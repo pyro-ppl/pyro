@@ -3,7 +3,7 @@ import torch
 from torch.autograd import Variable
 from collections import OrderedDict
 import pyro
-from pyro.infer.trace import Trace, TracePoutine
+from pyro.infer.trace import TracePoutine
 from pyro.infer.abstract_infer import AbstractInfer
 
 class TraceKLqp(AbstractInfer):

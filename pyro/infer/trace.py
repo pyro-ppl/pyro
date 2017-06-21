@@ -22,35 +22,6 @@ def get_parents(site, trace):
         sites.append(other_site)
     return sites
 
-class Site(object):
-    """
-    A single site in an execution trace
-    """
-    def __init__(self, *args, **kwargs):
-        """
-        Constructor
-        TODO docs
-        TODO args
-        TODO example
-        """
-        # XXX not actually implemented yet
-        raise NotImplementedError()
-
-class Trace(object):
-    """
-    Execution trace data structure
-    
-    TracePoutine creates these
-    """
-    def __init__(self, uid, *args, **kwargs):
-        """
-        Constructor
-        TODO get right args
-        TODO docs
-        TODO example
-        """
-        # XXX not actually implemented yet
-        raise NotImplementedError()
 
 class TracePoutine(TagPoutine):
     """
