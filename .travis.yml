@@ -6,6 +6,7 @@ python:
 sudo: required
 
 before_install:
+    - sudo apt-get update -qq
     - sudo apt-get install libblas-dev liblapack-dev libatlas-base-dev gfortran
 
 install:
