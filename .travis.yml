@@ -1,0 +1,34 @@
+language: python
+python:
+    - 2.7.8
+    - 2.7
+    - 3.5
+
+sudo: required
+
+before_install:
+    - sudo apt-get install libblas-dev liblapack-dev libatlas-base-dev gfortran
+
+install:
+    # this will be in setup.py
+    - pip install numpy
+    - pip install scipy
+    # install pytorch and its dependencies
+    - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
+          pip install http://download.pytorch.org/whl/cu75/torch-0.1.12.post2-cp27-none-linux_x86_64.whl;
+      else
+          pip install http://download.pytorch.org/whl/cu75/torch-0.1.12.post2-cp35-cp35m-linux_x86_64.whl;
+      fi
+    - pip install torchvision
+
+script:
+    - PYTHONPATH=$PWD:$PYTHONPATH ./tests/run_tests.sh
+
+matrix:
+    fast_finish: true
+    include:
+        env: LINT_CHECK
+        python: "2.7"
+        addons: true
+        install: pip install flake8
+        script: flake8
