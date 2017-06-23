@@ -16,7 +16,9 @@ class DiagNormal(Distribution):
         Currently operates over sigma instead of log_sigma - potential problem?
         """
         # if mu sigma no batch dim, add it to mu and sigma
-        if mu.dim() == 1 and batch_size > 1:
+        if mu.dim() != sigma.dim():
+            raise ValueError("Alpha and beta need to have the same dimensions.")
+        elif mu.dim() == 1 and batch_size > 1:
             self.mu = mu.unsqueeze(0).expand(batch_size, mu.size(0))
             self.sigma = sigma.unsqueeze(0).expand(batch_size, sigma.size(0))
         else:

@@ -17,7 +17,7 @@ class GuideCo(TagPoutine):
         When model execution begins
         """
         super(GuideCo, self)._enter_poutine(*args, **kwargs)
-        self.current_score = Variable(torch.zeros(1))  # 0.
+        self.current_score = 0  # Wrap in Variable?
         self.trace = {}
 
     def _pyro_sample(self, name, dist):
@@ -25,7 +25,7 @@ class GuideCo(TagPoutine):
         Simply sample from distribution
         """
         v = dist()
-        s = dist.log_pdf(v)
+        s = dist.batch_log_pdf(v)
         self.current_score += s
         self.trace[name] = v
         return v
@@ -49,14 +49,14 @@ class ModelCo(TagPoutine):
         When model execution begins
         """
         super(ModelCo, self)._enter_poutine(*args, **kwargs)
-        self.current_score = Variable(torch.zeros(1))  # 0.
+        self.current_score = 0
 
     def _pyro_sample(self, name, dist):
         """
         Simply sample from distribution
         """
         v = self.guide_trace[name]
-        s = dist.log_pdf(v)
+        s = dist.batch_log_pdf(v)
         self.current_score += s
         return v
 
@@ -64,7 +64,7 @@ class ModelCo(TagPoutine):
         """
         Get log_pdf of sample, add to ongoing scoring
         """
-        logp = dist.log_pdf(val)
+        logp = dist.batch_log_pdf(val)
         self.current_score += logp
         return val
 

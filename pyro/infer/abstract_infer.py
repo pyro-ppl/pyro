@@ -93,11 +93,12 @@ def lw_expectation(trace_dist, functional, num_samples):
     # loop over the sample tuples
     for i, rv, cur_score in samples:
 
-        # not necessarily efficient torch.exp call x2, fix later
-        sum_weight += torch.exp(cur_score)
+        # sum_prob = torch.exp(torch.sum(cur_score))
+        sum_prob = torch.exp(cur_score)
+        sum_weight += sum_prob
 
         # apply function to return value, multiply by exp(cur_score)
-        accum_so_far += functional(rv) * torch.exp(cur_score)
+        accum_so_far += functional(rv) * sum_prob  # .expand_as(functional(rv))
 
     #
-    return accum_so_far / sum_weight
+    return accum_so_far / sum_weight  # .expand_as(accum_so_far)
