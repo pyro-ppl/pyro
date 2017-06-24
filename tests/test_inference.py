@@ -12,6 +12,8 @@ from pyro.distributions import Bernoulli
 from pyro.distributions import Exponential
 from pyro.distributions import Poisson
 from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
+from pyro.infer.abstract_infer import LikelihoodWeighting, lw_expectation
+from pyro.infer.importance_sampling import ImportanceSampling
 from tests.common import TestCase
 
 from pyro.infer.kl_qp import KL_QP
@@ -30,6 +32,10 @@ class NormalNormalTests(TestCase):
         self.data.append(Variable(torch.Tensor([0.00, 0.4])))
         self.data.append(Variable(torch.Tensor([0.20, 0.5])))
         self.data.append(Variable(torch.Tensor([0.10, 0.7])))
+        self.t_data = Variable(torch.Tensor([[-0.1, 0.3],
+                               [0.0, 0.4],
+                               [0.2, 0.5],
+                               [0.1, 0.7]]))
         self.n_data = Variable(torch.Tensor([len(self.data)]))
         self.sum_data = self.data[0] + \
             self.data[1] + self.data[2] + self.data[3]
@@ -89,35 +95,33 @@ class NormalNormalTests(TestCase):
         self.assertEqual(0.0, mu_error.data.cpu().numpy()[0], prec=0.02)
         self.assertEqual(0.0, log_sig_error.data.cpu().numpy()[0], prec=0.02)
 
-# THIS TEST IS BROKEN BECAUSE OF EXPECTATION/BATCH DIMENSION ISSUES
-#     def test_importance_sampling(self):
-#   def model():
-#       mu_latent = pyro.sample("mu_latent",
-#                     DiagNormal(self.mu0, torch.pow(self.lam0, -0.5)))
-#       x_dist = DiagNormal(mu_latent, torch.pow(self.lam, -0.5))
-#       x = pyro.observe("obs", x_dist, self.data)
-#               return mu_latent
-#
-#   def guide():
-#       mu_latent = pyro.sample("mu_latent",
-#                   DiagNormal(self.analytic_mu_n, 1.1*torch.pow(self.analytic_lam_n, -0.5)))
-#
-#         is_infer = ImportanceSampling(model, guide)
-#         expected_mean0 = lw_expectation(is_infer, lambda x: x[0], self.n_is_samples)
-#         expected_mean1 = lw_expectation(is_infer, lambda x: x[1], self.n_is_samples)
-#         expected_mean = Variable(torch.Tensor([expected_mean0.data.cpu().numpy()[0],
-#                         expected_mean1.data.cpu().numpy()[0]]))
-#         expected_var0  = lw_expectation(is_infer, lambda x: torch.pow(x[0]-expected_mean0,2.0),
-#                                        self.n_is_samples).data.cpu().numpy()[0]
-#         expected_var1  = lw_expectation(is_infer, lambda x: torch.pow(x[1]-expected_mean1,2.0),
-#                                        self.n_is_samples).data.cpu().numpy()[0]
-#         expected_var = (expected_var0 + expected_var1)
-#         analytic_var = torch.sum(torch.pow(self.analytic_lam_n,-1.0)).data.cpu().numpy()[0]
-#
-#         mu_error  = torch.sum(torch.pow(expected_mean-self.analytic_mu_n,2.0)).data.cpu().numpy()[0]
-#         var_error = analytic_var - expected_var
-#   self.assertEqual(0.0, mu_error, prec=0.005)
-#   self.assertEqual(0.0, var_error, prec=0.010)
+    def test_importance_sampling(self):
+        def model():
+            mu_latent = pyro.sample("mu_latent", DiagNormal(self.mu0,
+                                    torch.pow(self.lam0, -0.5), batch_size=4))
+            lam_latent = torch.pow(self.lam, -0.5).expand_as(mu_latent)
+            x_dist = DiagNormal(mu_latent, lam_latent, batch_size=4)
+            x = pyro.observe("obs", x_dist, self.t_data)
+            return mu_latent
+
+        def guide():
+            mu_latent = pyro.sample("mu_latent", DiagNormal(self.analytic_mu_n,
+                                    1.1 * torch.pow(self.analytic_lam_n, -0.5), batch_size=4))
+
+        is_infer = ImportanceSampling(model, guide)
+        expected_mean0 = lw_expectation(is_infer, lambda x: x[:, 0].unsqueeze(1), self.n_is_samples)
+        expected_mean1 = lw_expectation(is_infer, lambda x: x[:, 1].unsqueeze(1), self.n_is_samples)
+        expected_mean = Variable(torch.Tensor([expected_mean0.data.cpu().numpy()[0],
+                                 expected_mean1.data.cpu().numpy()[0]]))
+        expected_var0 = lw_expectation(is_infer, lambda x: torch.pow(x[:, 0] - expected_mean0, 2.0),
+                                       self.n_is_samples).data.cpu().numpy()[0]
+        expected_var1 = lw_expectation(is_infer, lambda x: torch.pow(x[:, 1] - expected_mean1, 2.0),
+                                       self.n_is_samples).data.cpu().numpy()[0]
+        expected_var = (expected_var0 + expected_var1)
+        analytic_var = torch.sum(torch.pow(self.analytic_lam_n, -1.0)).data.cpu().numpy()[0]
+        mu_error = torch.sum(torch.pow(expected_mean - self.analytic_mu_n, 2.0)).data.cpu().numpy()[0]
+        var_error = analytic_var - expected_var
+        self.assertEqual(0.0, mu_error, prec=0.05)
 
 
 class TestFixedModelGuide(TestCase):

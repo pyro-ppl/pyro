@@ -3,6 +3,11 @@ python:
     - 2.7
     - 3.5
 
+notifications:
+    email:
+        recipients:
+            - pyro@uber.com
+
 sudo: required
 
 before_install:
@@ -15,9 +20,9 @@ install:
     - pip install scipy
     # install pytorch and its dependencies
     - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
-          pip install http://download.pytorch.org/whl/cu75/torch-0.1.12.post2-cp27-none-linux_x86_64.whl;
+          travis_retry pip install http://download.pytorch.org/whl/cu75/torch-0.1.12.post2-cp27-none-linux_x86_64.whl;
       else
-          pip install http://download.pytorch.org/whl/cu75/torch-0.1.12.post2-cp35-cp35m-linux_x86_64.whl;
+          travis_retry pip install http://download.pytorch.org/whl/cu75/torch-0.1.12.post2-cp35-cp35m-linux_x86_64.whl;
       fi
     - pip install torchvision
 
