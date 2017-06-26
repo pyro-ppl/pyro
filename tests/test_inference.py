@@ -397,8 +397,6 @@ class BernoulliBetaTests(TestCase):
         beta_error = torch.abs(
             pyro.param("beta_q_log") -
             self.log_beta_n).data.cpu().numpy()[0]
-        # print "alpha_error", alpha_error
-        # print "beta_error", beta_error
         self.assertEqual(0.0, alpha_error, prec=0.05)
         self.assertEqual(0.0, beta_error, prec=0.05)
 
