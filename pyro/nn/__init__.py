@@ -19,10 +19,6 @@ for fct_name in dir(pt_nn):
     if not isinstance(nn_mod, dict):
         setattr(nn, fct_name, nn_mod)
 
-    if not issubclass(nn_mod, pt_nn.Module):
-        setattr(nn, fct_name, nn_mod)
-        continue
-
     # wrap these objects
     orig_new = getattr(nn_mod, "__new__")
 

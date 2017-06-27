@@ -2,7 +2,6 @@ from setuptools import setup, find_packages
 
 setup(
     name='pyro',
-    #author='',
     version='0.0.1',
     description='A Python library for probabilistic modeling and inference',
     packages=find_packages(exclude=('tests*',)),

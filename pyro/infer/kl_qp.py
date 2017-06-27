@@ -87,7 +87,7 @@ class VIGuideCo(TagPoutine):
 
             # map over the minibatch
             # note that fn should expect an index and a datum
-            map(lambda x: fn(x[0], x[1]), self.batch)
+            list(map(lambda x: fn(x[0], x[1]), self.batch))
 
             # undo multiplyer
             self.score_multiplier = self.score_multiplier / batch_ratio
@@ -161,7 +161,7 @@ class VIModelCo(TagPoutine):
 
             # map over the minibatch
             # note that fn should expect an index and a datum
-            map(lambda x: fn(x[0], x[1]), self.batch)
+            list(map(lambda x: fn(x[0], x[1]), self.batch))
 
             # undo multiplyer
             self.score_multiplier = self.score_multiplier / batch_ratio
