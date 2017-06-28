@@ -151,6 +151,13 @@ class TestCategorical(TestCase):
         self.analytic_mean = n * self.ps
         one = Variable(torch.ones(3))
         self.analytic_var = n * torch.mul(self.ps, one.sub(self.ps))
+
+        # Discrete Distribution
+        self.d_ps = Variable(torch.Tensor([[0.2, 0.3, 0.5], [0.1, 0.1, 0.8]]))
+        self.d_vs = Variable(torch.Tensor([[0, 1, 2], [3, 4, 5]]))
+        self.d_test_data = Variable(torch.Tensor([[0], [5]]))
+        self.d_dist = dist.Categorical(self.d_ps, self.d_vs)
+
         self.n_samples = 50000
 
     def test_nhot_log_pdf(self):
@@ -176,6 +183,14 @@ class TestCategorical(TestCase):
         torch_var = np.square(np.mean(torch_samples)) / 16
         self.assertEqual(exp_, self.analytic_mean.data.numpy()[0], prec=0.01)
         self.assertEqual(torch_var, self.analytic_var.data.numpy()[0], prec=0.01)
+
+    def test_discrete_log_pdf(self):
+        log_px_torch = self.d_dist.batch_log_pdf(self.d_test_data).data[0][0]
+        log_px_np = float(spr.multinomial.logpmf(np.array([1, 0, 0]), 1, self.d_ps[0].data.numpy()))
+        log_px_torch2 = self.d_dist.batch_log_pdf(self.d_test_data).data[1][0]
+        log_px_np2 = float(spr.multinomial.logpmf(np.array([0, 0, 1]), 1, self.d_ps[1].data.numpy()))
+        self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
+        self.assertEqual(log_px_torch2, log_px_np2, prec=1e-4)
 
 
 class TestBatchMultinomial(TestCase):
