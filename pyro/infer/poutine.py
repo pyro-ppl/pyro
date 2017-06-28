@@ -1,5 +1,6 @@
 import pyro
 import torch
+from torch.autograd import Variable
 from uuid import uuid4 as uuid
 
 
@@ -90,14 +91,8 @@ class Poutine(object):
     # def _pyro_param(self, *args, **kwargs):
     #   raise NotImplementedError("Abstract Infer class does not implement this function")
 
-    def _pyro_map_data(self, data, fn):
-        if isinstance(data, torch.Tensor):
-            # assume vectorized observation fn
-            raise NotImplementedError(
-                "map_data for vectorized data not yet implemented.")
-        else:
-            # note that fn should expect an index and a datum
-            map(fn, enumerate(data))
+    def _pyro_map_data(self, name, fn, data, batch_size=None):
+        raise NotImplementedError("Abstract Poutine class does not implement this")
 
 
 class TagPoutine(Poutine):

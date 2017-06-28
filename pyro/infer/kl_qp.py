@@ -20,7 +20,6 @@ class VIGuideCo(TagPoutine):
 
     def __init__(self, *args, **kwargs):
         super(VIGuideCo, self).__init__(*args, **kwargs)
-        self.batch_index = 0  # TODO by name for multiple map_datas
 
     # every time
     def _enter_poutine(self, *args, **kwargs):
@@ -34,7 +33,7 @@ class VIGuideCo(TagPoutine):
         self.trace = OrderedDict()
         self.batch = []
         # TODO: make this cleaner via a trace data structure
-        self.score_multiplier = pyro.ones(1)
+        self.score_multiplier = Variable(torch.ones(1))
 
     def _pyro_sample(self, name, dist):
         """
@@ -51,46 +50,51 @@ class VIGuideCo(TagPoutine):
 
         assert(name not in self.trace)
         self.trace[name] = {}
+        self.trace[name]["type"] = "sample"
         self.trace[name]["sample"] = v_sample
         self.trace[name]["logpdf"] = log_q * self.score_multiplier.expand_as(log_q)
         self.trace[name]["reparam"] = dist.reparametrized
 
         return v_sample
 
-    def _pyro_map_data(self, data, fn, name="", batch_size=0):
-        # TODO: multiple map_datas will require naming.
-
-        if isinstance(data, torch.Tensor):
-            # assume vectorized observation fn
-            raise NotImplementedError(
-                "map_data for vectorized data not yet implemented.")
+    def _pyro_map_data(self, name, fn, data, batch_size=0):
+        """
+        Guide Poutine map_data implementation.
+        In this version, select a random subset of data and map over that
+        Then record the indices of the minibatch in the trace.
+        """
+        assert(name not in self.trace)
+        
+        if isinstance(data, torch.Tensor) or isinstance(data, Variable):
+            # draw a batch
+            if batch_size == 0:
+                batch_size = data.size(0)
+            ind = torch.randperm(data.size(0))[0:batch_size]
+            # create the trace node
+            self.trace[name] = {}
+            self.trace[name]["type"] = "map_data"
+            self.trace[name]["indices"] = ind
+            batch_ratio = float(data.size(0)) / float(batch_size)
+            self.score_multiplier = self.score_multiplier * batch_ratio
+            vals = fn(ind, data.index(0, ind))
+            self.score_multiplier = self.score_multiplier / batch_ratio
+            return vals
         else:
+            # data is a non-tensor iterable
             if batch_size == 0:
                 batch_size = len(data)
 
-            batch_ratio = len(data) / batch_size
+            ind = list(torch.randperm(len(data))[0:batch_size])
 
-            # get a minibatch
-            # FIXME: this is brittle, deal with mismatched stride.
-            if self.batch_index >= len(data):
-                self.batch_index = 0
-            new_batch_index = self.batch_index + batch_size
-
-            # FIXME: should add batch as a trace node
-            self.batch = list(enumerate(data))[
-                self.batch_index:new_batch_index]
-            self.batch_index = new_batch_index
-
-            # set multiplyer for logpdfs based on batch size, used wheres score
-            # are made.
+            self.trace[name] = {}
+            self.trace[name]["type"] = "map_data"
+            self.trace[name]["indices"] = ind
+            
+            batch_ratio = float(len(data)) / float(batch_size)
             self.score_multiplier = self.score_multiplier * batch_ratio
-
-            # map over the minibatch
-            # note that fn should expect an index and a datum
-            list(map(lambda x: fn(x[0], x[1]), self.batch))
-
-            # undo multiplyer
+            vals = list(map(lambda ix: fn(*ix), zip(ind, [data[i] for i in ind])))
             self.score_multiplier = self.score_multiplier / batch_ratio
+            return vals
 
 
 class VIModelCo(TagPoutine):
@@ -127,6 +131,7 @@ class VIModelCo(TagPoutine):
         assert(name not in self.trace)
 
         self.trace[name] = {}
+        self.trace[name]["type"] = "sample"
         self.trace[name]["logpdf"] = log_p * self.score_multiplier
         self.trace[name]["sample"] = v_sample
         self.trace[name]["reparam"] = dist.reparametrized
@@ -141,30 +146,44 @@ class VIModelCo(TagPoutine):
         self.observation_LL = self.observation_LL + logpdf * self.score_multiplier
         return val
 
-    def _pyro_map_data(self, data, fn, name="", batch_size=0):
-        # TODO: multiple map_datas will require naming.
-
-        if isinstance(data, torch.Tensor):
-            # assume vectorized observation fn
-            raise NotImplementedError(
-                "map_data for vectorized data not yet implemented.")
-        else:
-            # use minibatch from guide
-            assert(len(self.batch) > 0)
-
-            # batch_size comes from batch pre-constructed in guide.
-            batch_ratio = len(data) / len(self.batch)
-
-            # set multiplyer for logpdfs based on batch size, used wheres score
-            # are made.
+    def _pyro_map_data(self, name, fn, data, batch_size=0):
+        """
+        Model Poutine map_data.
+        In this version, we just reuse the minibatch indices from the guide
+        instead of using a fresh random sample.
+        Otherwise identical to the guide's version.
+        """
+        assert(name not in self.trace and name in self.guide_trace)
+        if isinstance(data, torch.Tensor) or isinstance(data, Variable):
+            # draw a batch
+            if batch_size == 0:
+                batch_size = data.size(0)
+            ind = self.guide_trace[name]["indices"]
+            # create the trace node
+            self.trace[name] = {}
+            self.trace[name]["type"] = "map_data"
+            self.trace[name]["indices"] = ind
+            batch_ratio = float(data.size(0)) / float(batch_size)
             self.score_multiplier = self.score_multiplier * batch_ratio
-
-            # map over the minibatch
-            # note that fn should expect an index and a datum
-            list(map(lambda x: fn(x[0], x[1]), self.batch))
-
-            # undo multiplyer
+            vals = fn(ind, data.index(0, ind))
             self.score_multiplier = self.score_multiplier / batch_ratio
+            return vals
+        else:
+            # data is a non-tensor iterable
+            if batch_size == 0:
+                batch_size = len(data)
+
+            ind = self.guide_trace[name]["indices"]
+
+            self.trace[name] = {}
+            self.trace[name]["type"] = "map_data"
+            self.trace[name]["indices"] = ind
+            
+            batch_ratio = float(len(data)) / float(batch_size)
+            self.score_multiplier = self.score_multiplier * batch_ratio
+            vals = list(map(lambda ix: fn(*ix), zip(ind, [data[i] for i in ind])))
+            self.score_multiplier = self.score_multiplier / batch_ratio
+            return vals
 
 
 class KL_QP(AbstractInfer):
@@ -228,14 +247,16 @@ class KL_QP(AbstractInfer):
         elbo = self.model.observation_LL
 
         for name in self.guide.trace.keys():
-            log_r += self.model.trace[name]["logpdf"] - \
-                self.guide.trace[name]["logpdf"]
+            if self.guide.trace[name]["type"] == "sample":
+                log_r += self.model.trace[name]["logpdf"] - \
+                    self.guide.trace[name]["logpdf"]
         for name in self.guide.trace.keys():
-            if not self.guide.trace[name]["reparam"]:
-                elbo += Variable(log_r.data) * self.guide.trace[name]["logpdf"]
-            else:
-                elbo += self.model.trace[name]["logpdf"]
-                elbo -= self.guide.trace[name]["logpdf"]
+            if self.guide.trace[name]["type"] == "sample":
+                if not self.guide.trace[name]["reparam"]:
+                    elbo += Variable(log_r.data) * self.guide.trace[name]["logpdf"]
+                else:
+                    elbo += self.model.trace[name]["logpdf"]
+                    elbo -= self.guide.trace[name]["logpdf"]
 
         loss = -torch.sum(elbo)
         # prxint("model loss {}".format(loss.data[0]))

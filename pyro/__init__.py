@@ -70,9 +70,9 @@ def ng_zeros(*args, **kwargs):
 
 
 def sample(name, dist, *args, **kwargs):
-    '''
+    """
     Return sample from provided distribution. Must be named.
-    '''
+    """
     assert isinstance(dist, pyro.distributions.Distribution)
     return dist()
 
@@ -82,10 +82,17 @@ def observe(name, dist, obs):
         "Observe has been used outside of a normalizing context.")
 
 
-def map_data(data, observer):
-    # by default map_data is the same as map.
-    # infer algs (eg VI) that do minibatches should overide this.
-    return map(observer, data)
+def map_data(name, fn, data, batch_size=None):
+    """
+    top-level map_data: like map(fn, enumerate(data)), but with a name
+    Assumes fn takes two arguments: ind, val
+    infer algs (eg VI) that do minibatches should overide this.
+    """
+    if isinstance(data, torch.Tensor) or isinstance(data, Variable):
+        return fn(Variable(torch.arange(0, data.size(0))), data)
+    else:
+        # list for py3 compatibility
+        return list(map(lambda ix: fn(*ix), enumerate(data)))
 
 # hand off behavior to poutine if necessary?
 # for now default calls out to pyro.param -- which is handled by poutine
