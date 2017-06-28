@@ -31,3 +31,7 @@ class Delta(Distribution):
         if torch.equal(x.data, self.v.data.expand_as(x.data)):
             return Variable(torch.zeros(1))
         return Variable(torch.Tensor([-float("inf")]))
+
+    def support(self):
+        # univariate case
+        return iter([Variable(self.v.data.index(i)) for i in range(self.v.size(0))])

@@ -142,12 +142,15 @@ class TestCategorical(TestCase):
     def setUp(self):
         n = 1
         self.ps = Variable(torch.Tensor([0.1, 0.6, 0.3]))
+        self.batch_ps = Variable(torch.Tensor([[0.1, 0.6, 0.3], [0.2, 0.4, 0.4]]))
         self.n = Variable(torch.Tensor([n]))
 #         self.test_data = Variable(torch.Tensor([0, 0, 1, 1, 2, 1, 1, 2]))
         self.test_data = Variable(torch.Tensor([0, 1, 0]))
         self.test_data_nhot = Variable(torch.Tensor([2]))
         self.dist = dist.Categorical(self.ps, batch_size=1)
         self.dist_nhot = dist.Categorical(self.ps, one_hot=False, batch_size=1)
+        self.batch_dist = dist.Categorical(self.batch_ps, batch_size=1)
+        self.batch_dist_nhot = dist.Categorical(self.batch_ps, one_hot=False, batch_size=1)
         self.analytic_mean = n * self.ps
         one = Variable(torch.ones(3))
         self.analytic_var = n * torch.mul(self.ps, one.sub(self.ps))
@@ -176,6 +179,19 @@ class TestCategorical(TestCase):
         torch_var = np.square(np.mean(torch_samples)) / 16
         self.assertEqual(exp_, self.analytic_mean.data.numpy()[0], prec=0.01)
         self.assertEqual(torch_var, self.analytic_var.data.numpy()[0], prec=0.01)
+
+    def test_support(self):
+        s = list(self.batch_dist.support())
+        tsum = torch.sum(sum(s))
+        self.assertEqual(len(s), 3 ** 2)
+        self.assertEqual(s[0].dim(), 2)
+        self.assertEqual(tsum.data[0], 3 * 6)
+
+    def test_nhot_support(self):
+        s = list(self.batch_dist_nhot.support())
+        tsum = torch.sum(sum(s))
+        self.assertEqual(len(s), 3 ** 2)
+        self.assertEqual(tsum.data[0], 3 * 6)
 
 
 class TestBatchMultinomial(TestCase):
@@ -367,12 +383,14 @@ class TestBatchBernoulli(TestCase):
     def setUp(self):
         self.ps = Variable(torch.Tensor(
             [0.25, 0.5, 0.75, 0.5, 0.25, 0.3, 0.1, 0.8, 0.9, 0.6]))
-
+        self.small_ps = Variable(torch.Tensor(
+            [[0.25, 0.5, 0.75], [0.3, 0.6, 0.1]]))
         self.ps_np = self.ps.data.cpu().numpy()
         self.test_data = Variable(torch.Tensor([[1, 0, 1, 1, 0, 1, 0, 1, 1, 1],
                                                 [1, 0, 0, 1, 0, 0, 1, 1, 0, 1]]))
 
         self.g = dist.Bernoulli(self.ps, batch_size=2)
+        self.small_g = dist.Bernoulli(self.small_ps)
 
     def test_log_pdf(self):
         bs = 2
@@ -383,6 +401,13 @@ class TestBatchBernoulli(TestCase):
         self.assertEqual(log_px_torch[0], log_px_np, prec=1e-4)
     # def test_sample(self):
     #     pass
+
+    def test_support(self):
+        s = list(self.small_g.support())
+        tsum = sum(s)
+        self.assertEqual(len(s), 2 ** 6)
+        # Half the values are 1, half are 0
+        self.assertEqual(tsum.data[0][0], 2 ** 5)
 
 
 class TestLogNormal(TestCase):

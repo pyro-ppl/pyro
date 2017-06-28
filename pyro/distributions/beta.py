@@ -80,3 +80,6 @@ class Beta(Distribution):
         ll_4 = -log_gamma(self.alpha)
         ll_5 = -log_gamma(self.beta)
         return ll_1 + ll_2 + ll_3 + ll_4 + ll_5
+
+    def support(self):
+        raise NotImplementedError("Support not supported for continuous distributions")
