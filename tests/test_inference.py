@@ -54,8 +54,10 @@ class NormalNormalTests(TestCase):
             mu_latent = pyro.sample("mu_latent", prior_dist)
             x_dist = DiagNormal(mu_latent, torch.pow(self.lam, -0.5))
             # x = pyro.observe("obs", x_dist, self.data)
-            pyro.map_data(self.data, lambda i,
-                          x: pyro.observe("obs_%d" % i, x_dist, x), batch_size=1)
+            pyro.map_data("md1",
+                          lambda i, x: pyro.observe("obs_{}".format(i), x_dist, x),
+                          self.data,
+                          batch_size=1)
             return mu_latent
 
         def guide():
@@ -68,7 +70,10 @@ class NormalNormalTests(TestCase):
             q_dist = DiagNormal(mu_q, sig_q)
             q_dist.reparametrized = reparametrized
             pyro.sample("mu_latent", q_dist)
-            pyro.map_data(self.data, lambda i, x: None, batch_size=1)
+            pyro.map_data("md1",
+                          lambda i, x: None,
+                          self.data,
+                          batch_size=1)
 
         kl_optim = KL_QP(
             model, guide, pyro.optim(
@@ -219,9 +224,10 @@ class PoissonGammaTests(TestCase):
                     self.alpha0, self.beta0))
             x_dist = Poisson(lambda_latent)
             # x0 = pyro.observe("obs0", x_dist, self.data[0])
-            pyro.map_data(
-                self.data, lambda i, x: pyro.observe(
-                    "obs", x_dist, x), batch_size=3)
+            pyro.map_data("md1",
+                          lambda i, x: pyro.observe("obs_{}".format(i), x_dist, x),
+                          self.data,
+                          batch_size=3)
             return lambda_latent
 
         def guide():
@@ -239,7 +245,10 @@ class PoissonGammaTests(TestCase):
                     requires_grad=True))
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             pyro.sample("lambda_latent", Gamma(alpha_q, beta_q))
-            pyro.map_data(self.data, lambda i, x: None, batch_size=3)
+            pyro.map_data("md1",
+                          lambda i, x: None,
+                          self.data,
+                          batch_size=3)
 
         kl_optim = KL_QP(
             model, guide, pyro.optim(
@@ -356,9 +365,10 @@ class BernoulliBetaTests(TestCase):
         def model():
             p_latent = pyro.sample("p_latent", Beta(self.alpha0, self.beta0))
             x_dist = Bernoulli(p_latent)
-            pyro.map_data(
-                self.data, lambda i, x: pyro.observe(
-                    "obs", x_dist, x), batch_size=2)
+            pyro.map_data("md1",
+                          lambda i, x: pyro.observe("obs_{}".format(i), x_dist, x),
+                          self.data,
+                          batch_size=2)
             return p_latent
 
         def guide():
@@ -376,7 +386,10 @@ class BernoulliBetaTests(TestCase):
                     requires_grad=True))
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             pyro.sample("p_latent", Beta(alpha_q, beta_q))
-            pyro.map_data(self.data, lambda i, x: None, batch_size=2)
+            pyro.map_data("md1",
+                          lambda i, x: None,
+                          self.data,
+                          batch_size=2)
 
         kl_optim = KL_QP(model, guide, pyro.optim(torch.optim.Adam,
                                                   {"lr": .001, "betas": (0.97, 0.999)}))
