@@ -170,6 +170,7 @@ class TestCategorical(TestCase):
             data = json.load(data_file)
         self.support = list(map(lambda x: torch.Tensor(x), data['one_hot']))
         self.nhot_support = list(map(lambda x: torch.Tensor(x), data['not_hot']))
+        self.discrete_support = list(map(lambda x: torch.Tensor(x), data['discrete']))
 
     def test_nhot_log_pdf(self):
         log_px_torch = self.dist_nhot.batch_log_pdf(self.test_data_nhot).data[0][0]
@@ -202,6 +203,11 @@ class TestCategorical(TestCase):
         log_px_np2 = float(spr.multinomial.logpmf(np.array([0, 0, 1]), 1, self.d_ps[1].data.numpy()))
         self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
         self.assertEqual(log_px_torch2, log_px_np2, prec=1e-4)
+
+    def test_discrete_support(self):
+        s = list(self.d_dist.support())
+        v = [torch.equal(x.data, y) for x, y in zip(s, self.discrete_support)]
+        self.assertTrue(all(v))
 
     def test_support(self):
         s = list(self.batch_dist.support())

@@ -73,6 +73,11 @@ class Categorical(Distribution):
     def support(self):
         r = self.ps.size(0)
         c = self.ps.size(1)
+        
+        if self.vs is not None:
+            return (torch.sum(self.vs * Variable(torch.Tensor(list(x))), 1)
+                    for x in itertools.product(torch.eye(c).numpy().tolist(),
+                    repeat=r))
         if self.one_hot:
             return (Variable(torch.Tensor(list(x))) for x in itertools.product(torch.eye(c).numpy().tolist(),
                     repeat=r))
