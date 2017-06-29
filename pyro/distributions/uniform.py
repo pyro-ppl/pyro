@@ -35,5 +35,5 @@ class Uniform(Distribution):
     def batch_log_pdf(self, x, batch_size=1):
         raise NotImplementedError()
 
-    def support(self, x):
-        return {'lower': self.a, 'upper': self.b}
+    def support(self):
+        raise NotImplementedError("Support not supported for continuous distributions")

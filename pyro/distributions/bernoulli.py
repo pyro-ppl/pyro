@@ -1,6 +1,7 @@
 import torch
+import itertools
+import functools
 from torch.autograd import Variable
-
 from pyro.distributions.distribution import Distribution
 
 
@@ -53,6 +54,8 @@ class Bernoulli(Distribution):
         return torch.sum(logsum, 1)
 
     def support(self):
-        # FIXME: need to enumerate out support when dims aren't 1.
-        #   use product iteratable.
-        return [Variable(torch.ones(1)), Variable(torch.zeros(1))]
+        if self.ps.dim() == 1:
+            return iter([Variable(torch.ones(1)), Variable(torch.zeros(1))])
+        size = functools.reduce(lambda x, y: x * y, self.ps.size())
+        return (Variable(torch.Tensor(list(x)).view_as(self.ps))
+                for x in itertools.product(torch.Tensor([0, 1]), repeat=size))
