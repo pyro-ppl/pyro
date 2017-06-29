@@ -1,8 +1,7 @@
 import torch
-import itertools as it
-import functools as ft
+import itertools
+import functools
 from torch.autograd import Variable
-from torch import Tensor as T
 from pyro.distributions.distribution import Distribution
 
 
@@ -57,5 +56,6 @@ class Bernoulli(Distribution):
     def support(self):
         if self.ps.dim() == 1:
             return iter([Variable(torch.ones(1)), Variable(torch.zeros(1))])
-        size = ft.reduce(lambda x, y: x * y, self.ps.size())
-        return (Variable(T(list(x)).view_as(self.ps)) for x in it.product(T([0, 1]), repeat=size))
+        size = functools.reduce(lambda x, y: x * y, self.ps.size())
+        return (Variable(torch.Tensor(list(x)).view_as(self.ps))
+                for x in itertools.product(torch.Tensor([0, 1]), repeat=size))

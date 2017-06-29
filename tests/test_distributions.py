@@ -1,5 +1,8 @@
 import numpy as np
 import scipy.stats as spr
+import json
+import itertools
+
 import torch
 from torch.autograd import Variable
 
@@ -156,6 +159,11 @@ class TestCategorical(TestCase):
         self.analytic_var = n * torch.mul(self.ps, one.sub(self.ps))
         self.n_samples = 50000
 
+        with open('tests/test_data/support_categorical.json') as data_file:
+            data = json.load(data_file)
+        self.support = list(map(lambda x: torch.Tensor(x), data['one_hot']))
+        self.nhot_support = list(map(lambda x: torch.Tensor(x), data['not_hot']))
+
     def test_nhot_log_pdf(self):
         log_px_torch = self.dist_nhot.batch_log_pdf(self.test_data_nhot).data[0][0]
         log_px_np = float(spr.multinomial.logpmf(np.array([0, 0, 1]), 1, self.ps.data.numpy()))
@@ -182,16 +190,13 @@ class TestCategorical(TestCase):
 
     def test_support(self):
         s = list(self.batch_dist.support())
-        tsum = torch.sum(sum(s))
-        self.assertEqual(len(s), 3 ** 2)
-        self.assertEqual(s[0].dim(), 2)
-        self.assertEqual(tsum.data[0], 3 * 6)
+        v = [torch.equal(x.data, y) for x, y in zip(s, self.support)]
+        self.assertTrue(all(v))
 
     def test_nhot_support(self):
         s = list(self.batch_dist_nhot.support())
-        tsum = torch.sum(sum(s))
-        self.assertEqual(len(s), 3 ** 2)
-        self.assertEqual(tsum.data[0], 3 * 6)
+        v = [torch.equal(x.data, y) for x, y in zip(s, self.nhot_support)]
+        self.assertTrue(all(v))
 
 
 class TestBatchMultinomial(TestCase):
@@ -392,6 +397,10 @@ class TestBatchBernoulli(TestCase):
         self.g = dist.Bernoulli(self.ps, batch_size=2)
         self.small_g = dist.Bernoulli(self.small_ps)
 
+        with open('tests/test_data/support_bernoulli.json') as data_file:
+            data = json.load(data_file)
+        self.support = list(map(lambda x: torch.Tensor(x), data['expected']))
+
     def test_log_pdf(self):
         bs = 2
         log_px_torch = self.g.batch_log_pdf(self.test_data, bs).data[0]
@@ -399,15 +408,11 @@ class TestBatchBernoulli(TestCase):
                                           p=self.ps_np)
         log_px_np = np.sum(_log_px_np[0])
         self.assertEqual(log_px_torch[0], log_px_np, prec=1e-4)
-    # def test_sample(self):
-    #     pass
 
     def test_support(self):
         s = list(self.small_g.support())
-        tsum = sum(s)
-        self.assertEqual(len(s), 2 ** 6)
-        # Half the values are 1, half are 0
-        self.assertEqual(tsum.data[0][0], 2 ** 5)
+        v = [torch.equal(x.data, y) for x, y in zip(s, self.support)]
+        self.assertTrue(all(v))
 
 
 class TestLogNormal(TestCase):

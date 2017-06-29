@@ -1,7 +1,7 @@
 import torch
 from torch.autograd import Variable
 from pyro.distributions.distribution import Distribution
-import itertools as it
+import itertools
 
 
 def _to_one_hot(x, ps):
@@ -64,9 +64,9 @@ class Categorical(Distribution):
         r = self.ps.size(0)
         c = self.ps.size(1)
         if self.one_hot:
-            return (Variable(torch.Tensor(list(x))) for x in it.product(torch.eye(c).numpy().tolist(),
+            return (Variable(torch.Tensor(list(x))) for x in itertools.product(torch.eye(c).numpy().tolist(),
                     repeat=r))
         if self.ps.dim() == 1:
             return iter([Variable(torch.Tensor([i])) for i in range(r)])
-        return (Variable(torch.Tensor(list(x)).unsqueeze(1)) for x in it.product(torch.arange(0, c),
+        return (Variable(torch.Tensor(list(x)).unsqueeze(1)) for x in itertools.product(torch.arange(0, c),
                 repeat=r))
