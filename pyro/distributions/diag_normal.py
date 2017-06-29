@@ -62,3 +62,6 @@ class DiagNormal(Distribution):
                                  Variable(torch.ones(self.sigma.size())))),
                                  0.5 * torch.pow(((x - self.mu) / self.sigma), 2))
         return torch.sum(log_pxs, 1)
+
+    def support(self):
+        raise NotImplementedError("Support not supported for continuous distributions")

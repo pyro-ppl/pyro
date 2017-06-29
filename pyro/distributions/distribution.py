@@ -25,4 +25,4 @@ class Distribution(object):
         raise NotImplementedError()
 
     def support(self):
-        raise NotImplementedError()
+        raise NotImplementedError("Support not supported for {}".format(str(type(self))))

@@ -80,3 +80,6 @@ class Gamma(Distribution):
         ll_3 = self.alpha * torch.log(self.beta)
         ll_4 = - log_gamma(self.alpha)
         return ll_1 + ll_2 + ll_3 + ll_4
+
+    def support(self):
+        raise NotImplementedError("Support not supported for continuous distributions")

@@ -1,6 +1,7 @@
 import torch
 from torch.autograd import Variable
 from pyro.distributions.distribution import Distribution
+import itertools
 
 
 def _to_one_hot(x, ps):
@@ -38,7 +39,6 @@ class Categorical(Distribution):
             if vs is not None:
                 self.vs = vs.unsqueeze(0).expand(batch_size, 0)
         self.one_hot = one_hot
-        # self.dist = Multinomial(self.ps, self.n, self.batch_size)
         super(Categorical, self).__init__(batch_size=1, *args, **kwargs)
 
     def sample(self):
@@ -50,12 +50,8 @@ class Categorical(Distribution):
             return _to_one_hot(sample, self.ps)
         return sample
 
-    # def expanded_sample(self):
-        # return Variable(torch.multinomial(self.ps.data, 1, replacement=True))
-        # return self.dist.expanded_sample()
-
-    def batch_log_pdf(self, x):
-        if x.dim() == 1:
+    def batch_log_pdf(self, x, batch_size=1):
+        if x.dim() == 1 and batch_size == 1:
             x = x.unsqueeze(0)
         if self.vs is not None:
             # get index of tensor
@@ -73,3 +69,14 @@ class Categorical(Distribution):
 
     def log_pdf(self, _x):
         return torch.sum(self.batch_log_pdf(_x))
+
+    def support(self):
+        r = self.ps.size(0)
+        c = self.ps.size(1)
+        if self.one_hot:
+            return (Variable(torch.Tensor(list(x))) for x in itertools.product(torch.eye(c).numpy().tolist(),
+                    repeat=r))
+        if self.ps.dim() == 1:
+            return iter([Variable(torch.Tensor([i])) for i in range(r)])
+        return (Variable(torch.Tensor(list(x)).unsqueeze(1)) for x in itertools.product(torch.arange(0, c),
+                repeat=r))

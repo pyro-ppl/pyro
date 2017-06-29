@@ -1,5 +1,8 @@
 import numpy as np
 import scipy.stats as spr
+import json
+import itertools
+
 import torch
 from torch.autograd import Variable
 
@@ -142,12 +145,15 @@ class TestCategorical(TestCase):
     def setUp(self):
         n = 1
         self.ps = Variable(torch.Tensor([0.1, 0.6, 0.3]))
+        self.batch_ps = Variable(torch.Tensor([[0.1, 0.6, 0.3], [0.2, 0.4, 0.4]]))
         self.n = Variable(torch.Tensor([n]))
 #         self.test_data = Variable(torch.Tensor([0, 0, 1, 1, 2, 1, 1, 2]))
         self.test_data = Variable(torch.Tensor([0, 1, 0]))
         self.test_data_nhot = Variable(torch.Tensor([2]))
         self.dist = dist.Categorical(self.ps, batch_size=1)
         self.dist_nhot = dist.Categorical(self.ps, one_hot=False, batch_size=1)
+        self.batch_dist = dist.Categorical(self.batch_ps, batch_size=1)
+        self.batch_dist_nhot = dist.Categorical(self.batch_ps, one_hot=False, batch_size=1)
         self.analytic_mean = n * self.ps
         one = Variable(torch.ones(3))
         self.analytic_var = n * torch.mul(self.ps, one.sub(self.ps))
@@ -159,6 +165,11 @@ class TestCategorical(TestCase):
         self.d_dist = dist.Categorical(self.d_ps, self.d_vs)
 
         self.n_samples = 50000
+
+        with open('tests/test_data/support_categorical.json') as data_file:
+            data = json.load(data_file)
+        self.support = list(map(lambda x: torch.Tensor(x), data['one_hot']))
+        self.nhot_support = list(map(lambda x: torch.Tensor(x), data['not_hot']))
 
     def test_nhot_log_pdf(self):
         log_px_torch = self.dist_nhot.batch_log_pdf(self.test_data_nhot).data[0][0]
@@ -191,6 +202,16 @@ class TestCategorical(TestCase):
         log_px_np2 = float(spr.multinomial.logpmf(np.array([0, 0, 1]), 1, self.d_ps[1].data.numpy()))
         self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
         self.assertEqual(log_px_torch2, log_px_np2, prec=1e-4)
+
+    def test_support(self):
+        s = list(self.batch_dist.support())
+        v = [torch.equal(x.data, y) for x, y in zip(s, self.support)]
+        self.assertTrue(all(v))
+
+    def test_nhot_support(self):
+        s = list(self.batch_dist_nhot.support())
+        v = [torch.equal(x.data, y) for x, y in zip(s, self.nhot_support)]
+        self.assertTrue(all(v))
 
 
 class TestBatchMultinomial(TestCase):
@@ -382,12 +403,18 @@ class TestBatchBernoulli(TestCase):
     def setUp(self):
         self.ps = Variable(torch.Tensor(
             [0.25, 0.5, 0.75, 0.5, 0.25, 0.3, 0.1, 0.8, 0.9, 0.6]))
-
+        self.small_ps = Variable(torch.Tensor(
+            [[0.25, 0.5, 0.75], [0.3, 0.6, 0.1]]))
         self.ps_np = self.ps.data.cpu().numpy()
         self.test_data = Variable(torch.Tensor([[1, 0, 1, 1, 0, 1, 0, 1, 1, 1],
                                                 [1, 0, 0, 1, 0, 0, 1, 1, 0, 1]]))
 
         self.g = dist.Bernoulli(self.ps, batch_size=2)
+        self.small_g = dist.Bernoulli(self.small_ps)
+
+        with open('tests/test_data/support_bernoulli.json') as data_file:
+            data = json.load(data_file)
+        self.support = list(map(lambda x: torch.Tensor(x), data['expected']))
 
     def test_log_pdf(self):
         bs = 2
@@ -396,8 +423,11 @@ class TestBatchBernoulli(TestCase):
                                           p=self.ps_np)
         log_px_np = np.sum(_log_px_np[0])
         self.assertEqual(log_px_torch[0], log_px_np, prec=1e-4)
-    # def test_sample(self):
-    #     pass
+
+    def test_support(self):
+        s = list(self.small_g.support())
+        v = [torch.equal(x.data, y) for x, y in zip(s, self.support)]
+        self.assertTrue(all(v))
 
 
 class TestLogNormal(TestCase):
