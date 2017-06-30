@@ -161,8 +161,13 @@ class TestCategorical(TestCase):
         # Discrete Distribution
         self.d_ps = Variable(torch.Tensor([[0.2, 0.3, 0.5], [0.1, 0.1, 0.8]]))
         self.d_vs = Variable(torch.Tensor([[0, 1, 2], [3, 4, 5]]))
+        self.d_vs_arr = [['a', 'b', 'c'], ['d', 'e', 'f']]
+        self.d_vs_tup = (('a', 'b', 'c'), ('d', 'e', 'f'))
         self.d_test_data = Variable(torch.Tensor([[0], [5]]))
+        self.d_v_test_data = [['a'], ['f']]
         self.d_dist = dist.Categorical(self.d_ps, self.d_vs)
+        self.d_dist_arr = dist.Categorical(self.d_ps, self.d_vs_arr)
+        self.d_dist_tup = dist.Categorical(self.d_ps, self.d_vs_tup)
 
         self.n_samples = 50000
 
@@ -171,6 +176,7 @@ class TestCategorical(TestCase):
         self.support = list(map(lambda x: torch.Tensor(x), data['one_hot']))
         self.nhot_support = list(map(lambda x: torch.Tensor(x), data['not_hot']))
         self.discrete_support = list(map(lambda x: torch.Tensor(x), data['discrete']))
+        self.discrete_arr_support = data['discrete_arr']
 
     def test_nhot_log_pdf(self):
         log_px_torch = self.dist_nhot.batch_log_pdf(self.test_data_nhot).data[0][0]
@@ -203,11 +209,23 @@ class TestCategorical(TestCase):
         log_px_np2 = float(spr.multinomial.logpmf(np.array([0, 0, 1]), 1, self.d_ps[1].data.numpy()))
         self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
         self.assertEqual(log_px_torch2, log_px_np2, prec=1e-4)
+    
+    def test_discrete_arr_logpdf(self):
+        log_px_torch = self.d_dist_arr.batch_log_pdf(self.d_v_test_data).data[0][0]
+        log_px_np = float(spr.multinomial.logpmf(np.array([1, 0, 0]), 1, self.d_ps[0].data.numpy()))
+        log_px_torch2 = self.d_dist.batch_log_pdf(self.d_test_data).data[1][0]
+        log_px_np2 = float(spr.multinomial.logpmf(np.array([0, 0, 1]), 1, self.d_ps[1].data.numpy()))
+        self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
+        self.assertEqual(log_px_torch2, log_px_np2, prec=1e-4)
 
     def test_discrete_support(self):
         s = list(self.d_dist.support())
         v = [torch.equal(x.data, y) for x, y in zip(s, self.discrete_support)]
         self.assertTrue(all(v))
+
+    def test_discrete_arr_support(self):
+        s = list(self.d_dist_arr.support())
+        self.assertTrue(s == self.discrete_arr_support)
 
     def test_support(self):
         s = list(self.batch_dist.support())
