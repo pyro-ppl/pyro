@@ -209,7 +209,7 @@ class TestCategorical(TestCase):
         log_px_np2 = float(spr.multinomial.logpmf(np.array([0, 0, 1]), 1, self.d_ps[1].data.numpy()))
         self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
         self.assertEqual(log_px_torch2, log_px_np2, prec=1e-4)
-    
+
     def test_discrete_arr_logpdf(self):
         log_px_torch = self.d_dist_arr.batch_log_pdf(self.d_v_test_data).data[0][0]
         log_px_np = float(spr.multinomial.logpmf(np.array([1, 0, 0]), 1, self.d_ps[0].data.numpy()))

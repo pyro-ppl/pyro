@@ -87,6 +87,7 @@ class Categorical(Distribution):
                 ix = len(self.vs.shape) - 1
                 _x = torch.nonzero(bm).select(ix, ix)
             else:
+                # x is a Variable(Tensor) as are ps and vs
                 ix = self.vs.dim() - 1
                 _x = torch.nonzero(self.vs.eq(x.expand_as(self.vs)).data).select(ix, ix)
             x = Variable(_x).unsqueeze(1)
@@ -103,28 +104,26 @@ class Categorical(Distribution):
 
         if self.vs is not None:
             if isinstance(self.vs, np.ndarray):
+                # vs is an array, so the support must be of type array
                 r_np = self.vs.shape[0]
                 c_np = self.vs.shape[1]
-                ix =  np.expand_dims(np.arange(r_np), axis=1)
+                ix = np.expand_dims(np.arange(r_np), axis=1)
                 b = torch.ones(r_np, 1)
                 return (self.vs[np.arange(r_np), torch.Tensor(list(x)).numpy().astype(int)]
                         .reshape(r_np, 1).tolist()
                         for x in itertools.product(torch.arange(0, c_np), repeat=r_np))
-                # print list(self.vs[np.arange(r_np),
-                #            torch.sum(torch.nonzero(torch.Tensor(list(x))
-                #            .eq(b.expand_as(torch.Tensor(list(x))))), 1).numpy().ravel()]
-                #            for x in itertools.product(torch.eye(c).numpy().tolist(), repeat=r))
-                # # print list(itertools.compress(self.vs.tolist()[j], list(i)[j])) for i in itertools.product(torch.eye(c_np).numpy().astype(int).tolist(), repeat=r_np) for j in range(r_np)
-                # return iter([[x] for x in self.vs[np.arange(r), list(i)].tolist()
-                #             for i in itertools.product(torch.eye(c_np).numpy().astype(int).tolist(),
-                #             repeat=r_np)])
+            # vs is a tensor so support is of type tensor
             return (torch.sum(self.vs * Variable(torch.Tensor(list(x))), 1)
                     for x in itertools.product(torch.eye(c).numpy().tolist(),
                     repeat=r))
+
         if self.one_hot:
-            return (Variable(torch.Tensor(list(x))) for x in itertools.product(torch.eye(c).numpy().tolist(),
+            return (Variable(torch.Tensor(list(x)))
+                    for x in itertools.product(torch.eye(c).numpy().tolist(),
                     repeat=r))
+
         if r == 1:
             return iter([Variable(torch.Tensor([[i]])) for i in range(c)])
-        return (Variable(torch.Tensor(list(x)).unsqueeze(1)) for x in itertools.product(torch.arange(0, c),
+        return (Variable(torch.Tensor(list(x)).unsqueeze(1))
+                for x in itertools.product(torch.arange(0, c),
                 repeat=r))
