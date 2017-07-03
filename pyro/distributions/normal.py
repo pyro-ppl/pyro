@@ -61,3 +61,6 @@ class Normal(Distribution):
 
     def batch_log_pdf(self, x, batch_size=1):
         raise NotImplementedError()
+
+    def support(self):
+        raise NotImplementedError("Support not supported for continuous distributions")
