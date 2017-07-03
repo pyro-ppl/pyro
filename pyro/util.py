@@ -1,3 +1,14 @@
+def yld(*args, **kwargs):
+    """
+    Yield nonlocally
+    """
+    g = greenlet.getcurrent()
+    # XXX what should g be an instance of?
+    while not isinstance(g, greenlet.greenlet):
+        if g is None:
+            raise RuntimeError("Yield outside a greenlet")
+        g = g.parent
+    return g.parent.switch(*args, **kwargs)
 
 
 # https://stackoverflow.com/questions/1988804/what-is-memoization-and-how-can-i-use-it-in-python
