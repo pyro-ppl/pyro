@@ -30,10 +30,16 @@ class Uniform(Distribution):
         """
         Normal log-likelihood
         """
+        if x.le(self.a).data[0] or x.ge(self.b).data[0]:
+            return Variable(torch.Tensor([-float("inf")]))
         return torch.sum(-torch.log(self.b - self.a))
 
     def batch_log_pdf(self, x, batch_size=1):
-        raise NotImplementedError()
+        if x.dim() == 1 and self.a.dim() == 1 and batch_size == 1:
+            return self.log_pdf(x)
+        _l = x.ge(self.a).type_as(self.a)
+        _u = x.le(self.b).type_as(self.b)
+        return torch.sum(torch.log(_l.mul(_u)) - torch.log(self.b - self.a), 1)
 
     def support(self):
         raise NotImplementedError("Support not supported for continuous distributions")
