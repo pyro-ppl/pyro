@@ -14,22 +14,35 @@ from pyro.distributions.transformed_distribution import AffineExp, TransformedDi
 class TestUniform(TestCase):
 
     def setUp(self):
-        self.a = Variable(torch.Tensor([-1.0, 0.0, 0.0]))
-        self.b = Variable(torch.Tensor([2.0, 2.0, 3.0]))
+        self.a = Variable(torch.Tensor([-1.0]))
+        self.b = Variable(torch.Tensor([2.0]))
+        self.vec_a = Variable(torch.Tensor([[2.0], [-3], [0]]))
+        self.vec_b = Variable(torch.Tensor([[2.5], [0], [1]]))
 
-        self.a_np = self.a.data.cpu().numpy()
-        self.b_np = self.b.data.cpu().numpy()
+        self.a_np = -1
+        self.b_np = 2
+        self.vec_a_np = self.vec_a.data.cpu().numpy()
+        self.vec_b_np = self.vec_b.data.cpu().numpy()
         self.range_np = self.b_np - self.a_np
-        self.test_data = Variable(torch.rand(3))
+        self.vec_range_np = self.vec_b_np - self.vec_a_np
+        self.test_data = Variable(torch.Tensor([-0.5]))
+        self.batch_test_data = Variable(torch.Tensor([[1], [-2], [0.7]]))
 
         self.g = dist.Uniform(self.a, self.b)
+        self.batch_g = dist.Uniform(self.vec_a, self.vec_b)
 
     def test_log_pdf(self):
         log_px_torch = self.g.log_pdf(self.test_data).data[0]
-        _log_px_np = spr.uniform.logpdf(self.test_data.data.cpu().numpy(),
-                                        loc=self.a_np,
-                                        scale=self.range_np)
-        log_px_np = np.sum(_log_px_np)
+        log_px_np = spr.uniform.logpdf(self.test_data.data.cpu().numpy(),
+                                       loc=self.a_np,
+                                       scale=self.range_np)[0]
+        self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
+
+    def test_batch_log_pdf(self):
+        log_px_torch = self.batch_g.batch_log_pdf(self.batch_test_data).data
+        log_px_np = spr.uniform.logpdf(self.batch_test_data.data.cpu().numpy(),
+                                       loc=self.vec_a_np,
+                                       scale=self.vec_range_np)
         self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
 
 
