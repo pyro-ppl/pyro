@@ -74,3 +74,10 @@ class Trace(dict):
         site["type"] = "return"
         site["value"] = val
         self[name] = site
+
+
+    def copy(self):
+        """
+        Make a copy (for dynamic programming)
+        """
+        return Trace(self)

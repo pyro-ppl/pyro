@@ -1,38 +1,10 @@
-import pyro
-from pyro.infer.poutine import Poutine, TagPoutine
 import torch
 from torch.autograd import Variable
+
+import pyro
+from pyro.infer import Trace
+from pyro.infer.poutine import Poutine
 # from pyro.distributions import Discrete
-# from collections import OrderedDict
-
-
-class Trace(dict):
-
-    def __init__(self, *args):
-        super(Trace, self).__init__(*args)
-        self.log_pdf = 0.0
-        # TODO: put in infrastructure to fold over trace as it's built.
-        #   that speeds up running sums and such.
-
-    def add_sample(self, name, sample, logpdf):
-        node = {}
-        # TODO: make this as an object instead of dict?
-        node["type"] = "sample"
-        node["sample"] = sample
-        node["log_pdf"] = logpdf
-        self.log_pdf += logpdf
-        self[name] = node
-
-    def add_observe(self, name, logpdf):
-        node = {}
-        node["type"] = "observe"
-        node["log_pdf"] = logpdf
-        self.log_pdf += logpdf
-        self[name] = node
-
-    def copy(self):
-        # will this work?
-        return Trace(self)
 
 
 class SearchCo(Poutine):
