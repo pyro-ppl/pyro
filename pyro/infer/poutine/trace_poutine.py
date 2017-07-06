@@ -28,15 +28,10 @@ class TracePoutine(Poutine):
         """
         aa
         """
+        self.trace.add_args((args, kwargs))
         ret = super(TracePoutine, self).__call__(*args, **kwargs)
         self.trace.add_return(ret, *args, **kwargs)
         return self.trace
-
-    def _pyro_map_data(self, name, *args, **kwargs):
-        """
-        Trace map_data
-        """
-        raise NotImplementedError("still working out proper semantics")
         
     def _pyro_sample(self, name, dist, *args, **kwargs):
         """
@@ -78,4 +73,9 @@ class TracePoutine(Poutine):
         return retrieved
 
 
-       
+     def _pyro_map_data(self, name, *args, **kwargs):
+        """
+        Trace map_data
+        """
+        raise NotImplementedError("still working out proper semantics")
+      

@@ -16,10 +16,10 @@ class PivotPoutine(Poutine):
         self.guide_trace = guide_trace
         self.all_sites = False
         self.pivot_site = None
-        # case 1: no sites or pivot
+        # case 1: pivot
         if pivot is None:
             self.all_sites = True
-        # case 2: pivot and no sites
+        # case 2: pivot
         elif pivot is not None:
             self.pivot_site = pivot
         # otherwise, something is wrong
@@ -57,7 +57,7 @@ class PivotPoutine(Poutine):
             # case 2a: site is pivot
             if name == self.pivot_site:
                 # XXX what to do here??
-                pass
+                self.pivot_seen = True
             # case 2b: pivot unseen: sample from guide
             elif not self.pivot_seen:
                 assert(name in self.guide_trace)
