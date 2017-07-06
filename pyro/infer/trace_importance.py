@@ -5,7 +5,7 @@ from collections import OrderedDict
 
 import pyro
 from pyro.infer.abstract_infer import AbstractInfer
-import pyro.infer.poutine as poutine
+import pyro.poutine as poutine
 
 
 # XXX what should be the base class here?

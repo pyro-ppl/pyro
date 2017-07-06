@@ -1,4 +1,4 @@
-from pyro.infer.poutine import TagPoutine
+from pyro.poutine import TagPoutine
 from pyro.infer.abstract_infer import AbstractInfer
 from torch.autograd import Variable
 import torch

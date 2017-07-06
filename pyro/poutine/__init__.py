@@ -11,6 +11,7 @@ from .beam_poutine import BeamPoutine
 
 ############################################
 # Begin primitive operations
+# XXX should these be returned as Poutines?
 ############################################
 
 def trace(fn):

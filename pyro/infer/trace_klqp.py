@@ -3,8 +3,7 @@ import torch
 from torch.autograd import Variable
 from collections import OrderedDict
 import pyro
-import pyro.infer.poutine as poutine
-from pyro.infer.trace import TracePoutine
+import pyro.poutine as poutine
 from pyro.infer.abstract_infer import AbstractInfer
 
 def zero_grads(tensors):
