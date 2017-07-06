@@ -1,9 +1,8 @@
 import pyro
 import torch
-from torch.autograd import Variable
-#from torch.multiprocessing import Pool
 
 from .poutine import Poutine
+from pyro.infer.trace import Trace
 
 
 class TracePoutine(Poutine):
@@ -24,15 +23,18 @@ class TracePoutine(Poutine):
         super(TracePoutine, self).__init__(fn, *args, **kwargs)
         self.trace = Trace()
 
+
     def __call__(self, *args, **kwargs):
         """
-        aa
+        Main logic; where the function is actually called
         """
+        # Have to override this to log inputs and outputs and change return type
         self.trace.add_args((args, kwargs))
         ret = super(TracePoutine, self).__call__(*args, **kwargs)
         self.trace.add_return(ret, *args, **kwargs)
         return self.trace
         
+
     def _pyro_sample(self, name, dist, *args, **kwargs):
         """
         sample
@@ -44,7 +46,8 @@ class TracePoutine(Poutine):
         self.trace.add_sample(name, val, dist, *args, **kwargs)
         return val
 
-    def _pyro_observe(self, name, dist, val, *args, **kwargs):
+
+    def _pyro_observe(self, name, fn, obs, *args, **kwargs):
         """
         observe
         TODO docs
@@ -54,10 +57,9 @@ class TracePoutine(Poutine):
         """
         # make sure the site name is unique
         assert(name not in self.trace)
-        val = super(TracePoutine, self)._pyro_observe(name, dist, val,
-                                                      *args, **kwargs)
+        val = super(TracePoutine, self)._pyro_observe(name, fn, obs, *args, **kwargs)
         # XXX not correct arguments?
-        self.trace.add_observe(name, dist, val, *args, **kwargs)
+        self.trace.add_observe(name, val, fn, obs, *args, **kwargs)
 
 
     def _pyro_param(self, name, *args, **kwargs):
