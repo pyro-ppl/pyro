@@ -4,10 +4,9 @@ from torch.autograd import Variable
 from collections import OrderedDict
 
 import pyro
-from pyro.infer.trace import TracePoutine
 from pyro.infer.abstract_infer import AbstractInfer
+import pyro.infer.poutine as poutine
 
-from .gpoutine import GPoutine
 
 # XXX what should be the base class here?
 class Importance(AbstractInfer):
