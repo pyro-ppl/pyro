@@ -13,36 +13,48 @@ class ReplayPoutine(Poutine):
         Constructor.
         """
         super(ReplayPoutine, self).__init__(fn)
-        self.sites = sites
         self.guide_trace = guide_trace
+        self.all_sites = False
+        # case 1: no sites
+        if sites is None:
+            self.all_sites = True
+        # case 3: sites is a list/tuple/set
+        elif isinstance(sites, (list, tuple, set)):
+            self.sites = {site: site for site in sites}
+        # case 4: sites is a dict
+        elif isinstance(sites, dict):
+            self.sites = sites
+        # otherwise, something is wrong
+        # XXX one other possible case: sites is a trace?
+        else:
+            raise TypeError(
+                "unrecognized type {} for sites".format(str(type(sites))))
 
 
     def _pyro_sample(self, name, fn, *args, **kwargs):
         """
-        Return the sample in the guide trace
-        
-        Expected behavior list:
-        Case 1: self.sites is None and self.guide_trace is empty
-        --> sample from model and store in trace
-        Case 2: self.sites is None and self.guide_trace is non-empty
-        --> replay sample from guide and store in trace
-        Case 3: name in self.sites and self.guide_trace is empty
-        --> sample from model and store in trace
-        Case 4: name in self.sites and name not in self.guide_trace
-        --> ambiguous - raise error, or sample from model and store in trace?
-        Case 5: name in self.sites and name in self.guide_trace
-        --> replay sample from guide and store in trace
-        Case 6: name not in self.sites and self.guide_trace is empty
-        --> sample from model but dont store
-        Case 7: name not in self.sites and name in self.guide_trace
-        --> ambiguous - raise error, or replay sample from guide but dont store?
-        
-        Any behavior cases missing?
-
+        Return the sample in the guide trace when appropriate
         """
-        assert(name in self.guide_trace)
-        assert(self.guide_trace[name]["type"] == "sample")
-        return self.guide_trace[name]
+        # case 1: all_sites
+        if self.all_sites:
+            # some sanity checks
+            assert(name in self.guide_trace)
+            assert(self.guide_trace[name]["type"] == "sample")
+            return self.guide_trace[name]["sample"]
+        # case 3: dict
+        if self.sites is not None:
+            # case 3a: dict, positive: sample from guide
+            if name in self.sites:
+                g_name = self.sites[name]
+                assert(g_name in self.guide_trace)
+                assert(self.guide_trace[g_name]["type"] == "sample")
+                return self.guide_trace[g_name]["sample"]
+            # case 3b: dict, negative: sample from model
+            elif name not in self.sites:
+                return fn(*args, **kwargs)
+            else:
+                raise ValueError(
+                    "something went wrong with replay conditions at site "+name)
 
 
     def _pyro_map_data(self, data, fn):

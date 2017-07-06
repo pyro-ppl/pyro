@@ -83,6 +83,10 @@ class Poutine(object):
 
 
     def _tag_name(self, trace_uid):
+        """
+        Generate a name for the trace consisting of a unique name for the poutine
+        and a trace-specific identifier
+        """
         return str(id(self)) + "_{}".format(trace_uid)
 
 
