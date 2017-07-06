@@ -1,26 +1,31 @@
-def yld(*args, **kwargs):
-    """
-    Yield nonlocally
-    """
-    g = greenlet.getcurrent()
-    # XXX what should g be an instance of?
-    while not isinstance(g, greenlet.greenlet):
-        if g is None:
-            raise RuntimeError("Yield outside a greenlet")
-        g = g.parent
-    return g.parent.switch(*args, **kwargs)
-
-
 # https://stackoverflow.com/questions/1988804/what-is-memoization-and-how-can-i-use-it-in-python
 # unbounded memoize
 # alternate in py3: https://docs.python.org/3/library/functools.html
 # lru_cache
-class Memoize:
-    def __init__(self, f):
-        self.f = f
-        self.memo = {}
+def memoize(fn):
+    _mem = {}
+    def _fn(*args, **kwargs):
+        if (args, kwargs) not in _mem:
+            _mem[(args, kwargs)] = fn(*args, **kwargs)
+        return _mem[(args, kwargs)]
+    return _fn
 
-    def __call__(self, *args):
-        if args not in self.memo:
-            self.memo[args] = self.f(*args)
-        return self.memo[args]
+
+def ones(*args, **kwargs):
+    return Parameter(torch.ones(*args, **kwargs))
+    # return pyro.device(Parameter(torch.ones(*args, **kwargs)))
+
+
+def zeros(*args, **kwargs):
+    return Parameter(torch.zeros(*args, **kwargs))
+    # return pyro.device(Parameter(torch.zeros(*args, **kwargs)))
+
+
+def ng_ones(*args, **kwargs):
+    return Variable(torch.ones(*args, **kwargs), requires_grad=False)
+
+
+def ng_zeros(*args, **kwargs):
+    return Variable(torch.zeros(*args, **kwargs), requires_grad=False)
+
+

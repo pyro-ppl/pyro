@@ -50,37 +50,35 @@ def module_from_param_name(param_name):
 # use pyro optim class to wrap nn optim
 optim = PyroOptim
 
+_PYRO_STACK = []
 
-def ones(*args, **kwargs):
-    return Parameter(torch.ones(*args, **kwargs))
-    # return pyro.device(Parameter(torch.ones(*args, **kwargs)))
-
-
-def zeros(*args, **kwargs):
-    return Parameter(torch.zeros(*args, **kwargs))
-    # return pyro.device(Parameter(torch.zeros(*args, **kwargs)))
-
-
-def ng_ones(*args, **kwargs):
-    return Variable(torch.ones(*args, **kwargs), requires_grad=False)
-
-
-def ng_zeros(*args, **kwargs):
-    return Variable(torch.zeros(*args, **kwargs), requires_grad=False)
+def sample(name, fn, *args, **kwargs):
+    # check if stack is empty
+    # if stack empty, default behavior (defined here)
+    if len(_PYRO_STACK) == 0:
+        return fn(*args, **kwargs)
+    # if stack not empty, apply everything in the stack?
+    else:
+        ret = None
+        for layer in _PYRO_STACK:
+            ret, stop = layer("sample", ret, name, fn, *args, **kwargs)
+            if stop:
+                break
+        return ret
 
 
-def sample(name, dist, *args, **kwargs):
-    '''
-    Return sample from provided distribution. Must be named.
-    '''
-    assert isinstance(dist, pyro.distributions.Distribution)
-    return dist()
-
-
-def observe(name, dist, obs):
-    raise NotImplementedError(
-        "Observe has been used outside of a normalizing context.")
-
+def observe(name, fn, obs, *args, **kwargs):
+    if len(_PYRO_STACK) == 0:
+        raise NotImplementedError(
+            "Observe has been used outside of a normalizing context.")
+    else:
+        ret = None
+        for layer in _PYRO_STACK:
+            ret, stop = layer("observe", ret, name, fn, obs, *args, **kwargs)
+            if stop:
+                break
+        return ret
+    
 
 def map_data(data, observer):
     # by default map_data is the same as map.
