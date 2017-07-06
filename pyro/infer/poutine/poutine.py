@@ -27,7 +27,7 @@ class Poutine(object):
         r_val = self.orig_fct(*args, **kwargs)
 
         # then return the pyro global fcts to their previous state
-        self._exit_poutine(*args, **kwargs)
+        self._exit_poutine(r_val, *args, **kwargs)
         self._pop_stack()
 
         # send back the final val
@@ -40,7 +40,7 @@ class Poutine(object):
         """
         self.trace_uid = uuid().hex
 
-    def _exit_poutine(self, *args, **kwargs):
+    def _exit_poutine(self, r_val, *args, **kwargs):
         """
         A teardown function called right before exit from the Poutine
         """
@@ -51,10 +51,6 @@ class Poutine(object):
         The dispatcher that gets put into _PYRO_STACK
         """
         ret = getattr(self, "_pyro_" + site_type)(_ret, name, *args, **kwargs)
-        # # sometimes ret might be none, we might want to pass old value through
-        # # XXX get the default behavior right here
-        # if (ret is None) or (self.transparent and (_ret is not None)):
-        #     ret = _ret
         barrier = self._block_stack(site_type, name)
         return ret, barrier
     
@@ -70,7 +66,10 @@ class Poutine(object):
         """
         Store the current stack of pyro functions, push this class model fcts
         """
-        pyro._PYRO_STACK.insert(0, self._dispatch)
+        if not (self._dispatch in pyro._PYRO_STACK):
+            pyro._PYRO_STACK.insert(0, self._dispatch)
+        else:
+            raise ValueError("cannot install a Poutine instance twice")
         
 
     def _pop_stack(self):
@@ -81,6 +80,15 @@ class Poutine(object):
             pyro._PYRO_STACK.pop(0)
         else:
             raise ValueError("This Poutine is not on top of the stack")
+
+
+    def _flush_stack(self):
+        """
+        Find our dispatcher in the stack, then remove it and everything below it
+        """
+        loc = pyro._PYRO_STACK.index(self._dispatch)
+        for i in range(0, loc+1):
+            pyro._PYRO_STACK.pop(0)
 
 
     def _tag_name(self, trace_uid):

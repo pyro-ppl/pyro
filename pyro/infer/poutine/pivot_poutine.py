@@ -27,7 +27,7 @@ class PivotPoutine(Poutine):
         # XXX one other possible case: sites is a trace?
         else:
             raise TypeError(
-                "something went wrong with pivot site {}".format(str(pivot_site)))
+                "something went wrong with pivot site {}".format(str(pivot)))
 
 
     def _enter_poutine(self, *args, **kwargs):

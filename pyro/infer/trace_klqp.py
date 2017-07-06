@@ -7,11 +7,11 @@ import pyro.infer.poutine as poutine
 from pyro.infer.trace import TracePoutine
 from pyro.infer.abstract_infer import AbstractInfer
 
-def zero_grads(all_trainable_params):
+def zero_grads(tensors):
     """
-    Sets gradients of all model parameters to zero
+    Sets gradients of list of Variables to zero in place
     """
-    for p in all_trainable_params:
+    for p in tensors:
         if p.grad is not None:
             if p.grad.volatile:
                 p.grad.data.zero_()

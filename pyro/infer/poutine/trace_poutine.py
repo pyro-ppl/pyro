@@ -28,12 +28,26 @@ class TracePoutine(Poutine):
         """
         Main logic; where the function is actually called
         """
-        # Have to override this to log inputs and outputs and change return type
-        self.trace.add_args((args, kwargs))
+        # Have to override this to change return type
         ret = super(TracePoutine, self).__call__(*args, **kwargs)
-        self.trace.add_return(ret, *args, **kwargs)
         return self.trace
         
+
+    def _enter_poutine(self, *args, **kwargs):
+        """
+        Register the input arguments in the trace upon entry
+        """
+        super(TracePoutine, self)._enter_poutine(*args, **kwargs)
+        self.trace = Trace()
+        self.trace.add_args((args, kwargs))
+
+
+    def _exit_poutine(self, ret_val, *args, **kwargs):
+        """
+        Register the return value from the function on exit
+        """
+        self.trace.add_return(ret_val, *args, **kwargs)
+    
 
     def _pyro_sample(self, prev_val, name, dist, *args, **kwargs):
         """

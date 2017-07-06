@@ -1,6 +1,14 @@
 import pyro
 
 
+def get_parents(node, trace):
+    """
+    Get the parents of a node in a trace
+    TODO docs
+    """
+    raise NotImplementedError("not implemented yet")
+    
+
 class Trace(dict):
     """
     Execution trace data structure
@@ -58,6 +66,7 @@ class Trace(dict):
         """
         input arguments site
         """
+        assert(name not in self)
         name = "_INPUT"
         site = dict({})
         site["type"] = "args"
@@ -69,6 +78,7 @@ class Trace(dict):
         """
         return value site
         """
+        assert(name not in self)
         name = "_RETURN"
         site = dict({})
         site["type"] = "return"
