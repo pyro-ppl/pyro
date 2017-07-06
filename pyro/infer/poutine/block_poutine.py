@@ -7,6 +7,7 @@ class BlockPoutine(Poutine):
     Blocks some things
     """
     def __init__(self, fn,
+                 transparent=None,
                  hide_all=True, expose_all=False,
                  hide=None, expose=None,
                  hide_types=None, expose_types=None):
@@ -15,6 +16,9 @@ class BlockPoutine(Poutine):
         Default behavior: block everything
         """
         super(BlockPoutine, self).__init__(fn)
+        if transparent is None:
+            transparent = True
+        self.transparent = transparent
         # first, some sanity checks:
         # hide_all and expose_all intersect?
         assert((hide_all == expose_all == False) or (hide_all != expose_all))

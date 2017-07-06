@@ -12,7 +12,9 @@ class Trace(dict):
         assert(name not in self)
         site = dict({})
         site["type"] = "sample"
-        # XXX
+        site["value"] = sample
+        site["fn"] = fn
+        site["args"] = (args, kwargs)
         self[name] = site
 
 
@@ -23,7 +25,10 @@ class Trace(dict):
         assert(name not in self)
         site = dict({})
         site["type"] = "observe"
-        # XXX
+        site["value"] = val
+        site["fn"] = fn
+        site["obs"] = obs
+        site["args"] = (args, kwargs)
         self[name] = site
 
 
@@ -42,7 +47,11 @@ class Trace(dict):
         """
         param site
         """
-        pass
+        site = dict({})
+        site["type"] = "param"
+        site["value"] = val
+        site["args"] = (args, kwargs)
+        self[name] = site
 
 
     def add_args(self, args_and_kwargs):
@@ -52,7 +61,7 @@ class Trace(dict):
         name = "_INPUT"
         site = dict({})
         site["type"] = "args"
-        # XXX
+        site["args"] = args_and_kwargs
         self[name] = site
 
 
@@ -63,5 +72,5 @@ class Trace(dict):
         name = "_RETURN"
         site = dict({})
         site["type"] = "return"
-        # XXX
+        site["value"] = val
         self[name] = site

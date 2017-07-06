@@ -1,8 +1,9 @@
 import pyro
 import torch
 
-from pyro.infer import Trace
+from pyro.infer.trace import Trace
 from .poutine import Poutine
+import pdb
 
 class ReplayPoutine(Poutine):
     """
@@ -13,6 +14,7 @@ class ReplayPoutine(Poutine):
         Constructor.
         """
         super(ReplayPoutine, self).__init__(fn)
+        self.transparent = False
         self.guide_trace = guide_trace
         self.all_sites = False
         # case 1: no sites
@@ -31,7 +33,7 @@ class ReplayPoutine(Poutine):
                 "unrecognized type {} for sites".format(str(type(sites))))
 
 
-    def _pyro_sample(self, name, fn, *args, **kwargs):
+    def _pyro_sample(self, prev_val, name, fn, *args, **kwargs):
         """
         Return the sample in the guide trace when appropriate
         """
@@ -40,7 +42,7 @@ class ReplayPoutine(Poutine):
             # some sanity checks
             assert(name in self.guide_trace)
             assert(self.guide_trace[name]["type"] == "sample")
-            return self.guide_trace[name]["sample"]
+            return self.guide_trace[name]["value"]
         # case 3: dict
         if self.sites is not None:
             # case 3a: dict, positive: sample from guide
@@ -48,7 +50,7 @@ class ReplayPoutine(Poutine):
                 g_name = self.sites[name]
                 assert(g_name in self.guide_trace)
                 assert(self.guide_trace[g_name]["type"] == "sample")
-                return self.guide_trace[g_name]["sample"]
+                return self.guide_trace[g_name]["value"]
             # case 3b: dict, negative: sample from model
             elif name not in self.sites:
                 return fn(*args, **kwargs)
@@ -57,7 +59,7 @@ class ReplayPoutine(Poutine):
                     "something went wrong with replay conditions at site "+name)
 
 
-    def _pyro_map_data(self, data, fn):
+    def _pyro_map_data(self, prev_val, name, data, fn):
         """
         Use the batch indices from the guide trace
         """

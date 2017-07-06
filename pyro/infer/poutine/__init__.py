@@ -23,6 +23,20 @@ def trace(fn):
     return _fn
 
 
+def collapse(fn):
+    """
+    Given a callable that contains Pyro primitive calls and returns Traces,
+    return a callable that returns the trace's return value
+    """
+    def _fn(*args, **kwargs):
+        ret = fn(*args, **kwargs)
+        if isinstance(ret, pyro.infer.Trace):
+            return ret["_RETURN"]["value"]
+        else:
+            return ret
+    return _fn
+
+
 def replay(fn, trace, sites=None):
     """
     Given a callable that contains Pyro primitive calls,

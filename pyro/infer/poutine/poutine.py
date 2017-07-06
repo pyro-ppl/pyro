@@ -13,6 +13,7 @@ class Poutine(object):
         """
         # store original fn to wrap
         self.orig_fct = fn
+        self.transparent = True
 
     def __call__(self, *args, **kwargs):
         """
@@ -49,11 +50,11 @@ class Poutine(object):
         """
         The dispatcher that gets put into _PYRO_STACK
         """
-        ret = getattr(self, "_pyro_" + site_type)(name, *args, **kwargs)
-        # sometimes ret might be none, we might want to pass old value through
-        # XXX get the default behavior right here
-        if ret is None and not (_ret is None):
-            ret = _ret
+        ret = getattr(self, "_pyro_" + site_type)(_ret, name, *args, **kwargs)
+        # # sometimes ret might be none, we might want to pass old value through
+        # # XXX get the default behavior right here
+        # if (ret is None) or (self.transparent and (_ret is not None)):
+        #     ret = _ret
         barrier = self._block_stack(site_type, name)
         return ret, barrier
     
@@ -76,7 +77,7 @@ class Poutine(object):
         """
         Reset global pyro attributes to the previously recorded fcts
         """
-        if pyro._PYRO_STACK[0] is self._dispatch:
+        if pyro._PYRO_STACK[0] == self._dispatch:
             pyro._PYRO_STACK.pop(0)
         else:
             raise ValueError("This Poutine is not on top of the stack")
@@ -90,36 +91,46 @@ class Poutine(object):
         return str(id(self)) + "_{}".format(trace_uid)
 
 
-    def _pyro_sample(self, name, fn, *args, **kwargs):
+    def _pyro_sample(self, prev_val, name, fn, *args, **kwargs):
         """
         Default pyro.sample Poutine behavior
         """
-        return fn(*args, **kwargs)
+        val = fn(*args, **kwargs)
+        if self.transparent and not (prev_val is None):
+            return prev_val
+        else:
+            return val
 
-    def _pyro_observe(self, name, fn, obs, *args, **kwargs):
+    def _pyro_observe(self, prev_val, name, fn, obs, *args, **kwargs):
         """
         Default pyro.observe Poutine behavior
         """
-        if obs is None:
-            return fn(*args, **kwargs)
+        if self.transparent and not (prev_val is None):
+            return prev_val
         else:
-            return obs
+            if obs is None:
+                return fn(*args, **kwargs)
+            else:
+                return obs
 
 
-    def _pyro_map_data(self, data, fn):
+    def _pyro_map_data(self, prev_val, name, data, fn):
         """
         Default pyro.map_data Poutine behavior
         """
-        if isinstance(data, torch.Tensor):
-            # assume vectorized observation fn
-            raise NotImplementedError(
-                "map_data for vectorized data not yet implemented.")
+        if self.transparent and not (prev_val is None):
+            return prev_val
         else:
-            # note that fn should expect an index and a datum
-            map(fn, enumerate(data))
+            if isinstance(data, torch.Tensor):
+                # assume vectorized observation fn
+                raise NotImplementedError(
+                    "map_data for vectorized data not yet implemented.")
+            else:
+                # note that fn should expect an index and a datum
+                map(fn, enumerate(data))
 
 
-    def _pyro_param(self, *args, **kwargs):
+    def _pyro_param(self, prev_val, name, *args, **kwargs):
         """
         overload pyro.param call
         here we tag all parameters constructed during this with

@@ -10,7 +10,7 @@ class TracePoutine(Poutine):
     Execution trace poutine.
 
     A TracePoutine records the input and output to every pyro primitive
-    and stores them as a Site() in a Trace().
+    and stores them as a site in a Trace().
     This should, in theory, be sufficient information for every inference algorithm
     (along with the implicit computational graph in the Variables?)
 
@@ -35,19 +35,20 @@ class TracePoutine(Poutine):
         return self.trace
         
 
-    def _pyro_sample(self, name, dist, *args, **kwargs):
+    def _pyro_sample(self, prev_val, name, dist, *args, **kwargs):
         """
         sample
         TODO docs
         """
         assert(name not in self.trace)
-        val = super(TracePoutine, self)._pyro_sample(name, dist, *args, **kwargs)
+        val = super(TracePoutine, self)._pyro_sample(prev_val, name, dist,
+                                                     *args, **kwargs)
         # XXX not correct arguments
         self.trace.add_sample(name, val, dist, *args, **kwargs)
         return val
 
 
-    def _pyro_observe(self, name, fn, obs, *args, **kwargs):
+    def _pyro_observe(self, prev_val, name, fn, obs, *args, **kwargs):
         """
         observe
         TODO docs
@@ -57,12 +58,13 @@ class TracePoutine(Poutine):
         """
         # make sure the site name is unique
         assert(name not in self.trace)
-        val = super(TracePoutine, self)._pyro_observe(name, fn, obs, *args, **kwargs)
+        val = super(TracePoutine, self)._pyro_observe(prev_val, name, fn, obs,
+                                                      *args, **kwargs)
         # XXX not correct arguments?
         self.trace.add_observe(name, val, fn, obs, *args, **kwargs)
 
 
-    def _pyro_param(self, name, *args, **kwargs):
+    def _pyro_param(self, prev_val, name, *args, **kwargs):
         """
         param
         TODO docs
@@ -70,12 +72,13 @@ class TracePoutine(Poutine):
         Expected behavior:
         TODO
         """
-        retrieved = super(TracePoutine, self)._pyro_param(name, *args, **kwargs)
+        retrieved = super(TracePoutine, self)._pyro_param(prev_val, name,
+                                                          *args, **kwargs)
         self.trace.add_param(name, retrieved, *args, **kwargs)
         return retrieved
 
 
-     def _pyro_map_data(self, name, *args, **kwargs):
+    def _pyro_map_data(self, prev_val, name, *args, **kwargs):
         """
         Trace map_data
         """

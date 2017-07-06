@@ -1,7 +1,7 @@
 import pyro
 import torch
 
-from pyro.infer import Trace
+from pyro.infer.trace import Trace
 from .poutine import Poutine
 
 class PivotPoutine(Poutine):
@@ -13,6 +13,7 @@ class PivotPoutine(Poutine):
         Constructor.
         """
         super(PivotPoutine, self).__init__(fn)
+        self.transparent = False
         self.guide_trace = guide_trace
         self.all_sites = False
         self.pivot_site = None
@@ -42,7 +43,7 @@ class PivotPoutine(Poutine):
         self.pivot_seen = False
         
 
-    def _pyro_sample(self, name, fn, *args, **kwargs):
+    def _pyro_sample(self, prev_val, name, fn, *args, **kwargs):
         """
         Return the sample in the guide trace when appropriate
         """
@@ -51,18 +52,19 @@ class PivotPoutine(Poutine):
             # some sanity checks
             assert(name in self.guide_trace)
             assert(self.guide_trace[name]["type"] == "sample")
-            return self.guide_trace[name]["sample"]
+            return self.guide_trace[name]["value"]
         # case 2: pivot
         if self.pivot_site is not None:
             # case 2a: site is pivot
             if name == self.pivot_site:
                 # XXX what to do here??
                 self.pivot_seen = True
+                return fn(*args, **kwargs)
             # case 2b: pivot unseen: sample from guide
             elif not self.pivot_seen:
                 assert(name in self.guide_trace)
                 assert(self.guide_trace[name]["type"] == "sample")
-                return self.guide_trace[name]["sample"] # XXX right entry?
+                return self.guide_trace[name]["value"] # XXX right entry?
             # case 2c: pivot seen: sample from model
             elif self.pivot_seen:
                 return fn(*args, **kwargs)
@@ -71,7 +73,7 @@ class PivotPoutine(Poutine):
                     "something went wrong with replay conditions at site "+name)
 
 
-    def _pyro_map_data(self, data, fn):
+    def _pyro_map_data(self, prev_val, name, data, fn):
         """
         Use the batch indices from the guide trace
         """
