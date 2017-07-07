@@ -21,7 +21,7 @@ class BlockPoutine(Poutine):
         self.transparent = transparent
         # first, some sanity checks:
         # hide_all and expose_all intersect?
-        assert((hide_all == expose_all == False) or (hide_all != expose_all))
+        assert((not (hide_all or expose_all)) or (hide_all != expose_all))
 
         # hide and expose intersect?
         if hide is None:
@@ -45,7 +45,6 @@ class BlockPoutine(Poutine):
         self.hide_types = hide_types
         self.expose_types = expose_types
 
-
     def _block_stack(self, site_type, name):
         """
         A stack-blocking operation
@@ -53,8 +52,7 @@ class BlockPoutine(Poutine):
         # hiding
         if (name in self.hide) or \
            (site_type in self.hide_types) or \
-           ((name not in self.expose) and (site_type not in self.expose_types) and \
-            self.hide_all):
+           ((name not in self.expose) and (site_type not in self.expose_types) and self.hide_all):
             return True
         # otherwise expose
         else:

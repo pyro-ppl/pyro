@@ -3,7 +3,7 @@ import torch
 
 from pyro.infer.trace import Trace
 from .poutine import Poutine
-import pdb
+
 
 class ReplayPoutine(Poutine):
     """
@@ -32,7 +32,6 @@ class ReplayPoutine(Poutine):
             raise TypeError(
                 "unrecognized type {} for sites".format(str(type(sites))))
 
-
     def _pyro_sample(self, prev_val, name, fn, *args, **kwargs):
         """
         Return the sample in the guide trace when appropriate
@@ -56,8 +55,7 @@ class ReplayPoutine(Poutine):
                 return fn(*args, **kwargs)
             else:
                 raise ValueError(
-                    "something went wrong with replay conditions at site "+name)
-
+                    "something went wrong with replay conditions at site " + name)
 
     # def _pyro_map_data(self, prev_val, name, data, fn):
     #     """

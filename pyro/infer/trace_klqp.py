@@ -7,6 +7,7 @@ import pyro
 import pyro.poutine as poutine
 from pyro.infer.abstract_infer import AbstractInfer
 
+
 def zero_grads(tensors):
     """
     Sets gradients of list of Variables to zero in place
@@ -45,7 +46,6 @@ class TraceKLqp(AbstractInfer):
 
     def __call__(self, *args, **kwargs):
         return self.step(*args, **kwargs)
-
 
     def step(self, *args, **kwargs):
         """
@@ -92,7 +92,6 @@ class TraceKLqp(AbstractInfer):
             else:
                 pass
 
-        
         elbo = 0.0
         for name in model_trace.keys():
             if model_trace[name]["type"] == "observe":

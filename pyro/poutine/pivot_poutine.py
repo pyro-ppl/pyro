@@ -4,6 +4,7 @@ import torch
 from pyro.infer.trace import Trace
 from .poutine import Poutine
 
+
 class PivotPoutine(Poutine):
     """
     Poutine for replaying from an existing execution trace
@@ -29,7 +30,6 @@ class PivotPoutine(Poutine):
             raise TypeError(
                 "something went wrong with pivot site {}".format(str(pivot)))
 
-
     def _enter_poutine(self, *args, **kwargs):
         """
         Poutine entry
@@ -42,7 +42,6 @@ class PivotPoutine(Poutine):
         """
         self.pivot_seen = False
         
-
     def _pyro_sample(self, prev_val, name, fn, *args, **kwargs):
         """
         Return the sample in the guide trace when appropriate
@@ -64,14 +63,13 @@ class PivotPoutine(Poutine):
             elif not self.pivot_seen:
                 assert(name in self.guide_trace)
                 assert(self.guide_trace[name]["type"] == "sample")
-                return self.guide_trace[name]["value"] # XXX right entry?
+                return self.guide_trace[name]["value"]  # XXX right entry?
             # case 2c: pivot seen: sample from model
             elif self.pivot_seen:
                 return fn(*args, **kwargs)
             else:
                 raise ValueError(
-                    "something went wrong with replay conditions at site "+name)
-
+                    "something went wrong with replay conditions at site " + name)
 
     def _pyro_map_data(self, prev_val, name, data, fn):
         """

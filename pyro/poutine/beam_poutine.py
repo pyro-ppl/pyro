@@ -1,6 +1,6 @@
 import pyro
 import torch
-import queue.Queue as Queue
+from queue import Queue
 
 from pyro.infer.trace import Trace
 from .poutine import Poutine
@@ -32,13 +32,11 @@ class BeamPoutine(Poutine):
             max_tries = 1e6
         self.max_tries = max_tries
         
-
     def __call__(self, *args, **kwargs):
         """
         Keep going until it returns a completed trace from the queue
         or has run for too long
         """
-        assert(not self.queue.empty(), "queue has to have some traces")
         for i in xrange(self.max_tries):
             try:
                 ret_val = super(BeamPoutine, self).__call__(*args, **kwargs)
@@ -50,7 +48,6 @@ class BeamPoutine(Poutine):
                     self.queue.put(tr)
         raise ValueError("max tries ({}) exceeded".format(str(self.max_tries)))
         
-        
     def _enter_poutine(self, *args, **kwargs):
         """
         Set a guide trace and a pivot switch
@@ -58,15 +55,13 @@ class BeamPoutine(Poutine):
         self.pivot_seen = False
         self.guide_trace = self.queue.get()
 
-
     def _exit_poutine(self, *args, **kwargs):
         """
         Forget the guide and pivot switch
         """
         self.pivot_seen = False
-        self.guide_trace = None # XXX what to put here?
+        self.guide_trace = None  # XXX what to put here?
     
-
     def _pyro_sample(self, prev_val, name, fn, *args, **kwargs):
         """
         Return the sample in the guide trace when appropriate

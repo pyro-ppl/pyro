@@ -20,13 +20,11 @@ class TraceSearch(pyro.infer.AbstractInfer):
             queue.put(Trace())
         self.queue = queue
 
-
     def __call__(self, *args, **kwargs):
         """
         Really need to work on the inference interface
         """
         return self.step(*args, **kwargs)
-
 
     def step(self, *args, **kwargs):
         """

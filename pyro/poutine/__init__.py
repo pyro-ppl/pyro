@@ -93,8 +93,9 @@ def cache(fn, sites=None, pivot=None):
     
     An example of using the poutine API to implement new composite control operations
     """
-    assert(sites is None or pivot is None, "only provide one replay type")
+    assert(sites is None or pivot is None)
     memoized_trace = memoize(trace(fn))
+
     def _fn(*args, **kwargs):
         tr = memoized_trace(*args, **kwargs)
         if sites is not None:
@@ -125,7 +126,8 @@ def inject(model, guide, sites=None, pivot=None):
     get a trace from the guide function and replay the model from it
     using the sites or pivot
     """
-    assert(sites is None or pivot is None, "only provide one replay type")
+    assert(sites is None or pivot is None)
+
     def _fn(*args, **kwargs):
         guide_trace = trace(guide)(*args, **kwargs)
         if sites is not None:

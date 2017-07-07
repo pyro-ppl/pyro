@@ -6,7 +6,7 @@ import pyro
 from torch.nn import Parameter
 import torch
 
-from pyro.utils import zeros, ones
+from pyro.util import zeros, ones
 
 # global map of params for now
 _param_store = ParamStoreDict()
@@ -51,6 +51,7 @@ optim = PyroOptim
 
 _PYRO_STACK = []
 
+
 def param(name, *args, **kwargs):
     if len(_PYRO_STACK) == 0:
         return _param_store.get_param(name, *args, **kwargs)
@@ -90,11 +91,12 @@ def observe(name, fn, obs, *args, **kwargs):
                 break
         return ret
     
+
 def map_data(name, data, observer, *args, **kwargs):
     # by default map_data is the same as map.
     # infer algs (eg VI) that do minibatches should overide this.
     if len(_PYRO_STACK) == 0:
-        return [observer(i, datum) for i, data in enumerate(data)]
+        return [observer(i, datum) for i, datum in enumerate(data)]
     else:
         ret = None
         for layer in _PYRO_STACK:

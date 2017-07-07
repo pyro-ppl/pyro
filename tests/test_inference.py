@@ -14,7 +14,7 @@ from pyro.distributions import Poisson
 from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
 from tests.common import TestCase
 
-#from pyro.infer.kl_qp import KL_QP
+# from pyro.infer.kl_qp import KL_QP
 from pyro.infer.trace_klqp import TraceKLqp as KL_QP
 
 
@@ -221,8 +221,8 @@ class PoissonGammaTests(TestCase):
             x_dist = Poisson(lambda_latent)
             # x0 = pyro.observe("obs0", x_dist, self.data[0])
             pyro.map_data("aaa",
-                self.data, lambda i, x: pyro.observe(
-                    "obs", x_dist, x), batch_size=3)
+                          self.data, lambda i, x: pyro.observe(
+                              "obs_{}".format(i), x_dist, x), batch_size=3)
             return lambda_latent
 
         def guide():
@@ -358,8 +358,8 @@ class BernoulliBetaTests(TestCase):
             p_latent = pyro.sample("p_latent", Beta(self.alpha0, self.beta0))
             x_dist = Bernoulli(p_latent)
             pyro.map_data("aaa",
-                self.data, lambda i, x: pyro.observe(
-                    "obs", x_dist, x), batch_size=2)
+                          self.data, lambda i, x: pyro.observe(
+                              "obs_{}".format(i), x_dist, x), batch_size=2)
             return p_latent
 
         def guide():

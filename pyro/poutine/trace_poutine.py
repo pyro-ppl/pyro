@@ -23,7 +23,6 @@ class TracePoutine(Poutine):
         super(TracePoutine, self).__init__(fn, *args, **kwargs)
         self.trace = Trace()
 
-
     def __call__(self, *args, **kwargs):
         """
         Main logic; where the function is actually called
@@ -32,7 +31,6 @@ class TracePoutine(Poutine):
         ret = super(TracePoutine, self).__call__(*args, **kwargs)
         return self.trace
         
-
     def _enter_poutine(self, *args, **kwargs):
         """
         Register the input arguments in the trace upon entry
@@ -41,14 +39,12 @@ class TracePoutine(Poutine):
         self.trace = Trace()
         self.trace.add_args((args, kwargs))
 
-
     def _exit_poutine(self, ret_val, *args, **kwargs):
         """
         Register the return value from the function on exit
         """
         self.trace.add_return(ret_val, *args, **kwargs)
     
-
     def _pyro_sample(self, prev_val, name, dist, *args, **kwargs):
         """
         sample
@@ -60,7 +56,6 @@ class TracePoutine(Poutine):
         # XXX not correct arguments
         self.trace.add_sample(name, val, dist, *args, **kwargs)
         return val
-
 
     def _pyro_observe(self, prev_val, name, fn, obs, *args, **kwargs):
         """
@@ -77,7 +72,6 @@ class TracePoutine(Poutine):
         self.trace.add_observe(name, val, fn, obs, *args, **kwargs)
         return val
 
-
     def _pyro_param(self, prev_val, name, *args, **kwargs):
         """
         param
@@ -90,7 +84,6 @@ class TracePoutine(Poutine):
                                                           *args, **kwargs)
         self.trace.add_param(name, retrieved, *args, **kwargs)
         return retrieved
-
 
     # def _pyro_map_data(self, prev_val, name, *args, **kwargs):
     #     """

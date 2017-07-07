@@ -2,6 +2,7 @@ import pyro
 import torch
 from uuid import uuid4 as uuid
 
+
 class Poutine(object):
     """
     Wraps a function call with a pyro stack push/pop of the basic pyro functions
@@ -19,20 +20,23 @@ class Poutine(object):
         """
         Wrap the original function call to call the poutine object
         """
-        # push the current stack onto the pyro global fcts
-        self._push_stack()
-        self._enter_poutine(*args, **kwargs)
+        try:
+            # push the current stack onto the pyro global fcts
+            self._push_stack()
+            self._enter_poutine(*args, **kwargs)
 
-        # run the original function overloading the fcts
-        r_val = self.orig_fct(*args, **kwargs)
+            # run the original function overloading the fcts
+            r_val = self.orig_fct(*args, **kwargs)
 
-        # then return the pyro global fcts to their previous state
-        self._exit_poutine(r_val, *args, **kwargs)
-        self._pop_stack()
+            # then return the pyro global fcts to their previous state
+            self._exit_poutine(r_val, *args, **kwargs)
+            self._pop_stack()
 
-        # send back the final val
-        return r_val
-
+            # send back the final val
+            return r_val
+        except Exception as e:
+            self._flush_stack()
+            raise e
 
     def _enter_poutine(self, *args, **kwargs):
         """
@@ -53,7 +57,6 @@ class Poutine(object):
         ret = getattr(self, "_pyro_" + site_type)(_ret, name, *args, **kwargs)
         barrier = self._block_stack(site_type, name)
         return ret, barrier
-    
 
     def _block_stack(self, site_type, name):
         """
@@ -71,7 +74,6 @@ class Poutine(object):
         else:
             raise ValueError("cannot install a Poutine instance twice")
         
-
     def _pop_stack(self):
         """
         Reset global pyro attributes to the previously recorded fcts
@@ -81,7 +83,6 @@ class Poutine(object):
         else:
             raise ValueError("This Poutine is not on top of the stack")
 
-
     def _flush_stack(self):
         """
         Find our dispatcher in the stack, then remove it and everything below it
@@ -89,9 +90,8 @@ class Poutine(object):
         """
         if self._dispatch in pyro._PYRO_STACK:
             loc = pyro._PYRO_STACK.index(self._dispatch)
-            for i in range(0, loc+1):
+            for i in range(0, loc + 1):
                 pyro._PYRO_STACK.pop(0)
-
 
     def _pyro_sample(self, prev_val, name, fn, *args, **kwargs):
         """
@@ -115,7 +115,6 @@ class Poutine(object):
             else:
                 return obs
 
-
     def _pyro_map_data(self, prev_val, name, data, fn, *args, **kwargs):
         """
         Default pyro.map_data Poutine behavior
@@ -130,7 +129,6 @@ class Poutine(object):
             else:
                 # note that fn should expect an index and a datum
                 return [fn(i, datum) for i, datum in enumerate(data)]
-
 
     def _pyro_param(self, prev_val, name, *args, **kwargs):
         """

@@ -10,7 +10,7 @@ from tests.common import TestCase
 
 
 def eq(x, y, prec=1e-10):
-    return (torch.norm(x-y).data[0] < prec)
+    return (torch.norm(x - y).data[0] < prec)
 
 
 class SimplePoutineTests(TestCase):
@@ -18,7 +18,7 @@ class SimplePoutineTests(TestCase):
     def setUp(self):
         def model():
             latent = pyro.sample("latent",
-                                DiagNormal(Variable(torch.zeros(1)),
+                                 DiagNormal(Variable(torch.zeros(1)),
                                             5 * Variable(torch.ones(1))))
             x_dist = DiagNormal(latent, Variable(torch.ones(1)))
             x = pyro.observe("obs", x_dist, Variable(torch.ones(1)))
@@ -28,13 +28,12 @@ class SimplePoutineTests(TestCase):
 
         def guide():
             latent = pyro.sample("latent",
-                                DiagNormal(Variable(torch.zeros(1)),
+                                 DiagNormal(Variable(torch.zeros(1)),
                                             5 * Variable(torch.ones(1))))
-            #x_dist = DiagNormal(latent, Variable(torch.ones(1)))
+            # x_dist = DiagNormal(latent, Variable(torch.ones(1)))
             return latent
 
         self.guide = guide
-
 
     def test_trace_replay(self):
         """

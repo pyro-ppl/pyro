@@ -1,9 +1,15 @@
+import torch
+from torch.autograd import Variable
+from torch.nn import Parameter
+
+
 # https://stackoverflow.com/questions/1988804/what-is-memoization-and-how-can-i-use-it-in-python
 # unbounded memoize
 # alternate in py3: https://docs.python.org/3/library/functools.html
 # lru_cache
 def memoize(fn):
     _mem = {}
+
     def _fn(*args, **kwargs):
         if (args, kwargs) not in _mem:
             _mem[(args, kwargs)] = fn(*args, **kwargs)
