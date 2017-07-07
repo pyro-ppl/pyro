@@ -21,8 +21,9 @@ def zero_grads(tensors):
 
 
 class TraceKLqp(AbstractInfer):
-    """hello"""
-
+    """
+    A new, Trace and Poutine-based implementation of SVI
+    """
     def __init__(self, model,
                  guide,
                  optim_step_fct,

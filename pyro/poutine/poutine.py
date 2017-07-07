@@ -87,9 +87,10 @@ class Poutine(object):
         Find our dispatcher in the stack, then remove it and everything below it
         Needed for exception handling
         """
-        loc = pyro._PYRO_STACK.index(self._dispatch)
-        for i in range(0, loc+1):
-            pyro._PYRO_STACK.pop(0)
+        if self._dispatch in pyro._PYRO_STACK:
+            loc = pyro._PYRO_STACK.index(self._dispatch)
+            for i in range(0, loc+1):
+                pyro._PYRO_STACK.pop(0)
 
 
     def _pyro_sample(self, prev_val, name, fn, *args, **kwargs):
