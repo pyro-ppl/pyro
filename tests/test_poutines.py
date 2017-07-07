@@ -6,46 +6,56 @@ import pyro
 from pyro.distributions import DiagNormal
 import pyro.poutine as poutine
 
+from tests.common import TestCase
 
-def model():
-    latent = pyro.sample("latent",
-                         DiagNormal(Variable(torch.zeros(1)),
-                                    5 * Variable(torch.ones(1))))
-    x_dist = DiagNormal(latent, Variable(torch.ones(1)))
-    x = pyro.observe("obs", x_dist, Variable(torch.ones(1)))
-    return latent
-
-
-def guide():
-    latent = pyro.sample("latent",
-                         DiagNormal(Variable(torch.zeros(1)),
-                                    5 * Variable(torch.ones(1))))
-    #x_dist = DiagNormal(latent, Variable(torch.ones(1)))
-    return latent
 
 def eq(x, y, prec=1e-10):
-    vv = (torch.norm(x-y).data[0] < prec)
-    print(vv)
-    if not vv:
-        print(x, y)
-    return vv
+    return (torch.norm(x-y).data[0] < prec)
 
 
-model_trace = poutine.trace(model)()
-guide_trace = poutine.trace(guide)()
+class SimplePoutineTests(TestCase):
 
-model_trace_replay = poutine.replay(poutine.trace(model), guide_trace)()
-model_replay_trace = poutine.trace(poutine.replay(model, guide_trace))()
-model_replay_ret = poutine.replay(model, guide_trace)()
+    def setUp(self):
+        def model():
+            latent = pyro.sample("latent",
+                                DiagNormal(Variable(torch.zeros(1)),
+                                            5 * Variable(torch.ones(1))))
+            x_dist = DiagNormal(latent, Variable(torch.ones(1)))
+            x = pyro.observe("obs", x_dist, Variable(torch.ones(1)))
+            return latent
 
-assert(eq(model_trace_replay["_RETURN"]["value"], model_replay_ret))
+        self.model = model
 
-assert(eq(model_replay_ret, guide_trace["latent"]["value"]))
+        def guide():
+            latent = pyro.sample("latent",
+                                DiagNormal(Variable(torch.zeros(1)),
+                                            5 * Variable(torch.ones(1))))
+            #x_dist = DiagNormal(latent, Variable(torch.ones(1)))
+            return latent
 
-assert(eq(model_replay_trace["latent"]["value"],
-          guide_trace["latent"]["value"]))
+        self.guide = guide
 
-assert(not eq(model_replay_trace["latent"]["value"],
-              model_trace_replay["latent"]["value"]))
 
-assert(not eq(model_trace["latent"]["value"], guide_trace["latent"]["value"]))
+    def test_trace_replay(self):
+        """
+        some simple invariants on a single example, but woefully incomplete
+        """
+        model_trace = poutine.trace(self.model)()
+        guide_trace = poutine.trace(self.guide)()
+
+        model_trace_replay = poutine.replay(poutine.trace(self.model), guide_trace)()
+        model_replay_trace = poutine.trace(poutine.replay(self.model, guide_trace))()
+        model_replay_ret = poutine.replay(self.model, guide_trace)()
+
+        self.assertTrue(eq(model_trace_replay["_RETURN"]["value"], model_replay_ret))
+
+        self.assertTrue(eq(model_replay_ret, guide_trace["latent"]["value"]))
+
+        self.assertTrue(eq(model_replay_trace["latent"]["value"],
+                           guide_trace["latent"]["value"]))
+
+        self.assertFalse(eq(model_replay_trace["latent"]["value"],
+                            model_trace_replay["latent"]["value"]))
+
+        self.assertFalse(eq(model_trace["latent"]["value"],
+                            guide_trace["latent"]["value"]))

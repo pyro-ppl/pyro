@@ -22,6 +22,9 @@ class TraceSearch(pyro.infer.AbstractInfer):
 
 
     def __call__(self, *args, **kwargs):
+        """
+        Really need to work on the inference interface
+        """
         return self.step(*args, **kwargs)
 
 
