@@ -2,14 +2,14 @@ import numpy as np
 import torch
 from torch.autograd import Variable
 import pyro
-from pyro.distributions import Uniform, DiagNormal, LogNormal
+from pyro.distributions import Uniform, DiagNormal
 from pyro.infer.kl_qp import KL_QP
 import torch.optim as optim
 import sys
 
 # Samantha really likes physics---but she likes pyro even more. Instead of using
 # calculus to do her physics lab homework (which she could easily do), she's going
-# to use variational inference. The problem setup is as follows. In lab she observed
+# to use bayesian inference. The problem setup is as follows. In lab she observed
 # a little box slide down an inclined plane (length of 2 meters and with an incline of
 # 30 degrees) 10 times. Each time she measured and recorded the descent time. The timing
 # device she used has a known measurement error of 20 milliseconds. Using the observed
@@ -43,6 +43,12 @@ def simulate(mu, length=2.0, phi=np.pi/6.0, dx=0.01, noise_sigma=None):
         return T.unsqueeze(0)
     else:
         return T + Variable(noise_sigma*torch.randn(1))
+
+# analytic formula that the simulator above is numerically integrating (no measurement noise)
+def analytic_T(mu, length=2.0, phi=np.pi/6.0):
+    numerator   = 2.0*length
+    denominator = little_g * (np.sin(phi) - mu*np.cos(phi))
+    return np.sqrt(numerator/denominator)
 
 # generate N_obs observations using simulator and the true coefficient of friction mu0
 print "generating simulated data using the true coefficient of friction %.3f" % mu0
@@ -92,8 +98,15 @@ for step in range(n_steps):
 # report results
 inferred_mu = pyro.param("mean_mu").data[0,0]
 inferred_mu_uncertainty = torch.exp(pyro.param("log_sigma_mu")).data[0,0]
-print "\nthe inferred coefficient of friction was %.3f +- %.3f" % (inferred_mu,
+print "\nthe coefficient of friction inferred by pyro is %.3f +- %.3f" % (inferred_mu,
                                                                  inferred_mu_uncertainty)
-print "the mean observed descent time was: %.4f seconds" % observed_mean
+
+# note that, given the finite step size in the simulator, the simulated descent times will
+# not precisely match the numbers from the analytic result.
+# in particular the first two numbers reported below should match each other pretty closely
+# but will be systematically off from the third number
+print "the mean observed descent time in the dataset is: %.4f seconds" % observed_mean
 print "the (forward) simulated descent time for the inferred (mean) mu is: %.4f seconds" %\
            simulate(pyro.param("mean_mu")).data[0,0]
+print "elementary calulus gives the descent time for the inferred (mean) mu as: %.4f seconds" %\
+           analytic_T(pyro.param("mean_mu").data[0,0])
