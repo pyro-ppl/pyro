@@ -34,7 +34,7 @@ class TraceSearch(pyro.infer.AbstractInfer):
         is performing exact inference
         """
         if not self.queue.empty():
-            p = poutine.trace(poutine.beam(self.model, queue=self.queue))
+            p = poutine.trace(poutine.queue(self.model, queue=self.queue))
             return p(*args, **kwargs)
         else:
             # the queue is empty - we're done!

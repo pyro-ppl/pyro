@@ -12,17 +12,17 @@ class ReturnExtendedTraces(Exception):
         self.traces = traces
 
 
-class BeamPoutine(Poutine):
+class QueuePoutine(Poutine):
     """
-    Poutine for extending a beam of traces
-    Useful for enumeration, beam search
+    Poutine for enumerating a queue of traces
+    Useful for systematic search, beam search
     """
     def __init__(self, fn, queue=None, max_tries=None):
         """
         Constructor.
         All persistent state is in the queue.
         """
-        super(BeamPoutine, self).__init__(fn)
+        super(QueuePoutine, self).__init__(fn)
         self.transparent = False
         if queue is None:
             queue = Queue()
@@ -39,7 +39,7 @@ class BeamPoutine(Poutine):
         """
         for i in xrange(self.max_tries):
             try:
-                ret_val = super(BeamPoutine, self).__call__(*args, **kwargs)
+                ret_val = super(QueuePoutine, self).__call__(*args, **kwargs)
                 return ret_val
             except ReturnExtendedTraces as returned_traces:
                 self._exit_poutine(None, *args, **kwargs)
