@@ -69,28 +69,7 @@ class TraceKLqp(AbstractInfer):
         all_trainable_params = list(set(all_trainable_params))
 
         # compute losses
-        # TODO get reparam right
-        log_r = 0.0
-        for name in model_trace.keys():
-            if model_trace[name]["type"] == "observe":
-                model_trace[name]["log_pdf"] = model_trace[name]["fn"].log_pdf(
-                    model_trace[name]["value"],
-                    *model_trace[name]["args"][0],
-                    **model_trace[name]["args"][1])
-                log_r += model_trace[name]["log_pdf"]
-            elif model_trace[name]["type"] == "sample":
-                model_trace[name]["log_pdf"] = model_trace[name]["fn"].log_pdf(
-                    model_trace[name]["value"],
-                    *model_trace[name]["args"][0],
-                    **model_trace[name]["args"][1])
-                log_r += model_trace[name]["log_pdf"]
-                guide_trace[name]["log_pdf"] = guide_trace[name]["fn"].log_pdf(
-                    guide_trace[name]["value"],
-                    *guide_trace[name]["args"][0],
-                    **guide_trace[name]["args"][1])
-                log_r -= model_trace[name]["log_pdf"]
-            else:
-                pass
+        log_r = model_trace.log_pdf() - guide_trace.log_pdf()
 
         elbo = 0.0
         for name in model_trace.keys():

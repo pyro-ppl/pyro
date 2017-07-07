@@ -85,3 +85,17 @@ class Trace(dict):
         Make a copy (for dynamic programming)
         """
         return Trace(self)
+
+    def log_pdf(self):
+        """
+        Compute the local and overall log-probabilities of the trace
+        """
+        log_p = 0.0
+        for name in self.keys():
+            if self[name]["type"] in ("observe", "sample"):
+                self[name]["log_pdf"] = self[name]["fn"].log_pdf(
+                    self[name]["value"],
+                    *self[name]["args"][0],
+                    **self[name]["args"][1])
+                log_p += self[name]["log_pdf"]
+        return log_p
