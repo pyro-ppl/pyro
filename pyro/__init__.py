@@ -6,6 +6,8 @@ import pyro
 from torch.nn import Parameter
 import torch
 
+from pyro.utils import zeros, ones
+
 # global map of params for now
 _param_store = ParamStoreDict()
 

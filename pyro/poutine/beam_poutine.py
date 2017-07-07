@@ -1,6 +1,6 @@
 import pyro
 import torch
-from queue import Queue
+import queue.Queue as Queue
 
 from pyro.infer.trace import Trace
 from .poutine import Poutine
