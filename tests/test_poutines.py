@@ -4,7 +4,7 @@ from torch.autograd import Variable
 
 import pyro
 from pyro.distributions import DiagNormal
-import pyro.infer.poutine as poutine
+import pyro.poutine as poutine
 
 
 def model():

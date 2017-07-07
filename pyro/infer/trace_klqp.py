@@ -1,4 +1,5 @@
 import six
+import pdb
 import torch
 from torch.autograd import Variable
 from collections import OrderedDict
@@ -49,9 +50,10 @@ class TraceKLqp(AbstractInfer):
         """
         single step?
         """
-        guide_trace = poutine.trace(guide)(*args, **kwargs)
+        #pdb.set_trace()
+        guide_trace = poutine.trace(self.guide)(*args, **kwargs)
         model_trace = poutine.trace(
-            poutine.replay(model, guide_trace))(*args, **kwargs)
+            poutine.replay(self.model, guide_trace))(*args, **kwargs)
 
         all_trainable_params = []
         # get trace params from last model run
@@ -64,32 +66,36 @@ class TraceKLqp(AbstractInfer):
             for name in guide_trace.keys():
                 if guide_trace[name]["type"] == "param":
                     all_trainable_params.append(guide_trace[name]["value"])
+        all_trainable_params = list(set(all_trainable_params))
 
         # compute losses
         # TODO get reparam right
         elbo = 0.0
         for name in model_trace.keys():
             if model_trace[name]["type"] == "observe":
-                elbo = elbo + model_trace[name]["dist"].log_pdf(
+                elbo += model_trace[name]["fn"].log_pdf(
                     model_trace[name]["value"],
                     *model_trace[name]["args"][0],
                     **model_trace[name]["args"][1])
             elif model_trace[name]["type"] == "sample":
-                elbo = elbo + model_trace[name]["dist"].log_pdf(
+                elbo += model_trace[name]["fn"].log_pdf(
                     model_trace[name]["value"],
                     *model_trace[name]["args"][0],
                     **model_trace[name]["args"][1])
-                elbo = elbo - guide_trace[name]["dist"].log_pdf(
+                elbo -= guide_trace[name]["fn"].log_pdf(
                     guide_trace[name]["value"],
                     *guide_trace[name]["args"][0],
                     **guide_trace[name]["args"][1])
+            else:
+                pass
 
         # gradients
-        (-elbo).backward()
+        loss = -elbo
+        loss.backward()
         # update
         self.optim_step_fct(all_trainable_params)
         # zero grads
         zero_grads(all_trainable_params)
 
-        return elbo.data[0]
+        return loss.data[0]
     

@@ -9,9 +9,6 @@ import torch
 # global map of params for now
 _param_store = ParamStoreDict()
 
-# set pyro.param function to _param_store.get_param
-param = _param_store.get_param
-
 # set global tensor type (cpu v.gpu); cpu by default
 _global_tensor_type = 'cpu'
 
@@ -52,6 +49,18 @@ optim = PyroOptim
 
 _PYRO_STACK = []
 
+def param(name, *args, **kwargs):
+    if len(_PYRO_STACK) == 0:
+        return _param_store.get_param(name, *args, **kwargs)
+    else:
+        ret = None
+        for layer in _PYRO_STACK:
+            ret, stop = layer("param", ret, name, *args, **kwargs)
+            if stop:
+                break
+        return ret
+
+
 def sample(name, fn, *args, **kwargs):
     # check if stack is empty
     # if stack empty, default behavior (defined here)
@@ -79,11 +88,18 @@ def observe(name, fn, obs, *args, **kwargs):
                 break
         return ret
     
-
-def map_data(data, observer):
+def map_data(name, data, observer, *args, **kwargs):
     # by default map_data is the same as map.
     # infer algs (eg VI) that do minibatches should overide this.
-    return map(observer, data)
+    if len(_PYRO_STACK) == 0:
+        return [observer(i, datum) for i, data in enumerate(data)]
+    else:
+        ret = None
+        for layer in _PYRO_STACK:
+            ret, stop = layer("map_data", ret, name, data, observer, *args, **kwargs)
+            if stop:
+                break
+        return ret
 
 # hand off behavior to poutine if necessary?
 # for now default calls out to pyro.param -- which is handled by poutine

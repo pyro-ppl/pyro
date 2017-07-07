@@ -1,6 +1,6 @@
 import pyro
 import torch
-
+import pdb
 from .poutine import Poutine
 from pyro.infer.trace import Trace
 
@@ -74,8 +74,8 @@ class TracePoutine(Poutine):
         assert(name not in self.trace)
         val = super(TracePoutine, self)._pyro_observe(prev_val, name, fn, obs,
                                                       *args, **kwargs)
-        # XXX not correct arguments?
         self.trace.add_observe(name, val, fn, obs, *args, **kwargs)
+        return val
 
 
     def _pyro_param(self, prev_val, name, *args, **kwargs):
@@ -92,9 +92,9 @@ class TracePoutine(Poutine):
         return retrieved
 
 
-    def _pyro_map_data(self, prev_val, name, *args, **kwargs):
-        """
-        Trace map_data
-        """
-        raise NotImplementedError("still working out proper semantics")
+    # def _pyro_map_data(self, prev_val, name, *args, **kwargs):
+    #     """
+    #     Trace map_data
+    #     """
+    #     raise NotImplementedError("still working out proper semantics")
       

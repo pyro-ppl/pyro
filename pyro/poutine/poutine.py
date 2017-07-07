@@ -85,18 +85,11 @@ class Poutine(object):
     def _flush_stack(self):
         """
         Find our dispatcher in the stack, then remove it and everything below it
+        Needed for exception handling
         """
         loc = pyro._PYRO_STACK.index(self._dispatch)
         for i in range(0, loc+1):
             pyro._PYRO_STACK.pop(0)
-
-
-    def _tag_name(self, trace_uid):
-        """
-        Generate a name for the trace consisting of a unique name for the poutine
-        and a trace-specific identifier
-        """
-        return str(id(self)) + "_{}".format(trace_uid)
 
 
     def _pyro_sample(self, prev_val, name, fn, *args, **kwargs):
@@ -122,7 +115,7 @@ class Poutine(object):
                 return obs
 
 
-    def _pyro_map_data(self, prev_val, name, data, fn):
+    def _pyro_map_data(self, prev_val, name, data, fn, *args, **kwargs):
         """
         Default pyro.map_data Poutine behavior
         """
@@ -135,25 +128,14 @@ class Poutine(object):
                     "map_data for vectorized data not yet implemented.")
             else:
                 # note that fn should expect an index and a datum
-                map(fn, enumerate(data))
+                return [fn(i, datum) for i, datum in enumerate(data)]
 
 
     def _pyro_param(self, prev_val, name, *args, **kwargs):
         """
         overload pyro.param call
-        here we tag all parameters constructed during this with
-        guide. This does not bin them in different buckets, but marks
-        for later filtering by inference alg
         """
-        return pyro._param_store.get_param(
-            tag=self._tag_name(self.trace_uid), *args, **kwargs)
-
-
-    def get_last_trace_parameters(self):
-        """
-        grab only the parameters that were called inside of the guide
-        e.g. pyro.param(name, val) was called from within guide fct
-        """
-        return pyro._param_store.filter_parameters(
-            self._tag_name(self.trace_uid))
-
+        if self.transparent and not (prev_val is None):
+            return prev_val
+        else:
+            return pyro._param_store.get_param(name, *args, **kwargs)

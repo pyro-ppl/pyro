@@ -66,8 +66,8 @@ class Trace(dict):
         """
         input arguments site
         """
-        assert(name not in self)
         name = "_INPUT"
+        assert(name not in self)
         site = dict({})
         site["type"] = "args"
         site["args"] = args_and_kwargs
@@ -78,8 +78,8 @@ class Trace(dict):
         """
         return value site
         """
-        assert(name not in self)
         name = "_RETURN"
+        assert(name not in self)
         site = dict({})
         site["type"] = "return"
         site["value"] = val

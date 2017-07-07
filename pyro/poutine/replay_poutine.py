@@ -59,8 +59,8 @@ class ReplayPoutine(Poutine):
                     "something went wrong with replay conditions at site "+name)
 
 
-    def _pyro_map_data(self, prev_val, name, data, fn):
-        """
-        Use the batch indices from the guide trace
-        """
-        raise NotImplementedError("havent finished this yet")
+    # def _pyro_map_data(self, prev_val, name, data, fn):
+    #     """
+    #     Use the batch indices from the guide trace
+    #     """
+    #     raise NotImplementedError("havent finished this yet")

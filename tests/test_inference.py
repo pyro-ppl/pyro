@@ -14,7 +14,8 @@ from pyro.distributions import Poisson
 from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
 from tests.common import TestCase
 
-from pyro.infer.kl_qp import KL_QP
+#from pyro.infer.kl_qp import KL_QP
+from pyro.infer.trace_klqp import TraceKLqp as KL_QP
 
 
 class NormalNormalTests(TestCase):
@@ -54,7 +55,7 @@ class NormalNormalTests(TestCase):
             mu_latent = pyro.sample("mu_latent", prior_dist)
             x_dist = DiagNormal(mu_latent, torch.pow(self.lam, -0.5))
             # x = pyro.observe("obs", x_dist, self.data)
-            pyro.map_data(self.data, lambda i,
+            pyro.map_data("aaa", self.data, lambda i,
                           x: pyro.observe("obs_%d" % i, x_dist, x), batch_size=1)
             return mu_latent
 
@@ -68,7 +69,7 @@ class NormalNormalTests(TestCase):
             q_dist = DiagNormal(mu_q, sig_q)
             q_dist.reparametrized = reparametrized
             pyro.sample("mu_latent", q_dist)
-            pyro.map_data(self.data, lambda i, x: None, batch_size=1)
+            pyro.map_data("aaa", self.data, lambda i, x: None, batch_size=1)
 
         kl_optim = KL_QP(
             model, guide, pyro.optim(
