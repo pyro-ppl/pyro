@@ -220,7 +220,7 @@ class PoissonGammaTests(TestCase):
                     self.alpha0, self.beta0))
             x_dist = Poisson(lambda_latent)
             # x0 = pyro.observe("obs0", x_dist, self.data[0])
-            pyro.map_data(
+            pyro.map_data("aaa",
                 self.data, lambda i, x: pyro.observe(
                     "obs", x_dist, x), batch_size=3)
             return lambda_latent
@@ -240,7 +240,7 @@ class PoissonGammaTests(TestCase):
                     requires_grad=True))
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             pyro.sample("lambda_latent", Gamma(alpha_q, beta_q))
-            pyro.map_data(self.data, lambda i, x: None, batch_size=3)
+            pyro.map_data("aaa", self.data, lambda i, x: None, batch_size=3)
 
         kl_optim = KL_QP(
             model, guide, pyro.optim(
@@ -357,7 +357,7 @@ class BernoulliBetaTests(TestCase):
         def model():
             p_latent = pyro.sample("p_latent", Beta(self.alpha0, self.beta0))
             x_dist = Bernoulli(p_latent)
-            pyro.map_data(
+            pyro.map_data("aaa",
                 self.data, lambda i, x: pyro.observe(
                     "obs", x_dist, x), batch_size=2)
             return p_latent
@@ -377,7 +377,7 @@ class BernoulliBetaTests(TestCase):
                     requires_grad=True))
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             pyro.sample("p_latent", Beta(alpha_q, beta_q))
-            pyro.map_data(self.data, lambda i, x: None, batch_size=2)
+            pyro.map_data("aaa", self.data, lambda i, x: None, batch_size=2)
 
         kl_optim = KL_QP(model, guide, pyro.optim(torch.optim.Adam,
                                                   {"lr": .001, "betas": (0.97, 0.999)}))
