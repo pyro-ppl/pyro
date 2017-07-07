@@ -36,8 +36,8 @@ class TraceKLqp(AbstractInfer):
         # TODO init this somewhere else in a more principled way
         self.sites = None
 
-        self.model = model #TracePoutine(model)
-        self.guide = guide #TracePoutine(guide)
+        self.model = model
+        self.guide = guide
         self.optim_step_fct = optim_step_fct
         self.model_fixed = model_fixed
         self.guide_fixed = guide_fixed
@@ -50,7 +50,6 @@ class TraceKLqp(AbstractInfer):
         """
         single step?
         """
-        #pdb.set_trace()
         guide_trace = poutine.trace(self.guide)(*args, **kwargs)
         model_trace = poutine.trace(
             poutine.replay(self.model, guide_trace))(*args, **kwargs)
@@ -70,22 +69,39 @@ class TraceKLqp(AbstractInfer):
 
         # compute losses
         # TODO get reparam right
-        elbo = 0.0
+        log_r = 0.0
         for name in model_trace.keys():
             if model_trace[name]["type"] == "observe":
-                elbo += model_trace[name]["fn"].log_pdf(
+                model_trace[name]["log_pdf"] = model_trace[name]["fn"].log_pdf(
                     model_trace[name]["value"],
                     *model_trace[name]["args"][0],
                     **model_trace[name]["args"][1])
+                log_r += model_trace[name]["log_pdf"]
             elif model_trace[name]["type"] == "sample":
-                elbo += model_trace[name]["fn"].log_pdf(
+                model_trace[name]["log_pdf"] = model_trace[name]["fn"].log_pdf(
                     model_trace[name]["value"],
                     *model_trace[name]["args"][0],
                     **model_trace[name]["args"][1])
-                elbo -= guide_trace[name]["fn"].log_pdf(
+                log_r += model_trace[name]["log_pdf"]
+                guide_trace[name]["log_pdf"] = guide_trace[name]["fn"].log_pdf(
                     guide_trace[name]["value"],
                     *guide_trace[name]["args"][0],
                     **guide_trace[name]["args"][1])
+                log_r -= model_trace[name]["log_pdf"]
+            else:
+                pass
+
+        
+        elbo = 0.0
+        for name in model_trace.keys():
+            if model_trace[name]["type"] == "observe":
+                elbo += model_trace[name]["log_pdf"]
+            elif model_trace[name]["type"] == "sample":
+                if model_trace[name]["fn"].reparametrized:
+                    elbo += model_trace[name]["log_pdf"]
+                    elbo -= guide_trace[name]["log_pdf"]
+                else:
+                    elbo += Variable(log_r.data) * guide_trace[name]["log_pdf"]
             else:
                 pass
 
