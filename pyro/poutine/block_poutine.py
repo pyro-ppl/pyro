@@ -21,7 +21,7 @@ class BlockPoutine(Poutine):
         self.transparent = transparent
         # first, some sanity checks:
         # hide_all and expose_all intersect?
-        assert((not (hide_all or expose_all)) or (hide_all != expose_all))
+        assert((hide_all is False and expose_all is False) or (hide_all != expose_all))
 
         # hide and expose intersect?
         if hide is None:
