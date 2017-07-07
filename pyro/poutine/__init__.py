@@ -18,9 +18,8 @@ def trace(fn):
     """
     Given a callable that contains Pyro primitive calls,
     return a callable that records the inputs and outputs to those primitive calls
-    
     Adds trace data structure site constructors to primitive stacks
-    
+
     tr = trace(fn)(*args, **kwargs)
     """
     def _fn(*args, **kwargs):
@@ -34,7 +33,7 @@ def replay(fn, trace, sites=None):
     Given a callable that contains Pyro primitive calls,
     return a callable that runs the original, reusing the values at sites in trace
     at those sites in the new trace
-    
+
     ret = replay(fn, trace, sites=some_sites)(*args, **kwargs)
     """
     def _fn(*args, **kwargs):
@@ -59,9 +58,9 @@ def block(fn, hide=None, expose=None):
     """
     Given a callable that contains Pyro primitive calls,
     hide the primitive calls at sites
-    
+
     ret = block(fn, hide=["a"], expose=["b"])(*args, **kwargs)
-    
+
     Also expose()?
     """
     def _fn(*args, **kwargs):
@@ -90,7 +89,7 @@ def cache(fn, sites=None, pivot=None):
     Given a callable that contains Pyro primitive calls, and sites or a pivot,
     run the callable once to get a trace and then replay the callable
     using the sites or pivot
-    
+
     An example of using the poutine API to implement new composite control operations
     """
     assert(sites is None or pivot is None)

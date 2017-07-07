@@ -7,7 +7,7 @@ def get_parents(node, trace):
     TODO docs
     """
     raise NotImplementedError("not implemented yet")
-    
+
 
 class Trace(dict):
     """

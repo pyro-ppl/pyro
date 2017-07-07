@@ -73,7 +73,7 @@ class Poutine(object):
             pyro._PYRO_STACK.insert(0, self._dispatch)
         else:
             raise ValueError("cannot install a Poutine instance twice")
-        
+
     def _pop_stack(self):
         """
         Reset global pyro attributes to the previously recorded fcts

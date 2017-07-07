@@ -33,5 +33,3 @@ def ng_ones(*args, **kwargs):
 
 def ng_zeros(*args, **kwargs):
     return Variable(torch.zeros(*args, **kwargs), requires_grad=False)
-
-

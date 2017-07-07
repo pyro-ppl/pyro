@@ -38,4 +38,3 @@ class Importance(AbstractInfer):
         # normalize the weights (logsumexp?)
         # return list(?) of samples and normalized weights to be consumed elsewhere
         raise NotImplementedError("importance sampling not done yet!!")
-    

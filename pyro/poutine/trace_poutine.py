@@ -30,7 +30,7 @@ class TracePoutine(Poutine):
         # Have to override this to change return type
         ret = super(TracePoutine, self).__call__(*args, **kwargs)
         return self.trace
-        
+
     def _enter_poutine(self, *args, **kwargs):
         """
         Register the input arguments in the trace upon entry
@@ -44,7 +44,7 @@ class TracePoutine(Poutine):
         Register the return value from the function on exit
         """
         self.trace.add_return(ret_val, *args, **kwargs)
-    
+
     def _pyro_sample(self, prev_val, name, dist, *args, **kwargs):
         """
         sample
@@ -61,7 +61,6 @@ class TracePoutine(Poutine):
         """
         observe
         TODO docs
-        
         Expected behavior:
         TODO
         """
@@ -76,7 +75,6 @@ class TracePoutine(Poutine):
         """
         param
         TODO docs
-        
         Expected behavior:
         TODO
         """
@@ -90,4 +88,3 @@ class TracePoutine(Poutine):
     #     Trace map_data
     #     """
     #     raise NotImplementedError("still working out proper semantics")
-      

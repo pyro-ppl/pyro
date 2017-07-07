@@ -41,7 +41,7 @@ class PivotPoutine(Poutine):
         Poutine exit
         """
         self.pivot_seen = False
-        
+
     def _pyro_sample(self, prev_val, name, fn, *args, **kwargs):
         """
         Return the sample in the guide trace when appropriate

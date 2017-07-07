@@ -114,4 +114,3 @@ class TraceKLqp(AbstractInfer):
         zero_grads(all_trainable_params)
 
         return loss.data[0]
-    

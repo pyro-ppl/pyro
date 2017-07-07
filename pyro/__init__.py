@@ -90,7 +90,7 @@ def observe(name, fn, obs, *args, **kwargs):
             if stop:
                 break
         return ret
-    
+
 
 def map_data(name, data, observer, *args, **kwargs):
     # by default map_data is the same as map.
