@@ -82,7 +82,7 @@ def cache(fn, sites=None):
     memoized_trace = memoize(trace(fn))
 
     def _fn(*args, **kwargs):
-        tr = memoized_trace(*args, **kwargs)
+        tr = memoized_trace(*args)
         p = replay(fn, trace=tr, sites=sites)
         return p(*args, **kwargs)
     return _fn

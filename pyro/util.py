@@ -10,10 +10,10 @@ from torch.nn import Parameter
 def memoize(fn):
     _mem = {}
 
-    def _fn(*args, **kwargs):
-        if (args, kwargs) not in _mem:
-            _mem[(args, kwargs)] = fn(*args, **kwargs)
-        return _mem[(args, kwargs)]
+    def _fn(*args):
+        if args not in _mem:
+            _mem[args] = fn(*args)
+        return _mem[args]
     return _fn
 
 
