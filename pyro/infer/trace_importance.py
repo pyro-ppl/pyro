@@ -19,8 +19,8 @@ class Importance(AbstractInfer):
         TODO proper docs etc
         """
         super(Importance, self).__init__()
-        self.model = TracePoutine(model)
-        self.guide = TracePoutine(guide)
+        self.model = model
+        self.guide = guide
 
     def runner(self, num_samples, *args, **kwargs):
         """
