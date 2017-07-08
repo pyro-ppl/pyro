@@ -16,14 +16,13 @@ class ReplayPoutine(Poutine):
         super(ReplayPoutine, self).__init__(fn)
         self.transparent = False
         self.guide_trace = guide_trace
-        self.all_sites = False
         # case 1: no sites
         if sites is None:
-            self.all_sites = True
-        # case 3: sites is a list/tuple/set
+            self.sites = {site: site for site in guide_trace.keys()}
+        # case 2: sites is a list/tuple/set
         elif isinstance(sites, (list, tuple, set)):
             self.sites = {site: site for site in sites}
-        # case 4: sites is a dict
+        # case 3: sites is a dict
         elif isinstance(sites, dict):
             self.sites = sites
         # otherwise, something is wrong
@@ -36,26 +35,18 @@ class ReplayPoutine(Poutine):
         """
         Return the sample in the guide trace when appropriate
         """
-        # case 1: all_sites
-        if self.all_sites:
-            # some sanity checks
-            assert(name in self.guide_trace)
-            assert(self.guide_trace[name]["type"] == "sample")
-            return self.guide_trace[name]["value"]
-        # case 3: dict
-        if self.sites is not None:
-            # case 3a: dict, positive: sample from guide
-            if name in self.sites:
-                g_name = self.sites[name]
-                assert(g_name in self.guide_trace)
-                assert(self.guide_trace[g_name]["type"] == "sample")
-                return self.guide_trace[g_name]["value"]
-            # case 3b: dict, negative: sample from model
-            elif name not in self.sites:
-                return fn(*args, **kwargs)
-            else:
-                raise ValueError(
-                    "something went wrong with replay conditions at site " + name)
+        # case 1: dict, positive: sample from guide
+        if name in self.sites:
+            g_name = self.sites[name]
+            assert(g_name in self.guide_trace)
+            assert(self.guide_trace[g_name]["type"] == "sample")
+            return self.guide_trace[g_name]["value"]
+        # case 2: dict, negative: sample from model
+        elif name not in self.sites:
+            return fn(*args, **kwargs)
+        else:
+            raise ValueError(
+                "something went wrong with replay conditions at site " + name)
 
     # def _pyro_map_data(self, prev_val, name, data, fn):
     #     """
