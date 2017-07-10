@@ -26,6 +26,9 @@ class BlockPoutine(Poutine):
         # hide and expose intersect?
         if hide is None:
             hide = []
+        else:
+            hide_all = False
+
         if expose is None:
             expose = []
         assert(set(hide).isdisjoint(set(expose)))

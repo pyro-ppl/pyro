@@ -56,9 +56,9 @@ class NormalNormalNormalPoutineTestCase(TestCase):
         self.full_sample_sites = {"latent1": "latent1", "latent2": "latent2"}
         self.partial_sample_sites = {"latent1": "latent1"}
 
-        
+
 class TracePoutineTests(NormalNormalNormalPoutineTestCase):
-        
+
     def test_trace_full(self):
         guide_trace = poutine.trace(self.guide)()
         model_trace = poutine.trace(self.model)()
@@ -97,21 +97,32 @@ class ReplayPoutineTests(NormalNormalNormalPoutineTestCase):
                 self.assertFalse(eq(model_trace[name]["value"],
                                     guide_trace[name]["value"]))
 
+    def test_replay_full_repeat(self):
+        model_trace = poutine.trace(self.model)()
+        ftr = poutine.trace(poutine.replay(self.model, model_trace))
+        tr11 = ftr()
+        tr12 = ftr()
+        tr2 = poutine.trace(poutine.replay(self.model, model_trace))()
+        for name in self.full_sample_sites.keys():
+            self.assertTrue(eq(tr11[name]["value"], tr12[name]["value"]))
+            self.assertTrue(eq(tr11[name]["value"], tr2[name]["value"]))
+            self.assertTrue(eq(model_trace[name]["value"], tr11[name]["value"]))
+            self.assertTrue(eq(model_trace[name]["value"], tr2[name]["value"]))
+
 
 class CachePoutineTests(NormalNormalNormalPoutineTestCase):
-    
+
     def test_cache_full(self):
-        cached_model = poutine.cache(poutine.trace(self.model))
+        cached_model = poutine.trace(poutine.cache(self.model))
         model_trace_1 = cached_model()
         model_trace_2 = cached_model()
         for name in self.full_sample_sites.keys():
-            print(name, model_trace_1[name]["value"], model_trace_2[name]["value"])
             self.assertTrue(eq(model_trace_1[name]["value"],
                                model_trace_2[name]["value"]))
 
     def test_cache_partial(self):
-        cached_model = poutine.cache(poutine.trace(self.model),
-                                     sites=self.partial_sample_sites)
+        cached_model = poutine.trace(
+            poutine.cache(self.model, sites=self.partial_sample_sites))
         model_trace_1 = cached_model()
         model_trace_2 = cached_model()
         for name in self.full_sample_sites.keys():
@@ -123,48 +134,70 @@ class CachePoutineTests(NormalNormalNormalPoutineTestCase):
                                     model_trace_2[name]["value"]))
 
 
-# class MemoizePoutineTests(NormalNormalNormalPoutineTestCase):
-#     
-#     def test_memoize(self):
-# 
-#         # test with a single argument
-# 
-#         # test with multiple non-kw arguments
-# 
-#         # test with multiple non-kw and kw arguments
-# 
-#         # test with tensors
-#         pass
+class BlockPoutineTests(NormalNormalNormalPoutineTestCase):
+
+    def test_block_full(self):
+        model_trace = poutine.trace(poutine.block(self.model))()
+        guide_trace = poutine.trace(poutine.block(self.guide))()
+        for name in model_trace.keys():
+            self.assertTrue(model_trace[name]["type"] in ("args", "return"))
+        for name in guide_trace.keys():
+            self.assertTrue(guide_trace[name]["type"] in ("args", "return"))
+
+    def test_block_full_hide(self):
+        model_trace = poutine.trace(poutine.block(self.model,
+                                                  hide=self.model_sites))()
+        guide_trace = poutine.trace(poutine.block(self.guide,
+                                                  hide=self.guide_sites))()
+        for name in model_trace.keys():
+            self.assertTrue(model_trace[name]["type"] in ("args", "return"))
+
+    def test_block_full_expose(self):
+        model_trace = poutine.trace(poutine.block(self.model,
+                                                  expose=self.model_sites))()
+        guide_trace = poutine.trace(poutine.block(self.guide,
+                                                  expose=self.guide_sites))()
+        for name in self.model_sites:
+            self.assertTrue(name in model_trace)
+        for name in self.guide_sites:
+            self.assertTrue(name in guide_trace)
+
+    def test_block_full_hide_expose(self):
+        try:
+            y = poutine.block(self.model,
+                              hide=self.partial_sample_sites.keys(),
+                              expose=self.partial_sample_sites.keys())()
+            self.assertTrue(False)
+        except AssertionError:
+            self.assertTrue(True)
+
+    def test_block_partial_hide(self):
+        model_trace = poutine.trace(
+            poutine.block(self.model, hide=self.partial_sample_sites.keys()))()
+        guide_trace = poutine.trace(
+            poutine.block(self.guide, hide=self.partial_sample_sites.keys()))()
+        for name in self.full_sample_sites.keys():
+            if name in self.partial_sample_sites:
+                self.assertFalse(name in model_trace)
+                self.assertFalse(name in guide_trace)
+            else:
+                self.assertTrue(name in model_trace)
+                self.assertTrue(name in guide_trace)
+
+    def test_block_partial_expose(self):
+        model_trace = poutine.trace(
+            poutine.block(self.model, expose=self.partial_sample_sites.keys()))()
+        guide_trace = poutine.trace(
+            poutine.block(self.guide, expose=self.partial_sample_sites.keys()))()
+        for name in self.full_sample_sites.keys():
+            if name in self.partial_sample_sites:
+                self.assertTrue(name in model_trace)
+                self.assertTrue(name in guide_trace)
+            else:
+                self.assertFalse(name in model_trace)
+                self.assertFalse(name in guide_trace)
 
 
-# class BlockPoutineTests(NormalNormalNormalPoutineTestCase):
-#     
-#     def setUp(self):
-#         super(BlockPoutineTests, self).setUp()
-#         # XXX set hide and expose sites?
-#         
-#     def test_block_full(self):
-#         pass
-# 
-#     def test_block_full_hide(self):
-#         pass
-# 
-#     def test_block_full_expose(self):
-#         pass
-# 
-#     def test_block_full_hide_expose(self):
-#         pass
-#     
-#     def test_block_partial_hide(self):
-#         pass
-# 
-#     def test_block_partial_expose(self):
-#         pass
-# 
-#     def test_block_partial_hide_expose(self):
-#         pass
-# 
-# 
 # class QueuePoutineTests(TestCase):
 # 
 #     def setUp(self):

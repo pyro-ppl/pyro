@@ -79,10 +79,10 @@ def cache(fn, sites=None):
 
     An example of using the poutine API to implement new composite control operations
     """
-    memoized_trace = memoize(trace(fn))
+    memoized_trace = memoize(block(trace(fn)))
 
     def _fn(*args, **kwargs):
-        tr = memoized_trace(*args)
-        p = replay(fn, trace=tr, sites=sites)
+        tr = memoized_trace(*args, **kwargs)
+        p = replay(fn, tr, sites=sites)
         return p(*args, **kwargs)
     return _fn

@@ -15,6 +15,7 @@ class ReplayPoutine(Poutine):
         """
         super(ReplayPoutine, self).__init__(fn)
         self.transparent = False
+        assert(not (guide_trace is None))
         self.guide_trace = guide_trace
         # case 1: no sites
         if sites is None:
