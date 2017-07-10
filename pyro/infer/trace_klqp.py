@@ -55,19 +55,6 @@ class TraceKLqp(AbstractInfer):
         model_trace = poutine.trace(
             poutine.replay(self.model, guide_trace))(*args, **kwargs)
 
-        all_trainable_params = []
-        # get trace params from last model run
-        if not self.model_fixed:
-            for name in model_trace.keys():
-                if model_trace[name]["type"] == "param":
-                    all_trainable_params.append(model_trace[name]["value"])
-        # get trace params from last guide run
-        if not self.guide_fixed:
-            for name in guide_trace.keys():
-                if guide_trace[name]["type"] == "param":
-                    all_trainable_params.append(guide_trace[name]["value"])
-        all_trainable_params = list(set(all_trainable_params))
-
         # compute losses
         log_r = model_trace.log_pdf() - guide_trace.log_pdf()
 
@@ -83,6 +70,20 @@ class TraceKLqp(AbstractInfer):
                     elbo += Variable(log_r.data) * guide_trace[name]["log_pdf"]
             else:
                 pass
+
+        # accumulate parameters
+        all_trainable_params = []
+        # get trace params from last model run
+        if not self.model_fixed:
+            for name in model_trace.keys():
+                if model_trace[name]["type"] == "param":
+                    all_trainable_params.append(model_trace[name]["value"])
+        # get trace params from last guide run
+        if not self.guide_fixed:
+            for name in guide_trace.keys():
+                if guide_trace[name]["type"] == "param":
+                    all_trainable_params.append(guide_trace[name]["value"])
+        all_trainable_params = list(set(all_trainable_params))
 
         # gradients
         loss = -elbo

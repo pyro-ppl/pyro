@@ -62,7 +62,7 @@ def queue(fn, queue=None, max_tries=None):
     return a return value from a complete trace in the queue
     """
     def _fn(*args, **kwargs):
-        p = BeamPoutine(fn, queue=queue, max_tries=max_tries)
+        p = QueuePoutine(fn, queue=queue, max_tries=max_tries)
         return p(*args, **kwargs)
     return _fn
 
