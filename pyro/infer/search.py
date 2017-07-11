@@ -10,11 +10,11 @@ from pyro.poutine import Trace
 import pyro.poutine as poutine
 
 
-class Search(pyro.infer.AbstractInfer):
+class Search(pyro.infer.abstract_infer.AbstractInfer):
     """
     New Trace and Poutine-based implementation of systematic search
     """
-    def __init__(self, model, queue=None, *args, **kwargs):
+    def __init__(self, model, queue=None, **kwargs):
         """
         Constructor
         """
@@ -24,23 +24,20 @@ class Search(pyro.infer.AbstractInfer):
             queue.put(Trace())
         self.queue = queue
 
-    def __call__(self, *args, **kwargs):
-        """
-        Really need to work on the inference interface
-        """
-        return self.step(*args, **kwargs)
-
-    def step(self, *args, **kwargs):
+    def runner(self, num_samples, *args, **kwargs):
         """
         algorithm entered here
         Returns traces from the posterior
         Running until the queue is empty and collecting the marginal histogram
         is performing exact inference
         """
-        if not self.queue.empty():
-            p = poutine.trace(poutine.queue(self.model, queue=self.queue))
-            return p(*args, **kwargs)
-        else:
-            # the queue is empty - we're done!
-            # XXX need to structure this better
-            return None
+        p = poutine.queue(poutine.trace(self.model),
+                          queue=self.queue,
+                          max_tries=num_samples)
+        samples = []
+        for i in range(num_samples):
+            if self.queue.empty():
+                break
+            model_trace = p(*args, **kwargs)
+            samples.append([i, model_trace["_RETURN"]["value"], model_trace.log_pdf()])
+        return samples

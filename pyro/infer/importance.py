@@ -3,12 +3,11 @@ import torch
 from torch.autograd import Variable
 
 import pyro
-from pyro.infer.abstract_infer import AbstractInfer
 import pyro.poutine as poutine
 
 
 # XXX what should be the base class here?
-class Importance(AbstractInfer):
+class Importance(pyro.infer.abstract_infer.AbstractInfer):
     """
     A new implementation of importance sampling
     """
