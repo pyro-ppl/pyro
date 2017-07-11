@@ -1,7 +1,6 @@
 import six
 import torch
 from torch.autograd import Variable
-from collections import OrderedDict
 
 import pyro
 from pyro.infer.abstract_infer import AbstractInfer
@@ -27,14 +26,13 @@ class Importance(AbstractInfer):
         main control loop
         TODO proper docs
         """
+        samples = []
         # for each requested sample, we must:
         for i in range(num_samples):
-            # sample from the guide
-            # replay the model from the guide
-            # sample from the model and store the return value
-            # compute the log-joints from the model and guide traces
-            # compute the unnormalized log-weight as logp - logq
-            pass
-        # normalize the weights (logsumexp?)
-        # return list(?) of samples and normalized weights to be consumed elsewhere
-        raise NotImplementedError("importance sampling not done yet!!")
+            guide_trace = poutine.trace(self.guide)(*args, **kwargs)
+            model_trace = poutine.trace(
+                poutine.replay(self.model, guide_trace))(*args, **kwargs)
+            samples.append([i, model_trace["_RETURN"]["value"],
+                            model_trace.log_pdf() - guide_trace.log_pdf()])
+
+        return samples
