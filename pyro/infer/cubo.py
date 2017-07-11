@@ -92,11 +92,11 @@ class CUBO(AbstractInfer):
         all_trainable_params = list(set(all_trainable_params))
 
         # gradients
-        loss = -elbo
+        loss = cubo
         loss.backward()
         # update
         self.optim_step_fct(all_trainable_params)
         # zero grads
         zero_grads(all_trainable_params)
 
-        return loss.data[0]
+        return (torch.log(loss)/self.n_cubo).data[0]
