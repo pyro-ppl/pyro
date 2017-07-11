@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import pdb
 from torch.autograd import Variable
-from queue import Queue
+from multiprocessing import Queue
 
 import pyro
 from pyro.distributions import DiagNormal, Bernoulli

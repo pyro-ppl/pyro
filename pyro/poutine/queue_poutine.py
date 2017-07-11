@@ -1,6 +1,6 @@
 import pyro
 import torch
-from queue import Queue
+from multiprocessing import Queue
 
 from .poutine import Poutine
 

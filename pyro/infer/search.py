@@ -1,6 +1,6 @@
 import pyro
 import torch
-from queue import Queue
+from multiprocessing import Queue
 
 from pyro.infer.trace import Trace
 import pyro.poutine as poutine
