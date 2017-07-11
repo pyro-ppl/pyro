@@ -33,7 +33,7 @@ class KL_QP(AbstractInfer):
         Call parent class initially, then setup the poutines to run
         """
         # initialize
-        super(TraceKLqp, self).__init__()
+        super(KL_QP, self).__init__()
         # TODO init this somewhere else in a more principled way
         self.sites = None
 
