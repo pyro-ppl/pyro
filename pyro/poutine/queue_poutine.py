@@ -2,7 +2,6 @@ import pyro
 import torch
 from queue import Queue
 
-from pyro.infer.trace import Trace
 from .poutine import Poutine
 
 
@@ -26,18 +25,18 @@ class QueuePoutine(Poutine):
         self.transparent = False
         if queue is None:
             queue = Queue()
-            queue.put(Trace())
+            queue.put(pyro.infer.Trace())
         self.queue = queue
         if max_tries is None:
             max_tries = 1e6
-        self.max_tries = max_tries
+        self.max_tries = int(max_tries)
 
     def __call__(self, *args, **kwargs):
         """
         Keep going until it returns a completed trace from the queue
         or has run for too long
         """
-        for i in xrange(self.max_tries):
+        for i in range(self.max_tries):
             try:
                 ret_val = super(QueuePoutine, self).__call__(*args, **kwargs)
                 return ret_val

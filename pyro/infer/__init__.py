@@ -1,1 +1,1 @@
-from trace import Trace
+from pyro.infer.trace import Trace

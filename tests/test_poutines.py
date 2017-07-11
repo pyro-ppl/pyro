@@ -1,6 +1,8 @@
 import numpy as np
 import torch
+import pdb
 from torch.autograd import Variable
+from queue import Queue
 
 import pyro
 from pyro.distributions import DiagNormal, Bernoulli
@@ -198,48 +200,57 @@ class BlockPoutineTests(NormalNormalNormalPoutineTestCase):
                 self.assertFalse(name in guide_trace)
 
 
-# class QueuePoutineTests(TestCase):
-# 
-#     def setUp(self):
-#         pass
-#     
-#     def test_queue(self):
-# 
-#         # test single trace
-# 
-#         # test full enumeration
-# 
-#         # test max_tries failure case
-# 
-#         # test queue exhaustion failure case
-#         pass
+class QueuePoutineTests(TestCase):
 
+    def setUp(self):
 
-# class CompoundPoutineTests(NormalNormalNormalPoutineTestCase):
-# 
-#     def test_trace_replay(self):
-#         """
-#         Make sure trace and replay interact correctly
-#         """
-#         model_trace = poutine.trace(self.model)()
-#         guide_trace = poutine.trace(self.guide)()
-# 
-#         model_trace_replay = poutine.replay(poutine.trace(self.model), guide_trace)()
-#         model_replay_trace = poutine.trace(poutine.replay(self.model, guide_trace))()
-#         model_replay_ret = poutine.replay(self.model, guide_trace)()
-# 
-#         self.assertTrue(eq(model_trace_replay["_RETURN"]["value"], model_replay_ret))
-# 
-#         self.assertTrue(eq(model_replay_ret, guide_trace["latent"]["value"]))
-# 
-#         self.assertTrue(eq(model_replay_trace["latent"]["value"],
-#                            guide_trace["latent"]["value"]))
-# 
-#         self.assertFalse(eq(model_replay_trace["latent"]["value"],
-#                             model_trace_replay["latent"]["value"]))
-# 
-#         self.assertFalse(eq(model_trace["latent"]["value"],
-#                             guide_trace["latent"]["value"]))
-# 
-#     def test_block_trace_replay(self):
-#         pass
+        # simple Gaussian-mixture HMM
+        def model():
+            ps = pyro.param("ps", Variable(torch.Tensor([[0.8], [0.3]])))
+            mu = pyro.param("mu", Variable(torch.Tensor([[-0.1], [0.9]])))
+            sigma = Variable(torch.ones(1))
+
+            latents = [Variable(torch.ones(1))]
+            observes = []
+            for t in range(3):
+
+                latents.append(
+                    pyro.sample("latent_{}".format(str(t)),
+                                Bernoulli(ps[latents[-1][0].long().data])))
+
+                observes.append(
+                    pyro.observe("observe_{}".format(str(t)),
+                                 DiagNormal(mu[latents[-1][0].long().data], sigma),
+                                 pyro.ones(1)))
+            return latents
+
+        self.sites = ["observe_{}".format(str(t)) for t in range(3)] + \
+                     ["latent_{}".format(str(t)) for t in range(3)] + \
+                     ["_INPUT", "_RETURN"]
+        self.model = model
+        self.queue = Queue()
+        self.queue.put(pyro.infer.Trace())
+
+    def test_queue_single(self):
+        f = poutine.queue(poutine.trace(self.model), queue=self.queue)
+        tr = f()
+        for name in self.sites:
+            self.assertTrue(name in tr)
+
+    def test_queue_enumerate(self):
+        f = poutine.queue(poutine.trace(self.model), queue=self.queue)
+        trs = []
+        while not self.queue.empty():
+            trs.append(f())
+        self.assertTrue(len(trs) == 2 ** 3)
+
+    def test_queue_max_tries(self):
+        f = poutine.queue(self.model, queue=self.queue, max_tries=3)
+        try:
+            f()
+            self.assertTrue(False)
+        except ValueError:
+            self.assertTrue(True)
+
+    def test_queue_exhaustion(self):
+        pass

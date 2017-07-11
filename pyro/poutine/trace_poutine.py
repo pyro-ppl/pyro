@@ -1,6 +1,6 @@
 import pyro
 import torch
-import pdb
+
 from .poutine import Poutine
 from pyro.infer.trace import Trace
 

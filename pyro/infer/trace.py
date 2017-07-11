@@ -24,6 +24,7 @@ class Trace(dict):
         site["fn"] = fn
         site["args"] = (args, kwargs)
         self[name] = site
+        return self
 
     def add_observe(self, name, val, fn, obs, *args, **kwargs):
         """
@@ -37,6 +38,7 @@ class Trace(dict):
         site["obs"] = obs
         site["args"] = (args, kwargs)
         self[name] = site
+        return self
 
     def add_map_data(self, name, data, fn):
         """
@@ -47,6 +49,7 @@ class Trace(dict):
         site["type"] = "map_data"
         # XXX
         self[name] = site
+        return self
 
     def add_param(self, name, val, *args, **kwargs):
         """
@@ -57,6 +60,7 @@ class Trace(dict):
         site["value"] = val
         site["args"] = (args, kwargs)
         self[name] = site
+        return self
 
     def add_args(self, args_and_kwargs):
         """
@@ -68,6 +72,7 @@ class Trace(dict):
         site["type"] = "args"
         site["args"] = args_and_kwargs
         self[name] = site
+        return self
 
     def add_return(self, val, *args, **kwargs):
         """
@@ -79,6 +84,7 @@ class Trace(dict):
         site["type"] = "return"
         site["value"] = val
         self[name] = site
+        return self
 
     def copy(self):
         """
