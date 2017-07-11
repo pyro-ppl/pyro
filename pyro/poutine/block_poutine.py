@@ -21,7 +21,8 @@ class BlockPoutine(Poutine):
         self.transparent = transparent
         # first, some sanity checks:
         # hide_all and expose_all intersect?
-        assert((hide_all is False and expose_all is False) or (hide_all != expose_all))
+        assert (hide_all is False and expose_all is False) or \
+            (hide_all != expose_all), "cannot hide and expose a site"
 
         # hide and expose intersect?
         if hide is None:
@@ -31,14 +32,16 @@ class BlockPoutine(Poutine):
 
         if expose is None:
             expose = []
-        assert(set(hide).isdisjoint(set(expose)))
+        assert set(hide).isdisjoint(set(expose)), \
+            "cannot hide and expose a site"
 
         # hide_types and expose_types intersect?
         if hide_types is None:
             hide_types = []
         if expose_types is None:
             expose_types = []
-        assert(set(hide_types).isdisjoint(set(expose_types)))
+        assert set(hide_types).isdisjoint(set(expose_types)), \
+            "cannot hide and expose a site type"
 
         # now set stuff
         self.hide_all = hide_all

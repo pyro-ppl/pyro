@@ -1,8 +1,12 @@
 import pyro
 import torch
-from multiprocessing import Queue
+import sys
+if sys.version_info[0] < 3:
+    from Queue import Queue
+else:
+    from queue import Queue
 
-from pyro.infer.trace import Trace
+from pyro.poutine import Trace
 import pyro.poutine as poutine
 
 

@@ -97,10 +97,10 @@ class Poutine(object):
         """
         Default pyro.sample Poutine behavior
         """
-        val = fn(*args, **kwargs)
-        if self.transparent and not (prev_val is None):
+        if self.transparent and prev_val is not None:
             return prev_val
         else:
+            val = fn(*args, **kwargs)
             return val
 
     def _pyro_observe(self, prev_val, name, fn, obs, *args, **kwargs):
@@ -112,17 +112,16 @@ class Poutine(object):
         else:
             if obs is None:
                 return fn(*args, **kwargs)
-            else:
-                return obs
+            return obs
 
     def _pyro_map_data(self, prev_val, name, data, fn, *args, **kwargs):
         """
         Default pyro.map_data Poutine behavior
         """
-        if self.transparent and not (prev_val is None):
+        if self.transparent and prev_val is not None:
             return prev_val
         else:
-            if isinstance(data, torch.Tensor):
+            if isinstance(data, (torch.autograd.Variable, torch.Tensor)):
                 # assume vectorized observation fn
                 raise NotImplementedError(
                     "map_data for vectorized data not yet implemented.")
@@ -134,7 +133,7 @@ class Poutine(object):
         """
         overload pyro.param call
         """
-        if self.transparent and not (prev_val is None):
+        if self.transparent and prev_val is not None:
             return prev_val
         else:
             return pyro._param_store.get_param(name, *args, **kwargs)

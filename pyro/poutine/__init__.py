@@ -1,6 +1,7 @@
 import pyro
 from pyro.util import memoize
 
+from .trace import Trace
 from .poutine import Poutine
 from .block_poutine import BlockPoutine
 from .trace_poutine import TracePoutine

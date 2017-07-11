@@ -1,6 +1,10 @@
 import pyro
 import torch
-from multiprocessing import Queue
+import sys
+if sys.version_info[0] < 3:
+    from Queue import Queue
+else:
+    from queue import Queue
 
 from .poutine import Poutine
 
@@ -25,7 +29,7 @@ class QueuePoutine(Poutine):
         self.transparent = False
         if queue is None:
             queue = Queue()
-            queue.put(pyro.infer.Trace())
+            queue.put(pyro.poutine.Trace())
         self.queue = queue
         if max_tries is None:
             max_tries = 1e6
@@ -65,9 +69,10 @@ class QueuePoutine(Poutine):
         """
         Return the sample in the guide trace when appropriate
         """
-        assert(hasattr(fn, "support"))
+        assert hasattr(fn, "support"), "distribution has no support method"
         if name in self.guide_trace:
-            assert(self.guide_trace[name]["type"] == "sample")
+            assert self.guide_trace[name]["type"] == "sample", \
+                "site {} in guide_trace is not a sample".format(name)
             return self.guide_trace[name]["value"]
         elif not self.pivot_seen:
             self.pivot_seen = True
@@ -77,4 +82,4 @@ class QueuePoutine(Poutine):
                     self.guide_trace.copy().add_sample(name, s, fn, *args, **kwargs))
             raise ReturnExtendedTraces(extended_traces)
         else:
-            raise ValueError("should never get here")
+            raise ValueError("should never get here (malfunction at site {})".format(name))

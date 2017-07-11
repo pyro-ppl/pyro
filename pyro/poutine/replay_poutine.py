@@ -1,7 +1,7 @@
 import pyro
 import torch
 
-from pyro.infer.trace import Trace
+from pyro.poutine import Trace
 from .poutine import Poutine
 
 
@@ -15,7 +15,7 @@ class ReplayPoutine(Poutine):
         """
         super(ReplayPoutine, self).__init__(fn)
         self.transparent = False
-        assert(not (guide_trace is None))
+        assert guide_trace is not None, "must provide guide_trace"
         self.guide_trace = guide_trace
         # case 1: no sites
         if sites is None:
@@ -39,8 +39,10 @@ class ReplayPoutine(Poutine):
         # case 1: dict, positive: sample from guide
         if name in self.sites:
             g_name = self.sites[name]
-            assert(g_name in self.guide_trace)
-            assert(self.guide_trace[g_name]["type"] == "sample")
+            assert g_name in self.guide_trace, \
+                "{} in sites but {} not in trace".format(name, g_name)
+            assert self.guide_trace[g_name]["type"] == "sample", \
+                "site {} must be sample in guide_trace".format(g_name)
             return self.guide_trace[g_name]["value"]
         # case 2: dict, negative: sample from model
         elif name not in self.sites:

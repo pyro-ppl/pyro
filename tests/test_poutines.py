@@ -1,8 +1,12 @@
 import numpy as np
 import torch
 import pdb
+import sys
 from torch.autograd import Variable
-from multiprocessing import Queue
+if sys.version_info[0] < 3:
+    from Queue import Queue
+else:
+    from queue import Queue
 
 import pyro
 from pyro.distributions import DiagNormal, Bernoulli
@@ -229,7 +233,7 @@ class QueuePoutineTests(TestCase):
                      ["_INPUT", "_RETURN"]
         self.model = model
         self.queue = Queue()
-        self.queue.put(pyro.infer.Trace())
+        self.queue.put(poutine.Trace())
 
     def test_queue_single(self):
         f = poutine.queue(poutine.trace(self.model), queue=self.queue)

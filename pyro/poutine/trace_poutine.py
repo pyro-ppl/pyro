@@ -2,7 +2,7 @@ import pyro
 import torch
 
 from .poutine import Poutine
-from pyro.infer.trace import Trace
+from pyro.poutine import Trace
 
 
 class TracePoutine(Poutine):
@@ -50,7 +50,6 @@ class TracePoutine(Poutine):
         sample
         TODO docs
         """
-        assert(name not in self.trace)
         val = super(TracePoutine, self)._pyro_sample(prev_val, name, dist,
                                                      *args, **kwargs)
         # XXX not correct arguments
@@ -65,7 +64,6 @@ class TracePoutine(Poutine):
         TODO
         """
         # make sure the site name is unique
-        assert(name not in self.trace)
         val = super(TracePoutine, self)._pyro_observe(prev_val, name, fn, obs,
                                                       *args, **kwargs)
         self.trace.add_observe(name, val, fn, obs, *args, **kwargs)
