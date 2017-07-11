@@ -1,188 +1,44 @@
-import pyro
-from pyro.infer.poutine import TagPoutine
-from pyro.infer.abstract_infer import AbstractInfer
+import six
 import torch
 from torch.autograd import Variable
 from collections import OrderedDict
+import pyro
+import pyro.poutine as poutine
+from pyro.infer.abstract_infer import AbstractInfer
 
 
-class VIGuideCo(TagPoutine):
+def zero_grads(tensors):
     """
-    The guide copoutine should:
-    1) cache a sample at each site
-    2) compute and store log(q(sample)) at each site
-    3) log each site's distribution type or at least record reparametrizable
+    Sets gradients of list of Variables to zero in place
     """
-    # uniquely tag each trace -- not expensive
-
-    def tag_name(self, trace_uid):
-        return "guide_{}".format(trace_uid)
-
-    def __init__(self, *args, **kwargs):
-        super(VIGuideCo, self).__init__(*args, **kwargs)
-        self.batch_index = 0  # TODO by name for multiple map_datas
-
-    # every time
-    def _enter_poutine(self, *args, **kwargs):
-        """
-        When model execution begins
-        """
-        super(VIGuideCo, self)._enter_poutine(*args, **kwargs)
-
-        # trace structure:
-        # site = {"sample": sample, "logq": logq, "reparam": reparam}
-        self.trace = OrderedDict()
-        self.batch = []
-        # TODO: make this cleaner via a trace data structure
-        self.score_multiplier = pyro.ones(1)
-
-    def _pyro_sample(self, name, dist):
-        """
-        Simply sample from distribution
-        """
-
-        if dist.reparametrized:
-            v_sample = dist()
-        else:
-            # Do we need to untape here, or will it already be untaped because the
-            #  sampler has a random choice (after params)?
-            v_sample = Variable(dist().data)  # XXX should be detach?
-        log_q = dist.batch_log_pdf(v_sample)
-
-        assert(name not in self.trace)
-        self.trace[name] = {}
-        self.trace[name]["sample"] = v_sample
-        self.trace[name]["logpdf"] = log_q * self.score_multiplier.expand_as(log_q)
-        self.trace[name]["reparam"] = dist.reparametrized
-
-        return v_sample
-
-    def _pyro_map_data(self, data, fn, name="", batch_size=0):
-        # TODO: multiple map_datas will require naming.
-
-        if isinstance(data, torch.Tensor):
-            # assume vectorized observation fn
-            raise NotImplementedError(
-                "map_data for vectorized data not yet implemented.")
-        else:
-            if batch_size == 0:
-                batch_size = len(data)
-
-            batch_ratio = len(data) / batch_size
-
-            # get a minibatch
-            # FIXME: this is brittle, deal with mismatched stride.
-            if self.batch_index >= len(data):
-                self.batch_index = 0
-            new_batch_index = self.batch_index + batch_size
-
-            # FIXME: should add batch as a trace node
-            self.batch = list(enumerate(data))[
-                self.batch_index:new_batch_index]
-            self.batch_index = new_batch_index
-
-            # set multiplyer for logpdfs based on batch size, used wheres score
-            # are made.
-            self.score_multiplier = self.score_multiplier * batch_ratio
-
-            # map over the minibatch
-            # note that fn should expect an index and a datum
-            list(map(lambda x: fn(x[0], x[1]), self.batch))
-
-            # undo multiplyer
-            self.score_multiplier = self.score_multiplier / batch_ratio
-
-
-class VIModelCo(TagPoutine):
-
-    # uniquely tag each trace -- not expensive
-    def tag_name(self, trace_uid):
-        return "model_{}".format(trace_uid)
-
-    def set_trace(self, guide_trace):
-        self.guide_trace = guide_trace
-
-        # fixme: should put batch in trace instead
-    def set_batch(self, guide_batch):
-        self.batch = guide_batch
-
-    # every time
-    def _enter_poutine(self, *args, **kwargs):
-        """
-        When model execution begins
-        """
-        super(VIModelCo, self)._enter_poutine(*args, **kwargs)
-        self.observation_LL = 0
-        self.score_multiplier = 1
-        self.trace = OrderedDict()
-
-    def _pyro_sample(self, name, dist):
-        """
-        Simply sample from distribution
-        """
-        v_sample = self.guide_trace[name]["sample"]
-        # typecheck class?
-        log_p = dist.batch_log_pdf(v_sample)
-
-        assert(name not in self.trace)
-
-        self.trace[name] = {}
-        self.trace[name]["logpdf"] = log_p * self.score_multiplier
-        self.trace[name]["sample"] = v_sample
-        self.trace[name]["reparam"] = dist.reparametrized
-
-        return v_sample
-
-    def _pyro_observe(self, name, dist, val):
-        """
-        Get log_pdf of sample, add to ongoing scoring
-        """
-        logpdf = dist.batch_log_pdf(val)
-        self.observation_LL = self.observation_LL + logpdf * self.score_multiplier
-        return val
-
-    def _pyro_map_data(self, data, fn, name="", batch_size=0):
-        # TODO: multiple map_datas will require naming.
-
-        if isinstance(data, torch.Tensor):
-            # assume vectorized observation fn
-            raise NotImplementedError(
-                "map_data for vectorized data not yet implemented.")
-        else:
-            # use minibatch from guide
-            assert(len(self.batch) > 0)
-
-            # batch_size comes from batch pre-constructed in guide.
-            batch_ratio = len(data) / len(self.batch)
-
-            # set multiplyer for logpdfs based on batch size, used wheres score
-            # are made.
-            self.score_multiplier = self.score_multiplier * batch_ratio
-
-            # map over the minibatch
-            # note that fn should expect an index and a datum
-            list(map(lambda x: fn(x[0], x[1]), self.batch))
-
-            # undo multiplyer
-            self.score_multiplier = self.score_multiplier / batch_ratio
+    for p in tensors:
+        if p.grad is not None:
+            if p.grad.volatile:
+                p.grad.data.zero_()
+            else:
+                data = p.grad.data
+                p.grad = Variable(data.new().resize_as_(data).zero_())
 
 
 class KL_QP(AbstractInfer):
-
+    """
+    A new, Trace and Poutine-based implementation of SVI
+    """
     def __init__(self, model,
                  guide,
                  optim_step_fct,
                  model_fixed=False,
                  guide_fixed=False, *args, **kwargs):
         """
-        Call parent class initially, then setup the copoutines to run
+        Call parent class initially, then setup the poutines to run
         """
         # initialize
-        super(KL_QP, self).__init__()
+        super(TraceKLqp, self).__init__()
+        # TODO init this somewhere else in a more principled way
+        self.sites = None
 
-        # wrap the model function with a LWCoupoutine
-        self.model = VIModelCo(model)
-        self.guide = VIGuideCo(guide)
+        self.model = model
+        self.guide = guide
         self.optim_step_fct = optim_step_fct
         self.model_fixed = model_fixed
         self.guide_fixed = guide_fixed
@@ -192,71 +48,48 @@ class KL_QP(AbstractInfer):
 
     def step(self, *args, **kwargs):
         """
-        Main function of an Infer object, automatically switches context with copoutine
+        single step?
         """
-        # for each step, sample guide, sample model,
-        # collect all the relevant parameters for both the guide
-        # and model according to whether or not those parameters
-        # will be updated by optim
-        all_trainable_params = []
+        guide_trace = poutine.trace(self.guide)(*args, **kwargs)
+        model_trace = poutine.trace(
+            poutine.replay(self.model, guide_trace))(*args, **kwargs)
 
-        # sample from the guide
-        # this will store random variables in self.guide.trace
-        self.guide(*args, **kwargs)
+        # compute losses
+        log_r = model_trace.log_pdf() - guide_trace.log_pdf()
 
-        # get trace params from last guide run
-        # i.e. all the calls to pyro.param inside of guide
-        if not self.guide_fixed:
-            all_trainable_params += self.guide.get_last_trace_parameters()
-
-        # use guide trace inside of our model copoutine
-        self.model.set_trace(self.guide.trace)
-        self.model.set_batch(self.guide.batch)
-
-        # sample from model, using the guide trace
-        self.model(*args, **kwargs)
-
-        # get trace params from last model run
-        # i.e. all the calls to pyro.param inside of model
-        if not self.model_fixed:
-            all_trainable_params += self.model.get_last_trace_parameters()
-
-        # now we finish computing elbo
-        # loop over non-reparametrized names
-        # current score reflects observations during trace
-        log_r = self.model.observation_LL.clone()
-        elbo = self.model.observation_LL
-
-        for name in self.guide.trace.keys():
-            log_r += self.model.trace[name]["logpdf"] - \
-                self.guide.trace[name]["logpdf"]
-        for name in self.guide.trace.keys():
-            if not self.guide.trace[name]["reparam"]:
-                elbo += Variable(log_r.data) * self.guide.trace[name]["logpdf"]
+        elbo = 0.0
+        for name in model_trace.keys():
+            if model_trace[name]["type"] == "observe":
+                elbo += model_trace[name]["log_pdf"]
+            elif model_trace[name]["type"] == "sample":
+                if model_trace[name]["fn"].reparametrized:
+                    elbo += model_trace[name]["log_pdf"]
+                    elbo -= guide_trace[name]["log_pdf"]
+                else:
+                    elbo += Variable(log_r.data) * guide_trace[name]["log_pdf"]
             else:
-                elbo += self.model.trace[name]["logpdf"]
-                elbo -= self.guide.trace[name]["logpdf"]
+                pass
 
-        loss = -torch.sum(elbo)
-        # prxint("model loss {}".format(loss.data[0]))
-        # use loss variable to calculate backward
-        # thanks pytorch autograd
-        loss.backward()
-
-        # make sure we're only listing the unique trainable params
+        # accumulate parameters
+        all_trainable_params = []
+        # get trace params from last model run
+        if not self.model_fixed:
+            for name in model_trace.keys():
+                if model_trace[name]["type"] == "param":
+                    all_trainable_params.append(model_trace[name]["value"])
+        # get trace params from last guide run
+        if not self.guide_fixed:
+            for name in guide_trace.keys():
+                if guide_trace[name]["type"] == "param":
+                    all_trainable_params.append(guide_trace[name]["value"])
         all_trainable_params = list(set(all_trainable_params))
 
-        # construct our optim object EVERY step
-        # TODO: Make this more efficient with respect to params
+        # gradients
+        loss = -elbo
+        loss.backward()
+        # update
         self.optim_step_fct(all_trainable_params)
-        """Sets gradients of all model parameters to zero."""
-        for p in all_trainable_params:
-            if p.grad is not None:
-                if p.grad.volatile:
-                    p.grad.data.zero_()
-                else:
-                    data = p.grad.data
-                    p.grad = Variable(data.new().resize_as_(data).zero_())
+        # zero grads
+        zero_grads(all_trainable_params)
 
-        # send back the float loss plz
         return loss.data[0]

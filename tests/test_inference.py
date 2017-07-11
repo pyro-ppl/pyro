@@ -14,8 +14,7 @@ from pyro.distributions import Poisson
 from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
 from tests.common import TestCase
 
-# from pyro.infer.kl_qp import KL_QP
-from pyro.infer.trace_klqp import TraceKLqp as KL_QP
+from pyro.infer.kl_qp import KL_QP
 
 
 class NormalNormalTests(TestCase):

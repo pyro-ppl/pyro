@@ -6,8 +6,7 @@ import pyro
 from pyro.distributions import DiagNormal
 from tests.common import TestCase
 
-# from pyro.infer.kl_qp import KL_QP
-from pyro.infer.trace_klqp import TraceKLqp as KL_QP
+from pyro.infer.kl_qp import KL_QP
 
 
 class OptimTests(TestCase):
