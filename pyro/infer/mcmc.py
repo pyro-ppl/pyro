@@ -33,7 +33,6 @@ class MCMC(pyro.infer.abstract_infer.AbstractInfer):
         traces = []
         t = 0
         while t < self.burn + self.lag * self.samples:
-            t += 1
             # p(x, z)
             old_model_trace = traces[-1]
             # q(z' | z)
@@ -55,7 +54,8 @@ class MCMC(pyro.infer.abstract_infer.AbstractInfer):
             if torch.log(rnd)[0] < logr[0]:
                 # accept
                 old_model_trace = new_model_trace
-                if t > self.burn and t % self.lag == 0:
+                if t <= self.burn or (t > self.burn and t % self.lag == 0):
+                    t += 1
                     traces.append(new_model_trace)
 
         trace_ps = Variable(torch.Tensor([tr.log_pdf() for tr in traces]))
