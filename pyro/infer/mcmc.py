@@ -3,15 +3,18 @@ from torch.autograd import Variable
 
 import pyro
 import pyro.poutine as poutine
-from pyro.distributions import Uniform
+from pyro.distributions import Uniform, Categorical
 
 
 class MCMC(pyro.infer.abstract_infer.AbstractInfer):
     """
     Initial implementation of MCMC
     """
-    def __init__(self, model, guide=None, proposal=None):
+    def __init__(self, model, guide=None, proposal=None, samples=10, lag=1, burn=0):
         super(MCMC, self).__init__()
+        self.samples = samples
+        self.lag = lag
+        self.burn = burn
         self.model = model
         assert (guide is None or proposal is None) and \
             (guide is not None or proposal is not None), \
@@ -21,13 +24,16 @@ class MCMC(pyro.infer.abstract_infer.AbstractInfer):
         else:
             self.guide = proposal
 
-    def runner(self, num_samples, *args, **kwargs):
+    def _dist(self, *args, **kwargs):
         """
-        main control loop
+        make trace posterior distribution
         """
         # initialize traces with a draw from the prior
-        traces = [poutine.trace(self.model)(*args, **kwargs)]
-        for i in range(num_samples):
+        old_model_trace = poutine.trace(self.model)(*args, **kwargs)
+        traces = []
+        t = 0
+        while t < self.burn + self.lag * self.samples:
+            t += 1
             # p(x, z)
             old_model_trace = traces[-1]
             # q(z' | z)
@@ -47,7 +53,20 @@ class MCMC(pyro.infer.abstract_infer.AbstractInfer):
             rnd = pyro.sample("mh_step_{}".format(i),
                               Uniform(pyro.zeros(1), pyro.ones(1)))
             if torch.log(rnd)[0] < logr[0]:
-                traces.append(new_model_trace)
+                # accept
+                old_model_trace = new_model_trace
+                if t > self.burn and t % self.lag == 0:
+                    traces.append(new_model_trace)
 
-        samples = [[i, tr["_RETURN"]["value"], tr.log_pdf()] for tr in traces]
-        return samples
+        trace_ps = Variable(torch.Tensor([tr.log_pdf() for tr in traces]))
+        trace_ps -= pyro.util.log_sum_exp(trace_ps)
+        return Categorical(ps=torch.exp(trace_ps), vs=traces)
+
+    def sample(self, *args, **kwargs):
+        """
+        sample from trace posterior
+        """
+        return self._dist(*args, **kwargs).sample()
+
+    def log_pdf(self, val, *args, **kwargs):
+        return self._dist(*args, **kwargs).log_pdf(val)

@@ -3,29 +3,44 @@ from torch.autograd import Variable
 
 import pyro
 import pyro.poutine as poutine
+from pyro.distributions import Categorical
 
 class SGMCMC(pyro.infer.abstract_infer.AbstractInfer):
     """
     sketch of stochastic gradient MCMC
     """
-    def __init__(self, model, optimizer=None):
+    def __init__(self, model, optimizer, samples=10, lag=1, burn=0):
+        super(SGMCMC, self).__init__()
+        self.samples = samples
+        self.lag = lag
+        self.burn = burn
         self.model = model
-        if optimizer is None:
-            optimizer = pyro.optim.SGD
-        self.optimizer = optimizer()
+        self.optimizer = optimizer
 
-    def runner(self, num_samples, *args, **kwargs):
+    def _dist(self, *args, **kwargs):
         """
         main control loop
         """
-        samples = []
+        traces = []
         tr = poutine.trace(self.model)(*args, **kwargs)
         for i in range(num_samples):
             tr = poutine.trace(poutine.replay(self.model, tr))(*args, **kwargs)
             logp = tr.log_pdf()
-            tr_samples = tr.filter(site_type="sample")
+            tr_samples = [s["value"] for s in tr.filter(site_type="sample")]
             autograd.backward(tr_samples, logp)
             self.optimizer.step(tr_samples)
             zero_grad(tr_samples)
-            samples.append([i, tr.copy(True)["_RETURN"]["value"], logp])
-        return samples
+            traces.append(tr.copy())
+
+        log_ps = Variable(torch.Tensor([tr.log_pdf() for tr in traces]))
+        log_ps = log_ps - pyro.util.log_sum_exp(log_ps)
+        return Categorical(ps=torch.exp(log_ps), vs=traces)
+
+    def sample(self, *args, **kwargs):
+        """
+        sample from trace posterior
+        """
+        return self._dist(*args, **kwargs).sample()
+
+    def log_pdf(self, val, *args, **kwargs):
+        return self._dist(*args, **kwargs).log_pdf(val)
