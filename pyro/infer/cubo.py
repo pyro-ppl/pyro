@@ -29,7 +29,8 @@ class CUBO(AbstractInfer):
                  optim_step_fct,
                  model_fixed=False,
                  guide_fixed=False,
-                 n_cubo=2, *args, **kwargs):
+                 n_cubo=2,
+                 *args, **kwargs):
         """
         Call parent class initially, then setup the poutines to run
         """
@@ -57,12 +58,12 @@ class CUBO(AbstractInfer):
             poutine.replay(self.model, guide_trace))(*args, **kwargs)
 
         # compute losses
-        log_r = model_trace.log_pdf() - guide_trace.log_pdf()
+        log_r = model_trace.batch_log_pdf() - guide_trace.batch_log_pdf()
 
-        rr_max = torch.max(log_r,1)
+        rr_max = torch.max(log_r, 1)
         rr_reduced = log_r - rr_max.expand_as(log_r)
         w = torch.exp(rr_reduced)
-        wn = torch.pow(w,self.n_cubo)
+        w_n = torch.pow(w, self.n_cubo)
 
         cubo = 0.0
         for name in model_trace.keys():
@@ -70,17 +71,18 @@ class CUBO(AbstractInfer):
                 cubo += model_trace[name]["log_pdf"]
             elif model_trace[name]["type"] == "sample":
                 if model_trace[name]["fn"].reparametrized:
+                    # FIX
                     cubo += model_trace[name]["log_pdf"]
                     cubo -= guide_trace[name]["log_pdf"]
                 else:
-                    cubo += Variable(wn.data) * guide_trace[name]["log_pdf"]
+                    cubo -= Variable(w_n.data) * guide_trace[name]["log_pdf"]
             else:
                 pass
 
         # accumulate parameters
         all_trainable_params = []
         # get trace params from last model run
-        if not self.model_fixed:
+        if not self.model_fixed:                                      
             for name in model_trace.keys():
                 if model_trace[name]["type"] == "param":
                     all_trainable_params.append(model_trace[name]["value"])
@@ -92,11 +94,11 @@ class CUBO(AbstractInfer):
         all_trainable_params = list(set(all_trainable_params))
 
         # gradients
-        loss = cubo
-        loss.backward()
+        cubo.backward()
         # update
         self.optim_step_fct(all_trainable_params)
         # zero grads
         zero_grads(all_trainable_params)
 
-        return (torch.log(loss)/self.n_cubo).data[0]
+        # return the log transform of the expectation
+        return (torch.log(cubo)/self.n_cubo).data[0]
