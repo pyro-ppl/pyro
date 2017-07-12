@@ -21,7 +21,7 @@ class Importance(pyro.infer.abstract_infer.AbstractInfer):
         self.model = model
         if guide is None:
             # propose from the prior
-            guide = poutine.block(model, hide_type="observe")
+            guide = poutine.block(model, hide_types=["observe"])
         self.guide = guide
 
     def _dist(self, *args, **kwargs):
