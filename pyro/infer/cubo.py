@@ -58,7 +58,7 @@ class CUBO(AbstractInfer):
             poutine.replay(self.model, guide_trace))(*args, **kwargs)
 
         # compute losses
-        log_r = model_trace.batch_log_pdf() - guide_trace.batch_log_pdf()
+        log_r = model_trace.log_pdf() - guide_trace.log_pdf()
         rr = torch.exp(log_r * self.n_cubo)
         w_n = Variable(rr.data)
 
@@ -68,7 +68,7 @@ class CUBO(AbstractInfer):
                 cubo += model_trace[name]["log_pdf"]
             elif model_trace[name]["type"] == "sample":
                 if model_trace[name]["fn"].reparametrized:
-
+                    # print "name",model_trace[name]
                     cubo += w_n * (model_trace[name]["log_pdf"] - guide_trace[name]["log_pdf"])
 
                 else:
