@@ -1,4 +1,4 @@
-from pyro.infer.poutine import Poutine
+from pyro.poutine import Poutine
 import torch
 
 # overload call function here?

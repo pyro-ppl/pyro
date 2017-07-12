@@ -6,11 +6,10 @@ import pyro
 from torch.nn import Parameter
 import torch
 
+from pyro.util import zeros, ones
+
 # global map of params for now
 _param_store = ParamStoreDict()
-
-# set pyro.param function to _param_store.get_param
-param = _param_store.get_param
 
 # set global tensor type (cpu v.gpu); cpu by default
 _global_tensor_type = 'cpu'
@@ -50,42 +49,61 @@ def module_from_param_name(param_name):
 # use pyro optim class to wrap nn optim
 optim = PyroOptim
 
-
-def ones(*args, **kwargs):
-    return Parameter(torch.ones(*args, **kwargs))
-    # return pyro.device(Parameter(torch.ones(*args, **kwargs)))
+_PYRO_STACK = []
 
 
-def zeros(*args, **kwargs):
-    return Parameter(torch.zeros(*args, **kwargs))
-    # return pyro.device(Parameter(torch.zeros(*args, **kwargs)))
+def param(name, *args, **kwargs):
+    if len(_PYRO_STACK) == 0:
+        return _param_store.get_param(name, *args, **kwargs)
+    else:
+        ret = None
+        for layer in _PYRO_STACK:
+            ret, stop = layer("param", ret, name, *args, **kwargs)
+            if stop:
+                break
+        return ret
 
 
-def ng_ones(*args, **kwargs):
-    return Variable(torch.ones(*args, **kwargs), requires_grad=False)
+def sample(name, fn, *args, **kwargs):
+    # check if stack is empty
+    # if stack empty, default behavior (defined here)
+    if len(_PYRO_STACK) == 0:
+        return fn(*args, **kwargs)
+    # if stack not empty, apply everything in the stack?
+    else:
+        ret = None
+        for layer in _PYRO_STACK:
+            ret, stop = layer("sample", ret, name, fn, *args, **kwargs)
+            if stop:
+                break
+        return ret
 
 
-def ng_zeros(*args, **kwargs):
-    return Variable(torch.zeros(*args, **kwargs), requires_grad=False)
+def observe(name, fn, obs, *args, **kwargs):
+    if len(_PYRO_STACK) == 0:
+        raise NotImplementedError(
+            "Observe has been used outside of a normalizing context.")
+    else:
+        ret = None
+        for layer in _PYRO_STACK:
+            ret, stop = layer("observe", ret, name, fn, obs, *args, **kwargs)
+            if stop:
+                break
+        return ret
 
 
-def sample(name, dist, *args, **kwargs):
-    '''
-    Return sample from provided distribution. Must be named.
-    '''
-    assert isinstance(dist, pyro.distributions.Distribution)
-    return dist()
-
-
-def observe(name, dist, obs):
-    raise NotImplementedError(
-        "Observe has been used outside of a normalizing context.")
-
-
-def map_data(data, observer):
+def map_data(name, data, observer, *args, **kwargs):
     # by default map_data is the same as map.
     # infer algs (eg VI) that do minibatches should overide this.
-    return map(observer, data)
+    if len(_PYRO_STACK) == 0:
+        return [observer(i, datum) for i, datum in enumerate(data)]
+    else:
+        ret = None
+        for layer in _PYRO_STACK:
+            ret, stop = layer("map_data", ret, name, data, observer, *args, **kwargs)
+            if stop:
+                break
+        return ret
 
 # hand off behavior to poutine if necessary?
 # for now default calls out to pyro.param -- which is handled by poutine
