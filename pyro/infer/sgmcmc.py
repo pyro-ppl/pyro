@@ -8,8 +8,11 @@ class SGMCMC(pyro.infer.abstract_infer.AbstractInfer):
     """
     sketch of stochastic gradient MCMC
     """
-    def __init__(self, model):
+    def __init__(self, model, optimizer=None):
         self.model = model
+        if optimizer is None:
+            optimizer = pyro.optim.SGD
+        self.optimizer = optimizer()
 
     def runner(self, num_samples, *args, **kwargs):
         """
@@ -22,7 +25,7 @@ class SGMCMC(pyro.infer.abstract_infer.AbstractInfer):
             logp = tr.log_pdf()
             tr_samples = tr.filter(site_type="sample")
             autograd.backward(tr_samples, logp)
-            optimizer.step(tr_samples)
+            self.optimizer.step(tr_samples)
             zero_grad(tr_samples)
             samples.append([i, tr.copy(True)["_RETURN"]["value"], logp])
         return samples
