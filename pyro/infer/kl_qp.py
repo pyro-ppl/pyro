@@ -6,19 +6,6 @@ import pyro.poutine as poutine
 from pyro.infer.abstract_infer import AbstractInfer
 
 
-def zero_grads(tensors):
-    """
-    Sets gradients of list of Variables to zero in place
-    """
-    for p in tensors:
-        if p.grad is not None:
-            if p.grad.volatile:
-                p.grad.data.zero_()
-            else:
-                data = p.grad.data
-                p.grad = Variable(data.new().resize_as_(data).zero_())
-
-
 class KL_QP(AbstractInfer):
     """
     A new, Trace and Poutine-based implementation of SVI
@@ -89,6 +76,6 @@ class KL_QP(AbstractInfer):
         # update
         self.optim_step_fct(all_trainable_params)
         # zero grads
-        zero_grads(all_trainable_params)
+        pyro.util.zero_grads(all_trainable_params)
 
         return loss.data[0]

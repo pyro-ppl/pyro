@@ -26,7 +26,8 @@ class SGMCMC(pyro.infer.abstract_infer.AbstractInfer):
         for i in range(num_samples):
             tr = poutine.trace(poutine.replay(self.model, tr))(*args, **kwargs)
             logp = tr.log_pdf()
-            tr_samples = [s["value"] for s in tr.filter(site_type="sample")]
+            tr_samples = [tr[name]["value"] for name in tr.keys() \
+                          if tr[name]["type"] == "param"]
             autograd.backward(tr_samples, logp)
             self.optimizer.step(tr_samples)
             zero_grad(tr_samples)

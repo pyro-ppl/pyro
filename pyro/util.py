@@ -56,3 +56,16 @@ def log_sum_exp(vec):
     max_score_broadcast = max_score.view(1, -1).expand(1, vec.size()[1])
     return max_score + \
         torch.log(torch.sum(torch.exp(vec - max_score_broadcast)))
+
+
+def zero_grads(tensors):
+    """
+    Sets gradients of list of Variables to zero in place
+    """
+    for p in tensors:
+        if p.grad is not None:
+            if p.grad.volatile:
+                p.grad.data.zero_()
+            else:
+                data = p.grad.data
+                p.grad = Variable(data.new().resize_as_(data).zero_())
