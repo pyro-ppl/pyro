@@ -101,6 +101,7 @@ adam_optim = pyro.optim(torch.optim.Adam, adam_params)
 data = Variable(mnist.train_data).float() / 255.
 nr_samples = data.size(0)
 nr_epochs = 1000
+nr_batches = 468
 grad_step = KL_QP(local_model, local_guide, adam_optim)
 
 # apply it to minibatches of data by hand:

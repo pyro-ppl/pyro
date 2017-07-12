@@ -25,9 +25,9 @@ print('dataset loaded')
 
 
 def local_model(i, datum):
-    beta = Variable(torch.ones(1)) * 0.5
+    beta = Variable(torch.ones(1,1)) * 0.5
     c = pyro.sample("class_of_datum_" + str(i), Bernoulli(beta))
-    mean_param = Variable(torch.zeros(784), requires_grad=True)
+    mean_param = Variable(torch.zeros(784, 1), requires_grad=True)
     # do MLE for class means
     m = pyro.param("mean_of_class_" + str(c[0]), mean_param)
 
@@ -37,7 +37,7 @@ def local_model(i, datum):
 
 
 def local_guide(i, datum):
-    alpha = torch.ones(1) * 0.1
+    alpha = torch.ones(1,1) * 0.1
     beta_q = Variable(alpha, requires_grad=True)
     guide_params = pyro.param("class_posterior_", beta_q)
     c = pyro.sample("class_of_datum_" + str(i), Bernoulli(guide_params))
@@ -46,7 +46,7 @@ def local_guide(i, datum):
 
 def inspect_posterior_samples(i):
     c = local_guide(i, None)
-    mean_param = Variable(torch.zeros(784), requires_grad=True)
+    mean_param = Variable(torch.zeros(784, 1), requires_grad=True)
     # do MLE for class means
     m = pyro.param("mean_of_class_" + str(c[0]), mean_param)
     sigma = Variable(torch.ones(m.size()))

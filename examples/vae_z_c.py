@@ -85,7 +85,7 @@ class Classifier(nn.Module):
 
     def forward(self, x):
         x = x.view(-1, 784)
-        h1 = self.relu(fc1(x))
+        h1 = self.relu(self.fc1(x))
         alpha_mult = self.softmax(self.fc21(h1))
         return alpha_mult
 
@@ -110,7 +110,7 @@ class Decoder(nn.Module):
 
 class Decoder_z(nn.Module):
     def __init__(self):
-        super(Decoder_xz, self).__init__()
+        super(Decoder_z, self).__init__()
         self.fc3 = nn.Linear(20, 200)
         self.fc4 = nn.Linear(200, 1 * 784)
         self.sigmoid = nn.Sigmoid()
@@ -137,8 +137,10 @@ class Decoder_c(nn.Module):
         return alpha_mult
 
 
-pt_encode_c = Encoder_c()
-pt_encode_z = Encoder_z()
+# pt_encode_c = Encoder_c()
+# pt_encode_z = Encoder_z()
+pt_encode_c = Encoder()
+pt_encode_z = Encoder_xz()
 
 pt_decode_c = Decoder_c()
 pt_decode_z = Decoder_z()
@@ -165,7 +167,8 @@ def model_given_c(data, cll):
 
 
 def guide_given_c(data, cll):
-    encoder_x = pyro.module("encoder_x", pt_encode_x)
+#     encoder_x = pyro.module("encoder_x", pt_encode_x)
+    encoder_x = pyro.module("encoder_x", pt_encode_c)
     encoder_z = pyro.module("encoder_z", pt_encode_z)
 
     z_mu, z_sigma = encoder_x.forward(data)
@@ -175,7 +178,8 @@ def guide_given_c(data, cll):
 
 
 def guide_latent(data, cll):
-    encoder_x = pyro.module("encoder_x", pt_encode_x)
+#     encoder_x = pyro.module("encoder_x", pt_encode_x)
+    encoder_x = pyro.module("encoder_x", pt_encode_c)
     encoder_z = pyro.module("encoder_z", pt_encode_z)
 
     z_mu, z_sigma = encoder_x.forward(data)

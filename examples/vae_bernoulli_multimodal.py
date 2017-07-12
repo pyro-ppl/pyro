@@ -61,7 +61,7 @@ class Encoder(nn.Module):
 
 
 class Classifier(nn.Module):
-    def __init__(self)__:
+    def __init__(self):
         super(Classifier, self).__init__()
         self.fc1 = nn.Linear(784, 200)
         self.fc21 = nn.Linear(200, 10)
@@ -69,7 +69,7 @@ class Classifier(nn.Module):
         self.softmax = nn.Softmax()
 
     def forward(self, x):
-        x = = x.view(-1, 784)
+        x = x.view(-1, 784)
         h1 = self.relu(fc1(x))
         alpha_mult = self.softmax(self.fc21(h1))
         return alpha_mult

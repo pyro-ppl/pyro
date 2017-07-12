@@ -211,7 +211,7 @@ def model_sample(cll=None):
     alpha = Variable(torch.ones([1, 10]) / 10.)
 
     if cll.data.cpu().numpy() is None:
-        bb()
+#         bb()
         cll = pyro.sample('class', Categorical(alpha))
         print('sampling class')
 
@@ -309,7 +309,7 @@ for i in range(1000):
         # bb()
     loss_training.append(epoch_loss / float(mnist_size))
 
-    bb()
+#     bb()
     sample0, sample_mu0 = model_sample(cll=cll_clamp0)
     sample3, sample_mu3 = model_sample(cll=cll_clamp3)
     sample9, sample_mu9 = model_sample(cll=cll_clamp9)

@@ -66,25 +66,25 @@ observed_mean = np.mean([T.data[0] for T in observed_data])
 # define model with uniform prior on mu and gaussian noise on the descent time
 
 def model(observed_data):
-    mu_prior = Uniform(Variable(torch.zeros(1, 1)), Variable(torch.ones(1, 1)))
+    mu_prior = Uniform(Variable(torch.zeros(1)), Variable(torch.ones(1)))
     mu = pyro.sample("mu", mu_prior)
 
     def observe_T(T_obs, obs_name):
         T_simulated = simulate(mu)
-        T_obs_dist = DiagNormal(T_simulated, Variable(torch.Tensor([[time_measurement_sigma]])))
+        T_obs_dist = DiagNormal(T_simulated, Variable(torch.Tensor([time_measurement_sigma])))
         T = pyro.observe(obs_name, T_obs_dist, T_obs)
 
-    pyro.map_data(observed_data, lambda i, x: observe_T(x, "obs_%d" % i), batch_size=1)
+    pyro.map_data("map", observed_data, lambda i, x: observe_T(x, "obs_%d" % i), batch_size=1)
     return mu
 
 # define a gaussian variational approximation for the posterior over mu
 
 def guide(observed_data):
-    mean_mu = pyro.param("mean_mu", Variable(torch.Tensor([[0.25]]), requires_grad=True))
-    log_sigma_mu = pyro.param("log_sigma_mu", Variable(torch.Tensor([[-4.0]]), requires_grad=True))
+    mean_mu = pyro.param("mean_mu", Variable(torch.Tensor([0.25]), requires_grad=True))
+    log_sigma_mu = pyro.param("log_sigma_mu", Variable(torch.Tensor([-4.0]), requires_grad=True))
     sigma_mu = torch.exp(log_sigma_mu)
     mu = pyro.sample("mu", DiagNormal(mean_mu, sigma_mu))
-    pyro.map_data(observed_data, lambda i, x: None, batch_size=1)
+    pyro.map_data("map", observed_data, lambda i, x: None, batch_size=1)
     return mu
 
 # do variational inference using KL_QP
@@ -104,8 +104,8 @@ for step in range(n_steps):
         sys.stdout.flush()
 
 # report results
-inferred_mu = pyro.param("mean_mu").data[0, 0]
-inferred_mu_uncertainty = torch.exp(pyro.param("log_sigma_mu")).data[0, 0]
+inferred_mu = pyro.param("mean_mu").data[0]
+inferred_mu_uncertainty = torch.exp(pyro.param("log_sigma_mu")).data[0]
 print("\nthe coefficient of friction inferred by pyro is %.3f +- %.3f" %
       (inferred_mu, inferred_mu_uncertainty))
 
@@ -115,6 +115,6 @@ print("\nthe coefficient of friction inferred by pyro is %.3f +- %.3f" %
 # but will be systematically off from the third number
 print("the mean observed descent time in the dataset is: %.4f seconds" % observed_mean)
 print("the (forward) simulated descent time for the inferred (mean) mu is: %.4f seconds" %
-      simulate(pyro.param("mean_mu")).data[0, 0])
+      simulate(pyro.param("mean_mu")).data[0])
 print("elementary calulus gives the descent time for the inferred (mean) mu as: %.4f seconds" %
-      analytic_T(pyro.param("mean_mu").data[0, 0]))
+      analytic_T(pyro.param("mean_mu").data[0]))
