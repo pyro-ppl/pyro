@@ -1,4 +1,3 @@
-import six
 import torch
 from torch.autograd import Variable
 

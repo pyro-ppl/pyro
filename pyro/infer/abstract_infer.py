@@ -6,7 +6,6 @@ class AbstractInfer(object):
     Infer class must implement: _pyro_sample, _pyro_observe,
     _pyro_on_exit, _pyro_param, _pyro_map_data
     """
-
     def __init__(self):
         pass
 
