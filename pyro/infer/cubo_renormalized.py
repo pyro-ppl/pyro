@@ -59,8 +59,11 @@ class CUBO(AbstractInfer):
 
         # compute losses
         log_r = model_trace.batch_log_pdf() - guide_trace.batch_log_pdf()
-        rr = torch.exp(log_r * self.n_cubo)
-        w_n = Variable(rr.data)
+
+        rr_max = torch.max(log_r, 1)
+        rr_reduced = log_r - rr_max.expand_as(log_r)
+        w = torch.exp(rr_reduced)
+        w_n = torch.pow(w, self.n_cubo)
 
         cubo = 0.0
         for name in model_trace.keys():
