@@ -138,6 +138,7 @@ class NormalNormalTests(TestCase):
         self.assertEqual(0.0, mu_error.data.cpu().numpy()[0], prec=0.02)
         self.assertEqual(0.0, log_sig_error.data.cpu().numpy()[0], prec=0.02)
 
+
 # THIS TEST IS BROKEN BECAUSE OF EXPECTATION/BATCH DIMENSION ISSUES
 #     def test_importance_sampling(self):
 #   def model():

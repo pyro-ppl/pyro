@@ -6,6 +6,7 @@ import pyro
 import pyro.poutine as poutine
 from pyro.infer.abstract_infer import AbstractInfer
 
+import pdb as pdb
 
 def zero_grads(tensors):
     """
@@ -60,7 +61,9 @@ class CUBO(AbstractInfer):
         # compute losses
         log_r = model_trace.log_pdf() - guide_trace.log_pdf()
         rr = torch.exp(log_r * self.n_cubo)
+        rr0 = torch.exp(log_r)
         w_n = Variable(rr.data)
+        w_n0 = Variable(rr0.data)
 
         cubo = 0.0
         for name in model_trace.keys():
@@ -69,12 +72,16 @@ class CUBO(AbstractInfer):
             elif model_trace[name]["type"] == "sample":
                 if model_trace[name]["fn"].reparametrized:
                     # print "name",model_trace[name]
-                    cubo += w_n * (model_trace[name]["log_pdf"] - guide_trace[name]["log_pdf"])
+                    cubo += model_trace[name]["log_pdf"]
+                    cubo -= guide_trace[name]["log_pdf"]
 
                 else:
-                    cubo -= w_n * guide_trace[name]["log_pdf"]
+                    cubo -= w_n0 * guide_trace[name]["log_pdf"]
             else:
                 pass
+        cubo = torch.exp(cubo * self.n_cubo)
+
+        #pdb.set_trace()
 
         # accumulate parameters
         all_trainable_params = []
@@ -98,4 +105,4 @@ class CUBO(AbstractInfer):
         zero_grads(all_trainable_params)
 
         # return the log transform of the expectation
-        return (torch.log(cubo)/self.n_cubo).data[0]
+        return cubo#(torch.log(cubo)/self.n_cubo).data[0]
