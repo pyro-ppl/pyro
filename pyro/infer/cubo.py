@@ -59,11 +59,8 @@ class CUBO(AbstractInfer):
 
         # compute losses
         log_r = model_trace.batch_log_pdf() - guide_trace.batch_log_pdf()
-
-        rr_max = torch.max(log_r, 1)
-        rr_reduced = log_r - rr_max.expand_as(log_r)
-        w = torch.exp(rr_reduced)
-        w_n = torch.pow(w, self.n_cubo)
+        rr = torch.exp(log_r * self.n_cubo)
+        w_n = Variable(rr.data)
 
         cubo = 0.0
         for name in model_trace.keys():
@@ -72,17 +69,17 @@ class CUBO(AbstractInfer):
             elif model_trace[name]["type"] == "sample":
                 if model_trace[name]["fn"].reparametrized:
                     # FIX
-                    cubo += model_trace[name]["log_pdf"]
-                    cubo -= guide_trace[name]["log_pdf"]
+                    cubo += w_n * (model_trace[name]["log_pdf"] - guide_trace[name]["log_pdf"])
+
                 else:
-                    cubo -= Variable(w_n.data) * guide_trace[name]["log_pdf"]
+                    cubo -= w_n * guide_trace[name]["log_pdf"]
             else:
                 pass
 
         # accumulate parameters
         all_trainable_params = []
         # get trace params from last model run
-        if not self.model_fixed:                                      
+        if not self.model_fixed:
             for name in model_trace.keys():
                 if model_trace[name]["type"] == "param":
                     all_trainable_params.append(model_trace[name]["value"])
