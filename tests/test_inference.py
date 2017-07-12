@@ -86,8 +86,8 @@ class NormalNormalTests(TestCase):
                 self.analytic_log_sig_n -
                 pyro.param("log_sig_q"),
                 2.0))
-        self.assertEqual(0.0, mu_error.data.cpu().numpy()[0], prec=0.02)
-        self.assertEqual(0.0, log_sig_error.data.cpu().numpy()[0], prec=0.02)
+        self.assertEqual(0.0, mu_error.data.cpu().numpy()[0], prec=0.05)
+        self.assertEqual(0.0, log_sig_error.data.cpu().numpy()[0], prec=0.05)
 
 # THIS TEST IS BROKEN BECAUSE OF EXPECTATION/BATCH DIMENSION ISSUES
 #     def test_importance_sampling(self):

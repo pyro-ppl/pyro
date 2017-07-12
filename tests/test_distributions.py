@@ -78,8 +78,8 @@ class TestExponential(TestCase):
                          for _ in range(self.n_samples)]
         torch_mean = np.mean(torch_samples)
         torch_var = np.var(torch_samples)
-        self.assertEqual(torch_mean, self.analytic_mean, prec=0.01)
-        self.assertEqual(torch_var, self.analytic_var, prec=0.01)
+        self.assertEqual(torch_mean, self.analytic_mean, prec=0.05)
+        self.assertEqual(torch_var, self.analytic_var, prec=0.05)
 
 
 class TestGamma(TestCase):
@@ -122,8 +122,8 @@ class TestGamma(TestCase):
                          for _ in range(self.n_samples)]
         torch_mean = np.mean(torch_samples)
         torch_var = np.var(torch_samples)
-        self.assertEqual(torch_mean, self.analytic_mean, prec=0.01)
-        self.assertEqual(torch_var, self.analytic_var, prec=0.025)
+        self.assertEqual(torch_mean, self.analytic_mean, prec=0.05)
+        self.assertEqual(torch_var, self.analytic_var, prec=0.05)
 
 
 class TestMultinomial(TestCase):
@@ -150,8 +150,8 @@ class TestMultinomial(TestCase):
         exp_ = float(counts[0]) / self.n_samples
         torch_var = float(counts[0]) * np.power(0.1 * (0 - np.mean(torch_samples)), 2)
         torch_var = np.square(np.mean(torch_samples)) / 2
-        self.assertEqual(exp_, self.analytic_mean.data.numpy()[0], prec=0.01)
-        self.assertEqual(torch_var, self.analytic_var.data.numpy()[0], prec=0.01)
+        self.assertEqual(exp_, self.analytic_mean.data.numpy()[0], prec=0.05)
+        self.assertEqual(torch_var, self.analytic_var.data.numpy()[0], prec=0.05)
 
 
 class TestCategorical(TestCase):
@@ -212,8 +212,8 @@ class TestCategorical(TestCase):
         exp_ = float(counts[0]) / self.n_samples
         torch_var = float(counts[0]) * np.power(0.1 * (0 - np.mean(torch_samples)), 2)
         torch_var = np.square(np.mean(torch_samples)) / 16
-        self.assertEqual(exp_, self.analytic_mean.data.numpy()[0], prec=0.01)
-        self.assertEqual(torch_var, self.analytic_var.data.numpy()[0], prec=0.01)
+        self.assertEqual(exp_, self.analytic_mean.data.numpy()[0], prec=0.05)
+        self.assertEqual(torch_var, self.analytic_var.data.numpy()[0], prec=0.05)
 
     def test_discrete_log_pdf(self):
         log_px_torch = self.d_dist.batch_log_pdf(self.d_test_data).data[0][0]
@@ -310,11 +310,11 @@ class TestBeta(TestCase):
         self.assertEqual(
             torch_mean,
             self.analytic_mean.data.cpu().numpy()[0],
-            prec=0.01)
+            prec=0.05)
         self.assertEqual(
             torch_var,
             self.analytic_var.data.cpu().numpy()[0],
-            prec=0.01)
+            prec=0.05)
 
 
 class TestPoisson(TestCase):
@@ -513,8 +513,8 @@ class TestLogNormal(TestCase):
                          for _ in range(self.n_samples)]
         torch_mean = np.mean(torch_samples)
         torch_var = np.var(torch_samples)
-        self.assertEqual(torch_mean, self.analytic_mean, prec=0.06)
-        self.assertEqual(torch_var, self.analytic_var, prec=0.06)
+        self.assertEqual(torch_mean, self.analytic_mean, prec=0.1)
+        self.assertEqual(torch_var, self.analytic_var, prec=0.1)
 
     def test_mean_and_var_on_transformed_distribution(self):
         unit_normal = dist.DiagNormal(
@@ -527,8 +527,8 @@ class TestLogNormal(TestCase):
                          for _ in range(self.n_samples)]
         torch_mean = np.mean(torch_samples)
         torch_var = np.var(torch_samples)
-        self.assertEqual(torch_mean, self.analytic_mean, prec=0.06)
-        self.assertEqual(torch_var, self.analytic_var, prec=0.06)
+        self.assertEqual(torch_mean, self.analytic_mean, prec=0.1)
+        self.assertEqual(torch_var, self.analytic_var, prec=0.1)
 
     def test_log_pdf_on_transformed_distribution(self):
         unit_normal = dist.DiagNormal(
