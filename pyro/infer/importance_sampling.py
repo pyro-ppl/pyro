@@ -8,7 +8,7 @@ import pyro.poutine as poutine
 
 
 # XXX what should be the base class here?
-class Importance(AbstractInfer):
+class ImportanceSampling(AbstractInfer):
     """
     A new implementation of importance sampling
     """
@@ -17,7 +17,7 @@ class Importance(AbstractInfer):
         Constructor
         TODO proper docs etc
         """
-        super(Importance, self).__init__()
+        super(ImportanceSampling, self).__init__()
         self.model = model
         self.guide = guide
 
