@@ -46,6 +46,12 @@ class NormalNormalTests(TestCase):
     def test_elbo_nonreparametrized(self):
         self.do_elbo_test(False, 15000)
 
+    def test_cubo_reparametrized(self):
+        self.do_cubo_test(True, 5000)
+
+    def test_cubo_nonreparametrized(self):
+        self.do_cubo_test(False, 15000)
+
     def do_elbo_test(self, reparametrized, n_steps):
         pyro._param_store._clear_cache()
 
@@ -76,6 +82,49 @@ class NormalNormalTests(TestCase):
                     "lr": .001}))
         for k in range(n_steps):
             kl_optim.step()
+        mu_error = torch.sum(
+            torch.pow(
+                self.analytic_mu_n -
+                pyro.param("mu_q"),
+                2.0))
+        log_sig_error = torch.sum(
+            torch.pow(
+                self.analytic_log_sig_n -
+                pyro.param("log_sig_q"),
+                2.0))
+        self.assertEqual(0.0, mu_error.data.cpu().numpy()[0], prec=0.02)
+        self.assertEqual(0.0, log_sig_error.data.cpu().numpy()[0], prec=0.02)
+
+    def do_cubo_test(self, reparametrized, n_steps):
+        pyro._param_store._clear_cache()
+
+        def model():
+            prior_dist = DiagNormal(self.mu0, torch.pow(self.lam0, -0.5))
+            mu_latent = pyro.sample("mu_latent", prior_dist)
+            x_dist = DiagNormal(mu_latent, torch.pow(self.lam, -0.5))
+            # x = pyro.observe("obs", x_dist, self.data)
+            pyro.map_data("aaa", self.data, lambda i,
+                          x: pyro.observe("obs_%d" % i, x_dist, x), batch_size=1)
+            return mu_latent
+
+        def guide():
+            mu_q = pyro.param("mu_q", Variable(self.analytic_mu_n.data + 0.134 * torch.ones(2),
+                                               requires_grad=True))
+            log_sig_q = pyro.param("log_sig_q", Variable(
+                                   self.analytic_log_sig_n.data - 0.09 * torch.ones(2),
+                                   requires_grad=True))
+            sig_q = torch.exp(log_sig_q)
+            q_dist = DiagNormal(mu_q, sig_q)
+            q_dist.reparametrized = reparametrized
+            pyro.sample("mu_latent", q_dist)
+            pyro.map_data("aaa", self.data, lambda i, x: None, batch_size=1)
+
+        cubo_optim = CUBO(
+            model, guide, pyro.optim(
+                torch.optim.Adam, {
+                    "lr": .001}))
+        for k in range(n_steps):
+            cubo_optim.step()
         mu_error = torch.sum(
             torch.pow(
                 self.analytic_mu_n -
