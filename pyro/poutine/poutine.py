@@ -36,7 +36,7 @@ class Poutine(object):
             return r_val
         except Exception as e:
             self._flush_stack()
-            raise e
+            raise
 
     def _enter_poutine(self, *args, **kwargs):
         """

@@ -52,3 +52,10 @@ class Search(pyro.infer.abstract_infer.AbstractInfer):
 
     def log_pdf(self, val, *args, **kwargs):
         return self._dist(*args, **kwargs).log_pdf(val)
+
+    def log_z(self, *args, **kwargs):
+        traces = self._dist(*args, **kwargs).vs
+        log_z = 0.0
+        for tr in traces:
+            log_z = log_z + tr.log_pdf()
+        return log_z / len(traces)

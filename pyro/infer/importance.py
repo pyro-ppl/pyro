@@ -49,3 +49,12 @@ class Importance(pyro.infer.abstract_infer.AbstractInfer):
 
     def log_pdf(self, val, *args, **kwargs):
         return self._dist(*args, **kwargs)
+
+    def log_z(self, *args, **kwargs):
+        traces = self._dist(*args, **kwargs).vs
+        log_z = 0.0
+        for tr in traces:
+            log_z = log_z + tr.log_pdf()
+            guide_tr = poutine.trace(poutine.replay(self.guide, tr))(*args, **kwargs)
+            log_z = log_z - guide_tr.log_pdf()
+        return log_z / len(traces)
