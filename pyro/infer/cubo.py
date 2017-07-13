@@ -31,7 +31,7 @@ class CUBO(AbstractInfer):
                  model_fixed=False,
                  guide_fixed=False,
                  n_cubo=2,
-                 nr_particles = 3,
+                 nr_particles = 2,
                  *args, **kwargs):
         """
         Call parent class initially, then setup the poutines to run
@@ -71,8 +71,15 @@ class CUBO(AbstractInfer):
         #pdb.set_trace()
         log_r_max = torch.max(log_weights_tensor,1)[0]
         log_r = log_weights_tensor - log_r_max.expand_as(log_weights_tensor)
+
         w_n = Variable(torch.exp(log_r * self.n_cubo).data)
+
         w_0 = Variable(torch.exp(log_r).data)
+        w_0_sum = w_0.sum(1)
+
+        w_0_norm = w_0 / w_0_sum.expand_as(w_0)
+
+        w_0n = torch.pow(w_0_norm,self.n_cubo)
         #pdb.set_trace()
         #log_r_max = log_weights
         # compute losses
@@ -98,7 +105,7 @@ class CUBO(AbstractInfer):
                     if model_trace[name]["fn"].reparametrized:
                         # print "name",model_trace[name]
                         #cubo = cubo - log_r_max.expand_as(cubo)
-                        log_r_s += w_n[:,i] *model_trace[name]["batch_log_pdf"]
+                        log_r_s += w_n[:,i] * model_trace[name]["batch_log_pdf"]
 
                         log_r_s -= w_n[:,i] * guide_trace[name]["batch_log_pdf"]
 
@@ -113,7 +120,7 @@ class CUBO(AbstractInfer):
 
             #exp_cubo += torch.exp(log_r_s*self.n_cubo) / self.nr_particles
 
-            exp_cubo += log_r_s * (self.n_cubo-1) / self.nr_particles
+            exp_cubo += log_r_s * (1-self.n_cubo) / self.nr_particles
 
 
 
@@ -137,7 +144,7 @@ class CUBO(AbstractInfer):
         all_trainable_params = list(set(all_trainable_params))
 
         # gradients
-        loss =  - exp_cubo_sum
+        loss = - exp_cubo_sum
         loss.backward()
         # update
         self.optim_step_fct(all_trainable_params)

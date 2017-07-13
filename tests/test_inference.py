@@ -84,6 +84,7 @@ class NormalNormalTests(TestCase):
                     "lr": .001}))
         for k in range(n_steps):
             kl_optim.step()
+
         mu_error = torch.sum(
             torch.pow(
                 self.analytic_mu_n -
@@ -129,11 +130,11 @@ class NormalNormalTests(TestCase):
             cubo_optim.step()
 
             if k%1000==0:
-                mu_error = torch.sum(torch.pow(self.analytic_mu_n - pyro.param("mu_q"),2.0))
-                print('mu_error '+str(mu_error.data.cpu().numpy()[0]))
+                mu_error_k = torch.sum(torch.pow(self.analytic_mu_n - pyro.param("mu_q"),2.0))
+                print('mu_error '+str(mu_error_k.data.cpu().numpy()[0]))
 
-                log_sig_error = torch.sum(torch.pow(self.analytic_log_sig_n -pyro.param("log_sig_q"),2.0))
-                print('log_sig_error '+str(log_sig_error.data.cpu().numpy()[0]))
+                log_sig_error_k = torch.sum(torch.pow(self.analytic_log_sig_n -pyro.param("log_sig_q"),2.0))
+                print('log_sig_error '+str(log_sig_error_k.data.cpu().numpy()[0]))
                 #print('sig '+str(torch.exp(pyro.param("log_sig_q")).data.cpu().numpy()[0]))
 
 
@@ -373,7 +374,7 @@ class PoissonGammaTests(TestCase):
                 torch.optim.Adam, {
                     "lr": .0002, "betas": (
                         0.97, 0.999)}))
-        for k in range(10000):
+        for k in range(5000):
             kl_optim.step()
 #            if k%1000==0:
 #                 print "alpha_q", torch.exp(pyro.param("alpha_q_log")).data.numpy()[0]
@@ -427,16 +428,16 @@ class PoissonGammaTests(TestCase):
         cubo_optim = CUBO(
             model, guide, pyro.optim(
                 torch.optim.Adam, {
-                    "lr": .0001, "betas": (
+                    "lr": .0002, "betas": (
                         0.97, 0.999)}))
-        for k in range(25000):
+        for k in range(50000):
             cubo_optim.step()
 
-        #     if k%100==0:
-        #          print "alpha_q", torch.exp(pyro.param("alpha_q_log")).data.numpy()[0]
-        #          print "beta_q", torch.exp(pyro.param("beta_q_log")).data.numpy()[0]
-        #          alpha_error = torch.abs(pyro.param("alpha_q_log") - self.log_alpha_n).data.cpu().numpy()[0]
-        #          print(alpha_error)
+            if k%100==0:
+                 print "alpha_q", torch.exp(pyro.param("alpha_q_log")).data.numpy()[0]
+                 print "beta_q", torch.exp(pyro.param("beta_q_log")).data.numpy()[0]
+                 alpha_error = torch.abs(pyro.param("alpha_q_log") - self.log_alpha_n).data.cpu().numpy()[0]
+                 print(alpha_error)
 
         # print "alpha_n", self.alpha_n.data.numpy()[0]
         # print "beta_n", self.beta_n.data.numpy()[0]
