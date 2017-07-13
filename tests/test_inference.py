@@ -2,6 +2,8 @@ import torch
 import torch.optim
 from torch.autograd import Variable
 
+import pdb as pdb
+
 import pyro
 import pyro.distributions as dist
 from pyro.distributions import DiagNormal
@@ -307,13 +309,14 @@ class PoissonGammaTests(TestCase):
     def setUp(self):
         # poisson-gamma model
         # gamma prior hyperparameter
-        self.alpha0 = Variable(torch.Tensor([1.0]))
+        self.alpha0 = Variable(torch.Tensor([[1.0]]))
         # gamma prior hyperparameter
-        self.beta0 = Variable(torch.Tensor([1.0]))
+        self.beta0 = Variable(torch.Tensor([[1.0]]))
         self.data = []
-        self.data.append(Variable(torch.Tensor([1.0])))
-        self.data.append(Variable(torch.Tensor([2.0])))
-        self.data.append(Variable(torch.Tensor([3.0])))
+        self.data.append(Variable(torch.Tensor([[1.0]])))
+        self.data.append(Variable(torch.Tensor([[2.0]])))
+        self.data.append(Variable(torch.Tensor([[3.0]])))
+
         self.n_data = len(self.data)
         sum_data = self.data[0] + self.data[1] + self.data[2]
         self.alpha_n = self.alpha0 + sum_data  # posterior alpha
@@ -351,6 +354,7 @@ class PoissonGammaTests(TestCase):
                     requires_grad=True))
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             pyro.sample("lambda_latent", Gamma(alpha_q, beta_q))
+            pdb.set_trace()
             pyro.map_data("aaa", self.data, lambda i, x: None, batch_size=3)
 
         kl_optim = KL_QP(
@@ -414,7 +418,7 @@ class PoissonGammaTests(TestCase):
                 torch.optim.Adam, {
                     "lr": .0002, "betas": (
                         0.97, 0.999)}))
-        for k in range(10000):
+        for k in range(25000):
             cubo_optim.step()
 #            if k%1000==0:
 #                 print "alpha_q", torch.exp(pyro.param("alpha_q_log")).data.numpy()[0]
