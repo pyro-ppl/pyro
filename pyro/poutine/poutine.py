@@ -1,5 +1,6 @@
 import pyro
 import torch
+from torch.autograd import Variable
 from uuid import uuid4 as uuid
 
 
@@ -99,9 +100,8 @@ class Poutine(object):
         """
         if self.transparent and prev_val is not None:
             return prev_val
-        else:
-            val = fn(*args, **kwargs)
-            return val
+        val = fn(*args, **kwargs)
+        return val
 
     def _pyro_observe(self, prev_val, name, fn, obs, *args, **kwargs):
         """
@@ -109,10 +109,9 @@ class Poutine(object):
         """
         if self.transparent and not (prev_val is None):
             return prev_val
-        else:
-            if obs is None:
-                return fn(*args, **kwargs)
-            return obs
+        if obs is None:
+            return fn(*args, **kwargs)
+        return obs
 
     def _pyro_map_data(self, prev_val, name, data, fn, *args, **kwargs):
         """
@@ -120,14 +119,12 @@ class Poutine(object):
         """
         if self.transparent and prev_val is not None:
             return prev_val
-        else:
-            if isinstance(data, (torch.autograd.Variable, torch.Tensor)):
-                # assume vectorized observation fn
-                raise NotImplementedError(
-                    "map_data for vectorized data not yet implemented.")
-            else:
-                # note that fn should expect an index and a datum
-                return [fn(i, datum) for i, datum in enumerate(data)]
+        if isinstance(data, (Variable, torch.Tensor)):
+            # assume vectorized observation fn
+            raise NotImplementedError(
+                "map_data for vectorized data not yet implemented.")
+        # note that fn should expect an index and a datum
+        return [fn(i, datum) for i, datum in enumerate(data)]
 
     def _pyro_param(self, prev_val, name, *args, **kwargs):
         """
@@ -135,5 +132,4 @@ class Poutine(object):
         """
         if self.transparent and prev_val is not None:
             return prev_val
-        else:
-            return pyro._param_store.get_param(name, *args, **kwargs)
+        return pyro._param_store.get_param(name, *args, **kwargs)
