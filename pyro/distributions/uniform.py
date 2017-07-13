@@ -44,6 +44,3 @@ class Uniform(Distribution):
         _l = x.ge(self.a).type_as(self.a)
         _u = x.le(self.b).type_as(self.b)
         return torch.sum(torch.log(_l.mul(_u)) - torch.log(self.b - self.a), 1)
-
-    def support(self):
-        raise NotImplementedError("Support not supported for continuous distributions")

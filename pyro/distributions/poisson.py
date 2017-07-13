@@ -70,6 +70,3 @@ class Poisson(Distribution):
         ll_2 = -torch.sum(self.lam, 1)
         ll_3 = -torch.sum(log_gamma(x + 1.0), 1)
         return ll_1 + ll_2 + ll_3
-
-    def support(self):
-        raise NotImplementedError("Support not supported for continuous distributions")

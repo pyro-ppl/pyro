@@ -44,6 +44,3 @@ class Exponential(Distribution):
             x = x.expand(batch_size, x.size(0))
         ll = -self.lam * x + torch.log(self.lam)
         return torch.sum(ll, 1)
-
-    def support(self):
-        raise NotImplementedError("Support not supported for continuous distributions")
