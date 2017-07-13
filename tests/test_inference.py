@@ -178,7 +178,7 @@ class TestFixedModelGuide(TestCase):
         self.alpha_p_log_0 = 0.11 * torch.ones(1)
         self.beta_p_log_0 = 0.13 * torch.ones(1)
 
-    def do_test_fixedness(self, model_fixed, guide_fixed):
+    def do_test_elbo_fixedness(self, model_fixed, guide_fixed):
         pyro._param_store._clear_cache()
 
         def model():
@@ -222,21 +222,83 @@ class TestFixedModelGuide(TestCase):
                 not guide_unchanged))
         return (not bad)
 
-    def test_model_fixed(self):
+    def do_test_cubo_fixedness(self, model_fixed, guide_fixed):
+        pyro._param_store._clear_cache()
+
+        def model():
+            alpha_p_log = pyro.param(
+                "alpha_p_log", Variable(
+                    self.alpha_p_log_0, requires_grad=True))
+            beta_p_log = pyro.param(
+                "beta_p_log", Variable(
+                    self.beta_p_log_0, requires_grad=True))
+            alpha_p, beta_p = torch.exp(alpha_p_log), torch.exp(beta_p_log)
+            lambda_latent = pyro.sample(
+                "lambda_latent", Gamma(
+                    alpha_p, beta_p))
+            x_dist = Poisson(lambda_latent)
+            pyro.observe("obs", x_dist, self.data)
+            return lambda_latent
+
+        def guide():
+            alpha_q_log = pyro.param(
+                "alpha_q_log", Variable(
+                    self.alpha_q_log_0, requires_grad=True))
+            beta_q_log = pyro.param(
+                "beta_q_log", Variable(
+                    self.beta_q_log_0, requires_grad=True))
+            alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
+            pyro.sample("lambda_latent", Gamma(alpha_q, beta_q))
+
+        cubo_optim = CUBO(model, guide, pyro.optim(torch.optim.Adam, {"lr": .001}),
+                         model_fixed=model_fixed, guide_fixed=guide_fixed)
+        for _ in range(10):
+            cubo_optim.step()
+
+        model_unchanged = (torch.equal(pyro.param("alpha_p_log").data, self.alpha_p_log_0)) and\
+                          (torch.equal(pyro.param("beta_p_log").data, self.beta_p_log_0))
+        guide_unchanged = (torch.equal(pyro.param("alpha_q_log").data, self.alpha_q_log_0)) and\
+                          (torch.equal(pyro.param("beta_q_log").data, self.beta_q_log_0))
+        bad = (
+            model_fixed and (
+                not model_unchanged)) or (
+            guide_fixed and (
+                not guide_unchanged))
+        return (not bad)
+
+    def test_elbo_model_fixed(self):
         self.assertTrue(
-            self.do_test_fixedness(
+            self.do_test_elbo_fixedness(
                 model_fixed=True,
                 guide_fixed=False))
 
-    def test_guide_fixed(self):
+    def test_elbo_guide_fixed(self):
         self.assertTrue(
-            self.do_test_fixedness(
+            self.do_test_elbo_fixedness(
                 model_fixed=False,
                 guide_fixed=True))
 
-    def test_guide_and_model_fixed(self):
+    def test_elbo_both_fixed(self):
         self.assertTrue(
-            self.do_test_fixedness(
+            self.do_test_elbo_fixedness(
+                model_fixed=True,
+                guide_fixed=True))
+
+    def test_cubo_model_fixed(self):
+        self.assertTrue(
+            self.do_test_cubo_fixedness(
+                model_fixed=True,
+                guide_fixed=False))
+
+    def test_cubo_guide_fixed(self):
+        self.assertTrue(
+            self.do_test_cubo_fixedness(
+                model_fixed=False,
+                guide_fixed=True))
+
+    def test_cubo_both_fixed(self):
+        self.assertTrue(
+            self.do_test_cubo_fixedness(
                 model_fixed=True,
                 guide_fixed=True))
 
@@ -296,8 +358,64 @@ class PoissonGammaTests(TestCase):
                 torch.optim.Adam, {
                     "lr": .0002, "betas": (
                         0.97, 0.999)}))
-        for k in range(25000):
+        for k in range(10000):
             kl_optim.step()
+#            if k%1000==0:
+#                 print "alpha_q", torch.exp(pyro.param("alpha_q_log")).data.numpy()[0]
+#                 print "beta_q", torch.exp(pyro.param("beta_q_log")).data.numpy()[0]
+#
+#         print "alpha_n", self.alpha_n.data.numpy()[0]
+#         print "beta_n", self.beta_n.data.numpy()[0]
+#         print "alpha_0", self.alpha0.data.numpy()[0]
+#         print "beta_0", self.beta0.data.numpy()[0]
+
+        alpha_error = torch.abs(
+            pyro.param("alpha_q_log") -
+            self.log_alpha_n).data.cpu().numpy()[0]
+        beta_error = torch.abs(
+            pyro.param("beta_q_log") -
+            self.log_beta_n).data.cpu().numpy()[0]
+        self.assertEqual(0.0, alpha_error, prec=0.05)
+        self.assertEqual(0.0, beta_error, prec=0.05)
+
+    def test_cubo_nonreparametrized(self):
+        pyro._param_store._clear_cache()
+
+        def model():
+            lambda_latent = pyro.sample(
+                "lambda_latent", Gamma(
+                    self.alpha0, self.beta0))
+            x_dist = Poisson(lambda_latent)
+            # x0 = pyro.observe("obs0", x_dist, self.data[0])
+            pyro.map_data("aaa",
+                          self.data, lambda i, x: pyro.observe(
+                              "obs_{}".format(i), x_dist, x), batch_size=3)
+            return lambda_latent
+
+        def guide():
+            alpha_q_log = pyro.param(
+                "alpha_q_log",
+                Variable(
+                    self.log_alpha_n.data +
+                    0.17,
+                    requires_grad=True))
+            beta_q_log = pyro.param(
+                "beta_q_log",
+                Variable(
+                    self.log_beta_n.data -
+                    0.143,
+                    requires_grad=True))
+            alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
+            pyro.sample("lambda_latent", Gamma(alpha_q, beta_q))
+            pyro.map_data("aaa", self.data, lambda i, x: None, batch_size=3)
+
+        cubo_optim = CUBO(
+            model, guide, pyro.optim(
+                torch.optim.Adam, {
+                    "lr": .0002, "betas": (
+                        0.97, 0.999)}))
+        for k in range(10000):
+            cubo_optim.step()
 #            if k%1000==0:
 #                 print "alpha_q", torch.exp(pyro.param("alpha_q_log")).data.numpy()[0]
 #                 print "beta_q", torch.exp(pyro.param("beta_q_log")).data.numpy()[0]
@@ -379,6 +497,52 @@ class ExponentialGammaTests(TestCase):
         self.assertEqual(0.0, alpha_error, prec=0.05)
         self.assertEqual(0.0, beta_error, prec=0.05)
 
+    def test_cubo_nonreparametrized(self):
+        pyro._param_store._clear_cache()
+
+        def model():
+            lambda_latent = pyro.sample(
+                "lambda_latent", Gamma(
+                    self.alpha0, self.beta0))
+            x_dist = Exponential(lambda_latent)
+            pyro.observe("obs0", x_dist, self.data[0])
+            pyro.observe("obs1", x_dist, self.data[1])
+            return lambda_latent
+
+        def guide():
+            alpha_q_log = pyro.param(
+                "alpha_q_log",
+                Variable(
+                    self.log_alpha_n.data +
+                    0.17,
+                    requires_grad=True))
+            beta_q_log = pyro.param(
+                "beta_q_log",
+                Variable(
+                    self.log_beta_n.data -
+                    0.143,
+                    requires_grad=True))
+            alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
+            pyro.sample("lambda_latent", Gamma(alpha_q, beta_q))
+
+        cubo_optim = CUBO(
+            model, guide, pyro.optim(
+                torch.optim.Adam, {
+                    "lr": .0003, "betas": (
+                        0.97, 0.999)}))
+        for k in range(10001):
+            cubo_optim.step()
+
+        alpha_error = torch.abs(
+            pyro.param("alpha_q_log") -
+            self.log_alpha_n).data.cpu().numpy()[0]
+        beta_error = torch.abs(
+            pyro.param("beta_q_log") -
+            self.log_beta_n).data.cpu().numpy()[0]
+        # print "alpha_error", alpha_error
+        # print "beta_error", beta_error
+        self.assertEqual(0.0, alpha_error, prec=0.05)
+        self.assertEqual(0.0, beta_error, prec=0.05)
 
 class BernoulliBetaTests(TestCase):
     def setUp(self):
@@ -450,6 +614,56 @@ class BernoulliBetaTests(TestCase):
         self.assertEqual(0.0, alpha_error, prec=0.05)
         self.assertEqual(0.0, beta_error, prec=0.05)
 
+    def test_cubo_nonreparametrized(self):
+        pyro._param_store._clear_cache()
+
+        def model():
+            p_latent = pyro.sample("p_latent", Beta(self.alpha0, self.beta0))
+            x_dist = Bernoulli(p_latent)
+            pyro.map_data("aaa",
+                          self.data, lambda i, x: pyro.observe(
+                              "obs_{}".format(i), x_dist, x), batch_size=2)
+            return p_latent
+
+        def guide():
+            alpha_q_log = pyro.param(
+                "alpha_q_log",
+                Variable(
+                    self.log_alpha_n.data +
+                    0.17,
+                    requires_grad=True))
+            beta_q_log = pyro.param(
+                "beta_q_log",
+                Variable(
+                    self.log_beta_n.data -
+                    0.143,
+                    requires_grad=True))
+            alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
+            pyro.sample("p_latent", Beta(alpha_q, beta_q))
+            pyro.map_data("aaa", self.data, lambda i, x: None, batch_size=2)
+
+        cubo_optim = KL_QP(model, guide, pyro.optim(torch.optim.Adam,
+                                                  {"lr": .001, "betas": (0.97, 0.999)}))
+        for k in range(6001):
+            cubo_optim.step()
+#             if k%1000==0:
+#                 print "alpha_q", torch.exp(pyro.param("alpha_q_log")).data.numpy()[0]
+#                 print "beta_q", torch.exp(pyro.param("beta_q_log")).data.numpy()[0]
+#
+#         print "alpha_n", self.alpha_n.data.numpy()[0]
+#         print "beta_n", self.beta_n.data.numpy()[0]
+#         print "alpha_0", self.alpha0.data.numpy()[0]
+#         print "beta_0", self.beta0.data.numpy()[0]
+
+        alpha_error = torch.abs(
+            pyro.param("alpha_q_log") -
+            self.log_alpha_n).data.cpu().numpy()[0]
+        beta_error = torch.abs(
+            pyro.param("beta_q_log") -
+            self.log_beta_n).data.cpu().numpy()[0]
+        self.assertEqual(0.0, alpha_error, prec=0.05)
+        self.assertEqual(0.0, beta_error, prec=0.05)
+
 
 class LogNormalNormalTests(TestCase):
     def setUp(self):
@@ -474,6 +688,12 @@ class LogNormalNormalTests(TestCase):
 
     def test_elbo_nonreparametrized(self):
         self.do_elbo_test(False, 15000)
+
+    def test_elbo_reparametrized(self):
+        self.do_cubo_test(True, 7000)
+
+    def test_elbo_nonreparametrized(self):
+        self.do_cubo_test(False, 15000)
 
     def do_elbo_test(self, reparametrized, n_steps):
         pyro._param_store._clear_cache()
@@ -516,8 +736,44 @@ class LogNormalNormalTests(TestCase):
         tau_error = torch.abs(
             pyro.param("tau_q_log") -
             self.log_tau_n).data.cpu().numpy()[0]
-        # print "mu_error", mu_error
-        # print "tau_error", tau_error
+        self.assertEqual(0.0, mu_error, prec=0.07)
+        self.assertEqual(0.0, tau_error, prec=0.07)
+
+    def do_cubo_test(self, reparametrized, n_steps):
+        pyro._param_store._clear_cache()
+
+        def model():
+            mu_latent = pyro.sample(
+                "mu_latent", DiagNormal(
+                    self.mu0, torch.pow(
+                        self.tau0, -0.5)))
+            x_dist = LogNormal(mu_latent, torch.pow(self.tau, -0.5))
+            pyro.observe("obs0", x_dist, self.data[0])
+            pyro.observe("obs1", x_dist, self.data[1])
+            return mu_latent
+
+        def guide():
+            mu_q_log = pyro.param("mu_q_log", Variable(
+                                  self.log_mu_n.data + 0.17,
+                                  requires_grad=True))
+            tau_q_log = pyro.param("tau_q_log", Variable(self.log_tau_n.data - 0.143,
+                                                         requires_grad=True))
+            mu_q, tau_q = torch.exp(mu_q_log), torch.exp(tau_q_log)
+            q_dist = DiagNormal(mu_q, torch.pow(tau_q, -0.5))
+            q_dist.reparametrized = reparametrized
+            pyro.sample("mu_latent", q_dist)
+
+        cubo_optim = CUBO(model, guide, pyro.optim(torch.optim.Adam,
+                                                  {"lr": .0005, "betas": (0.96, 0.999)}))
+        for k in range(n_steps):
+            cubo_optim.step()
+
+        mu_error = torch.abs(
+            pyro.param("mu_q_log") -
+            self.log_mu_n).data.cpu().numpy()[0]
+        tau_error = torch.abs(
+            pyro.param("tau_q_log") -
+            self.log_tau_n).data.cpu().numpy()[0]
         self.assertEqual(0.0, mu_error, prec=0.07)
         self.assertEqual(0.0, tau_error, prec=0.07)
 
