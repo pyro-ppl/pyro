@@ -1,13 +1,45 @@
 import torch
+import pyro
 
 
-class AbstractInfer(object):
+class AbstractInfer(pyro.distributions.Distribution):
     """
-    Infer class must implement: _pyro_sample, _pyro_observe,
-    _pyro_on_exit, _pyro_param, _pyro_map_data
+    abstract inference class
     """
-    def __init__(self):
-        pass
+    def _traces(self, *args, **kwargs):
+        """
+        Virtual method to get unnormalized weighted list of posterior traces
+        """
+        raise NotImplementedError("inference algorithm must implement _traces")
+    
+    def _dist(self, *args, **kwargs):
+        """
+        make trace posterior distribution object with normalized probs
+        """
+        traces, log_weights = self._traces(*args, **kwargs)
+        log_ps = Variable(torch.Tensor(log_weights))
+        log_ps = log_ps - pyro.util.log_sum_exp(log_weights)
+        return Categorical(ps=torch.exp(log_ps), vs=traces)       
+
+    def sample(self, *args, **kwargs):
+        """
+        sample from trace posterior
+        """
+        return self._dist(*args, **kwargs).sample()
+
+    def log_pdf(self, val, *args, **kwargs):
+        return self._dist(*args, **kwargs).log_pdf(val)
+
+    def log_z(self, *args, **kwargs):
+        """
+        estimate marginal probability of observations
+        """
+        traces, log_weights = self._traces(*args, **kwargs)
+        log_z = 0.0
+        # TODO parallelize
+        for tr, log_w in zip(traces, log_weights):
+            log_z = log_z + log_w
+        return log_z / len(traces)
 
 
 def lw_expectation(trace_dist, functional, num_samples):

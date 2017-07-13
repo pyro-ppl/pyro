@@ -24,9 +24,9 @@ class Importance(pyro.infer.abstract_infer.AbstractInfer):
             guide = poutine.block(model, hide_types=["observe"])
         self.guide = guide
 
-    def _dist(self, *args, **kwargs):
+    def _traces(self, *args, **kwargs):
         """
-        make trace posterior distribution
+        make trace posterior histogram (unnormalized)
         """
         traces = []
         log_weights = []
@@ -36,25 +36,4 @@ class Importance(pyro.infer.abstract_infer.AbstractInfer):
                 poutine.replay(self.model, guide_trace))(*args, **kwargs)
             traces.append(model_trace)
             log_weights.append(model_trace.log_pdf() - guide_trace.log_pdf())
-
-        log_ps = Variable(torch.Tensor(log_weights))
-        log_ps = log_ps - pyro.util.log_sum_exp(log_weights)
-        return Categorical(ps=torch.exp(log_ps), vs=traces)       
-
-    def sample(self, *args, **kwargs):
-        """
-        sample from trace posterior
-        """
-        return self._dist(*args, **kwargs).sample()
-
-    def log_pdf(self, val, *args, **kwargs):
-        return self._dist(*args, **kwargs)
-
-    def log_z(self, *args, **kwargs):
-        traces = self._dist(*args, **kwargs).vs
-        log_z = 0.0
-        for tr in traces:
-            log_z = log_z + tr.log_pdf()
-            guide_tr = poutine.trace(poutine.replay(self.guide, tr))(*args, **kwargs)
-            log_z = log_z - guide_tr.log_pdf()
-        return log_z / len(traces)
+        return traces, log_weights

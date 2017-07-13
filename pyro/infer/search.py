@@ -26,7 +26,7 @@ class Search(pyro.infer.abstract_infer.AbstractInfer):
         self.queue = queue
         self.max_tries = int(max_tries)
 
-    def _dist(self, *args, **kwargs):
+    def _traces(self, *args, **kwargs):
         """
         algorithm entered here
         Returns traces from the posterior
@@ -40,22 +40,5 @@ class Search(pyro.infer.abstract_infer.AbstractInfer):
         while not self.queue.empty():
             traces.append(p(*args, **kwargs))
 
-        log_ps = Variable(torch.Tensor([tr.log_pdf() for tr in traces]))
-        log_ps = log_ps - pyro.util.log_sum_exp(log_ps)
-        return Categorical(ps=torch.exp(log_ps), vs=traces)
-
-    def sample(self, *args, **kwargs):
-        """
-        sample from trace posterior
-        """
-        return self._dist(*args, **kwargs).sample()
-
-    def log_pdf(self, val, *args, **kwargs):
-        return self._dist(*args, **kwargs).log_pdf(val)
-
-    def log_z(self, *args, **kwargs):
-        traces = self._dist(*args, **kwargs).vs
-        log_z = 0.0
-        for tr in traces:
-            log_z = log_z + tr.log_pdf()
-        return log_z / len(traces)
+        log_weights = [tr.log_pdf() for tr in traces]
+        return traces, log_weights
