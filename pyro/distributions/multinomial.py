@@ -44,8 +44,7 @@ class Multinomial(Distribution):
             x = x.expand(batch_size, 0)
         out_arr = [[self._get_tensor(self.log_pdf([
                     x.narrow(0, ix, ix + 1),
-                    self.ps.narrow(0, ix, ix + 1),
-                    self.n.narrow(0, ix, ix + 1)
+                    self.ps.narrow(0, ix, ix + 1)
                     ]))[0]]
                    for ix in range(int(x.size(0)))]
         return Variable(torch.Tensor(out_arr))

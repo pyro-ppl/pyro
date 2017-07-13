@@ -131,9 +131,13 @@ class TestMultinomial(TestCase):
         n = 8
         self.ps = Variable(torch.Tensor([0.1, 0.6, 0.3]))
         self.n = Variable(torch.Tensor([n]))
+        self.batch_ps = Variable(torch.Tensor([[0.1, 0.6, 0.3], [0.2, 0.4, 0.4]]))
+        self.batch_n = Variable(torch.Tensor([[n]]))
 #         self.test_data = Variable(torch.Tensor([0, 0, 1, 1, 2, 1, 1, 2]))
         self.test_data = Variable(torch.Tensor([2, 4, 2]))
+        self.batch_test_data = Variable(torch.Tensor([[2, 4, 2], [1, 4, 3]]))
         self.dist = dist.Multinomial(self.ps, self.n)
+        self.batch_dist = dist.Multinomial(self.batch_ps, self.batch_n, batch_size=1)
         self.analytic_mean = n * self.ps
         one = Variable(torch.ones(3))
         self.analytic_var = n * torch.mul(self.ps, one.sub(self.ps))
@@ -142,6 +146,13 @@ class TestMultinomial(TestCase):
     def test_log_pdf(self):
         log_px_torch = self.dist.log_pdf(self.test_data).data[0]
         log_px_np = float(spr.multinomial.logpmf(np.array([2, 4, 2]), 8, self.ps.data.numpy()))
+        self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
+
+    def test_batch_log_pdf(self):
+        log_px_torch = self.batch_dist.batch_log_pdf(self.batch_test_data).data.numpy()
+        log_px_np0 = float(spr.multinomial.logpmf(np.array([2, 4, 2]), 8, self.ps.data.numpy()))
+        log_px_np1 = float(spr.multinomial.logpmf(np.array([1, 4, 3]), 8, np.array([0.2, 0.4, 0.4])))
+        log_px_np = [log_px_np0, log_px_np1]
         self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
 
     def test_mean_and_var(self):
