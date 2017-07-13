@@ -23,11 +23,7 @@ class Exponential(Distribution):
         """
         reparameterized sampler.
         """
-        eps = Variable(
-            torch.rand(
-                self.lam.size()),
-            requires_grad=False).type_as(
-            self.lam)
+        eps = Variable(torch.rand(self.lam.size()))
         x = -torch.log(eps) / self.lam
         return x
 

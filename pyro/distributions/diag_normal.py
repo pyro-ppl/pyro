@@ -33,8 +33,7 @@ class DiagNormal(Distribution):
         if batch_size != 1 and batch_size != self.bs:
             raise ValueError("Batch sizes do not match")
 
-        eps = Variable(torch.randn(self.mu.size()),  # .type_as(self.mu),
-                       requires_grad=False)  # .type_as(self.mu)
+        eps = Variable(torch.randn(self.mu.size()))
         z = self.mu + eps * self.sigma
         return z
 

@@ -22,16 +22,20 @@ class Uniform(Distribution):
         """
         Reparametrized Uniform sampler.
         """
-        eps = Variable(torch.rand(self.a.size()),
-                       requires_grad=False).type_as(self.mu)
+        eps = Variable(torch.rand(self.a.size()))
         return self.a + torch.mul(eps, torch.Tensor.sub(self.b, self.a))
 
     def log_pdf(self, x):
         """
         Normal log-likelihood
         """
-        if x.le(self.a).data[0] or x.ge(self.b).data[0]:
-            return Variable(torch.Tensor([-float("inf")]))
+        if x.dim() == 1:
+            if x.le(self.a).data[0] or x.ge(self.b).data[0]:
+                return Variable(torch.Tensor([-float("inf")]))
+        else:
+            # x is 2-d
+            if x.le(self.a).data[0, 0] or x.ge(self.b).data[0, 0]:
+                return Variable(torch.Tensor([[-float("inf")]]))
         return torch.sum(-torch.log(self.b - self.a))
 
     def batch_log_pdf(self, x, batch_size=1):

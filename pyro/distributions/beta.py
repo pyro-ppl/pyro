@@ -60,7 +60,7 @@ class Beta(Distribution):
         """
         gamma log-likelihood
         """
-        one = Variable(torch.ones([1]))
+        one = Variable(torch.ones(self.alpha.size()))
         ll_1 = (self.alpha - one) * torch.log(x)
         ll_2 = (self.beta - one) * torch.log(one - x)
         ll_3 = log_gamma(self.alpha + self.beta)

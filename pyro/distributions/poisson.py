@@ -42,17 +42,14 @@ class Poisson(Distribution):
             self.lam = lam.unsqueeze(0).expand(batch_size, lam.size(0))
         else:
             self.lam = lam
-        self.dim = lam.size(0)
         super(Poisson, self).__init__(*args, **kwargs)
 
     def sample(self, batch_size=1):
         """
         Poisson sampler.
         """
-        x = torch.Tensor(
-            npr.poisson(
-                lam=self.lam.data.numpy()).astype("float"))
-        return Variable(x)
+        x = npr.poisson(lam=self.lam.data.numpy()).astype("float")
+        return Variable(torch.Tensor(x))
 
     def log_pdf(self, x, batch_size=1):
         """

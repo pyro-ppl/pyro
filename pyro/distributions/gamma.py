@@ -62,7 +62,7 @@ class Gamma(Distribution):
         gamma log-likelihood
         """
         ll_1 = -self.beta * x
-        ll_2 = (self.alpha - pyro.ones([1])) * torch.log(x)
+        ll_2 = (self.alpha - pyro.ones(self.alpha.size())) * torch.log(x)
         ll_3 = self.alpha * torch.log(self.beta)
         ll_4 = - log_gamma(self.alpha)
         return ll_1 + ll_2 + ll_3 + ll_4

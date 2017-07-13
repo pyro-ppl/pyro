@@ -36,8 +36,7 @@ class Normal(Distribution):
         """
         Reparameterized Normal sampler.
         """
-        eps = Variable(torch.randn(self.mu.size()),
-                       requires_grad=False).type_as(self.mu)
+        eps = Variable(torch.randn(self.mu.size()))
         z = self.mu + torch.mm(self.l_chol, eps.unsqueeze(1)).squeeze()
         return z
 
