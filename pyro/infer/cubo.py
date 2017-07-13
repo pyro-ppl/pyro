@@ -110,8 +110,10 @@ class CUBO(AbstractInfer):
                 else:
                     pass
 
+
             #exp_cubo += torch.exp(log_r_s*self.n_cubo) / self.nr_particles
-            exp_cubo = (log_r_s * self.n_cubo) / self.nr_particles
+
+            exp_cubo += log_r_s * (self.n_cubo-1) / self.nr_particles
 
 
 
@@ -135,7 +137,7 @@ class CUBO(AbstractInfer):
         all_trainable_params = list(set(all_trainable_params))
 
         # gradients
-        loss =  exp_cubo_sum
+        loss =  - exp_cubo_sum
         loss.backward()
         # update
         self.optim_step_fct(all_trainable_params)
