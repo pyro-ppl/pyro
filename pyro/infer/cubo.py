@@ -66,8 +66,10 @@ class CUBO(AbstractInfer):
             log_r_raw = model_trace.batch_log_pdf() - guide_trace.batch_log_pdf()
             log_weights.append(log_r_raw)
 
-        log_weights_tensor = torch.stack(log_weights,1).squeeze(2)
-        log_r_max = torch.max(log_weights_tensor)[0]
+        #pdb.set_trace()
+        log_weights_tensor = torch.stack(log_weights,1)#.squeeze(2)
+        #pdb.set_trace()
+        log_r_max = torch.max(log_weights_tensor,1)[0]
         log_r = log_weights_tensor - log_r_max.expand_as(log_weights_tensor)
         w_n = Variable(torch.exp(log_r * self.n_cubo).data)
         w_0 = Variable(torch.exp(log_r).data)

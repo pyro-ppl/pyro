@@ -354,7 +354,7 @@ class PoissonGammaTests(TestCase):
                     requires_grad=True))
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             pyro.sample("lambda_latent", Gamma(alpha_q, beta_q))
-            pdb.set_trace()
+            #pdb.set_trace()
             pyro.map_data("aaa", self.data, lambda i, x: None, batch_size=3)
 
         kl_optim = KL_QP(
