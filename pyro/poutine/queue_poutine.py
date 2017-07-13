@@ -77,7 +77,7 @@ class QueuePoutine(Poutine):
         elif not self.pivot_seen:
             self.pivot_seen = True
             extended_traces = []
-            for s in fn.support():
+            for s in fn.support(*args, **kwargs):
                 extended_traces.append(
                     self.guide_trace.copy().add_sample(name, s, fn, *args, **kwargs))
             raise ReturnExtendedTraces(extended_traces)

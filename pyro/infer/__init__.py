@@ -1,5 +1,6 @@
 import pyro.distributions
 import pyro.util
+import pyro.poutine
 
 from pyro.infer.abstract_infer import AbstractInfer
 from pyro.infer.mh import MH
@@ -36,7 +37,13 @@ class Marginal(pyro.distributions.Distribution):
                                               vs=[list(hist.keys())])
 
     def sample(self, *args, **kwargs):
-        return self._aggregate(self.trace_dist._dist(*args, **kwargs)).sample()
+        return self._aggregate(
+            pyro.poutine.block(self.trace_dist._dist)(*args, **kwargs)).sample()
 
     def log_pdf(self, val, *args, **kwargs):
-        return self._aggregate(self.trace_dist._dist(*args, **kwargs)).log_pdf(val)
+        return self._aggregate(
+            pyro.poutine.block(self.trace_dist._dist)(*args, **kwargs)).log_pdf(val)
+
+    def support(self, *args, **kwargs):
+        return self._aggregate(
+            pyro.poutine.block(self.trace_dist._dist)(*args, **kwargs)).support()

@@ -25,8 +25,7 @@ class AbstractInfer(pyro.distributions.Distribution):
         log_ps = torch.cat(log_weights, 0)
         log_ps = log_ps - pyro.util.log_sum_exp(log_ps).expand_as(log_ps)
         # XXX Categorical not working correctly with non-Tensor vs
-        d = Categorical(ps=torch.exp(log_ps), vs=[traces])
-        return d
+        return Categorical(ps=torch.exp(log_ps), vs=[traces])
 
     def sample(self, *args, **kwargs):
         """
