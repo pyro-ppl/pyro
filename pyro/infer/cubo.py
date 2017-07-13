@@ -59,7 +59,11 @@ class CUBO(AbstractInfer):
             poutine.replay(self.model, guide_trace))(*args, **kwargs)
 
         # compute losses
-        log_r = model_trace.log_pdf() - guide_trace.log_pdf()
+        log_r_raw = model_trace.batch_log_pdf() - guide_trace.batch_log_pdf()
+
+        log_r_max = Variable(log_r_raw.max().data)
+        log_r = log_r_raw - log_r_max.expand_as(log_r_raw)
+
         rr = torch.exp(log_r * self.n_cubo)
         rr0 = torch.exp(log_r)
         w_n = Variable(rr.data)
@@ -68,20 +72,22 @@ class CUBO(AbstractInfer):
         cubo = 0.0
         for name in model_trace.keys():
             if model_trace[name]["type"] == "observe":
-                cubo += model_trace[name]["log_pdf"]
+                cubo += model_trace[name]["batch_log_pdf"]
             elif model_trace[name]["type"] == "sample":
                 if model_trace[name]["fn"].reparametrized:
                     # print "name",model_trace[name]
-                    cubo += model_trace[name]["log_pdf"]
-                    cubo -= guide_trace[name]["log_pdf"]
+                    cubo += model_trace[name]["batch_log_pdf"]
+                    cubo -= guide_trace[name]["batch_log_pdf"]
 
                 else:
-                    cubo -= w_n0 * guide_trace[name]["log_pdf"]
+                    cubo -= w_n0 * guide_trace[name]["batch_log_pdf"]
             else:
                 pass
-        cubo = torch.exp(cubo * self.n_cubo)
 
-        #pdb.set_trace()
+        cubo_corrected = cubo-log_r_max.expand_as(cubo)
+        post_cubo = (torch.exp(cubo_corrected * self.n_cubo)).sum()
+
+        pdb.set_trace()
 
         # accumulate parameters
         all_trainable_params = []
@@ -98,11 +104,11 @@ class CUBO(AbstractInfer):
         all_trainable_params = list(set(all_trainable_params))
 
         # gradients
-        cubo.backward()
+        post_cubo.backward()
         # update
         self.optim_step_fct(all_trainable_params)
         # zero grads
         zero_grads(all_trainable_params)
 
         # return the log transform of the expectation
-        return cubo#(torch.log(cubo)/self.n_cubo).data[0]
+        return (torch.log(post_cubo)/self.n_cubo).data[0]
