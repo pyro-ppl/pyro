@@ -5,6 +5,7 @@ import pyro
 class AbstractInfer(pyro.distributions.Distribution):
     """
     abstract inference class
+    TODO documentation
     """
     def _traces(self, *args, **kwargs):
         """
@@ -28,6 +29,9 @@ class AbstractInfer(pyro.distributions.Distribution):
         return self._dist(*args, **kwargs).sample()
 
     def log_pdf(self, val, *args, **kwargs):
+        """
+        Use the histogram to score a value
+        """
         return self._dist(*args, **kwargs).log_pdf(val)
 
     def log_z(self, *args, **kwargs):

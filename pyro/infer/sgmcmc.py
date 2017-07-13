@@ -17,7 +17,7 @@ class SGMCMC(pyro.infer.abstract_infer.AbstractInfer):
         self.model = model
         self.optimizer = optimizer
 
-    def _dist(self, *args, **kwargs):
+    def _traces(self, *args, **kwargs):
         """
         main control loop
         """
@@ -33,15 +33,5 @@ class SGMCMC(pyro.infer.abstract_infer.AbstractInfer):
             zero_grad(tr_samples)
             traces.append(tr.copy())
 
-        log_ps = Variable(torch.Tensor([tr.log_pdf() for tr in traces]))
-        log_ps = log_ps - pyro.util.log_sum_exp(log_ps)
-        return Categorical(ps=torch.exp(log_ps), vs=traces)
-
-    def sample(self, *args, **kwargs):
-        """
-        sample from trace posterior
-        """
-        return self._dist(*args, **kwargs).sample()
-
-    def log_pdf(self, val, *args, **kwargs):
-        return self._dist(*args, **kwargs).log_pdf(val)
+        log_weights = [tr.log_pdf() for tr in traces]
+        return traces, log_weights
