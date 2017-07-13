@@ -12,6 +12,7 @@ from pyro.distributions import Bernoulli
 from pyro.distributions import Exponential
 from pyro.distributions import Poisson
 from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
+from pyro.infer.importance import Importance
 from tests.common import TestCase
 
 from pyro.infer.kl_qp import KL_QP
@@ -86,8 +87,8 @@ class NormalNormalTests(TestCase):
                 self.analytic_log_sig_n -
                 pyro.param("log_sig_q"),
                 2.0))
-        self.assertEqual(0.0, mu_error.data.cpu().numpy()[0], prec=0.02)
-        self.assertEqual(0.0, log_sig_error.data.cpu().numpy()[0], prec=0.02)
+        self.assertEqual(0.0, mu_error.data.cpu().numpy()[0], prec=0.05)
+        self.assertEqual(0.0, log_sig_error.data.cpu().numpy()[0], prec=0.05)
 
 # THIS TEST IS BROKEN BECAUSE OF EXPECTATION/BATCH DIMENSION ISSUES
 #     def test_importance_sampling(self):

@@ -123,7 +123,7 @@ class Categorical(Distribution):
                     repeat=r))
 
         if r == 1:
-            return iter([Variable(torch.Tensor([[i]])) for i in range(c)])
+            return (Variable(torch.Tensor([[i]])) for i in range(c))
         return (Variable(torch.Tensor(list(x)).unsqueeze(1))
                 for x in itertools.product(torch.arange(0, c),
                 repeat=r))

@@ -10,7 +10,7 @@ def _dict_to_tuple(d):
     May break when keys cant be sorted, but that is not an expected use-case
     """
     if isinstance(d, dict):
-        return tuple([(k, dict_to_tuple(d[k])) for k in sorted(d.keys())])
+        return tuple([(k, _dict_to_tuple(d[k])) for k in sorted(d.keys())])
     else:
         return d
 
