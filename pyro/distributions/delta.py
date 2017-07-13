@@ -34,4 +34,4 @@ class Delta(Distribution):
 
     def support(self):
         # univariate case
-        return iter([Variable(self.v.data.index(i)) for i in range(self.v.size(0))])
+        return (Variable(self.v.data.index(i)) for i in range(self.v.size(0)))

@@ -37,7 +37,9 @@ class Normal(Distribution):
         Reparameterized Normal sampler.
         """
         eps = Variable(torch.randn(self.mu.size()))
-        z = self.mu + torch.mm(self.l_chol, eps.unsqueeze(1)).squeeze()
+        if eps.dim() == 1:
+            eps = eps.unsqueeze(1)
+        z = self.mu + torch.mm(self.l_chol, eps).squeeze()
         return z
 
     def log_pdf(self, x):
