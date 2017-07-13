@@ -309,13 +309,13 @@ class PoissonGammaTests(TestCase):
     def setUp(self):
         # poisson-gamma model
         # gamma prior hyperparameter
-        self.alpha0 = Variable(torch.Tensor([[1.0]]))
+        self.alpha0 = Variable(torch.Tensor([1.0]))
         # gamma prior hyperparameter
-        self.beta0 = Variable(torch.Tensor([[1.0]]))
+        self.beta0 = Variable(torch.Tensor([1.0]))
         self.data = []
-        self.data.append(Variable(torch.Tensor([[1.0]])))
-        self.data.append(Variable(torch.Tensor([[2.0]])))
-        self.data.append(Variable(torch.Tensor([[3.0]])))
+        self.data.append(Variable(torch.Tensor([1.0])))
+        self.data.append(Variable(torch.Tensor([2.0])))
+        self.data.append(Variable(torch.Tensor([3.0])))
 
         self.n_data = len(self.data)
         sum_data = self.data[0] + self.data[1] + self.data[2]
