@@ -4,9 +4,10 @@ from torch.autograd import Variable
 import pyro
 import pyro.poutine as poutine
 from pyro.distributions import Uniform
+from pyro.infer import AbstractInfer
 
 
-class MH(pyro.infer.abstract_infer.AbstractInfer):
+class MH(AbstractInfer):
     """
     Initial implementation of MH MCMC
     """
@@ -35,8 +36,6 @@ class MH(pyro.infer.abstract_infer.AbstractInfer):
         i = 0
         while t < self.burn + self.lag * self.samples:
             i += 1
-            # p(x, z)
-            old_model_trace = traces[-1]
             # q(z' | z)
             new_guide_trace = poutine.block(
                 poutine.trace(self.guide))(old_model_trace, *args, **kwargs)
@@ -46,14 +45,16 @@ class MH(pyro.infer.abstract_infer.AbstractInfer):
             # q(z | z')
             old_guide_trace = poutine.block(
                 poutine.trace(
-                    poutine.replay(self.guide, new_model_trace)))(new_model_trace,
+                    poutine.replay(self.guide, old_model_trace)))(new_model_trace,
                                                                   *args, **kwargs)
             # p(x, z') q(z' | z) / p(x, z) q(z | z')
             logr = new_model_trace.log_pdf() + new_guide_trace.log_pdf() - \
                    old_model_trace.log_pdf() + old_guide_trace.log_pdf()
             rnd = pyro.sample("mh_step_{}".format(i),
                               Uniform(pyro.zeros(1), pyro.ones(1)))
-            if torch.log(rnd)[0] < logr[0]:
+
+            #print(i, t, torch.log(rnd).data[0], logr.data[0])
+            if torch.log(rnd).data[0] < logr.data[0]:
                 # accept
                 old_model_trace = new_model_trace
                 if t <= self.burn or (t > self.burn and t % self.lag == 0):
@@ -73,19 +74,24 @@ def hmc_proposal(model, sites=None):
         for i in range(steps):
             tr = poutine.block(poutine.trace(poutine.replay(model, tr, sites=sites)))(*args, **kwargs)
             logp = tr.log_pdf()
-            samples = [s[name]["value"] for name in tr.keys() \
-                       if s[name]["type"] == "sample"]
+            samples = [tr[name]["value"] for name in tr.keys() \
+                       if tr[name]["type"] == "sample"]
             autograd.backward(samples, logp)
             optimizer.step(samples)
         return tr
     return _fn
 
 
-def single_site_proposal(model):
+def single_site_proposal(model, name=None):
     def _fn(tr, *args, **kwargs):
-        name = itertools.randomchoice(tr.filter(site_type="sample").keys())
+        if name is None:
+            name = itertools.randomchoice(
+                [s for s in tr.keys() if tr[s]["type"] == "sample"])
         new_site = propose(tr[name])
         new_tr = tr.copy()
+        new_val = pyro.sample(name, new_tr[name]["fn"],
+                              *new_tr[name]["args"][0],
+                              **new_tr[name]["args"][1])
         new_tr[name] = new_site
         new_tr = poutine.trace(
             poutine.replay(model, new_tr, sites=parents(tr, name)))(*args, **kwargs)
@@ -99,13 +105,14 @@ def single_site_proposal(model):
 
 class HMC(MH):
     def __init__(self, model, **kwargs):
-        super(HMC, self).__init__(model, proposal=hmc_guide(model), **kwargs)
+        super(HMC, self).__init__(
+            model, guide=None, proposal=hmc_guide(model), **kwargs)
 
 
 class SingleSiteMH(MH):
     def __init__(self, model, **kwargs):
         super(SingleSiteMH, self).__init__(
-            model, proposal=single_site_guide(model), **kwargs)
+            model, guide=None, proposal=single_site_guide(model), **kwargs)
 
 
 # class MixedHMCMH(MH):

@@ -50,13 +50,16 @@ def ng_zeros(*args, **kwargs):
     return Variable(torch.zeros(*args, **kwargs), requires_grad=False)
 
 
-def log_sum_exp(vec):
-    _, idx = torch.max(x, 1)
-    max_score = vec[0, idx.view(-1).data[0]]
-    max_score_broadcast = max_score.view(1, -1).expand(1, vec.size()[1])
-    return max_score + \
-        torch.log(torch.sum(torch.exp(vec - max_score_broadcast)))
-
+def log_sum_exp(vecs):
+    n = len(vecs.size())
+    if n == 1:
+        vecs = vecs.view(1, -1)
+    _, idx = torch.max(vecs, 1)
+    max_score = torch.index_select(vecs, 1, idx.view(-1))
+    ret = max_score + torch.log(torch.sum(torch.exp(vecs - max_score.expand_as(vecs))))
+    if n == 1:
+        return ret.view(-1)
+    return ret
 
 def zero_grads(tensors):
     """

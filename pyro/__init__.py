@@ -6,6 +6,14 @@ import pyro
 from torch.nn import Parameter
 import torch
 
+from pyro import distributions
+from pyro import infer
+from pyro import optim
+from pyro import poutine
+from pyro import nn
+from pyro import params
+from pyro import util
+
 from pyro.util import zeros, ones
 
 # global map of params for now

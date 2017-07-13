@@ -7,9 +7,10 @@ else:
     from queue import Queue
 
 import pyro.poutine as poutine
+from pyro.infer import AbstractInfer
 
 
-class Search(pyro.infer.abstract_infer.AbstractInfer):
+class Search(AbstractInfer):
     """
     New Trace and Poutine-based implementation of systematic search
     """
@@ -18,6 +19,7 @@ class Search(pyro.infer.abstract_infer.AbstractInfer):
         Constructor
         """
         self.model = model
+        # XXX add queue here or on call to _traces?
         if queue is None:
             queue = Queue()
             queue.put(poutine.Trace())
@@ -31,6 +33,9 @@ class Search(pyro.infer.abstract_infer.AbstractInfer):
         Running until the queue is empty and collecting the marginal histogram
         is performing exact inference
         """
+        if self.queue.empty():
+            self.queue.put(poutine.Trace())
+
         p = poutine.queue(poutine.trace(self.model),
                           queue=self.queue,
                           max_tries=self.max_tries)

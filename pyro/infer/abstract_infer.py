@@ -1,5 +1,8 @@
 import torch
+from torch.autograd import Variable
 import pyro
+import pyro.util
+from pyro.distributions import Categorical
 
 
 class AbstractInfer(pyro.distributions.Distribution):
@@ -13,14 +16,17 @@ class AbstractInfer(pyro.distributions.Distribution):
         """
         raise NotImplementedError("inference algorithm must implement _traces")
     
+    @pyro.util.memoize
     def _dist(self, *args, **kwargs):
         """
         make trace posterior distribution object with normalized probs
         """
         traces, log_weights = self._traces(*args, **kwargs)
-        log_ps = Variable(torch.Tensor(log_weights))
-        log_ps = log_ps - pyro.util.log_sum_exp(log_weights)
-        return Categorical(ps=torch.exp(log_ps), vs=traces)       
+        log_ps = torch.cat(log_weights, 0)
+        log_ps = log_ps - pyro.util.log_sum_exp(log_ps).expand_as(log_ps)
+        # XXX Categorical not working correctly with non-Tensor vs
+        d = Categorical(ps=torch.exp(log_ps), vs=[traces])
+        return d
 
     def sample(self, *args, **kwargs):
         """
