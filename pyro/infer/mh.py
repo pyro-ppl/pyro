@@ -6,12 +6,12 @@ import pyro.poutine as poutine
 from pyro.distributions import Uniform, Categorical
 
 
-class MCMC(pyro.infer.abstract_infer.AbstractInfer):
+class MH(pyro.infer.abstract_infer.AbstractInfer):
     """
-    Initial implementation of MCMC
+    Initial implementation of MH MCMC
     """
     def __init__(self, model, guide=None, proposal=None, samples=10, lag=1, burn=0):
-        super(MCMC, self).__init__()
+        super(MH, self).__init__()
         self.samples = samples
         self.lag = lag
         self.burn = burn
@@ -80,49 +80,49 @@ class MCMC(pyro.infer.abstract_infer.AbstractInfer):
 
 
 ##############################################
-# Non-functioning MCMC subclasses and helpers
+# Non-functioning MH subclasses and helpers
 ##############################################
-
-def hmc_proposal(model, sites=None):
-    def _fn(tr, *args, **kwargs):
-        for i in range(steps):
-            tr = poutine.block(poutine.trace(poutine.replay(model, tr, sites=sites)))(*args, **kwargs)
-            logp = tr.log_pdf()
-            samples = values(tr.filter(site_type="sample"))
-            autograd.backward(samples, logp)
-            optimizer.step(samples)
-        return tr
-    return _fn
-
-
-def single_site_proposal(model):
-    def _fn(tr, *args, **kwargs):
-        name = itertools.randomchoice(tr.filter(site_type="sample").keys())
-        new_site = propose(tr[name])
-        new_tr = tr.copy()
-        new_tr[name] = new_site
-        new_tr = poutine.trace(
-            poutine.replay(model, new_tr, sites=parents(tr, name)))(*args, **kwargs)
-        return new_tr
-    return _fn
-
-
-def mixture_guide(guides):
-    return lambda *args, **kwargs: guides[pyro.sample(gensym(), discrete, guides, ones())](*args, **kwargs)
-
-
-class MixedHMCMH(MCMC):
-    def __init__(self, model):
-        proposal = mixture_guide([hmc_proposal(model),
-                                  single_site_proposal(model)])
-        super(MixedHMCMH, self).__init__(model, proposal=proposal)
-
-
-class HMC(MCMC):
-    def __init__(self, model):
-        super(HMC, self).__init__(model, proposal=hmc_guide(model))
-
-
-class SingleSiteMH(MCMC):
-    def __init__(self, model):
-        super(SingleSiteMH, self).__init__(model, proposal=single_site_guide(model))
+# 
+# def hmc_proposal(model, sites=None):
+#     def _fn(tr, *args, **kwargs):
+#         for i in range(steps):
+#             tr = poutine.block(poutine.trace(poutine.replay(model, tr, sites=sites)))(*args, **kwargs)
+#             logp = tr.log_pdf()
+#             samples = values(tr.filter(site_type="sample"))
+#             autograd.backward(samples, logp)
+#             optimizer.step(samples)
+#         return tr
+#     return _fn
+# 
+# 
+# def single_site_proposal(model):
+#     def _fn(tr, *args, **kwargs):
+#         name = itertools.randomchoice(tr.filter(site_type="sample").keys())
+#         new_site = propose(tr[name])
+#         new_tr = tr.copy()
+#         new_tr[name] = new_site
+#         new_tr = poutine.trace(
+#             poutine.replay(model, new_tr, sites=parents(tr, name)))(*args, **kwargs)
+#         return new_tr
+#     return _fn
+# 
+# 
+# def mixture_guide(guides):
+#     return lambda *args, **kwargs: guides[pyro.sample(gensym(), discrete, guides, ones())](*args, **kwargs)
+# 
+# 
+# class MixedHMCMH(MH):
+#     def __init__(self, model):
+#         proposal = mixture_guide([hmc_proposal(model),
+#                                   single_site_proposal(model)])
+#         super(MixedHMCMH, self).__init__(model, proposal=proposal)
+# 
+# 
+# class HMC(MH):
+#     def __init__(self, model):
+#         super(HMC, self).__init__(model, proposal=hmc_guide(model))
+# 
+# 
+# class SingleSiteMH(MH):
+#     def __init__(self, model):
+#         super(SingleSiteMH, self).__init__(model, proposal=single_site_guide(model))
