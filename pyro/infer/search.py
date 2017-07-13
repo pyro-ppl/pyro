@@ -6,9 +6,7 @@ if sys.version_info[0] < 3:
 else:
     from queue import Queue
 
-from pyro.poutine import Trace
 import pyro.poutine as poutine
-from pyro.distributions import Categorical
 
 
 class Search(pyro.infer.abstract_infer.AbstractInfer):
@@ -22,7 +20,7 @@ class Search(pyro.infer.abstract_infer.AbstractInfer):
         self.model = model
         if queue is None:
             queue = Queue()
-            queue.put(Trace())
+            queue.put(poutine.Trace())
         self.queue = queue
         self.max_tries = int(max_tries)
 

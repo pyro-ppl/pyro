@@ -3,7 +3,6 @@ from torch.autograd import Variable
 
 import pyro
 import pyro.poutine as poutine
-from pyro.distributions import Categorical
 
 
 # XXX what should be the base class here?

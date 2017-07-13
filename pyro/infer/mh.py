@@ -3,7 +3,7 @@ from torch.autograd import Variable
 
 import pyro
 import pyro.poutine as poutine
-from pyro.distributions import Uniform, Categorical
+from pyro.distributions import Uniform
 
 
 class MH(pyro.infer.abstract_infer.AbstractInfer):
@@ -98,13 +98,14 @@ def single_site_proposal(model):
 
 
 class HMC(MH):
-    def __init__(self, model):
-        super(HMC, self).__init__(model, proposal=hmc_guide(model))
+    def __init__(self, model, **kwargs):
+        super(HMC, self).__init__(model, proposal=hmc_guide(model), **kwargs)
 
 
 class SingleSiteMH(MH):
-    def __init__(self, model):
-        super(SingleSiteMH, self).__init__(model, proposal=single_site_guide(model))
+    def __init__(self, model, **kwargs):
+        super(SingleSiteMH, self).__init__(
+            model, proposal=single_site_guide(model), **kwargs)
 
 
 # class MixedHMCMH(MH):
