@@ -262,25 +262,6 @@ class TestCategorical(TestCase):
         self.assertTrue(all(v))
 
 
-class TestBatchMultinomial(TestCase):
-    def setUp(self):
-        n = [[8], [5]]
-        self.ps = Variable(torch.Tensor([[0.1, 0.6, 0.3], [0.4, 0.1, 0.5]]))
-        self.n = Variable(torch.Tensor(n))
-#         self.test_data = Variable(torch.Tensor([0, 0, 1, 1, 2, 1, 1, 2]))
-        self.test_data = Variable(torch.Tensor([[2, 4, 2], [2, 0, 3]]))
-        self.dist = dist.Multinomial(self.ps, self.n, batch_size=1)
-
-    def test_log_pdf(self):
-        log_px_torch = self.dist.batch_log_pdf(self.test_data).data[1, 0]
-        log_px_np = float(
-            spr.multinomial.logpmf(
-                self.test_data.data[1].numpy(),
-                5,
-                self.ps.data[1].numpy()))
-        self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
-
-
 class TestBeta(TestCase):
     def setUp(self):
         self.alpha = Variable(torch.Tensor([2.4]))
@@ -408,13 +389,18 @@ class TestDiagNormal(TestCase):
     def setUp(self):
         self.mu = Variable(torch.ones(3))
         self.sigma = 2 * Variable(torch.ones(3))
-
         self.mu_np = self.mu.data.cpu().numpy()
         self.sigma_np = self.sigma.data.cpu().numpy()
-
         self.test_data = Variable(torch.randn(3))
-
         self.g = dist.DiagNormal(self.mu, self.sigma)
+
+        self.batch_mu = Variable(torch.ones(2, 50))
+        self.batch_sigma = 2 * Variable(torch.ones(2, 50))
+        self.batch_mu_np = self.mu.data.cpu().numpy()
+        self.batch_sigma_np = self.sigma.data.cpu().numpy()
+        self.batch_test_data = Variable(torch.randn(2, 50))
+        self.batch_g = dist.DiagNormal(self.mu, self.sigma, batch_size=1)
+
 
     def test_log_pdf(self):
         log_px_torch = self.g.log_pdf(self.test_data).data[0]
@@ -423,30 +409,16 @@ class TestDiagNormal(TestCase):
                                                    cov=self.sigma_np ** 2.0)
         self.assertEqual(log_px_torch, log_px_np, prec=1e-3)
 
-
-class TestBatchDiagNormal(TestCase):
-
-    def setUp(self):
-        self.mu = Variable(torch.ones(2, 50))
-        self.sigma = 2 * Variable(torch.ones(2, 50))
-
-        self.mu_np = self.mu.data.cpu().numpy()
-        self.sigma_np = self.sigma.data.cpu().numpy()
-
-        self.test_data = Variable(torch.randn(2, 50))
-
-        self.g = dist.DiagNormal(self.mu, self.sigma, batch_size=1)
-
-    def test_log_pdf(self):
+    def test_batch_log_pdf(self):
         bs = 10
-        log_px_torch = self.g.batch_log_pdf(self.test_data, bs).data[0]
-        log_px_np = spr.multivariate_normal.logpdf(self.test_data.data.cpu().numpy()[0],
-                                                   mean=self.mu_np[0],
-                                                   cov=self.sigma_np[0] ** 2.0)
+        log_px_torch = self.g.batch_log_pdf(self.batch_test_data, bs).data[0]
+        log_px_np = spr.multivariate_normal.logpdf(self.tbatch_est_data.data.cpu().numpy()[0],
+                                                   mean=self.batch_mu_np[0],
+                                                   cov=self.batch_sigma_np[0] ** 2.0)
         self.assertEqual(log_px_torch[0], log_px_np, prec=2e-2)
 
 
-class TestBatchBernoulli(TestCase):
+class TestBernoulli(TestCase):
 
     def setUp(self):
         self.ps = Variable(torch.Tensor(
@@ -456,7 +428,7 @@ class TestBatchBernoulli(TestCase):
         self.ps_np = self.ps.data.cpu().numpy()
         self.test_data = Variable(torch.Tensor([[1, 0, 1, 1, 0, 1, 0, 1, 1, 1],
                                                 [1, 0, 0, 1, 0, 0, 1, 1, 0, 1]]))
-
+        self.g_1 = dist.Bernoulli(self.ps)
         self.g = dist.Bernoulli(self.ps, batch_size=2)
         self.small_g = dist.Bernoulli(self.small_ps)
 
@@ -465,12 +437,19 @@ class TestBatchBernoulli(TestCase):
         self.support = list(map(lambda x: torch.Tensor(x), data['expected']))
 
     def test_log_pdf(self):
+        log_px_torch = self.g_1.log_pdf(self.test_data[0]).data[0]
+        _log_px_np = spr.bernoulli.logpmf(self.test_data.data[0].cpu().numpy(),
+                                          p=self.ps_np)
+        log_px_np = np.sum(_log_px_np)
+        self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
+
+    def test_batch_log_pdf(self):
         bs = 2
-        log_px_torch = self.g.batch_log_pdf(self.test_data, bs).data[0]
+        log_px_torch = self.g.batch_log_pdf(self.test_data, bs).data.numpy()
         _log_px_np = spr.bernoulli.logpmf(self.test_data.data.cpu().numpy(),
                                           p=self.ps_np)
-        log_px_np = np.sum(_log_px_np[0])
-        self.assertEqual(log_px_torch[0], log_px_np, prec=1e-4)
+        log_px_np = [np.sum(_log_px_np[0]), np.sum(_log_px_np[1])]
+        self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
 
     def test_support(self):
         s = list(self.small_g.support())
