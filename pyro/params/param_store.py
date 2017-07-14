@@ -1,26 +1,27 @@
 import cloudpickle
 
+
 class ParamStoreDict(object):
 
     def __init__(self):
         self._params = {}
-        #self._tags = {}
+        # self._tags = {}
         self._param_to_name = {}
 
     def clear(self):
         self._params = {}
-        #self._tags = {}
+        # self._tags = {}
         self._param_to_name = {}
 
-    def get_param(self, name, init_tensor=None): #, tag="main"):
+    def get_param(self, name, init_tensor=None):
         """
         Return named parameters from the global store
         """
-        #if tag not in self._tags:
+        # if tag not in self._tags:
         #    self._tags[tag] = {}
 
-        # get the scoped params
-        #tag_group = self._tags[tag]
+        #  get the scoped params
+        # tag_group = self._tags[tag]
 
         # make sure the param exists in our group
         if name not in self._params:
@@ -40,7 +41,7 @@ class ParamStoreDict(object):
             self._param_to_name[self._params[name]] = name
 
         # tag -> params
-        #if name not in tag_group:
+        # if name not in tag_group:
         #    tag_group[name] = self._params[name]
 
         # send back the guaranteed to exist param
@@ -53,7 +54,7 @@ class ParamStoreDict(object):
         return self._param_to_name[p]
 
     # only return parameters matching some tag
-    #def filter_parameters(self, tag):
+    # def filter_parameters(self, tag):
     #    # if you've never seen the tag, return empty
     #    if tag not in self._tags:
     #        return []
@@ -72,4 +73,3 @@ class ParamStoreDict(object):
             for param_name, param in loaded_params.items():
                 self._params[param_name] = param
                 self._param_to_name[param] = param_name
-

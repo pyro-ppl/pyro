@@ -18,6 +18,7 @@ _global_tensor_type = 'cpu'
 def get_param_store():
     return _param_store
 
+
 def set_cuda():
     global _global_tensor_type
     _global_tensor_type = 'cuda'
@@ -45,8 +46,9 @@ def module_name(pyro_name, param_name):
 
 
 def module_from_param_name(param_name):
-    #if param_name is not None:
+    # if param_name is not None:
     return param_name.split(module_namespace_divider)[0]
+
 
 def user_param_name(param_name):
     if module_namespace_divider in param_name:
@@ -117,6 +119,7 @@ def map_data(name, data, observer, *args, **kwargs):
 # hand off behavior to poutine if necessary?
 # for now default calls out to pyro.param -- which is handled by poutine
 
+
 def sync_module(pyro_name, nn_obj):
     assert hasattr(nn_obj, "parameters"), "module has no parameters"
     assert module_namespace_divider not in pyro_name, "improper module name, since contains %s" %\
@@ -130,6 +133,7 @@ def sync_module(pyro_name, nn_obj):
             state_dict[param_key] = param
 
     nn_obj.load_state_dict(state_dict)
+
 
 def module(pyro_name, nn_obj):  # :, *args, **kwargs):
     assert hasattr(nn_obj, "parameters"), "module has no parameters"
