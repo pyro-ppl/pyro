@@ -15,7 +15,7 @@ class AbstractInfer(pyro.distributions.Distribution):
         Virtual method to get unnormalized weighted list of posterior traces
         """
         raise NotImplementedError("inference algorithm must implement _traces")
-    
+
     @pyro.util.memoize
     def _dist(self, *args, **kwargs):
         """
@@ -39,16 +39,16 @@ class AbstractInfer(pyro.distributions.Distribution):
         """
         return self._dist(*args, **kwargs).log_pdf(val)
 
-    def log_z(self, *args, **kwargs):
-        """
-        estimate marginal probability of observations
-        """
-        traces, log_weights = self._traces(*args, **kwargs)
-        log_z = 0.0
-        # TODO parallelize
-        for tr, log_w in zip(traces, log_weights):
-            log_z = log_z + log_w
-        return log_z / len(traces)
+    # def log_z(self, *args, **kwargs):
+    #     """
+    #     estimate marginal probability of observations
+    #     """
+    #     traces, log_weights = self._traces(*args, **kwargs)
+    #     log_z = 0.0
+    #     # TODO parallelize
+    #     for tr, log_w in zip(traces, log_weights):
+    #         log_z = log_z + log_w
+    #     return log_z / len(traces)
 
 
 def lw_expectation(trace_dist, functional, num_samples):

@@ -21,26 +21,27 @@ class HMMSamplingTestCase(TestCase):
 
     def setUp(self):
 
-        # simple Gaussian-mixture HMM
+        # simple Gaussian-emission HMM
         def model():
-            ps = pyro.param("ps", Variable(torch.Tensor([[0.8], [0.3]])))
-            mu = pyro.param("mu", Variable(torch.Tensor([[-0.1], [0.9]])))
-            sigma = Variable(torch.ones(1))
+            p_latent = pyro.param("p1", Variable(torch.Tensor([[0.7], [0.3]])))
+            p_obs = pyro.param("p2", Variable(torch.Tensor([[0.9], [0.1]])))
 
             latents = [Variable(torch.ones(1))]
             observes = []
-            for t in range(5):
+            for t in range(self.model_steps):
 
                 latents.append(
                     pyro.sample("latent_{}".format(str(t)),
-                                Bernoulli(ps[latents[-1][0].long().data])))
+                                Bernoulli(torch.index_select(p_latent, 0, latents[-1].view(-1).long()))))
 
                 observes.append(
                     pyro.observe("observe_{}".format(str(t)),
-                                 DiagNormal(mu[latents[-1][0].long().data], sigma),
-                                 pyro.ones(1)))
-            return latents
+                                 Bernoulli(torch.index_select(p_obs, 0, latents[-1].view(-1).long())),
+                                 self.data[t]))
+            return torch.sum(torch.cat(latents))
 
+        self.model_steps = 3
+        self.data = [pyro.ones(1) for i in range(self.model_steps)]
         self.model = model
 
 
@@ -73,6 +74,21 @@ class NormalNormalSamplingTestCase(TestCase):
         self.guide = guide
 
 
+class SearchTest(HMMSamplingTestCase):
+
+    def test_complete(self):
+        #pdb.set_trace()
+        posterior = pyro.infer.Search(self.model)
+        posterior()
+        
+    def test_marginal(self):
+        pdb.set_trace()
+        posterior = pyro.infer.Search(self.model)
+        marginal = pyro.infer.Marginal(posterior)
+        dd = marginal._aggregate(posterior._dist())
+        print(marginal._aggregate(posterior._dist()).vs)
+
+
 class MHTest(NormalNormalSamplingTestCase):
 
     def test_mh_guide(self):
@@ -103,11 +119,4 @@ class ImportanceTest(NormalNormalSamplingTestCase):
                          prec=0.01)
         self.assertEqual(0, torch.norm(posterior_stddev - self.mu_stddev).data[0],
                          prec=0.01)
-
-
-class SearchTest(HMMSamplingTestCase):
-
-    def test_complete(self):
-        pdb.set_trace()
-        posterior = pyro.infer.Search(self.model)
-        traces, log_weights = posterior._traces()
+       

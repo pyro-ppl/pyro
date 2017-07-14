@@ -1,13 +1,13 @@
+import torch
 import pyro.distributions
 import pyro.util
 import pyro.poutine
 
 from pyro.infer.abstract_infer import AbstractInfer
+from pyro.infer.search import Search
 from pyro.infer.mh import MH
 from pyro.infer.importance import Importance
-from pyro.infer.search import Search
 from pyro.infer.kl_qp import KL_QP
-
 
 class Marginal(pyro.distributions.Distribution):
     """
@@ -29,12 +29,12 @@ class Marginal(pyro.distributions.Distribution):
             "trace histogram must be a Categorical distribution object"
         hist = dict()
         for i, tr in enumerate(trace_hist.vs[0]):
-            v = tr[0]["_RETURN"]["value"]
+            v = tr["_RETURN"]["value"]
             if v not in hist:
                 hist[v] = 0.0
             hist[v] = hist[v] + trace_hist.ps[0][i]
-        return pyro.distributions.Categorical(ps=torch.cat(list(hist.values())),
-                                              vs=[list(hist.keys())])
+        return pyro.distributions.Categorical(ps=torch.cat([vv for vv in hist.values()]),
+                                              vs=[[kk for kk in hist.keys()]])
 
     def sample(self, *args, **kwargs):
         return self._aggregate(
