@@ -105,7 +105,7 @@ class CUBO(AbstractInfer):
                 else:
                     pass
 
-            exp_cubo += torch.exp(log_r_s * self.n_cubo)
+            exp_cubo += torch.exp(log_r_s * self.n_cubo) / self.nr_particles
             grad_cubo += log_r_s
 
         exp_cubo_sum = grad_cubo.sum()
