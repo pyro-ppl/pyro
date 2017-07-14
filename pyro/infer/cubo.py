@@ -105,14 +105,14 @@ class CUBO(AbstractInfer):
                     if model_trace[name]["fn"].reparametrized:
                         # print "name",model_trace[name]
                         #cubo = cubo - log_r_max.expand_as(cubo)
-                        log_r_s += w_n[:,i] * model_trace[name]["batch_log_pdf"]
+                        log_r_s += w_n[:,i] * model_trace[name]["batch_log_pdf"] * (self.n_cubo) / self.nr_particles
 
-                        log_r_s -= w_n[:,i] * guide_trace[name]["batch_log_pdf"]
+                        log_r_s -= w_n[:,i] * guide_trace[name]["batch_log_pdf"] * (self.n_cubo) / self.nr_particles
 
                     else:
                         #pdb.set_trace()
                         #cubo = cubo - log_r_max.expand_as(log_r)
-                        log_r_s += w_n[:,i] * guide_trace[name]["batch_log_pdf"]
+                        log_r_s += w_n[:,i] * guide_trace[name]["batch_log_pdf"] * (1-self.n_cubo) / self.nr_particles
 
                 else:
                     pass
@@ -120,7 +120,7 @@ class CUBO(AbstractInfer):
 
             #exp_cubo += torch.exp(log_r_s*self.n_cubo) / self.nr_particles
 
-            exp_cubo += log_r_s * (1-self.n_cubo) / self.nr_particles
+            exp_cubo += log_r_s
 
 
 

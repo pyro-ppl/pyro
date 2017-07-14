@@ -374,7 +374,7 @@ class PoissonGammaTests(TestCase):
                 torch.optim.Adam, {
                     "lr": .0002, "betas": (
                         0.97, 0.999)}))
-        for k in range(5000):
+        for k in range(15000):
             kl_optim.step()
 #            if k%1000==0:
 #                 print "alpha_q", torch.exp(pyro.param("alpha_q_log")).data.numpy()[0]
@@ -430,7 +430,7 @@ class PoissonGammaTests(TestCase):
                 torch.optim.Adam, {
                     "lr": .0002, "betas": (
                         0.97, 0.999)}))
-        for k in range(50000):
+        for k in range(15000):
             cubo_optim.step()
 
             if k%100==0:
