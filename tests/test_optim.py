@@ -25,7 +25,7 @@ class OptimTests(TestCase):
 
     # make sure lr=0 gets propagated correctly to parameters of our choice
     def do_test_per_param_optim(self, fixed_param, free_param):
-        pyro._param_store._clear_cache()
+        pyro.get_param_store().clear()
 
         def model():
             prior_dist = DiagNormal(self.mu0, torch.pow(self.lam0, -0.5))
@@ -46,7 +46,7 @@ class OptimTests(TestCase):
             sig_q = torch.exp(log_sig_q)
             pyro.sample("mu_latent", DiagNormal(mu_q, sig_q))
 
-        def optim_params(param_name, param):
+        def optim_params(module_name, param_name):
             if param_name == fixed_param:
                 return {'lr': 0.00}
             elif param_name == free_param:
