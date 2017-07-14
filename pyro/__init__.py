@@ -15,6 +15,9 @@ _param_store = ParamStoreDict()
 _global_tensor_type = 'cpu'
 
 
+def get_param_store():
+    return _param_store
+
 def set_cuda():
     global _global_tensor_type
     _global_tensor_type = 'cuda'
@@ -34,16 +37,22 @@ def device(x):
         return x.cuda()
 
 
-mod_div = "$$$"
+module_namespace_divider = "$$$"
 
 
-def module_name(pyro_name, param):
-    return mod_div.join([pyro_name, str(id(param))])
+def module_name(pyro_name, param_name):
+    return module_namespace_divider.join([pyro_name, param_name])
 
 
 def module_from_param_name(param_name):
-    if param_name is not None:
-        return param_name.split(mod_div)[0]
+    #if param_name is not None:
+    return param_name.split(module_namespace_divider)[0]
+
+def user_param_name(param_name):
+    if module_namespace_divider in param_name:
+        return param_name.split(module_namespace_divider)[1]
+    else:
+        return param_name
 
 
 # use pyro optim class to wrap nn optim
@@ -108,24 +117,39 @@ def map_data(name, data, observer, *args, **kwargs):
 # hand off behavior to poutine if necessary?
 # for now default calls out to pyro.param -- which is handled by poutine
 
+def sync_module(pyro_name, nn_obj):
+    assert hasattr(nn_obj, "parameters"), "module has no parameters"
+    assert module_namespace_divider not in pyro_name, "improper module name, since contains %s" %\
+                                                      module_namespace_divider
+
+    state_dict = {}
+    for param_name, param in _param_store._params.items():
+        if module_namespace_divider in param_name:
+            module_name = module_from_param_name(param_name)
+            param_key = user_param_name(param_name)
+            state_dict[param_key] = param
+
+    nn_obj.load_state_dict(state_dict)
 
 def module(pyro_name, nn_obj):  # :, *args, **kwargs):
-    assert hasattr(nn_obj, "parameters")
+    assert hasattr(nn_obj, "parameters"), "module has no parameters"
 
     # cannot contain our special modifier marker
-    assert mod_div not in pyro_name
+    assert module_namespace_divider not in pyro_name, "improper module name, since contains %s" %\
+                                                      module_namespace_divider
 
     if isclass(nn_obj):
         raise NotImplementedError("Not yet supporting class constructor")
 
     # for now, we simply loop through parameters every time and marke then
-    for param in nn_obj.parameters():
+    for param_name, param in nn_obj.named_parameters():
 
         # is param a variable? Save variable inside param store
+        # XXX NOTE: this won't save persistent buffers
         if isinstance(param, Variable):
 
             # mark the object
-            pyro.param(module_name(pyro_name, param), param)
+            pyro.param(module_name(pyro_name, param_name), param)
 
     # send back object for calling forward
     # if we want to intercept somewhere else we can
