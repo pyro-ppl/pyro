@@ -63,12 +63,12 @@ class ParamStoreDict(object):
 
     # save to file
     def save(self, filename):
-        with open(filename, "w") as output_file:
+        with open(filename, "wb") as output_file:
             output_file.write(cloudpickle.dumps(self._params))
 
     # load from file
     def load(self, filename):
-        with open(filename, "r") as input_file:
+        with open(filename, "rb") as input_file:
             loaded_params = cloudpickle.loads(input_file.read())
             for param_name, param in loaded_params.items():
                 self._params[param_name] = param
