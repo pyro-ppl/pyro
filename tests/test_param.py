@@ -22,18 +22,18 @@ class ParamStoreDictTests(TestCase):
     def test_save_and_load(self):
         lin = pyro.module("mymodule", self.linear_module)
         x = Variable(torch.randn(1, 3))
-        # myparam = pyro.param("myparam", 1.234*ones(1))
+        myparam = pyro.param("myparam", Variable(1.234 * torch.ones(1), requires_grad=True))
 
-        cost = torch.sum(torch.pow(lin(x), 2.0))
+        cost = torch.sum(torch.pow(lin(x), 2.0)) * torch.pow(myparam, 4.0)
         cost.backward()
         params = list(self.linear_module.parameters())
-        # params.append(myparam)
+        params.append(myparam)
         optim = torch.optim.Adam(params, lr=.01)
-        # myparam_copy_stale = copy(pyro.param("myparam").data.numpy())
+        myparam_copy_stale = copy(pyro.param("myparam").data.numpy())
 
         optim.step()
 
-        # myparam_copy = copy(pyro.param("myparam").data.numpy())
+        myparam_copy = copy(pyro.param("myparam").data.numpy())
         param_store_params = copy(pyro.get_param_store()._params)
         param_store_param_to_name = copy(pyro.get_param_store()._param_to_name)
 
@@ -52,9 +52,9 @@ class ParamStoreDictTests(TestCase):
         pyro.sync_module("mymodule", self.linear_module2)
         self.assertTrue(modules_are_equal())
 
-        # myparam = pyro.param("myparam")
-        # self.assertFalse(myparam_copy_stale == myparam.data.numpy())
-        # self.assertTrue(myparam_copy == myparam.data.numpy())
+        myparam = pyro.param("myparam")
+        self.assertFalse(myparam_copy_stale == myparam.data.numpy())
+        self.assertTrue(myparam_copy == myparam.data.numpy())
         self.assertTrue(param_store_params.keys().sort() ==
                         pyro.get_param_store()._params.keys().sort())
         self.assertTrue(param_store_param_to_name.values().sort() ==
