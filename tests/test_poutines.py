@@ -236,17 +236,30 @@ class QueuePoutineTests(TestCase):
         self.queue.put(poutine.Trace())
 
     def test_queue_single(self):
-        f = poutine.queue(poutine.trace(self.model), queue=self.queue)
+        f = poutine.trace(poutine.queue(self.model, queue=self.queue))
         tr = f()
         for name in self.sites:
             self.assertTrue(name in tr)
 
     def test_queue_enumerate(self):
-        f = poutine.queue(poutine.trace(self.model), queue=self.queue)
+        f = poutine.trace(poutine.queue(self.model, queue=self.queue))
         trs = []
         while not self.queue.empty():
             trs.append(f())
         self.assertTrue(len(trs) == 2 ** 3)
+
+        true_latents = set()
+        for i1 in range(2):
+            for i2 in range(2):
+                for i3 in range(2):
+                    true_latents.add((i1, i2, i3))
+
+        tr_latents = set()
+        for tr in trs:
+            tr_latents.add(tuple([tr[name]["value"].view(-1).data[0] for name in tr
+                                  if tr[name]["type"] == "sample"]))
+
+        self.assertTrue(true_latents == tr_latents)
 
     def test_queue_max_tries(self):
         f = poutine.queue(self.model, queue=self.queue, max_tries=3)
@@ -255,6 +268,3 @@ class QueuePoutineTests(TestCase):
             self.assertTrue(False)
         except ValueError:
             self.assertTrue(True)
-
-    def test_queue_exhaustion(self):
-        pass

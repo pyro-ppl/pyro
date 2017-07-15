@@ -16,21 +16,6 @@ class TracePoutine(Poutine):
 
     We can also use this for visualization.
     """
-    def __init__(self, fn, *args, **kwargs):
-        """
-        Constructor
-        """
-        super(TracePoutine, self).__init__(fn, *args, **kwargs)
-        self.trace = Trace()
-
-    def __call__(self, *args, **kwargs):
-        """
-        Main logic; where the function is actually called
-        """
-        # Have to override this to change return type
-        ret = super(TracePoutine, self).__call__(*args, **kwargs)
-        return self.trace
-
     def _enter_poutine(self, *args, **kwargs):
         """
         Register the input arguments in the trace upon entry
@@ -44,15 +29,19 @@ class TracePoutine(Poutine):
         Register the return value from the function on exit
         """
         self.trace.add_return(ret_val, *args, **kwargs)
+        return self.trace
 
     def _pyro_sample(self, prev_val, name, dist, *args, **kwargs):
         """
         sample
         TODO docs
         """
+        if name in self.trace:
+            self._enter_poutine(*self.trace["_INPUT"]["args"][0],
+                                **self.trace["_INPUT"]["args"][1])
+
         val = super(TracePoutine, self)._pyro_sample(prev_val, name, dist,
                                                      *args, **kwargs)
-        # XXX not correct arguments
         self.trace.add_sample(name, val, dist, *args, **kwargs)
         return val
 
@@ -63,6 +52,10 @@ class TracePoutine(Poutine):
         Expected behavior:
         TODO
         """
+        if name in self.trace:
+            self._enter_poutine(*self.trace["_INPUT"]["args"][0],
+                                **self.trace["_INPUT"]["args"][1])
+
         # make sure the site name is unique
         val = super(TracePoutine, self)._pyro_observe(prev_val, name, fn, obs,
                                                       *args, **kwargs)
