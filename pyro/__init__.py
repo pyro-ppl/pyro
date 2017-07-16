@@ -53,8 +53,7 @@ def module_from_param_name(param_name):
 def user_param_name(param_name):
     if module_namespace_divider in param_name:
         return param_name.split(module_namespace_divider)[1]
-    else:
-        return param_name
+    return param_name
 
 
 # use pyro optim class to wrap nn optim
@@ -121,6 +120,11 @@ def map_data(name, data, observer, *args, **kwargs):
 
 
 def sync_module(pyro_name, nn_obj):
+    """
+    Takes a pytorch nn module and syncs its parameters with the param store.
+    In conjunction with the param store save() and load() functionality, this
+    allows the user to save and load nn modules
+    """
     assert hasattr(nn_obj, "parameters"), "module has no parameters"
     assert module_namespace_divider not in pyro_name, "improper module name, since contains %s" %\
                                                       module_namespace_divider
@@ -129,10 +133,13 @@ def sync_module(pyro_name, nn_obj):
     for param_name, param in _param_store._params.items():
         if module_namespace_divider in param_name:
             module_name = module_from_param_name(param_name)
-            param_key = user_param_name(param_name)
-            state_dict[param_key] = param
+            if module_name == pyro_name:
+                param_key = user_param_name(param_name)
+                state_dict[param_key] = param
 
     nn_obj.load_state_dict(state_dict)
+
+    return nn_obj
 
 
 def module(pyro_name, nn_obj):  # :, *args, **kwargs):
