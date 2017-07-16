@@ -11,8 +11,7 @@ before_install:
 
 install:
     # this will be in setup.py
-    - pip install numpy
-    - pip install scipy
+    - pip install numpy scipy cloudpickle
     # install pytorch and its dependencies
     - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
           pip install http://download.pytorch.org/whl/cu75/torch-0.1.12.post2-cp27-none-linux_x86_64.whl;

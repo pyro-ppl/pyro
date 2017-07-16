@@ -8,12 +8,14 @@ class PyroOptim(object):
     # helper to fetch the optim args if callable
     def get_optim_args(self, param):
         # if we were passed a fct, we call fct with param info
+        # arguments are (module name, param name) e.g. ('mymodule', 'bias')
         if callable(self.pt_optim_args):
 
             # get param name
-            p_mod_name = pyro.module_from_param_name(
-                pyro._param_store.param_name(param))
-            opt_dict = self.pt_optim_args(p_mod_name, param)
+            param_name = pyro._param_store.param_name(param)
+            mod_name = pyro.module_from_param_name(param_name)
+            stripped_param_name = pyro.user_param_name(param_name)
+            opt_dict = self.pt_optim_args(mod_name, stripped_param_name)
 
             # must be dictionary
             assert isinstance(
