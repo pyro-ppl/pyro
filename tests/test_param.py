@@ -37,13 +37,13 @@ class ParamStoreDictTests(TestCase):
         myparam_copy = copy(pyro.param("myparam").data.numpy())
         param_store_params = copy(pyro.get_param_store()._params)
         param_store_param_to_name = copy(pyro.get_param_store()._param_to_name)
-        self.assertTrue(len(param_store_params.keys()) == 5)
-        self.assertTrue(len(param_store_param_to_name.values()) == 5)
+        self.assertTrue(len(list(param_store_params.keys())) == 5)
+        self.assertTrue(len(list(param_store_param_to_name.values())) == 5)
 
         pyro.get_param_store().save('paramstore.unittest.out')
         pyro.get_param_store().clear()
-        self.assertTrue(len(pyro.get_param_store()._params) == 0)
-        self.assertTrue(len(pyro.get_param_store()._param_to_name) == 0)
+        self.assertTrue(len(list(pyro.get_param_store()._params)) == 0)
+        self.assertTrue(len(list(pyro.get_param_store()._param_to_name)) == 0)
 
         pyro.get_param_store().load('paramstore.unittest.out')
 
