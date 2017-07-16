@@ -16,6 +16,7 @@ from copy import copy
 class ParamStoreDictTests(TestCase):
 
     def setUp(self):
+        pyro.get_param_store().clear()
         self.linear_module = nn.Linear(3, 2)
         self.linear_module2 = nn.Linear(3, 2)
         self.linear_module3 = nn.Linear(3, 2)
