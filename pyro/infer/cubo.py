@@ -70,18 +70,15 @@ class CUBO(AbstractInfer):
             guide_traces.append(guide_trace)
 
 
-        log_weights_tensor = torch.stack(log_weights,1)
+        log_weights_tensor = torch.stack(log_weights, 1)
 
-        log_r_max = torch.max(log_weights_tensor,1)[0]
+        # max samples along first dimenaion to get c
+        log_r_max = torch.max(log_weights_tensor, 1)[0]
+
+        # w(s)
         log_r = log_weights_tensor - log_r_max.expand_as(log_weights_tensor)
 
         w_n = Variable(torch.exp(log_r * self.n_cubo).data)
-
-        # w_0 = Variable(torch.exp(log_r).data)
-        # w_0_sum = w_0.sum(1)
-        # w_0_norm = w_0 / w_0_sum.expand_as(w_0)
-        # w_0n = torch.pow(w_0_norm,self.n_cubo)
-
 
         cubo = 0.0
         exp_cubo = 0.0
@@ -106,9 +103,12 @@ class CUBO(AbstractInfer):
                     pass
 
             exp_cubo += torch.exp(log_r_s * self.n_cubo) / self.nr_particles
-            grad_cubo += log_r_s
+            grad_cubo += log_r_s #/self.nr_particles
 
-        exp_cubo_sum = grad_cubo.sum()
+        # exp_cubo_sum = grad_cubo.sum()
+        # use estimator
+        exp_cubo_sum = exp_cubo.sum()
+
         cubo = (torch.log(exp_cubo)/self.n_cubo ).sum()
 
         # accumulate parameters
