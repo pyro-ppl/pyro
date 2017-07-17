@@ -45,7 +45,6 @@ class ParamStoreDictTests(TestCase):
         pyro.get_param_store().clear()
         self.assertTrue(len(list(pyro.get_param_store()._params)) == 0)
         self.assertTrue(len(list(pyro.get_param_store()._param_to_name)) == 0)
-
         pyro.get_param_store().load('paramstore.unittest.out')
 
         def modules_are_equal():
@@ -56,7 +55,7 @@ class ParamStoreDictTests(TestCase):
             return (weights_equal and bias_equal)
 
         self.assertFalse(modules_are_equal())
-        pyro.sync_module("mymodule", self.linear_module3)
+        pyro.module("mymodule", self.linear_module3)
         self.assertTrue(modules_are_equal())
 
         myparam = pyro.param("myparam")

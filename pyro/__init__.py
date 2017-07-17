@@ -41,12 +41,11 @@ def device(x):
 module_namespace_divider = "$$$"
 
 
-def module_name(pyro_name, param_name):
+def param_cum_module_name(pyro_name, param_name):
     return module_namespace_divider.join([pyro_name, param_name])
 
 
-def module_from_param_name(param_name):
-    # if param_name is not None:
+def module_from_param_cum_module_name(param_name):
     return param_name.split(module_namespace_divider)[0]
 
 
@@ -119,9 +118,9 @@ def map_data(name, data, observer, *args, **kwargs):
 # for now default calls out to pyro.param -- which is handled by poutine
 
 
-def sync_module(pyro_name, nn_obj):
+def module(pyro_name, nn_obj):
     """
-    Takes a pytorch nn module and syncs its parameters with the param store.
+    Takes a pytorch nn module and registers its parameters with the param store.
     In conjunction with the param store save() and load() functionality, this
     allows the user to save and load nn modules
     """
@@ -129,39 +128,13 @@ def sync_module(pyro_name, nn_obj):
     assert module_namespace_divider not in pyro_name, "improper module name, since contains %s" %\
                                                       module_namespace_divider
 
-    state_dict = {}
-    for param_name, param in _param_store._params.items():
-        if module_namespace_divider in param_name:
-            module_name = module_from_param_name(param_name)
-            if module_name == pyro_name:
-                param_key = user_param_name(param_name)
-                state_dict[param_key] = param
-
-    nn_obj.load_state_dict(state_dict)
-
-    return nn_obj
-
-
-def module(pyro_name, nn_obj):  # :, *args, **kwargs):
-    assert hasattr(nn_obj, "parameters"), "module has no parameters"
-
-    # cannot contain our special modifier marker
-    assert module_namespace_divider not in pyro_name, "improper module name, since contains %s" %\
-                                                      module_namespace_divider
-
     if isclass(nn_obj):
         raise NotImplementedError("Not yet supporting class constructor")
 
-    # for now, we simply loop through parameters every time and marke then
+    state_dict = {}
     for param_name, param in nn_obj.named_parameters():
+        state_dict[param_name] = pyro.param(param_cum_module_name(pyro_name, param_name), param)
 
-        # is param a variable? Save variable inside param store
-        # XXX NOTE: this won't save persistent buffers
-        if isinstance(param, Variable):
+    nn_obj.load_state_dict(state_dict)
 
-            # mark the object
-            pyro.param(module_name(pyro_name, param_name), param)
-
-    # send back object for calling forward
-    # if we want to intercept somewhere else we can
     return nn_obj

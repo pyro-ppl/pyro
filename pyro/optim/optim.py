@@ -13,7 +13,7 @@ class PyroOptim(object):
 
             # get param name
             param_name = pyro._param_store.param_name(param)
-            mod_name = pyro.module_from_param_name(param_name)
+            mod_name = pyro.module_from_param_cum_module_name(param_name)
             stripped_param_name = pyro.user_param_name(param_name)
             opt_dict = self.pt_optim_args(mod_name, stripped_param_name)
 
