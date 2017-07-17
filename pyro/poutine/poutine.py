@@ -27,10 +27,10 @@ class Poutine(object):
             self._enter_poutine(*args, **kwargs)
 
             # run the original function overloading the fcts
-            r_val = self.orig_fct(*args, **kwargs)
+            base_r_val = self.orig_fct(*args, **kwargs)
 
             # then return the pyro global fcts to their previous state
-            self._exit_poutine(r_val, *args, **kwargs)
+            r_val = self._exit_poutine(base_r_val, *args, **kwargs)
             self._pop_stack()
 
             # send back the final val
@@ -49,7 +49,7 @@ class Poutine(object):
         """
         A teardown function called right before exit from the Poutine
         """
-        pass
+        return r_val
 
     def _dispatch(self, site_type, _ret, name, *args, **kwargs):
         """
