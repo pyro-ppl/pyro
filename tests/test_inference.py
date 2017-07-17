@@ -48,7 +48,7 @@ class NormalNormalTests(TestCase):
         self.do_elbo_test(False, 15000)
 
     def do_elbo_test(self, reparametrized, n_steps):
-        pyro._param_store._clear_cache()
+        pyro.get_param_store().clear()
 
         def model():
             prior_dist = DiagNormal(self.mu0, torch.pow(self.lam0, -0.5))
@@ -130,7 +130,7 @@ class TestFixedModelGuide(TestCase):
         self.beta_p_log_0 = 0.13 * torch.ones(1)
 
     def do_test_fixedness(self, model_fixed, guide_fixed):
-        pyro._param_store._clear_cache()
+        pyro.get_param_store().clear()
 
         def model():
             alpha_p_log = pyro.param(
@@ -212,7 +212,7 @@ class PoissonGammaTests(TestCase):
         self.log_beta_n = torch.log(self.beta_n)
 
     def test_elbo_nonreparametrized(self):
-        pyro._param_store._clear_cache()
+        pyro.get_param_store().clear()
 
         def model():
             lambda_latent = pyro.sample(
@@ -284,7 +284,7 @@ class ExponentialGammaTests(TestCase):
         self.log_beta_n = torch.log(self.beta_n)
 
     def test_elbo_nonreparametrized(self):
-        pyro._param_store._clear_cache()
+        pyro.get_param_store().clear()
 
         def model():
             lambda_latent = pyro.sample(
@@ -352,7 +352,7 @@ class BernoulliBetaTests(TestCase):
         self.log_beta_n = torch.log(self.beta_n)
 
     def test_elbo_nonreparametrized(self):
-        pyro._param_store._clear_cache()
+        pyro.get_param_store().clear()
 
         def model():
             p_latent = pyro.sample("p_latent", Beta(self.alpha0, self.beta0))
@@ -427,7 +427,7 @@ class LogNormalNormalTests(TestCase):
         self.do_elbo_test(False, 15000)
 
     def do_elbo_test(self, reparametrized, n_steps):
-        pyro._param_store._clear_cache()
+        pyro.get_param_store().clear()
 
         def model():
             mu_latent = pyro.sample(
@@ -473,7 +473,7 @@ class LogNormalNormalTests(TestCase):
         self.assertEqual(0.0, tau_error, prec=0.07)
 
     def test_elbo_with_transformed_distribution(self):
-        pyro._param_store._clear_cache()
+        pyro.get_param_store().clear()
 
         def model():
             mu_latent = pyro.sample(
