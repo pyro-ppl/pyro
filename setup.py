@@ -8,6 +8,7 @@ setup(
     install_requires=['numpy>=1.7',
                       'scipy>=0.19.0',
                       'funcy>=1.7.5',
+                      'cloudpickle>=0.3.1',
                       'torch'],
     extras_require={
         'notebooks': ['jupyter>=1.0.0'],

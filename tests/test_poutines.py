@@ -24,7 +24,7 @@ def eq(x, y, prec=1e-10):
 class NormalNormalNormalPoutineTestCase(TestCase):
 
     def setUp(self):
-        pyro._param_store._clear_cache()
+        pyro.get_param_store().clear()
 
         def model():
             latent1 = pyro.sample("latent1",
