@@ -48,9 +48,6 @@ class DiagNormal(Distribution):
         return torch.sum(log_pxs)
 
     def batch_log_pdf(self, x, batch_size=1):
-        """
-        Diagonal Normal log-likelihood
-        """
         # expand to patch size of input
         if x.dim() == 1 and self.mu.dim() == 1 and batch_size == 1:
             return self.log_pdf(x)
