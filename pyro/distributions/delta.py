@@ -20,6 +20,8 @@ class Delta(Distribution):
         super(Delta, self).__init__(*args, **kwargs)
 
     def sample(self):
+        if isinstance(self.v, Variable):
+            return self.v
         return Variable(self.v)
 
     def batch_log_pdf(self, x, batch_size=1):
