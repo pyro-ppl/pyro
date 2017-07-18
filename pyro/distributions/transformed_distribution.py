@@ -32,7 +32,7 @@ class TransformedDistribution(Distribution):
 
     def log_pdf(self, y, *args, **kwargs):
         x = self.bijector.inverse(y)
-        log_pdf_1 = self.base_dist.log_pdf(x)
+        log_pdf_1 = self.base_dist.log_pdf(x, *args, **kwargs)
         log_pdf_2 = -self.bijector.log_det_jacobian(y)
         return log_pdf_1 + log_pdf_2
 

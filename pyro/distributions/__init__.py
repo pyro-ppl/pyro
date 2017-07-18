@@ -21,6 +21,7 @@ from pyro.distributions.transformed_distribution import Bijector
 
 diagnormal = DiagNormal()
 # normal = Normal()
-# lognormal = LogNormal()
+lognormal = LogNormal()
 # uniform = Uniform()
 # poisson = Poisson()
+bernoulli = Bernoulli()

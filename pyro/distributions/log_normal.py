@@ -9,50 +9,63 @@ class LogNormal(Distribution):
     Log Normal parameterized by its mean mu and std sigma
     """
 
-    def __init__(self, mu, sigma, batch_size=1, *args, **kwargs):
+    def _sanitize_input(self, mu, sigma):
+        if mu is not None:
+            # stateless distribution
+            return mu, sigma
+        elif self.mu is not None:
+            # stateful distribution
+            return self.mu, self.sigma
+        else:
+            raise ValueError("Parameter(s) were None")
+
+    def __init__(self, mu=None, sigma=None, batch_size=1, *args, **kwargs):
         """
         Params:
           `mu` - mean
           `sigma` - root variance
         """
-        if mu.dim() != sigma.dim():
-            raise ValueError("Mu and sigma need to have the same dimensions.")
-        elif mu.dim() == 1:
-            self.mu = mu.unsqueeze(0).expand(batch_size, 0)
-            self.sigma = sigma.unsqueeze(0).expand(batch_size, 0)
-        else:
-            self.mu = mu
-            self.sigma = sigma
+        self.mu = mu
+        self.sigma = sigma
+        if mu is not None:
+            if mu.dim() != sigma.dim():
+                raise ValueError("Mu and sigma need to have the same dimensions.")
+            elif mu.dim() == 1:
+                self.mu = mu.unsqueeze(0).expand(batch_size, 0)
+                self.sigma = sigma.unsqueeze(0).expand(batch_size, 0)
         super(LogNormal, self).__init__(*args, **kwargs)
         self.reparametrized = True
 
-    def sample(self):
+    def sample(self, mu=None, sigma=None, *args, **kwargs):
         """
         Reparameterized log-normal sampler.
         """
+        _mu, _sigma = self._sanitize_input(mu, sigma)
         eps = Variable(torch.randn(1),
-                       requires_grad=False).type_as(self.mu)
-        z = self.mu + self.sigma * eps
+                       requires_grad=False).type_as(_mu)
+        z = _mu + _sigma * eps
         return torch.exp(z)
 
-    def log_pdf(self, x):
+    def log_pdf(self, x, mu=None, sigma=None, *args, **kwargs):
         """
         log-normal log-likelihood
         """
+        _mu, _sigma = self._sanitize_input(mu, sigma)
         ll_1 = Variable(torch.Tensor([-0.5 * np.log(2.0 * np.pi)]))
-        ll_2 = -torch.log(self.sigma * x)
-        ll_3 = -0.5 * torch.pow((torch.log(x) - self.mu) / self.sigma, 2.0)
+        ll_2 = -torch.log(_sigma * x)
+        ll_3 = -0.5 * torch.pow((torch.log(x) - _mu) / _sigma, 2.0)
         return ll_1 + ll_2 + ll_3
 
-    def batch_log_pdf(self, x, batch_size=1):
+    def batch_log_pdf(self, x, mu=None, sigma=None, batch_size=1, *args, **kwargs):
         """
         log-normal log-likelihood
         """
-        if x.dim() == 1 and self.mu.dim() == 1 and batch_size == 1:
+        _mu, _sigma = self._sanitize_input(mu, sigma)
+        if x.dim() == 1 and _mu.dim() == 1 and batch_size == 1:
             return self.log_pdf(x)
         elif x.dim() == 1:
             x = x.expand(batch_size, x.size(0))
         ll_1 = Variable(torch.Tensor([-0.5 * np.log(2.0 * np.pi)]).expand_as(x))
-        ll_2 = -torch.log(self.sigma * x)
-        ll_3 = -0.5 * torch.pow((torch.log(x) - self.mu) / self.sigma, 2.0)
+        ll_2 = -torch.log(_sigma * x)
+        ll_3 = -0.5 * torch.pow((torch.log(x) - _mu) / _sigma, 2.0)
         return ll_1 + ll_2 + ll_3
