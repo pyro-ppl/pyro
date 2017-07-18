@@ -56,6 +56,7 @@ class TestUniform(TestCase):
         self.assertEqual(torch_mean, self.analytic_mean, prec=0.05)
         self.assertEqual(torch_var, self.analytic_var, prec=0.05)
 
+
 class TestExponential(TestCase):
 
     def setUp(self):
@@ -376,7 +377,7 @@ class TestNormalChol(TestCase):
         self.analytic_mean = self.mu.data[0]
 
         self.g = dist.Normal_Chol(self.mu, self.L)
-        self.n_samples = 10000
+        self.n_samples = 15000
 
     def test_log_pdf(self):
         log_px_torch = self.g.log_pdf(self.test_data).data[0]
@@ -390,8 +391,9 @@ class TestNormalChol(TestCase):
                          for _ in range(self.n_samples)]
         torch_mean = np.mean(torch_samples)
         torch_var = np.var(torch_samples)
-        self.assertEqual(torch_mean, self.analytic_mean, prec=0.05)
-        self.assertEqual(torch_var, self.analytic_var, prec=0.05)
+        self.assertEqual(torch_mean, self.analytic_mean, prec=0.1)
+        self.assertEqual(torch_var, self.analytic_var, prec=0.1)
+
 
 class TestNormal(TestCase):
 
@@ -424,6 +426,7 @@ class TestNormal(TestCase):
         self.assertEqual(torch_mean, self.analytic_mean, prec=0.1)
         self.assertEqual(torch_var, self.analytic_var, prec=0.1)
 
+
 class TestDiagNormal(TestCase):
 
     def setUp(self):
@@ -436,7 +439,7 @@ class TestDiagNormal(TestCase):
 
         self.analytic_mean = self.mu.data[0]
         self.analytic_var = self.sigma.data[0] ** 2
-        self.n_samples = 10000
+        self.n_samples = 15000
 
         self.batch_mu = Variable(torch.ones(2, 50))
         self.batch_sigma = 2 * Variable(torch.ones(2, 50))
@@ -444,7 +447,6 @@ class TestDiagNormal(TestCase):
         self.batch_sigma_np = self.sigma.data.cpu().numpy()
         self.batch_test_data = Variable(torch.randn(2, 50))
         self.batch_g = dist.DiagNormal(self.batch_mu, self.batch_sigma, batch_size=1)
-
 
     def test_log_pdf(self):
         log_px_torch = self.g.log_pdf(self.test_data).data[0]
@@ -465,8 +467,9 @@ class TestDiagNormal(TestCase):
                          for _ in range(self.n_samples)]
         torch_mean = np.mean(torch_samples)
         torch_var = np.var(torch_samples)
-        self.assertEqual(torch_mean, self.analytic_mean, prec=0.05)
-        self.assertEqual(torch_var, self.analytic_var, prec=0.05)
+        self.assertEqual(torch_mean, self.analytic_mean, prec=0.1)
+        self.assertEqual(torch_var, self.analytic_var, prec=0.1)
+
 
 class TestBernoulli(TestCase):
 
