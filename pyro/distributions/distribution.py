@@ -24,5 +24,8 @@ class Distribution(object):
     def log_pdf(self, x):
         raise NotImplementedError()
 
+    def batch_log_pdf(self, x, batch_size):
+        raise NotImplementedError()
+
     def support(self):
         raise NotImplementedError("Support not supported for {}".format(str(type(self))))

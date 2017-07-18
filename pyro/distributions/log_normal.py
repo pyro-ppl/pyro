@@ -55,6 +55,3 @@ class LogNormal(Distribution):
         ll_2 = -torch.log(self.sigma * x)
         ll_3 = -0.5 * torch.pow((torch.log(x) - self.mu) / self.sigma, 2.0)
         return ll_1 + ll_2 + ll_3
-
-    def support(self):
-        raise NotImplementedError("Support not supported for continuous distributions")

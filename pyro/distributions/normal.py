@@ -15,20 +15,15 @@ class Normal(Distribution):
         Constructor.
         """
         self.dim = mu.size(0)
-        self.l_chol = Variable(torch.from_numpy(self.do_cholesky(sigma)))
-        if batch_size == 1:
-            self.mu = torch.unsqueeze(mu, 0)
-            self.sigma = torch.unsqueeze(sigma, 0)
+        if batch_size == 1 and mu.dim() == 1:
+            self.mu = torch.unsqueeze(mu, 1)
         else:
             self.mu = mu.expand(batch_size, mu.size(0))
-            self.sigma = sigma.expand(batch_size, sigma.size(0))
+        self.l_chol = Variable(torch.from_numpy(self.do_cholesky(sigma)))
         super(Normal, self).__init__(*args, **kwargs)
         self.reparametrized = True
 
     def do_cholesky(self, sigma, batch_size=1):
-        # do a cholesky decomposition
-        if batch_size != 1 and batch_size != self.bs:
-            raise ValueError("Batch sizes do not match")
         L = np.linalg.cholesky(sigma.data.cpu().numpy())
         return L
 
@@ -36,18 +31,16 @@ class Normal(Distribution):
         """
         Reparameterized Normal sampler.
         """
-        eps = Variable(torch.randn(self.mu.size()),
-                       requires_grad=False).type_as(self.mu)
-        z = self.mu + torch.mm(self.l_chol, eps.unsqueeze(1)).squeeze()
+        eps = Variable(torch.randn(self.mu.size()))
+        if eps.dim() == 1:
+            eps = eps.unsqueeze(1)
+        z = self.mu + torch.mm(self.l_chol, eps).squeeze()
         return z
 
     def log_pdf(self, x):
         """
         Normal log-likelihood
         """
-#         x_chol dims needs to be fixed since x-.self.mu dims is not nx1 right now
-#         if x.dim() == 1
-#             x = x.expand(batch_size, x.size(0))
         ll_1 = Variable(torch.Tensor([-0.5 * self.dim * np.log(2.0 * np.pi)]))
         ll_2 = -torch.sum(torch.log(torch.diag(self.l_chol)))
         x_chol = Variable(
@@ -61,6 +54,3 @@ class Normal(Distribution):
 
     def batch_log_pdf(self, x, batch_size=1):
         raise NotImplementedError()
-
-    def support(self):
-        raise NotImplementedError("Support not supported for continuous distributions")

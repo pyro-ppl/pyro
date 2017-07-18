@@ -20,6 +20,8 @@ class Delta(Distribution):
         super(Delta, self).__init__(*args, **kwargs)
 
     def sample(self):
+        if isinstance(self.v, Variable):
+            return self.v
         return Variable(self.v)
 
     def batch_log_pdf(self, x, batch_size=1):
@@ -34,4 +36,4 @@ class Delta(Distribution):
 
     def support(self):
         # univariate case
-        return iter([Variable(self.v.data.index(i)) for i in range(self.v.size(0))])
+        return (Variable(self.v.data.index(i)) for i in range(self.v.size(0)))

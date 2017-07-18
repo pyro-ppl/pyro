@@ -5,7 +5,7 @@ import pyro
 from pyro.distributions.distribution import Distribution
 
 
-def log_gamma(xx):
+def _log_gamma(xx):
     """
     quick and dirty log gamma copied from webppl
     """
@@ -42,17 +42,14 @@ class Poisson(Distribution):
             self.lam = lam.unsqueeze(0).expand(batch_size, lam.size(0))
         else:
             self.lam = lam
-        self.dim = lam.size(0)
         super(Poisson, self).__init__(*args, **kwargs)
 
     def sample(self, batch_size=1):
         """
         Poisson sampler.
         """
-        x = torch.Tensor(
-            npr.poisson(
-                lam=self.lam.data.numpy()).astype("float"))
-        return Variable(x)
+        x = npr.poisson(lam=self.lam.data.numpy()).astype("float")
+        return Variable(torch.Tensor(x))
 
     def log_pdf(self, x, batch_size=1):
         """
@@ -61,7 +58,7 @@ class Poisson(Distribution):
         """
         ll_1 = torch.sum(x * torch.log(self.lam))
         ll_2 = -torch.sum(self.lam)
-        ll_3 = -torch.sum(log_gamma(x + 1.0))
+        ll_3 = -torch.sum(_log_gamma(x + 1.0))
         return ll_1 + ll_2 + ll_3
 
     def batch_log_pdf(self, x, batch_size=1):
@@ -71,8 +68,5 @@ class Poisson(Distribution):
             x = x.expand(batch_size, x.size(0))
         ll_1 = torch.sum(x * torch.log(self.lam), 1)
         ll_2 = -torch.sum(self.lam, 1)
-        ll_3 = -torch.sum(log_gamma(x + 1.0), 1)
+        ll_3 = -torch.sum(_log_gamma(x + 1.0), 1)
         return ll_1 + ll_2 + ll_3
-
-    def support(self):
-        raise NotImplementedError("Support not supported for continuous distributions")
