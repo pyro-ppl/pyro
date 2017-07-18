@@ -435,7 +435,7 @@ class TestDiagNormal(TestCase):
         self.mu_np = self.mu.data.cpu().numpy()
         self.sigma_np = self.sigma.data.cpu().numpy()
         self.test_data = Variable(torch.randn(3))
-        self.g = dist.DiagNormal(self.mu, self.sigma)
+        self.g = dist.DiagNormal()
 
         self.analytic_mean = self.mu.data[0]
         self.analytic_var = self.sigma.data[0] ** 2
@@ -446,24 +446,26 @@ class TestDiagNormal(TestCase):
         self.batch_mu_np = self.mu.data.cpu().numpy()
         self.batch_sigma_np = self.sigma.data.cpu().numpy()
         self.batch_test_data = Variable(torch.randn(2, 50))
-        self.batch_g = dist.DiagNormal(self.batch_mu, self.batch_sigma, batch_size=1)
 
     def test_log_pdf(self):
-        log_px_torch = self.g.log_pdf(self.test_data).data[0]
+        log_px_torch = self.g.log_pdf(self.test_data, self.mu, self.sigma).data[0]
         log_px_np = spr.multivariate_normal.logpdf(self.test_data.data.cpu().numpy(),
                                                    mean=self.mu_np,
                                                    cov=self.sigma_np ** 2.0)
         self.assertEqual(log_px_torch, log_px_np, prec=1e-3)
 
     def test_batch_log_pdf(self):
-        log_px_torch = self.batch_g.batch_log_pdf(self.batch_test_data).data[0][0]
+        log_px_torch = self.g.batch_log_pdf(self.batch_test_data,
+                                                  self.batch_mu,
+                                                  self.batch_sigma).data[0][0]
         log_px_np = spr.multivariate_normal.logpdf(self.batch_test_data.data.cpu().numpy()[0],
                                                    mean=self.batch_mu_np[0],
                                                    cov=self.batch_sigma_np[0] ** 2.0)
         self.assertEqual(log_px_torch, log_px_np.sum(), prec=2e-2)
 
     def test_mean_and_var(self):
-        torch_samples = [self.g.sample().data[0]
+        print dist.diagnormal(self.mu, self.sigma)
+        torch_samples = [self.g.sample(self.mu, self.sigma).data[0]
                          for _ in range(self.n_samples)]
         torch_mean = np.mean(torch_samples)
         torch_var = np.var(torch_samples)

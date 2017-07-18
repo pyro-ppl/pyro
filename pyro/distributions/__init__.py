@@ -18,4 +18,9 @@ from pyro.distributions.delta import Delta
 from pyro.distributions.transformed_distribution import TransformedDistribution
 from pyro.distributions.transformed_distribution import AffineExp
 from pyro.distributions.transformed_distribution import Bijector
-# add your distributions here
+
+diagnormal = DiagNormal()
+normal = Normal()
+lognormal = LogNormal()
+uniform = Uniform()
+poisson = Poisson()
