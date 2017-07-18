@@ -2,40 +2,19 @@ import scipy.stats as spr
 import torch
 from torch.autograd import Variable
 from pyro.distributions.distribution import Distribution
-
-
-def log_gamma(xx):
-    """
-    quick and dirty log gamma copied from webppl
-    """
-    gamma_coeff = [
-        76.18009172947146,
-        -86.50532032941677,
-        24.01409824083091,
-        -1.231739572450155,
-        0.1208650973866179e-2,
-        -0.5395239384953e-5
-    ]
-    magic1 = 1.000000000190015
-    magic2 = 2.5066282746310005
-    x = xx - 1.0
-    t = x + 5.5
-    t = t - (x + 0.5) * torch.log(t)
-    ser = Variable(torch.ones(x.size())) * magic1
-    for c in gamma_coeff:
-        x = x + 1.0
-        ser = ser + torch.pow(x / c, -1)
-    return torch.log(ser * magic2) - t
+from pyro.util import log_gamma
 
 
 class Beta(Distribution):
     """
-    univariate beta distribution parameterized by alpha and beta
+    Univariate beta distribution parameterized by alpha and beta
     """
 
     def __init__(self, alpha, beta, batch_size=1, *args, **kwargs):
         """
-        Constructor.
+        Params:
+          `alpha` - alpha
+          `beta` - beta
         """
         if alpha.dim() != beta.dim():
             raise ValueError("Alpha and beta need to have the same dimensions.")
@@ -50,7 +29,7 @@ class Beta(Distribution):
 
     def sample(self):
         """
-        un-reparameterizeable sampler.
+        Un-reparameterizeable sampler.
         """
         x = Variable(torch.Tensor(
             [spr.beta.rvs(self.alpha.data.cpu().numpy(), self.beta.data.cpu().numpy())]))
@@ -58,7 +37,7 @@ class Beta(Distribution):
 
     def log_pdf(self, x):
         """
-        gamma log-likelihood
+        Beta log-likelihood
         """
         one = Variable(torch.ones(self.alpha.size()))
         ll_1 = (self.alpha - one) * torch.log(x)

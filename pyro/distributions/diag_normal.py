@@ -17,8 +17,6 @@ class DiagNormal(Distribution):
         elif self.mu is not None:
             # stateful distribution
             return self.mu, self.sigma
-        else:
-            raise ValueError("Mu and/or sigma had invalid values")
 
     # def __init__(self, mu=1, sigma=1, *args, **kwargs):
     #     """
@@ -37,6 +35,11 @@ class DiagNormal(Distribution):
     #     self.reparametrized = True
 
     def __init__(self, mu=None, sigma=None, *args, **kwargs):
+        """
+        Params:
+          `mu` - mean
+          `sigma` - root variance
+        """
         self.mu = mu
         self.sigma = sigma
         super(DiagNormal, self).__init__(*args, **kwargs)
@@ -61,10 +64,14 @@ class DiagNormal(Distribution):
                                  0.5 * torch.pow(((x - _mu) / _sigma), 2))
         return torch.sum(log_pxs)
 
+<<<<<<< HEAD
     def batch_log_pdf(self, x, mu, sigma, batch_size=1):
         """
         Diagonal Normal log-likelihood
         """
+=======
+    def batch_log_pdf(self, x, batch_size=1):
+>>>>>>> dist-cleanup
         # expand to patch size of input
         _mu, _sigma = self.sanitize_input(mu, sigma)
         if x.dim() == 1 and _mu.dim() == 1 and batch_size == 1:

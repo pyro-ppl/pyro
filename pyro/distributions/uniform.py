@@ -11,8 +11,9 @@ class Uniform(Distribution):
 
     def __init__(self, a, b, *args, **kwargs):
         """
-        * `low = a`,
-        * `high = b`,
+        Params:
+          `a` - low bound
+          `b` -  high bound
         """
         self.a = a
         self.b = b
@@ -27,7 +28,7 @@ class Uniform(Distribution):
 
     def log_pdf(self, x):
         """
-        Normal log-likelihood
+        Uniform log-likelihood
         """
         if x.dim() == 1:
             if x.le(self.a).data[0] or x.ge(self.b).data[0]:

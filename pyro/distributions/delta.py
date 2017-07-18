@@ -6,12 +6,13 @@ from pyro.distributions.distribution import Distribution
 
 class Delta(Distribution):
     """
-    Diagonal covariance Normal - the first distribution
+    Delta Distribution - probability of 1 at `v`
     """
 
     def __init__(self, v, batch_size=1, *args, **kwargs):
         """
-        Constructor.
+        Params:
+          `v` - value
         """
         if v.dim() == 1 and batch_size > 1:
             self.v = v.expand(v, 0)

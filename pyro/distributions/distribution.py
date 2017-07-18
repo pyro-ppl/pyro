@@ -13,6 +13,9 @@ class Distribution(object):
         pass
 
     def __call__(self, *args, **kwargs):
+        """
+        Samples on call
+        """
         return self.sample(*args, **kwargs)
 
     def sample(self, *args, **kwargs):

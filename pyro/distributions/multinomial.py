@@ -7,13 +7,13 @@ from pyro.distributions.distribution import Distribution
 class Multinomial(Distribution):
     """
     Multinomial distributino
-    ps - probabilities
-    n - num trials
     """
 
     def __init__(self, ps, n, batch_size=1, *args, **kwargs):
         """
-        Constructor.
+        Params:
+          ps - probabilities
+          n - num trials
         """
         if ps.dim() == 1 and batch_size > 1:
             self.ps = ps.unsqueeze(0).expand(batch_size, ps.size(0))

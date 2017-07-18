@@ -5,12 +5,13 @@ from pyro.distributions.distribution import Distribution
 
 class Exponential(Distribution):
     """
-    univariate exponential parameterized by lam
+    Univariate exponential parameterized by lam
     """
 
     def __init__(self, lam, batch_size=1, *args, **kwargs):
         """
-        Constructor.
+        Params:
+          `lam` - lambda
         """
         if lam.dim() == 1 and batch_size > 1:
             self.lam = lam.unsqueeze(0).expand(batch_size, lam.size(0))
