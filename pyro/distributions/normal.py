@@ -21,13 +21,9 @@ class Normal(Distribution):
             self.mu = torch.unsqueeze(mu, 1)
         else:
             self.mu = mu.expand(batch_size, mu.size(0))
-        self.l_chol = Variable(torch.from_numpy(self.do_cholesky(sigma)))
+        self.l_chol = Variable(torch.potrf(sigma.data, False))
         super(Normal, self).__init__(*args, **kwargs)
         self.reparametrized = True
-
-    def do_cholesky(self, sigma, batch_size=1):
-        L = np.linalg.cholesky(sigma.data.cpu().numpy())
-        return L
 
     def sample(self):
         """
