@@ -7,9 +7,13 @@ from torch.nn import Parameter
 import torch
 
 from pyro.util import zeros, ones
+from pyro.params import param_with_module_name
 
 # global map of params for now
 _param_store = ParamStoreDict()
+
+# used to create fully-formed param names, e.g. mymodule$$$mysubmodule.weight
+_MODULE_NAMESPACE_DIVIDER = "$$$"
 
 # set global tensor type (cpu v.gpu); cpu by default
 _global_tensor_type = 'cpu'
@@ -36,23 +40,6 @@ def device(x):
         return x.cpu()
     elif _global_tensor_type == 'cuda':
         return x.cuda()
-
-
-module_namespace_divider = "$$$"
-
-
-def param_cum_module_name(pyro_name, param_name):
-    return module_namespace_divider.join([pyro_name, param_name])
-
-
-def module_from_param_cum_module_name(param_name):
-    return param_name.split(module_namespace_divider)[0]
-
-
-def user_param_name(param_name):
-    if module_namespace_divider in param_name:
-        return param_name.split(module_namespace_divider)[1]
-    return param_name
 
 
 # use pyro optim class to wrap nn optim
@@ -125,15 +112,15 @@ def module(pyro_name, nn_obj):
     allows the user to save and load nn modules
     """
     assert hasattr(nn_obj, "parameters"), "module has no parameters"
-    assert module_namespace_divider not in pyro_name, "improper module name, since contains %s" %\
-                                                      module_namespace_divider
+    assert _MODULE_NAMESPACE_DIVIDER not in pyro_name, "improper module name, since contains %s" %\
+        _MODULE_NAMESPACE_DIVIDER
 
     if isclass(nn_obj):
         raise NotImplementedError("Not yet supporting class constructor")
 
     state_dict = {}
     for param_name, param in nn_obj.named_parameters():
-        state_dict[param_name] = pyro.param(param_cum_module_name(pyro_name, param_name), param)
+        state_dict[param_name] = pyro.param(param_with_module_name(pyro_name, param_name), param)
 
     nn_obj.load_state_dict(state_dict)
 
