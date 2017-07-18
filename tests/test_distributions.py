@@ -464,7 +464,6 @@ class TestDiagNormal(TestCase):
         self.assertEqual(log_px_torch, log_px_np.sum(), prec=2e-2)
 
     def test_mean_and_var(self):
-        print dist.diagnormal(self.mu, self.sigma)
         torch_samples = [self.g.sample(self.mu, self.sigma).data[0]
                          for _ in range(self.n_samples)]
         torch_mean = np.mean(torch_samples)

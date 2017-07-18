@@ -20,7 +20,7 @@ from pyro.distributions.transformed_distribution import AffineExp
 from pyro.distributions.transformed_distribution import Bijector
 
 diagnormal = DiagNormal()
-normal = Normal()
-lognormal = LogNormal()
-uniform = Uniform()
-poisson = Poisson()
+# normal = Normal()
+# lognormal = LogNormal()
+# uniform = Uniform()
+# poisson = Poisson()
