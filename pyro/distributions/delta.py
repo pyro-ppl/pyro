@@ -11,7 +11,8 @@ class Delta(Distribution):
 
     def __init__(self, v, batch_size=1, *args, **kwargs):
         """
-        Constructor.
+        Params:
+          `v` - value
         """
         if v.dim() == 1 and batch_size > 1:
             self.v = v.expand(v, 0)

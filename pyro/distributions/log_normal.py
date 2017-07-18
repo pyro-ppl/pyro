@@ -6,13 +6,14 @@ from pyro.distributions.distribution import Distribution
 
 class LogNormal(Distribution):
     """
-    uni-variate normal
-    parameterized by its mean mu and std sigma
+    Log Normal parameterized by its mean mu and std sigma
     """
 
     def __init__(self, mu, sigma, batch_size=1, *args, **kwargs):
         """
-        Constructor.
+        Params:
+          `mu` - mean
+          `sigma` - root variance
         """
         if mu.dim() != sigma.dim():
             raise ValueError("Mu and sigma need to have the same dimensions.")

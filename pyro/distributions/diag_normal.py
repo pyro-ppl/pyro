@@ -12,8 +12,9 @@ class DiagNormal(Distribution):
 
     def __init__(self, mu, sigma, batch_size=1, *args, **kwargs):
         """
-        Constructor.
-        Currently operates over sigma instead of log_sigma - potential problem?
+        Params:
+          `mu` - mean
+          `sigma` - root variance
         """
         # if mu sigma no batch dim, add it to mu and sigma
         if mu.dim() == 1 and batch_size > 1:

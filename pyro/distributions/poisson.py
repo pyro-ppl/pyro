@@ -13,7 +13,7 @@ class Poisson(Distribution):
 
     def __init__(self, lam, batch_size=1, *args, **kwargs):
         """
-        Constructor.
+          `lam` - rate parameter
         """
         if lam.dim() == 1 and batch_size > 1:
             self.lam = lam.unsqueeze(0).expand(batch_size, lam.size(0))

@@ -7,12 +7,14 @@ from pyro.util import log_gamma
 
 class Beta(Distribution):
     """
-    univariate beta distribution parameterized by alpha and beta
+    Univariate beta distribution parameterized by alpha and beta
     """
 
     def __init__(self, alpha, beta, batch_size=1, *args, **kwargs):
         """
-        Constructor.
+        Params:
+          `alpha` - alpha
+          `beta` - beta
         """
         if alpha.dim() != beta.dim():
             raise ValueError("Alpha and beta need to have the same dimensions.")
@@ -27,7 +29,7 @@ class Beta(Distribution):
 
     def sample(self):
         """
-        un-reparameterizeable sampler.
+        Un-reparameterizeable sampler.
         """
         x = Variable(torch.Tensor(
             [spr.beta.rvs(self.alpha.data.cpu().numpy(), self.beta.data.cpu().numpy())]))
@@ -35,7 +37,7 @@ class Beta(Distribution):
 
     def log_pdf(self, x):
         """
-        gamma log-likelihood
+        Beta log-likelihood
         """
         one = Variable(torch.ones(self.alpha.size()))
         ll_1 = (self.alpha - one) * torch.log(x)

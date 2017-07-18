@@ -13,7 +13,9 @@ class Gamma(Distribution):
 
     def __init__(self, alpha, beta, batch_size=1, *args, **kwargs):
         """
-        Constructor.
+        Params:
+          `alpha` - alpha
+          `beta` - beta
         """
         if alpha.dim() == 1 and beta.dim() == 1:
             self.alpha = alpha.expand(batch_size, 0)

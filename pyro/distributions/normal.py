@@ -12,7 +12,9 @@ class Normal(Distribution):
 
     def __init__(self, mu, sigma, batch_size=1, *args, **kwargs):
         """
-        Constructor.
+        Params:
+          `mu` - mean
+          `sigma` - root variance
         """
         self.dim = mu.size(0)
         if batch_size == 1 and mu.dim() == 1:
