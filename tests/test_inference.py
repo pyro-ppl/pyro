@@ -1,6 +1,8 @@
 import torch
 import torch.optim
 from torch.autograd import Variable
+from torch import nn as nn
+from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
@@ -402,9 +404,18 @@ class BernoulliBetaTests(TestCase):
         self.assertEqual(0.0, beta_error, prec=0.05)
 
 
+class LogNormalNormalGuide(nn.Module):
+    def __init__(self, mu_q_log_init, tau_q_log_init):
+        super(LogNormalNormalGuide, self).__init__()
+        self.mu_q_log = Parameter(mu_q_log_init)
+        self.tau_q_log = Parameter(tau_q_log_init)
+
+
 class LogNormalNormalTests(TestCase):
     def setUp(self):
         # lognormal-normal model
+        # putting some of the parameters inside of a torch module to
+        # make sure that that functionality is ok (XXX: do this somewhere else in the future)
         self.mu0 = Variable(torch.Tensor([[1.0]]))  # normal prior hyperparameter
         # normal prior hyperparameter
         self.tau0 = Variable(torch.Tensor([[1.0]]))
@@ -428,6 +439,8 @@ class LogNormalNormalTests(TestCase):
 
     def do_elbo_test(self, reparametrized, n_steps):
         pyro.get_param_store().clear()
+        pt_guide = LogNormalNormalGuide(self.log_mu_n.data + 0.17,
+                                        self.log_tau_n.data - 0.143)
 
         def model():
             mu_latent = pyro.sample(
@@ -440,12 +453,8 @@ class LogNormalNormalTests(TestCase):
             return mu_latent
 
         def guide():
-            mu_q_log = pyro.param("mu_q_log", Variable(
-                                  self.log_mu_n.data + 0.17,
-                                  requires_grad=True))
-            tau_q_log = pyro.param("tau_q_log", Variable(self.log_tau_n.data - 0.143,
-                                                         requires_grad=True))
-            mu_q, tau_q = torch.exp(mu_q_log), torch.exp(tau_q_log)
+            pyro.module("mymodule", pt_guide)
+            mu_q, tau_q = torch.exp(pt_guide.mu_q_log), torch.exp(pt_guide.tau_q_log)
             q_dist = DiagNormal(mu_q, torch.pow(tau_q, -0.5))
             q_dist.reparametrized = reparametrized
             pyro.sample("mu_latent", q_dist)
@@ -462,10 +471,10 @@ class LogNormalNormalTests(TestCase):
         # print "log_tau_n", self.log_tau_n.data.numpy()[0]
 
         mu_error = torch.abs(
-            pyro.param("mu_q_log") -
+            pyro.param("mymodule$$$mu_q_log") -
             self.log_mu_n).data.cpu().numpy()[0]
         tau_error = torch.abs(
-            pyro.param("tau_q_log") -
+            pyro.param("mymodule$$$tau_q_log") -
             self.log_tau_n).data.cpu().numpy()[0]
         # print "mu_error", mu_error
         # print "tau_error", tau_error
