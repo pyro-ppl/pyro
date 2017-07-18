@@ -37,6 +37,9 @@ class TracePoutine(Poutine):
         TODO docs
         """
         if name in self.trace:
+            # XXX temporary solution - right now, if the name appears in the trace,
+            # we assume that this was intentional and that the poutine restarted,
+            # so we should reset self.trace to be empty
             self._enter_poutine(*self.trace["_INPUT"]["args"][0],
                                 **self.trace["_INPUT"]["args"][1])
 
@@ -53,10 +56,12 @@ class TracePoutine(Poutine):
         TODO
         """
         if name in self.trace:
+            # XXX temporary solution - right now, if the name appears in the trace,
+            # we assume that this was intentional and that the poutine restarted,
+            # so we should reset self.trace to be empty
             self._enter_poutine(*self.trace["_INPUT"]["args"][0],
                                 **self.trace["_INPUT"]["args"][1])
 
-        # make sure the site name is unique
         val = super(TracePoutine, self)._pyro_observe(prev_val, name, fn, obs,
                                                       *args, **kwargs)
         self.trace.add_observe(name, val, fn, obs, *args, **kwargs)
