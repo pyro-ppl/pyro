@@ -23,7 +23,7 @@ class Uniform(Distribution):
         Reparametrized Uniform sampler.
         """
         eps = Variable(torch.rand(self.a.size()))
-        return self.a + torch.mul(eps, torch.Tensor.sub(self.b, self.a))
+        return self.a + torch.mul(eps, self.b - self.a)
 
     def log_pdf(self, x):
         """

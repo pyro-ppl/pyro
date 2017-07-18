@@ -28,8 +28,11 @@ class TestUniform(TestCase):
         self.test_data = Variable(torch.Tensor([-0.5]))
         self.batch_test_data = Variable(torch.Tensor([[1], [-2], [0.7]]))
 
+        self.analytic_mean = 0.5 * (self.a + self.b).data.cpu().numpy()[0]
+        self.analytic_var = (torch.pow(self.b - self.a, 2) / 12).data.cpu().numpy()[0]
         self.g = dist.Uniform(self.a, self.b)
         self.batch_g = dist.Uniform(self.vec_a, self.vec_b)
+        self.n_samples = 10000
 
     def test_log_pdf(self):
         log_px_torch = self.g.log_pdf(self.test_data).data[0]
@@ -45,6 +48,13 @@ class TestUniform(TestCase):
                                        scale=self.vec_range_np)
         self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
 
+    def test_mean_and_var(self):
+        torch_samples = [self.g.sample().data.cpu().numpy()
+                         for _ in range(self.n_samples)]
+        torch_mean = np.mean(torch_samples)
+        torch_var = np.var(torch_samples)
+        self.assertEqual(torch_mean, self.analytic_mean, prec=0.05)
+        self.assertEqual(torch_var, self.analytic_var, prec=0.05)
 
 class TestExponential(TestCase):
 
