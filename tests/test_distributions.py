@@ -382,7 +382,7 @@ class TestNormalChol(TestCase):
         self.analytic_var = torch.pow(self.L, 2).data[0][0]
         self.analytic_mean = self.mu.data[0]
 
-        self.g = dist.Normal_Chol(self.mu, self.L)
+        self.g = dist.NormalChol(self.mu, self.L)
         self.n_samples = 15000
 
     def test_log_pdf(self):

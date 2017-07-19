@@ -4,7 +4,7 @@ from torch.autograd import Variable
 from pyro.distributions.distribution import Distribution
 
 
-class Normal_Chol(Distribution):
+class NormalChol(Distribution):
     """
     Multi-variate normal with arbitrary covariance sigma
     parameterized by its mean and its cholesky decomposition L
@@ -19,7 +19,7 @@ class Normal_Chol(Distribution):
         self.mu = mu
         self.L = L
         self.dim = mu.size(0)
-        super(Normal_Chol, self).__init__(*args, **kwargs)
+        super(NormalChol, self).__init__(*args, **kwargs)
         self.reparametrized = True
 
     def sample(self):

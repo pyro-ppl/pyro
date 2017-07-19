@@ -5,7 +5,7 @@ from pyro.distributions.distribution import Distribution
 from pyro.distributions.diag_normal import DiagNormal
 from pyro.distributions.normal import Normal
 from pyro.distributions.log_normal import LogNormal
-from pyro.distributions.normal_chol import Normal_Chol
+from pyro.distributions.normal_chol import NormalChol
 from pyro.distributions.uniform import Uniform
 from pyro.distributions.poisson import Poisson
 from pyro.distributions.gamma import Gamma
