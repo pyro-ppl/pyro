@@ -5,12 +5,13 @@ from pyro.distributions.distribution import Distribution
 
 class Exponential(Distribution):
     """
-    univariate exponential parameterized by lam
+    Univariate exponential parameterized by lam
     """
 
     def __init__(self, lam, batch_size=1, *args, **kwargs):
         """
-        Constructor.
+        Params:
+          `lam` - lambda
         """
         if lam.dim() == 1 and batch_size > 1:
             self.lam = lam.unsqueeze(0).expand(batch_size, lam.size(0))
@@ -23,11 +24,7 @@ class Exponential(Distribution):
         """
         reparameterized sampler.
         """
-        eps = Variable(
-            torch.rand(
-                self.lam.size()),
-            requires_grad=False).type_as(
-            self.lam)
+        eps = Variable(torch.rand(self.lam.size()))
         x = -torch.log(eps) / self.lam
         return x
 
@@ -48,6 +45,3 @@ class Exponential(Distribution):
             x = x.expand(batch_size, x.size(0))
         ll = -self.lam * x + torch.log(self.lam)
         return torch.sum(ll, 1)
-
-    def support(self):
-        raise NotImplementedError("Support not supported for continuous distributions")

@@ -13,6 +13,9 @@ class Distribution(object):
         pass
 
     def __call__(self, *args, **kwargs):
+        """
+        Samples on call
+        """
         return self.sample(*args, **kwargs)
 
     def sample(self, *args, **kwargs):
@@ -22,6 +25,9 @@ class Distribution(object):
         raise NotImplementedError()
 
     def log_pdf(self, x):
+        raise NotImplementedError()
+
+    def batch_log_pdf(self, x, batch_size):
         raise NotImplementedError()
 
     def support(self):

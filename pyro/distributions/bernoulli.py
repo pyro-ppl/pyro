@@ -8,13 +8,12 @@ from pyro.distributions.distribution import Distribution
 class Bernoulli(Distribution):
     """
     Multi-variate bernoulli
-    Params:
-      ps = tensor of probabilities
     """
 
     def __init__(self, ps, batch_size=1, *args, **kwargs):
         """
-        Constructor.
+        Params:
+          ps = tensor of probabilities
         """
         if ps.dim() == 1:
             self.ps = ps.expand(batch_size, ps.size(0))
@@ -32,7 +31,7 @@ class Bernoulli(Distribution):
 
     def log_pdf(self, x, batch_size=1):
         """
-        log-likelihood
+        Bernoulli log-likelihood
         """
         x_1 = x - 1
         ps_1 = self.ps - 1

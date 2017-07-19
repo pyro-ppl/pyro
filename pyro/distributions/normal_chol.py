@@ -12,7 +12,9 @@ class Normal_Chol(Distribution):
 
     def __init__(self, mu, L, *args, **kwargs):
         """
-        Constructor.
+        Params:
+          `mu` - mean
+          `L` - cholesky decomposition matrix
         """
         self.mu = mu
         self.L = L
@@ -22,16 +24,17 @@ class Normal_Chol(Distribution):
 
     def sample(self):
         """
-        Reparameterized Normal sampler.
+        Reparameterized Normal cholesky sampler.
         """
-        eps = Variable(torch.randn(self.mu.size()),
-                       requires_grad=False).type_as(self.mu)
-        z = self.mu + torch.mm(self.L, eps.unsqueeze(1)).squeeze()
+        eps = Variable(torch.randn(self.mu.size()))
+        if eps.dim() == 1:
+            eps = eps.unsqueeze(1)
+        z = self.mu + torch.mm(self.L, eps).squeeze()
         return z
 
     def log_pdf(self, x):
         """
-        Normal log-likelihood
+        Normal cholesky log-likelihood
         """
         ll_1 = Variable(torch.Tensor([-0.5 * self.dim * np.log(2.0 * np.pi)]))
         ll_2 = -torch.sum(torch.log(torch.diag(self.L)))
@@ -46,6 +49,3 @@ class Normal_Chol(Distribution):
 
     def batch_log_pdf(self, x, batch_size=1):
         raise NotImplementedError()
-
-    def support(self):
-        raise NotImplementedError("Support not supported for continuous distributions")

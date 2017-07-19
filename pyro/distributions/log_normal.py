@@ -6,13 +6,14 @@ from pyro.distributions.distribution import Distribution
 
 class LogNormal(Distribution):
     """
-    uni-variate normal
-    parameterized by its mean mu and std sigma
+    Log Normal parameterized by its mean mu and std sigma
     """
 
     def __init__(self, mu, sigma, batch_size=1, *args, **kwargs):
         """
-        Constructor.
+        Params:
+          `mu` - mean
+          `sigma` - root variance
         """
         if mu.dim() != sigma.dim():
             raise ValueError("Mu and sigma need to have the same dimensions.")
@@ -55,6 +56,3 @@ class LogNormal(Distribution):
         ll_2 = -torch.log(self.sigma * x)
         ll_3 = -0.5 * torch.pow((torch.log(x) - self.mu) / self.sigma, 2.0)
         return ll_1 + ll_2 + ll_3
-
-    def support(self):
-        raise NotImplementedError("Support not supported for continuous distributions")

@@ -1,6 +1,8 @@
 import torch
 import torch.optim
 from torch.autograd import Variable
+from torch import nn as nn
+from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
@@ -12,6 +14,7 @@ from pyro.distributions import Bernoulli
 from pyro.distributions import Exponential
 from pyro.distributions import Poisson
 from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
+from pyro.infer.importance import Importance
 from tests.common import TestCase
 
 from pyro.infer.kl_qp import KL_QP
@@ -47,7 +50,7 @@ class NormalNormalTests(TestCase):
         self.do_elbo_test(False, 15000)
 
     def do_elbo_test(self, reparametrized, n_steps):
-        pyro._param_store._clear_cache()
+        pyro.get_param_store().clear()
 
         def model():
             prior_dist = DiagNormal(self.mu0, torch.pow(self.lam0, -0.5))
@@ -86,8 +89,8 @@ class NormalNormalTests(TestCase):
                 self.analytic_log_sig_n -
                 pyro.param("log_sig_q"),
                 2.0))
-        self.assertEqual(0.0, mu_error.data.cpu().numpy()[0], prec=0.02)
-        self.assertEqual(0.0, log_sig_error.data.cpu().numpy()[0], prec=0.02)
+        self.assertEqual(0.0, mu_error.data.cpu().numpy()[0], prec=0.05)
+        self.assertEqual(0.0, log_sig_error.data.cpu().numpy()[0], prec=0.05)
 
 # THIS TEST IS BROKEN BECAUSE OF EXPECTATION/BATCH DIMENSION ISSUES
 #     def test_importance_sampling(self):
@@ -129,7 +132,7 @@ class TestFixedModelGuide(TestCase):
         self.beta_p_log_0 = 0.13 * torch.ones(1)
 
     def do_test_fixedness(self, model_fixed, guide_fixed):
-        pyro._param_store._clear_cache()
+        pyro.get_param_store().clear()
 
         def model():
             alpha_p_log = pyro.param(
@@ -211,7 +214,7 @@ class PoissonGammaTests(TestCase):
         self.log_beta_n = torch.log(self.beta_n)
 
     def test_elbo_nonreparametrized(self):
-        pyro._param_store._clear_cache()
+        pyro.get_param_store().clear()
 
         def model():
             lambda_latent = pyro.sample(
@@ -283,7 +286,7 @@ class ExponentialGammaTests(TestCase):
         self.log_beta_n = torch.log(self.beta_n)
 
     def test_elbo_nonreparametrized(self):
-        pyro._param_store._clear_cache()
+        pyro.get_param_store().clear()
 
         def model():
             lambda_latent = pyro.sample(
@@ -351,7 +354,7 @@ class BernoulliBetaTests(TestCase):
         self.log_beta_n = torch.log(self.beta_n)
 
     def test_elbo_nonreparametrized(self):
-        pyro._param_store._clear_cache()
+        pyro.get_param_store().clear()
 
         def model():
             p_latent = pyro.sample("p_latent", Beta(self.alpha0, self.beta0))
@@ -401,9 +404,18 @@ class BernoulliBetaTests(TestCase):
         self.assertEqual(0.0, beta_error, prec=0.05)
 
 
+class LogNormalNormalGuide(nn.Module):
+    def __init__(self, mu_q_log_init, tau_q_log_init):
+        super(LogNormalNormalGuide, self).__init__()
+        self.mu_q_log = Parameter(mu_q_log_init)
+        self.tau_q_log = Parameter(tau_q_log_init)
+
+
 class LogNormalNormalTests(TestCase):
     def setUp(self):
         # lognormal-normal model
+        # putting some of the parameters inside of a torch module to
+        # make sure that that functionality is ok (XXX: do this somewhere else in the future)
         self.mu0 = Variable(torch.Tensor([[1.0]]))  # normal prior hyperparameter
         # normal prior hyperparameter
         self.tau0 = Variable(torch.Tensor([[1.0]]))
@@ -426,7 +438,9 @@ class LogNormalNormalTests(TestCase):
         self.do_elbo_test(False, 15000)
 
     def do_elbo_test(self, reparametrized, n_steps):
-        pyro._param_store._clear_cache()
+        pyro.get_param_store().clear()
+        pt_guide = LogNormalNormalGuide(self.log_mu_n.data + 0.17,
+                                        self.log_tau_n.data - 0.143)
 
         def model():
             mu_latent = pyro.sample(
@@ -439,12 +453,8 @@ class LogNormalNormalTests(TestCase):
             return mu_latent
 
         def guide():
-            mu_q_log = pyro.param("mu_q_log", Variable(
-                                  self.log_mu_n.data + 0.17,
-                                  requires_grad=True))
-            tau_q_log = pyro.param("tau_q_log", Variable(self.log_tau_n.data - 0.143,
-                                                         requires_grad=True))
-            mu_q, tau_q = torch.exp(mu_q_log), torch.exp(tau_q_log)
+            pyro.module("mymodule", pt_guide)
+            mu_q, tau_q = torch.exp(pt_guide.mu_q_log), torch.exp(pt_guide.tau_q_log)
             q_dist = DiagNormal(mu_q, torch.pow(tau_q, -0.5))
             q_dist.reparametrized = reparametrized
             pyro.sample("mu_latent", q_dist)
@@ -461,10 +471,10 @@ class LogNormalNormalTests(TestCase):
         # print "log_tau_n", self.log_tau_n.data.numpy()[0]
 
         mu_error = torch.abs(
-            pyro.param("mu_q_log") -
+            pyro.param("mymodule$$$mu_q_log") -
             self.log_mu_n).data.cpu().numpy()[0]
         tau_error = torch.abs(
-            pyro.param("tau_q_log") -
+            pyro.param("mymodule$$$tau_q_log") -
             self.log_tau_n).data.cpu().numpy()[0]
         # print "mu_error", mu_error
         # print "tau_error", tau_error
@@ -472,7 +482,7 @@ class LogNormalNormalTests(TestCase):
         self.assertEqual(0.0, tau_error, prec=0.07)
 
     def test_elbo_with_transformed_distribution(self):
-        pyro._param_store._clear_cache()
+        pyro.get_param_store().clear()
 
         def model():
             mu_latent = pyro.sample(
