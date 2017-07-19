@@ -19,6 +19,7 @@ def zero_grads(tensors):
                 data = p.grad.data
                 p.grad = Variable(data.new().resize_as_(data).zero_())
 
+
 class KL_QP(AbstractInfer):
     """
     A new, Trace and Poutine-based implementation of SVI
