@@ -1,3 +1,4 @@
+import random
 import torch
 from torch.autograd import Variable
 
@@ -35,6 +36,7 @@ class MH(AbstractInfer):
         t = 0
         i = 0
         while t < self.burn + self.lag * self.samples:
+            print(i, t)
             i += 1
             # q(z' | z)
             new_guide_trace = poutine.block(
@@ -82,20 +84,14 @@ def hmc_proposal(model, sites=None):
     return _fn
 
 
-def single_site_proposal(model, name=None):
+def single_site_proposal(model):
     def _fn(tr, *args, **kwargs):
-        if name is None:
-            name = itertools.randomchoice(
-                [s for s in tr.keys() if tr[s]["type"] == "sample"])
-        new_site = propose(tr[name])
-        new_tr = tr.copy()
-        new_val = pyro.sample(name, new_tr[name]["fn"],
-                              *new_tr[name]["args"][0],
-                              **new_tr[name]["args"][1])
-        new_tr[name] = new_site
-        new_tr = poutine.trace(
-            poutine.replay(model, new_tr, sites=parents(tr, name)))(*args, **kwargs)
-        return new_tr
+        choice_name = random.choice(
+            [s for s in tr.keys() if tr[s]["type"] == "sample"])
+        return pyro.sample(choice_name,
+                           tr[choice_name]["fn"],
+                           *tr[choice_name]["args"][0],
+                           **tr[choice_name]["args"][1])
     return _fn
 
 
@@ -112,7 +108,7 @@ class HMC(MH):
 class SingleSiteMH(MH):
     def __init__(self, model, **kwargs):
         super(SingleSiteMH, self).__init__(
-            model, guide=None, proposal=single_site_guide(model), **kwargs)
+            model, guide=None, proposal=single_site_proposal(model), **kwargs)
 
 
 # class MixedHMCMH(MH):
