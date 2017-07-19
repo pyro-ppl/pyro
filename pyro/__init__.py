@@ -122,6 +122,22 @@ def module(pyro_name, nn_obj):
     for param_name, param in nn_obj.named_parameters():
         state_dict[param_name] = pyro.param(param_with_module_name(pyro_name, param_name), param)
 
-    nn_obj.load_state_dict(state_dict)
+    current_nn_state = nn_obj.state_dict()
+    for name, param in state_dict.items():
+        if name not in current_nn_state:
+            raise KeyError('unexpected key "{}" in state_dict'.format(name))
+        if isinstance(param, Parameter):
+            # backwards compatibility for serialized parameters
+            param = param.data
+
+        # only copy if the param has actually changed
+        # Note: apart from the following line, the rest of this code
+        # logic is borrowed from torch.nn.Module.load_state_dict
+        if id(param) != id(current_nn_state[name]):
+            current_nn_state[name].copy_(param)
+
+    missing = set(current_nn_state.keys()) - set(state_dict.keys())
+    if len(missing) > 0:
+        raise KeyError('missing keys in state_dict: "{}"'.format(missing))
 
     return nn_obj
