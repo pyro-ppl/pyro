@@ -9,6 +9,7 @@ from pyro.infer.mh import MH
 from pyro.infer.importance import Importance
 from pyro.infer.kl_qp import KL_QP
 
+
 class Marginal(pyro.distributions.Distribution):
     """
     Marginal histogram

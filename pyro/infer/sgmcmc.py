@@ -4,6 +4,7 @@ from torch.autograd import Variable
 import pyro
 import pyro.poutine as poutine
 
+
 class SGMCMC(pyro.infer.abstract_infer.AbstractInfer):
     """
     sketch of stochastic gradient MCMC
@@ -25,7 +26,7 @@ class SGMCMC(pyro.infer.abstract_infer.AbstractInfer):
         for i in range(num_samples):
             tr = poutine.trace(poutine.replay(self.model, tr))(*args, **kwargs)
             logp = tr.log_pdf()
-            tr_samples = [tr[name]["value"] for name in tr.keys() \
+            tr_samples = [tr[name]["value"] for name in tr.keys()
                           if tr[name]["type"] == "param"]
             autograd.backward(tr_samples, logp)
             self.optimizer.step(tr_samples)

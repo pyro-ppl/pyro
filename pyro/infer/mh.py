@@ -51,11 +51,10 @@ class MH(AbstractInfer):
                                                                   *args, **kwargs)
             # p(x, z') q(z' | z) / p(x, z) q(z | z')
             logr = new_model_trace.log_pdf() + new_guide_trace.log_pdf() - \
-                   old_model_trace.log_pdf() - old_guide_trace.log_pdf()
+                old_model_trace.log_pdf() - old_guide_trace.log_pdf()
             rnd = pyro.sample("mh_step_{}".format(i),
                               Uniform(pyro.zeros(1), pyro.ones(1)))
 
-            #print(i, t, torch.log(rnd).data[0], logr.data[0])
             if torch.log(rnd).data[0] < logr.data[0]:
                 # accept
                 t += 1
@@ -71,19 +70,6 @@ class MH(AbstractInfer):
 # MH subclasses and helpers
 ##############################################
 
-def hmc_proposal(model, sites=None):
-    def _fn(tr, *args, **kwargs):
-        for i in range(steps):
-            tr = poutine.block(poutine.trace(poutine.replay(model, tr, sites=sites)))(*args, **kwargs)
-            logp = tr.log_pdf()
-            samples = [tr[name]["value"] for name in tr.keys() \
-                       if tr[name]["type"] == "sample"]
-            autograd.backward(samples, logp)
-            optimizer.step(samples)
-        return tr
-    return _fn
-
-
 def single_site_proposal(model):
     def _fn(tr, *args, **kwargs):
         choice_name = random.choice(
@@ -95,22 +81,37 @@ def single_site_proposal(model):
     return _fn
 
 
-# def mixture_guide(guides):
-#     return lambda *args, **kwargs: guides[pyro.sample(gensym(), discrete, guides, ones())](*args, **kwargs)
-
-
-class HMC(MH):
-    def __init__(self, model, **kwargs):
-        super(HMC, self).__init__(
-            model, guide=None, proposal=hmc_guide(model), **kwargs)
-
-
 class SingleSiteMH(MH):
     def __init__(self, model, **kwargs):
         super(SingleSiteMH, self).__init__(
             model, guide=None, proposal=single_site_proposal(model), **kwargs)
 
 
+# def hmc_proposal(model, sites=None):
+#     def _fn(tr, *args, **kwargs):
+#         for i in range(steps):
+#             tr = poutine.block(
+#                 poutine.trace(poutine.replay(model, tr, sites=sites)))(
+#                     *args, **kwargs)
+#             logp = tr.log_pdf()
+#             samples = [tr[name]["value"] for name in tr.keys() \
+#                        if tr[name]["type"] == "sample"]
+#             autograd.backward(samples, logp)
+#             optimizer.step(samples)
+#         return tr
+#     return _fn
+#
+#
+# class HMC(MH):
+#     def __init__(self, model, **kwargs):
+#         super(HMC, self).__init__(
+#             model, guide=None, proposal=hmc_guide(model), **kwargs)
+#
+#
+# def mixture_guide(guides):
+#     return lambda *args, **kwargs: guides[pyro.sample(gensym(), discrete, guides, ones())](*args, **kwargs)
+#
+#
 # class MixedHMCMH(MH):
 #     def __init__(self, model):
 #         proposal = mixture_guide([hmc_proposal(model),

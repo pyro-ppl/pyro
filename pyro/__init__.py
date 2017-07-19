@@ -8,7 +8,6 @@ import torch
 
 from pyro import distributions
 from pyro import infer
-from pyro import optim
 from pyro import poutine
 from pyro import nn
 from pyro import params

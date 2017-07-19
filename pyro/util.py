@@ -61,6 +61,7 @@ def log_sum_exp(vecs):
         return ret.view(-1)
     return ret
 
+
 def zero_grads(tensors):
     """
     Sets gradients of list of Variables to zero in place

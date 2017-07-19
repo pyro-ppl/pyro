@@ -77,12 +77,12 @@ class NormalNormalSamplingTestCase(TestCase):
 class SearchTest(HMMSamplingTestCase):
 
     def test_complete(self):
-        #pdb.set_trace()
+        # pdb.set_trace()
         posterior = pyro.infer.Search(self.model)
         posterior()
-        
+
     def test_marginal(self):
-        pdb.set_trace()
+        # pdb.set_trace()
         posterior = pyro.infer.Search(self.model)
         marginal = pyro.infer.Marginal(posterior)
         dd = marginal._aggregate(posterior._dist())
@@ -125,7 +125,7 @@ class ImportanceTest(NormalNormalSamplingTestCase):
                          prec=0.01)
         self.assertEqual(0, torch.norm(posterior_stddev - self.mu_stddev).data[0],
                          prec=0.1)
-       
+
     def test_importance_prior(self):
         posterior = pyro.infer.Importance(self.model, guide=None, samples=2000)
         posterior_samples = [posterior()[0][0]["mu"]["value"] for i in range(500)]
@@ -135,4 +135,3 @@ class ImportanceTest(NormalNormalSamplingTestCase):
                          prec=0.01)
         self.assertEqual(0, torch.norm(posterior_stddev - self.mu_stddev).data[0],
                          prec=0.1)
-       
