@@ -70,6 +70,7 @@ def log_gamma(xx):
         ser = ser + torch.pow(x / c, -1)
     return torch.log(ser * magic2) - t
 
+
 def to_one_hot(x, ps):
     batch_size = x.size(0)
     classes = ps.size(1)

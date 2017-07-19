@@ -5,6 +5,7 @@ import itertools
 import numpy as np
 from pyro.util import to_one_hot
 
+
 class Categorical(Distribution):
     """
     Categorical is a specialized version of multinomial where n = 1
@@ -77,7 +78,7 @@ class Categorical(Distribution):
             return to_one_hot(sample, _ps)
         return sample
 
-    def batch_log_pdf(self,x, ps=None, vs=None, one_hot=True, batch_size=1, *args, **kwargs):
+    def batch_log_pdf(self, x, ps=None, vs=None, one_hot=True, batch_size=1, *args, **kwargs):
         _ps, _vs, _one_hot = self._sanitize_input(ps, vs, one_hot)
         _vs = self._process_v(_vs)
         _ps, _vs = self._process_p(_ps, _vs, batch_size)

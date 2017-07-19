@@ -20,7 +20,7 @@ class DiagNormal(Distribution):
         else:
             raise ValueError("Parameter(s) were None")
 
-    def __init__(self, mu=None, sigma=None, *args, **kwargs):
+    def __init__(self, mu=None, sigma=None, batch_size=1, *args, **kwargs):
         """
         Constructor.
         Currently operates over sigma instead of log_sigma - potential problem?

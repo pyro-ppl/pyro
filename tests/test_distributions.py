@@ -117,7 +117,8 @@ class TestGamma(TestCase):
         self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
 
     def test_batch_log_pdf(self):
-        log_px_torch = dist.gamma.batch_log_pdf(self.batch_test_data,
+        log_px_torch = dist.gamma.batch_log_pdf(
+            self.batch_test_data,
             self.batch_alpha,
             self.batch_beta).data[0]
         log_px_np = spr.gamma.logpdf(
@@ -156,7 +157,7 @@ class TestMultinomial(TestCase):
         self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
 
     def test_batch_log_pdf(self):
-        log_px_torch = dist.multinomial.batch_log_pdf(self.batch_test_data, 
+        log_px_torch = dist.multinomial.batch_log_pdf(self.batch_test_data,
                                                       self.batch_ps, self.batch_n).data.numpy()
         log_px_np0 = float(spr.multinomial.logpmf(np.array([2, 4, 2]), 8, self.ps.data.numpy()))
         log_px_np1 = float(spr.multinomial.logpmf(np.array([1, 4, 3]), 8, np.array([0.2, 0.4, 0.4])))
@@ -193,7 +194,7 @@ class TestCategorical(TestCase):
         self.d_vs_tup = (('a', 'b', 'c'), ('d', 'e', 'f'))
         self.d_test_data = Variable(torch.Tensor([[0], [5]]))
         self.d_v_test_data = [['a'], ['f']]
-        
+
         self.n_samples = 50000
 
         with open('tests/test_data/support_categorical.json') as data_file:
@@ -223,7 +224,8 @@ class TestCategorical(TestCase):
         self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
 
     def test_mean_and_var(self):
-        torch_samples = [dist.categorical(self.ps, one_hot=False, batch_size=1).data.numpy() for _ in range(self.n_samples)]
+        torch_samples = [dist.categorical(self.ps, one_hot=False, batch_size=1).data.numpy()
+                         for _ in range(self.n_samples)]
         _, counts = np.unique(torch_samples, return_counts=True)
         exp_ = float(counts[0]) / self.n_samples
         torch_var = float(counts[0]) * np.power(0.1 * (0 - np.mean(torch_samples)), 2)
@@ -244,7 +246,7 @@ class TestCategorical(TestCase):
                                                       self.d_ps, self.d_vs_arr).data[0][0]
         log_px_np = float(spr.multinomial.logpmf(np.array([1, 0, 0]), 1, self.d_ps[0].data.numpy()))
         log_px_torch2 = dist.categorical.batch_log_pdf(self.d_v_test_data,
-                                                      self.d_ps, self.d_vs_arr).data[1][0]
+                                                       self.d_ps, self.d_vs_arr).data[1][0]
         log_px_np2 = float(spr.multinomial.logpmf(np.array([0, 0, 1]), 1, self.d_ps[1].data.numpy()))
         self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
         self.assertEqual(log_px_torch2, log_px_np2, prec=1e-4)
@@ -446,8 +448,8 @@ class TestDiagNormal(TestCase):
 
     def test_batch_log_pdf(self):
         log_px_torch = dist.diagnormal.batch_log_pdf(self.batch_test_data,
-                                                  self.batch_mu,
-                                                  self.batch_sigma).data[0][0]
+                                                     self.batch_mu,
+                                                     self.batch_sigma).data[0][0]
         log_px_np = spr.multivariate_normal.logpdf(self.batch_test_data.data.cpu().numpy()[0],
                                                    mean=self.batch_mu_np[0],
                                                    cov=self.batch_sigma_np[0] ** 2.0)
@@ -541,7 +543,8 @@ class TestLogNormal(TestCase):
         self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
 
     def test_batch_log_pdf(self):
-        log_px_torch = dist.lognormal.batch_log_pdf(self.batch_test_data,
+        log_px_torch = dist.lognormal.batch_log_pdf(
+            self.batch_test_data,
             self.batch_mu,
             self.batch_sigma).data[0]
         log_px_np = spr.lognorm.logpdf(
