@@ -12,8 +12,9 @@ class DiagNormal(Distribution):
 
     def __init__(self, mu, sigma, batch_size=1, *args, **kwargs):
         """
-        Constructor.
-        Currently operates over sigma instead of log_sigma - potential problem?
+        Params:
+          `mu` - mean
+          `sigma` - root variance
         """
         # if mu sigma no batch dim, add it to mu and sigma
         if mu.dim() == 1 and batch_size > 1:
@@ -33,8 +34,7 @@ class DiagNormal(Distribution):
         if batch_size != 1 and batch_size != self.bs:
             raise ValueError("Batch sizes do not match")
 
-        eps = Variable(torch.randn(self.mu.size()),  # .type_as(self.mu),
-                       requires_grad=False)  # .type_as(self.mu)
+        eps = Variable(torch.randn(self.mu.size()))
         z = self.mu + eps * self.sigma
         return z
 
@@ -49,9 +49,6 @@ class DiagNormal(Distribution):
         return torch.sum(log_pxs)
 
     def batch_log_pdf(self, x, batch_size=1):
-        """
-        Diagonal Normal log-likelihood
-        """
         # expand to patch size of input
         if x.dim() == 1 and self.mu.dim() == 1 and batch_size == 1:
             return self.log_pdf(x)
@@ -62,6 +59,3 @@ class DiagNormal(Distribution):
                                  Variable(torch.ones(self.sigma.size())))),
                                  0.5 * torch.pow(((x - self.mu) / self.sigma), 2))
         return torch.sum(log_pxs, 1)
-
-    def support(self):
-        raise NotImplementedError("Support not supported for continuous distributions")

@@ -6,17 +6,13 @@ import numpy as np
 
 
 def _to_one_hot(x, ps):
-    # batch_class_raw = Variable(torch.LongTensor(batch_size,1))
-
     batch_size = x.size(0)
     classes = ps.size(1)
     # create an empty array for one-hots
     batch_one_hot = torch.zeros(batch_size, classes)
-
     # this operation writes ones where needed
     batch_one_hot.scatter_(1, x.data.view(-1, 1), 1)
 
-    # this operation turns the one hot tensor again into a Variable
     return Variable(batch_one_hot)
 
 
@@ -28,10 +24,11 @@ class Categorical(Distribution):
     def __init__(self, ps, vs=None, one_hot=True, batch_size=1, *args, **kwargs):
         """
         Instantiates a discrete distribution.
-        vs - tuple, list, numpy array, Variable, or torch tensor of values
-        ps - torch tensor of probabilities (must be same size as `vs`)
-        one_hot - return one-hot samples (when `vs` is None)
-        batch_size - expand ps and vs by a batch dimension
+        Params:
+          vs - tuple, list, numpy array, Variable, or torch tensor of values
+          ps - torch tensor of probabilities (must be same size as `vs`)
+          one_hot - return one-hot samples (when `vs` is None)
+          batch_size - expand ps and vs by a batch dimension
         """
         if vs is not None:
             if isinstance(vs, tuple):
