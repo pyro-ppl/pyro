@@ -54,18 +54,16 @@ class NormalNormalSamplingTestCase(TestCase):
         def model():
             mu = pyro.sample("mu", DiagNormal(Variable(torch.zeros(1)),
                                               Variable(torch.ones(1))))
-            xd = DiagNormal(mu, Variable(torch.ones(1)))
-            xs = pyro.map_data("aa", self.data,
-                               lambda i, x_i: pyro.observe("x{}".format(i), xd, x_i))
+            xd = DiagNormal(mu, Variable(torch.ones(1)), batch_size=50)
+            xs = pyro.observe("xs", xd, self.data)
             return xs
 
         def guide():
-            pyro.map_data("aa", self.data, lambda i, x_i: None)
             return pyro.sample("mu", DiagNormal(Variable(torch.zeros(1)),
                                                 Variable(torch.ones(1))))
 
         # data
-        self.data = [Variable(torch.zeros(1)) for i in range(50)]
+        self.data = Variable(torch.zeros(50))
         self.mu_mean = Variable(torch.zeros(1))
         self.mu_stddev = torch.sqrt(Variable(torch.ones(1)) / 51.0)
 
