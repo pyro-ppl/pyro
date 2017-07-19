@@ -7,6 +7,7 @@ from .block_poutine import BlockPoutine
 from .trace_poutine import TracePoutine
 from .replay_poutine import ReplayPoutine
 from .queue_poutine import QueuePoutine
+from .viz_poutine import VizPoutine
 
 
 ############################################
@@ -24,6 +25,13 @@ def trace(fn):
     """
     def _fn(*args, **kwargs):
         p = TracePoutine(fn)
+        return p(*args, **kwargs)
+    return _fn
+
+
+def viz(fn, output_file):
+    def _fn(*args, **kwargs):
+        p = VizPoutine(fn, output_file)
         return p(*args, **kwargs)
     return _fn
 
