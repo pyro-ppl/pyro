@@ -8,7 +8,7 @@ from pyro.distributions import DiagNormal
 from pyro.distributions import Bernoulli
 
 from pyro.infer.abstract_infer import LikelihoodWeighting, lw_expectation
-from pyro.infer.importance_sampling import ImportanceSampling
+from pyro.infer.importance import Importance
 from pyro.infer.kl_qp import KL_QP
 
 import torchvision.datasets as dset

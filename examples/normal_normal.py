@@ -8,7 +8,7 @@ import pyro
 from pyro.distributions import DiagNormal
 
 from pyro.infer.abstract_infer import LikelihoodWeighting, lw_expectation
-from pyro.infer.importance_sampling import ImportanceSampling
+from pyro.infer.importance import Importance
 from pyro.infer.kl_qp import KL_QP
 
 
@@ -19,11 +19,11 @@ def model():
     x_dist = DiagNormal(latent, Variable(torch.ones(1, 1)))
     x = pyro.observe("obs", x_dist, Variable(torch.ones(1, 1)))
     return latent
-
+#
 # now let's try inference
 infer = LikelihoodWeighting(model)
-
-exp = lw_expectation(infer, lambda x: x, 100)
+#
+exp = lw_expectation(infer, lambda x: x, 101)
 print(exp)
 
 # and try importance!
@@ -34,7 +34,7 @@ def guide():
                                     5 * Variable(torch.ones(1, 1))))
     x_dist = DiagNormal(latent, Variable(torch.ones(1, 1)))
 
-infer = ImportanceSampling(model, guide)
+infer = Importance(model, guide)
 
 exp = lw_expectation(infer, lambda x: x, 100)
 print(exp)

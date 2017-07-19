@@ -5,6 +5,7 @@ from torch.autograd import Variable
 from pyro.infer.kl_qp import KL_QP
 from pyro.infer.abstract_infer import lw_expectation
 from pyro.distributions import DiagNormal, Normal
+from pyro.util import ng_zeros, ng_ones
 from torch import nn
 
 import torch
@@ -91,8 +92,8 @@ def model(data):
     decoder = pyro.module("decoder", pt_decode)
 
     # sample from prior
-    z_mu, z_sigma = pyro.ng_zeros(
-        [data.size(0), 20]), pyro.ng_ones([data.size(0), 20])
+    z_mu, z_sigma = ng_zeros(
+        [data.size(0), 20]), ng_ones([data.size(0), 20])
     # Variable(torch.zeros([data.size(0), 20])), Variable(torch.ones([data.size(0), 20]))
 
     # sample (retrieve value set by the guide)

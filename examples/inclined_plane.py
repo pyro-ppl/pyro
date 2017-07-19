@@ -89,16 +89,16 @@ def guide(observed_data):
 
 # do variational inference using KL_QP
 print("doing inference with simulated data")
-verbose = False
+verbose = True
 n_steps = 3001
 kl_optim = KL_QP(model, guide, pyro.optim(optim.Adam, {"lr": 0.003, "betas": (0.93, 0.993)}))
 for step in range(n_steps):
     loss = kl_optim.step(observed_data)
     if step % 100 == 0:
         if verbose:
-            print("[epoch %d] mean_mu: %.3f" % (step, pyro.param("mean_mu").data[0, 0]))
+            print("[epoch %d] mean_mu: %.3f" % (step, pyro.param("mean_mu").data[0]))
             print("[epoch %d] sigma_mu: %.3f" % (step,
-                                                 torch.exp(pyro.param("log_sigma_mu")).data[0, 0]))
+                                                 torch.exp(pyro.param("log_sigma_mu")).data[0]))
         else:
             print(".", end='')
         sys.stdout.flush()
