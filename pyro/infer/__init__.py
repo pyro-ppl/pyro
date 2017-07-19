@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 import pyro.distributions
 import pyro.util
 import pyro.poutine
@@ -28,14 +29,24 @@ class Marginal(pyro.distributions.Distribution):
         """
         assert isinstance(trace_hist, pyro.distributions.Categorical), \
             "trace histogram must be a Categorical distribution object"
-        hist = dict()
-        for i, tr in enumerate(trace_hist.vs[0]):
-            v = tr["_RETURN"]["value"]
-            if v not in hist:
-                hist[v] = 0.0
-            hist[v] = hist[v] + trace_hist.ps[0][i]
-        return pyro.distributions.Categorical(ps=torch.cat([vv for vv in hist.values()]),
-                                              vs=[[kk for kk in hist.keys()]])
+        if isinstance(trace_hist.vs[0]["_RETURN"]["value"],
+                      (torch.autograd.Variable, torch.Tensor, np.ndarray)):
+            ps = []
+            vs = []
+            for i, tr in enumerate(trace_hist.vs[0]):
+                ps.append(trace_hist.ps[0][i])
+                vs.append(tr["_RETURN"]["value"])
+            hist = pyro.util.tensor_histogram(ps, vs)
+        else:
+            hist1 = dict()
+            for i, tr in enumerate(trace_hist.vs[0]):
+                v = tr["_RETURN"]["value"]
+                if v not in hist:
+                    hist1[v] = 0.0
+                hist1[v] = hist1[v] + trace_hist.ps[0][i]
+            hist = {"ps": torch.cat([vv for vv in hist.values()]),
+                    "vs": [[kk for kk in hist.keys()]]}
+        return pyro.distributions.Categorical(ps=hist["ps"], vs=hist["vs"])
 
     def sample(self, *args, **kwargs):
         return self._aggregate(

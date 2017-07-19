@@ -94,3 +94,34 @@ def log_gamma(xx):
         x = x + 1.0
         ser = ser + torch.pow(x / c, -1)
     return torch.log(ser * magic2) - t
+
+
+def tensor_histogram(ps, vs):
+    """
+    make a histogram from weighted Variable/Tensor/ndarray samples
+    """
+    # first, get everything into the same form: numpy arrays
+    np_vs = []
+    for v in vs:
+        _v = v
+        if isinstance(_v, Variable):
+            _v = _v.data
+        if isinstance(_v, torch.Tensor):
+            _v = v.numpy()
+        np_vs.append(_v)
+    # now form the histogram
+    hist = dict()
+    for p, v, np_v in zip(ps, vs, np_vs):
+        k = tuple(np_vs.flatten().tolist())
+        if k not in hist:
+            # XXX should clone?
+            hist[k] = [0.0, v]
+        hist[k][0] = hist[k][0] + p
+    # now split into keys and original values
+    ps2 = []
+    vs2 = []
+    for k in hist.keys():
+        ps2.append(hist[k][0])
+        vs2.append(hist[k][1])
+    # return dict suitable for passing into Categorical
+    return {"ps": torch.cat(ps2), "vs": [vs2]}
