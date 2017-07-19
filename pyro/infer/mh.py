@@ -49,16 +49,16 @@ class MH(AbstractInfer):
                                                                   *args, **kwargs)
             # p(x, z') q(z' | z) / p(x, z) q(z | z')
             logr = new_model_trace.log_pdf() + new_guide_trace.log_pdf() - \
-                   old_model_trace.log_pdf() + old_guide_trace.log_pdf()
+                   old_model_trace.log_pdf() - old_guide_trace.log_pdf()
             rnd = pyro.sample("mh_step_{}".format(i),
                               Uniform(pyro.zeros(1), pyro.ones(1)))
 
             #print(i, t, torch.log(rnd).data[0], logr.data[0])
             if torch.log(rnd).data[0] < logr.data[0]:
                 # accept
+                t += 1
                 old_model_trace = new_model_trace
                 if t <= self.burn or (t > self.burn and t % self.lag == 0):
-                    t += 1
                     traces.append(new_model_trace)
 
         log_weights = [tr.log_pdf() for tr in traces]
