@@ -19,11 +19,17 @@ from pyro.distributions.transformed_distribution import TransformedDistribution
 from pyro.distributions.transformed_distribution import AffineExp
 from pyro.distributions.transformed_distribution import Bijector
 
+# function aliases
 diagnormal = DiagNormal()
-# normal = Normal()
 lognormal = LogNormal()
-# uniform = Uniform()
-# poisson = Poisson()
 categorical = Categorical()
 bernoulli = Bernoulli()
 beta = Beta()
+delta = Delta()
+exponential = Exponential()
+gamma = Gamma()
+multinomial = Multinomial()
+normal = Normal()
+normalchol = NormalChol()
+poisson = Poisson()
+uniform = Uniform()

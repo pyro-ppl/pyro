@@ -55,7 +55,7 @@ class DiagNormal(Distribution):
                                  0.5 * torch.pow(((x - _mu) / _sigma), 2))
         return torch.sum(log_pxs)
 
-    def batch_log_pdf(self, x, mu=None, sigma=None, batch_size=1):
+    def batch_log_pdf(self, x, mu=None, sigma=None, batch_size=1, *args, **kwargs):
         """
         Diagonal Normal log-likelihood
         """

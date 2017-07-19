@@ -10,9 +10,10 @@ class Normal(Distribution):
     parameterized by its mean mu and covariance matrix sigma
     """
 
-    def sanitize_input(self, mu, sigma):
+    def _sanitize_input(self, mu, sigma):
         if mu is not None:
             # stateless distribution
+            mu = torch.unsqueeze(mu, 1)
             return mu, sigma
         elif self.mu is not None:
             # stateful distribution
@@ -20,43 +21,44 @@ class Normal(Distribution):
         else:
             raise ValueError("Mu and/or sigma had invalid values")
 
-    def __init__(self, mu, sigma, batch_size=1, *args, **kwargs):
+    def __init__(self, mu=None, sigma=None, batch_size=1, *args, **kwargs):
         """
         Params:
           `mu` - mean
           `sigma` - root variance
         """
-        self.dim = mu.size(0)
-        if batch_size == 1 and mu.dim() == 1:
-            self.mu = torch.unsqueeze(mu, 1)
-        else:
-            self.mu = mu.expand(batch_size, mu.size(0))
-        self.l_chol = Variable(torch.potrf(sigma.data, False))
+        if mu is not None:
+            if batch_size == 1 and mu.dim() == 1:
+                self.mu = torch.unsqueeze(mu, 1)
+            else:
+                self.mu = mu.expand(batch_size, mu.size(0))
         super(Normal, self).__init__(*args, **kwargs)
         self.reparametrized = True
 
-    def sample(self, mu, sigma, *args, **kwargs):
+    def sample(self, mu=None, sigma=None, *args, **kwargs):
         """
         Reparameterized Normal sampler.
         """
-        _mu, _sigma = self.sanitize_input(mu, sigma)
+        _mu, _sigma = self._sanitize_input(mu, sigma)
+        l_chol = Variable(torch.potrf(_sigma.data, False))
         eps = Variable(torch.randn(_mu.size()))
         if eps.dim() == 1:
             eps = eps.unsqueeze(1)
-        z = _mu + torch.mm(self.l_chol, eps).squeeze()
+        z = _mu + torch.mm(l_chol, eps).squeeze()
         return z
 
     def log_pdf(self, x, mu=None, sigma=None, batch_size=1, *args, **kwargs):
         """
         Normal log-likelihood
         """
-        _mu, _sigma = self.sanitize_input(mu, sigma)
-        ll_1 = Variable(torch.Tensor([-0.5 * self.dim * np.log(2.0 * np.pi)]))
-        ll_2 = -torch.sum(torch.log(torch.diag(self.l_chol)))
+        _mu, _sigma = self._sanitize_input(mu, sigma)
+        l_chol = Variable(torch.potrf(_sigma.data, False))
+        ll_1 = Variable(torch.Tensor([-0.5 * _mu.size(0) * np.log(2.0 * np.pi)]))
+        ll_2 = -torch.sum(torch.log(torch.diag(l_chol)))
         x_chol = Variable(
             torch.trtrs(
                 (x - _mu).data,
-                self.l_chol.data,
+                l_chol.data,
                 False)[0])
         ll_3 = -0.5 * torch.sum(torch.pow(x_chol, 2.0))
 
