@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 from torch.autograd import Variable
 from torch.nn import Parameter
@@ -50,6 +51,31 @@ def ng_zeros(*args, **kwargs):
     return Variable(torch.zeros(*args, **kwargs), requires_grad=False)
 
 
+def log_sum_exp(vecs):
+    n = len(vecs.size())
+    if n == 1:
+        vecs = vecs.view(1, -1)
+    _, idx = torch.max(vecs, 1)
+    max_score = torch.index_select(vecs, 1, idx.view(-1))
+    ret = max_score + torch.log(torch.sum(torch.exp(vecs - max_score.expand_as(vecs))))
+    if n == 1:
+        return ret.view(-1)
+    return ret
+
+
+def zero_grads(tensors):
+    """
+    Sets gradients of list of Variables to zero in place
+    """
+    for p in tensors:
+        if p.grad is not None:
+            if p.grad.volatile:
+                p.grad.data.zero_()
+            else:
+                data = p.grad.data
+                p.grad = Variable(data.new().resize_as_(data).zero_())
+
+
 def log_gamma(xx):
     gamma_coeff = [
         76.18009172947146,
@@ -80,3 +106,35 @@ def to_one_hot(x, ps):
     batch_one_hot.scatter_(1, x.data.view(-1, 1), 1)
 
     return Variable(batch_one_hot)
+
+
+def tensor_histogram(ps, vs):
+    """
+    make a histogram from weighted Variable/Tensor/ndarray samples
+    Horribly slow...
+    """
+    # first, get everything into the same form: numpy arrays
+    np_vs = []
+    for v in vs:
+        _v = v
+        if isinstance(_v, Variable):
+            _v = _v.data
+        if isinstance(_v, torch.Tensor):
+            _v = _v.numpy()
+        np_vs.append(_v)
+    # now form the histogram
+    hist = dict()
+    for p, v, np_v in zip(ps, vs, np_vs):
+        k = tuple(np_v.flatten().tolist())
+        if k not in hist:
+            # XXX should clone?
+            hist[k] = [0.0, v]
+        hist[k][0] = hist[k][0] + p
+    # now split into keys and original values
+    ps2 = []
+    vs2 = []
+    for k in hist.keys():
+        ps2.append(hist[k][0])
+        vs2.append(hist[k][1])
+    # return dict suitable for passing into Categorical
+    return {"ps": torch.cat(ps2), "vs": np.array(vs2).flatten()}
