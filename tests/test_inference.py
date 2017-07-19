@@ -46,11 +46,8 @@ class NormalNormalTests(TestCase):
             self.mu0 * (self.lam0 / self.analytic_lam_n)
         self.n_is_samples = 5000
 
-    # def test_elbo_reparametrized(self):
-        # self.do_elbo_test(True, 5000)
-
-    def test_elbo_nonreparametrized(self):
-        self.do_elbo_test(False, 15000)
+    def test_elbo_reparametrized(self):
+        self.do_elbo_test(True, 5000)
 
     def do_elbo_test(self, reparametrized, n_steps):
         pyro.get_param_store().clear()
@@ -60,10 +57,6 @@ class NormalNormalTests(TestCase):
             # mu_latent = pyro.sample("mu_latent", prior_dist)
             mu_latent = pyro.sample("mu_latent", dist.diagnormal,
                                     self.mu0, torch.pow(self.lam0, -0.5))
-            # x_dist = DiagNormal(mu_latent, torch.pow(self.lam, -0.5))
-            # # x = pyro.observe("obs", x_dist, self.data)
-            # pyro.map_data("aaa", self.data, lambda i,
-            #               x: pyro.observe("obs_%d" % i, x_dist, x), batch_size=1)
             pyro.map_data("aaa", self.data, lambda i,
                           x: pyro.observe("obs_%d" % i, dist.diagnormal, x, mu_latent, torch.pow(self.lam, -0.5)), batch_size=1)
             return mu_latent
@@ -75,7 +68,6 @@ class NormalNormalTests(TestCase):
                                    self.analytic_log_sig_n.data - 0.09 * torch.ones(2),
                                    requires_grad=True))
             sig_q = torch.exp(log_sig_q)
-            # q_dist = DiagNormal(mu_q, sig_q)
             dist.diagnormal.reparametrized = reparametrized
             pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q)
             pyro.map_data("aaa", self.data, lambda i, x: None, batch_size=1)
