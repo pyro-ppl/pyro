@@ -14,12 +14,20 @@ from pyro import params
 from pyro import util
 
 from pyro.util import zeros, ones
+from pyro.params import param_with_module_name
 
 # global map of params for now
 _param_store = ParamStoreDict()
 
+# used to create fully-formed param names, e.g. mymodule$$$mysubmodule.weight
+_MODULE_NAMESPACE_DIVIDER = "$$$"
+
 # set global tensor type (cpu v.gpu); cpu by default
 _global_tensor_type = 'cpu'
+
+
+def get_param_store():
+    return _param_store
 
 
 def set_cuda():
@@ -39,18 +47,6 @@ def device(x):
         return x.cpu()
     elif _global_tensor_type == 'cuda':
         return x.cuda()
-
-
-mod_div = "$$$"
-
-
-def module_name(pyro_name, param):
-    return mod_div.join([pyro_name, str(id(param))])
-
-
-def module_from_param_name(param_name):
-    if param_name is not None:
-        return param_name.split(mod_div)[0]
 
 
 # use pyro optim class to wrap nn optim
@@ -116,24 +112,39 @@ def map_data(name, data, observer, *args, **kwargs):
 # for now default calls out to pyro.param -- which is handled by poutine
 
 
-def module(pyro_name, nn_obj):  # :, *args, **kwargs):
-    assert hasattr(nn_obj, "parameters")
-
-    # cannot contain our special modifier marker
-    assert mod_div not in pyro_name
+def module(pyro_name, nn_obj):
+    """
+    Takes a pytorch nn module and registers its parameters with the param store.
+    In conjunction with the param store save() and load() functionality, this
+    allows the user to save and load nn modules
+    """
+    assert hasattr(nn_obj, "parameters"), "module has no parameters"
+    assert _MODULE_NAMESPACE_DIVIDER not in pyro_name, "improper module name, since contains %s" %\
+        _MODULE_NAMESPACE_DIVIDER
 
     if isclass(nn_obj):
         raise NotImplementedError("Not yet supporting class constructor")
 
-    # for now, we simply loop through parameters every time and marke then
-    for param in nn_obj.parameters():
+    state_dict = {}
+    for param_name, param in nn_obj.named_parameters():
+        state_dict[param_name] = pyro.param(param_with_module_name(pyro_name, param_name), param)
 
-        # is param a variable? Save variable inside param store
-        if isinstance(param, Variable):
+    current_nn_state = nn_obj.state_dict()
+    for name, param in state_dict.items():
+        if name not in current_nn_state:
+            raise KeyError('unexpected key "{}" in state_dict'.format(name))
+        if isinstance(param, Parameter):
+            # backwards compatibility for serialized parameters
+            param = param.data
 
-            # mark the object
-            pyro.param(module_name(pyro_name, param), param)
+        # only copy if the param has actually changed
+        # Note: apart from the following line, the rest of this code
+        # logic is borrowed from torch.nn.Module.load_state_dict
+        if id(param) != id(current_nn_state[name]):
+            current_nn_state[name].copy_(param)
 
-    # send back object for calling forward
-    # if we want to intercept somewhere else we can
+    missing = set(current_nn_state.keys()) - set(state_dict.keys())
+    if len(missing) > 0:
+        raise KeyError('missing keys in state_dict: "{}"'.format(missing))
+
     return nn_obj
