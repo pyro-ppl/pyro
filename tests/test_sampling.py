@@ -49,7 +49,7 @@ class NormalNormalSamplingTestCase(TestCase):
 
     def setUp(self):
 
-        pyro._param_store._clear_cache()
+        pyro._param_store.clear()
 
         def model():
             mu = pyro.sample("mu", DiagNormal(Variable(torch.zeros(1)),
