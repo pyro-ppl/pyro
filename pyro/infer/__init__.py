@@ -29,7 +29,7 @@ class Marginal(pyro.distributions.Distribution):
         """
         assert isinstance(trace_hist, pyro.distributions.Categorical), \
             "trace histogram must be a Categorical distribution object"
-        if isinstance(trace_hist.vs[0]["_RETURN"]["value"],
+        if isinstance(trace_hist.vs[0][0]["_RETURN"]["value"],
                       (torch.autograd.Variable, torch.Tensor, np.ndarray)):
             ps = []
             vs = []
@@ -44,8 +44,8 @@ class Marginal(pyro.distributions.Distribution):
                 if v not in hist:
                     hist1[v] = 0.0
                 hist1[v] = hist1[v] + trace_hist.ps[0][i]
-            hist = {"ps": torch.cat([vv for vv in hist.values()]),
-                    "vs": [[kk for kk in hist.keys()]]}
+            hist = {"ps": torch.cat([vv for vv in hist1.values()]),
+                    "vs": [[kk for kk in hist1.keys()]]}
         return pyro.distributions.Categorical(ps=hist["ps"], vs=hist["vs"])
 
     def sample(self, *args, **kwargs):

@@ -36,9 +36,8 @@ class Search(AbstractInfer):
         if self.queue.empty():
             self.queue.put(poutine.Trace())
 
-        p = poutine.queue(poutine.trace(self.model),
-                          queue=self.queue,
-                          max_tries=self.max_tries)
+        p = poutine.trace(
+            poutine.queue(self.model, queue=self.queue, max_tries=self.max_tries))
         traces = []
         while not self.queue.empty():
             traces.append(p(*args, **kwargs))

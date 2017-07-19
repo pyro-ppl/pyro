@@ -77,16 +77,34 @@ class NormalNormalSamplingTestCase(TestCase):
 class SearchTest(HMMSamplingTestCase):
 
     def test_complete(self):
-        # pdb.set_trace()
         posterior = pyro.infer.Search(self.model)
-        posterior()
+        dd = posterior._dist()
+
+        true_latents = set()
+        for i1 in range(2):
+            for i2 in range(2):
+                for i3 in range(2):
+                    true_latents.add((float(i1), float(i2), float(i3)))
+
+        tr_latents = set()
+        for tr in dd.vs[0]:
+            tr_latents.add(tuple([tr[name]["value"].view(-1).data[0] for name in tr
+                                  if tr[name]["type"] == "sample"]))
+
+        self.assertTrue(true_latents == tr_latents)
 
     def test_marginal(self):
-        # pdb.set_trace()
         posterior = pyro.infer.Search(self.model)
         marginal = pyro.infer.Marginal(posterior)
         dd = marginal._aggregate(posterior._dist())
-        # print(marginal._aggregate(posterior._dist()).vs)
+
+        tr_rets = []
+        for v in dd.vs:
+            tr_rets.append(v.view(-1).data[0])
+
+        self.assertTrue(len(tr_rets) == 4)
+        for i in range(4):
+            self.assertTrue(i + 1 in tr_rets)
 
 
 class MHTest(NormalNormalSamplingTestCase):

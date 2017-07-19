@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 from torch.autograd import Variable
 from torch.nn import Parameter
@@ -99,6 +100,7 @@ def log_gamma(xx):
 def tensor_histogram(ps, vs):
     """
     make a histogram from weighted Variable/Tensor/ndarray samples
+    Horribly slow...
     """
     # first, get everything into the same form: numpy arrays
     np_vs = []
@@ -107,12 +109,12 @@ def tensor_histogram(ps, vs):
         if isinstance(_v, Variable):
             _v = _v.data
         if isinstance(_v, torch.Tensor):
-            _v = v.numpy()
+            _v = _v.numpy()
         np_vs.append(_v)
     # now form the histogram
     hist = dict()
     for p, v, np_v in zip(ps, vs, np_vs):
-        k = tuple(np_vs.flatten().tolist())
+        k = tuple(np_v.flatten().tolist())
         if k not in hist:
             # XXX should clone?
             hist[k] = [0.0, v]
@@ -124,4 +126,4 @@ def tensor_histogram(ps, vs):
         ps2.append(hist[k][0])
         vs2.append(hist[k][1])
     # return dict suitable for passing into Categorical
-    return {"ps": torch.cat(ps2), "vs": [vs2]}
+    return {"ps": torch.cat(ps2), "vs": np.array(vs2).flatten()}
