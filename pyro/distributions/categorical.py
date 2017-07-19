@@ -36,7 +36,7 @@ class Categorical(Distribution):
                 vs = [list(x) for x in vs]
             if isinstance(vs, list):
                 vs = np.array(vs)
-            elif not isinstance(vs, Variable) and not isinstance(vs, torch.Tensor):
+            elif not isinstance(vs, (Variable, torch.Tensor, np.ndarray)):
                 raise TypeError(("vs should be of type: list, Variable, Tensor, tuple, or numpy array"
                                  "but was of {}".format(str(type(vs)))))
         self.ps = ps
