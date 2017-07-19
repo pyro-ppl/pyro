@@ -36,7 +36,6 @@ class MH(AbstractInfer):
         t = 0
         i = 0
         while t < self.burn + self.lag * self.samples:
-            print(i, t)
             i += 1
             # q(z' | z)
             new_guide_trace = poutine.block(

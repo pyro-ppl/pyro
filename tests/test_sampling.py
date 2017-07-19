@@ -86,7 +86,7 @@ class SearchTest(HMMSamplingTestCase):
         posterior = pyro.infer.Search(self.model)
         marginal = pyro.infer.Marginal(posterior)
         dd = marginal._aggregate(posterior._dist())
-        print(marginal._aggregate(posterior._dist()).vs)
+        # print(marginal._aggregate(posterior._dist()).vs)
 
 
 class MHTest(NormalNormalSamplingTestCase):
