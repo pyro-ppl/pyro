@@ -16,7 +16,7 @@ class TransformedDistribution(Distribution):
         Constructor; takes base distribution and bijector as arguments
         """
         super(TransformedDistribution, self).__init__(*args, **kwargs)
-        self.reparametrized = base_distribution.reparametrized
+        self.reparameterized = base_distribution.reparameterized
         self.base_dist = base_distribution
         self.bijector = bijector
 

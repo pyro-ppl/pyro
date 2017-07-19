@@ -33,7 +33,7 @@ class Gamma(Distribution):
             if alpha.dim() == 1 and beta.dim() == 1:
                 self.alpha = alpha.expand(batch_size, 0)
                 self.beta = beta.expand(batch_size, 0)
-        self.reparametrized = False
+        self.reparameterized = False
         super(Gamma, self).__init__(*args, **kwargs)
 
     def sample(self, alpha=None, beta=None, *args, **kwargs):

@@ -29,7 +29,7 @@ class NormalChol(Distribution):
         self.mu = mu
         self.L = L
         super(NormalChol, self).__init__(*args, **kwargs)
-        self.reparametrized = True
+        self.reparameterized = True
 
     def sample(self, mu=None, L=None, *args, **kwargs):
         """

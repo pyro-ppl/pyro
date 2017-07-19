@@ -36,10 +36,10 @@ class NormalNormalTests(TestCase):
             self.mu0 * (self.lam0 / self.analytic_lam_n)
         self.n_is_samples = 5000
 
-    def test_elbo_reparametrized(self):
+    def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 5000)
 
-    def do_elbo_test(self, reparametrized, n_steps):
+    def do_elbo_test(self, reparameterized, n_steps):
         pyro.get_param_store().clear()
 
         def model():
@@ -58,7 +58,7 @@ class NormalNormalTests(TestCase):
                                    self.analytic_log_sig_n.data - 0.09 * torch.ones(2),
                                    requires_grad=True))
             sig_q = torch.exp(log_sig_q)
-            dist.diagnormal.reparametrized = reparametrized
+            dist.diagnormal.reparameterized = reparameterized
             pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q)
             pyro.map_data("aaa", self.data, lambda i, x: None, batch_size=1)
 
@@ -155,30 +155,17 @@ class TestFixedModelGuide(TestCase):
                           (torch.equal(pyro.param("beta_p_log").data, self.beta_p_log_0))
         guide_unchanged = (torch.equal(pyro.param("alpha_q_log").data, self.alpha_q_log_0)) and\
                           (torch.equal(pyro.param("beta_q_log").data, self.beta_q_log_0))
-        bad = (
-            model_fixed and (
-                not model_unchanged)) or (
-            guide_fixed and (
-                not guide_unchanged))
+        bad = (model_fixed and (not model_unchanged)) or (guide_fixed and (not guide_unchanged))
         return (not bad)
 
     def test_model_fixed(self):
-        self.assertTrue(
-            self.do_test_fixedness(
-                model_fixed=True,
-                guide_fixed=False))
+        self.assertTrue(self.do_test_fixedness(model_fixed=True, guide_fixed=False))
 
     def test_guide_fixed(self):
-        self.assertTrue(
-            self.do_test_fixedness(
-                model_fixed=False,
-                guide_fixed=True))
+        self.assertTrue(self.do_test_fixedness(model_fixed=False, guide_fixed=True))
 
     def test_guide_and_model_fixed(self):
-        self.assertTrue(
-            self.do_test_fixedness(
-                model_fixed=True,
-                guide_fixed=True))
+        self.assertTrue(self.do_test_fixedness(model_fixed=True, guide_fixed=True))
 
 
 class PoissonGammaTests(TestCase):
@@ -200,7 +187,7 @@ class PoissonGammaTests(TestCase):
         self.log_alpha_n = torch.log(self.alpha_n)
         self.log_beta_n = torch.log(self.beta_n)
 
-    def test_elbo_nonreparametrized(self):
+    def test_elbo_nonreparameterized(self):
         pyro.get_param_store().clear()
 
         def model():
@@ -249,8 +236,8 @@ class PoissonGammaTests(TestCase):
         beta_error = torch.abs(
             pyro.param("beta_q_log") -
             self.log_beta_n).data.cpu().numpy()[0]
-        self.assertEqual(0.0, alpha_error, prec=0.05)
-        self.assertEqual(0.0, beta_error, prec=0.05)
+        self.assertEqual(0.0, alpha_error, prec=0.08)
+        self.assertEqual(0.0, beta_error, prec=0.08)
 
 
 class ExponentialGammaTests(TestCase):
@@ -268,7 +255,7 @@ class ExponentialGammaTests(TestCase):
         self.log_alpha_n = torch.log(self.alpha_n)
         self.log_beta_n = torch.log(self.beta_n)
 
-    def test_elbo_nonreparametrized(self):
+    def test_elbo_nonreparameterized(self):
         pyro.get_param_store().clear()
 
         def model():
@@ -303,8 +290,8 @@ class ExponentialGammaTests(TestCase):
             self.log_beta_n).data.cpu().numpy()[0]
         # print "alpha_error", alpha_error
         # print "beta_error", beta_error
-        self.assertEqual(0.0, alpha_error, prec=0.05)
-        self.assertEqual(0.0, beta_error, prec=0.05)
+        self.assertEqual(0.0, alpha_error, prec=0.08)
+        self.assertEqual(0.0, beta_error, prec=0.08)
 
 
 class BernoulliBetaTests(TestCase):
@@ -327,7 +314,7 @@ class BernoulliBetaTests(TestCase):
         self.log_alpha_n = torch.log(self.alpha_n)
         self.log_beta_n = torch.log(self.beta_n)
 
-    def test_elbo_nonreparametrized(self):
+    def test_elbo_nonreparameterized(self):
         pyro.get_param_store().clear()
 
         def model():
@@ -365,8 +352,8 @@ class BernoulliBetaTests(TestCase):
         beta_error = torch.abs(
             pyro.param("beta_q_log") -
             self.log_beta_n).data.cpu().numpy()[0]
-        self.assertEqual(0.0, alpha_error, prec=0.05)
-        self.assertEqual(0.0, beta_error, prec=0.05)
+        self.assertEqual(0.0, alpha_error, prec=0.08)
+        self.assertEqual(0.0, beta_error, prec=0.08)
 
 
 class LogNormalNormalGuide(nn.Module):
@@ -396,10 +383,10 @@ class LogNormalNormalTests(TestCase):
         self.log_mu_n = torch.log(self.mu_n)
         self.log_tau_n = torch.log(self.tau_n)
 
-    def test_elbo_reparametrized(self):
+    def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 7000)
 
-    def do_elbo_test(self, reparametrized, n_steps):
+    def do_elbo_test(self, reparameterized, n_steps):
         pyro.get_param_store().clear()
         pt_guide = LogNormalNormalGuide(self.log_mu_n.data + 0.17,
                                         self.log_tau_n.data - 0.143)
@@ -416,7 +403,7 @@ class LogNormalNormalTests(TestCase):
             pyro.module("mymodule", pt_guide)
             mu_q, tau_q = torch.exp(pt_guide.mu_q_log), torch.exp(pt_guide.tau_q_log)
             sigma = torch.pow(tau_q, -0.5)
-            dist.diagnormal.reparametrized = reparametrized
+            dist.diagnormal.reparameterized = reparameterized
             pyro.sample("mu_latent", dist.diagnormal, mu_q, sigma)
 
         kl_optim = KL_QP(model, guide, pyro.optim(torch.optim.Adam,

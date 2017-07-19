@@ -34,7 +34,7 @@ class LogNormal(Distribution):
                 self.mu = mu.unsqueeze(0).expand(batch_size, 0)
                 self.sigma = sigma.unsqueeze(0).expand(batch_size, 0)
         super(LogNormal, self).__init__(*args, **kwargs)
-        self.reparametrized = True
+        self.reparameterized = True
 
     def sample(self, mu=None, sigma=None, *args, **kwargs):
         """

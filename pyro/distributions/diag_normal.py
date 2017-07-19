@@ -10,8 +10,6 @@ class DiagNormal(Distribution):
     Diagonal covariance Normal
     """
 
-    reparametrized = True
-
     def _sanitize_input(self, mu, sigma):
         if mu is not None:
             # stateless distribution
@@ -35,7 +33,7 @@ class DiagNormal(Distribution):
                 self.mu = mu.unsqueeze(0).expand(batch_size, mu.size(0))
                 self.sigma = sigma.unsqueeze(0).expand(batch_size, sigma.size(0))
         super(DiagNormal, self).__init__(*args, **kwargs)
-        self.reparametrized = True
+        self.reparameterized = True
 
     def sample(self, mu=None, sigma=None, *args, **kwargs):
         """
@@ -72,7 +70,3 @@ class DiagNormal(Distribution):
                                  Variable(torch.ones(_sigma.size())))),
                                  0.5 * torch.pow(((x - _mu) / _sigma), 2))
         return torch.sum(log_pxs, 1)
-
-    def reset():
-        global reparametrized
-        reparametrized = True
