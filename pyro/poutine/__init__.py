@@ -29,9 +29,10 @@ def trace(fn):
     return _fn
 
 
-def viz(fn, output_file):
+def viz(fn, output_file, skip_creators = False, include_intermediates = True):
     def _fn(*args, **kwargs):
-        p = VizPoutine(fn, output_file)
+        p = VizPoutine(fn, output_file, skip_creators = skip_creators,
+                       include_intermediates = include_intermediates)
         return p(*args, **kwargs)
     return _fn
 
