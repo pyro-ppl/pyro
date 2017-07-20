@@ -48,7 +48,7 @@ class KL_QP(object):  # AbstractInfer):
             if model_trace[name]["type"] == "observe":
                 elbo += model_trace[name]["log_pdf"]
             elif model_trace[name]["type"] == "sample":
-                if model_trace[name]["fn"].reparametrized:
+                if model_trace[name]["fn"].reparameterized:
                     elbo += model_trace[name]["log_pdf"]
                     elbo -= guide_trace[name]["log_pdf"]
                 else:
