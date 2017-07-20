@@ -157,4 +157,3 @@ def rescale_dist(fn, scale):
     else:
         # XXX should raise an error here?
         return fn
-       
