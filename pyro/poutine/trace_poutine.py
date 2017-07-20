@@ -87,7 +87,7 @@ class TracePoutine(Poutine):
         ret = super(TracePoutine, self)._pyro_map_data(prev_val, name, data, fn,
                                                        # XXX watch out for changing
                                                        batch_size=batch_size,
-                                                       *args, **kwargs)
+                                                       **kwargs)
         # store the indices, batch_size, and scaled function in a site
         # XXX does not store input or output values due to space constraints - beware!
         assert hasattr(fn, "__map_data_indices"), "fn has no __map_data_indices?"

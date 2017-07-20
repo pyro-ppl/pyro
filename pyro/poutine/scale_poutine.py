@@ -32,10 +32,11 @@ class ScalePoutine(Poutine):
         """
         if hasattr(fn, "log_pdf"):
             old_log_pdf = fn.log_pdf
+
             def new_log_pdf(*args, **kwargs):
                 return self.scale * old_log_pdf(*args, **kwargs)
 
-            new_fn = copy.copy(fn) # XXX incorrect?
+            new_fn = copy.copy(fn)  # XXX incorrect?
             new_fn.log_pdf = new_log_pdf
             return new_fn
         else:

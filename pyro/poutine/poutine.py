@@ -2,6 +2,8 @@ import pyro
 import torch
 from torch.autograd import Variable
 
+from . import scale as poutine_scale
+
 
 class Poutine(object):
     """
@@ -138,7 +140,7 @@ class Poutine(object):
                     scale = 1.0
                     ind = Variable(torch.range(data.size(0)))
                     ind_data = data
-                scaled_fn = poutine.scale(fn, scale=scale)
+                scaled_fn = poutine_scale(fn, scale=scale)
                 ret = scaled_fn(ind, ind_data)
             else:
                 # if batch_size > 0, select a random set of indices and store it
@@ -146,17 +148,16 @@ class Poutine(object):
                     ind = torch.randperm(len(data))[0:batch_size].numpy().tolist()
                     scale = float(len(data)) / float(batch_size)
                 else:
-                    ind = list(xrange(len(data)))
+                    ind = list(range(len(data)))
                     scale = 1.0
                 # map the function over the iterables of indices and data
-                scaled_fn = poutine.scale(fn, scale=scale)
+                scaled_fn = poutine_scale(fn, scale=scale)
                 ret = list(map(lambda ix: scaled_fn(*ix), [(i, data[i]) for i in ind]))
             # XXX is there a more elegant way to move indices up the stack?
             if not hasattr(fn, "__map_data_indices"):
                 setattr(fn, "__map_data_indices", ind)
                 setattr(fn, "__map_data_scale", scale)
             return ret
-
 
     def _pyro_param(self, prev_val, name, *args, **kwargs):
         """
