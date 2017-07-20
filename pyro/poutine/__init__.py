@@ -7,6 +7,7 @@ from .block_poutine import BlockPoutine
 from .trace_poutine import TracePoutine
 from .replay_poutine import ReplayPoutine
 from .queue_poutine import QueuePoutine
+from .scale_poutine import ScalePoutine
 
 
 ############################################
@@ -64,6 +65,17 @@ def queue(fn, queue=None, max_tries=None):
     """
     def _fn(*args, **kwargs):
         p = QueuePoutine(fn, queue=queue, max_tries=max_tries)
+        return p(*args, **kwargs)
+    return _fn
+
+
+def scale(fn, scale=None):
+    """
+    Given a stochastic function and a scale,
+    at each sample and observe site, monkeypatch the log_pdf to be rescaled by scale
+    """
+    def _fn(*args, **kwargs):
+        p = ScalePoutine(fn, scale=scale)
         return p(*args, **kwargs)
     return _fn
 
