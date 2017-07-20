@@ -69,17 +69,6 @@ def queue(fn, queue=None, max_tries=None):
     return _fn
 
 
-def scale(fn, scale=None):
-    """
-    Given a stochastic function and a scale,
-    at each sample and observe site, monkeypatch the log_pdf to be rescaled by scale
-    """
-    def _fn(*args, **kwargs):
-        p = ScalePoutine(fn, scale=scale)
-        return p(*args, **kwargs)
-    return _fn
-
-
 #########################################
 # Begin composite operations
 #########################################
