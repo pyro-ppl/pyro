@@ -63,32 +63,10 @@ class ReplayPoutine(Poutine):
             assert self.guide_trace[name]["type"] == "map_data", \
                 name + " is not a map_data in the guide_trace"
             batch_size = self.guide_trace[name]["batch_size"]
-            scale = self.guide_trace[name]["scale"]
-            ind = self.guide_trace[name]["indices"]
+            fn.__map_data_scale = self.guide_trace[name]["scale"]
+            fn.__map_data_indices = self.guide_trace[name]["indices"]
 
-        if isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
-            if batch_size > 0:
-                if name not in self.guide_trace:
-                    scale = float(data.size(0)) / float(batch_size)
-                    ind = Variable(torch.randperm(data.size(0))[0:batch_size])
-                ind_data = data.index_select(0, ind)
-            else:
-                # if batch_size == 0, don't index (saves time/space)
-                scale = 1.0
-                ind = Variable(torch.range(data.size(0)))
-                ind_data = data
-            scaled_fn = poutine.scale(fn, scale=scale)
-            ret = scaled_fn(ind, ind_data)
-        else:
-            # if batch_size > 0, select a random set of indices and store it
-            if batch_size > 0 and name not in self.guide_trace:
-                ind = torch.randperm(len(data))[0:batch_size].numpy().tolist()
-                scale = float(len(data)) / float(batch_size)
-            else:
-                ind = list(xrange(len(data)))
-                scale = 1.0
-            # map the function over the iterables of indices and data
-            scaled_fn = poutine.scale(fn, scale=scale)
-            ret = list(map(lambda ix: scaled_fn(*ix), [(i, data[i]) for i in ind]))
-
+        ret = super(ReplayPoutine, self)._pyro_map_data(self, prev_val, name, data,
+                                                        fn, batch_size=batch_size,
+                                                        **kwargs)
         return ret

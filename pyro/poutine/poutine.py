@@ -117,14 +117,47 @@ class Poutine(object):
         """
         Default pyro.map_data Poutine behavior
         """
-        if self.transparent and prev_val is not None:
+        if self.transparent and not (prev_val is None):
             return prev_val
-        if isinstance(data, (Variable, torch.Tensor)):
-            # assume vectorized observation fn
-            raise NotImplementedError(
-                "map_data for vectorized data not yet implemented.")
-        # note that fn should expect an index and a datum
-        return [fn(i, datum) for i, datum in enumerate(data)]
+        else:
+            if batch_size is None:
+                batch_size = 0
+            assert batch_size >= 0, "cannot have negative batch sizes"
+            if hasattr(fn, "__map_data_indices") and \
+               hasattr(fn, "__map_data_scale"):
+                ind = fn.__map_data_indices
+                scale = fn.__map_data_scale
+
+            if isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
+                if batch_size > 0:
+                    if not hasattr(fn, "__map_data_indices"):
+                        scale = float(data.size(0)) / float(batch_size)
+                        ind = Variable(torch.randperm(data.size(0))[0:batch_size])
+                    ind_data = data.index_select(0, ind)
+                else:
+                    # if batch_size == 0, don't index (saves time/space)
+                    scale = 1.0
+                    ind = Variable(torch.range(data.size(0)))
+                    ind_data = data
+                scaled_fn = poutine.scale(fn, scale=scale)
+                ret = scaled_fn(ind, ind_data)
+            else:
+                # if batch_size > 0, select a random set of indices and store it
+                if batch_size > 0 and not hasattr(fn, "__map_data_indices"):
+                    ind = torch.randperm(len(data))[0:batch_size].numpy().tolist()
+                    scale = float(len(data)) / float(batch_size)
+                else:
+                    ind = list(xrange(len(data)))
+                    scale = 1.0
+                # map the function over the iterables of indices and data
+                scaled_fn = poutine.scale(fn, scale=scale)
+                ret = list(map(lambda ix: scaled_fn(*ix), [(i, data[i]) for i in ind]))
+            # XXX is there a more elegant way to move indices up the stack?
+            if not hasattr(fn, "__map_data_indices"):
+                setattr(fn, "__map_data_indices", ind)
+                setattr(fn, "__map_data_scale", scale)
+            return ret
+
 
     def _pyro_param(self, prev_val, name, *args, **kwargs):
         """

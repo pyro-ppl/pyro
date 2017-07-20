@@ -40,7 +40,7 @@ class Trace(dict):
         self[name] = site
         return self
 
-    def add_map_data(self, name, fn, scale, batch_size, ind, **kwargs):
+    def add_map_data(self, name, fn, batch_size, scale, ind, **kwargs):
         """
         map_data site
         """

@@ -84,35 +84,15 @@ class TracePoutine(Poutine):
         """
         Trace map_data
         """
-        if batch_size is None:
-            batch_size = 0
-        assert batch_size >= 0, "cannot have negative batch sizes"
-
-        if isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
-            if batch_size > 0:
-                scale = float(data.size(0)) / float(batch_size)
-                ind = Variable(torch.randperm(data.size(0))[0:batch_size])
-                ind_data = data.index_select(0, ind)
-            else:
-                # if batch_size == 0, don't index (saves time/space)
-                scale = 1.0
-                ind = Variable(torch.range(data.size(0)))
-                ind_data = data
-            scaled_fn = poutine.scale(fn, scale=scale)
-            ret = scaled_fn(ind, ind_data)
-        else:
-            # if batch_size > 0, select a random set of indices and store it
-            if batch_size > 0:
-                ind = torch.randperm(len(data))[0:batch_size].numpy().tolist()
-                scale = float(len(data)) / float(batch_size)
-            else:
-                ind = list(xrange(len(data)))
-                scale = 1.0
-            # map the function over the iterables of indices and data
-            scaled_fn = poutine.scale(fn, scale=scale)
-            ret = list(map(lambda ix: scaled_fn(*ix), [(i, data[i]) for i in ind]))
-
+        ret = super(TracePoutine, self)._pyro_map_data(prev_val, name, data, fn,
+                                                       # XXX watch out for changing
+                                                       batch_size=batch_size,
+                                                       *args, **kwargs)
         # store the indices, batch_size, and scaled function in a site
         # XXX does not store input or output values due to space constraints - beware!
-        self.trace.add_map_data(name, fn, scale, batch_size, ind, **kwargs)
+        assert hasattr(fn, "__map_data_indices"), "fn has no __map_data_indices?"
+        assert hasattr(fn, "__map_data_scale"), "fn has no __map_data_scale?"
+        self.trace.add_map_data(name, fn, batch_size,
+                                fn.__map_data_scale, fn.__map_data_indices,
+                                **kwargs)
         return ret
