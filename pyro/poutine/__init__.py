@@ -7,7 +7,6 @@ from .block_poutine import BlockPoutine
 from .trace_poutine import TracePoutine
 from .replay_poutine import ReplayPoutine
 from .queue_poutine import QueuePoutine
-from .scale_poutine import ScalePoutine
 
 
 ############################################

@@ -2,8 +2,6 @@ import pyro
 import torch
 from torch.autograd import Variable
 
-from . import scale as poutine_scale
-
 
 class Poutine(object):
     """
@@ -140,8 +138,17 @@ class Poutine(object):
                     scale = 1.0
                     ind = Variable(torch.range(data.size(0)))
                     ind_data = data
-                scaled_fn = poutine_scale(fn, scale=scale)
-                ret = scaled_fn(ind, ind_data)
+
+                old_sample = self._pyro_sample
+
+                def scaled_sample(_prev_val, _name, _fn, *args, **kwargs):
+                    return old_sample(_prev_val, _name,
+                                      pyro.util.rescale_dist(_fn, scale),
+                                      *args, **kwargs)
+
+                self._pyro_sample = scaled_sample
+                ret = fn(ind, ind_data)
+                self._pyro_sample = old_sample
             else:
                 # if batch_size > 0, select a random set of indices and store it
                 if batch_size > 0 and not hasattr(fn, "__map_data_indices"):
@@ -151,8 +158,16 @@ class Poutine(object):
                     ind = list(range(len(data)))
                     scale = 1.0
                 # map the function over the iterables of indices and data
-                scaled_fn = poutine_scale(fn, scale=scale)
-                ret = list(map(lambda ix: scaled_fn(*ix), [(i, data[i]) for i in ind]))
+                old_sample = self._pyro_sample
+
+                def scaled_sample(_prev_val, _name, _fn, *args, **kwargs):
+                    return old_sample(_prev_val, _name,
+                                      pyro.util.rescale_dist(_fn, scale),
+                                      *args, **kwargs)
+
+                self._pyro_sample = scaled_sample
+                ret = list(map(lambda ix: fn(*ix), [(i, data[i]) for i in ind]))
+                self._pyro_sample = old_sample
             # XXX is there a more elegant way to move indices up the stack?
             if not hasattr(fn, "__map_data_indices"):
                 setattr(fn, "__map_data_indices", ind)

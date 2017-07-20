@@ -138,3 +138,22 @@ def tensor_histogram(ps, vs):
         vs2.append(hist[k][1])
     # return dict suitable for passing into Categorical
     return {"ps": torch.cat(ps2), "vs": np.array(vs2).flatten()}
+
+
+def rescale_dist(fn, scale):
+    """
+    Rescales a distribution's log_pdf method output by a constant factor
+    """
+    if hasattr(fn, "log_pdf"):
+        old_log_pdf = fn.log_pdf
+
+        def new_log_pdf(*args, **kwargs):
+            return old_log_pdf(*args, **kwargs) * scale
+
+        new_fn = copy.copy(fn)  # XXX incorrect?
+        new_fn.log_pdf = new_log_pdf
+        return new_fn
+    else:
+        # XXX should raise an error here?
+        return fn
+       
