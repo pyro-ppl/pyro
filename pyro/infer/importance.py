@@ -29,11 +29,11 @@ class Importance(AbstractInfer):
         make trace posterior histogram (unnormalized)
         """
         traces = []
-        log_weights = []
         for i in range(self.samples):
             guide_trace = poutine.trace(self.guide)(*args, **kwargs)
             model_trace = poutine.trace(
                 poutine.replay(self.model, guide_trace))(*args, **kwargs)
-            traces.append(model_trace)
-            log_weights.append(model_trace.log_pdf() - guide_trace.log_pdf())
-        return traces, log_weights
+            log_weight = model_trace.log_pdf() - guide_trace.log_pdf()
+            # traces.append((model_trace, log_weight))
+            yield (model_trace, log_weight)
+        # return traces

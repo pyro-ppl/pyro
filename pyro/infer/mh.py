@@ -59,10 +59,7 @@ class MH(AbstractInfer):
                 t += 1
                 old_model_trace = new_model_trace
                 if t <= self.burn or (t > self.burn and t % self.lag == 0):
-                    traces.append(new_model_trace)
-
-        log_weights = [tr.log_pdf() for tr in traces]
-        return traces, log_weights
+                    yield (new_model_trace, new_model_trace.log_pdf())
 
 
 ##############################################

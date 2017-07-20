@@ -127,3 +127,17 @@ def tensor_histogram(ps, vs):
         vs2.append(hist[k][1])
     # return dict suitable for passing into Categorical
     return {"ps": torch.cat(ps2), "vs": np.array(vs2).flatten()}
+
+
+def basic_histogram(ps, vs):
+    """
+    make a histogram from weighted things that aren't tensors
+    Horribly slow...
+    """
+    hist = dict()
+    for i, v in enumerate(vs):
+        if v not in hist:
+            hist[v] = 0.0
+        hist[v] = hist[v] + ps[i]
+    return {"ps": torch.cat([hist[v] for v in hist.keys()]),
+            "vs": [v for v in hist.keys()]}

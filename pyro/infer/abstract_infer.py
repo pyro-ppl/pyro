@@ -21,7 +21,11 @@ class AbstractInfer(pyro.distributions.Distribution):
         """
         make trace posterior distribution object with normalized probs
         """
-        traces, log_weights = self._traces(*args, **kwargs)
+        trace_hist = self._traces(*args, **kwargs)
+        traces, log_weights = [], []
+        for tr, log_weight in trace_hist:
+            traces.append(tr)
+            log_weights.append(log_weight)
         log_ps = torch.cat(log_weights, 0)
         log_ps = log_ps - pyro.util.log_sum_exp(log_ps).expand_as(log_ps)
         # XXX Categorical not working correctly with non-Tensor vs

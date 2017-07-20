@@ -22,40 +22,33 @@ class Marginal(pyro.distributions.Distribution):
         self.trace_dist = trace_dist
 
     @pyro.util.memoize
-    def _aggregate(self, trace_hist):
+    def _dist(self, *args, **kwargs):
         """
         Convert a histogram over traces to a histogram over return values
         Currently very inefficient...
         """
-        assert isinstance(trace_hist, pyro.distributions.Categorical), \
-            "trace histogram must be a Categorical distribution object"
-        if isinstance(trace_hist.vs[0][0]["_RETURN"]["value"],
-                      (torch.autograd.Variable, torch.Tensor, np.ndarray)):
-            ps = []
-            vs = []
-            for i, tr in enumerate(trace_hist.vs[0]):
-                ps.append(trace_hist.ps[0][i])
-                vs.append(tr["_RETURN"]["value"])
+        vs, log_weights = [], []
+        for tr, log_weight in self.trace_dist._traces(*args, **kwargs):
+            vs.append(tr["_RETURN"]["value"])
+            log_weights.append(log_weight)
+
+        log_weights = torch.cat(log_weights)
+        if not isinstance(log_weights, torch.autograd.Variable):
+            log_weights = torch.autograd.Variable(log_weights)
+        log_z = pyro.util.log_sum_exp(log_weights)
+        ps = torch.exp(log_weights - log_z.expand_as(log_weights))
+
+        if isinstance(vs[0], (torch.autograd.Variable, torch.Tensor, np.ndarray)):
             hist = pyro.util.tensor_histogram(ps, vs)
         else:
-            hist1 = dict()
-            for i, tr in enumerate(trace_hist.vs[0]):
-                v = tr["_RETURN"]["value"]
-                if v not in hist:
-                    hist1[v] = 0.0
-                hist1[v] = hist1[v] + trace_hist.ps[0][i]
-            hist = {"ps": torch.cat([vv for vv in hist1.values()]),
-                    "vs": [[kk for kk in hist1.keys()]]}
+            hist = pyro.util.basic_histogram(ps, vs)
         return pyro.distributions.Categorical(ps=hist["ps"], vs=hist["vs"])
 
     def sample(self, *args, **kwargs):
-        return self._aggregate(
-            pyro.poutine.block(self.trace_dist._dist)(*args, **kwargs)).sample()
+        return pyro.poutine.block(self._dist(*args, **kwargs)).sample()
 
     def log_pdf(self, val, *args, **kwargs):
-        return self._aggregate(
-            pyro.poutine.block(self.trace_dist._dist)(*args, **kwargs)).log_pdf(val)
+        return pyro.poutine.block(self._dist(*args, **kwargs)).log_pdf(val)
 
     def support(self, *args, **kwargs):
-        return self._aggregate(
-            pyro.poutine.block(self.trace_dist._dist)(*args, **kwargs)).support()
+        return pyro.poutine.block(self._dist(*args, **kwargs)).support()

@@ -22,7 +22,6 @@ class Search(AbstractInfer):
         # XXX add queue here or on call to _traces?
         if queue is None:
             queue = Queue()
-            queue.put(poutine.Trace())
         self.queue = queue
         self.max_tries = int(max_tries)
 
@@ -38,9 +37,6 @@ class Search(AbstractInfer):
 
         p = poutine.trace(
             poutine.queue(self.model, queue=self.queue, max_tries=self.max_tries))
-        traces = []
         while not self.queue.empty():
-            traces.append(p(*args, **kwargs))
-
-        log_weights = [tr.log_pdf() for tr in traces]
-        return traces, log_weights
+            tr = p(*args, **kwargs)
+            yield (tr, tr.log_pdf())
