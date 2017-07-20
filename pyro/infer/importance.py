@@ -3,25 +3,27 @@ from torch.autograd import Variable
 
 import pyro
 import pyro.poutine as poutine
-from pyro.infer import AbstractInfer
+from pyro.infer import TracePosterior
 
 
 # XXX what should be the base class here?
-class Importance(AbstractInfer):
+class Importance(TracePosterior):
     """
     A new implementation of importance sampling
     """
-    def __init__(self, model, guide=None, samples=10):
+    def __init__(self, model, guide=None, samples=None):
         """
         Constructor
         TODO proper docs etc
         """
         super(Importance, self).__init__()
-        self.samples = samples
-        self.model = model
+        if samples is None:
+            samples = 10
         if guide is None:
             # propose from the prior
             guide = poutine.block(model, hide_types=["observe"])
+        self.samples = samples
+        self.model = model
         self.guide = guide
 
     def _traces(self, *args, **kwargs):
@@ -34,6 +36,4 @@ class Importance(AbstractInfer):
             model_trace = poutine.trace(
                 poutine.replay(self.model, guide_trace))(*args, **kwargs)
             log_weight = model_trace.log_pdf() - guide_trace.log_pdf()
-            # traces.append((model_trace, log_weight))
             yield (model_trace, log_weight)
-        # return traces

@@ -7,10 +7,10 @@ else:
     from queue import Queue
 
 import pyro.poutine as poutine
-from pyro.infer import AbstractInfer
+from pyro.infer import TracePosterior
 
 
-class Search(AbstractInfer):
+class Search(TracePosterior):
     """
     New Trace and Poutine-based implementation of systematic search
     """

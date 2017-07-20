@@ -5,10 +5,10 @@ from torch.autograd import Variable
 import pyro
 import pyro.poutine as poutine
 from pyro.distributions import Uniform
-from pyro.infer import AbstractInfer
+from pyro.infer import TracePosterior
 
 
-class MH(AbstractInfer):
+class MH(TracePosterior):
     """
     Initial implementation of MH MCMC
     """

@@ -3,10 +3,9 @@ from torch.autograd import Variable
 from collections import OrderedDict
 import pyro
 import pyro.poutine as poutine
-# from pyro.infer.abstract_infer import AbstractInfer
 
 
-class KL_QP(object):  # AbstractInfer):
+class KL_QP(object):
     """
     A new, Trace and Poutine-based implementation of SVI
     """
