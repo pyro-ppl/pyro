@@ -39,6 +39,10 @@ class NormalNormalTests(TestCase):
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 5000)
 
+    # FIXME
+    # def test_elbo_nonreparameterized(self):
+    #     self.do_elbo_test(False, 15000)
+
     def do_elbo_test(self, reparameterized, n_steps):
         pyro.get_param_store().clear()
 
@@ -385,6 +389,10 @@ class LogNormalNormalTests(TestCase):
 
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 7000)
+
+    # FIXME
+    # def test_elbo_nonreparameterized(self):
+    #     self.do_elbo_test(False, 15000)
 
     def do_elbo_test(self, reparameterized, n_steps):
         pyro.get_param_store().clear()
