@@ -4,7 +4,6 @@ from torch.autograd import Variable
 import pyro
 import pyro.util
 from pyro.distributions import Categorical
-import pdb
 
 
 class Histogram(pyro.distributions.Distribution):
@@ -62,8 +61,8 @@ class Marginal(Histogram):
     def gen_weighted_samples(self, *args, **kwargs):
         for tr, log_weight in self.trace_dist._traces(*args, **kwargs):
             yield (tr["_RETURN"]["value"], log_weight)
-    
-    
+
+
 class TracePosterior(Histogram):
     """
     abstract inference class
@@ -72,7 +71,7 @@ class TracePosterior(Histogram):
     def gen_weighted_samples(self, *args, **kwargs):
         for tr, log_weight in self._traces(*args, **kwargs):
             yield (tr, log_weight)
-        
+
     def _traces(self, *args, **kwargs):
         """
         Virtual method to get unnormalized weighted list of posterior traces
