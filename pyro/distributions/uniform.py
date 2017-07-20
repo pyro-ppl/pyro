@@ -1,5 +1,6 @@
 import torch
 from torch.autograd import Variable
+import numpy as np
 
 from pyro.distributions.distribution import Distribution
 
@@ -31,7 +32,7 @@ class Uniform(Distribution):
 
     def sample(self, a=None, b=None, *args, **kwargs):
         """
-        Reparametrized Uniform sampler.
+        Reparameterized Uniform sampler.
         """
         _a, _b = self._sanitize_input(a, b)
         eps = Variable(torch.rand(_a.size()))
@@ -48,7 +49,7 @@ class Uniform(Distribution):
         else:
             # x is 2-d
             if x.le(_a).data[0, 0] or x.ge(_b).data[0, 0]:
-                return Variable(torch.Tensor([[-float("inf")]]))
+                return Variable(torch.Tensor([[-np.inf]]))
         return torch.sum(-torch.log(_b - _a))
 
     def batch_log_pdf(self, x, a=None, b=None, batch_size=1, *args, **kwargs):

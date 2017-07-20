@@ -6,7 +6,7 @@ from pyro.distributions.distribution import Distribution
 
 class Multinomial(Distribution):
     """
-    Multinomial distributino
+    Multinomial distribution
     """
     def _sanitize_input(self, ps, n):
         if ps is not None:

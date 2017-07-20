@@ -5,7 +5,7 @@ from pyro.distributions.distribution import Distribution
 
 class Exponential(Distribution):
     """
-    Univariate exponential parameterized by lam
+    Exponential parameterized by lam
     """
 
     def _sanitize_input(self, lam):

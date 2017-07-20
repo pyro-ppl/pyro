@@ -8,7 +8,7 @@ from pyro.util import log_gamma
 
 class Gamma(Distribution):
     """
-    univariate gamma parameterized by alpha and beta
+    Gamma parameterized by alpha and beta
     """
 
     def _sanitize_input(self, alpha, beta):

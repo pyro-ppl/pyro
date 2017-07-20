@@ -37,7 +37,7 @@ class DiagNormal(Distribution):
 
     def sample(self, mu=None, sigma=None, *args, **kwargs):
         """
-        Reparametrized diagonal Normal sampler.
+        Reparameterized diagonal Normal sampler.
         """
         _mu, _sigma = self._sanitize_input(mu, sigma)
         eps = Variable(torch.randn(_mu.size()))
