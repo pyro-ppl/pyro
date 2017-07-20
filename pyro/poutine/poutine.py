@@ -112,7 +112,7 @@ class Poutine(object):
             return fn(*args, **kwargs)
         return obs
 
-    def _pyro_map_data(self, prev_val, name, data, fn, batch_size=None, **kwargs):
+    def _pyro_map_data(self, prev_val, name, data, fn, batch_size):
         """
         Default pyro.map_data Poutine behavior
         """

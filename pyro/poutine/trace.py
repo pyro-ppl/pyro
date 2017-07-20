@@ -52,7 +52,7 @@ class Trace(dict):
         site["scale"] = scale
         site["fn"] = fn
         # site["value"] = val  # XXX too large to store
-        site["args"] = ((), kwargs)
+        # site["args"] = ((), kwargs)
         self[name] = site
         return self
 

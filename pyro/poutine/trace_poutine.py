@@ -80,19 +80,18 @@ class TracePoutine(Poutine):
         self.trace.add_param(name, retrieved, *args, **kwargs)
         return retrieved
 
-    def _pyro_map_data(self, prev_val, name, data, fn, batch_size=None, **kwargs):
+    def _pyro_map_data(self, prev_val, name, data, fn, batch_size=None):
         """
         Trace map_data
         """
         ret = super(TracePoutine, self)._pyro_map_data(prev_val, name, data, fn,
                                                        # XXX watch out for changing
-                                                       batch_size=batch_size,
-                                                       **kwargs)
+                                                       batch_size=batch_size)
         # store the indices, batch_size, and scaled function in a site
         # XXX does not store input or output values due to space constraints - beware!
         assert hasattr(fn, "__map_data_indices"), "fn has no __map_data_indices?"
         assert hasattr(fn, "__map_data_scale"), "fn has no __map_data_scale?"
         self.trace.add_map_data(name, fn, batch_size,
-                                fn.__map_data_scale, fn.__map_data_indices,
-                                **kwargs)
+                                getattr(fn, "__map_data_scale"),
+                                getattr(fn, "__map_data_indices"))
         return ret
