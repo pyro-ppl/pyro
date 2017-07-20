@@ -43,7 +43,7 @@ def replay(fn, trace, sites=None):
     return _fn
 
 
-def block(fn, hide=None, expose=None):
+def block(fn, hide=None, expose=None, hide_types=None, expose_types=None):
     """
     Given a callable that contains Pyro primitive calls,
     hide the primitive calls at sites
@@ -53,7 +53,8 @@ def block(fn, hide=None, expose=None):
     Also expose()?
     """
     def _fn(*args, **kwargs):
-        p = BlockPoutine(fn, hide=hide, expose=expose)
+        p = BlockPoutine(fn, hide=hide, expose=expose,
+                         hide_types=hide_types, expose_types=expose_types)
         return p(*args, **kwargs)
     return _fn
 

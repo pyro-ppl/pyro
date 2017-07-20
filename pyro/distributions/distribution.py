@@ -9,7 +9,7 @@ class Distribution(object):
 
         Currently takes no explicit arguments.
         """
-        self.reparametrized = False
+        self.reparameterized = False
         pass
 
     def __call__(self, *args, **kwargs):

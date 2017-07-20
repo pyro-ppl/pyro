@@ -1,7 +1,6 @@
 import pyro
 import torch
 from torch.autograd import Variable
-from uuid import uuid4 as uuid
 
 
 class Poutine(object):
@@ -37,13 +36,13 @@ class Poutine(object):
             return r_val
         except Exception as e:
             self._flush_stack()
-            raise e
+            raise
 
     def _enter_poutine(self, *args, **kwargs):
         """
         A setup function called right after entry to the Poutine
         """
-        self.trace_uid = uuid().hex
+        pass
 
     def _exit_poutine(self, r_val, *args, **kwargs):
         """
