@@ -6,7 +6,6 @@ import pyro.poutine as poutine
 from pyro.infer import TracePosterior
 
 
-# XXX what should be the base class here?
 class Importance(TracePosterior):
     """
     A new implementation of importance sampling

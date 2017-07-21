@@ -1,6 +1,5 @@
 import torch
 from torch.autograd import Variable
-from collections import OrderedDict
 import pyro
 import pyro.poutine as poutine
 

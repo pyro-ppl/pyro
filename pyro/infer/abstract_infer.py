@@ -17,7 +17,7 @@ class Histogram(pyro.distributions.Distribution):
         Currently very inefficient...
         """
         vs, log_weights = [], []
-        for v, log_weight in self.gen_weighted_samples(*args, **kwargs):
+        for v, log_weight in self._gen_weighted_samples(*args, **kwargs):
             vs.append(v)
             log_weights.append(log_weight)
 
@@ -35,8 +35,8 @@ class Histogram(pyro.distributions.Distribution):
             hist = pyro.util.basic_histogram(ps, vs)
         return pyro.distributions.Categorical(ps=hist["ps"], vs=hist["vs"])
 
-    def gen_weighted_samples(self, *args, **kwargs):
-        raise NotImplementedError("gen_weighted_samples is abstract method")
+    def _gen_weighted_samples(self, *args, **kwargs):
+        raise NotImplementedError("_gen_weighted_samples is abstract method")
 
     def sample(self, *args, **kwargs):
         return pyro.poutine.block(self._dist)(*args, **kwargs).sample()
@@ -58,7 +58,7 @@ class Marginal(Histogram):
         super(Marginal, self).__init__()
         self.trace_dist = trace_dist
 
-    def gen_weighted_samples(self, *args, **kwargs):
+    def _gen_weighted_samples(self, *args, **kwargs):
         for tr, log_weight in self.trace_dist._traces(*args, **kwargs):
             yield (tr["_RETURN"]["value"], log_weight)
 
@@ -68,7 +68,7 @@ class TracePosterior(Histogram):
     abstract inference class
     TODO documentation
     """
-    def gen_weighted_samples(self, *args, **kwargs):
+    def _gen_weighted_samples(self, *args, **kwargs):
         for tr, log_weight in self._traces(*args, **kwargs):
             yield (tr, log_weight)
 
@@ -78,13 +78,14 @@ class TracePosterior(Histogram):
         """
         raise NotImplementedError("inference algorithm must implement _traces")
 
-    # def log_z(self, *args, **kwargs):
-    #     """
-    #     estimate marginal probability of observations
-    #     """
-    #     traces, log_weights = self._traces(*args, **kwargs)
-    #     log_z = 0.0
-    #     # TODO parallelize
-    #     for tr, log_w in zip(traces, log_weights):
-    #         log_z = log_z + log_w
-    #     return log_z / len(traces)
+    def log_z(self, *args, **kwargs):
+        """
+        estimate marginal probability of observations
+        """
+        log_z = 0.0
+        n = 0
+        # TODO parallelize
+        for _, log_weight in self._traces(*args, **kwargs):
+            n += 1
+            log_z = log_z + log_weight
+        return log_z / n
