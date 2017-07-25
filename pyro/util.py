@@ -97,6 +97,17 @@ def log_gamma(xx):
     return torch.log(ser * magic2) - t
 
 
+def to_one_hot(x, ps):
+    batch_size = x.size(0)
+    classes = ps.size(1)
+    # create an empty array for one-hots
+    batch_one_hot = torch.zeros(batch_size, classes)
+    # this operation writes ones where needed
+    batch_one_hot.scatter_(1, x.data.view(-1, 1), 1)
+
+    return Variable(batch_one_hot)
+
+
 def tensor_histogram(ps, vs):
     """
     make a histogram from weighted Variable/Tensor/ndarray samples
