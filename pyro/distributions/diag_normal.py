@@ -26,6 +26,8 @@ class DiagNormal(Distribution):
         self.bs = batch_size
         super(DiagNormal, self).__init__(*args, **kwargs)
         self.reparametrized = True
+        if 'reparameterized' in kwargs:
+            self.reparametrized = kwargs['reparameterized']
 
     def sample(self, batch_size=1):
         """

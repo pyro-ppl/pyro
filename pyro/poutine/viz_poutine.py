@@ -7,11 +7,54 @@ from collections import defaultdict
 from .poutine import Poutine
 
 
+class TraceGraph(object):
+    def __init__(self, G, stochastic_nodes, reparameterized_nodes, param_nodes):
+        self.G = G
+        self.param_nodes = param_nodes
+        self.reparameterized_nodes = reparameterized_nodes
+        self.stochastic_nodes = stochastic_nodes
+        self.nonreparam_stochastic_nodes = list(set(stochastic_nodes) - set(reparameterized_nodes))
+
+    def get_direct_stochastic_children_of_parameters(self):
+        print "\ninside get direct stochastic"
+        direct_children = set()
+        for param in self.param_nodes:
+            print "param", param
+            for node in self.get_children(param):
+                print "child of %s : %s" % (param, node)
+                if node in self.nonreparam_stochastic_nodes:
+                    print "adding child node", node
+                    direct_children.add(node)
+        print "\nleaving get direct stochastic"
+        return list(direct_children)
+
+    def get_nonreparam_stochastic_nodes(self):
+        return self.nonreparam_stochastic_nodes
+
+    def get_nodes(self):
+	return self.G.nodes()
+
+    def get_children(self, node):
+	return self.G.successors(node)
+
+    def get_parents(self, node):
+	return self.G.predecessors(node)
+
+    def get_ancestors(self, node):
+	return list(networkx.ancestors(self.G, node))
+
+    def get_descendants(self, node):
+	return list(networkx.descendants(self.G, node))
+
+
 class VizPoutine(Poutine):
     """
-    visualization.
+    visualization and graph poutine.
+    -- if output_file = None, no visualization is made
+    -- skip_creators and include_intermediates control the granularity of the
+       constructed graph
     """
-    def __init__(self, fn, output_file, skip_creators = False, include_intermediates = True):
+    def __init__(self, fn, output_file = None, skip_creators = False, include_intermediates = True):
         super(VizPoutine, self).__init__(fn)
         self.output_file = output_file
         self.skip_creators = skip_creators
@@ -32,7 +75,9 @@ class VizPoutine(Poutine):
 	self.variables = {}
 	self.funcs = {}
         self.output_to_input = {}
-        self.G = networkx.DiGraph()
+        self.stochastic_nodes = []
+        self.reparameterized_nodes = []
+        self.param_nodes = []
 
 	def new_function__call__(func, *args, **kwargs):
 	    inputs =  [a for a in args            if isinstance(a, Variable)]
@@ -47,7 +92,7 @@ class VizPoutine(Poutine):
 	cid = id(creator)
 	oid = id(output)
 	if oid in self.variables:
-	    return
+            assert False, "oid in self.var"
 	# connect creator to input
 	for _input in inputs:
 	    iid = id(_input)
@@ -55,30 +100,37 @@ class VizPoutine(Poutine):
 	    # register input
 	    self.variables[iid] = _input
 	# connect output to creator
-	assert type(output) not in [tuple, list, dict]
+        assert type(output) not in [tuple, list, dict], "registor_creator: output type not as expected"
 	self.var_trace[oid][cid] = creator
 	# register creator and output and all inputs
 	self.variables[oid] = output
 	self.funcs[cid] = creator
         # connect output directly to inputs
-	self.output_to_input[oid] = []
-	for _input in inputs:
-	    iid = id(_input)
-	    self.output_to_input[oid].append(iid)
+	self.output_to_input[oid] = [ id(_input) for _input in inputs ]
 
     def _exit_poutine(self, ret_val, *args, **kwargs):
         """
         Register the return value from the function on exit and make visualization
         """
+	Function.__call__ = self.old_function__call__
+
         if ret_val in self.var_to_name_dict:
             self.var_to_name_dict[ret_val] += ' [return]'
         else:
             self.var_to_name_dict[ret_val] = 'return'
-	Function.__call__ = self.old_function__call__
-        self._create_graph()
-	self.save_visualization()
 
-    def _create_graph(self):
+        self.create_graph()
+        if self.output_file is not None:
+            self.save_visualization()
+
+        if self.skip_creators and not self.include_intermediates:
+            return TraceGraph(networkx.relabel_nodes(self.G, self.vid_to_names),
+                              self.stochastic_nodes, self.reparameterized_nodes,
+                              self.param_nodes)
+        else:
+            return self.G
+
+    def create_graph(self):
         self.G = networkx.DiGraph()
         self.vid_to_names = {str(k): self.var_to_name_dict[v] for k,v in self.variables.iteritems()
                              if v in self.var_to_name_dict}
@@ -128,13 +180,19 @@ class VizPoutine(Poutine):
                         except Exception as e:
                             pass
 
+            for vid in self.G.nodes():
+                if vid not in self.vid_to_names and int(vid) not in self.funcs:
+                    self.G.remove_node(vid)
+
     def save_visualization(self):
 	g = graphviz.Digraph()
         for vid in self.G.nodes():
             if vid in self.vid_to_names:
                 label = self.vid_to_names[vid]
-                g.node(vid, label=label, shape='ellipse', style='filled',
-                       fillcolor='lightblue')
+                fillcolor = 'lightblue' if label not in self.stochastic_nodes else 'salmon'
+                if label in self.reparameterized_nodes:
+                    fillcolor = 'lightgrey;.5:salmon'
+                g.node(vid, label=label, shape='ellipse', style='filled', fillcolor=fillcolor)
             elif int(vid) in self.funcs:
                 g.node(vid, label=str(self.funcs[int(vid)].__class__.__name__), shape='rectangle',
                                  style='filled', fillcolor='orange')
@@ -151,18 +209,25 @@ class VizPoutine(Poutine):
 
     def _pyro_sample(self, prev_val, name, dist, *args, **kwargs):
         """
-        TODO
+        register sampled variable for graph construction
         """
         val = super(VizPoutine, self)._pyro_sample(prev_val, name, dist,
                                                      *args, **kwargs)
+        print "pyro sample args:", args
         self.var_to_name_dict[val] = name
+        self.stochastic_nodes.append(name)
+        if dist.reparametrized:
+            self.reparameterized_nodes.append(name)
+        if not dist.reparametrized:
+            return val.detach()
         return val
 
     def _pyro_param(self, prev_val, name, *args, **kwargs):
         """
-        TODO
+        register parameter for graph construction
         """
         retrieved = super(VizPoutine, self)._pyro_param(prev_val, name,
                                                           *args, **kwargs)
         self.var_to_name_dict[retrieved] = name
+        self.param_nodes.append(name)
         return retrieved
