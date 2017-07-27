@@ -7,7 +7,7 @@ from .block_poutine import BlockPoutine
 from .trace_poutine import TracePoutine
 from .replay_poutine import ReplayPoutine
 from .queue_poutine import QueuePoutine
-from .viz_poutine import VizPoutine
+from .tracegraph_poutine import TraceGraphPoutine
 
 
 ############################################
@@ -29,9 +29,9 @@ def trace(fn):
     return _fn
 
 
-def viz(fn, output_file, skip_creators = False, include_intermediates = True):
+def tracegraph(fn, graph_output = None, skip_creators = True, include_intermediates = False):
     def _fn(*args, **kwargs):
-        p = VizPoutine(fn, output_file, skip_creators = skip_creators,
+        p = TraceGraphPoutine(fn, graph_output = graph_output, skip_creators = skip_creators,
                        include_intermediates = include_intermediates)
         return p(*args, **kwargs)
     return _fn

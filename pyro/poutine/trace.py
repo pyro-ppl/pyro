@@ -1,3 +1,4 @@
+from torch.autograd import Variable
 import pyro
 
 
@@ -20,7 +21,11 @@ class Trace(dict):
         assert name not in self, "sample {} already in trace".format(name)
         site = {}
         site["type"] = "sample"
-        site["value"] = sample
+        if fn.reparameterized:
+            site["value"] = sample
+        else:
+            # hack to make the non-reparam normal work
+            site['value'] = Variable(sample.data)
         site["fn"] = fn
         site["args"] = (args, kwargs)
         self[name] = site

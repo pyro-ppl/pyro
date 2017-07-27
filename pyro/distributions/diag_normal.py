@@ -42,6 +42,8 @@ class DiagNormal(Distribution):
         _mu, _sigma = self._sanitize_input(mu, sigma)
         eps = Variable(torch.randn(_mu.size()))
         z = _mu + eps * _sigma
+        if 'reparameterized' in kwargs:
+            self.reparameterized = kwargs['reparameterized']
         return z
 
     def log_pdf(self, x, mu=None, sigma=None, batch_size=1, *args, **kwargs):
