@@ -36,7 +36,7 @@ class NormalNormalTests(TestCase):
         self.analytic_log_sig_n = -0.5 * torch.log(self.analytic_lam_n)
         self.analytic_mu_n = self.sum_data * (self.lam / self.analytic_lam_n) +\
             self.mu0 * (self.lam0 / self.analytic_lam_n)
-        self.verbose = True
+        self.verbose = False
 
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 1000)
@@ -117,7 +117,7 @@ class NormalNormalNormalTests(TestCase):
         self.analytic_log_sig_n = -0.5 * torch.log(self.analytic_lam_n)
         self.analytic_mu_n = self.sum_data * (self.lam / self.analytic_lam_n) +\
             self.mu0 * (self.lam0 / self.analytic_lam_n)
-        self.verbose = True
+        self.verbose = False
 
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, True, 5000, 0.02, 0.002)
@@ -233,7 +233,7 @@ class BernoulliBetaTests(TestCase):
         # posterior beta
         self.log_alpha_n = torch.log(self.alpha_n)
         self.log_beta_n = torch.log(self.beta_n)
-        self.verbose = True
+        self.verbose = False
 
     def test_elbo_nonreparameterized(self):
         if self.verbose:
@@ -292,7 +292,7 @@ class PoissonGammaTests(TestCase):
             Variable(torch.Tensor([self.n_data]))  # posterior beta
         self.log_alpha_n = torch.log(self.alpha_n)
         self.log_beta_n = torch.log(self.beta_n)
-        self.verbose = True
+        self.verbose = False
 
     def test_elbo_nonreparameterized(self):
         if self.verbose:
@@ -355,7 +355,7 @@ class ExponentialGammaTests(TestCase):
         self.beta_n = self.beta0 + torch.sum(self.data)  # posterior beta
         self.log_alpha_n = torch.log(self.alpha_n)
         self.log_beta_n = torch.log(self.beta_n)
-        self.verbose = True
+        self.verbose = False
 
     def test_elbo_nonreparameterized(self):
         if self.verbose:
@@ -425,7 +425,7 @@ class LogNormalNormalTests(TestCase):
         self.mu_n = mu_numerator / self.tau_n  # posterior mu
         self.log_mu_n = torch.log(self.mu_n)
         self.log_tau_n = torch.log(self.tau_n)
-        self.verbose = True
+        self.verbose = False
 
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 7000, 0.95, 0.001)
