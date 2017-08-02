@@ -129,7 +129,7 @@ class TraceGraphPoutine(TracePoutine):
         # if self.ret_val not in self.id_to_name_dict:
         #    self.id_to_name_dict[self.ret_val] = 'return'
 
-        #if not self.include_intermediates:
+        # if not self.include_intermediates:
         self.remove_intermediates()
 
         if self.graph_output is not None:
