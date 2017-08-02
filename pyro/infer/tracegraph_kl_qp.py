@@ -5,6 +5,7 @@ import pyro
 import pyro.poutine as poutine
 import sys
 
+
 class TraceGraph_KL_QP(object):
     """
     A TraceGraph and Poutine-based implementation of SVI
@@ -42,15 +43,14 @@ class TraceGraph_KL_QP(object):
         # arguments for visualization
         guide_graph_output = kwargs.pop('guide_graph_output', None)
         model_graph_output = kwargs.pop('model_graph_output', None)
-        #include_intermediates = kwargs.pop('include_intermediates', False)
+        # include_intermediates = kwargs.pop('include_intermediates', False)
 
         # call guide() and model() and record trace/tracegraph
         guide_trgraph = poutine.tracegraph(self.guide,
                                            graph_output=guide_graph_output)(*args, **kwargs)
         guide_trace = guide_trgraph.get_trace()
 
-        model_trgraph = poutine.tracegraph(
-                                           poutine.replay(self.model, guide_trace),
+        model_trgraph = poutine.tracegraph(poutine.replay(self.model, guide_trace),
                                            graph_output=model_graph_output)(*args, **kwargs)
         model_trace = model_trgraph.get_trace()
 
@@ -67,13 +67,13 @@ class TraceGraph_KL_QP(object):
         for name in model_trace.keys():
             mtn = model_trace[name]
             if mtn["type"] == "observe":
-                cost_node = ( mtn["log_pdf"], model_trgraph.get_parents(name, with_self=False) )
+                cost_node = (mtn["log_pdf"], model_trgraph.get_parents(name, with_self=False))
                 cost_nodes.append(cost_node)
             elif mtn["type"] == "sample":
                 gtn = guide_trace[name]
-                cost_node1 = (mtn["log_pdf"], model_trgraph.get_parents(name, with_self=True) )
-                cost_node2 = (- gtn["log_pdf"], guide_trgraph.get_parents(name, with_self=True) )
-                cost_nodes.extend( [cost_node1, cost_node2] )
+                cost_node1 = (mtn["log_pdf"], model_trgraph.get_parents(name, with_self=True))
+                cost_node2 = (- gtn["log_pdf"], guide_trgraph.get_parents(name, with_self=True))
+                cost_nodes.extend([cost_node1, cost_node2])
 
         elbo = 0.0
         elbo_reinforce_terms = 0.0
@@ -87,7 +87,7 @@ class TraceGraph_KL_QP(object):
         # we include only downstream costs to reduce variance
         for node in guide_trgraph.get_nonreparam_stochastic_nodes():
             downstream_cost = 0.0
-            node_descendants = guide_trgraph.get_descendants(node, with_self = True)
+            node_descendants = guide_trgraph.get_descendants(node, with_self=True)
             for cost_node in cost_nodes:
                 if any([p in node_descendants for p in cost_node[1]]):
                     downstream_cost += cost_node[0]

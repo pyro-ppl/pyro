@@ -31,34 +31,35 @@ class TraceGraph(object):
         return self.reparameterized_nodes
 
     def get_nodes(self):
-	return self.G.nodes()
+        return self.G.nodes()
 
-    def get_children(self, node, with_self = False):
-	children = self.G.successors(node)
+    def get_children(self, node, with_self=False):
+        children = self.G.successors(node)
         if with_self:
             children.append(node)
         return children
 
-    def get_parents(self, node, with_self = False):
-	parents = self.G.predecessors(node)
+    def get_parents(self, node, with_self=False):
+        parents = self.G.predecessors(node)
         if with_self:
             parents.append(node)
         return parents
 
-    def get_ancestors(self, node, with_self = False):
-	ancestors = list(networkx.ancestors(self.G, node))
+    def get_ancestors(self, node, with_self=False):
+        ancestors = list(networkx.ancestors(self.G, node))
         if with_self:
             ancestors.append(node)
         return ancestors
 
-    def get_descendants(self, node, with_self = False):
-	descendants = list(networkx.descendants(self.G, node))
+    def get_descendants(self, node, with_self=False):
+        descendants = list(networkx.descendants(self.G, node))
         if with_self:
             descendants.append(node)
         return descendants
 
     def get_trace(self):
         return self.trace
+
 
 class TraceGraphPoutine(TracePoutine):
     """
@@ -74,10 +75,10 @@ class TraceGraphPoutine(TracePoutine):
         always remove for tracegraph_klqp?
     XXX seems to play somewhat strangely with replay?
     """
-    def __init__(self, fn, graph_output = None): #, include_intermediates = False):
+    def __init__(self, fn, graph_output=None):  # include_intermediates = False):
         super(TraceGraphPoutine, self).__init__(fn)
         self.graph_output = graph_output
-        #self.include_intermediates = include_intermediates
+        # self.include_intermediates = include_intermediates
 
     def _enter_poutine(self, *args, **kwargs):
         """
@@ -95,15 +96,15 @@ class TraceGraphPoutine(TracePoutine):
 
         # this function wraps pytorch computations so that we can
         # construct the forward graph
-	def new_function__call__(func, *args, **kwargs):
-	    output = self.old_function__call__(func, *args, **kwargs)
+        def new_function__call__(func, *args, **kwargs):
+            output = self.old_function__call__(func, *args, **kwargs)
             if self.monkeypatch_active:
-                inputs =  [a for a in args            if isinstance(a, Variable)]
+                inputs = [a for a in args if isinstance(a, Variable)]
                 inputs += [a for a in kwargs.values() if isinstance(a, Variable)]
                 self.register_function(inputs, func, output)
-	    return output
+            return output
 
-	Function.__call__ = new_function__call__
+        Function.__call__ = new_function__call__
 
     def register_function(self, inputs, creator, output):
         """
@@ -111,9 +112,9 @@ class TraceGraphPoutine(TracePoutine):
         """
         assert type(output) not in [tuple, list, dict],\
             "registor_function: output type not as expected"
-	output_id = id(output)
-	for _input in inputs:
-	    input_id = id(_input)
+        output_id = id(output)
+        for _input in inputs:
+            input_id = id(_input)
             self.G.add_edge(input_id, output_id)
 
     def _exit_poutine(self, ret_val, *args, **kwargs):
@@ -121,26 +122,26 @@ class TraceGraphPoutine(TracePoutine):
         Register the return value from the function on exit and make visualization
         Return a TraceGraph object that contains the forward graph and trace
         """
-	Function.__call__ = self.old_function__call__
+        Function.__call__ = self.old_function__call__
         self.trace = super(TraceGraphPoutine, self)._exit_poutine(ret_val, *args, **kwargs)
 
-        #self.ret_val = id(ret_val)
-        #if self.ret_val not in self.id_to_name_dict:
+        # self.ret_val = id(ret_val)
+        # if self.ret_val not in self.id_to_name_dict:
         #    self.id_to_name_dict[self.ret_val] = 'return'
 
-        #if not self.include_intermediates:
+        # if not self.include_intermediates:
         self.remove_intermediates()
 
         if self.graph_output is not None:
             self.save_visualization()
 
         # in any case we remove intermediates from the graph passed to TraceGraph
-        #if self.include_intermediates:
-        #self.remove_intermediates()
+        # if self.include_intermediates:
+        # self.remove_intermediates()
 
         return TraceGraph(networkx.relabel_nodes(self.G, self.id_to_name_dict), self.trace,
-                              self.stochastic_nodes, self.reparameterized_nodes,
-                              self.param_nodes)
+                          self.stochastic_nodes, self.reparameterized_nodes,
+                          self.param_nodes)
 
     def remove_intermediates(self):
         """
@@ -148,7 +149,7 @@ class TraceGraphPoutine(TracePoutine):
         """
         for vid1 in self.G.nodes():
             for vid2 in self.G.nodes():
-                if vid1==vid2:
+                if vid1 == vid2:
                     continue
                 if vid1 in self.id_to_name_dict and vid2 in self.id_to_name_dict:
                     try:
@@ -171,11 +172,11 @@ class TraceGraphPoutine(TracePoutine):
         """
         render graph and save to graph_output
         """
-	g = graphviz.Digraph()
+        g = graphviz.Digraph()
         for vid in self.G.nodes():
             if vid in self.id_to_name_dict:
                 label = self.id_to_name_dict[vid]
-                shape = 'ellipse' # if not vid==self.ret_val else 'doublecircle'
+                shape = 'ellipse'  # if not vid==self.ret_val else 'doublecircle'
                 if label in self.param_nodes:
                     fillcolor = 'lightblue'
                 elif label in self.stochastic_nodes and label not in self.reparameterized_nodes:
@@ -192,7 +193,7 @@ class TraceGraphPoutine(TracePoutine):
         for vid1, vid2 in self.G.edges():
             g.edge(str(vid1), str(vid2))
 
-	g.render(self.graph_output, view=False, cleanup=True)
+        g.render(self.graph_output, view=False, cleanup=True)
 
     def _pyro_sample(self, prev_val, name, dist, *args, **kwargs):
         """
@@ -200,7 +201,7 @@ class TraceGraphPoutine(TracePoutine):
         """
         self.monkeypatch_active = False
         val = super(TraceGraphPoutine, self)._pyro_sample(prev_val, name, dist,
-                                                     *args, **kwargs)
+                                                          *args, **kwargs)
         self.monkeypatch_active = True
 
         self.id_to_name_dict[id(val)] = name
@@ -217,7 +218,7 @@ class TraceGraphPoutine(TracePoutine):
         register parameter for graph construction
         """
         retrieved = super(TraceGraphPoutine, self)._pyro_param(prev_val, name,
-                                                          *args, **kwargs)
+                                                               *args, **kwargs)
         self.id_to_name_dict[id(retrieved)] = name
         self.param_nodes.append(name)
         return retrieved
@@ -228,7 +229,7 @@ class TraceGraphPoutine(TracePoutine):
         """
         self.monkeypatch_active = False
         val = super(TraceGraphPoutine, self)._pyro_observe(prev_val, name, fn, obs,
-                                                      *args, **kwargs)
+                                                           *args, **kwargs)
         self.monkeypatch_active = True
         self.id_to_name_dict[id(val)] = name
         self.observation_nodes.append(name)
