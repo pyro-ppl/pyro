@@ -62,39 +62,51 @@ class TraceGraph_KL_QP(object):
 
         # prepare a list of all the cost nodes, each of which is +- log_pdf
         # the parent information will be used below for rao-blackwellization
+        # also flag if term can be removed because its gradient has zero expectation
         # XXX parents currently include parameters (unnecessarily so)
         cost_nodes = []
         for name in model_trace.keys():
             mtn = model_trace[name]
             if mtn["type"] == "observe":
-                cost_node = (mtn["log_pdf"], model_trgraph.get_parents(name, with_self=False))
+                cost_node = (mtn["log_pdf"], model_trgraph.get_parents(name, with_self=False), True)
                 cost_nodes.append(cost_node)
             elif mtn["type"] == "sample":
                 gtn = guide_trace[name]
-                cost_node1 = (mtn["log_pdf"], model_trgraph.get_parents(name, with_self=True))
-                cost_node2 = (- gtn["log_pdf"], guide_trgraph.get_parents(name, with_self=True))
+                cost_node1 = (mtn["log_pdf"], model_trgraph.get_parents(name, with_self=True), True)
+                zero_expectation = name in guide_trgraph.get_nonreparam_stochastic_nodes()
+                cost_node2 = (- gtn["log_pdf"], guide_trgraph.get_parents(name, with_self=True),
+                              not zero_expectation)
                 cost_nodes.extend([cost_node1, cost_node2])
 
         elbo = 0.0
+        elbo_no_zero_expectation_terms = 0.0
         elbo_reinforce_terms = 0.0
 
         # compute the elbo; if all stochastic nodes are reparameterizable, we're done
         for cost_node in cost_nodes:
             elbo += cost_node[0]
 
+        # compute the elbo, removing terms whose gradient is zero
+        for cost_node in cost_nodes:
+            if cost_node[2]:
+                elbo_no_zero_expectation_terms += cost_node[0]
+
         # if there are any non-reparameterized stochastic nodes,
         # include all the reinforce-like terms.
         # we include only downstream costs to reduce variance
         for node in guide_trgraph.get_nonreparam_stochastic_nodes():
             downstream_cost = 0.0
+            downstream_cost_non_zero = False
             node_descendants = guide_trgraph.get_descendants(node, with_self=True)
             for cost_node in cost_nodes:
                 if any([p in node_descendants for p in cost_node[1]]):
                     downstream_cost += cost_node[0]
+                    downstream_cost_non_zero = True
+            if downstream_cost_non_zero: # XXX is this actually necessary?
                 elbo_reinforce_terms += guide_trace[node]['log_pdf'] * Variable(downstream_cost.data)
 
         # the gradient of the surrogate loss yields our gradient estimator for the elbo
-        surrogate_loss = - elbo - elbo_reinforce_terms
+        surrogate_loss = - elbo_no_zero_expectation_terms - elbo_reinforce_terms
 
         # accumulate trainable parameters for gradient step
         # XXX should this also be reflected in the construction of the surrogate_loss instead?

@@ -431,7 +431,7 @@ class LogNormalNormalTests(TestCase):
         self.do_elbo_test(True, 7000, 0.95, 0.001)
 
     def test_elbo_nonreparameterized(self):
-        self.do_elbo_test(False, 15000, 0.96, 0.0006)
+        self.do_elbo_test(False, 25000, 0.96, 0.0005)
 
     def do_elbo_test(self, reparameterized, n_steps, beta1, lr):
         if self.verbose:

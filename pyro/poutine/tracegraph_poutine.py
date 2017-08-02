@@ -153,6 +153,8 @@ class TraceGraphPoutine(TracePoutine):
                     continue
                 if vid1 in self.id_to_name_dict and vid2 in self.id_to_name_dict:
                     try:
+                        # XXX FIX ME! this only looks at the shortest path, which
+                        # is going to be problematic in some cases
                         path = networkx.astar_path(self.G, vid1, vid2)
                         connect = True
                         for node in path[1:-1]:
