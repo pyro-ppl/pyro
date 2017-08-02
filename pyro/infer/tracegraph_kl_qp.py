@@ -3,12 +3,17 @@ from torch.autograd import Variable
 from collections import OrderedDict
 import pyro
 import pyro.poutine as poutine
+import sys
 
 class TraceGraph_KL_QP(object):
     """
-    A Tracegraph and Poutine-based implementation of SVI
+    A TraceGraph and Poutine-based implementation of SVI
+    The gradient estimator is constructed along the lines of
+    'Gradient Estimation Using Stochastic Computation Graphs'
+    John Schulman, Nicolas Heess, Theophane Weber, Pieter Abbeel
     """
-    def __init__(self, model,
+    def __init__(self,
+                 model,
                  guide,
                  optim_step_fct,
                  model_fixed=False,
@@ -34,65 +39,79 @@ class TraceGraph_KL_QP(object):
         """
         single step?
         """
-        step_number = kwargs.pop('step_number', -1)
-        reparam = kwargs.pop('reparameterized', '')
-        if step_number==0:
-            guide_tracegraph = poutine.tracegraph(self.guide, graph_output='guide.%s' % reparam)(*args, **kwargs)
-        else:
-            guide_tracegraph = poutine.tracegraph(self.guide)(*args, **kwargs)
-        guide_trace = guide_tracegraph.get_trace()
-        model_tracegraph = poutine.tracegraph(
-             poutine.replay(self.model, guide_trace))(*args, **kwargs)
-        model_trace = model_tracegraph.get_trace()
+        # arguments for visualization
+        guide_graph_output = kwargs.pop('guide_graph_output', None)
+        model_graph_output = kwargs.pop('model_graph_output', None)
+        #include_intermediates = kwargs.pop('include_intermediates', False)
 
-        # compute losses
+        # call guide() and model() and record trace/tracegraph
+        guide_trgraph = poutine.tracegraph(self.guide,
+                                           graph_output=guide_graph_output)(*args, **kwargs)
+        guide_trace = guide_trgraph.get_trace()
+
+        model_trgraph = poutine.tracegraph(
+                                           poutine.replay(self.model, guide_trace),
+                                           graph_output=model_graph_output)(*args, **kwargs)
+        model_trace = model_trgraph.get_trace()
+
+        # compute all the individual log pdf terms
+        # XXX not actually using the result of this computation, but these two calls
+        # trigger the actual log_pdf calculations and fill in the trace dictionary.
+        # do elsewhere?
         _ = guide_trace.log_pdf() - model_trace.log_pdf()
 
-        surrogate_loss_stochastic_bit = 0.0
-        surrogate_loss_deterministic_bit = 0.0
-
+        # prepare a list of all the cost nodes, each of which is +- log_pdf
+        # the parent information will be used below for rao-blackwellization
+        # XXX parents currently include parameters (unnecessarily so)
+        cost_nodes = []
         for name in model_trace.keys():
-            if model_trace[name]["type"] == "observe":
-                surrogate_loss_deterministic_bit -= model_trace[name]["log_pdf"]
-            elif model_trace[name]["type"] == "sample":
-                surrogate_loss_deterministic_bit -= model_trace[name]["log_pdf"]
-                surrogate_loss_deterministic_bit += guide_trace[name]["log_pdf"]
+            mtn = model_trace[name]
+            if mtn["type"] == "observe":
+                cost_node = ( mtn["log_pdf"], model_trgraph.get_parents(name, with_self=False) )
+                cost_nodes.append(cost_node)
+            elif mtn["type"] == "sample":
+                gtn = guide_trace[name]
+                cost_node1 = (mtn["log_pdf"], model_trgraph.get_parents(name, with_self=True) )
+                cost_node2 = (- gtn["log_pdf"], guide_trgraph.get_parents(name, with_self=True) )
+                cost_nodes.extend( [cost_node1, cost_node2] )
 
-        for node in guide_tracegraph.get_direct_stochastic_children_of_parameters():
-            for cost_node in model_trace.keys():
-                if cost_node in guide_tracegraph.get_descendants(node, with_self=True):
-                    if model_trace[cost_node]["type"] == "sample":
-                        surrogate_loss_stochastic_bit -= Variable(model_trace[cost_node]["log_pdf"].data) *\
-                                                         guide_trace[node]['log_pdf']
-                        surrogate_loss_stochastic_bit += Variable(guide_trace[cost_node]["log_pdf"].data) *\
-                                                         guide_trace[node]['log_pdf']
-                if model_trace[cost_node]["type"] == "observe":
-                    include_term = False
-                    for parent in model_tracegraph.observe_stochastic_parents[cost_node]:
-                        if parent in guide_tracegraph.get_ancestors(parent, with_self = True):
-                            include_term = True
-                    if include_term:
-                        surrogate_loss_stochastic_bit -= Variable(model_trace[cost_node]["log_pdf"].data) *\
-                                                         guide_trace[node]['log_pdf']
+        elbo = 0.0
+        elbo_reinforce_terms = 0.0
 
-        surrogate_loss = surrogate_loss_stochastic_bit + surrogate_loss_deterministic_bit
-        elbo = -surrogate_loss_deterministic_bit
+        # compute the elbo; if all stochastic nodes are reparameterizable, we're done
+        for cost_node in cost_nodes:
+            elbo += cost_node[0]
 
-        # accumulate parameters
+        # if there are any non-reparameterized stochastic nodes,
+        # include all the reinforce-like terms.
+        # we include only downstream costs to reduce variance
+        for node in guide_trgraph.get_nonreparam_stochastic_nodes():
+            downstream_cost = 0.0
+            node_descendants = guide_trgraph.get_descendants(node, with_self = True)
+            for cost_node in cost_nodes:
+                if any([p in node_descendants for p in cost_node[1]]):
+                    downstream_cost += cost_node[0]
+                elbo_reinforce_terms += guide_trace[node]['log_pdf'] * Variable(downstream_cost.data)
+
+        # the gradient of the surrogate loss yields our gradient estimator for the elbo
+        surrogate_loss = - elbo - elbo_reinforce_terms
+
+        # accumulate trainable parameters for gradient step
+        # XXX should this also be reflected in the construction of the surrogate_loss instead?
         all_trainable_params = []
-        # get trace params from last model run
+        # get trace params from model run
         if not self.model_fixed:
             for name in model_trace.keys():
                 if model_trace[name]["type"] == "param":
                     all_trainable_params.append(model_trace[name]["value"])
-        # get trace params from last guide run
+        # get trace params from guide run
         if not self.guide_fixed:
             for name in guide_trace.keys():
                 if guide_trace[name]["type"] == "param":
                     all_trainable_params.append(guide_trace[name]["value"])
         all_trainable_params = list(set(all_trainable_params))
 
-        # gradients
+        # compute gradients
         surrogate_loss.backward()
         # update
         self.optim_step_fct(all_trainable_params)

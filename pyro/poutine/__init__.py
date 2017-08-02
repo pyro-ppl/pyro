@@ -29,10 +29,10 @@ def trace(fn):
     return _fn
 
 
-def tracegraph(fn, graph_output = None, skip_creators = True, include_intermediates = False):
+def tracegraph(fn, graph_output = None): #, include_intermediates = False):
     def _fn(*args, **kwargs):
-        p = TraceGraphPoutine(fn, graph_output = graph_output, skip_creators = skip_creators,
-                       include_intermediates = include_intermediates)
+        p = TraceGraphPoutine(fn, graph_output = graph_output)
+        #               include_intermediates = include_intermediates)
         return p(*args, **kwargs)
     return _fn
 
