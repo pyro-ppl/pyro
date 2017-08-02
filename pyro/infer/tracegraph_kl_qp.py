@@ -102,7 +102,7 @@ class TraceGraph_KL_QP(object):
                 if any([p in node_descendants for p in cost_node[1]]):
                     downstream_cost += cost_node[0]
                     downstream_cost_non_zero = True
-            if downstream_cost_non_zero: # XXX is this actually necessary?
+            if downstream_cost_non_zero:  # XXX is this actually necessary?
                 elbo_reinforce_terms += guide_trace[node]['log_pdf'] * Variable(downstream_cost.data)
 
         # the gradient of the surrogate loss yields our gradient estimator for the elbo
