@@ -75,7 +75,7 @@ class TraceGraphPoutine(TracePoutine):
         always remove for tracegraph_klqp?
     XXX seems to play somewhat strangely with replay?
     """
-    def __init__(self, fn, graph_output=None):  # include_intermediates = False):
+    def __init__(self, fn, graph_output=None):  # , include_intermediates = False):
         super(TraceGraphPoutine, self).__init__(fn)
         self.graph_output = graph_output
         # self.include_intermediates = include_intermediates
@@ -129,7 +129,7 @@ class TraceGraphPoutine(TracePoutine):
         # if self.ret_val not in self.id_to_name_dict:
         #    self.id_to_name_dict[self.ret_val] = 'return'
 
-        # if not self.include_intermediates:
+        #if not self.include_intermediates:
         self.remove_intermediates()
 
         if self.graph_output is not None:
@@ -137,7 +137,7 @@ class TraceGraphPoutine(TracePoutine):
 
         # in any case we remove intermediates from the graph passed to TraceGraph
         # if self.include_intermediates:
-        # self.remove_intermediates()
+        #    self.remove_intermediates()
 
         return TraceGraph(networkx.relabel_nodes(self.G, self.id_to_name_dict), self.trace,
                           self.stochastic_nodes, self.reparameterized_nodes,
@@ -147,28 +147,16 @@ class TraceGraphPoutine(TracePoutine):
         """
         remove unnamed intermediates from graph
         """
-        for vid1 in self.G.nodes():
-            for vid2 in self.G.nodes():
-                if vid1 == vid2:
-                    continue
-                if vid1 in self.id_to_name_dict and vid2 in self.id_to_name_dict:
-                    try:
-                        # XXX FIX ME! this only looks at the shortest path, which
-                        # is going to be problematic in some cases
-                        path = networkx.astar_path(self.G, vid1, vid2)
-                        connect = True
-                        for node in path[1:-1]:
-                            if node in self.id_to_name_dict:
-                                connect = False
-                        if connect:
-                            self.G.add_edge(vid1, vid2)
 
-                    except Exception as e:
-                        pass
-
-        for vid in self.G.nodes():
-            if vid not in self.id_to_name_dict:
-                self.G.remove_node(vid)
+        for node in self.G.nodes():
+            if node not in self.id_to_name_dict:
+                children = self.G.successors(node)
+                parents = self.G.predecessors(node)
+                for p in parents:
+                    for c in children:
+                        if c != p:
+                            self.G.add_edge(p, c)
+                self.G.remove_node(node)
 
     def save_visualization(self):
         """
