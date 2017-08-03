@@ -1,6 +1,10 @@
 Installation
 ============
 
-To setup, install `Pytorch <http://pytorch.org>`_ then run::
+Install from Source
+-------------------
+Pyro supports Python 2.7.* and Python 3.  To setup, install `Pytorch <http://pytorch.org>`_ then run::
 
-   python setup.py
+   git clone https://github.com/uber/pyro.git
+   cd pyro
+   python setup.py install

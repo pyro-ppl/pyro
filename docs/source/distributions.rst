@@ -39,5 +39,5 @@ Distributions provide the following methods:
 Take a look at the examples[link] to see how they interact with inference algorithms.
 
 Primitives
-==========
+----------
 .. include:: primitive_distributions.txt
