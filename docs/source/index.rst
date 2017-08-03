@@ -3,12 +3,19 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to Pyro's documentation!
+Pyro Documentation
 ================================
 
 .. toctree::
+   :glob:
    :maxdepth: 2
    :caption: Contents:
+
+   installation
+   getting_started
+   inference
+   distributions
+   contributing
 
 
 
