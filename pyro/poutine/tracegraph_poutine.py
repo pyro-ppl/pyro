@@ -7,6 +7,10 @@ from collections import defaultdict
 from .trace_poutine import TracePoutine
 
 
+def varid(v):  # XXX what's the best way to do this??
+    return int(str(v.data._cdata) + str(v.data.__hash__()))
+
+
 class TraceGraph(object):
     """
     -- encapsulates the forward graph as well as the trace of a stochastic function,
@@ -69,16 +73,21 @@ class TraceGraphPoutine(TracePoutine):
     -- non-reparameterized stochastic nodes are salmon
     -- reparameterized stochastic nodes are half salmon, half grey
     -- observation nodes are green
-    XXX commented out include_intermediates, since a bit funky to deal with accurately
-    XXX commented out explicit handling of return node, since a bit funky to detail with properly
+    -- intermediate nodes are grey
+    -- include_intermediates controls granularity of visualization
+    -- if there's a return value node, it's visualized as a double circle
+    XXX some things are still funky with the graph (it's not necessarily a DAG) although i don't
+        think this affects TraceGraph_KL_QP. this has to do with the unique id used, how that
+        interacts with operations like torch.view(), etc. all this should be solved once we
+        move away from monkeypatching?
     XXX graph and graph visualization always contains parameters. optionally remove and/or
         always remove for tracegraph_klqp?
     XXX seems to play somewhat strangely with replay?
     """
-    def __init__(self, fn, graph_output=None):  # , include_intermediates = False):
+    def __init__(self, fn, graph_output=None, include_intermediates=False):
         super(TraceGraphPoutine, self).__init__(fn)
         self.graph_output = graph_output
-        # self.include_intermediates = include_intermediates
+        self.include_intermediates = include_intermediates
 
     def _enter_poutine(self, *args, **kwargs):
         """
@@ -112,9 +121,9 @@ class TraceGraphPoutine(TracePoutine):
         """
         assert type(output) not in [tuple, list, dict],\
             "registor_function: output type not as expected"
-        output_id = id(output)
+        output_id = varid(output)
         for _input in inputs:
-            input_id = id(_input)
+            input_id = varid(_input)
             self.G.add_edge(input_id, output_id)
 
     def _exit_poutine(self, ret_val, *args, **kwargs):
@@ -125,19 +134,26 @@ class TraceGraphPoutine(TracePoutine):
         Function.__call__ = self.old_function__call__
         self.trace = super(TraceGraphPoutine, self)._exit_poutine(ret_val, *args, **kwargs)
 
-        # self.ret_val = id(ret_val)
-        # if self.ret_val not in self.id_to_name_dict:
-        #    self.id_to_name_dict[self.ret_val] = 'return'
+        # register return value
+        if ret_val is not None:
+            self.ret_val = varid(ret_val)
+            if self.ret_val not in self.id_to_name_dict:
+                self.id_to_name_dict[self.ret_val] = 'return'
 
-        # if not self.include_intermediates:
-        self.remove_intermediates()
+        if not self.include_intermediates:
+            self.remove_intermediates()
+
+        # remove loops
+        # for edge in self.G.edges():
+        #    if edge[0]==edge[1]:
+        #        self.G.remove_edge(*edge)
 
         if self.graph_output is not None:
             self.save_visualization()
 
         # in any case we remove intermediates from the graph passed to TraceGraph
-        # if self.include_intermediates:
-        #    self.remove_intermediates()
+        if self.include_intermediates:
+            self.remove_intermediates()
 
         return TraceGraph(networkx.relabel_nodes(self.G, self.id_to_name_dict), self.trace,
                           self.stochastic_nodes, self.reparameterized_nodes,
@@ -166,7 +182,7 @@ class TraceGraphPoutine(TracePoutine):
         for vid in self.G.nodes():
             if vid in self.id_to_name_dict:
                 label = self.id_to_name_dict[vid]
-                shape = 'ellipse'  # if not vid==self.ret_val else 'doublecircle'
+                shape = 'ellipse' if vid != self.ret_val else 'doublecircle'
                 if label in self.param_nodes:
                     fillcolor = 'lightblue'
                 elif label in self.stochastic_nodes and label not in self.reparameterized_nodes:
@@ -175,6 +191,8 @@ class TraceGraphPoutine(TracePoutine):
                     fillcolor = 'lightgrey;.5:salmon'
                 elif label in self.observation_nodes:
                     fillcolor = 'darkolivegreen3'
+                else:
+                    fillcolor = 'lightgrey'
                 g.node(str(vid), label=label, shape=shape, style='filled', fillcolor=fillcolor)
             else:
                 label = 'unnamed\nintermediate'
@@ -194,10 +212,10 @@ class TraceGraphPoutine(TracePoutine):
                                                           *args, **kwargs)
         self.monkeypatch_active = True
 
-        self.id_to_name_dict[id(val)] = name
+        self.id_to_name_dict[varid(val)] = name
         for arg in args:
             if isinstance(arg, Variable):
-                self.G.add_edge(id(arg), id(val))
+                self.G.add_edge(varid(arg), varid(val))
         self.stochastic_nodes.append(name)
         if dist.reparameterized:
             self.reparameterized_nodes.append(name)
@@ -209,7 +227,7 @@ class TraceGraphPoutine(TracePoutine):
         """
         retrieved = super(TraceGraphPoutine, self)._pyro_param(prev_val, name,
                                                                *args, **kwargs)
-        self.id_to_name_dict[id(retrieved)] = name
+        self.id_to_name_dict[varid(retrieved)] = name
         self.param_nodes.append(name)
         return retrieved
 
@@ -221,9 +239,9 @@ class TraceGraphPoutine(TracePoutine):
         val = super(TraceGraphPoutine, self)._pyro_observe(prev_val, name, fn, obs,
                                                            *args, **kwargs)
         self.monkeypatch_active = True
-        self.id_to_name_dict[id(val)] = name
+        self.id_to_name_dict[varid(val)] = name
         self.observation_nodes.append(name)
         for arg in args:
             if isinstance(arg, Variable):
-                self.G.add_edge(id(arg), id(val))
+                self.G.add_edge(varid(arg), varid(val))
         return val
