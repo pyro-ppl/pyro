@@ -13,8 +13,10 @@ Pyro Documentation
 
    installation
    getting_started
+   primitives 
    inference
    distributions
+   parameters
    contributing
 
 
