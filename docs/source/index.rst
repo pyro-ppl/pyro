@@ -17,8 +17,6 @@ Pyro Documentation
    inference
    distributions
    parameters
-   contributing
-
 
 
 Indices and tables
