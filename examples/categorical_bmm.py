@@ -53,7 +53,7 @@ def local_guide(i, datum):
     alpha = torch.ones(1, 10) * 0.1
     beta_q = Variable(alpha, requires_grad=True)
     guide_params = pyro.param("class_posterior_", beta_q)
-    cll = pyro.sample("class_of_datum_" + str(i), Bernoulli(guide_params))
+    cll = pyro.sample("class_of_datum_" + str(i), Categorical(guide_params))
     return cll
 
 
@@ -71,8 +71,8 @@ optim_fct = pyro.optim(torch.optim.Adam, {'lr': .0001})
 
 inference = KL_QP(local_model, local_guide, optim_fct)
 
-d0 = inspect_posterior_samples(0)
-d1 = inspect_posterior_samples(1)
+#d0 = inspect_posterior_samples(0)
+#d1 = inspect_posterior_samples(1)
 
 vis = visdom.Visdom()
 
@@ -105,11 +105,12 @@ for i in range(1000):
         batch_class = Variable(batch_class)
 
         inference.step(ix, batch_data)
+        print("epoch done")
         #
-        # bb()
+        #bb()
 
-    sample, sample_mu = model_sample()
-    vis.image(batch_data[0].view(28, 28).data.numpy())
-    vis.image(sample[0].view(28, 28).data.numpy())
-    vis.image(sample_mu[0].view(28, 28).data.numpy())
-    print("epoch avg loss {}".format(epoch_loss / float(mnist_size)))
+    # sample, sample_mu = model_sample()
+    # vis.image(batch_data[0].view(28, 28).data.numpy())
+    # vis.image(sample[0].view(28, 28).data.numpy())
+    # vis.image(sample_mu[0].view(28, 28).data.numpy())
+    # print("epoch avg loss {}".format(epoch_loss / float(mnist_size)))
