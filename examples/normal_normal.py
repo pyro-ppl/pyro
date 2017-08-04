@@ -24,7 +24,7 @@ def model():
 infer = LikelihoodWeighting(model)
 #
 exp = lw_expectation(infer, lambda x: x, 101)
-print(exp)
+print("LikelihoodWeighting: ", exp)
 
 # and try importance!
 
@@ -37,17 +37,4 @@ def guide():
 infer = Importance(model, guide)
 
 exp = lw_expectation(infer, lambda x: x, 100)
-print(exp)
-
-def guide():
-    mf_m = pyro.param("mf_m", Variable(torch.zeros(1, 1)))
-    mf_v = pyro.param("mf_v", Variable(torch.ones(1, 1)))
-    latent = pyro.sample("latent",
-                         DiagNormal(mf_m, mf_v))
-
-adam_params = {"lr": .0001}
-
-infer = KL_QP(model, guide, pyro.optim(optim.Adam, adam_params))
-
-exp = lw_expectation(infer, lambda x: x, 100)
-print(exp)
+print("Importance Sampling: ", exp)
