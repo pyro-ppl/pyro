@@ -17,6 +17,7 @@ mnist = dset.MNIST(
     download=True)
 print('dataset loaded')
 sigmoid = torch.nn.Sigmoid()
+softplus = torch.nn.Softplus()
 
 
 def factor_analysis_model(i, data):
@@ -45,7 +46,7 @@ def factor_analysis_model(i, data):
 
         #use sigmoid as link function between the Gaussian activation and the Bernoulli variable
         beta = sigmoid(mean_beta_activation)
-        bb()
+#         bb()
         #observe with the Bernoulli
         pyro.observe("obs_" + str(i), Bernoulli(beta), data)
 
@@ -56,7 +57,7 @@ def factor_analysis_model(i, data):
     mu_w = Variable(torch.ones(dim_z, dim_o), requires_grad=False)
     sigma_w = Variable(torch.ones(dim_z, dim_o), requires_grad = False)
     weight = pyro.sample("factor_weight", DiagNormal(mu_w, sigma_w))
-    
+
 
     #loop over all data and sample the local variables (coordinates/embeddings) for each datum given global variable
     sub_model(data, weight)
@@ -76,15 +77,16 @@ def factor_analysis_guide(i, data):
 
         #parameters for approximate posteriors to the distributions of the embeddings
         guide_mu_z = pyro.param("embedding_posterior_mean_", mu_q_z)
-        #guide_log_sigma_q_z = log_sigma_q_z + (-1e5) 
+        #guide_log_sigma_q_z = log_sigma_q_z + (-1e5)
         guide_log_sigma_q_z = pyro.param("embedding_posterior_log_sigma_", log_sigma_q_z)
 
         guide_sigma_z = torch.exp(guide_log_sigma_q_z)# * 1e-5
+#         guide_mu_z = softplus(guide_mu_z)
+#         guide_sigma_z = softplus(guide_sigma_z)
 
         #sample from approximate posteriors for embeddings
         z_q = pyro.sample("embedding_of_chunk_" +str(i), DiagNormal(guide_mu_z, guide_sigma_z))
-        pass
-    
+
 
     mu_q_w = Variable(torch.zeros(dim_z, dim_o), requires_grad=True)
     log_sigma_q_w = Variable(torch.zeros(dim_z, dim_o), requires_grad=True)
@@ -94,6 +96,7 @@ def factor_analysis_guide(i, data):
     guide_log_sigma_q_w = log_sigma_q_w - 1e5#pyro.param("factor_weight_log_sigma", log_sigma_q_w)
     #sigma_q_w = torch.exp(log_sigma_q_w)
     guide_sigma_q_w = torch.exp(guide_log_sigma_q_w)
+    guide_sigma_q_w = softplus(guide_sigma_q_w)
 
     #sample from approximate posterior for weights
     w_q = pyro.sample("factor_weight",DiagNormal(guide_mu_q_w,guide_sigma_q_w))
@@ -103,7 +106,7 @@ def factor_analysis_guide(i, data):
     pass
 
 
-adam_params = {"lr": 0.00001}
+adam_params = {"lr": 0.01}
 adam_optim = pyro.optim(torch.optim.Adam, adam_params)
 
 dat = mnist.train_data
