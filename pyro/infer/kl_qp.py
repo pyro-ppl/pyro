@@ -1,26 +1,12 @@
-import six
 import torch
 from torch.autograd import Variable
 from collections import OrderedDict
 import pyro
 import pyro.poutine as poutine
-from pyro.infer.abstract_infer import AbstractInfer
+# from pyro.infer.abstract_infer import AbstractInfer
 
 
-def zero_grads(tensors):
-    """
-    Sets gradients of list of Variables to zero in place
-    """
-    for p in tensors:
-        if p.grad is not None:
-            if p.grad.volatile:
-                p.grad.data.zero_()
-            else:
-                data = p.grad.data
-                p.grad = Variable(data.new().resize_as_(data).zero_())
-
-
-class KL_QP(AbstractInfer):
+class KL_QP(object):  # AbstractInfer):
     """
     A new, Trace and Poutine-based implementation of SVI
     """
@@ -62,7 +48,7 @@ class KL_QP(AbstractInfer):
             if model_trace[name]["type"] == "observe":
                 elbo += model_trace[name]["log_pdf"]
             elif model_trace[name]["type"] == "sample":
-                if model_trace[name]["fn"].reparametrized:
+                if model_trace[name]["fn"].reparameterized:
                     elbo += model_trace[name]["log_pdf"]
                     elbo -= guide_trace[name]["log_pdf"]
                 else:
@@ -90,6 +76,6 @@ class KL_QP(AbstractInfer):
         # update
         self.optim_step_fct(all_trainable_params)
         # zero grads
-        zero_grads(all_trainable_params)
+        pyro.util.zero_grads(all_trainable_params)
 
         return loss.data[0]

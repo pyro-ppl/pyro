@@ -4,41 +4,55 @@ from torch.autograd import Variable
 from pyro.distributions.distribution import Distribution
 
 
-class Normal_Chol(Distribution):
+class NormalChol(Distribution):
     """
     Multi-variate normal with arbitrary covariance sigma
     parameterized by its mean and its cholesky decomposition L
     """
 
-    def __init__(self, mu, L, *args, **kwargs):
+    def _sanitize_input(self, mu, sigma):
+        if mu is not None:
+            # stateless distribution
+            return mu, sigma
+        elif self.mu is not None:
+            # stateful distribution
+            return self.mu, self.L
+        else:
+            raise ValueError("Mu and/or sigma had invalid values")
+
+    def __init__(self, mu=None, L=None, *args, **kwargs):
         """
-        Constructor.
+        Params:
+          `mu` - mean
+          `L` - cholesky decomposition matrix
         """
         self.mu = mu
         self.L = L
-        self.dim = mu.size(0)
-        super(Normal_Chol, self).__init__(*args, **kwargs)
-        self.reparametrized = True
+        super(NormalChol, self).__init__(*args, **kwargs)
+        self.reparameterized = False
 
-    def sample(self):
+    def sample(self, mu=None, L=None, *args, **kwargs):
         """
-        Reparameterized Normal sampler.
+        Reparameterized Normal cholesky sampler.
         """
-        eps = Variable(torch.randn(self.mu.size()),
-                       requires_grad=False).type_as(self.mu)
-        z = self.mu + torch.mm(self.L, eps.unsqueeze(1)).squeeze()
+        _mu, _L = self._sanitize_input(mu, L)
+        eps = Variable(torch.randn(_mu.size()))
+        if eps.dim() == 1:
+            eps = eps.unsqueeze(1)
+        z = _mu + torch.mm(_L, eps).squeeze()
         return z
 
-    def log_pdf(self, x):
+    def log_pdf(self, x, mu=None, L=None, *args, **kwargs):
         """
-        Normal log-likelihood
+        Normal cholesky log-likelihood
         """
-        ll_1 = Variable(torch.Tensor([-0.5 * self.dim * np.log(2.0 * np.pi)]))
-        ll_2 = -torch.sum(torch.log(torch.diag(self.L)))
+        _mu, _L = self._sanitize_input(mu, L)
+        ll_1 = Variable(torch.Tensor([-0.5 * _mu.size(0) * np.log(2.0 * np.pi)]))
+        ll_2 = -torch.sum(torch.log(torch.diag(_L)))
         x_chol = Variable(
             torch.trtrs(
-                (x - self.mu).unsqueeze(1).data,
-                self.L.data,
+                (x - _mu).unsqueeze(1).data,
+                _L.data,
                 False)[0])
         ll_3 = -0.5 * torch.sum(torch.pow(x_chol, 2.0))
 
@@ -46,6 +60,3 @@ class Normal_Chol(Distribution):
 
     def batch_log_pdf(self, x, batch_size=1):
         raise NotImplementedError()
-
-    def support(self):
-        raise NotImplementedError("Support not supported for continuous distributions")

@@ -1,5 +1,9 @@
 import torch
+import torch.nn as nn
 from pyro.distributions.distribution import Distribution
+from pyro.nn import MaskedLinear, AutoRegressiveNN
+from torch.autograd import Variable
+from pyro.util import ng_ones, ng_zeros
 
 
 class TransformedDistribution(Distribution):
@@ -12,8 +16,7 @@ class TransformedDistribution(Distribution):
         Constructor; takes base distribution and bijector as arguments
         """
         super(TransformedDistribution, self).__init__(*args, **kwargs)
-        # self.reparametrized = False #base_distribution.reparametrized
-        self.reparametrized = base_distribution.reparametrized
+        self.reparameterized = base_distribution.reparameterized
         self.base_dist = base_distribution
         self.bijector = bijector
 
@@ -23,31 +26,24 @@ class TransformedDistribution(Distribution):
         """
         x = self.base_dist.sample(*args, **kwargs)
         y = self.bijector(x)
+        if self.bijector.add_inverse_to_cache:
+            self.bijector.add_intermediate_to_cache(x, y, 'x')
         return y
 
-    def log_pdf(self, y):
+    def log_pdf(self, y, *args, **kwargs):
         x = self.bijector.inverse(y)
-        log_pdf_1 = self.base_dist.log_pdf(x)
-        log_pdf_2 = -self.bijector.log_det_jacobian(y)
-        return log_pdf_1 + log_pdf_2
-
-    def batch_log_pdf(self, y, batch_size=1):
-        if y.dim() == 1 and batch_size == 1:
-            return self.log_pdf(y)
-        elif y.dim() == 1:
-            y = y.expand(batch_size, y.size(0))
-        x = self.bijector.inverse(y)
-        log_pdf_1 = self.base_dist.batch_log_pdf(x)
+        log_pdf_1 = self.base_dist.log_pdf(x, *args, **kwargs)
         log_pdf_2 = -self.bijector.log_det_jacobian(y)
         return log_pdf_1 + log_pdf_2
 
 
-class Bijector(torch.nn.Module):
+class Bijector(nn.Module):
     def __init__(self, *args, **kwargs):
         """
         Constructor for abstract class bijector
         """
         super(Bijector, self).__init__(*args, **kwargs)
+        self.add_inverse_to_cache = False
 
     def __call__(self, *args, **kwargs):
         """
@@ -68,22 +64,59 @@ class Bijector(torch.nn.Module):
         raise NotImplementedError()
 
 
+class InverseAutoregressiveFlow(Bijector):
+    def __init__(self, input_dim, hidden_dim, s_bias=2.0):
+        super(InverseAutoregressiveFlow, self).__init__()
+        self.arn_s = AutoRegressiveNN(input_dim, hidden_dim, output_bias=s_bias)
+        self.arn_m = AutoRegressiveNN(input_dim, hidden_dim,
+                                      lin1=self.arn_s.get_lin1(),
+                                      mask_encoding=self.arn_s.get_mask_encoding())
+        self.sigmoid = nn.Sigmoid()
+        self.intermediates_cache = {}
+        self.add_inverse_to_cache = True
+
+    def __call__(self, x, *args, **kwargs):
+        """
+        invoke bijection x=>y
+        """
+        s = self.arn_s(x)
+        sigma = self.sigmoid(s)
+        m = self.arn_m(x)
+        y = sigma * x + (ng_ones(sigma.size()) - sigma) * m
+        self.add_intermediate_to_cache(sigma, y, 'sigma')
+        return y
+
+    def inverse(self, y, *args, **kwargs):
+        """
+        invert y => x
+        """
+        if (y, 'x') in self.intermediates_cache:
+            x = self.intermediates_cache.pop((y, 'x'))
+            return x
+        else:
+            raise KeyError("Bijector InverseAutoregressiveFlow expected to find" +
+                           "key in intermediates cache but didn't")
+
+    def add_intermediate_to_cache(self, intermediate, y, name):
+        assert((y, name) not in self.intermediates_cache),\
+            "key collision in add_intermediate_to_cache"
+        self.intermediates_cache[(y, name)] = intermediate
+
+    def log_det_jacobian(self, y, *args, **kwargs):
+        if (y, 'sigma') in self.intermediates_cache:
+            sigma = self.intermediates_cache.pop((y, 'sigma'))
+        else:
+            raise KeyError("Bijector InverseAutoregressiveFlow expected to find" +
+                           "key in intermediates cache but didn't")
+        return torch.sum(torch.log(sigma))
+
+
 class AffineExp(Bijector):
-    def __init__(self, a_init, b_init, *args, **kwargs):
+    def __init__(self, a_init, b_init):
         """
         Constructor for univariate affine bijector followed by exp
         """
-        super(AffineExp, self).__init__(*args, **kwargs)
-        # if a_fixed:
-        #    self.a = Variable(a_init)
-        # else:
-        #    self.a = Parameter(a_init)
-        # if b_fixed and isinstance(b_init, torch.Tensor):
-        #    self.b = Variable(b_init)
-        # elif b_fixed and isinstance(b_init, Variable):
-        #    self.b = b_init
-        # else:
-        #    self.b = Parameter(b_init)
+        super(AffineExp, self).__init__()
         self.a = a_init
         self.b = b_init
 
@@ -103,31 +136,3 @@ class AffineExp(Bijector):
 
     def log_det_jacobian(self, y, *args, **kwargs):
         return torch.log(torch.abs(self.a)) + torch.log(y)
-
-
-"""
-class AffineTanh(Bijector):
-    def __init__(self, u_init, w_init, b_init, *args, **kwargs):
-        #Constructor for affine tanh bijector
-        super(AffineTanh, self).__init__(*args, **kwargs)
-        self.u = Parameter(u_init)
-        self.w = Parameter(w_init)
-        self.b = Parameter(b_init)
-        assert self.u.size()==self.w.size()
-
-    def __call__(self, x, *args, **kwargs):
-        y = x + torch.sum(self.u_hat() * torch.tanh(torch.sum(self.w*x) + self.b))
-        return y
-
-    def inverse(self, y, *args, **kwargs):
-        #Virtual sample method.
-        x_perp = y - x_par - self.u_hat() * torch.tanh(torch.sum(self.w*x_par) + self.b))
-
-    def u_hat(self):
-        def m(x):
-            return torch.log(torch.ones(1)+torch.exp(x))-torch.ones(1) - x
-        w_norm_sqr = torch.sum(torch.pow(self.w,2.0))
-        w_dot_u = torch.sum(self.w*self.u)
-        factor = m(w_dot_u) / w_norm_sqr
-        return self.u + factor*self.w
-"""

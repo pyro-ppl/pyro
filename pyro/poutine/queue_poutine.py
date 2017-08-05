@@ -58,12 +58,13 @@ class QueuePoutine(Poutine):
         self.pivot_seen = False
         self.guide_trace = self.queue.get()
 
-    def _exit_poutine(self, *args, **kwargs):
+    def _exit_poutine(self, r_val, *args, **kwargs):
         """
         Forget the guide and pivot switch
         """
         self.pivot_seen = False
         self.guide_trace = None  # XXX what to put here?
+        return r_val
 
     def _pyro_sample(self, prev_val, name, fn, *args, **kwargs):
         """
@@ -77,7 +78,7 @@ class QueuePoutine(Poutine):
         elif not self.pivot_seen:
             self.pivot_seen = True
             extended_traces = []
-            for s in fn.support():
+            for s in fn.support(*args, **kwargs):
                 extended_traces.append(
                     self.guide_trace.copy().add_sample(name, s, fn, *args, **kwargs))
             raise ReturnExtendedTraces(extended_traces)

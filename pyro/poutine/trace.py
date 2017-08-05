@@ -18,7 +18,7 @@ class Trace(dict):
         Sample site
         """
         assert name not in self, "sample {} already in trace".format(name)
-        site = dict()
+        site = {}
         site["type"] = "sample"
         site["value"] = sample
         site["fn"] = fn
@@ -31,7 +31,7 @@ class Trace(dict):
         Observe site
         """
         assert name not in self, "observe {} already in trace".format(name)
-        site = dict()
+        site = {}
         site["type"] = "observe"
         site["value"] = val
         site["fn"] = fn
@@ -45,7 +45,7 @@ class Trace(dict):
         map_data site
         """
         assert name not in self, "map_data {} already in trace".format(name)
-        site = dict()
+        site = {}
         site["type"] = "map_data"
         # XXX
         self[name] = site
@@ -55,7 +55,7 @@ class Trace(dict):
         """
         param site
         """
-        site = dict()
+        site = {}
         site["type"] = "param"
         site["value"] = val
         site["args"] = (args, kwargs)
@@ -68,7 +68,7 @@ class Trace(dict):
         """
         name = "_INPUT"
         assert name not in self, "_INPUT already in trace"
-        site = dict()
+        site = {}
         site["type"] = "args"
         site["args"] = args_and_kwargs
         self[name] = site
@@ -80,7 +80,7 @@ class Trace(dict):
         """
         name = "_RETURN"
         assert name not in self, "_RETURN already in trace"
-        site = dict()
+        site = {}
         site["type"] = "return"
         site["value"] = val
         self[name] = site
