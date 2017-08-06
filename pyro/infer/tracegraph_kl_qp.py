@@ -4,6 +4,7 @@ from collections import OrderedDict
 import pyro
 import pyro.poutine as poutine
 import sys
+from pyro.util import ng_zeros
 
 
 class TraceGraph_KL_QP(object):
@@ -18,7 +19,10 @@ class TraceGraph_KL_QP(object):
                  guide,
                  optim_step_fct,
                  model_fixed=False,
-                 guide_fixed=False, *args, **kwargs):
+                 guide_fixed=False,
+                 decaying_avg_baseline=True,
+                 baseline_beta=0.9,
+                 *args, **kwargs):
         """
         Call parent class initially, then setup the poutines to run
         """
@@ -32,6 +36,8 @@ class TraceGraph_KL_QP(object):
         self.optim_step_fct = optim_step_fct
         self.model_fixed = model_fixed
         self.guide_fixed = guide_fixed
+        self.decaying_avg_baseline = decaying_avg_baseline
+        self.baseline_beta = baseline_beta
 
     def __call__(self, *args, **kwargs):
         return self.step(*args, **kwargs)
@@ -94,7 +100,11 @@ class TraceGraph_KL_QP(object):
         # if there are any non-reparameterized stochastic nodes,
         # include all the reinforce-like terms.
         # we include only downstream costs to reduce variance
+        # optionally include decaying average baseline to further reduce variance
+        # XXX should the average baseline be in the param store as below?
         for node in guide_trgraph.get_nonreparam_stochastic_nodes():
+            if self.decaying_avg_baseline:
+                avg_downstream_cost_old = pyro.param("_baseline_avg_downstream_cost_" + node, ng_zeros(1))
             downstream_cost = 0.0
             downstream_cost_non_zero = False
             node_descendants = guide_trgraph.get_descendants(node, with_self=True)
@@ -102,8 +112,16 @@ class TraceGraph_KL_QP(object):
                 if any([p in node_descendants for p in cost_node[1]]):
                     downstream_cost += cost_node[0]
                     downstream_cost_non_zero = True
+            if self.decaying_avg_baseline:
+                avg_downstream_cost_new = (1 - self.baseline_beta) * downstream_cost +\
+                    self.baseline_beta * avg_downstream_cost_old
+                avg_downstream_cost_old.data = avg_downstream_cost_new.data
             if downstream_cost_non_zero:  # XXX is this actually necessary?
-                elbo_reinforce_terms += guide_trace[node]['log_pdf'] * Variable(downstream_cost.data)
+                if self.decaying_avg_baseline:
+                    elbo_reinforce_terms += guide_trace[node]['log_pdf'] * \
+                        (Variable(downstream_cost.data) - avg_downstream_cost_old)
+                else:
+                    elbo_reinforce_terms += guide_trace[node]['log_pdf'] * Variable(downstream_cost.data)
 
         # the gradient of the surrogate loss yields our gradient estimator for the elbo
         surrogate_loss = - elbo_no_zero_expectation_terms - elbo_reinforce_terms
