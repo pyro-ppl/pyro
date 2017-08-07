@@ -94,7 +94,7 @@ class CUBO_logc(AbstractInfer):
                     log_r_s += model_trace[name]["batch_log_pdf"]# * (self.n_cubo) / self.nr_particles
                     pass
                 elif model_trace[name]["type"] == "sample":
-                    if model_trace[name]["fn"].reparametrized:
+                    if model_trace[name]["fn"].reparameterized:
                         # print "name",model_trace[name]
                         log_r_s += log_r[:,i] * model_trace[name]["batch_log_pdf"]# * (self.n_cubo) / self.nr_particles
                         log_r_s -= log_r[:,i] * guide_trace[name]["batch_log_pdf"]# * (self.n_cubo) / self.nr_particles
@@ -217,7 +217,7 @@ class CUBO_logcn(AbstractInfer):
                     #log_r_s += model_trace[name]["batch_log_pdf"]# * (self.n_cubo) / self.nr_particles
                     pass
                 elif model_trace[name]["type"] == "sample":
-                    if model_trace[name]["fn"].reparametrized:
+                    if model_trace[name]["fn"].reparameterized:
                         # print "name",model_trace[name]
                         #log_r_s += model_trace[name]["batch_log_pdf"]* w_n[:,i]# * (self.n_cubo) / self.nr_particles
                         #log_r_s -= guide_trace[name]["batch_log_pdf"]* w_n[:,i]# * (self.n_cubo) / self.nr_particles
@@ -341,7 +341,7 @@ class CUBO(AbstractInfer):
                     log_r_s += model_trace[name]["batch_log_pdf"]
                     pass
                 elif model_trace[name]["type"] == "sample":
-                    if model_trace[name]["fn"].reparametrized:
+                    if model_trace[name]["fn"].reparameterized:
                         # print "name",model_trace[name]
                         log_r_s += model_trace[name]["batch_log_pdf"]
                         log_r_s -= guide_trace[name]["batch_log_pdf"]
@@ -462,8 +462,8 @@ class CUBO_grad(AbstractInfer):
                     log_r_s += model_trace[name]["batch_log_pdf"]
                     pass
                 elif model_trace[name]["type"] == "sample":
-                    if model_trace[name]["fn"].reparametrized:
-                        #print(model_trace[name]["fn"].reparametrized)
+                    if model_trace[name]["fn"].reparameterized:
+                        #print(model_trace[name]["fn"].reparameterized)
                         log_r_s += model_trace[name]["batch_log_pdf"]
                         log_r_s -= guide_trace[name]["batch_log_pdf"]
 
@@ -494,7 +494,7 @@ class CUBO_grad(AbstractInfer):
         exp_cubo_sum = exp_cubo.sum()
         cubo = (torch.log(exp_cubo)/self.n_cubo ).sum()
 
-        pdb.set_trace()
+        # pdb.set_trace()
 
         # accumulate parameters
         all_trainable_params = []
@@ -561,7 +561,7 @@ class CUBO_massive(AbstractInfer):
         guide_traces = []
         log_weights = []
 
-        pdb.set_trace()
+        # pdb.set_trace()
 
         for i in range(self.nr_particles):
             guide_trace = poutine.trace(self.guide)(*args, **kwargs)
@@ -582,7 +582,7 @@ class CUBO_massive(AbstractInfer):
 
         log_weights_tensor = Variable(torch.stack(log_weights,1).data)
 
-        pdb.set_trace()
+        # pdb.set_trace()
 
         log_r_max = Variable(torch.max(log_weights_tensor,1)[0].data)
         log_w_shifted = Variable((log_weights_tensor - log_r_max.expand_as(log_weights_tensor)).data)
@@ -610,8 +610,8 @@ class CUBO_massive(AbstractInfer):
                     avr_lk += model_trace[name]["batch_log_pdf"] / self.nr_particles
                     pass
                 elif model_trace[name]["type"] == "sample":
-                    if model_trace[name]["fn"].reparametrized:
-                        #print(model_trace[name]["fn"].reparametrized)
+                    if model_trace[name]["fn"].reparameterized:
+                        #print(model_trace[name]["fn"].reparameterized)
                         log_r_s += model_trace[name]["batch_log_pdf"]
                         log_r_s -= guide_trace[name]["batch_log_pdf"]
 

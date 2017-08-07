@@ -8,6 +8,7 @@ import pdb as pdb
 
 import pyro
 import pyro.distributions as dist
+from pyro.distributions import DiagNormal
 from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
 from pyro.infer.importance import Importance
 from tests.common import TestCase
@@ -45,10 +46,10 @@ class NormalNormalTests(TestCase):
     # def test_elbo_nonreparameterized(self):
     #     self.do_elbo_test(False, 15000)
 
-    def test_cubo_reparametrized(self):
+    def test_cubo_reparameterized(self):
         self.do_cubo_test(True, 25000)
 
-    def test_cubo_nonreparametrized(self):
+    def test_cubo_nonreparameterized(self):
         self.do_cubo_test(False, 25000)
 
     def do_elbo_test(self, reparameterized, n_steps):
@@ -94,16 +95,16 @@ class NormalNormalTests(TestCase):
         self.assertEqual(0.0, mu_error.data.cpu().numpy()[0], prec=0.05)
         self.assertEqual(0.0, log_sig_error.data.cpu().numpy()[0], prec=0.05)
 
-    def do_cubo_test(self, reparametrized, n_steps):
-        pyro._param_store._clear_cache()
+    def do_cubo_test(self, reparameterized, n_steps):
+        pyro._param_store.clear()
 
         def model():
-            prior_dist = DiagNormal(self.mu0, torch.pow(self.lam0, -0.5))
-            mu_latent = pyro.sample("mu_latent", prior_dist)
-            x_dist = DiagNormal(mu_latent, torch.pow(self.lam, -0.5))
-            # x = pyro.observe("obs", x_dist, self.data)
+            mu_latent = pyro.sample("mu_latent", dist.diagnormal,
+                                    self.mu0, torch.pow(self.lam0, -0.5))
             pyro.map_data("aaa", self.data, lambda i,
-                          x: pyro.observe("obs_%d" % i, x_dist, x), batch_size=1)
+                          x: pyro.observe(
+                              "obs_%d" % i, dist.diagnormal,
+                              x, mu_latent, torch.pow(self.lam, -0.5)), batch_size=1)
             return mu_latent
 
         def guide():
@@ -113,9 +114,8 @@ class NormalNormalTests(TestCase):
                                    self.analytic_log_sig_n.data - 0.09 * torch.ones(2),
                                    requires_grad=True))
             sig_q = torch.exp(log_sig_q)
-            q_dist = DiagNormal(mu_q, sig_q)
-            q_dist.reparametrized = reparametrized
-            pyro.sample("mu_latent", q_dist)
+            dist.diagnormal.reparameterized = reparameterized
+            pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q)
             pyro.map_data("aaa", self.data, lambda i, x: None, batch_size=1)
 
         cubo_optim = CUBO(
@@ -185,7 +185,7 @@ class TestFixedModelGuide(TestCase):
         self.alpha_p_log_0 = 0.11 * torch.ones(1)
         self.beta_p_log_0 = 0.13 * torch.ones(1)
 
-    def do_test_fixedness(self, model_fixed, guide_fixed):
+    def do_test_elbo_fixedness(self, model_fixed, guide_fixed):
         pyro.get_param_store().clear()
 
         def model():
@@ -223,7 +223,6 @@ class TestFixedModelGuide(TestCase):
         return (not bad)
 
     def do_test_cubo_fixedness(self, model_fixed, guide_fixed):
-        #pyro._param_store._clear_cache()
         pyro.get_param_store().clear()
 
         def model():
@@ -234,11 +233,8 @@ class TestFixedModelGuide(TestCase):
                 "beta_p_log", Variable(
                     self.beta_p_log_0, requires_grad=True))
             alpha_p, beta_p = torch.exp(alpha_p_log), torch.exp(beta_p_log)
-            lambda_latent = pyro.sample(
-                "lambda_latent", Gamma(
-                    alpha_p, beta_p))
-            x_dist = Poisson(lambda_latent)
-            pyro.observe("obs", x_dist, self.data)
+            lambda_latent = pyro.sample("lambda_latent", dist.gamma, alpha_p, beta_p)
+            pyro.observe("obs", dist.poisson, self.data, lambda_latent)
             return lambda_latent
 
         def guide():
@@ -249,7 +245,7 @@ class TestFixedModelGuide(TestCase):
                 "beta_q_log", Variable(
                     self.beta_q_log_0, requires_grad=True))
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
-            pyro.sample("lambda_latent", Gamma(alpha_q, beta_q))
+            pyro.sample("lambda_latent", dist.gamma, alpha_q, beta_q)
 
         cubo_optim = CUBO(model, guide, pyro.optim(torch.optim.Adam, {"lr": .001}),
                          model_fixed=model_fixed, guide_fixed=guide_fixed)
@@ -376,18 +372,14 @@ class PoissonGammaTests(TestCase):
         self.assertEqual(0.0, alpha_error, prec=0.08)
         self.assertEqual(0.0, beta_error, prec=0.08)
 
-    def test_cubo_nonreparametrized(self):
-        #pyro._param_store._clear_cache()
+    def test_cubo_nonreparameterized(self):
         pyro.get_param_store().clear()
 
         def model():
-            #lambda_latent = pyro.sample("lambda_latent", Gamma(self.alpha0, self.beta0))
             lambda_latent = pyro.sample("lambda_latent", dist.gamma, self.alpha0, self.beta0)
-            x_dist = Poisson(lambda_latent)
-            # x0 = pyro.observe("obs0", x_dist, self.data[0])
             pyro.map_data("aaa",
                           self.data, lambda i, x: pyro.observe(
-                              "obs_{}".format(i), x_dist, x), batch_size=3)
+                              "obs_{}".format(i), dist.poisson, x, lambda_latent), batch_size=3)
             return lambda_latent
 
         def guide():
@@ -404,7 +396,6 @@ class PoissonGammaTests(TestCase):
                     0.143,
                     requires_grad=True))
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
-            #pyro.sample("lambda_latent", Gamma(alpha_q, beta_q))
             pyro.sample("lambda_latent", dist.gamma, alpha_q, beta_q)
             pyro.map_data("aaa", self.data, lambda i, x: None, batch_size=3)
 
@@ -453,8 +444,46 @@ class ExponentialGammaTests(TestCase):
         self.log_alpha_n = torch.log(self.alpha_n)
         self.log_beta_n = torch.log(self.beta_n)
 
-    def test_elbo_nonreparameterized(self):
-        pyro.get_param_store().clear()
+    # def test_elbo_nonreparameterized(self):
+    #     pyro.get_param_store().clear()
+
+    #     def model():
+    #         lambda_latent = pyro.sample("lambda_latent", dist.gamma, self.alpha0, self.beta0)
+    #         pyro.observe("obs0", dist.exponential, self.data[0], lambda_latent)
+    #         pyro.observe("obs1", dist.exponential, self.data[1], lambda_latent)
+    #         return lambda_latent
+
+    #     def guide():
+    #         alpha_q_log = pyro.param(
+    #             "alpha_q_log",
+    #             Variable(self.log_alpha_n.data + 0.17, requires_grad=True))
+    #         beta_q_log = pyro.param(
+    #             "beta_q_log",
+    #             Variable(self.log_beta_n.data - 0.143, requires_grad=True))
+    #         alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
+    #         pyro.sample("lambda_latent", dist.gamma, alpha_q, beta_q)
+
+    #     kl_optim = KL_QP(
+    #         model, guide, pyro.optim(
+    #             torch.optim.Adam, {
+    #                 "lr": .0003, "betas": (
+    #                     0.97, 0.999)}))
+    #     for k in range(10001):
+    #         kl_optim.step()
+
+    #     alpha_error = torch.abs(
+    #         pyro.param("alpha_q_log") -
+    #         self.log_alpha_n).data.cpu().numpy()[0]
+    #     beta_error = torch.abs(
+    #         pyro.param("beta_q_log") -
+    #         self.log_beta_n).data.cpu().numpy()[0]
+    #     # print "alpha_error", alpha_error
+    #     # print "beta_error", beta_error
+    #     self.assertEqual(0.0, alpha_error, prec=0.08)
+    #     self.assertEqual(0.0, beta_error, prec=0.08)
+
+    def test_cubo_nonreparameterized(self):
+        pyro._param_store.clear()
 
         def model():
             lambda_latent = pyro.sample("lambda_latent", dist.gamma, self.alpha0, self.beta0)
@@ -472,52 +501,6 @@ class ExponentialGammaTests(TestCase):
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             pyro.sample("lambda_latent", dist.gamma, alpha_q, beta_q)
 
-        kl_optim = KL_QP(
-            model, guide, pyro.optim(
-                torch.optim.Adam, {
-                    "lr": .0003, "betas": (
-                        0.97, 0.999)}))
-        for k in range(10001):
-            kl_optim.step()
-
-        alpha_error = torch.abs(
-            pyro.param("alpha_q_log") -
-            self.log_alpha_n).data.cpu().numpy()[0]
-        beta_error = torch.abs(
-            pyro.param("beta_q_log") -
-            self.log_beta_n).data.cpu().numpy()[0]
-        # print "alpha_error", alpha_error
-        # print "beta_error", beta_error
-        self.assertEqual(0.0, alpha_error, prec=0.08)
-        self.assertEqual(0.0, beta_error, prec=0.08)
-
-    def test_cubo_nonreparametrized(self):
-        pyro._param_store._clear_cache()
-
-        def model():
-            lambda_latent = pyro.sample(
-                "lambda_latent", Gamma(
-                    self.alpha0, self.beta0))
-            x_dist = Exponential(lambda_latent)
-            pyro.observe("obs0", x_dist, self.data[0])
-            pyro.observe("obs1", x_dist, self.data[1])
-            return lambda_latent
-
-        def guide():
-            alpha_q_log = pyro.param(
-                "alpha_q_log",
-                Variable(
-                    self.log_alpha_n.data +
-                    0.17,
-                    requires_grad=True))
-            beta_q_log = pyro.param(
-                "beta_q_log",
-                Variable(
-                    self.log_beta_n.data -
-                    0.143,
-                    requires_grad=True))
-            alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
-            pyro.sample("lambda_latent", Gamma(alpha_q, beta_q))
 
         cubo_optim = CUBO(
             model, guide, pyro.optim(
@@ -606,15 +589,14 @@ class LogNormalNormalGuide(nn.Module):
         self.mu_q_log = Parameter(mu_q_log_init)
         self.tau_q_log = Parameter(tau_q_log_init)
 
-    def test_cubo_nonreparametrized(self):
-        pyro._param_store._clear_cache()
+    def test_cubo_nonreparameterized(self):
+        pyro._param_store.clear()
 
         def model():
-            p_latent = pyro.sample("p_latent", Beta(self.alpha0, self.beta0))
-            x_dist = Bernoulli(p_latent)
+            p_latent = pyro.sample("p_latent", dist.beta, self.alpha0, self.beta0)
             pyro.map_data("aaa",
                           self.data, lambda i, x: pyro.observe(
-                              "obs_{}".format(i), x_dist, x), batch_size=2)
+                              "obs_{}".format(i), dist.bernoulli, x, p_latent), batch_size=2)
             return p_latent
 
         def guide():
@@ -631,7 +613,7 @@ class LogNormalNormalGuide(nn.Module):
                     0.143,
                     requires_grad=True))
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
-            pyro.sample("p_latent", Beta(alpha_q, beta_q))
+            pyro.sample("p_latent", dist.beta, alpha_q, beta_q)
             pyro.map_data("aaa", self.data, lambda i, x: None, batch_size=2)
 
         cubo_optim = KL_QP(model, guide, pyro.optim(torch.optim.Adam,
@@ -684,10 +666,10 @@ class LogNormalNormalTests(TestCase):
     # def test_elbo_nonreparameterized(self):
     #     self.do_elbo_test(False, 15000)
 
-    def test_cubo_reparametrized(self):
+    def test_cubo_reparameterized(self):
         self.do_cubo_test(True, 7000)
 
-    def test_cubo_nonreparametrized(self):
+    def test_cubo_nonreparameterized(self):
         self.do_cubo_test(False, 15000)
 
     def do_elbo_test(self, reparameterized, n_steps):
@@ -724,17 +706,18 @@ class LogNormalNormalTests(TestCase):
         self.assertEqual(0.0, mu_error, prec=0.07)
         self.assertEqual(0.0, tau_error, prec=0.07)
 
-    def do_cubo_test(self, reparametrized, n_steps):
-        pyro._param_store._clear_cache()
+    def do_cubo_test(self, reparameterized, n_steps):
+        pyro._param_store.clear()
 
         def model():
             mu_latent = pyro.sample(
                 "mu_latent", DiagNormal(
                     self.mu0, torch.pow(
                         self.tau0, -0.5)))
-            x_dist = LogNormal(mu_latent, torch.pow(self.tau, -0.5))
-            pyro.observe("obs0", x_dist, self.data[0])
-            pyro.observe("obs1", x_dist, self.data[1])
+            pyro.observe("obs0", dist.lognormal, self.data[0],
+                         mu_latent, torch.pow(self.tau, -0.5))
+            pyro.observe("obs1", dist.lognormal, self.data[1],
+                         mu_latent, torch.pow(self.tau, -0.5))
             return mu_latent
 
         def guide():
@@ -745,7 +728,7 @@ class LogNormalNormalTests(TestCase):
                                                          requires_grad=True))
             mu_q, tau_q = torch.exp(mu_q_log), torch.exp(tau_q_log)
             q_dist = DiagNormal(mu_q, torch.pow(tau_q, -0.5))
-            q_dist.reparametrized = reparametrized
+            q_dist.reparameterized = reparameterized
             pyro.sample("mu_latent", q_dist)
 
         cubo_optim = CUBO(model, guide, pyro.optim(torch.optim.Adam,
