@@ -53,7 +53,7 @@ class Bernoulli(Distribution):
     def batch_log_pdf(self, x, ps=None, batch_size=1, *args, **kwargs):
         _ps = self._sanitize_input(ps)
         if x.dim() == 1 and _ps.dim() == 1 and batch_size == 1:
-            return self.log_pdf(x)
+            return self.log_pdf(x, _ps)
         elif x.dim() == 1:
             x = x.expand(batch_size, x.size(0))
         if _ps.size() != x.size():

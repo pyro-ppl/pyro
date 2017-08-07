@@ -55,7 +55,7 @@ class Uniform(Distribution):
     def batch_log_pdf(self, x, a=None, b=None, batch_size=1, *args, **kwargs):
         _a, _b = self._sanitize_input(a, b)
         if x.dim() == 1 and _a.dim() == 1 and batch_size == 1:
-            return self.log_pdf(x)
+            return self.log_pdf(x, _a, _b)
         _l = x.ge(_a).type_as(_a)
         _u = x.le(_b).type_as(_b)
         return torch.sum(torch.log(_l.mul(_u)) - torch.log(_b - _a), 1)

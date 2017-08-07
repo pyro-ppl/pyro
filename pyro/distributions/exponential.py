@@ -53,7 +53,7 @@ class Exponential(Distribution):
         """
         _lam = self._sanitize_input(lam)
         if x.dim() == 1 and _lam.dim() == 1 and batch_size == 1:
-            return self.log_pdf(x)
+            return self.log_pdf(x, _lam)
         elif x.dim() == 1:
             x = x.expand(batch_size, x.size(0))
         ll = -_lam * x + torch.log(_lam)
