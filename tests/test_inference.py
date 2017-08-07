@@ -223,7 +223,8 @@ class TestFixedModelGuide(TestCase):
         return (not bad)
 
     def do_test_cubo_fixedness(self, model_fixed, guide_fixed):
-        pyro._param_store._clear_cache()
+        #pyro._param_store._clear_cache()
+        pyro.get_param_store().clear()
 
         def model():
             alpha_p_log = pyro.param(
@@ -376,12 +377,12 @@ class PoissonGammaTests(TestCase):
         self.assertEqual(0.0, beta_error, prec=0.08)
 
     def test_cubo_nonreparametrized(self):
-        pyro._param_store._clear_cache()
+        #pyro._param_store._clear_cache()
+        pyro.get_param_store().clear()
 
         def model():
-            lambda_latent = pyro.sample(
-                "lambda_latent", Gamma(
-                    self.alpha0, self.beta0))
+            #lambda_latent = pyro.sample("lambda_latent", Gamma(self.alpha0, self.beta0))
+            lambda_latent = pyro.sample("lambda_latent", dist.gamma, self.alpha0, self.beta0)
             x_dist = Poisson(lambda_latent)
             # x0 = pyro.observe("obs0", x_dist, self.data[0])
             pyro.map_data("aaa",
@@ -403,7 +404,8 @@ class PoissonGammaTests(TestCase):
                     0.143,
                     requires_grad=True))
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
-            pyro.sample("lambda_latent", Gamma(alpha_q, beta_q))
+            #pyro.sample("lambda_latent", Gamma(alpha_q, beta_q))
+            pyro.sample("lambda_latent", dist.gamma, alpha_q, beta_q)
             pyro.map_data("aaa", self.data, lambda i, x: None, batch_size=3)
 
         cubo_optim = CUBO(

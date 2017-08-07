@@ -494,6 +494,8 @@ class CUBO_grad(AbstractInfer):
         exp_cubo_sum = exp_cubo.sum()
         cubo = (torch.log(exp_cubo)/self.n_cubo ).sum()
 
+        pdb.set_trace()
+
         # accumulate parameters
         all_trainable_params = []
         # get trace params from last model run
