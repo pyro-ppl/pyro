@@ -23,7 +23,7 @@ def zero_grads(tensors):
 
 class CUBO_logc(AbstractInfer):
     """
-    A new, Trace and Poutine-based implementation of SVI
+    Cubo with correction term
     """
     def __init__(self, model,
                  guide,
@@ -145,7 +145,7 @@ class CUBO_logc(AbstractInfer):
 
 class CUBO_logcn(AbstractInfer):
     """
-    A new, Trace and Poutine-based implementation of SVI
+    Cubo with normalized correction
     """
     def __init__(self, model,
                  guide,
@@ -388,7 +388,7 @@ class CUBO(AbstractInfer):
 
 class CUBO_grad(AbstractInfer):
     """
-    A new, Trace and Poutine-based implementation of SVI
+    Implements the gradient of Cubo in normal form
     """
     def __init__(self, model,
                  guide,
