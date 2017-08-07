@@ -13,7 +13,7 @@ from pyro.infer.importance import Importance
 from tests.common import TestCase
 
 from pyro.infer.kl_qp import KL_QP
-from pyro.infer.cubo import CUBO
+from pyro.infer.cubo import CUBO_grad as CUBO
 
 class NormalNormalTests(TestCase):
 
