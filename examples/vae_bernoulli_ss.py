@@ -1,4 +1,3 @@
-from pdb import set_trace as bb
 import torch
 import pyro
 from torch.autograd import Variable
@@ -69,7 +68,6 @@ class Encoder_c(nn.Module):
         self.fc21 = nn.Linear(200, 10)
         self.relu = nn.ReLU()
         self.softmax = nn.Softmax()
-        # self.exp = nn.Exp()
 
     def forward(self, x):
         x = x.view(-1, 784)
@@ -85,11 +83,9 @@ class Encoder_o(nn.Module):
         self.fc21 = nn.Linear(400, 20)
         self.fc22 = nn.Linear(400, 20)
         self.relu = nn.ReLU()
-        # self.exp = nn.Exp()
 
     def forward(self, x, cll):
         x = x.view(-1, 784)
-        # bb()
         input_vec = torch.cat((x, cll), 1)
         h1 = self.relu(self.fc1(input_vec))
         return self.fc21(h1), torch.exp(self.fc22(h1))
@@ -129,10 +125,8 @@ def model_latent_backup(data):
     z = pyro.sample("latent_z", DiagNormal(z_mu, z_sigma))
 
     alpha = Variable(torch.ones([data.size(0), 10])) / 10.
-    # c = pyro.sample('latent_class', Multinomial(alpha,1))#Categorical(alpha))
-    cll = pyro.sample('latent_class', Categorical(alpha))  # Categorical(alpha))
+    cll = pyro.sample('latent_class', Categorical(alpha))
 
-    # bb()
     # decode into size of imgx2 for mu/sigma
     img_mu = decoder.forward(z, cll)
     # score against actual images
@@ -155,7 +149,6 @@ def model_observed(data, cll):
 
     # sample
     z = pyro.sample("latent_z", DiagNormal(z_mu, z_sigma))
-    #c = Variable(c)
 
     # decode into size of imgx2 for mu/sigma
     img_mu = decoder.forward(z, cll)
@@ -198,9 +191,6 @@ def guide_latent2(data):
 
 
 def model_sample(cll=None):
-    # wrap params for use in model -- required
-    # decoder = pyro.module("decoder", pt_decode)
-
     # sample from prior
     z_mu, z_sigma = Variable(torch.zeros(
         [1, 20])), Variable(torch.ones([1, 20]))
@@ -211,22 +201,17 @@ def model_sample(cll=None):
     alpha = Variable(torch.ones([1, 10]) / 10.)
 
     if cll.data.cpu().numpy() is None:
-#         bb()
         cll = pyro.sample('class', Categorical(alpha))
         print('sampling class')
 
     # decode into size of imgx1 for mu
     img_mu = pt_decode.forward(z, cll)
-    # bb()
-    # img=Bernoulli(img_mu).sample()
     # score against actual images
     img = pyro.sample("sample", Bernoulli(img_mu))
-    # return img
     return img, img_mu
 
 
 def model_sample_given_class(cll=None):
-    pass
 
 
 def per_param_args(name, param):
@@ -238,7 +223,6 @@ def per_param_args(name, param):
 
 # or alternatively
 adam_params = {"lr": .0001}
-# optim.SGD(lr=.0001)
 
 inference_latent_class = KL_QP(model_latent, guide_latent, pyro.optim(optim.Adam, adam_params))
 inference_observed_class = KL_QP(
@@ -266,13 +250,6 @@ if all_batches[-1] != mnist_size:
 
 vis = visdom.Visdom(env='vae_ss_400')
 
-# rand_ix = 0
-# sam_cnt = 50
-# for i in range(sam_cnt):
-#   vis.image(mnist_data[rand_ix].data.numpy())
-#   vis.image(Bernoulli(mnist_data[rand_ix])().data.numpy())
-# bb()
-
 
 cll_clamp0 = Variable(torch.zeros(1, 10))
 cll_clamp3 = Variable(torch.zeros(1, 10))
@@ -290,7 +267,6 @@ for i in range(1000):
     for ix, batch_start in enumerate(all_batches[:-1]):
         batch_end = all_batches[ix + 1]
 
-        #print('Batch '+str(ix))
         # get batch
         batch_data = mnist_data[batch_start:batch_end]
         bs_size = batch_data.size(0)
@@ -299,24 +275,18 @@ for i in range(1000):
         batch_class.scatter_(1, batch_class_raw.data.view(-1, 1), 1)
         batch_class = Variable(batch_class)
 
-        # bb()
         if np.mod(ix, 1) == 0:
             epoch_loss += inference_observed_class.step(batch_data, batch_class)
-            #epoch_loss += inference_observed_class_scored.step(batch_data,batch_class)
         else:
             epoch_loss += inference_latent_class.step(batch_data)
-        #
-        # bb()
     loss_training.append(epoch_loss / float(mnist_size))
 
-#     bb()
     sample0, sample_mu0 = model_sample(cll=cll_clamp0)
     sample3, sample_mu3 = model_sample(cll=cll_clamp3)
     sample9, sample_mu9 = model_sample(cll=cll_clamp9)
-    #title='Learning Curves of ELBO in Nats per Sample',
     vis.line(np.array(loss_training), opts=dict({'title': 'my title'}))
-    #vis.image(batch_data[0].view(28, 28).data.numpy())
-    #vis.image(sample[0].view(28, 28).data.numpy())
+    vis.image(batch_data[0].view(28, 28).data.numpy())
+    vis.image(sample[0].view(28, 28).data.numpy())
     vis.image(sample_mu0[0].view(28, 28).data.numpy())
     vis.image(sample_mu3[0].view(28, 28).data.numpy())
     vis.image(sample_mu9[0].view(28, 28).data.numpy())

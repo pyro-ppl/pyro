@@ -1,4 +1,3 @@
-from pdb import set_trace as bb
 import torch
 import pyro
 from torch.autograd import Variable
@@ -256,7 +255,6 @@ for i in range(1000):
     for ix, batch_start in enumerate(all_batches[:-1]):
         batch_end = all_batches[ix + 1]
 
-        #print('Batch '+str(ix))
         # get batch
         batch_data = mnist_data[batch_start:batch_end]
         bs_size = batch_data.size(0)
@@ -270,17 +268,12 @@ for i in range(1000):
         else:
             epoch_loss += inference.step(batch_data, batch_class)
 
-    #sample, sample_mu, sample_class = model_sample()
     sample, sample_mu, sample_class = classify(mnist_data_test)
-    # bb()
     acc = torch.sum(sample_class * mnist_labels_test) / \
         float(mnist_labels_test.size(0))  # .cpu().numpy()
     acc_val = acc.data.numpy()[0]
-    # bb()
-    #.data.cpu().numpy()[0]
     print('accuracy ' + str(acc_val))
     acc_test.append(acc_val)
-    # bb()
     #vis.image(batch_data[0].view(28, 28).data.numpy())
     #vis.image(sample[0].view(28, 28).data.numpy())
     vis.image(sample_mu[0].view(28, 28).data.numpy())  # ,opts=dict({'title': str(sample_class)}))

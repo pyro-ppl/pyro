@@ -1,4 +1,3 @@
-from pdb import set_trace as bb
 import torch
 import pyro
 from torch.autograd import Variable
@@ -52,7 +51,6 @@ class Encoder(nn.Module):
         self.fc21 = nn.Linear(200, 20)
         self.fc22 = nn.Linear(200, 20)
         self.relu = nn.ReLU()
-        # self.exp = nn.Exp()
 
     def forward(self, x, cll):
         x = x.view(-1, 784)
@@ -90,15 +88,11 @@ class Decoder(nn.Module):
         h3 = self.relu(self.fc3(z))
         mu_bern = self.sigmoid(self.fc4(h3))
         alpha_mult = self.softmax(self.fc5(h3))
-        # reshape to capture mu, sigma params for every pixel
-        #rvs = rv.view(z.size(0), -1, 1)
-        # send back two params
         return mu_bern, alpha_mult
 
 
 pt_encode = Encoder()
 pt_decode = Decoder()
-# bb()
 
 
 def model(data, cll):
@@ -146,7 +140,6 @@ def guide(data, cll):
     # use the ecnoder to get an estimate of mu, sigma
     z_mu, z_sigma = encoder.forward(data, cll)
     pyro.sample("latent", DiagNormal(z_mu, z_sigma))
-    # z = pyro.sample(DiagNormal(torch.zeros([20]), torch.ones([20])))
 
 
 def guide_latent(data, cll):
@@ -158,9 +151,6 @@ def guide_latent(data, cll):
 
 
 def model_sample():
-    # wrap params for use in model -- required
-    # decoder = pyro.module("decoder", pt_decode)
-
     # sample from prior
     z_mu, z_sigma = Variable(torch.zeros(
         [1, 20])), Variable(torch.ones([1, 20]))
@@ -170,8 +160,6 @@ def model_sample():
 
     # decode into size of imgx1 for mu
     img_mu, alpha = pt_decode.forward(z)
-    # bb()
-    # img=Bernoulli(img_mu).sample()
     # score against actual images
     img = pyro.sample("sample_img", Bernoulli(img_mu))
     cll = pyro.sample("sample_cll", Categorical(alpha))
@@ -214,7 +202,6 @@ for i in range(1000):
     for ix, batch_start in enumerate(all_batches[:-1]):
         batch_end = all_batches[ix + 1]
 
-        #print('Batch '+str(ix))
         # get batch
         batch_data = mnist_data[batch_start:batch_end]
         bs_size = batch_data.size(0)

@@ -1,4 +1,3 @@
-from pdb import set_trace as bb
 import numpy as np
 import torch
 from torch.autograd import Variable
@@ -19,7 +18,7 @@ def model():
     x_dist = DiagNormal(latent, Variable(torch.ones(1, 1)))
     x = pyro.observe("obs", x_dist, Variable(torch.ones(1, 1)))
     return latent
-#
+
 # now let's try inference
 infer = LikelihoodWeighting(model)
 #

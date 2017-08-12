@@ -1,4 +1,3 @@
-from pdb import set_trace as bb
 import torch
 import pyro
 from torch.autograd import Variable
@@ -42,8 +41,6 @@ test_loader = torch.utils.data.DataLoader(
     shuffle=False, **kwargs)
 
 # network
-
-
 class Encoder(nn.Module):
 
     def __init__(self):
@@ -52,7 +49,6 @@ class Encoder(nn.Module):
         self.fc21 = nn.Linear(200, 20)
         self.fc22 = nn.Linear(200, 20)
         self.relu = nn.ReLU()
-        # self.exp = nn.Exp()
 
     def forward(self, x):
         x = x.view(-1, 784)
@@ -82,11 +78,10 @@ class Decoder(nn.Module):
 # create encoder decoder
 pt_encode = Encoder()
 pt_decode = Decoder()
-# bb()
 
 
 def model(data):
-        # klqp gets called with data.
+    # klqp gets called with data.
 
     # wrap params for use in model -- required
     decoder = pyro.module("decoder", pt_decode)
@@ -94,7 +89,6 @@ def model(data):
     # sample from prior
     z_mu, z_sigma = ng_zeros(
         [data.size(0), 20]), ng_ones([data.size(0), 20])
-    # Variable(torch.zeros([data.size(0), 20])), Variable(torch.ones([data.size(0), 20]))
 
     # sample (retrieve value set by the guide)
     z = pyro.sample("latent", DiagNormal(z_mu, z_sigma))
@@ -115,8 +109,6 @@ def guide(data):
 
     pyro.sample("latent", DiagNormal(z_mu, z_sigma))
 
-    # z = pyro.sample(DiagNormal(torch.zeros([20]), torch.ones([20])))
-
 
 def model_sample():
 
@@ -134,11 +126,11 @@ def model_sample():
     img_mu, img_sigma = decoder.forward(z)
 
     # score against actual images
-    #img= pyro.sample("obs", DiagNormal(img_mu, img_sigma))
     return img_mu
 
 
 def per_param_args(name, param):
+    # vary hyperparams based on model
     if name == "decoder":
         return {"lr": .0001}
     else:
@@ -147,9 +139,7 @@ def per_param_args(name, param):
 
 # or alternatively
 adam_params = {"lr": .0001}
-# optim.SGD(lr=.0001)
 
-# kl_optim = KL_QP(model, guide, pyro.optim(optim.Adam, adam_params))
 kl_optim = KL_QP(model, guide, pyro.optim(optim.Adam, per_param_args))
 
 # num_steps = 1
@@ -157,7 +147,7 @@ mnist_data = Variable(train_loader.dataset.train_data.float() / 255.)
 mnist_size = mnist_data.size(0)
 batch_size = 256
 
-# TODO: batches not necessarily
+# TODO: batches not necessary
 all_batches = np.arange(0, mnist_size, batch_size)
 
 if all_batches[-1] != mnist_size:
@@ -176,51 +166,6 @@ for i in range(1000):
         epoch_loss += kl_optim.step(batch_data)
 
         sample = model_sample()
-        # bb()
     vis.image(batch_data[0].contiguous().view(28, 28).data.numpy())
     vis.image(sample[0].contiguous().view(28, 28).data.numpy())
     print("epoch avg loss {}".format(epoch_loss / float(mnist_size)))
-
-
-# data =
-# kl_optim.runner(num_steps, data)
-
-# # # create a model with params
-# def model(data):
-
-
-#   return pyro.sample(DiagNormal(torch.zeros(), torch.ones()))
-
-#   # create our forward
-#   z_mu, z_sigma = encode.forward(data)
-
-#   #
-#   z = pyro.sample(DiagNormal(z_mu, z_sigma))
-
-
-#   latent = pyro.sample("latent",
-#                        DiagNormal(Variable(torch.zeros(1)),
-#                                   5*Variable(torch.ones(1))))
-#   x_dist = DiagNormal(latent, Variable(torch.ones(1)))
-#   x = pyro.observe("obs", x_dist, Variable(torch.ones(1)))
-#   return latent
-
-# #and try importance!
-# def guide_with_params():
-#   mu = pyro.param("p1", Variable(torch.zeros(1), requires_grad=True))
-#   sigma = torch.exp(.5*pyro.param("p2", Variable(torch.ones(1), requires_grad=True)))
-#   latent = pyro.sample("latent",
-#                        DiagNormal(mu, sigma))
-
-#   x_dist = DiagNormal(latent, Variable(torch.ones(1)))
-#   pass
-
-
-# # use sgd functions by default
-# optim_fct = torch.optim.SGD
-
-# # create our KL_QP object with optim fct passed in for loss calcs
-# infer = KL_QP(model, guide_with_params, fixed_model=True, optim_fct)
-
-# #
-# exp = lw_expectation(infer, lambda x: x, 100)

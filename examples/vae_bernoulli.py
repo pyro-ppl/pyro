@@ -1,4 +1,3 @@
-from pdb import set_trace as bb
 import torch
 import pyro
 from torch.autograd import Variable
@@ -51,7 +50,6 @@ class Encoder(nn.Module):
         self.fc21 = nn.Linear(200, 20)
         self.fc22 = nn.Linear(200, 20)
         self.relu = nn.ReLU()
-        # self.exp = nn.Exp()
 
     def forward(self, x):
         x = x.view(-1, 784)
@@ -78,7 +76,6 @@ class Decoder(nn.Module):
 
 pt_encode = Encoder()
 pt_decode = Decoder()
-# bb()
 
 
 def model(data):
@@ -106,13 +103,9 @@ def guide(data):
     # use the ecnoder to get an estimate of mu, sigma
     z_mu, z_sigma = encoder.forward(data)
     pyro.sample("latent", DiagNormal(z_mu, z_sigma))
-    # z = pyro.sample(DiagNormal(torch.zeros([20]), torch.ones([20])))
 
 
 def model_sample():
-    # wrap params for use in model -- required
-    # decoder = pyro.module("decoder", pt_decode)
-
     # sample from prior
     z_mu, z_sigma = Variable(torch.zeros(
         [1, 20])), Variable(torch.ones([1, 20]))
@@ -122,7 +115,6 @@ def model_sample():
 
     # decode into size of imgx1 for mu
     img_mu = pt_decode.forward(z)
-    # bb()
     # img=Bernoulli(img_mu).sample()
     # score against actual images
     img = pyro.sample("sample", Bernoulli(img_mu))
@@ -139,10 +131,8 @@ def per_param_args(name, param):
 
 # or alternatively
 adam_params = {"lr": .0001}
-# optim.SGD(lr=.0001)
 
 kl_optim = KL_QP(model, guide, pyro.optim(optim.Adam, adam_params))
-#kl_optim = KL_QP(model, guide, pyro.optim(optim.Adam, per_param_args))
 
 # num_steps = 1
 mnist_data = Variable(train_loader.dataset.train_data.float() / 255.)
@@ -158,13 +148,6 @@ if all_batches[-1] != mnist_size:
 
 vis = visdom.Visdom(env='vae_mnist')
 
-# rand_ix = 0
-# sam_cnt = 50
-# for i in range(sam_cnt):
-#   vis.image(mnist_data[rand_ix].data.numpy())
-#   vis.image(Bernoulli(mnist_data[rand_ix])().data.numpy())
-# bb()
-
 loss_training = []
 
 for i in range(1000):
@@ -176,9 +159,7 @@ for i in range(1000):
         # get batch
         batch_data = mnist_data[batch_start:batch_end]
 
-        # bb()
         epoch_loss += kl_optim.step(batch_data)
-        # bb()
 
     loss_training.append(-epoch_loss / float(mnist_size))
     sample, sample_mu = model_sample()

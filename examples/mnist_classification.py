@@ -1,4 +1,3 @@
-from pdb import set_trace as bb
 import torch
 import pyro
 from torch.autograd import Variable
@@ -71,11 +70,8 @@ def model_sample(data, cll):
     cll = pyro.sample('observed_class', Categorical(alpha_cat))
     return cll
 
-
 def guide(data, cll):
     return lambda foo: None
-
-
 
 # or alternatively
 adam_params = {"lr": .0001}
@@ -103,7 +99,6 @@ for i in range(1000):
     for ix, batch_start in enumerate(all_batches[:-1]):
         batch_end = all_batches[ix + 1]
 
-        #print('Batch '+str(ix))
         # get batch
         batch_data = mnist_data[batch_start:batch_end]
         bs_size = batch_data.size(0)
