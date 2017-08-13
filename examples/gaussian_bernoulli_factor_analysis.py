@@ -1,3 +1,4 @@
+import argparse
 import numpy as np
 import torch
 from torch.autograd import Variable
@@ -98,7 +99,6 @@ mnist_size = dat.size(0)
 m_data= dat.view(mnist_size,-1)
 mnist_data = Variable(m_data).float() / 255.
 nr_samples = mnist_data.size(0)
-nr_epochs = 1000
 batch_size = 10
 
 all_batches = np.arange(0, mnist_size, batch_size)
@@ -110,14 +110,19 @@ grad_step = KL_QP(factor_analysis_model, factor_analysis_guide, adam_optim)
 
 
 # apply it to minibatches of data by hand:
-for j in range(nr_epochs):
+def main():
+    parser = argparse.ArgumentParser(description="parse args")
+    parser.add_argument('-n', '--num-epochs', type=int, required=True)
+    args = parser.parse_args()
+    for i in range(args.num_epochs):
+        epoch_loss = 0.
+        for ix, batch_start in enumerate(all_batches[:-1]):
+            batch_end = all_batches[ix + 1]
+            # get batch
+            batch_data = mnist_data[batch_start:batch_end]
+            epoch_loss += grad_step.step(ix, batch_data)
 
-    epoch_loss = 0.
-    for ix, batch_start in enumerate(all_batches[:-1]):
-        batch_end = all_batches[ix + 1]
-        # get batch
-        batch_data = mnist_data[batch_start:batch_end]
-        epoch_loss += grad_step.step(ix, batch_data)
+        print("epoch avg loss {}".format(epoch_loss / float(mnist_size)))
 
-    print("epoch avg loss {}".format(epoch_loss / float(mnist_size)))
-
+if __name__ == '__main__':
+    main()

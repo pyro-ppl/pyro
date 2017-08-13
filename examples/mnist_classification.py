@@ -1,3 +1,4 @@
+import argparse
 import torch
 import pyro
 from torch.autograd import Variable
@@ -93,20 +94,26 @@ if all_batches[-1] != mnist_size:
 
 vis = visdom.Visdom()
 
-for i in range(1000):
+def main():
+    parser = argparse.ArgumentParser(description="parse args")
+    parser.add_argument('-n', '--num-epochs', type=int, required=True)
+    args = parser.parse_args()
+    for i in range(args.num_epochs):
+        epoch_loss = 0.
+        for ix, batch_start in enumerate(all_batches[:-1]):
+            batch_end = all_batches[ix + 1]
 
-    epoch_loss = 0.
-    for ix, batch_start in enumerate(all_batches[:-1]):
-        batch_end = all_batches[ix + 1]
+            # get batch
+            batch_data = mnist_data[batch_start:batch_end]
+            bs_size = batch_data.size(0)
+            batch_class_raw = mnist_labels[batch_start:batch_end]
+            batch_class = torch.zeros(bs_size, 10)  # maybe it needs a FloatTensor
+            batch_class.scatter_(1, batch_class_raw.data.view(-1, 1), 1)
+            batch_class = Variable(batch_class)
 
-        # get batch
-        batch_data = mnist_data[batch_start:batch_end]
-        bs_size = batch_data.size(0)
-        batch_class_raw = mnist_labels[batch_start:batch_end]
-        batch_class = torch.zeros(bs_size, 10)  # maybe it needs a FloatTensor
-        batch_class.scatter_(1, batch_class_raw.data.view(-1, 1), 1)
-        batch_class = Variable(batch_class)
+            epoch_loss += inference_opt.step(batch_data, batch_class)
 
-        epoch_loss += inference_opt.step(batch_data, batch_class)
+        print("epoch avg loss {}".format(epoch_loss / float(mnist_size)))
 
-    print("epoch avg loss {}".format(epoch_loss / float(mnist_size)))
+if __name__ == '__main__':
+    main()

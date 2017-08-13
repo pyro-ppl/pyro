@@ -1,3 +1,4 @@
+import argparse
 import torch
 import pyro
 from torch.autograd import Variable
@@ -150,21 +151,28 @@ vis = visdom.Visdom(env='vae_mnist')
 
 loss_training = []
 
-for i in range(1000):
+def main():
+    parser = argparse.ArgumentParser(description="parse args")
+    parser.add_argument('-n', '--num-epochs', type=int, required=True)
+    args = parser.parse_args()
+    for i in range(args.num_epochs):
 
-    epoch_loss = 0.
-    for ix, batch_start in enumerate(all_batches[:-1]):
-        batch_end = all_batches[ix + 1]
+        epoch_loss = 0.
+        for ix, batch_start in enumerate(all_batches[:-1]):
+            batch_end = all_batches[ix + 1]
 
-        # get batch
-        batch_data = mnist_data[batch_start:batch_end]
+            # get batch
+            batch_data = mnist_data[batch_start:batch_end]
 
-        epoch_loss += kl_optim.step(batch_data)
+            epoch_loss += kl_optim.step(batch_data)
 
-    loss_training.append(-epoch_loss / float(mnist_size))
-    sample, sample_mu = model_sample()
-    vis.line(np.array(loss_training), opts=dict({'title': 'Training ELBO in nats'}))
-    #vis.image(batch_data[0].view(28, 28).data.numpy())
-    #vis.image(sample[0].view(28, 28).data.numpy())
-    vis.image(sample_mu[0].view(28, 28).data.numpy())
-    print("epoch avg loss {}".format(epoch_loss / float(mnist_size)))
+        loss_training.append(-epoch_loss / float(mnist_size))
+        sample, sample_mu = model_sample()
+        vis.line(np.array(loss_training), opts=dict({'title': 'Training ELBO in nats'}))
+        #vis.image(batch_data[0].view(28, 28).data.numpy())
+        #vis.image(sample[0].view(28, 28).data.numpy())
+        vis.image(sample_mu[0].view(28, 28).data.numpy())
+        print("epoch avg loss {}".format(epoch_loss / float(mnist_size)))
+
+if __name__ == '__main__':
+    main()

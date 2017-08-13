@@ -1,3 +1,4 @@
+import argparse
 import torch
 import pyro
 from torch.autograd import Variable
@@ -211,9 +212,6 @@ def model_sample(cll=None):
     return img, img_mu
 
 
-def model_sample_given_class(cll=None):
-
-
 def per_param_args(name, param):
     if name == "decoder":
         return {"lr": .0001}
@@ -261,33 +259,41 @@ cll_clamp9[0, 9] = 1
 
 
 loss_training = []
-for i in range(1000):
 
-    epoch_loss = 0.
-    for ix, batch_start in enumerate(all_batches[:-1]):
-        batch_end = all_batches[ix + 1]
+def main():
+    parser = argparse.ArgumentParser(description="parse args")
+    parser.add_argument('-n', '--num-epochs', type=int, required=True)
+    args = parser.parse_args()
+    for i in range(args.num_epochs):
 
-        # get batch
-        batch_data = mnist_data[batch_start:batch_end]
-        bs_size = batch_data.size(0)
-        batch_class_raw = mnist_labels[batch_start:batch_end]
-        batch_class = torch.zeros(bs_size, 10)  # maybe it needs a FloatTensor
-        batch_class.scatter_(1, batch_class_raw.data.view(-1, 1), 1)
-        batch_class = Variable(batch_class)
+        epoch_loss = 0.
+        for ix, batch_start in enumerate(all_batches[:-1]):
+            batch_end = all_batches[ix + 1]
 
-        if np.mod(ix, 1) == 0:
-            epoch_loss += inference_observed_class.step(batch_data, batch_class)
-        else:
-            epoch_loss += inference_latent_class.step(batch_data)
-    loss_training.append(epoch_loss / float(mnist_size))
+            # get batch
+            batch_data = mnist_data[batch_start:batch_end]
+            bs_size = batch_data.size(0)
+            batch_class_raw = mnist_labels[batch_start:batch_end]
+            batch_class = torch.zeros(bs_size, 10)  # maybe it needs a FloatTensor
+            batch_class.scatter_(1, batch_class_raw.data.view(-1, 1), 1)
+            batch_class = Variable(batch_class)
 
-    sample0, sample_mu0 = model_sample(cll=cll_clamp0)
-    sample3, sample_mu3 = model_sample(cll=cll_clamp3)
-    sample9, sample_mu9 = model_sample(cll=cll_clamp9)
-    vis.line(np.array(loss_training), opts=dict({'title': 'my title'}))
-    vis.image(batch_data[0].view(28, 28).data.numpy())
-    vis.image(sample[0].view(28, 28).data.numpy())
-    vis.image(sample_mu0[0].view(28, 28).data.numpy())
-    vis.image(sample_mu3[0].view(28, 28).data.numpy())
-    vis.image(sample_mu9[0].view(28, 28).data.numpy())
-    print("epoch avg loss {}".format(epoch_loss / float(mnist_size)))
+            if np.mod(ix, 1) == 0:
+                epoch_loss += inference_observed_class.step(batch_data, batch_class)
+            else:
+                epoch_loss += inference_latent_class.step(batch_data)
+        loss_training.append(epoch_loss / float(mnist_size))
+
+        sample0, sample_mu0 = model_sample(cll=cll_clamp0)
+        sample3, sample_mu3 = model_sample(cll=cll_clamp3)
+        sample9, sample_mu9 = model_sample(cll=cll_clamp9)
+        vis.line(np.array(loss_training), opts=dict({'title': 'my title'}))
+        vis.image(batch_data[0].view(28, 28).data.numpy())
+#         vis.image(sample[0].view(28, 28).data.numpy())
+        vis.image(sample_mu0[0].view(28, 28).data.numpy())
+        vis.image(sample_mu3[0].view(28, 28).data.numpy())
+        vis.image(sample_mu9[0].view(28, 28).data.numpy())
+        print("epoch avg loss {}".format(epoch_loss / float(mnist_size)))
+
+if __name__ == '__main__':
+    main()

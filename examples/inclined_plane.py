@@ -1,4 +1,5 @@
 from __future__ import print_function
+import argparse
 import numpy as np
 import torch
 from torch.autograd import Variable
@@ -44,7 +45,7 @@ def simulate(mu, length=2.0, phi=np.pi / 6.0, dx=0.01, noise_sigma=None):
         T += dx / velocity
 
     if noise_sigma is None:
-        return T.unsqueeze(0)
+        return T
     else:
         return T + Variable(noise_sigma * torch.randn(1))
 
@@ -90,31 +91,37 @@ def guide(observed_data):
 # do variational inference using KL_QP
 print("doing inference with simulated data")
 verbose = True
-n_steps = 3001
 kl_optim = KL_QP(model, guide, pyro.optim(optim.Adam, {"lr": 0.003, "betas": (0.93, 0.993)}))
-for step in range(n_steps):
-    loss = kl_optim.step(observed_data)
-    if step % 100 == 0:
-        if verbose:
-            print("[epoch %d] mean_mu: %.3f" % (step, pyro.param("mean_mu").data[0]))
-            print("[epoch %d] sigma_mu: %.3f" % (step,
-                                                 torch.exp(pyro.param("log_sigma_mu")).data[0]))
-        else:
-            print(".", end='')
-        sys.stdout.flush()
+def main():
+    parser = argparse.ArgumentParser(description="parse args")
+    parser.add_argument('-n', '--num-epochs', type=int, required=True)
+    args = parser.parse_args()
+    for step in range(args.num_epochs):
+        loss = kl_optim.step(observed_data)
+        if step % 100 == 0:
+            if verbose:
+                print("[epoch %d] mean_mu: %.3f" % (step, pyro.param("mean_mu").data[0]))
+                print("[epoch %d] sigma_mu: %.3f" % (step,
+                                                     torch.exp(pyro.param("log_sigma_mu")).data[0]))
+            else:
+                print(".", end='')
+            sys.stdout.flush()
 
-# report results
-inferred_mu = pyro.param("mean_mu").data[0]
-inferred_mu_uncertainty = torch.exp(pyro.param("log_sigma_mu")).data[0]
-print("\nthe coefficient of friction inferred by pyro is %.3f +- %.3f" %
-      (inferred_mu, inferred_mu_uncertainty))
+    # report results
+    inferred_mu = pyro.param("mean_mu").data[0]
+    inferred_mu_uncertainty = torch.exp(pyro.param("log_sigma_mu")).data[0]
+    print("\nthe coefficient of friction inferred by pyro is %.3f +- %.3f" %
+          (inferred_mu, inferred_mu_uncertainty))
 
-# note that, given the finite step size in the simulator, the simulated descent times will
-# not precisely match the numbers from the analytic result.
-# in particular the first two numbers reported below should match each other pretty closely
-# but will be systematically off from the third number
-print("the mean observed descent time in the dataset is: %.4f seconds" % observed_mean)
-print("the (forward) simulated descent time for the inferred (mean) mu is: %.4f seconds" %
-      simulate(pyro.param("mean_mu")).data[0])
-print("elementary calulus gives the descent time for the inferred (mean) mu as: %.4f seconds" %
-      analytic_T(pyro.param("mean_mu").data[0]))
+    # note that, given the finite step size in the simulator, the simulated descent times will
+    # not precisely match the numbers from the analytic result.
+    # in particular the first two numbers reported below should match each other pretty closely
+    # but will be systematically off from the third number
+    print("the mean observed descent time in the dataset is: %.4f seconds" % observed_mean)
+    print("the (forward) simulated descent time for the inferred (mean) mu is: %.4f seconds" %
+          simulate(pyro.param("mean_mu")).data[0])
+    print("elementary calulus gives the descent time for the inferred (mean) mu as: %.4f seconds" %
+          analytic_T(pyro.param("mean_mu").data[0]))
+
+if __name__ == '__main__':
+    main()
