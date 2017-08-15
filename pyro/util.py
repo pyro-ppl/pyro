@@ -35,12 +35,10 @@ def memoize(fn):
 
 def ones(*args, **kwargs):
     return Parameter(torch.ones(*args, **kwargs))
-    # return pyro.device(Parameter(torch.ones(*args, **kwargs)))
 
 
 def zeros(*args, **kwargs):
     return Parameter(torch.zeros(*args, **kwargs))
-    # return pyro.device(Parameter(torch.zeros(*args, **kwargs)))
 
 
 def ng_ones(*args, **kwargs):
