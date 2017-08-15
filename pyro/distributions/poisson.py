@@ -53,7 +53,7 @@ class Poisson(Distribution):
     def batch_log_pdf(self, x, lam=None, batch_size=1, *args, **kwargs):
         _lam = self._sanitize_input(lam)
         if x.dim() == 1 and _lam.dim() == 1 and batch_size == 1:
-            return self.log_pdf(x)
+            return self.log_pdf(x, _lam)
         elif x.dim() == 1:
             x = x.expand(batch_size, x.size(0))
         ll_1 = torch.sum(x * torch.log(_lam), 1)

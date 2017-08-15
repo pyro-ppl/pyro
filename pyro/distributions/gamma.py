@@ -62,7 +62,7 @@ class Gamma(Distribution):
     def batch_log_pdf(self, x, alpha=None, beta=None, batch_size=1, *args, **kwargs):
         _alpha, _beta = self._sanitize_input(alpha, beta)
         if x.dim() == 1 and _beta.dim() == 1 and batch_size == 1:
-            return self.log_pdf(x)
+            return self.log_pdf(x, _alpha, _beta)
         elif x.dim() == 1:
             x = x.expand(batch_size, x.size(0))
         ll_1 = -_beta * x

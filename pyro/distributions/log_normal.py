@@ -61,7 +61,7 @@ class LogNormal(Distribution):
         """
         _mu, _sigma = self._sanitize_input(mu, sigma)
         if x.dim() == 1 and _mu.dim() == 1 and batch_size == 1:
-            return self.log_pdf(x)
+            return self.log_pdf(x, _mu, _sigma)
         elif x.dim() == 1:
             x = x.expand(batch_size, x.size(0))
         ll_1 = Variable(torch.Tensor([-0.5 * np.log(2.0 * np.pi)])
