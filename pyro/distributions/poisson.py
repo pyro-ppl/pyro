@@ -37,7 +37,7 @@ class Poisson(Distribution):
         """
         _lam = self._sanitize_input(lam)
         x = npr.poisson(lam=_lam.data.numpy()).astype("float")
-        return Variable(torch.Tensor(x))
+        return Variable(torch.Tensor(x).type_as(_lam.data))
 
     def log_pdf(self, x, lam=None, *args, **kwargs):
         """

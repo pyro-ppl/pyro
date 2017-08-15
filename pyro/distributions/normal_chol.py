@@ -36,7 +36,7 @@ class NormalChol(Distribution):
         Reparameterized Normal cholesky sampler.
         """
         _mu, _L = self._sanitize_input(mu, L)
-        eps = Variable(torch.randn(_mu.size()))
+        eps = Variable(torch.randn(_mu.size()).type_as(_mu.data))
         if eps.dim() == 1:
             eps = eps.unsqueeze(1)
         z = _mu + torch.mm(_L, eps).squeeze()
@@ -47,7 +47,8 @@ class NormalChol(Distribution):
         Normal cholesky log-likelihood
         """
         _mu, _L = self._sanitize_input(mu, L)
-        ll_1 = Variable(torch.Tensor([-0.5 * _mu.size(0) * np.log(2.0 * np.pi)]))
+        ll_1 = Variable(torch.Tensor([-0.5 * _mu.size(0) * np.log(2.0 * np.pi)])
+                        .type_as(_mu.data))
         ll_2 = -torch.sum(torch.log(torch.diag(_L)))
         x_chol = Variable(
             torch.trtrs(

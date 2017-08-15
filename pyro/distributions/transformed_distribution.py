@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 from pyro.distributions.distribution import Distribution
 from pyro.nn import MaskedLinear, AutoRegressiveNN
-from torch.autograd import Variable
 from pyro.util import ng_ones, ng_zeros
 
 

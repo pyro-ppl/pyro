@@ -40,7 +40,7 @@ class DiagNormal(Distribution):
         Reparameterized diagonal Normal sampler.
         """
         _mu, _sigma = self._sanitize_input(mu, sigma)
-        eps = Variable(torch.randn(_mu.size()))
+        eps = Variable(torch.randn(_mu.size()).type_as(_mu.data))
         z = _mu + eps * _sigma
         return z
 
@@ -51,7 +51,7 @@ class DiagNormal(Distribution):
         _mu, _sigma = self._sanitize_input(mu, sigma)
         log_pxs = -1 * torch.add(torch.add(torch.log(_sigma),
                                  0.5 * torch.log(2.0 * np.pi *
-                                 Variable(torch.ones(_sigma.size())))),
+                                 Variable(torch.ones(_sigma.size()).type_as(_mu.data)))),
                                  0.5 * torch.pow(((x - _mu) / _sigma), 2))
         return torch.sum(log_pxs)
 
@@ -67,6 +67,6 @@ class DiagNormal(Distribution):
             x = x.expand(batch_size, x.size(0))
         log_pxs = -1 * torch.add(torch.add(torch.log(_sigma),
                                  0.5 * torch.log(2.0 * np.pi *
-                                 Variable(torch.ones(_sigma.size())))),
+                                 Variable(torch.ones(_sigma.size()).type_as(_mu.data)))),
                                  0.5 * torch.pow(((x - _mu) / _sigma), 2))
         return torch.sum(log_pxs, 1)

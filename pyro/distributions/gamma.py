@@ -44,7 +44,8 @@ class Gamma(Distribution):
         _alpha, _beta = self._sanitize_input(alpha, beta)
         _theta = torch.pow(_beta, -1.0)
         x = pyro.device(Variable(torch.Tensor([spr.gamma.rvs(
-            _alpha.data.cpu().numpy(), scale=_theta.data.cpu().numpy())])))
+            _alpha.data.cpu().numpy(), scale=_theta.data.cpu().numpy())])
+            .type_as(_alpha.data)))
         return x
 
     def log_pdf(self, x, alpha=None, beta=None, *args, **kwargs):

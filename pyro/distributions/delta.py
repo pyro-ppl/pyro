@@ -45,8 +45,8 @@ class Delta(Distribution):
     def log_pdf(self, x, v=None, *args, **kwargs):
         _v = self._sanitize_input(v)
         if torch.equal(x.data, _v.data.expand_as(x.data)):
-            return Variable(torch.zeros(1))
-        return Variable(torch.Tensor([-float("inf")]))
+            return Variable(torch.zeros(1).type_as(_v.data))
+        return Variable(torch.Tensor([-float("inf")]).type_as(_v.data))
 
     def support(self, v=None, *args, **kwargs):
         _v = self._sanitize_input(v)

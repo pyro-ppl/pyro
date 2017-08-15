@@ -35,7 +35,7 @@ class Uniform(Distribution):
         Reparameterized Uniform sampler.
         """
         _a, _b = self._sanitize_input(a, b)
-        eps = Variable(torch.rand(_a.size()))
+        eps = Variable(torch.rand(_a.size()).type_as(_a.data))
         return _a + torch.mul(eps, _b - _a)
 
     def log_pdf(self, x, a=None, b=None, *args, **kwargs):
@@ -45,11 +45,11 @@ class Uniform(Distribution):
         _a, _b = self._sanitize_input(a, b)
         if x.dim() == 1:
             if x.le(_a).data[0] or x.ge(_b).data[0]:
-                return Variable(torch.Tensor([-float("inf")]))
+                return Variable(torch.Tensor([-float("inf")]).type_as(_a.data))
         else:
             # x is 2-d
             if x.le(_a).data[0, 0] or x.ge(_b).data[0, 0]:
-                return Variable(torch.Tensor([[-np.inf]]))
+                return Variable(torch.Tensor([[-np.inf]]).type_as(_a.data))
         return torch.sum(-torch.log(_b - _a))
 
     def batch_log_pdf(self, x, a=None, b=None, batch_size=1, *args, **kwargs):

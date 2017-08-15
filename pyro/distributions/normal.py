@@ -40,8 +40,8 @@ class Normal(Distribution):
         Reparameterized Normal sampler.
         """
         _mu, _sigma = self._sanitize_input(mu, sigma)
-        l_chol = Variable(torch.potrf(_sigma.data, False))
-        eps = Variable(torch.randn(_mu.size()))
+        l_chol = Variable(torch.potrf(_sigma.data, False).type_as(_mu.data))
+        eps = Variable(torch.randn(_mu.size()).type_as(_mu.data))
         if eps.dim() == 1:
             eps = eps.unsqueeze(1)
         z = _mu + torch.mm(l_chol, eps).squeeze()
@@ -52,8 +52,9 @@ class Normal(Distribution):
         Normal log-likelihood
         """
         _mu, _sigma = self._sanitize_input(mu, sigma)
-        l_chol = Variable(torch.potrf(_sigma.data, False))
-        ll_1 = Variable(torch.Tensor([-0.5 * _mu.size(0) * np.log(2.0 * np.pi)]))
+        l_chol = Variable(torch.potrf(_sigma.data, False).type_as(_mu.data))
+        ll_1 = Variable(torch.Tensor([-0.5 * _mu.size(0) * np.log(2.0 * np.pi)])
+                        .type_as(_mu.data))
         ll_2 = -torch.sum(torch.log(torch.diag(l_chol)))
         x_chol = Variable(
             torch.trtrs(

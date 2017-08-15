@@ -46,7 +46,8 @@ class Beta(Distribution):
         """
         _alpha, _beta = self._sanitize_input(alpha, beta)
         x = Variable(torch.Tensor(
-            [spr.beta.rvs(_alpha.data.cpu().numpy(), _beta.data.cpu().numpy())]))
+            [spr.beta.rvs(_alpha.data.cpu().numpy(), _beta.data.cpu().numpy())])
+            .type_as(_alpha.data))
         return x
 
     def log_pdf(self, x, alpha=None, beta=None, *args, **kwargs):
@@ -54,7 +55,7 @@ class Beta(Distribution):
         Beta log-likelihood
         """
         _alpha, _beta = self._sanitize_input(alpha, beta)
-        one = Variable(torch.ones(_alpha.size()))
+        one = Variable(torch.ones(_alpha.size()).type_as(_alpha.data))
         ll_1 = (_alpha - one) * torch.log(x)
         ll_2 = (_beta - one) * torch.log(one - x)
         ll_3 = log_gamma(_alpha + _beta)
@@ -68,7 +69,7 @@ class Beta(Distribution):
             return self.log_pdf(x)
         elif x.dim() == 1:
             x = x.expand(batch_size, x.size(0))
-        one = Variable(torch.ones(x.size()))
+        one = Variable(torch.ones(x.size()).type_as(_alpha.data))
         ll_1 = (_alpha - one) * torch.log(x)
         ll_2 = (_beta - one) * torch.log(one - x)
         ll_3 = log_gamma(_alpha + _beta)
