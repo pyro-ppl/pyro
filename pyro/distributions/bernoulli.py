@@ -36,7 +36,7 @@ class Bernoulli(Distribution):
         Reparameterized Bernoulli sampler.
         """
         _ps = self._sanitize_input(ps)
-        return torch.bernoulli(_ps)
+        return torch.bernoulli(_ps).type_as(_ps)
 
     def log_pdf(self, x, ps=None, batch_size=1, *args, **kwargs):
         """

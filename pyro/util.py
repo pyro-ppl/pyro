@@ -109,7 +109,7 @@ def to_one_hot(x, ps):
     # create an empty array for one-hots
     batch_one_hot = torch.zeros(batch_size, classes)
     # this operation writes ones where needed
-    batch_one_hot.scatter_(1, x.data.view(-1, 1), 1)
+    batch_one_hot.scatter_(1, x.data.view(-1, 1).long(), 1)
 
     return Variable(batch_one_hot.type(ttype))
 

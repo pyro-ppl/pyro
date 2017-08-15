@@ -65,7 +65,7 @@ class Categorical(Distribution):
         _ps, _vs, _one_hot = self._sanitize_input(ps, vs, one_hot)
         _vs = self._process_v(_vs)
         _ps, _vs = self._process_p(_ps, _vs)
-        sample = Variable(torch.multinomial(_ps.data, 1, replacement=True))
+        sample = Variable(torch.multinomial(_ps.data, 1, replacement=True).type_as(_ps.data))
         if _vs is not None:
             if isinstance(_vs, np.ndarray):
                 # always returns a 2-d (unsqueezed 1-d) list
