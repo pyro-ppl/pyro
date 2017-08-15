@@ -3,6 +3,8 @@ run_outputs*
 data
 examples/processed
 examples/raw
+processed
+raw
 
 # Logs
 logs

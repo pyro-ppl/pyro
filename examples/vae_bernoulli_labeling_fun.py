@@ -1,4 +1,4 @@
-from pdb import set_trace as bb
+import argparse
 import torch
 import pyro
 from torch.autograd import Variable
@@ -250,41 +250,41 @@ loss_training = []
 acc_test = []
 
 
-for i in range(1000):
+def main():
+    parser = argparse.ArgumentParser(description="parse args")
+    parser.add_argument('-n', '--num-epochs', type=int, required=True)
+    args = parser.parse_args()
+    for i in range(args.num_epochs):
+        epoch_loss = 0.
+        for ix, batch_start in enumerate(all_batches[:-1]):
+            batch_end = all_batches[ix + 1]
 
-    epoch_loss = 0.
-    for ix, batch_start in enumerate(all_batches[:-1]):
-        batch_end = all_batches[ix + 1]
+            # get batch
+            batch_data = mnist_data[batch_start:batch_end]
+            bs_size = batch_data.size(0)
+            batch_class_raw = mnist_labels[batch_start:batch_end]
+            batch_class = torch.zeros(bs_size, 10)  # maybe it needs a FloatTensor
+            batch_class.scatter_(1, batch_class_raw.data.view(-1, 1), 1)
+            batch_class = Variable(batch_class)
 
-        #print('Batch '+str(ix))
-        # get batch
-        batch_data = mnist_data[batch_start:batch_end]
-        bs_size = batch_data.size(0)
-        batch_class_raw = mnist_labels[batch_start:batch_end]
-        batch_class = torch.zeros(bs_size, 10)  # maybe it needs a FloatTensor
-        batch_class.scatter_(1, batch_class_raw.data.view(-1, 1), 1)
-        batch_class = Variable(batch_class)
+            if np.mod(ix, 100) == 0:
+                epoch_loss += inference_c.step(batch_data, batch_class)
+            else:
+                epoch_loss += inference.step(batch_data, batch_class)
 
-        if np.mod(ix, 100) == 0:
-            epoch_loss += inference_c.step(batch_data, batch_class)
-        else:
-            epoch_loss += inference.step(batch_data, batch_class)
+        sample, sample_mu, sample_class = classify(mnist_data_test)
+        acc = torch.sum(sample_class * mnist_labels_test) / \
+            float(mnist_labels_test.size(0))  # .cpu().numpy()
+        acc_val = acc.data.numpy()[0]
+        print('accuracy ' + str(acc_val))
+        acc_test.append(acc_val)
+        #vis.image(batch_data[0].view(28, 28).data.numpy())
+        #vis.image(sample[0].view(28, 28).data.numpy())
+        vis.image(sample_mu[0].view(28, 28).data.numpy())  # ,opts=dict({'title': str(sample_class)}))
+        vis.line(np.array(acc_test), opts=dict(
+            {'title': 'Test Classification Acc. given 100% Tr.-labels'}))
+        # vis.image(sample_class.view(1,10).data.numpy())
+        print("epoch avg loss {}".format(epoch_loss / float(mnist_size)))
 
-    #sample, sample_mu, sample_class = model_sample()
-    sample, sample_mu, sample_class = classify(mnist_data_test)
-    # bb()
-    acc = torch.sum(sample_class * mnist_labels_test) / \
-        float(mnist_labels_test.size(0))  # .cpu().numpy()
-    acc_val = acc.data.numpy()[0]
-    # bb()
-    #.data.cpu().numpy()[0]
-    print('accuracy ' + str(acc_val))
-    acc_test.append(acc_val)
-    # bb()
-    #vis.image(batch_data[0].view(28, 28).data.numpy())
-    #vis.image(sample[0].view(28, 28).data.numpy())
-    vis.image(sample_mu[0].view(28, 28).data.numpy())  # ,opts=dict({'title': str(sample_class)}))
-    vis.line(np.array(acc_test), opts=dict(
-        {'title': 'Test Classification Acc. given 100% Tr.-labels'}))
-    # vis.image(sample_class.view(1,10).data.numpy())
-    print("epoch avg loss {}".format(epoch_loss / float(mnist_size)))
+if __name__ == '__main__':
+    main()
