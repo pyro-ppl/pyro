@@ -614,3 +614,38 @@ class TestDelta(TestCase):
         torch_var = np.var(torch_samples)
         self.assertEqual(torch_mean, self.analytic_mean)
         self.assertEqual(torch_var, self.analytic_var)
+
+
+class TestTensorType(TestCase):
+
+    def setUp(self):
+        self.alpha = Variable(torch.DoubleTensor([2.4]))
+        self.float_alpha = Variable(torch.FloatTensor([2.4]))
+        self.beta = Variable(torch.DoubleTensor([3.7]))
+        self.float_beta = Variable(torch.FloatTensor([3.7]))
+        self.test_data = Variable(torch.DoubleTensor([0.4]))
+        self.float_test_data = Variable(torch.FloatTensor([0.4]))
+
+    def test_double_type(self):
+        log_px_torch = dist.beta.log_pdf(self.test_data, self.alpha, self.beta).data
+        self.assertTrue(isinstance(log_px_torch, torch.DoubleTensor))
+        log_px_val = log_px_torch[0]
+        log_px_np = spr.beta.logpdf(
+            self.test_data.data.cpu().numpy(),
+            self.alpha.data.cpu().numpy(),
+            self.beta.data.cpu().numpy())
+        self.assertEqual(log_px_val, log_px_np, prec=1e-4)
+
+    def test_float_type(self):
+        log_px_torch = dist.beta.log_pdf(self.float_test_data, self.float_alpha, self.float_beta).data
+        self.assertTrue(isinstance(log_px_torch, torch.FloatTensor))
+        log_px_val = log_px_torch[0]
+        log_px_np = spr.beta.logpdf(
+            self.test_data.data.cpu().numpy(),
+            self.alpha.data.cpu().numpy(),
+            self.beta.data.cpu().numpy())
+        self.assertEqual(log_px_val, log_px_np, prec=1e-4)
+
+    def test_conflicting_types(self):
+        self.assertRaises(TypeError, dist.beta.log_pdf, self.test_data,
+                          self.float_alpha, self.beta)

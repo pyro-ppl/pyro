@@ -77,6 +77,10 @@ def zero_grads(tensors):
 
 
 def log_gamma(xx):
+    if isinstance(xx, Variable):
+        ttype = xx.data.type()
+    elif isinstance(xx, torch.Tensor):
+        ttype = xx.type()
     gamma_coeff = [
         76.18009172947146,
         -86.50532032941677,
@@ -90,7 +94,7 @@ def log_gamma(xx):
     x = xx - 1.0
     t = x + 5.5
     t = t - (x + 0.5) * torch.log(t)
-    ser = Variable(torch.ones(x.size())) * magic1
+    ser = Variable(torch.ones(x.size()).type(ttype)) * magic1
     for c in gamma_coeff:
         x = x + 1.0
         ser = ser + torch.pow(x / c, -1)
@@ -105,7 +109,7 @@ def to_one_hot(x, ps):
     # this operation writes ones where needed
     batch_one_hot.scatter_(1, x.data.view(-1, 1), 1)
 
-    return Variable(batch_one_hot)
+    return Variable(batch_one_hot.type_as(x))
 
 
 def tensor_histogram(ps, vs):
