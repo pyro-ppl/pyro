@@ -99,7 +99,7 @@ class Poutine(object):
         Weirdly complicated because of type ambiguity
         """
         if hasattr(fn, "__map_data_indices") and \
-            hasattr(fn, "__map_data_scale"):
+           hasattr(fn, "__map_data_scale"):
             ind = fn.__map_data_indices
             scale = fn.__map_data_scale
 
