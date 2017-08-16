@@ -163,3 +163,19 @@ def rescale_dist(fn, scale):
     else:
         # XXX should raise an error here?
         return fn
+
+
+def rescale_dist_inplace(fn, scale):
+    """
+    Rescales a distribution's log_pdf method output by a constant factor
+    """
+    if hasattr(fn, "log_pdf"):
+        old_log_pdf = copy.copy(fn.log_pdf)
+
+        def new_log_pdf(*args, **kwargs):
+            return old_log_pdf(*args, **kwargs) * scale
+
+        fn.log_pdf = new_log_pdf
+    else:
+        # XXX should raise an error here?
+        return fn

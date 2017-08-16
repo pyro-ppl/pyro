@@ -93,6 +93,40 @@ class Poutine(object):
             for i in range(0, loc + 1):
                 pyro._PYRO_STACK.pop(0)
 
+    def _get_scale(self, fn, data, batch_size):
+        """
+        Compute scale and batch indices used for subsampling in map_data
+        Weirdly complicated because of type ambiguity
+        """
+        if hasattr(fn, "__map_data_indices") and \
+            hasattr(fn, "__map_data_scale"):
+            ind = fn.__map_data_indices
+            scale = fn.__map_data_scale
+
+        if isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
+            if batch_size > 0:
+                if not hasattr(fn, "__map_data_indices"):
+                    scale = float(data.size(0)) / float(batch_size)
+                    ind = Variable(torch.randperm(data.size(0))[0:batch_size])
+                ind_data = data.index_select(0, ind)
+            else:
+                # if batch_size == 0, don't index (saves time/space)
+                scale = 1.0
+                ind = Variable(torch.range(data.size(0)))
+                ind_data = data
+        else:
+            # if batch_size > 0, select a random set of indices and store it
+            if batch_size > 0 and not hasattr(fn, "__map_data_indices"):
+                ind = torch.randperm(len(data))[0:batch_size].numpy().tolist()
+                scale = float(len(data)) / float(batch_size)
+                ind_data = [data[i] for i in ind]
+            else:
+                ind = list(range(len(data)))
+                scale = 1.0
+                ind_data = data
+
+        return scale, ind, ind_data
+
     def _pyro_sample(self, prev_val, name, fn, *args, **kwargs):
         """
         Default pyro.sample Poutine behavior
@@ -122,52 +156,12 @@ class Poutine(object):
             if batch_size is None:
                 batch_size = 0
             assert batch_size >= 0, "cannot have negative batch sizes"
-            if hasattr(fn, "__map_data_indices") and \
-               hasattr(fn, "__map_data_scale"):
-                ind = fn.__map_data_indices
-                scale = fn.__map_data_scale
+            scale, ind, ind_data = self._get_scale(fn, data, batch_size)
 
             if isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
-                if batch_size > 0:
-                    if not hasattr(fn, "__map_data_indices"):
-                        scale = float(data.size(0)) / float(batch_size)
-                        ind = Variable(torch.randperm(data.size(0))[0:batch_size])
-                    ind_data = data.index_select(0, ind)
-                else:
-                    # if batch_size == 0, don't index (saves time/space)
-                    scale = 1.0
-                    ind = Variable(torch.range(data.size(0)))
-                    ind_data = data
-
-                old_sample = self._pyro_sample
-
-                def scaled_sample(_prev_val, _name, _fn, *args, **kwargs):
-                    return old_sample(_prev_val, _name,
-                                      pyro.util.rescale_dist(_fn, scale),
-                                      *args, **kwargs)
-
-                self._pyro_sample = scaled_sample
                 ret = fn(ind, ind_data)
-                self._pyro_sample = old_sample
             else:
-                # if batch_size > 0, select a random set of indices and store it
-                if batch_size > 0 and not hasattr(fn, "__map_data_indices"):
-                    ind = torch.randperm(len(data))[0:batch_size].numpy().tolist()
-                    scale = float(len(data)) / float(batch_size)
-                else:
-                    ind = list(range(len(data)))
-                    scale = 1.0
-                # map the function over the iterables of indices and data
-                old_sample = self._pyro_sample
-
-                def scaled_sample(_prev_val, _name, _fn, *args, **kwargs):
-                    return old_sample(_prev_val, _name,
-                                      pyro.util.rescale_dist(_fn, scale),
-                                      *args, **kwargs)
-
-                self._pyro_sample = scaled_sample
-                ret = list(map(lambda ix: fn(*ix), [(i, data[i]) for i in ind]))
-                self._pyro_sample = old_sample
+                ret = list(map(lambda ix: fn(*ix), enumerate(ind_data)))
             # XXX is there a more elegant way to move indices up the stack?
             if not hasattr(fn, "__map_data_indices"):
                 setattr(fn, "__map_data_indices", ind)

@@ -6,6 +6,37 @@ from .poutine import Poutine
 from pyro.poutine import Trace
 
 
+class ScalePoutine(Poutine):
+    """
+    score-rescaling Poutine
+    Subsampling means we have to rescale pdfs inside map_data
+    This poutine handles the rescaling because it wouldn't fit in Poutine
+    """
+    def __init__(self, fn, scale):
+        """
+        Constructor
+        """
+        self.scale = scale
+        super(ScalePoutine, self).__init__(fn)
+        self.transparent = False
+
+    def _pyro_sample(self, prev_val, name, fn, *args, **kwargs):
+        """
+        Rescale the scorer of the stochastic function passed to sample
+        """
+        pyro.util.rescale_dist_inplace(fn, self.scale)
+        return super(ScalePoutine, self)._pyro_sample(
+            prev_val, name, fn, *args, **kwargs)
+
+    def _pyro_observe(self, prev_val, name, fn, obs, *args, **kwargs):
+        """
+        Rescale the scorer of the stochastic function passed to observe
+        """
+        pyro.util.rescale_dist_inplace(fn, self.scale)
+        return super(ScalePoutine, self)._pyro_observe(
+            prev_val, name, fn, obs, *args, **kwargs)
+
+
 class TracePoutine(Poutine):
     """
     Execution trace poutine.
@@ -84,13 +115,20 @@ class TracePoutine(Poutine):
         """
         Trace map_data
         """
-        ret = super(TracePoutine, self)._pyro_map_data(prev_val, name, data, fn,
+        scale, ind, ind_data = self.get_scale(fn, data, batch_size)
+        scaled_fn = ScalePoutine(fn, scale)
+        ret = super(TracePoutine, self)._pyro_map_data(prev_val, name,
+                                                       data, scaled_fn,
                                                        # XXX watch out for changing
                                                        batch_size=batch_size)
         # store the indices, batch_size, and scaled function in a site
         # XXX does not store input or output values due to space constraints - beware!
-        assert hasattr(fn, "__map_data_indices"), "fn has no __map_data_indices?"
-        assert hasattr(fn, "__map_data_scale"), "fn has no __map_data_scale?"
+        assert hasattr(scaled_fn, "__map_data_indices"), "fn has no __map_data_indices?"
+        assert hasattr(scaled_fn, "__map_data_scale"), "fn has no __map_data_scale?"
+        if not hasattr(fn, "__map_data_indices"):
+            setattr(fn, "__map_data_indices", scaled_fn.__map_data_indices)
+            setattr(fn, "__map_data_scale", scaled_fn.__map_data_scale)
+
         self.trace.add_map_data(name, fn, batch_size,
                                 getattr(fn, "__map_data_scale"),
                                 getattr(fn, "__map_data_indices"))
