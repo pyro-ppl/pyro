@@ -23,7 +23,6 @@ class ParamStoreDict(object):
 
             # a function
             if callable(init_tensor):
-                # self._params[name] = pyro.device(init_tensor())
                 self._params[name] = init_tensor()
             else:
                 # from the memory passed in

@@ -6,12 +6,7 @@ import pyro
 from torch.nn import Parameter
 import torch
 
-from pyro import distributions
-from pyro import infer
-from pyro import poutine
-from pyro import nn
-from pyro import params
-from pyro import util
+from pyro import distributions, infer, nn, params, util, poutine
 
 from pyro.util import zeros, ones
 from pyro.params import param_with_module_name
@@ -22,31 +17,15 @@ _param_store = ParamStoreDict()
 # used to create fully-formed param names, e.g. mymodule$$$mysubmodule.weight
 _MODULE_NAMESPACE_DIVIDER = "$$$"
 
-# set global tensor type (cpu v.gpu); cpu by default
-_global_tensor_type = 'cpu'
-
 
 def get_param_store():
     return _param_store
 
 
-def set_cuda():
-    global _global_tensor_type
-    _global_tensor_type = 'cuda'
-    torch.set_default_tensor_type('torch.cuda.FloatTensor')
-
-
-def set_cpu():
-    global _global_tensor_type
-    _global_tensor_type = 'cpu'
-    torch.set_default_tensor_type('torch.FloatTensor')
-
-
 def device(x):
-    if _global_tensor_type == 'cpu':
-        return x.cpu()
-    elif _global_tensor_type == 'cuda':
+    if torch.cuda.is_available():
         return x.cuda()
+    return x.cpu()
 
 
 # use pyro optim class to wrap nn optim

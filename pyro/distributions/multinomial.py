@@ -35,7 +35,7 @@ class Multinomial(Distribution):
     def sample(self, ps=None, n=None, *args, **kwargs):
         _ps, _n = self._sanitize_input(ps, n)
         _, counts = np.unique([self.expanded_sample().data.numpy()], return_counts=True)
-        return Variable(torch.Tensor(counts))
+        return Variable(torch.Tensor(counts).type_as(_ps.data))
 
     def expanded_sample(self, ps=None, n=None, *args, **kwargs):
         _ps, _n = self._sanitize_input(ps, n)
@@ -44,7 +44,7 @@ class Multinomial(Distribution):
             _n = int(_n.data[0][0])
         else:
             _n = int(_n.data[0])
-        return Variable(torch.multinomial(_ps.data, _n, replacement=True))
+        return Variable(torch.multinomial(_ps.data, _n, replacement=True).type_as(_ps.data))
 
     def batch_log_pdf(self, x, ps=None, n=None, batch_size=1, *args, **kwargs):
         """
@@ -59,7 +59,7 @@ class Multinomial(Distribution):
                     _ps.narrow(0, ix, ix + 1)
                     ], _ps, _n))[0]]
                    for ix in range(int(x.size(0)))]
-        return Variable(torch.Tensor(out_arr))
+        return Variable(torch.Tensor(out_arr).type_as(_ps.data))
 
     def log_pdf(self, _x, ps=None, n=None, *args, **kwargs):
         """
@@ -67,6 +67,7 @@ class Multinomial(Distribution):
         """
         # probably use gamma function when added
         _ps, _n = self._sanitize_input(ps, n)
+        ttype = _ps.data.type()
         if isinstance(_x, list):
             x = _x[0]
             ps = _x[1]
@@ -74,21 +75,22 @@ class Multinomial(Distribution):
             x = _x
             ps = _ps
         prob = torch.sum(torch.mul(x, torch.log(ps)))
-        logfactsum = self._log_factorial(torch.sum(x))
+        logfactsum = self._log_factorial(torch.sum(x), ttype)
         # this is disgusting because theres no clean way to do this ..yet
         logfactct = torch.sum(Variable(torch.Tensor(
-            [self._log_factorial(_xi) for _xi in self._get_array(x)])))
+            [self._log_factorial(_xi, ttype) for _xi in self._get_array(x)])
+            .type_as(_ps.data)))
         return prob + logfactsum - logfactct
 
 #     https://stackoverflow.com/questions/13903922/multinomial-pmf-in-python-scipy-numpy
-    def _log_factorial(self, var_s):
+    def _log_factorial(self, var_s, tensor_type):
         if isinstance(var_s, Variable):
             var_s = int(var_s.data[0])
         if isinstance(var_s, torch.Tensor):
             var_s = int(var_s[0])
         else:
             var_s = int(var_s)
-        xs = Variable(torch.Tensor(range(1, var_s + 1)))
+        xs = Variable(torch.Tensor(range(1, var_s + 1)).type(tensor_type))
         return torch.sum(torch.log(xs)).data[0]
 
     def _get_tensor(self, var):

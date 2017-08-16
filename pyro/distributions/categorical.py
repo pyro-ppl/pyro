@@ -65,7 +65,7 @@ class Categorical(Distribution):
         _ps, _vs, _one_hot = self._sanitize_input(ps, vs, one_hot)
         _vs = self._process_v(_vs)
         _ps, _vs = self._process_p(_ps, _vs)
-        sample = Variable(torch.multinomial(_ps.data, 1, replacement=True))
+        sample = Variable(torch.multinomial(_ps.data, 1, replacement=True).type_as(_ps.data))
         if _vs is not None:
             if isinstance(_vs, np.ndarray):
                 # always returns a 2-d (unsqueezed 1-d) list
@@ -127,17 +127,17 @@ class Categorical(Distribution):
                         .reshape(r_np, 1).tolist()
                         for x in itertools.product(torch.arange(0, c_np), repeat=r_np))
             # vs is a tensor so support is of type tensor
-            return (torch.sum(_vs * Variable(torch.Tensor(list(x))), 1)
+            return (torch.sum(_vs * Variable(torch.Tensor(list(x)).type_as(_ps.data)), 1)
                     for x in itertools.product(torch.eye(c).numpy().tolist(),
                     repeat=r))
 
         if _one_hot:
-            return (Variable(torch.Tensor(list(x)))
+            return (Variable(torch.Tensor(list(x)).type_as(_ps.data))
                     for x in itertools.product(torch.eye(c).numpy().tolist(),
                     repeat=r))
 
         if r == 1:
-            return (Variable(torch.Tensor([[i]])) for i in range(c))
-        return (Variable(torch.Tensor(list(x)).unsqueeze(1))
+            return (Variable(torch.Tensor([[i]]).type_as(_ps.data)) for i in range(c))
+        return (Variable(torch.Tensor(list(x)).unsqueeze(1).type_as(_ps.data))
                 for x in itertools.product(torch.arange(0, c),
                 repeat=r))
