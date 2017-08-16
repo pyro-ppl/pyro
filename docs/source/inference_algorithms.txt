@@ -1,0 +1,30 @@
+Variational Inference
++++++++++++++++++++++
+
+.. function:: kl_qp(model, guide, optim)
+
+  * model: probabilistic model defined as a function
+  * guide: guide used for sampling defined as a function
+  * optim: optimization function 
+
+  This method performs variational inference by minimizing the
+  `KL-divergence <https://en.wikipedia.org/wiki/Kullback%E2%80%93Leibler_divergence>`_
+  between the actual and approximate posterior.
+
+  Example::
+
+    from pyro.infer.kl_qp import KL_QP
+
+    kl_optim = KL_QP(model, guide,
+                     pyro.optim(torch.optim.Adam, {"lr": .001}))
+    for k in range(n_steps):
+      # optimize
+      kl_optim.step()
+
+Importance Sampling
++++++++++++++++++++
+  TODO
+
+MCMC
+++++
+  TODO
