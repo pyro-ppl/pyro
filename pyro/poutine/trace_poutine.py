@@ -4,6 +4,7 @@ from torch.autograd import Variable
 
 from .poutine import Poutine
 from pyro.poutine import Trace
+import pdb
 
 
 class ScalePoutine(Poutine):
@@ -115,7 +116,8 @@ class TracePoutine(Poutine):
         """
         Trace map_data
         """
-        scale, ind, ind_data = self.get_scale(fn, data, batch_size)
+        # pdb.set_trace()
+        scale, ind, ind_data = self._get_scale(fn, data, batch_size)
         scaled_fn = ScalePoutine(fn, scale)
         ret = super(TracePoutine, self)._pyro_map_data(prev_val, name,
                                                        data, scaled_fn,
@@ -126,8 +128,8 @@ class TracePoutine(Poutine):
         assert hasattr(scaled_fn, "__map_data_indices"), "fn has no __map_data_indices?"
         assert hasattr(scaled_fn, "__map_data_scale"), "fn has no __map_data_scale?"
         if not hasattr(fn, "__map_data_indices"):
-            setattr(fn, "__map_data_indices", scaled_fn.__map_data_indices)
-            setattr(fn, "__map_data_scale", scaled_fn.__map_data_scale)
+            setattr(fn, "__map_data_indices", getattr(scaled_fn, "__map_data_indices"))
+            setattr(fn, "__map_data_scale", getattr(scaled_fn, "__map_data_scale"))
 
         self.trace.add_map_data(name, fn, batch_size,
                                 getattr(fn, "__map_data_scale"),

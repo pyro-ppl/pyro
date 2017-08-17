@@ -100,8 +100,8 @@ class Poutine(object):
         """
         if hasattr(fn, "__map_data_indices") and \
            hasattr(fn, "__map_data_scale"):
-            ind = fn.__map_data_indices
-            scale = fn.__map_data_scale
+            ind = getattr(fn, "__map_data_indices")
+            scale = getattr(fn, "__map_data_scale")
 
         if isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
             if batch_size > 0:
