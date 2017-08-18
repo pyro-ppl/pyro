@@ -616,6 +616,46 @@ class TestDelta(TestCase):
         self.assertEqual(torch_var, self.analytic_var)
 
 
+class TestDirichlet(TestCase):
+
+    def setUp(self):
+        self.alpha = Variable(torch.Tensor([2.4, 5, 8.2]))
+        self.batch_alpha = Variable(torch.Tensor([[2.4, 3, 6], [3.2, 1.2, 0.4]]))
+        self.test_data = Variable(torch.Tensor([0.2, 0.45, 0.35]))
+        self.batch_test_data = Variable(torch.Tensor([[0.2, 0.45, 0.35],
+                                                     [0.3, 0.4, 0.3]]))
+        _sum_alpha = torch.sum(self.alpha)
+        self.expected_val = (5 / _sum_alpha).data[0]
+        _num = 5 * (_sum_alpha - 5)
+        _denom = torch.pow(_sum_alpha, 2) * (_sum_alpha + 1)
+        self.analytic_var = (_num / _denom).data[0]
+        self.n_samples = 50000
+
+    def test_log_pdf(self):
+        log_px_torch = dist.dirichlet.log_pdf(self.test_data, self.alpha).data[0]
+        log_px_np = spr.dirichlet.logpdf(
+            self.test_data.data.cpu().numpy(),
+            self.alpha.data.cpu().numpy())
+        self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
+
+    def test_batch_log_pdf(self):
+        log_px_torch = dist.dirichlet.batch_log_pdf(
+            self.batch_test_data,
+            self.batch_alpha).data[1, 0]
+        log_px_np = spr.dirichlet.logpdf(
+            self.batch_test_data.data[1].numpy(),
+            self.batch_alpha.data[1].numpy())
+        self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
+
+    def test_mean_and_var(self):
+        torch_samples = [dist.dirichlet(self.alpha).data.numpy()[1]
+                         for _ in range(self.n_samples)]
+        torch_mean = np.mean(torch_samples)
+        torch_var = np.var(torch_samples)
+        self.assertEqual(torch_mean, self.expected_val, prec=0.05)
+        self.assertEqual(torch_var, self.analytic_var, prec=0.05)
+
+
 class TestTensorType(TestCase):
 
     def setUp(self):

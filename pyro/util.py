@@ -99,6 +99,16 @@ def log_gamma(xx):
     return torch.log(ser * magic2) - t
 
 
+def log_beta(t):
+    if t.dim() == 1:
+        numer = torch.sum(log_gamma(t))
+        denom = log_gamma(torch.sum(t))
+    else:
+        numer = torch.sum(log_gamma(t), 1)
+        denom = log_gamma(torch.sum(t, 1))
+    return numer - denom
+
+
 def to_one_hot(x, ps):
     if isinstance(x, Variable):
         ttype = x.data.type()
