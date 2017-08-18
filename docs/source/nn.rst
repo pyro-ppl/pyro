@@ -1,4 +1,4 @@
 Neural Network
 ==============
 
-.. include:: pyro.nn.rst
+.. include:: pyro.nn.txt

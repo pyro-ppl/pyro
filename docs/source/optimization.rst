@@ -1,4 +1,4 @@
 Optimization
 ============
 
-.. include:: pyro.optim.rst
+.. include:: pyro.optim.txt

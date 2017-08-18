@@ -40,4 +40,4 @@ Take a look at the examples[link] to see how they interact with inference algori
 
 Primitives
 ----------
-.. include:: pyro.distributions.rst 
+.. include:: pyro.distributions.txt
