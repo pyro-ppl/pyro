@@ -8,7 +8,7 @@ from pyro.util import ng_ones, ng_zeros
 class TransformedDistribution(Distribution):
     """
     :param base_distribution: distribution
-    :param bijector: bijector 
+    :param bijector: bijector
 
     Transforms the distribution with the bijector
     """
@@ -69,7 +69,7 @@ class InverseAutoregressiveFlow(Bijector):
     :param hidden_dim: NN hidden dimension
     :param s_bias: bias default=`2.0`
 
-    Inverse Autoregressive Flow 
+    Inverse Autoregressive Flow
     """
     def __init__(self, input_dim, hidden_dim, s_bias=2.0):
         super(InverseAutoregressiveFlow, self).__init__()
@@ -126,7 +126,7 @@ class AffineExp(Bijector):
     :param b_init: b
 
     `y = exp(ax + b)`
-    
+
     Univariate affine bijector followed by exp
     """
     def __init__(self, a_init, b_init):

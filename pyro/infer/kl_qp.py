@@ -10,7 +10,7 @@ class KL_QP(object):  # AbstractInfer):
     """
     :param model: probabilistic model defined as a function
     :param guide: guide used for sampling defined as a function
-    :param optim: optimization function 
+    :param optim: optimization function
     :param model_fixed: flag for if the model is fixed
     :type model_fixed: bool
     :param guide_fixed: flag for if the guide is fixed

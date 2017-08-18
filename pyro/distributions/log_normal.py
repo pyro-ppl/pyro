@@ -10,7 +10,7 @@ class LogNormal(Distribution):
     :param sigma: standard deviations *(vector (0, Infinity))*
 
     A distribution over probability vectors obtained by exp-transforming a random
-    variable drawn from ``Normal({mu: mu, sigma: sigma})``. 
+    variable drawn from ``Normal({mu: mu, sigma: sigma})``.
     """
 
     def _sanitize_input(self, mu, sigma):

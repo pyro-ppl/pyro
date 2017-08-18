@@ -50,7 +50,7 @@ def param(name, *args, **kwargs):
     :param name: name of parameter
     :returns: parameter
 
-    Saves the variable as a parameter in the param store. 
+    Saves the variable as a parameter in the param store.
     To interact with the param store or write to disk,
     see `Parameters <parameters.html>`_.
     """
@@ -118,7 +118,7 @@ def map_data(name, data, observer, *args, **kwargs):
     :param data: data tp subsample
     :param observer: observe function
 
-    Data subsampling with the important property that 
+    Data subsampling with the important property that
     all the data are conditionally independent. By
     default `map_data` is the same as `map`.
     """
