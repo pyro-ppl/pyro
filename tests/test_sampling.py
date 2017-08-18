@@ -105,7 +105,6 @@ class SearchTest(HMMSamplingTestCase):
             self.assertTrue(i + 1 in tr_rets)
 
 
-
 class ImportanceTest(NormalNormalSamplingTestCase):
 
     def test_importance_guide(self):
