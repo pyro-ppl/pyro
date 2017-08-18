@@ -78,14 +78,9 @@ class TracePosterior(Histogram):
         """
         raise NotImplementedError("inference algorithm must implement _traces")
 
+    # XXX this isnt a good abstraction for marginal likelihood estimation
     def log_z(self, *args, **kwargs):
         """
         estimate marginal probability of observations
         """
-        log_z = 0.0
-        n = 0
-        # TODO parallelize
-        for _, log_weight in self._traces(*args, **kwargs):
-            n += 1
-            log_z = log_z + log_weight
-        return log_z / n
+        raise NotImplementedError("inference algorithm must implement log_z")
