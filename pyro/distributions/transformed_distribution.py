@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 from pyro.distributions.distribution import Distribution
 from pyro.nn import MaskedLinear, AutoRegressiveNN
-from torch.autograd import Variable
 from pyro.util import ng_ones, ng_zeros
 
 
@@ -16,7 +15,7 @@ class TransformedDistribution(Distribution):
         Constructor; takes base distribution and bijector as arguments
         """
         super(TransformedDistribution, self).__init__(*args, **kwargs)
-        self.reparametrized = base_distribution.reparametrized
+        self.reparameterized = base_distribution.reparameterized
         self.base_dist = base_distribution
         self.bijector = bijector
 
@@ -32,7 +31,7 @@ class TransformedDistribution(Distribution):
 
     def log_pdf(self, y, *args, **kwargs):
         x = self.bijector.inverse(y)
-        log_pdf_1 = self.base_dist.log_pdf(x)
+        log_pdf_1 = self.base_dist.log_pdf(x, *args, **kwargs)
         log_pdf_2 = -self.bijector.log_det_jacobian(y)
         return log_pdf_1 + log_pdf_2
 

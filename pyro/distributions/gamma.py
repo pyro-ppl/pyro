@@ -8,51 +8,65 @@ from pyro.util import log_gamma
 
 class Gamma(Distribution):
     """
-    univariate gamma parameterized by alpha and beta
+    Gamma parameterized by alpha and beta
     """
 
-    def __init__(self, alpha, beta, batch_size=1, *args, **kwargs):
+    def _sanitize_input(self, alpha, beta):
+        if alpha is not None:
+            # stateless distribution
+            return alpha, beta
+        elif self.alpha is not None:
+            # stateful distribution
+            return self.alpha, self.beta
+        else:
+            raise ValueError("Parameter(s) were None")
+
+    def __init__(self, alpha=None, beta=None, batch_size=1, *args, **kwargs):
         """
         Params:
           `alpha` - alpha
           `beta` - beta
         """
-        if alpha.dim() == 1 and beta.dim() == 1:
-            self.alpha = alpha.expand(batch_size, 0)
-            self.beta = beta.expand(batch_size, 0)
-        else:
-            self.alpha = alpha
-            self.beta = beta
-        self.k = alpha
-        self.theta = torch.pow(beta, -1.0)
-        self.reparametrized = False
+        self.alpha = alpha
+        self.beta = beta
+        if alpha is not None:
+            if alpha.dim() == 1 and beta.dim() == 1:
+                self.alpha = alpha.expand(batch_size, 0)
+                self.beta = beta.expand(batch_size, 0)
+        self.reparameterized = False
         super(Gamma, self).__init__(*args, **kwargs)
 
-    def sample(self):
+    def sample(self, alpha=None, beta=None, *args, **kwargs):
         """
         un-reparameterized sampler.
         """
-        x = pyro.device(Variable(torch.Tensor([spr.gamma.rvs(
-            self.alpha.data.cpu().numpy(), scale=self.theta.data.cpu().numpy())])))
+
+        _alpha, _beta = self._sanitize_input(alpha, beta)
+        _theta = torch.pow(_beta, -1.0)
+        x = Variable(torch.Tensor([spr.gamma.rvs(
+            _alpha.data.numpy(), scale=_theta.data.numpy())])
+            .type_as(_alpha.data))
         return x
 
-    def log_pdf(self, x):
+    def log_pdf(self, x, alpha=None, beta=None, *args, **kwargs):
         """
         gamma log-likelihood
         """
-        ll_1 = -self.beta * x
-        ll_2 = (self.alpha - pyro.ones(self.alpha.size())) * torch.log(x)
-        ll_3 = self.alpha * torch.log(self.beta)
-        ll_4 = - log_gamma(self.alpha)
+        _alpha, _beta = self._sanitize_input(alpha, beta)
+        ll_1 = -_beta * x
+        ll_2 = (_alpha - pyro.ones(_alpha.size())) * torch.log(x)
+        ll_3 = _alpha * torch.log(_beta)
+        ll_4 = - log_gamma(_alpha)
         return ll_1 + ll_2 + ll_3 + ll_4
 
-    def batch_log_pdf(self, x, batch_size=1):
-        if x.dim() == 1 and self.beta.dim() == 1 and batch_size == 1:
-            return self.log_pdf(x)
+    def batch_log_pdf(self, x, alpha=None, beta=None, batch_size=1, *args, **kwargs):
+        _alpha, _beta = self._sanitize_input(alpha, beta)
+        if x.dim() == 1 and _beta.dim() == 1 and batch_size == 1:
+            return self.log_pdf(x, _alpha, _beta)
         elif x.dim() == 1:
             x = x.expand(batch_size, x.size(0))
-        ll_1 = -self.beta * x
-        ll_2 = (self.alpha - pyro.ones(x.size())) * torch.log(x)
-        ll_3 = self.alpha * torch.log(self.beta)
-        ll_4 = - log_gamma(self.alpha)
+        ll_1 = -_beta * x
+        ll_2 = (_alpha - pyro.ones(x.size())) * torch.log(x)
+        ll_3 = _alpha * torch.log(_beta)
+        ll_4 = - log_gamma(_alpha)
         return ll_1 + ll_2 + ll_3 + ll_4

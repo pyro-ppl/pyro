@@ -3,18 +3,29 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to Pyro's documentation!
+:github_url: https://github.com/uber/pyro
+
+Pyro Documentation
 ================================
 
 .. toctree::
+   :glob:
    :maxdepth: 2
    :caption: Contents:
 
+   installation
+   getting_started
+   primitives 
+   inference
+   distributions
+   parameters
 
 
 Indices and tables
 ==================
 
 * :ref:`genindex`
-* :ref:`modindex`
 * :ref:`search`
+
+.. * :ref:`modindex`
+
