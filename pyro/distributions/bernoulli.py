@@ -7,7 +7,10 @@ from pyro.distributions.distribution import Distribution
 
 class Bernoulli(Distribution):
     """
-    Multi-variate bernoulli
+    :param ps: probabilities *(vector [0, 1])*
+
+    Distribution over a vector of independent Bernoulli variables. Each element
+    of the vector takes on a value in ``{0, 1}``.
     """
 
     def _sanitize_input(self, ps):

@@ -8,7 +8,14 @@ from pyro.util import to_one_hot
 
 class Categorical(Distribution):
     """
-    Categorical is a specialized version of multinomial where n = 1
+    :param ps: probabilities (can be unnormalized) *(vector or real array [0,
+               Infinity))*
+    :param vs: support *(any numpy array, Variable, or list)*
+    :param one_hot: if ``True``, ``sample()`` returns a one_hot sample. ``True`` by default.
+
+    Discrete distribution over elements of ``vs`` with ``P(vs[i])`` proportional to
+    ``ps[i]``.  If ``one_hot=True``, ``sample`` returns a one-hot vector.
+    Else, ``sample`` returns the category selected.
     """
 
     def _sanitize_input(self, ps, vs, one_hot):

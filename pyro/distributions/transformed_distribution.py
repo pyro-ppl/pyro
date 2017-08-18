@@ -7,7 +7,10 @@ from pyro.util import ng_ones, ng_zeros
 
 class TransformedDistribution(Distribution):
     """
-    TransformedDistribution class
+    :param base_distribution: distribution
+    :param bijector: bijector 
+
+    Transforms the distribution with the bijector
     """
 
     def __init__(self, base_distribution, bijector, *args, **kwargs):
@@ -21,7 +24,7 @@ class TransformedDistribution(Distribution):
 
     def sample(self, *args, **kwargs):
         """
-        sample from base and pass through bijector
+        Sample from base and pass through bijector
         """
         x = self.base_dist.sample(*args, **kwargs)
         y = self.bijector(x)
@@ -30,6 +33,9 @@ class TransformedDistribution(Distribution):
         return y
 
     def log_pdf(self, y, *args, **kwargs):
+        """
+        Scores the sample by inverting the bijector
+        """
         x = self.bijector.inverse(y)
         log_pdf_1 = self.base_dist.log_pdf(x, *args, **kwargs)
         log_pdf_2 = -self.bijector.log_det_jacobian(y)
@@ -45,25 +51,26 @@ class Bijector(nn.Module):
         self.add_inverse_to_cache = False
 
     def __call__(self, *args, **kwargs):
-        """
-        Virtual forward method
-        """
+        # Virtual forward method
         raise NotImplementedError()
 
     def inverse(self, *args, **kwargs):
-        """
-        Virtual inverse method.
-        """
+        # Virtual inverse method.
         raise NotImplementedError()
 
     def log_det_jacobian(self, *args, **kwargs):
-        """
-        Virtual logdet jacobian method.
-        """
+        # Virtual logdet jacobian method.
         raise NotImplementedError()
 
 
 class InverseAutoregressiveFlow(Bijector):
+    """
+    :param input_dim: NN input dimension
+    :param hidden_dim: NN hidden dimension
+    :param s_bias: bias default=`2.0`
+
+    Inverse Autoregressive Flow 
+    """
     def __init__(self, input_dim, hidden_dim, s_bias=2.0):
         super(InverseAutoregressiveFlow, self).__init__()
         self.arn_s = AutoRegressiveNN(input_dim, hidden_dim, output_bias=s_bias)
@@ -76,7 +83,7 @@ class InverseAutoregressiveFlow(Bijector):
 
     def __call__(self, x, *args, **kwargs):
         """
-        invoke bijection x=>y
+        Invoke bijection x=>y
         """
         s = self.arn_s(x)
         sigma = self.sigmoid(s)
@@ -87,7 +94,7 @@ class InverseAutoregressiveFlow(Bijector):
 
     def inverse(self, y, *args, **kwargs):
         """
-        invert y => x
+        Invert y => x
         """
         if (y, 'x') in self.intermediates_cache:
             x = self.intermediates_cache.pop((y, 'x'))
@@ -102,6 +109,9 @@ class InverseAutoregressiveFlow(Bijector):
         self.intermediates_cache[(y, name)] = intermediate
 
     def log_det_jacobian(self, y, *args, **kwargs):
+        """
+        Calculates the determinant of the log jacobian
+        """
         if (y, 'sigma') in self.intermediates_cache:
             sigma = self.intermediates_cache.pop((y, 'sigma'))
         else:
@@ -111,6 +121,14 @@ class InverseAutoregressiveFlow(Bijector):
 
 
 class AffineExp(Bijector):
+    """
+    :param a_init: a
+    :param b_init: b
+
+    `y = exp(ax + b)`
+    
+    Univariate affine bijector followed by exp
+    """
     def __init__(self, a_init, b_init):
         """
         Constructor for univariate affine bijector followed by exp
@@ -121,17 +139,20 @@ class AffineExp(Bijector):
 
     def __call__(self, x, *args, **kwargs):
         """
-        invoke bijection x=>y
+        Invoke bijection x=>y
         """
         y = self.a * x + self.b
         return torch.exp(y)
 
     def inverse(self, y, *args, **kwargs):
         """
-        invert y => x
+        Invert y => x
         """
         x = (torch.log(y) - self.b) / self.a
         return x
 
     def log_det_jacobian(self, y, *args, **kwargs):
+        """
+        Calculates the determinant of the log jacobian
+        """
         return torch.log(torch.abs(self.a)) + torch.log(y)

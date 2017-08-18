@@ -19,10 +19,21 @@ _MODULE_NAMESPACE_DIVIDER = "$$$"
 
 
 def get_param_store():
+    """
+    Returns the param store
+    """
+
     return _param_store
 
 
 def device(x):
+    """
+    :param x: Pytorch tensor or Variable
+    :type: Pytorch Tensor
+    :returns: Pytorch tensor or Variable
+
+    Returns CUDATensor is CUDA is enabled
+    """
     if torch.cuda.is_available():
         return x.cuda()
     return x.cpu()
@@ -35,6 +46,15 @@ _PYRO_STACK = []
 
 
 def param(name, *args, **kwargs):
+    """
+    :param name: name of parameter
+    :returns: parameter
+
+    Saves the variable as a parameter in the param store. 
+    To interact with the param store or write to disk,
+    see `Parameters <parameters.html>`_.
+    """
+
     if len(_PYRO_STACK) == 0:
         return _param_store.get_param(name, *args, **kwargs)
     else:
@@ -47,6 +67,14 @@ def param(name, *args, **kwargs):
 
 
 def sample(name, fn, *args, **kwargs):
+    """
+    :param name: name of sample
+    :param fn: distribution class or function
+    :returns: sample
+
+    Samples from the distribution and registers it in the trace data structure.
+    """
+
     # check if stack is empty
     # if stack empty, default behavior (defined here)
     if len(_PYRO_STACK) == 0:
@@ -62,6 +90,16 @@ def sample(name, fn, *args, **kwargs):
 
 
 def observe(name, fn, obs, *args, **kwargs):
+    """
+    :param name: name of observation
+    :param fn: distribution class or function
+    :param obs: observed datum
+    :returns: sample
+
+    Only should be used in the context of inference.
+    Calculates the score of the sample and registers
+    it in the trace data structure.
+    """
     if len(_PYRO_STACK) == 0:
         raise NotImplementedError(
             "Observe has been used outside of a normalizing context.")
@@ -75,7 +113,16 @@ def observe(name, fn, obs, *args, **kwargs):
 
 
 def map_data(name, data, observer, *args, **kwargs):
-    # by default map_data is the same as map.
+    """
+    :param name: named argument
+    :param data: data tp subsample
+    :param observer: observe function
+
+    Data subsampling with the important property that 
+    all the data are conditionally independent. By
+    default `map_data` is the same as `map`.
+    """
+
     # infer algs (eg VI) that do minibatches should overide this.
     if len(_PYRO_STACK) == 0:
         return [observer(i, datum) for i, datum in enumerate(data)]
@@ -93,6 +140,10 @@ def map_data(name, data, observer, *args, **kwargs):
 
 def module(pyro_name, nn_obj):
     """
+    :param pyro_name: name of module
+    :param nn_obj: pytorch nn module
+    :returns: pytorch nn object
+
     Takes a pytorch nn module and registers its parameters with the param store.
     In conjunction with the param store save() and load() functionality, this
     allows the user to save and load nn modules

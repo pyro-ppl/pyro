@@ -6,7 +6,11 @@ from pyro.distributions.distribution import Distribution
 
 class LogNormal(Distribution):
     """
-    Log Normal parameterized by its mean mu and std sigma
+    :param mu: mean *(vector)*
+    :param sigma: standard deviations *(vector (0, Infinity))*
+
+    A distribution over probability vectors obtained by exp-transforming a random
+    variable drawn from ``Normal({mu: mu, sigma: sigma})``. 
     """
 
     def _sanitize_input(self, mu, sigma):

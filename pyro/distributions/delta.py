@@ -6,7 +6,11 @@ from pyro.distributions.distribution import Distribution
 
 class Delta(Distribution):
     """
-    Delta Distribution - probability of 1 at `v`
+    :param v: support element *(any)*
+
+    Discrete distribution that assigns probability one to the single element in
+    its support. Delta distribution parameterized by a random choice should not
+    be used with MCMC based inference, as doing so produces incorrect results.
     """
 
     def _sanitize_input(self, v):

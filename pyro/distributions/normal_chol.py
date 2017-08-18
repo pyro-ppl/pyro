@@ -6,8 +6,13 @@ from pyro.distributions.distribution import Distribution
 
 class NormalChol(Distribution):
     """
-    Multi-variate normal with arbitrary covariance sigma
-    parameterized by its mean and its cholesky decomposition L
+    :param mu: mean *(real)*
+    :param sigma: standard deviation *(real (0, Infinity))*
+    :param L: Cholesky decomposition
+
+    A multi-variate normal distribution with arbitrary covariance sigma
+    parameterized by its mean and its cholesky decomposition ``L``. Parameters
+    must have dimensions <= 2.
     """
 
     def _sanitize_input(self, mu, sigma):

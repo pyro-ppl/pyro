@@ -5,7 +5,9 @@ from pyro.distributions.distribution import Distribution
 
 class Exponential(Distribution):
     """
-    Exponential parameterized by lam
+    :param lam: rate *(real (0, Infinity))*
+
+    Exponential parameterized by lambda
     """
 
     def _sanitize_input(self, lam):

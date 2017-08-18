@@ -8,7 +8,27 @@ import pyro.poutine as poutine
 
 class KL_QP(object):  # AbstractInfer):
     """
-    A new, Trace and Poutine-based implementation of SVI
+    :param model: probabilistic model defined as a function
+    :param guide: guide used for sampling defined as a function
+    :param optim: optimization function 
+    :param model_fixed: flag for if the model is fixed
+    :type model_fixed: bool
+    :param guide_fixed: flag for if the guide is fixed
+    :type guide_fixed: bool
+
+    This method performs variational inference by minimizing the
+    `KL-divergence <https://en.wikipedia.org/wiki/Kullback%E2%80%93Leibler_divergence>`_
+    between the actual and approximate posterior.
+
+    Example::
+
+        from pyro.infer.kl_qp import KL_QP
+
+        kl_optim = KL_QP(model, guide,
+                         pyro.optim(torch.optim.Adam, {"lr": .001}))
+        for k in range(n_steps):
+        # optimize
+        kl_optim.step()
     """
     def __init__(self, model,
                  guide,
@@ -34,8 +54,9 @@ class KL_QP(object):  # AbstractInfer):
 
     def step(self, *args, **kwargs):
         """
-        single step?
+        Takes a single step of optimization
         """
+
         guide_trace = poutine.trace(self.guide)(*args, **kwargs)
         model_trace = poutine.trace(
             poutine.replay(self.model, guide_trace))(*args, **kwargs)

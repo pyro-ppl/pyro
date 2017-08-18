@@ -7,6 +7,9 @@ from pyro.util import log_gamma
 
 class Beta(Distribution):
     """
+    :param a: shape *(real (0, Infinity))*
+    :param b: shape *(real (0, Infinity))*
+
     Univariate beta distribution parameterized by alpha and beta
     """
 

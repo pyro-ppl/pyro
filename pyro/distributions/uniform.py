@@ -7,7 +7,10 @@ from pyro.distributions.distribution import Distribution
 
 class Uniform(Distribution):
     """
-    Diagonal covariance Normal - the first distribution
+    :param a: lower bound *(real)*
+    :param b: upper bound (>a) *(real)*
+
+    Continuous uniform distribution over ``[a, b]``
     """
 
     def _sanitize_input(self, alpha, beta):

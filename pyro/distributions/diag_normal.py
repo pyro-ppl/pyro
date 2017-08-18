@@ -7,7 +7,14 @@ from pyro.distributions.distribution import Distribution
 
 class DiagNormal(Distribution):
     """
-    Diagonal covariance Normal
+    :param mu: mean *(tensor)*
+    :param sigma: standard deviations *(tensor (0, Infinity))*
+
+    A distribution over tensors in which each element is independent and
+    Gaussian distributed, with its own mean and standard deviation. i.e. A
+    multivariate Gaussian distribution with diagonal covariance matrix. The
+    distribution is over tensors that have the same shape as the parameters ``mu``
+    and ``sigma``, which in turn must have the same shape as each other.
     """
 
     def _sanitize_input(self, mu, sigma):

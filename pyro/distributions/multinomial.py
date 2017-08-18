@@ -6,7 +6,11 @@ from pyro.distributions.distribution import Distribution
 
 class Multinomial(Distribution):
     """
-    Multinomial distribution
+    :param ps: probabilities *(real array with elements that sum to one)*
+    :param n: number of trials *(int (>=1))*
+
+    Distribution over counts for ``n`` independent ``Discrete({ps: ps})``
+    trials.
     """
     def _sanitize_input(self, ps, n):
         if ps is not None:
