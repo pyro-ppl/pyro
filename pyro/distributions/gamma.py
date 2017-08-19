@@ -8,7 +8,10 @@ from pyro.util import log_gamma
 
 class Gamma(Distribution):
     """
-    Gamma parameterized by alpha and beta
+    :param shape:  *(real (0, Infinity))*
+    :param scale:  *(real (0, Infinity))*
+
+    Gamma distribution parameterized by alpha and beta
     """
 
     def _sanitize_input(self, alpha, beta):

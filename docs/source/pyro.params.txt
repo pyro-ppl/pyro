@@ -1,7 +1,4 @@
-Primitives
-==========
-
-.. automodule:: pyro.__init__
+.. automodule:: pyro.params.param_store
     :members:
     :undoc-members:
     :show-inheritance:

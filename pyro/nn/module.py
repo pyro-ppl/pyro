@@ -1,10 +1,10 @@
-import pyro.nn as nn
+# import pyro.nn as nn
 
 
-rr = nn.Linear(2, 2)
+# rr = nn.Linear(2, 2)
 
 
-r2 = nn.Linear(2, 2, pyro_name="dope")
+# r2 = nn.Linear(2, 2, pyro_name="dope")
 
 # import pyro
 # import torch.nn as nn
