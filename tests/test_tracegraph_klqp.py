@@ -42,7 +42,7 @@ class NormalNormalTests(TestCase):
         self.do_elbo_test(True, 1000)
 
     def test_elbo_nonreparameterized(self):
-        self.do_elbo_test(False, 10000)
+        self.do_elbo_test(False, 5000)
 
     def do_elbo_test(self, reparameterized, n_steps):
         if self.verbose:
@@ -145,7 +145,7 @@ class NormalNormalNormalTests(TestCase):
                              torch.pow(self.lam, -0.5))
             return mu_latent
 
-        # note that the true posterior is not mean field!
+        # note that the exact posterior is not mean field!
         def guide():
             mu_q = pyro.param("mu_q", Variable(self.analytic_mu_n.data + 0.334 * torch.ones(2),
                                                requires_grad=True))
@@ -167,6 +167,9 @@ class NormalNormalNormalTests(TestCase):
                                           sig_q_prime,
                                           reparameterized=repa1)
             return mu_latent
+
+        pyro.poutine.tracegraph(model, graph_output='NormalNormalNormal.model')()
+        pyro.poutine.tracegraph(guide, graph_output='NormalNormalNormal.guide')()
 
         kl_optim = TraceGraph_KL_QP(model, guide, pyro.optim(
                                     torch.optim.Adam,
@@ -258,7 +261,7 @@ class BernoulliBetaTests(TestCase):
 
         kl_optim = TraceGraph_KL_QP(model, guide, pyro.optim(torch.optim.Adam,
                                     {"lr": .0004, "betas": (0.95, 0.999)}))
-        for k in range(15000):
+        for k in range(9000):
             # model_graph_output = 'BernoulliBeta.model' if k==0 else None
             # guide_graph_output = 'BernoulliBeta.guide' if k==0 else None
             # kl_optim.step(model_graph_output=model_graph_output, guide_graph_output=guide_graph_output)
@@ -383,7 +386,7 @@ class ExponentialGammaTests(TestCase):
                 torch.optim.Adam, {
                     "lr": .0005, "betas": (
                         0.95, 0.999)}))
-        for k in range(10000):
+        for k in range(8000):
             kl_optim.step()
 
             alpha_error = torch.abs(
@@ -431,7 +434,7 @@ class LogNormalNormalTests(TestCase):
         self.do_elbo_test(True, 7000, 0.95, 0.001)
 
     def test_elbo_nonreparameterized(self):
-        self.do_elbo_test(False, 25000, 0.96, 0.0005)
+        self.do_elbo_test(False, 9000, 0.96, 0.0005)
 
     def do_elbo_test(self, reparameterized, n_steps, beta1, lr):
         if self.verbose:

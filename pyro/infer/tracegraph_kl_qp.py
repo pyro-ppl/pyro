@@ -46,41 +46,33 @@ class TraceGraph_KL_QP(object):
         """
         single step?
         """
-        # arguments for visualization
-        guide_graph_output = kwargs.pop('guide_graph_output', None)
-        model_graph_output = kwargs.pop('model_graph_output', None)
-        # include_intermediates = kwargs.pop('include_intermediates', False)
-
         # call guide() and model() and record trace/tracegraph
-        guide_trgraph = poutine.tracegraph(self.guide,
-                                           graph_output=guide_graph_output)(*args, **kwargs)
+        guide_trgraph = poutine.tracegraph(self.guide)(*args, **kwargs)
         guide_trace = guide_trgraph.get_trace()
 
-        model_trgraph = poutine.tracegraph(poutine.replay(self.model, guide_trace),
-                                           graph_output=model_graph_output)(*args, **kwargs)
+        model_trgraph = poutine.tracegraph(poutine.replay(self.model, guide_trace))(*args, **kwargs)
         model_trace = model_trgraph.get_trace()
 
-        # compute all the individual log pdf terms
-        # XXX not actually using the result of this computation, but these two calls
-        # trigger the actual log_pdf calculations and fill in the trace dictionary.
-        # do elsewhere?
-        _ = guide_trace.log_pdf() - model_trace.log_pdf()
+        # have the trace compute all the individual log pdf terms
+        # so that they are available below
+        guide_trace.log_pdf(), model_trace.log_pdf()
 
         # prepare a list of all the cost nodes, each of which is +- log_pdf
         # the parent information will be used below for rao-blackwellization
         # also flag if term can be removed because its gradient has zero expectation
-        # XXX parents currently include parameters (unnecessarily so)
+        # XXX had to change get_parents -> get_ancestors below to accomodate coarser
+        # graph structure correctly : (
         cost_nodes = []
         for name in model_trace.keys():
             mtn = model_trace[name]
             if mtn["type"] == "observe":
-                cost_node = (mtn["log_pdf"], model_trgraph.get_parents(name, with_self=False), True)
+                cost_node = (mtn["log_pdf"], model_trgraph.get_ancestors(name, with_self=False), True)
                 cost_nodes.append(cost_node)
             elif mtn["type"] == "sample":
                 gtn = guide_trace[name]
-                cost_node1 = (mtn["log_pdf"], model_trgraph.get_parents(name, with_self=True), True)
+                cost_node1 = (mtn["log_pdf"], model_trgraph.get_ancestors(name, with_self=True), True)
                 zero_expectation = name in guide_trgraph.get_nonreparam_stochastic_nodes()
-                cost_node2 = (- gtn["log_pdf"], guide_trgraph.get_parents(name, with_self=True),
+                cost_node2 = (- gtn["log_pdf"], guide_trgraph.get_ancestors(name, with_self=True),
                               not zero_expectation)
                 cost_nodes.extend([cost_node1, cost_node2])
 
@@ -89,10 +81,12 @@ class TraceGraph_KL_QP(object):
         elbo_reinforce_terms = 0.0
 
         # compute the elbo; if all stochastic nodes are reparameterizable, we're done
+        # this bit is never differentiated: it's here for getting an estimate of the elbo itself
         for cost_node in cost_nodes:
             elbo += cost_node[0]
 
         # compute the elbo, removing terms whose gradient is zero
+        # this is the bit that's actually differentiated
         for cost_node in cost_nodes:
             if cost_node[2]:
                 elbo_no_zero_expectation_terms += cost_node[0]
@@ -104,7 +98,7 @@ class TraceGraph_KL_QP(object):
         # XXX should the average baseline be in the param store as below?
         for node in guide_trgraph.get_nonreparam_stochastic_nodes():
             if self.decaying_avg_baseline:
-                avg_downstream_cost_old = pyro.param("_baseline_avg_downstream_cost_" + node, ng_zeros(1))
+                avg_downstream_cost_old = pyro.param("__baseline_avg_downstream_cost_" + node, ng_zeros(1))
             downstream_cost = 0.0
             downstream_cost_non_zero = False
             node_descendants = guide_trgraph.get_descendants(node, with_self=True)
@@ -115,7 +109,7 @@ class TraceGraph_KL_QP(object):
             if self.decaying_avg_baseline:
                 avg_downstream_cost_new = (1 - self.baseline_beta) * downstream_cost +\
                     self.baseline_beta * avg_downstream_cost_old
-                avg_downstream_cost_old.data = avg_downstream_cost_new.data
+                avg_downstream_cost_old.data = avg_downstream_cost_new.data  # XXX copy_() ?
             if downstream_cost_non_zero:  # XXX is this actually necessary?
                 if self.decaying_avg_baseline:
                     elbo_reinforce_terms += guide_trace[node]['log_pdf'] * \
