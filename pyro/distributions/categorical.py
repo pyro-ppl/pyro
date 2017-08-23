@@ -70,7 +70,7 @@ class Categorical(Distribution):
             if isinstance(_vs, np.ndarray):
                 # always returns a 2-d (unsqueezed 1-d) list
                 r = np.arange(_vs.shape[0])
-                return [[x] for x in _vs[r, sample.squeeze().data.numpy()].tolist()]
+                return [[x] for x in _vs[r, sample.squeeze().data.numpy().astype("int")].tolist()]
             # _vs is a torch.Tensor
             return torch.gather(_vs, 1, sample.long())
         if _one_hot:
