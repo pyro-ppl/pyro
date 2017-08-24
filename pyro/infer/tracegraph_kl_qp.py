@@ -4,7 +4,7 @@ from collections import OrderedDict
 import pyro
 import pyro.poutine as poutine
 import sys
-from pyro.util import ng_zeros
+from pyro.util import ng_zeros, detach_iterable
 
 
 class TraceGraph_KL_QP(object):
@@ -20,8 +20,7 @@ class TraceGraph_KL_QP(object):
                  optim_step_fct,
                  model_fixed=False,
                  guide_fixed=False,
-                 decaying_avg_baseline=True,
-                 baseline_beta=0.9,
+                 baseline_optim_step_fct=None,
                  *args, **kwargs):
         """
         Call parent class initially, then setup the poutines to run
@@ -36,8 +35,7 @@ class TraceGraph_KL_QP(object):
         self.optim_step_fct = optim_step_fct
         self.model_fixed = model_fixed
         self.guide_fixed = guide_fixed
-        self.decaying_avg_baseline = decaying_avg_baseline
-        self.baseline_beta = baseline_beta
+        self.baseline_optim_step_fct = baseline_optim_step_fct
 
     def __call__(self, *args, **kwargs):
         return self.step(*args, **kwargs)
@@ -60,7 +58,7 @@ class TraceGraph_KL_QP(object):
         # prepare a list of all the cost nodes, each of which is +- log_pdf
         # the parent information will be used below for rao-blackwellization
         # also flag if term can be removed because its gradient has zero expectation
-        # XXX had to change get_parents -> get_ancestors below to accomodate coarser
+        # XXX had to change get_parents -> get_ancestors below to accommodate coarser
         # graph structure correctly : (
         cost_nodes = []
         for name in model_trace.keys():
@@ -96,9 +94,12 @@ class TraceGraph_KL_QP(object):
         # we include only downstream costs to reduce variance
         # optionally include decaying average baseline to further reduce variance
         # XXX should the average baseline be in the param store as below?
+        baseline_mses = []
         for node in guide_trgraph.get_nonreparam_stochastic_nodes():
-            if self.decaying_avg_baseline:
+            use_decaying_avg_baseline = guide_trace[node]['fn'].use_decaying_avg_baseline
+            if use_decaying_avg_baseline:
                 avg_downstream_cost_old = pyro.param("__baseline_avg_downstream_cost_" + node, ng_zeros(1))
+                baseline_beta = guide_trace[node]['fn'].baseline_beta
             downstream_cost = 0.0
             downstream_cost_non_zero = False
             node_descendants = guide_trgraph.get_descendants(node, with_self=True)
@@ -106,16 +107,38 @@ class TraceGraph_KL_QP(object):
                 if any([p in node_descendants for p in cost_node[1]]):
                     downstream_cost += cost_node[0]
                     downstream_cost_non_zero = True
-            if self.decaying_avg_baseline:
-                avg_downstream_cost_new = (1 - self.baseline_beta) * downstream_cost +\
-                    self.baseline_beta * avg_downstream_cost_old
+            if use_decaying_avg_baseline:
+                avg_downstream_cost_new = (1 - baseline_beta) * downstream_cost +\
+                    baseline_beta * avg_downstream_cost_old
                 avg_downstream_cost_old.data = avg_downstream_cost_new.data  # XXX copy_() ?
             if downstream_cost_non_zero:  # XXX is this actually necessary?
-                if self.decaying_avg_baseline:
+                use_dependent_baseline = guide_trace[node]['fn'].baseline is not None
+                baseline = 0.0
+                if use_decaying_avg_baseline:
+                    baseline += avg_downstream_cost_old
+                    detached_baseline = baseline
+                if use_dependent_baseline:
+                    baseline_input = pyro.util.detach_iterable(guide_trace[node]['baseline_input'])
+                    baseline += guide_trace[node]['fn'].baseline(baseline_input)
+                    detached_baseline = baseline.detach()
+                if use_dependent_baseline or use_decaying_avg_baseline:
                     elbo_reinforce_terms += guide_trace[node]['log_pdf'] * \
-                        (Variable(downstream_cost.data) - avg_downstream_cost_old)
+                        (Variable(downstream_cost.data) - baseline.detach())
+                    if use_dependent_baseline:
+                        nn_params = guide_trace[node]['fn'].baseline.parameters()
+                        baseline_mse = torch.pow(Variable(downstream_cost.data) - baseline, 2.0)
+                        baseline_mses.append((baseline_mse, nn_params))
                 else:
                     elbo_reinforce_terms += guide_trace[node]['log_pdf'] * Variable(downstream_cost.data)
+
+        # minimize losses for any neural network baselines
+        for loss, params in baseline_mses:
+            loss.backward()
+            if self.baseline_optim_step_fct is None:
+                self.optim_step_fct(params)
+            else:
+                self.baseline_optim_step_fct(params)
+            pyro.util.zero_grads(params)
 
         # the gradient of the surrogate loss yields our gradient estimator for the elbo
         surrogate_loss = - elbo_no_zero_expectation_terms - elbo_reinforce_terms

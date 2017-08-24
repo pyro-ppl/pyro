@@ -23,6 +23,8 @@ class Trace(dict):
         site["value"] = sample
         site["fn"] = fn
         site["args"] = (args, kwargs)
+        if 'baseline_input' in kwargs:
+            site["baseline_input"] = kwargs['baseline_input']
         self[name] = site
         return self
 

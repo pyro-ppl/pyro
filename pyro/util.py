@@ -4,6 +4,13 @@ from torch.autograd import Variable
 from torch.nn import Parameter
 
 
+def detach_iterable(iterable):
+    if isinstance(iterable, Variable):
+        return iterable.detach()
+    else:
+        return [var.detach() for var in iterable]
+
+
 def _dict_to_tuple(d):
     """
     Recursively converts a dictionary to a list of key-value tuples

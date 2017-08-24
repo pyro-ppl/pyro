@@ -36,7 +36,7 @@ class NormalNormalTests(TestCase):
         self.analytic_log_sig_n = -0.5 * torch.log(self.analytic_lam_n)
         self.analytic_mu_n = self.sum_data * (self.lam / self.analytic_lam_n) +\
             self.mu0 * (self.lam0 / self.analytic_lam_n)
-        self.verbose = False
+        self.verbose = True
 
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 1000)
@@ -117,21 +117,44 @@ class NormalNormalNormalTests(TestCase):
         self.analytic_log_sig_n = -0.5 * torch.log(self.analytic_lam_n)
         self.analytic_mu_n = self.sum_data * (self.lam / self.analytic_lam_n) +\
             self.mu0 * (self.lam0 / self.analytic_lam_n)
-        self.verbose = False
+        self.verbose = True
 
     def test_elbo_reparameterized(self):
-        self.do_elbo_test(True, True, 5000, 0.02, 0.002)
+        self.do_elbo_test(True, True, 5000, 0.02, 0.002, False)
 
     def test_elbo_nonreparameterized(self):
-        self.do_elbo_test(False, False, 15000, 0.05, 0.001)
-        self.do_elbo_test(True, False, 12000, 0.04, 0.0015)
-        self.do_elbo_test(False, True, 12000, 0.04, 0.0015)
+        for use_nn_baseline in [True, False]:
+            for use_decaying_avg_baseline in [True, False]:
+                self.do_elbo_test(False, False, 15000, 0.05, 0.001, use_nn_baseline,
+                                  use_decaying_avg_baseline)
+                self.do_elbo_test(True, False, 12000, 0.04, 0.0015, use_nn_baseline,
+                                  use_decaying_avg_baseline)
+                self.do_elbo_test(False, True, 12000, 0.04, 0.0015, use_nn_baseline,
+                                  use_decaying_avg_baseline)
 
-    def do_elbo_test(self, repa1, repa2, n_steps, prec, lr):
+    def do_elbo_test(self, repa1, repa2, n_steps, prec, lr, use_nn_baseline, use_decaying_avg_baseline):
         if self.verbose:
-            print((" - - - - - DO NORMALNORMALNORMAL ELBO TEST  [reparameterized = %s, %s]" +
-                  "- - - - - ") % (repa1, repa2))
+            print(" - - - - - DO NORMALNORMALNORMAL ELBO TEST - - - - - -")
+            print("[reparameterized = %s, %s; nn_baseline = %s, decaying_baseline = %s]" %
+                  (repa1, repa2, use_nn_baseline, use_decaying_avg_baseline))
         pyro.get_param_store().clear()
+
+        if use_nn_baseline:
+
+            class VanillaBaselineNN(nn.Module):
+                def __init__(self, dim_input, dim_h):
+                    super(VanillaBaselineNN, self).__init__()
+                    self.lin1 = nn.Linear(dim_input, dim_h)
+                    self.lin2 = nn.Linear(dim_h, 1)
+                    self.sigmoid = nn.Sigmoid()
+
+                def forward(self, x):
+                    h = self.sigmoid(self.lin1(x))
+                    return self.lin2(h)
+
+            mu_prime_baseline = pyro.module("mu_prime_baseline", VanillaBaselineNN(2, 5))
+        else:
+            mu_prime_baseline = None
 
         def model():
             mu_latent_prime = pyro.sample("mu_latent_prime", dist.diagnormal,
@@ -160,24 +183,24 @@ class NormalNormalNormalTests(TestCase):
                                          Variable(-0.5 * torch.log(1.2 * self.lam0.data),
                                                   requires_grad=True))
             sig_q, sig_q_prime = torch.exp(log_sig_q), torch.exp(log_sig_q_prime)
-            mu_latent = pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q,
-                                    reparameterized=repa2)
-            mu_latent_prime = pyro.sample("mu_latent_prime", dist.diagnormal,
-                                          kappa_q.expand_as(mu_latent) * mu_latent + mu_q_prime,
-                                          sig_q_prime,
-                                          reparameterized=repa1)
+            mu_latent_dist = dist.DiagNormal(mu_q, sig_q, use_decaying_avg_baseline=use_decaying_avg_baseline)
+            mu_latent = pyro.sample("mu_latent", mu_latent_dist, reparameterized=repa2)
+            mu_latent_prime_dist = dist.DiagNormal(kappa_q.expand_as(mu_latent) * mu_latent + mu_q_prime,
+                                                   sig_q_prime, baseline=mu_prime_baseline,
+                                                   use_decaying_avg_baseline=use_decaying_avg_baseline)
+            mu_latent_prime = pyro.sample("mu_latent_prime", mu_latent_prime_dist,
+                                          reparameterized=repa1, baseline_input=mu_latent)
             return mu_latent
 
-        pyro.poutine.tracegraph(model, graph_output='NormalNormalNormal.model')()
-        pyro.poutine.tracegraph(guide, graph_output='NormalNormalNormal.guide')()
+        # pyro.poutine.tracegraph(model, graph_output='NormalNormalNormal.model')()
+        # pyro.poutine.tracegraph(guide, graph_output='NormalNormalNormal.guide')()
 
         kl_optim = TraceGraph_KL_QP(model, guide, pyro.optim(
                                     torch.optim.Adam,
-                                    {"lr": lr, "betas": (0.97, 0.999)}))
+                                    {"lr": lr, "betas": (0.97, 0.999)}),
+                                    baseline_optim=pyro.optim(torch.optim.Adam,
+                                    {"lr": 5.0 * lr, "betas": (0.90, 0.999)}))
         for k in range(n_steps):
-            # model_graph_output = 'NormalNormalNormal.model.%s%s' % (repa1, repa2) if k==0 else None
-            # guide_graph_output = 'NormalNormalNormal.guide.%s%s' % (repa1, repa2) if k==0 else None
-            # kl_optim.step(model_graph_output=model_graph_output, guide_graph_output=guide_graph_output)
             kl_optim.step()
 
             mu_error = torch.sum(
@@ -236,7 +259,7 @@ class BernoulliBetaTests(TestCase):
         # posterior beta
         self.log_alpha_n = torch.log(self.alpha_n)
         self.log_beta_n = torch.log(self.beta_n)
-        self.verbose = False
+        self.verbose = True
 
     def test_elbo_nonreparameterized(self):
         if self.verbose:
@@ -295,7 +318,7 @@ class PoissonGammaTests(TestCase):
             Variable(torch.Tensor([self.n_data]))  # posterior beta
         self.log_alpha_n = torch.log(self.alpha_n)
         self.log_beta_n = torch.log(self.beta_n)
-        self.verbose = False
+        self.verbose = True
 
     def test_elbo_nonreparameterized(self):
         if self.verbose:
@@ -358,7 +381,7 @@ class ExponentialGammaTests(TestCase):
         self.beta_n = self.beta0 + torch.sum(self.data)  # posterior beta
         self.log_alpha_n = torch.log(self.alpha_n)
         self.log_beta_n = torch.log(self.beta_n)
-        self.verbose = False
+        self.verbose = True
 
     def test_elbo_nonreparameterized(self):
         if self.verbose:
@@ -428,7 +451,7 @@ class LogNormalNormalTests(TestCase):
         self.mu_n = mu_numerator / self.tau_n  # posterior mu
         self.log_mu_n = torch.log(self.mu_n)
         self.log_tau_n = torch.log(self.tau_n)
-        self.verbose = False
+        self.verbose = True
 
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 7000, 0.95, 0.001)
