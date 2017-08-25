@@ -34,6 +34,117 @@ optim = PyroOptim
 _PYRO_STACK = []
 
 
+###################################################################################
+# def apply_stack(initial_msg, stack=None):
+#     """
+#     execute the poutine stack according to the new two-sided blocking scheme
+#     New Poutine stack mechanism:
+#     1) start at the top
+#     2) grab the top poutine, ask to go down
+#     3) if down, recur
+#     4) if not, stop, start returning
+#     """
+#     if stack is None:
+#         stack = _PYRO_STACK
+# 
+#     # XXX seems like this should happen on poutine installation, not at execution
+#     assert poutine.validate_stack(stack), \
+#         "Current poutine stack violates poutine composition rules"
+#         
+#     msg = initial_msg
+# 
+#     # work out the bottom poutine at this site
+#     for i, layer in enumerate(reverse(stack)):
+#         msg, stop = layer.down(msg)
+#         if stop:
+#             break
+# 
+#     # go until time to stop?
+#     for j in range(i, -1, -1):
+#         msg, stop = layer.up(msg)
+#         if stop:
+#             break
+# 
+#     return msg
+# 
+# 
+# def new_sample(name, fn, *args, **kwargs):
+#     """
+#     current sample interface
+#     """
+#     # initialize data structure to pass up/down the stack
+#     msg = {
+#         "type": "sample",
+#         "name": name,
+#         "fn": fn,
+#         "args": args,
+#         "kwargs": kwargs,
+#         "ret": None,
+#     }
+#     # apply the stack and return its return value
+#     out_msg = poutine.apply_stack(msg)
+#     return out_msg["ret"]
+# 
+# 
+# def new_observe(name, fn, val, *args, **kwargs):
+#     """
+#     current observe interface
+#     """
+#     # initialize data structure to pass up/down the stack
+#     msg = {
+#         "type": "observe",
+#         "name": name,
+#         "fn": fn,
+#         "val": val,
+#         "args": args,
+#         "kwargs": kwargs,
+#         "ret": None,
+#     }
+#     # apply the stack and return its return value
+#     out_msg = poutine.apply_stack(msg)
+#     return out_msg["ret"]
+# 
+# 
+# def new_map_data(name, data, fn, batch_size=None):
+#     """
+#     current map_data interface
+#     """
+#     # initialize data structure to pass up/down the stack
+#     msg = {
+#         "type": "sample",
+#         "name": name,
+#         "fn": fn,
+#         "data": data,
+#         "batch_size": batch_size,
+#         # XXX should these be added here or during application
+#         "indices": None,
+#         "scale": None,
+#         "ret": None,
+#     }
+#     # apply the stack and return its return value
+#     out_msg = poutine.apply_stack(msg)
+#     return out_msg["ret"]
+# 
+# 
+# # XXX this should have the same call signature as torch.Tensor constructors
+# def new_param(name, *args, **kwargs):
+#     """
+#     New version of param based on updated poutine stack logic
+#     """
+#     msg = {
+#         "type": "param",
+#         "name": name,
+#         "args": args,
+#         "kwargs": kwargs,
+#         "ret": None,
+#     }
+#     # apply the stack and return its return value
+#     out_msg = poutine.apply_stack(msg)
+#     return out_msg["ret"]
+# 
+
+###############################################################
+
 def param(name, *args, **kwargs):
     if len(_PYRO_STACK) == 0:
         return _param_store.get_param(name, *args, **kwargs)

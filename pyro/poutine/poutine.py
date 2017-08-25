@@ -58,6 +58,22 @@ class Poutine(object):
         barrier = self._block_stack(site_type, name)
         return ret, barrier
 
+    # def up(self, msg):
+    #     """
+    #     The dispatcher that gets put into _PYRO_STACK
+    #     """
+    #     ret = getattr(self, "_pyro_" + site_type)(_ret, name, *args, **kwargs)
+    #     barrier = self._block_stack(site_type, name)
+    #     return ret, barrier
+
+    # def down(self, msg):
+    #     """
+    #     The dispatcher that gets put into _PYRO_STACK
+    #     """
+    #     ret = getattr(self, "_pyro_" + site_type)(_ret, name, *args, **kwargs)
+    #     barrier = self._block_stack(site_type, name)
+    #     return ret, barrier
+
     def _block_stack(self, site_type, name):
         """
         Default behavior for stack-blocking:
