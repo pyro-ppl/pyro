@@ -111,7 +111,7 @@ class ImportanceTest(NormalNormalSamplingTestCase):
         posterior = pyro.infer.Importance(self.model, guide=self.guide, samples=2000)
         posterior_samples = [posterior()[0][0]["mu"]["value"] for i in range(500)]
         posterior_mean = torch.mean(torch.cat(posterior_samples))
-        posterior_stddev = torch.sqrt(torch.mean(torch.cat(posterior_samples) ** 2))
+        posterior_stddev = torch.std(torch.cat(posterior_samples), 0)
         self.assertEqual(0, torch.norm(posterior_mean - self.mu_mean).data[0],
                          prec=0.01)
         self.assertEqual(0, torch.norm(posterior_stddev - self.mu_stddev).data[0],
@@ -121,7 +121,7 @@ class ImportanceTest(NormalNormalSamplingTestCase):
         posterior = pyro.infer.Importance(self.model, guide=None, samples=2000)
         posterior_samples = [posterior()[0][0]["mu"]["value"] for i in range(500)]
         posterior_mean = torch.mean(torch.cat(posterior_samples))
-        posterior_stddev = torch.sqrt(torch.mean(torch.cat(posterior_samples) ** 2))
+        posterior_stddev = torch.std(torch.cat(posterior_samples), 0)
         self.assertEqual(0, torch.norm(posterior_mean - self.mu_mean).data[0],
                          prec=0.01)
         self.assertEqual(0, torch.norm(posterior_stddev - self.mu_stddev).data[0],
