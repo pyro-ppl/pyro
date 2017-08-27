@@ -29,7 +29,6 @@ class Importance(TracePosterior):
         """
         make trace posterior histogram (unnormalized)
         """
-        traces = []
         for i in range(self.samples):
             guide_trace = poutine.trace(self.guide)(*args, **kwargs)
             model_trace = poutine.trace(
