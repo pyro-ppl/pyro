@@ -9,6 +9,7 @@ from collections import defaultdict
 import time
 import networkx
 
+
 class TraceGraph_KL_QP(object):
     """
     A TraceGraph and Poutine-based implementation of SVI
