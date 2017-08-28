@@ -15,14 +15,21 @@ class TraceGraph(object):
     -- visualization handled by save_visualization()
     """
     def __init__(self, G, trace, stochastic_nodes, reparameterized_nodes,
-                 param_nodes, observation_nodes):
+                 param_nodes, observation_nodes, root_node):
         self.G = G
+        self.root_node = root_node
         self.trace = trace
         self.param_nodes = param_nodes
         self.reparameterized_nodes = reparameterized_nodes
         self.stochastic_nodes = stochastic_nodes
         self.nonreparam_stochastic_nodes = list(set(stochastic_nodes) - set(reparameterized_nodes))
         self.observation_nodes = observation_nodes
+
+    def get_root_node(self):
+        """
+        get root node
+        """
+        return self.root_node
 
     def get_stochastic_nodes(self):
         """
@@ -72,16 +79,19 @@ class TraceGraph(object):
             parents.append(node)
         return parents
 
-    def get_ancestors(self, node, with_self=False):
+    def get_ancestors(self, node, with_self=False, non_reparam_only=False):
         """
         get ancestors of a named node
         Params:
           `node` - the name of the node in the tracegraph
           `with_self` - whether to include `node` among the ancestors
+          `non_reparam_only` - only include non-reparameterizable nodes
         """
         ancestors = list(networkx.ancestors(self.G, node))
         if with_self:
             ancestors.append(node)
+        if non_reparam_only:
+            return filter(set(ancestors).__contains__, self.get_nonreparam_stochastic_nodes())
         return ancestors
 
     def get_descendants(self, node, with_self=False):
@@ -159,11 +169,12 @@ class TraceGraphPoutine(TracePoutine):
         Return a TraceGraph object that contains the forward graph and trace
         """
         self.trace = super(TraceGraphPoutine, self)._exit_poutine(ret_val, *args, **kwargs)
+        root_node = self.G.successors('___ROOT_NODE___')[0]
         self.G.remove_node('___ROOT_NODE___')
 
         trace_graph = TraceGraph(self.G, self.trace,
                                  self.stochastic_nodes, self.reparameterized_nodes,
-                                 self.param_nodes, self.observation_nodes)
+                                 self.param_nodes, self.observation_nodes, root_node)
         return trace_graph
 
     def _pyro_sample(self, prev_val, name, dist, *args, **kwargs):

@@ -5,7 +5,9 @@ import pyro
 import pyro.poutine as poutine
 import sys
 from pyro.util import ng_zeros, detach_iterable
-
+from collections import defaultdict
+import time
+import networkx
 
 class TraceGraph_KL_QP(object):
     """
@@ -45,11 +47,10 @@ class TraceGraph_KL_QP(object):
         single step?
         """
         # call guide() and model() and record trace/tracegraph
-        guide_trgraph = poutine.tracegraph(self.guide)(*args, **kwargs)
-        guide_trace = guide_trgraph.get_trace()
-
-        model_trgraph = poutine.tracegraph(poutine.replay(self.model, guide_trace))(*args, **kwargs)
-        model_trace = model_trgraph.get_trace()
+        guide_tracegraph = poutine.tracegraph(self.guide)(*args, **kwargs)
+        guide_trace = guide_tracegraph.get_trace()
+        model_tracegraph = poutine.tracegraph(poutine.replay(self.model, guide_trace))(*args, **kwargs)
+        model_trace = model_tracegraph.get_trace()
 
         # have the trace compute all the individual log pdf terms
         # so that they are available below
@@ -61,18 +62,38 @@ class TraceGraph_KL_QP(object):
         # XXX had to change get_parents -> get_ancestors below to accommodate coarser
         # graph structure correctly : (
         cost_nodes = []
-        for name in model_trace.keys():
-            mtn = model_trace[name]
-            if mtn["type"] == "observe":
-                cost_node = (mtn["log_pdf"], model_trgraph.get_ancestors(name, with_self=False), True)
+        non_reparam_nodes = guide_tracegraph.get_nonreparam_stochastic_nodes()
+
+        def filter_non_reparam_nodes(x):
+            return filter(set(x).__contains__, non_reparam_nodes)
+
+        t0 = time.time()
+        for site in model_trace.keys():
+            model_trace_site = model_trace[site]
+            if model_trace_site["type"] == "observe":
+                ancestors = model_tracegraph.get_ancestors(site, with_self=False)
+                ancestors_non_reparam = filter_non_reparam_nodes(ancestors)
+                cost_node = (model_trace_site["log_pdf"], ancestors, ancestors_non_reparam, True)
                 cost_nodes.append(cost_node)
-            elif mtn["type"] == "sample":
-                gtn = guide_trace[name]
-                cost_node1 = (mtn["log_pdf"], model_trgraph.get_ancestors(name, with_self=True), True)
-                zero_expectation = name in guide_trgraph.get_nonreparam_stochastic_nodes()
-                cost_node2 = (- gtn["log_pdf"], guide_trgraph.get_ancestors(name, with_self=True),
+            elif model_trace_site["type"] == "sample":
+                # cost node from model sample
+                ancestors1 = model_tracegraph.get_ancestors(site, with_self=True)
+                ancestors1_non_reparam = filter_non_reparam_nodes(ancestors1)
+                cost_node1 = (model_trace_site["log_pdf"], ancestors1, ancestors1_non_reparam, True)
+                # cost node from guide sample
+                zero_expectation = site in non_reparam_nodes
+                ancestors2 = guide_tracegraph.get_ancestors(site, with_self=True)
+                ancestors2_non_reparam = filter_non_reparam_nodes(ancestors2)
+                cost_node2 = (- guide_trace[site]["log_pdf"], ancestors2, ancestors2_non_reparam,
                               not zero_expectation)
                 cost_nodes.extend([cost_node1, cost_node2])
+
+        # prepare downstream costs for non-reparameterizable nodes
+        t0 = time.time()
+        downstream_costs = defaultdict(lambda: 0.0)
+        for cost_node in cost_nodes:
+            for node in cost_node[2]:
+                downstream_costs[node] += cost_node[0]
 
         elbo = 0.0
         elbo_no_zero_expectation_terms = 0.0
@@ -86,7 +107,7 @@ class TraceGraph_KL_QP(object):
         # compute the elbo, removing terms whose gradient is zero
         # this is the bit that's actually differentiated
         for cost_node in cost_nodes:
-            if cost_node[2]:
+            if cost_node[3]:
                 elbo_no_zero_expectation_terms += cost_node[0]
 
         # if there are any non-reparameterized stochastic nodes,
@@ -95,40 +116,33 @@ class TraceGraph_KL_QP(object):
         # optionally include decaying average baseline to further reduce variance
         # XXX should the average baseline be in the param store as below?
         baseline_mses = []
-        for node in guide_trgraph.get_nonreparam_stochastic_nodes():
+        for node in non_reparam_nodes:
+            downstream_cost = downstream_costs[node]
             use_decaying_avg_baseline = guide_trace[node]['fn'].use_decaying_avg_baseline
             if use_decaying_avg_baseline:
                 avg_downstream_cost_old = pyro.param("__baseline_avg_downstream_cost_" + node, ng_zeros(1))
                 baseline_beta = guide_trace[node]['fn'].baseline_beta
-            downstream_cost = 0.0
-            downstream_cost_non_zero = False
-            node_descendants = guide_trgraph.get_descendants(node, with_self=True)
-            for cost_node in cost_nodes:
-                if any([p in node_descendants for p in cost_node[1]]):
-                    downstream_cost += cost_node[0]
-                    downstream_cost_non_zero = True
             if use_decaying_avg_baseline:
                 avg_downstream_cost_new = (1 - baseline_beta) * downstream_cost +\
                     baseline_beta * avg_downstream_cost_old
                 avg_downstream_cost_old.data = avg_downstream_cost_new.data  # XXX copy_() ?
-            if downstream_cost_non_zero:  # XXX is this actually necessary?
-                use_dependent_baseline = guide_trace[node]['fn'].baseline is not None
-                baseline = 0.0
-                if use_decaying_avg_baseline:
-                    baseline += avg_downstream_cost_old
-                    detached_baseline = baseline
+            use_dependent_baseline = guide_trace[node]['fn'].baseline is not None
+            baseline = 0.0
+            if use_decaying_avg_baseline:
+                baseline += avg_downstream_cost_old
+                detached_baseline = baseline
+            if use_dependent_baseline:
+                baseline_input = pyro.util.detach_iterable(guide_trace[node]['baseline_input'])
+                baseline += guide_trace[node]['fn'].baseline(baseline_input)
+                detached_baseline = baseline.detach()
+            if use_dependent_baseline or use_decaying_avg_baseline:
+                elbo_reinforce_terms += guide_trace[node]['log_pdf'] * \
+                    (Variable(downstream_cost.data) - baseline.detach())
                 if use_dependent_baseline:
-                    baseline_input = pyro.util.detach_iterable(guide_trace[node]['baseline_input'])
-                    baseline += guide_trace[node]['fn'].baseline(baseline_input)
-                    detached_baseline = baseline.detach()
-                if use_dependent_baseline or use_decaying_avg_baseline:
-                    elbo_reinforce_terms += guide_trace[node]['log_pdf'] * \
-                        (Variable(downstream_cost.data) - baseline.detach())
-                    if use_dependent_baseline:
-                        nn_params = guide_trace[node]['fn'].baseline.parameters()
-                        baseline_mse = torch.pow(Variable(downstream_cost.data) - baseline, 2.0)
-                        baseline_mses.append((baseline_mse, nn_params))
-                else:
+                    nn_params = guide_trace[node]['fn'].baseline.parameters()
+                    baseline_mse = torch.pow(Variable(downstream_cost.data) - baseline, 2.0)
+                    baseline_mses.append((baseline_mse, nn_params))
+            else:
                     elbo_reinforce_terms += guide_trace[node]['log_pdf'] * Variable(downstream_cost.data)
 
         # minimize losses for any neural network baselines
@@ -148,14 +162,14 @@ class TraceGraph_KL_QP(object):
         all_trainable_params = []
         # get trace params from model run
         if not self.model_fixed:
-            for name in model_trace.keys():
-                if model_trace[name]["type"] == "param":
-                    all_trainable_params.append(model_trace[name]["value"])
+            for site in model_trace.keys():
+                if model_trace[site]["type"] == "param":
+                    all_trainable_params.append(model_trace[site]["value"])
         # get trace params from guide run
         if not self.guide_fixed:
-            for name in guide_trace.keys():
-                if guide_trace[name]["type"] == "param":
-                    all_trainable_params.append(guide_trace[name]["value"])
+            for site in guide_trace.keys():
+                if guide_trace[site]["type"] == "param":
+                    all_trainable_params.append(guide_trace[site]["value"])
         all_trainable_params = list(set(all_trainable_params))
 
         # compute gradients

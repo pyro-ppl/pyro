@@ -120,11 +120,13 @@ class NormalNormalNormalTests(TestCase):
         self.verbose = True
 
     def test_elbo_reparameterized(self):
-        self.do_elbo_test(True, True, 5000, 0.02, 0.002, False)
+        self.do_elbo_test(True, True, 5000, 0.02, 0.002, False, False)
 
     def test_elbo_nonreparameterized(self):
         for use_nn_baseline in [True, False]:
             for use_decaying_avg_baseline in [True, False]:
+                if not use_nn_baseline and not use_decaying_avg_baseline:
+                    continue
                 self.do_elbo_test(False, False, 15000, 0.05, 0.001, use_nn_baseline,
                                   use_decaying_avg_baseline)
                 self.do_elbo_test(True, False, 12000, 0.04, 0.0015, use_nn_baseline,
@@ -283,7 +285,7 @@ class BernoulliBetaTests(TestCase):
             return p_latent
 
         kl_optim = TraceGraph_KL_QP(model, guide, pyro.optim(torch.optim.Adam,
-                                    {"lr": .0004, "betas": (0.95, 0.999)}))
+                                    {"lr": .0007, "betas": (0.90, 0.999)}))
         for k in range(9000):
             # model_graph_output = 'BernoulliBeta.model' if k==0 else None
             # guide_graph_output = 'BernoulliBeta.guide' if k==0 else None
