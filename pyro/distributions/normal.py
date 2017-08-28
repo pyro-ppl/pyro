@@ -16,7 +16,6 @@ class Normal(Distribution):
     def _sanitize_input(self, mu, sigma):
         if mu is not None:
             # stateless distribution
-            mu = torch.unsqueeze(mu, 1)
             return mu, sigma
         elif self.mu is not None:
             # stateful distribution
