@@ -30,7 +30,7 @@ class Poisson(Distribution):
         self.lam = lam
         if lam is not None:
             if lam.dim() == 1 and batch_size > 1:
-                self.lam = lam.unsqueeze(0).expand(batch_size, lam.size(0))
+                self.lam = lam.expand(batch_size, lam.size(0))
         super(Poisson, self).__init__(*args, **kwargs)
 
     def sample(self, lam=None, *args, **kwargs):
