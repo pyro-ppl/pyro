@@ -51,7 +51,7 @@ class BlockPoutine(Poutine):
         self.hide_types = hide_types
         self.expose_types = expose_types
 
-    def _block_stack(self, site_type, name):
+    def _block_up(self, site_type, name):
         """
         A stack-blocking operation
         """

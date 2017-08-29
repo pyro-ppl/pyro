@@ -11,8 +11,6 @@ from pyro import distributions, infer, nn, params, util, poutine
 from pyro.util import zeros, ones
 from pyro.params import param_with_module_name
 
-import pdb
-
 # global map of params for now
 _param_store = ParamStoreDict()
 

@@ -50,10 +50,16 @@ class Poutine(object):
         """
         return r_val
 
-    def _block_stack(self, site_type, name):
+    def _block_up(self, site_type, name):
         """
         Default behavior for stack-blocking:
         In general, don't stop operating the stack at that site
+        """
+        return False
+
+    def _block_down(self, site_type, name):
+        """
+        Block going down
         """
         return False
 
@@ -88,21 +94,21 @@ class Poutine(object):
             raise ValueError(
                 "{} is an invalid site type, how did that get there?".format(msg["type"]))
 
-        barrier = self._block_stack(msg["type"], msg["name"])
+        barrier = self._block_up(msg["type"], msg["name"])
         return new_msg, barrier
 
     def down(self, msg):
         """
         The dispatcher that gets put into _PYRO_STACK
         """
-        return msg, False
+        barrier = self._block_down(msg["type"], msg["name"])
+        return msg, barrier
 
     def _push_stack(self):
         """
         Store the current stack of pyro functions, push this class model fcts
         """
         if not (self in pyro._PYRO_STACK):
-            # pyro._PYRO_STACK.insert(0, self._dispatch)
             pyro._PYRO_STACK.insert(0, self)
         else:
             raise ValueError("cannot install a Poutine instance twice")
