@@ -8,7 +8,10 @@ from pyro.util import log_gamma
 
 class Gamma(Distribution):
     """
-    Gamma parameterized by alpha and beta
+    :param shape:  *(real (0, Infinity))*
+    :param scale:  *(real (0, Infinity))*
+
+    Gamma distribution parameterized by alpha and beta
     """
 
     def _sanitize_input(self, alpha, beta):
@@ -31,8 +34,8 @@ class Gamma(Distribution):
         self.beta = beta
         if alpha is not None:
             if alpha.dim() == 1 and beta.dim() == 1:
-                self.alpha = alpha.expand(batch_size, 0)
-                self.beta = beta.expand(batch_size, 0)
+                self.alpha = alpha.expand(batch_size, alpha.size(0))
+                self.beta = beta.expand(batch_size, beta.size(0))
         self.reparameterized = False
         super(Gamma, self).__init__(*args, **kwargs)
 
@@ -43,8 +46,9 @@ class Gamma(Distribution):
 
         _alpha, _beta = self._sanitize_input(alpha, beta)
         _theta = torch.pow(_beta, -1.0)
-        x = pyro.device(Variable(torch.Tensor([spr.gamma.rvs(
-            _alpha.data.cpu().numpy(), scale=_theta.data.cpu().numpy())])))
+        x = Variable(torch.Tensor([spr.gamma.rvs(
+            _alpha.data.numpy(), scale=_theta.data.numpy())])
+            .type_as(_alpha.data))
         return x
 
     def log_pdf(self, x, alpha=None, beta=None, *args, **kwargs):
@@ -61,7 +65,7 @@ class Gamma(Distribution):
     def batch_log_pdf(self, x, alpha=None, beta=None, batch_size=1, *args, **kwargs):
         _alpha, _beta = self._sanitize_input(alpha, beta)
         if x.dim() == 1 and _beta.dim() == 1 and batch_size == 1:
-            return self.log_pdf(x)
+            return self.log_pdf(x, _alpha, _beta)
         elif x.dim() == 1:
             x = x.expand(batch_size, x.size(0))
         ll_1 = -_beta * x

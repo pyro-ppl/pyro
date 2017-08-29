@@ -15,6 +15,7 @@ from pyro.distributions.multinomial import Multinomial
 from pyro.distributions.exponential import Exponential
 from pyro.distributions.categorical import Categorical
 from pyro.distributions.delta import Delta
+from pyro.distributions.dirichlet import Dirichlet
 from pyro.distributions.transformed_distribution import TransformedDistribution
 from pyro.distributions.transformed_distribution import AffineExp
 from pyro.distributions.transformed_distribution import Bijector
@@ -33,3 +34,4 @@ normal = Normal()
 normalchol = NormalChol()
 poisson = Poisson()
 uniform = Uniform()
+dirichlet = Dirichlet()

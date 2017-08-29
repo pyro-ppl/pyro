@@ -6,7 +6,11 @@ from pyro.distributions.distribution import Distribution
 
 class LogNormal(Distribution):
     """
-    Log Normal parameterized by its mean mu and std sigma
+    :param mu: mean *(vector)*
+    :param sigma: standard deviations *(vector (0, Infinity))*
+
+    A distribution over probability vectors obtained by exp-transforming a random
+    variable drawn from ``Normal({mu: mu, sigma: sigma})``.
     """
 
     def _sanitize_input(self, mu, sigma):
@@ -31,8 +35,8 @@ class LogNormal(Distribution):
             if mu.dim() != sigma.dim():
                 raise ValueError("Mu and sigma need to have the same dimensions.")
             elif mu.dim() == 1:
-                self.mu = mu.unsqueeze(0).expand(batch_size, 0)
-                self.sigma = sigma.unsqueeze(0).expand(batch_size, 0)
+                self.mu = mu.expand(batch_size, mu.size(0))
+                self.sigma = sigma.expand(batch_size, sigma.size(0))
         super(LogNormal, self).__init__(*args, **kwargs)
         self.reparameterized = True
 
@@ -41,8 +45,7 @@ class LogNormal(Distribution):
         Reparameterized log-normal sampler.
         """
         _mu, _sigma = self._sanitize_input(mu, sigma)
-        eps = Variable(torch.randn(1),
-                       requires_grad=False).type_as(_mu)
+        eps = Variable(torch.randn(1).type_as(_mu.data))
         z = _mu + _sigma * eps
         return torch.exp(z)
 
@@ -51,7 +54,7 @@ class LogNormal(Distribution):
         log-normal log-likelihood
         """
         _mu, _sigma = self._sanitize_input(mu, sigma)
-        ll_1 = Variable(torch.Tensor([-0.5 * np.log(2.0 * np.pi)]))
+        ll_1 = Variable(torch.Tensor([-0.5 * np.log(2.0 * np.pi)]).type_as(_mu.data))
         ll_2 = -torch.log(_sigma * x)
         ll_3 = -0.5 * torch.pow((torch.log(x) - _mu) / _sigma, 2.0)
         return ll_1 + ll_2 + ll_3
@@ -62,10 +65,11 @@ class LogNormal(Distribution):
         """
         _mu, _sigma = self._sanitize_input(mu, sigma)
         if x.dim() == 1 and _mu.dim() == 1 and batch_size == 1:
-            return self.log_pdf(x)
+            return self.log_pdf(x, _mu, _sigma)
         elif x.dim() == 1:
             x = x.expand(batch_size, x.size(0))
-        ll_1 = Variable(torch.Tensor([-0.5 * np.log(2.0 * np.pi)]).expand_as(x))
+        ll_1 = Variable(torch.Tensor([-0.5 * np.log(2.0 * np.pi)])
+                        .type_as(_mu.data).expand_as(x))
         ll_2 = -torch.log(_sigma * x)
         ll_3 = -0.5 * torch.pow((torch.log(x) - _mu) / _sigma, 2.0)
         return ll_1 + ll_2 + ll_3

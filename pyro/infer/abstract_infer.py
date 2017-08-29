@@ -24,17 +24,17 @@ class LWCopoutine(Poutine):
         """
         self.current_score = 0
 
-    def _pyro_sample(self, name, dist):
+    def _pyro_sample(self, prev_val, name, dist, *args, **kwargs):
         """
         Simply sample from distribution
         """
-        return dist()
+        return dist(*args, **kwargs)
 
-    def _pyro_observe(self, name, dist, val):
+    def _pyro_observe(self, prev_val, name, dist, val, *args, **kwargs):
         """
         Get log_pdf of sample, add to ongoing scoring
         """
-        logp = dist.log_pdf(val)
+        logp = dist.log_pdf(val, *args, **kwargs)
         self.current_score += logp
         return val
 

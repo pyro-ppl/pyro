@@ -7,7 +7,10 @@ from pyro.distributions.distribution import Distribution
 
 class Bernoulli(Distribution):
     """
-    Multi-variate bernoulli
+    :param ps: probabilities *(vector [0, 1])*
+
+    Distribution over a vector of independent Bernoulli variables. Each element
+    of the vector takes on a value in ``{0, 1}``.
     """
 
     def _sanitize_input(self, ps):
@@ -33,10 +36,10 @@ class Bernoulli(Distribution):
 
     def sample(self, ps=None, *args, **kwargs):
         """
-        Reparameterized Bernoulli sampler.
+        Bernoulli sampler.
         """
         _ps = self._sanitize_input(ps)
-        return torch.bernoulli(_ps)
+        return Variable(torch.bernoulli(_ps.data).type_as(_ps.data))
 
     def log_pdf(self, x, ps=None, batch_size=1, *args, **kwargs):
         """
@@ -53,7 +56,7 @@ class Bernoulli(Distribution):
     def batch_log_pdf(self, x, ps=None, batch_size=1, *args, **kwargs):
         _ps = self._sanitize_input(ps)
         if x.dim() == 1 and _ps.dim() == 1 and batch_size == 1:
-            return self.log_pdf(x)
+            return self.log_pdf(x, _ps)
         elif x.dim() == 1:
             x = x.expand(batch_size, x.size(0))
         if _ps.size() != x.size():
@@ -68,7 +71,7 @@ class Bernoulli(Distribution):
     def support(self, ps=None, *args, **kwargs):
         _ps = self._sanitize_input(ps)
         if _ps.dim() == 1:
-            return iter([Variable(torch.ones(1)), Variable(torch.zeros(1))])
+            return iter([Variable(torch.ones(1).type_as(_ps.data)), Variable(torch.zeros(1).type_as(_ps))])
         size = functools.reduce(lambda x, y: x * y, _ps.size())
         return (Variable(torch.Tensor(list(x)).view_as(_ps))
-                for x in itertools.product(torch.Tensor([0, 1]), repeat=size))
+                for x in itertools.product(torch.Tensor([0, 1]).type_as(_ps.data), repeat=size))

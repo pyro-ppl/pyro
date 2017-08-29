@@ -1,3 +1,5 @@
+import sphinx_rtd_theme
+
 # -*- coding: utf-8 -*-
 #
 # Pyro documentation build configuration file, created by
@@ -35,7 +37,8 @@ extensions = ['sphinx.ext.intersphinx',
               'sphinx.ext.mathjax',
               'sphinx.ext.ifconfig',
               'sphinx.ext.viewcode',
-              'sphinx.ext.githubpages']
+              'sphinx.ext.githubpages',
+              'sphinx.ext.autodoc']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -51,7 +54,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'Pyro'
-copyright = u'2017, Uber AI Labs'
+copyright = u'2017, Uber Technologies Inc'
 author = u'Uber AI Labs'
 
 # The version info for the project you're documenting, acts as replacement for
@@ -81,13 +84,16 @@ pygments_style = 'sphinx'
 # If true, `todo` and `todoList` produce output, else they produce nothing.
 todo_include_todos = True
 
+# do not prepend module name to functions
+add_module_names = False
 
 # -- Options for HTML output ----------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'alabaster'
+html_theme = "sphinx_rtd_theme"
+html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
