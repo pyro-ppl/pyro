@@ -5,7 +5,9 @@ from pyro.distributions.distribution import Distribution
 
 class Exponential(Distribution):
     """
-    Exponential parameterized by lam
+    :param lam: rate *(real (0, Infinity))*
+
+    Exponential parameterized by lambda
     """
 
     def _sanitize_input(self, lam):
@@ -26,7 +28,7 @@ class Exponential(Distribution):
         self.lam = lam
         if lam is not None:
             if lam.dim() == 1 and batch_size > 1:
-                self.lam = lam.unsqueeze(0).expand(batch_size, lam.size(0))
+                self.lam = lam.expand(batch_size, lam.size(0))
         self.reparameterized = True
         super(Exponential, self).__init__(*args, **kwargs)
 
@@ -35,7 +37,7 @@ class Exponential(Distribution):
         reparameterized sampler.
         """
         _lam = self._sanitize_input(lam)
-        eps = Variable(torch.rand(_lam.size()))
+        eps = Variable(torch.rand(_lam.size()).type_as(_lam.data))
         x = -torch.log(eps) / _lam
         return x
 
@@ -53,7 +55,7 @@ class Exponential(Distribution):
         """
         _lam = self._sanitize_input(lam)
         if x.dim() == 1 and _lam.dim() == 1 and batch_size == 1:
-            return self.log_pdf(x)
+            return self.log_pdf(x, _lam)
         elif x.dim() == 1:
             x = x.expand(batch_size, x.size(0))
         ll = -_lam * x + torch.log(_lam)

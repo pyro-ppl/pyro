@@ -13,7 +13,13 @@ class ParamStoreDict(object):
 
     def get_param(self, name, init_tensor=None):
         """
-        Return named parameters from the global store
+        :param name: parameter name
+        :type name: str
+        :param init_tensor: initial tensor
+        :returns: parameter
+
+        Get parameter from its name. If it does not yet exist in the
+        param store, it will be created and stored
         """
         # make sure the param exists in our group
         if name not in self._params:
@@ -23,7 +29,6 @@ class ParamStoreDict(object):
 
             # a function
             if callable(init_tensor):
-                # self._params[name] = pyro.device(init_tensor())
                 self._params[name] = init_tensor()
             else:
                 # from the memory passed in
@@ -36,18 +41,34 @@ class ParamStoreDict(object):
         return self._params[name]
 
     def param_name(self, p):
+        """
+        :param p: parameter
+        :returns: parameter name
+
+        Get parameter name from parameter
+        """
         if p not in self._param_to_name:
             return None
 
         return self._param_to_name[p]
 
-    # save to file
     def save(self, filename):
+        """
+        :param filename: file name to save to
+        :type name: str
+
+        Save parameters to disk
+        """
         with open(filename, "wb") as output_file:
             output_file.write(cloudpickle.dumps(self._params))
 
-    # load from file
     def load(self, filename):
+        """
+        :param filename: file name to load from
+        :type name: str
+
+        Loads parameters from disk
+        """
         with open(filename, "rb") as input_file:
             loaded_params = cloudpickle.loads(input_file.read())
             for param_name, param in loaded_params.items():
