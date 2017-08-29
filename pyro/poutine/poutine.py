@@ -50,30 +50,6 @@ class Poutine(object):
         """
         return r_val
 
-    def _dispatch(self, site_type, _ret, name, *args, **kwargs):
-        """
-        The dispatcher that gets put into _PYRO_STACK
-        """
-        ret = getattr(self, "_pyro_" + site_type)(_ret, name, *args, **kwargs)
-        barrier = self._block_stack(site_type, name)
-        return ret, barrier
-
-    # def up(self, msg):
-    #     """
-    #     The dispatcher that gets put into _PYRO_STACK
-    #     """
-    #     ret = getattr(self, "_pyro_" + site_type)(_ret, name, *args, **kwargs)
-    #     barrier = self._block_stack(site_type, name)
-    #     return ret, barrier
-
-    # def down(self, msg):
-    #     """
-    #     The dispatcher that gets put into _PYRO_STACK
-    #     """
-    #     ret = getattr(self, "_pyro_" + site_type)(_ret, name, *args, **kwargs)
-    #     barrier = self._block_stack(site_type, name)
-    #     return ret, barrier
-
     def _block_stack(self, site_type, name):
         """
         Default behavior for stack-blocking:
@@ -81,12 +57,53 @@ class Poutine(object):
         """
         return False
 
+    def up(self, msg):
+        """
+        The dispatcher that gets put into _PYRO_STACK
+        """
+        # TODO can probably condense this logic, keeping explicit for now
+        if msg["type"] == "sample":
+            ret = self._pyro_sample(msg["ret"], msg["name"],
+                                    msg["fn"],
+                                    *msg["args"], **msg["kwargs"])
+            new_msg = msg.copy()
+            new_msg.update({"ret": ret})
+        elif msg["type"] == "observe":
+            ret = self._pyro_observe(msg["ret"], msg["name"],
+                                     msg["fn"], msg["val"],
+                                     *msg["args"], **msg["kwargs"])
+            new_msg = msg.copy()
+            new_msg.update({"ret": ret})
+        elif msg["type"] == "param":
+            ret = self._pyro_param(msg["ret"], msg["name"],
+                                   *msg["args"], **msg["kwargs"])
+            new_msg = msg.copy()
+            new_msg.update({"ret": ret})
+        elif msg["type"] == "map_data":
+            ret = self._pyro_map_data(msg["ret"], msg["name"],
+                                      msg["data"], msg["fn"], msg["batch_size"])
+            new_msg = msg.copy()
+            new_msg.update({"ret": ret})
+        else:
+            raise ValueError(
+                "{} is an invalid site type, how did that get there?".format(msg["type"]))
+
+        barrier = self._block_stack(msg["type"], msg["name"])
+        return new_msg, barrier
+
+    def down(self, msg):
+        """
+        The dispatcher that gets put into _PYRO_STACK
+        """
+        return msg, False
+
     def _push_stack(self):
         """
         Store the current stack of pyro functions, push this class model fcts
         """
-        if not (self._dispatch in pyro._PYRO_STACK):
-            pyro._PYRO_STACK.insert(0, self._dispatch)
+        if not (self in pyro._PYRO_STACK):
+            # pyro._PYRO_STACK.insert(0, self._dispatch)
+            pyro._PYRO_STACK.insert(0, self)
         else:
             raise ValueError("cannot install a Poutine instance twice")
 
@@ -94,7 +111,7 @@ class Poutine(object):
         """
         Reset global pyro attributes to the previously recorded fcts
         """
-        if pyro._PYRO_STACK[0] == self._dispatch:
+        if pyro._PYRO_STACK[0] == self:
             pyro._PYRO_STACK.pop(0)
         else:
             raise ValueError("This Poutine is not on top of the stack")
@@ -104,8 +121,8 @@ class Poutine(object):
         Find our dispatcher in the stack, then remove it and everything below it
         Needed for exception handling
         """
-        if self._dispatch in pyro._PYRO_STACK:
-            loc = pyro._PYRO_STACK.index(self._dispatch)
+        if self in pyro._PYRO_STACK:
+            loc = pyro._PYRO_STACK.index(self)
             for i in range(0, loc + 1):
                 pyro._PYRO_STACK.pop(0)
 
