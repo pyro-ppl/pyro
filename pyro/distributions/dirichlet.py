@@ -32,7 +32,7 @@ class Dirichlet(Distribution):
         self.alpha = alpha
         if alpha is not None:
             if alpha.dim() == 1:
-                self.alpha = alpha.expand(batch_size, 0)
+                self.alpha = alpha.expand(batch_size, alpha.size(0))
         self.reparameterized = False
         super(Dirichlet, self).__init__(*args, **kwargs)
 

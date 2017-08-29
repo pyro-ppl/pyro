@@ -31,7 +31,7 @@ class Delta(Distribution):
         self.v = v
         if v is not None:
             if v.dim() == 1 and batch_size > 1:
-                self.v = v.expand(v, 0)
+                self.v = v.expand(v, v.size(0))
         super(Delta, self).__init__(*args, **kwargs)
 
     def sample(self, v=None, *args, **kwargs):
@@ -43,7 +43,7 @@ class Delta(Distribution):
     def batch_log_pdf(self, x, v=None, batch_size=1, *args, **kwargs):
         _v = self._sanitize_input(v)
         if x.dim == 1:
-            x = x.expand(batch_size, 0)
+            x = x.expand(batch_size, x.size(0))
         return (torch.eq(x, _v.expand_as(x)) - 1).float() * 999999
 
     def log_pdf(self, x, v=None, *args, **kwargs):

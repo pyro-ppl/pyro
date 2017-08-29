@@ -180,7 +180,6 @@ class TestCategorical(TestCase):
         self.ps = Variable(torch.Tensor([0.1, 0.6, 0.3]))
         self.batch_ps = Variable(torch.Tensor([[0.1, 0.6, 0.3], [0.2, 0.4, 0.4]]))
         self.n = Variable(torch.Tensor([n]))
-#         self.test_data = Variable(torch.Tensor([0, 0, 1, 1, 2, 1, 1, 2]))
         self.test_data = Variable(torch.Tensor([0, 1, 0]))
         self.test_data_nhot = Variable(torch.Tensor([2]))
         self.analytic_mean = n * self.ps
@@ -209,7 +208,6 @@ class TestCategorical(TestCase):
                                                       self.ps,
                                                       one_hot=False,
                                                       batch_size=1).data[0][0]
-        # log_px_torch = self.dist_nhot.batch_log_pdf(self.test_data_nhot).data[0][0]
         log_px_np = float(spr.multinomial.logpmf(np.array([0, 0, 1]), 1, self.ps.data.numpy()))
         self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
 

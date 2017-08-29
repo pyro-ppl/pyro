@@ -35,8 +35,8 @@ class LogNormal(Distribution):
             if mu.dim() != sigma.dim():
                 raise ValueError("Mu and sigma need to have the same dimensions.")
             elif mu.dim() == 1:
-                self.mu = mu.unsqueeze(0).expand(batch_size, 0)
-                self.sigma = sigma.unsqueeze(0).expand(batch_size, 0)
+                self.mu = mu.expand(batch_size, mu.size(0))
+                self.sigma = sigma.expand(batch_size, sigma.size(0))
         super(LogNormal, self).__init__(*args, **kwargs)
         self.reparameterized = True
 

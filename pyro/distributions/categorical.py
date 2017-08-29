@@ -47,9 +47,9 @@ class Categorical(Distribution):
                 if isinstance(vs, Variable):
                     vs = vs.unsqueeze(0)
             elif batch_size > 1:
-                ps = ps.unsqueeze(0).expand(batch_size, 0)
+                ps = ps.expand(batch_size, ps.size(0))
                 if isinstance(vs, Variable):
-                    vs = vs.unsqueeze(0).expand(batch_size, 0)
+                    vs = vs.expand(batch_size, vs.size(0))
         return ps, vs
 
     def __init__(self, ps=None, vs=None, one_hot=True, batch_size=1, *args, **kwargs):
