@@ -19,7 +19,6 @@ class ScalePoutine(Poutine):
         """
         self.scale = scale
         super(ScalePoutine, self).__init__(fn)
-        self.transparent = False
 
     def _pyro_sample(self, msg, name, fn, *args, **kwargs):
         """

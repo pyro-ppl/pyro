@@ -26,7 +26,6 @@ class QueuePoutine(Poutine):
         All persistent state is in the queue.
         """
         super(QueuePoutine, self).__init__(fn)
-        self.transparent = False
         if queue is None:
             queue = Queue()
             queue.put(pyro.poutine.Trace())

@@ -14,7 +14,6 @@ class Poutine(object):
         """
         # store original fn to wrap
         self.orig_fct = fn
-        self.transparent = True
 
     def __call__(self, *args, **kwargs):
         """
@@ -171,7 +170,7 @@ class Poutine(object):
         Default pyro.sample Poutine behavior
         """
         prev_val = msg["ret"]
-        if self.transparent and prev_val is not None:
+        if prev_val is not None:
             return prev_val
         val = fn(*args, **kwargs)
         return val
@@ -181,7 +180,7 @@ class Poutine(object):
         Default pyro.observe Poutine behavior
         """
         prev_val = msg["ret"]
-        if self.transparent and not (prev_val is None):
+        if prev_val is not None:
             return prev_val
         if obs is None:
             return fn(*args, **kwargs)
@@ -192,7 +191,7 @@ class Poutine(object):
         Default pyro.map_data Poutine behavior
         """
         prev_val = msg["ret"]
-        if self.transparent and not (prev_val is None):
+        if prev_val is not None:
             return prev_val
         else:
             if batch_size is None:
@@ -215,6 +214,6 @@ class Poutine(object):
         overload pyro.param call
         """
         prev_val = msg["ret"]
-        if self.transparent and prev_val is not None:
+        if prev_val is not None:
             return prev_val
         return pyro._param_store.get_param(name, *args, **kwargs)

@@ -14,7 +14,6 @@ class ReplayPoutine(Poutine):
         Constructor.
         """
         super(ReplayPoutine, self).__init__(fn)
-        self.transparent = False
         assert guide_trace is not None, "must provide guide_trace"
         self.guide_trace = guide_trace
         # case 1: no sites
