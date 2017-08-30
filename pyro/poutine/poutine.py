@@ -69,24 +69,24 @@ class Poutine(object):
         """
         # TODO can probably condense this logic, keeping explicit for now
         if msg["type"] == "sample":
-            ret = self._pyro_sample(msg["ret"], msg["name"],
+            ret = self._pyro_sample(msg, msg["name"],
                                     msg["fn"],
                                     *msg["args"], **msg["kwargs"])
             new_msg = msg.copy()
             new_msg.update({"ret": ret})
         elif msg["type"] == "observe":
-            ret = self._pyro_observe(msg["ret"], msg["name"],
+            ret = self._pyro_observe(msg, msg["name"],
                                      msg["fn"], msg["val"],
                                      *msg["args"], **msg["kwargs"])
             new_msg = msg.copy()
             new_msg.update({"ret": ret})
         elif msg["type"] == "param":
-            ret = self._pyro_param(msg["ret"], msg["name"],
+            ret = self._pyro_param(msg, msg["name"],
                                    *msg["args"], **msg["kwargs"])
             new_msg = msg.copy()
             new_msg.update({"ret": ret})
         elif msg["type"] == "map_data":
-            ret = self._pyro_map_data(msg["ret"], msg["name"],
+            ret = self._pyro_map_data(msg, msg["name"],
                                       msg["data"], msg["fn"], msg["batch_size"])
             new_msg = msg.copy()
             new_msg.update({"ret": ret})
@@ -166,29 +166,32 @@ class Poutine(object):
 
         return scale, ind, ind_data
 
-    def _pyro_sample(self, prev_val, name, fn, *args, **kwargs):
+    def _pyro_sample(self, msg, name, fn, *args, **kwargs):
         """
         Default pyro.sample Poutine behavior
         """
+        prev_val = msg["ret"]
         if self.transparent and prev_val is not None:
             return prev_val
         val = fn(*args, **kwargs)
         return val
 
-    def _pyro_observe(self, prev_val, name, fn, obs, *args, **kwargs):
+    def _pyro_observe(self, msg, name, fn, obs, *args, **kwargs):
         """
         Default pyro.observe Poutine behavior
         """
+        prev_val = msg["ret"]
         if self.transparent and not (prev_val is None):
             return prev_val
         if obs is None:
             return fn(*args, **kwargs)
         return obs
 
-    def _pyro_map_data(self, prev_val, name, data, fn, batch_size):
+    def _pyro_map_data(self, msg, name, data, fn, batch_size):
         """
         Default pyro.map_data Poutine behavior
         """
+        prev_val = msg["ret"]
         if self.transparent and not (prev_val is None):
             return prev_val
         else:
@@ -207,10 +210,11 @@ class Poutine(object):
                 setattr(fn, "__map_data_scale", scale)
             return ret
 
-    def _pyro_param(self, prev_val, name, *args, **kwargs):
+    def _pyro_param(self, msg, name, *args, **kwargs):
         """
         overload pyro.param call
         """
+        prev_val = msg["ret"]
         if self.transparent and prev_val is not None:
             return prev_val
         return pyro._param_store.get_param(name, *args, **kwargs)

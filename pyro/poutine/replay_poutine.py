@@ -38,7 +38,7 @@ class ReplayPoutine(Poutine):
         """
         return msg, True
 
-    def _pyro_sample(self, prev_val, name, fn, *args, **kwargs):
+    def _pyro_sample(self, msg, name, fn, *args, **kwargs):
         """
         Return the sample in the guide trace when appropriate
         """
@@ -57,7 +57,7 @@ class ReplayPoutine(Poutine):
             raise ValueError(
                 "something went wrong with replay conditions at site " + name)
 
-    def _pyro_map_data(self, prev_val, name, data, fn, batch_size=None):
+    def _pyro_map_data(self, msg, name, data, fn, batch_size=None):
         """
         Use the batch indices from the guide trace
         """
@@ -72,6 +72,6 @@ class ReplayPoutine(Poutine):
             fn.__map_data_scale = self.guide_trace[name]["scale"]
             fn.__map_data_indices = self.guide_trace[name]["indices"]
 
-        ret = super(ReplayPoutine, self)._pyro_map_data(prev_val, name, data, fn,
+        ret = super(ReplayPoutine, self)._pyro_map_data(msg, name, data, fn,
                                                         batch_size=batch_size)
         return ret

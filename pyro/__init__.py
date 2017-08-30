@@ -124,7 +124,34 @@ def map_data(name, data, fn, batch_size=None):
     current map_data interface
     """
     if len(_PYRO_STACK) == 0:
-        return [fn(i, datum) for i, datum in enumerate(data)]
+        # default behavior
+        if isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
+            if batch_size > 0:
+                if not hasattr(fn, "__map_data_indices"):
+                    scale = float(data.size(0)) / float(batch_size)
+                    ind = Variable(torch.randperm(data.size(0))[0:batch_size])
+                ind_data = data.index_select(0, ind)
+            else:
+                # if batch_size == 0, don't index (saves time/space)
+                scale = 1.0
+                ind = Variable(torch.range(data.size(0)))
+                ind_data = data
+        else:
+            # if batch_size > 0, select a random set of indices and store it
+            if batch_size > 0 and not hasattr(fn, "__map_data_indices"):
+                ind = torch.randperm(len(data))[0:batch_size].numpy().tolist()
+                scale = float(len(data)) / float(batch_size)
+                ind_data = [data[i] for i in ind]
+            else:
+                ind = list(range(len(data)))
+                scale = 1.0
+                ind_data = data
+
+        if isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
+            ret = fn(ind, ind_data)
+        else:
+            ret = list(map(lambda ix: fn(*ix), enumerate(ind_data)))
+        return ret
     else:
         # initialize data structure to pass up/down the stack
         msg = {

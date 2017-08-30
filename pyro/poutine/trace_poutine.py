@@ -21,21 +21,21 @@ class ScalePoutine(Poutine):
         super(ScalePoutine, self).__init__(fn)
         self.transparent = False
 
-    def _pyro_sample(self, prev_val, name, fn, *args, **kwargs):
+    def _pyro_sample(self, msg, name, fn, *args, **kwargs):
         """
         Rescale the scorer of the stochastic function passed to sample
         """
         pyro.util.rescale_dist_inplace(fn, self.scale)
         return super(ScalePoutine, self)._pyro_sample(
-            prev_val, name, fn, *args, **kwargs)
+            msg, name, fn, *args, **kwargs)
 
-    def _pyro_observe(self, prev_val, name, fn, obs, *args, **kwargs):
+    def _pyro_observe(self, msg, name, fn, obs, *args, **kwargs):
         """
         Rescale the scorer of the stochastic function passed to observe
         """
         pyro.util.rescale_dist_inplace(fn, self.scale)
         return super(ScalePoutine, self)._pyro_observe(
-            prev_val, name, fn, obs, *args, **kwargs)
+            msg, name, fn, obs, *args, **kwargs)
 
 
 class TracePoutine(Poutine):
@@ -64,7 +64,7 @@ class TracePoutine(Poutine):
         self.trace.add_return(ret_val, *args, **kwargs)
         return self.trace
 
-    def _pyro_sample(self, prev_val, name, dist, *args, **kwargs):
+    def _pyro_sample(self, msg, name, dist, *args, **kwargs):
         """
         sample
         TODO docs
@@ -76,12 +76,12 @@ class TracePoutine(Poutine):
             self._enter_poutine(*self.trace["_INPUT"]["args"][0],
                                 **self.trace["_INPUT"]["args"][1])
 
-        val = super(TracePoutine, self)._pyro_sample(prev_val, name, dist,
+        val = super(TracePoutine, self)._pyro_sample(msg, name, dist,
                                                      *args, **kwargs)
         self.trace.add_sample(name, val, dist, *args, **kwargs)
         return val
 
-    def _pyro_observe(self, prev_val, name, fn, obs, *args, **kwargs):
+    def _pyro_observe(self, msg, name, fn, obs, *args, **kwargs):
         """
         observe
         TODO docs
@@ -95,31 +95,31 @@ class TracePoutine(Poutine):
             self._enter_poutine(*self.trace["_INPUT"]["args"][0],
                                 **self.trace["_INPUT"]["args"][1])
 
-        val = super(TracePoutine, self)._pyro_observe(prev_val, name, fn, obs,
+        val = super(TracePoutine, self)._pyro_observe(msg, name, fn, obs,
                                                       *args, **kwargs)
         self.trace.add_observe(name, val, fn, obs, *args, **kwargs)
         return val
 
-    def _pyro_param(self, prev_val, name, *args, **kwargs):
+    def _pyro_param(self, msg, name, *args, **kwargs):
         """
         param
         TODO docs
         Expected behavior:
         TODO
         """
-        retrieved = super(TracePoutine, self)._pyro_param(prev_val, name,
+        retrieved = super(TracePoutine, self)._pyro_param(msg, name,
                                                           *args, **kwargs)
         self.trace.add_param(name, retrieved, *args, **kwargs)
         return retrieved
 
-    def _pyro_map_data(self, prev_val, name, data, fn, batch_size=None):
+    def _pyro_map_data(self, msg, name, data, fn, batch_size=None):
         """
         Trace map_data
         """
         # pdb.set_trace()
         scale, ind, ind_data = self._get_scale(fn, data, batch_size)
         scaled_fn = ScalePoutine(fn, scale)
-        ret = super(TracePoutine, self)._pyro_map_data(prev_val, name,
+        ret = super(TracePoutine, self)._pyro_map_data(msg, name,
                                                        data, scaled_fn,
                                                        # XXX watch out for changing
                                                        batch_size=batch_size)

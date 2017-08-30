@@ -66,7 +66,7 @@ class QueuePoutine(Poutine):
         self.guide_trace = None  # XXX what to put here?
         return r_val
 
-    def _pyro_sample(self, prev_val, name, fn, *args, **kwargs):
+    def _pyro_sample(self, msg, name, fn, *args, **kwargs):
         """
         Return the sample in the guide trace when appropriate
         """
