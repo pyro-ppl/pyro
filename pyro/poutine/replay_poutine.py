@@ -3,6 +3,7 @@ import torch
 
 from pyro.poutine import Trace
 from .poutine import Poutine
+from .scale_poutine import ScalePoutine
 
 
 class ReplayPoutine(Poutine):
@@ -31,11 +32,11 @@ class ReplayPoutine(Poutine):
             raise TypeError(
                 "unrecognized type {} for sites".format(str(type(sites))))
 
-    def down(self, msg):
-        """
-        dont keep going down, we dont need the randomness from below
-        """
-        return msg, True
+    # def down(self, msg):
+    #     """
+    #     dont keep going down, we dont need the randomness from below
+    #     """
+    #     return msg, True
 
     def _pyro_sample(self, msg, name, fn, *args, **kwargs):
         """
@@ -51,7 +52,7 @@ class ReplayPoutine(Poutine):
             return self.guide_trace[g_name]["value"]
         # case 2: dict, negative: sample from model
         elif name not in self.sites:
-            return fn(*args, **kwargs)
+            return super(ReplayPoutine, self)._pyro_sample(msg, name, fn, *args, **kwargs)
         else:
             raise ValueError(
                 "something went wrong with replay conditions at site " + name)
@@ -67,10 +68,11 @@ class ReplayPoutine(Poutine):
         if name in self.guide_trace:
             assert self.guide_trace[name]["type"] == "map_data", \
                 name + " is not a map_data in the guide_trace"
-            batch_size = self.guide_trace[name]["batch_size"]
-            fn.__map_data_scale = self.guide_trace[name]["scale"]
-            fn.__map_data_indices = self.guide_trace[name]["indices"]
+            msg["scale"] = self.guide_trace[name]["scale"]
+            msg["indices"] = self.guide_trace[name]["indices"]
+            msg["batch_size"] = self.guide_trace[name]["batch_size"]
 
-        ret = super(ReplayPoutine, self)._pyro_map_data(msg, name, data, fn,
-                                                        batch_size=batch_size)
+        ret = super(ReplayPoutine, self)._pyro_map_data(msg, name, data,
+                                                        ScalePoutine(fn, msg["scale"]),
+                                                        batch_size=msg["batch_size"])
         return ret

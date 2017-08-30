@@ -90,6 +90,7 @@ def sample(name, fn, *args, **kwargs):
             "args": args,
             "kwargs": kwargs,
             "ret": None,
+            "scale": 1.0,
         }
         # apply the stack and return its return value
         out_msg = apply_stack(msg)
@@ -113,6 +114,7 @@ def observe(name, fn, val, *args, **kwargs):
             "args": args,
             "kwargs": kwargs,
             "ret": None,
+            "scale": 1.0,
         }
         # apply the stack and return its return value
         out_msg = apply_stack(msg)
@@ -155,7 +157,7 @@ def map_data(name, data, fn, batch_size=None):
     else:
         # initialize data structure to pass up/down the stack
         msg = {
-            "type": "sample",
+            "type": "map_data",
             "name": name,
             "fn": fn,
             "data": data,

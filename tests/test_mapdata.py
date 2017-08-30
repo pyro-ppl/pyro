@@ -36,14 +36,9 @@ class NormalNormalTests(TestCase):
         self.verbose = True
 
     def test_elbo_reparameterized(self):
-        # for batch_size in [1, 2, 4, 8]:
-        for batch_size in [1]:
-            self.do_elbo_test(True, 1, batch_size, explicit_map=False)
-            # self.do_elbo_test(True, 2000, batch_size, explicit_map=True)
-
-    # FIXME
-    # def test_elbo_nonreparameterized(self):
-    #     self.do_elbo_test(False, 15000)
+        for batch_size in [7, 6, 4, 2, 1, 8, 0]:
+            self.do_elbo_test(True, 5000, batch_size, explicit_map=False)
+        self.do_elbo_test(True, 2000, 0, explicit_map=True)
 
     def do_elbo_test(self, reparameterized, n_steps, batch_size, explicit_map):
         if self.verbose:

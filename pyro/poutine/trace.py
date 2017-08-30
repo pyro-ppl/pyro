@@ -1,4 +1,5 @@
 import pyro
+import pdb
 
 
 def get_parents(node, trace):
@@ -13,20 +14,21 @@ class Trace(dict):
     """
     Execution trace data structure
     """
-    def add_sample(self, name, sample, fn, *args, **kwargs):
+    def add_sample(self, name, scale, val, fn, *args, **kwargs):
         """
         Sample site
         """
         assert name not in self, "sample {} already in trace".format(name)
         site = {}
         site["type"] = "sample"
-        site["value"] = sample
+        site["value"] = val
         site["fn"] = fn
         site["args"] = (args, kwargs)
+        site["scale"] = scale
         self[name] = site
         return self
 
-    def add_observe(self, name, val, fn, obs, *args, **kwargs):
+    def add_observe(self, name, scale, val, fn, obs, *args, **kwargs):
         """
         Observe site
         """
@@ -37,6 +39,7 @@ class Trace(dict):
         site["fn"] = fn
         site["obs"] = obs
         site["args"] = (args, kwargs)
+        site["scale"] = scale
         self[name] = site
         return self
 
@@ -107,8 +110,11 @@ class Trace(dict):
                 self[name]["log_pdf"] = self[name]["fn"].log_pdf(
                     self[name]["value"],
                     *self[name]["args"][0],
-                    **self[name]["args"][1])
+                    **self[name]["args"][1]) * self[name]["scale"]
                 log_p += self[name]["log_pdf"]
+                # if self[name]["scale"] == 1.0:
+                #     print(name, self[name]["scale"])
+                #     pdb.set_trace()
         return log_p
 
     def batch_log_pdf(self):
@@ -121,6 +127,6 @@ class Trace(dict):
                 self[name]["batch_log_pdf"] = self[name]["fn"].batch_log_pdf(
                     self[name]["value"],
                     *self[name]["args"][0],
-                    **self[name]["args"][1])
+                    **self[name]["args"][1]) * self[name]["scale"]
                 log_p += self[name]["batch_log_pdf"]
         return log_p

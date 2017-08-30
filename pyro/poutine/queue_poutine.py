@@ -79,7 +79,8 @@ class QueuePoutine(Poutine):
             extended_traces = []
             for s in fn.support(*args, **kwargs):
                 extended_traces.append(
-                    self.guide_trace.copy().add_sample(name, s, fn, *args, **kwargs))
+                    self.guide_trace.copy().add_sample(name, msg["scale"], s, fn,
+                                                       *args, **kwargs))
             raise ReturnExtendedTraces(extended_traces)
         else:
             raise ValueError("should never get here (malfunction at site {})".format(name))

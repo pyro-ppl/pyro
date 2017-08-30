@@ -3,38 +3,8 @@ import torch
 from torch.autograd import Variable
 
 from .poutine import Poutine
+from .scale_poutine import ScalePoutine
 from pyro.poutine import Trace
-import pdb
-
-
-class ScalePoutine(Poutine):
-    """
-    score-rescaling Poutine
-    Subsampling means we have to rescale pdfs inside map_data
-    This poutine handles the rescaling because it wouldn't fit in Poutine
-    """
-    def __init__(self, fn, scale):
-        """
-        Constructor
-        """
-        self.scale = scale
-        super(ScalePoutine, self).__init__(fn)
-
-    def _pyro_sample(self, msg, name, fn, *args, **kwargs):
-        """
-        Rescale the scorer of the stochastic function passed to sample
-        """
-        pyro.util.rescale_dist_inplace(fn, self.scale)
-        return super(ScalePoutine, self)._pyro_sample(
-            msg, name, fn, *args, **kwargs)
-
-    def _pyro_observe(self, msg, name, fn, obs, *args, **kwargs):
-        """
-        Rescale the scorer of the stochastic function passed to observe
-        """
-        pyro.util.rescale_dist_inplace(fn, self.scale)
-        return super(ScalePoutine, self)._pyro_observe(
-            msg, name, fn, obs, *args, **kwargs)
 
 
 class TracePoutine(Poutine):
@@ -77,7 +47,7 @@ class TracePoutine(Poutine):
 
         val = super(TracePoutine, self)._pyro_sample(msg, name, dist,
                                                      *args, **kwargs)
-        self.trace.add_sample(name, val, dist, *args, **kwargs)
+        self.trace.add_sample(name, msg["scale"], val, dist, *args, **kwargs)
         return val
 
     def _pyro_observe(self, msg, name, fn, obs, *args, **kwargs):
@@ -96,7 +66,7 @@ class TracePoutine(Poutine):
 
         val = super(TracePoutine, self)._pyro_observe(msg, name, fn, obs,
                                                       *args, **kwargs)
-        self.trace.add_observe(name, val, fn, obs, *args, **kwargs)
+        self.trace.add_observe(name, msg["scale"], val, fn, obs, *args, **kwargs)
         return val
 
     def _pyro_param(self, msg, name, *args, **kwargs):
@@ -115,22 +85,16 @@ class TracePoutine(Poutine):
         """
         Trace map_data
         """
-        # pdb.set_trace()
-        scale, ind, ind_data = self._get_scale(fn, data, batch_size)
-        scaled_fn = ScalePoutine(fn, scale)
+        if msg["scale"] is None and msg["indices"] is None:
+            scale, ind = self._get_scale(data, batch_size)
+            msg["scale"] = scale
+            msg["indices"] = ind
+        # print(msg["scale"])
+        scaled_fn = ScalePoutine(fn, msg["scale"])
         ret = super(TracePoutine, self)._pyro_map_data(msg, name,
                                                        data, scaled_fn,
                                                        # XXX watch out for changing
                                                        batch_size=batch_size)
-        # store the indices, batch_size, and scaled function in a site
-        # XXX does not store input or output values due to space constraints - beware!
-        assert hasattr(scaled_fn, "__map_data_indices"), "fn has no __map_data_indices?"
-        assert hasattr(scaled_fn, "__map_data_scale"), "fn has no __map_data_scale?"
-        if not hasattr(fn, "__map_data_indices"):
-            setattr(fn, "__map_data_indices", getattr(scaled_fn, "__map_data_indices"))
-            setattr(fn, "__map_data_scale", getattr(scaled_fn, "__map_data_scale"))
 
-        self.trace.add_map_data(name, fn, batch_size,
-                                getattr(fn, "__map_data_scale"),
-                                getattr(fn, "__map_data_indices"))
+        self.trace.add_map_data(name, fn, batch_size, msg["scale"], msg["indices"])
         return ret

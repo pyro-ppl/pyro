@@ -131,39 +131,29 @@ class Poutine(object):
             for i in range(0, loc + 1):
                 pyro._PYRO_STACK.pop(0)
 
-    def _get_scale(self, fn, data, batch_size):
+    def _get_scale(self, data, batch_size):
         """
         Compute scale and batch indices used for subsampling in map_data
         Weirdly complicated because of type ambiguity
         """
-        if hasattr(fn, "__map_data_indices") and \
-           hasattr(fn, "__map_data_scale"):
-            ind = getattr(fn, "__map_data_indices")
-            scale = getattr(fn, "__map_data_scale")
-
         if isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
             if batch_size > 0:
-                if not hasattr(fn, "__map_data_indices"):
-                    scale = float(data.size(0)) / float(batch_size)
-                    ind = Variable(torch.randperm(data.size(0))[0:batch_size])
-                ind_data = data.index_select(0, ind)
+                scale = float(data.size(0)) / float(batch_size)
+                ind = Variable(torch.randperm(data.size(0))[0:batch_size])
             else:
                 # if batch_size == 0, don't index (saves time/space)
                 scale = 1.0
                 ind = Variable(torch.range(data.size(0)))
-                ind_data = data
         else:
             # if batch_size > 0, select a random set of indices and store it
-            if batch_size > 0 and not hasattr(fn, "__map_data_indices"):
+            if batch_size > 0:
                 ind = torch.randperm(len(data))[0:batch_size].numpy().tolist()
                 scale = float(len(data)) / float(batch_size)
-                ind_data = [data[i] for i in ind]
             else:
                 ind = list(range(len(data)))
                 scale = 1.0
-                ind_data = data
 
-        return scale, ind, ind_data
+        return scale, ind
 
     def _pyro_sample(self, msg, name, fn, *args, **kwargs):
         """
@@ -197,16 +187,24 @@ class Poutine(object):
             if batch_size is None:
                 batch_size = 0
             assert batch_size >= 0, "cannot have negative batch sizes"
-            scale, ind, ind_data = self._get_scale(fn, data, batch_size)
+            if msg["scale"] is None and msg["indices"] is None:
+                scale, ind = self._get_scale(fn, data, batch_size)
+                msg["scale"] = scale
+                msg["indices"] = ind
 
             if isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
-                ret = fn(ind, ind_data)
+                if batch_size > 0:
+                    ind_data = data.index_select(0, msg["indices"])
+                else:
+                    ind_data = data
+                ret = fn(msg["indices"], ind_data)
             else:
+                if batch_size > 0:
+                    ind_data = [data[i] for i in msg["indices"]]
+                else:
+                    ind_data = data
                 ret = list(map(lambda ix: fn(*ix), enumerate(ind_data)))
-            # XXX is there a more elegant way to move indices up the stack?
-            if not hasattr(fn, "__map_data_indices"):
-                setattr(fn, "__map_data_indices", ind)
-                setattr(fn, "__map_data_scale", scale)
+
             return ret
 
     def _pyro_param(self, msg, name, *args, **kwargs):
