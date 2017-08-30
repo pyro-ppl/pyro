@@ -127,3 +127,9 @@ def module(pyro_name, nn_obj):
         raise KeyError('missing keys in state_dict: "{}"'.format(missing))
 
     return nn_obj
+
+def random_module(pyro_name, module, prior, *args, **kwargs):
+    assert hasattr(module, "parameters"), "Module is not a NN module."
+    def _fn():
+        return poutine,lift(pyro_name, module, prior, *args, **kwargs)
+    return _fn

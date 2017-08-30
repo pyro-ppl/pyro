@@ -7,7 +7,7 @@ from .block_poutine import BlockPoutine
 from .trace_poutine import TracePoutine
 from .replay_poutine import ReplayPoutine
 from .queue_poutine import QueuePoutine
-
+from .lift_poutine import LiftPoutine
 
 ############################################
 # Begin primitive operations
@@ -57,6 +57,18 @@ def block(fn, hide=None, expose=None, hide_types=None, expose_types=None):
         return p(*args, **kwargs)
     return _fn
 
+
+def lift(fn, prior):
+     """
+     :param fn: stochastic function
+     :param prior: prior distribution
+     
+     "Converts" the params to random samples sampled from the prior
+     """
+     def _fn(*args, **kwargs):
+         p = LiftPoutine(fn, prior)
+         return p(*args, **kwargs)
+     return _fn
 
 def queue(fn, queue=None, max_tries=None):
     """
