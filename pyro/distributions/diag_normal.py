@@ -7,7 +7,14 @@ from pyro.distributions.distribution import Distribution
 
 class DiagNormal(Distribution):
     """
-    Diagonal covariance Normal
+    :param mu: mean *(tensor)*
+    :param sigma: standard deviations *(tensor (0, Infinity))*
+
+    A distribution over tensors in which each element is independent and
+    Gaussian distributed, with its own mean and standard deviation. i.e. A
+    multivariate Gaussian distribution with diagonal covariance matrix. The
+    distribution is over tensors that have the same shape as the parameters ``mu``
+    and ``sigma``, which in turn must have the same shape as each other.
     """
 
     def _sanitize_input(self, mu, sigma):
@@ -30,8 +37,8 @@ class DiagNormal(Distribution):
         self.sigma = sigma
         if mu is not None:
             if mu.dim() == 1 and batch_size > 1:
-                self.mu = mu.unsqueeze(0).expand(batch_size, mu.size(0))
-                self.sigma = sigma.unsqueeze(0).expand(batch_size, sigma.size(0))
+                self.mu = mu.expand(batch_size, mu.size(0))
+                self.sigma = sigma.expand(batch_size, sigma.size(0))
         super(DiagNormal, self).__init__(*args, **kwargs)
         self.reparameterized = True
 
@@ -42,6 +49,10 @@ class DiagNormal(Distribution):
         _mu, _sigma = self._sanitize_input(mu, sigma)
         eps = Variable(torch.randn(_mu.size()).type_as(_mu.data))
         z = _mu + eps * _sigma
+        if 'reparameterized' in kwargs:
+            self.reparameterized = kwargs['reparameterized']
+        if not self.reparameterized:
+            return Variable(z.data)
         return z
 
     def log_pdf(self, x, mu=None, sigma=None, batch_size=1, *args, **kwargs):

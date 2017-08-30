@@ -6,7 +6,11 @@ from pyro.distributions.distribution import Distribution
 
 class Multinomial(Distribution):
     """
-    Multinomial distribution
+    :param ps: probabilities *(real array with elements that sum to one)*
+    :param n: number of trials *(int (>=1))*
+
+    Distribution over counts for ``n`` independent ``Discrete({ps: ps})``
+    trials.
     """
     def _sanitize_input(self, ps, n):
         if ps is not None:
@@ -28,8 +32,8 @@ class Multinomial(Distribution):
         self.n = n
         if ps is not None:
             if ps.dim() == 1 and batch_size > 1:
-                self.ps = ps.unsqueeze(0).expand(batch_size, ps.size(0))
-                self.n = n.unsqueeze(0).expand(batch_size, n.size(0))
+                self.ps = ps.expand(batch_size, ps.size(0))
+                self.n = n.expand(batch_size, n.size(0))
         super(Multinomial, self).__init__(*args, **kwargs)
 
     def sample(self, ps=None, n=None, *args, **kwargs):
@@ -53,7 +57,7 @@ class Multinomial(Distribution):
         # FIXME: torch.split so tensor is differentiable
         _ps, _n = self._sanitize_input(ps, n)
         if x.dim() == 1:
-            x = x.expand(batch_size, 0)
+            x = x.expand(batch_size, x.size(0))
         out_arr = [[self._get_tensor(self.log_pdf([
                     x.narrow(0, ix, ix + 1),
                     _ps.narrow(0, ix, ix + 1)

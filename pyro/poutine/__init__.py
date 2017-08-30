@@ -8,6 +8,7 @@ from .trace_poutine import TracePoutine
 from .replay_poutine import ReplayPoutine
 from .queue_poutine import QueuePoutine
 from .scale_poutine import ScalePoutine
+from .tracegraph_poutine import TraceGraphPoutine
 
 
 ############################################
@@ -25,6 +26,13 @@ def trace(fn):
     """
     def _fn(*args, **kwargs):
         p = TracePoutine(fn)
+        return p(*args, **kwargs)
+    return _fn
+
+
+def tracegraph(fn, graph_output=None):
+    def _fn(*args, **kwargs):
+        p = TraceGraphPoutine(fn)
         return p(*args, **kwargs)
     return _fn
 

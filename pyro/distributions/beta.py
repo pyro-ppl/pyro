@@ -7,6 +7,9 @@ from pyro.util import log_gamma
 
 class Beta(Distribution):
     """
+    :param a: shape *(real (0, Infinity))*
+    :param b: shape *(real (0, Infinity))*
+
     Univariate beta distribution parameterized by alpha and beta
     """
 
@@ -32,8 +35,8 @@ class Beta(Distribution):
             if alpha.dim() != beta.dim():
                 raise ValueError("Alpha and beta need to have the same dimensions.")
             if alpha.dim() == 1 and beta.dim() == 1:
-                self.alpha = alpha.expand(batch_size, 0)
-                self.beta = beta.expand(batch_size, 0)
+                self.alpha = alpha.expand(batch_size, alpha.size(0))
+                self.beta = beta.expand(batch_size, beta.size(0))
             else:
                 self.alpha = alpha
                 self.beta = beta

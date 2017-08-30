@@ -19,10 +19,21 @@ _MODULE_NAMESPACE_DIVIDER = "$$$"
 
 
 def get_param_store():
+    """
+    Returns the param store
+    """
+
     return _param_store
 
 
 def device(x):
+    """
+    :param x: Pytorch tensor or Variable
+    :type: Pytorch Tensor
+    :returns: Pytorch tensor or Variable
+
+    Returns CUDATensor is CUDA is enabled
+    """
     if torch.cuda.is_available():
         return x.cuda()
     return x.cpu()
@@ -62,7 +73,6 @@ def apply_stack(initial_msg, stack=None):
         if stop:
             break
 
-    # pdb.set_trace()
     # go until time to stop?
     for j in range(i, len(stack)):
         msg, stop = stack[j].up(msg)
@@ -196,6 +206,10 @@ def param(name, *args, **kwargs):
 # for now default calls out to pyro.param -- which is handled by poutine
 def module(pyro_name, nn_obj):
     """
+    :param pyro_name: name of module
+    :param nn_obj: pytorch nn module
+    :returns: pytorch nn object
+
     Takes a pytorch nn module and registers its parameters with the param store.
     In conjunction with the param store save() and load() functionality, this
     allows the user to save and load nn modules
