@@ -23,8 +23,11 @@ class Trace(dict):
         site["value"] = sample
         site["fn"] = fn
         site["args"] = (args, kwargs)
-        if 'baseline_input' in kwargs:
-            site["baseline_input"] = kwargs['baseline_input']
+        site["nn_baseline"] = kwargs.get('nn_baseline', None)
+        site["nn_baseline_input"] = kwargs.get('nn_baseline_input', None)
+        site["use_decaying_avg_baseline"] = kwargs.get('use_decaying_avg_baseline', False)
+        site["baseline_beta"] = kwargs.get('baseline_beta', 0.90)
+
         self[name] = site
         return self
 

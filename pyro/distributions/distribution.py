@@ -10,9 +10,6 @@ class Distribution(object):
         Currently takes no explicit arguments.
         """
         self.reparameterized = False
-        self.baseline = kwargs.pop('baseline', None)
-        self.use_decaying_avg_baseline = kwargs.pop('use_decaying_avg_baseline', False)
-        self.baseline_beta = kwargs.pop('baseline_beta', 0.90)
 
     def __call__(self, *args, **kwargs):
         """

@@ -58,10 +58,6 @@ class TraceGraph_KL_QP(object):
         guide_trace.log_pdf(), model_trace.log_pdf()
 
         # prepare a list of all the cost nodes, each of which is +- log_pdf
-        # the parent information will be used below for rao-blackwellization
-        # also flag if term can be removed because its gradient has zero expectation
-        # XXX had to change get_parents -> get_ancestors below to accommodate coarser
-        # graph structure correctly : (
         cost_nodes = []
         non_reparam_nodes = set(guide_tracegraph.get_nonreparam_stochastic_nodes())
         for site in model_trace.keys():
@@ -77,9 +73,7 @@ class TraceGraph_KL_QP(object):
                 cost_node2 = (- guide_trace[site]["log_pdf"], not zero_expectation)
                 cost_nodes.extend([cost_node1, cost_node2])
 
-        elbo = 0.0
-        elbo_no_zero_expectation_terms = 0.0
-        elbo_reinforce_terms = 0.0
+        elbo, elbo_reinforce_terms, elbo_no_zero_expectation_terms = 0.0, 0.0, 0.0
 
         # compute the elbo; if all stochastic nodes are reparameterizable, we're done
         # this bit is never differentiated: it's here for getting an estimate of the elbo itself
@@ -97,7 +91,8 @@ class TraceGraph_KL_QP(object):
 
             # recursively compute downstream cost nodes for all sample sites in model and guide
             # (even though ultimately just need for non-reparameterizable sample sites)
-            # model observe sites (as well as terms that arise from the model and guide having different
+            # 1. downstream costs used for rao-blackwellization
+            # 2. model observe sites (as well as terms that arise from the model and guide having different
             # dependency structures) are taken care of via 'children_in_model' below
             topo_sort_guide_nodes = networkx.topological_sort(guide_tracegraph.get_graph(), reverse=True)
             downstream_guide_cost_nodes = {}
@@ -109,54 +104,54 @@ class TraceGraph_KL_QP(object):
                 for child in guide_tracegraph.get_children(node):
                     child_cost_nodes = downstream_guide_cost_nodes[child]
                     downstream_guide_cost_nodes[node].update(child_cost_nodes)
-                    if nodes_included_in_sum.isdisjoint(child_cost_nodes):
+                    if nodes_included_in_sum.isdisjoint(child_cost_nodes):  # avoid duplicates
                         downstream_costs[node] += downstream_costs[child]
                         nodes_included_in_sum.update(child_cost_nodes)
                 missing_downstream_costs = downstream_guide_cost_nodes[node] - nodes_included_in_sum
+                # include terms we missed because we had to avoid duplicates
                 for missing_node in missing_downstream_costs:
                     downstream_costs[node] += model_trace[missing_node]["log_pdf"] -\
                         guide_trace[missing_node]["log_pdf"]
 
-            # finish assembling complete downstream costs (may be missing terms from model)
-            # XXX can we cache some of the sums over children_in_model to make things
-            # more efficient??
+            # finish assembling complete downstream costs
+            # (the above computation may be missing terms from model)
+            # XXX can we cache some of the sums over children_in_model to make things more efficient?
             for site in non_reparam_nodes:
                 children_in_model = set()
                 for node in downstream_guide_cost_nodes[site]:
                     children_in_model.update(model_tracegraph.get_children(node))
-                children_in_model.difference_update(downstream_guide_cost_nodes[site])  # remove duplicates
+                # remove terms accounted for above
+                children_in_model.difference_update(downstream_guide_cost_nodes[site])
                 for child in children_in_model:
                     assert(model_trace[child]["type"] in ("sample", "observe"))
                     downstream_costs[site] += model_trace[child]["log_pdf"]
 
-            # if there are any non-reparameterized stochastic nodes,
-            # include all the reinforce-like terms.
+            # construct all the reinforce-like terms.
             # we include only downstream costs to reduce variance
-            # optionally include decaying average baseline to further reduce variance
+            # optionally include baselines to further reduce variance
             # XXX should the average baseline be in the param store as below?
             baseline_mses = []
             for node in non_reparam_nodes:
                 downstream_cost = downstream_costs[node]
-                use_decaying_avg_baseline = guide_trace[node]['fn'].use_decaying_avg_baseline
+                baseline = ng_zeros(1)
+                use_decaying_avg_baseline = guide_trace[node]['use_decaying_avg_baseline']
+                use_nn_baseline = guide_trace[node]['nn_baseline'] is not None
                 if use_decaying_avg_baseline:
-                    avg_downstream_cost_old = pyro.param("__baseline_avg_downstream_cost_" + node, ng_zeros(1))
-                    baseline_beta = guide_trace[node]['fn'].baseline_beta
-                if use_decaying_avg_baseline:
+                    avg_downstream_cost_old = pyro.param("__baseline_avg_downstream_cost_" + node,
+                                                         ng_zeros(1))
+                    baseline_beta = guide_trace[node]['baseline_beta']
                     avg_downstream_cost_new = (1 - baseline_beta) * downstream_cost +\
                         baseline_beta * avg_downstream_cost_old
                     avg_downstream_cost_old.data = avg_downstream_cost_new.data  # XXX copy_() ?
-                use_dependent_baseline = guide_trace[node]['fn'].baseline is not None
-                baseline = ng_zeros(1)
-                if use_decaying_avg_baseline:
                     baseline += avg_downstream_cost_old
-                if use_dependent_baseline:
-                    baseline_input = pyro.util.detach_iterable(guide_trace[node]['baseline_input'])
-                    baseline += guide_trace[node]['fn'].baseline(baseline_input)
-                if use_dependent_baseline or use_decaying_avg_baseline:
+                if use_nn_baseline:
+                    nn_baseline_input = detach_iterable(guide_trace[node]['nn_baseline_input'])
+                    baseline += guide_trace[node]['nn_baseline'](nn_baseline_input)
+                if use_nn_baseline or use_decaying_avg_baseline:
                     elbo_reinforce_terms += guide_trace[node]['log_pdf'] * \
-                        (Variable(downstream_cost.data) - baseline.detach())
-                    if use_dependent_baseline:
-                        nn_params = guide_trace[node]['fn'].baseline.parameters()
+                        (Variable(downstream_cost.data - baseline.data))
+                    if use_nn_baseline:
+                        nn_params = guide_trace[node]['nn_baseline'].parameters()
                         baseline_mse = torch.pow(Variable(downstream_cost.data) - baseline, 2.0)
                         baseline_mses.append((baseline_mse, nn_params))
                 else:

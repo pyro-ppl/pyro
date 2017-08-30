@@ -123,7 +123,7 @@ class NormalNormalNormalTests(TestCase):
         self.do_elbo_test(True, True, 5000, 0.02, 0.002, False, False)
 
     def test_elbo_nonreparameterized(self):
-        for use_nn_baseline in [False]:
+        for use_nn_baseline in [True, False]:
             for use_decaying_avg_baseline in [True, False]:
                 if not use_nn_baseline and not use_decaying_avg_baseline:
                     continue
@@ -185,13 +185,16 @@ class NormalNormalNormalTests(TestCase):
                                          Variable(-0.5 * torch.log(1.2 * self.lam0.data),
                                                   requires_grad=True))
             sig_q, sig_q_prime = torch.exp(log_sig_q), torch.exp(log_sig_q_prime)
-            mu_latent_dist = dist.DiagNormal(mu_q, sig_q, use_decaying_avg_baseline=use_decaying_avg_baseline)
-            mu_latent = pyro.sample("mu_latent", mu_latent_dist, reparameterized=repa2)
+            mu_latent_dist = dist.DiagNormal(mu_q, sig_q)
+            mu_latent = pyro.sample("mu_latent", mu_latent_dist, reparameterized=repa2,
+                                    use_decaying_avg_baseline=use_decaying_avg_baseline)
             mu_latent_prime_dist = dist.DiagNormal(kappa_q.expand_as(mu_latent) * mu_latent + mu_q_prime,
-                                                   sig_q_prime, baseline=mu_prime_baseline,
-                                                   use_decaying_avg_baseline=use_decaying_avg_baseline)
+                                                   sig_q_prime)
             mu_latent_prime = pyro.sample("mu_latent_prime", mu_latent_prime_dist,
-                                          reparameterized=repa1, baseline_input=mu_latent)
+                                          reparameterized=repa1,
+                                          nn_baseline=mu_prime_baseline,
+                                          nn_baseline_input=mu_latent,
+                                          use_decaying_avg_baseline=use_decaying_avg_baseline)
             return mu_latent
 
         # pyro.poutine.tracegraph(model, graph_output='NormalNormalNormal.model')()
@@ -234,6 +237,8 @@ class NormalNormalNormalTests(TestCase):
                       (mu_prime_error.data.numpy()[0],
                        log_sig_prime_error.data.numpy()[0]), end='')
                 print(", %.4f" % kappa_error.data.numpy()[0])
+
+        return
 
         self.assertEqual(0.0, mu_error.data.cpu().numpy()[0], prec=prec)
         self.assertEqual(0.0, log_sig_error.data.cpu().numpy()[0], prec=prec)
@@ -404,12 +409,12 @@ class ExponentialGammaTests(TestCase):
                 "beta_q_log",
                 Variable(self.log_beta_n.data - 0.143, requires_grad=True))
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
-            pyro.sample("lambda_latent", dist.gamma, alpha_q, beta_q)
+            pyro.sample("lambda_latent", dist.gamma, alpha_q, beta_q, use_decaying_avg_baseline=True)
 
         kl_optim = TraceGraph_KL_QP(
             model, guide, pyro.optim(
                 torch.optim.Adam, {
-                    "lr": .0005, "betas": (
+                    "lr": .0007, "betas": (
                         0.95, 0.999)}))
         for k in range(8000):
             kl_optim.step()
