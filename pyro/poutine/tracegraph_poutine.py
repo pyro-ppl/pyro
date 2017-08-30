@@ -15,21 +15,14 @@ class TraceGraph(object):
     -- visualization handled by save_visualization()
     """
     def __init__(self, G, trace, stochastic_nodes, reparameterized_nodes,
-                 param_nodes, observation_nodes, root_node):
+                 param_nodes, observation_nodes):
         self.G = G
-        self.root_node = root_node
         self.trace = trace
         self.param_nodes = param_nodes
         self.reparameterized_nodes = reparameterized_nodes
         self.stochastic_nodes = stochastic_nodes
         self.nonreparam_stochastic_nodes = list(set(stochastic_nodes) - set(reparameterized_nodes))
         self.observation_nodes = observation_nodes
-
-    def get_root_node(self):
-        """
-        get root node
-        """
-        return self.root_node
 
     def get_stochastic_nodes(self):
         """
@@ -112,6 +105,12 @@ class TraceGraph(object):
         """
         return self.trace
 
+    def get_graph(self):
+        """
+        get the graph associated with the TraceGraph
+        """
+        return self.G
+
     def save_visualization(self, graph_output):
         """
         render graph and save to file
@@ -148,9 +147,10 @@ class TraceGraphPoutine(TracePoutine):
        by following the sequential ordering of the execution trace
     TODO: add map data constructs
     """
-    def __init__(self, fn, graph_type='coarse'):
+    def __init__(self, fn, graph_type='coarse', include_params=False):
         assert(graph_type == 'coarse'), "only coarse graph type supported at present"
         super(TraceGraphPoutine, self).__init__(fn)
+        self.include_params = include_params
 
     def _enter_poutine(self, *args, **kwargs):
         """
@@ -169,13 +169,18 @@ class TraceGraphPoutine(TracePoutine):
         Return a TraceGraph object that contains the forward graph and trace
         """
         self.trace = super(TraceGraphPoutine, self)._exit_poutine(ret_val, *args, **kwargs)
-        root_node = self.G.successors('___ROOT_NODE___')[0]
         self.G.remove_node('___ROOT_NODE___')
 
         trace_graph = TraceGraph(self.G, self.trace,
                                  self.stochastic_nodes, self.reparameterized_nodes,
-                                 self.param_nodes, self.observation_nodes, root_node)
+                                 self.param_nodes, self.observation_nodes)
         return trace_graph
+
+    def _add_graph_node(self, name):
+        self.G.add_edge(self.prev_node, name)
+        for ancestor in networkx.ancestors(self.G, self.prev_node):
+            self.G.add_edge(ancestor, name)
+        self.prev_node = name
 
     def _pyro_sample(self, prev_val, name, dist, *args, **kwargs):
         """
@@ -183,8 +188,7 @@ class TraceGraphPoutine(TracePoutine):
         """
         val = super(TraceGraphPoutine, self)._pyro_sample(prev_val, name, dist,
                                                           *args, **kwargs)
-        self.G.add_edge(self.prev_node, name)
-        self.prev_node = name
+        self._add_graph_node(name)
         self.stochastic_nodes.append(name)
         if dist.reparameterized:
             self.reparameterized_nodes.append(name)
@@ -196,9 +200,9 @@ class TraceGraphPoutine(TracePoutine):
         """
         retrieved = super(TraceGraphPoutine, self)._pyro_param(prev_val, name,
                                                                *args, **kwargs)
-        self.G.add_edge(self.prev_node, name)
-        self.prev_node = name
-        self.param_nodes.append(name)
+        if self.include_params:
+            self._add_graph_node(name)
+            self.param_nodes.append(name)
         return retrieved
 
     def _pyro_observe(self, prev_val, name, fn, obs, *args, **kwargs):
@@ -208,6 +212,5 @@ class TraceGraphPoutine(TracePoutine):
         val = super(TraceGraphPoutine, self)._pyro_observe(prev_val, name, fn, obs,
                                                            *args, **kwargs)
         self.observation_nodes.append(name)
-        self.G.add_edge(self.prev_node, name)
-        self.prev_node = name
+        self._add_graph_node(name)
         return val

@@ -123,7 +123,7 @@ class NormalNormalNormalTests(TestCase):
         self.do_elbo_test(True, True, 5000, 0.02, 0.002, False, False)
 
     def test_elbo_nonreparameterized(self):
-        for use_nn_baseline in [True, False]:
+        for use_nn_baseline in [False]:
             for use_decaying_avg_baseline in [True, False]:
                 if not use_nn_baseline and not use_decaying_avg_baseline:
                     continue
