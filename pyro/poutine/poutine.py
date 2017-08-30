@@ -143,7 +143,7 @@ class Poutine(object):
             else:
                 # if batch_size == 0, don't index (saves time/space)
                 scale = 1.0
-                ind = Variable(torch.range(data.size(0)))
+                ind = Variable(torch.arange(0, data.size(0)))
         else:
             # if batch_size > 0, select a random set of indices and store it
             if batch_size > 0:

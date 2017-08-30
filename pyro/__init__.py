@@ -146,7 +146,7 @@ def map_data(name, data, fn, batch_size=None):
             else:
                 # if batch_size == 0, don't index (saves time/space)
                 scale = 1.0
-                ind = Variable(torch.range(data.size(0)))
+                ind = Variable(torch.arange(0, data.size(0)))
                 ind_data = data
         else:
             # if batch_size > 0, select a random set of indices and store it
