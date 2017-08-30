@@ -36,20 +36,21 @@ class NormalNormalTests(TestCase):
         self.verbose = True
 
     def test_elbo_reparameterized(self):
-        for batch_size in [7, 6, 4, 2, 1, 8, 0]:
-            self.do_elbo_test(True, 5000, batch_size, explicit_map=False)
-        self.do_elbo_test(True, 2000, 0, explicit_map=True)
+        for batch_size in [8, 7, 6, 4, 3, 0]:
+            self.do_elbo_test(True, 5000, batch_size, map_type="list")
+            self.do_elbo_test(True, 5000, batch_size, map_type="tensor")
+        self.do_elbo_test(True, 5000, 0, map_type=None)
 
-    def do_elbo_test(self, reparameterized, n_steps, batch_size, explicit_map):
+    def do_elbo_test(self, reparameterized, n_steps, batch_size, map_type):
         if self.verbose:
-            print("DOING ELBO TEST [repa = {}, bs = {}, explicit_map = {}]".format(
-                reparameterized, batch_size, explicit_map))
+            print("DOING ELBO TEST [repa = {}, bs = {}, map_type = {}]".format(
+                reparameterized, batch_size, map_type))
         pyro.get_param_store().clear()
 
         def model():
             mu_latent = pyro.sample("mu_latent", dist.diagnormal,
                                     self.mu0, torch.pow(self.lam0, -0.5))
-            if not explicit_map:
+            if map_type == "list":
                 pyro.map_data("aaa", self.data, lambda i,
                               x: pyro.observe(
                                   "obs_%d" % i, dist.diagnormal,
@@ -58,6 +59,18 @@ class NormalNormalTests(TestCase):
                               x: pyro.sample(
                                   "z_sample_%d" % i, dist.diagnormal,
                                   x, torch.pow(self.lam, -0.5)), batch_size=batch_size)
+            elif map_type == "tensor":
+                tdata = torch.cat([xi.view(1, -1) for xi in self.data], 0)
+                pyro.map_data("aaa", tdata,
+                              # XXX get batch size args to dist right
+                              lambda i, x: pyro.observe("obs", dist.diagnormal, x, mu_latent,
+                                                        torch.pow(self.lam, -0.5)),
+                              batch_size=batch_size)
+                pyro.map_data("bbb", tdata,
+                              # XXX get batch_size args to dist right
+                              lambda i, x: pyro.sample("z_sample", dist.diagnormal,
+                                                       x, torch.pow(self.lam, -0.5)),
+                              batch_size=batch_size)
             else:
                 for i, x in enumerate(self.data):
                     pyro.observe('obs_%d' % i, dist.diagnormal, x, mu_latent, torch.pow(self.lam, -0.5))
@@ -70,13 +83,25 @@ class NormalNormalTests(TestCase):
                 self.analytic_log_sig_n.data - 0.39 * torch.randn(2),
                 requires_grad=True))
             sig_q = torch.exp(log_sig_q)
-            dist.diagnormal.reparameterized = reparameterized
             pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q)
-            pyro.map_data("aaa", self.data, lambda i, x: None, batch_size=batch_size)
-            pyro.map_data("bbb", self.data, lambda i,
-                          x: pyro.sample(
-                              "z_sample_%d" % i, dist.diagnormal,
-                              x, torch.pow(self.lam, -0.5)), batch_size=batch_size)
+            if map_type == "list" or map_type is None:
+                pyro.map_data("aaa", self.data, lambda i, x: None, batch_size=batch_size)
+                pyro.map_data("bbb", self.data,
+                              lambda i, x: pyro.sample(
+                                  "z_sample_%d" % i, dist.diagnormal,
+                                  x, torch.pow(self.lam, -0.5)), batch_size=batch_size)
+            elif map_type == "tensor":
+                tdata = torch.cat([xi.view(1, -1) for xi in self.data], 0)
+                # dummy map_data to do subsampling for observe
+                pyro.map_data("aaa", tdata, lambda i, x: None, batch_size=batch_size)
+                pyro.map_data("bbb", tdata,
+                              # XXX get batch_size args to dist right
+                              lambda i, x: pyro.sample("z_sample", dist.diagnormal,
+                                                       x, torch.pow(self.lam, -0.5)),
+                              batch_size=batch_size)
+
+            else:
+                pass
 
         kl_optim = KL_QP(
             model, guide, pyro.optim(
