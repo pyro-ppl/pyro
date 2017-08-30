@@ -21,26 +21,26 @@ def eq(x, y, prec=1e-10):
 
 
 # class NormalNormalMapDataPoutineTestCase(TestCase):
-# 
+#
 #     def setup(self):
 #         pyro.get_param_store().clear()
-# 
+#
 #         self.data = []
-# 
+#
 #         def local_model(i, x):
 #             mu = pyro.sample("mu_{}".format(i), dist.diagnormal, zz, oo)
 #             return pyro.observe("obs_{}".format(i), dist.diagnormal, mu, beta)
-# 
+#
 #         def local_guide(i, x):
 #             pyro.sample("mu_{}".format(i), dist.diagnormal, pz, po)
-# 
+#
 #         def local_model_vectorized(i, x):
 #             mu = pyro.sample("mu", dist.diagnormal, zz, oo)
 #             return pyro.observe("obs", dist.diagnormal, mu, beta)
-# 
+#
 #         def local_guide_vectorized(i, x):
 #             pyro.sample("mu", dist.diagnormal, pm, ps)
-# 
+#
 #         def model():
 #             # global variable
 #             beta = pyro.sample("beta", dist.diagnormal, self.mu, self.sigma)
@@ -59,7 +59,7 @@ def eq(x, y, prec=1e-10):
 #             else:
 #                 assert False
 #             return ret
-# 
+#
 #         def guide():
 #             # global variable
 #             # local variables
@@ -314,3 +314,36 @@ class QueuePoutineTests(TestCase):
             self.assertTrue(False)
         except ValueError:
             self.assertTrue(True)
+
+
+class LiftPoutineTests(TestCase):
+
+    def setUp(self):
+        pyro.get_param_store().clear()
+
+        def simple_prior(tensor):
+            flat_tensor = tensor.view(-1)
+            m = Variable(torch.zeros(flat_tensor.size(0)))
+            s = Variable(torch.ones(flat_tensor.size(0)))
+            return DiagNormal(m, s).sample().view(tensor.size())
+
+        def guide():
+            mu1 = pyro.param("mu1", Variable(torch.randn(2), requires_grad=True))
+            sigma1 = pyro.param("sigma1", Variable(torch.ones(2), requires_grad=True))
+            latent1 = pyro.sample("latent1", DiagNormal(mu1, sigma1))
+
+            mu2 = pyro.param("mu2", Variable(torch.randn(2), requires_grad=True))
+            sigma2 = pyro.param("sigma2", Variable(torch.ones(2), requires_grad=True))
+            latent2 = pyro.sample("latent2", DiagNormal(mu2, sigma2))
+            return latent2
+
+        self.guide = guide
+        self.prior = simple_prior
+
+    def test_lift_simple(self):
+        tr = poutine.trace(self.guide)()
+        lifted_tr = poutine.trace(poutine.lift(self.guide, prior=self.prior))()
+        for name in tr.keys():
+            self.assertTrue(name in lifted_tr)
+            if tr[name]["type"] == "param":
+                self.assertTrue(lifted_tr[name]["type"] == "sample")

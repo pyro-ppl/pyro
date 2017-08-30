@@ -10,12 +10,12 @@ class LiftPoutine(Poutine):
     Should block on down but not on up?
     """
     # XXX docs
-    def __init__(self, fn, prior, *args, **kwargs):
+    def __init__(self, fn, prior):
         """
         constructor
         """
         self.prior = prior
-        super(LiftPoutine, self).__init__(self, fn, *args, **kwargs)
+        super(LiftPoutine, self).__init__(fn)
 
     def _block_down(self, site_type, site_name):
         if site_type == "param":
