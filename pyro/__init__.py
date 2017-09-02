@@ -45,9 +45,6 @@ optim = PyroOptim
 _PYRO_STACK = []
 
 
-##############################################################
-# New primitive definitions with bidirectional stack traversal
-##############################################################
 def apply_stack(initial_msg, stack=None):
     """
     execute the poutine stack according to the new two-sided blocking scheme

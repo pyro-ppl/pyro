@@ -23,7 +23,7 @@ class ScalePoutine(Poutine):
         Dont continue down the stack, we're good here
         """
         return True
-    
+
     def down(self, msg):
         """
         ScalePoutine has a side effect - pass the scale down the stack via msg
