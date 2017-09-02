@@ -32,12 +32,6 @@ class ReplayPoutine(Poutine):
             raise TypeError(
                 "unrecognized type {} for sites".format(str(type(sites))))
 
-    # def down(self, msg):
-    #     """
-    #     dont keep going down, we dont need the randomness from below
-    #     """
-    #     return msg, True
-
     def _pyro_sample(self, msg, name, fn, *args, **kwargs):
         """
         Return the sample in the guide trace when appropriate

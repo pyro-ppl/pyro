@@ -18,12 +18,18 @@ class ScalePoutine(Poutine):
         self.scale = scale
         super(ScalePoutine, self).__init__(fn)
 
+    def _block_down(self, msg):
+        """
+        Dont continue down the stack, we're good here
+        """
+        return True
+    
     def down(self, msg):
         """
-        dont keep going down, we dont need the randomness from below
+        ScalePoutine has a side effect - pass the scale down the stack via msg
         """
         msg["scale"] = self.scale
-        return msg, True
+        return super(ScalePoutine, self).down(msg)
 
     def _pyro_sample(self, msg, name, fn, *args, **kwargs):
         """

@@ -139,9 +139,8 @@ def map_data(name, data, fn, batch_size=None):
         # default behavior
         if isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
             if batch_size > 0:
-                if not hasattr(fn, "__map_data_indices"):
-                    scale = float(data.size(0)) / float(batch_size)
-                    ind = Variable(torch.randperm(data.size(0))[0:batch_size])
+                scale = float(data.size(0)) / float(batch_size)
+                ind = Variable(torch.randperm(data.size(0))[0:batch_size])
                 ind_data = data.index_select(0, ind)
             else:
                 # if batch_size == 0, don't index (saves time/space)
@@ -150,7 +149,7 @@ def map_data(name, data, fn, batch_size=None):
                 ind_data = data
         else:
             # if batch_size > 0, select a random set of indices and store it
-            if batch_size > 0 and not hasattr(fn, "__map_data_indices"):
+            if batch_size > 0:
                 ind = torch.randperm(len(data))[0:batch_size].numpy().tolist()
                 scale = float(len(data)) / float(batch_size)
                 ind_data = [data[i] for i in ind]

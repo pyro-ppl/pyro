@@ -4,7 +4,7 @@ from torch.autograd import Variable
 
 from .poutine import Poutine
 from .scale_poutine import ScalePoutine
-from pyro.poutine import Trace
+from .trace import Trace
 
 
 class TracePoutine(Poutine):

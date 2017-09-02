@@ -49,14 +49,14 @@ class Poutine(object):
         """
         return r_val
 
-    def _block_up(self, site_type, name):
+    def _block_up(self, msg):
         """
         Default behavior for stack-blocking:
         In general, don't stop operating the stack at that site
         """
         return False
 
-    def _block_down(self, site_type, name):
+    def _block_down(self, msg):
         """
         Block going down
         """
@@ -93,14 +93,14 @@ class Poutine(object):
             raise ValueError(
                 "{} is an invalid site type, how did that get there?".format(msg["type"]))
 
-        barrier = self._block_up(msg["type"], msg["name"])
+        barrier = self._block_up(msg)
         return new_msg, barrier
 
     def down(self, msg):
         """
         The dispatcher that gets put into _PYRO_STACK
         """
-        barrier = self._block_down(msg["type"], msg["name"])
+        barrier = self._block_down(msg)
         return msg, barrier
 
     def _push_stack(self):
