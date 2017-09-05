@@ -59,6 +59,13 @@ class ReplayPoutine(Poutine):
             batch_size = 0
 
         assert batch_size >= 0, "cannot have negative batch sizes"
+        if isinstance(data, (torch.Tensor, Variable)):
+            assert batch_size <= data.size(0), \
+                "batch must be smaller than dataset size"
+        else:
+            assert batch_size <= len(data), \
+                "batch must be smaller than dataset size"
+
         if name in self.guide_trace:
             assert self.guide_trace[name]["type"] == "map_data", \
                 name + " is not a map_data in the guide_trace"
