@@ -36,7 +36,7 @@ class GaussianChainTests(TestCase):
         # chain of normals with known covariances and latent means
         self.N = N  # number of latent variables in the chain
         lambdas = [1.5 * (k + 1) / N for k in range(N + 1)]
-        self.lambdas = map(lambda x: Variable(torch.Tensor([x])), lambdas)
+        self.lambdas = list(map(lambda x: Variable(torch.Tensor([x])), lambdas))
         self.lambda_tilde_posts = [self.lambdas[0]]
         for k in range(1, self.N):
             lambda_tilde_k = (self.lambdas[k] * self.lambda_tilde_posts[k - 1]) /\
@@ -165,7 +165,7 @@ class GaussianPyramidTests(TestCase):
         # pyramid of normals with known covariances and latent means
         self.N = N  # number of layers in the pyramid
         lambdas = [1.1 * (k + 1) / N for k in range(N + 2)]
-        self.lambdas = map(lambda x: Variable(torch.Tensor([x])), lambdas)
+        self.lambdas = list(map(lambda x: Variable(torch.Tensor([x])), lambdas))
         # generate data
         self.data = []
         self.N_data = 3
@@ -186,7 +186,7 @@ class GaussianPyramidTests(TestCase):
     def test_elbo_reparameterized(self):
         for N in [3, 4, 5]:
             self.setup_pyramid(N)
-            self.do_elbo_test(True, N * 4000 - 4000)
+            self.do_elbo_test(True, N * 3000 - 3000)
 
     # def test_elbo_nonreparameterized(self): XXX to add
     #     self.do_elbo_test(False, 5000)
