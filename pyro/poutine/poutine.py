@@ -71,24 +71,21 @@ class Poutine(object):
             ret = self._pyro_sample(msg, msg["name"],
                                     msg["fn"],
                                     *msg["args"], **msg["kwargs"])
-            msg.update({"ret": ret})
         elif msg["type"] == "observe":
             ret = self._pyro_observe(msg, msg["name"],
                                      msg["fn"], msg["val"],
                                      *msg["args"], **msg["kwargs"])
-            msg.update({"ret": ret})
         elif msg["type"] == "param":
             ret = self._pyro_param(msg, msg["name"],
                                    *msg["args"], **msg["kwargs"])
-            msg.update({"ret": ret})
         elif msg["type"] == "map_data":
             ret = self._pyro_map_data(msg, msg["name"],
                                       msg["data"], msg["fn"], msg["batch_size"])
-            msg.update({"ret": ret})
         else:
             raise ValueError(
                 "{} is an invalid site type, how did that get there?".format(msg["type"]))
 
+        msg.update({"ret": ret})
         barrier = self._block_up(msg)
         return msg, barrier
 

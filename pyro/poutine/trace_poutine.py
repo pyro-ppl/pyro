@@ -86,7 +86,7 @@ class TracePoutine(Poutine):
         Trace map_data
         """
         if msg["scale"] is None and msg["indices"] is None:
-            scale, ind = self._get_scale(data, batch_size)
+            scale, ind = pyro.util.get_scale(data, batch_size)
             msg["scale"] = scale
             msg["indices"] = ind
         # print(msg["scale"])
