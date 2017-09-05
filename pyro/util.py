@@ -162,6 +162,8 @@ def get_scale(data, batch_size):
     Weirdly complicated because of type ambiguity
     """
     if isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
+        assert batch_size <= data.size(0), \
+            "batch must be smaller than dataset size"
         if batch_size > 0:
             scale = float(data.size(0)) / float(batch_size)
             ind = Variable(torch.randperm(data.size(0))[0:batch_size])
@@ -170,6 +172,8 @@ def get_scale(data, batch_size):
             scale = 1.0
             ind = Variable(torch.arange(0, data.size(0)))
     else:
+        assert batch_size <= len(data), \
+            "batch must be smaller than dataset size"
         # if batch_size > 0, select a random set of indices and store it
         if batch_size > 0:
             ind = torch.randperm(len(data))[0:batch_size].numpy().tolist()
