@@ -138,12 +138,8 @@ def map_data(name, data, fn, batch_size=None):
         if batch_size == 0:
             ind_data = data
         elif isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
-            assert batch_size <= data.size(0), \
-                "batch must be smaller than dataset size"
             ind_data = data.index_select(0, ind)
         else:
-            assert batch_size <= len(data), \
-                "batch must be smaller than dataset size"
             ind_data = [data[i] for i in ind]
 
         if isinstance(data, (torch.Tensor, Variable)):
