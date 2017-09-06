@@ -23,6 +23,15 @@ class ConditionPoutine(Poutine):
         else:
             return False
 
+    def _pyro_observe(self, msg, name, fn, val, *args, **kwargs):
+        """
+        Default observe behavior, but we shouldnt use this to override existing values
+        """
+        assert name not in self.data, \
+            "Should not change values of existing observes..."
+        return super(ConditionPoutine, self)._pyro_observe(self, msg, name, fn, val,
+                                                           *args, **kwargs)
+
     def _pyro_sample(self, msg, name, fn, *args, **kwargs):
         """
         Here we change the obs argument and thread it up through the stack
