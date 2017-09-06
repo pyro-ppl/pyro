@@ -180,7 +180,6 @@ class TestCategorical(TestCase):
         self.ps = Variable(torch.Tensor([0.1, 0.6, 0.3]))
         self.batch_ps = Variable(torch.Tensor([[0.1, 0.6, 0.3], [0.2, 0.4, 0.4]]))
         self.n = Variable(torch.Tensor([n]))
-#         self.test_data = Variable(torch.Tensor([0, 0, 1, 1, 2, 1, 1, 2]))
         self.test_data = Variable(torch.Tensor([0, 1, 0]))
         self.test_data_nhot = Variable(torch.Tensor([2]))
         self.analytic_mean = n * self.ps
@@ -209,7 +208,6 @@ class TestCategorical(TestCase):
                                                       self.ps,
                                                       one_hot=False,
                                                       batch_size=1).data[0][0]
-        # log_px_torch = self.dist_nhot.batch_log_pdf(self.test_data_nhot).data[0][0]
         log_px_np = float(spr.multinomial.logpmf(np.array([0, 0, 1]), 1, self.ps.data.numpy()))
         self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
 
@@ -219,7 +217,7 @@ class TestCategorical(TestCase):
         self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
 
     def test_batch_log_pdf(self):
-        log_px_torch = dist.categorical.batch_log_pdf(self.test_data, self.ps).data[0][0]
+        log_px_torch = dist.categorical.batch_log_pdf(self.test_data, self.ps).data[0]
         log_px_np = float(spr.multinomial.logpmf(np.array([0, 1, 0]), 1, self.ps.data.numpy()))
         self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
 
@@ -355,7 +353,7 @@ class TestPoisson(TestCase):
                 self.lams.data.cpu().numpy()[i]) for i in range(
                 self.dim)]
         log_px_np = np.sum(log_px_np_)
-        self.assertEqual(log_px_torch[0], log_px_np, prec=1e-4)
+        self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
 
 
 class TestNormalChol(TestCase):
@@ -398,7 +396,7 @@ class TestNormal(TestCase):
         self.L_np = self.L.data.cpu().numpy()
         self.cov_np = np.matmul(self.L_np, np.transpose(self.L_np))
         self.cov_torch = Variable(torch.from_numpy(self.cov_np))
-        self.test_data = Variable(torch.randn(2))
+        self.test_data = Variable(torch.Tensor([0.4, 0.5]))
         self.analytic_var = torch.pow(self.L, 2).data[0][0]
         self.analytic_mean = self.mu.data[0]
 
@@ -412,7 +410,7 @@ class TestNormal(TestCase):
         self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
 
     def test_mean_and_var(self):
-        torch_samples = [dist.normal(self.mu, self.cov_torch).data[0][0]
+        torch_samples = [dist.normal(self.mu, self.cov_torch).data[0]
                          for _ in range(self.n_samples)]
         torch_mean = np.mean(torch_samples)
         torch_var = np.var(torch_samples)
@@ -449,7 +447,7 @@ class TestDiagNormal(TestCase):
     def test_batch_log_pdf(self):
         log_px_torch = dist.diagnormal.batch_log_pdf(self.batch_test_data,
                                                      self.batch_mu,
-                                                     self.batch_sigma).data[0][0]
+                                                     self.batch_sigma).data[0]
         log_px_np = spr.multivariate_normal.logpdf(self.batch_test_data.data.cpu().numpy()[0],
                                                    mean=self.batch_mu_np[0],
                                                    cov=self.batch_sigma_np[0] ** 2.0)
@@ -614,6 +612,46 @@ class TestDelta(TestCase):
         torch_var = np.var(torch_samples)
         self.assertEqual(torch_mean, self.analytic_mean)
         self.assertEqual(torch_var, self.analytic_var)
+
+
+class TestDirichlet(TestCase):
+
+    def setUp(self):
+        self.alpha = Variable(torch.Tensor([2.4, 5, 8.2]))
+        self.batch_alpha = Variable(torch.Tensor([[2.4, 3, 6], [3.2, 1.2, 0.4]]))
+        self.test_data = Variable(torch.Tensor([0.2, 0.45, 0.35]))
+        self.batch_test_data = Variable(torch.Tensor([[0.2, 0.45, 0.35],
+                                                     [0.3, 0.4, 0.3]]))
+        _sum_alpha = torch.sum(self.alpha)
+        self.expected_val = (5 / _sum_alpha).data[0]
+        _num = 5 * (_sum_alpha - 5)
+        _denom = torch.pow(_sum_alpha, 2) * (_sum_alpha + 1)
+        self.analytic_var = (_num / _denom).data[0]
+        self.n_samples = 50000
+
+    def test_log_pdf(self):
+        log_px_torch = dist.dirichlet.log_pdf(self.test_data, self.alpha).data[0]
+        log_px_np = spr.dirichlet.logpdf(
+            self.test_data.data.cpu().numpy(),
+            self.alpha.data.cpu().numpy())
+        self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
+
+    def test_batch_log_pdf(self):
+        log_px_torch = dist.dirichlet.batch_log_pdf(
+            self.batch_test_data,
+            self.batch_alpha).data[1]
+        log_px_np = spr.dirichlet.logpdf(
+            self.batch_test_data.data[1].numpy(),
+            self.batch_alpha.data[1].numpy())
+        self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
+
+    def test_mean_and_var(self):
+        torch_samples = [dist.dirichlet(self.alpha).data.numpy()[1]
+                         for _ in range(self.n_samples)]
+        torch_mean = np.mean(torch_samples)
+        torch_var = np.var(torch_samples)
+        self.assertEqual(torch_mean, self.expected_val, prec=0.05)
+        self.assertEqual(torch_var, self.analytic_var, prec=0.05)
 
 
 class TestTensorType(TestCase):

@@ -1,7 +1,4 @@
-Primitives
-==========
-
-.. automodule:: pyro.__init__
+.. automodule:: pyro.optim.optim
     :members:
     :undoc-members:
     :show-inheritance:

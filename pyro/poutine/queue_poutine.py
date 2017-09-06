@@ -26,7 +26,6 @@ class QueuePoutine(Poutine):
         All persistent state is in the queue.
         """
         super(QueuePoutine, self).__init__(fn)
-        self.transparent = False
         if queue is None:
             queue = Queue()
             queue.put(pyro.poutine.Trace())
@@ -66,7 +65,7 @@ class QueuePoutine(Poutine):
         self.guide_trace = None  # XXX what to put here?
         return r_val
 
-    def _pyro_sample(self, prev_val, name, fn, *args, **kwargs):
+    def _pyro_sample(self, msg, name, fn, *args, **kwargs):
         """
         Return the sample in the guide trace when appropriate
         """
@@ -80,7 +79,8 @@ class QueuePoutine(Poutine):
             extended_traces = []
             for s in fn.support(*args, **kwargs):
                 extended_traces.append(
-                    self.guide_trace.copy().add_sample(name, s, fn, *args, **kwargs))
+                    self.guide_trace.copy().add_sample(name, msg["scale"], s, fn,
+                                                       *args, **kwargs))
             raise ReturnExtendedTraces(extended_traces)
         else:
             raise ValueError("should never get here (malfunction at site {})".format(name))

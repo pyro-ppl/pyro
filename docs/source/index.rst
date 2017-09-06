@@ -19,6 +19,8 @@ Pyro Documentation
    inference
    distributions
    parameters
+   nn
+   optimization
 
 
 Indices and tables

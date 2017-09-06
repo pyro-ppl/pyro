@@ -6,14 +6,16 @@ from pyro.distributions.distribution import Distribution
 
 class Normal(Distribution):
     """
-    Multi-variate normal with arbitrary covariance sigma
-    parameterized by its mean mu and covariance matrix sigma
+    :param mu: mean *(real)*
+    :param sigma: standard deviation *(real (0, Infinity))*
+    :param dims: dimension of tensor *(int (>=1) array)*
+
+    Gaussian Distribution over a tensor of independent variables.
     """
 
     def _sanitize_input(self, mu, sigma):
         if mu is not None:
             # stateless distribution
-            mu = torch.unsqueeze(mu, 1)
             return mu, sigma
         elif self.mu is not None:
             # stateful distribution

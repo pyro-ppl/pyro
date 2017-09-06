@@ -8,7 +8,9 @@ from pyro.util import log_gamma
 
 class Poisson(Distribution):
     """
-    Multi-variate poisson parameterized by its mean lam
+    :param lam: mean *(real (0, Infinity))*
+
+    Poisson distribution over integers parameterizeds by lambda.
     """
 
     def _sanitize_input(self, lam):
@@ -28,7 +30,7 @@ class Poisson(Distribution):
         self.lam = lam
         if lam is not None:
             if lam.dim() == 1 and batch_size > 1:
-                self.lam = lam.unsqueeze(0).expand(batch_size, lam.size(0))
+                self.lam = lam.expand(batch_size, lam.size(0))
         super(Poisson, self).__init__(*args, **kwargs)
 
     def sample(self, lam=None, *args, **kwargs):
@@ -42,7 +44,7 @@ class Poisson(Distribution):
     def log_pdf(self, x, lam=None, *args, **kwargs):
         """
         Poisson log-likelihood
-        warning: need pytorch implementation of log gamma in order to be ADable
+        Warning: need pytorch implementation of log gamma in order to be differentiable
         """
         _lam = self._sanitize_input(lam)
         ll_1 = torch.sum(x * torch.log(_lam))

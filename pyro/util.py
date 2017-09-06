@@ -99,6 +99,16 @@ def log_gamma(xx):
     return torch.log(ser * magic2) - t
 
 
+def log_beta(t):
+    if t.dim() == 1:
+        numer = torch.sum(log_gamma(t))
+        denom = log_gamma(torch.sum(t))
+    else:
+        numer = torch.sum(log_gamma(t), 1)
+        denom = log_gamma(torch.sum(t, 1))
+    return numer - denom
+
+
 def to_one_hot(x, ps):
     if isinstance(x, Variable):
         ttype = x.data.type()
@@ -158,3 +168,32 @@ def basic_histogram(ps, vs):
         hist[v] = hist[v] + ps[i]
     return {"ps": torch.cat([hist[v] for v in hist.keys()]),
             "vs": [v for v in hist.keys()]}
+
+
+def get_scale(data, batch_size):
+    """
+    Compute scale and batch indices used for subsampling in map_data
+    Weirdly complicated because of type ambiguity
+    """
+    if isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
+        assert batch_size <= data.size(0), \
+            "batch must be smaller than dataset size"
+        if batch_size > 0:
+            scale = float(data.size(0)) / float(batch_size)
+            ind = Variable(torch.randperm(data.size(0))[0:batch_size])
+        else:
+            # if batch_size == 0, don't index (saves time/space)
+            scale = 1.0
+            ind = Variable(torch.arange(0, data.size(0)))
+    else:
+        assert batch_size <= len(data), \
+            "batch must be smaller than dataset size"
+        # if batch_size > 0, select a random set of indices and store it
+        if batch_size > 0:
+            ind = torch.randperm(len(data))[0:batch_size].numpy().tolist()
+            scale = float(len(data)) / float(batch_size)
+        else:
+            ind = list(range(len(data)))
+            scale = 1.0
+
+    return scale, ind
