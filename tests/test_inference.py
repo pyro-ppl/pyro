@@ -394,7 +394,7 @@ class LogNormalNormalTests(TestCase):
         self.log_tau_n = torch.log(self.tau_n)
 
     def test_elbo_reparameterized(self):
-        self.do_elbo_test(True, 7000)
+        self.do_elbo_test(True, 12000)
 
     # FIXME
     # def test_elbo_nonreparameterized(self):
@@ -464,7 +464,7 @@ class LogNormalNormalTests(TestCase):
 
         kl_optim = KL_QP(model, guide, pyro.optim(torch.optim.Adam,
                                                   {"lr": .0005, "betas": (0.96, 0.999)}))
-        for k in range(9001):
+        for k in range(12001):
             kl_optim.step()
 
         mu_error = torch.abs(

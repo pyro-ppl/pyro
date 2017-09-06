@@ -16,6 +16,17 @@ class TraceGraph_KL_QP(object):
     The gradient estimator is constructed along the lines of
     'Gradient Estimation Using Stochastic Computation Graphs'
     John Schulman, Nicolas Heess, Theophane Weber, Pieter Abbeel
+
+        Params:
+          `model` - the model (callable)
+          `guide` - the guide (callable), i.e. the variational distribution
+          `optim_step_fct` - the pyro.optim object that is used to take a gradient
+          step maximizing the ELBO
+          `model_fixed` - optional flag which freezes the parameters in the model
+          `guide_fixed` - optional flag which freezes the parameters in the guide
+          `optim_step_fct` - [optional] pyro.optim object that is used to take gradient
+          steps on the baseline losses; defaults to `optim_step_fct`
+
     """
     def __init__(self,
                  model,
@@ -137,7 +148,8 @@ class TraceGraph_KL_QP(object):
                     kwargs.get('use_decaying_avg_baseline', False),\
                     kwargs.get('baseline_beta', 0.90)  # default decay rate for avg_baseline
 
-            baseline_mses = []
+            # this [] will be used to store information need to construct baseline losses below
+            baseline_losses = []
             for node in non_reparam_nodes:
                 downstream_cost = downstream_costs[node]
                 baseline = ng_zeros(1)
@@ -160,13 +172,13 @@ class TraceGraph_KL_QP(object):
                         (Variable(downstream_cost.data - baseline.data))
                     if use_nn_baseline:
                         nn_params = nn_baseline.parameters()
-                        baseline_mse = torch.pow(Variable(downstream_cost.data) - baseline, 2.0)
-                        baseline_mses.append((baseline_mse, nn_params))
+                        baseline_loss = torch.pow(Variable(downstream_cost.data) - baseline, 2.0)
+                        baseline_loss.append((baseline_loss, nn_params))
                 else:
                         elbo_reinforce_terms += guide_trace[node]['log_pdf'] * Variable(downstream_cost.data)
 
             # minimize losses for any neural network baselines
-            for loss, params in baseline_mses:
+            for loss, params in baseline_losses:
                 loss.backward()
                 if self.baseline_optim_step_fct is None:
                     self.optim_step_fct(params)

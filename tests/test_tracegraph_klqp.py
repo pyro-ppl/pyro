@@ -464,7 +464,7 @@ class LogNormalNormalTests(TestCase):
         self.do_elbo_test(True, 7000, 0.95, 0.001)
 
     def test_elbo_nonreparameterized(self):
-        self.do_elbo_test(False, 9000, 0.96, 0.0005)
+        self.do_elbo_test(False, 7000, 0.95, 0.001)
 
     def do_elbo_test(self, reparameterized, n_steps, beta1, lr):
         if self.verbose:
@@ -486,7 +486,7 @@ class LogNormalNormalTests(TestCase):
             mu_q, tau_q = torch.exp(pt_guide.mu_q_log), torch.exp(pt_guide.tau_q_log)
             sigma = torch.pow(tau_q, -0.5)
             pyro.sample("mu_latent", dist.diagnormal, mu_q, sigma,
-                        reparameterized=reparameterized)
+                        reparameterized=reparameterized, use_decaying_avg_baseline=True)
 
         kl_optim = TraceGraph_KL_QP(model, guide, pyro.optim(torch.optim.Adam,
                                     {"lr": lr, "betas": (beta1, 0.999)}))
