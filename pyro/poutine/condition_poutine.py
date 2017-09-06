@@ -28,8 +28,6 @@ class ConditionPoutine(Poutine):
         Here we change the obs argument and thread it up through the stack
         """
         if name in self.data:
-            assert kwargs["val"] is None, \
-                "ConditionPoutine should not override existing observations"
             msg["type"] = "observe"
             msg["val"] = self.data[name]
             return super(ConditionPoutine, self)._pyro_observe(msg, name, fn,

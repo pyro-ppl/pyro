@@ -268,3 +268,18 @@ class QueuePoutineTests(TestCase):
             self.assertTrue(False)
         except ValueError:
             self.assertTrue(True)
+
+
+class ConditionPoutineTests(NormalNormalNormalPoutineTestCase):
+
+    def test_condition(self):
+        data = {"latent2": Variable(torch.randn(2))}
+        tr1 = poutine.trace(self.model)()
+        tr2 = poutine.trace(poutine.condition(self.model, data=data))()
+        tr3 = poutine.trace(poutine.do(self.model, data=data))()
+
+        self.assertTrue("latent2" in tr2)
+        self.assertTrue(tr2["latent2"]["type"] == "observe")
+        self.assertTrue(eq(tr2["latent2"]["value"], data["latent2"]))
+
+        self.assertTrue("latent2" not in tr3)
