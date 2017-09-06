@@ -11,28 +11,29 @@ class ScalePoutine(Poutine):
     """
     def __init__(self, fn, scale):
         """
-        Constructor
+        Constructor: basically default, but store an extra scalar self.scale
         """
         self.scale = scale
         super(ScalePoutine, self).__init__(fn)
 
     def _pyro_sample(self, msg, name, fn, *args, **kwargs):
         """
-        Rescale the message and continue
+        Scaled sampling: Rescale the message and continue
         """
         msg["scale"] = self.scale * msg["scale"]
         return super(ScalePoutine, self)._pyro_sample(msg, name, fn, *args, **kwargs)
 
     def _pyro_observe(self, msg, name, fn, obs, *args, **kwargs):
         """
-        Rescale the message and continue
+        Scaled observe: Rescale the message and continue
         """
         msg["scale"] = self.scale * msg["scale"]
         return super(ScalePoutine, self)._pyro_observe(msg, name, fn, obs, *args, **kwargs)
 
     def _pyro_map_data(self, msg, name, data, fn, batch_size=None):
         """
-        Rescale the message and continue
+        Scaled map_data: Rescale the message and continue
+        Should just work...
         """
         msg["scale"] = self.scale * msg["scale"]
         return super(ScalePoutine, self)._pyro_map_data(msg, name, data, fn,
