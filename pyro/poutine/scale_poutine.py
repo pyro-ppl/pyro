@@ -16,9 +16,24 @@ class ScalePoutine(Poutine):
         self.scale = scale
         super(ScalePoutine, self).__init__(fn)
 
-    def down(self, msg):
+    def _pyro_sample(self, msg, name, fn, *args, **kwargs):
         """
-        ScalePoutine has a side effect - pass the scale down the stack via msg
+        Rescale the message and continue
         """
         msg["scale"] = self.scale * msg["scale"]
-        return super(ScalePoutine, self).down(msg)
+        return super(ScalePoutine, self)._pyro_sample(msg, name, fn, *args, **kwargs)
+
+    def _pyro_observe(self, msg, name, fn, obs, *args, **kwargs):
+        """
+        Rescale the message and continue
+        """
+        msg["scale"] = self.scale * msg["scale"]
+        return super(ScalePoutine, self)._pyro_observe(msg, name, fn, obs, *args, **kwargs)
+
+    def _pyro_map_data(self, msg, name, data, fn, batch_size=None):
+        """
+        Rescale the message and continue
+        """
+        msg["scale"] = self.scale * msg["scale"]
+        return super(ScalePoutine, self)._pyro_map_data(msg, name, data, fn,
+                                                        batch_size=batch_size)
