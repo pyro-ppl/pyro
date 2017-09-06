@@ -71,7 +71,7 @@ class TracePosterior(object):
     """
     def __init__(self):
         pass
- 
+
     def _gen_weighted_samples(self, *args, **kwargs):
         for tr, log_weight in self._traces(*args, **kwargs):
             yield (tr, log_weight)
