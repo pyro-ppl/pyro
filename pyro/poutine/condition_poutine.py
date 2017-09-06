@@ -1,5 +1,4 @@
 import pyro
-import torch
 
 from .poutine import Poutine
 
@@ -29,7 +28,6 @@ class ConditionPoutine(Poutine):
         Here we change the obs argument and thread it up through the stack
         """
         if name in self.data:
-            # XXX is this the name we want for this thing?
             assert kwargs["val"] is None, \
                 "ConditionPoutine should not override existing observations"
             msg["type"] = "observe"
