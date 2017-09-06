@@ -17,8 +17,8 @@ class LiftPoutine(Poutine):
         self.prior = prior
         super(LiftPoutine, self).__init__(fn)
 
-    def _block_down(self, site_type, site_name):
-        if site_type == "param":
+    def _block_down(self, msg):
+        if msg["type"] == "param":
             return True
         else:
             return False
