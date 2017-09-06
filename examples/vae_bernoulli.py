@@ -3,7 +3,6 @@ import torch
 import pyro
 from torch.autograd import Variable
 from pyro.infer.kl_qp import KL_QP
-from pyro.infer.abstract_infer import lw_expectation
 from pyro.distributions import DiagNormal, Normal, Bernoulli
 from torch import nn
 

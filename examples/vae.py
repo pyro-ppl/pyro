@@ -3,7 +3,6 @@ import torch
 import pyro
 from torch.autograd import Variable
 from pyro.infer.kl_qp import KL_QP
-from pyro.infer.abstract_infer import lw_expectation
 from pyro.distributions import DiagNormal, Normal
 from pyro.util import ng_zeros, ng_ones
 from torch import nn
