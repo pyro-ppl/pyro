@@ -128,8 +128,9 @@ def module(pyro_name, nn_obj):
 
     return nn_obj
 
-def random_module(pyro_name, module, prior, *args, **kwargs):
+def random_module(module, prior, *args, **kwargs):
     assert hasattr(module, "parameters"), "Module is not a NN module."
+    return poutine.lift(module, prior)
     def _fn():
-        return poutine,lift(pyro_name, module, prior, *args, **kwargs)
+        return poutine.lift(module, prior, *args, **kwargs)
     return _fn
