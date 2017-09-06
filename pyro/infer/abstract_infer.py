@@ -5,6 +5,8 @@ import pyro
 import pyro.util
 from pyro.distributions import Categorical
 
+import pdb
+
 
 class Histogram(pyro.distributions.Distribution):
     """
@@ -27,10 +29,9 @@ class Histogram(pyro.distributions.Distribution):
         log_z = pyro.util.log_sum_exp(log_weights)
         ps = torch.exp(log_weights - log_z.expand_as(log_weights))
 
+        pdb.set_trace()
         if isinstance(vs[0], (torch.autograd.Variable, torch.Tensor, np.ndarray)):
             hist = pyro.util.tensor_histogram(ps, vs)
-        elif isinstance(vs[0], pyro.poutine.Trace):
-            hist = {"ps": ps, "vs": [vs]}
         else:
             hist = pyro.util.basic_histogram(ps, vs)
         return pyro.distributions.Categorical(ps=hist["ps"], vs=hist["vs"])
@@ -63,11 +64,14 @@ class Marginal(Histogram):
             yield (tr["_RETURN"]["value"], log_weight)
 
 
-class TracePosterior(Histogram):
+class TracePosterior(object):
     """
     abstract inference class
     TODO documentation
     """
+    def __init__(self):
+        pass
+ 
     def _gen_weighted_samples(self, *args, **kwargs):
         for tr, log_weight in self._traces(*args, **kwargs):
             yield (tr, log_weight)
