@@ -154,3 +154,32 @@ def tensor_histogram(ps, vs):
         vs2.append(hist[k][1])
     # return dict suitable for passing into Categorical
     return {"ps": torch.cat(ps2), "vs": np.array(vs2).flatten()}
+
+
+def get_scale(data, batch_size):
+    """
+    Compute scale and batch indices used for subsampling in map_data
+    Weirdly complicated because of type ambiguity
+    """
+    if isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
+        assert batch_size <= data.size(0), \
+            "batch must be smaller than dataset size"
+        if batch_size > 0:
+            scale = float(data.size(0)) / float(batch_size)
+            ind = Variable(torch.randperm(data.size(0))[0:batch_size])
+        else:
+            # if batch_size == 0, don't index (saves time/space)
+            scale = 1.0
+            ind = Variable(torch.arange(0, data.size(0)))
+    else:
+        assert batch_size <= len(data), \
+            "batch must be smaller than dataset size"
+        # if batch_size > 0, select a random set of indices and store it
+        if batch_size > 0:
+            ind = torch.randperm(len(data))[0:batch_size].numpy().tolist()
+            scale = float(len(data)) / float(batch_size)
+        else:
+            ind = list(range(len(data)))
+            scale = 1.0
+
+    return scale, ind

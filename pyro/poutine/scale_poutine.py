@@ -1,6 +1,4 @@
 import pyro
-import torch
-from torch.autograd import Variable
 
 from .poutine import Poutine
 
@@ -13,30 +11,30 @@ class ScalePoutine(Poutine):
     """
     def __init__(self, fn, scale):
         """
-        Constructor
+        Constructor: basically default, but store an extra scalar self.scale
         """
         self.scale = scale
         super(ScalePoutine, self).__init__(fn)
 
-    def down(self, msg):
-        """
-        dont keep going down, we dont need the randomness from below
-        """
-        msg["scale"] = self.scale
-        return msg, True
-
     def _pyro_sample(self, msg, name, fn, *args, **kwargs):
         """
-        Rescale the scorer of the stochastic function passed to sample
+        Scaled sampling: Rescale the message and continue
         """
-        msg["scale"] = self.scale
-        return super(ScalePoutine, self)._pyro_sample(
-            msg, name, fn, *args, **kwargs)
+        msg["scale"] = self.scale * msg["scale"]
+        return super(ScalePoutine, self)._pyro_sample(msg, name, fn, *args, **kwargs)
 
     def _pyro_observe(self, msg, name, fn, obs, *args, **kwargs):
         """
-        Rescale the scorer of the stochastic function passed to observe
+        Scaled observe: Rescale the message and continue
         """
-        msg["scale"] = self.scale
-        return super(ScalePoutine, self)._pyro_observe(
-            msg, name, fn, obs, *args, **kwargs)
+        msg["scale"] = self.scale * msg["scale"]
+        return super(ScalePoutine, self)._pyro_observe(msg, name, fn, obs, *args, **kwargs)
+
+    def _pyro_map_data(self, msg, name, data, fn, batch_size=None):
+        """
+        Scaled map_data: Rescale the message and continue
+        Should just work...
+        """
+        msg["scale"] = self.scale * msg["scale"]
+        return super(ScalePoutine, self)._pyro_map_data(msg, name, data, fn,
+                                                        batch_size=batch_size)

@@ -4,7 +4,7 @@ from torch.autograd import Variable
 
 from .poutine import Poutine
 from .scale_poutine import ScalePoutine
-from pyro.poutine import Trace
+from .trace import Trace
 
 
 class TracePoutine(Poutine):
@@ -86,7 +86,7 @@ class TracePoutine(Poutine):
         Trace map_data
         """
         if msg["scale"] is None and msg["indices"] is None:
-            scale, ind = self._get_scale(data, batch_size)
+            scale, ind = pyro.util.get_scale(data, batch_size)
             msg["scale"] = scale
             msg["indices"] = ind
         # print(msg["scale"])

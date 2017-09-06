@@ -49,14 +49,14 @@ class Poutine(object):
         """
         return r_val
 
-    def _block_up(self, site_type, name):
+    def _block_up(self, msg):
         """
         Default behavior for stack-blocking:
         In general, don't stop operating the stack at that site
         """
         return False
 
-    def _block_down(self, site_type, name):
+    def _block_down(self, msg):
         """
         Block going down
         """
@@ -71,36 +71,29 @@ class Poutine(object):
             ret = self._pyro_sample(msg, msg["name"],
                                     msg["fn"],
                                     *msg["args"], **msg["kwargs"])
-            new_msg = msg.copy()
-            new_msg.update({"ret": ret})
         elif msg["type"] == "observe":
             ret = self._pyro_observe(msg, msg["name"],
                                      msg["fn"], msg["val"],
                                      *msg["args"], **msg["kwargs"])
-            new_msg = msg.copy()
-            new_msg.update({"ret": ret})
         elif msg["type"] == "param":
             ret = self._pyro_param(msg, msg["name"],
                                    *msg["args"], **msg["kwargs"])
-            new_msg = msg.copy()
-            new_msg.update({"ret": ret})
         elif msg["type"] == "map_data":
             ret = self._pyro_map_data(msg, msg["name"],
                                       msg["data"], msg["fn"], msg["batch_size"])
-            new_msg = msg.copy()
-            new_msg.update({"ret": ret})
         else:
             raise ValueError(
                 "{} is an invalid site type, how did that get there?".format(msg["type"]))
 
-        barrier = self._block_up(msg["type"], msg["name"])
-        return new_msg, barrier
+        msg.update({"ret": ret})
+        barrier = self._block_up(msg)
+        return msg, barrier
 
     def down(self, msg):
         """
         The dispatcher that gets put into _PYRO_STACK
         """
-        barrier = self._block_down(msg["type"], msg["name"])
+        barrier = self._block_down(msg)
         return msg, barrier
 
     def _push_stack(self):
@@ -131,37 +124,12 @@ class Poutine(object):
             for i in range(0, loc + 1):
                 pyro._PYRO_STACK.pop(0)
 
-    def _get_scale(self, data, batch_size):
-        """
-        Compute scale and batch indices used for subsampling in map_data
-        Weirdly complicated because of type ambiguity
-        """
-        if isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
-            if batch_size > 0:
-                scale = float(data.size(0)) / float(batch_size)
-                ind = Variable(torch.randperm(data.size(0))[0:batch_size])
-            else:
-                # if batch_size == 0, don't index (saves time/space)
-                scale = 1.0
-                ind = Variable(torch.arange(0, data.size(0)))
-        else:
-            # if batch_size > 0, select a random set of indices and store it
-            if batch_size > 0:
-                ind = torch.randperm(len(data))[0:batch_size].numpy().tolist()
-                scale = float(len(data)) / float(batch_size)
-            else:
-                ind = list(range(len(data)))
-                scale = 1.0
-
-        return scale, ind
-
     def _pyro_sample(self, msg, name, fn, *args, **kwargs):
         """
         Default pyro.sample Poutine behavior
         """
-        prev_val = msg["ret"]
-        if prev_val is not None:
-            return prev_val
+        if msg["ret"] is not None:
+            return msg["ret"]
         val = fn(*args, **kwargs)
         return val
 
@@ -169,9 +137,8 @@ class Poutine(object):
         """
         Default pyro.observe Poutine behavior
         """
-        prev_val = msg["ret"]
-        if prev_val is not None:
-            return prev_val
+        if msg["ret"] is not None:
+            return msg["ret"]
         if obs is None:
             return fn(*args, **kwargs)
         return obs
@@ -180,38 +147,34 @@ class Poutine(object):
         """
         Default pyro.map_data Poutine behavior
         """
-        prev_val = msg["ret"]
-        if prev_val is not None:
-            return prev_val
+        if msg["ret"] is not None:
+            return msg["ret"]
         else:
             if batch_size is None:
                 batch_size = 0
             assert batch_size >= 0, "cannot have negative batch sizes"
             if msg["scale"] is None and msg["indices"] is None:
-                scale, ind = self._get_scale(fn, data, batch_size)
+                scale, ind = pyro.util.get_scale(data, batch_size)
                 msg["scale"] = scale
                 msg["indices"] = ind
 
-            if isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
-                if batch_size > 0:
-                    ind_data = data.index_select(0, msg["indices"])
-                else:
-                    ind_data = data
+            if batch_size == 0:
+                ind_data = data
+            elif isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
+                ind_data = data.index_select(0, msg["indices"])
+            else:
+                ind_data = [data[i] for i in msg["indices"]]
+
+            if isinstance(data, (torch.Tensor, Variable)):
                 ret = fn(msg["indices"], ind_data)
             else:
-                if batch_size > 0:
-                    ind_data = [data[i] for i in msg["indices"]]
-                else:
-                    ind_data = data
                 ret = list(map(lambda ix: fn(*ix), enumerate(ind_data)))
-
             return ret
 
     def _pyro_param(self, msg, name, *args, **kwargs):
         """
         overload pyro.param call
         """
-        prev_val = msg["ret"]
-        if prev_val is not None:
-            return prev_val
+        if msg["ret"] is not None:
+            return msg["ret"]
         return pyro._param_store.get_param(name, *args, **kwargs)

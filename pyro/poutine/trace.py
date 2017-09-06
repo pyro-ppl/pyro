@@ -1,5 +1,4 @@
 import pyro
-import pdb
 
 
 def get_parents(node, trace):

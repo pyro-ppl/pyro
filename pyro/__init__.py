@@ -45,9 +45,6 @@ optim = PyroOptim
 _PYRO_STACK = []
 
 
-##############################################################
-# New primitive definitions with bidirectional stack traversal
-##############################################################
 def apply_stack(initial_msg, stack=None):
     """
     execute the poutine stack according to the new two-sided blocking scheme
@@ -84,7 +81,11 @@ def apply_stack(initial_msg, stack=None):
 
 def sample(name, fn, *args, **kwargs):
     """
-    current sample interface
+    :param name: name of sample
+    :param fn: distribution class or function
+    :returns: sample
+
+    Samples from the distribution and registers it in the trace data structure.
     """
     # check if stack is empty
     # if stack empty, default behavior (defined here)
@@ -109,7 +110,14 @@ def sample(name, fn, *args, **kwargs):
 
 def observe(name, fn, val, *args, **kwargs):
     """
-    current observe interface
+    :param name: name of observation
+    :param fn: distribution class or function
+    :param obs: observed datum
+    :returns: sample
+
+    Only should be used in the context of inference.
+    Calculates the score of the sample and registers
+    it in the trace data structure.
     """
     if len(_PYRO_STACK) == 0:
         raise NotImplementedError(
@@ -133,33 +141,25 @@ def observe(name, fn, val, *args, **kwargs):
 
 def map_data(name, data, fn, batch_size=None):
     """
-    current map_data interface
+    :param name: named argument
+    :param data: data tp subsample
+    :param observer: observe function
+
+    Data subsampling with the important property that
+    all the data are conditionally independent. By
+    default `map_data` is the same as `map`.
     """
     if len(_PYRO_STACK) == 0:
         # default behavior
-        if isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
-            if batch_size > 0:
-                if not hasattr(fn, "__map_data_indices"):
-                    scale = float(data.size(0)) / float(batch_size)
-                    ind = Variable(torch.randperm(data.size(0))[0:batch_size])
-                ind_data = data.index_select(0, ind)
-            else:
-                # if batch_size == 0, don't index (saves time/space)
-                scale = 1.0
-                ind = Variable(torch.arange(0, data.size(0)))
-                ind_data = data
+        scale, ind = util.get_scale(data, batch_size)
+        if batch_size == 0:
+            ind_data = data
+        elif isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
+            ind_data = data.index_select(0, ind)
         else:
-            # if batch_size > 0, select a random set of indices and store it
-            if batch_size > 0 and not hasattr(fn, "__map_data_indices"):
-                ind = torch.randperm(len(data))[0:batch_size].numpy().tolist()
-                scale = float(len(data)) / float(batch_size)
-                ind_data = [data[i] for i in ind]
-            else:
-                ind = list(range(len(data)))
-                scale = 1.0
-                ind_data = data
+            ind_data = [data[i] for i in ind]
 
-        if isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
+        if isinstance(data, (torch.Tensor, Variable)):
             ret = fn(ind, ind_data)
         else:
             ret = list(map(lambda ix: fn(*ix), enumerate(ind_data)))
@@ -185,7 +185,12 @@ def map_data(name, data, fn, batch_size=None):
 # XXX this should have the same call signature as torch.Tensor constructors
 def param(name, *args, **kwargs):
     """
-    New version of param based on updated poutine stack logic
+    :param name: name of parameter
+    :returns: parameter
+
+    Saves the variable as a parameter in the param store.
+    To interact with the param store or write to disk,
+    see `Parameters <parameters.html>`_.
     """
     if len(_PYRO_STACK) == 0:
         return _param_store.get_param(name, *args, **kwargs)

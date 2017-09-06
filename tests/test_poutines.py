@@ -20,52 +20,6 @@ def eq(x, y, prec=1e-10):
     return (torch.norm(x - y).data[0] < prec)
 
 
-# class NormalNormalMapDataPoutineTestCase(TestCase):
-#
-#     def setup(self):
-#         pyro.get_param_store().clear()
-#
-#         self.data = []
-#
-#         def local_model(i, x):
-#             mu = pyro.sample("mu_{}".format(i), dist.diagnormal, zz, oo)
-#             return pyro.observe("obs_{}".format(i), dist.diagnormal, mu, beta)
-#
-#         def local_guide(i, x):
-#             pyro.sample("mu_{}".format(i), dist.diagnormal, pz, po)
-#
-#         def local_model_vectorized(i, x):
-#             mu = pyro.sample("mu", dist.diagnormal, zz, oo)
-#             return pyro.observe("obs", dist.diagnormal, mu, beta)
-#
-#         def local_guide_vectorized(i, x):
-#             pyro.sample("mu", dist.diagnormal, pm, ps)
-#
-#         def model():
-#             # global variable
-#             beta = pyro.sample("beta", dist.diagnormal, self.mu, self.sigma)
-#             # local variables
-#             if self.state == "explicit":
-#                 ret = []
-#                 for i, x in enumerate(self.data):
-#                     mu = pyro.sample("mu_{}".format(i), dist.diagnormal, zz, oo)
-#                     ret.append(pyro.observe("obs_{}".format(i), dist.diagnormal, mu, beta))
-#             elif self.state == "list":
-#                 ret = pyro.map_data("local", self.data, local_model,
-#                                     batch_size=self.batch_size)
-#             elif self.state == "tensor":
-#                 ret = pyro.map_data("local", self.data, local_model_vectorized,
-#                                     batch_size=self.batch_size)
-#             else:
-#                 assert False
-#             return ret
-#
-#         def guide():
-#             # global variable
-#             # local variables
-#             pass
-
-
 # XXX name is a bit silly
 class NormalNormalNormalPoutineTestCase(TestCase):
 

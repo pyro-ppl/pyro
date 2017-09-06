@@ -34,12 +34,18 @@ class NormalNormalTests(TestCase):
         self.analytic_mu_n = self.sum_data * (self.lam / self.analytic_lam_n) +\
             self.mu0 * (self.lam0 / self.analytic_lam_n)
         self.verbose = True
+        self.batch_sizes = [3, 4, 6, 7, 8, 0]
 
-    def test_elbo_reparameterized(self):
-        for batch_size in [8, 7, 6, 4, 3, 0]:
-            self.do_elbo_test(True, 5000, batch_size, map_type="list")
+    def test_elbo_tensor(self):
+        for batch_size in self.batch_sizes:
             self.do_elbo_test(True, 5000, batch_size, map_type="tensor")
+
+    def test_elbo_none(self):
         self.do_elbo_test(True, 5000, 0, map_type=None)
+
+    def test_elbo_list(self):
+        for batch_size in self.batch_sizes:
+            self.do_elbo_test(True, 5000, batch_size, map_type="list")
 
     def do_elbo_test(self, reparameterized, n_steps, batch_size, map_type):
         if self.verbose:
