@@ -76,7 +76,6 @@ class SearchTest(HMMSamplingTestCase):
 
     def test_complete(self):
         posterior = pyro.infer.Search(self.model)
-        dd = posterior._dist()
 
         true_latents = set()
         for i1 in range(2):
@@ -85,7 +84,7 @@ class SearchTest(HMMSamplingTestCase):
                     true_latents.add((float(i1), float(i2), float(i3)))
 
         tr_latents = set()
-        for tr in dd.vs[0]:
+        for tr, _ in posterior._traces():
             tr_latents.add(tuple([tr[name]["value"].view(-1).data[0] for name in tr
                                   if tr[name]["type"] == "sample"]))
 

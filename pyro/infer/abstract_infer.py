@@ -29,7 +29,7 @@ class Histogram(pyro.distributions.Distribution):
         log_z = pyro.util.log_sum_exp(log_weights)
         ps = torch.exp(log_weights - log_z.expand_as(log_weights))
 
-        pdb.set_trace()
+        # pdb.set_trace()
         if isinstance(vs[0], (torch.autograd.Variable, torch.Tensor, np.ndarray)):
             hist = pyro.util.tensor_histogram(ps, vs)
         else:

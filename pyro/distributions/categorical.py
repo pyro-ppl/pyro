@@ -69,8 +69,13 @@ class Categorical(Distribution):
         if _vs is not None:
             if isinstance(_vs, np.ndarray):
                 # always returns a 2-d (unsqueezed 1-d) list
+                if _vs.ndim == 1:
+                    _vs = np.expand_dims(_vs, axis=0)
                 r = np.arange(_vs.shape[0])
-                return [[x] for x in _vs[r, sample.squeeze().data.numpy().astype("int")].tolist()]
+                if _vs.shape[0] == 1:
+                    return _vs[r, sample.squeeze().data.numpy().astype("int")][0]
+                else:
+                    return _vs[r, sample.squeeze().data.numpy().astype("int")].tolist()
             # _vs is a torch.Tensor
             return torch.gather(_vs, 1, sample.long())
         if _one_hot:
