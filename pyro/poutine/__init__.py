@@ -9,6 +9,7 @@ from .replay_poutine import ReplayPoutine
 from .queue_poutine import QueuePoutine
 from .scale_poutine import ScalePoutine
 from .tracegraph_poutine import TraceGraphPoutine
+from .condition_poutine import ConditionPoutine
 
 
 ############################################
@@ -78,6 +79,19 @@ def queue(fn, queue=None, max_tries=None):
     return _fn
 
 
+def condition(fn, data=None):
+    """
+    Given a stochastic function with some sample statements
+    and a dictionary of observations at names,
+    change the sample statements at those names into observes
+    with those values
+    """
+    def _fn(*args, **kwargs):
+        p = ConditionPoutine(fn, data=data)
+        return p(*args, **kwargs)
+    return _fn
+
+
 #########################################
 # Begin composite operations
 #########################################
@@ -95,5 +109,19 @@ def cache(fn, sites=None):
     def _fn(*args, **kwargs):
         tr = memoized_trace(*args, **kwargs)
         p = replay(fn, tr, sites=sites)
+        return p(*args, **kwargs)
+    return _fn
+
+
+def do(fn, data=None):
+    """
+    Given a stochastic functuon with some sample statements
+    and a dictionary of values at names,
+    set the return values of those sites equal to the values
+    and hide them from the rest of the stack
+    as if they were hard-coded to those values
+    """
+    def _fn(*args, **kwargs):
+        p = block(condition(fn, data=data), hide=list(data.keys()))
         return p(*args, **kwargs)
     return _fn
