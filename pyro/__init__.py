@@ -81,7 +81,11 @@ def apply_stack(initial_msg, stack=None):
 
 def sample(name, fn, *args, **kwargs):
     """
-    current sample interface
+    :param name: name of sample
+    :param fn: distribution class or function
+    :returns: sample
+
+    Samples from the distribution and registers it in the trace data structure.
     """
     # check if stack is empty
     # if stack empty, default behavior (defined here)
@@ -106,7 +110,14 @@ def sample(name, fn, *args, **kwargs):
 
 def observe(name, fn, val, *args, **kwargs):
     """
-    current observe interface
+    :param name: name of observation
+    :param fn: distribution class or function
+    :param obs: observed datum
+    :returns: sample
+
+    Only should be used in the context of inference.
+    Calculates the score of the sample and registers
+    it in the trace data structure.
     """
     if len(_PYRO_STACK) == 0:
         raise NotImplementedError(
@@ -130,7 +141,13 @@ def observe(name, fn, val, *args, **kwargs):
 
 def map_data(name, data, fn, batch_size=None):
     """
-    current map_data interface
+    :param name: named argument
+    :param data: data tp subsample
+    :param observer: observe function
+
+    Data subsampling with the important property that
+    all the data are conditionally independent. By
+    default `map_data` is the same as `map`.
     """
     if len(_PYRO_STACK) == 0:
         # default behavior
@@ -168,7 +185,12 @@ def map_data(name, data, fn, batch_size=None):
 # XXX this should have the same call signature as torch.Tensor constructors
 def param(name, *args, **kwargs):
     """
-    New version of param based on updated poutine stack logic
+    :param name: name of parameter
+    :returns: parameter
+
+    Saves the variable as a parameter in the param store.
+    To interact with the param store or write to disk,
+    see `Parameters <parameters.html>`_.
     """
     if len(_PYRO_STACK) == 0:
         return _param_store.get_param(name, *args, **kwargs)
