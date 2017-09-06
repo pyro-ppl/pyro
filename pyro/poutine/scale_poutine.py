@@ -22,19 +22,3 @@ class ScalePoutine(Poutine):
         """
         msg["scale"] = self.scale * msg["scale"]
         return super(ScalePoutine, self).down(msg)
-
-    def _pyro_sample(self, msg, name, fn, *args, **kwargs):
-        """
-        Rescale the scorer of the stochastic function passed to sample
-        """
-        msg["scale"] = self.scale * msg["scale"]
-        return super(ScalePoutine, self)._pyro_sample(
-            msg, name, fn, *args, **kwargs)
-
-    def _pyro_observe(self, msg, name, fn, obs, *args, **kwargs):
-        """
-        Rescale the scorer of the stochastic function passed to observe
-        """
-        msg["scale"] = self.scale * msg["scale"]
-        return super(ScalePoutine, self)._pyro_observe(
-            msg, name, fn, obs, *args, **kwargs)

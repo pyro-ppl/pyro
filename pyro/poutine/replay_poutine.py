@@ -2,7 +2,7 @@ import pyro
 import torch
 from torch.autograd import Variable
 
-from pyro.poutine import Trace
+from .trace import Trace
 from .poutine import Poutine
 from .scale_poutine import ScalePoutine
 

@@ -34,7 +34,7 @@ class NormalNormalTests(TestCase):
         self.analytic_mu_n = self.sum_data * (self.lam / self.analytic_lam_n) +\
             self.mu0 * (self.lam0 / self.analytic_lam_n)
         self.verbose = True
-        self.batch_sizes = [8, 7, 6, 4, 3, 0]
+        self.batch_sizes = [3, 4, 6, 7, 8, 0]
 
     def test_elbo_tensor(self):
         for batch_size in self.batch_sizes:
