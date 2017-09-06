@@ -182,11 +182,11 @@ class TraceGraphPoutine(TracePoutine):
             self.G.add_edge(ancestor, name)
         self.prev_node = name
 
-    def _pyro_sample(self, prev_val, name, dist, *args, **kwargs):
+    def _pyro_sample(self, msg, name, dist, *args, **kwargs):
         """
         register sampled variable for coarse graph construction
         """
-        val = super(TraceGraphPoutine, self)._pyro_sample(prev_val, name, dist,
+        val = super(TraceGraphPoutine, self)._pyro_sample(msg, name, dist,
                                                           *args, **kwargs)
         self._add_graph_node(name)
         self.stochastic_nodes.append(name)
@@ -194,22 +194,22 @@ class TraceGraphPoutine(TracePoutine):
             self.reparameterized_nodes.append(name)
         return val
 
-    def _pyro_param(self, prev_val, name, *args, **kwargs):
+    def _pyro_param(self, msg, name, *args, **kwargs):
         """
         register parameter for coarse graph construction
         """
-        retrieved = super(TraceGraphPoutine, self)._pyro_param(prev_val, name,
+        retrieved = super(TraceGraphPoutine, self)._pyro_param(msg, name,
                                                                *args, **kwargs)
         if self.include_params:
             self._add_graph_node(name)
             self.param_nodes.append(name)
         return retrieved
 
-    def _pyro_observe(self, prev_val, name, fn, obs, *args, **kwargs):
+    def _pyro_observe(self, msg, name, fn, obs, *args, **kwargs):
         """
         register observe dependencies for coarse graph construction
         """
-        val = super(TraceGraphPoutine, self)._pyro_observe(prev_val, name, fn, obs,
+        val = super(TraceGraphPoutine, self)._pyro_observe(msg, name, fn, obs,
                                                            *args, **kwargs)
         self.observation_nodes.append(name)
         self._add_graph_node(name)

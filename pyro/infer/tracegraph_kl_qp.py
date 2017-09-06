@@ -130,28 +130,36 @@ class TraceGraph_KL_QP(object):
             # we include only downstream costs to reduce variance
             # optionally include baselines to further reduce variance
             # XXX should the average baseline be in the param store as below?
+
+            def get_baseline_kwargs(kwargs):
+                return kwargs.get('nn_baseline', None),\
+                    kwargs.get('nn_baseline_input', None),\
+                    kwargs.get('use_decaying_avg_baseline', False),\
+                    kwargs.get('baseline_beta', 0.90)  # default decay rate for avg_baseline
+
             baseline_mses = []
             for node in non_reparam_nodes:
                 downstream_cost = downstream_costs[node]
                 baseline = ng_zeros(1)
-                use_decaying_avg_baseline = guide_trace[node]['use_decaying_avg_baseline']
-                use_nn_baseline = guide_trace[node]['nn_baseline'] is not None
+                # extract baseline arguments from sample site kwargs
+                nn_baseline, nn_baseline_input, use_decaying_avg_baseline, \
+                    baseline_beta = get_baseline_kwargs(guide_trace[node]['args'][1])
+                use_nn_baseline = nn_baseline is not None
                 if use_decaying_avg_baseline:
                     avg_downstream_cost_old = pyro.param("__baseline_avg_downstream_cost_" + node,
                                                          ng_zeros(1))
-                    baseline_beta = guide_trace[node]['baseline_beta']
                     avg_downstream_cost_new = (1 - baseline_beta) * downstream_cost +\
                         baseline_beta * avg_downstream_cost_old
                     avg_downstream_cost_old.data = avg_downstream_cost_new.data  # XXX copy_() ?
                     baseline += avg_downstream_cost_old
                 if use_nn_baseline:
-                    nn_baseline_input = detach_iterable(guide_trace[node]['nn_baseline_input'])
-                    baseline += guide_trace[node]['nn_baseline'](nn_baseline_input)
+                    # block nn_baseline_input gradients except in baseline loss
+                    baseline += nn_baseline(detach_iterable(nn_baseline_input))
                 if use_nn_baseline or use_decaying_avg_baseline:
                     elbo_reinforce_terms += guide_trace[node]['log_pdf'] * \
                         (Variable(downstream_cost.data - baseline.data))
                     if use_nn_baseline:
-                        nn_params = guide_trace[node]['nn_baseline'].parameters()
+                        nn_params = nn_baseline.parameters()
                         baseline_mse = torch.pow(Variable(downstream_cost.data) - baseline, 2.0)
                         baseline_mses.append((baseline_mse, nn_params))
                 else:
