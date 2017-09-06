@@ -35,6 +35,7 @@ class NormalNormalTests(TestCase):
         self.analytic_mu_n = self.sum_data * (self.lam / self.analytic_lam_n) +\
             self.mu0 * (self.lam0 / self.analytic_lam_n)
         self.n_is_samples = 5000
+        self.batch_size = 0
 
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 5000)
@@ -52,7 +53,8 @@ class NormalNormalTests(TestCase):
             pyro.map_data("aaa", self.data, lambda i,
                           x: pyro.observe(
                               "obs_%d" % i, dist.diagnormal,
-                              x, mu_latent, torch.pow(self.lam, -0.5)), batch_size=1)
+                              x, mu_latent, torch.pow(self.lam, -0.5)),
+                          batch_size=self.batch_size)
             return mu_latent
 
         def guide():
@@ -64,7 +66,8 @@ class NormalNormalTests(TestCase):
             sig_q = torch.exp(log_sig_q)
             dist.diagnormal.reparameterized = reparameterized
             pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q)
-            pyro.map_data("aaa", self.data, lambda i, x: None, batch_size=1)
+            pyro.map_data("aaa", self.data, lambda i, x: None,
+                          batch_size=self.batch_size)
 
         kl_optim = KL_QP(
             model, guide, pyro.optim(
@@ -310,6 +313,8 @@ class BernoulliBetaTests(TestCase):
         self.data.append(Variable(torch.Tensor([1.0])))
         self.data.append(Variable(torch.Tensor([1.0])))
         self.n_data = len(self.data)
+        self.batch_size = 0
+        self.n_steps = 6001
         data_sum = self.data[0] + self.data[1] + self.data[2] + self.data[3]
         self.alpha_n = self.alpha0 + data_sum  # posterior alpha
         self.beta_n = self.beta0 - data_sum + \
@@ -325,7 +330,8 @@ class BernoulliBetaTests(TestCase):
             p_latent = pyro.sample("p_latent", dist.beta, self.alpha0, self.beta0)
             pyro.map_data("aaa",
                           self.data, lambda i, x: pyro.observe(
-                              "obs_{}".format(i), dist.bernoulli, x, p_latent), batch_size=2)
+                              "obs_{}".format(i), dist.bernoulli, x, p_latent),
+                          batch_size=self.batch_size)
             return p_latent
 
         def guide():
@@ -335,11 +341,11 @@ class BernoulliBetaTests(TestCase):
                                     Variable(self.log_beta_n.data - 0.143, requires_grad=True))
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             pyro.sample("p_latent", dist.beta, alpha_q, beta_q)
-            pyro.map_data("aaa", self.data, lambda i, x: None, batch_size=2)
+            pyro.map_data("aaa", self.data, lambda i, x: None, batch_size=self.batch_size)
 
         kl_optim = KL_QP(model, guide, pyro.optim(torch.optim.Adam,
                                                   {"lr": .001, "betas": (0.97, 0.999)}))
-        for k in range(6001):
+        for k in range(self.n_steps):
             kl_optim.step()
 #             if k%1000==0:
 #                 print "alpha_q", torch.exp(pyro.param("alpha_q_log")).data.numpy()[0]
