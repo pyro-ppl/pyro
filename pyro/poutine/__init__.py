@@ -121,6 +121,9 @@ def do(fn, data=None):
     and hide them from the rest of the stack
     as if they were hard-coded to those values
     """
+    if data is None:
+        data = {}
+
     def _fn(*args, **kwargs):
         p = block(condition(fn, data=data), hide=list(data.keys()))
         return p(*args, **kwargs)
