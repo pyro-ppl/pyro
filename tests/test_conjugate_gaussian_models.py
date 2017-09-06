@@ -57,19 +57,22 @@ class GaussianChainTests(TestCase):
         target_mu_N = self.sum_data * self.lambdas[N] / lambda_N_post +\
             self.mu0 * self.lambda_tilde_posts[N - 1] / lambda_N_post
         self.target_mus.append(target_mu_N)
+        self.which_nodes_reparam = torch.bernoulli(0.5 * torch.ones(N))
 
     def test_elbo_reparameterized(self):
         for N in [3, 8, 17, 31]:
             self.setup_chain(N)
             self.do_elbo_test(True, 5000 + N * 200)
 
-    # def test_elbo_nonreparameterized(self):
-    #     self.do_elbo_test(False, 5000)
+    def test_elbo_nonreparameterized(self):
+        for N in [3, 5]:
+            self.setup_chain(N)
+            self.do_elbo_test(False, 20000 + N * 2000)
 
     def do_elbo_test(self, reparameterized, n_steps):
         if self.verbose:
-            print(" - - - - - DO GAUSSIAN %d-CHAIN ELBO TEST  [reparameterized = %s] - - - - - " %
-                  (self.N, reparameterized))
+            print(" - - - - - DO GAUSSIAN %d-CHAIN ELBO TEST  [reparameterized = %s; %d/%d] - - - - - " %
+                  (self.N, reparameterized, torch.sum(self.which_nodes_reparam), self.N))
             if self.N < 10:
                 def array_to_string(y):
                     return str(map(lambda x: "%.3f" % x.data.numpy()[0], y))
@@ -86,8 +89,7 @@ class GaussianChainTests(TestCase):
             next_mean = self.mu0
             for k in range(1, self.N + 1):
                 latent_dist = dist.DiagNormal(next_mean, torch.pow(self.lambdas[k - 1], -0.5))
-                mu_latent = pyro.sample("mu_latent_%d" % k, latent_dist,
-                                        reparameterized=reparameterized)
+                mu_latent = pyro.sample("mu_latent_%d" % k, latent_dist)
                 next_mean = mu_latent
 
             mu_N = next_mean
@@ -111,13 +113,14 @@ class GaussianChainTests(TestCase):
                                                                        requires_grad=True))
                 mean_function = mu_q if k == self.N else kappa_q * previous_sample + mu_q
                 latent_dist = dist.DiagNormal(mean_function, sig_q)
-                mu_latent = pyro.sample("mu_latent_%d" % k, latent_dist,
-                                        reparameterized=reparameterized)
+                node_flagged = True if self.which_nodes_reparam[k-1]==1.0 else False
+                repa = True if reparameterized else node_flagged
+                mu_latent = pyro.sample("mu_latent_%d" % k, latent_dist, reparameterized=repa)
                 previous_sample = mu_latent
             return previous_sample
 
         kl_optim = KL_QP(model, guide, pyro.optim(torch.optim.Adam,
-                         {"lr": .0015, "betas": (0.90, 0.999)}))
+                         {"lr": .0008, "betas": (0.96, 0.999)}))
         # kl_optim = TraceGraph_KL_QP(model, guide, pyro.optim(torch.optim.Adam,
         #                            {"lr": .0015, "betas": (0.90, 0.999)}))
 
@@ -181,6 +184,8 @@ class GaussianPyramidTests(TestCase):
         self.q_dag = self.construct_q_dag()
         # compute the order in which guide samples are generated
         self.q_topo_sort = networkx.topological_sort(self.q_dag)
+        self.which_nodes_reparam = torch.bernoulli(0.5 * torch.ones(len(self.q_topo_sort)))
+        #self.which_nodes_reparam = torch.randperm(len(self.q_topo_sort))
         self.calculate_variational_targets()
 
     def test_elbo_reparameterized(self):
@@ -188,8 +193,10 @@ class GaussianPyramidTests(TestCase):
             self.setup_pyramid(N)
             self.do_elbo_test(True, N * 3000 - 3000)
 
-    # def test_elbo_nonreparameterized(self): XXX to add
-    #     self.do_elbo_test(False, 5000)
+    def test_elbo_nonreparameterized(self):
+        for N in [3, 4]:
+            self.setup_pyramid(N)
+            self.do_elbo_test(False, N * 5000 - 3000)
 
     def calculate_variational_targets(self):
         # calculate (some of the) variational parameters corresponding to exact posterior
@@ -329,7 +336,9 @@ class GaussianPyramidTests(TestCase):
                                            Variable(torch.Tensor([0.9 * i / n_nodes]), requires_grad=True))
                     mean_function_node = mean_function_node + kappa_dep * latents_dict[dep]
                 latent_dist_node = dist.DiagNormal(mean_function_node, torch.exp(log_sig_node))
-                latent_node = pyro.sample(node, latent_dist_node)
+                node_flagged = True if self.which_nodes_reparam[i]==1.0 else False
+                repa = True if reparameterized else node_flagged
+                latent_node = pyro.sample(node, latent_dist_node, reparameterized=repa)
                 latents_dict[node] = latent_node
 
             return latents_dict['mu_latent_1']
