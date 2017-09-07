@@ -108,6 +108,7 @@ class TraceGraph_KL_QP(object):
             topo_sort_guide_nodes = networkx.topological_sort(guide_tracegraph.get_graph(), reverse=True)
             downstream_guide_cost_nodes = {}
             downstream_costs = {}
+
             for node in topo_sort_guide_nodes:
                 downstream_costs[node] = model_trace[node]["log_pdf"] - guide_trace[node]["log_pdf"]
                 nodes_included_in_sum = set([node])

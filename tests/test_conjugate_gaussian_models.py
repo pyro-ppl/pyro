@@ -20,6 +20,7 @@ import networkx
 
 
 class GaussianChainTests(TestCase):
+    # chain of normals with known covariances and latent means
 
     def setUp(self):
         self.mu0 = Variable(torch.Tensor([0.2]))
@@ -33,7 +34,7 @@ class GaussianChainTests(TestCase):
         self.verbose = True
 
     def setup_chain(self, N):
-        # chain of normals with known covariances and latent means
+        torch.manual_seed(0)
         self.N = N  # number of latent variables in the chain
         lambdas = [1.5 * (k + 1) / N for k in range(N + 1)]
         self.lambdas = list(map(lambda x: Variable(torch.Tensor([x])), lambdas))
@@ -57,23 +58,31 @@ class GaussianChainTests(TestCase):
         target_mu_N = self.sum_data * self.lambdas[N] / lambda_N_post +\
             self.mu0 * self.lambda_tilde_posts[N - 1] / lambda_N_post
         self.target_mus.append(target_mu_N)
-        self.which_nodes_reparam = torch.bernoulli(0.5 * torch.ones(N))
+        self.which_nodes_reparam = self.setup_reparam_mask(N)
+
+    # controls which nodes are reparameterized
+    def setup_reparam_mask(self, N):
+        while True:
+            mask = torch.bernoulli(0.30 * torch.ones(N))
+            if torch.sum(mask) < 0.40 * N and torch.sum(mask) > 0.5:
+                return mask
 
     def test_elbo_reparameterized(self):
-        for N in [3, 8, 17, 31]:
+        for N in [3, 8, 17]:
             self.setup_chain(N)
-            self.do_elbo_test(True, 5000 + N * 200)
+            self.do_elbo_test(True, 5000 + N * 200, 0.0015, 0.03, difficulty = 1.0)
 
     def test_elbo_nonreparameterized(self):
-        for N in [3, 5]:
+        for N in [3, 5, 7]:
             self.setup_chain(N)
-            self.do_elbo_test(False, 20000 + N * 2000)
+            self.do_elbo_test(False, 4000 + N * 4000, 0.001, 0.05, difficulty = 0.6)
 
-    def do_elbo_test(self, reparameterized, n_steps):
+    def do_elbo_test(self, reparameterized, n_steps, lr, prec, difficulty=1.0):
         if self.verbose:
+            n_repa_nodes = torch.sum(self.which_nodes_reparam) if not reparameterized else self.N
             print(" - - - - - DO GAUSSIAN %d-CHAIN ELBO TEST  [reparameterized = %s; %d/%d] - - - - - " %
-                  (self.N, reparameterized, torch.sum(self.which_nodes_reparam), self.N))
-            if self.N < 10:
+                  (self.N, reparameterized, n_repa_nodes, self.N))
+            if self.N < 0:
                 def array_to_string(y):
                     return str(map(lambda x: "%.3f" % x.data.numpy()[0], y))
 
@@ -83,7 +92,6 @@ class GaussianChainTests(TestCase):
                 print("lambda_posts: " + array_to_string(self.lambda_posts[1:]))
                 print("lambda_tilde_posts: " + array_to_string(self.lambda_tilde_posts))
         pyro.get_param_store().clear()
-        torch.manual_seed(0)
 
         def model(*args, **kwargs):
             next_mean = self.mu0
@@ -101,28 +109,29 @@ class GaussianChainTests(TestCase):
         def guide(*args, **kwargs):
             previous_sample = None
             for k in reversed(range(1, self.N + 1)):
-                mu_q = pyro.param("mu_q_%d" % k, Variable(torch.Tensor([0.5 + k / (2.0 * self.N)]),
+                mu_q = pyro.param("mu_q_%d" % k, Variable(self.target_mus[k].data +
+                                                          difficulty * (0.1 * torch.randn(1) - 0.53),
                                                           requires_grad=True))
                 log_sig_q = pyro.param("log_sig_q_%d" % k,
                                        Variable(-0.5 * torch.log(self.lambda_posts[k]).data +
-                                                0.1 * torch.randn(1) - 0.53,
+                                                difficulty * (0.1 * torch.randn(1) - 0.53),
                                                 requires_grad=True))
                 sig_q = torch.exp(log_sig_q)
                 kappa_q = None if k == self.N else pyro.param("kappa_q_%d" % k,
-                                                              Variable(torch.Tensor([k / self.N]),
+                                                    Variable(self.target_kappas[k].data +
+                                                    difficulty * (0.1 * torch.randn(1) - 0.53),
                                                                        requires_grad=True))
                 mean_function = mu_q if k == self.N else kappa_q * previous_sample + mu_q
                 latent_dist = dist.DiagNormal(mean_function, sig_q)
                 node_flagged = True if self.which_nodes_reparam[k-1]==1.0 else False
                 repa = True if reparameterized else node_flagged
-                mu_latent = pyro.sample("mu_latent_%d" % k, latent_dist, reparameterized=repa)
+                mu_latent = pyro.sample("mu_latent_%d" % k, latent_dist, reparameterized=repa,
+                                        decaying_avg_baseline=True)
                 previous_sample = mu_latent
             return previous_sample
 
-        kl_optim = KL_QP(model, guide, pyro.optim(torch.optim.Adam,
-                         {"lr": .0008, "betas": (0.96, 0.999)}))
-        # kl_optim = TraceGraph_KL_QP(model, guide, pyro.optim(torch.optim.Adam,
-        #                            {"lr": .0015, "betas": (0.90, 0.999)}))
+        kl_optim = TraceGraph_KL_QP(model, guide, pyro.optim(torch.optim.Adam,
+                         {"lr": lr, "betas": (0.95, 0.999)}))
 
         for step in range(n_steps):
             t0 = time.time()
@@ -153,9 +162,9 @@ class GaussianChainTests(TestCase):
                 print("[mean errors]  (mu, log_sigma, kappa) = (%.4f, %.4f, %.4f)" % mean_errors)
                 print("[step time = %.3f;  N = %d;  step = %d]\n" % (time.time() - t0, self.N, step))
 
-        self.assertEqual(0.0, max_errors[0], prec=0.02)
-        self.assertEqual(0.0, max_errors[1], prec=0.02)
-        self.assertEqual(0.0, max_errors[2], prec=0.02)
+        self.assertEqual(0.0, max_errors[0], prec=prec)
+        self.assertEqual(0.0, max_errors[1], prec=prec)
+        self.assertEqual(0.0, max_errors[2], prec=prec)
 
 
 class GaussianPyramidTests(TestCase):
@@ -166,6 +175,8 @@ class GaussianPyramidTests(TestCase):
 
     def setup_pyramid(self, N):
         # pyramid of normals with known covariances and latent means
+        assert(N>1)
+        torch.manual_seed(0)
         self.N = N  # number of layers in the pyramid
         lambdas = [1.1 * (k + 1) / N for k in range(N + 2)]
         self.lambdas = list(map(lambda x: Variable(torch.Tensor([x])), lambdas))
@@ -184,19 +195,46 @@ class GaussianPyramidTests(TestCase):
         self.q_dag = self.construct_q_dag()
         # compute the order in which guide samples are generated
         self.q_topo_sort = networkx.topological_sort(self.q_dag)
-        self.which_nodes_reparam = torch.bernoulli(0.5 * torch.ones(len(self.q_topo_sort)))
-        #self.which_nodes_reparam = torch.randperm(len(self.q_topo_sort))
+        self.which_nodes_reparam = self.setup_reparam_mask(len(self.q_topo_sort))
         self.calculate_variational_targets()
+        self.set_model_permutations()
+
+    # for choosing which latents should be reparameterized
+    def setup_reparam_mask(self, n):
+        while True:
+            mask = torch.bernoulli(0.30 * torch.ones(n))
+            if torch.sum(mask) < 0.40 * n and torch.sum(mask) > 0.5:
+                return mask
+
+    # for doing model sampling in different sequential orders
+    def set_model_permutations(self):
+        self.model_permutations = []
+        self.model_unpermutations = []
+        for n in range(1, self.N):
+            permutation = range(2**(n-1))
+            while permutation!=range(2**(n-1)):
+                permutation = torch.randperm(2**(n-1)).numpy().tolist()
+            self.model_permutations.append(permutation)
+
+            unpermutation = range(len(permutation))
+            for i in range(len(permutation)):
+                unpermutation[permutation[i]] = i
+            self.model_unpermutations.append(unpermutation)
 
     def test_elbo_reparameterized(self):
-        for N in [3, 4, 5]:
-            self.setup_pyramid(N)
-            self.do_elbo_test(True, N * 3000 - 3000)
-
-    def test_elbo_nonreparameterized(self):
         for N in [3, 4]:
             self.setup_pyramid(N)
-            self.do_elbo_test(False, N * 5000 - 3000)
+            self.do_elbo_test(True, N * 7000, 0.0015, 0.04, 0.92,
+                              difficulty=0.8, model_permutation=False)
+
+    def test_elbo_nonreparameterized(self):
+        for N in [2, 3]:
+            self.setup_pyramid(N)
+            self.do_elbo_test(False, N * 8000 + 4000, 0.001, 0.06, 0.95,
+                              difficulty=0.6, model_permutation=False)
+        for N in [3]:
+            self.setup_pyramid(N)
+            self.do_elbo_test(False, 30000, 0.001, 0.06, 0.95, difficulty=0.4, model_permutation=True)
 
     def calculate_variational_targets(self):
         # calculate (some of the) variational parameters corresponding to exact posterior
@@ -222,6 +260,7 @@ class GaussianPyramidTests(TestCase):
 
         # recursion to compute the target precisions
         previous_names = ["1"]
+        old_left_pivot_lambda = None
         for n in range(2, self.N + 1):
             new_names = []
             for prev_name in previous_names:
@@ -230,6 +269,8 @@ class GaussianPyramidTests(TestCase):
                     new_names.append(prev_name + LR)
                     BC_names.append(new_names[-1])
                 lambda_A0 = self.target_lambdas[prev_name]
+                if n == self.N:
+                    old_left_pivot_lambda = lambda_A0
                 lambda_B0 = self.target_lambdas[BC_names[0]]
                 lambda_C0 = self.target_lambdas[BC_names[1]]
                 lambda_A = calc_lambda_A(lambda_A0, lambda_B0, lambda_C0)
@@ -245,10 +286,17 @@ class GaussianPyramidTests(TestCase):
             self.target_lambdas[prev_name] = new_lambda
 
         leftmost_node_suffix = self.q_topo_sort[0][10:]
-        self.target_leftmost_constant = self.data_sums[0] * self.lambdas[-1] /\
-            (self.N * self.lambdas[-1] + self.target_lambdas[leftmost_node_suffix])
-        self.target_leftmost_constant += self.mu0 * self.target_lambdas[leftmost_node_suffix] /\
-            (self.N * self.lambdas[-1] + self.target_lambdas[leftmost_node_suffix])
+        leftmost_lambda = self.target_lambdas[leftmost_node_suffix]
+        self.target_leftmost_constant = self.data_sums[0] * self.lambdas[-1] / leftmost_lambda
+        self.target_leftmost_constant += self.mu0 * (leftmost_lambda - self.N_data * self.lambdas[-1]) /\
+            leftmost_lambda
+
+        almost_leftmost_node_suffix = leftmost_node_suffix[:-1] + 'R'
+        almost_leftmost_lambda = self.target_lambdas[almost_leftmost_node_suffix]
+        result = self.lambdas[-1] * self.data_sums[1]
+        result += (almost_leftmost_lambda - self.N_data * self.lambdas[-1]) \
+                * self.mu0 * old_left_pivot_lambda / (old_left_pivot_lambda + self.lambdas[-2])
+        self.target_almost_leftmost_constant = result / almost_leftmost_lambda
 
     # construct dependency structure for the guide
     def construct_q_dag(self):
@@ -283,37 +331,54 @@ class GaussianPyramidTests(TestCase):
 
         return g
 
-    def do_elbo_test(self, reparameterized, n_steps):
+    def do_elbo_test(self, reparameterized, n_steps, lr, prec, beta1,
+                     difficulty=1.0, model_permutation=False):
         if self.verbose:
+            n_repa_nodes = torch.sum(self.which_nodes_reparam) if not reparameterized \
+                    else len(self.q_topo_sort)
             print((" - - - DO GAUSSIAN %d-LAYERED PYRAMID ELBO TEST " +
-                  "(with a total of %d RVs) [reparameterized = %s] - - -") %
-                  (self.N, (2 ** self.N) - 1, reparameterized))
+                  "(with a total of %d RVs) [reparameterized=%s; %d/%d; perm=%s] - - -") %
+                  (self.N, (2 ** self.N) - 1, reparameterized, n_repa_nodes,
+                   len(self.q_topo_sort), model_permutation))
         pyro.get_param_store().clear()
-        torch.manual_seed(0)
 
         def model(*args, **kwargs):
             top_latent_dist = dist.DiagNormal(self.mu0, torch.pow(self.lambdas[0], -0.5))
             previous_names = ["mu_latent_1"]
             top_latent = pyro.sample(previous_names[0], top_latent_dist)
-            previous_latents = [top_latent]
+            previous_latents_and_names = zip([top_latent], previous_names)
+
+            # for sampling model variables in different sequential orders
+            def permute(x, n):
+                if model_permutation:
+                    return [x[self.model_permutations[n-1][i]] for i in range(len(x))]
+                return x
+
+            def unpermute(x, n):
+                if model_permutation:
+                    return [x[self.model_unpermutations[n-1][i]] for i in range(len(x))]
+                return x
 
             for n in range(2, self.N + 1):
-                new_latents = []
-                new_names = []
-                for i, prev_latent in enumerate(previous_latents):
+                new_latents_and_names = []
+                for prev_latent, prev_name in permute(previous_latents_and_names, n-1):
                     latent_dist = dist.DiagNormal(prev_latent, torch.pow(self.lambdas[n - 1], -0.5))
+                    couple = []
                     for LR in ['L', 'R']:
-                        new_name = previous_names[i] + LR
+                        new_name = prev_name + LR
                         mu_latent_LR = pyro.sample(new_name, latent_dist)
-                        new_latents.append(mu_latent_LR)
-                        new_names.append(new_name)
-                previous_latents = new_latents
-                previous_names = new_names
+                        couple.append([mu_latent_LR, new_name])
+                    new_latents_and_names.append(couple)
+                _previous_latents_and_names = unpermute(new_latents_and_names, n-1)
+                previous_latents_and_names = []
+                for x in _previous_latents_and_names:
+                    previous_latents_and_names.append(x[0])
+                    previous_latents_and_names.append(x[1])
 
             for i, data_i in enumerate(self.data):
                 for k, x in enumerate(data_i):
-                    pyro.observe("obs_%s_%d" % (previous_names[i], k),
-                                 dist.diagnormal, x, previous_latents[i],
+                    pyro.observe("obs_%s_%d" % (previous_latents_and_names[i][1], k),
+                                 dist.diagnormal, x, previous_latents_and_names[i][0],
                                  torch.pow(self.lambdas[-1], -0.5))
             return top_latent
 
@@ -326,27 +391,29 @@ class GaussianPyramidTests(TestCase):
                 node_suffix = node[10:]
                 log_sig_node = pyro.param("log_sig_" + node_suffix,
                                           Variable(-0.5 * torch.log(self.target_lambdas[node_suffix]).data +
-                                                   torch.Tensor([-0.5]) - 0.15 * (torch.randn(1) ** 2),
+                                                   difficulty * (torch.Tensor([-0.3]) - \
+                                                                 0.3 * (torch.randn(1) ** 2)),
                                                    requires_grad=True))
                 mean_function_node = pyro.param("constant_term_" + node,
-                                                Variable(torch.Tensor([-0.3 + (0.6 * i) / n_nodes]),
+                                                Variable(self.mu0.data +\
+                                                         torch.Tensor([difficulty * i / n_nodes]),
                                                          requires_grad=True))
                 for dep in deps:
                     kappa_dep = pyro.param("kappa_" + node_suffix + '_' + dep[10:],
-                                           Variable(torch.Tensor([0.9 * i / n_nodes]), requires_grad=True))
+                                           Variable(torch.Tensor([0.5  + difficulty * i / n_nodes]),
+                                                    requires_grad=True))
                     mean_function_node = mean_function_node + kappa_dep * latents_dict[dep]
                 latent_dist_node = dist.DiagNormal(mean_function_node, torch.exp(log_sig_node))
                 node_flagged = True if self.which_nodes_reparam[i]==1.0 else False
                 repa = True if reparameterized else node_flagged
-                latent_node = pyro.sample(node, latent_dist_node, reparameterized=repa)
+                latent_node = pyro.sample(node, latent_dist_node, reparameterized=repa,
+                                          decaying_avg_baseline=True)
                 latents_dict[node] = latent_node
 
             return latents_dict['mu_latent_1']
 
-        kl_optim = KL_QP(model, guide, pyro.optim(torch.optim.Adam,
-                         {"lr": .0015, "betas": (0.90, 0.999)}))
-        # kl_optim = TraceGraph_KL_QP(model, guide, pyro.optim(torch.optim.Adam,
-        #                            {"lr": .0015, "betas": (0.90, 0.999)}))
+        kl_optim = TraceGraph_KL_QP(model, guide, pyro.optim(torch.optim.Adam,
+                         {"lr": lr, "betas": (beta1, 0.999)}))
 
         for step in range(n_steps):
             t0 = time.time()
@@ -366,12 +433,16 @@ class GaussianPyramidTests(TestCase):
                 leftmost_constant = pyro.param('constant_term_' + leftmost_node)
                 leftmost_constant_error = torch.sum(torch.pow(self.target_leftmost_constant -
                                                     leftmost_constant, 2.0)).data.numpy()[0]
+                almost_leftmost_constant = pyro.param('constant_term_' + leftmost_node[:-1] + 'R')
+                almost_leftmost_constant_error = torch.sum(torch.pow(self.target_almost_leftmost_constant -
+                                                    almost_leftmost_constant, 2.0)).data.numpy()[0]
 
-                print("[leftmost constant error]   %.4f" %
-                      leftmost_constant_error)
+                print("[mean function constant errors (partial)]   %.4f  %.4f" %
+                      (leftmost_constant_error, almost_leftmost_constant_error))
                 print("[min/mean/max log(sigma) errors]   %.4f  %.4f   %.4f" % (min_log_sig_error,
                       mean_log_sig_error, max_log_sig_error))
                 print("[step time = %.3f;  N = %d;  step = %d]\n" % (time.time() - t0, self.N, step))
 
-        self.assertEqual(0.0, max_log_sig_error, prec=0.03)
-        self.assertEqual(0.0, leftmost_constant_error, prec=0.03)
+        self.assertEqual(0.0, max_log_sig_error, prec=prec)
+        self.assertEqual(0.0, leftmost_constant_error, prec=prec)
+        self.assertEqual(0.0, almost_leftmost_constant_error, prec=prec)
