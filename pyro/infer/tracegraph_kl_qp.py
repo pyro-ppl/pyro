@@ -143,6 +143,7 @@ class TraceGraph_KL_QP(object):
             # optionally include baselines to further reduce variance
             # XXX should the average baseline be in the param store as below?
 
+            # for extracting baseline options from kwargs
             def get_baseline_kwargs(kwargs):
                 return kwargs.get('nn_baseline', None),\
                     kwargs.get('nn_baseline_input', None),\
@@ -154,7 +155,6 @@ class TraceGraph_KL_QP(object):
             for node in non_reparam_nodes:
                 downstream_cost = downstream_costs[node]
                 baseline = ng_zeros(1)
-                # extract baseline arguments from sample site kwargs
                 nn_baseline, nn_baseline_input, use_decaying_avg_baseline, \
                     baseline_beta = get_baseline_kwargs(guide_trace[node]['args'][1])
                 use_nn_baseline = nn_baseline is not None
@@ -184,6 +184,7 @@ class TraceGraph_KL_QP(object):
                 if self.baseline_optim_step_fct is None:
                     self.optim_step_fct(params)
                 else:
+                    # use baseline_optim_step_fct if user provided
                     self.baseline_optim_step_fct(params)
                 pyro.util.zero_grads(params)
 
