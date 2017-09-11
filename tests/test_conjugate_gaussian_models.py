@@ -138,7 +138,7 @@ class GaussianChainTests(TestCase):
             t0 = time.time()
             kl_optim.step(Verbose=(step == 0))
 
-            if step % 500 == 0 and self.verbose:
+            if (step % 5000 == 0 or step == n_steps - 1) and self.verbose:
                 kappa_errors, log_sig_errors, mu_errors = [], [], []
                 for k in range(1, self.N + 1):
                     if k != self.N:
@@ -238,7 +238,7 @@ class GaussianPyramidTests(TestCase):
     def test_elbo_nonreparameterized_model_permuted(self):
         for N in [2, 3]:
             self.setup_pyramid(N)
-            self.do_elbo_test(False, 18000 * N, 0.0007, 0.06, 0.97, difficulty=0.4, model_permutation=True)
+            self.do_elbo_test(False, 20000 * N, 0.0007, 0.06, 0.97, difficulty=0.4, model_permutation=True)
 
     def calculate_variational_targets(self):
         # calculate (some of the) variational parameters corresponding to exact posterior
@@ -423,7 +423,7 @@ class GaussianPyramidTests(TestCase):
             t0 = time.time()
             kl_optim.step(Verbose=(step == 0))
 
-            if step % 500 == 0 and self.verbose:
+            if (step % 5000 == 0 or step == n_steps - 1) and self.verbose:
                 log_sig_errors = []
                 for node in self.target_lambdas:
                     target_log_sig = -0.5 * torch.log(self.target_lambdas[node])
