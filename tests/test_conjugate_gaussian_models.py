@@ -70,7 +70,7 @@ class GaussianChainTests(TestCase):
     def test_elbo_reparameterized(self):
         for N in [3, 8, 17]:
             self.setup_chain(N)
-            self.do_elbo_test(True, 5000 + N * 200, 0.0015, 0.03, difficulty=1.0)
+            self.do_elbo_test(True, 7000 + N * 400, 0.0015, 0.04, difficulty=1.0)
 
     def test_elbo_nonreparameterized(self):
         for N in [3, 5, 7]:
