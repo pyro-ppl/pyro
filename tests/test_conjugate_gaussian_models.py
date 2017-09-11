@@ -236,9 +236,9 @@ class GaussianPyramidTests(TestCase):
                               difficulty=0.4, model_permutation=False)
 
     def test_elbo_nonreparameterized_model_permuted(self):
-        for N in [2]:
+        for N in [2, 3]:
             self.setup_pyramid(N)
-            self.do_elbo_test(False, 30000, 0.001, 0.06, 0.95, difficulty=0.4, model_permutation=True)
+            self.do_elbo_test(False, 18000 * N, 0.0007, 0.06, 0.97, difficulty=0.4, model_permutation=True)
 
     def calculate_variational_targets(self):
         # calculate (some of the) variational parameters corresponding to exact posterior
@@ -411,7 +411,7 @@ class GaussianPyramidTests(TestCase):
                 node_flagged = True if self.which_nodes_reparam[i] == 1.0 else False
                 repa = True if reparameterized else node_flagged
                 latent_node = pyro.sample(node, latent_dist_node, reparameterized=repa,
-                                          decaying_avg_baseline=True)
+                                          decaying_avg_baseline=True, baseline_beta=0.96)
                 latents_dict[node] = latent_node
 
             return latents_dict['mu_latent_1']
