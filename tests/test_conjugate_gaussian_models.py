@@ -213,8 +213,9 @@ class GaussianPyramidTests(TestCase):
         self.model_unpermutations = []
         for n in range(1, self.N):
             permutation = list(range(2 ** (n - 1)))
-            while permutation != list(range(2 ** (n - 1))):
-                permutation = torch.randperm(2 ** (n - 1)).numpy().tolist()
+            if n > 1:
+                while permutation == list(range(2 ** (n - 1))):
+                    permutation = torch.randperm(2 ** (n - 1)).numpy().tolist()
             self.model_permutations.append(permutation)
 
             unpermutation = list(range(len(permutation)))
@@ -232,10 +233,12 @@ class GaussianPyramidTests(TestCase):
         for N in [2, 3]:
             self.setup_pyramid(N)
             self.do_elbo_test(False, N * 10000 + 5000, 0.001, 0.06, 0.95,
-                              difficulty=0.5, model_permutation=False)
-        for N in [3]:
+                              difficulty=0.4, model_permutation=False)
+
+    def test_elbo_nonreparameterized_model_permuted(self):
+        for N in [2]:
             self.setup_pyramid(N)
-            self.do_elbo_test(False, 35000, 0.001, 0.06, 0.95, difficulty=0.5, model_permutation=True)
+            self.do_elbo_test(False, 30000, 0.001, 0.06, 0.95, difficulty=0.4, model_permutation=True)
 
     def calculate_variational_targets(self):
         # calculate (some of the) variational parameters corresponding to exact posterior
