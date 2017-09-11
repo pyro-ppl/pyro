@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import pdb
 import sys
+import torch.nn as nn
 from torch.autograd import Variable
 if sys.version_info[0] < 3:
     from Queue import Queue
@@ -268,3 +269,70 @@ class QueuePoutineTests(TestCase):
             self.assertTrue(False)
         except ValueError:
             self.assertTrue(True)
+
+class Model(nn.Module):
+    def __init__(self):
+        self.fc = nn.Linear(2, 1)
+        super(Model, self).__init__()
+
+    def forward(self, x):
+        return self.fc(x)
+
+class LiftPoutineTests(TestCase):
+
+    def setUp(self):
+        pyro.get_param_store().clear()
+
+        def simple_prior(tensor):
+            flat_tensor = tensor.view(-1)
+            m = Variable(torch.zeros(flat_tensor.size(0)))
+            s = Variable(torch.ones(flat_tensor.size(0)))
+            return DiagNormal(m, s).sample().view(tensor.size())
+
+        def prior1(tensor):
+            flat_tensor = tensor.view(-1)
+            m = Variable(torch.zeros(flat_tensor.size(0)))
+            s = Variable(torch.ones(flat_tensor.size(0)))
+            return DiagNormal(m, s).sample().view(tensor.size())
+
+        def prior2(tensor):
+            flat_tensor = tensor.view(-1)
+            m = Variable(torch.zeros(flat_tensor.size(0)))
+            s = Variable(torch.ones(flat_tensor.size(0)))
+            return DiagNormal(m, s).sample().view(tensor.size())    
+
+        def guide():
+            mu1 = pyro.param("mu1", Variable(torch.randn(2), requires_grad=True))
+            sigma1 = pyro.param("sigma1", Variable(torch.ones(2), requires_grad=True))
+            latent1 = pyro.sample("latent1", DiagNormal(mu1, sigma1))
+
+            mu2 = pyro.param("mu2", Variable(torch.randn(2), requires_grad=True))
+            sigma2 = pyro.param("sigma2", Variable(torch.ones(2), requires_grad=True))
+            latent2 = pyro.sample("latent2", DiagNormal(mu2, sigma2))
+            return latent2
+
+        self.model = Model
+        self.guide = guide
+        self.prior = simple_prior
+        self.prior_list = [simple_prior, prior1, prior2]
+
+    def test_lift_simple(self):
+        tr = poutine.trace(self.guide)()
+        lifted_tr = poutine.trace(poutine.lift(self.guide, prior=self.prior))()
+        for name in tr.keys():
+            self.assertTrue(name in lifted_tr)
+            if tr[name]["type"] == "param":
+                self.assertTrue(lifted_tr[name]["type"] == "sample")
+
+    # def test_lift_list_priors(self):
+    #     tr = poutine.trace(self.guide)()
+    #     lifted_tr = poutine.trace(poutine.lift(self.guide, prior=self.prior_list)())
+    #     for name in tr.keys():
+    #         self.assertTrue(name in lifted_tr)
+    #         if tr[name]["type"] == "param":
+    #             self.assertTrue(lifted_tr[name]["type"] == "sample")
+
+    # def test_lift_nn(self):
+    #     tr = poutine.trace(poutine.lift(self.model, self.prior))
+    #     nn = tr(Variable(torch.zeros(2,1)))
+    #     print tr

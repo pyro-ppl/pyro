@@ -36,6 +36,7 @@ def model(data):
 def guide(data):
     pass
 
+classifier = nn.Sequential(nn.Conv2d(784,200,5), nn.ReLU(), nn.Conv2d(200,10,5), nn.ReLU())
 
 #now let's make it bayesian. we'll need the prior fn:
 def prior(name, shape):
