@@ -22,8 +22,14 @@ def get_param_store():
     """
     Returns the param store
     """
-
     return _param_store
+
+
+def clear_param_store():
+    """
+    Clears the param store
+    """
+    return _param_store.clear()
 
 
 def device(x):
@@ -250,6 +256,13 @@ def module(pyro_name, nn_obj):
 
     return nn_obj
 
-def random_module(module, prior, *args, **kwargs):
-    assert hasattr(module, "parameters"), "Module is not a NN module."
+def random_module(name, module, prior, *args, **kwargs):
+    """
+    :param name: name of module
+    :param module: pytorch nn module
+    :param prior: prior distribution or iterable over distributions
+
+    Places a prior over the parameters of the nn module
+    """
+    # assert hasattr(module, "parameters"), "Module is not a NN module."
     return poutine.lift(module, prior, *args, **kwargs)
