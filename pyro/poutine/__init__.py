@@ -11,7 +11,6 @@ from .scale_poutine import ScalePoutine
 from .tracegraph_poutine import TraceGraphPoutine
 from .lift_poutine import LiftPoutine
 
-
 ############################################
 # Begin primitive operations
 # XXX should these be returned as Poutines?
@@ -67,6 +66,18 @@ def block(fn, hide=None, expose=None, hide_types=None, expose_types=None):
         return p(*args, **kwargs)
     return _fn
 
+
+def lift(fn, prior):
+     """
+     :param fn: stochastic function
+     :param prior: prior distribution
+     
+     "Converts" the params to random samples sampled from the prior
+     """
+     def _fn(*args, **kwargs):
+         p = LiftPoutine(fn, prior)
+         return p(*args, **kwargs)
+     return _fn
 
 def queue(fn, queue=None, max_tries=None):
     """

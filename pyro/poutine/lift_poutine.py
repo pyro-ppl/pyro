@@ -1,13 +1,10 @@
 import pyro
-import torch
-
 from .poutine import Poutine
 
 
 class LiftPoutine(Poutine):
     """
     Implements the param->sample lifting operation that turns params into rvs
-    Should block on down but not on up?
     """
     # XXX docs
     def __init__(self, fn, prior):

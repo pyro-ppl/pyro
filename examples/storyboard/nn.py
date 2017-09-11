@@ -4,42 +4,44 @@ import numpy as np
 import torch
 from torch.autograd import Variable
 import torch.nn as nn
+import torch.nn.functional as F
 
 import pyro
 from pyro import poutine
 from pyro.distributions import DiagNormal, Categorical
 from pyro.infer.kl_qp import KL_QP
-'''
-To make a neural net bayesian we need to make the params into random vars, and guide them if we want VI.
-
-I propose a new helper pyro.random_module to construct an (implicit) distribution over nns from a module and a matching prior.
-
-prior(name, shape) must return an iterator over tensors, whose signatures matche the sizes of module.parameters().
-the shape arg will be an iterator over parameter objects (ie the result of module.parameters()).
-
-note that initializers could (should?) have same signature as priors.
-'''
-
 #To start, let's just write a non-bayesian neural net, with supervised training:
-classify = nn.Sequential(nn.Conv2d(784,200,5), nn.ReLU(), nn.Conv2d(200,10,5), nn.ReLU())
+
+# simple nn
+class Model(nn.Module):
+    def __init__(self):
+        super(Model, self).__init__()
+        self.conv1 = nn.Conv2d(1, 20, 5)
+        self.conv2 = nn.Conv2d(20, 20, 5)
+
+    def forward(self, x):
+       x = F.relu(self.conv1(x))
+       return F.relu(self.conv2(x))
+
+def prior():
+    mu = Variable(torch.zeros(2))
+    sigma = Variable(torch.ones(2))
+    return pyro.sample("sample", DiagNormal(mu, sigma))
 
 def model(data):
-    nn = pyro.module("classifier", classify)
-    map_data(data, lambda i, d: pyro.observe("obs"+i, Categorical(nn.forward(d.data)), d.cll))
+    model = pyro.random_module(module, prior)
+    pyro.observe()
+    pass
 
 def guide(data):
-    None
+    pass
 
+classifier = nn.Sequential(nn.Conv2d(784,200,5), nn.ReLU(), nn.Conv2d(200,10,5), nn.ReLU())
 
 #now let's make it bayesian. we'll need the prior fn:
 def prior(name, shape):
     for p in shape:
         yield pyro.sample(name+uuid, DiagNormal(p.size()))
-
-#we use this as so:
-classifier_dist = pyro.random_module("classifier", classify, prior) #make the module into an implicit distribution on nets
-classifier = classifier_dist() #sample a random net
-class_weights = classifier.forward(data) #use the net (as ordinary fn)
 
 #note that in the corresponding guide (for VI) we'd want to add (implicitly or explicitly) params to the prior dist.
 #here's a sketch of a bayesian nn with a layer-wise independent posterior:
@@ -63,9 +65,6 @@ def guide(data):
     nn = classifier_dist() #sample a random net
 
 
-#here's a sketch of the posterior function to use for a "deep posterior":
-# update = nn.rnn(...) #hm, assumes all weight matrices are same size.
-# predict = nn.mlp(..)
 def posterior(name, shape):
     update = pyro.module("update", update)
     predict = pyro.module("predict", predict)
