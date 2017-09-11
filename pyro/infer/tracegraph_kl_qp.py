@@ -17,15 +17,15 @@ class TraceGraph_KL_QP(object):
     'Gradient Estimation Using Stochastic Computation Graphs'
     John Schulman, Nicolas Heess, Theophane Weber, Pieter Abbeel
 
-        Params:
-          `model` - the model (callable)
-          `guide` - the guide (callable), i.e. the variational distribution
-          `optim_step_fct` - the pyro.optim object that is used to take a gradient
-          step maximizing the ELBO
-          `model_fixed` - optional flag which freezes the parameters in the model
-          `guide_fixed` - optional flag which freezes the parameters in the guide
-          `optim_step_fct` - [optional] pyro.optim object that is used to take gradient
-          steps on the baseline losses; defaults to `optim_step_fct`
+    :param mu:
+    :param model: the model (callable)
+    :param guide: the guide (callable), i.e. the variational distribution
+    :param optim_step_fct: the pyro.optim object that is used to take a gradient
+    step maximizing the ELBO
+    :param model_fixed: optional flag which freezes the parameters in the model
+    :param guide_fixed: optional flag which freezes the parameters in the guide
+    :param optim_step_fct: [optional] pyro.optim object that is used to take gradient
+    steps on the baseline losses; defaults to `optim_step_fct`
 
     """
     def __init__(self,
@@ -168,15 +168,14 @@ class TraceGraph_KL_QP(object):
                 if use_nn_baseline:
                     # block nn_baseline_input gradients except in baseline loss
                     baseline += nn_baseline(detach_iterable(nn_baseline_input))
+                    nn_params = nn_baseline.parameters()
+                    baseline_loss = torch.pow(Variable(downstream_cost.data) - baseline, 2.0)
+                    baseline_loss.append((baseline_loss, nn_params))
                 if use_nn_baseline or use_decaying_avg_baseline:
                     elbo_reinforce_terms += guide_trace[node]['log_pdf'] * \
                         (Variable(downstream_cost.data - baseline.data))
-                    if use_nn_baseline:
-                        nn_params = nn_baseline.parameters()
-                        baseline_loss = torch.pow(Variable(downstream_cost.data) - baseline, 2.0)
-                        baseline_loss.append((baseline_loss, nn_params))
                 else:
-                        elbo_reinforce_terms += guide_trace[node]['log_pdf'] * Variable(downstream_cost.data)
+                    elbo_reinforce_terms += guide_trace[node]['log_pdf'] * Variable(downstream_cost.data)
 
             # minimize losses for any neural network baselines
             for loss, params in baseline_losses:

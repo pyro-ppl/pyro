@@ -51,9 +51,8 @@ class TraceGraph(object):
     def get_children(self, node, with_self=False):
         """
         get children of a named node
-        Params:
-          `node` - the name of the node in the tracegraph
-          `with_self` - whether to include `node` among the children
+        :param node: the name of the node in the tracegraph
+        :param with_self: whether to include `node` among the children
         """
         children = self.G.successors(node)
         if with_self:
@@ -63,36 +62,30 @@ class TraceGraph(object):
     def get_parents(self, node, with_self=False):
         """
         get parents of a named node
-        Params:
-          `node` - the name of the node in the tracegraph
-          `with_self` - whether to include `node` among the parents
+        :param node: the name of the node in the tracegraph
+        :param with_self: whether to include `node` among the parents
         """
         parents = self.G.predecessors(node)
         if with_self:
             parents.append(node)
         return parents
 
-    def get_ancestors(self, node, with_self=False, non_reparam_only=False):
+    def get_ancestors(self, node, with_self=False):
         """
         get ancestors of a named node
-        Params:
-          `node` - the name of the node in the tracegraph
-          `with_self` - whether to include `node` among the ancestors
-          `non_reparam_only` - only include non-reparameterizable nodes
+        :param node: the name of the node in the tracegraph
+        :param with_self: whether to include `node` among the ancestors
         """
         ancestors = list(networkx.ancestors(self.G, node))
         if with_self:
             ancestors.append(node)
-        if non_reparam_only:
-            return filter(set(ancestors).__contains__, self.get_nonreparam_stochastic_nodes())
         return ancestors
 
     def get_descendants(self, node, with_self=False):
         """
         get descendants of a named node
-        Params:
-          `node` - the name of the node in the tracegraph
-          `with_self` - whether to include `node` among the descendants
+        :param node: the name of the node in the tracegraph
+        :param with_self: whether to include `node` among the descendants
         """
         descendants = list(networkx.descendants(self.G, node))
         if with_self:
@@ -114,8 +107,7 @@ class TraceGraph(object):
     def save_visualization(self, graph_output):
         """
         render graph and save to file
-        Params:
-          `graph_output` - the graph will be saved to graph_output.pdf
+        :param graph_output: the graph will be saved to graph_output.pdf
         -- parameter nodes are light blue
         -- non-reparameterized stochastic nodes are salmon
         -- reparameterized stochastic nodes are half salmon, half grey
