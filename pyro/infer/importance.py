@@ -14,7 +14,7 @@ class Importance(TracePosterior):
 
     This method performs posterior inference by importance sampling
     using the guide as the proposal distribution.
-    If no guide is provided, it defaults to proposing from the model's prior.    
+    If no guide is provided, it defaults to proposing from the model's prior.
     """
     def __init__(self, model, guide=None, num_samples=None):
         """

@@ -161,7 +161,7 @@ def basic_histogram(ps, vs):
     make a histogram from weighted things that aren't tensors
     Horribly slow...
     """
-    assert isinstance(vs (list, tuple)), \
+    assert isinstance(vs, (list, tuple)), \
         "vs must be a primitive type that preserves ordering at construction"
     hist = {}
     for i, v in enumerate(vs):

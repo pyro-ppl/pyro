@@ -14,7 +14,7 @@ class Histogram(pyro.distributions.Distribution):
     @pyro.util.memoize
     def _dist(self, *args, **kwargs):
         """
-        This is an abstract method 
+        This is an abstract method
         """
         # XXX currently this whole object is very inefficient
         vs, log_weights = [], []
@@ -51,7 +51,7 @@ class Marginal(Histogram):
     """
     :param trace_dist: a TracePosterior instance representing a Monte Carlo posterior
 
-    Marginal histogram distribution. 
+    Marginal histogram distribution.
     Turns a TracePosterior object into a Distribution
     over the return values of the TracePosterior's model.
     """
