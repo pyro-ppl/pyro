@@ -25,6 +25,7 @@ emission_dim = 100 if not quick_mode else 5
 rnn_dim = 600 if not quick_mode else 5
 rnn_num_layers = 2
 
+# parameterizes p(x_t | z_t)
 class Emitter(nn.Module):
     def __init__(self, input_dim, z_dim, emission_dim):
         super(Emitter, self).__init__()
@@ -40,6 +41,7 @@ class Emitter(nn.Module):
 	ps = self.sigmoid(self.lin3(h2))
         return ps
 
+# parameterizes p(z_t | z_{t-1})
 class GatedTransition(nn.Module):
     def __init__(self, z_dim, transition_dim):
         super(GatedTransition, self).__init__()
@@ -62,6 +64,7 @@ class GatedTransition(nn.Module):
         sigma = self.softplus(self.lin_sig(self.relu(h)))
         return mu, sigma
 
+# parameterizes q(z_t | z_{t-1}, x_{t:T})
 class Combiner(nn.Module):
     def __init__(self, z_dim, rnn_dim):
         super(Combiner, self).__init__()
@@ -72,17 +75,19 @@ class Combiner(nn.Module):
         self.softplus = nn.Softplus()
 
     def forward(self, z, h_rnn):
-        h_combined = 0.5 * self.tanh(self.lin_z(z) + h_rnn)
+        h_combined = 0.5 * (self.tanh(self.lin_z(z)) + h_rnn)
         mu = self.lin_mu(h_combined)
         sigma = self.softplus(self.lin_sig(h_combined))
         return mu, sigma
 
+# instantiate pytorch modules
 pt_rnn = nn.RNN(input_size=input_dim, hidden_size=rnn_dim, nonlinearity='relu',
                 batch_first=True, bidirectional=False, num_layers=rnn_num_layers)
 pt_emitter = Emitter(input_dim, z_dim, emission_dim)
 pt_trans = GatedTransition(z_dim, transition_dim)
 pt_combiner = Combiner(z_dim, rnn_dim)
 
+# the model
 def model(x_seq):
     emitter = pyro.module("emitter", pt_emitter)
     trans = pyro.module("transition", pt_trans)
@@ -98,11 +103,13 @@ def model(x_seq):
 
     return z_prev
 
+# reverses a sequence (need this since RNN in guide runs from right to left)
 def reverse(x_seq):
     idx = list(range(x_seq.size(0) - 1, -1, -1))
     idx = Variable(torch.LongTensor(idx))
     return x_seq.index_select(0, idx)
 
+# the guide
 def guide(x_seq):
     h_0 = pyro.param("h_0", zeros(rnn_num_layers, 1, rnn_dim))
     rnn = pyro.module("rnn", pt_rnn)
@@ -118,9 +125,11 @@ def guide(x_seq):
 
     return z_prev
 
+# optimization done with Adam
 adam_params = {"lr": .0008}
 kl_optim = KL_QP(model, guide, pyro.optim(optim.Adam, adam_params))
 
+# setup and optimization loop
 def main():
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', type=int, required=True)
