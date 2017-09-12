@@ -93,12 +93,10 @@ class KL_QP(object):  # AbstractInfer):
                     else:
                         elbo_particle += model_trace[name]["log_pdf"]
                         elbo_particle -= guide_trace[name]["log_pdf"]
-                        #elbo_particle += Variable(log_r.data) * guide_trace[name]["log_pdf"]
                 else:
                     pass
             elbo += elbo_particle
        
-
         # gradients
         loss = -elbo
 
