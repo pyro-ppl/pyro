@@ -73,17 +73,9 @@ class KL_QP(object):  # AbstractInfer):
             model_trace = poutine.trace(
                 poutine.replay(self.model, guide_trace))(*args, **kwargs)
 
-            log_r = model_trace.log_pdf() - guide_trace.log_pdf()
-            log_r_per_sample.append(log_r)
             model_traces.append(model_trace)
             guide_traces.append(guide_trace)
 
-        # guide_trace = poutine.trace(self.guide)(*args, **kwargs)
-        # model_trace = poutine.trace(
-        #     poutine.replay(self.model, guide_trace))(*args, **kwargs)
-
-        # # compute losses
-        # log_r = model_trace.log_pdf() - guide_trace.log_pdf()
 
         elbo = 0.0
         for i in range(nr_particles):
@@ -136,12 +128,6 @@ class KL_QP(object):  # AbstractInfer):
             model_traces.append(model_trace)
             guide_traces.append(guide_trace)
 
-        # guide_trace = poutine.trace(self.guide)(*args, **kwargs)
-        # model_trace = poutine.trace(
-        #     poutine.replay(self.model, guide_trace))(*args, **kwargs)
-
-        # # compute losses
-        # log_r = model_trace.log_pdf() - guide_trace.log_pdf()
 
         elbo = 0.0
         for i in range(nr_particles):
