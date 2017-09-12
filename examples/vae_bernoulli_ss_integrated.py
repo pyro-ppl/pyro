@@ -1,4 +1,4 @@
-import argparse
+from pdb import set_trace as bb
 import torch
 import pyro
 from torch.autograd import Variable
@@ -16,9 +16,6 @@ import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
 import visdom
-import pdb as pdb
-
-# pyro.set_cuda()
 
 # load mnist dataset
 root = './data'
@@ -62,36 +59,68 @@ test_loader = torch.utils.data.DataLoader(
 # network
 
 
-class Encoder_c(nn.Module):
+def workflow(data, classes):
+    z_mu,z_sigma = pt_encode_o.forward(data,classes)
+    import numpy as np
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import sklearn
+    from  sklearn import manifold
+    from sklearn.manifold import TSNE
+    model_tsne = TSNE(n_components=2,random_state=0)
+    z_states = z_mu.data.cpu().numpy()
+    z_embed = model_tsne.fit_transform(z_states)
 
+    classes = classes.data.cpu().numpy()
+    fig666= plt.figure()
+
+    colors = []
+    for ic in range(10):
+        ind_vec = np.zeros_like(classes)
+        ind_vec[:,ic]=1
+        ind_class = classes[:,ic]==1
+        #bb()
+        color = plt.cm.Set1(ic)
+        plt.scatter(z_embed[ind_class,0],z_embed[ind_class,1],s=10,color=color)
+        plt.title("Latent Variable Embeddings colour coded by class for VAE-SS")
+        fig666.savefig('./results/vaeSS_embedding_'+str(ic)+'.png')
+        #bb()
+
+
+    fig666.savefig('./results/vaeSS_embedding.png')
+    pass
+
+class Encoder_c(nn.Module):
     def __init__(self):
         super(Encoder_c, self).__init__()
-        self.fc1 = nn.Linear(784, 200)
-        self.fc21 = nn.Linear(200, 10)
+        self.fc1 = nn.Linear(784, 400)
+        self.fc21 = nn.Linear(400, 10)
         self.relu = nn.ReLU()
         self.softmax = nn.Softmax()
+        # self.exp = nn.Exp()
 
     def forward(self, x):
         x = x.view(-1, 784)
         h1 = self.relu(self.fc1(x))
         return self.softmax(self.fc21(h1))
 
-
 class Encoder_o(nn.Module):
-
     def __init__(self):
         super(Encoder_o, self).__init__()
         self.fc1 = nn.Linear(784 + 10, 400)
         self.fc21 = nn.Linear(400, 20)
         self.fc22 = nn.Linear(400, 20)
         self.relu = nn.ReLU()
+        # self.exp = nn.Exp()
 
     def forward(self, x, cll):
         x = x.view(-1, 784)
+        # bb()
         input_vec = torch.cat((x, cll), 1)
         h1 = self.relu(self.fc1(input_vec))
         return self.fc21(h1), torch.exp(self.fc22(h1))
-
 
 class Decoder(nn.Module):
     def __init__(self):
@@ -127,8 +156,10 @@ def model_latent_backup(data):
     z = pyro.sample("latent_z", DiagNormal(z_mu, z_sigma))
 
     alpha = Variable(torch.ones([data.size(0), 10])) / 10.
-    cll = pyro.sample('latent_class', Categorical(alpha))
+    # c = pyro.sample('latent_class', Multinomial(alpha,1))#Categorical(alpha))
+    cll = pyro.sample('latent_class', Categorical(alpha))  # Categorical(alpha))
 
+    # bb()
     # decode into size of imgx2 for mu/sigma
     img_mu = decoder.forward(z, cll)
     # score against actual images
@@ -136,9 +167,18 @@ def model_latent_backup(data):
 
 
 def model_latent(data):
+    """
+    analytically integrate over all classes
+    """
+    nr_classes = 10
     alpha = Variable(torch.ones([data.size(0), 10])) / 10.
-    cll = pyro.sample('latent_class', Categorical(alpha))
-    model_observed(data, cll)
+    #cll = pyro.sample('latent_class', Categorical(alpha))
+    for ic in range(nr_classes):
+        cll = Variable(torch.zeros([data.size(0), 10]))
+        cll[:,ic] = 1
+        pyro.observe("latent_class", Categorical(alpha), cll)
+        model_observed(data, cll)
+    pass
 
 
 def model_observed(data, cll):
@@ -151,6 +191,10 @@ def model_observed(data, cll):
 
     # sample
     z = pyro.sample("latent_z", DiagNormal(z_mu, z_sigma))
+
+    encoder_c = pyro.module("encoder_c", pt_encode_c)
+    alpha = encoder_c.forward(data)
+    pyro.observe("latent_class", Categorical(alpha), cll)
 
     # decode into size of imgx2 for mu/sigma
     img_mu = decoder.forward(z, cll)
@@ -193,6 +237,9 @@ def guide_latent2(data):
 
 
 def model_sample(cll=None):
+    # wrap params for use in model -- required
+    # decoder = pyro.module("decoder", pt_decode)
+
     # sample from prior
     z_mu, z_sigma = Variable(torch.zeros(
         [1, 20])), Variable(torch.ones([1, 20]))
@@ -203,27 +250,43 @@ def model_sample(cll=None):
     alpha = Variable(torch.ones([1, 10]) / 10.)
 
     if cll.data.cpu().numpy() is None:
+        bb()
         cll = pyro.sample('class', Categorical(alpha))
         print('sampling class')
 
     # decode into size of imgx1 for mu
     img_mu = pt_decode.forward(z, cll)
+    # bb()
+    # img=Bernoulli(img_mu).sample()
     # score against actual images
     img = pyro.sample("sample", Bernoulli(img_mu))
+    # return img
     return img, img_mu
+
+
+def model_sample_given_image(data=None):
+    pass
+
+
+def classify(data):
+    alpha_mu = pt_encode_c.forward(data)
+    cll = pyro.sample("sample_cll", Categorical(alpha_mu))
+    return cll, alpha_mu
 
 
 def per_param_args(name, param):
     if name == "decoder":
-        return {"lr": .0001}
+        return {"lr": .00001}
     else:
-        return {"lr": .0001}
+        return {"lr": .00001}
 
 
 # or alternatively
-adam_params = {"lr": .0001}
+adam_params = {"lr": .00001}
+# optim.SGD(lr=.0001)
 
 inference_latent_class = KL_QP(model_latent, guide_latent, pyro.optim(optim.Adam, adam_params))
+
 inference_observed_class = KL_QP(
     model_observed, guide_observed, pyro.optim(
         optim.Adam, adam_params))
@@ -238,7 +301,10 @@ mnist_size = mnist_data.size(0)
 batch_size = 128  # 64
 
 mnist_data_test = Variable(test_loader.dataset.test_data.float() / 255.)
-mnist_labels_test = Variable(test_loader.dataset.test_labels)
+mnist_labels_test_raw = Variable(test_loader.dataset.test_labels)
+mnist_labels_test = torch.zeros(mnist_labels_test_raw.size(0), 10)
+mnist_labels_test.scatter_(1, mnist_labels_test_raw.data.view(-1, 1), 1)
+mnist_labels_test = Variable(mnist_labels_test)
 
 
 # TODO: batches not necessarily
@@ -248,6 +314,13 @@ if all_batches[-1] != mnist_size:
     all_batches = list(all_batches) + [mnist_size]
 
 vis = visdom.Visdom(env='vae_ss_400')
+
+# rand_ix = 0
+# sam_cnt = 50
+# for i in range(sam_cnt):
+#   vis.image(mnist_data[rand_ix].data.numpy())
+#   vis.image(Bernoulli(mnist_data[rand_ix])().data.numpy())
+# bb()
 
 
 cll_clamp0 = Variable(torch.zeros(1, 10))
@@ -260,51 +333,48 @@ cll_clamp9[0, 9] = 1
 
 
 loss_training = []
+for i in range(1001):
 
-def main():
-    parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', nargs='?', default=1000, type=int)
-    args = parser.parse_args()
-    for i in range(args.num_epochs):
+    epoch_loss = 0.
+    for ix, batch_start in enumerate(all_batches[:-1]):
+        batch_end = all_batches[ix + 1]
 
-        epoch_loss = 0.
-        for ix, batch_start in enumerate(all_batches[:-1]):
-            batch_end = all_batches[ix + 1]
+        #print('Batch '+str(ix))
+        # get batch
+        batch_data = mnist_data[batch_start:batch_end]
+        bs_size = batch_data.size(0)
+        batch_class_raw = mnist_labels[batch_start:batch_end]
+        batch_class = torch.zeros(bs_size, 10)  # maybe it needs a FloatTensor
+        batch_class.scatter_(1, batch_class_raw.data.view(-1, 1), 1)
+        batch_class = Variable(batch_class)
 
-            # get batch
-            batch_data = mnist_data[batch_start:batch_end]
-            bs_size = batch_data.size(0)
-            batch_class_raw = mnist_labels[batch_start:batch_end]
-            batch_class = torch.zeros(bs_size, 10)  # maybe it needs a FloatTensor
-            batch_class.scatter_(1, batch_class_raw.data.view(-1, 1), 1)
-            batch_class = Variable(batch_class)
+        # bb()
+        if np.mod(ix, 1) == 0:
+            epoch_loss += inference_observed_class.step(batch_data, batch_class)
+            #epoch_loss += inference_observed_class_scored.step(batch_data,batch_class)
+        else:
+            epoch_loss += inference_latent_class.step(batch_data)
+        #
+        # bb()
+    loss_training.append(epoch_loss / float(mnist_size))
 
-            if np.mod(ix, 1) == 0:
-                epoch_loss += inference_observed_class.step(batch_data, batch_class)
-
-            else:
-                epoch_loss += inference_latent_class.step(batch_data)
-
-        loss_training.append(epoch_loss / float(mnist_size))
-
-        if np.mod(i,60)==0:
-            if i>0:
-                workflow(mnist_data_test,mnist_labels_test)
-
-        if np.mod(i,8)==0:
-
+    if np.mod(i,60)==0:
+        if i>0:
+            workflow(mnist_data_test,mnist_labels_test)
+    if 0:#np.mod(i,8)==0:
+        for rr in range(5):
             sample0, sample_mu0 = model_sample(cll=cll_clamp0)
             sample3, sample_mu3 = model_sample(cll=cll_clamp3)
             sample9, sample_mu9 = model_sample(cll=cll_clamp9)
-            vis.line(np.array(loss_training), opts=dict({'title': 'my title'}))
-            vis.image(batch_data[0].view(28, 28).data.numpy())
-            #vis.image(sample[0].view(28, 28).data.numpy())
+
             vis.image(sample_mu0[0].view(28, 28).data.numpy())
             vis.image(sample_mu3[0].view(28, 28).data.numpy())
             vis.image(sample_mu9[0].view(28, 28).data.numpy())
-            print("epoch avg loss {}".format(epoch_loss / float(mnist_size)))
-            
-        pass
 
-if __name__ == '__main__':
-    main()
+
+    #title='Learning Curves of ELBO in Nats per Sample',
+    #vis.line(np.array(loss_training), opts=dict({'title': 'my title'}))
+    #vis.image(batch_data[0].view(28, 28).data.numpy())
+    #vis.image(sample[0].view(28, 28).data.numpy())
+
+    print("epoch "+str(i)+" avg loss {}".format(epoch_loss / float(mnist_size)))

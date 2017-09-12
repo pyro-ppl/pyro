@@ -85,15 +85,14 @@ class KL_QP(object):  # AbstractInfer):
             log_r_s = 0.0
             model_trace = model_traces[i]
             guide_trace = guide_traces[i]
-            log_r = log_r_per_sample[i]
-
+            
             for name in model_trace.keys():
                 if model_trace[name]["type"] == "observe":
                     elbo_particle += model_trace[name]["log_pdf"]
                 elif model_trace[name]["type"] == "sample":
                     elbo_particle += model_trace[name]["log_pdf"]
                     elbo_particle -= guide_trace[name]["log_pdf"]
-                    
+
                 else:
                     pass
             elbo += elbo_particle
