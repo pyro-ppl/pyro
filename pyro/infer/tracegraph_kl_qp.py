@@ -170,7 +170,7 @@ class TraceGraph_KL_QP(object):
                     baseline += nn_baseline(detach_iterable(nn_baseline_input))
                     nn_params = nn_baseline.parameters()
                     baseline_loss = torch.pow(Variable(downstream_cost.data) - baseline, 2.0)
-                    baseline_loss.append((baseline_loss, nn_params))
+                    baseline_losses.append((baseline_loss, nn_params))
                 if use_nn_baseline or use_decaying_avg_baseline:
                     elbo_reinforce_terms += guide_trace[node]['log_pdf'] * \
                         (Variable(downstream_cost.data - baseline.data))

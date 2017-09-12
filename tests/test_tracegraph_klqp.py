@@ -73,9 +73,6 @@ class NormalNormalTests(TestCase):
                                     torch.optim.Adam,
                                     {"lr": .0015, "betas": (0.97, 0.999)}))
         for k in range(n_steps):
-            # model_graph_output = 'NormalNormal.model.%s' % reparameterized if k==0 else None
-            # guide_graph_output = 'NormalNormal.guide.%s' % reparameterized if k==0 else None
-            # kl_optim.step(model_graph_output=model_graph_output, guide_graph_output=guide_graph_output)
             kl_optim.step()
 
             mu_error = torch.sum(
@@ -197,9 +194,6 @@ class NormalNormalNormalTests(TestCase):
                                           use_decaying_avg_baseline=use_decaying_avg_baseline)
             return mu_latent
 
-        # pyro.poutine.tracegraph(model, graph_output='NormalNormalNormal.model')()
-        # pyro.poutine.tracegraph(guide, graph_output='NormalNormalNormal.guide')()
-
         kl_optim = TraceGraph_KL_QP(model, guide, pyro.optim(
                                     torch.optim.Adam,
                                     {"lr": lr, "betas": (0.97, 0.999)}),
@@ -237,8 +231,6 @@ class NormalNormalNormalTests(TestCase):
                       (mu_prime_error.data.numpy()[0],
                        log_sig_prime_error.data.numpy()[0]), end='')
                 print(", %.4f" % kappa_error.data.numpy()[0])
-
-        return
 
         self.assertEqual(0.0, mu_error.data.cpu().numpy()[0], prec=prec)
         self.assertEqual(0.0, log_sig_error.data.cpu().numpy()[0], prec=prec)
@@ -292,9 +284,6 @@ class BernoulliBetaTests(TestCase):
         kl_optim = TraceGraph_KL_QP(model, guide, pyro.optim(torch.optim.Adam,
                                     {"lr": .0007, "betas": (0.90, 0.999)}))
         for k in range(9000):
-            # model_graph_output = 'BernoulliBeta.model' if k==0 else None
-            # guide_graph_output = 'BernoulliBeta.guide' if k==0 else None
-            # kl_optim.step(model_graph_output=model_graph_output, guide_graph_output=guide_graph_output)
             kl_optim.step()
             alpha_error = torch.abs(pyro.param("alpha_q_log") -
                                     self.log_alpha_n).data.cpu().numpy()[0]

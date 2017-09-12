@@ -350,7 +350,7 @@ class GaussianPyramidTests(TestCase):
             top_latent_dist = dist.DiagNormal(self.mu0, torch.pow(self.lambdas[0], -0.5))
             previous_names = ["mu_latent_1"]
             top_latent = pyro.sample(previous_names[0], top_latent_dist)
-            previous_latents_and_names = zip([top_latent], previous_names)
+            previous_latents_and_names = list(zip([top_latent], previous_names))
 
             # for sampling model variables in different sequential orders
             def permute(x, n):
