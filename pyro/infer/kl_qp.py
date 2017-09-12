@@ -149,9 +149,7 @@ class KL_QP(object):
                 for name in guide_trace.keys():
                     if guide_trace[name]["type"] == "param":
                         all_trainable_params.append(guide_trace[name]["value"])
-        
         all_trainable_params = list(set(all_trainable_params))
-
         loss = -elbo
 
         return loss, all_trainable_params
