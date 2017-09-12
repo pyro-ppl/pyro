@@ -29,7 +29,7 @@ class ConditionPoutine(Poutine):
         """
         assert name not in self.data, \
             "Should not change values of existing observes..."
-        return super(ConditionPoutine, self)._pyro_observe(self, msg, name, fn, val,
+        return super(ConditionPoutine, self)._pyro_observe(msg, name, fn, val,
                                                            *args, **kwargs)
 
     def _pyro_sample(self, msg, name, fn, *args, **kwargs):
