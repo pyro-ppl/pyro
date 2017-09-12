@@ -64,6 +64,14 @@ test_loader = torch.utils.data.DataLoader(
 
 def workflow(data, classes):
     z_mu,z_sigma = pt_encode_o.forward(data,classes)
+
+    z1_mu, z1_sigma = encoder_l1.forward(data)
+    z1 = pyro.sample(DiagNormal(z1_mu, z1_sigma))
+    z2_mu, z2_sigma = encoder_l2.forward(z1, classes)
+
+    z_mu = z2_mu
+    z_sigma = z2_sigma
+
     import numpy as np
     import matplotlib
     matplotlib.use('Agg')
@@ -311,7 +319,6 @@ cll_clamp0[0, 0] = 1
 cll_clamp3[0, 3] = 1
 cll_clamp9[0, 9] = 1
 
-
 loss_training = []
 
 def main():
@@ -341,21 +348,21 @@ def main():
 
         loss_training.append(epoch_loss / float(mnist_size))
 
-        if np.mod(i,5)==0:
-            if i>0:
-                workflow(mnist_data_test,mnist_labels_test)
+        # if np.mod(i,5)==0:
+        #     if i>0:
+        #         workflow(mnist_data_test,mnist_labels_test)
 
-        if 0:#np.mod(i,8)==0:
-            for rr in range(5):
-                sample0, sample_mu0 = model_sample(cll=cll_clamp0)
-                sample3, sample_mu3 = model_sample(cll=cll_clamp3)
-                sample9, sample_mu9 = model_sample(cll=cll_clamp9)
-                vis.line(np.array(loss_training), opts=dict({'title': 'my title'}))
-                vis.image(batch_data[0].view(28, 28).data.numpy())
-                #vis.image(sample[0].view(28, 28).data.numpy())
-                vis.image(sample_mu0[0].view(28, 28).data.numpy())
-                vis.image(sample_mu3[0].view(28, 28).data.numpy())
-                vis.image(sample_mu9[0].view(28, 28).data.numpy())
+        # if 0:#np.mod(i,8)==0:
+        #     for rr in range(5):
+        #         sample0, sample_mu0 = model_sample(cll=cll_clamp0)
+        #         sample3, sample_mu3 = model_sample(cll=cll_clamp3)
+        #         sample9, sample_mu9 = model_sample(cll=cll_clamp9)
+        #         vis.line(np.array(loss_training), opts=dict({'title': 'my title'}))
+        #         vis.image(batch_data[0].view(28, 28).data.numpy())
+        #         #vis.image(sample[0].view(28, 28).data.numpy())
+        #         vis.image(sample_mu0[0].view(28, 28).data.numpy())
+        #         vis.image(sample_mu3[0].view(28, 28).data.numpy())
+        #         vis.image(sample_mu9[0].view(28, 28).data.numpy())
 
         print("epoch "+str(i)+" avg loss {}".format(epoch_loss / float(mnist_size)))
 
