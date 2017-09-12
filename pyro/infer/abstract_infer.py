@@ -40,10 +40,10 @@ class Histogram(pyro.distributions.Distribution):
         raise NotImplementedError("_gen_weighted_samples is abstract method")
 
     def sample(self, *args, **kwargs):
-        return pyro.poutine.block(self._dist)(*args, **kwargs).sample()
+        return pyro.poutine.block(self._dist)(*args, **kwargs).sample()[0]
 
     def log_pdf(self, val, *args, **kwargs):
-        return pyro.poutine.block(self._dist)(*args, **kwargs).log_pdf(val)
+        return pyro.poutine.block(self._dist)(*args, **kwargs).log_pdf([val])
 
     def support(self, *args, **kwargs):
         return pyro.poutine.block(self._dist)(*args, **kwargs).support()
