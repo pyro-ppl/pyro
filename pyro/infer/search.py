@@ -1,10 +1,4 @@
-import pyro
-import torch
-import sys
-if sys.version_info[0] < 3:
-    from Queue import Queue
-else:
-    from queue import Queue
+from six.moves.queue import Queue
 
 import pyro.poutine as poutine
 from pyro.infer import TracePosterior

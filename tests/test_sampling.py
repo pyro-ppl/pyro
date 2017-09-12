@@ -1,19 +1,9 @@
-import numpy as np
 import torch
-import pdb
-import sys
 from torch.autograd import Variable
-if sys.version_info[0] < 3:
-    from Queue import Queue
-else:
-    from queue import Queue
 
 import pyro
 import pyro.infer
 from pyro.distributions import DiagNormal, Bernoulli
-import pyro.poutine as poutine
-from pyro.util import memoize
-
 from tests.common import TestCase
 
 
@@ -55,7 +45,7 @@ class NormalNormalSamplingTestCase(TestCase):
             mu = pyro.sample("mu", DiagNormal(Variable(torch.zeros(1)),
                                               Variable(torch.ones(1))))
             xd = DiagNormal(mu, Variable(torch.ones(1)), batch_size=50)
-            xs = pyro.observe("xs", xd, self.data)
+            pyro.observe("xs", xd, self.data)
             return mu
 
         def guide():

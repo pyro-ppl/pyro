@@ -1,6 +1,7 @@
-import pyro
 import torch
 from torch.autograd import Variable
+
+import pyro
 
 
 class Poutine(object):
@@ -8,6 +9,7 @@ class Poutine(object):
     Wraps a function call with a pyro stack push/pop of the basic pyro functions
     This is the base class with all APIs implemented and sane default behavior.
     """
+
     def __init__(self, fn):
         """
         Constructor
@@ -33,7 +35,7 @@ class Poutine(object):
 
             # send back the final val
             return r_val
-        except Exception as e:
+        except Exception:
             self._flush_stack()
             raise
 

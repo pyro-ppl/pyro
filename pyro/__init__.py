@@ -1,15 +1,15 @@
-from pyro.params.param_store import ParamStoreDict
-from torch.autograd import Variable
-from pyro.optim.optim import PyroOptim
 from inspect import isclass
-import pyro
-from torch.nn import Parameter
+
 import torch
+from torch.autograd import Variable
+from torch.nn import Parameter
 
-from pyro import distributions, infer, nn, params, util, poutine
-
-from pyro.util import zeros, ones
+import pyro
+from pyro import util
+from pyro.optim.optim import PyroOptim
 from pyro.params import param_with_module_name
+from pyro.params.param_store import ParamStoreDict
+from pyro.util import zeros, ones  # noqa: F401
 
 # global map of params for now
 _param_store = ParamStoreDict()

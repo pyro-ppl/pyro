@@ -1,22 +1,17 @@
 from __future__ import print_function
+
+import time
+
+import networkx
+import numpy as np
 import torch
 import torch.optim
 from torch.autograd import Variable
-from torch import nn as nn
-from torch.nn import Parameter
-import numpy as np
 
 import pyro
 import pyro.distributions as dist
-from tests.common import TestCase
-
 from pyro.infer.tracegraph_kl_qp import TraceGraph_KL_QP
-from pyro.infer.kl_qp import KL_QP
-from pyro.util import ng_ones, ng_zeros, ones, zeros
-from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
-
-import time
-import networkx
+from tests.common import TestCase
 
 
 class GaussianChainTests(TestCase):

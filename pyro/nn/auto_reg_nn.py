@@ -1,14 +1,16 @@
 import torch
 import torch.nn as nn
-from torch.nn import functional as F
 from torch.autograd import Variable
-from pyro.util import ng_ones, ng_zeros
+from torch.nn import functional as F
+
+from pyro.util import ng_ones
 
 
 class MaskedLinear(nn.Linear):
     """
     a linear mapping with a given mask on the weights (arbitrary bias)
     """
+
     def __init__(self, in_features, out_features, mask, bias=True):
         super(MaskedLinear, self).__init__(in_features, out_features, bias)
         self.mask = mask
@@ -25,6 +27,7 @@ class AutoRegressiveNN(nn.Module):
     that encode the allowed dependencies
     reference: https://arxiv.org/abs/1502.03509
     """
+
     def __init__(self, input_dim, hidden_dim,
                  lin1=None, mask_encoding=None, output_bias=None):
         super(AutoRegressiveNN, self).__init__()

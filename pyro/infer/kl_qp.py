@@ -1,5 +1,5 @@
-import torch
 from torch.autograd import Variable
+
 import pyro
 import pyro.poutine as poutine
 

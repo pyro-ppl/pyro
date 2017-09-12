@@ -1,16 +1,11 @@
 import torch
 import torch.optim
 from torch.autograd import Variable
-from torch import nn as nn
-from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
-from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
-from pyro.infer.importance import Importance
-from tests.common import TestCase
-
 from pyro.infer.kl_qp import KL_QP
+from tests.common import TestCase
 
 
 class NormalNormalTests(TestCase):
