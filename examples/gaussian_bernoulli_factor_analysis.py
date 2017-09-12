@@ -112,7 +112,7 @@ grad_step = KL_QP(factor_analysis_model, factor_analysis_guide, adam_optim)
 # apply it to minibatches of data by hand:
 def main():
     parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', type=int, required=True)
+    parser.add_argument('-n', '--num-epochs', nargs='?', default=1000, type=int)
     args = parser.parse_args()
     for i in range(args.num_epochs):
         epoch_loss = 0.

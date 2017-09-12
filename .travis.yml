@@ -11,7 +11,7 @@ before_install:
 
 install:
     # this will be in setup.py
-    - pip install numpy scipy cloudpickle funcy graphviz networkx visdom
+    - pip install numpy scipy cloudpickle funcy graphviz networkx visdom pytest pytest-cov
     # install pytorch and its dependencies
     - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
           pip install http://download.pytorch.org/whl/cu75/torch-0.2.0.post2-cp27-cp27mu-manylinux1_x86_64.whl;
@@ -21,7 +21,7 @@ install:
     - pip install torchvision
 
 script:
-    - PYTHONPATH=$PWD:$PYTHONPATH ./tests/run_tests.sh
+    - PYTHONPATH=$PWD:$PYTHONPATH pytest -s --cov=pyro
 
 matrix:
     fast_finish: true

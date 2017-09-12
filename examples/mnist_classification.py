@@ -3,7 +3,6 @@ import torch
 import pyro
 from torch.autograd import Variable
 from pyro.infer.kl_qp import KL_QP
-from pyro.infer.abstract_infer import lw_expectation
 from pyro.distributions import DiagNormal, Normal, Bernoulli, Categorical
 from torch import nn
 
@@ -96,7 +95,7 @@ vis = visdom.Visdom()
 
 def main():
     parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', type=int, required=True)
+    parser.add_argument('-n', '--num-epochs', nargs='?', default=1000, type=int)
     args = parser.parse_args()
     for i in range(args.num_epochs):
         epoch_loss = 0.

@@ -4,6 +4,13 @@ from torch.autograd import Variable
 from torch.nn import Parameter
 
 
+def detach_iterable(iterable):
+    if isinstance(iterable, Variable):
+        return iterable.detach()
+    else:
+        return [var.detach() for var in iterable]
+
+
 def _dict_to_tuple(d):
     """
     Recursively converts a dictionary to a list of key-value tuples
@@ -154,6 +161,22 @@ def tensor_histogram(ps, vs):
         vs2.append(hist[k][1])
     # return dict suitable for passing into Categorical
     return {"ps": torch.cat(ps2), "vs": np.array(vs2).flatten()}
+
+
+def basic_histogram(ps, vs):
+    """
+    make a histogram from weighted things that aren't tensors
+    Horribly slow...
+    """
+    assert isinstance(vs, (list, tuple)), \
+        "vs must be a primitive type that preserves ordering at construction"
+    hist = {}
+    for i, v in enumerate(vs):
+        if v not in hist:
+            hist[v] = 0.0
+        hist[v] = hist[v] + ps[i]
+    return {"ps": torch.cat([hist[v] for v in hist.keys()]),
+            "vs": [v for v in hist.keys()]}
 
 
 def get_scale(data, batch_size):
