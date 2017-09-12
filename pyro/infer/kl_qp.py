@@ -49,7 +49,7 @@ class KL_QP(object):  # AbstractInfer):
         self.optim_step_fct = optim_step_fct
         self.model_fixed = model_fixed
         self.guide_fixed = guide_fixed
-        self.num_particles = nr_particles
+        self.num_particles = num_particles
 
     def __call__(self, *args, **kwargs):
         return self.step(*args, **kwargs)
@@ -57,8 +57,7 @@ class KL_QP(object):  # AbstractInfer):
 
     def eval_bound(self, *args, **kwargs):
         """
-        Evaluate Elbo by running nr_particles often.
-        This nr_particles can differ from the one used globally for gradient estimation if set, but generally matches global values.
+        Evaluate Elbo by running num_particles often.
         Returns the Elbo as a value
         """
         model_traces = []
@@ -106,7 +105,7 @@ class KL_QP(object):  # AbstractInfer):
 
     def eval_grad(self, *args, **kwargs):
         """
-        Evaluates the statistics for a single gradient step of ELBO based on nr_particles many samples.
+        Evaluates the statistics for a single gradient step of ELBO based on num_particles many samples.
         """
 
         model_traces = []
@@ -177,12 +176,12 @@ class KL_QP(object):  # AbstractInfer):
 
         num_particles = self.num_particles
 
-        if 'loss' not in kwargs.keys():
+        if 'loss_and_params' not in kwargs.keys():
             
             [loss, all_trainable_params] = self.eval_grad(*args, **kwargs)
         
         else:
-            [loss,all_trainable_params] = kwargs['loss']
+            [loss,all_trainable_params] = kwargs['loss_and_params']
 
         loss.backward()
 
