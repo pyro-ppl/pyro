@@ -80,10 +80,8 @@ class KL_QP(object):  # AbstractInfer):
         elbo = 0.0
         for i in range(nr_particles):
             elbo_particle = 0.0
-            log_r_s = 0.0
             model_trace = model_traces[i]
             guide_trace = guide_traces[i]
-            log_r = log_r_per_sample[i]
 
             for name in model_trace.keys():
                 if model_trace[name]["type"] == "observe":
