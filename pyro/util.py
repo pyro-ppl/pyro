@@ -163,6 +163,22 @@ def tensor_histogram(ps, vs):
     return {"ps": torch.cat(ps2), "vs": np.array(vs2).flatten()}
 
 
+def basic_histogram(ps, vs):
+    """
+    make a histogram from weighted things that aren't tensors
+    Horribly slow...
+    """
+    assert isinstance(vs, (list, tuple)), \
+        "vs must be a primitive type that preserves ordering at construction"
+    hist = {}
+    for i, v in enumerate(vs):
+        if v not in hist:
+            hist[v] = 0.0
+        hist[v] = hist[v] + ps[i]
+    return {"ps": torch.cat([hist[v] for v in hist.keys()]),
+            "vs": [v for v in hist.keys()]}
+
+
 def get_scale(data, batch_size):
     """
     Compute scale and batch indices used for subsampling in map_data
