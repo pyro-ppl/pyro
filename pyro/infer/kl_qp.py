@@ -34,7 +34,9 @@ class KL_QP(object):  # AbstractInfer):
                  guide,
                  optim_step_fct,
                  model_fixed=False,
-                 guide_fixed=False, *args, **kwargs):
+                 guide_fixed=False,
+                 num_particles = 1,
+                 *args, **kwargs):
         """
         Call parent class initially, then setup the poutines to run
         """
@@ -42,40 +44,107 @@ class KL_QP(object):  # AbstractInfer):
         super(KL_QP, self).__init__()
         # TODO init this somewhere else in a more principled way
         self.sites = None
-
         self.model = model
         self.guide = guide
         self.optim_step_fct = optim_step_fct
         self.model_fixed = model_fixed
         self.guide_fixed = guide_fixed
+        self.num_particles = num_particles
 
     def __call__(self, *args, **kwargs):
         return self.step(*args, **kwargs)
 
-    def step(self, *args, **kwargs):
-        """
-        Takes a single step of optimization
-        """
 
-        guide_trace = poutine.trace(self.guide)(*args, **kwargs)
-        model_trace = poutine.trace(
-            poutine.replay(self.model, guide_trace))(*args, **kwargs)
+    def eval_bound(self, *args, **kwargs):
+        """
+        Evaluate Elbo by running num_particles often.
+        Returns the Elbo as a value
+        """
+        model_traces = []
+        guide_traces = []
+        log_r_per_sample = []
 
-        # compute losses
-        log_r = model_trace.log_pdf() - guide_trace.log_pdf()
+        num_particles = self.num_particles
+
+        for i in range(num_particles):
+            guide_trace = poutine.trace(self.guide)(*args, **kwargs)
+            model_trace = poutine.trace(
+                poutine.replay(self.model, guide_trace))(*args, **kwargs)
+
+            log_r = model_trace.log_pdf() - guide_trace.log_pdf()
+            log_r_per_sample.append(log_r)
+            model_traces.append(model_trace)
+            guide_traces.append(guide_trace)
+
 
         elbo = 0.0
-        for name in model_trace.keys():
-            if model_trace[name]["type"] == "observe":
-                elbo += model_trace[name]["log_pdf"]
-            elif model_trace[name]["type"] == "sample":
-                if model_trace[name]["fn"].reparameterized:
-                    elbo += model_trace[name]["log_pdf"]
-                    elbo -= guide_trace[name]["log_pdf"]
+        for i in range(num_particles):
+            elbo_particle = 0.0
+            log_r_s = 0.0
+            model_trace = model_traces[i]
+            guide_trace = guide_traces[i]
+            log_r = log_r_per_sample[i]
+
+            for name in model_trace.keys():
+                if model_trace[name]["type"] == "observe":
+                    elbo_particle += model_trace[name]["log_pdf"]
+                elif model_trace[name]["type"] == "sample":
+                    elbo_particle += model_trace[name]["log_pdf"]
+                    elbo_particle -= guide_trace[name]["log_pdf"]
+                    
                 else:
-                    elbo += Variable(log_r.data) * guide_trace[name]["log_pdf"]
-            else:
-                pass
+                    pass
+            elbo += elbo_particle
+       
+
+        # gradients
+        loss = -elbo
+
+        return loss.data[0]
+
+
+    def eval_grad(self, *args, **kwargs):
+        """
+        Evaluates the statistics for a single gradient step of ELBO based on num_particles many samples.
+        """
+
+        model_traces = []
+        guide_traces = []
+        log_r_per_sample = []
+
+        num_particles = self.num_particles
+
+        for i in range(num_particles):
+            guide_trace = poutine.trace(self.guide)(*args, **kwargs)
+            model_trace = poutine.trace(
+                poutine.replay(self.model, guide_trace))(*args, **kwargs)
+
+            log_r = model_trace.log_pdf() - guide_trace.log_pdf()
+            log_r_per_sample.append(log_r)
+            model_traces.append(model_trace)
+            guide_traces.append(guide_trace)
+
+
+        elbo = 0.0
+        for i in range(num_particles):
+            elbo_particle = 0.0
+            log_r_s = 0.0
+            model_trace = model_traces[i]
+            guide_trace = guide_traces[i]
+            log_r = log_r_per_sample[i]
+
+            for name in model_trace.keys():
+                if model_trace[name]["type"] == "observe":
+                    elbo_particle += model_trace[name]["log_pdf"]
+                elif model_trace[name]["type"] == "sample":
+                    if model_trace[name]["fn"].reparameterized:
+                        elbo_particle += model_trace[name]["log_pdf"]
+                        elbo_particle -= guide_trace[name]["log_pdf"]
+                    else:
+                        elbo_particle += Variable(log_r.data) * guide_trace[name]["log_pdf"]
+                else:
+                    pass
+            elbo += elbo_particle
 
         # accumulate parameters
         all_trainable_params = []
@@ -93,7 +162,29 @@ class KL_QP(object):  # AbstractInfer):
 
         # gradients
         loss = -elbo
+
+        return loss, all_trainable_params
+
+
+    def step(self, *args, **kwargs): #nr_particles=None, loss=None,
+        """
+        Takes a single step of optimization by using the elbo loss and then applying autograd
+        Returns the Elbo as a value
+
+        If "loss" has been precomputed it can be passed into it, else it runs eval_grad with nr_partricles
+        """
+
+        num_particles = self.num_particles
+
+        if 'loss_and_params' not in kwargs.keys():
+            
+            [loss, all_trainable_params] = self.eval_grad(*args, **kwargs)
+        
+        else:
+            [loss,all_trainable_params] = kwargs['loss_and_params']
+
         loss.backward()
+
         # update
         self.optim_step_fct(all_trainable_params)
         # zero grads
