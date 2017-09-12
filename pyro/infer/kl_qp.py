@@ -9,9 +9,9 @@ class KL_QP(object):
     :param model: probabilistic model defined as a function
     :param guide: guide used for sampling defined as a function
     :param optim: optimization function
-    :param model_fixed: flag for if the model is fixed
+    :param model_fixed: flag that controls whether the model parameters are fixed during optimization
     :type model_fixed: bool
-    :param guide_fixed: flag for if the guide is fixed
+    :param guide_fixed: flag that controls whether the guide parameters are fixed during optimization
     :type guide_fixed: bool
 
     This method performs variational inference by minimizing the
@@ -100,14 +100,14 @@ class KL_QP(object):
                 else:
                     pass
             elbo += elbo_particle / self.num_particles
-        # gradients
         loss = -elbo
 
         return loss.data[0]
 
     def eval_grad(self, *args, **kwargs):
         """
-        Evaluates the statistics for a single gradient step of ELBO based on num_particles many samples.
+        Computes a surrogate loss, which, when differentiated yields an estimate of the gradient of the Elbo.
+        Num_particle many samples are used to form the surrogate loss.
         """
 
         [model_traces, guide_traces, log_r_per_sample] = self.populate_traces(*args, **kwargs)
@@ -137,17 +137,21 @@ class KL_QP(object):
         all_trainable_params = []
         # get trace params from last model run
         if not self.model_fixed:
-            for name in model_trace.keys():
-                if model_trace[name]["type"] == "param":
-                    all_trainable_params.append(model_trace[name]["value"])
+            for i in range(self.num_particles):
+                model_trace = model_traces[i]
+                for name in model_trace.keys():
+                    if model_trace[name]["type"] == "param":
+                        all_trainable_params.append(model_trace[name]["value"])
         # get trace params from last guide run
         if not self.guide_fixed:
-            for name in guide_trace.keys():
-                if guide_trace[name]["type"] == "param":
-                    all_trainable_params.append(guide_trace[name]["value"])
+            for i in range(self.num_particles):
+                guide_trace = guide_traces[i]
+                for name in guide_trace.keys():
+                    if guide_trace[name]["type"] == "param":
+                        all_trainable_params.append(guide_trace[name]["value"])
+        
         all_trainable_params = list(set(all_trainable_params))
 
-        # gradients
         loss = -elbo
 
         return loss, all_trainable_params
@@ -156,8 +160,7 @@ class KL_QP(object):
         """
         Takes a single step of optimization by using the elbo loss and then applying autograd
         Returns the Elbo as a value
-
-        If "loss" has been precomputed it can be passed into it, else it runs eval_grad with nr_partricles
+        If "loss" has been precomputed it can be passed into it, else it runs eval_grad with num_partricles
         """
 
         num_particles = self.num_particles
