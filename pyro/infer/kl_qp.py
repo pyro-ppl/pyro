@@ -4,7 +4,6 @@ from collections import OrderedDict
 import pyro
 import pyro.poutine as poutine
 # from pyro.infer.abstract_infer import AbstractInfer
-import pdb as pdb
 
 
 class KL_QP(object):  # AbstractInfer):
@@ -36,7 +35,7 @@ class KL_QP(object):  # AbstractInfer):
                  optim_step_fct,
                  model_fixed=False,
                  guide_fixed=False,
-                 nr_particles = 1,
+                 num_particles = 1,
                  *args, **kwargs):
         """
         Call parent class initially, then setup the poutines to run
@@ -50,7 +49,7 @@ class KL_QP(object):  # AbstractInfer):
         self.optim_step_fct = optim_step_fct
         self.model_fixed = model_fixed
         self.guide_fixed = guide_fixed
-        self.nr_particles = nr_particles
+        self.num_particles = nr_particles
 
     def __call__(self, *args, **kwargs):
         return self.step(*args, **kwargs)
@@ -66,9 +65,9 @@ class KL_QP(object):  # AbstractInfer):
         guide_traces = []
         log_r_per_sample = []
 
-        nr_particles = self.nr_particles
+        num_particles = self.num_particles
 
-        for i in range(nr_particles):
+        for i in range(num_particles):
             guide_trace = poutine.trace(self.guide)(*args, **kwargs)
             model_trace = poutine.trace(
                 poutine.replay(self.model, guide_trace))(*args, **kwargs)
@@ -80,7 +79,7 @@ class KL_QP(object):  # AbstractInfer):
 
 
         elbo = 0.0
-        for i in range(nr_particles):
+        for i in range(num_particles):
             elbo_particle = 0.0
             log_r_s = 0.0
             model_trace = model_traces[i]
@@ -114,9 +113,9 @@ class KL_QP(object):  # AbstractInfer):
         guide_traces = []
         log_r_per_sample = []
 
-        nr_particles = self.nr_particles
+        num_particles = self.num_particles
 
-        for i in range(nr_particles):
+        for i in range(num_particles):
             guide_trace = poutine.trace(self.guide)(*args, **kwargs)
             model_trace = poutine.trace(
                 poutine.replay(self.model, guide_trace))(*args, **kwargs)
@@ -126,15 +125,9 @@ class KL_QP(object):  # AbstractInfer):
             model_traces.append(model_trace)
             guide_traces.append(guide_trace)
 
-        # guide_trace = poutine.trace(self.guide)(*args, **kwargs)
-        # model_trace = poutine.trace(
-        #     poutine.replay(self.model, guide_trace))(*args, **kwargs)
-
-        # # compute losses
-        # log_r = model_trace.log_pdf() - guide_trace.log_pdf()
 
         elbo = 0.0
-        for i in range(nr_particles):
+        for i in range(num_particles):
             elbo_particle = 0.0
             log_r_s = 0.0
             model_trace = model_traces[i]
@@ -182,7 +175,7 @@ class KL_QP(object):  # AbstractInfer):
         If "loss" has been precomputed it can be passed into it, else it runs eval_grad with nr_partricles
         """
 
-        nr_particles = self.nr_particles
+        num_particles = self.num_particles
 
         if 'loss' not in kwargs.keys():
             

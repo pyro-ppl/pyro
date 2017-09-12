@@ -134,7 +134,7 @@ def per_param_args(name, param):
 adam_params = {"lr": .0001}
 
 kl_optim = KL_QP(model, guide, pyro.optim(optim.Adam, adam_params))
-kl_eval = KL_QP(model=model, guide=guide, optim_step_fct=pyro.optim(optim.Adam, adam_params), nr_particles = 10)
+kl_eval = KL_QP(model=model, guide=guide, optim_step_fct=pyro.optim(optim.Adam, adam_params), num_particles = 10)
 
 # num_steps = 1
 mnist_data = Variable(train_loader.dataset.train_data.float() / 255.)
