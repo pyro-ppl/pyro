@@ -107,7 +107,7 @@ class SearchTest(HMMSamplingTestCase):
 class ImportanceTest(NormalNormalSamplingTestCase):
 
     def test_importance_guide(self):
-        posterior = pyro.infer.Importance(self.model, guide=self.guide, samples=2000)
+        posterior = pyro.infer.Importance(self.model, guide=self.guide, num_samples=2000)
         marginal = pyro.infer.Marginal(posterior)
         posterior_samples = [marginal() for i in range(1000)]
         posterior_mean = torch.mean(torch.cat(posterior_samples))
@@ -118,7 +118,7 @@ class ImportanceTest(NormalNormalSamplingTestCase):
                          prec=0.1)
 
     def test_importance_prior(self):
-        posterior = pyro.infer.Importance(self.model, guide=None, samples=2000)
+        posterior = pyro.infer.Importance(self.model, guide=None, num_samples=2000)
         marginal = pyro.infer.Marginal(posterior)
         posterior_samples = [marginal() for i in range(1000)]
         posterior_mean = torch.mean(torch.cat(posterior_samples))
