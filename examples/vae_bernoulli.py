@@ -177,7 +177,7 @@ def main():
         #vis.image(sample[0].view(28, 28).data.numpy())
         vis.image(sample_mu[0].view(28, 28).data.numpy())
         print("epoch avg loss {}".format(epoch_loss / float(mnist_size)))
-        print("epoch eval loss {}".format(epoch_loss / float(mnist_size)))
+        print("epoch eval loss {}".format(epoch_eval_loss / float(mnist_size)))
 
 if __name__ == '__main__':
     main()
