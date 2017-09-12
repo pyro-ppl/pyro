@@ -3,21 +3,20 @@ import torch
 from torch.autograd import Variable
 import pyro
 import pyro.util
-from pyro.distributions import Categorical
-
-import pdb
+import pyro.distributions as dist
+import pyro.poutine as poutine
 
 
 class Histogram(pyro.distributions.Distribution):
     """
-    Histogram
+    Abstract Histogram distribution.  For now, should not be using outside Marginal.
     """
     @pyro.util.memoize
     def _dist(self, *args, **kwargs):
         """
-        Convert a histogram over traces to a histogram over return values
-        Currently very inefficient...
+        This is an abstract method 
         """
+        # XXX currently this whole object is very inefficient
         vs, log_weights = [], []
         for v, log_weight in self._gen_weighted_samples(*args, **kwargs):
             vs.append(v)
@@ -25,33 +24,36 @@ class Histogram(pyro.distributions.Distribution):
 
         log_weights = torch.cat(log_weights)
         if not isinstance(log_weights, torch.autograd.Variable):
-            log_weights = torch.autograd.Variable(log_weights)
+            log_weights = Variable(log_weights)
         log_z = pyro.util.log_sum_exp(log_weights)
         ps = torch.exp(log_weights - log_z.expand_as(log_weights))
 
-        # pdb.set_trace()
-        if isinstance(vs[0], (torch.autograd.Variable, torch.Tensor, np.ndarray)):
+        if isinstance(vs[0], (Variable, torch.Tensor, np.ndarray)):
             hist = pyro.util.tensor_histogram(ps, vs)
         else:
             hist = pyro.util.basic_histogram(ps, vs)
-        return pyro.distributions.Categorical(ps=hist["ps"], vs=hist["vs"])
+        return dist.Categorical(ps=hist["ps"], vs=hist["vs"])
 
     def _gen_weighted_samples(self, *args, **kwargs):
         raise NotImplementedError("_gen_weighted_samples is abstract method")
 
     def sample(self, *args, **kwargs):
-        return pyro.poutine.block(self._dist)(*args, **kwargs).sample()[0]
+        return poutine.block(self._dist)(*args, **kwargs).sample()[0]
 
     def log_pdf(self, val, *args, **kwargs):
-        return pyro.poutine.block(self._dist)(*args, **kwargs).log_pdf([val])
+        return poutine.block(self._dist)(*args, **kwargs).log_pdf([val])
 
     def support(self, *args, **kwargs):
-        return pyro.poutine.block(self._dist)(*args, **kwargs).support()
+        return poutine.block(self._dist)(*args, **kwargs).support()
 
 
 class Marginal(Histogram):
     """
-    Marginal histogram
+    :param trace_dist: a TracePosterior instance representing a Monte Carlo posterior
+
+    Marginal histogram distribution. 
+    Turns a TracePosterior object into a Distribution
+    over the return values of the TracePosterior's model.
     """
     def __init__(self, trace_dist):
         assert isinstance(trace_dist, TracePosterior), \
@@ -66,25 +68,24 @@ class Marginal(Histogram):
 
 class TracePosterior(object):
     """
-    abstract inference class
-    TODO documentation
+    Abstract TracePosterior object from which posterior inference algorithms inherit.
+    Holds a generator over Traces sampled from the approximate posterior.
+    Not actually a distribution object - no sample or score methods.
     """
     def __init__(self):
         pass
 
-    def _gen_weighted_samples(self, *args, **kwargs):
-        for tr, log_weight in self._traces(*args, **kwargs):
-            yield (tr, log_weight)
-
     def _traces(self, *args, **kwargs):
         """
-        Virtual method to get unnormalized weighted list of posterior traces
+        Abstract method.
+        Get unnormalized weighted list of posterior traces
         """
         raise NotImplementedError("inference algorithm must implement _traces")
 
-    # XXX this isnt a good abstraction for marginal likelihood estimation
     def log_z(self, *args, **kwargs):
         """
-        estimate marginal probability of observations
+        Abstract method.
+        Algorithm-specific estimate of marginal log-probability of observations.
+        Should have same input signature as self.model and self.guide and return a scalar.
         """
         raise NotImplementedError("inference algorithm must implement log_z")

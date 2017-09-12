@@ -12,11 +12,14 @@ from pyro.infer import TracePosterior
 
 class Search(TracePosterior):
     """
+    :param model: probabilistic model defined as a function
+    :param max_tries: the maximum number of times to try completing a trace from the queue.
+    :type max_tries: int
     New Trace and Poutine-based implementation of systematic search
     """
     def __init__(self, model, max_tries=1e6):
         """
-        Constructor
+        Constructor. Default max_tries to something sensible - 1e6.
         """
         self.model = model
         self.max_tries = int(max_tries)
@@ -28,6 +31,7 @@ class Search(TracePosterior):
         Running until the queue is empty and collecting the marginal histogram
         is performing exact inference
         """
+        # currently only using the standard library queue
         self.queue = Queue()
         self.queue.put(poutine.Trace())
 
@@ -41,7 +45,6 @@ class Search(TracePosterior):
         """
         harmonic mean log-evidence estimator
         """
-        # XXX weights not correct?
         log_z = 0.0
         n = 0
         # TODO parallelize
