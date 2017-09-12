@@ -135,6 +135,8 @@ adam_params = {"lr": .0001}
 
 kl_optim = KL_QP(model, guide, pyro.optim(optim.Adam, adam_params))
 
+kl_eval = KL_QP(model=model, guide=guide, optim_step_fct=pyro.optim(optim.Adam, adam_params), nr_particles = 10)
+
 # num_steps = 1
 mnist_data = Variable(train_loader.dataset.train_data.float() / 255.)
 mnist_size = mnist_data.size(0)
@@ -165,6 +167,8 @@ def main():
             batch_data = mnist_data[batch_start:batch_end]
 
             epoch_loss += kl_optim.step(batch_data)
+            
+            epoch_loss += kl_eval.eval_bound(batch_data)
 
         loss_training.append(-epoch_loss / float(mnist_size))
         sample, sample_mu = model_sample()
