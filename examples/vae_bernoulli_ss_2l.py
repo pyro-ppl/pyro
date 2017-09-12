@@ -64,6 +64,14 @@ test_loader = torch.utils.data.DataLoader(
 
 def workflow(data, classes):
     z_mu,z_sigma = pt_encode_o.forward(data,classes)
+
+    z1_mu, z1_sigma = encoder_l1.forward(data)
+    z1 = pyro.sample(DiagNormal(z1_mu, z1_sigma))
+    z2_mu, z2_sigma = encoder_l2.forward(z1, classes)
+
+    z_mu = z2_mu
+    z_sigma = z2_sigma
+
     import numpy as np
     import matplotlib
     matplotlib.use('Agg')
@@ -97,75 +105,89 @@ def workflow(data, classes):
 
 class Encoder_c(nn.Module):
 
-    def __init__(self):
+    def __init__(self, dimX = None, dimC=None, dimh1 = None):
         super(Encoder_c, self).__init__()
-        self.fc1 = nn.Linear(784, 200)
-        self.fc21 = nn.Linear(200, 10)
+        self.fc1 = nn.Linear(dimX, dimh1)
+        self.fc21 = nn.Linear(dimh1, dimC)
         self.relu = nn.ReLU()
         self.softmax = nn.Softmax()
 
     def forward(self, x):
-        x = x.view(-1, 784)
+        #x = x.view(-1, 784)
         h1 = self.relu(self.fc1(x))
         return self.softmax(self.fc21(h1))
 
 
 class Encoder_o(nn.Module):
 
-    def __init__(self):
+    def __init__(self, dimX = None, dimC=None, dimZ=None, dimh1 = None):
         super(Encoder_o, self).__init__()
-        self.fc1 = nn.Linear(784 + 10, 400)
-        self.fc21 = nn.Linear(400, 20)
-        self.fc22 = nn.Linear(400, 20)
+        self.fc1 = nn.Linear(dimX+dimC, dimh1)
+        self.fc21 = nn.Linear(dimh1, dimZ)
+        self.fc22 = nn.Linear(dimh1, dimZ)
         self.relu = nn.ReLU()
+        self.dimX = dimX
+        self.dimC = dimC
 
     def forward(self, x, cll):
-        x = x.view(-1, 784)
+        x = x.view(-1, self.dimX)
         input_vec = torch.cat((x, cll), 1)
         h1 = self.relu(self.fc1(input_vec))
         return self.fc21(h1), torch.exp(self.fc22(h1))
 
 
-class Decoder(nn.Module):
-    def __init__(self):
-        super(Decoder, self).__init__()
-        self.fc3 = nn.Linear(20 + 10, 400)
-        self.fc4 = nn.Linear(400, 1 * 784)
+class Encoder_z(nn.Module):
+
+    def __init__(self, dimX = None, dimZ=None, dimh1 = None):
+        super(Encoder_z, self).__init__()
+        self.fc1 = nn.Linear(dimX, dimh1)
+        self.fc21 = nn.Linear(dimh1, dimZ)
+        self.fc22 = nn.Linear(dimh1, dimZ)
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        x = x.view(-1, 784)
+        h1 = self.relu(self.fc1(x))
+        return self.fc21(h1), torch.exp(self.fc22(h1))
+
+
+class Decoder_Bern(nn.Module):
+    def __init__(self, dimX = None, dimL=None, dimh1 = None):
+        super(Decoder_Bern, self).__init__()
+        self.fc3 = nn.Linear(dimL, dimh1)
+        self.fc4 = nn.Linear(dimh1, 1 * dimX)
         self.sigmoid = nn.Sigmoid()
         self.relu = nn.ReLU()
 
-    def forward(self, z, cll):
-        input_vec = torch.cat((z, cll), 1)
-        h3 = self.relu(self.fc3(input_vec))
+    def forward(self, z):
+        h3 = self.relu(self.fc3(z))
         rv = self.sigmoid(self.fc4(h3))
         # reshape to capture mu, sigma params for every pixel
         rvs = rv.view(z.size(0), -1, 1)
         # send back two params
-        return rv  # rvs[:,:, 0]
+        return rv
+
+class Decoder_Gauss(nn.Module):
+    def __init__(self, dimX = None, dimL=None, dimh1 = None):
+        super(Decoder_Gauss, self).__init__()
+        self.fc3 = nn.Linear(dimL, dimh1)
+        self.fc41 = nn.Linear(dimh1, 1 * dimX)
+        self.fc42 = nn.Linear(dimh1, 1 * dimX)
+        self.relu = nn.ReLU()
+
+    def forward(self, z, cll):
+        input_vec = torch.cat((z, cll), 1)
+        h1 = self.relu(self.fc3(input_vec))
+        return self.fc41(h1), torch.exp(self.fc42(h1))
 
 
-pt_encode_c = Encoder_c()
-pt_encode_o = Encoder_o()
-pt_decode = Decoder()
+pt_encode_c = Encoder_c(dimX= 50, dimC = 10, dimh1 = 200)
 
+pt_encode_l1 = Encoder_z(dimX=784, dimZ=50, dimh1=400)
+pt_encode_o = Encoder_o(dimX=50, dimC=10, dimZ=20, dimh1=200)
 
-def model_latent_backup(data):
-    # wrap params for use in model -- required
-    decoder = pyro.module("decoder", pt_decode)
-    # sample from prior
-    z_mu, z_sigma = Variable(torch.zeros([data.size(0), 20])), Variable(
-        torch.ones([data.size(0), 20]))
-
-    # sample
-    z = pyro.sample("latent_z", DiagNormal(z_mu, z_sigma))
-
-    alpha = Variable(torch.ones([data.size(0), 10])) / 10.
-    cll = pyro.sample('latent_class', Categorical(alpha))
-
-    # decode into size of imgx2 for mu/sigma
-    img_mu = decoder.forward(z, cll)
-    # score against actual images
-    pyro.observe("obs", Bernoulli(img_mu), data.view(-1, 784))
+pt_decode_l2 = Decoder_Gauss(dimX = 50, dimL=20+10, dimh1 = 200)
+pt_decode_l1 = Decoder_Bern(dimX = 784, dimL=50, dimh1 = 400)
 
 
 def model_latent(data):
@@ -176,62 +198,64 @@ def model_latent(data):
 
 def model_observed(data, cll):
     # wrap params for use in model -- required
-    decoder = pyro.module("decoder", pt_decode)
+    decoder_l2 = pyro.module("decoder2", pt_decode_l2)
+    decoder_l1 = pyro.module("decoder1", pt_decode_l1)
 
     # sample from prior
-    z_mu, z_sigma = Variable(torch.zeros([data.size(0), 20])), Variable(
+    z2_mu, z2_sigma = Variable(torch.zeros([data.size(0), 20])), Variable(
         torch.ones([data.size(0), 20]))
 
     # sample
-    z = pyro.sample("latent_z", DiagNormal(z_mu, z_sigma))
+    z2 = pyro.sample("latent_z2", DiagNormal(z2_mu, z2_sigma))
 
     # decode into size of imgx2 for mu/sigma
-    img_mu = decoder.forward(z, cll)
+    z1_mu, z1_sigma = decoder_l2.forward(z2, cll)
+
+    z1 = pyro.sample("latent_z1", DiagNormal(z1_mu, z1_sigma))
+
+    img_mu = decoder_l1.forward(z1)
 
     # score against actual images
     pyro.observe("obs", Bernoulli(img_mu), data.view(-1, 784))
+    pass
 
 
 def guide_observed(data, cll):
-    encoder = pyro.module("encoder_o", pt_encode_o)
-    z_mu, z_sigma = encoder.forward(data, cll)
-    z = pyro.sample("latent_z", DiagNormal(z_mu, z_sigma))
+    encoder_l2 = pyro.module("encoder_o", pt_encode_o)
 
+    z1 = guide_layer1(data)
 
-def guide_observed2(data, cll):
+    z2_mu, z2_sigma = encoder_l2.forward(z1, cll)
+    z2 = pyro.sample("latent_z2", DiagNormal(z2_mu, z2_sigma))
+    pass
+
+def guide_layer1(data):
+    """
+    Here we could also condition z1 on cll if avaiulable to get a better version, unclear what to do best.
+    The paper does this, but pretrains M1 instead of learning it jointly.
+    """
+    encoder_l1 = pyro.module("encoder_l1", pt_encode_l1)
+
+    z1_mu, z1_sigma = encoder_l1.forward(data)
+    z1 = pyro.sample("latent_z1", DiagNormal(z1_mu, z1_sigma))
+    return z1
+
+def guide_latent(z1):
     encoder_c = pyro.module("encoder_c", pt_encode_c)
-    alpha = encoder_c.forward(data)
-    pyro.observe("latent_class", Categorical(alpha), cll)
-
-    encoder = pyro.module("encoder_o", pt_encode_o)
-    z_mu, z_sigma = encoder.forward(data, cll)
-    z = pyro.sample("latent_z", DiagNormal(z_mu, z_sigma))
-
-
-def guide_latent(data):
-    encoder_c = pyro.module("encoder_c", pt_encode_c)
-    alpha = encoder_c.forward(data)
+    alpha = encoder_c.forward(z1)
     cll = pyro.sample("latent_class", Categorical(alpha))
     guide_observed(data, cll)
+    pass
 
-
-def guide_latent2(data):
-    encoder_c = pyro.module("encoder_c", pt_encode_c)
-    alpha = encoder_c.forward(data)
-    cll = pyro.sample("latent_class", Categorical(alpha))
-
-    encoder = pyro.module("encoder_o", pt_encode_o)
-    z_mu, z_sigma = encoder.forward(data, cll)
-    z = pyro.sample("latent_z", DiagNormal(z_mu, z_sigma))
 
 
 def model_sample(cll=None):
     # sample from prior
-    z_mu, z_sigma = Variable(torch.zeros(
+    z1_mu, z1_sigma = Variable(torch.zeros(
         [1, 20])), Variable(torch.ones([1, 20]))
 
     # sample
-    z = pyro.sample("latent", DiagNormal(z_mu, z_sigma))
+    z2 = pyro.sample("latent_z2", DiagNormal(z_mu, z_sigma))
 
     alpha = Variable(torch.ones([1, 10]) / 10.)
 
@@ -240,9 +264,13 @@ def model_sample(cll=None):
         print('sampling class')
 
     # decode into size of imgx1 for mu
-    img_mu = pt_decode.forward(z, cll)
+    z1_mu, z1_sigma = pt_decode_l2.forward(z2, cll)
+
+    z1 = pyro.sample("latent_z1", DiagNormal(z_mu, z_sigma))
+
+    img_mu = pt_decode_l1.forward(z1)
     # score against actual images
-    img = pyro.sample("sample", Bernoulli(img_mu))
+    img = pyro.sample("sample_observation", Bernoulli(img_mu))
     return img, img_mu
 
 
@@ -261,9 +289,6 @@ inference_observed_class = KL_QP(
     model_observed, guide_observed, pyro.optim(
         optim.Adam, adam_params))
 
-inference_observed_class_scored = KL_QP(
-    model_observed, guide_observed2, pyro.optim(
-        optim.Adam, adam_params))
 
 mnist_data = Variable(train_loader.dataset.train_data.float() / 255.)
 mnist_labels = Variable(train_loader.dataset.train_labels)
@@ -294,7 +319,6 @@ cll_clamp0[0, 0] = 1
 cll_clamp3[0, 3] = 1
 cll_clamp9[0, 9] = 1
 
-
 loss_training = []
 
 def main():
@@ -324,22 +348,22 @@ def main():
 
         loss_training.append(epoch_loss / float(mnist_size))
 
-        if np.mod(i,5)==0:
-            if i>0:
-                workflow(mnist_data_test,mnist_labels_test)
+        # if np.mod(i,5)==0:
+        #     if i>0:
+        #         workflow(mnist_data_test,mnist_labels_test)
 
-        if 0:#np.mod(i,8)==0:
-            for rr in range(5):
-                sample0, sample_mu0 = model_sample(cll=cll_clamp0)
-                sample3, sample_mu3 = model_sample(cll=cll_clamp3)
-                sample9, sample_mu9 = model_sample(cll=cll_clamp9)
-                vis.line(np.array(loss_training), opts=dict({'title': 'my title'}))
-                vis.image(batch_data[0].view(28, 28).data.numpy())
-                #vis.image(sample[0].view(28, 28).data.numpy())
-                vis.image(sample_mu0[0].view(28, 28).data.numpy())
-                vis.image(sample_mu3[0].view(28, 28).data.numpy())
-                vis.image(sample_mu9[0].view(28, 28).data.numpy())
-                
+        # if 0:#np.mod(i,8)==0:
+        #     for rr in range(5):
+        #         sample0, sample_mu0 = model_sample(cll=cll_clamp0)
+        #         sample3, sample_mu3 = model_sample(cll=cll_clamp3)
+        #         sample9, sample_mu9 = model_sample(cll=cll_clamp9)
+        #         vis.line(np.array(loss_training), opts=dict({'title': 'my title'}))
+        #         vis.image(batch_data[0].view(28, 28).data.numpy())
+        #         #vis.image(sample[0].view(28, 28).data.numpy())
+        #         vis.image(sample_mu0[0].view(28, 28).data.numpy())
+        #         vis.image(sample_mu3[0].view(28, 28).data.numpy())
+        #         vis.image(sample_mu9[0].view(28, 28).data.numpy())
+
         print("epoch "+str(i)+" avg loss {}".format(epoch_loss / float(mnist_size)))
 
         pass
