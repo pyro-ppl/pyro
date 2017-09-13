@@ -165,7 +165,7 @@ class Poutine(object):
         if isinstance(data, (torch.Tensor, Variable)):
             ret = fn(msg["indices"], ind_data)
         else:
-            ret = list(map(lambda ix: fn(*ix), enumerate(ind_data)))
+            ret = list(map(lambda ix: fn(*ix), zip(msg["indices"], ind_data)))
         return ret
 
     def _pyro_param(self, msg, name, *args, **kwargs):
