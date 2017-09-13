@@ -28,7 +28,7 @@ install:
     - pip install torchvision
 
 script:
-    - flake8 && PYTHONPATH=$PWD:$PYTHONPATH pytest -s --cov=pyro tests/$TEST_DIRECTORY
+    - flake8 && PYTHONPATH=$PWD:$PYTHONPATH pytest -vs --cov=pyro tests/$TEST_DIRECTORY
 
 matrix:
     fast_finish: true
