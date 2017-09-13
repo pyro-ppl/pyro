@@ -21,6 +21,7 @@ emission_dim = 100 if not quick_mode else 5
 rnn_dim = 600 if not quick_mode else 5
 rnn_num_layers = 2
 
+
 # parameterizes p(x_t | z_t)
 class Emitter(nn.Module):
     def __init__(self, input_dim, z_dim, emission_dim):
@@ -34,8 +35,9 @@ class Emitter(nn.Module):
     def forward(self, z):
         h1 = self.relu(self.lin1(z))
         h2 = self.relu(self.lin2(h1))
-	ps = self.sigmoid(self.lin3(h2))
+        ps = self.sigmoid(self.lin3(h2))
         return ps
+
 
 # parameterizes p(z_t | z_{t-1})
 class GatedTransition(nn.Module):
@@ -59,6 +61,7 @@ class GatedTransition(nn.Module):
         mu = (ng_ones(g.size()) - g) * self.lin_mu(z) + g * h
         sigma = self.softplus(self.lin_sig(self.relu(h)))
         return mu, sigma
+
 
 # parameterizes q(z_t | z_{t-1}, x_{t:T})
 # the dependence on x_{t:T} is through the hidden state of the RNN (see pt_rnn below)
@@ -84,37 +87,40 @@ pt_combiner = Combiner(z_dim, rnn_dim)
 pt_rnn = nn.RNN(input_size=input_dim, hidden_size=rnn_dim, nonlinearity='relu',
                 batch_first=True, bidirectional=False, num_layers=rnn_num_layers)
 
+
 # the model
-def model(mini_batch, mini_batch_reversed, T_max):
+def model(mini_batch, mini_batch_reversed, mini_batch_mask, T_max):
     emitter = pyro.module("emitter", pt_emitter)
     trans = pyro.module("transition", pt_trans)
     mini_batch_size = mini_batch.size(0)
-    z_prev = pyro.param("z_0", zeros(z_dim)) #.expand(mini_batch_size, z_dim)
+    z_prev = pyro.param("z_0", zeros(z_dim))
 
     for t in range(1, T_max + 1):
         z_mu, z_sigma = trans(z_prev)
-        z_t = pyro.sample("z_%d" % t, DiagNormal(z_mu, z_sigma))
-	emission_probs_t = emitter(z_t)
-        pyro.observe("obs_x_%d" % t, dist.bernoulli, mini_batch[:, t - 1, :], emission_probs_t)
+        z_t = pyro.sample("z_%d" % t, DiagNormal(z_mu, z_sigma),
+                          log_pdf_mask=mini_batch_mask[:, t - 1:t].expand(mini_batch_size, z_dim))
+        emission_probs_t = emitter(z_t)
+        pyro.observe("obs_x_%d" % t, dist.bernoulli, mini_batch[:, t - 1, :], emission_probs_t,
+                     log_pdf_mask=mini_batch_mask[:, t - 1:t].expand(mini_batch_size, input_dim))
         z_prev = z_t
 
     return z_prev
 
+
 # the guide
-def guide(mini_batch, mini_batch_reversed, T_max):
+def guide(mini_batch, mini_batch_reversed, mini_batch_mask, T_max):
     mini_batch_size = mini_batch.size(0)
     h_0 = pyro.param("h_0", zeros(rnn_num_layers, 1, rnn_dim))
-    #.expand(rnn_num_layers, mini_batch_size, rnn_dim)
     rnn = pyro.module("rnn", pt_rnn)
     combiner = pyro.module("combiner", pt_combiner)
     rnn_output, _ = rnn(mini_batch_reversed, h_0)
     rnn_output, _ = torch.nn.utils.rnn.pad_packed_sequence(rnn_output, batch_first=True)
     z_prev = pyro.param("z_q_0", zeros(z_dim))
-    #.expand(mini_batch_size, z_dim)
 
     for t in range(1, T_max + 1):
         z_mu, z_sigma = combiner(z_prev, rnn_output[:, T_max - t, :])
-        z_t = pyro.sample("z_%d" % t, DiagNormal(z_mu, z_sigma))
+        z_t = pyro.sample("z_%d" % t, DiagNormal(z_mu, z_sigma),
+                          log_pdf_mask=mini_batch_mask[:, t - 1:t].expand(mini_batch_size, z_dim))
         z_prev = z_t
 
     return z_prev
@@ -122,6 +128,7 @@ def guide(mini_batch, mini_batch_reversed, T_max):
 # optimization done with Adam
 adam_params = {"lr": .0008}
 kl_optim = KL_QP(model, guide, pyro.optim(optim.Adam, adam_params))
+
 
 # setup and optimization loop
 def main():
@@ -142,8 +149,14 @@ def main():
     def reverse_sequences(mini_batch, seq_lengths):
         for b in range(mini_batch.shape[0]):
             T = seq_lengths[b]
-            mini_batch[b, 0:T, :] = mini_batch[b, (T-1)::-1, :]
+            mini_batch[b, 0:T, :] = mini_batch[b, (T - 1)::-1, :]
         return mini_batch
+
+    def get_mini_batch_mask(mini_batch, seq_lengths):
+        mask = np.zeros(mini_batch.shape[0:2])
+        for b in range(mini_batch.shape[0]):
+            mask[b, 0:seq_lengths[b]] = np.ones(seq_lengths[b])
+        return mask
 
     def get_training_mini_batch(mini_batch_size):
         data_indices = np.random.choice(N_train_data, mini_batch_size, replace=False)
@@ -158,16 +171,17 @@ def main():
                                                                       batch_first=True)
         mini_batch_time_slices = np.sum(seq_lengths)
         T_max = np.max(seq_lengths)
+        mini_batch_mask = Variable(torch.Tensor(get_mini_batch_mask(mini_batch, sorted_seq_lengths)))
 
-        return Variable(torch.Tensor(mini_batch)), mini_batch_reversed,\
+        return Variable(torch.Tensor(mini_batch)), mini_batch_reversed, mini_batch_mask,\
             mini_batch_time_slices, T_max
 
     for epoch in range(args.num_epochs):
         epoch_nll, total_time_slices = 0.0, 0.0
         for _ in range(N_mini_batches):
-            mini_batch, mini_batch_reversed, mini_batch_time_slices, \
-                    T_max = get_training_mini_batch(mini_batch_size)
-            loss = kl_optim.step(mini_batch, mini_batch_reversed, T_max)
+            mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_time_slices, \
+                T_max = get_training_mini_batch(mini_batch_size)
+            loss = kl_optim.step(mini_batch, mini_batch_reversed, mini_batch_mask, T_max)
             total_time_slices += mini_batch_time_slices
             epoch_nll += loss
         times.append(time.time())
