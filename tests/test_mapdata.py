@@ -38,14 +38,14 @@ class NormalNormalTests(TestCase):
 
     def test_elbo_tensor(self):
         for batch_size in self.batch_sizes:
-            self.do_elbo_test(True, 10000, batch_size, map_type="tensor")
+            self.do_elbo_test(True, 15000, batch_size, map_type="tensor")
 
     def test_elbo_none(self):
         self.do_elbo_test(True, 10000, 0, map_type=None)
 
     def test_elbo_list(self):
         for batch_size in self.batch_sizes:
-            self.do_elbo_test(True, 10000, batch_size, map_type="list")
+            self.do_elbo_test(True, 15000, batch_size, map_type="list")
 
     def do_elbo_test(self, reparameterized, n_steps, batch_size, map_type):
         if self.verbose:
@@ -111,7 +111,7 @@ class NormalNormalTests(TestCase):
 
         kl_optim = KL_QP(
             model, guide, pyro.optim(
-                torch.optim.Adam, {"lr": 0.008, "betas": (0.95, 0.999)}))
+                torch.optim.Adam, {"lr": 0.0008, "betas": (0.95, 0.999)}))
         for k in range(n_steps):
             kl_optim.step()
 
@@ -126,8 +126,8 @@ class NormalNormalTests(TestCase):
                     pyro.param("log_sig_q"),
                     2.0))
 
-            if self.verbose and k % 500 == 0:
+            if self.verbose and k % 5000 == 0:
                 print("errors", mu_error.data.numpy()[0], log_sig_error.data.numpy()[0])
 
-        self.assertEqual(0.0, mu_error.data.cpu().numpy()[0], prec=0.05)
-        self.assertEqual(0.0, log_sig_error.data.cpu().numpy()[0], prec=0.05)
+        self.assertEqual(0.0, mu_error.data.cpu().numpy()[0], prec=0.06)
+        self.assertEqual(0.0, log_sig_error.data.cpu().numpy()[0], prec=0.07)
