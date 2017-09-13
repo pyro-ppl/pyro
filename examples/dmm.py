@@ -137,10 +137,24 @@ def main():
     args = parser.parse_args()
 
     training_data = cPickle.load(open("jsb_processed.pkl", "rb"))['train']
-    training_data_seq_lengths = np.array(training_data['sequence_lengths'], dtype=np.int32)
-    training_data_sequences = training_data['array']
+    training_data_seq_lengths = training_data['sequence_lengths']
+    training_data_sequences = training_data['sequences']
     N_train_data = len(training_data_seq_lengths)
     times = [time.time()]
+
+    def get_training_mini_batch(batch_size=10):
+        data_indices = np.random.choice(N_train_data, batch_size, replace=False)
+        seq_lengths = training_data_seq_lengths[data_indices]
+        sorted_seq_length_indices = np.argsort(seq_lengths)[::-1]
+        sorted_seq_lengths = seq_lengths[sorted_seq_length_indices]
+        sorted_data_indices = data_indices[sorted_seq_length_indices]
+        mini_batch = Variable(torch.Tensor(training_data_sequences[sorted_data_indices, :, :]))
+        mini_batch = torch.nn.utils.rnn.pack_padded_sequence(mini_batch, sorted_seq_lengths,
+                                                             batch_first=True)
+        return mini_batch
+
+    print "get_training_mini_batch", get_training_mini_batch()
+
 
     for epoch in range(args.num_epochs):
         epoch_nll = 0.0
