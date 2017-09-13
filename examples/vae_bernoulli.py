@@ -167,7 +167,7 @@ def main():
 
             epoch_loss += kl_optim.step(batch_data)
             
-            epoch_eval_loss += kl_eval.eval_bound(batch_data)
+            epoch_eval_loss += kl_eval.eval_objective(batch_data)
 
         loss_training.append(-epoch_loss / float(mnist_size))
         sample, sample_mu = model_sample()
