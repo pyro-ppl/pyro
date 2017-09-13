@@ -65,7 +65,6 @@ class DiagNormal(Distribution):
                                  Variable(torch.ones(_sigma.size()).type_as(_mu.data)))),
                                  0.5 * torch.pow(((x - _mu) / _sigma), 2))
         if 'log_pdf_mask' in kwargs:
-            #print "mask log pdf in diagnorm; mask size", kwargs['log_pdf_mask'].size(), "logpxs size", log_pxs.size()
             return torch.sum(kwargs['log_pdf_mask'] * log_pxs)
         return torch.sum(log_pxs)
 

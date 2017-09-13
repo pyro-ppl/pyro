@@ -52,7 +52,6 @@ class Bernoulli(Distribution):
         xmul_1 = torch.mul(x_1, ps_1)
         logsum = torch.log(torch.add(xmul, xmul_1))
         if 'log_pdf_mask' in kwargs:
-            #print "mask bernoulli logpdf; mask size", kwargs['log_pdf_mask'].size(), " logsumsize", logsum.size()
             return torch.sum(kwargs['log_pdf_mask'] * logsum)
         return torch.sum(logsum)
 
