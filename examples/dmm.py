@@ -65,6 +65,7 @@ class GatedTransition(nn.Module):
         return mu, sigma
 
 # parameterizes q(z_t | z_{t-1}, x_{t:T})
+# the dependence on x_{t:T} is through the hidden state of the RNN (see pt_rnn below)
 class Combiner(nn.Module):
     def __init__(self, z_dim, rnn_dim):
         super(Combiner, self).__init__()
@@ -80,12 +81,12 @@ class Combiner(nn.Module):
         sigma = self.softplus(self.lin_sig(h_combined))
         return mu, sigma
 
-# instantiate pytorch modules
-pt_rnn = nn.RNN(input_size=input_dim, hidden_size=rnn_dim, nonlinearity='relu',
-                batch_first=True, bidirectional=False, num_layers=rnn_num_layers)
+# instantiate pytorch modules that make up the model and the inference network
 pt_emitter = Emitter(input_dim, z_dim, emission_dim)
 pt_trans = GatedTransition(z_dim, transition_dim)
 pt_combiner = Combiner(z_dim, rnn_dim)
+pt_rnn = nn.RNN(input_size=input_dim, hidden_size=rnn_dim, nonlinearity='relu',
+                batch_first=True, bidirectional=False, num_layers=rnn_num_layers)
 
 # the model
 def model(x_seq):
