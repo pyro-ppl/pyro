@@ -1,21 +1,17 @@
 import argparse
 import torch
 import pyro
-from torch.autograd import Variable
 from pyro.infer.kl_qp import KL_QP
 from pyro.distributions import DiagNormal
 import pyro.distributions as dist
 from pyro.util import ng_zeros, ng_ones
 from pyro.util import zeros, ones
-import cPickle
-
-import torch
 import torch.nn as nn
 from torch.autograd import Variable
-import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
 import time
+import cPickle
 
 quick_mode = False
 input_dim = 88
@@ -89,38 +85,35 @@ pt_rnn = nn.RNN(input_size=input_dim, hidden_size=rnn_dim, nonlinearity='relu',
                 batch_first=True, bidirectional=False, num_layers=rnn_num_layers)
 
 # the model
-def model(x_seq):
+def model(mini_batch, mini_batch_reversed, T_max):
     emitter = pyro.module("emitter", pt_emitter)
     trans = pyro.module("transition", pt_trans)
-    T = x_seq.size(0)
-    z_prev = pyro.param("z_0", zeros(z_dim))
+    mini_batch_size = mini_batch.size(0)
+    z_prev = pyro.param("z_0", zeros(z_dim)) #.expand(mini_batch_size, z_dim)
 
-    for t in range(1, T + 1):
+    for t in range(1, T_max + 1):
         z_mu, z_sigma = trans(z_prev)
         z_t = pyro.sample("z_%d" % t, DiagNormal(z_mu, z_sigma))
 	emission_probs_t = emitter(z_t)
-        pyro.observe("obs_x_%d" % t, dist.bernoulli, x_seq[t - 1, :], emission_probs_t)
+        pyro.observe("obs_x_%d" % t, dist.bernoulli, mini_batch[:, t - 1, :], emission_probs_t)
         z_prev = z_t
 
     return z_prev
 
-# reverses a sequence (need this since RNN in guide runs from right to left)
-def reverse(x_seq):
-    idx = list(range(x_seq.size(0) - 1, -1, -1))
-    idx = Variable(torch.LongTensor(idx))
-    return x_seq.index_select(0, idx)
-
 # the guide
-def guide(x_seq):
+def guide(mini_batch, mini_batch_reversed, T_max):
+    mini_batch_size = mini_batch.size(0)
     h_0 = pyro.param("h_0", zeros(rnn_num_layers, 1, rnn_dim))
+    #.expand(rnn_num_layers, mini_batch_size, rnn_dim)
     rnn = pyro.module("rnn", pt_rnn)
     combiner = pyro.module("combiner", pt_combiner)
-    rnn_output, _ = rnn(reverse(x_seq).view(-1, 1, input_dim), h_0)
+    rnn_output, _ = rnn(mini_batch_reversed, h_0)
+    rnn_output, _ = torch.nn.utils.rnn.pad_packed_sequence(rnn_output, batch_first=True)
     z_prev = pyro.param("z_q_0", zeros(z_dim))
-    T = x_seq.size(0)
+    #.expand(mini_batch_size, z_dim)
 
-    for t in range(1, T + 1):
-        z_mu, z_sigma = combiner(z_prev, rnn_output[T-t, 0, :])
+    for t in range(1, T_max + 1):
+        z_mu, z_sigma = combiner(z_prev, rnn_output[:, T_max - t, :])
         z_t = pyro.sample("z_%d" % t, DiagNormal(z_mu, z_sigma))
         z_prev = z_t
 
@@ -146,36 +139,40 @@ def main():
     print "N_train_data: %d   avg. seq. length: %.2f" % (N_train_data, np.mean(training_data_seq_lengths))
     times = [time.time()]
 
+    def reverse_sequences(mini_batch, seq_lengths):
+        for b in range(mini_batch.shape[0]):
+            T = seq_lengths[b]
+            mini_batch[b, 0:T, :] = mini_batch[b, (T-1)::-1, :]
+        return mini_batch
+
     def get_training_mini_batch(mini_batch_size):
         data_indices = np.random.choice(N_train_data, mini_batch_size, replace=False)
         seq_lengths = training_data_seq_lengths[data_indices]
         sorted_seq_length_indices = np.argsort(seq_lengths)[::-1]
         sorted_seq_lengths = seq_lengths[sorted_seq_length_indices]
         sorted_data_indices = data_indices[sorted_seq_length_indices]
-        mini_batch = Variable(torch.Tensor(training_data_sequences[sorted_data_indices, :, :]))
-        mini_batch = torch.nn.utils.rnn.pack_padded_sequence(mini_batch, sorted_seq_lengths,
-                                                             batch_first=True)
+        mini_batch = training_data_sequences[sorted_data_indices, :, :]
+        mini_batch_reversed = Variable(torch.Tensor(reverse_sequences(mini_batch, sorted_seq_lengths)))
+        mini_batch_reversed = torch.nn.utils.rnn.pack_padded_sequence(mini_batch_reversed,
+                                                                      sorted_seq_lengths,
+                                                                      batch_first=True)
         mini_batch_time_slices = np.sum(seq_lengths)
+        T_max = np.max(seq_lengths)
 
-    idx = list(range(x_seq.size(0) - 1, -1, -1))
-    idx = Variable(torch.LongTensor(idx))
-    return x_seq.index_select(0, idx)
-
-        return mini_batch, mini_batch_time_slices
-
+        return Variable(torch.Tensor(mini_batch)), mini_batch_reversed,\
+            mini_batch_time_slices, T_max
 
     for epoch in range(args.num_epochs):
-        epoch_nll = 0.0
-        total_time_slices = 0.0
-        for mini_batch in range(N_mini_batches):
-            x_seqs, mini_batch_time_slices = get_training_mini_batch(mini_batch_size)
-            loss = kl_optim.step(x_seqs)
+        epoch_nll, total_time_slices = 0.0, 0.0
+        for _ in range(N_mini_batches):
+            mini_batch, mini_batch_reversed, mini_batch_time_slices, \
+                    T_max = get_training_mini_batch(mini_batch_size)
+            loss = kl_optim.step(mini_batch, mini_batch_reversed, T_max)
             total_time_slices += mini_batch_time_slices
             epoch_nll += loss
         times.append(time.time())
         epoch_time = times[-1] - times[-2]
-        print "[epoch %03d]  %.4f    (dt = %.3f sec)" % (epoch,
-            epoch_nll / float(total_time_slices), epoch_time)
+        print "[epoch %03d]  %.4f    (dt = %.3f sec)" % (epoch, epoch_nll / total_time_slices, epoch_time)
 
 if __name__ == '__main__':
     main()
