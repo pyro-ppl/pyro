@@ -176,6 +176,7 @@ def map_data(name, data, fn, batch_size=None):
             "indices": None,
             "scale": None,
             "ret": None,
+            "done": False,
         }
         # apply the stack and return its return value
         out_msg = apply_stack(msg)
