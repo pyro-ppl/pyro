@@ -3,6 +3,7 @@ from pyro.distributions.bernoulli import Bernoulli
 from pyro.distributions.beta import Beta
 from pyro.distributions.categorical import Categorical
 from pyro.distributions.delta import Delta
+from pyro.distributions.distribution import Distribution
 # specific distributions
 from pyro.distributions.diag_normal import DiagNormal
 from pyro.distributions.dirichlet import Dirichlet

@@ -86,10 +86,8 @@ class KL_QP(object):
         elbo = 0.0
         for i in range(self.num_particles):
             elbo_particle = 0.0
-            log_r_s = 0.0
             model_trace = model_traces[i]
             guide_trace = guide_traces[i]
-            log_r = log_r_per_sample[i]
 
             for name in model_trace.keys():
                 if model_trace[name]["type"] == "observe":
@@ -115,7 +113,6 @@ class KL_QP(object):
         elbo = 0.0
         for i in range(self.num_particles):
             elbo_particle = 0.0
-            log_r_s = 0.0
             model_trace = model_traces[i]
             guide_trace = guide_traces[i]
             log_r = log_r_per_sample[i]
@@ -160,8 +157,6 @@ class KL_QP(object):
         Returns the Elbo as a value
         If "loss" has been precomputed it can be passed into it, else it runs eval_grad with num_partricles
         """
-
-        num_particles = self.num_particles
 
         if 'loss_and_params' not in kwargs.keys():
             [loss, all_trainable_params] = self.eval_grad(*args, **kwargs)
