@@ -1,8 +1,4 @@
-import torch
-import numpy as np
-import pyro.distributions
-import pyro.util
-import pyro.poutine
+# flake8: noqa
 
 from pyro.infer.abstract_infer import Marginal, TracePosterior
 from pyro.infer.search import Search

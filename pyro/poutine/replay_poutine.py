@@ -1,8 +1,6 @@
-import pyro
 import torch
 from torch.autograd import Variable
 
-from .trace import Trace
 from .poutine import Poutine
 from .scale_poutine import ScalePoutine
 
@@ -11,6 +9,7 @@ class ReplayPoutine(Poutine):
     """
     Poutine for replaying from an existing execution trace
     """
+
     def __init__(self, fn, guide_trace, sites=None):
         """
         Constructor.

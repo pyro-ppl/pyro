@@ -1,6 +1,4 @@
 import pyro
-import torch
-from torch.autograd import Variable
 
 from .poutine import Poutine
 from .scale_poutine import ScalePoutine
@@ -18,6 +16,7 @@ class TracePoutine(Poutine):
 
     We can also use this for visualization.
     """
+
     def _enter_poutine(self, *args, **kwargs):
         """
         Register the input arguments in the trace upon entry

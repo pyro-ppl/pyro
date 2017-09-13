@@ -1,18 +1,17 @@
 from __future__ import print_function
+
 import torch
 import torch.optim
-from torch.autograd import Variable
 from torch import nn as nn
+from torch.autograd import Variable
 from torch.nn import Parameter
-import numpy as np
 
 import pyro
 import pyro.distributions as dist
-from tests.common import TestCase
-
-from pyro.infer.tracegraph_kl_qp import TraceGraph_KL_QP
-from pyro.util import ng_ones, ng_zeros, ones, zeros
 from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
+from pyro.infer.tracegraph_kl_qp import TraceGraph_KL_QP
+from pyro.util import ng_ones, ng_zeros
+from tests.common import TestCase
 
 
 class NormalNormalTests(TestCase):
@@ -187,11 +186,13 @@ class NormalNormalNormalTests(TestCase):
                                     use_decaying_avg_baseline=use_decaying_avg_baseline)
             mu_latent_prime_dist = dist.DiagNormal(kappa_q.expand_as(mu_latent) * mu_latent + mu_q_prime,
                                                    sig_q_prime)
-            mu_latent_prime = pyro.sample("mu_latent_prime", mu_latent_prime_dist,
-                                          reparameterized=repa1,
-                                          nn_baseline=mu_prime_baseline,
-                                          nn_baseline_input=mu_latent,
-                                          use_decaying_avg_baseline=use_decaying_avg_baseline)
+            pyro.sample("mu_latent_prime",
+                        mu_latent_prime_dist,
+                        reparameterized=repa1,
+                        nn_baseline=mu_prime_baseline,
+                        nn_baseline_input=mu_latent,
+                        use_decaying_avg_baseline=use_decaying_avg_baseline)
+
             return mu_latent
 
         kl_optim = TraceGraph_KL_QP(model, guide, pyro.optim(

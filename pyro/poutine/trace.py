@@ -1,6 +1,3 @@
-import pyro
-
-
 def get_parents(node, trace):
     """
     Get the parents of a node in a trace
@@ -13,6 +10,7 @@ class Trace(dict):
     """
     Execution trace data structure
     """
+
     def add_sample(self, name, scale, val, fn, *args, **kwargs):
         """
         Sample site

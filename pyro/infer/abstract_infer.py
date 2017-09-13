@@ -1,10 +1,11 @@
 import numpy as np
 import torch
 from torch.autograd import Variable
+
 import pyro
-import pyro.util
 import pyro.distributions as dist
 import pyro.poutine as poutine
+import pyro.util
 
 
 class Histogram(pyro.distributions.Distribution):

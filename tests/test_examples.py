@@ -1,11 +1,8 @@
 from __future__ import print_function
 
-import torch
 import os
 import sys
-import subprocess
 from os.path import isfile, join
-import signal
 from subprocess import Popen, PIPE, STDOUT
 
 from tests.common import TestCase
