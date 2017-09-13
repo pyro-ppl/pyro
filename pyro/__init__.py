@@ -162,7 +162,7 @@ def map_data(name, data, fn, batch_size=None):
         if isinstance(data, (torch.Tensor, Variable)):
             ret = fn(ind, ind_data)
         else:
-            ret = list(map(lambda ix: fn(*ix), enumerate(ind_data)))
+            ret = list(map(lambda ix: fn(*ix), zip(ind, ind_data)))
         return ret
     else:
         # initialize data structure to pass up/down the stack
