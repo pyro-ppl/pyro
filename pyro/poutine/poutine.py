@@ -147,29 +147,26 @@ class Poutine(object):
         """
         Default pyro.map_data Poutine behavior
         """
-        if msg["ret"] is not None:
-            return msg["ret"]
+        if batch_size is None:
+            batch_size = 0
+        assert batch_size >= 0, "cannot have negative batch sizes"
+        if msg["scale"] is None and msg["indices"] is None:
+            scale, ind = pyro.util.get_scale(data, batch_size)
+            msg["scale"] = scale
+            msg["indices"] = ind
+
+        if batch_size == 0:
+            ind_data = data
+        elif isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
+            ind_data = data.index_select(0, msg["indices"])
         else:
-            if batch_size is None:
-                batch_size = 0
-            assert batch_size >= 0, "cannot have negative batch sizes"
-            if msg["scale"] is None and msg["indices"] is None:
-                scale, ind = pyro.util.get_scale(data, batch_size)
-                msg["scale"] = scale
-                msg["indices"] = ind
+            ind_data = [data[i] for i in msg["indices"]]
 
-            if batch_size == 0:
-                ind_data = data
-            elif isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
-                ind_data = data.index_select(0, msg["indices"])
-            else:
-                ind_data = [data[i] for i in msg["indices"]]
-
-            if isinstance(data, (torch.Tensor, Variable)):
-                ret = fn(msg["indices"], ind_data)
-            else:
-                ret = list(map(lambda ix: fn(*ix), enumerate(ind_data)))
-            return ret
+        if isinstance(data, (torch.Tensor, Variable)):
+            ret = fn(msg["indices"], ind_data)
+        else:
+            ret = list(map(lambda ix: fn(*ix), enumerate(ind_data)))
+        return ret
 
     def _pyro_param(self, msg, name, *args, **kwargs):
         """
