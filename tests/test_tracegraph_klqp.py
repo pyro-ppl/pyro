@@ -122,24 +122,12 @@ class NormalNormalNormalTests(TestCase):
     def test_elbo_nonreparameterized_both_baselines(self):
         self.do_elbo_test(False, False, 15000, 0.05, 0.001, use_nn_baseline=True,
                           use_decaying_avg_baseline=True)
-        self.do_elbo_test(True, False, 12000, 0.04, 0.0015, use_nn_baseline=True,
-                          use_decaying_avg_baseline=True)
-        self.do_elbo_test(False, True, 12000, 0.04, 0.0015, use_nn_baseline=True,
-                          use_decaying_avg_baseline=True)
 
     def test_elbo_nonreparameterized_decaying_baseline(self):
-        self.do_elbo_test(False, False, 15000, 0.05, 0.001, use_nn_baseline=False,
-                          use_decaying_avg_baseline=True)
         self.do_elbo_test(True, False, 12000, 0.04, 0.0015, use_nn_baseline=False,
-                          use_decaying_avg_baseline=True)
-        self.do_elbo_test(False, True, 12000, 0.04, 0.0015, use_nn_baseline=False,
                           use_decaying_avg_baseline=True)
 
     def test_elbo_nonreparameterized_nn_baseline(self):
-        self.do_elbo_test(False, False, 15000, 0.05, 0.001, use_nn_baseline=True,
-                          use_decaying_avg_baseline=False)
-        self.do_elbo_test(True, False, 12000, 0.04, 0.0015, use_nn_baseline=True,
-                          use_decaying_avg_baseline=False)
         self.do_elbo_test(False, True, 12000, 0.04, 0.0015, use_nn_baseline=True,
                           use_decaying_avg_baseline=False)
 
