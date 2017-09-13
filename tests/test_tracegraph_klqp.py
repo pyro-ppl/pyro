@@ -39,10 +39,11 @@ class NormalNormalTests(TestCase):
         self.verbose = False
 
     def test_elbo_reparameterized(self):
-        self.do_elbo_test(True, 1000)
+    #    self.do_elbo_test(True, 1000)
+        self.do_elbo_test(True, 2)
 
-    def test_elbo_nonreparameterized(self):
-        self.do_elbo_test(False, 5000)
+    #def test_elbo_nonreparameterized(self):
+    #    self.do_elbo_test(False, 5000)
 
     def do_elbo_test(self, reparameterized, n_steps):
         if self.verbose:
@@ -50,15 +51,22 @@ class NormalNormalTests(TestCase):
         pyro.get_param_store().clear()
 
         def model():
+            print("entering model")
             mu_latent = pyro.sample("mu_latent", dist.diagnormal,
                                     self.mu0, torch.pow(self.lam0, -0.5),
                                     reparameterized=reparameterized)
-            for i, x in enumerate(self.data):
-                pyro.observe("obs_%d" % i, dist.diagnormal, x, mu_latent,
-                             torch.pow(self.lam, -0.5))
+            #for i, x in enumerate(self.data):
+            #    pyro.observe("obs_%d" % i, dist.diagnormal, x, mu_latent,
+            #                 torch.pow(self.lam, -0.5))
+
+            pyro.map_data("map_obs", self.data, lambda i, x:
+                          pyro.observe("obs_%d" % i, dist.diagnormal, x, mu_latent,
+                          	       torch.pow(self.lam, -0.5)), batch_size=2)
+            print("exiting model")
             return mu_latent
 
         def guide():
+            print("\n**********\nentering guide")
             mu_q = pyro.param("mu_q", Variable(self.analytic_mu_n.data + 0.334 * torch.ones(2),
                                                requires_grad=True))
             log_sig_q = pyro.param("log_sig_q", Variable(
@@ -67,6 +75,8 @@ class NormalNormalTests(TestCase):
             sig_q = torch.exp(log_sig_q)
             mu_latent = pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q,
                                     reparameterized=reparameterized)
+            pyro.map_data("map_obs", self.data, lambda i, x: None, batch_size=2)
+            print("exiting guide")
             return mu_latent
 
         kl_optim = TraceGraph_KL_QP(model, guide, pyro.optim(

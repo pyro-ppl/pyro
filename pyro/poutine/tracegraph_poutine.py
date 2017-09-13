@@ -5,6 +5,7 @@ import graphviz
 import networkx
 from collections import defaultdict
 from .trace_poutine import TracePoutine
+from .lambda_poutine import LambdaPoutine
 
 
 class TraceGraph(object):
@@ -206,3 +207,13 @@ class TraceGraphPoutine(TracePoutine):
         self.observation_nodes.append(name)
         self._add_graph_node(name)
         return val
+
+    def _pyro_map_data(self, msg, name, data, fn, batch_size=None):
+        marked_fn = LambdaPoutine(fn)
+        if msg['ret'] is None:
+            print "msg ret is None; indicies", msg['indices']
+        else:
+            print "msg ret is not None; indices", msg['indices']
+            #print "msg ret is not None", msg['ret'][0].data.numpy(),  msg['ret'][1].data.numpy()
+        return super(TraceGraphPoutine, self)._pyro_map_data(msg, name, data, marked_fn,
+                                                             batch_size=batch_size)
