@@ -9,6 +9,7 @@ import numpy as np
 import pyro
 import pyro.distributions as dist
 from tests.common import TestCase
+import pyro.poutine as poutine
 
 from pyro.infer.tracegraph_kl_qp import TraceGraph_KL_QP
 from pyro.util import ng_ones, ng_zeros, ones, zeros
@@ -32,11 +33,18 @@ class NormalNormalTests(TestCase):
         self.data.append(Variable(torch.Tensor([0.30, 0.4])))
         self.data.append(Variable(torch.Tensor([0.10, -0.3])))
         self.data.append(Variable(torch.Tensor([0.17, 0.1])))
+        self.data.append(Variable(torch.Tensor([-0.03, 0.03])))
+        self.data.append(Variable(torch.Tensor([0.15, 0.22])))
+        self.data.append(Variable(torch.Tensor([0.17, -0.09])))
+        self.data.append(Variable(torch.Tensor([0.07, 0.11])))
         self.n_data = Variable(torch.Tensor([len(self.data)]))
         self.sum_data = self.data[0] + self.data[1] + self.data[2] + self.data[3] + \
-            self.data[4] + self.data[5] + self.data[6] + self.data[7]
-        self.data = [(self.data[0], self.data[1]), (self.data[2], self.data[3]),
-                     (self.data[4], self.data[5]), (self.data[6], self.data[7])]
+            self.data[4] + self.data[5] + self.data[6] + self.data[7] + \
+            self.data[8] + self.data[9] + self.data[10] + self.data[11]
+        self.data = [(self.data[0], self.data[1], self.data[2]),
+                     (self.data[3], self.data[4], self.data[5]),
+                     (self.data[6], self.data[7], self.data[8]),
+                     (self.data[9], self.data[10], self.data[11])]
         self.analytic_lam_n = self.lam0 + \
             self.n_data.expand_as(self.lam) * self.lam
         self.analytic_log_sig_n = -0.5 * torch.log(self.analytic_lam_n)
@@ -46,7 +54,7 @@ class NormalNormalTests(TestCase):
 
     def test_elbo_reparameterized(self):
     #    self.do_elbo_test(True, 1000)
-        self.do_elbo_test(True, 10000)
+        self.do_elbo_test(False, 20000)
 
     #def test_elbo_nonreparameterized(self):
     #    self.do_elbo_test(False, 5000)
@@ -66,11 +74,12 @@ class NormalNormalTests(TestCase):
             #                  pyro.observe("obs_%d" % _x[1], dist.diagnormal, _x[0], mu_latent,
             #                               torch.pow(self.lam, -0.5)), batch_size=1), batch_size=2)
 
-            def obs(i, x1, x2):
+            def obs(i, x1, x2, x3):
                 pyro.observe("obs_%d_1" % i, dist.diagnormal, x1, mu_latent, torch.pow(self.lam, -0.5))
                 pyro.observe("obs_%d_2" % i, dist.diagnormal, x2, mu_latent, torch.pow(self.lam, -0.5))
+                pyro.observe("obs_%d_3" % i, dist.diagnormal, x3, mu_latent, torch.pow(self.lam, -0.5))
 
-            pyro.map_data("map_obs", self.data, lambda i, x: obs(i, x[0], x[1]), batch_size=1)
+            pyro.map_data("map_obs", self.data, lambda i, x: obs(i, x[0], x[1], x[2]), batch_size=2)
             #print("exiting model")
             return mu_latent
 
@@ -83,18 +92,27 @@ class NormalNormalTests(TestCase):
                                    requires_grad=True))
             sig_q = torch.exp(log_sig_q)
             mu_latent = pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q,
-                                    reparameterized=reparameterized)
+                                    reparameterized=reparameterized,
+                                    avg_decaying_baseline=True, baseline_beta=0.95)
             #pyro.map_data("map_obs_outer", self.data, lambda i, x:
             #        pyro.map_data("map_obs_inner_%d" % i, [(x, i)], lambda _i, _x: None, batch_size=1),
             #                      batch_size=2)
             #pyro.map_data("map_obs", self.data, lambda i, x: None, batch_size=2)
-            pyro.map_data("map_obs", self.data, lambda i, x: None, batch_size=1)
+            pyro.map_data("map_obs", self.data, lambda i, x: None, batch_size=2)
             #print("exiting guide")
             return mu_latent
 
+        guide_tracegraph = poutine.tracegraph(guide)()
+        guide_tracegraph.save_visualization('guide')
+        guide_trace = guide_tracegraph.get_trace()
+        model_tracegraph = poutine.tracegraph(poutine.replay(model, guide_trace))()
+        model_tracegraph.save_visualization('model')
+        model_trace = model_tracegraph.get_trace()
+
         kl_optim = TraceGraph_KL_QP(model, guide, pyro.optim(
                                     torch.optim.Adam,
-                                    {"lr": .0015, "betas": (0.97, 0.999)}))
+                                    {"lr": .001, "betas": (0.95, 0.999)}))
+
         for k in range(n_steps):
             kl_optim.step()
 
