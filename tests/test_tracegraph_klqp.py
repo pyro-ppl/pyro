@@ -1,18 +1,17 @@
 from __future__ import print_function
+
 import torch
 import torch.optim
-from torch.autograd import Variable
 from torch import nn as nn
+from torch.autograd import Variable
 from torch.nn import Parameter
-import numpy as np
 
 import pyro
 import pyro.distributions as dist
-from tests.common import TestCase
-
-from pyro.infer.tracegraph_kl_qp import TraceGraph_KL_QP
-from pyro.util import ng_ones, ng_zeros, ones, zeros
 from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
+from pyro.infer.tracegraph_kl_qp import TraceGraph_KL_QP
+from pyro.util import ng_ones, ng_zeros
+from tests.common import TestCase
 
 
 class NormalNormalTests(TestCase):
@@ -39,11 +38,10 @@ class NormalNormalTests(TestCase):
         self.verbose = False
 
     def test_elbo_reparameterized(self):
-    #    self.do_elbo_test(True, 1000)
-        self.do_elbo_test(True, 2)
+        self.do_elbo_test(True, 1000)
 
-    #def test_elbo_nonreparameterized(self):
-    #    self.do_elbo_test(False, 5000)
+    def test_elbo_nonreparameterized(self):
+        self.do_elbo_test(False, 5000)
 
     def do_elbo_test(self, reparameterized, n_steps):
         if self.verbose:
@@ -51,26 +49,15 @@ class NormalNormalTests(TestCase):
         pyro.get_param_store().clear()
 
         def model():
-            print("entering model")
             mu_latent = pyro.sample("mu_latent", dist.diagnormal,
                                     self.mu0, torch.pow(self.lam0, -0.5),
                                     reparameterized=reparameterized)
-            #for i, x in enumerate(self.data):
-            #    pyro.observe("obs_%d" % i, dist.diagnormal, x, mu_latent,
-            #                 torch.pow(self.lam, -0.5))
-
-            #pyro.map_data("map_obs_outer", self.data, lambda i, x:
-            #              pyro.map_data("map_obs_inner_%d" % i, [(x, i)], lambda _i, _x:
-            #                  pyro.observe("obs_%d" % _x[1], dist.diagnormal, _x[0], mu_latent,
-            #                               torch.pow(self.lam, -0.5)), batch_size=1), batch_size=2)
-            pyro.map_data("map_obs", self.data, lambda i, x:
-                          pyro.observe("obs_%d" % i, dist.diagnormal, x, mu_latent,
-                          	       torch.pow(self.lam, -0.5)), batch_size=2)
-            print("exiting model")
+            for i, x in enumerate(self.data):
+                pyro.observe("obs_%d" % i, dist.diagnormal, x, mu_latent,
+                             torch.pow(self.lam, -0.5))
             return mu_latent
 
         def guide():
-            print("\n**********\nentering guide")
             mu_q = pyro.param("mu_q", Variable(self.analytic_mu_n.data + 0.334 * torch.ones(2),
                                                requires_grad=True))
             log_sig_q = pyro.param("log_sig_q", Variable(
@@ -79,11 +66,6 @@ class NormalNormalTests(TestCase):
             sig_q = torch.exp(log_sig_q)
             mu_latent = pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q,
                                     reparameterized=reparameterized)
-            #pyro.map_data("map_obs_outer", self.data, lambda i, x:
-            #        pyro.map_data("map_obs_inner_%d" % i, [(x, i)], lambda _i, _x: None, batch_size=1),
-            #                      batch_size=2)
-            pyro.map_data("map_obs", self.data, lambda i, x: None, batch_size=2)
-            print("exiting guide")
             return mu_latent
 
         kl_optim = TraceGraph_KL_QP(model, guide, pyro.optim(
@@ -136,17 +118,17 @@ class NormalNormalNormalTests(TestCase):
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, True, 5000, 0.02, 0.002, False, False)
 
-    def test_elbo_nonreparameterized(self):
-        for use_nn_baseline in [True, False]:
-            for use_decaying_avg_baseline in [True, False]:
-                if not use_nn_baseline and not use_decaying_avg_baseline:
-                    continue
-                self.do_elbo_test(False, False, 15000, 0.05, 0.001, use_nn_baseline,
-                                  use_decaying_avg_baseline)
-                self.do_elbo_test(True, False, 12000, 0.04, 0.0015, use_nn_baseline,
-                                  use_decaying_avg_baseline)
-                self.do_elbo_test(False, True, 12000, 0.04, 0.0015, use_nn_baseline,
-                                  use_decaying_avg_baseline)
+    def test_elbo_nonreparameterized_both_baselines(self):
+        self.do_elbo_test(False, False, 15000, 0.05, 0.001, use_nn_baseline=True,
+                          use_decaying_avg_baseline=True)
+
+    def test_elbo_nonreparameterized_decaying_baseline(self):
+        self.do_elbo_test(True, False, 12000, 0.04, 0.0015, use_nn_baseline=False,
+                          use_decaying_avg_baseline=True)
+
+    def test_elbo_nonreparameterized_nn_baseline(self):
+        self.do_elbo_test(False, True, 12000, 0.04, 0.0015, use_nn_baseline=True,
+                          use_decaying_avg_baseline=False)
 
     def do_elbo_test(self, repa1, repa2, n_steps, prec, lr, use_nn_baseline, use_decaying_avg_baseline):
         if self.verbose:
@@ -204,11 +186,13 @@ class NormalNormalNormalTests(TestCase):
                                     use_decaying_avg_baseline=use_decaying_avg_baseline)
             mu_latent_prime_dist = dist.DiagNormal(kappa_q.expand_as(mu_latent) * mu_latent + mu_q_prime,
                                                    sig_q_prime)
-            mu_latent_prime = pyro.sample("mu_latent_prime", mu_latent_prime_dist,
-                                          reparameterized=repa1,
-                                          nn_baseline=mu_prime_baseline,
-                                          nn_baseline_input=mu_latent,
-                                          use_decaying_avg_baseline=use_decaying_avg_baseline)
+            pyro.sample("mu_latent_prime",
+                        mu_latent_prime_dist,
+                        reparameterized=repa1,
+                        nn_baseline=mu_prime_baseline,
+                        nn_baseline_input=mu_latent,
+                        use_decaying_avg_baseline=use_decaying_avg_baseline)
+
             return mu_latent
 
         kl_optim = TraceGraph_KL_QP(model, guide, pyro.optim(

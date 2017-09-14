@@ -1,16 +1,11 @@
 import torch
 import torch.optim
 from torch.autograd import Variable
-from torch import nn as nn
-from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
-from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
-from pyro.infer.importance import Importance
-from tests.common import TestCase
-
 from pyro.infer.kl_qp import KL_QP
+from tests.common import TestCase
 
 
 class NormalNormalTests(TestCase):
@@ -34,18 +29,18 @@ class NormalNormalTests(TestCase):
         self.analytic_mu_n = self.sum_data * (self.lam / self.analytic_lam_n) +\
             self.mu0 * (self.lam0 / self.analytic_lam_n)
         self.verbose = True
-        self.batch_sizes = [3, 4, 6, 7, 8, 0]
+        self.batch_sizes = [3, 7, 8, 0]
 
-#     def test_elbo_tensor(self):
-#         for batch_size in self.batch_sizes:
-#             self.do_elbo_test(True, 5000, batch_size, map_type="tensor")
-#
-#     def test_elbo_none(self):
-#         self.do_elbo_test(True, 5000, 0, map_type=None)
-#
+    def test_elbo_tensor(self):
+        for batch_size in self.batch_sizes:
+            self.do_elbo_test(True, 15000, batch_size, map_type="tensor")
+
+    def test_elbo_none(self):
+        self.do_elbo_test(True, 10000, 0, map_type=None)
+
     def test_elbo_list(self):
         for batch_size in self.batch_sizes:
-            self.do_elbo_test(True, 5000, batch_size, map_type="list")
+            self.do_elbo_test(True, 15000, batch_size, map_type="list")
 
     def do_elbo_test(self, reparameterized, n_steps, batch_size, map_type):
         if self.verbose:
@@ -57,12 +52,10 @@ class NormalNormalTests(TestCase):
             mu_latent = pyro.sample("mu_latent", dist.diagnormal,
                                     self.mu0, torch.pow(self.lam0, -0.5))
             if map_type == "list":
-                pyro.map_data("aaa", self.data, lambda i, x:
-                        pyro.map_data("aaa_%d" % i, [x], lambda _i, _x:
-                            pyro.observe(
+                pyro.map_data("aaa", self.data, lambda i,
+                              x: pyro.observe(
                                   "obs_%d" % i, dist.diagnormal,
-                                  x, mu_latent, torch.pow(self.lam, -0.5)), batch_size=1),
-                            batch_size=batch_size)
+                                  x, mu_latent, torch.pow(self.lam, -0.5)), batch_size=batch_size)
                 pyro.map_data("bbb", self.data, lambda i,
                               x: pyro.sample(
                                   "z_sample_%d" % i, dist.diagnormal,
@@ -93,8 +86,7 @@ class NormalNormalTests(TestCase):
             sig_q = torch.exp(log_sig_q)
             pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q)
             if map_type == "list" or map_type is None:
-                pyro.map_data("aaa", self.data, lambda i, x:
-                    pyro.map_data("aaa_%d" % i, [x], lambda _i, _x: None, batch_size=1), batch_size=batch_size)
+                pyro.map_data("aaa", self.data, lambda i, x: None, batch_size=batch_size)
                 pyro.map_data("bbb", self.data,
                               lambda i, x: pyro.sample(
                                   "z_sample_%d" % i, dist.diagnormal,
@@ -114,8 +106,7 @@ class NormalNormalTests(TestCase):
 
         kl_optim = KL_QP(
             model, guide, pyro.optim(
-                torch.optim.Adam, {
-                    "lr": .001}))
+                torch.optim.Adam, {"lr": 0.0008, "betas": (0.95, 0.999)}))
         for k in range(n_steps):
             kl_optim.step()
 
@@ -130,8 +121,8 @@ class NormalNormalTests(TestCase):
                     pyro.param("log_sig_q"),
                     2.0))
 
-            if self.verbose and k % 500 == 0:
+            if self.verbose and k % 5000 == 0:
                 print("errors", mu_error.data.numpy()[0], log_sig_error.data.numpy()[0])
 
-        self.assertEqual(0.0, mu_error.data.cpu().numpy()[0], prec=0.05)
-        self.assertEqual(0.0, log_sig_error.data.cpu().numpy()[0], prec=0.05)
+        self.assertEqual(0.0, mu_error.data.cpu().numpy()[0], prec=0.06)
+        self.assertEqual(0.0, log_sig_error.data.cpu().numpy()[0], prec=0.07)
