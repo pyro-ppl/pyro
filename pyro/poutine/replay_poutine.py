@@ -74,7 +74,7 @@ class ReplayPoutine(Poutine):
             msg["scale"] = self.guide_trace[name]["scale"]
             msg["indices"] = self.guide_trace[name]["indices"]
             msg["batch_size"] = self.guide_trace[name]["batch_size"]
-        #print "REPLAY MAP DATA"
+        #print "enter replay mapdata"
         ret = super(ReplayPoutine, self)._pyro_map_data(msg, name, data,
                                                         LambdaPoutine(ScalePoutine(fn, msg["scale"]), name),
                                                         batch_size=msg["batch_size"])

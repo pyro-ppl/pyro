@@ -202,10 +202,14 @@ class TraceGraphPoutine(TracePoutine):
         """
         register observe dependencies for coarse graph construction
         """
-        #print "tracegraph poutine observe msg:", msg['type'], msg.keys(), msg['lambda_counter']
-        print "tracegraph poutine observe: "
-        if '__map_data_lambda_counters' in msg:
-            print "tracegraph poutine observe: ", msg['__map_data_lambda_counters']
+        if 'current_map_data' in msg:
+        #if '__map_data_lambda_counters' in msg:
+            current_counter = msg['__map_data_lambda_counters'][msg['current_map_data']]
+            prev_node = msg['__map_data_previous_nodes'][msg['current_map_data']]
+            #print "tracegraph poutine observe: current counter", current_counter, prev_node
+        else:
+            #print "tracegraph poutine observe: no current map data "
+            pass
         val = super(TraceGraphPoutine, self)._pyro_observe(msg, name, fn, obs,
                                                            *args, **kwargs)
         self.observation_nodes.append(name)
@@ -214,7 +218,9 @@ class TraceGraphPoutine(TracePoutine):
 
     def _pyro_map_data(self, msg, name, data, fn, batch_size=None):
         marked_fn = LambdaPoutine(fn, name)
-        print "tracegraph map data"
+        #print "tracegraph map data enter"
+        #self._add_graph_node(name+'_split_node')
         return super(TraceGraphPoutine, self)._pyro_map_data(msg, name, data, marked_fn,
                                                              batch_size=batch_size)
+        #print "tracegraph map data exit"
         #self.map_data_stack.pop()
