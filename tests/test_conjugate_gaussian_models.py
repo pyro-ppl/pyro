@@ -242,10 +242,10 @@ class GaussianPyramidTests(TestCase):
         self.do_elbo_test(True, 20000, 0.0015, 0.04, 0.92,
                           difficulty=0.8, model_permutation=False)
 
-    def test_elbo_reparameterized_four_layers(self):
-        self.setup_pyramid(4)
-        self.do_elbo_test(True, 30000, 0.0015, 0.04, 0.92,
-                          difficulty=0.8, model_permutation=False)
+#     def test_elbo_reparameterized_four_layers(self):
+#         self.setup_pyramid(4)
+#         self.do_elbo_test(True, 30000, 0.0015, 0.04, 0.92,
+#                           difficulty=0.8, model_permutation=False)
 
     def test_elbo_nonreparameterized_two_layers(self):
         self.setup_pyramid(2)
@@ -259,9 +259,9 @@ class GaussianPyramidTests(TestCase):
         self.setup_pyramid(2)
         self.do_elbo_test(False, 40000, 0.0007, 0.06, 0.97, difficulty=0.4, model_permutation=True)
 
-    def test_elbo_nonreparameterized_three_layers_model_permuted(self):
-        self.setup_pyramid(3)
-        self.do_elbo_test(False, 60000, 0.0007, 0.06, 0.97, difficulty=0.4, model_permutation=True)
+#     def test_elbo_nonreparameterized_three_layers_model_permuted(self):
+#         self.setup_pyramid(3)
+#         self.do_elbo_test(False, 60000, 0.0007, 0.06, 0.97, difficulty=0.4, model_permutation=True)
 
     def calculate_variational_targets(self):
         # calculate (some of the) variational parameters corresponding to exact posterior
