@@ -20,7 +20,7 @@ transition_dim = 200 if not quick_mode else 5
 emission_dim = 100 if not quick_mode else 5
 rnn_dim = 600 if not quick_mode else 5
 rnn_num_layers = 2
-
+val_test_frequency = 10
 
 # parameterizes p(x_t | z_t)
 class Emitter(nn.Module):
@@ -110,9 +110,9 @@ def model(mini_batch, mini_batch_reversed, mini_batch_mask, T_max):
 # the guide
 def guide(mini_batch, mini_batch_reversed, mini_batch_mask, T_max):
     mini_batch_size = mini_batch.size(0)
-    h_0 = pyro.param("h_0", zeros(rnn_num_layers, 1, rnn_dim))
     rnn = pyro.module("rnn", pt_rnn)
     combiner = pyro.module("combiner", pt_combiner)
+    h_0 = pyro.param("h_0", zeros(rnn_num_layers, 1, rnn_dim))
     rnn_output, _ = rnn(mini_batch_reversed, h_0)
     rnn_output, _ = torch.nn.utils.rnn.pad_packed_sequence(rnn_output, batch_first=True)
     z_prev = pyro.param("z_q_0", zeros(z_dim))
@@ -125,25 +125,34 @@ def guide(mini_batch, mini_batch_reversed, mini_batch_mask, T_max):
 
     return z_prev
 
-# optimization done with Adam
-adam_params = {"lr": .0008}
-kl_optim = KL_QP(model, guide, pyro.optim(optim.Adam, adam_params))
-
 
 # setup and optimization loop
 def main():
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', type=int, required=True)
+    parser.add_argument('-lr', '--learning-rate', type=float, required=True)
+    parser.add_argument('-b1', '--beta1', type=float, required=True)
+    parser.add_argument('-mbs', '--mini-batch-size', type=int, required=True)
     args = parser.parse_args()
 
-    training_data = cPickle.load(open("jsb_processed.pkl", "rb"))['train']
+    adam_params = {"lr": args.learning_rate, "betas": (args.beta1, 0.999)}
+    kl_optim = KL_QP(model, guide, pyro.optim(optim.Adam, adam_params))
+
+    data = cPickle.load(open("jsb_processed.pkl", "rb"))
+    training_data, val_data, test_data = data['train'], data['valid'], data['test']
     training_data_seq_lengths = training_data['sequence_lengths']
     training_data_sequences = training_data['sequences']
+    test_data_seq_lengths = test_data['sequence_lengths']
+    test_data_sequences = test_data['sequences']
+    val_data_seq_lengths = val_data['sequence_lengths']
+    val_data_sequences = val_data['sequences']
     N_train_data = len(training_data_seq_lengths)
-    mini_batch_size = 25
-    N_mini_batches = N_train_data / mini_batch_size
+    N_mini_batches = N_train_data / args.mini_batch_size
+    if N_train_data % args.mini_batch_size > 0:
+        N_mini_batches += 1
 
-    print "N_train_data: %d   avg. seq. length: %.2f" % (N_train_data, np.mean(training_data_seq_lengths))
+    print "N_train_data: %d     avg. training seq. length: %.2f    N_mini_batches: %d" % (N_train_data,\
+        np.mean(training_data_seq_lengths), N_mini_batches)
     times = [time.time()]
 
     def reverse_sequences(mini_batch, seq_lengths):
@@ -158,13 +167,12 @@ def main():
             mask[b, 0:seq_lengths[b]] = np.ones(seq_lengths[b])
         return mask
 
-    def get_training_mini_batch(mini_batch_size):
-        data_indices = np.random.choice(N_train_data, mini_batch_size, replace=False)
-        seq_lengths = training_data_seq_lengths[data_indices]
+    def get_mini_batch(mini_batch_indices, sequences, seq_lengths):
+        seq_lengths = seq_lengths[mini_batch_indices]
         sorted_seq_length_indices = np.argsort(seq_lengths)[::-1]
         sorted_seq_lengths = seq_lengths[sorted_seq_length_indices]
-        sorted_data_indices = data_indices[sorted_seq_length_indices]
-        mini_batch = training_data_sequences[sorted_data_indices, :, :]
+        sorted_mini_batch_indices = mini_batch_indices[sorted_seq_length_indices]
+        mini_batch = sequences[sorted_mini_batch_indices, :, :]
         mini_batch_reversed = Variable(torch.Tensor(reverse_sequences(mini_batch, sorted_seq_lengths)))
         mini_batch_reversed = torch.nn.utils.rnn.pack_padded_sequence(mini_batch_reversed,
                                                                       sorted_seq_lengths,
@@ -176,17 +184,50 @@ def main():
         return Variable(torch.Tensor(mini_batch)), mini_batch_reversed, mini_batch_mask,\
             mini_batch_time_slices, T_max
 
+    def do_evaluation(data, seq_lengths):
+	N_data, eval_batch_size = data.shape[0], data.shape[0]
+	N_eval_batches = N_data / eval_batch_size
+	if N_data % eval_batch_size > 0:
+	    N_eval_batches += 1
+        eval_nll, total_time_slices = 0.0, 0.0
+
+	for which in range(N_eval_batches):
+	    mini_batch_start = (which * eval_batch_size)
+	    mini_batch_end = np.min([(which + 1) * eval_batch_size, N_data])
+	    mini_batch_indices = np.arange(mini_batch_start, mini_batch_end)
+	    mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_time_slices, \
+		T_max = get_mini_batch(mini_batch_indices, data, seq_lengths)
+	    loss = kl_optim.eval_bound(mini_batch, mini_batch_reversed, mini_batch_mask, T_max)
+	    total_time_slices += mini_batch_time_slices
+	    eval_nll += loss
+
+	return eval_nll / total_time_slices
+
     for epoch in range(args.num_epochs):
         epoch_nll, total_time_slices = 0.0, 0.0
-        for _ in range(N_mini_batches):
-            mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_time_slices, \
-                T_max = get_training_mini_batch(mini_batch_size)
+        shuffled_indices = np.arange(N_train_data)
+        np.random.shuffle(shuffled_indices)
+        for which in range(N_mini_batches):
+            mini_batch_start = (which * args.mini_batch_size)
+            mini_batch_end = np.min([(which + 1) * args.mini_batch_size, N_train_data])
+            mini_batch_indices = shuffled_indices[mini_batch_start:mini_batch_end]
+            mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_time_slices, T_max = \
+                get_mini_batch(mini_batch_indices, training_data_sequences, training_data_seq_lengths)
             loss = kl_optim.step(mini_batch, mini_batch_reversed, mini_batch_mask, T_max)
             total_time_slices += mini_batch_time_slices
             epoch_nll += loss
         times.append(time.time())
         epoch_time = times[-1] - times[-2]
-        print "[epoch %03d]  %.4f    (dt = %.3f sec)" % (epoch, epoch_nll / total_time_slices, epoch_time)
+        print "[training epoch %04d]  %.4f \t\t\t\t(dt = %.3f sec)" % (epoch,
+            epoch_nll / total_time_slices, epoch_time)
+
+        if epoch % val_test_frequency == 0:
+            val_nll = do_evaluation(val_data_sequences, val_data_seq_lengths)
+            test_nll = do_evaluation(test_data_sequences, test_data_seq_lengths)
+            print "[val/test epoch %04d]  %.4f  %.4f" % (epoch, val_nll, test_nll)
+
+        if epoch % 100 == 0:
+            print "[args]  ", args
 
 if __name__ == '__main__':
     main()
