@@ -2,6 +2,10 @@ language: python
 
 sudo: required
 
+env:
+    global:
+        - PYTHONPATH=$PWD:$PYTHONPATH
+
 before_install:
     - sudo apt-get update -qq
     - sudo apt-get install libblas-dev liblapack-dev libatlas-base-dev gfortran
