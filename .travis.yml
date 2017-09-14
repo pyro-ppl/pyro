@@ -1,13 +1,5 @@
 language: python
 
-python:
-    - 2.7
-    - 3.5
-
-env:
-    - TEST_DIRECTORY=unit
-    - TEST_DIRECTORY=integration
-
 sudo: required
 
 before_install:
@@ -27,8 +19,21 @@ install:
       fi
     - pip install torchvision
 
-script:
-    - flake8 && PYTHONPATH=$PWD:$PYTHONPATH pytest -vs --cov=pyro tests/$TEST_DIRECTORY
-
-matrix:
+jobs:
     fast_finish: true
+    include:
+        - stage: lint
+          python: "2.7"
+          addons: true
+          install: pip install flake8
+          script: flake8
+        - stage: unit test
+          python: 2.7
+          script: pytest -vs --cov=pyro tests/unit
+        - python: 3.5
+          script: pytest -vs --cov=pyro tests/unit
+        - stage: integration test
+          python: 2.7
+          script: pytest -vs --cov=pyro tests/integration
+        - python: 3.5
+          script: pytest -vs --cov=pyro tests/integration
