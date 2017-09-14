@@ -1,4 +1,5 @@
 import pyro
+import torch
 from .poutine import Poutine
 
 
@@ -17,14 +18,18 @@ class LiftPoutine(Poutine):
     def _block_down(self, msg):
         if msg["type"] == "param":
             return True
-        else:
-            return False
+        return False
 
     def _pyro_param(self, msg, name, *args, **kwargs):
         """
         prototype override of param->sample
         """
         msg["type"] = "sample"
-        msg["fn"] = self.prior
+        if isinstance(self.prior, (dict, list)):
+            if name in self.prior.keys():
+                msg["fn"] = self.prior[name]
+        else:
+            # prior is a distribution
+            msg["fn"] = self.prior
         msg["scale"] = 1.0
-        return self._pyro_sample(msg, name, self.prior, *args, **kwargs)
+        return self._pyro_sample(msg, name, msg["fn"], *args, **kwargs)

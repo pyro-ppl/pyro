@@ -264,5 +264,5 @@ def random_module(name, module, prior, *args, **kwargs):
 
     Places a prior over the parameters of the nn module
     """
-    # assert hasattr(module, "parameters"), "Module is not a NN module."
+    assert hasattr(module, "parameters"), "Module is not a NN module."
     return poutine.lift(module, prior, *args, **kwargs)
