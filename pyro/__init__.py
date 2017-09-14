@@ -256,6 +256,7 @@ def module(pyro_name, nn_obj):
 
     return nn_obj
 
+
 def random_module(name, module, prior, *args, **kwargs):
     """
     :param name: name of module
@@ -264,5 +265,6 @@ def random_module(name, module, prior, *args, **kwargs):
 
     Places a prior over the parameters of the nn module
     """
+    # XXX do we need this
     assert hasattr(module, "parameters"), "Module is not a NN module."
     return poutine.lift(module, prior, *args, **kwargs)

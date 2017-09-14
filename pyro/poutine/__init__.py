@@ -16,6 +16,7 @@ from .lift_poutine import LiftPoutine
 # XXX should these be returned as Poutines?
 ############################################
 
+
 def trace(fn):
     """
     Given a callable that contains Pyro primitive calls,
