@@ -36,13 +36,13 @@ class NormalNormalTests(TestCase):
         self.verbose = True
         self.batch_sizes = [3, 4, 6, 7, 8, 0]
 
-    def test_elbo_tensor(self):
-        for batch_size in self.batch_sizes:
-            self.do_elbo_test(True, 5000, batch_size, map_type="tensor")
-
-    def test_elbo_none(self):
-        self.do_elbo_test(True, 5000, 0, map_type=None)
-
+#     def test_elbo_tensor(self):
+#         for batch_size in self.batch_sizes:
+#             self.do_elbo_test(True, 5000, batch_size, map_type="tensor")
+#
+#     def test_elbo_none(self):
+#         self.do_elbo_test(True, 5000, 0, map_type=None)
+#
     def test_elbo_list(self):
         for batch_size in self.batch_sizes:
             self.do_elbo_test(True, 5000, batch_size, map_type="list")
@@ -57,10 +57,12 @@ class NormalNormalTests(TestCase):
             mu_latent = pyro.sample("mu_latent", dist.diagnormal,
                                     self.mu0, torch.pow(self.lam0, -0.5))
             if map_type == "list":
-                pyro.map_data("aaa", self.data, lambda i,
-                              x: pyro.observe(
+                pyro.map_data("aaa", self.data, lambda i, x:
+                        pyro.map_data("aaa_%d" % i, [x], lambda _i, _x:
+                            pyro.observe(
                                   "obs_%d" % i, dist.diagnormal,
-                                  x, mu_latent, torch.pow(self.lam, -0.5)), batch_size=batch_size)
+                                  x, mu_latent, torch.pow(self.lam, -0.5)), batch_size=1),
+                            batch_size=batch_size)
                 pyro.map_data("bbb", self.data, lambda i,
                               x: pyro.sample(
                                   "z_sample_%d" % i, dist.diagnormal,
@@ -91,7 +93,8 @@ class NormalNormalTests(TestCase):
             sig_q = torch.exp(log_sig_q)
             pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q)
             if map_type == "list" or map_type is None:
-                pyro.map_data("aaa", self.data, lambda i, x: None, batch_size=batch_size)
+                pyro.map_data("aaa", self.data, lambda i, x:
+                    pyro.map_data("aaa_%d" % i, [x], lambda _i, _x: None, batch_size=1), batch_size=batch_size)
                 pyro.map_data("bbb", self.data,
                               lambda i, x: pyro.sample(
                                   "z_sample_%d" % i, dist.diagnormal,

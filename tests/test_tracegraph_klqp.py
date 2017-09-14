@@ -59,9 +59,13 @@ class NormalNormalTests(TestCase):
             #    pyro.observe("obs_%d" % i, dist.diagnormal, x, mu_latent,
             #                 torch.pow(self.lam, -0.5))
 
-            pyro.map_data("map_obs", self.data, lambda i, x:
-                          pyro.observe("obs_%d" % i, dist.diagnormal, x, mu_latent,
-                          	       torch.pow(self.lam, -0.5)), batch_size=2)
+            pyro.map_data("map_obs_outer", self.data, lambda i, x:
+                          pyro.map_data("map_obs_inner_%d" % i, [x], lambda _i, _x:
+                              pyro.observe("obs_%d" % i, dist.diagnormal, _x, mu_latent,
+                                           torch.pow(self.lam, -0.5)), batch_size=1), batch_size=2)
+            #pyro.map_data("map_obs_outer", self.data, lambda i, x:
+            #              pyro.observe("obs_%d" % i, dist.diagnormal, x, mu_latent,
+            #              	       torch.pow(self.lam, -0.5)), batch_size=2)
             print("exiting model")
             return mu_latent
 
@@ -75,7 +79,10 @@ class NormalNormalTests(TestCase):
             sig_q = torch.exp(log_sig_q)
             mu_latent = pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q,
                                     reparameterized=reparameterized)
-            pyro.map_data("map_obs", self.data, lambda i, x: None, batch_size=2)
+            pyro.map_data("map_obs_outer", self.data, lambda i, x:
+                    pyro.map_data("map_obs_inner_%d" % i, [x], lambda _i, _x: None, batch_size=1),
+                                  batch_size=2)
+            #pyro.map_data("map_obs", self.data, lambda i, x: None, batch_size=2)
             print("exiting guide")
             return mu_latent
 
