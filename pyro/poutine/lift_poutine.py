@@ -25,7 +25,7 @@ class LiftPoutine(Poutine):
         prototype override of param->sample
         """
         msg["type"] = "sample"
-        if isinstance(self.prior, (dict, list)):
+        if isinstance(self.prior, dict):
             if name in self.prior.keys():
                 msg["fn"] = self.prior[name]
         else:

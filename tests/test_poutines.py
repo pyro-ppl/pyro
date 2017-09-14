@@ -285,12 +285,6 @@ class LiftPoutineTests(TestCase):
     def setUp(self):
         pyro.get_param_store().clear()
 
-        def simple_prior(tensor):
-            flat_tensor = tensor.view(-1)
-            m = Variable(torch.zeros(flat_tensor.size(0)))
-            s = Variable(torch.ones(flat_tensor.size(0)))
-            return DiagNormal(m, s).sample().view(tensor.size())
-
         def mu1_prior(tensor):
             flat_tensor = tensor.view(-1)
             m = Variable(torch.zeros(flat_tensor.size(0)))
@@ -306,14 +300,10 @@ class LiftPoutineTests(TestCase):
         def mu2_prior(tensor):
             flat_tensor = tensor.view(-1)
             m = Variable(torch.zeros(flat_tensor.size(0)))
-            s = Variable(torch.ones(flat_tensor.size(0)))
-            return DiagNormal(m, s).sample().view(tensor.size())
+            return Bernoulli(m).sample().view(tensor.size())
 
         def sigma2_prior(tensor):
-            flat_tensor = tensor.view(-1)
-            m = Variable(torch.zeros(flat_tensor.size(0)))
-            s = Variable(torch.ones(flat_tensor.size(0)))
-            return DiagNormal(m, s).sample().view(tensor.size())
+            return sigma1_prior(tensor)
 
         def guide():
             mu1 = pyro.param("mu1", Variable(torch.randn(2), requires_grad=True))
@@ -327,8 +317,8 @@ class LiftPoutineTests(TestCase):
 
         self.model = Model
         self.guide = guide
-        self.prior = simple_prior
-        self.prior_list = {"mu1": mu1_prior, "sigma1": sigma1_prior, "mu2": mu2_prior, "sigma2": sigma2_prior}
+        self.prior = mu1_prior
+        self.prior_dict = {"mu1": mu1_prior, "sigma1": sigma1_prior, "mu2": mu2_prior, "sigma2": sigma2_prior}
 
     def test_lift_simple(self):
         tr = poutine.trace(self.guide)()
@@ -340,7 +330,7 @@ class LiftPoutineTests(TestCase):
 
     def test_list_priors(self):
         tr = poutine.trace(self.guide)()
-        lifted_tr = poutine.trace(poutine.lift(self.guide, prior=self.prior_list))()
+        lifted_tr = poutine.trace(poutine.lift(self.guide, prior=self.prior_dict))()
         for name in tr.keys():
             self.assertTrue(name in lifted_tr)
             if name in {'sigma1', 'mu1', 'sigma2', 'mu2'}:
