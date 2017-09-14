@@ -89,7 +89,7 @@ pt_rnn = nn.RNN(input_size=input_dim, hidden_size=rnn_dim, nonlinearity='relu',
 
 
 # the model
-def model(mini_batch, mini_batch_reversed, mini_batch_mask, T_max):
+def model(mini_batch, mini_batch_reversed, mini_batch_mask, T_max, annealing_factor=1.0):
     emitter = pyro.module("emitter", pt_emitter)
     trans = pyro.module("transition", pt_trans)
     mini_batch_size = mini_batch.size(0)
@@ -98,17 +98,17 @@ def model(mini_batch, mini_batch_reversed, mini_batch_mask, T_max):
     for t in range(1, T_max + 1):
         z_mu, z_sigma = trans(z_prev)
         z_t = pyro.sample("z_%d" % t, DiagNormal(z_mu, z_sigma),
-                          log_pdf_mask=mini_batch_mask[:, t - 1:t].expand(mini_batch_size, z_dim))
+                          log_pdf_mask=annealing_factor * mini_batch_mask[:, t - 1:t])
         emission_probs_t = emitter(z_t)
         pyro.observe("obs_x_%d" % t, dist.bernoulli, mini_batch[:, t - 1, :], emission_probs_t,
-                     log_pdf_mask=mini_batch_mask[:, t - 1:t].expand(mini_batch_size, input_dim))
+                     log_pdf_mask=mini_batch_mask[:, t - 1:t])
         z_prev = z_t
 
     return z_prev
 
 
 # the guide
-def guide(mini_batch, mini_batch_reversed, mini_batch_mask, T_max):
+def guide(mini_batch, mini_batch_reversed, mini_batch_mask, T_max, annealing_factor=1.0):
     mini_batch_size = mini_batch.size(0)
     rnn = pyro.module("rnn", pt_rnn)
     combiner = pyro.module("combiner", pt_combiner)
@@ -120,7 +120,7 @@ def guide(mini_batch, mini_batch_reversed, mini_batch_mask, T_max):
     for t in range(1, T_max + 1):
         z_mu, z_sigma = combiner(z_prev, rnn_output[:, T_max - t, :])
         z_t = pyro.sample("z_%d" % t, DiagNormal(z_mu, z_sigma),
-                          log_pdf_mask=mini_batch_mask[:, t - 1:t].expand(mini_batch_size, z_dim))
+                          log_pdf_mask=annealing_factor * mini_batch_mask[:, t - 1:t])
         z_prev = z_t
 
     return z_prev
@@ -133,6 +133,7 @@ def main():
     parser.add_argument('-lr', '--learning-rate', type=float, required=True)
     parser.add_argument('-b1', '--beta1', type=float, required=True)
     parser.add_argument('-mbs', '--mini-batch-size', type=int, required=True)
+    parser.add_argument('-ae', '--annealing-epochs', type=int, required=True)
     args = parser.parse_args()
 
     adam_params = {"lr": args.learning_rate, "betas": (args.beta1, 0.999)}
@@ -203,18 +204,27 @@ def main():
 
 	return eval_nll / total_time_slices
 
+    annealing_factor = 1.0
+    min_af = 0.10
+
     for epoch in range(args.num_epochs):
         epoch_nll, total_time_slices = 0.0, 0.0
         shuffled_indices = np.arange(N_train_data)
         np.random.shuffle(shuffled_indices)
         for which in range(N_mini_batches):
+            if args.annealing_epochs > 0 and epoch < args.annealing_epochs:
+                annealing_factor = min_af + (1.0 - min_af)*(float(which + epoch * N_mini_batches + 1)/\
+                    float(args.annealing_epochs * N_mini_batches))
             mini_batch_start = (which * args.mini_batch_size)
             mini_batch_end = np.min([(which + 1) * args.mini_batch_size, N_train_data])
             mini_batch_indices = shuffled_indices[mini_batch_start:mini_batch_end]
             mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_time_slices, T_max = \
                 get_mini_batch(mini_batch_indices, training_data_sequences, training_data_seq_lengths)
-            loss = kl_optim.step(mini_batch, mini_batch_reversed, mini_batch_mask, T_max)
+            loss = kl_optim.step(mini_batch, mini_batch_reversed, mini_batch_mask,
+                                 T_max, annealing_factor)
             total_time_slices += mini_batch_time_slices
+            if epoch < 2:
+                print "loss, af", loss, annealing_factor
             epoch_nll += loss
         times.append(time.time())
         epoch_time = times[-1] - times[-2]
