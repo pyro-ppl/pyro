@@ -52,12 +52,8 @@ class NormalNormalTests(TestCase):
             self.mu0 * (self.lam0 / self.analytic_lam_n)
         self.verbose = True
 
-    def test_elbo_reparameterized(self):
-    #    self.do_elbo_test(True, 1000)
-        self.do_elbo_test(False, 20000)
-
-    #def test_elbo_nonreparameterized(self):
-    #    self.do_elbo_test(False, 5000)
+    def test_elbo_nonreparameterized(self):
+        self.do_elbo_test(False, 15000)
 
     def do_elbo_test(self, reparameterized, n_steps):
         if self.verbose:
@@ -65,7 +61,7 @@ class NormalNormalTests(TestCase):
         pyro.get_param_store().clear()
 
         def model():
-            #print("entering model")
+            #print("\n*******\nentering model")
             mu_latent = pyro.sample("mu_latent", dist.diagnormal,
                                     self.mu0, torch.pow(self.lam0, -0.5),
                                     reparameterized=reparameterized)
@@ -78,6 +74,7 @@ class NormalNormalTests(TestCase):
                 pyro.observe("obs_%d_1" % i, dist.diagnormal, x1, mu_latent, torch.pow(self.lam, -0.5))
                 pyro.observe("obs_%d_2" % i, dist.diagnormal, x2, mu_latent, torch.pow(self.lam, -0.5))
                 pyro.observe("obs_%d_3" % i, dist.diagnormal, x3, mu_latent, torch.pow(self.lam, -0.5))
+                pyro.sample("z_%d" % i, dist.diagnormal, mu_latent, ng_ones(2))
 
             pyro.map_data("map_obs", self.data, lambda i, x: obs(i, x[0], x[1], x[2]), batch_size=2)
             #print("exiting model")
@@ -98,7 +95,8 @@ class NormalNormalTests(TestCase):
             #        pyro.map_data("map_obs_inner_%d" % i, [(x, i)], lambda _i, _x: None, batch_size=1),
             #                      batch_size=2)
             #pyro.map_data("map_obs", self.data, lambda i, x: None, batch_size=2)
-            pyro.map_data("map_obs", self.data, lambda i, x: None, batch_size=2)
+            pyro.map_data("map_obs", self.data, lambda i, x:
+                    pyro.sample("z_%d" % i, dist.diagnormal, mu_latent, ng_ones(2)), batch_size=2)
             #print("exiting guide")
             return mu_latent
 
