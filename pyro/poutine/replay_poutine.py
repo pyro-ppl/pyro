@@ -3,6 +3,7 @@ from torch.autograd import Variable
 
 from .poutine import Poutine
 from .scale_poutine import ScalePoutine
+from .lambda_poutine import LambdaPoutine
 
 
 class ReplayPoutine(Poutine):
@@ -72,8 +73,8 @@ class ReplayPoutine(Poutine):
             msg["scale"] = self.guide_trace[name]["scale"]
             msg["indices"] = self.guide_trace[name]["indices"]
             msg["batch_size"] = self.guide_trace[name]["batch_size"]
-
+        #print "enter replay mapdata"
         ret = super(ReplayPoutine, self)._pyro_map_data(msg, name, data,
-                                                        ScalePoutine(fn, msg["scale"]),
+                                                        LambdaPoutine(ScalePoutine(fn, msg["scale"]), name),
                                                         batch_size=msg["batch_size"])
         return ret

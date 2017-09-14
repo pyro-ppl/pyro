@@ -2,6 +2,7 @@ import graphviz
 import networkx
 
 from .trace_poutine import TracePoutine
+from .lambda_poutine import LambdaPoutine
 
 
 class TraceGraph(object):
@@ -122,6 +123,8 @@ class TraceGraph(object):
                 fillcolor = 'lightgrey;.5:salmon'
             elif label in self.observation_nodes:
                 fillcolor = 'darkolivegreen3'
+            else:
+                fillcolor = 'grey'
             g.node(label, label=label, shape=shape, style='filled', fillcolor=fillcolor)
 
         for label1, label2 in self.G.edges():
@@ -161,16 +164,23 @@ class TraceGraphPoutine(TracePoutine):
         self.trace = super(TraceGraphPoutine, self)._exit_poutine(ret_val, *args, **kwargs)
         self.G.remove_node('___ROOT_NODE___')
 
+        for node in self.G.nodes():
+            if node[-10:] == '_join_node':
+                self.G.remove_node(node)
+
+        #self.report("exit tracegraph poutine")
+
         trace_graph = TraceGraph(self.G, self.trace,
                                  self.stochastic_nodes, self.reparameterized_nodes,
                                  self.param_nodes, self.observation_nodes)
         return trace_graph
 
-    def _add_graph_node(self, name):
-        self.G.add_edge(self.prev_node, name)
-        for ancestor in networkx.ancestors(self.G, self.prev_node):
+    def _add_graph_node(self, name, prev, update_prev_node=False):
+        self.G.add_edge(prev, name)
+        for ancestor in networkx.ancestors(self.G, prev):
             self.G.add_edge(ancestor, name)
-        self.prev_node = name
+        if update_prev_node:
+            self.prev_node = name
 
     def _pyro_sample(self, msg, name, dist, *args, **kwargs):
         """
@@ -178,7 +188,14 @@ class TraceGraphPoutine(TracePoutine):
         """
         val = super(TraceGraphPoutine, self)._pyro_sample(msg, name, dist,
                                                           *args, **kwargs)
-        self._add_graph_node(name)
+        if 'current_map_data' in msg:
+            nodes = msg['__map_data_nodes'][msg['current_map_data']]
+            #self.report("tracegraph poutine sample: prev node %s curr %s" %\
+            #        (nodes[1], nodes[0]))
+            self._add_graph_node(nodes[0], nodes[1], update_prev_node=False)
+            self.G.add_edge(nodes[0], nodes[2])
+        else:
+            self._add_graph_node(name, self.prev_node, update_prev_node=True)
         self.stochastic_nodes.append(name)
         if dist.reparameterized:
             self.reparameterized_nodes.append(name)
@@ -191,9 +208,13 @@ class TraceGraphPoutine(TracePoutine):
         retrieved = super(TraceGraphPoutine, self)._pyro_param(msg, name,
                                                                *args, **kwargs)
         if self.include_params:
-            self._add_graph_node(name)
+            self._add_graph_node(name, self.prev_node, update_prev_node=True)
             self.param_nodes.append(name)
         return retrieved
+
+    def report(self, s):
+        if False:
+            print s
 
     def _pyro_observe(self, msg, name, fn, obs, *args, **kwargs):
         """
@@ -201,6 +222,24 @@ class TraceGraphPoutine(TracePoutine):
         """
         val = super(TraceGraphPoutine, self)._pyro_observe(msg, name, fn, obs,
                                                            *args, **kwargs)
+        if 'current_map_data' in msg:
+            nodes = msg['__map_data_nodes'][msg['current_map_data']]
+            #self.report("tracegraph poutine observe: prev node %s curr %s" %\
+            #        (nodes[1], nodes[0]))
+            self._add_graph_node(nodes[0], nodes[1], update_prev_node=False)
+            self.G.add_edge(nodes[0], nodes[2])
+        else:
+            self._add_graph_node(name, self.prev_node, update_prev_node=True)
         self.observation_nodes.append(name)
-        self._add_graph_node(name)
         return val
+
+    def _pyro_map_data(self, msg, name, data, fn, batch_size=None):
+        #self.report("tracegraph map data enter")
+        marked_fn = LambdaPoutine(fn, name) if not isinstance(data, (torch.Tensor, Variable)) \
+            else fn
+        ret = super(TraceGraphPoutine, self)._pyro_map_data(msg, name, data, marked_fn,
+                                                             batch_size=batch_size)
+        if (name + '_split_node') in self.G.nodes():
+            self.G = networkx.contracted_nodes(self.G, self.prev_node, name + '_split_node')
+            self.prev_node = name + '_join_node'
+        return ret
