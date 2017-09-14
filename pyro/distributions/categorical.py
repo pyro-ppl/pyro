@@ -1,8 +1,10 @@
+import itertools
+
+import numpy as np
 import torch
 from torch.autograd import Variable
+
 from pyro.distributions.distribution import Distribution
-import itertools
-import numpy as np
 from pyro.util import to_one_hot
 
 
@@ -76,8 +78,13 @@ class Categorical(Distribution):
         if _vs is not None:
             if isinstance(_vs, np.ndarray):
                 # always returns a 2-d (unsqueezed 1-d) list
+                if _vs.ndim == 1:
+                    _vs = np.expand_dims(_vs, axis=0)
                 r = np.arange(_vs.shape[0])
-                return [[x] for x in _vs[r, sample.squeeze().data.numpy()].tolist()]
+                # if _vs.shape[0] == 1:
+                #     return _vs[r, sample.squeeze().data.numpy().astype("int")][0]
+                # else:
+                return _vs[r, sample.squeeze().data.numpy().astype("int")].tolist()
             # _vs is a torch.Tensor
             return torch.gather(_vs, 1, sample.long())
         if _one_hot:
@@ -128,8 +135,8 @@ class Categorical(Distribution):
                 # vs is an array, so the support must be of type array
                 r_np = _vs.shape[0]
                 c_np = _vs.shape[1]
-                ix = np.expand_dims(np.arange(r_np), axis=1)
-                b = torch.ones(r_np, 1)
+                np.expand_dims(np.arange(r_np), axis=1)
+                torch.ones(r_np, 1)
                 return (_vs[np.arange(r_np), torch.Tensor(list(x)).numpy().astype(int)]
                         .reshape(r_np, 1).tolist()
                         for x in itertools.product(torch.arange(0, c_np), repeat=r_np))

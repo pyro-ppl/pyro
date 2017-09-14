@@ -1,16 +1,14 @@
 import torch
 import torch.optim
-from torch.autograd import Variable
 from torch import nn as nn
+from torch.autograd import Variable
 from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
 from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
-from pyro.infer.importance import Importance
-from tests.common import TestCase
-
 from pyro.infer.kl_qp import KL_QP
+from tests.common import TestCase
 
 
 class NormalNormalTests(TestCase):
@@ -394,7 +392,7 @@ class LogNormalNormalTests(TestCase):
         self.log_tau_n = torch.log(self.tau_n)
 
     def test_elbo_reparameterized(self):
-        self.do_elbo_test(True, 7000)
+        self.do_elbo_test(True, 12000)
 
     # FIXME
     # def test_elbo_nonreparameterized(self):
@@ -464,7 +462,7 @@ class LogNormalNormalTests(TestCase):
 
         kl_optim = KL_QP(model, guide, pyro.optim(torch.optim.Adam,
                                                   {"lr": .0005, "betas": (0.96, 0.999)}))
-        for k in range(9001):
+        for k in range(12001):
             kl_optim.step()
 
         mu_error = torch.abs(

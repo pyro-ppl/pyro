@@ -1,6 +1,7 @@
-import pyro
 import torch
 from torch.autograd import Variable
+
+import pyro
 
 
 class Poutine(object):
@@ -8,6 +9,7 @@ class Poutine(object):
     Wraps a function call with a pyro stack push/pop of the basic pyro functions
     This is the base class with all APIs implemented and sane default behavior.
     """
+
     def __init__(self, fn):
         """
         Constructor
@@ -33,7 +35,7 @@ class Poutine(object):
 
             # send back the final val
             return r_val
-        except Exception as e:
+        except Exception:
             self._flush_stack()
             raise
 
@@ -147,7 +149,10 @@ class Poutine(object):
         """
         Default pyro.map_data Poutine behavior
         """
-        if msg["ret"] is not None:
+        # we dont want fn to get executed more than once,
+        # because then the primitive statements in it will appear multiple times
+        # however, sometimes fn can return None, so we can't just check msg["ret"]
+        if msg["done"]:
             return msg["ret"]
         else:
             if batch_size is None:
@@ -168,7 +173,10 @@ class Poutine(object):
             if isinstance(data, (torch.Tensor, Variable)):
                 ret = fn(msg["indices"], ind_data)
             else:
-                ret = list(map(lambda ix: fn(*ix), enumerate(ind_data)))
+                ret = list(map(lambda ix: fn(*ix), zip(msg["indices"], ind_data)))
+
+            # make sure fn doesn't get reexecuted further up the stack
+            msg["done"] = True
             return ret
 
     def _pyro_param(self, msg, name, *args, **kwargs):

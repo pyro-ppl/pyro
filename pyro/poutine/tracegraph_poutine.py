@@ -1,9 +1,6 @@
-import pyro
-import torch
-from torch.autograd import Variable, Function
 import graphviz
 import networkx
-from collections import defaultdict
+
 from .trace_poutine import TracePoutine
 
 
@@ -14,6 +11,7 @@ class TraceGraph(object):
     -- returned by TraceGraphPoutine
     -- visualization handled by save_visualization()
     """
+
     def __init__(self, G, trace, stochastic_nodes, reparameterized_nodes,
                  param_nodes, observation_nodes):
         self.G = G
@@ -51,9 +49,8 @@ class TraceGraph(object):
     def get_children(self, node, with_self=False):
         """
         get children of a named node
-        Params:
-          `node` - the name of the node in the tracegraph
-          `with_self` - whether to include `node` among the children
+        :param node: the name of the node in the tracegraph
+        :param with_self: whether to include `node` among the children
         """
         children = self.G.successors(node)
         if with_self:
@@ -63,9 +60,8 @@ class TraceGraph(object):
     def get_parents(self, node, with_self=False):
         """
         get parents of a named node
-        Params:
-          `node` - the name of the node in the tracegraph
-          `with_self` - whether to include `node` among the parents
+        :param node: the name of the node in the tracegraph
+        :param with_self: whether to include `node` among the parents
         """
         parents = self.G.predecessors(node)
         if with_self:
@@ -75,9 +71,8 @@ class TraceGraph(object):
     def get_ancestors(self, node, with_self=False):
         """
         get ancestors of a named node
-        Params:
-          `node` - the name of the node in the tracegraph
-          `with_self` - whether to include `node` among the ancestors
+        :param node: the name of the node in the tracegraph
+        :param with_self: whether to include `node` among the ancestors
         """
         ancestors = list(networkx.ancestors(self.G, node))
         if with_self:
@@ -87,9 +82,8 @@ class TraceGraph(object):
     def get_descendants(self, node, with_self=False):
         """
         get descendants of a named node
-        Params:
-          `node` - the name of the node in the tracegraph
-          `with_self` - whether to include `node` among the descendants
+        :param node: the name of the node in the tracegraph
+        :param with_self: whether to include `node` among the descendants
         """
         descendants = list(networkx.descendants(self.G, node))
         if with_self:
@@ -102,11 +96,16 @@ class TraceGraph(object):
         """
         return self.trace
 
+    def get_graph(self):
+        """
+        get the graph associated with the TraceGraph
+        """
+        return self.G
+
     def save_visualization(self, graph_output):
         """
         render graph and save to file
-        Params:
-          `graph_output` - the graph will be saved to graph_output.pdf
+        :param graph_output: the graph will be saved to graph_output.pdf
         -- parameter nodes are light blue
         -- non-reparameterized stochastic nodes are salmon
         -- reparameterized stochastic nodes are half salmon, half grey
@@ -138,9 +137,10 @@ class TraceGraphPoutine(TracePoutine):
        by following the sequential ordering of the execution trace
     TODO: add map data constructs
     """
-    def __init__(self, fn, graph_type='coarse'):
+    def __init__(self, fn, graph_type='coarse', include_params=False):
         assert(graph_type == 'coarse'), "only coarse graph type supported at present"
         super(TraceGraphPoutine, self).__init__(fn)
+        self.include_params = include_params
 
     def _enter_poutine(self, *args, **kwargs):
         """
@@ -166,14 +166,19 @@ class TraceGraphPoutine(TracePoutine):
                                  self.param_nodes, self.observation_nodes)
         return trace_graph
 
+    def _add_graph_node(self, name):
+        self.G.add_edge(self.prev_node, name)
+        for ancestor in networkx.ancestors(self.G, self.prev_node):
+            self.G.add_edge(ancestor, name)
+        self.prev_node = name
+
     def _pyro_sample(self, msg, name, dist, *args, **kwargs):
         """
         register sampled variable for coarse graph construction
         """
         val = super(TraceGraphPoutine, self)._pyro_sample(msg, name, dist,
                                                           *args, **kwargs)
-        self.G.add_edge(self.prev_node, name)
-        self.prev_node = name
+        self._add_graph_node(name)
         self.stochastic_nodes.append(name)
         if dist.reparameterized:
             self.reparameterized_nodes.append(name)
@@ -185,9 +190,9 @@ class TraceGraphPoutine(TracePoutine):
         """
         retrieved = super(TraceGraphPoutine, self)._pyro_param(msg, name,
                                                                *args, **kwargs)
-        self.G.add_edge(self.prev_node, name)
-        self.prev_node = name
-        self.param_nodes.append(name)
+        if self.include_params:
+            self._add_graph_node(name)
+            self.param_nodes.append(name)
         return retrieved
 
     def _pyro_observe(self, msg, name, fn, obs, *args, **kwargs):
@@ -197,6 +202,5 @@ class TraceGraphPoutine(TracePoutine):
         val = super(TraceGraphPoutine, self)._pyro_observe(msg, name, fn, obs,
                                                            *args, **kwargs)
         self.observation_nodes.append(name)
-        self.G.add_edge(self.prev_node, name)
-        self.prev_node = name
+        self._add_graph_node(name)
         return val

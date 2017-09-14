@@ -1,18 +1,17 @@
 from __future__ import print_function
+
 import torch
 import torch.optim
-from torch.autograd import Variable
 from torch import nn as nn
+from torch.autograd import Variable
 from torch.nn import Parameter
-import numpy as np
 
 import pyro
 import pyro.distributions as dist
-from tests.common import TestCase
-
-from pyro.infer.tracegraph_kl_qp import TraceGraph_KL_QP
-from pyro.util import ng_ones, ng_zeros, ones, zeros
 from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
+from pyro.infer.tracegraph_kl_qp import TraceGraph_KL_QP
+from pyro.util import ng_ones, ng_zeros
+from tests.common import TestCase
 
 
 class NormalNormalTests(TestCase):
@@ -73,9 +72,6 @@ class NormalNormalTests(TestCase):
                                     torch.optim.Adam,
                                     {"lr": .0015, "betas": (0.97, 0.999)}))
         for k in range(n_steps):
-            # model_graph_output = 'NormalNormal.model.%s' % reparameterized if k==0 else None
-            # guide_graph_output = 'NormalNormal.guide.%s' % reparameterized if k==0 else None
-            # kl_optim.step(model_graph_output=model_graph_output, guide_graph_output=guide_graph_output)
             kl_optim.step()
 
             mu_error = torch.sum(
@@ -120,18 +116,43 @@ class NormalNormalNormalTests(TestCase):
         self.verbose = False
 
     def test_elbo_reparameterized(self):
-        self.do_elbo_test(True, True, 5000, 0.02, 0.002)
+        self.do_elbo_test(True, True, 5000, 0.02, 0.002, False, False)
 
     def test_elbo_nonreparameterized(self):
-        self.do_elbo_test(False, False, 15000, 0.05, 0.001)
-        self.do_elbo_test(True, False, 12000, 0.04, 0.0015)
-        self.do_elbo_test(False, True, 12000, 0.04, 0.0015)
+        for use_nn_baseline in [True, False]:
+            for use_decaying_avg_baseline in [True, False]:
+                if not use_nn_baseline and not use_decaying_avg_baseline:
+                    continue
+                self.do_elbo_test(False, False, 15000, 0.05, 0.001, use_nn_baseline,
+                                  use_decaying_avg_baseline)
+                self.do_elbo_test(True, False, 12000, 0.04, 0.0015, use_nn_baseline,
+                                  use_decaying_avg_baseline)
+                self.do_elbo_test(False, True, 12000, 0.04, 0.0015, use_nn_baseline,
+                                  use_decaying_avg_baseline)
 
-    def do_elbo_test(self, repa1, repa2, n_steps, prec, lr):
+    def do_elbo_test(self, repa1, repa2, n_steps, prec, lr, use_nn_baseline, use_decaying_avg_baseline):
         if self.verbose:
-            print((" - - - - - DO NORMALNORMALNORMAL ELBO TEST  [reparameterized = %s, %s]" +
-                  "- - - - - ") % (repa1, repa2))
+            print(" - - - - - DO NORMALNORMALNORMAL ELBO TEST - - - - - -")
+            print("[reparameterized = %s, %s; nn_baseline = %s, decaying_baseline = %s]" %
+                  (repa1, repa2, use_nn_baseline, use_decaying_avg_baseline))
         pyro.get_param_store().clear()
+
+        if use_nn_baseline:
+
+            class VanillaBaselineNN(nn.Module):
+                def __init__(self, dim_input, dim_h):
+                    super(VanillaBaselineNN, self).__init__()
+                    self.lin1 = nn.Linear(dim_input, dim_h)
+                    self.lin2 = nn.Linear(dim_h, 1)
+                    self.sigmoid = nn.Sigmoid()
+
+                def forward(self, x):
+                    h = self.sigmoid(self.lin1(x))
+                    return self.lin2(h)
+
+            mu_prime_baseline = pyro.module("mu_prime_baseline", VanillaBaselineNN(2, 5))
+        else:
+            mu_prime_baseline = None
 
         def model():
             mu_latent_prime = pyro.sample("mu_latent_prime", dist.diagnormal,
@@ -160,24 +181,26 @@ class NormalNormalNormalTests(TestCase):
                                          Variable(-0.5 * torch.log(1.2 * self.lam0.data),
                                                   requires_grad=True))
             sig_q, sig_q_prime = torch.exp(log_sig_q), torch.exp(log_sig_q_prime)
-            mu_latent = pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q,
-                                    reparameterized=repa2)
-            mu_latent_prime = pyro.sample("mu_latent_prime", dist.diagnormal,
-                                          kappa_q.expand_as(mu_latent) * mu_latent + mu_q_prime,
-                                          sig_q_prime,
-                                          reparameterized=repa1)
-            return mu_latent
+            mu_latent_dist = dist.DiagNormal(mu_q, sig_q)
+            mu_latent = pyro.sample("mu_latent", mu_latent_dist, reparameterized=repa2,
+                                    use_decaying_avg_baseline=use_decaying_avg_baseline)
+            mu_latent_prime_dist = dist.DiagNormal(kappa_q.expand_as(mu_latent) * mu_latent + mu_q_prime,
+                                                   sig_q_prime)
+            pyro.sample("mu_latent_prime",
+                        mu_latent_prime_dist,
+                        reparameterized=repa1,
+                        nn_baseline=mu_prime_baseline,
+                        nn_baseline_input=mu_latent,
+                        use_decaying_avg_baseline=use_decaying_avg_baseline)
 
-        pyro.poutine.tracegraph(model, graph_output='NormalNormalNormal.model')()
-        pyro.poutine.tracegraph(guide, graph_output='NormalNormalNormal.guide')()
+            return mu_latent
 
         kl_optim = TraceGraph_KL_QP(model, guide, pyro.optim(
                                     torch.optim.Adam,
-                                    {"lr": lr, "betas": (0.97, 0.999)}))
+                                    {"lr": lr, "betas": (0.97, 0.999)}),
+                                    baseline_optim=pyro.optim(torch.optim.Adam,
+                                    {"lr": 5.0 * lr, "betas": (0.90, 0.999)}))
         for k in range(n_steps):
-            # model_graph_output = 'NormalNormalNormal.model.%s%s' % (repa1, repa2) if k==0 else None
-            # guide_graph_output = 'NormalNormalNormal.guide.%s%s' % (repa1, repa2) if k==0 else None
-            # kl_optim.step(model_graph_output=model_graph_output, guide_graph_output=guide_graph_output)
             kl_optim.step()
 
             mu_error = torch.sum(
@@ -260,11 +283,8 @@ class BernoulliBetaTests(TestCase):
             return p_latent
 
         kl_optim = TraceGraph_KL_QP(model, guide, pyro.optim(torch.optim.Adam,
-                                    {"lr": .0004, "betas": (0.95, 0.999)}))
+                                    {"lr": .0007, "betas": (0.90, 0.999)}))
         for k in range(9000):
-            # model_graph_output = 'BernoulliBeta.model' if k==0 else None
-            # guide_graph_output = 'BernoulliBeta.guide' if k==0 else None
-            # kl_optim.step(model_graph_output=model_graph_output, guide_graph_output=guide_graph_output)
             kl_optim.step()
             alpha_error = torch.abs(pyro.param("alpha_q_log") -
                                     self.log_alpha_n).data.cpu().numpy()[0]
@@ -379,12 +399,12 @@ class ExponentialGammaTests(TestCase):
                 "beta_q_log",
                 Variable(self.log_beta_n.data - 0.143, requires_grad=True))
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
-            pyro.sample("lambda_latent", dist.gamma, alpha_q, beta_q)
+            pyro.sample("lambda_latent", dist.gamma, alpha_q, beta_q, use_decaying_avg_baseline=True)
 
         kl_optim = TraceGraph_KL_QP(
             model, guide, pyro.optim(
                 torch.optim.Adam, {
-                    "lr": .0005, "betas": (
+                    "lr": .0007, "betas": (
                         0.95, 0.999)}))
         for k in range(8000):
             kl_optim.step()
@@ -434,7 +454,7 @@ class LogNormalNormalTests(TestCase):
         self.do_elbo_test(True, 7000, 0.95, 0.001)
 
     def test_elbo_nonreparameterized(self):
-        self.do_elbo_test(False, 9000, 0.96, 0.0005)
+        self.do_elbo_test(False, 7000, 0.95, 0.001)
 
     def do_elbo_test(self, reparameterized, n_steps, beta1, lr):
         if self.verbose:
@@ -456,7 +476,7 @@ class LogNormalNormalTests(TestCase):
             mu_q, tau_q = torch.exp(pt_guide.mu_q_log), torch.exp(pt_guide.tau_q_log)
             sigma = torch.pow(tau_q, -0.5)
             pyro.sample("mu_latent", dist.diagnormal, mu_q, sigma,
-                        reparameterized=reparameterized)
+                        reparameterized=reparameterized, use_decaying_avg_baseline=True)
 
         kl_optim = TraceGraph_KL_QP(model, guide, pyro.optim(torch.optim.Adam,
                                     {"lr": lr, "betas": (beta1, 0.999)}))

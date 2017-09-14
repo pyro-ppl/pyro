@@ -1,8 +1,9 @@
 import torch
 import torch.nn as nn
+
 from pyro.distributions.distribution import Distribution
-from pyro.nn import MaskedLinear, AutoRegressiveNN
-from pyro.util import ng_ones, ng_zeros
+from pyro.nn import AutoRegressiveNN
+from pyro.util import ng_ones
 
 
 class TransformedDistribution(Distribution):

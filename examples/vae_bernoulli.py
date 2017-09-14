@@ -3,7 +3,6 @@ import torch
 import pyro
 from torch.autograd import Variable
 from pyro.infer.kl_qp import KL_QP
-from pyro.infer.abstract_infer import lw_expectation
 from pyro.distributions import DiagNormal, Normal, Bernoulli
 from torch import nn
 
@@ -134,6 +133,7 @@ def per_param_args(name, param):
 adam_params = {"lr": .0001}
 
 kl_optim = KL_QP(model, guide, pyro.optim(optim.Adam, adam_params))
+kl_eval = KL_QP(model=model, guide=guide, optim_step_fct=pyro.optim(optim.Adam, adam_params), num_particles = 10)
 
 # num_steps = 1
 mnist_data = Variable(train_loader.dataset.train_data.float() / 255.)
@@ -153,11 +153,12 @@ loss_training = []
 
 def main():
     parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', type=int, required=True)
+    parser.add_argument('-n', '--num-epochs', nargs='?', default=1000, type=int)
     args = parser.parse_args()
     for i in range(args.num_epochs):
 
         epoch_loss = 0.
+        epoch_eval_loss = 0.
         for ix, batch_start in enumerate(all_batches[:-1]):
             batch_end = all_batches[ix + 1]
 
@@ -165,6 +166,8 @@ def main():
             batch_data = mnist_data[batch_start:batch_end]
 
             epoch_loss += kl_optim.step(batch_data)
+            
+            epoch_eval_loss += kl_eval.eval_objective(batch_data)
 
         loss_training.append(-epoch_loss / float(mnist_size))
         sample, sample_mu = model_sample()
@@ -173,6 +176,7 @@ def main():
         #vis.image(sample[0].view(28, 28).data.numpy())
         vis.image(sample_mu[0].view(28, 28).data.numpy())
         print("epoch avg loss {}".format(epoch_loss / float(mnist_size)))
+        print("epoch eval loss {}".format(epoch_eval_loss / float(mnist_size)))
 
 if __name__ == '__main__':
     main()
