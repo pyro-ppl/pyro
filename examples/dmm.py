@@ -3,16 +3,14 @@ import torch
 import pyro
 from pyro.infer.kl_qp import KL_QP
 import pyro.distributions as dist
-from pyro.util import ng_zeros, ng_ones, zeros, ones
+from pyro.util import ng_ones, zeros
 import torch.nn as nn
-from torch.autograd import Variable
+# from torch.autograd import Variable
 import torch.optim as optim
 import numpy as np
 import time
 import cPickle
-
-from polyphonic_data_loader import reverse_sequences, pad_and_reverse, do_evaluation
-from polyphonic_data_loader import get_mini_batch_mask, get_mini_batch
+from polyphonic_data_loader import get_mini_batch, pad_and_reverse, do_evaluation
 
 input_dim = 88
 z_dim = 100
@@ -80,6 +78,7 @@ class Combiner(nn.Module):
         mu = self.lin_mu(h_combined)
         sigma = self.softplus(self.lin_sig(h_combined))
         return mu, sigma
+
 
 # instantiate pytorch modules that make up the model and the inference network
 pt_emitter = Emitter(input_dim, z_dim, emission_dim)
@@ -155,6 +154,7 @@ def main():
     val_data_seq_lengths = val_data['sequence_lengths']
     val_data_sequences = val_data['sequences']
     N_train_data = len(training_data_seq_lengths)
+    N_train_time_slices = np.sum(training_data_seq_lengths)
     N_mini_batches = N_train_data / args.mini_batch_size
     if N_train_data % args.mini_batch_size > 0:
         N_mini_batches += 1
@@ -166,7 +166,7 @@ def main():
     annealing_factor = 1.0
 
     for epoch in range(args.num_epochs):
-        epoch_nll, total_time_slices = 0.0, 0.0
+        epoch_nll = 0.0
         shuffled_indices = np.arange(N_train_data)
         np.random.shuffle(shuffled_indices)
         for which in range(N_mini_batches):
@@ -178,20 +178,18 @@ def main():
             mini_batch_start = (which * args.mini_batch_size)
             mini_batch_end = np.min([(which + 1) * args.mini_batch_size, N_train_data])
             mini_batch_indices = shuffled_indices[mini_batch_start:mini_batch_end]
-            mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths, \
-                mini_batch_time_slices = \
-                get_mini_batch(mini_batch_indices, training_data_sequences,
-                               training_data_seq_lengths)
+            mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths \
+                = get_mini_batch(mini_batch_indices, training_data_sequences,
+                                 training_data_seq_lengths)
             loss = kl_optim.step(mini_batch, mini_batch_reversed, mini_batch_mask,
                                  mini_batch_seq_lengths, annealing_factor)
-            total_time_slices += mini_batch_time_slices
             if epoch < 1:
                 print("minibatch loss:  %.4f  [annealing factor: %.4f]" % (loss, annealing_factor))
             epoch_nll += loss
         times.append(time.time())
         epoch_time = times[-1] - times[-2]
         print("[training epoch %04d]  %.4f \t\t\t\t(dt = %.3f sec)" %
-              (epoch, epoch_nll / total_time_slices, epoch_time))
+              (epoch, epoch_nll / N_train_time_slices, epoch_time))
 
         if epoch % val_test_frequency == 0:
             val_nll = do_evaluation(kl_optim, val_data_sequences, val_data_seq_lengths)
@@ -200,6 +198,7 @@ def main():
 
         if epoch % 100 == 0:
             print("[args]  ", args)
+
 
 if __name__ == '__main__':
     main()

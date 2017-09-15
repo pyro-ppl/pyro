@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import numpy as np
-import cPickle
+# import cPickle
 
 
 def reverse_sequences(mini_batch, seq_lengths):
@@ -36,17 +36,15 @@ def get_mini_batch(mini_batch_indices, sequences, seq_lengths):
     mini_batch_reversed = nn.utils.rnn.pack_padded_sequence(mini_batch_reversed,
                                                             sorted_seq_lengths,
                                                             batch_first=True)
-    mini_batch_time_slices = np.sum(seq_lengths)
     mini_batch_mask = Variable(torch.Tensor(get_mini_batch_mask(mini_batch, sorted_seq_lengths)))
 
     return Variable(torch.Tensor(mini_batch)), mini_batch_reversed, mini_batch_mask,\
-        sorted_seq_lengths, mini_batch_time_slices
+        sorted_seq_lengths
 
 
 def do_evaluation(kl_optim, data, seq_lengths):
-    full_batch, full_batch_reversed, full_batch_mask, full_batch_seq_lengths, \
-        full_batch_time_slices = get_mini_batch(np.arange(data.shape[0]), data, seq_lengths)
-    loss = kl_optim.eval_bound(full_batch, full_batch_reversed, full_batch_mask,
+    full_batch, full_batch_reversed, full_batch_mask, full_batch_seq_lengths \
+        = get_mini_batch(np.arange(data.shape[0]), data, seq_lengths)
+    loss = kl_optim.eval_objective(full_batch, full_batch_reversed, full_batch_mask,
                                    full_batch_seq_lengths)
-    return loss / full_batch_time_slices
-
+    return loss / np.sum(seq_lengths)
