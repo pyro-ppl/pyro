@@ -28,6 +28,7 @@ class LiftPoutine(Poutine):
                 msg["fn"] = self.prior[name]
         else:
             # prior is a distribution
+            print "NAME",msg["name"]
             msg["fn"] = self.prior
         msg["scale"] = 1.0
         return self._pyro_sample(msg, name, msg["fn"], *args, **kwargs)

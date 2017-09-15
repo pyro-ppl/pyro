@@ -7,6 +7,7 @@ from torch.nn import Parameter
 
 import pyro
 from pyro import util
+import pyro.poutine as poutine
 from pyro.optim.optim import PyroOptim
 from pyro.params import param_with_module_name
 from pyro.params.param_store import ParamStoreDict
@@ -259,14 +260,22 @@ def module(pyro_name, nn_obj):
     return nn_obj
 
 
-def random_module(name, module, prior, *args, **kwargs):
+def random_module(name, nn_module, prior, *args, **kwargs):
     """
-    :param name: name of module
-    :param module: pytorch nn module
+    :param name: name of pyro module
+    :param nn_module: pyro wrapped nn module
     :param prior: prior distribution or iterable over distributions
 
     Places a prior over the parameters of the nn module
     """
-    # XXX do we need this
-    assert hasattr(module, "parameters"), "Module is not a NN module."
-    return poutine.lift(module, prior, *args, **kwargs)
+    assert hasattr(nn_module, "parameters"), "Module is not a NN module."
+    # reguster oarams in param store
+    # module = pyro.module(name, nn_module)
+    # print "before", list(module.parameters())
+    # print list(nn_module.named_parameters())
+    # def  _fn():
+    #     module.modules()
+    #     return module
+    lifted_fn = poutine.lift(pyro.module, prior, *args, **kwargs)
+    module = lifted_fn(name, nn_module)
+    return lambda: module
