@@ -1,5 +1,4 @@
 import torch
-import sys
 import torch.nn as nn
 from six.moves.queue import Queue
 from torch.autograd import Variable
@@ -303,7 +302,7 @@ class LiftPoutineTests(TestCase):
         def guide():
             mu1 = pyro.param("mu1", Variable(torch.randn(2), requires_grad=True))
             sigma1 = pyro.param("sigma1", Variable(torch.ones(2), requires_grad=True))
-            latent1 = pyro.sample("latent1", DiagNormal(mu1, sigma1))
+            pyro.sample("latent1", DiagNormal(mu1, sigma1))
 
             mu2 = pyro.param("mu2", Variable(torch.randn(2), requires_grad=True))
             sigma2 = pyro.param("sigma2", Variable(torch.ones(2), requires_grad=True))
