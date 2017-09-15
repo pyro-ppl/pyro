@@ -21,6 +21,15 @@ rnn_dim = 600
 rnn_num_layers = 1
 val_test_frequency = 10
 
+
+def reverse_sequences(mini_batch, seq_lengths):
+    reversed_mini_batch = mini_batch.copy()
+    for b in range(mini_batch.shape[0]):
+        T = seq_lengths[b]
+        reversed_mini_batch[b, 0:T, :] = mini_batch[b, (T - 1)::-1, :]
+    return reversed_mini_batch
+
+
 # parameterizes p(x_t | z_t)
 class Emitter(nn.Module):
     def __init__(self, input_dim, z_dim, emission_dim):
@@ -88,14 +97,14 @@ pt_rnn = nn.RNN(input_size=input_dim, hidden_size=rnn_dim, nonlinearity='relu',
 
 
 # the model
-def model(mini_batch, mini_batch_reversed, mini_batch_mask,
-          T_max, annealing_factor=1.0):
+def model(mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths,
+          annealing_factor=1.0):
 
     emitter = pyro.module("emitter", pt_emitter)
     trans = pyro.module("transition", pt_trans)
     z_prev = pyro.param("z_0", zeros(z_dim))
 
-    for t in range(1, T_max + 1):
+    for t in range(1, np.max(mini_batch_seq_lengths) + 1):
         z_mu, z_sigma = trans(z_prev)
         z_t = pyro.sample("z_%d" % t, DiagNormal(z_mu, z_sigma),
                           log_pdf_mask=annealing_factor * mini_batch_mask[:, t - 1:t])
@@ -108,18 +117,20 @@ def model(mini_batch, mini_batch_reversed, mini_batch_mask,
 
 
 # the guide
-def guide(mini_batch, mini_batch_reversed, mini_batch_mask,
-          T_max, annealing_factor=1.0):
+def guide(mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths,
+          annealing_factor=1.0):
 
     rnn = pyro.module("rnn", pt_rnn)
     combiner = pyro.module("combiner", pt_combiner)
     h_0 = pyro.param("h_0", zeros(rnn_num_layers, 1, rnn_dim))
     rnn_output, _ = rnn(mini_batch_reversed, h_0)
     rnn_output, _ = torch.nn.utils.rnn.pad_packed_sequence(rnn_output, batch_first=True)
+    rnn_output = reverse_sequences(rnn_output.data.numpy(), mini_batch_seq_lengths)
+    rnn_output = Variable(torch.Tensor(rnn_output))
     z_prev = pyro.param("z_q_0", zeros(z_dim))
 
-    for t in range(1, T_max + 1):
-        z_mu, z_sigma = combiner(z_prev, rnn_output[:, T_max - t, :])
+    for t in range(1, np.max(mini_batch_seq_lengths) + 1):
+        z_mu, z_sigma = combiner(z_prev, rnn_output[:, t - 1, :])
         z_t = pyro.sample("z_%d" % t, DiagNormal(z_mu, z_sigma),
                           log_pdf_mask=annealing_factor * mini_batch_mask[:, t - 1:t])
         z_prev = z_t
@@ -159,13 +170,6 @@ def main():
         np.mean(training_data_seq_lengths), N_mini_batches)
     times = [time.time()]
 
-    def reverse_sequences(mini_batch, seq_lengths):
-        reversed_mini_batch = mini_batch.copy()
-        for b in range(mini_batch.shape[0]):
-            T = seq_lengths[b]
-            reversed_mini_batch[b, 0:T, :] = mini_batch[b, (T - 1)::-1, :]
-        return reversed_mini_batch
-
     def get_mini_batch_mask(mini_batch, seq_lengths):
         mask = np.zeros(mini_batch.shape[0:2])
         for b in range(mini_batch.shape[0]):
@@ -183,11 +187,10 @@ def main():
                                                                       sorted_seq_lengths,
                                                                       batch_first=True)
         mini_batch_time_slices = np.sum(seq_lengths)
-        T_max = np.max(seq_lengths)
         mini_batch_mask = Variable(torch.Tensor(get_mini_batch_mask(mini_batch, sorted_seq_lengths)))
 
         return Variable(torch.Tensor(mini_batch)), mini_batch_reversed, mini_batch_mask,\
-            mini_batch_time_slices, T_max
+            sorted_seq_lengths, mini_batch_time_slices
 
     def do_evaluation(data, seq_lengths):
 	N_data, eval_batch_size = data.shape[0], data.shape[0]
@@ -200,9 +203,10 @@ def main():
 	    mini_batch_start = (which * eval_batch_size)
 	    mini_batch_end = np.min([(which + 1) * eval_batch_size, N_data])
 	    mini_batch_indices = np.arange(mini_batch_start, mini_batch_end)
-	    mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_time_slices, \
-		T_max = get_mini_batch(mini_batch_indices, data, seq_lengths)
-	    loss = kl_optim.eval_bound(mini_batch, mini_batch_reversed, mini_batch_mask, T_max)
+	    mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths, \
+                mini_batch_time_slices = get_mini_batch(mini_batch_indices, data, seq_lengths)
+	    loss = kl_optim.eval_bound(mini_batch, mini_batch_reversed, mini_batch_mask,
+                                       mini_batch_seq_lengths)
 	    total_time_slices += mini_batch_time_slices
 	    eval_nll += loss
 
@@ -223,10 +227,11 @@ def main():
             mini_batch_start = (which * args.mini_batch_size)
             mini_batch_end = np.min([(which + 1) * args.mini_batch_size, N_train_data])
             mini_batch_indices = shuffled_indices[mini_batch_start:mini_batch_end]
-            mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_time_slices, T_max = \
-                get_mini_batch(mini_batch_indices, training_data_sequences, training_data_seq_lengths)
+            mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths, \
+                mini_batch_time_slices = get_mini_batch(mini_batch_indices,
+                    training_data_sequences, training_data_seq_lengths)
             loss = kl_optim.step(mini_batch, mini_batch_reversed, mini_batch_mask,
-                                 T_max, annealing_factor)
+                                 mini_batch_seq_lengths, annealing_factor)
             total_time_slices += mini_batch_time_slices
             if epoch < 1:
                 print "minibatch loss:  %.4f  [annealing factor: %.4f]" % (loss, annealing_factor)
