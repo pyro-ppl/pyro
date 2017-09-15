@@ -268,8 +268,8 @@ class QueuePoutineTests(TestCase):
 
 class Model(nn.Module):
     def __init__(self):
-        self.fc = nn.Linear(2, 1)
         super(Model, self).__init__()
+        self.fc = nn.Linear(2, 1)
 
     def forward(self, x):
         return self.fc(x)
@@ -310,10 +310,11 @@ class LiftPoutineTests(TestCase):
             latent2 = pyro.sample("latent2", DiagNormal(mu2, sigma2))
             return latent2
 
-        self.model = Model
+        self.model = Model()
         self.guide = guide
         self.prior = mu1_prior
         self.prior_dict = {"mu1": mu1_prior, "sigma1": sigma1_prior, "mu2": mu2_prior, "sigma2": sigma2_prior}
+        self.data = Variable(torch.randn(2, 2))
 
     def test_lift_simple(self):
         tr = poutine.trace(self.guide)()
@@ -333,10 +334,15 @@ class LiftPoutineTests(TestCase):
             if tr[name]["type"] == "param":
                 self.assertTrue(lifted_tr[name]["type"] == "sample")
 
-    # def test_random_module(self):
-    #     tr = poutine.trace(self.guide)()
-    #     lifted_tr = poutine.trace(pyro.random_module("name", self.guide, prior=self.prior_list)())
-    #     for name in tr.keys():
-    #         self.assertTrue(name in lifted_tr)
-    #         if tr[name]["type"] == "param":
-    #             self.assertTrue(lifted_tr[name]["type"] == "sample")
+    def test_random_module(self):
+        tr = poutine.trace(self.model)(self.data)
+        lifted_tr = poutine.trace(pyro.random_module("name", self.model, prior=self.prior_dict))(self.data)
+        for name in tr.keys():
+            self.assertTrue(name in lifted_tr)
+            if tr[name]["type"] == "param":
+                self.assertTrue(lifted_tr[name]["type"] == "sample")
+            self.assertTrue(name in lifted_tr)
+            if name in {'sigma1', 'mu1', 'sigma2', 'mu2'}:
+                self.assertTrue(name + "_prior" == lifted_tr[name]['fn'].__name__)
+            if tr[name]["type"] == "param":
+                self.assertTrue(lifted_tr[name]["type"] == "sample")
