@@ -1,9 +1,9 @@
 import scipy.stats as spr
 import torch
 from torch.autograd import Variable
-import pyro
+
 from pyro.distributions.distribution import Distribution
-from pyro.util import log_gamma, log_beta
+from pyro.util import log_beta
 
 
 class Dirichlet(Distribution):

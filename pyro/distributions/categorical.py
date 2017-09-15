@@ -1,8 +1,10 @@
+import itertools
+
+import numpy as np
 import torch
 from torch.autograd import Variable
+
 from pyro.distributions.distribution import Distribution
-import itertools
-import numpy as np
 from pyro.util import to_one_hot
 
 
@@ -133,8 +135,8 @@ class Categorical(Distribution):
                 # vs is an array, so the support must be of type array
                 r_np = _vs.shape[0]
                 c_np = _vs.shape[1]
-                ix = np.expand_dims(np.arange(r_np), axis=1)
-                b = torch.ones(r_np, 1)
+                np.expand_dims(np.arange(r_np), axis=1)
+                torch.ones(r_np, 1)
                 return (_vs[np.arange(r_np), torch.Tensor(list(x)).numpy().astype(int)]
                         .reshape(r_np, 1).tolist()
                         for x in itertools.product(torch.arange(0, c_np), repeat=r_np))

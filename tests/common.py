@@ -1,17 +1,16 @@
-import sys
-import os
 import argparse
+import contextlib
+import os
+import sys
 import unittest
 import warnings
-import contextlib
+from copy import deepcopy
 from functools import wraps
 from itertools import product
-from copy import deepcopy
 
 import torch
 import torch.cuda
 from torch.autograd import Variable
-
 
 torch.set_default_tensor_type('torch.DoubleTensor')
 
@@ -22,25 +21,12 @@ def run_tests():
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument('--seed', type=int, default=123)
     args, remaining = parser.parse_known_args()
-    SEED = args.seed
+    SEED = args.seed  # noqa: F841
     torch.manual_seed(args.seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(args.seed)
     remaining = [sys.argv[0]] + remaining
     unittest.main(argv=remaining)
-
-
-TEST_NUMPY = True
-try:
-    import numpy
-except ImportError:
-    TEST_NUMPY = False
-
-TEST_SCIPY = True
-try:
-    import scipy
-except ImportError:
-    TEST_SCIPY = False
 
 
 def skipIfNoLapack(fn):
@@ -275,5 +261,5 @@ def download_file(url, path, binary=True):
         with open(path, 'wb' if binary else 'w') as f:
             f.write(data)
         return True
-    except error.URLError as e:
+    except error.URLError:
         return False

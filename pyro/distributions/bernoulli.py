@@ -1,7 +1,9 @@
-import torch
-import itertools
 import functools
+import itertools
+
+import torch
 from torch.autograd import Variable
+
 from pyro.distributions.distribution import Distribution
 
 

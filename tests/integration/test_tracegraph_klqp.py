@@ -1,18 +1,17 @@
 from __future__ import print_function
+
 import torch
 import torch.optim
-from torch.autograd import Variable
 from torch import nn as nn
+from torch.autograd import Variable
 from torch.nn import Parameter
-import numpy as np
 
 import pyro
 import pyro.distributions as dist
-from tests.common import TestCase
-
-from pyro.infer.tracegraph_kl_qp import TraceGraph_KL_QP
-from pyro.util import ng_ones, ng_zeros, ones, zeros
 from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
+from pyro.infer.tracegraph_kl_qp import TraceGraph_KL_QP
+from pyro.util import ng_ones, ng_zeros
+from tests.common import TestCase
 
 
 class NormalNormalTests(TestCase):
@@ -119,17 +118,17 @@ class NormalNormalNormalTests(TestCase):
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, True, 5000, 0.02, 0.002, False, False)
 
-    def test_elbo_nonreparameterized(self):
-        for use_nn_baseline in [True, False]:
-            for use_decaying_avg_baseline in [True, False]:
-                if not use_nn_baseline and not use_decaying_avg_baseline:
-                    continue
-                self.do_elbo_test(False, False, 15000, 0.05, 0.001, use_nn_baseline,
-                                  use_decaying_avg_baseline)
-                self.do_elbo_test(True, False, 12000, 0.04, 0.0015, use_nn_baseline,
-                                  use_decaying_avg_baseline)
-                self.do_elbo_test(False, True, 12000, 0.04, 0.0015, use_nn_baseline,
-                                  use_decaying_avg_baseline)
+    def test_elbo_nonreparameterized_both_baselines(self):
+        self.do_elbo_test(False, False, 15000, 0.05, 0.001, use_nn_baseline=True,
+                          use_decaying_avg_baseline=True)
+
+    def test_elbo_nonreparameterized_decaying_baseline(self):
+        self.do_elbo_test(True, False, 12000, 0.04, 0.0015, use_nn_baseline=False,
+                          use_decaying_avg_baseline=True)
+
+    def test_elbo_nonreparameterized_nn_baseline(self):
+        self.do_elbo_test(False, True, 12000, 0.04, 0.0015, use_nn_baseline=True,
+                          use_decaying_avg_baseline=False)
 
     def do_elbo_test(self, repa1, repa2, n_steps, prec, lr, use_nn_baseline, use_decaying_avg_baseline):
         if self.verbose:
@@ -187,11 +186,13 @@ class NormalNormalNormalTests(TestCase):
                                     use_decaying_avg_baseline=use_decaying_avg_baseline)
             mu_latent_prime_dist = dist.DiagNormal(kappa_q.expand_as(mu_latent) * mu_latent + mu_q_prime,
                                                    sig_q_prime)
-            mu_latent_prime = pyro.sample("mu_latent_prime", mu_latent_prime_dist,
-                                          reparameterized=repa1,
-                                          nn_baseline=mu_prime_baseline,
-                                          nn_baseline_input=mu_latent,
-                                          use_decaying_avg_baseline=use_decaying_avg_baseline)
+            pyro.sample("mu_latent_prime",
+                        mu_latent_prime_dist,
+                        reparameterized=repa1,
+                        nn_baseline=mu_prime_baseline,
+                        nn_baseline_input=mu_latent,
+                        use_decaying_avg_baseline=use_decaying_avg_baseline)
+
             return mu_latent
 
         kl_optim = TraceGraph_KL_QP(model, guide, pyro.optim(

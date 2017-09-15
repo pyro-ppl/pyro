@@ -1,4 +1,3 @@
-import pyro
 from .poutine import Poutine
 
 
@@ -6,6 +5,7 @@ class BlockPoutine(Poutine):
     """
     Blocks some things
     """
+
     def __init__(self, fn,
                  hide_all=True, expose_all=False,
                  hide=None, expose=None,
@@ -18,7 +18,7 @@ class BlockPoutine(Poutine):
         # first, some sanity checks:
         # hide_all and expose_all intersect?
         assert (hide_all is False and expose_all is False) or \
-            (hide_all != expose_all), "cannot hide and expose a site"
+               (hide_all != expose_all), "cannot hide and expose a site"
 
         # hide and expose intersect?
         if hide is None:

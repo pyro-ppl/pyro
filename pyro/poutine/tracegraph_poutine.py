@@ -1,9 +1,6 @@
-import pyro
-import torch
-from torch.autograd import Variable, Function
 import graphviz
 import networkx
-from collections import defaultdict
+
 from .trace_poutine import TracePoutine
 
 
@@ -14,6 +11,7 @@ class TraceGraph(object):
     -- returned by TraceGraphPoutine
     -- visualization handled by save_visualization()
     """
+
     def __init__(self, G, trace, stochastic_nodes, reparameterized_nodes,
                  param_nodes, observation_nodes):
         self.G = G

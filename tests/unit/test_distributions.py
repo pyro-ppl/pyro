@@ -1,14 +1,13 @@
+import json
+
 import numpy as np
 import scipy.stats as spr
-import json
-import itertools
-
 import torch
 from torch.autograd import Variable
 
 import pyro.distributions as dist
-from tests.common import TestCase
 from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
+from tests.common import TestCase
 
 
 class TestUniform(TestCase):
