@@ -1,5 +1,3 @@
-import pyro
-import torch
 from .poutine import Poutine
 
 

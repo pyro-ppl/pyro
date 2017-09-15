@@ -1,3 +1,4 @@
+# flake8: noqa
 from inspect import isclass
 
 import torch
