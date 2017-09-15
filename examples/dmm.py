@@ -13,13 +13,12 @@ import numpy as np
 import time
 import cPickle
 
-quick_mode = False
 input_dim = 88
-z_dim = 100 if not quick_mode else 5
-transition_dim = 200 if not quick_mode else 5
-emission_dim = 100 if not quick_mode else 5
-rnn_dim = 600 if not quick_mode else 5
-rnn_num_layers = 2
+z_dim = 100
+transition_dim = 200
+emission_dim = 100
+rnn_dim = 600
+rnn_num_layers = 1
 val_test_frequency = 10
 
 # parameterizes p(x_t | z_t)
@@ -89,10 +88,11 @@ pt_rnn = nn.RNN(input_size=input_dim, hidden_size=rnn_dim, nonlinearity='relu',
 
 
 # the model
-def model(mini_batch, mini_batch_reversed, mini_batch_mask, T_max, annealing_factor=1.0):
+def model(mini_batch, mini_batch_reversed, mini_batch_mask,
+          T_max, annealing_factor=1.0):
+
     emitter = pyro.module("emitter", pt_emitter)
     trans = pyro.module("transition", pt_trans)
-    mini_batch_size = mini_batch.size(0)
     z_prev = pyro.param("z_0", zeros(z_dim))
 
     for t in range(1, T_max + 1):
@@ -108,8 +108,9 @@ def model(mini_batch, mini_batch_reversed, mini_batch_mask, T_max, annealing_fac
 
 
 # the guide
-def guide(mini_batch, mini_batch_reversed, mini_batch_mask, T_max, annealing_factor=1.0):
-    mini_batch_size = mini_batch.size(0)
+def guide(mini_batch, mini_batch_reversed, mini_batch_mask,
+          T_max, annealing_factor=1.0):
+
     rnn = pyro.module("rnn", pt_rnn)
     combiner = pyro.module("combiner", pt_combiner)
     h_0 = pyro.param("h_0", zeros(rnn_num_layers, 1, rnn_dim))
@@ -129,14 +130,16 @@ def guide(mini_batch, mini_batch_reversed, mini_batch_mask, T_max, annealing_fac
 # setup and optimization loop
 def main():
     parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', type=int, required=True)
-    parser.add_argument('-lr', '--learning-rate', type=float, required=True)
-    parser.add_argument('-b1', '--beta1', type=float, required=True)
-    parser.add_argument('-mbs', '--mini-batch-size', type=int, required=True)
-    parser.add_argument('-ae', '--annealing-epochs', type=int, required=True)
+    parser.add_argument('-n', '--num-epochs', type=int, default=2000)
+    parser.add_argument('-lr', '--learning-rate', type=float, default=0.0008)
+    parser.add_argument('-b1', '--beta1', type=float, default=0.90)
+    parser.add_argument('-b2', '--beta2', type=float, default=0.999)
+    parser.add_argument('-mbs', '--mini-batch-size', type=int, default=20)
+    parser.add_argument('-ae', '--annealing-epochs', type=int, default=0)
+    parser.add_argument('-maf', '--minimum-annealing-factor', type=float, default=0.0)
     args = parser.parse_args()
 
-    adam_params = {"lr": args.learning_rate, "betas": (args.beta1, 0.999)}
+    adam_params = {"lr": args.learning_rate, "betas": (args.beta1, args.beta2)}
     kl_optim = KL_QP(model, guide, pyro.optim(optim.Adam, adam_params))
 
     data = cPickle.load(open("jsb_processed.pkl", "rb"))
@@ -157,10 +160,11 @@ def main():
     times = [time.time()]
 
     def reverse_sequences(mini_batch, seq_lengths):
+        reversed_mini_batch = mini_batch.copy()
         for b in range(mini_batch.shape[0]):
             T = seq_lengths[b]
-            mini_batch[b, 0:T, :] = mini_batch[b, (T - 1)::-1, :]
-        return mini_batch
+            reversed_mini_batch[b, 0:T, :] = mini_batch[b, (T - 1)::-1, :]
+        return reversed_mini_batch
 
     def get_mini_batch_mask(mini_batch, seq_lengths):
         mask = np.zeros(mini_batch.shape[0:2])
@@ -205,7 +209,6 @@ def main():
 	return eval_nll / total_time_slices
 
     annealing_factor = 1.0
-    min_af = 0.10
 
     for epoch in range(args.num_epochs):
         epoch_nll, total_time_slices = 0.0, 0.0
@@ -213,7 +216,9 @@ def main():
         np.random.shuffle(shuffled_indices)
         for which in range(N_mini_batches):
             if args.annealing_epochs > 0 and epoch < args.annealing_epochs:
-                annealing_factor = min_af + (1.0 - min_af)*(float(which + epoch * N_mini_batches + 1)/\
+                min_af = args.minimum_annealing_factor
+                annealing_factor = min_af + (1.0 - min_af) * \
+                    (float(which + epoch * N_mini_batches + 1) / \
                     float(args.annealing_epochs * N_mini_batches))
             mini_batch_start = (which * args.mini_batch_size)
             mini_batch_end = np.min([(which + 1) * args.mini_batch_size, N_train_data])
@@ -223,8 +228,8 @@ def main():
             loss = kl_optim.step(mini_batch, mini_batch_reversed, mini_batch_mask,
                                  T_max, annealing_factor)
             total_time_slices += mini_batch_time_slices
-            if epoch < 2:
-                print "loss, af", loss, annealing_factor
+            if epoch < 1:
+                print "minibatch loss:  %.4f  [annealing factor: %.4f]" % (loss, annealing_factor)
             epoch_nll += loss
         times.append(time.time())
         epoch_time = times[-1] - times[-2]
