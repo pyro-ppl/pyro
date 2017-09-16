@@ -2,7 +2,50 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import numpy as np
-# import cPickle
+import cPickle
+import os.path
+import urllib
+
+
+def download_if_absent(saveas, url):
+    if not os.path.exists(saveas):
+        print("downloading polyphonic music data from %s..." % url)
+        urllib.URLopener().retrieve(url, saveas)
+
+
+def process_data(output="jsb_processed.pkl", rawdata="jsb_raw.pkl",
+                 T_max=160, min_note=21, note_range=88):
+
+    if os.path.exists(output):
+        return
+
+    print("processing raw polyphonic music data...")
+    data = cPickle.load(open(rawdata, "rb"))
+    processed_dataset = {}
+    for split in ['train', 'valid', 'test']:
+        processed_dataset[split] = {}
+        data_split = data[split]
+        n_seqs = len(data_split)
+        processed_dataset[split]['sequence_lengths'] = np.zeros((n_seqs), dtype=np.int32)
+        processed_dataset[split]['sequences'] = np.zeros((n_seqs, T_max, note_range))
+        for seq in range(n_seqs):
+            seq_length = len(data_split[seq])
+            processed_dataset[split]['sequence_lengths'][seq] = seq_length
+            for t in range(seq_length):
+                note_slice = np.array(list(data_split[seq][t])) - min_note
+                slice_length = len(note_slice)
+                if slice_length > 0:
+                    processed_dataset[split]['sequences'][seq, t, note_slice] = np.ones((slice_length))
+    cPickle.dump(processed_dataset, open(output, "wb"))
+    print("dumped processed data to %s" % output)
+
+
+###############################
+#  download data and process  #
+###############################
+
+download_if_absent("jsb_raw.pkl", "http://www-etud.iro.umontreal.ca/~boulanni/JSB%20Chorales.pickle")
+process_data()
 
 
 def reverse_sequences(mini_batch, seq_lengths):

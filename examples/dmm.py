@@ -10,7 +10,9 @@ import torch.optim as optim
 import numpy as np
 import time
 import cPickle
+import polyphonic_data_loader
 from polyphonic_data_loader import get_mini_batch, pad_and_reverse, do_evaluation
+
 
 input_dim = 88
 z_dim = 100
@@ -130,7 +132,7 @@ def guide(mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengt
     return z_prev
 
 
-# setup and optimization loop
+# setup, training, and evaluation
 def main():
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', type=int, default=2000)
@@ -142,27 +144,25 @@ def main():
     parser.add_argument('-maf', '--minimum-annealing-factor', type=float, default=0.0)
     args = parser.parse_args()
 
-    adam_params = {"lr": args.learning_rate, "betas": (args.beta1, args.beta2)}
-    kl_optim = KL_QP(model, guide, pyro.optim(optim.Adam, adam_params))
-
+    # ingest data
     data = cPickle.load(open("jsb_processed.pkl", "rb"))
-    training_data, val_data, test_data = data['train'], data['valid'], data['test']
-    training_data_seq_lengths = training_data['sequence_lengths']
-    training_data_sequences = training_data['sequences']
-    test_data_seq_lengths = test_data['sequence_lengths']
-    test_data_sequences = test_data['sequences']
-    val_data_seq_lengths = val_data['sequence_lengths']
-    val_data_sequences = val_data['sequences']
+    training_data_seq_lengths = data['train']['sequence_lengths']
+    training_data_sequences = data['train']['sequences']
+    test_data_seq_lengths = data['test']['sequence_lengths']
+    test_data_sequences = data['test']['sequences']
+    val_data_seq_lengths = data['valid']['sequence_lengths']
+    val_data_sequences = data['valid']['sequences']
     N_train_data = len(training_data_seq_lengths)
     N_train_time_slices = np.sum(training_data_seq_lengths)
-    N_mini_batches = N_train_data / args.mini_batch_size
-    if N_train_data % args.mini_batch_size > 0:
-        N_mini_batches += 1
+    N_mini_batches = N_train_data / args.mini_batch_size +\
+        int(N_train_data % args.mini_batch_size > 0)
 
     print("N_train_data: %d     avg. training seq. length: %.2f    N_mini_batches: %d" %
           (N_train_data, np.mean(training_data_seq_lengths), N_mini_batches))
     times = [time.time()]
 
+    adam_params = {"lr": args.learning_rate, "betas": (args.beta1, args.beta2)}
+    kl_optim = KL_QP(model, guide, pyro.optim(optim.Adam, adam_params))
     annealing_factor = 1.0
 
     for epoch in range(args.num_epochs):
