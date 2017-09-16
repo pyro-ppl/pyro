@@ -10,8 +10,9 @@ import torch.optim as optim
 import numpy as np
 import time
 import cPickle
-import polyphonic_data_loader
-from polyphonic_data_loader import get_mini_batch, pad_and_reverse, do_evaluation
+import polyphonic_data_loader as poly
+from pyro.optim import ClippedAdam
+import logging
 
 
 input_dim = 88
@@ -120,7 +121,7 @@ def guide(mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengt
     combiner = pyro.module("combiner", pt_combiner)
     h_0 = pyro.param("h_0", zeros(rnn_num_layers, 1, rnn_dim))
     rnn_output, _ = rnn(mini_batch_reversed, h_0)
-    rnn_output = pad_and_reverse(rnn_output, mini_batch_seq_lengths)
+    rnn_output = poly.pad_and_reverse(rnn_output, mini_batch_seq_lengths)
     z_prev = pyro.param("z_q_0", zeros(z_dim))
 
     for t in range(1, T_max + 1):
@@ -140,9 +141,19 @@ def main():
     parser.add_argument('-b1', '--beta1', type=float, default=0.90)
     parser.add_argument('-b2', '--beta2', type=float, default=0.999)
     parser.add_argument('-mbs', '--mini-batch-size', type=int, default=20)
-    parser.add_argument('-ae', '--annealing-epochs', type=int, default=0)
-    parser.add_argument('-maf', '--minimum-annealing-factor', type=float, default=0.0)
+    parser.add_argument('-ae', '--annealing-epochs', type=int, default=500)
+    parser.add_argument('-maf', '--minimum-annealing-factor', type=float, default=0.1)
+    parser.add_argument('-cn', '--clip-norm', type=float, default=10.0)
     args = parser.parse_args()
+
+    logging.basicConfig(level=logging.DEBUG, format='%(message)s', filename='dmm.log', filemode='w')
+    console = logging.StreamHandler()
+    console.setLevel(logging.INFO)
+    logging.getLogger('').addHandler(console)
+
+    def log(s):
+	logging.info(s)
+    log(args)
 
     # ingest data
     data = cPickle.load(open("jsb_processed.pkl", "rb"))
@@ -157,12 +168,13 @@ def main():
     N_mini_batches = N_train_data / args.mini_batch_size +\
         int(N_train_data % args.mini_batch_size > 0)
 
-    print("N_train_data: %d     avg. training seq. length: %.2f    N_mini_batches: %d" %
-          (N_train_data, np.mean(training_data_seq_lengths), N_mini_batches))
+    log("N_train_data: %d     avg. training seq. length: %.2f    N_mini_batches: %d" %
+        (N_train_data, np.mean(training_data_seq_lengths), N_mini_batches))
     times = [time.time()]
 
-    adam_params = {"lr": args.learning_rate, "betas": (args.beta1, args.beta2)}
-    kl_optim = KL_QP(model, guide, pyro.optim(optim.Adam, adam_params))
+    adam_params = {"lr": args.learning_rate, "betas": (args.beta1, args.beta2),
+                   "clip_norm": args.clip_norm}
+    kl_optim = KL_QP(model, guide, pyro.optim(ClippedAdam, adam_params))
     annealing_factor = 1.0
 
     for epoch in range(args.num_epochs):
@@ -179,26 +191,25 @@ def main():
             mini_batch_end = np.min([(which + 1) * args.mini_batch_size, N_train_data])
             mini_batch_indices = shuffled_indices[mini_batch_start:mini_batch_end]
             mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths \
-                = get_mini_batch(mini_batch_indices, training_data_sequences,
-                                 training_data_seq_lengths)
+                = poly.get_mini_batch(mini_batch_indices, training_data_sequences,
+                                      training_data_seq_lengths)
             loss = kl_optim.step(mini_batch, mini_batch_reversed, mini_batch_mask,
                                  mini_batch_seq_lengths, annealing_factor)
+#             if epoch==0 and which==0:
+#                 for name, param in pyro._param_store._params.items():
+#                     pyro.pyro._param_store._params[name] = param.register_hook(lambda grad: 0.0*grad)
             if epoch < 1:
-                print("minibatch loss:  %.4f  [annealing factor: %.4f]" % (loss, annealing_factor))
+                log("minibatch loss:  %.4f  [annealing factor: %.4f]" % (loss, annealing_factor))
             epoch_nll += loss
         times.append(time.time())
         epoch_time = times[-1] - times[-2]
-        print("[training epoch %04d]  %.4f \t\t\t\t(dt = %.3f sec)" %
+        log("[training epoch %04d]  %.4f \t\t\t\t(dt = %.3f sec)" %
               (epoch, epoch_nll / N_train_time_slices, epoch_time))
 
         if epoch % val_test_frequency == 0:
-            val_nll = do_evaluation(kl_optim, val_data_sequences, val_data_seq_lengths)
-            test_nll = do_evaluation(kl_optim, test_data_sequences, test_data_seq_lengths)
-            print("[val/test epoch %04d]  %.4f  %.4f" % (epoch, val_nll, test_nll))
-
-        if epoch % 100 == 0:
-            print("[args]  ", args)
-
+            val_nll = poly.do_evaluation(kl_optim, val_data_sequences, val_data_seq_lengths)
+            test_nll = poly.do_evaluation(kl_optim, test_data_sequences, test_data_seq_lengths)
+            log("[val/test epoch %04d]  %.4f  %.4f" % (epoch, val_nll, test_nll))
 
 if __name__ == '__main__':
     main()
