@@ -251,12 +251,15 @@ def module(pyro_name, nn_obj):
         # Note: apart from the following line, the rest of this code
         # logic is borrowed from torch.nn.Module.load_state_dict
         if id(param) != id(current_nn_state[name]):
+            if isinstance(param, Variable):
+                param = param.data
             current_nn_state[name].copy_(param)
 
     missing = set(current_nn_state.keys()) - set(state_dict.keys())
     if len(missing) > 0:
         raise KeyError('missing keys in state_dict: "{}"'.format(missing))
 
+    nn_obj.load_state_dict(current_nn_state)
     return nn_obj
 
 
@@ -269,13 +272,6 @@ def random_module(name, nn_module, prior, *args, **kwargs):
     Places a prior over the parameters of the nn module
     """
     assert hasattr(nn_module, "parameters"), "Module is not a NN module."
-    # reguster oarams in param store
-    # module = pyro.module(name, nn_module)
-    # print "before", list(module.parameters())
-    # print list(nn_module.named_parameters())
-    # def  _fn():
-    #     module.modules()
-    #     return module
+    # register oarams in param store
     lifted_fn = poutine.lift(pyro.module, prior, *args, **kwargs)
-    module = lifted_fn(name, nn_module)
-    return lambda: module
+    return lambda: lifted_fn(name, nn_module)
