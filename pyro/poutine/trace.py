@@ -107,9 +107,6 @@ class Trace(dict):
                     *self[name]["args"][0],
                     **self[name]["args"][1]) * self[name]["scale"]
                 log_p += self[name]["log_pdf"]
-                # if self[name]["scale"] == 1.0:
-                #     print(name, self[name]["scale"])
-                #     pdb.set_trace()
         return log_p
 
     def batch_log_pdf(self):

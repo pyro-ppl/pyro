@@ -88,7 +88,6 @@ class TracePoutine(Poutine):
             scale, ind = pyro.util.get_scale(data, batch_size)
             msg["scale"] = scale
             msg["indices"] = ind
-        # print(msg["scale"])
         scaled_fn = ScalePoutine(fn, msg["scale"])
         ret = super(TracePoutine, self)._pyro_map_data(msg, name,
                                                        data, scaled_fn,
