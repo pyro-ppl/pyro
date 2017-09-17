@@ -6,9 +6,10 @@ from torch.optim import Optimizer
 class ClippedAdam(Optimizer):
 
     def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8,
-                 weight_decay=0, clip_norm=10.0):
+                 weight_decay=0, clip_norm=10.0, lrd=1.0):
         defaults = dict(lr=lr, betas=betas, eps=eps,
-                        weight_decay=weight_decay, clip_norm=clip_norm)
+                        weight_decay=weight_decay,
+                        clip_norm=clip_norm, lrd=lrd)
         super(ClippedAdam, self).__init__(params, defaults)
 
     def step(self, closure=None):
@@ -21,6 +22,7 @@ class ClippedAdam(Optimizer):
                 if p.grad is None:
                     continue
                 grad = p.grad.data
+                grad.clamp_(-group['clip_norm'], group['clip_norm'])
                 state = self.state[p]
 
                 if len(state) == 0:
@@ -45,7 +47,8 @@ class ClippedAdam(Optimizer):
                 bias_correction2 = 1 - beta2 ** state['step']
                 step_size = group['lr'] * math.sqrt(bias_correction2) / bias_correction1
 
-                exp_avg.clamp_(-group['clip_norm'], group['clip_norm'])
+                group['lr'] *= group['lrd']
+
                 p.data.addcdiv_(-step_size, exp_avg, denom)
 
         return loss

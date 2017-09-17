@@ -1,3 +1,14 @@
+#####################################################################################
+#  download data and process;  initiated upon import
+#
+#  data are taken from Boulanger-Lewandowski, N., Bengio, Y. and Vincent, P.,
+#  "Modeling Temporal Dependencies in High-Dimensional Sequences: Application to
+#  Polyphonic Music Generation and Transcription"
+#
+#  however, the original source of the data seems to be the Institut fuer Algorithmen
+#  und Kognitive Systeme at Universitaet Karlsruhe
+#####################################################################################
+
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
@@ -40,10 +51,6 @@ def process_data(output="jsb_processed.pkl", rawdata="jsb_raw.pkl",
     print("dumped processed data to %s" % output)
 
 
-###############################
-#  download data and process  #
-###############################
-
 download_if_absent("jsb_raw.pkl", "http://www-etud.iro.umontreal.ca/~boulanni/JSB%20Chorales.pickle")
 process_data()
 
@@ -83,11 +90,3 @@ def get_mini_batch(mini_batch_indices, sequences, seq_lengths):
 
     return Variable(torch.Tensor(mini_batch)), mini_batch_reversed, mini_batch_mask,\
         sorted_seq_lengths
-
-
-def do_evaluation(kl_optim, data, seq_lengths):
-    full_batch, full_batch_reversed, full_batch_mask, full_batch_seq_lengths \
-        = get_mini_batch(np.arange(data.shape[0]), data, seq_lengths)
-    loss = kl_optim.eval_objective(full_batch, full_batch_reversed, full_batch_mask,
-                                   full_batch_seq_lengths)
-    return loss / np.sum(seq_lengths)
