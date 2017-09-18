@@ -1,4 +1,7 @@
+import pyro
+
 from .poutine import Poutine
+from .scale_poutine import ScalePoutine
 
 
 class ReplayPoutine(Poutine):
@@ -61,3 +64,13 @@ class ReplayPoutine(Poutine):
         else:
             raise ValueError(
                 "something went wrong with replay conditions at site " + name)
+
+    def _pyro_map_data(self, msg, name, data, fn, batch_size=None, batch_dim=0):
+        """
+        Scale
+        """
+        scale = pyro.util.get_batch_scale(data, batch_size, batch_dim)
+        return super(ReplayPoutine, self)._pyro_map_data(msg, name, data,
+                                                         ScalePoutine(fn, scale),
+                                                         batch_size=batch_size,
+                                                         batch_dim=batch_dim)
