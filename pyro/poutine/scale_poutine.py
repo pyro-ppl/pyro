@@ -8,7 +8,6 @@ class ScalePoutine(Poutine):
     Subsampling means we have to rescale pdfs inside map_data
     This poutine handles the rescaling because it wouldn't fit in Poutine
     """
-
     def __init__(self, fn, scale):
         """
         Constructor: basically default, but store an extra scalar self.scale
