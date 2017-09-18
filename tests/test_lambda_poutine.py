@@ -131,3 +131,51 @@ class NormalNormalTests(TestCase):
         self.assertEqual(0.0, mu_error.data.cpu().numpy()[0], prec=0.03)
         self.assertEqual(0.0, log_sig_error.data.cpu().numpy()[0], prec=0.03)
 
+    def do_graphical_test(self):
+        pyro.get_param_store().clear()
+        self.data = []
+        self.data.append(Variable(torch.Tensor([-0.1, 0.3])))
+        self.data.append(Variable(torch.Tensor([0.00, 0.4])))
+        self.data.append(Variable(torch.Tensor([0.20, 0.5])))
+        self.data.append(Variable(torch.Tensor([0.10, 0.7])))
+        self.data.append(Variable(torch.Tensor([-0.2, 0.0])))
+        self.data.append(Variable(torch.Tensor([0.30, 0.4])))
+
+        def model():
+            z_global = pyro.sample("z_global", dist.diagnormal,
+                                    self.mu0, torch.pow(self.lam0, -0.5))
+
+            def obs(i, x, which):
+                z_local_a = pyro.sample("z_local_a_%d_%d" % (i, which), dist.diagnormal,
+                                    z_global, torch.pow(self.lam0, -0.5))
+                z_local_b = pyro.sample("z_local_b_%d_%d" % (i, which), dist.diagnormal,
+                                    z_local_a, torch.pow(self.lam0, -0.5))
+                pyro.observe("obs_%d_%d" % (i, which), dist.diagnormal, x, z_local_b, torch.pow(self.lam, -0.5))
+
+            pyro.map_data("map_obs0", self.data, lambda i, x: obs(i, x, 0), batch_size=3)
+            z_end = pyro.sample("z_end", dist.diagnormal, self.mu0, torch.pow(self.lam0, -0.5))
+            pyro.map_data("map_obs1", self.data, lambda i, x: obs(i, x, 1), batch_size=2)
+            z_end2 = pyro.sample("z_end2", dist.diagnormal, self.mu0, torch.pow(self.lam0, -0.5))
+            return z_global
+
+        def guide():
+            z_global = pyro.sample("z_global", dist.diagnormal, ones(2), ng_ones(2))
+
+            def local(i, x, which):
+                z_local_b = pyro.sample("z_local_b_%d_%d" % (i, which), dist.diagnormal,
+                                    z_global, torch.pow(self.lam0, -0.5))
+                z_local_a = pyro.sample("z_local_a_%d_%d" % (i, which), dist.diagnormal,
+                                    z_local_b, torch.pow(self.lam0, -0.5))
+
+            pyro.map_data("map_obs0", self.data, lambda i, x: local(i, x, 0), batch_size=3)
+            z_end = pyro.sample("z_end", dist.diagnormal, self.mu0, torch.pow(self.lam0, -0.5))
+            pyro.map_data("map_obs1", self.data, lambda i, x: local(i, x, 1), batch_size=2)
+            z_end2 = pyro.sample("z_end2", dist.diagnormal, self.mu0, torch.pow(self.lam0, -0.5))
+            return z_global
+
+        guide_tracegraph = poutine.tracegraph(guide)()
+        guide_tracegraph.save_visualization('guide')
+        guide_trace = guide_tracegraph.get_trace()
+        model_tracegraph = poutine.tracegraph(poutine.replay(model, guide_trace))()
+        model_tracegraph.save_visualization('model')
+        model_trace = model_tracegraph.get_trace()
