@@ -1,6 +1,4 @@
 import pyro
-import torch
-from torch.autograd import Variable
 
 from .poutine import Poutine
 from .scale_poutine import ScalePoutine
@@ -18,6 +16,7 @@ class TracePoutine(Poutine):
 
     We can also use this for visualization.
     """
+
     def _enter_poutine(self, *args, **kwargs):
         """
         Register the input arguments in the trace upon entry
@@ -81,20 +80,16 @@ class TracePoutine(Poutine):
         self.trace.add_param(name, retrieved, *args, **kwargs)
         return retrieved
 
-    def _pyro_map_data(self, msg, name, data, fn, batch_size=None):
+    def _pyro_map_data(self, msg, name, data, fn, batch_size=None, batch_dim=0):
         """
         Trace map_data
         """
-        if msg["scale"] is None and msg["indices"] is None:
-            scale, ind = pyro.util.get_scale(data, batch_size)
-            msg["scale"] = scale
-            msg["indices"] = ind
-        # print(msg["scale"])
-        scaled_fn = ScalePoutine(fn, msg["scale"])
-        ret = super(TracePoutine, self)._pyro_map_data(msg, name,
-                                                       data, scaled_fn,
+        scale = pyro.util.get_batch_scale(data, batch_size, batch_dim)
+        ret = super(TracePoutine, self)._pyro_map_data(msg, name, data,
+                                                       ScalePoutine(fn, scale),
                                                        # XXX watch out for changing
-                                                       batch_size=batch_size)
+                                                       batch_size=batch_size,
+                                                       batch_dim=batch_dim)
 
-        self.trace.add_map_data(name, fn, batch_size, msg["scale"], msg["indices"])
+        self.trace.add_map_data(name, fn, batch_size, batch_dim, msg["indices"])
         return ret

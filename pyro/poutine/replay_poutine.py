@@ -1,8 +1,5 @@
 import pyro
-import torch
-from torch.autograd import Variable
 
-from .trace import Trace
 from .poutine import Poutine
 from .scale_poutine import ScalePoutine
 from .lambda_poutine import LambdaPoutine
@@ -12,6 +9,7 @@ class ReplayPoutine(Poutine):
     """
     Poutine for replaying from an existing execution trace
     """
+
     def __init__(self, fn, guide_trace, sites=None):
         """
         Constructor.
@@ -34,6 +32,21 @@ class ReplayPoutine(Poutine):
             raise TypeError(
                 "unrecognized type {} for sites".format(str(type(sites))))
 
+    def down(self, msg):
+        """
+        Pass indices down at a map_data
+        """
+        if msg["type"] == "map_data":
+            if msg["name"] in self.guide_trace:
+                assert self.guide_trace[msg["name"]]["type"] == "map_data", \
+                    msg["name"] + " is not a map_data in the guide_trace"
+                msg["indices"] = self.guide_trace[msg["name"]]["indices"]
+                msg["batch_size"] = self.guide_trace[msg["name"]]["batch_size"]
+                msg["batch_dim"] = self.guide_trace[msg["name"]]["batch_dim"]
+
+        barrier = self._block_down(msg)
+        return msg, barrier
+
     def _pyro_sample(self, msg, name, fn, *args, **kwargs):
         """
         Return the sample in the guide trace when appropriate
@@ -53,29 +66,13 @@ class ReplayPoutine(Poutine):
             raise ValueError(
                 "something went wrong with replay conditions at site " + name)
 
-    def _pyro_map_data(self, msg, name, data, fn, batch_size=None):
+    def _pyro_map_data(self, msg, name, data, fn, batch_size=None, batch_dim=0):
         """
-        Use the batch indices from the guide trace
+        Scale
         """
-        if batch_size is None:
-            batch_size = 0
+        scale = pyro.util.get_batch_scale(data, batch_size, batch_dim)
+        return super(ReplayPoutine, self)._pyro_map_data(msg, name, data,
+							 LambdaPoutine(ScalePoutine(fn, scale), name),
+                                                         batch_size=batch_size,
+                                                         batch_dim=batch_dim)
 
-        assert batch_size >= 0, "cannot have negative batch sizes"
-        if isinstance(data, (torch.Tensor, Variable)):
-            assert batch_size <= data.size(0), \
-                "batch must be smaller than dataset size"
-        else:
-            assert batch_size <= len(data), \
-                "batch must be smaller than dataset size"
-
-        if name in self.guide_trace:
-            assert self.guide_trace[name]["type"] == "map_data", \
-                name + " is not a map_data in the guide_trace"
-            msg["scale"] = self.guide_trace[name]["scale"]
-            msg["indices"] = self.guide_trace[name]["indices"]
-            msg["batch_size"] = self.guide_trace[name]["batch_size"]
-        #print "enter replay mapdata"
-        ret = super(ReplayPoutine, self)._pyro_map_data(msg, name, data,
-                                                        LambdaPoutine(ScalePoutine(fn, msg["scale"]), name),
-                                                        batch_size=msg["batch_size"])
-        return ret

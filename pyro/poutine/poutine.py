@@ -1,6 +1,7 @@
-import pyro
 import torch
 from torch.autograd import Variable
+
+import pyro
 
 
 class Poutine(object):
@@ -8,6 +9,7 @@ class Poutine(object):
     Wraps a function call with a pyro stack push/pop of the basic pyro functions
     This is the base class with all APIs implemented and sane default behavior.
     """
+
     def __init__(self, fn):
         """
         Constructor
@@ -33,7 +35,7 @@ class Poutine(object):
 
             # send back the final val
             return r_val
-        except Exception as e:
+        except Exception:
             self._flush_stack()
             raise
 
@@ -80,7 +82,9 @@ class Poutine(object):
                                    *msg["args"], **msg["kwargs"])
         elif msg["type"] == "map_data":
             ret = self._pyro_map_data(msg, msg["name"],
-                                      msg["data"], msg["fn"], msg["batch_size"])
+                                      msg["data"], msg["fn"],
+                                      batch_size=msg["batch_size"],
+                                      batch_dim=msg["batch_dim"])
         else:
             raise ValueError(
                 "{} is an invalid site type, how did that get there?".format(msg["type"]))
@@ -143,32 +147,37 @@ class Poutine(object):
             return fn(*args, **kwargs)
         return obs
 
-    def _pyro_map_data(self, msg, name, data, fn, batch_size):
+    def _pyro_map_data(self, msg, name, data, fn, batch_size, batch_dim=0):
         """
         Default pyro.map_data Poutine behavior
         """
-        if msg["ret"] is not None:
+        # we dont want fn to get executed more than once,
+        # because then the primitive statements in it will appear multiple times
+        # however, sometimes fn can return None, so we can't just check msg["ret"]
+        if msg["done"]:
             return msg["ret"]
         else:
             if batch_size is None:
                 batch_size = 0
             assert batch_size >= 0, "cannot have negative batch sizes"
-            if msg["scale"] is None and msg["indices"] is None:
-                scale, ind = pyro.util.get_scale(data, batch_size)
-                msg["scale"] = scale
+            if msg["indices"] is None:
+                ind = pyro.util.get_batch_indices(data, batch_size, batch_dim)
                 msg["indices"] = ind
 
             if batch_size == 0:
                 ind_data = data
             elif isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
-                ind_data = data.index_select(0, msg["indices"])
+                ind_data = data.index_select(batch_dim, msg["indices"])
             else:
                 ind_data = [data[i] for i in msg["indices"]]
 
             if isinstance(data, (torch.Tensor, Variable)):
                 ret = fn(msg["indices"], ind_data)
             else:
-                ret = list(map(lambda ix: fn(*ix), enumerate(ind_data)))
+                ret = list(map(lambda ix: fn(*ix), zip(msg["indices"], ind_data)))
+
+            # make sure fn doesn't get reexecuted further up the stack
+            msg["done"] = True
             return ret
 
     def _pyro_param(self, msg, name, *args, **kwargs):

@@ -1,16 +1,13 @@
+from copy import copy
+
+import numpy as np
 import torch
 import torch.optim
-from torch.autograd import Variable
 from torch import nn as nn
+from torch.autograd import Variable
 
 import pyro
-import numpy as np
-from pyro.distributions import DiagNormal
 from tests.common import TestCase
-
-from pyro.infer.kl_qp import KL_QP
-from pyro.util import zeros, ones
-from copy import copy
 
 
 class ParamStoreDictTests(TestCase):
@@ -23,7 +20,7 @@ class ParamStoreDictTests(TestCase):
 
     def test_save_and_load(self):
         lin = pyro.module("mymodule", self.linear_module)
-        lin2 = pyro.module("mymodule2", self.linear_module2)
+        lin2 = pyro.module("mymodule2", self.linear_module2)  # noqa: F841
         x = Variable(torch.randn(1, 3))
         myparam = pyro.param("myparam", Variable(1.234 * torch.ones(1), requires_grad=True))
 

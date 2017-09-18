@@ -1,18 +1,10 @@
-import numpy as np
 import torch
-import pdb
-import sys
+from six.moves.queue import Queue
 from torch.autograd import Variable
-if sys.version_info[0] < 3:
-    from Queue import Queue
-else:
-    from queue import Queue
 
 import pyro
-from pyro.distributions import DiagNormal, Bernoulli
 import pyro.poutine as poutine
-from pyro.util import memoize
-
+from pyro.distributions import DiagNormal, Bernoulli
 from tests.common import TestCase
 
 
@@ -34,13 +26,13 @@ class NormalNormalNormalPoutineTestCase(TestCase):
                                   DiagNormal(latent1,
                                              5 * Variable(torch.ones(2))))
             x_dist = DiagNormal(latent2, Variable(torch.ones(2)))
-            x = pyro.observe("obs", x_dist, Variable(torch.ones(2)))
+            pyro.observe("obs", x_dist, Variable(torch.ones(2)))
             return latent1
 
         def guide():
             mu1 = pyro.param("mu1", Variable(torch.randn(2), requires_grad=True))
             sigma1 = pyro.param("sigma1", Variable(torch.ones(2), requires_grad=True))
-            latent1 = pyro.sample("latent1", DiagNormal(mu1, sigma1))
+            pyro.sample("latent1", DiagNormal(mu1, sigma1))
 
             mu2 = pyro.param("mu2", Variable(torch.randn(2), requires_grad=True))
             sigma2 = pyro.param("sigma2", Variable(torch.ones(2), requires_grad=True))
@@ -157,6 +149,8 @@ class BlockPoutineTests(NormalNormalNormalPoutineTestCase):
                                                   hide=self.guide_sites))()
         for name in model_trace.keys():
             self.assertTrue(model_trace[name]["type"] in ("args", "return"))
+        for name in guide_trace.keys():
+            self.assertTrue(guide_trace[name]["type"] in ("args", "return"))
 
     def test_block_full_expose(self):
         model_trace = poutine.trace(poutine.block(self.model,
@@ -170,9 +164,9 @@ class BlockPoutineTests(NormalNormalNormalPoutineTestCase):
 
     def test_block_full_hide_expose(self):
         try:
-            y = poutine.block(self.model,
-                              hide=self.partial_sample_sites.keys(),
-                              expose=self.partial_sample_sites.keys())()
+            poutine.block(self.model,
+                          hide=self.partial_sample_sites.keys(),
+                          expose=self.partial_sample_sites.keys())()
             self.assertTrue(False)
         except AssertionError:
             self.assertTrue(True)
