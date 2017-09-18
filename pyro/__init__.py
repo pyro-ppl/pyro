@@ -151,7 +151,7 @@ def map_data(name, data, fn, batch_size=None):
     """
     if len(_PYRO_STACK) == 0:
         # default behavior
-        scale, ind = util.get_scale(data, batch_size)
+        ind = util.get_batch_indices(data, batch_size)
         if batch_size == 0:
             ind_data = data
         elif isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
@@ -174,7 +174,7 @@ def map_data(name, data, fn, batch_size=None):
             "batch_size": batch_size,
             # XXX should these be added here or during application
             "indices": None,
-            "scale": None,
+            "scale": 1.0,
             "ret": None,
             "done": False,
         }

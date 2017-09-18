@@ -158,9 +158,8 @@ class Poutine(object):
             if batch_size is None:
                 batch_size = 0
             assert batch_size >= 0, "cannot have negative batch sizes"
-            if msg["scale"] is None and msg["indices"] is None:
-                scale, ind = pyro.util.get_scale(data, batch_size)
-                msg["scale"] = scale
+            if msg["indices"] is None:
+                ind = pyro.util.get_batch_indices(data, batch_size)
                 msg["indices"] = ind
 
             if batch_size == 0:

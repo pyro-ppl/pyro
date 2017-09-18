@@ -1,6 +1,7 @@
 import torch
 from torch.autograd import Variable
 
+import pyro
 from .poutine import Poutine
 from .scale_poutine import ScalePoutine
 
@@ -69,11 +70,11 @@ class ReplayPoutine(Poutine):
         if name in self.guide_trace:
             assert self.guide_trace[name]["type"] == "map_data", \
                 name + " is not a map_data in the guide_trace"
-            msg["scale"] = self.guide_trace[name]["scale"]
             msg["indices"] = self.guide_trace[name]["indices"]
             msg["batch_size"] = self.guide_trace[name]["batch_size"]
 
+        scale = pyro.util.get_batch_scale(data, msg["batch_size"])
         ret = super(ReplayPoutine, self)._pyro_map_data(msg, name, data,
-                                                        ScalePoutine(fn, msg["scale"]),
+                                                        ScalePoutine(fn, scale),
                                                         batch_size=msg["batch_size"])
         return ret

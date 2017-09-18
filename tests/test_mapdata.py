@@ -4,6 +4,7 @@ from torch.autograd import Variable
 
 import pyro
 import pyro.distributions as dist
+import pyro.poutine as poutine
 from pyro.infer.kl_qp import KL_QP
 from tests.common import TestCase
 
@@ -126,3 +127,35 @@ class NormalNormalTests(TestCase):
 
         self.assertEqual(0.0, mu_error.data.cpu().numpy()[0], prec=0.06)
         self.assertEqual(0.0, log_sig_error.data.cpu().numpy()[0], prec=0.07)
+
+
+class NestedMapDataTest(TestCase):
+
+    def setUp(self):
+
+        self.means = [Variable(torch.randn(2)) for i in range(8)]
+        self.mean_batch_size = 2
+        self.stds = [Variable(torch.abs(torch.randn(2))) for i in range(6)]
+        self.std_batch_size = 3
+
+        def model(means, stds):
+            return pyro.map_data("a", means,
+                                 lambda i, x: pyro.map_data("a_{}".format(i), stds,
+                                                            lambda j, y: pyro.sample("x_{}{}".format(i, j),
+                                                                                     dist.diagnormal, x, y),
+                                                            batch_size=self.std_batch_size),
+                                 batch_size=self.mean_batch_size)
+
+        self.model = model
+
+    def test_default(self):
+        xs = self.model(self.means, self.stds)
+        self.assertTrue(len(xs) == self.mean_batch_size)
+        self.assertTrue(len(xs[0]) == self.std_batch_size)
+
+    def test_trace(self):
+        tr = poutine.trace(self.model)(self.means, self.stds)
+        for name in tr.keys():
+            if tr[name]["type"] == "sample":
+                print(name, tr[name]["scale"])
+                self.assertTrue(tr[name]["scale"] == 4.0 * 2.0)

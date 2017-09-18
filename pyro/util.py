@@ -179,20 +179,18 @@ def basic_histogram(ps, vs):
             "vs": [v for v in hist.keys()]}
 
 
-def get_scale(data, batch_size):
+def get_batch_indices(data, batch_size):
     """
-    Compute scale and batch indices used for subsampling in map_data
+    Compute batch indices used for subsampling in map_data
     Weirdly complicated because of type ambiguity
     """
     if isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
         assert batch_size <= data.size(0), \
             "batch must be smaller than dataset size"
         if batch_size > 0:
-            scale = float(data.size(0)) / float(batch_size)
             ind = Variable(torch.randperm(data.size(0))[0:batch_size])
         else:
             # if batch_size == 0, don't index (saves time/space)
-            scale = 1.0
             ind = Variable(torch.arange(0, data.size(0)))
     else:
         assert batch_size <= len(data), \
@@ -200,9 +198,32 @@ def get_scale(data, batch_size):
         # if batch_size > 0, select a random set of indices and store it
         if batch_size > 0:
             ind = torch.randperm(len(data))[0:batch_size].numpy().tolist()
-            scale = float(len(data)) / float(batch_size)
         else:
             ind = list(range(len(data)))
+
+    return ind
+
+
+def get_batch_scale(data, batch_size):
+    """
+    Compute scale used for subsampling in map_data
+    Weirdly complicated because of type ambiguity
+    """
+    if isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
+        assert batch_size <= data.size(0), \
+            "batch must be smaller than dataset size"
+        if batch_size > 0:
+            scale = float(data.size(0)) / float(batch_size)
+        else:
+            # if batch_size == 0, don't index (saves time/space)
+            scale = 1.0
+    else:
+        assert batch_size <= len(data), \
+            "batch must be smaller than dataset size"
+        # if batch_size > 0, select a random set of indices and store it
+        if batch_size > 0:
+            scale = float(len(data)) / float(batch_size)
+        else:
             scale = 1.0
 
-    return scale, ind
+    return scale

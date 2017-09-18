@@ -1,3 +1,4 @@
+import pyro
 from .poutine import Poutine
 
 
@@ -34,6 +35,7 @@ class ScalePoutine(Poutine):
         Scaled map_data: Rescale the message and continue
         Should just work...
         """
-        msg["scale"] = self.scale * msg["scale"]
-        return super(ScalePoutine, self)._pyro_map_data(msg, name, data, fn,
+        mapdata_scale = pyro.util.get_batch_scale(data, batch_size)
+        return super(ScalePoutine, self)._pyro_map_data(msg, name, data,
+                                                        ScalePoutine(fn, mapdata_scale),
                                                         batch_size=batch_size)
