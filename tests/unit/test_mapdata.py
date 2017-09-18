@@ -50,10 +50,6 @@ def test_elbo_mapdata(batch_size, map_type):
                           x: pyro.observe(
                               "obs_%d" % i, dist.diagnormal,
                               x, mu_latent, torch.pow(lam, -0.5)), batch_size=batch_size)
-            pyro.map_data("bbb", data, lambda i,
-                          x: pyro.sample(
-                              "z_sample_%d" % i, dist.diagnormal,
-                              x, torch.pow(lam, -0.5)), batch_size=batch_size)
         elif map_type == "tensor":
             tdata = torch.cat([xi.view(1, -1) for xi in data], 0)
             pyro.map_data("aaa", tdata,
@@ -61,14 +57,10 @@ def test_elbo_mapdata(batch_size, map_type):
                           lambda i, x: pyro.observe("obs", dist.diagnormal, x, mu_latent,
                                                     torch.pow(lam, -0.5)),
                           batch_size=batch_size)
-            pyro.map_data("bbb", tdata,
-                          # XXX get batch_size args to dist right
-                          lambda i, x: pyro.sample("z_sample", dist.diagnormal,
-                                                   x, torch.pow(lam, -0.5)),
-                          batch_size=batch_size)
         else:
             for i, x in enumerate(data):
-                pyro.observe('obs_%d' % i, dist.diagnormal, x, mu_latent, torch.pow(lam, -0.5))
+                pyro.observe('obs_%d' % i,
+                             dist.diagnormal, x, mu_latent, torch.pow(lam, -0.5))
         return mu_latent
 
     def guide():
@@ -81,20 +73,10 @@ def test_elbo_mapdata(batch_size, map_type):
         pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q)
         if map_type == "list" or map_type is None:
             pyro.map_data("aaa", data, lambda i, x: None, batch_size=batch_size)
-            pyro.map_data("bbb", data,
-                          lambda i, x: pyro.sample(
-                              "z_sample_%d" % i, dist.diagnormal,
-                              x, torch.pow(lam, -0.5)), batch_size=batch_size)
         elif map_type == "tensor":
             tdata = torch.cat([xi.view(1, -1) for xi in data], 0)
             # dummy map_data to do subsampling for observe
             pyro.map_data("aaa", tdata, lambda i, x: None, batch_size=batch_size)
-            pyro.map_data("bbb", tdata,
-                          # XXX get batch_size args to dist right
-                          lambda i, x: pyro.sample("z_sample", dist.diagnormal,
-                                                   x, torch.pow(lam, -0.5)),
-                          batch_size=batch_size)
-
         else:
             pass
 
