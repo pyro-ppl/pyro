@@ -40,7 +40,7 @@ class ReplayPoutine(Poutine):
                 msg["batch_size"] = self.guide_trace[msg["name"]]["batch_size"]
                 msg["batch_dim"] = self.guide_trace[msg["name"]]["batch_dim"]
 
-        barrier = self._block_down(self, msg)
+        barrier = self._block_down(msg)
         return msg, barrier
 
     def _pyro_sample(self, msg, name, fn, *args, **kwargs):
