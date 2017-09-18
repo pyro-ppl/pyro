@@ -52,7 +52,7 @@ class ReplayPoutine(Poutine):
             raise ValueError(
                 "something went wrong with replay conditions at site " + name)
 
-    def _pyro_map_data(self, msg, name, data, fn, batch_size=None):
+    def _pyro_map_data(self, msg, name, data, fn, batch_size=None, batch_dim=0):
         """
         Use the batch indices from the guide trace
         """
@@ -61,7 +61,7 @@ class ReplayPoutine(Poutine):
 
         assert batch_size >= 0, "cannot have negative batch sizes"
         if isinstance(data, (torch.Tensor, Variable)):
-            assert batch_size <= data.size(0), \
+            assert batch_size <= data.size(batch_dim), \
                 "batch must be smaller than dataset size"
         else:
             assert batch_size <= len(data), \
@@ -72,9 +72,11 @@ class ReplayPoutine(Poutine):
                 name + " is not a map_data in the guide_trace"
             msg["indices"] = self.guide_trace[name]["indices"]
             msg["batch_size"] = self.guide_trace[name]["batch_size"]
+            msg["batch_dim"] = self.guide_trace[name]["batch_dim"]
 
-        scale = pyro.util.get_batch_scale(data, msg["batch_size"])
+        scale = pyro.util.get_batch_scale(data, msg["batch_size"], msg["batch_dim"])
         ret = super(ReplayPoutine, self)._pyro_map_data(msg, name, data,
                                                         ScalePoutine(fn, scale),
-                                                        batch_size=msg["batch_size"])
+                                                        batch_size=msg["batch_size"],
+                                                        batch_dim=msg["batch_dim"])
         return ret

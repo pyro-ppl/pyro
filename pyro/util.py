@@ -179,19 +179,19 @@ def basic_histogram(ps, vs):
             "vs": [v for v in hist.keys()]}
 
 
-def get_batch_indices(data, batch_size):
+def get_batch_indices(data, batch_size, batch_dim):
     """
     Compute batch indices used for subsampling in map_data
     Weirdly complicated because of type ambiguity
     """
     if isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
-        assert batch_size <= data.size(0), \
+        assert batch_size <= data.size(batch_dim), \
             "batch must be smaller than dataset size"
         if batch_size > 0:
-            ind = Variable(torch.randperm(data.size(0))[0:batch_size])
+            ind = Variable(torch.randperm(data.size(batch_dim))[0:batch_size])
         else:
             # if batch_size == 0, don't index (saves time/space)
-            ind = Variable(torch.arange(0, data.size(0)))
+            ind = Variable(torch.arange(0, data.size(batch_dim)))
     else:
         assert batch_size <= len(data), \
             "batch must be smaller than dataset size"
@@ -204,16 +204,16 @@ def get_batch_indices(data, batch_size):
     return ind
 
 
-def get_batch_scale(data, batch_size):
+def get_batch_scale(data, batch_size, batch_dim):
     """
     Compute scale used for subsampling in map_data
     Weirdly complicated because of type ambiguity
     """
     if isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
-        assert batch_size <= data.size(0), \
+        assert batch_size <= data.size(batch_dim), \
             "batch must be smaller than dataset size"
         if batch_size > 0:
-            scale = float(data.size(0)) / float(batch_size)
+            scale = float(data.size(batch_dim)) / float(batch_size)
         else:
             # if batch_size == 0, don't index (saves time/space)
             scale = 1.0

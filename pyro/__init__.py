@@ -139,11 +139,13 @@ def observe(name, fn, val, *args, **kwargs):
         return out_msg["ret"]
 
 
-def map_data(name, data, fn, batch_size=None):
+def map_data(name, data, fn, batch_size=None, batch_dim=0):
     """
     :param name: named argument
     :param data: data tp subsample
     :param observer: observe function
+    :param batch_size: number of samples per batch
+    :param batch_dim: dimension to subsample for tensor inputs
 
     Data subsampling with the important property that
     all the data are conditionally independent. By
@@ -151,11 +153,11 @@ def map_data(name, data, fn, batch_size=None):
     """
     if len(_PYRO_STACK) == 0:
         # default behavior
-        ind = util.get_batch_indices(data, batch_size)
+        ind = util.get_batch_indices(data, batch_size, batch_dim)
         if batch_size == 0:
             ind_data = data
         elif isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
-            ind_data = data.index_select(0, ind)
+            ind_data = data.index_select(batch_dim, ind)
         else:
             ind_data = [data[i] for i in ind]
 
@@ -172,9 +174,9 @@ def map_data(name, data, fn, batch_size=None):
             "fn": fn,
             "data": data,
             "batch_size": batch_size,
+            "batch_dim": batch_dim,
             # XXX should these be added here or during application
             "indices": None,
-            "scale": 1.0,
             "ret": None,
             "done": False,
         }

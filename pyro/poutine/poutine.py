@@ -82,7 +82,9 @@ class Poutine(object):
                                    *msg["args"], **msg["kwargs"])
         elif msg["type"] == "map_data":
             ret = self._pyro_map_data(msg, msg["name"],
-                                      msg["data"], msg["fn"], msg["batch_size"])
+                                      msg["data"], msg["fn"],
+                                      batch_size=msg["batch_size"],
+                                      batch_dim=msg["batch_dim"])
         else:
             raise ValueError(
                 "{} is an invalid site type, how did that get there?".format(msg["type"]))
@@ -145,7 +147,7 @@ class Poutine(object):
             return fn(*args, **kwargs)
         return obs
 
-    def _pyro_map_data(self, msg, name, data, fn, batch_size):
+    def _pyro_map_data(self, msg, name, data, fn, batch_size, batch_dim=0):
         """
         Default pyro.map_data Poutine behavior
         """
@@ -159,13 +161,13 @@ class Poutine(object):
                 batch_size = 0
             assert batch_size >= 0, "cannot have negative batch sizes"
             if msg["indices"] is None:
-                ind = pyro.util.get_batch_indices(data, batch_size)
+                ind = pyro.util.get_batch_indices(data, batch_size, batch_dim)
                 msg["indices"] = ind
 
             if batch_size == 0:
                 ind_data = data
             elif isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
-                ind_data = data.index_select(0, msg["indices"])
+                ind_data = data.index_select(batch_dim, msg["indices"])
             else:
                 ind_data = [data[i] for i in msg["indices"]]
 
