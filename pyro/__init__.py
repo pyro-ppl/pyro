@@ -243,7 +243,7 @@ def module(pyro_name, nn_obj):
     for name, param in state_dict.items():
         if name not in current_nn_state:
             raise KeyError('unexpected key "{}" in state_dict'.format(name))
-        if isinstance(param, Parameter):
+        if isinstance(param, Variable):
             # backwards compatibility for serialized parameters
             param = param.data
 
@@ -251,8 +251,6 @@ def module(pyro_name, nn_obj):
         # Note: apart from the following line, the rest of this code
         # logic is borrowed from torch.nn.Module.load_state_dict
         if id(param) != id(current_nn_state[name]):
-            if isinstance(param, Variable):
-                param = param.data
             current_nn_state[name].copy_(param)
 
     missing = set(current_nn_state.keys()) - set(state_dict.keys())
