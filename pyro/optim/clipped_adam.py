@@ -18,6 +18,7 @@ class ClippedAdam(Optimizer):
             loss = closure()
 
         for group in self.param_groups:
+            oldlr = group['lr']
             group['lr'] *= group['lrd']
 
             for p in group['params']:

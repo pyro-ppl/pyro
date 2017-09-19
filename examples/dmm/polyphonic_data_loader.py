@@ -76,17 +76,19 @@ def get_mini_batch_mask(mini_batch, seq_lengths):
     return mask
 
 
-def get_mini_batch(mini_batch_indices, sequences, seq_lengths):
+def get_mini_batch(mini_batch_indices, sequences, seq_lengths, volatile=False):
     seq_lengths = seq_lengths[mini_batch_indices]
     sorted_seq_length_indices = np.argsort(seq_lengths)[::-1]
     sorted_seq_lengths = seq_lengths[sorted_seq_length_indices]
     sorted_mini_batch_indices = mini_batch_indices[sorted_seq_length_indices]
     mini_batch = sequences[sorted_mini_batch_indices, :, :]
-    mini_batch_reversed = Variable(torch.Tensor(reverse_sequences(mini_batch, sorted_seq_lengths)))
+    mini_batch_reversed = Variable(torch.Tensor(reverse_sequences(mini_batch, sorted_seq_lengths)),
+                                   volatile=volatile)
     mini_batch_reversed = nn.utils.rnn.pack_padded_sequence(mini_batch_reversed,
                                                             sorted_seq_lengths,
                                                             batch_first=True)
-    mini_batch_mask = Variable(torch.Tensor(get_mini_batch_mask(mini_batch, sorted_seq_lengths)))
+    mini_batch_mask = Variable(torch.Tensor(get_mini_batch_mask(mini_batch, sorted_seq_lengths)),
+                               volatile=volatile)
 
-    return Variable(torch.Tensor(mini_batch)), mini_batch_reversed, mini_batch_mask,\
-        sorted_seq_lengths
+    return Variable(torch.Tensor(mini_batch), volatile=volatile), mini_batch_reversed, \
+        mini_batch_mask, sorted_seq_lengths

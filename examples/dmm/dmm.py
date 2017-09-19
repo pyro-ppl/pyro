@@ -6,7 +6,7 @@ import pyro.distributions as dist
 from pyro.util import ng_ones, zeros
 import torch.nn as nn
 # from torch.autograd import Variable
-import torch.optim as optim
+# import torch.optim as optim
 import numpy as np
 import time
 import cPickle
@@ -20,8 +20,8 @@ z_dim = 100
 transition_dim = 200
 emission_dim = 100
 rnn_dim = 600
-rnn_num_layers = 1
 val_test_frequency = 10
+n_eval_samples = 5
 
 
 # parameterizes p(x_t | z_t)
@@ -84,16 +84,15 @@ class Combiner(nn.Module):
 
 
 # instantiate pytorch modules that make up the model and the inference network
+# rnn instantiated below
 pt_emitter = Emitter(input_dim, z_dim, emission_dim)
 pt_trans = GatedTransition(z_dim, transition_dim)
 pt_combiner = Combiner(z_dim, rnn_dim)
-pt_rnn = nn.RNN(input_size=input_dim, hidden_size=rnn_dim, nonlinearity='relu',
-                batch_first=True, bidirectional=False, num_layers=rnn_num_layers)
 
 
 # the model
 def model(mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths,
-          annealing_factor=1.0):
+          pt_rnn, annealing_factor=1.0):
 
     T_max = np.max(mini_batch_seq_lengths)
     emitter = pyro.module("emitter", pt_emitter)
@@ -114,12 +113,12 @@ def model(mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengt
 
 # the guide
 def guide(mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths,
-          annealing_factor=1.0):
+          pt_rnn, annealing_factor=1.0):
 
     T_max = np.max(mini_batch_seq_lengths)
     rnn = pyro.module("rnn", pt_rnn)
     combiner = pyro.module("combiner", pt_combiner)
-    h_0 = pyro.param("h_0", zeros(rnn_num_layers, 1, rnn_dim))
+    h_0 = pyro.param("h_0", zeros(pt_rnn.num_layers, 1, rnn_dim))
     rnn_output, _ = rnn(mini_batch_reversed, h_0)
     rnn_output = poly.pad_and_reverse(rnn_output, mini_batch_seq_lengths)
     z_prev = pyro.param("z_q_0", zeros(z_dim))
@@ -146,6 +145,8 @@ def main():
     parser.add_argument('-mbs', '--mini-batch-size', type=int, default=20)
     parser.add_argument('-ae', '--annealing-epochs', type=int, default=500)
     parser.add_argument('-maf', '--minimum-annealing-factor', type=float, default=0.0)
+    parser.add_argument('-rdr', '--rnn-dropout-rate', type=float, default=0.0)
+    parser.add_argument('-rnl', '--rnn-num-layers', type=int, default=1)
     parser.add_argument('-l', '--log', type=str, default='dmm.log')
     args = parser.parse_args()
 
@@ -156,8 +157,12 @@ def main():
     logging.getLogger('').addHandler(console)
 
     def log(s):
-	logging.info(s)
+        logging.info(s)
     log(args)
+
+    pt_rnn = nn.RNN(input_size=input_dim, hidden_size=rnn_dim, nonlinearity='relu',
+                    batch_first=True, bidirectional=False, num_layers=args.rnn_num_layers,
+                    dropout=args.rnn_dropout_rate)
 
     # ingest data from disk
     data = cPickle.load(open("jsb_processed.pkl", "rb"))
@@ -174,15 +179,17 @@ def main():
 
     # package val/test data for model/guide
     def rep(x):
-        y = np.repeat(x, 5, axis=0)
+        y = np.repeat(x, n_eval_samples, axis=0)
         return y
 
     val_seq_lengths = rep(val_seq_lengths)
     test_seq_lengths = rep(test_seq_lengths)
-    val_batch, val_batch_reversed, val_batch_mask, val_seq_lengths = poly.get_mini_batch(\
-	np.arange(5*val_data_sequences.shape[0]), rep(val_data_sequences), val_seq_lengths)
-    test_batch, test_batch_reversed, test_batch_mask, test_seq_lengths = poly.get_mini_batch(\
-	np.arange(5*test_data_sequences.shape[0]), rep(test_data_sequences), test_seq_lengths)
+    val_batch, val_batch_reversed, val_batch_mask, val_seq_lengths = poly.get_mini_batch(
+        np.arange(n_eval_samples * val_data_sequences.shape[0]), rep(val_data_sequences),
+        val_seq_lengths, volatile=True)
+    test_batch, test_batch_reversed, test_batch_mask, test_seq_lengths = poly.get_mini_batch(
+        np.arange(n_eval_samples * test_data_sequences.shape[0]), rep(test_data_sequences),
+        test_seq_lengths, volatile=True)
 
     log("N_train_data: %d     avg. training seq. length: %.2f    N_mini_batches: %d" %
         (N_train_data, np.mean(training_seq_lengths), N_mini_batches))
@@ -197,7 +204,8 @@ def main():
 
     for epoch in range(args.num_epochs):
         epoch_nll = 0.0
-        shuffled_indices = np.arange(N_train_data); np.random.shuffle(shuffled_indices)
+        shuffled_indices = np.arange(N_train_data)
+        np.random.shuffle(shuffled_indices)
         for which in range(N_mini_batches):
             if args.annealing_epochs > 0 and epoch < args.annealing_epochs:
                 min_af = args.minimum_annealing_factor
@@ -211,21 +219,24 @@ def main():
                 = poly.get_mini_batch(mini_batch_indices, training_data_sequences,
                                       training_seq_lengths)
             loss = elbo_train.step(mini_batch, mini_batch_reversed, mini_batch_mask,
-                                   mini_batch_seq_lengths, annealing_factor)
+                                   mini_batch_seq_lengths, pt_rnn, annealing_factor)
             if epoch < 1:
                 log("minibatch loss:  %.4f  [annealing factor: %.4f]" % (loss, annealing_factor))
             epoch_nll += loss
         times.append(time.time())
         epoch_time = times[-1] - times[-2]
         log("[training epoch %04d]  %.4f \t\t\t\t(dt = %.3f sec)" %
-              (epoch, epoch_nll / N_train_time_slices, epoch_time))
+            (epoch, epoch_nll / N_train_time_slices, epoch_time))
 
         if epoch % val_test_frequency == 0:
+            pt_rnn.eval()
             val_nll = elbo_train.eval_objective(val_batch, val_batch_reversed, val_batch_mask,
-                                                val_seq_lengths) / np.sum(val_seq_lengths)
+                                                val_seq_lengths, pt_rnn) / np.sum(val_seq_lengths)
             test_nll = elbo_train.eval_objective(test_batch, test_batch_reversed, test_batch_mask,
-                                                 test_seq_lengths) / np.sum(test_seq_lengths)
+                                                 test_seq_lengths, pt_rnn) / np.sum(test_seq_lengths)
+            pt_rnn.train()
             log("[val/test epoch %04d]  %.4f  %.4f" % (epoch, val_nll, test_nll))
+
 
 if __name__ == '__main__':
     main()
