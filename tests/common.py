@@ -104,6 +104,7 @@ def is_iterable(obj):
     except BaseException:
         return False
 
+
 def set_rng_seed(rng_seed=SEED):
     torch.manual_seed(rng_seed)
     if torch.cuda.is_available():
