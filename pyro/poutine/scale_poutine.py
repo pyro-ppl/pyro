@@ -29,6 +29,13 @@ class ScalePoutine(Poutine):
         msg["scale"] = self.scale * msg["scale"]
         return super(ScalePoutine, self)._pyro_observe(msg, name, fn, obs, *args, **kwargs)
 
+    def _pyro_param(self, msg, name, *args, **kwargs):
+        """
+        Scaled param: Rescale the message and continue
+        """
+        msg["scale"] = self.scale * msg["scale"]
+        return super(ScalePoutine, self)._pyro_param(msg, name, *args, **kwargs)
+
     def _pyro_map_data(self, msg, name, data, fn, batch_size=None, batch_dim=0):
         """
         Scaled map_data: Rescale the message and continue

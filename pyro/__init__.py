@@ -206,6 +206,7 @@ def param(name, *args, **kwargs):
             "name": name,
             "args": args,
             "kwargs": kwargs,
+            "scale": 1.0,
             "ret": None,
             "stop": False,
         }
