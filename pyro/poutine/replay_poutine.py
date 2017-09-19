@@ -35,15 +35,18 @@ class ReplayPoutine(Poutine):
         """
         Pass indices down at a map_data
         """
-        if msg["type"] == "map_data":
-            if msg["name"] in self.guide_trace:
+        if msg["name"] in self.sites:
+            if msg["type"] == "map_data":
                 assert self.guide_trace[msg["name"]]["type"] == "map_data", \
                     msg["name"] + " is not a map_data in the guide_trace"
                 msg["indices"] = self.guide_trace[msg["name"]]["indices"]
                 msg["batch_size"] = self.guide_trace[msg["name"]]["batch_size"]
                 msg["batch_dim"] = self.guide_trace[msg["name"]]["batch_dim"]
-        elif msg["type"] == "sample":
-            msg["done"] = True
+
+            # dont reexecute
+            if msg["type"] == "sample":
+                msg["done"] = True
+
         return msg
 
     def _pyro_sample(self, msg, name, fn, *args, **kwargs):
