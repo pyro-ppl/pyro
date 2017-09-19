@@ -18,6 +18,8 @@ class ClippedAdam(Optimizer):
             loss = closure()
 
         for group in self.param_groups:
+            group['lr'] *= group['lrd']
+
             for p in group['params']:
                 if p.grad is None:
                     continue
@@ -46,8 +48,6 @@ class ClippedAdam(Optimizer):
                 bias_correction1 = 1 - beta1 ** state['step']
                 bias_correction2 = 1 - beta2 ** state['step']
                 step_size = group['lr'] * math.sqrt(bias_correction2) / bias_correction1
-
-                group['lr'] *= group['lrd']
 
                 p.data.addcdiv_(-step_size, exp_avg, denom)
 

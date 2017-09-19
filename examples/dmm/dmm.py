@@ -179,9 +179,9 @@ def main():
 
     val_seq_lengths = rep(val_seq_lengths)
     test_seq_lengths = rep(test_seq_lengths)
-    val_batch, val_batch_reversed, val_batch_mask, _ = poly.get_mini_batch(\
+    val_batch, val_batch_reversed, val_batch_mask, val_seq_lengths = poly.get_mini_batch(\
 	np.arange(5*val_data_sequences.shape[0]), rep(val_data_sequences), val_seq_lengths)
-    test_batch, test_batch_reversed, test_batch_mask, _ = poly.get_mini_batch(\
+    test_batch, test_batch_reversed, test_batch_mask, test_seq_lengths = poly.get_mini_batch(\
 	np.arange(5*test_data_sequences.shape[0]), rep(test_data_sequences), test_seq_lengths)
 
     log("N_train_data: %d     avg. training seq. length: %.2f    N_mini_batches: %d" %
@@ -197,8 +197,7 @@ def main():
 
     for epoch in range(args.num_epochs):
         epoch_nll = 0.0
-        shuffled_indices = np.arange(N_train_data)
-        np.random.shuffle(shuffled_indices)
+        shuffled_indices = np.arange(N_train_data); np.random.shuffle(shuffled_indices)
         for which in range(N_mini_batches):
             if args.annealing_epochs > 0 and epoch < args.annealing_epochs:
                 min_af = args.minimum_annealing_factor
