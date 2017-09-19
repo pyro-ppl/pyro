@@ -144,7 +144,7 @@ def observe(name, fn, val, *args, **kwargs):
 def map_data(name, data, fn, batch_size=None, batch_dim=0):
     """
     :param name: named argument
-    :param data: data tp subsample
+    :param data: data to subsample
     :param observer: observe function
     :param batch_size: number of samples per batch
     :param batch_dim: dimension to subsample for tensor inputs

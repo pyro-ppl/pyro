@@ -104,6 +104,25 @@ def test_elbo_mapdata(batch_size, map_type):
     assert eq(Variable(torch.zeros(1)), log_sig_error, prec=0.07)
 
 
+@pytest.mark.parametrize("batch_dim", [0, 1])
+def test_batch_dim(batch_dim):
+
+    data = Variable(torch.randn(4, 5, 7))
+
+    def local_model(ixs, _xs):
+        xs = _xs.view(-1, _xs.size(2))
+        return pyro.sample("xs", dist.diagnormal,
+                           xs, Variable(torch.ones(xs.size())))
+
+    def model():
+        return pyro.map_data("md", data, local_model,
+                             batch_size=1, batch_dim=batch_dim)
+
+    tr = poutine.trace(model)()
+    assert tr["xs"]["value"].size(0) == data.size(1 - batch_dim)
+    assert tr["xs"]["value"].size(1) == data.size(2)
+    
+
 class NestedMapDataTest(TestCase):
 
     def setUp(self):
@@ -132,5 +151,4 @@ class NestedMapDataTest(TestCase):
         tr = poutine.trace(self.model)(self.means, self.stds)
         for name in tr.keys():
             if tr[name]["type"] == "sample":
-                print(name, tr[name]["scale"])
                 self.assertTrue(tr[name]["scale"] == 4.0 * 2.0)

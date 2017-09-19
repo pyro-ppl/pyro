@@ -71,7 +71,8 @@ class ReplayPoutine(Poutine):
 
     def _pyro_map_data(self, msg, name, data, fn, batch_size=None, batch_dim=0):
         """
-        Scale
+        Use the batch indices from the guide trace, already provided by down
+        So all we need to do here is apply a ScalePoutine as in TracePoutine
         """
         scale = pyro.util.get_batch_scale(data, batch_size, batch_dim)
         return super(ReplayPoutine, self)._pyro_map_data(msg, name, data,
