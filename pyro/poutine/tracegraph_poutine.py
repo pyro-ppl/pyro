@@ -221,8 +221,8 @@ class TraceGraphPoutine(TracePoutine):
         """
         register observe dependencies for coarse graph construction
         """
-        val = super(TraceGraphPoutine, self)._pyro_observe(msg, name, fn, obs,
-                                                           *args, **kwargs)
+        if 'current_map_datas' in msg:
+            self.report("tracegraph poutine observe" + str(msg['current_map_datas']))
         if 'current_map_data' in msg:
             nodes = msg['__map_data_nodes'][msg['current_map_data']]
             self.report("[%s] tracegraph poutine observe %s: prev node %s curr %s" %\
@@ -232,10 +232,14 @@ class TraceGraphPoutine(TracePoutine):
         else:
             self._add_graph_node(name, self.prev_node, update_prev_node=True)
         self.observation_nodes.append(name)
+        val = super(TraceGraphPoutine, self)._pyro_observe(msg, name, fn, obs,
+                                                           *args, **kwargs)
         return val
 
     def _pyro_map_data(self, msg, name, data, fn, batch_size=None, batch_dim=0):
         self.report("tracegraph map data enter: %s" % name)
+        if 'lambda_installed' in msg:
+            self.report("tracegraph map data enter: lambda INSTALLED %s" % str(msg['lambda_installed']))
         marked_fn = LambdaPoutine(fn, name) if not isinstance(data, (torch.Tensor,
             torch.autograd.Variable)) else fn
         ret = super(TraceGraphPoutine, self)._pyro_map_data(msg, name, data, marked_fn,

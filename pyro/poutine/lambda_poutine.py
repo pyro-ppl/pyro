@@ -6,6 +6,7 @@ class LambdaPoutine(Poutine):
     def __init__(self, fn, name):
         super(LambdaPoutine, self).__init__(fn)
         self.name = name
+        print "intialized lambda poutine: %s" % name
 
     def report(self, s):
         if True:
@@ -31,6 +32,10 @@ class LambdaPoutine(Poutine):
     def _pyro_observe(self, msg, name, fn, obs, *args, **kwargs):
         self.report("inside lambdapoutine observe: %s" % name)
         msg['current_map_data'] = self.name
+        if 'current_map_datas' in msg:
+            msg['current_map_datas'].append(self.name)
+        else:
+            msg['current_map_datas'] = [self.name]
         msg['__map_data_nodes'] = {self.name: (name, self.prev_node, self.join_node)}
         self.prev_node = name
         return super(LambdaPoutine, self)._pyro_observe(msg, name, fn, obs, *args, **kwargs)

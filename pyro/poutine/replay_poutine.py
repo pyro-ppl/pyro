@@ -70,7 +70,9 @@ class ReplayPoutine(Poutine):
         """
         Scale
         """
+        print "replay poutine map data: %s" % name
         scale = pyro.util.get_batch_scale(data, batch_size, batch_dim)
+        msg['lambda_instqlled'] = True
         return super(ReplayPoutine, self)._pyro_map_data(msg, name, data,
 							 LambdaPoutine(ScalePoutine(fn, scale), name),
                                                          batch_size=batch_size,
