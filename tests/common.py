@@ -104,14 +104,14 @@ def is_iterable(obj):
     except BaseException:
         return False
 
+def set_rng_seed(rng_seed=SEED):
+    torch.manual_seed(rng_seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(rng_seed)
+
 
 class TestCase(unittest.TestCase):
     precision = 1e-5
-
-    def setUp(self):
-        torch.manual_seed(SEED)
-        if torch.cuda.is_available():
-            torch.cuda.manual_seed_all(SEED)
 
     def assertTensorsSlowEqual(self, x, y, prec=None, message=''):
         max_err = 0
@@ -193,12 +193,7 @@ class TestCase(unittest.TestCase):
             for x_, y_ in zip(x, y):
                 self.assertEqual(x_, y_, prec, message)
         else:
-            try:
-                self.assertLessEqual(abs(x - y), prec, message)
-                return
-            except BaseException:
-                pass
-            super(TestCase, self).assertEqual(x, y, message)
+            self.assertLessEqual(abs(x - y), prec, message)
 
     def assertNotEqual(self, x, y, prec=None, message=''):
         if prec is None:
