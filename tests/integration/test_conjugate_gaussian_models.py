@@ -80,7 +80,7 @@ class GaussianChainTests(TestCase):
         self.setup_chain(3)
         self.do_elbo_test(False, 16000, 0.001, 0.05, difficulty=0.6)
 
-    pytest.mark.xfail(reason="flaky - does not meet the precision threshold for passing")
+    @pytest.mark.xfail(reason="flaky - does not meet the precision threshold for passing")
     def test_elbo_nonreparameterized_N_is_5(self):
         self.setup_chain(5)
         self.do_elbo_test(False, 24000, 0.001, 0.06, difficulty=0.6)

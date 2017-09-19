@@ -296,7 +296,7 @@ class BernoulliBetaTests(TestCase):
                 print("alpha_error, beta_error: %.4f, %.4f" % (alpha_error, beta_error))
 
         self.assertEqual(0.0, alpha_error, prec=0.04)
-        self.assertEqual(0.0, beta_error, prec=0.04)
+        self.assertEqual(0.0, beta_error, prec=0.06)
 
 
 class PoissonGammaTests(TestCase):
