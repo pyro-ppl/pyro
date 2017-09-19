@@ -42,9 +42,9 @@ class ReplayPoutine(Poutine):
                 msg["indices"] = self.guide_trace[msg["name"]]["indices"]
                 msg["batch_size"] = self.guide_trace[msg["name"]]["batch_size"]
                 msg["batch_dim"] = self.guide_trace[msg["name"]]["batch_dim"]
-
-        barrier = self._block_down(msg)
-        return msg, barrier
+        elif msg["type"] == "sample":
+            msg["done"] = True
+        return msg
 
     def _pyro_sample(self, msg, name, fn, *args, **kwargs):
         """
@@ -57,6 +57,7 @@ class ReplayPoutine(Poutine):
                 "{} in sites but {} not in trace".format(name, g_name)
             assert self.guide_trace[g_name]["type"] == "sample", \
                 "site {} must be sample in guide_trace".format(g_name)
+            msg["done"] = True
             return self.guide_trace[g_name]["value"]
         # case 2: dict, negative: sample from model
         elif name not in self.sites:

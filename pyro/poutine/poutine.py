@@ -58,12 +58,6 @@ class Poutine(object):
         """
         return False
 
-    def _block_down(self, msg):
-        """
-        Block going down
-        """
-        return False
-
     def up(self, msg):
         """
         The dispatcher that gets put into _PYRO_STACK
@@ -90,15 +84,14 @@ class Poutine(object):
                 "{} is an invalid site type, how did that get there?".format(msg["type"]))
 
         msg.update({"ret": ret})
-        barrier = self._block_up(msg)
-        return msg, barrier
+        msg["stop"] = self._block_up(msg)
+        return msg
 
     def down(self, msg):
         """
         The dispatcher that gets put into _PYRO_STACK
         """
-        barrier = self._block_down(msg)
-        return msg, barrier
+        return msg
 
     def _push_stack(self):
         """
@@ -132,19 +125,21 @@ class Poutine(object):
         """
         Default pyro.sample Poutine behavior
         """
-        if msg["ret"] is not None:
+        if msg["done"]:
             return msg["ret"]
         val = fn(*args, **kwargs)
+        msg["done"] = True
         return val
 
     def _pyro_observe(self, msg, name, fn, obs, *args, **kwargs):
         """
         Default pyro.observe Poutine behavior
         """
-        if msg["ret"] is not None:
+        if msg["done"]:
             return msg["ret"]
         if obs is None:
             return fn(*args, **kwargs)
+        msg["done"] = True
         return obs
 
     def _pyro_map_data(self, msg, name, data, fn, batch_size, batch_dim=0):

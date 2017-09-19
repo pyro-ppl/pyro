@@ -66,14 +66,12 @@ def apply_stack(initial_msg, stack=None):
 
     # work out the bottom poutine at this site
     for i in range(len(stack) - 1, -1, -1):
-        msg, stop = stack[i].down(msg)
-        if stop:
-            break
+        msg = stack[i].down(msg)
 
     # go until time to stop?
-    for j in range(i, len(stack)):
-        msg, stop = stack[j].up(msg)
-        if stop:
+    for j in range(0, len(stack)):
+        msg = stack[j].up(msg)
+        if msg["stop"]:
             break
 
     return msg
@@ -102,6 +100,8 @@ def sample(name, fn, *args, **kwargs):
             "kwargs": kwargs,
             "ret": None,
             "scale": 1.0,
+            "done": False,
+            "stop": False,
         }
         # apply the stack and return its return value
         out_msg = apply_stack(msg)
@@ -133,6 +133,8 @@ def observe(name, fn, val, *args, **kwargs):
             "kwargs": kwargs,
             "ret": None,
             "scale": 1.0,
+            "done": False,
+            "stop": False,
         }
         # apply the stack and return its return value
         out_msg = apply_stack(msg)
@@ -179,6 +181,7 @@ def map_data(name, data, fn, batch_size=None, batch_dim=0):
             "indices": None,
             "ret": None,
             "done": False,
+            "stop": False,
         }
         # apply the stack and return its return value
         out_msg = apply_stack(msg)
@@ -204,6 +207,7 @@ def param(name, *args, **kwargs):
             "args": args,
             "kwargs": kwargs,
             "ret": None,
+            "stop": False,
         }
         # apply the stack and return its return value
         out_msg = apply_stack(msg)
