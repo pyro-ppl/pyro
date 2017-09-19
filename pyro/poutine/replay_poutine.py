@@ -36,16 +36,19 @@ class ReplayPoutine(Poutine):
         """
         Pass indices down at a map_data
         """
-        if msg["type"] == "map_data":
-            if msg["name"] in self.guide_trace:
+        if msg["name"] in self.sites:
+            if msg["type"] == "map_data":
                 assert self.guide_trace[msg["name"]]["type"] == "map_data", \
                     msg["name"] + " is not a map_data in the guide_trace"
                 msg["indices"] = self.guide_trace[msg["name"]]["indices"]
                 msg["batch_size"] = self.guide_trace[msg["name"]]["batch_size"]
                 msg["batch_dim"] = self.guide_trace[msg["name"]]["batch_dim"]
 
-        barrier = self._block_down(msg)
-        return msg, barrier
+            # dont reexecute
+            if msg["type"] == "sample":
+                msg["done"] = True
+
+        return msg
 
     def _pyro_sample(self, msg, name, fn, *args, **kwargs):
         """
@@ -58,6 +61,7 @@ class ReplayPoutine(Poutine):
                 "{} in sites but {} not in trace".format(name, g_name)
             assert self.guide_trace[g_name]["type"] == "sample", \
                 "site {} must be sample in guide_trace".format(g_name)
+            msg["done"] = True
             return self.guide_trace[g_name]["value"]
         # case 2: dict, negative: sample from model
         elif name not in self.sites:
@@ -68,7 +72,8 @@ class ReplayPoutine(Poutine):
 
     def _pyro_map_data(self, msg, name, data, fn, batch_size=None, batch_dim=0):
         """
-        Scale
+        Use the batch indices from the guide trace, already provided by down
+        So all we need to do here is apply a ScalePoutine as in TracePoutine
         """
         print "replay poutine map data: %s" % name
         scale = pyro.util.get_batch_scale(data, batch_size, batch_dim)

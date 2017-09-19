@@ -185,6 +185,8 @@ def get_batch_indices(data, batch_size, batch_dim):
     Weirdly complicated because of type ambiguity
     """
     if isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
+        assert batch_dim >= 0, \
+            "batch_dim must be nonnegative"
         assert batch_size <= data.size(batch_dim), \
             "batch must be smaller than dataset size"
         if batch_size > 0:
@@ -193,6 +195,9 @@ def get_batch_indices(data, batch_size, batch_dim):
             # if batch_size == 0, don't index (saves time/space)
             ind = Variable(torch.arange(0, data.size(batch_dim)))
     else:
+        # handle lists and other ordered sequence types (e.g. tuples but not sets)
+        assert batch_dim == 0, \
+            "batch dim for non-tensor map_data must be 0"
         assert batch_size <= len(data), \
             "batch must be smaller than dataset size"
         # if batch_size > 0, select a random set of indices and store it
@@ -218,6 +223,9 @@ def get_batch_scale(data, batch_size, batch_dim):
             # if batch_size == 0, don't index (saves time/space)
             scale = 1.0
     else:
+        # handle lists and other ordered sequence types (e.g. tuples but not sets)
+        assert batch_dim == 0, \
+            "batch_dim for non-tensor map_data must be 0"
         assert batch_size <= len(data), \
             "batch must be smaller than dataset size"
         # if batch_size > 0, select a random set of indices and store it
