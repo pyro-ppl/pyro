@@ -1,4 +1,4 @@
-import common
+from tests import common
 
 
 def pytest_configure(config):
