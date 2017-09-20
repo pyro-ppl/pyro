@@ -229,22 +229,22 @@ class TraceGraphPoutine(TracePoutine):
         """
         register sampled variable for coarse graph construction
         """
+        val = super(TraceGraphPoutine, self)._pyro_sample(msg, name, dist,
+                                                          *args, **kwargs)
         self._add_graph_node(msg, name)
         self.stochastic_nodes.append(name)
         if dist.reparameterized:
             self.reparameterized_nodes.append(name)
-        val = super(TraceGraphPoutine, self)._pyro_sample(msg, name, dist,
-                                                          *args, **kwargs)
         return val
 
     def _pyro_observe(self, msg, name, fn, obs, *args, **kwargs):
         """
         register observe dependencies for coarse graph construction
         """
-        self._add_graph_node(msg, name)
-        self.observation_nodes.append(name)
         val = super(TraceGraphPoutine, self)._pyro_observe(msg, name, fn, obs,
                                                            *args, **kwargs)
+        self._add_graph_node(msg, name)
+        self.observation_nodes.append(name)
         return val
 
     def _pyro_map_data(self, msg, name, data, fn, batch_size=None, batch_dim=0):
