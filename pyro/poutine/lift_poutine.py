@@ -24,6 +24,7 @@ class LiftPoutine(Poutine):
         prototype override of param->sample
         """
         msg["type"] = "sample"
+        msg["done"] = False
         param_name = params.user_param_name(name)
         if isinstance(self.prior, dict):
             if param_name in self.prior.keys():
@@ -31,5 +32,4 @@ class LiftPoutine(Poutine):
         else:
             # prior is a distribution
             msg["fn"] = self.prior
-        msg["scale"] = 1.0
         return self._pyro_sample(msg, name, msg["fn"], *args, **kwargs)
