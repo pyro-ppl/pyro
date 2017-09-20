@@ -4,9 +4,10 @@ from .poutine import Poutine
 
 class LambdaPoutine(Poutine):
     """
-    score-rescaling Poutine
-    Subsampling means we have to rescale pdfs inside map_data
-    This poutine handles the rescaling because it wouldn't fit in Poutine
+    This poutine has two functions:
+    (i)  handle score-rescaling
+    (ii) keep track of dependency structure inside of map_data for
+         the benefit of TraceGraphPoutine
     """
     def __init__(self, fn, name, scale):
         """
@@ -17,50 +18,38 @@ class LambdaPoutine(Poutine):
         super(LambdaPoutine, self).__init__(fn)
 
     def _enter_poutine(self, *args, **kwargs):
-        self.report("[%s] Enter LambdaPoutine" % self.name)
-        self.join_node = self.name + '_join_node'
-        self.split_node = self.name + '_split_node'
+        self.join_node = self.name + '__JOIN_NODE'
+        self.split_node = self.name + '__SPLIT_NODE'
         self.prev_node = self.split_node
-        #super(LambdaPoutine, self)._enter_poutine(*args, **kwargs)
 
-    def report(self, s):
-        if True:
-            print s
+    # construct the message that is consumed by TraceGraphPoutine
+    def _enrich_msg(self, msg, name):
+        if len(msg['map_data_stack']) == 0 or msg['map_data_stack'][0] != self.name:
+            msg['map_data_stack'].append(self.name)
+        if len(msg['map_data_stack']) == 1:
+            nodes = {'current': name, 'previous': self.prev_node,
+                     'join': self.join_node, 'split': self.split_node}
+            msg['map_data_nodes'] = nodes
+            self.prev_node = name
+        return msg
 
     def _pyro_sample(self, msg, name, fn, *args, **kwargs):
         """
-        Scaled sampling: Rescale the message and continue
+        pack the message with extra information and continue
         """
         msg["scale"] = self.scale * msg["scale"]
-        if len(msg['map_data_stack']) == 0 or msg['map_data_stack'][0] != self.name:
-            msg['map_data_stack'].append(self.name)
-        nodes = {'current': name, 'previous': self.prev_node,
-                'join': self.join_node, 'split': self.split_node}
-        #msg['map_data_nodes'][self.name] = nodes
-        if len(msg['map_data_stack']) == 1:
-            msg['map_data_nodes'][self.name] = nodes
-            self.prev_node = name
-        self.report("[%s/%s] Exit LambdaPoutine OBSERVE" % (self.name, name))
+        msg = self._enrich_msg(msg, name)
         ret = super(LambdaPoutine, self)._pyro_sample(msg, name, fn, *args, **kwargs)
         return ret
 
     def _pyro_observe(self, msg, name, fn, obs, *args, **kwargs):
         """
-        Scaled observe: Rescale the message and continue
+        pack the message with extra information and continue
         """
-        self.report("[%s/%s] Enter LambdaPoutine OBSERVE" % (self.name, name))
-        if len(msg['map_data_stack']) == 0 or msg['map_data_stack'][0] != self.name:
-            msg['map_data_stack'].append(self.name)
-        nodes = {'current': name, 'previous': self.prev_node,
-                'join': self.join_node, 'split': self.split_node}
-        #msg['map_data_nodes'][self.name] = nodes
-        if len(msg['map_data_stack']) == 1:
-            msg['map_data_nodes'][self.name] = nodes
-            self.prev_node = name
         msg["scale"] = self.scale * msg["scale"]
+        msg = self._enrich_msg(msg, name)
         ret = super(LambdaPoutine, self)._pyro_observe(msg, name, fn, obs, *args, **kwargs)
-        self.report("[%s/%s] Exit LambdaPoutine OBSERVE" % (self.name, name))
-	return ret
+        return ret
 
     def _pyro_param(self, msg, name, *args, **kwargs):
         """
@@ -71,11 +60,10 @@ class LambdaPoutine(Poutine):
 
     def _pyro_map_data(self, msg, name, data, fn, batch_size=None, batch_dim=0):
         """
-        Scaled map_data: Rescale the message and continue
-        Should just work...
+        scaled map_data: Rescale the message and continue
         """
         mapdata_scale = pyro.util.get_batch_scale(data, batch_size, batch_dim)
         return super(LambdaPoutine, self)._pyro_map_data(msg, name, data,
-                                                        LambdaPoutine(fn, name, mapdata_scale),
-                                                        batch_size=batch_size,
-                                                        batch_dim=batch_dim)
+                                                         LambdaPoutine(fn, name, mapdata_scale),
+                                                         batch_size=batch_size,
+                                                         batch_dim=batch_dim)

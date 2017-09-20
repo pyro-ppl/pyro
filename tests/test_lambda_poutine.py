@@ -181,12 +181,73 @@ class NormalNormalTests(TestCase):
 
         def model():
             print("\n******* ENTERING MODEL ******\n")
-            z_top1 = pyro.sample("z_top1", dist.diagnormal, zeros(1), ones(1))
+            #z_top1 = pyro.sample("z_top1", dist.diagnormal, zeros(1), ones(1))
             z_top2 = pyro.sample("z_top2", dist.diagnormal, zeros(1), ones(1))
 
             def obs(i, x, which):
                 z_local_1 = pyro.sample("z_local_1_%d_%d" % (which, i), dist.diagnormal,
                                     z_top2, ones(1))
+                pyro.map_data("map_inner_%d_%d" % (which, i), [ng_ones(1), ng_ones(1)],
+                    lambda _i, _x:
+                    pyro.observe("obs_inner_%d_%d_%d" % (which, i, _i),
+                        dist.diag_normal, _x, ng_zeros(1), ng_ones(1)), batch_size=1)
+                z_local_2 = pyro.sample("z_local_2_%d_%d" % (which, i), dist.diagnormal,
+                                    z_local_1, ones(1))
+                pyro.observe("obs_%d_%d" % (which, i), dist.diagnormal, x, z_local_2, ones(1))
+
+            pyro.map_data("map_obs0", self.data, lambda i, x: obs(i, x, 0), batch_size=2)
+            z_mid1 = pyro.sample("z_mid1", dist.diagnormal, self.mu0, torch.pow(self.lam0, -0.5))
+            #z_mid2 = pyro.sample("z_mid2", dist.diagnormal, z_mid1, torch.pow(self.lam0, -0.5))
+            #pyro.map_data("map_obs1", self.data, lambda i, x: obs(i, x, 1), batch_size=2)
+            #z_end1 = pyro.sample("z_end1", dist.diagnormal, self.mu0, torch.pow(self.lam0, -0.5))
+            z_end2 = pyro.sample("z_end2", dist.diagnormal, self.mu0, torch.pow(self.lam0, -0.5))
+            print("\n******* EXITING MODEL ******\n")
+            return z_top2
+
+        def guide():
+            print("\n******* ENTERING GUIDE ******\n")
+            #z_top1 = pyro.sample("z_top1", dist.diagnormal, zeros(1), ones(1))
+            z_top2 = pyro.sample("z_top2", dist.diagnormal, zeros(1), ones(1))
+
+            def obs(i, x, which):
+                z_local_1 = pyro.sample("z_local_1_%d_%d" % (which, i), dist.diagnormal,
+                                    z_top2, ones(1))
+                pyro.map_data("map_inner_%d_%d" % (which, i), [ng_ones(1), ng_ones(1)],
+                    lambda _i, _x: None, batch_size=1)
+                z_local_2 = pyro.sample("z_local_2_%d_%d" % (which, i), dist.diagnormal,
+                                    z_local_1, ones(1))
+
+            pyro.map_data("map_obs0", self.data, lambda i, x: obs(i, x, 0), batch_size=2)
+            z_mid1 = pyro.sample("z_mid1", dist.diagnormal, self.mu0, torch.pow(self.lam0, -0.5))
+            #z_mid2 = pyro.sample("z_mid2", dist.diagnormal, z_mid1, torch.pow(self.lam0, -0.5))
+            #pyro.map_data("map_obs1", self.data, lambda i, x: obs(i, x, 1), batch_size=2)
+            #z_end1 = pyro.sample("z_end1", dist.diagnormal, self.mu0, torch.pow(self.lam0, -0.5))
+            z_end2 = pyro.sample("z_end2", dist.diagnormal, self.mu0, torch.pow(self.lam0, -0.5))
+            print("\n******* EXITING GUIDE ******\n")
+            return z_top2
+
+        guide_tracegraph = poutine.tracegraph(guide)()
+        guide_tracegraph.save_visualization('guide')
+        guide_trace = guide_tracegraph.get_trace()
+        model_tracegraph = poutine.tracegraph(poutine.replay(model, guide_trace))()
+        model_tracegraph.save_visualization('model')
+        model_trace = model_tracegraph.get_trace()
+
+    def do_graphical_test2(self):
+        pyro.get_param_store().clear()
+        self.data = []
+        self.data.append(Variable(torch.Tensor([-0.1, 0.3])))
+        self.data.append(Variable(torch.Tensor([0.00, 0.4])))
+        self.data.append(Variable(torch.Tensor([0.20, 0.5])))
+        self.data.append(Variable(torch.Tensor([0.10, 0.7])))
+        self.data.append(Variable(torch.Tensor([-0.2, 0.0])))
+        self.data.append(Variable(torch.Tensor([0.30, 0.4])))
+
+        def model():
+
+            def obs(i, x, which):
+                z_local_1 = pyro.sample("z_local_1_%d_%d" % (which, i), dist.diagnormal,
+                                    zeros(1), ones(1))
                 pyro.map_data("map_inner_%d_%d" % (which, i), [ng_ones(1)], lambda _i, _x:
                     pyro.observe("obs_inner_%d_%d" % (which, i),
                         dist.diag_normal, _x, ng_zeros(1), ng_ones(1)), batch_size=1)
@@ -195,35 +256,22 @@ class NormalNormalTests(TestCase):
                 pyro.observe("obs_%d_%d" % (which, i), dist.diagnormal, x, z_local_2, ones(1))
 
             pyro.map_data("map_obs0", self.data, lambda i, x: obs(i, x, 0), batch_size=2)
-            z_mid1 = pyro.sample("z_mid1", dist.diagnormal, self.mu0, torch.pow(self.lam0, -0.5))
-            z_mid2 = pyro.sample("z_mid2", dist.diagnormal, z_mid1, torch.pow(self.lam0, -0.5))
+            #z_mid1 = pyro.sample("z_mid1", dist.diagnormal, self.mu0, torch.pow(self.lam0, -0.5))
             pyro.map_data("map_obs1", self.data, lambda i, x: obs(i, x, 1), batch_size=2)
-            #z_end1 = pyro.sample("z_end1", dist.diagnormal, z_mid2, torch.pow(self.lam0, -0.5))
-            #z_end2 = pyro.sample("z_end2", dist.diagnormal, z_end1, torch.pow(self.lam0, -0.5))
-            print("\n******* EXITING MODEL ******\n")
-            return z_top1
 
         def guide():
-            print("\n******* ENTERING GUIDE ******\n")
-            z_top1 = pyro.sample("z_top1", dist.diagnormal, zeros(1), ones(1))
-            z_top2 = pyro.sample("z_top2", dist.diagnormal, zeros(1), ones(1))
 
             def obs(i, x, which):
                 z_local_1 = pyro.sample("z_local_1_%d_%d" % (which, i), dist.diagnormal,
-                                    z_top2, ones(1))
+                                    zeros(1), ones(1))
                 pyro.map_data("map_inner_%d_%d" % (which, i), [ng_ones(1)], lambda _i, _x:
                         None, batch_size=1)
                 z_local_2 = pyro.sample("z_local_2_%d_%d" % (which, i), dist.diagnormal,
                                     z_local_1, ones(1))
 
             pyro.map_data("map_obs0", self.data, lambda i, x: obs(i, x, 0), batch_size=2)
-            z_mid1 = pyro.sample("z_mid1", dist.diagnormal, self.mu0, torch.pow(self.lam0, -0.5))
-            z_mid2 = pyro.sample("z_mid2", dist.diagnormal, z_mid1, torch.pow(self.lam0, -0.5))
+            #z_mid1 = pyro.sample("z_mid1", dist.diagnormal, self.mu0, torch.pow(self.lam0, -0.5))
             pyro.map_data("map_obs1", self.data, lambda i, x: obs(i, x, 1), batch_size=2)
-            #z_end1 = pyro.sample("z_end1", dist.diagnormal, z_mid2, torch.pow(self.lam0, -0.5))
-            #z_end2 = pyro.sample("z_end2", dist.diagnormal, z_end1, torch.pow(self.lam0, -0.5))
-            print("\n******* EXITING GUIDE ******\n")
-            return z_top1
 
         guide_tracegraph = poutine.tracegraph(guide)()
         guide_tracegraph.save_visualization('guide')

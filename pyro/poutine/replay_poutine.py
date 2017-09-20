@@ -69,21 +69,14 @@ class ReplayPoutine(Poutine):
             raise ValueError(
                 "something went wrong with replay conditions at site " + name)
 
-    def report(self, s):
-        if False:
-            print s
-
     def _pyro_map_data(self, msg, name, data, fn, batch_size=None, batch_dim=0):
         """
         Use the batch indices from the guide trace, already provided by down
-        So all we need to do here is apply a ScalePoutine as in TracePoutine
+        So all we need to do here is apply a LambdaPoutine as in TracePoutine
         """
-        self.report("[%s] Enter ReplayPoutine map_data" % name)
         scale = pyro.util.get_batch_scale(data, batch_size, batch_dim)
-        ret =  super(ReplayPoutine, self)._pyro_map_data(msg, name, data,
-							 LambdaPoutine(fn, name, scale),
-                                                         batch_size=batch_size,
-                                                         batch_dim=batch_dim)
-        self.report("[%s] Exit ReplayPoutine map_data" % name)
+        ret = super(ReplayPoutine, self)._pyro_map_data(msg, name, data,
+                                                        LambdaPoutine(fn, name, scale),
+                                                        batch_size=batch_size,
+                                                        batch_dim=batch_dim)
         return ret
-
