@@ -19,7 +19,13 @@ Replicates the result in https://arxiv.org/pdf/1310.5438.pdf
 """
 
 # use covtype dataset
-# df = pd.read_csv("data/covtype/covtype.data", delim_whitespace=True)
+fname = "data//covtype/covtype.data"
+with open(fname, "r+") as f:
+    content = f.read()
+#     f.seek(0, 0)
+#     f.write(first_line.rstrip('\r\n') + '\n' + content)
+df = pd.read_csv(fname, header=None)
+# df = pd.read_csv("data/covtype/covtype.data")
 # def load_ds():
 #     for i,row in df.iterrows():
 #         yield Variable(torch.Tensor(row[0]))
@@ -39,15 +45,15 @@ def build_toy_dataset(N, noise_std=0.1):
 sigmoid = torch.nn.Sigmoid()
 softplus = torch.nn.Softplus()
 
-N = 40 # data
-D = 1 # features
+N = 581012 # data
+D = 39 # features
 
 def model(i, data):
     """
     Logistic regression model
     """
-    mu = Variable(torch.zeros(N))
-    sigma = Variable(torch.ones(N)) * 3.0
+    mu = Variable(torch.zeros(D))
+    sigma = Variable(torch.ones(D)) * 3.0
     p_w = pyro.sample("weight_" + str(i), DiagNormal(mu, sigma))
     p_b = pyro.sample("bias_" + str(i), DiagNormal(mu, sigma))
     # exp to get log bernoulli
@@ -60,19 +66,21 @@ def model(i, data):
 
 def guide(i, data):
     #sample from approximate posterior for weights
-    w_mu = Variable(torch.randn(data.size()))
-    w_sig = softplus(Variable(torch.randn(data.size())))
-    b_mu = Variable(torch.randn(data.size()))
+    w_mu = Variable(torch.randn(D))
+    w_sig = softplus(Variable(torch.randn(D)))
+    b_mu = Variable(torch.randn(data.size()) + 10.0)
     b_sig = softplus(Variable(torch.randn(data.size())))
     q_w = pyro.sample("weight_" + str(i), DiagNormal(w_mu, w_sig))
     q_b = pyro.sample("bias_" + str(i), DiagNormal(b_mu, b_sig))
 
 adam_params = {"lr": 0.0001}
-# adam_optim = pyro.optim(torch.optim.Adam, adam_params)
-adam_optim = pyro.optim(torch.optim.SGD, adam_params)
+adam_optim = pyro.optim(torch.optim.Adam, adam_params)
+sgd_optim = pyro.optim(torch.optim.SGD, adam_params)
 
-dat = build_toy_dataset(N)
-mnist_size = len(dat)
+# dat = build_toy_dataset(N)
+x = df.as_matrix(columns=range(D))
+y = np.squeeze(df.as_matrix(columns=[D]))
+mnist_size = len(x)
 
 
 nr_samples = 50
@@ -84,7 +92,7 @@ batch_size = 1
 # if all_batches[-1] != mnist_size:
 #     all_batches = list(all_batches) + [mnist_size]
 
-grad_step = KL_QP(model, guide, adam_optim)
+grad_step = KL_QP(model, guide, sgd_optim)
 
 # apply it to minibatches of data by hand:
 for j in range(nr_epochs):
@@ -94,7 +102,6 @@ for j in range(nr_epochs):
 #         batch_end = all_batches[ix + 1]
          # get batch
 #         batch_data = mnist_data[batch_start:batch_end]
-        # ignore batching for now
         batch_data = dat[0]
 
         epoch_loss += grad_step.step(ix, batch_data)
