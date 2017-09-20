@@ -14,10 +14,10 @@ class LiftPoutine(Poutine):
         self.prior = prior
         super(LiftPoutine, self).__init__(fn)
 
-    def _block_down(self, msg):
+    def down(self, msg):
         if msg["type"] == "param":
-            return True
-        return False
+            msg["done"] = True
+        return msg
 
     def _pyro_param(self, msg, name, *args, **kwargs):
         """
