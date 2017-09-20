@@ -7,7 +7,7 @@ import pyro.infer
 from pyro.distributions import DiagNormal, Bernoulli
 from tests.common import TestCase
 
-pytestmark = pytest.mark.init(rng_seed=123)
+pytestmark = pytest.mark.init(rng_seed=124)
 
 
 class HMMSamplingTestCase(TestCase):
