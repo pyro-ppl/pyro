@@ -8,6 +8,8 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer.kl_qp import KL_QP
 
+pytestmark = pytest.mark.init(rng_seed=123)
+
 
 def eq(x, y, prec=1e-10):
     return (torch.norm(x - y, 1).data[0] < prec)

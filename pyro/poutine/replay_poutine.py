@@ -37,8 +37,10 @@ class ReplayPoutine(Poutine):
         """
         if msg["name"] in self.sites:
             if msg["type"] == "map_data":
+                guide_type = self.guide_trace[msg["name"]]["type"]
                 assert self.guide_trace[msg["name"]]["type"] == "map_data", \
-                    msg["name"] + " is not a map_data in the guide_trace"
+                    "{} is {}, not map_data, in guide_trace".format(msg["name"],
+                                                                    guide_type)
                 msg["indices"] = self.guide_trace[msg["name"]]["indices"]
                 msg["batch_size"] = self.guide_trace[msg["name"]]["batch_size"]
                 msg["batch_dim"] = self.guide_trace[msg["name"]]["batch_dim"]
