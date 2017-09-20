@@ -208,7 +208,7 @@ class TraceGraphPoutine(TracePoutine):
 
     def _add_graph_node(self, msg, name):
         map_data_stack_height = len(msg['map_data_stack'])
-        # inside a map_data use the msg pass by LambdaPoutine to record
+        # inside a map_data use the msg passed by LambdaPoutine to record
         # the correct dependency structure in the graph
         if map_data_stack_height > 0:
             nodes = msg['map_data_nodes']
