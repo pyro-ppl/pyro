@@ -271,12 +271,13 @@ def module(pyro_name, nn_obj):
 def random_module(name, nn_module, prior, *args, **kwargs):
     """
     :param name: name of pyro module
-    :param nn_module: pyro wrapped nn module
+    :param nn_module: pytorch nn module
     :param prior: prior distribution or iterable over distributions
+    :returns: a callable which returns a sampled module
 
     Places a prior over the parameters of the nn module
     """
     assert hasattr(nn_module, "parameters"), "Module is not a NN module."
-    # register oarams in param store
+    # register params in param store
     lifted_fn = poutine.lift(pyro.module, prior, *args, **kwargs)
     return lambda: lifted_fn(name, nn_module)
