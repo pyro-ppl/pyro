@@ -3,7 +3,6 @@ import networkx
 import torch
 
 from .trace_poutine import TracePoutine
-from .lambda_poutine import LambdaPoutine
 
 
 class TraceGraph(object):
@@ -156,6 +155,11 @@ class TraceGraphPoutine(TracePoutine):
         self.param_nodes = []
         self.observation_nodes = []
         self.prev_node = '___ROOT_NODE___'
+        self.prev_nodes = {}
+        #self.prev_map_data_node = None
+        #self.current_map_data = None
+        #self.current_map_data_split_node = None
+        self.current_map_data_join_nodes = []
         self.G = networkx.DiGraph()
 
     def _exit_poutine(self, ret_val, *args, **kwargs):
@@ -163,44 +167,29 @@ class TraceGraphPoutine(TracePoutine):
         Return a TraceGraph object that contains the forward graph and trace
         """
         self.trace = super(TraceGraphPoutine, self)._exit_poutine(ret_val, *args, **kwargs)
-        self.G.remove_node('___ROOT_NODE___')
+        if '___ROOT_NODE___' in self.G.nodes():
+            self.G.remove_node('___ROOT_NODE___')
+
+        #for node in self.G.nodes():
+        #    if node[-10:] == '_join_node':
+        #        self.G.remove_node(node)
 
         for node in self.G.nodes():
             if node[-10:] == '_join_node':
-                self.G.remove_node(node)
-
-        #self.report("exit tracegraph poutine")
+                split_node = node[:-10] + '_split_node'
+                join_node = node
+                parent_node = self.G.predecessors(split_node)[0]
+                children = self.G.successors(parent_node)
+                target_child = list(filter(lambda n: n[-5:] != '_node', children))
+                assert(len(target_child)<=1)
+                if len(target_child)==1:
+                    target_child = target_child[0]
+                    self.G.add_edge(join_node, target_child)
 
         trace_graph = TraceGraph(self.G, self.trace,
                                  self.stochastic_nodes, self.reparameterized_nodes,
                                  self.param_nodes, self.observation_nodes)
         return trace_graph
-
-    def _add_graph_node(self, name, prev, update_prev_node=False):
-        self.G.add_edge(prev, name)
-        for ancestor in networkx.ancestors(self.G, prev):
-            self.G.add_edge(ancestor, name)
-        if update_prev_node:
-            self.prev_node = name
-
-    def _pyro_sample(self, msg, name, dist, *args, **kwargs):
-        """
-        register sampled variable for coarse graph construction
-        """
-        val = super(TraceGraphPoutine, self)._pyro_sample(msg, name, dist,
-                                                          *args, **kwargs)
-        if 'current_map_data' in msg:
-            nodes = msg['__map_data_nodes'][msg['current_map_data']]
-            #self.report("tracegraph poutine sample: prev node %s curr %s" %\
-            #        (nodes[1], nodes[0]))
-            self._add_graph_node(nodes[0], nodes[1], update_prev_node=False)
-            self.G.add_edge(nodes[0], nodes[2])
-        else:
-            self._add_graph_node(name, self.prev_node, update_prev_node=True)
-        self.stochastic_nodes.append(name)
-        if dist.reparameterized:
-            self.reparameterized_nodes.append(name)
-        return val
 
     def _pyro_param(self, msg, name, *args, **kwargs):
         """
@@ -217,36 +206,92 @@ class TraceGraphPoutine(TracePoutine):
         if True:
             print s
 
+    def _pyro_sample(self, msg, name, dist, *args, **kwargs):
+        """
+        register sampled variable for coarse graph construction
+        """
+        if len(msg['map_data_stack']) > 0:
+            nodes = msg['map_data_nodes'][msg['map_data_stack'][0]]
+            self.report("[%s] Enter TraceGraph SAMPLE: stack %s; nodes %s" %\
+                    (name, str(msg['map_data_stack']), nodes))
+            self.report("map_data_nodes: %s" % str(msg['map_data_nodes']))
+            #self.G.add_edge(self.prev_node, nodes['split'])
+            self.G.add_edge(nodes['previous'], nodes['current'])
+            self.G.add_edge(nodes['current'], nodes['join'])
+            self.prev_nodes[msg['map_data_stack'][0]] = nodes['current']
+            if nodes['previous']==nodes['split'] and len(msg['map_data_stack'])==1:
+                self.G.add_edge(self.prev_node, nodes['split'])
+            if nodes['previous']==nodes['split'] and len(msg['map_data_stack'])==2:
+                self.G.add_edge(self.prev_nodes[msg['map_data_stack'][1]], nodes['split'])
+            #if len(self.current_map_data_join_nodes)==0 or self.current_map_data_join_nodes[0]!= nodes['join']:
+            #    self.current_map_data_join_nodes.append(nodes['join'])
+            #self.current_map_data_split_node = nodes['split']
+        else:
+            if len(self.current_map_data_join_nodes)==0:
+                self.G.add_edge(self.prev_node, name)
+                self.prev_node = name
+                self.report("[%s] Enter TraceGraph SAMPLE  [--outside of stack split is None--]" % name)
+            else:
+                #self.G.add_edge(self.current_map_data_join_nodes[0], name)
+                self.current_map_data_join_nodes.pop(0)
+                self.prev_node = name
+                self.report("[%s] Enter TraceGraph SAMPLE  [--outside of stack split is Not None--]" % name)
+        self.stochastic_nodes.append(name)
+        if dist.reparameterized:
+            self.reparameterized_nodes.append(name)
+        val = super(TraceGraphPoutine, self)._pyro_sample(msg, name, dist,
+                                                          *args, **kwargs)
+        self.report("[%s] Exit TraceGraph Sample" % name)
+        return val
+
     def _pyro_observe(self, msg, name, fn, obs, *args, **kwargs):
         """
         register observe dependencies for coarse graph construction
         """
-        if 'current_map_datas' in msg:
-            self.report("tracegraph poutine observe" + str(msg['current_map_datas']))
-        if 'current_map_data' in msg:
-            nodes = msg['__map_data_nodes'][msg['current_map_data']]
-            self.report("[%s] tracegraph poutine observe %s: prev node %s curr %s" %\
-                    (msg['current_map_data'], name, nodes[1], nodes[0]))
-            self._add_graph_node(nodes[0], nodes[1], update_prev_node=False)
-            self.G.add_edge(nodes[0], nodes[2])
+        if len(msg['map_data_stack']) > 0:
+            nodes = msg['map_data_nodes'][msg['map_data_stack'][0]]
+            self.report("[%s] Enter TraceGraph OBSERVE: stack %s; nodes %s" %\
+                    (name, str(msg['map_data_stack']), nodes))
+            self.report("map_data_nodes: %s" % str(msg['map_data_nodes']))
+            #self.G.add_edge(self.prev_node, nodes['split'])
+            self.G.add_edge(nodes['previous'], nodes['current'])
+            self.G.add_edge(nodes['current'], nodes['join'])
+            self.prev_nodes[msg['map_data_stack'][0]] = nodes['current']
+            if nodes['previous']==nodes['split'] and len(msg['map_data_stack'])==1:
+                self.G.add_edge(self.prev_node, nodes['split'])
+            if nodes['previous']==nodes['split'] and len(msg['map_data_stack'])==2:
+                self.G.add_edge(self.prev_nodes[msg['map_data_stack'][1]], nodes['split'])
+            #if nodes['previous']==nodes['split'] and len(msg['map_data_stack'])==2:
+            #    self.G.add_edge(msg['map_data_nodes'][msg['map_data_stack'][1]]['current'], nodes['split'])
+
+            #if len(self.current_map_data_join_nodes)==0 or self.current_map_data_join_nodes[0]!= nodes['join']:
+            #    self.current_map_data_join_nodes.append(nodes['join'])
+            #self.current_map_data_split_node = nodes['split']
         else:
-            self._add_graph_node(name, self.prev_node, update_prev_node=True)
+            if len(self.current_map_data_join_nodes)==0:
+                self.G.add_edge(self.prev_node, name)
+                self.prev_node = name
+                self.report("[%s] Enter TraceGraph OBSERVE  [--outside of stack split is None--]" % name)
+            else:
+                #self.G.add_edge(self.current_map_data_join_nodes[0], name)
+                self.current_map_data_join_nodes.pop(0)
+                self.prev_node = name
+                self.report("[%s] Enter TraceGraph OBSERVE  [--outside of stack split is Not None--]" % name)
+
         self.observation_nodes.append(name)
         val = super(TraceGraphPoutine, self)._pyro_observe(msg, name, fn, obs,
                                                            *args, **kwargs)
+        self.report("[%s] Exit TraceGraph OBSERVE" % name)
         return val
 
     def _pyro_map_data(self, msg, name, data, fn, batch_size=None, batch_dim=0):
-        self.report("tracegraph map data enter: %s" % name)
-        if 'lambda_installed' in msg:
-            self.report("tracegraph map data enter: lambda INSTALLED %s" % str(msg['lambda_installed']))
-        marked_fn = LambdaPoutine(fn, name) if not isinstance(data, (torch.Tensor,
-            torch.autograd.Variable)) else fn
-        ret = super(TraceGraphPoutine, self)._pyro_map_data(msg, name, data, marked_fn,
+        self.report("[%s] Enter TraceGraph map_data" % name)
+        #self.current_map_data = name
+        ret = super(TraceGraphPoutine, self)._pyro_map_data(msg, name, data, fn,
                                                              batch_size=batch_size,
                                                              batch_dim=batch_dim)
-        if (name + '_split_node') in self.G.nodes():
-            self.G = networkx.contracted_nodes(self.G, self.prev_node, name + '_split_node')
-            self.prev_node = name + '_join_node'
-        self.report("tracegraph map data exit: %s" % name)
+        #if (name + '_split_node') in self.G.nodes():
+        #    self.G = networkx.contracted_nodes(self.G, self.prev_node, name + '_split_node')
+        #self.prev_node = name + '_join_node'
+        self.report("[%s] Exit TraceGraph map_data" % name)
         return ret

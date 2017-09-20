@@ -100,6 +100,8 @@ def sample(name, fn, *args, **kwargs):
             "kwargs": kwargs,
             "ret": None,
             "scale": 1.0,
+            "map_data_stack": [],
+            "map_data_nodes": {},
             "done": False,
             "stop": False,
         }
@@ -133,6 +135,8 @@ def observe(name, fn, val, *args, **kwargs):
             "kwargs": kwargs,
             "ret": None,
             "scale": 1.0,
+            "map_data_stack": [],
+            "map_data_nodes": {},
             "done": False,
             "stop": False,
         }
