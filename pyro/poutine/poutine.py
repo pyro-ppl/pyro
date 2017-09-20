@@ -58,12 +58,6 @@ class Poutine(object):
         """
         return False
 
-    def _block_down(self, msg):
-        """
-        Block going down
-        """
-        return False
-
     def up(self, msg):
         """
         The dispatcher that gets put into _PYRO_STACK
@@ -82,21 +76,22 @@ class Poutine(object):
                                    *msg["args"], **msg["kwargs"])
         elif msg["type"] == "map_data":
             ret = self._pyro_map_data(msg, msg["name"],
-                                      msg["data"], msg["fn"], msg["batch_size"])
+                                      msg["data"], msg["fn"],
+                                      batch_size=msg["batch_size"],
+                                      batch_dim=msg["batch_dim"])
         else:
             raise ValueError(
                 "{} is an invalid site type, how did that get there?".format(msg["type"]))
 
         msg.update({"ret": ret})
-        barrier = self._block_up(msg)
-        return msg, barrier
+        msg["stop"] = self._block_up(msg)
+        return msg
 
     def down(self, msg):
         """
         The dispatcher that gets put into _PYRO_STACK
         """
-        barrier = self._block_down(msg)
-        return msg, barrier
+        return msg
 
     def _push_stack(self):
         """
@@ -130,22 +125,24 @@ class Poutine(object):
         """
         Default pyro.sample Poutine behavior
         """
-        if msg["ret"] is not None:
+        if msg["done"]:
             return msg["ret"]
         val = fn(*args, **kwargs)
+        msg["done"] = True
         return val
 
     def _pyro_observe(self, msg, name, fn, obs, *args, **kwargs):
         """
         Default pyro.observe Poutine behavior
         """
-        if msg["ret"] is not None:
+        if msg["done"]:
             return msg["ret"]
         if obs is None:
             return fn(*args, **kwargs)
+        msg["done"] = True
         return obs
 
-    def _pyro_map_data(self, msg, name, data, fn, batch_size):
+    def _pyro_map_data(self, msg, name, data, fn, batch_size, batch_dim=0):
         """
         Default pyro.map_data Poutine behavior
         """
@@ -158,15 +155,14 @@ class Poutine(object):
             if batch_size is None:
                 batch_size = 0
             assert batch_size >= 0, "cannot have negative batch sizes"
-            if msg["scale"] is None and msg["indices"] is None:
-                scale, ind = pyro.util.get_scale(data, batch_size)
-                msg["scale"] = scale
+            if msg["indices"] is None:
+                ind = pyro.util.get_batch_indices(data, batch_size, batch_dim)
                 msg["indices"] = ind
 
             if batch_size == 0:
                 ind_data = data
             elif isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
-                ind_data = data.index_select(0, msg["indices"])
+                ind_data = data.index_select(batch_dim, msg["indices"])
             else:
                 ind_data = [data[i] for i in msg["indices"]]
 
