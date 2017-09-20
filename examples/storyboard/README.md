@@ -1,3 +1,3 @@
 # Storyboard
 
-The Storyboard is ____ TODO What is the storyboard?
+This directory contains non-functioning pseudocode sketches for possible future langauge features.
