@@ -8,12 +8,13 @@ import pyro.poutine as poutine
 from pyro.distributions import DiagNormal, Bernoulli
 from tests.common import TestCase
 
+pytestmark = pytest.mark.init(rng_seed=123)
+
 
 def eq(x, y, prec=1e-10):
     return (torch.norm(x - y).data[0] < prec)
 
 
-@pytest.mark.init(rng_seed=123)
 # XXX name is a bit silly
 class NormalNormalNormalPoutineTestCase(TestCase):
 

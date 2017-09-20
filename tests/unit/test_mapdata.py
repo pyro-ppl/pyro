@@ -8,12 +8,13 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer.kl_qp import KL_QP
 
+pytestmark = pytest.mark.init(rng_seed=123)
+
 
 def eq(x, y, prec=1e-10):
     return (torch.norm(x - y, 1).data[0] < prec)
 
 
-@pytest.mark.init(rng_seed=123)
 @pytest.mark.parametrize("batch_size", [3, 5, 7, 8, 0])
 @pytest.mark.parametrize("map_type", ["tensor", "list"])
 def test_elbo_mapdata(batch_size, map_type):

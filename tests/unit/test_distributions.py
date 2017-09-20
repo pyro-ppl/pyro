@@ -10,8 +10,9 @@ import pyro.distributions as dist
 from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
 from tests.common import TestCase
 
+pytestmark = pytest.mark.init(rng_seed=123)
 
-@pytest.mark.init(rng_seed=123)
+
 class TestUniform(TestCase):
 
     def setUp(self):

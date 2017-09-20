@@ -11,8 +11,9 @@ from pyro.distributions.transformed_distribution import AffineExp, TransformedDi
 from pyro.infer.kl_qp import KL_QP
 from tests.common import TestCase
 
+pytestmark = pytest.mark.init(rng_seed=123)
 
-@pytest.mark.init(rng_seed=123)
+
 class NormalNormalTests(TestCase):
 
     def setUp(self):

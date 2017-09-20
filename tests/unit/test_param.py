@@ -10,8 +10,9 @@ from torch.autograd import Variable
 import pyro
 from tests.common import TestCase
 
+pytestmark = pytest.mark.init(rng_seed=123)
 
-@pytest.mark.init(rng_seed=123)
+
 class ParamStoreDictTests(TestCase):
 
     def setUp(self):

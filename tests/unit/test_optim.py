@@ -8,8 +8,9 @@ from pyro.distributions import DiagNormal
 from pyro.infer.kl_qp import KL_QP
 from tests.common import TestCase
 
+pytestmark = pytest.mark.init(rng_seed=123)
 
-@pytest.mark.init(rng_seed=123)
+
 class OptimTests(TestCase):
 
     def setUp(self):
