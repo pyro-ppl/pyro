@@ -1,11 +1,6 @@
-import pyro
-import torch
-import sys
-if sys.version_info[0] < 3:
-    from Queue import Queue
-else:
-    from queue import Queue
+from six.moves.queue import Queue
 
+import pyro
 from .poutine import Poutine
 
 
@@ -20,6 +15,7 @@ class QueuePoutine(Poutine):
     Poutine for enumerating a queue of traces
     Useful for systematic search, beam search
     """
+
     def __init__(self, fn, queue=None, max_tries=None):
         """
         Constructor.
@@ -73,6 +69,7 @@ class QueuePoutine(Poutine):
         if name in self.guide_trace:
             assert self.guide_trace[name]["type"] == "sample", \
                 "site {} in guide_trace is not a sample".format(name)
+            msg["done"] = True
             return self.guide_trace[name]["value"]
         elif not self.pivot_seen:
             self.pivot_seen = True
@@ -81,6 +78,7 @@ class QueuePoutine(Poutine):
                 extended_traces.append(
                     self.guide_trace.copy().add_sample(name, msg["scale"], s, fn,
                                                        *args, **kwargs))
+            msg["done"] = True
             raise ReturnExtendedTraces(extended_traces)
         else:
             raise ValueError("should never get here (malfunction at site {})".format(name))

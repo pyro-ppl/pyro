@@ -1,13 +1,10 @@
+import networkx
 import torch
 from torch.autograd import Variable
-from collections import OrderedDict
+
 import pyro
 import pyro.poutine as poutine
-import sys
 from pyro.util import ng_zeros, detach_iterable
-from collections import defaultdict
-import time
-import networkx
 
 
 class TraceGraph_KL_QP(object):
@@ -28,6 +25,7 @@ class TraceGraph_KL_QP(object):
     steps on the baseline losses; defaults to `optim_step_fct`
 
     """
+
     def __init__(self,
                  model,
                  guide,
@@ -122,8 +120,8 @@ class TraceGraph_KL_QP(object):
                 missing_downstream_costs = downstream_guide_cost_nodes[node] - nodes_included_in_sum
                 # include terms we missed because we had to avoid duplicates
                 for missing_node in missing_downstream_costs:
-                    downstream_costs[node] += model_trace[missing_node]["log_pdf"] -\
-                        guide_trace[missing_node]["log_pdf"]
+                    downstream_costs[node] += model_trace[missing_node]["log_pdf"] - \
+                                              guide_trace[missing_node]["log_pdf"]
 
             # finish assembling complete downstream costs
             # (the above computation may be missing terms from model)
@@ -135,7 +133,7 @@ class TraceGraph_KL_QP(object):
                 # remove terms accounted for above
                 children_in_model.difference_update(downstream_guide_cost_nodes[site])
                 for child in children_in_model:
-                    assert(model_trace[child]["type"] in ("sample", "observe"))
+                    assert (model_trace[child]["type"] in ("sample", "observe"))
                     downstream_costs[site] += model_trace[child]["log_pdf"]
 
             # construct all the reinforce-like terms.
@@ -145,10 +143,10 @@ class TraceGraph_KL_QP(object):
 
             # for extracting baseline options from kwargs
             def get_baseline_kwargs(kwargs):
-                return kwargs.get('nn_baseline', None),\
-                    kwargs.get('nn_baseline_input', None),\
-                    kwargs.get('use_decaying_avg_baseline', False),\
-                    kwargs.get('baseline_beta', 0.90)  # default decay rate for avg_baseline
+                return kwargs.get('nn_baseline', None), \
+                       kwargs.get('nn_baseline_input', None), \
+                       kwargs.get('use_decaying_avg_baseline', False), \
+                       kwargs.get('baseline_beta', 0.90)  # default decay rate for avg_baseline
 
             # this [] will be used to store information need to construct baseline losses below
             baseline_losses = []
@@ -161,7 +159,7 @@ class TraceGraph_KL_QP(object):
                 if use_decaying_avg_baseline:
                     avg_downstream_cost_old = pyro.param("__baseline_avg_downstream_cost_" + node,
                                                          ng_zeros(1))
-                    avg_downstream_cost_new = (1 - baseline_beta) * downstream_cost +\
+                    avg_downstream_cost_new = (1 - baseline_beta) * downstream_cost + \
                         baseline_beta * avg_downstream_cost_old
                     avg_downstream_cost_old.data = avg_downstream_cost_new.data  # XXX copy_() ?
                     baseline += avg_downstream_cost_old
@@ -173,7 +171,7 @@ class TraceGraph_KL_QP(object):
                     baseline_losses.append((baseline_loss, nn_params))
                 if use_nn_baseline or use_decaying_avg_baseline:
                     elbo_reinforce_terms += guide_trace[node]['log_pdf'] * \
-                        (Variable(downstream_cost.data - baseline.data))
+                                            (Variable(downstream_cost.data - baseline.data))
                 else:
                     elbo_reinforce_terms += guide_trace[node]['log_pdf'] * Variable(downstream_cost.data)
 

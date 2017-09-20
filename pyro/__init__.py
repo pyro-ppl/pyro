@@ -1,15 +1,15 @@
-from pyro.params.param_store import ParamStoreDict
-from torch.autograd import Variable
-from pyro.optim.optim import PyroOptim
 from inspect import isclass
-import pyro
-from torch.nn import Parameter
+
 import torch
+from torch.autograd import Variable
+from torch.nn import Parameter
 
-from pyro import distributions, infer, nn, params, util, poutine
-
-from pyro.util import zeros, ones
+import pyro
+from pyro import util
+from pyro.optim.optim import PyroOptim
 from pyro.params import param_with_module_name
+from pyro.params.param_store import ParamStoreDict
+from pyro.util import zeros, ones  # noqa: F401
 
 # global map of params for now
 _param_store = ParamStoreDict()
@@ -66,14 +66,12 @@ def apply_stack(initial_msg, stack=None):
 
     # work out the bottom poutine at this site
     for i in range(len(stack) - 1, -1, -1):
-        msg, stop = stack[i].down(msg)
-        if stop:
-            break
+        msg = stack[i].down(msg)
 
     # go until time to stop?
-    for j in range(i, len(stack)):
-        msg, stop = stack[j].up(msg)
-        if stop:
+    for j in range(0, len(stack)):
+        msg = stack[j].up(msg)
+        if msg["stop"]:
             break
 
     return msg
@@ -102,6 +100,8 @@ def sample(name, fn, *args, **kwargs):
             "kwargs": kwargs,
             "ret": None,
             "scale": 1.0,
+            "done": False,
+            "stop": False,
         }
         # apply the stack and return its return value
         out_msg = apply_stack(msg)
@@ -133,17 +133,21 @@ def observe(name, fn, val, *args, **kwargs):
             "kwargs": kwargs,
             "ret": None,
             "scale": 1.0,
+            "done": False,
+            "stop": False,
         }
         # apply the stack and return its return value
         out_msg = apply_stack(msg)
         return out_msg["ret"]
 
 
-def map_data(name, data, fn, batch_size=None):
+def map_data(name, data, fn, batch_size=None, batch_dim=0):
     """
     :param name: named argument
-    :param data: data tp subsample
+    :param data: data to subsample
     :param observer: observe function
+    :param batch_size: number of samples per batch
+    :param batch_dim: dimension to subsample for tensor inputs
 
     Data subsampling with the important property that
     all the data are conditionally independent. By
@@ -151,18 +155,18 @@ def map_data(name, data, fn, batch_size=None):
     """
     if len(_PYRO_STACK) == 0:
         # default behavior
-        scale, ind = util.get_scale(data, batch_size)
+        ind = util.get_batch_indices(data, batch_size, batch_dim)
         if batch_size == 0:
             ind_data = data
         elif isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
-            ind_data = data.index_select(0, ind)
+            ind_data = data.index_select(batch_dim, ind)
         else:
             ind_data = [data[i] for i in ind]
 
         if isinstance(data, (torch.Tensor, Variable)):
             ret = fn(ind, ind_data)
         else:
-            ret = list(map(lambda ix: fn(*ix), enumerate(ind_data)))
+            ret = list(map(lambda ix: fn(*ix), zip(ind, ind_data)))
         return ret
     else:
         # initialize data structure to pass up/down the stack
@@ -172,10 +176,12 @@ def map_data(name, data, fn, batch_size=None):
             "fn": fn,
             "data": data,
             "batch_size": batch_size,
+            "batch_dim": batch_dim,
             # XXX should these be added here or during application
             "indices": None,
-            "scale": None,
             "ret": None,
+            "done": False,
+            "stop": False,
         }
         # apply the stack and return its return value
         out_msg = apply_stack(msg)
@@ -200,7 +206,9 @@ def param(name, *args, **kwargs):
             "name": name,
             "args": args,
             "kwargs": kwargs,
+            "scale": 1.0,
             "ret": None,
+            "stop": False,
         }
         # apply the stack and return its return value
         out_msg = apply_stack(msg)

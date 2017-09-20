@@ -1,6 +1,3 @@
-import pyro
-
-
 def get_parents(node, trace):
     """
     Get the parents of a node in a trace
@@ -13,6 +10,7 @@ class Trace(dict):
     """
     Execution trace data structure
     """
+
     def add_sample(self, name, scale, val, fn, *args, **kwargs):
         """
         Sample site
@@ -42,7 +40,7 @@ class Trace(dict):
         self[name] = site
         return self
 
-    def add_map_data(self, name, fn, batch_size, scale, ind):
+    def add_map_data(self, name, fn, batch_size, batch_dim, ind):
         """
         map_data site
         """
@@ -51,7 +49,7 @@ class Trace(dict):
         site["type"] = "map_data"
         site["indices"] = ind
         site["batch_size"] = batch_size
-        site["scale"] = scale
+        site["batch_dim"] = batch_dim
         site["fn"] = fn
         self[name] = site
         return self

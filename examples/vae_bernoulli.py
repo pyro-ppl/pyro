@@ -1,20 +1,17 @@
 import argparse
-import torch
-import pyro
-from torch.autograd import Variable
-from pyro.infer.kl_qp import KL_QP
-from pyro.distributions import DiagNormal, Normal, Bernoulli
-from torch import nn
 
+import numpy as np
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
+import torch.optim as optim
 import torchvision.datasets as dset
 import torchvision.transforms as transforms
-import torch.nn.functional as F
-import torch.optim as optim
-import numpy as np
 import visdom
+from torch.autograd import Variable
+
+import pyro
+from pyro.distributions import DiagNormal, Bernoulli
+from pyro.infer.kl_qp import KL_QP
 
 # load mnist dataset
 root = './data'
@@ -39,11 +36,11 @@ test_loader = torch.utils.data.DataLoader(
     batch_size=batch_size,
     shuffle=False, **kwargs)
 
+
 # network
 
 
 class Encoder(nn.Module):
-
     def __init__(self):
         super(Encoder, self).__init__()
         self.fc1 = nn.Linear(784, 200)
@@ -69,7 +66,7 @@ class Decoder(nn.Module):
         h3 = self.relu(self.fc3(z))
         rv = self.sigmoid(self.fc4(h3))
         # reshape to capture mu, sigma params for every pixel
-        rvs = rv.view(z.size(0), -1, 1)
+        # rvs = rv.view(z.size(0), -1, 1)
         # send back two params
         return rv  # rvs[:,:, 0]
 
@@ -79,7 +76,6 @@ pt_decode = Decoder()
 
 
 def model(data):
-
     # wrap params for use in model -- required
     decoder = pyro.module("decoder", pt_decode)
 
@@ -133,7 +129,7 @@ def per_param_args(name, param):
 adam_params = {"lr": .0001}
 
 kl_optim = KL_QP(model, guide, pyro.optim(optim.Adam, adam_params))
-kl_eval = KL_QP(model=model, guide=guide, optim_step_fct=pyro.optim(optim.Adam, adam_params), num_particles = 10)
+kl_eval = KL_QP(model=model, guide=guide, optim_step_fct=pyro.optim(optim.Adam, adam_params), num_particles=10)
 
 # num_steps = 1
 mnist_data = Variable(train_loader.dataset.train_data.float() / 255.)
@@ -146,10 +142,10 @@ all_batches = np.arange(0, mnist_size, batch_size)
 if all_batches[-1] != mnist_size:
     all_batches = list(all_batches) + [mnist_size]
 
-
 vis = visdom.Visdom(env='vae_mnist')
 
 loss_training = []
+
 
 def main():
     parser = argparse.ArgumentParser(description="parse args")
@@ -166,17 +162,18 @@ def main():
             batch_data = mnist_data[batch_start:batch_end]
 
             epoch_loss += kl_optim.step(batch_data)
-            
-            epoch_eval_loss += kl_eval.eval_bound(batch_data)
+
+            epoch_eval_loss += kl_eval.eval_objective(batch_data)
 
         loss_training.append(-epoch_loss / float(mnist_size))
         sample, sample_mu = model_sample()
         vis.line(np.array(loss_training), opts=dict({'title': 'Training ELBO in nats'}))
-        #vis.image(batch_data[0].view(28, 28).data.numpy())
-        #vis.image(sample[0].view(28, 28).data.numpy())
+        # vis.image(batch_data[0].view(28, 28).data.numpy())
+        # vis.image(sample[0].view(28, 28).data.numpy())
         vis.image(sample_mu[0].view(28, 28).data.numpy())
         print("epoch avg loss {}".format(epoch_loss / float(mnist_size)))
         print("epoch eval loss {}".format(epoch_eval_loss / float(mnist_size)))
+
 
 if __name__ == '__main__':
     main()

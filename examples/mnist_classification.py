@@ -1,20 +1,17 @@
 import argparse
-import torch
-import pyro
-from torch.autograd import Variable
-from pyro.infer.kl_qp import KL_QP
-from pyro.distributions import DiagNormal, Normal, Bernoulli, Categorical
-from torch import nn
 
+import numpy as np
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
+import torch.optim as optim
 import torchvision.datasets as dset
 import torchvision.transforms as transforms
-import torch.nn.functional as F
-import torch.optim as optim
-import numpy as np
 import visdom
+from torch.autograd import Variable
+
+import pyro
+from pyro.distributions import Categorical
+from pyro.infer.kl_qp import KL_QP
 
 # load mnist dataset
 root = './data'
@@ -70,12 +67,13 @@ def model_sample(data, cll):
     cll = pyro.sample('observed_class', Categorical(alpha_cat))
     return cll
 
+
 def guide(data, cll):
     return lambda foo: None
 
+
 # or alternatively
 adam_params = {"lr": .0001}
-
 
 inference_opt = KL_QP(model_obs, guide, pyro.optim(optim.Adam, adam_params))
 
@@ -84,7 +82,6 @@ mnist_labels = Variable(train_loader.dataset.train_labels)
 mnist_size = mnist_data.size(0)
 batch_size = 128  # 64
 
-
 # TODO: batches not necessarily
 all_batches = np.arange(0, mnist_size, batch_size)
 
@@ -92,6 +89,7 @@ if all_batches[-1] != mnist_size:
     all_batches = list(all_batches) + [mnist_size]
 
 vis = visdom.Visdom()
+
 
 def main():
     parser = argparse.ArgumentParser(description="parse args")
@@ -113,6 +111,7 @@ def main():
             epoch_loss += inference_opt.step(batch_data, batch_class)
 
         print("epoch avg loss {}".format(epoch_loss / float(mnist_size)))
+
 
 if __name__ == '__main__':
     main()
