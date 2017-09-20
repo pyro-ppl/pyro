@@ -1,6 +1,7 @@
 from copy import copy
 
 import numpy as np
+import pytest
 import torch
 import torch.optim
 from torch import nn as nn
@@ -10,6 +11,7 @@ import pyro
 from tests.common import TestCase
 
 
+@pytest.mark.init(rng_seed=123)
 class ParamStoreDictTests(TestCase):
 
     def setUp(self):

@@ -1,3 +1,4 @@
+import pytest
 import torch
 from torch.autograd import Variable
 
@@ -7,6 +8,7 @@ from pyro.distributions import DiagNormal, Bernoulli
 from tests.common import TestCase
 
 
+@pytest.mark.init(rng_seed=123)
 class HMMSamplingTestCase(TestCase):
 
     def setUp(self):

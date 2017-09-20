@@ -1,3 +1,4 @@
+import pytest
 import torch
 from six.moves.queue import Queue
 from torch.autograd import Variable
@@ -12,7 +13,7 @@ def eq(x, y, prec=1e-10):
     return (torch.norm(x - y).data[0] < prec)
 
 
-# XXX name is a bit silly
+@pytest.mark.init(rng_seed=123)
 class NormalNormalNormalPoutineTestCase(TestCase):
 
     def setUp(self):

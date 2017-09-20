@@ -1,3 +1,4 @@
+import pytest
 import torch
 import torch.optim
 from torch import nn as nn
@@ -11,6 +12,7 @@ from pyro.infer.kl_qp import KL_QP
 from tests.common import TestCase
 
 
+@pytest.mark.init(rng_seed=123)
 class NormalNormalTests(TestCase):
 
     def setUp(self):
