@@ -14,6 +14,7 @@ def eq(x, y, prec=1e-10):
 
 
 @pytest.mark.init(rng_seed=123)
+# XXX name is a bit silly
 class NormalNormalNormalPoutineTestCase(TestCase):
 
     def setUp(self):
