@@ -1,3 +1,4 @@
+import pytest
 import torch
 from six.moves.queue import Queue
 from torch.autograd import Variable
@@ -6,6 +7,8 @@ import pyro
 import pyro.poutine as poutine
 from pyro.distributions import DiagNormal, Bernoulli
 from tests.common import TestCase
+
+pytestmark = pytest.mark.init(rng_seed=123)
 
 
 def eq(x, y, prec=1e-10):
