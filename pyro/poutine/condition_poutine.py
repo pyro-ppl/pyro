@@ -1,5 +1,3 @@
-import pyro
-
 from .poutine import Poutine
 
 
@@ -17,11 +15,10 @@ class ConditionPoutine(Poutine):
         self.data = data
         super(ConditionPoutine, self).__init__(fn)
 
-    def _block_down(self, msg):
+    def down(self, msg):
         if msg["name"] in self.data:
-            return True
-        else:
-            return False
+            msg["done"] = True
+        return msg
 
     def _pyro_observe(self, msg, name, fn, val, *args, **kwargs):
         """
@@ -37,6 +34,7 @@ class ConditionPoutine(Poutine):
         Here we change the obs argument and thread it up through the stack
         """
         if name in self.data:
+            msg["done"] = False
             msg["type"] = "observe"
             msg["val"] = self.data[name]
             return super(ConditionPoutine, self)._pyro_observe(msg, name, fn,
