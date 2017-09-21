@@ -103,7 +103,7 @@ class TraceGraph_KL_QP(object):
             # 1. downstream costs used for rao-blackwellization
             # 2. model observe sites (as well as terms that arise from the model and guide having different
             # dependency structures) are taken care of via 'children_in_model' below
-            topo_sort_guide_nodes = networkx.topological_sort(guide_tracegraph.get_graph(), reverse=True)
+            topo_sort_guide_nodes = list(reversed(list(networkx.topological_sort(guide_tracegraph.get_graph()))))
             downstream_guide_cost_nodes = {}
             downstream_costs = {}
 
