@@ -11,6 +11,8 @@ class KL_QP(object):
     :param guide: guide used for sampling defined as a function
     :param optim: optimization function
     :param model_fixed: flag that controls whether the model parameters are fixed during optimization
+    :param n_s: number of kl-divergence samples if we sample it. At 1 uses guide-samples
+    :param analytic: flag to detemrine if algorithm should look for analytical expression for kl div
     :type model_fixed: bool
     :param guide_fixed: flag that controls whether the guide parameters are fixed during optimization
     :type guide_fixed: bool
@@ -35,6 +37,8 @@ class KL_QP(object):
                  model_fixed=False,
                  guide_fixed=False,
                  num_particles=1,
+                 n_s=10,
+                 analytic=True,
                  *args, **kwargs):
         """
         Call parent class initially, then setup the poutines to run
@@ -49,6 +53,8 @@ class KL_QP(object):
         self.model_fixed = model_fixed
         self.guide_fixed = guide_fixed
         self.num_particles = num_particles
+        self.n_s = n_s
+        self.analytic = analytic
 
     def __call__(self, *args, **kwargs):
         return self.step(*args, **kwargs)
@@ -101,8 +107,8 @@ class KL_QP(object):
         model_traces = []
         guide_traces = []
         log_r_per_sample = []
-        n_s = 10
-        analytic = True
+        n_s = self.n_s
+        analytic = self.analytic
 
         [model_traces, guide_traces, log_r_per_sample] = self.populate_traces(*args, **kwargs)
 
@@ -133,8 +139,8 @@ class KL_QP(object):
         """
 
         [model_traces, guide_traces, log_r_per_sample] = self.populate_traces(*args, **kwargs)
-        n_s = 10
-        analytic = True
+        n_s = self.n_s
+        analytic = self.analytic
 
         elbo = 0.0
         for i in range(self.num_particles):
