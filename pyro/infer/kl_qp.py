@@ -2,6 +2,7 @@ from torch.autograd import Variable
 
 import pyro
 import pyro.poutine as poutine
+from pyro.distributions import KLdiv as KLdiv
 
 
 class KL_QP(object):
@@ -72,6 +73,20 @@ class KL_QP(object):
 
         return model_traces, guide_traces, log_r_per_sample
 
+    def eval_kldiv(self, model_site=None, guide_site=None, analytical=False, nr_samples=1):
+        """
+        Method to evaluate the log-ratio
+        If nr_sample=1, it reverts to just scoring the already sampled particles from the guide
+        If, however, we want a better approximation to that local divergence, it will sample more particles from the local distributions
+        or evaluate analytically
+        """
+        if nr_samples==1:
+            return model_site["log_pdf"] - guide_site["log_pdf"]
+        else:
+            kld_obj=KLdiv(dist_q=model_site['fn'], dist_p=guide_site['fn'])
+            return kld_obj.eval(analytical=analytical, num_samples=nr_samples)
+        pass
+
     def eval_objective(self, *args, **kwargs):
         """
         Evaluate Elbo by running num_particles often.
@@ -93,8 +108,7 @@ class KL_QP(object):
                 if model_trace[name]["type"] == "observe":
                     elbo_particle += model_trace[name]["log_pdf"]
                 elif model_trace[name]["type"] == "sample":
-                    elbo_particle += model_trace[name]["log_pdf"]
-                    elbo_particle -= guide_trace[name]["log_pdf"]
+                    elbo_particle -= self.eval_kldiv(model_site=guide_trace[name], guide_site=model_trace[name], analytical=False, nr_samples=10).sum()
                 else:
                     pass
             elbo += elbo_particle / self.num_particles
@@ -122,8 +136,7 @@ class KL_QP(object):
                     elbo_particle += model_trace[name]["log_pdf"]
                 elif model_trace[name]["type"] == "sample":
                     if model_trace[name]["fn"].reparameterized:
-                        elbo_particle += model_trace[name]["log_pdf"]
-                        elbo_particle -= guide_trace[name]["log_pdf"]
+                        elbo_particle -= self.eval_kldiv(model_site=guide_trace[name], guide_site=model_trace[name], analytical=False, nr_samples=10).sum()
                     else:
                         elbo_particle += Variable(log_r.data) * guide_trace[name]["log_pdf"]
                 else:
