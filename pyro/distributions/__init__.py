@@ -18,6 +18,7 @@ from pyro.distributions.uniform import Uniform
 # ways to score distances of distributions
 from pyro.distributions.kldiv import KLdiv
 
+
 # function aliases
 diagnormal = DiagNormal()
 lognormal = LogNormal()
@@ -33,4 +34,4 @@ normalchol = NormalChol()
 poisson = Poisson()
 uniform = Uniform()
 dirichlet = Dirichlet()
-
+kldiv = KLdiv()

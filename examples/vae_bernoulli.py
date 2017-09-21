@@ -142,10 +142,7 @@ all_batches = np.arange(0, mnist_size, batch_size)
 if all_batches[-1] != mnist_size:
     all_batches = list(all_batches) + [mnist_size]
 
-
-
 loss_training = []
-
 
 vis_on = False
 if vis_on:
@@ -167,8 +164,7 @@ def main():
             batch_data = mnist_data[batch_start:batch_end]
 
             epoch_loss += kl_optim.step(batch_data)
-
-            #epoch_eval_loss += kl_eval.eval_objective(batch_data)
+            # epoch_eval_loss += kl_eval.eval_objective(batch_data)
 
         loss_training.append(-epoch_loss / float(mnist_size))
         sample, sample_mu = model_sample()
