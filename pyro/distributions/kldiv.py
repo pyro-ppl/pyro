@@ -12,23 +12,23 @@ class KLdiv():
     """
     class to evaluate KL divergences between distributions
     """
-    def __init__(self, dist_q=None, dist_p=None, num_samples=1, *args, **kwargs):
+    def __init__(self, dist_q=None, dist_p=None, num_kl_samples=1, *args, **kwargs):
         self.dist_q = dist_q
         self.dist_p = dist_p
-        self.num_samples = num_samples
+        self.num_kl_samples = num_kl_samples
 
-    def eval_sampled_kl(self, num_samples=10):
+    def eval_sampled_kl(self, num_kl_samples=10):
         """
         evaluate kldiv through sampling from the provided distributions and scoring their ratio
         """
         r_iis = 0
-        for iis in range(num_samples):
+        for iis in range(num_kl_samples):
             sq = self.dist_q.sample()
             r_iis += self.dist_q.log_pdf(sq) - self.dist_p.log_pdf(sq)
-        kld = r_iis/num_samples
+        kld = r_iis/num_kl_samples
         return kld
 
-    def eval(self, analytical=True, num_samples=10):
+    def eval(self, analytical=True, num_kl_samples=10):
         """
         Evaluate the KL divergence either analytically, if an expression is available, or through sampling.
         Here we can add more analytical criteria through use of entropy and cross-entropy expressions for
@@ -43,11 +43,9 @@ class KLdiv():
                     log_sigma_p = torch.log(self.dist_p.sigma+fudge)
                     kld = kl_divergence_normal(mu_q, log_sigma_q, mu_p, log_sigma_p)
                 else:
-                    kld = self.eval_sampled_kl(num_samples)
-
+                    kld = self.eval_sampled_kl(num_kl_samples)
             else:
-                kld = self.eval_sampled_kl(num_samples)
-
+                kld = self.eval_sampled_kl(num_kl_samples)
         else:
-            kld = self.eval_sampled_kl(num_samples)
+            kld = self.eval_sampled_kl(num_kl_samples)
         return kld
