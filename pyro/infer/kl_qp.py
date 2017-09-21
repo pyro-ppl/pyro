@@ -11,7 +11,7 @@ class KL_QP(object):
     :param guide: guide used for sampling defined as a function
     :param optim: optimization function
     :param model_fixed: flag that controls whether the model parameters are fixed during optimization
-    :param n_s: number of kl-divergence samples if we sample it. At 1 uses guide-samples
+    :param n_s_kldiv: number of kl-divergence samples if we sample it. At 1 uses guide-samples
     :param analytic: flag to detemrine if algorithm should look for analytical expression for kl div
     :type model_fixed: bool
     :param guide_fixed: flag that controls whether the guide parameters are fixed during optimization
@@ -37,7 +37,7 @@ class KL_QP(object):
                  model_fixed=False,
                  guide_fixed=False,
                  num_particles=1,
-                 n_s=10,
+                 n_s_kldiv=10,
                  analytic=True,
                  *args, **kwargs):
         """
@@ -53,7 +53,7 @@ class KL_QP(object):
         self.model_fixed = model_fixed
         self.guide_fixed = guide_fixed
         self.num_particles = num_particles
-        self.n_s = n_s
+        self.n_s = n_s_kldiv
         self.analytic = analytic
 
     def __call__(self, *args, **kwargs):
@@ -154,7 +154,8 @@ class KL_QP(object):
                     elbo_particle += model_trace[name]["log_pdf"]
                 elif model_trace[name]["type"] == "sample":
                     if model_trace[name]["fn"].reparameterized:
-                        kld = self.eval_kld(m_site=guide_trace[name], g_site=model_trace[name], analytic=analytic, n_s=n_s)
+                        kld = self.eval_kld(m_site=guide_trace[name], g_site=model_trace[name],
+                                            analytic=analytic, n_s=n_s)
                         elbo_particle -= kld.sum()
                     else:
                         elbo_particle += Variable(log_r.data) * guide_trace[name]["log_pdf"]
