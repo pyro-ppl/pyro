@@ -37,7 +37,7 @@ class KL_QP(object):
                  model_fixed=False,
                  guide_fixed=False,
                  num_particles=1,
-                 n_s_kldiv=10,
+                 n_s_kldiv=1,
                  analytic=True,
                  *args, **kwargs):
         """
@@ -91,12 +91,15 @@ class KL_QP(object):
         :input g_site is a site of a guide_trace
 
         """
-        if n_s == 1:
-            return m_site["log_pdf"] - g_site["log_pdf"]
-        else:
+        if analytic:
             kld_obj = KLdiv(dist_q=m_site['fn'], dist_p=g_site['fn'])
             return kld_obj.eval(analytical=analytic, num_samples=n_s)
-        pass
+        else:
+            if n_s == 1:
+                return m_site["log_pdf"] - g_site["log_pdf"]
+            else:
+                kld_obj = KLdiv(dist_q=m_site['fn'], dist_p=g_site['fn'])
+                return kld_obj.eval(analytical=analytic, num_samples=n_s)
 
     def eval_objective(self, *args, **kwargs):
         """

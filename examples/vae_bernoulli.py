@@ -128,7 +128,7 @@ def per_param_args(name, param):
 # or alternatively
 adam_params = {"lr": .001}
 
-kl_optim = KL_QP(model, guide, pyro.optim(optim.Adam, adam_params), analytic=True)
+kl_optim = KL_QP(model, guide, pyro.optim(optim.Adam, adam_params), num_particles=1, n_s=1, analytic=True)
 kl_eval = KL_QP(model=model, guide=guide, optim_step_fct=pyro.optim(optim.Adam, adam_params),
                 num_particles=10, analytic=True)
 
@@ -165,7 +165,8 @@ def main():
             batch_data = mnist_data[batch_start:batch_end]
 
             epoch_loss += kl_optim.step(batch_data)
-            epoch_eval_loss += kl_eval.eval_objective(batch_data)
+            if np.mod(i, 5) == 0:
+                epoch_eval_loss += kl_eval.eval_objective(batch_data)
 
         loss_training.append(-epoch_loss / float(mnist_size))
         sample, sample_mu = model_sample()
@@ -174,8 +175,10 @@ def main():
             # vis.image(batch_data[0].view(28, 28).data.numpy())
             # vis.image(sample[0].view(28, 28).data.numpy())
             vis.image(sample_mu[0].view(28, 28).data.numpy())
+
         print("epoch "+str(i)+" avg loss {}".format(epoch_loss / float(mnist_size)))
-        print("epoch "+str(i)+" eval loss {}".format(epoch_eval_loss / float(mnist_size)))
+        if np.mod(i, 5) == 0:
+            print("epoch "+str(i)+" eval loss {}".format(epoch_eval_loss / float(mnist_size)))
 
 
 if __name__ == '__main__':
