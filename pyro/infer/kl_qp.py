@@ -92,7 +92,7 @@ class KL_QP(object):
             return kld_obj.eval(analytical=analytic, num_samples=n_s)
         pass
 
-    def eval_objective(self, n_s=10, *args, **kwargs):
+    def eval_objective(self, *args, **kwargs):
         """
         Evaluate Elbo by running num_particles often.
         Returns the Elbo as a value
@@ -102,6 +102,7 @@ class KL_QP(object):
         guide_traces = []
         log_r_per_sample = []
         n_s = 10
+        analytic = True
 
         [model_traces, guide_traces, log_r_per_sample] = self.populate_traces(*args, **kwargs)
 
@@ -115,7 +116,7 @@ class KL_QP(object):
                 if model_trace[name]["type"] == "observe":
                     elbo_particle += model_trace[name]["log_pdf"]
                 elif model_trace[name]["type"] == "sample":
-                    kld = self.eval_kld(m_site=guide_trace[name], g_site=model_trace[name], analytic=False, n_s=n_s)
+                    kld = self.eval_kld(m_site=guide_trace[name], g_site=model_trace[name], analytic=analytic, n_s=n_s)
                     elbo_particle -= kld.sum()
                 else:
                     pass
@@ -133,6 +134,7 @@ class KL_QP(object):
 
         [model_traces, guide_traces, log_r_per_sample] = self.populate_traces(*args, **kwargs)
         n_s = 10
+        analytic = True
 
         elbo = 0.0
         for i in range(self.num_particles):
@@ -146,7 +148,7 @@ class KL_QP(object):
                     elbo_particle += model_trace[name]["log_pdf"]
                 elif model_trace[name]["type"] == "sample":
                     if model_trace[name]["fn"].reparameterized:
-                        kld = self.eval_kld(m_site=guide_trace[name], g_site=model_trace[name], analytic=False, n_s=n_s)
+                        kld = self.eval_kld(m_site=guide_trace[name], g_site=model_trace[name], analytic=analytic, n_s=n_s)
                         elbo_particle -= kld.sum()
                     else:
                         elbo_particle += Variable(log_r.data) * guide_trace[name]["log_pdf"]
