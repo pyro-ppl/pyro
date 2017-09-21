@@ -1,7 +1,7 @@
 import torch
-import pyro
+from pyro.distributions import DiagNormal
 fudge = 1e-13
-from pyro.distributions import *
+
 
 def kl_divergence_normal(m_q, log_sig_q, m_p, log_sig_p):
     kl = (log_sig_p-log_sig_q) + ((torch.exp(2*log_sig_q) + torch.pow((m_q-m_p), 2)) / (2*torch.exp(2*log_sig_p))) - 0.5

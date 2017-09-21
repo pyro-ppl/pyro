@@ -1,7 +1,7 @@
 from torch.autograd import Variable
 import pyro
 import pyro.poutine as poutine
-from pyro.distributions import KLdiv 
+from pyro.distributions import KLdiv
 
 
 class KL_QP(object):
