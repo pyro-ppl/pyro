@@ -15,7 +15,6 @@ class KLdiv():
         self.dist_q = dist_q
         self.dist_p = dist_p
         self.num_samples = num_samples
-        pass
 
     def eval_sampled_kl(self, num_samples=10):
         """
@@ -51,4 +50,3 @@ class KLdiv():
         else:
             kld = self.eval_sampled_kl(num_samples)
         return kld
-    pass
