@@ -1,8 +1,7 @@
 from torch.autograd import Variable
-
 import pyro
 import pyro.poutine as poutine
-from pyro.distributions import KLdiv as KLdiv
+from pyro.distributions import KLdiv 
 
 
 class KL_QP(object):
@@ -86,7 +85,7 @@ class KL_QP(object):
         If, however, we want a better approximation to that local divergence, it will sample more particles
         from the local distributions or evaluate analytically
         :input n_s controls how often we would sample from the kl-divergence to evaluiate it, set to '10'.
-        :input analytic determines if analytical forms for objhectives are pursued
+        :input analytic determines if analytical forms for objectives are pursued
         :input m_site is a site of a model trace
         :input g_site is a site of a guide_trace
 

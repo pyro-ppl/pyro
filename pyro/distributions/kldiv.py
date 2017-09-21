@@ -1,6 +1,7 @@
 import torch
+import pyro
 fudge = 1e-13
-
+from pyro.distributions import *
 
 def kl_divergence_normal(m_q, log_sig_q, m_p, log_sig_p):
     kl = (log_sig_p-log_sig_q) + ((torch.exp(2*log_sig_q) + torch.pow((m_q-m_p), 2)) / (2*torch.exp(2*log_sig_p))) - 0.5
@@ -29,13 +30,13 @@ class KLdiv():
 
     def eval(self, analytical=True, num_samples=10):
         """
-        Evaluate the KL divergence either analytically, if an expression is available, or throiugh sampling.
-        Here we can add more analyticak criteria through use of entropy and cross-entropy expressions for
+        Evaluate the KL divergence either analytically, if an expression is available, or through sampling.
+        Here we can add more analytical criteria through use of entropy and cross-entropy expressions for
         distributions at a later point.
         """
         if analytical:
-            if self.dist_q.__class__.__name__ == 'DiagNormal':
-                if self.dist_p.__class__.__name__ == 'DiagNormal':
+            if isinstance(self.dist_q, DiagNormal):
+                if isinstance(self.dist_p, DiagNormal):
                     mu_q = self.dist_q.mu
                     log_sigma_q = torch.log(self.dist_q.sigma+fudge)
                     mu_p = self.dist_p.mu
