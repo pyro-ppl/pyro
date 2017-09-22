@@ -1,5 +1,6 @@
 import pyro
 from pyro import params
+from pyro.distributions import Distribution
 from .poutine import Poutine
 
 
@@ -24,14 +25,16 @@ class LiftPoutine(Poutine):
         """
         prototype override of param->sample
         """
-        msg["type"] = "sample"
-        msg["done"] = False
         param_name = params.user_param_name(name)
         if isinstance(self.prior, dict):
             if param_name in self.prior.keys():
                 msg["fn"] = self.prior[param_name]
-        else:
+        elif callable(self.prior):
             # prior is a distribution
             msg["fn"] = self.prior
-        sample = self._pyro_sample(msg, name, msg["fn"], *args, **kwargs)
-        return pyro._param_store.get_param(name, sample)
+        else:
+            # otherwise leave as is
+            return pyro._param_store.get_param(name, *args, **kwargs)
+        msg["type"] = "sample"
+        msg["done"] = False
+        return self._pyro_sample(msg, name, msg["fn"], *args, **kwargs)
