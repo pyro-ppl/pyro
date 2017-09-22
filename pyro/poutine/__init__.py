@@ -6,12 +6,13 @@ from .replay_poutine import ReplayPoutine
 from .trace import Trace  # noqa: F401
 from .trace_poutine import TracePoutine
 from .tracegraph_poutine import TraceGraphPoutine
-
+from .lift_poutine import LiftPoutine
 
 ############################################
 # Begin primitive operations
 # XXX should these be returned as Poutines?
 ############################################
+
 
 def trace(fn):
     """
@@ -81,6 +82,18 @@ def queue(fn, queue=None, max_tries=None):
         p = QueuePoutine(fn, queue=queue, max_tries=max_tries)
         return p(*args, **kwargs)
 
+    return _fn
+
+
+def lift(fn, prior):
+    """
+    Given a stochastic function with param calls and a prior distribution,
+    create a stochastic function where all param calls are replaced by sampling from prior
+    prior should be a callable with the same signature as pyro.param
+    """
+    def _fn(*args, **kwargs):
+        p = LiftPoutine(fn, prior)
+        return p(*args, **kwargs)
     return _fn
 
 

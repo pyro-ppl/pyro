@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 from six.moves.queue import Queue
 from torch.autograd import Variable
 
@@ -262,3 +263,97 @@ class QueuePoutineTests(TestCase):
             self.assertTrue(False)
         except ValueError:
             self.assertTrue(True)
+
+
+class Model(nn.Module):
+    def __init__(self):
+        super(Model, self).__init__()
+        self.fc = nn.Linear(2, 1)
+
+    def forward(self, x):
+        return self.fc(x)
+
+
+class LiftPoutineTests(TestCase):
+
+    def setUp(self):
+        pyro.get_param_store().clear()
+
+        def mu1_prior(tensor):
+            flat_tensor = tensor.view(-1)
+            m = Variable(torch.zeros(flat_tensor.size(0)))
+            s = Variable(torch.ones(flat_tensor.size(0)))
+            return DiagNormal(m, s).sample().view(tensor.size())
+
+        def sigma1_prior(tensor):
+            flat_tensor = tensor.view(-1)
+            m = Variable(torch.zeros(flat_tensor.size(0)))
+            s = Variable(torch.ones(flat_tensor.size(0)))
+            return DiagNormal(m, s).sample().view(tensor.size())
+
+        def mu2_prior(tensor):
+            flat_tensor = tensor.view(-1)
+            m = Variable(torch.zeros(flat_tensor.size(0)))
+            return Bernoulli(m).sample().view(tensor.size())
+
+        def sigma2_prior(tensor):
+            return sigma1_prior(tensor)
+
+        def bias_prior(tensor):
+            return mu2_prior(tensor)
+
+        def weight_prior(tensor):
+            return sigma1_prior(tensor)
+
+        def guide():
+            mu1 = pyro.param("mu1", Variable(torch.randn(2), requires_grad=True))
+            sigma1 = pyro.param("sigma1", Variable(torch.ones(2), requires_grad=True))
+            pyro.sample("latent1", DiagNormal(mu1, sigma1))
+
+            mu2 = pyro.param("mu2", Variable(torch.randn(2), requires_grad=True))
+            sigma2 = pyro.param("sigma2", Variable(torch.ones(2), requires_grad=True))
+            latent2 = pyro.sample("latent2", DiagNormal(mu2, sigma2))
+            return latent2
+
+        self.model = Model()
+        self.guide = guide
+        self.prior = mu1_prior
+        self.prior_dict = {"mu1": mu1_prior, "sigma1": sigma1_prior, "mu2": mu2_prior, "sigma2": sigma2_prior}
+        self.nn_prior = {"fc.bias": bias_prior, "fc.weight": weight_prior}
+        self.data = Variable(torch.randn(2, 2))
+
+    def test_lift_simple(self):
+        tr = poutine.trace(self.guide)()
+        lifted_tr = poutine.trace(poutine.lift(self.guide, prior=self.prior))()
+        for name in tr.keys():
+            self.assertTrue(name in lifted_tr)
+            if tr[name]["type"] == "param":
+                self.assertTrue(lifted_tr[name]["type"] == "sample")
+
+    def test_prior_dict(self):
+        tr = poutine.trace(self.guide)()
+        lifted_tr = poutine.trace(poutine.lift(self.guide, prior=self.prior_dict))()
+        for name in tr.keys():
+            self.assertTrue(name in lifted_tr)
+            if name in {'sigma1', 'mu1', 'sigma2', 'mu2'}:
+                self.assertTrue(name + "_prior" == lifted_tr[name]['fn'].__name__)
+            if tr[name]["type"] == "param":
+                self.assertTrue(lifted_tr[name]["type"] == "sample")
+
+    def test_random_module(self):
+        pyro.clear_param_store()
+        lifted_tr = poutine.trace(pyro.random_module("name", self.model, prior=self.prior))()
+        for name in lifted_tr.keys():
+            if lifted_tr[name]["type"] == "param":
+                self.assertTrue(lifted_tr[name]["type"] == "sample")
+
+    def test_random_module_prior_dict(self):
+        pyro.clear_param_store()
+        lifted_nn = pyro.random_module("name", self.model, prior=self.nn_prior)
+        lifted_tr = poutine.trace(lifted_nn)()
+        for key_name in lifted_tr.keys():
+            name = pyro.params.user_param_name(key_name)
+            if name in {'fc.weight', 'fc.prior'}:
+                dist_name = name[3:]
+                self.assertTrue(dist_name + "_prior" == lifted_tr[key_name]['fn'].__name__)
+                self.assertTrue(lifted_tr[key_name]["type"] == "sample")

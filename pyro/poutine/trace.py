@@ -40,7 +40,7 @@ class Trace(dict):
         self[name] = site
         return self
 
-    def add_map_data(self, name, fn, batch_size, scale, ind):
+    def add_map_data(self, name, fn, batch_size, batch_dim, ind):
         """
         map_data site
         """
@@ -49,7 +49,7 @@ class Trace(dict):
         site["type"] = "map_data"
         site["indices"] = ind
         site["batch_size"] = batch_size
-        site["scale"] = scale
+        site["batch_dim"] = batch_dim
         site["fn"] = fn
         self[name] = site
         return self
@@ -107,9 +107,6 @@ class Trace(dict):
                     *self[name]["args"][0],
                     **self[name]["args"][1]) * self[name]["scale"]
                 log_p += self[name]["log_pdf"]
-                # if self[name]["scale"] == 1.0:
-                #     print(name, self[name]["scale"])
-                #     pdb.set_trace()
         return log_p
 
     def batch_log_pdf(self):
