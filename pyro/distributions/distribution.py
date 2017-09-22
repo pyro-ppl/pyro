@@ -1,6 +1,3 @@
-import abc
-
-
 class Distribution(object):
     """
     Abstract base class for probability distributions.
@@ -51,9 +48,10 @@ class Distribution(object):
         """
         batch_size = kwargs.get('batch_size', 1)
         assert xs.dim() >= 1
+        assert batch_size > 0
         num_xs = xs.size()[0]
         result = 0.0
-        for _ in range(num_xs):
+        for i in range(num_xs):
             result += self.log_pdf(xs[i], *args, **kwargs)
         return result
 
