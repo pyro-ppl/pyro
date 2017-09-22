@@ -1,3 +1,4 @@
+import pyro
 from pyro import params
 from .poutine import Poutine
 
@@ -32,4 +33,5 @@ class LiftPoutine(Poutine):
         else:
             # prior is a distribution
             msg["fn"] = self.prior
-        return self._pyro_sample(msg, name, msg["fn"], *args, **kwargs)
+        sample = self._pyro_sample(msg, name, msg["fn"], *args, **kwargs)
+        return pyro._param_store.get_param(name, sample)
