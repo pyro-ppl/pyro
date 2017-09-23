@@ -147,8 +147,8 @@ class TraceGraphPoutine(TracePoutine):
     if the visualization proves difficult to parse, one can also directly interrogate the networkx
     graph object, e.g.:
 
-	print model_tracegraph.get_graph().nodes()
-	print model_tracegraph.get_graph().edges()
+        print model_tracegraph.get_graph().nodes()
+        print model_tracegraph.get_graph().edges()
 
     """
     def __init__(self, fn, graph_type='coarse'):
