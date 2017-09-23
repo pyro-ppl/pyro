@@ -6,6 +6,7 @@ To install `pyro` for development, we recommend using
 
 ```sh
 conda env create -f environment.yml
+source activate pyro
 pip install -e .
 ```
 
