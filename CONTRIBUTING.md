@@ -1,3 +1,14 @@
+
+# Installing
+
+To install `pyro` for development, we recommend using
+[Anaconda or miniconda](https://conda.io/docs/user-guide/install/index.html):
+
+```sh
+conda env create -f env environment.yml
+pip install -e .
+```
+
 # Testing
 
 Before submitting a pull request, ensure that linting and unit tests pass locally
