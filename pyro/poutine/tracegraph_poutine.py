@@ -201,6 +201,8 @@ class TraceGraphPoutine(TracePoutine):
                     break
             if not node_independent:
                 self.G.add_edge(node, name)
+
+        self.G.add_node(name)
         self.nodes_seen_so_far[name] = map_data_stack
 
     def _pyro_sample(self, msg, name, dist, *args, **kwargs):
