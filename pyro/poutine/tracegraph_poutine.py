@@ -1,6 +1,7 @@
 import graphviz
 import networkx
 from collections import defaultdict, OrderedDict
+from copy import copy
 
 from .trace_poutine import TracePoutine
 
@@ -150,8 +151,26 @@ class TraceGraphPoutine(TracePoutine):
         self.observation_nodes = []
         self.prev_node = '___ROOT_NODE___'
         self.prev_nodes = {}
-        self.map_data_ordering_dict = defaultdict(lambda: OrderedDict())
+        self.prev_nodes_contexts = {}
+        self.split_attach_points = {}
+        self.split_node_counter = defaultdict(lambda: int())
+        self.split_node_attached = defaultdict(lambda: False)
         self.G = networkx.DiGraph()
+
+    def _attach_join_node(self, join_node, split_node):
+        parents = self.G.predecessors(split_node)
+        while True:
+            assert(len(parents) < 2)
+            if len(parents) == 0:
+                return
+            elif parents[0][-12:] != '__SPLIT_NODE':
+                children = self.G.successors(parents[0])
+                target_child = list(filter(lambda n: n[-5:] != '_NODE', children))
+                assert(len(target_child) <= 1)
+                if len(target_child) == 1:
+                    self.G.add_edge(join_node, target_child[0])
+                return
+            parents = self.G.predecessors(parents[0])
 
     def _exit_poutine(self, ret_val, *args, **kwargs):
         """
@@ -159,30 +178,34 @@ class TraceGraphPoutine(TracePoutine):
         """
         self.trace = super(TraceGraphPoutine, self)._exit_poutine(ret_val, *args, **kwargs)
 
-        # in the presence of map data the graph is a bunch of disconnected components
-        # so here we weave them together appropriately
-        for node, map_data_ordering in self.map_data_ordering_dict.items():
-            attach_node = node
-            for split_node in map_data_ordering.keys():
-                self.G.add_edge(attach_node, split_node)
-                join_node = split_node[:-10] + 'JOIN_NODE'
-                attach_node = join_node
-            children = self.G.successors(node)
-            target_child = list(filter(lambda n: n[-5:] != '_NODE', children))
-            assert(len(target_child) <= 1)
-            if len(target_child) == 1:
-                self.G.add_edge(attach_node, target_child[0])
+        # in the presence of map data there may be dangling join nodes that need to be
+        # stitched appropriately. do that here
+        print "SPLIT ATTACH POINTS"
+        for k in self.split_attach_points:
+            break
+            print "[%s]" % k, self.split_attach_points[k]
+            if len(self.G.predecessors(k))==0:
+                self.G.add_edge(self.split_attach_points[k], k)
+        print "***************"
+
+        for split_node in filter(lambda n: n[-12:] == '__SPLIT_NODE', self.G.nodes()):
+            break
+            join_node = split_node[:-10] + 'JOIN_NODE'
+            self._attach_join_node(join_node, split_node)
 
         # remove all auxiliary nodes while preserving dependency structure
         for node in self.G.nodes():
+            break
             if node[-12:] == '__SPLIT_NODE':
                 parents = self.G.predecessors(node)
                 assert(len(parents) == 1)
                 children = self.G.successors(node)
                 for c in children:
-                    self.G.add_edge(parents[0], c)
+                    for p in parents:
+                        self.G.add_edge(p, c)
                 self.G.remove_node(node)
         for node in self.G.nodes():
+            break
             if node[-11:] == '__JOIN_NODE':
                 parents = self.G.predecessors(node)
                 children = self.G.successors(node)
@@ -190,37 +213,80 @@ class TraceGraphPoutine(TracePoutine):
                     for p in parents:
                         self.G.add_edge(p, c)
                 self.G.remove_node(node)
-        if '___ROOT_NODE___' in self.G.nodes():
-            self.G.remove_node('___ROOT_NODE___')
+        #if '___ROOT_NODE___' in self.G.nodes():
+        #    self.G.remove_node('___ROOT_NODE___')
 
         # make sure all dependencies are explicitly accounted for
         # (up to this point the graph structure is a skeleton in which some
         # dependencies haven't been made explicit)
         # XXX can we do this better given the graph structure at this point?
-        for node in self.G.nodes():
-            for ancestor in networkx.ancestors(self.G, node):
-                self.G.add_edge(ancestor, node)
+        #for node in self.G.nodes():
+        #    for ancestor in networkx.ancestors(self.G, node):
+        #        self.G.add_edge(ancestor, node)
 
         trace_graph = TraceGraph(self.G, self.trace,
                                  self.stochastic_nodes, self.reparameterized_nodes,
                                  self.observation_nodes)
         return trace_graph
 
+    def _get_prev_node(self, stack, context):
+        if len(stack)==0:
+            return self.prev_node
+        if stack not in self.prev_nodes_contexts or \
+            (stack in self.prev_nodes_contexts and self.prev_nodes_contexts[stack] != context):
+            self.prev_nodes[stack] = stack[0] + "__SPLIT_NODE"
+            self.prev_nodes_contexts[stack] = context
+        return self.prev_nodes[stack]
+
+    def _set_prev_node(self, stack, new_value, context):
+        if len(stack)==0:
+            self.prev_node = new_value
+        else:
+            self.prev_nodes[stack] = new_value
+        self.prev_nodes_contexts[stack] = context
+
+    def _attach_split_node(self, split_node, join_node, stack, context):
+        prev_node = self._get_prev_node(stack, context)
+        self.G.add_edge(prev_node, split_node)
+        self.split_node_attached[split_node] = True
+        self._set_prev_node(stack, join_node, context)
+        if prev_node[-12:] == '__SPLIT_NODE' and prev_node not in self.split_node_attached:
+            prev_join_node = prev_node[:-12] + '__JOIN_NODE'
+            self.G.add_edge(join_node, prev_join_node)
+            self._attach_split_node(prev_node, prev_join_node, stack[1:], stack[0])
+
     def _add_graph_node(self, msg, name):
-        map_data_stack_height = len(msg['map_data_stack'])
-        # inside a map_data use the msg passed by LambdaPoutine to record
-        # the correct dependency structure in the graph
+        map_data_stack = tuple(msg['map_data_stack'])
+        map_data_stack_height = len(map_data_stack)
+
         if map_data_stack_height > 0:
             nodes = msg['map_data_nodes']
-            self.G.add_edge(nodes['previous'], nodes['current'])
+            if nodes['previous'] == nodes['split']:
+                self.G.add_edge(nodes['split'], nodes['current'])
+                #self.G.add_edge(nodes['split'], nodes['join'])
+                if not self.split_node_attached[nodes['split']]:
+                    self._attach_split_node(nodes['split'], nodes['join'],
+                                            map_data_stack[1:], map_data_stack[0])
+            else:
+                self.G.add_edge(nodes['previous'], nodes['current'])
+            #self._set_prev_node(map_data_stack[1:], self.split_node_counter[nodes['split']],
+            #        nodes['join'])
             self.G.add_edge(nodes['current'], nodes['join'])
-            self.prev_nodes[msg['map_data_stack'][0]] = nodes['current']
-            if nodes['previous'] == nodes['split'] and map_data_stack_height > 1:
-                self.map_data_ordering_dict[self.prev_nodes[msg['map_data_stack']
-                                            [map_data_stack_height-1]]][nodes['split']] = None
-            elif nodes['previous'] == nodes['split']:
-                self.map_data_ordering_dict[self.prev_node][nodes['split']] = None
-        # else we're outside of map_data
+            #self._set_prev_node(stack, nodes['current'], ())
+            #self._set_prev_node(map_data_stack[1:], nodes['join'])
+            #if nodes['previous'] == nodes['split']:
+            #    print "%s == %s" % (nodes['previous'], nodes['split'])
+                #if nodes['split'] not in self.split_attach_points:
+                #self.split_attach_points[nodes['split']] = self._get_prev_node(map_data_stack[1:])
+                #self.G.add_edge(nodes['split'], self._get_prev_node(map_data_stack[1:]))
+                #self._set_prev_node(map_data_stack[1:], nodes['join'])
+            #for k in range(1, map_data_stack_height):
+            #    split_node_k_1 = map_data_stack[k - 1] + '__SPLIT_NODE'
+            #    split_node_k = map_data_stack[k] + '__SPLIT_NODE'
+            #    self.G.add_edge(split_node_k, split_node_k_1)
+                #for k, map_data_node in enumerate(map_data_stack[1:]):
+                #    if map_data_node + '__SPLIT_NODE' not in self.split_attach_points and k<len(map_data_stack[1:])-1:
+                #        self.split_attach_points[map_data_node] = map_data_stack[k+2] + '__SPLIT_NODE'
         else:
             self.G.add_edge(self.prev_node, name)
             self.prev_node = name
