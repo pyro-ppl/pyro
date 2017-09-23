@@ -5,7 +5,7 @@ To install `pyro` for development, we recommend using
 [Anaconda or miniconda](https://conda.io/docs/user-guide/install/index.html):
 
 ```sh
-conda env create -f env environment.yml
+conda env create -f environment.yml
 pip install -e .
 ```
 
