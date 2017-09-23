@@ -1,7 +1,5 @@
 import graphviz
 import networkx
-from collections import defaultdict, OrderedDict
-from copy import copy
 
 from .trace_poutine import TracePoutine
 
@@ -149,28 +147,8 @@ class TraceGraphPoutine(TracePoutine):
         self.stochastic_nodes = []
         self.reparameterized_nodes = []
         self.observation_nodes = []
-        self.prev_node = '___ROOT_NODE___'
-        self.prev_nodes = {}
-        self.prev_nodes_contexts = {}
-        self.split_attach_points = {}
-        self.split_node_counter = defaultdict(lambda: int())
-        self.split_node_attached = defaultdict(lambda: False)
+        self.nodes_seen_so_far = {}
         self.G = networkx.DiGraph()
-
-    def _attach_join_node(self, join_node, split_node):
-        parents = self.G.predecessors(split_node)
-        while True:
-            assert(len(parents) < 2)
-            if len(parents) == 0:
-                return
-            elif parents[0][-12:] != '__SPLIT_NODE':
-                children = self.G.successors(parents[0])
-                target_child = list(filter(lambda n: n[-5:] != '_NODE', children))
-                assert(len(target_child) <= 1)
-                if len(target_child) == 1:
-                    self.G.add_edge(join_node, target_child[0])
-                return
-            parents = self.G.predecessors(parents[0])
 
     def _exit_poutine(self, ret_val, *args, **kwargs):
         """
@@ -178,122 +156,40 @@ class TraceGraphPoutine(TracePoutine):
         """
         self.trace = super(TraceGraphPoutine, self)._exit_poutine(ret_val, *args, **kwargs)
 
-        # in the presence of map data there may be dangling join nodes that need to be
-        # stitched appropriately. do that here
-        print "SPLIT ATTACH POINTS"
-        for k in self.split_attach_points:
-            break
-            print "[%s]" % k, self.split_attach_points[k]
-            if len(self.G.predecessors(k))==0:
-                self.G.add_edge(self.split_attach_points[k], k)
-        print "***************"
-
-        for split_node in filter(lambda n: n[-12:] == '__SPLIT_NODE', self.G.nodes()):
-            break
-            join_node = split_node[:-10] + 'JOIN_NODE'
-            self._attach_join_node(join_node, split_node)
-
-        # remove all auxiliary nodes while preserving dependency structure
-        for node in self.G.nodes():
-            break
-            if node[-12:] == '__SPLIT_NODE':
-                parents = self.G.predecessors(node)
-                assert(len(parents) == 1)
-                children = self.G.successors(node)
-                for c in children:
-                    for p in parents:
-                        self.G.add_edge(p, c)
-                self.G.remove_node(node)
-        for node in self.G.nodes():
-            break
-            if node[-11:] == '__JOIN_NODE':
-                parents = self.G.predecessors(node)
-                children = self.G.successors(node)
-                for c in children:
-                    for p in parents:
-                        self.G.add_edge(p, c)
-                self.G.remove_node(node)
-        #if '___ROOT_NODE___' in self.G.nodes():
-        #    self.G.remove_node('___ROOT_NODE___')
-
-        # make sure all dependencies are explicitly accounted for
-        # (up to this point the graph structure is a skeleton in which some
-        # dependencies haven't been made explicit)
-        # XXX can we do this better given the graph structure at this point?
-        #for node in self.G.nodes():
-        #    for ancestor in networkx.ancestors(self.G, node):
-        #        self.G.add_edge(ancestor, node)
-
         trace_graph = TraceGraph(self.G, self.trace,
                                  self.stochastic_nodes, self.reparameterized_nodes,
                                  self.observation_nodes)
         return trace_graph
 
-    def _get_prev_node(self, stack, context):
-        if len(stack)==0:
-            return self.prev_node
-        if stack not in self.prev_nodes_contexts or \
-            (stack in self.prev_nodes_contexts and self.prev_nodes_contexts[stack] != context):
-            self.prev_nodes[stack] = stack[0] + "__SPLIT_NODE"
-            self.prev_nodes_contexts[stack] = context
-        return self.prev_nodes[stack]
-
-    def _set_prev_node(self, stack, new_value, context):
-        if len(stack)==0:
-            self.prev_node = new_value
-        else:
-            self.prev_nodes[stack] = new_value
-        self.prev_nodes_contexts[stack] = context
-
-    def _attach_split_node(self, split_node, join_node, stack, context):
-        prev_node = self._get_prev_node(stack, context)
-        self.G.add_edge(prev_node, split_node)
-        self.split_node_attached[split_node] = True
-        self._set_prev_node(stack, join_node, context)
-        if prev_node[-12:] == '__SPLIT_NODE' and prev_node not in self.split_node_attached:
-            prev_join_node = prev_node[:-12] + '__JOIN_NODE'
-            self.G.add_edge(join_node, prev_join_node)
-            self._attach_split_node(prev_node, prev_join_node, stack[1:], stack[0])
-
     def _add_graph_node(self, msg, name):
+        """
+        used internally to attach the node at the current site to any nodes
+        that it could depend on. 90% of the logic is for making sure independencies
+        from (list) map_data are taken into account. note that this has bad asymptotics
+        because the result is a (possibly) very dense graph
+        """
         map_data_stack = tuple(msg['map_data_stack'])
-        map_data_stack_height = len(map_data_stack)
 
-        if map_data_stack_height > 0:
-            nodes = msg['map_data_nodes']
-            if nodes['previous'] == nodes['split']:
-                self.G.add_edge(nodes['split'], nodes['current'])
-                #self.G.add_edge(nodes['split'], nodes['join'])
-                if not self.split_node_attached[nodes['split']]:
-                    self._attach_split_node(nodes['split'], nodes['join'],
-                                            map_data_stack[1:], map_data_stack[0])
-            else:
-                self.G.add_edge(nodes['previous'], nodes['current'])
-            #self._set_prev_node(map_data_stack[1:], self.split_node_counter[nodes['split']],
-            #        nodes['join'])
-            self.G.add_edge(nodes['current'], nodes['join'])
-            #self._set_prev_node(stack, nodes['current'], ())
-            #self._set_prev_node(map_data_stack[1:], nodes['join'])
-            #if nodes['previous'] == nodes['split']:
-            #    print "%s == %s" % (nodes['previous'], nodes['split'])
-                #if nodes['split'] not in self.split_attach_points:
-                #self.split_attach_points[nodes['split']] = self._get_prev_node(map_data_stack[1:])
-                #self.G.add_edge(nodes['split'], self._get_prev_node(map_data_stack[1:]))
-                #self._set_prev_node(map_data_stack[1:], nodes['join'])
-            #for k in range(1, map_data_stack_height):
-            #    split_node_k_1 = map_data_stack[k - 1] + '__SPLIT_NODE'
-            #    split_node_k = map_data_stack[k] + '__SPLIT_NODE'
-            #    self.G.add_edge(split_node_k, split_node_k_1)
-                #for k, map_data_node in enumerate(map_data_stack[1:]):
-                #    if map_data_node + '__SPLIT_NODE' not in self.split_attach_points and k<len(map_data_stack[1:])-1:
-                #        self.split_attach_points[map_data_node] = map_data_stack[k+2] + '__SPLIT_NODE'
-        else:
-            self.G.add_edge(self.prev_node, name)
-            self.prev_node = name
+        # for each node seen thus far we determine whether the current
+        # node should depend on it. in this context the answer is always yes
+        # unless map_data is telling us otherwise
+        for node in self.nodes_seen_so_far:
+            node_independent = False
+            node_map_data_stack = self.nodes_seen_so_far[node]
+            node_map_data_stack_height = len(node_map_data_stack)
+            map_data_stack_slice = map_data_stack[-node_map_data_stack_height:] \
+                if node_map_data_stack_height > 0 else ()
+            for query, target in zip(map_data_stack_slice, node_map_data_stack):
+                if query[0] == target[0] and query[1] != target[1]:
+                    node_independent = True
+                    break
+            if not node_independent:
+                self.G.add_edge(node, name)
+        self.nodes_seen_so_far[name] = map_data_stack
 
     def _pyro_sample(self, msg, name, dist, *args, **kwargs):
         """
-        register sampled variable for coarse graph construction
+        register sample dependencies for coarse graph construction
         """
         val = super(TraceGraphPoutine, self)._pyro_sample(msg, name, dist,
                                                           *args, **kwargs)
@@ -312,9 +208,3 @@ class TraceGraphPoutine(TracePoutine):
         self._add_graph_node(msg, name)
         self.observation_nodes.append(name)
         return val
-
-    def _pyro_map_data(self, msg, name, data, fn, batch_size=None, batch_dim=0):
-        ret = super(TraceGraphPoutine, self)._pyro_map_data(msg, name, data, fn,
-                                                            batch_size=batch_size,
-                                                            batch_dim=batch_dim)
-        return ret
