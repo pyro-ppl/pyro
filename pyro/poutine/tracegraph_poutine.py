@@ -134,6 +134,22 @@ class TraceGraphPoutine(TracePoutine):
     -- currently only supports 'coarse' graphs, i.e. overly-conservative ones constructed
        by following the sequential ordering of the execution trace
     TODO: add constructs for vectorized map data
+
+    this can be invoked as follows to create visualizations of the TraceGraph:
+
+        guide_tracegraph = poutine.tracegraph(guide)(*args, **kwargs)
+        guide_tracegraph.save_visualization('guide')
+        guide_trace = guide_tracegraph.get_trace()
+        model_tracegraph = poutine.tracegraph(poutine.replay(model, guide_trace))(*args, **kwargs)
+        model_tracegraph.save_visualization('model')
+        model_trace = model_tracegraph.get_trace()
+
+    if the visualization proves difficult to parse, one can also directly interrogate the networkx
+    graph object, e.g.:
+
+	print model_tracegraph.get_graph().nodes()
+	print model_tracegraph.get_graph().edges()
+
     """
     def __init__(self, fn, graph_type='coarse'):
         assert(graph_type == 'coarse'), "only coarse graph type supported at present"

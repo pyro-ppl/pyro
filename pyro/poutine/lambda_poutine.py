@@ -28,7 +28,9 @@ class LambdaPoutine(Poutine):
 
     def _annotate_map_data_stack(self, msg, name):
         """
-        construct the message that is consumed by TraceGraphPoutine
+        construct the message that is consumed by TraceGraphPoutine;
+        map_data_stack encodes the nested sequence of map_data branches
+        that the site at name is within
         """
         if len(msg['map_data_stack']) == 0 or msg['map_data_stack'][0] != self.name:
             msg['map_data_stack'].append((self.name, self.counter))
