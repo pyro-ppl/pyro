@@ -21,7 +21,7 @@ class Distribution(object):
         Samples a random value.
 
         :return: A random value.
-        :rtype: torch.Variable
+        :rtype: torch.autograd.Variable
         """
         return self.sample(*args, **kwargs)
 
@@ -30,7 +30,7 @@ class Distribution(object):
         Samples a random value.
 
         :return: A random value.
-        :rtype: torch.Variable
+        :rtype: torch.autograd.Variable
         """
         raise NotImplementedError()
 
@@ -38,9 +38,9 @@ class Distribution(object):
         """
         Evaluates log probability density at a single value.
 
-        :param torch.Variable x: A value.
-        :return: log probability density as a zero-dimensional torch.Variable.
-        :rtype: torch.Variable.
+        :param torch.autograd.Variable x: A value.
+        :return: log probability density as a zero-dimensional torch.autograd.Variable.
+        :rtype: torch.autograd.Variable.
         """
         raise NotImplementedError
 
@@ -68,7 +68,7 @@ class Distribution(object):
             raise NotImplementedError
 
         num_values = xs.size()[0]
-        result = torch.Variable(torch.zeros(num_values))
+        result = torch.autograd.Variable(torch.zeros(num_values))
         for i in range(num_values):
             x = torch.index_select(xs, axis, i).squeeze(axis)
             result[i] = self.log_pdf(x, *args, **kwargs)
