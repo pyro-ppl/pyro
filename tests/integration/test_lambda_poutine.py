@@ -77,6 +77,14 @@ class NormalNormalTests(TestCase):
 
             return mu_latent
 
+        guide_tracegraph = pyro.poutine.tracegraph(guide)()
+        guide_trace = guide_tracegraph.get_trace()
+	model_tracegraph = pyro.poutine.tracegraph(pyro.poutine.replay(model, guide_trace))()
+        self.assertEqual(len(model_tracegraph.get_graph().edges()), 9)
+        self.assertEqual(len(model_tracegraph.get_graph().nodes()), 10)
+        self.assertEqual(len(guide_tracegraph.get_graph().edges()), 0)
+        self.assertEqual(len(guide_tracegraph.get_graph().nodes()), 1)
+
         kl_optim = TraceGraph_KL_QP(model, guide, pyro.optim(
                                     torch.optim.Adam,
                                     {"lr": .0008, "betas": (0.96, 0.999)}))
