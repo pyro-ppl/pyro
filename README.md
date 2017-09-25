@@ -1,6 +1,6 @@
-[![Build Status](https://travis-ci.com/uber/pyro.svg?token=LrMxkQNuTGCmwphBqyVs&branch=dev)](https://travis-ci.com/uber/pyro)
-
 # Pyro
+
+[![Build Status](https://travis-ci.com/uber/pyro.svg?token=LrMxkQNuTGCmwphBqyVs&branch=dev)](https://travis-ci.com/uber/pyro)
 
 [Examples](examples) | [Tutorials](tutorial) | [Contributing](CONTRIBUTING.md)
 
