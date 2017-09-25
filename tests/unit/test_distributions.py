@@ -96,7 +96,6 @@ class TestExponential(TestCase):
 class TestGamma(TestCase):
 
     def setUp(self):
-        print np.random.get_state()
         self.alpha = Variable(torch.Tensor([2.4]))
         self.batch_alpha = Variable(torch.Tensor([[2.4], [3.2]]))
         self.batch_beta = Variable(torch.Tensor([[np.sqrt(2.4)], [np.sqrt(3.2)]]))
