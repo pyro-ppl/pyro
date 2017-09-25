@@ -8,6 +8,7 @@ from copy import deepcopy
 from functools import wraps
 from itertools import product
 
+import numpy as np
 import torch
 import torch.cuda
 from torch.autograd import Variable
@@ -109,6 +110,7 @@ def set_rng_seed(rng_seed=SEED):
     torch.manual_seed(rng_seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(rng_seed)
+    np.random.seed(rng_seed)
 
 
 class TestCase(unittest.TestCase):
