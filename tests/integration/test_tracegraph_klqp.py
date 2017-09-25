@@ -319,7 +319,7 @@ class PoissonGammaTests(TestCase):
         self.log_beta_n = torch.log(self.beta_n)
         self.verbose = False
 
-    pytest.mark.xfail(reason="flaky - may not meet the precision threshold for passing")
+    @pytest.mark.xfail(reason="flaky - may not meet the precision threshold for passing")
     def test_elbo_nonreparameterized(self):
         if self.verbose:
             print(" - - - - - DO POISSON-GAMMA ELBO TEST - - - - - ")
