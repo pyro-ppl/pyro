@@ -20,9 +20,9 @@ torch.set_default_tensor_type('torch.DoubleTensor')
 SEED = 0
 
 """
-Contains test utilities for assertions, approximate comparison (of tensors and other objects) 
+Contains test utilities for assertions, approximate comparison (of tensors and other objects)
 and setting the random number generator seed.
- 
+
 Code has been largely adapted from pytorch/test/common.py
 Source: https://github.com/pytorch/pytorch/blob/master/test/common.py
 """
