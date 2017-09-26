@@ -184,7 +184,7 @@ class TraceGraphPoutine(TracePoutine):
         from (list) map_data are taken into account. note that this has bad asymptotics
         because the result is a (possibly) very dense graph
         """
-        map_data_stack = tuple(msg['map_data_stack'])
+        map_data_stack = list(reversed(msg['map_data_stack']))
 
         # for each node seen thus far we determine whether the current
         # node should depend on it. in this context the answer is always yes
@@ -192,10 +192,7 @@ class TraceGraphPoutine(TracePoutine):
         for node in self.nodes_seen_so_far:
             node_independent = False
             node_map_data_stack = self.nodes_seen_so_far[node]
-            node_map_data_stack_height = len(node_map_data_stack)
-            map_data_stack_slice = map_data_stack[-node_map_data_stack_height:] \
-                if node_map_data_stack_height > 0 else ()
-            for query, target in zip(map_data_stack_slice, node_map_data_stack):
+            for query, target in zip(map_data_stack, node_map_data_stack):
                 if query[0] == target[0] and query[1] != target[1]:
                     node_independent = True
                     break
