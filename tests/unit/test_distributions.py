@@ -111,7 +111,7 @@ class TestGamma(TestCase):
         self.n_samples = 50000
 
     def test_log_pdf(self):
-        log_px_torch = dist.gamma.log_pdf(self.test_data, self.alpha, self.beta).data[0]
+        log_px_torch = dist.gamma.log_pdf(self.test_data, self.alpha, self.beta).data
         log_px_np = spr.gamma.logpdf(
             self.test_data.data.cpu().numpy(),
             self.alpha.data.cpu().numpy(),
@@ -286,7 +286,7 @@ class TestBeta(TestCase):
         self.n_samples = 50000
 
     def test_log_pdf(self):
-        log_px_torch = dist.beta.log_pdf(self.test_data, self.alpha, self.beta).data[0]
+        log_px_torch = dist.beta.log_pdf(self.test_data, self.alpha, self.beta).data.numpy()
         log_px_np = spr.beta.logpdf(
             self.test_data.data.cpu().numpy(),
             self.alpha.data.cpu().numpy(),
@@ -669,7 +669,7 @@ class TestTensorType(TestCase):
     def test_double_type(self):
         log_px_torch = dist.beta.log_pdf(self.test_data, self.alpha, self.beta).data
         self.assertTrue(isinstance(log_px_torch, torch.DoubleTensor))
-        log_px_val = log_px_torch[0]
+        log_px_val = log_px_torch.numpy()
         log_px_np = spr.beta.logpdf(
             self.test_data.data.cpu().numpy(),
             self.alpha.data.cpu().numpy(),
@@ -679,7 +679,7 @@ class TestTensorType(TestCase):
     def test_float_type(self):
         log_px_torch = dist.beta.log_pdf(self.float_test_data, self.float_alpha, self.float_beta).data
         self.assertTrue(isinstance(log_px_torch, torch.FloatTensor))
-        log_px_val = log_px_torch[0]
+        log_px_val = log_px_torch
         log_px_np = spr.beta.logpdf(
             self.test_data.data.cpu().numpy(),
             self.alpha.data.cpu().numpy(),
