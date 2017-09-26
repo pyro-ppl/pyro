@@ -196,9 +196,7 @@ def assert_equal(x, y, prec=1e-5, msg=''):
     elif type(x) != type(y):
         raise AssertionError("cannot compare {} and {}".format(type(x), type(y)))
     elif is_iterable(x) and is_iterable(y):
-        for x_, y_ in zip(x, y):
-            assert x_ == approx(y_, abs=prec), msg
-
+        assert list(x) == approx(y, prec)
     else:
         assert x == y, msg
 
