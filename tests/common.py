@@ -9,6 +9,7 @@ from copy import deepcopy
 from functools import wraps
 from pytest import approx
 from itertools import product
+from numpy.testing import assert_allclose
 
 import numpy as np
 import torch
@@ -188,11 +189,16 @@ def assert_equal(x, y, prec=1e-5, msg=''):
             assert_tensors_equal(x._values(), y._values(), prec, msg)
         else:
             assert_tensors_equal(x, y, prec, msg)
+    elif type(x) == np.ndarray and type(y) == np.ndarray:
+        assert_allclose(x, y, atol=prec, equal_nan=True)
+    elif isinstance(x, numbers.Number) and isinstance(y, numbers.Number):
+        assert x == approx(y, abs=prec), msg
+    elif type(x) != type(y):
+        raise AssertionError("cannot compare {} and {}".format(type(x), type(y)))
     elif is_iterable(x) and is_iterable(y):
         for x_, y_ in zip(x, y):
             assert x_ == approx(y_, abs=prec), msg
-    elif isinstance(x, numbers.Number) and isinstance(y, numbers.Number):
-        assert x == approx(y, abs=prec), msg
+
     else:
         assert x == y, msg
 
