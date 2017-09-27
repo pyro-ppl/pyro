@@ -41,11 +41,17 @@ def memoize(fn):
 
 
 def ones(*args, **kwargs):
-    return Parameter(torch.ones(*args, **kwargs))
+    # retype the tensor before the param call (to preserve gradients on GPUs)
+    retype = kwargs.pop('type_as', None)
+    p_tensor = torch.ones(*args, **kwargs)
+    return Parameter(p_tensor if retype is None else p_tensor.type_as(retype))
 
 
 def zeros(*args, **kwargs):
-    return Parameter(torch.zeros(*args, **kwargs))
+    # retype the tensor before the param call (to preserve gradients on GPUs)
+    retype = kwargs.pop('type_as', None)
+    p_tensor = torch.zeros(*args, **kwargs)
+    return Parameter(p_tensor if retype is None else p_tensor.type_as(retype))
 
 
 def ng_ones(*args, **kwargs):

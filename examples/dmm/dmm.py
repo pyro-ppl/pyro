@@ -9,20 +9,17 @@ import torch.nn as nn
 # import torch.optim as optim
 import numpy as np
 import time
-import cPickle
+
+# need to handle python 2 vs 3
+try:
+    import cPickle
+except:
+    import pickle as cPickle
+
 import polyphonic_data_loader as poly
 from pyro.optim import ClippedAdam
 import logging
-
-
-input_dim = 88
-z_dim = 100
-transition_dim = 200
-emission_dim = 100
-rnn_dim = 600
-val_test_frequency = 10
-n_eval_samples = 5
-
+from os.path import join, dirname
 
 # parameterizes p(x_t | z_t)
 class Emitter(nn.Module):
@@ -60,7 +57,7 @@ class GatedTransition(nn.Module):
     def forward(self, z):
         g = self.sigmoid(self.lin_g2(self.relu(self.lin_g1(z))))
         h = self.lin_h2(self.relu(self.lin_h1(z)))
-        mu = (ng_ones(g.size()) - g) * self.lin_mu(z) + g * h
+        mu = (ng_ones(g.size()).type_as(g) - g) * self.lin_mu(z) + g * h
         sigma = self.softplus(self.lin_sig(self.relu(h)))
         return mu, sigma
 
@@ -83,72 +80,98 @@ class Combiner(nn.Module):
         return mu, sigma
 
 
-# instantiate pytorch modules that make up the model and the inference network
-# rnn instantiated below
-pt_emitter = Emitter(input_dim, z_dim, emission_dim)
-pt_trans = GatedTransition(z_dim, transition_dim)
-pt_combiner = Combiner(z_dim, rnn_dim)
+class DMM(nn.Module):
 
+    def __init__(self, input_dim, z_dim, emission_dim, transition_dim, rnn_dim, max_rnn_batch):
 
-# the model
-def model(mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths,
-          pt_rnn, annealing_factor=1.0):
+        # instantiate pytorch modules that make up the model and the inference network
+        super(DMM, self).__init__()
 
-    T_max = np.max(mini_batch_seq_lengths)
-    emitter = pyro.module("emitter", pt_emitter)
-    trans = pyro.module("transition", pt_trans)
-    z_prev = pyro.param("z_0", zeros(z_dim))
+        # rnn instantiated below
+        self.pt_emitter = Emitter(input_dim, z_dim, emission_dim)
+        self.pt_trans = GatedTransition(z_dim, transition_dim)
+        self.pt_combiner = Combiner(z_dim, rnn_dim)
 
-    for t in range(1, T_max + 1):
-        z_mu, z_sigma = trans(z_prev)
-        z_t = pyro.sample("z_%d" % t, dist.DiagNormal(z_mu, z_sigma),
-                          log_pdf_mask=annealing_factor * mini_batch_mask[:, t - 1:t])
-        emission_probs_t = emitter(z_t)
-        pyro.observe("obs_x_%d" % t, dist.bernoulli, mini_batch[:, t - 1, :], emission_probs_t,
-                     log_pdf_mask=mini_batch_mask[:, t - 1:t])
-        z_prev = z_t
+        self.input_dim = input_dim
+        self.z_dim = z_dim
+        self.emission_dim = emission_dim
+        self.transition_dim = transition_dim
+        self.rnn_dim = rnn_dim
+        self.max_rnn_batch = max_rnn_batch
 
-    return z_prev
+    # the model
+    def model(self, mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths,
+            pt_rnn, annealing_factor=1.0):
 
+        T_max = np.max(mini_batch_seq_lengths)
+        emitter = pyro.module("emitter", self.pt_emitter)
+        trans = pyro.module("transition", self.pt_trans)
+        z_prev = pyro.param("z_0", zeros(self.z_dim, type_as=mini_batch.data))
 
-# the guide
-def guide(mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths,
-          pt_rnn, annealing_factor=1.0):
+        for t in range(1, T_max + 1):
+            z_mu, z_sigma = trans(z_prev)
+            z_t = pyro.sample("z_%d" % t, dist.DiagNormal(z_mu, z_sigma),
+                            log_pdf_mask=annealing_factor * mini_batch_mask[:, t - 1:t])
+            emission_probs_t = emitter(z_t)
+            pyro.observe("obs_x_%d" % t, dist.bernoulli, mini_batch[:, t - 1, :], emission_probs_t,
+                        log_pdf_mask=mini_batch_mask[:, t - 1:t])
+            z_prev = z_t
 
-    T_max = np.max(mini_batch_seq_lengths)
-    rnn = pyro.module("rnn", pt_rnn)
-    combiner = pyro.module("combiner", pt_combiner)
-    h_0 = pyro.param("h_0", zeros(pt_rnn.num_layers, 1, rnn_dim))
-    rnn_output, _ = rnn(mini_batch_reversed, h_0)
-    rnn_output = poly.pad_and_reverse(rnn_output, mini_batch_seq_lengths)
-    z_prev = pyro.param("z_q_0", zeros(z_dim))
+        return z_prev
 
-    for t in range(1, T_max + 1):
-        z_mu, z_sigma = combiner(z_prev, rnn_output[:, t - 1, :])
-        z_t = pyro.sample("z_%d" % t, dist.DiagNormal(z_mu, z_sigma),
-                          log_pdf_mask=annealing_factor * mini_batch_mask[:, t - 1:t])
-        z_prev = z_t
+    # the guide
+    def guide(self, mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths,
+            pt_rnn, annealing_factor=1.0):
 
-    return z_prev
+        T_max = np.max(mini_batch_seq_lengths)
+        rnn = pyro.module("rnn", pt_rnn)
+        combiner = pyro.module("combiner", self.pt_combiner)
 
+        # complicated rnn behavior for gpus
+        # must provide the whole state tensor at time of gpu running
+        # on gpu, must provide batch_size number of hidden states
+        if 'cuda' in mini_batch.data.type():
+            h_0 = pyro.param("h_0", zeros(pt_rnn.num_layers, 1, self.rnn_dim, type_as=mini_batch.data))
+            h_0 = h_0.expand(*[h_0.data.shape[0], mini_batch.data.shape[0], h_0.data.shape[2]]).contiguous()
+        else:
+            # on cpu, hidden size starts as 1 and is created
+            h_0 = pyro.param("h_0", zeros(pt_rnn.num_layers, 1, self.rnn_dim, type_as=mini_batch.data))
+
+        rnn_output, _ = rnn(mini_batch_reversed, h_0)
+        rnn_output = poly.pad_and_reverse(rnn_output, mini_batch_seq_lengths)
+        z_prev = pyro.param("z_q_0", zeros(self.z_dim, type_as=mini_batch.data))
+
+        for t in range(1, T_max + 1):
+            z_mu, z_sigma = combiner(z_prev, rnn_output[:, t - 1, :])
+            z_t = pyro.sample("z_%d" % t, dist.DiagNormal(z_mu, z_sigma),
+                            log_pdf_mask=annealing_factor * mini_batch_mask[:, t - 1:t])
+            z_prev = z_t
+
+        return z_prev
 
 # setup, training, and evaluation
-def main():
-    parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', type=int, default=2000)
-    parser.add_argument('-lr', '--learning-rate', type=float, default=0.0008)
-    parser.add_argument('-b1', '--beta1', type=float, default=0.90)
-    parser.add_argument('-b2', '--beta2', type=float, default=0.999)
-    parser.add_argument('-cn', '--clip-norm', type=float, default=25.0)
-    parser.add_argument('-lrd', '--lr-decay', type=float, default=1.0)
-    parser.add_argument('-wd', '--weight-decay', type=float, default=0.0)
-    parser.add_argument('-mbs', '--mini-batch-size', type=int, default=20)
-    parser.add_argument('-ae', '--annealing-epochs', type=int, default=500)
-    parser.add_argument('-maf', '--minimum-annealing-factor', type=float, default=0.0)
-    parser.add_argument('-rdr', '--rnn-dropout-rate', type=float, default=0.0)
-    parser.add_argument('-rnl', '--rnn-num-layers', type=int, default=1)
-    parser.add_argument('-l', '--log', type=str, default='dmm.log')
-    args = parser.parse_args()
+def main(num_epochs=2000, learning_rate=0.0008, beta1=.9, beta2=.999,
+            clip_norm=25., lr_decay=1.0, weight_decay=0.0,
+            mini_batch_size=20, annealing_epochs=500,
+            minimum_annealing_factor=0.0, rnn_dropout_rate=0.0,
+            rnn_num_layers=1, log='dmm.log', cuda=False):
+
+    # ensure ints
+    # TODO: Remove this, temp hyper param logic
+    num_epochs = int(num_epochs)
+    mini_batch_size = int(mini_batch_size)
+    annealing_epochs = int(annealing_epochs)
+    rnn_num_layers = int(rnn_num_layers)
+
+
+    input_dim = 88
+    z_dim = 100
+    transition_dim = 200
+    emission_dim = 100
+    rnn_dim = 600
+    val_test_frequency = 10
+    n_eval_samples = 5
+
 
     # setup logging
     logging.basicConfig(level=logging.DEBUG, format='%(message)s', filename=args.log, filemode='w')
@@ -158,14 +181,16 @@ def main():
 
     def log(s):
         logging.info(s)
+
     log(args)
 
     pt_rnn = nn.RNN(input_size=input_dim, hidden_size=rnn_dim, nonlinearity='relu',
                     batch_first=True, bidirectional=False, num_layers=args.rnn_num_layers,
                     dropout=args.rnn_dropout_rate)
 
+    jsb_file_loc = join(dirname(__file__), "jsb_processed.pkl")
     # ingest data from disk
-    data = cPickle.load(open("jsb_processed.pkl", "rb"))
+    data = cPickle.load(open(jsb_file_loc, "rb"))
     training_seq_lengths = data['train']['sequence_lengths']
     training_data_sequences = data['train']['sequences']
     test_seq_lengths = data['test']['sequence_lengths']
@@ -174,8 +199,8 @@ def main():
     val_data_sequences = data['valid']['sequences']
     N_train_data = len(training_seq_lengths)
     N_train_time_slices = np.sum(training_seq_lengths)
-    N_mini_batches = N_train_data / args.mini_batch_size +\
-        int(N_train_data % args.mini_batch_size > 0)
+    N_mini_batches = int(N_train_data / args.mini_batch_size +\
+        int(N_train_data % args.mini_batch_size > 0))
 
     # package val/test data for model/guide
     def rep(x):
@@ -186,20 +211,28 @@ def main():
     test_seq_lengths = rep(test_seq_lengths)
     val_batch, val_batch_reversed, val_batch_mask, val_seq_lengths = poly.get_mini_batch(
         np.arange(n_eval_samples * val_data_sequences.shape[0]), rep(val_data_sequences),
-        val_seq_lengths, volatile=True)
+        val_seq_lengths, volatile=True, cuda=cuda)
     test_batch, test_batch_reversed, test_batch_mask, test_seq_lengths = poly.get_mini_batch(
         np.arange(n_eval_samples * test_data_sequences.shape[0]), rep(test_data_sequences),
-        test_seq_lengths, volatile=True)
+        test_seq_lengths, volatile=True, cuda=cuda)
 
     log("N_train_data: %d     avg. training seq. length: %.2f    N_mini_batches: %d" %
         (N_train_data, np.mean(training_seq_lengths), N_mini_batches))
     times = [time.time()]
 
+     # create the dmm
+    dmm = DMM(input_dim, z_dim, emission_dim, transition_dim, rnn_dim, max(test_batch.data.shape[0], val_batch.data.shape[0], mini_batch_size))
+
+    # easy fix, turn dmm into cuda dmm
+    if cuda:
+        dmm = dmm.cuda()
+        pt_rnn = pt_rnn.cuda()
+
     # setup optimizers
     adam_params = {"lr": args.learning_rate, "betas": (args.beta1, args.beta2),
                    "clip_norm": args.clip_norm, "lrd": args.lr_decay,
                    "weight_decay": args.weight_decay}
-    elbo_train = KL_QP(model, guide, pyro.optim(ClippedAdam, adam_params))
+    elbo_train = KL_QP(dmm.model, dmm.guide, pyro.optim(ClippedAdam, adam_params))
     annealing_factor = 1.0
 
     for epoch in range(args.num_epochs):
@@ -217,7 +250,7 @@ def main():
             mini_batch_indices = shuffled_indices[mini_batch_start:mini_batch_end]
             mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths \
                 = poly.get_mini_batch(mini_batch_indices, training_data_sequences,
-                                      training_seq_lengths)
+                                      training_seq_lengths, cuda=cuda)
             loss = elbo_train.step(mini_batch, mini_batch_reversed, mini_batch_mask,
                                    mini_batch_seq_lengths, pt_rnn, annealing_factor)
             if epoch < 1:
@@ -237,6 +270,31 @@ def main():
             pt_rnn.train()
             log("[val/test epoch %04d]  %.4f  %.4f" % (epoch, val_nll, test_nll))
 
+    # when finished, do eval and send back validation
+    # for hyper param search
+    pt_rnn.eval()
+    val_nll = elbo_train.eval_objective(val_batch, val_batch_reversed, val_batch_mask,
+                                        val_seq_lengths, pt_rnn) / np.sum(val_seq_lengths)
+    return val_nll
+
 
 if __name__ == '__main__':
-    main()
+
+    parser = argparse.ArgumentParser(description="parse args")
+    parser.add_argument('-n', '--num-epochs', type=int, default=2000)
+    parser.add_argument('-lr', '--learning-rate', type=float, default=0.0008)
+    parser.add_argument('-b1', '--beta1', type=float, default=0.90)
+    parser.add_argument('-b2', '--beta2', type=float, default=0.999)
+    parser.add_argument('-cn', '--clip-norm', type=float, default=25.0)
+    parser.add_argument('-lrd', '--lr-decay', type=float, default=1.0)
+    parser.add_argument('-wd', '--weight-decay', type=float, default=0.0)
+    parser.add_argument('-mbs', '--mini-batch-size', type=int, default=20)
+    parser.add_argument('-ae', '--annealing-epochs', type=int, default=500)
+    parser.add_argument('-maf', '--minimum-annealing-factor', type=float, default=0.0)
+    parser.add_argument('-rdr', '--rnn-dropout-rate', type=float, default=0.0)
+    parser.add_argument('-rnl', '--rnn-num-layers', type=int, default=1)
+    parser.add_argument('--cuda', action='store_true')
+    parser.add_argument('-l', '--log', type=str, default='dmm.log')
+    args = parser.parse_args()
+
+    main(**vars(args))

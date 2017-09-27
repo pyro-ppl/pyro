@@ -10,8 +10,8 @@ setup(
                       'funcy>=1.7.5',
                       'cloudpickle>=0.3.1',
                       'graphviz>=0.8',
-                      'networkx>=1.11',
-                      'torch'],
+                      'networkx>=1.11'
+                      ],
     extras_require={
         'notebooks': ['jupyter>=1.0.0'],
         'visualization': ['matplotlib>=1.3',
