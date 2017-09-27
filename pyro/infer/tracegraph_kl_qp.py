@@ -62,24 +62,46 @@ class TraceGraph_KL_QP(object):
         model_tracegraph = poutine.tracegraph(poutine.replay(self.model, guide_trace))(*args, **kwargs)
         model_trace = model_tracegraph.get_trace()
 
-        # have the trace compute all the individual log pdf terms
+        guide_vec_md_info = guide_tracegraph.vectorized_map_data_info
+        model_vec_md_info = model_tracegraph.vectorized_map_data_info
+        guide_vec_md_condition = guide_vec_md_info['rao-blackwellization-condition']
+        model_vec_md_condition = model_vec_md_info['rao-blackwellization-condition']
+        do_vec_rb = guide_vec_md_condition and model_vec_md_condition
+        guide_vec_md_nodes = guide_vec_md_info['nodes'] if do_vec_rb else None
+        model_vec_md_nodes = model_vec_md_info['nodes'] if do_vec_rb else None
+
+	def get_vec_batch_nodes_dict(vec_batch_nodes):
+	    vec_batch_nodes = vec_batch_nodes.values() if vec_batch_nodes is not None \
+		else []
+	    vec_batch_nodes = [item for sublist in vec_batch_nodes for item in sublist]
+	    vec_batch_nodes_dict = {}
+	    for pair in vec_batch_nodes:
+		vec_batch_nodes_dict[pair[0]] = pair[1]
+	    return vec_batch_nodes_dict
+
+	guide_vec_batch_nodes_dict = get_vec_batch_nodes_dict(guide_vec_md_nodes)
+	model_vec_batch_nodes_dict = get_vec_batch_nodes_dict(model_vec_md_nodes)
+
+        # have the trace compute all the individual (batch) log pdf terms
         # so that they are available below
-        guide_trace.log_pdf(), model_trace.log_pdf()
+        guide_trace.log_pdf(vec_batch_nodes_dict=guide_vec_batch_nodes_dict)
+        model_trace.log_pdf(vec_batch_nodes_dict=model_vec_batch_nodes_dict)
 
         # prepare a list of all the cost nodes, each of which is +- log_pdf
         cost_nodes = []
         non_reparam_nodes = set(guide_tracegraph.get_nonreparam_stochastic_nodes())
         for site in model_trace.keys():
             model_trace_site = model_trace[site]
+            log_pdf_key = 'log_pdf' if site not in model_vec_batch_nodes_dict else 'batch_log_pdf'
             if model_trace_site["type"] == "observe":
-                cost_node = (model_trace_site["log_pdf"], True)
+                cost_node = (model_trace_site[log_pdf_key], True)
                 cost_nodes.append(cost_node)
             elif model_trace_site["type"] == "sample":
                 # cost node from model sample
-                cost_node1 = (model_trace_site["log_pdf"], True)
+                cost_node1 = (model_trace_site[log_pdf_key], True)
                 # cost node from guide sample
                 zero_expectation = site in non_reparam_nodes
-                cost_node2 = (- guide_trace[site]["log_pdf"], not zero_expectation)
+                cost_node2 = (- guide_trace[site][log_pdf_key], not zero_expectation)
                 cost_nodes.extend([cost_node1, cost_node2])
 
         elbo, elbo_reinforce_terms, elbo_no_zero_expectation_terms = 0.0, 0.0, 0.0
@@ -87,13 +109,13 @@ class TraceGraph_KL_QP(object):
         # compute the elbo; if all stochastic nodes are reparameterizable, we're done
         # this bit is never differentiated: it's here for getting an estimate of the elbo itself
         for cost_node in cost_nodes:
-            elbo += cost_node[0]
+            elbo += cost_node[0].sum()
 
         # compute the elbo, removing terms whose gradient is zero
         # this is the bit that's actually differentiated
         for cost_node in cost_nodes:
             if cost_node[1]:
-                elbo_no_zero_expectation_terms += cost_node[0]
+                elbo_no_zero_expectation_terms += cost_node[0].sum()
 
         # the following computations are only necessary if we have non-reparameterizable nodes
         if len(non_reparam_nodes) > 0:
@@ -108,20 +130,31 @@ class TraceGraph_KL_QP(object):
             downstream_costs = {}
 
             for node in topo_sort_guide_nodes:
-                downstream_costs[node] = model_trace[node]["log_pdf"] - guide_trace[node]["log_pdf"]
+                node_log_pdf_key = 'log_pdf' if node not in guide_vec_batch_nodes_dict else 'batch_log_pdf'
+                downstream_costs[node] = model_trace[node][node_log_pdf_key] - \
+                    guide_trace[node][node_log_pdf_key]
                 nodes_included_in_sum = set([node])
                 downstream_guide_cost_nodes[node] = set([node])
                 for child in guide_tracegraph.get_children(node):
                     child_cost_nodes = downstream_guide_cost_nodes[child]
                     downstream_guide_cost_nodes[node].update(child_cost_nodes)
                     if nodes_included_in_sum.isdisjoint(child_cost_nodes):  # avoid duplicates
-                        downstream_costs[node] += downstream_costs[child]
+                        if node_log_pdf_key == 'log_pdf':
+                            downstream_costs[node] += downstream_costs[child].sum()
+                        else:
+                            downstream_costs[node] += downstream_costs[child]
                         nodes_included_in_sum.update(child_cost_nodes)
                 missing_downstream_costs = downstream_guide_cost_nodes[node] - nodes_included_in_sum
                 # include terms we missed because we had to avoid duplicates
                 for missing_node in missing_downstream_costs:
-                    downstream_costs[node] += model_trace[missing_node]["log_pdf"] - \
-                                              guide_trace[missing_node]["log_pdf"]
+                    missing_node_log_pdf_key = 'log_pdf' if missing_node not in guide_vec_batch_nodes_dict \
+                        else 'batch_log_pdf'
+                    if node_log_pdf_key == 'log_pdf':
+                        downstream_costs[node] += (model_trace[missing_node][missing_node_log_pdf_key] -
+                                                  guide_trace[missing_node][missing_node_log_pdf_key]).sum()
+                    else:
+                        downstream_costs[node] += model_trace[missing_node][missing_node_log_pdf_key] - \
+                                                  guide_trace[missing_node][missing_node_log_pdf_key]
 
             # finish assembling complete downstream costs
             # (the above computation may be missing terms from model)
@@ -133,8 +166,15 @@ class TraceGraph_KL_QP(object):
                 # remove terms accounted for above
                 children_in_model.difference_update(downstream_guide_cost_nodes[site])
                 for child in children_in_model:
+                    child_log_pdf_key = 'log_pdf' if child not in model_vec_batch_nodes_dict \
+                        else 'batch_log_pdf'
+                    site_log_pdf_key = 'log_pdf' if site not in guide_vec_batch_nodes_dict \
+                        else 'batch_log_pdf'
                     assert (model_trace[child]["type"] in ("sample", "observe"))
-                    downstream_costs[site] += model_trace[child]["log_pdf"]
+                    if site_log_pdf_key == 'log_pdf':
+                        downstream_costs[site] += model_trace[child][child_log_pdf_key].sum()
+                    else:
+                        downstream_costs[site] += model_trace[child][child_log_pdf_key]
 
             # construct all the reinforce-like terms.
             # we include only downstream costs to reduce variance

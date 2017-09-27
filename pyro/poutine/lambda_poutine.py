@@ -1,4 +1,5 @@
 import pyro
+import torch
 from .poutine import Poutine
 
 
@@ -10,7 +11,7 @@ class LambdaPoutine(Poutine):
          for the benefit of TraceGraphPoutine;
          necessary information passed via map_data_stack in msg
     """
-    def __init__(self, fn, name, scale):
+    def __init__(self, fn, name, scale, map_data_type, batch_dim):
         """
         Constructor: basically default, but store an extra scalar self.scale
         and a counter to keep track of which (list) map_data branch we're in
@@ -18,6 +19,8 @@ class LambdaPoutine(Poutine):
         self.name = name
         self.scale = scale
         self.counter = 0
+        self.map_data_type = map_data_type
+        self.batch_dim = batch_dim
         super(LambdaPoutine, self).__init__(fn)
 
     def _enter_poutine(self, *args, **kwargs):
@@ -25,15 +28,22 @@ class LambdaPoutine(Poutine):
         increment counter by one each time we enter a new map_data branch
         """
         self.counter += 1
+        #print "enter lambdapoutine: %s, %d, %s" % (self.name, self.counter, self.map_data_type)
+
+    def _exit_poutine(self, ret_val, *args, **kwargs):
+        #print "exit lambdapoutine: %s, %d, %s" % (self.name, self.counter, self.map_data_type)
+        return super(LambdaPoutine, self)._exit_poutine(ret_val, *args, **kwargs)
 
     def _annotate_map_data_stack(self, msg, name):
         """
         construct the message that is consumed by TraceGraphPoutine;
         map_data_stack encodes the nested sequence of map_data branches
         that the site at name is within
+        note: the map_data_stack ordering is innermost to outermost from left to right
         """
         if len(msg['map_data_stack']) == 0 or msg['map_data_stack'][0] != self.name:
-            msg['map_data_stack'].append((self.name, self.counter))
+            msg['map_data_stack'].append((self.name, self.counter,
+                                          self.map_data_type, self.batch_dim))
         return msg
 
     def _pyro_sample(self, msg, name, fn, *args, **kwargs):
@@ -66,7 +76,12 @@ class LambdaPoutine(Poutine):
         scaled map_data: Rescale the message and continue
         """
         mapdata_scale = pyro.util.get_batch_scale(data, batch_size, batch_dim)
+        map_data_type = 'tensor' if isinstance(data, (torch.Tensor, torch.autograd.Variable)) \
+            else 'list'
         return super(LambdaPoutine, self)._pyro_map_data(msg, name, data,
-                                                         LambdaPoutine(fn, name, mapdata_scale),
+                                                         LambdaPoutine(fn, name,
+								       mapdata_scale,
+								       map_data_type,
+                                                                       batch_dim),
                                                          batch_size=batch_size,
                                                          batch_dim=batch_dim)

@@ -1,4 +1,5 @@
 import pyro
+import torch
 
 from .poutine import Poutine
 from .lambda_poutine import LambdaPoutine
@@ -77,8 +78,11 @@ class ReplayPoutine(Poutine):
         So all we need to do here is apply a LambdaPoutine as in TracePoutine
         """
         scale = pyro.util.get_batch_scale(data, batch_size, batch_dim)
+        map_data_type = 'tensor' if isinstance(data, (torch.Tensor, torch.autograd.Variable)) \
+            else 'list'
         ret = super(ReplayPoutine, self)._pyro_map_data(msg, name, data,
-                                                        LambdaPoutine(fn, name, scale),
+                                                        LambdaPoutine(fn, name, scale,
+                                                                      map_data_type, batch_dim),
                                                         batch_size=batch_size,
                                                         batch_dim=batch_dim)
         return ret

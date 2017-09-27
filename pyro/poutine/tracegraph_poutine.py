@@ -2,7 +2,7 @@ import graphviz
 import networkx
 
 from .trace_poutine import TracePoutine
-
+from collections import defaultdict
 
 class TraceGraph(object):
     """
@@ -13,13 +13,16 @@ class TraceGraph(object):
     """
 
     def __init__(self, G, trace, stochastic_nodes, reparameterized_nodes,
-                 observation_nodes):
+                 observation_nodes,
+                 vectorized_map_data_info):
         self.G = G
         self.trace = trace
         self.reparameterized_nodes = reparameterized_nodes
         self.stochastic_nodes = stochastic_nodes
         self.nonreparam_stochastic_nodes = list(set(stochastic_nodes) - set(reparameterized_nodes))
         self.observation_nodes = observation_nodes
+        #self.map_data_stacks = map_data_stacks
+        self.vectorized_map_data_info = vectorized_map_data_info
 
     def get_stochastic_nodes(self):
         """
@@ -172,9 +175,34 @@ class TraceGraphPoutine(TracePoutine):
         """
         self.trace = super(TraceGraphPoutine, self)._exit_poutine(ret_val, *args, **kwargs)
 
+        vectorized_map_data_info = {}
+        vectorized_map_data_info['nodes'] = defaultdict(lambda: [])
+        vectorized_map_data_info['rao-blackwellization-condition'] = True
+        for node, stack in self.nodes_seen_so_far.items():
+            vec_mds = filter(lambda x: x[2]=='tensor', stack)
+            # check for nested vectorized map datas
+            if len(vec_mds) > 1:
+                vectorized_map_data_info['rao-blackwellization-condition'] = False
+            # check that vectorized map datas only found at inner most position
+            if len(vec_mds) > 0 and stack[-1][2]=='list':
+                vectorized_map_data_info['rao-blackwellization-condition'] = False
+            # for now enforce batch_dim = 0 for vectorized map_data
+            # since batch_log_pdf infrastructure missing
+            if len(vec_mds) > 0 and vec_mds[0][3] != 0:
+                vectorized_map_data_info['rao-blackwellization-condition'] = False
+            # bail on constructing vectorized_map_data_info, since condition false
+            if not vectorized_map_data_info['rao-blackwellization-condition']:
+                vectorized_map_data_info = {'rao-blackwellization-condition': False}
+                break
+            # condition still true so continue constructing info dictionary
+            if len(vec_mds) > 0:
+                node_batch_dim_pair = (node, vec_mds[0][3])
+		vectorized_map_data_info['nodes'][vec_mds[0][0]].append(node_batch_dim_pair)
+
         trace_graph = TraceGraph(self.G, self.trace,
                                  self.stochastic_nodes, self.reparameterized_nodes,
-                                 self.observation_nodes)
+                                 self.observation_nodes,
+                                 vectorized_map_data_info)
         return trace_graph
 
     def _add_graph_node(self, msg, name):
@@ -184,7 +212,7 @@ class TraceGraphPoutine(TracePoutine):
         from (list) map_data are taken into account. note that this has bad asymptotics
         because the result is a (possibly) very dense graph
         """
-        map_data_stack = list(reversed(msg['map_data_stack']))
+        map_data_stack = tuple(reversed(msg['map_data_stack']))
 
         # for each node seen thus far we determine whether the current
         # node should depend on it. in this context the answer is always yes
