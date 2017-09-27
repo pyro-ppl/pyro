@@ -10,7 +10,8 @@ from pyro.util import ng_zeros, detach_iterable
 class TraceGraph_KL_QP(object):
     """
     A TraceGraph and Poutine-based implementation of SVI
-    The gradient estimator is constructed along the lines of
+    The basic structure gradient estimator is constructed along the lines of
+
     'Gradient Estimation Using Stochastic Computation Graphs'
     John Schulman, Nicolas Heess, Theophane Weber, Pieter Abbeel
 
@@ -40,8 +41,6 @@ class TraceGraph_KL_QP(object):
         # initialize
         super(TraceGraph_KL_QP, self).__init__()
         # TODO init this somewhere else in a more principled way
-        self.sites = None
-
         self.model = model
         self.guide = guide
         self.optim_step_fct = optim_step_fct
@@ -62,6 +61,7 @@ class TraceGraph_KL_QP(object):
         model_tracegraph = poutine.tracegraph(poutine.replay(self.model, guide_trace))(*args, **kwargs)
         model_trace = model_tracegraph.get_trace()
 
+        # get info regarding rao-blackwellization of vectorized map_data
         guide_vec_md_info = guide_tracegraph.vectorized_map_data_info
         model_vec_md_info = model_tracegraph.vectorized_map_data_info
         guide_vec_md_condition = guide_vec_md_info['rao-blackwellization-condition']
@@ -79,6 +79,7 @@ class TraceGraph_KL_QP(object):
 		vec_batch_nodes_dict[pair[0]] = pair[1]
 	    return vec_batch_nodes_dict
 
+        # these dictionaries encode which sites are batched
 	guide_vec_batch_nodes_dict = get_vec_batch_nodes_dict(guide_vec_md_nodes)
 	model_vec_batch_nodes_dict = get_vec_batch_nodes_dict(model_vec_md_nodes)
 
@@ -191,6 +192,7 @@ class TraceGraph_KL_QP(object):
             # this [] will be used to store information need to construct baseline losses below
             baseline_losses = []
             for node in non_reparam_nodes:
+                log_pdf_key = 'log_pdf' if node not in guide_vec_batch_nodes_dict else 'batch_log_pdf'
                 downstream_cost = downstream_costs[node]
                 baseline = ng_zeros(1)
                 nn_baseline, nn_baseline_input, use_decaying_avg_baseline, \
@@ -207,13 +209,14 @@ class TraceGraph_KL_QP(object):
                     # block nn_baseline_input gradients except in baseline loss
                     baseline += nn_baseline(detach_iterable(nn_baseline_input))
                     nn_params = nn_baseline.parameters()
-                    baseline_loss = torch.pow(Variable(downstream_cost.data) - baseline, 2.0)
+                    baseline_loss = torch.pow(Variable(downstream_cost.data) - baseline, 2.0).sum()
                     baseline_losses.append((baseline_loss, nn_params))
                 if use_nn_baseline or use_decaying_avg_baseline:
-                    elbo_reinforce_terms += guide_trace[node]['log_pdf'] * \
-                                            (Variable(downstream_cost.data - baseline.data))
+                    elbo_reinforce_terms += (guide_trace[node][log_pdf_key] * \
+                                            (Variable(downstream_cost.data - baseline.data))).sum()
                 else:
-                    elbo_reinforce_terms += guide_trace[node]['log_pdf'] * Variable(downstream_cost.data)
+                    elbo_reinforce_terms += (guide_trace[node][log_pdf_key] * \
+                                            Variable(downstream_cost.data)).sum()
 
             # minimize losses for any neural network baselines
             for loss, params in baseline_losses:

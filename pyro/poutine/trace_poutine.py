@@ -90,7 +90,8 @@ class TracePoutine(Poutine):
             else 'list'
         ret = super(TracePoutine, self)._pyro_map_data(msg, name, data,
                                                        LambdaPoutine(fn, name, scale,
-                                                                     map_data_type, batch_dim),
+                                                                     map_data_type, batch_dim,
+                                                                     batch_size),
                                                        # XXX watch out for changing
                                                        batch_size=batch_size,
                                                        batch_dim=batch_dim)

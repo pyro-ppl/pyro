@@ -175,29 +175,7 @@ class TraceGraphPoutine(TracePoutine):
         """
         self.trace = super(TraceGraphPoutine, self)._exit_poutine(ret_val, *args, **kwargs)
 
-        vectorized_map_data_info = {}
-        vectorized_map_data_info['nodes'] = defaultdict(lambda: [])
-        vectorized_map_data_info['rao-blackwellization-condition'] = True
-        for node, stack in self.nodes_seen_so_far.items():
-            vec_mds = filter(lambda x: x[2]=='tensor', stack)
-            # check for nested vectorized map datas
-            if len(vec_mds) > 1:
-                vectorized_map_data_info['rao-blackwellization-condition'] = False
-            # check that vectorized map datas only found at inner most position
-            if len(vec_mds) > 0 and stack[-1][2]=='list':
-                vectorized_map_data_info['rao-blackwellization-condition'] = False
-            # for now enforce batch_dim = 0 for vectorized map_data
-            # since batch_log_pdf infrastructure missing
-            if len(vec_mds) > 0 and vec_mds[0][3] != 0:
-                vectorized_map_data_info['rao-blackwellization-condition'] = False
-            # bail on constructing vectorized_map_data_info, since condition false
-            if not vectorized_map_data_info['rao-blackwellization-condition']:
-                vectorized_map_data_info = {'rao-blackwellization-condition': False}
-                break
-            # condition still true so continue constructing info dictionary
-            if len(vec_mds) > 0:
-                node_batch_dim_pair = (node, vec_mds[0][3])
-		vectorized_map_data_info['nodes'][vec_mds[0][0]].append(node_batch_dim_pair)
+        vectorized_map_data_info = self._get_vectorized_map_data_info()
 
         trace_graph = TraceGraph(self.G, self.trace,
                                  self.stochastic_nodes, self.reparameterized_nodes,
@@ -205,12 +183,71 @@ class TraceGraphPoutine(TracePoutine):
                                  vectorized_map_data_info)
         return trace_graph
 
+    def _get_vectorized_map_data_info(self):
+        """
+        this determines whether the vectorized map_datas are rao-blackwellizable by tracegraph_kl_qp
+        also gathers information to be consumed by downstream by tracegraph_kl_qp
+        XXX this logic should probably sit elsewhere
+        """
+        vectorized_map_data_info = {'rao-blackwellization-condition': True}
+        vec_md_stacks = set()
+
+        for node, stack in self.nodes_seen_so_far.items():
+            vec_mds = filter(lambda x: x[2]=='tensor', stack)
+            # check for nested vectorized map datas
+            if len(vec_mds) > 1:
+                vectorized_map_data_info['rao-blackwellization-condition'] = False
+            # check that vectorized map datas only found at innermost position
+            if len(vec_mds) > 0 and stack[-1][2]=='list':
+                vectorized_map_data_info['rao-blackwellization-condition'] = False
+            # for now enforce batch_dim = 0 for vectorized map_data
+            # since needed batch_log_pdf infrastructure missing
+            if len(vec_mds) > 0 and vec_mds[0][3] != 0:
+                vectorized_map_data_info['rao-blackwellization-condition'] = False
+            # enforce that if there are multiple vectorized map_datas, they are all
+            # independent of one another because of enclosing list map_datas
+            # (step 1: collect the stacks)
+            if len(vec_mds) > 0:
+                vec_md_stacks.add(stack)
+            # bail, since condition false
+            if not vectorized_map_data_info['rao-blackwellization-condition']:
+                break
+
+        # enforce that if there are multiple vectorized map_datas, they are all
+        # independent of one another because of enclosing list map_datas
+        # (step 2: explicitly check this)
+        if vectorized_map_data_info['rao-blackwellization-condition']:
+            vec_md_stacks = list(vec_md_stacks)
+            for i, stack_i in enumerate(vec_md_stacks):
+                for j, stack_j in enumerate(vec_md_stacks):
+                    # only check unique pairs
+                    if i <= j:
+                        continue
+                    ij_independent = False
+                    for md_i, md_j in zip(stack_i, stack_j):
+                        if md_i[0] == md_j[0] and md_i[1] != md_j[1]:
+                            ij_independent = True
+                    if not ij_independent:
+                        vectorized_map_data_info['rao-blackwellization-condition'] = False
+                        break
+
+        # construct data structure consumed by tracegraph_kl_qp
+        if vectorized_map_data_info['rao-blackwellization-condition']:
+            vectorized_map_data_info['nodes'] = defaultdict(lambda: [])
+            for node, stack in self.nodes_seen_so_far.items():
+                vec_mds = filter(lambda x: x[2]=='tensor', stack)
+                if len(vec_mds) > 0:
+                    node_batch_dim_pair = (node, vec_mds[0][3])
+                    vectorized_map_data_info['nodes'][vec_mds[0][0]].append(node_batch_dim_pair)
+
+        return vectorized_map_data_info
+
     def _add_graph_node(self, msg, name):
         """
         used internally to attach the node at the current site to any nodes
         that it could depend on. 90% of the logic is for making sure independencies
-        from (list) map_data are taken into account. note that this has bad asymptotics
-        because the result is a (possibly) very dense graph
+        from (list) map_data are taken into account. note that this has potentially
+        bad asymptotics because the result is a (possibly) very dense graph
         """
         map_data_stack = tuple(reversed(msg['map_data_stack']))
 

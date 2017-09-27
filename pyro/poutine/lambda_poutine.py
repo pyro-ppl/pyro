@@ -11,7 +11,7 @@ class LambdaPoutine(Poutine):
          for the benefit of TraceGraphPoutine;
          necessary information passed via map_data_stack in msg
     """
-    def __init__(self, fn, name, scale, map_data_type, batch_dim):
+    def __init__(self, fn, name, scale, map_data_type, batch_dim, batch_size):
         """
         Constructor: basically default, but store an extra scalar self.scale
         and a counter to keep track of which (list) map_data branch we're in
@@ -21,6 +21,7 @@ class LambdaPoutine(Poutine):
         self.counter = 0
         self.map_data_type = map_data_type
         self.batch_dim = batch_dim
+        self.batch_size = batch_size
         super(LambdaPoutine, self).__init__(fn)
 
     def _enter_poutine(self, *args, **kwargs):
@@ -28,10 +29,8 @@ class LambdaPoutine(Poutine):
         increment counter by one each time we enter a new map_data branch
         """
         self.counter += 1
-        #print "enter lambdapoutine: %s, %d, %s" % (self.name, self.counter, self.map_data_type)
 
     def _exit_poutine(self, ret_val, *args, **kwargs):
-        #print "exit lambdapoutine: %s, %d, %s" % (self.name, self.counter, self.map_data_type)
         return super(LambdaPoutine, self)._exit_poutine(ret_val, *args, **kwargs)
 
     def _annotate_map_data_stack(self, msg, name):
@@ -43,7 +42,7 @@ class LambdaPoutine(Poutine):
         """
         if len(msg['map_data_stack']) == 0 or msg['map_data_stack'][0] != self.name:
             msg['map_data_stack'].append((self.name, self.counter,
-                                          self.map_data_type, self.batch_dim))
+                                          self.map_data_type, self.batch_dim, self.batch_size))
         return msg
 
     def _pyro_sample(self, msg, name, fn, *args, **kwargs):
@@ -82,6 +81,7 @@ class LambdaPoutine(Poutine):
                                                          LambdaPoutine(fn, name,
 								       mapdata_scale,
 								       map_data_type,
-                                                                       batch_dim),
+                                                                       batch_dim,
+                                                                       batch_size),
                                                          batch_size=batch_size,
                                                          batch_dim=batch_dim)
