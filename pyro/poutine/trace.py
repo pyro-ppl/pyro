@@ -95,7 +95,7 @@ class Trace(dict):
         """
         return Trace(self)
 
-    def log_pdf(self, vec_batch_nodes_dict=None):
+    def log_pdf(self, vec_batch_nodes_dict={}):
         """
         Compute the local and overall log-probabilities of the trace
         """
