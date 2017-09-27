@@ -4,6 +4,7 @@ import networkx
 from .trace_poutine import TracePoutine
 from collections import defaultdict
 
+
 class TraceGraph(object):
     """
     -- encapsulates the forward graph as well as the trace of a stochastic function,
@@ -21,7 +22,6 @@ class TraceGraph(object):
         self.stochastic_nodes = stochastic_nodes
         self.nonreparam_stochastic_nodes = list(set(stochastic_nodes) - set(reparameterized_nodes))
         self.observation_nodes = observation_nodes
-        #self.map_data_stacks = map_data_stacks
         self.vectorized_map_data_info = vectorized_map_data_info
 
     def get_stochastic_nodes(self):
@@ -193,12 +193,12 @@ class TraceGraphPoutine(TracePoutine):
         vec_md_stacks = set()
 
         for node, stack in self.nodes_seen_so_far.items():
-            vec_mds = filter(lambda x: x[2]=='tensor', stack)
+            vec_mds = filter(lambda x: x[2] == 'tensor', stack)
             # check for nested vectorized map datas
             if len(vec_mds) > 1:
                 vectorized_map_data_info['rao-blackwellization-condition'] = False
             # check that vectorized map datas only found at innermost position
-            if len(vec_mds) > 0 and stack[-1][2]=='list':
+            if len(vec_mds) > 0 and stack[-1][2] == 'list':
                 vectorized_map_data_info['rao-blackwellization-condition'] = False
             # for now enforce batch_dim = 0 for vectorized map_data
             # since needed batch_log_pdf infrastructure missing
@@ -235,7 +235,7 @@ class TraceGraphPoutine(TracePoutine):
         if vectorized_map_data_info['rao-blackwellization-condition']:
             vectorized_map_data_info['nodes'] = defaultdict(lambda: [])
             for node, stack in self.nodes_seen_so_far.items():
-                vec_mds = filter(lambda x: x[2]=='tensor', stack)
+                vec_mds = filter(lambda x: x[2] == 'tensor', stack)
                 if len(vec_mds) > 0:
                     node_batch_dim_pair = (node, vec_mds[0][3])
                     vectorized_map_data_info['nodes'][vec_mds[0][0]].append(node_batch_dim_pair)

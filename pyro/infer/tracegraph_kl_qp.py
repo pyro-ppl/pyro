@@ -70,18 +70,17 @@ class TraceGraph_KL_QP(object):
         guide_vec_md_nodes = guide_vec_md_info['nodes'] if do_vec_rb else None
         model_vec_md_nodes = model_vec_md_info['nodes'] if do_vec_rb else None
 
-	def get_vec_batch_nodes_dict(vec_batch_nodes):
-	    vec_batch_nodes = vec_batch_nodes.values() if vec_batch_nodes is not None \
-		else []
-	    vec_batch_nodes = [item for sublist in vec_batch_nodes for item in sublist]
-	    vec_batch_nodes_dict = {}
-	    for pair in vec_batch_nodes:
-		vec_batch_nodes_dict[pair[0]] = pair[1]
-	    return vec_batch_nodes_dict
+        def get_vec_batch_nodes_dict(vec_batch_nodes):
+            vec_batch_nodes = vec_batch_nodes.values() if vec_batch_nodes is not None else []
+            vec_batch_nodes = [item for sublist in vec_batch_nodes for item in sublist]
+            vec_batch_nodes_dict = {}
+            for pair in vec_batch_nodes:
+                vec_batch_nodes_dict[pair[0]] = pair[1]
+            return vec_batch_nodes_dict
 
         # these dictionaries encode which sites are batched
-	guide_vec_batch_nodes_dict = get_vec_batch_nodes_dict(guide_vec_md_nodes)
-	model_vec_batch_nodes_dict = get_vec_batch_nodes_dict(model_vec_md_nodes)
+        guide_vec_batch_nodes_dict = get_vec_batch_nodes_dict(guide_vec_md_nodes)
+        model_vec_batch_nodes_dict = get_vec_batch_nodes_dict(model_vec_md_nodes)
 
         # have the trace compute all the individual (batch) log pdf terms
         # so that they are available below
@@ -152,7 +151,7 @@ class TraceGraph_KL_QP(object):
                         else 'batch_log_pdf'
                     if node_log_pdf_key == 'log_pdf':
                         downstream_costs[node] += (model_trace[missing_node][missing_node_log_pdf_key] -
-                                                  guide_trace[missing_node][missing_node_log_pdf_key]).sum()
+                                                   guide_trace[missing_node][missing_node_log_pdf_key]).sum()
                     else:
                         downstream_costs[node] += model_trace[missing_node][missing_node_log_pdf_key] - \
                                                   guide_trace[missing_node][missing_node_log_pdf_key]
@@ -183,11 +182,14 @@ class TraceGraph_KL_QP(object):
             # XXX should the average baseline be in the param store as below?
 
             # for extracting baseline options from kwargs
+            # XXX default for baseline_beta currently set here
             def get_baseline_kwargs(kwargs):
                 return kwargs.get('nn_baseline', None), \
                        kwargs.get('nn_baseline_input', None), \
                        kwargs.get('use_decaying_avg_baseline', False), \
-                       kwargs.get('baseline_beta', 0.90)  # default decay rate for avg_baseline
+                       kwargs.get('baseline_beta', 0.90), \
+                       kwargs.get('baseline_value', None), \
+                       kwargs.get('baseline_params', None)
 
             # this [] will be used to store information need to construct baseline losses below
             baseline_losses = []
@@ -195,9 +197,12 @@ class TraceGraph_KL_QP(object):
                 log_pdf_key = 'log_pdf' if node not in guide_vec_batch_nodes_dict else 'batch_log_pdf'
                 downstream_cost = downstream_costs[node]
                 baseline = ng_zeros(1)
-                nn_baseline, nn_baseline_input, use_decaying_avg_baseline, \
-                    baseline_beta = get_baseline_kwargs(guide_trace[node]['args'][1])
+                nn_baseline, nn_baseline_input, use_decaying_avg_baseline, baseline_beta, \
+                    baseline_value, baseline_params = get_baseline_kwargs(guide_trace[node]['args'][1])
                 use_nn_baseline = nn_baseline is not None
+                use_baseline_value = baseline_value is not None
+                assert(not (use_nn_baseline and use_baseline_value)), \
+                    "cannot use baseline_value and nn_baseline simultaneously"
                 if use_decaying_avg_baseline:
                     avg_downstream_cost_old = pyro.param("__baseline_avg_downstream_cost_" + node,
                                                          ng_zeros(1))
@@ -211,21 +216,33 @@ class TraceGraph_KL_QP(object):
                     nn_params = nn_baseline.parameters()
                     baseline_loss = torch.pow(Variable(downstream_cost.data) - baseline, 2.0).sum()
                     baseline_losses.append((baseline_loss, nn_params))
-                if use_nn_baseline or use_decaying_avg_baseline:
-                    elbo_reinforce_terms += (guide_trace[node][log_pdf_key] * \
-                                            (Variable(downstream_cost.data - baseline.data))).sum()
+                elif use_baseline_value:
+                    # it's on the user to make sure baseline_value tape only points to baseline params
+                    baseline += baseline_value
+                    nn_params = baseline_params
+                    baseline_loss = torch.pow(Variable(downstream_cost.data) - baseline, 2.0).sum()
+                    baseline_losses.append((baseline_loss, nn_params))
+                if use_nn_baseline or use_decaying_avg_baseline or use_baseline_value:
+                    elbo_reinforce_terms += (guide_trace[node][log_pdf_key] *
+                                             (Variable(downstream_cost.data - baseline.data))).sum()
                 else:
-                    elbo_reinforce_terms += (guide_trace[node][log_pdf_key] * \
-                                            Variable(downstream_cost.data)).sum()
+                    elbo_reinforce_terms += (guide_trace[node][log_pdf_key] *
+                                             Variable(downstream_cost.data)).sum()
 
             # minimize losses for any neural network baselines
+            aggregate_baseline_loss = 0.0
+            aggregate_baseline_params = set()
             for loss, params in baseline_losses:
-                loss.backward()
+                aggregate_baseline_loss += loss
+                aggregate_baseline_params.update(params)
+
+            if len(aggregate_baseline_params) > 0:
+                aggregate_baseline_loss.backward()
                 if self.baseline_optim_step_fct is None:
-                    self.optim_step_fct(params)
+                    self.optim_step_fct(aggregate_baseline_params)
                 else:
                     # use baseline_optim_step_fct if user provided
-                    self.baseline_optim_step_fct(params)
+                    self.baseline_optim_step_fct(aggregate_baseline_params)
                 pyro.util.zero_grads(params)
 
         # the gradient of the surrogate loss yields our gradient estimator for the elbo

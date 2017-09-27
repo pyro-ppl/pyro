@@ -79,8 +79,8 @@ class LambdaPoutine(Poutine):
             else 'list'
         return super(LambdaPoutine, self)._pyro_map_data(msg, name, data,
                                                          LambdaPoutine(fn, name,
-								       mapdata_scale,
-								       map_data_type,
+                                                                       mapdata_scale,
+                                                                       map_data_type,
                                                                        batch_dim,
                                                                        batch_size),
                                                          batch_size=batch_size,

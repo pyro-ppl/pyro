@@ -7,7 +7,7 @@ from torch.autograd import Variable
 import pyro
 import pyro.distributions as dist
 from pyro.infer.tracegraph_kl_qp import TraceGraph_KL_QP
-from pyro.util import ng_zeros
+from pyro.util import ng_zeros, ng_ones
 from tests.common import TestCase
 
 
@@ -35,8 +35,9 @@ class NormalNormalTests(TestCase):
         self.analytic_log_sig_n = -0.5 * torch.log(self.analytic_lam_n)
         self.analytic_mu_n = self.sum_data * (self.lam / self.analytic_lam_n) +\
             self.mu0 * (self.lam0 / self.analytic_lam_n)
-        self.verbose = False
+        self.verbose = True
 
+    # this tests rao-blackwellization in elbo for nested list map_datas
     def _test_nested_list_map_data_in_elbo(self, n_steps=10000):
         pyro.get_param_store().clear()
 
@@ -108,13 +109,14 @@ class NormalNormalTests(TestCase):
         self.assertEqual(0.0, mu_error.data.cpu().numpy()[0], prec=0.04)
         self.assertEqual(0.0, log_sig_error.data.cpu().numpy()[0], prec=0.04)
 
+    # this tests rao-blackwellization and baselines for a vectorized map_data
+    # inside of a list map_data (note: the baseline is trivial)
     def test_vectorized_map_data_in_elbo(self, n_steps=10000):
         pyro.get_param_store().clear()
-        self._data = Variable(torch.zeros(9,2))
+        self.data_tensor = Variable(torch.zeros(9, 2))
         for _out in range(self.n_outer):
             for _in in range(self.n_inner):
-                self._data[3 * _out + _in, :] = self.data[_out][_in]
-        self.data = self._data
+                self.data_tensor[3 * _out + _in, :] = self.data[_out][_in]
 
         def model():
             mu_latent = pyro.sample("mu_latent", dist.diagnormal,
@@ -128,10 +130,13 @@ class NormalNormalTests(TestCase):
                 pyro.map_data("map_obs_inner_%d" % i, x, lambda _i, _x:
                               obs_inner(i, _i, _x), batch_size=3)
 
-            pyro.map_data("map_obs_outer", [self.data[0:3, :], self.data[3:6, :], self.data[6:9, :]],
+            pyro.map_data("map_obs_outer", [self.data_tensor[0:3, :], self.data_tensor[3:6, :],
+                                            self.data_tensor[6:9, :]],
                           lambda i, x: obs_outer(i, x), batch_size=3)
 
             return mu_latent
+
+        pt_trivial_baseline = torch.nn.Linear(1, 1)
 
         def guide():
             mu_q = pyro.param("mu_q", Variable(self.analytic_mu_n.data + 0.184 * torch.ones(2),
@@ -140,13 +145,18 @@ class NormalNormalTests(TestCase):
                                    self.analytic_log_sig_n.data - 0.19 * torch.ones(2),
                                    requires_grad=True))
             sig_q = torch.exp(log_sig_q)
-            mu_latent = pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q, reparameterized=False)
+            trivial_baseline = pyro.module("baseline", pt_trivial_baseline)
+            baseline_value = trivial_baseline(ng_ones(1))
+            baseline_params = trivial_baseline.parameters()
+            mu_latent = pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q, baseline_value=baseline_value,
+                                    baseline_params=baseline_params, reparameterized=False)
 
             def obs_outer(i, x):
                 pyro.map_data("map_obs_inner_%d" % i, x, lambda _i, _x:
                               None, batch_size=3)
 
-            pyro.map_data("map_obs_outer", [self.data[0:3, :], self.data[3:6, :], self.data[6:9, :]],
+            pyro.map_data("map_obs_outer", [self.data_tensor[0:3, :], self.data_tensor[3:6, :],
+                                            self.data_tensor[6:9, :]],
                           lambda i, x: obs_outer(i, x), batch_size=3)
 
             return mu_latent
