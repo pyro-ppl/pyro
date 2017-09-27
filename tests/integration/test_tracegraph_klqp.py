@@ -488,10 +488,10 @@ class LogNormalNormalTests(TestCase):
 
             mu_error = torch.abs(
                 pyro.param("mymodule$$$mu_q_log") -
-                self.log_mu_n).data.cpu().numpy()[0]
+                self.log_mu_n).data.cpu().numpy()[0][0]
             tau_error = torch.abs(
                 pyro.param("mymodule$$$tau_q_log") -
-                self.log_tau_n).data.cpu().numpy()[0]
+                self.log_tau_n).data.cpu().numpy()[0][0]
             if k % 500 == 0 and self.verbose:
                 print("mu_error, tau_error = %.4f, %.4f" % (mu_error, tau_error))
 
@@ -532,10 +532,10 @@ class LogNormalNormalTests(TestCase):
 
             mu_error = torch.abs(
                 pyro.param("mu_q_log") -
-                self.log_mu_n).data.cpu().numpy()[0]
+                self.log_mu_n).data.cpu().numpy()[0][0]
             tau_error = torch.abs(
                 pyro.param("tau_q_log") -
-                self.log_tau_n).data.cpu().numpy()[0]
+                self.log_tau_n).data.cpu().numpy()[0][0]
             if k % 500 == 0 and self.verbose:
                 print("mu_error, tau_error = %.4f, %.4f" % (mu_error, tau_error))
 
