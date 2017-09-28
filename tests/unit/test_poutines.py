@@ -6,7 +6,10 @@ from torch.autograd import Variable
 import pyro
 import pyro.poutine as poutine
 from pyro.distributions import DiagNormal, Bernoulli
+import pyro.distributions as dist
 from tests.common import TestCase
+from pyro.util import ng_ones, ng_zeros
+from pyro.poutine.lambda_poutine import LambdaPoutine
 
 pytestmark = pytest.mark.init(rng_seed=123)
 
@@ -265,3 +268,58 @@ class QueuePoutineTests(TestCase):
             self.assertTrue(False)
         except ValueError:
             self.assertTrue(True)
+
+class LambdaPoutineTests(TestCase):
+
+    def setUp(self):
+
+        def model():
+            mu_latent = pyro.sample("mu_latent", dist.diagnormal, ng_zeros(1), ng_ones(1))
+
+            def outer(i, x):
+                pyro.map_data("map_inner_%d" % i, x, lambda _i, _x:
+                              inner(i, _i, _x), batch_size=2)
+
+            def inner(i, _i, _x):
+                pyro.sample("z_%d_%d" % (i, _i), dist.diagnormal, mu_latent + _x, ng_ones(1))
+
+            pyro.map_data("map_outer", [[ng_ones(1)] * 4] * 4, lambda i, x:
+                          outer(i, x), batch_size=2)
+
+            return mu_latent
+
+        self.model = model
+
+    def test(self):
+        print "LP:\n", LambdaPoutine(self.model, "name", 1.0)()
+	self.assertTrue(True)
+
+"""
+    def test_queue_enumerate(self):
+        f = poutine.trace(poutine.queue(self.model, queue=self.queue))
+        trs = []
+        while not self.queue.empty():
+            trs.append(f())
+        self.assertTrue(len(trs) == 2 ** 3)
+
+        true_latents = set()
+        for i1 in range(2):
+            for i2 in range(2):
+                for i3 in range(2):
+                    true_latents.add((i1, i2, i3))
+
+        tr_latents = set()
+        for tr in trs:
+            tr_latents.add(tuple([tr[name]["value"].view(-1).data[0] for name in tr
+                                  if tr[name]["type"] == "sample"]))
+
+        self.assertTrue(true_latents == tr_latents)
+
+    def test_queue_max_tries(self):
+        f = poutine.queue(self.model, queue=self.queue, max_tries=3)
+        try:
+            f()
+            self.assertTrue(False)
+        except ValueError:
+            self.assertTrue(True)
+"""
