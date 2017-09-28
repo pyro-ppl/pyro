@@ -33,7 +33,17 @@ class Distribution(object):
         raise NotImplementedError("Support not supported for {}".format(str(type(self))))
 
     def analytic_mean(self, *args, **kwargs):
+        """
+        Analytic mean of the distribution, to be implemented by derived classes.
+        :return: Analytic mean, assuming it can be computed analytically given the distribution parameters
+        :rtype: torch.autograd.Variable.
+        """
         raise NotImplementedError("Method not implemented by the subclass {}".format(str(type(self))))
 
     def analytic_var(self, *args, **kwargs):
+        """
+        Analytic variance of the distribution, to be implemented by derived classes.
+        :return: Analytic variance, assuming it can be computed analytically given the distribution parameters
+        :rtype: torch.autograd.Variable.
+        """
         raise NotImplementedError("Method not implemented by the subclass {}".format(str(type(self))))
