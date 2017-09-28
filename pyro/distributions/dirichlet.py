@@ -81,11 +81,11 @@ class Dirichlet(Distribution):
             raise ValueError('Expected alpha.dim() in (1,2), actual: {}'.format(alpha.dim()))
         alpha_np = alpha.data.numpy()
         if alpha.dim() == 1:
-            x_np = spr.dirichlet.rvs(alpha_np)
+            x_np = spr.dirichlet.rvs(alpha_np)[0]
         else:
             x_np = np.empty_like(alpha_np)
             for i in range(alpha_np.shape[0]):
-                x_np[i, :] = spr.dirichlet.rvs(alpha_np[i, :])
+                x_np[i, :] = spr.dirichlet.rvs(alpha_np[i, :])[0]
         x = Variable(torch.Tensor(x_np))
         return x
 
