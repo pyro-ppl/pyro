@@ -20,7 +20,7 @@ def distribution():
                    sp.lognorm,
                    [(1.4, 0.4)],
                    [5.5],
-                   lambda (mean, sigma): ((sigma,), {"scale": math.exp(mean)}),
+                   lambda mean, sigma: ((sigma,), {"scale": math.exp(mean)}),
                    prec=0.1,
                    min_samples=20000)
 

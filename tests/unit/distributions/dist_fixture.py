@@ -1,19 +1,19 @@
+import json
 import math
 import numbers
 
 import numpy as np
 import torch
-import json
 from torch.autograd import Variable
 
 
 class Fixture(object):
     def __init__(self,
-                 pyro_dist,
-                 scipy_dist,
-                 dist_params,
-                 test_data,
-                 scipy_arg_fn,
+                 pyro_dist=None,
+                 scipy_dist=None,
+                 dist_params=None,
+                 test_data=None,
+                 scipy_arg_fn=None,
                  prec=0.05,
                  min_samples=None,
                  is_discrete=False,
