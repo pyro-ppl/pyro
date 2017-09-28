@@ -191,7 +191,7 @@ class TraceGraph_KL_QP(object):
                        kwargs.get('baseline_value', None), \
                        kwargs.get('baseline_params', None)
 
-            # this [] will be used to store information need to construct baseline losses below
+            # this [] will be used to store information need to construct baseline loss below
             baseline_losses = []
             for node in non_reparam_nodes:
                 log_pdf_key = 'log_pdf' if node not in guide_vec_batch_nodes_dict else 'batch_log_pdf'

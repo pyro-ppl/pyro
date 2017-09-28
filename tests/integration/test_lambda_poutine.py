@@ -7,7 +7,7 @@ from torch.autograd import Variable
 import pyro
 import pyro.distributions as dist
 from pyro.infer.tracegraph_kl_qp import TraceGraph_KL_QP
-from pyro.util import ng_zeros, ng_ones
+from pyro.util import ng_zeros, ng_ones, ones
 from tests.common import TestCase
 
 
@@ -35,10 +35,10 @@ class NormalNormalTests(TestCase):
         self.analytic_log_sig_n = -0.5 * torch.log(self.analytic_lam_n)
         self.analytic_mu_n = self.sum_data * (self.lam / self.analytic_lam_n) +\
             self.mu0 * (self.lam0 / self.analytic_lam_n)
-        self.verbose = True
+        self.verbose = False
 
     # this tests rao-blackwellization in elbo for nested list map_datas
-    def _test_nested_list_map_data_in_elbo(self, n_steps=10000):
+    def test_nested_list_map_data_in_elbo(self, n_steps=8000):
         pyro.get_param_store().clear()
 
         def model():
@@ -111,7 +111,14 @@ class NormalNormalTests(TestCase):
 
     # this tests rao-blackwellization and baselines for a vectorized map_data
     # inside of a list map_data (note: the baseline is trivial)
-    def test_vectorized_map_data_in_elbo(self, n_steps=10000):
+    # with and without a superfluous random variable
+    def test_vectorized_map_data_in_elbo_without_superfluous_rv(self):
+        self._test_vectorized_map_data_in_elbo(superfluous=False, n_steps=6000)
+
+    def test_vectorized_map_data_in_elbo_with_superfluous_rv(self):
+        self._test_vectorized_map_data_in_elbo(superfluous=True, n_steps=8000)
+
+    def _test_vectorized_map_data_in_elbo(self, superfluous, n_steps):
         pyro.get_param_store().clear()
         self.data_tensor = Variable(torch.zeros(9, 2))
         for _out in range(self.n_outer):
@@ -124,14 +131,17 @@ class NormalNormalTests(TestCase):
                                     reparameterized=False)
 
             def obs_inner(i, _i, _x):
+                if superfluous:
+                    pyro.sample("z_%d" % i, dist.diagnormal, ng_zeros(4 - i, 1), ng_ones(4 - i, 1),
+                                reparameterized=False)
                 pyro.observe("obs_%d" % i, dist.diagnormal, _x, mu_latent, torch.pow(self.lam, -0.5))
 
             def obs_outer(i, x):
                 pyro.map_data("map_obs_inner_%d" % i, x, lambda _i, _x:
-                              obs_inner(i, _i, _x), batch_size=3)
+                              obs_inner(i, _i, _x), batch_size=4 - i)
 
-            pyro.map_data("map_obs_outer", [self.data_tensor[0:3, :], self.data_tensor[3:6, :],
-                                            self.data_tensor[6:9, :]],
+            pyro.map_data("map_obs_outer", [self.data_tensor[0:4, :], self.data_tensor[4:7, :],
+                                            self.data_tensor[7:9, :]],
                           lambda i, x: obs_outer(i, x), batch_size=3)
 
             return mu_latent
@@ -151,12 +161,20 @@ class NormalNormalTests(TestCase):
             mu_latent = pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q, baseline_value=baseline_value,
                                     baseline_params=baseline_params, reparameterized=False)
 
+            def obs_inner(i, _i, _x):
+                if superfluous:
+                    mean_i = pyro.param("mean_%d" % i, ones(4 - i, 1))
+                    pyro.sample("z_%d" % i, dist.diagnormal, mean_i, ng_ones(4 - i, 1),
+                                reparameterized=False)
+                else:
+                    pass
+
             def obs_outer(i, x):
                 pyro.map_data("map_obs_inner_%d" % i, x, lambda _i, _x:
-                              None, batch_size=3)
+                              obs_inner(i, _i, _x), batch_size=4 - i)
 
-            pyro.map_data("map_obs_outer", [self.data_tensor[0:3, :], self.data_tensor[3:6, :],
-                                            self.data_tensor[6:9, :]],
+            pyro.map_data("map_obs_outer", [self.data_tensor[0:4, :], self.data_tensor[4:7, :],
+                                            self.data_tensor[7:9, :]],
                           lambda i, x: obs_outer(i, x), batch_size=3)
 
             return mu_latent
