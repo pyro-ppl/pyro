@@ -195,9 +195,19 @@ class NormalNormalTests(TestCase):
                     self.analytic_log_sig_n -
                     pyro.param("log_sig_q"),
                     2.0))
+            if superfluous:
+                mean_0_error = torch.sum(torch.pow(pyro.param("mean_0"), 2.0))
+                mean_1_error = torch.sum(torch.pow(pyro.param("mean_1"), 2.0))
+                mean_2_error = torch.sum(torch.pow(pyro.param("mean_2"), 2.0))
+                superfluous_error = torch.max(torch.max(mean_0_error, mean_1_error), mean_2_error)
+
             if k % 500 == 0 and self.verbose:
                 print("mu error, log(sigma) error:  %.4f, %.4f" % (mu_error.data.numpy()[0],
                       log_sig_error.data.numpy()[0]))
+                if superfluous:
+                    print("superfluous error: %.4f" % superfluous_error.data.numpy()[0])
 
         self.assertEqual(0.0, mu_error.data.cpu().numpy()[0], prec=0.04)
         self.assertEqual(0.0, log_sig_error.data.cpu().numpy()[0], prec=0.04)
+        if superfluous:
+            self.assertEqual(0.0, superfluous_error.data.cpu().numpy()[0], prec=0.04)
