@@ -14,34 +14,46 @@ class TransformedDistribution(Distribution):
     Transforms the distribution with the bijector
     """
 
-    def __init__(self, base_distribution, bijector, *args, **kwargs):
+    def __init__(self, base_distribution, bijectors, *args, **kwargs):
         """
-        Constructor; takes base distribution and bijector as arguments
+        Constructor; takes base distribution and bijector(s) as arguments
         """
         super(TransformedDistribution, self).__init__(*args, **kwargs)
         self.reparameterized = base_distribution.reparameterized
         self.base_dist = base_distribution
-        self.bijector = bijector
+        if type(bijectors) is list or type(bijectors) is tuple:
+           self.bijectors = bijectors
+        else:
+           self.bijectors = [bijectors]
 
     def sample(self, *args, **kwargs):
         """
-        Sample from base and pass through bijector
+        Sample from base and pass through bijector(s)
         """
         x = self.base_dist.sample(*args, **kwargs)
-        y = self.bijector(x)
-        if self.bijector.add_inverse_to_cache:
-            self.bijector.add_intermediate_to_cache(x, y, 'x')
-        return y
+        next_input = x
+        for bijector in self.bijectors:
+           y = bijector(next_input)
+           if bijector.add_inverse_to_cache:
+               bijector.add_intermediate_to_cache(next_input, y, 'x')
+           next_input = y
+        return next_input
 
     def log_pdf(self, y, *args, **kwargs):
         """
-        Scores the sample by inverting the bijector
+        Scores the sample by inverting the bijector(s)
         """
-        x = self.bijector.inverse(y)
-        log_pdf_1 = self.base_dist.log_pdf(x, *args, **kwargs)
-        log_pdf_2 = -self.bijector.log_det_jacobian(y)
-        return log_pdf_1 + log_pdf_2
-
+        inverses = []
+        next_to_invert = y
+        for bijector in reversed(self.bijectors):
+            inverse = bijector.inverse(next_to_invert)
+            inverses.append(inverse)
+            next_to_invert = inverse
+        log_pdf_base = self.base_dist.log_pdf(inverses[-1], *args, **kwargs)
+        log_det_jacobian = self.bijectors[-1].log_det_jacobian(y)
+        for bijector, inverse in zip(list(reversed(self.bijectors))[1:], inverses[:-1]):
+            log_det_jacobian += bijector.log_det_jacobian(inverse)
+        return log_pdf_base - log_det_jacobian
 
 class Bijector(nn.Module):
     def __init__(self, *args, **kwargs):

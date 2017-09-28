@@ -41,8 +41,12 @@ data = Variable(gen_distr(N))
 n_mini_batches = N / batch_size
 
 use_iaf = True
+N_iafs = 3
+pt_iafs = []
 if use_iaf:
-    pt_iaf = InverseAutoregressiveFlow(dim_z, dim_h_iaf)
+    for _ in range(N_iafs):
+        pt_iaf = InverseAutoregressiveFlow(dim_z, dim_h_iaf)
+        pt_iafs.append(pt_iaf)
 
 #make_scatter_plot(data.data.numpy(), "training data")
 
@@ -72,8 +76,11 @@ def guide(observed_data):
     mu_z = x_encoded[:, 0:dim_z]
     sigma_z = torch.exp(x_encoded[:, dim_z:])
     if use_iaf:
-        iaf = pyro.module("iaf", pt_iaf)
-        z_dist = TransformedDistribution(DiagNormal(mu_z, sigma_z), iaf)
+        iafs = []
+        for i, pt_iaf in enumerate(pt_iafs):
+            iaf = pyro.module("iaf_%d" % i, pt_iaf)
+            iafs.append(iaf)
+        z_dist = TransformedDistribution(DiagNormal(mu_z, sigma_z), iafs)
     else:
         z_dist = DiagNormal(mu_z, sigma_z)
     z = pyro.sample("z", z_dist)

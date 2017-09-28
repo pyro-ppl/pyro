@@ -29,7 +29,7 @@ class AutoRegressiveNN(nn.Module):
     """
 
     def __init__(self, input_dim, hidden_dim, output_dim_multiplier=1,
-                 mask_encoding=None, output_bias=None):
+                 mask_encoding=None, output_bias=None, permutation=None):
         super(AutoRegressiveNN, self).__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
@@ -44,16 +44,22 @@ class AutoRegressiveNN(nn.Module):
             # the dependency structure is given by the user
             self.mask_encoding = mask_encoding
 
+        if permutation is None:
+            self.permutation = torch.randperm(input_dim)
+        else:
+            self.permutation = permutation
+
         self.mask1 = Variable(torch.zeros(hidden_dim, input_dim))
         self.mask2 = Variable(torch.zeros(input_dim * self.output_dim_multiplier, hidden_dim))
 
         for k in range(input_dim):
             m_k = self.mask_encoding[k]
-            self.mask1[k, 0:m_k] = torch.ones(m_k)
+            permuted_k = self.permutation[k]
+            self.mask1[permuted_k, 0:m_k] = torch.ones(m_k)
             for j in range(self.output_dim_multiplier):
                 left_index = m_k + j * input_dim
                 right_index = (j + 1) * input_dim
-                self.mask2[left_index:right_index, k] = torch.ones(input_dim - m_k)
+                self.mask2[left_index:right_index, permuted_k] = torch.ones(input_dim - m_k)
 
         self.lin1 = MaskedLinear(input_dim, hidden_dim, self.mask1)
         self.lin2 = MaskedLinear(hidden_dim, input_dim * output_dim_multiplier, self.mask2)
@@ -62,6 +68,9 @@ class AutoRegressiveNN(nn.Module):
     def get_mask_encoding(self):
         # basically the quantity m(k) in the MADE paper
         return self.mask_encoding
+
+    def get_permutation(self):
+        return self.permutation
 
     def forward(self, z):
         h = self.relu(self.lin1(z))
