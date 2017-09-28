@@ -193,7 +193,7 @@ class TraceGraphPoutine(TracePoutine):
         vec_md_stacks = set()
 
         for node, stack in self.nodes_seen_so_far.items():
-            vec_mds = filter(lambda x: x[2] == 'tensor', stack)
+            vec_mds = list(filter(lambda x: x[2] == 'tensor', stack))
             # check for nested vectorized map datas
             if len(vec_mds) > 1:
                 vectorized_map_data_info['rao-blackwellization-condition'] = False
@@ -235,7 +235,7 @@ class TraceGraphPoutine(TracePoutine):
         if vectorized_map_data_info['rao-blackwellization-condition']:
             vectorized_map_data_info['nodes'] = defaultdict(lambda: [])
             for node, stack in self.nodes_seen_so_far.items():
-                vec_mds = filter(lambda x: x[2] == 'tensor', stack)
+                vec_mds = list(filter(lambda x: x[2] == 'tensor', stack))
                 if len(vec_mds) > 0:
                     node_batch_dim_pair = (node, vec_mds[0][3])
                     vectorized_map_data_info['nodes'][vec_mds[0][0]].append(node_batch_dim_pair)
