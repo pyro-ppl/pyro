@@ -269,7 +269,7 @@ class QueuePoutineTests(TestCase):
             self.assertTrue(True)
 
 
-class TraceGraphPoutineTests(TestCase):
+class IndirectLambdaPoutineTests(TestCase):
 
     def setUp(self):
 
