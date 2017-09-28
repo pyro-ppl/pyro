@@ -13,10 +13,6 @@ class Dirichlet(Distribution):
 
     Dirichlet is a multivariate generalization of the Beta distribution.
 
-    This class can either be constructed from a fixed parameter and called without paramters,
-    or constructed without a parameter and called with a paramter.
-    It is not allowed to specify a parameter both during construction and when calling.
-
     :param alpha:  *(real (0, Infinity))*
     """
 
@@ -33,7 +29,7 @@ class Dirichlet(Distribution):
 
     def _expand_dims(self, x, alpha):
         """
-        Expand to 2-dimensional tensors.
+        Expand to 2-dimensional tensors of the same shape.
         """
         if not isinstance(x, (torch.Tensor, Variable)):
             raise TypeError('Expected x a Tensor or Variable, got a {}'.format(type(x)))
@@ -49,19 +45,13 @@ class Dirichlet(Distribution):
             # Disallow broadcasting, e.g. disallow resizing (1,4) -> (4,4).
             raise ValueError('Batch sizes disagree: {} vs {}'.format(x.size(0), alpha.size(0)))
 
-        if x.dim() == 2:
-            if alpha.dim() == 2:
-                # Note that this does not broadcast, so e.g. (1,4) -> (4,4) is not allowed.
-                if x.size(0) != alpha.size(0):
-                    raise ValueError('Batch sizes disagree: {} vs {}'.format(x.dim(), alpha.dim()))
-            else:
-                alpha = alpha.expand(x.size(0), 0)
-        else:
-            if alpha.dim() == 2:
-                x = x.expand(alpha.size(0), 0)
-            else:
-                alpha = alpha.unsqueeze(0)
-                x = x.unsqueeze(0)
+        if x.dim() == 1:
+            x = x.unsqueeze(0)
+        if alpha.dim() == 1:
+            alpha = alpha.unsqueeze(0)
+        batch_size = max(x.size(1), alpha.size(1))
+        x = x.expand(x.size(0), batch_size)
+        alpha = alpha.expand(x.size(0), batch_size)
         return x, alpha
 
     def __init__(self, alpha=None, batch_size=1, *args, **kwargs):
@@ -99,6 +89,7 @@ class Dirichlet(Distribution):
         x = Variable(torch.Tensor(x_np))
         return x
 
+    # TODO Move this generic implementation into the Distribution base class.
     def log_pdf(self, x, *args, **kwargs):
         """
         Evaluates total log probability density for one or a batch of samples and parameters.
@@ -109,7 +100,6 @@ class Dirichlet(Distribution):
         :return: log probability density.
         :rtype: torch.autograd.Variable of torch.Tensor of dimension 1.
         """
-        # TODO Move this generic implementation into Distribution base class.
         return torch.sum(self.batch_log_pdf(x, *args, **kwargs))
 
     # TODO Remove the batch_size argument.
