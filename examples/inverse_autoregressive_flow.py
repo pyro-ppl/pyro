@@ -14,13 +14,20 @@ import sys
 import visdom
 from sklearn.datasets import make_moons
 
-viz = visdom.Visdom()
+visualize = False
+
+if visualize:
+    viz = visdom.Visdom()
+
+    def make_scatter_plot(X, title):
+        win = viz.scatter(X=X,
+                          opts=dict(markersize=2, title=title))
 
 dim_x = 2
-dim_z = 5
-dim_h_decoder = 20
-dim_h_encoder = 20
-dim_h_iaf = 5
+dim_z = 10
+dim_h_decoder = 50
+dim_h_encoder = 50
+dim_h_iaf = 10
 
 def gen_distr(N):
     x, y = make_moons(n_samples=2 * N, noise=0.2)
@@ -28,19 +35,16 @@ def gen_distr(N):
     return torch.Tensor(data)
 
 N = 500
-batch_size = 20
+batch_size = 5
 data = Variable(gen_distr(N))
-mini_batches = [data[i*batch_size:(i+1)*batch_size] for i in range(N/batch_size)]
+#mini_batches = [data[i*batch_size:(i+1)*batch_size] for i in range(N/batch_size)]
+n_mini_batches = N / batch_size
 
-use_iaf = False
+use_iaf = True
 if use_iaf:
     pt_iaf = InverseAutoregressiveFlow(dim_z, dim_h_iaf)
 
-def make_scatter_plot(X, title):
-    win = viz.scatter(X=X,
-                      opts=dict(markersize=2, title=title))
-
-make_scatter_plot(data.data.numpy(), "training data")
+#make_scatter_plot(data.data.numpy(), "training data")
 
 pt_decoder = nn.Sequential(nn.Linear(dim_z, dim_h_decoder), nn.Softplus(),
                            #nn.Linear(dim_h_decoder, dim_h_decoder), nn.Softplus(),
@@ -59,7 +63,7 @@ def model(observed_data):
     mu_x = z_decoded[:, 0:dim_x]
     sigma_x = torch.exp(z_decoded[:, dim_x:])
     obs_dist = DiagNormal(mu_x, sigma_x)
-    pyro.observe("obs", obs_dist, observed_data)
+    pyro.map_data("map", observed_data, lambda i, x: pyro.observe("obs", obs_dist, x))
 
 def guide(observed_data):
     encoder = pyro.module("encoder", pt_encoder)
@@ -73,6 +77,7 @@ def guide(observed_data):
     else:
         z_dist = DiagNormal(mu_z, sigma_z)
     z = pyro.sample("z", z_dist)
+    pyro.map_data("map", observed_data, lambda i, x: None)
 
 def sample_x(n_samples, return_mu=False):
     z_prior = DiagNormal(ng_zeros(n_samples, dim_z),
@@ -89,20 +94,21 @@ def sample_x(n_samples, return_mu=False):
     else:
         return mu_x
 
-n_steps = 200
-kl_optim = KL_QP(model, guide, pyro.optim(optim.Adam, {"lr": 0.002, "betas": (0.90, 0.990)}))
+n_steps = 1000
+kl_optim = KL_QP(model, guide, pyro.optim(optim.Adam, {"lr": 0.01, "betas": (0.90, 0.999)}))
 for step in range(n_steps):
     losses = []
-    for mini_batch in mini_batches:
-        loss = kl_optim.step(mini_batch)
+    for mini_batch in range(n_mini_batches):
+        loss = kl_optim.step(data)
         losses.append(loss)
     if step % 10 == 0:
         print("[epoch %04d] elbo = %.4f" % (step, -np.mean(losses)))
         sys.stdout.flush()
 
-samples = sample_x(N)
-samples_mu = sample_x(N, return_mu=True)
-title = "x samples "
-addendum = "(with flow)" if use_iaf else "(without flow)"
-make_scatter_plot(samples.data.numpy(), title + addendum)
-make_scatter_plot(samples_mu.data.numpy(), title + addendum + '[mu]')
+if visualize:
+    samples = sample_x(N)
+    samples_mu = sample_x(N, return_mu=True)
+    title = "x samples "
+    addendum = "(with flow)" if use_iaf else "(without flow)"
+    make_scatter_plot(samples.data.numpy(), title + addendum)
+    make_scatter_plot(samples_mu.data.numpy(), title + addendum + '[mu]')

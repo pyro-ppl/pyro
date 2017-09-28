@@ -74,10 +74,9 @@ class InverseAutoregressiveFlow(Bijector):
     """
     def __init__(self, input_dim, hidden_dim, s_bias=2.0):
         super(InverseAutoregressiveFlow, self).__init__()
-        self.arn_s = AutoRegressiveNN(input_dim, hidden_dim, output_bias=s_bias)
-        self.arn_m = AutoRegressiveNN(input_dim, hidden_dim,
-                                      lin1=self.arn_s.get_lin1(),
-                                      mask_encoding=self.arn_s.get_mask_encoding())
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.arn = AutoRegressiveNN(input_dim, hidden_dim, output_dim_multiplier=2, output_bias=s_bias)
         self.sigmoid = nn.Sigmoid()
         self.intermediates_cache = {}
         self.add_inverse_to_cache = True
@@ -86,10 +85,10 @@ class InverseAutoregressiveFlow(Bijector):
         """
         Invoke bijection x=>y
         """
-        s = self.arn_s(x)
-        sigma = self.sigmoid(s)
-        m = self.arn_m(x)
-        y = sigma * x + (ng_ones(sigma.size()) - sigma) * m
+        hidden = self.arn(x)
+        sigma = self.sigmoid(hidden[:, 0:self.input_dim])
+        mean = hidden[:, self.input_dim:]
+        y = sigma * x + (ng_ones(sigma.size()) - sigma) * mean
         self.add_intermediate_to_cache(sigma, y, 'sigma')
         return y
 

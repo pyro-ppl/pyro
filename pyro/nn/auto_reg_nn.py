@@ -28,39 +28,36 @@ class AutoRegressiveNN(nn.Module):
     reference: https://arxiv.org/abs/1502.03509
     """
 
-    def __init__(self, input_dim, hidden_dim,
-                 lin1=None, mask_encoding=None, output_bias=None):
+    def __init__(self, input_dim, hidden_dim, output_dim_multiplier=1,
+                 mask_encoding=None, output_bias=None):
         super(AutoRegressiveNN, self).__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.output_bias = output_bias
+        self.output_dim_multiplier = output_dim_multiplier
 
         if mask_encoding is None:
             # the dependency structure is chosen at random
             self.mask_encoding = 1 + torch.multinomial(torch.ones(input_dim - 1) / (input_dim - 1),
                                                        num_samples=input_dim, replacement=True)
         else:
-            # the dependency structure is given by the user (probably just passing on an
-            # encoding_mask from a previously initialized AutoRegressiveNN)
+            # the dependency structure is given by the user
             self.mask_encoding = mask_encoding
 
         self.mask1 = Variable(torch.zeros(hidden_dim, input_dim))
-        self.mask2 = Variable(torch.zeros(input_dim, hidden_dim))
+        self.mask2 = Variable(torch.zeros(input_dim * self.output_dim_multiplier, hidden_dim))
+
         for k in range(input_dim):
             m_k = self.mask_encoding[k]
             self.mask1[k, 0:m_k] = torch.ones(m_k)
-            self.mask2[m_k:input_dim, k] = torch.ones(input_dim - m_k)
+            for j in range(self.output_dim_multiplier):
+                left_index = m_k + j * input_dim
+                right_index = (j + 1) * input_dim
+                self.mask2[left_index:right_index, k] = torch.ones(input_dim - m_k)
 
-        if lin1 is None:
-            self.lin1 = MaskedLinear(input_dim, hidden_dim, self.mask1)
-        else:
-            self.lin1 = lin1
-
-        self.lin2 = MaskedLinear(hidden_dim, input_dim, self.mask2)
+        self.lin1 = MaskedLinear(input_dim, hidden_dim, self.mask1)
+        self.lin2 = MaskedLinear(hidden_dim, input_dim * output_dim_multiplier, self.mask2)
         self.relu = nn.ReLU()
-
-    def get_lin1(self):
-        return self.lin1
 
     def get_mask_encoding(self):
         # basically the quantity m(k) in the MADE paper
