@@ -31,3 +31,9 @@ class Distribution(object):
 
     def support(self):
         raise NotImplementedError("Support not supported for {}".format(str(type(self))))
+
+    def analytic_mean(self, *args, **kwargs):
+        raise NotImplementedError("Method not implemented by the subclass {}".format(str(type(self))))
+
+    def analytic_var(self, *args, **kwargs):
+        raise NotImplementedError("Method not implemented by the subclass {}".format(str(type(self))))

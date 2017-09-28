@@ -39,8 +39,8 @@ class Multinomial(Distribution):
 
     def sample(self, ps=None, n=None, *args, **kwargs):
         _ps, _n = self._sanitize_input(ps, n)
-        _, counts = np.unique([self.expanded_sample().data.numpy()], return_counts=True)
-        return Variable(torch.Tensor(counts).type_as(_ps.data))
+        counts = np.bincount(self.expanded_sample(_ps, _n).data.numpy(), minlength=_ps.size()[0])
+        return Variable(torch.Tensor(counts))
 
     def expanded_sample(self, ps=None, n=None, *args, **kwargs):
         _ps, _n = self._sanitize_input(ps, n)
@@ -49,7 +49,7 @@ class Multinomial(Distribution):
             _n = int(_n.data[0][0])
         else:
             _n = int(_n.data[0])
-        return Variable(torch.multinomial(_ps.data, _n, replacement=True).type_as(_ps.data))
+        return Variable(torch.multinomial(_ps.data, _n, replacement=True))
 
     def batch_log_pdf(self, x, ps=None, n=None, batch_size=1, *args, **kwargs):
         """
@@ -108,3 +108,11 @@ class Multinomial(Distribution):
             return var.data
         # nested tensor arrays because of batches"
         return var.data.numpy()[0]
+
+    def analytic_mean(self, ps=None, n=None):
+        _ps, _n = self._sanitize_input(ps, n)
+        return _n * _ps
+
+    def analytic_var(self, ps=None, n=None):
+        _ps, _n = self._sanitize_input(ps, n)
+        return _n * ps * (1 - _ps)

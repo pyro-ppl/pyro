@@ -61,3 +61,11 @@ class Exponential(Distribution):
             x = x.expand(batch_size, x.size(0))
         ll = -_lam * x + torch.log(_lam)
         return torch.sum(ll, 1)
+
+    def analytic_mean(self, lam=None):
+        _lam = self._sanitize_input(lam)
+        return torch.pow(_lam, -1.0)
+
+    def analytic_var(self, lam=None):
+        _lam = self._sanitize_input(lam)
+        return torch.pow(_lam, -2.0)

@@ -62,3 +62,11 @@ class Poisson(Distribution):
         ll_2 = -torch.sum(_lam, 1)
         ll_3 = -torch.sum(log_gamma(x + 1.0), 1)
         return ll_1 + ll_2 + ll_3
+
+    def analytic_mean(self, lam=None):
+        _lam = self._sanitize_input(lam)
+        return _lam
+
+    def analytic_var(self, lam=None):
+        _lam = self._sanitize_input(lam)
+        return _lam
