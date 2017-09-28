@@ -24,7 +24,7 @@ def test_batch_log_pdf(dist):
     try:
         logpdf_sum_pyro = unwrap_variable(torch.sum(dist.get_pyro_batch_logpdf()))[0]
     except NotImplementedError:
-        return
+        pytest.skip("Batch log pdf not tested for distribution")
     logpdf_sum_np = np.sum(dist.get_scipy_batch_logpdf())
     assert_equal(logpdf_sum_pyro, logpdf_sum_np)
 
