@@ -5,6 +5,12 @@ class Distribution(object):
     """
     Abstract base class for probability distributions.
 
+    Instances can either be constructed from a fixed parameter and called without paramters,
+    or constructed without a parameter and called with a paramter.
+    It is not allowed to specify a parameter both during construction and when calling.
+    When calling with a parameter, it is preferred to use one of the singleton instances
+    in pyro.distributions rather than constructing a new instance without a parameter.
+
     Derived classes must implement the `sample`, and `log_pdf` methods.
     """
 
