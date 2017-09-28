@@ -1,20 +1,19 @@
 import pyro
-import torch
 
-from pyro.poutine import Trace
 from .poutine import Poutine
+from .lambda_poutine import LambdaPoutine
 
 
 class ReplayPoutine(Poutine):
     """
     Poutine for replaying from an existing execution trace
     """
+
     def __init__(self, fn, guide_trace, sites=None):
         """
         Constructor.
         """
         super(ReplayPoutine, self).__init__(fn)
-        self.transparent = False
         assert guide_trace is not None, "must provide guide_trace"
         self.guide_trace = guide_trace
         # case 1: no sites
@@ -32,7 +31,27 @@ class ReplayPoutine(Poutine):
             raise TypeError(
                 "unrecognized type {} for sites".format(str(type(sites))))
 
-    def _pyro_sample(self, prev_val, name, fn, *args, **kwargs):
+    def down(self, msg):
+        """
+        Pass indices down at a map_data
+        """
+        if msg["name"] in self.sites:
+            if msg["type"] == "map_data":
+                guide_type = self.guide_trace[msg["name"]]["type"]
+                assert self.guide_trace[msg["name"]]["type"] == "map_data", \
+                    "{} is {}, not map_data, in guide_trace".format(msg["name"],
+                                                                    guide_type)
+                msg["indices"] = self.guide_trace[msg["name"]]["indices"]
+                msg["batch_size"] = self.guide_trace[msg["name"]]["batch_size"]
+                msg["batch_dim"] = self.guide_trace[msg["name"]]["batch_dim"]
+
+            # dont reexecute
+            if msg["type"] == "sample":
+                msg["done"] = True
+
+        return msg
+
+    def _pyro_sample(self, msg, name, fn, *args, **kwargs):
         """
         Return the sample in the guide trace when appropriate
         """
@@ -43,16 +62,23 @@ class ReplayPoutine(Poutine):
                 "{} in sites but {} not in trace".format(name, g_name)
             assert self.guide_trace[g_name]["type"] == "sample", \
                 "site {} must be sample in guide_trace".format(g_name)
+            msg["done"] = True
             return self.guide_trace[g_name]["value"]
         # case 2: dict, negative: sample from model
         elif name not in self.sites:
-            return fn(*args, **kwargs)
+            return super(ReplayPoutine, self)._pyro_sample(msg, name, fn, *args, **kwargs)
         else:
             raise ValueError(
                 "something went wrong with replay conditions at site " + name)
 
-    # def _pyro_map_data(self, prev_val, name, data, fn):
-    #     """
-    #     Use the batch indices from the guide trace
-    #     """
-    #     raise NotImplementedError("havent finished this yet")
+    def _pyro_map_data(self, msg, name, data, fn, batch_size=None, batch_dim=0):
+        """
+        Use the batch indices from the guide trace, already provided by down
+        So all we need to do here is apply a LambdaPoutine as in TracePoutine
+        """
+        scale = pyro.util.get_batch_scale(data, batch_size, batch_dim)
+        ret = super(ReplayPoutine, self)._pyro_map_data(msg, name, data,
+                                                        LambdaPoutine(fn, name, scale),
+                                                        batch_size=batch_size,
+                                                        batch_dim=batch_dim)
+        return ret

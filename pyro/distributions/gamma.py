@@ -1,6 +1,7 @@
 import scipy.stats as spr
 import torch
 from torch.autograd import Variable
+
 import pyro
 from pyro.distributions.distribution import Distribution
 from pyro.util import log_gamma
@@ -34,8 +35,8 @@ class Gamma(Distribution):
         self.beta = beta
         if alpha is not None:
             if alpha.dim() == 1 and beta.dim() == 1:
-                self.alpha = alpha.expand(batch_size, 0)
-                self.beta = beta.expand(batch_size, 0)
+                self.alpha = alpha.expand(batch_size, alpha.size(0))
+                self.beta = beta.expand(batch_size, beta.size(0))
         self.reparameterized = False
         super(Gamma, self).__init__(*args, **kwargs)
 

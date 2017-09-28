@@ -1,15 +1,15 @@
-from pyro.params.param_store import ParamStoreDict
-from torch.autograd import Variable
-from pyro.optim.optim import PyroOptim
 from inspect import isclass
-import pyro
-from torch.nn import Parameter
+
 import torch
+from torch.autograd import Variable
+from torch.nn import Parameter
 
-from pyro import distributions, infer, nn, params, util, poutine
-
-from pyro.util import zeros, ones
+import pyro
+from pyro import util
+from pyro.optim.optim import PyroOptim
 from pyro.params import param_with_module_name
+from pyro.params.param_store import ParamStoreDict
+from pyro.util import zeros, ones  # noqa: F401
 
 # global map of params for now
 _param_store = ParamStoreDict()
@@ -45,25 +45,33 @@ optim = PyroOptim
 _PYRO_STACK = []
 
 
-def param(name, *args, **kwargs):
+def apply_stack(initial_msg):
     """
-    :param name: name of parameter
-    :returns: parameter
-
-    Saves the variable as a parameter in the param store.
-    To interact with the param store or write to disk,
-    see `Parameters <parameters.html>`_.
+    Execute the poutine stack according to the new two-sided blocking scheme.
+    Poutine stack mechanism:
+    1) start at the top
+    2) grab the top poutine, ask to go down
+    3) if down, recur
+    4) if not, stop, start returning
     """
+    stack = _PYRO_STACK
+    # # XXX seems like this should happen on poutine installation, not at execution
+    # assert poutine.validate_stack(stack), \
+    #     "Current poutine stack violates poutine composition rules"
 
-    if len(_PYRO_STACK) == 0:
-        return _param_store.get_param(name, *args, **kwargs)
-    else:
-        ret = None
-        for layer in _PYRO_STACK:
-            ret, stop = layer("param", ret, name, *args, **kwargs)
-            if stop:
-                break
-        return ret
+    msg = initial_msg
+
+    # work out the bottom poutine at this site
+    for frame in reversed(stack):
+        msg = frame.down(msg)
+
+    # go until time to stop?
+    for frame in stack:
+        msg = frame.up(msg)
+        if msg["stop"]:
+            break
+
+    return msg
 
 
 def sample(name, fn, *args, **kwargs):
@@ -74,22 +82,31 @@ def sample(name, fn, *args, **kwargs):
 
     Samples from the distribution and registers it in the trace data structure.
     """
-
     # check if stack is empty
     # if stack empty, default behavior (defined here)
     if len(_PYRO_STACK) == 0:
         return fn(*args, **kwargs)
     # if stack not empty, apply everything in the stack?
     else:
-        ret = None
-        for layer in _PYRO_STACK:
-            ret, stop = layer("sample", ret, name, fn, *args, **kwargs)
-            if stop:
-                break
-        return ret
+        # initialize data structure to pass up/down the stack
+        msg = {
+            "type": "sample",
+            "name": name,
+            "fn": fn,
+            "args": args,
+            "kwargs": kwargs,
+            "ret": None,
+            "scale": 1.0,
+            "map_data_stack": [],
+            "done": False,
+            "stop": False,
+        }
+        # apply the stack and return its return value
+        out_msg = apply_stack(msg)
+        return out_msg["ret"]
 
 
-def observe(name, fn, obs, *args, **kwargs):
+def observe(name, fn, val, *args, **kwargs):
     """
     :param name: name of observation
     :param fn: distribution class or function
@@ -104,40 +121,101 @@ def observe(name, fn, obs, *args, **kwargs):
         raise NotImplementedError(
             "Observe has been used outside of a normalizing context.")
     else:
-        ret = None
-        for layer in _PYRO_STACK:
-            ret, stop = layer("observe", ret, name, fn, obs, *args, **kwargs)
-            if stop:
-                break
-        return ret
+        # initialize data structure to pass up/down the stack
+        msg = {
+            "type": "observe",
+            "name": name,
+            "fn": fn,
+            "val": val,
+            "args": args,
+            "kwargs": kwargs,
+            "ret": None,
+            "scale": 1.0,
+            "map_data_stack": [],
+            "done": False,
+            "stop": False,
+        }
+        # apply the stack and return its return value
+        out_msg = apply_stack(msg)
+        return out_msg["ret"]
 
 
-def map_data(name, data, observer, *args, **kwargs):
+def map_data(name, data, fn, batch_size=None, batch_dim=0):
     """
     :param name: named argument
-    :param data: data tp subsample
+    :param data: data to subsample
     :param observer: observe function
+    :param batch_size: number of samples per batch
+    :param batch_dim: dimension to subsample for tensor inputs
 
     Data subsampling with the important property that
     all the data are conditionally independent. By
     default `map_data` is the same as `map`.
     """
-
-    # infer algs (eg VI) that do minibatches should overide this.
     if len(_PYRO_STACK) == 0:
-        return [observer(i, datum) for i, datum in enumerate(data)]
-    else:
-        ret = None
-        for layer in _PYRO_STACK:
-            ret, stop = layer("map_data", ret, name, data, observer, *args, **kwargs)
-            if stop:
-                break
+        # default behavior
+        ind = util.get_batch_indices(data, batch_size, batch_dim)
+        if batch_size == 0:
+            ind_data = data
+        elif isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
+            ind_data = data.index_select(batch_dim, ind)
+        else:
+            ind_data = [data[i] for i in ind]
+
+        if isinstance(data, (torch.Tensor, Variable)):
+            ret = fn(ind, ind_data)
+        else:
+            ret = list(map(lambda ix: fn(*ix), zip(ind, ind_data)))
         return ret
+    else:
+        # initialize data structure to pass up/down the stack
+        msg = {
+            "type": "map_data",
+            "name": name,
+            "fn": fn,
+            "data": data,
+            "batch_size": batch_size,
+            "batch_dim": batch_dim,
+            # XXX should these be added here or during application
+            "indices": None,
+            "ret": None,
+            "done": False,
+            "stop": False,
+        }
+        # apply the stack and return its return value
+        out_msg = apply_stack(msg)
+        return out_msg["ret"]
+
+
+# XXX this should have the same call signature as torch.Tensor constructors
+def param(name, *args, **kwargs):
+    """
+    :param name: name of parameter
+    :returns: parameter
+
+    Saves the variable as a parameter in the param store.
+    To interact with the param store or write to disk,
+    see `Parameters <parameters.html>`_.
+    """
+    if len(_PYRO_STACK) == 0:
+        return _param_store.get_param(name, *args, **kwargs)
+    else:
+        msg = {
+            "type": "param",
+            "name": name,
+            "args": args,
+            "kwargs": kwargs,
+            "scale": 1.0,
+            "ret": None,
+            "stop": False,
+        }
+        # apply the stack and return its return value
+        out_msg = apply_stack(msg)
+        return out_msg["ret"]
+
 
 # hand off behavior to poutine if necessary?
 # for now default calls out to pyro.param -- which is handled by poutine
-
-
 def module(pyro_name, nn_obj):
     """
     :param pyro_name: name of module

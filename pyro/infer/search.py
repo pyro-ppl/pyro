@@ -1,46 +1,48 @@
-import pyro
-import torch
-import sys
-if sys.version_info[0] < 3:
-    from Queue import Queue
-else:
-    from queue import Queue
+from six.moves.queue import Queue
 
-from pyro.poutine import Trace
 import pyro.poutine as poutine
+from pyro.infer import TracePosterior
 
 
-class Search(pyro.infer.AbstractInfer):
+class Search(TracePosterior):
     """
+    :param model: probabilistic model defined as a function
+    :param max_tries: the maximum number of times to try completing a trace from the queue.
+    :type max_tries: int
     New Trace and Poutine-based implementation of systematic search
     """
-    def __init__(self, model, queue=None, *args, **kwargs):
+    def __init__(self, model, max_tries=1e6):
         """
-        Constructor
+        Constructor. Default max_tries to something sensible - 1e6.
         """
         self.model = model
-        if queue is None:
-            queue = Queue()
-            queue.put(Trace())
-        self.queue = queue
+        self.max_tries = int(max_tries)
 
-    def __call__(self, *args, **kwargs):
-        """
-        Really need to work on the inference interface
-        """
-        return self.step(*args, **kwargs)
-
-    def step(self, *args, **kwargs):
+    def _traces(self, *args, **kwargs):
         """
         algorithm entered here
         Returns traces from the posterior
         Running until the queue is empty and collecting the marginal histogram
         is performing exact inference
         """
-        if not self.queue.empty():
-            p = poutine.trace(poutine.queue(self.model, queue=self.queue))
-            return p(*args, **kwargs)
-        else:
-            # the queue is empty - we're done!
-            # XXX need to structure this better
-            return None
+        # currently only using the standard library queue
+        self.queue = Queue()
+        self.queue.put(poutine.Trace())
+
+        p = poutine.trace(
+            poutine.queue(self.model, queue=self.queue, max_tries=self.max_tries))
+        while not self.queue.empty():
+            tr = p(*args, **kwargs)
+            yield (tr, tr.log_pdf())
+
+    def log_z(self, *args, **kwargs):
+        """
+        harmonic mean log-evidence estimator
+        """
+        log_z = 0.0
+        n = 0
+        # TODO parallelize
+        for _, log_weight in self._traces(*args, **kwargs):
+            n += 1
+            log_z = log_z + log_weight
+        return log_z / n

@@ -1,22 +1,18 @@
 import argparse
-import torch
-import pyro
-from torch.autograd import Variable
-from pyro.infer.kl_qp import KL_QP
-from pyro.infer.abstract_infer import lw_expectation
-from pyro.distributions import DiagNormal, Normal
-from pyro.util import ng_zeros, ng_ones
-from torch import nn
 
+import numpy as np
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
+import torch.optim as optim
 import torchvision.datasets as dset
 import torchvision.transforms as transforms
-import torch.nn.functional as F
-import torch.optim as optim
-import numpy as np
 import visdom
+from torch.autograd import Variable
+
+import pyro
+from pyro.distributions import DiagNormal
+from pyro.infer.kl_qp import KL_QP
+from pyro.util import ng_zeros, ng_ones
 
 # load mnist dataset
 root = './data'
@@ -41,9 +37,9 @@ test_loader = torch.utils.data.DataLoader(
     batch_size=batch_size,
     shuffle=False, **kwargs)
 
+
 # network
 class Encoder(nn.Module):
-
     def __init__(self):
         super(Encoder, self).__init__()
         self.fc1 = nn.Linear(784, 200)
@@ -112,7 +108,6 @@ def guide(data):
 
 
 def model_sample():
-
     # wrap params for use in model -- required
     decoder = pyro.module("decoder", pt_decode)
 
@@ -156,9 +151,10 @@ if all_batches[-1] != mnist_size:
 
 vis = visdom.Visdom()
 
+
 def main():
     parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', type=int, required=True)
+    parser.add_argument('-n', '--num-epochs', nargs='?', default=1000, type=int)
     args = parser.parse_args()
     for i in range(args.num_epochs):
         epoch_loss = 0.
@@ -173,6 +169,7 @@ def main():
         vis.image(batch_data[0].contiguous().view(28, 28).data.numpy())
         vis.image(sample[0].contiguous().view(28, 28).data.numpy())
         print("epoch avg loss {}".format(epoch_loss / float(mnist_size)))
+
 
 if __name__ == '__main__':
     main()

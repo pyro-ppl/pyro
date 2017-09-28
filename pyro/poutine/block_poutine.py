@@ -1,4 +1,3 @@
-import pyro
 from .poutine import Poutine
 
 
@@ -6,8 +5,8 @@ class BlockPoutine(Poutine):
     """
     Blocks some things
     """
+
     def __init__(self, fn,
-                 transparent=None,
                  hide_all=True, expose_all=False,
                  hide=None, expose=None,
                  hide_types=None, expose_types=None):
@@ -16,13 +15,10 @@ class BlockPoutine(Poutine):
         Default behavior: block everything
         """
         super(BlockPoutine, self).__init__(fn)
-        if transparent is None:
-            transparent = True
-        self.transparent = transparent
         # first, some sanity checks:
         # hide_all and expose_all intersect?
         assert (hide_all is False and expose_all is False) or \
-            (hide_all != expose_all), "cannot hide and expose a site"
+               (hide_all != expose_all), "cannot hide and expose a site"
 
         # hide and expose intersect?
         if hide is None:
@@ -51,14 +47,14 @@ class BlockPoutine(Poutine):
         self.hide_types = hide_types
         self.expose_types = expose_types
 
-    def _block_stack(self, site_type, name):
+    def _block_up(self, msg):
         """
         A stack-blocking operation
         """
         # hiding
-        if (name in self.hide) or \
-           (site_type in self.hide_types) or \
-           ((name not in self.expose) and (site_type not in self.expose_types) and self.hide_all):
+        if (msg["name"] in self.hide) or \
+           (msg["type"] in self.hide_types) or \
+           ((msg["name"] not in self.expose) and (msg["type"] not in self.expose_types) and self.hide_all):
             return True
         # otherwise expose
         else:

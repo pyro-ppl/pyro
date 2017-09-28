@@ -1,18 +1,16 @@
 import argparse
+
 import numpy as np
 import torch
-from torch.nn import Softmax
-from torch.autograd import Variable
-
-import pyro
-from pyro.distributions import DiagNormal
-from pyro.distributions import Bernoulli, Categorical
-import visdom
-
-from pyro.infer.kl_qp import KL_QP
-
 import torchvision.datasets as dset
 import torchvision.transforms as transforms
+import visdom
+from torch.autograd import Variable
+from torch.nn import Softmax
+
+import pyro
+from pyro.distributions import Bernoulli, Categorical
+from pyro.infer.kl_qp import KL_QP
 
 mnist = dset.MNIST(
     root='./data',
@@ -87,9 +85,10 @@ all_batches = np.arange(0, mnist_size, batch_size)
 if all_batches[-1] != mnist_size:
     all_batches = list(all_batches) + [mnist_size]
 
+
 def main():
     parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', type=int, required=True)
+    parser.add_argument('-n', '--num-epochs', nargs='?', default=1000, type=int)
     args = parser.parse_args()
     for i in range(args.num_epochs):
         epoch_loss = 0.
@@ -103,10 +102,12 @@ def main():
             batch_class = Variable(batch_class)
             epoch_loss += inference.step(ix, batch_data)
 
-           # optional  visualization!
-    #      vis.image(batch_data[0].view(28, 28).data.numpy())
-    #      vis.image(sample[0].view(28, 28).data.numpy())
-    #      vis.image(sample_mu[0].view(28, 28).data.numpy())
+            # optional  visualization!
+            #      vis.image(batch_data[0].view(28, 28).data.numpy())
+            #      vis.image(sample[0].view(28, 28).data.numpy())
+            #      vis.image(sample_mu[0].view(28, 28).data.numpy())
         print("epoch avg loss {}".format(epoch_loss / float(mnist_size)))
+
+
 if __name__ == '__main__':
     main()

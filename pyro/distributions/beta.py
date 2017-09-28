@@ -1,6 +1,7 @@
 import scipy.stats as spr
 import torch
 from torch.autograd import Variable
+
 from pyro.distributions.distribution import Distribution
 from pyro.util import log_gamma
 
@@ -35,8 +36,8 @@ class Beta(Distribution):
             if alpha.dim() != beta.dim():
                 raise ValueError("Alpha and beta need to have the same dimensions.")
             if alpha.dim() == 1 and beta.dim() == 1:
-                self.alpha = alpha.expand(batch_size, 0)
-                self.beta = beta.expand(batch_size, 0)
+                self.alpha = alpha.expand(batch_size, alpha.size(0))
+                self.beta = beta.expand(batch_size, beta.size(0))
             else:
                 self.alpha = alpha
                 self.beta = beta

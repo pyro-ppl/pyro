@@ -1,11 +1,6 @@
-import pyro
-import torch
-import sys
-if sys.version_info[0] < 3:
-    from Queue import Queue
-else:
-    from queue import Queue
+from six.moves.queue import Queue
 
+import pyro
 from .poutine import Poutine
 
 
@@ -20,13 +15,13 @@ class QueuePoutine(Poutine):
     Poutine for enumerating a queue of traces
     Useful for systematic search, beam search
     """
+
     def __init__(self, fn, queue=None, max_tries=None):
         """
         Constructor.
         All persistent state is in the queue.
         """
         super(QueuePoutine, self).__init__(fn)
-        self.transparent = False
         if queue is None:
             queue = Queue()
             queue.put(pyro.poutine.Trace())
@@ -66,7 +61,7 @@ class QueuePoutine(Poutine):
         self.guide_trace = None  # XXX what to put here?
         return r_val
 
-    def _pyro_sample(self, prev_val, name, fn, *args, **kwargs):
+    def _pyro_sample(self, msg, name, fn, *args, **kwargs):
         """
         Return the sample in the guide trace when appropriate
         """
@@ -74,13 +69,16 @@ class QueuePoutine(Poutine):
         if name in self.guide_trace:
             assert self.guide_trace[name]["type"] == "sample", \
                 "site {} in guide_trace is not a sample".format(name)
+            msg["done"] = True
             return self.guide_trace[name]["value"]
         elif not self.pivot_seen:
             self.pivot_seen = True
             extended_traces = []
             for s in fn.support(*args, **kwargs):
                 extended_traces.append(
-                    self.guide_trace.copy().add_sample(name, s, fn, *args, **kwargs))
+                    self.guide_trace.copy().add_sample(name, msg["scale"], s, fn,
+                                                       *args, **kwargs))
+            msg["done"] = True
             raise ReturnExtendedTraces(extended_traces)
         else:
             raise ValueError("should never get here (malfunction at site {})".format(name))

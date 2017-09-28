@@ -4,6 +4,13 @@ from torch.autograd import Variable
 from torch.nn import Parameter
 
 
+def detach_iterable(iterable):
+    if isinstance(iterable, Variable):
+        return iterable.detach()
+    else:
+        return [var.detach() for var in iterable]
+
+
 def _dict_to_tuple(d):
     """
     Recursively converts a dictionary to a list of key-value tuples
@@ -99,6 +106,16 @@ def log_gamma(xx):
     return torch.log(ser * magic2) - t
 
 
+def log_beta(t):
+    if t.dim() == 1:
+        numer = torch.sum(log_gamma(t))
+        denom = log_gamma(torch.sum(t))
+    else:
+        numer = torch.sum(log_gamma(t), 1)
+        denom = log_gamma(torch.sum(t, 1))
+    return numer - denom
+
+
 def to_one_hot(x, ps):
     if isinstance(x, Variable):
         ttype = x.data.type()
@@ -144,3 +161,77 @@ def tensor_histogram(ps, vs):
         vs2.append(hist[k][1])
     # return dict suitable for passing into Categorical
     return {"ps": torch.cat(ps2), "vs": np.array(vs2).flatten()}
+
+
+def basic_histogram(ps, vs):
+    """
+    make a histogram from weighted things that aren't tensors
+    Horribly slow...
+    """
+    assert isinstance(vs, (list, tuple)), \
+        "vs must be a primitive type that preserves ordering at construction"
+    hist = {}
+    for i, v in enumerate(vs):
+        if v not in hist:
+            hist[v] = 0.0
+        hist[v] = hist[v] + ps[i]
+    return {"ps": torch.cat([hist[v] for v in hist.keys()]),
+            "vs": [v for v in hist.keys()]}
+
+
+def get_batch_indices(data, batch_size, batch_dim):
+    """
+    Compute batch indices used for subsampling in map_data
+    Weirdly complicated because of type ambiguity
+    """
+    if isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
+        assert batch_dim >= 0, \
+            "batch_dim must be nonnegative"
+        assert batch_size <= data.size(batch_dim), \
+            "batch must be smaller than dataset size"
+        if batch_size > 0:
+            ind = Variable(torch.randperm(data.size(batch_dim))[0:batch_size])
+        else:
+            # if batch_size == 0, don't index (saves time/space)
+            ind = Variable(torch.arange(0, data.size(batch_dim)))
+    else:
+        # handle lists and other ordered sequence types (e.g. tuples but not sets)
+        assert batch_dim == 0, \
+            "batch dim for non-tensor map_data must be 0"
+        assert batch_size <= len(data), \
+            "batch must be smaller than dataset size"
+        # if batch_size > 0, select a random set of indices and store it
+        if batch_size > 0:
+            ind = torch.randperm(len(data))[0:batch_size].numpy().tolist()
+        else:
+            ind = list(range(len(data)))
+
+    return ind
+
+
+def get_batch_scale(data, batch_size, batch_dim):
+    """
+    Compute scale used for subsampling in map_data
+    Weirdly complicated because of type ambiguity
+    """
+    if isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
+        assert batch_size <= data.size(batch_dim), \
+            "batch must be smaller than dataset size"
+        if batch_size > 0:
+            scale = float(data.size(batch_dim)) / float(batch_size)
+        else:
+            # if batch_size == 0, don't index (saves time/space)
+            scale = 1.0
+    else:
+        # handle lists and other ordered sequence types (e.g. tuples but not sets)
+        assert batch_dim == 0, \
+            "batch_dim for non-tensor map_data must be 0"
+        assert batch_size <= len(data), \
+            "batch must be smaller than dataset size"
+        # if batch_size > 0, select a random set of indices and store it
+        if batch_size > 0:
+            scale = float(len(data)) / float(batch_size)
+        else:
+            scale = 1.0
+
+    return scale

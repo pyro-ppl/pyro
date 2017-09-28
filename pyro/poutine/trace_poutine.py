@@ -1,8 +1,8 @@
 import pyro
-import torch
 
 from .poutine import Poutine
-from pyro.poutine import Trace
+from .lambda_poutine import LambdaPoutine
+from .trace import Trace
 
 
 class TracePoutine(Poutine):
@@ -16,6 +16,7 @@ class TracePoutine(Poutine):
 
     We can also use this for visualization.
     """
+
     def _enter_poutine(self, *args, **kwargs):
         """
         Register the input arguments in the trace upon entry
@@ -31,7 +32,7 @@ class TracePoutine(Poutine):
         self.trace.add_return(ret_val, *args, **kwargs)
         return self.trace
 
-    def _pyro_sample(self, prev_val, name, dist, *args, **kwargs):
+    def _pyro_sample(self, msg, name, dist, *args, **kwargs):
         """
         sample
         TODO docs
@@ -43,12 +44,12 @@ class TracePoutine(Poutine):
             self._enter_poutine(*self.trace["_INPUT"]["args"][0],
                                 **self.trace["_INPUT"]["args"][1])
 
-        val = super(TracePoutine, self)._pyro_sample(prev_val, name, dist,
+        val = super(TracePoutine, self)._pyro_sample(msg, name, dist,
                                                      *args, **kwargs)
-        self.trace.add_sample(name, val, dist, *args, **kwargs)
+        self.trace.add_sample(name, msg["scale"], val, dist, *args, **kwargs)
         return val
 
-    def _pyro_observe(self, prev_val, name, fn, obs, *args, **kwargs):
+    def _pyro_observe(self, msg, name, fn, obs, *args, **kwargs):
         """
         observe
         TODO docs
@@ -62,25 +63,33 @@ class TracePoutine(Poutine):
             self._enter_poutine(*self.trace["_INPUT"]["args"][0],
                                 **self.trace["_INPUT"]["args"][1])
 
-        val = super(TracePoutine, self)._pyro_observe(prev_val, name, fn, obs,
+        val = super(TracePoutine, self)._pyro_observe(msg, name, fn, obs,
                                                       *args, **kwargs)
-        self.trace.add_observe(name, val, fn, obs, *args, **kwargs)
+        self.trace.add_observe(name, msg["scale"], val, fn, obs, *args, **kwargs)
         return val
 
-    def _pyro_param(self, prev_val, name, *args, **kwargs):
+    def _pyro_param(self, msg, name, *args, **kwargs):
         """
         param
         TODO docs
         Expected behavior:
         TODO
         """
-        retrieved = super(TracePoutine, self)._pyro_param(prev_val, name,
+        retrieved = super(TracePoutine, self)._pyro_param(msg, name,
                                                           *args, **kwargs)
         self.trace.add_param(name, retrieved, *args, **kwargs)
         return retrieved
 
-    # def _pyro_map_data(self, prev_val, name, *args, **kwargs):
-    #     """
-    #     Trace map_data
-    #     """
-    #     raise NotImplementedError("still working out proper semantics")
+    def _pyro_map_data(self, msg, name, data, fn, batch_size=None, batch_dim=0):
+        """
+        Trace map_data
+        """
+        scale = pyro.util.get_batch_scale(data, batch_size, batch_dim)
+        ret = super(TracePoutine, self)._pyro_map_data(msg, name, data,
+                                                       LambdaPoutine(fn, name, scale),
+                                                       # XXX watch out for changing
+                                                       batch_size=batch_size,
+                                                       batch_dim=batch_dim)
+
+        self.trace.add_map_data(name, fn, batch_size, batch_dim, msg["indices"])
+        return ret

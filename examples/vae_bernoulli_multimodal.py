@@ -1,21 +1,17 @@
 import argparse
-import torch
-import pyro
-from torch.autograd import Variable
-from pyro.infer.kl_qp import KL_QP
-from pyro.infer.abstract_infer import lw_expectation
-from pyro.distributions import DiagNormal, Normal, Bernoulli, Categorical
-from torch import nn
 
+import numpy as np
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
+import torch.optim as optim
 import torchvision.datasets as dset
 import torchvision.transforms as transforms
-import torch.nn.functional as F
-import torch.optim as optim
-import numpy as np
 import visdom
+from torch.autograd import Variable
+
+import pyro
+from pyro.distributions import DiagNormal, Bernoulli, Categorical
+from pyro.infer.kl_qp import KL_QP
 
 # load mnist dataset
 root = './data'
@@ -40,11 +36,11 @@ test_loader = torch.utils.data.DataLoader(
     batch_size=batch_size,
     shuffle=False, **kwargs)
 
+
 # network
 
 
 class Encoder(nn.Module):
-
     def __init__(self):
         super(Encoder, self).__init__()
         self.fc1 = nn.Linear(784, 200)
@@ -69,7 +65,7 @@ class Classifier(nn.Module):
 
     def forward(self, x):
         x = x.view(-1, 784)
-        h1 = self.relu(fc1(x))
+        h1 = self.relu(self.fc1(x))
         alpha_mult = self.softmax(self.fc21(h1))
         return alpha_mult
 
@@ -85,7 +81,6 @@ class Decoder(nn.Module):
         self.relu = nn.ReLU()
 
     def forward(self, z):
-
         h3 = self.relu(self.fc3(z))
         mu_bern = self.sigmoid(self.fc4(h3))
         alpha_mult = self.softmax(self.fc5(h3))
@@ -97,7 +92,6 @@ pt_decode = Decoder()
 
 
 def model(data, cll):
-
     # wrap params for use in model -- required
     decoder = pyro.module("decoder", pt_decode)
 
@@ -117,7 +111,6 @@ def model(data, cll):
 
 
 def model_latent(data):
-
     # wrap params for use in model -- required
     decoder = pyro.module("decoder", pt_decode)
 
@@ -178,7 +171,6 @@ def per_param_args(name, param):
 # or alternatively
 adam_params = {"lr": .0001}
 
-
 inference = KL_QP(model, guide, pyro.optim(optim.Adam, adam_params))
 inference_latent = KL_QP(model_latent, guide, pyro.optim(optim.Adam, adam_params))
 
@@ -186,7 +178,6 @@ mnist_data = Variable(train_loader.dataset.train_data.float() / 255.)
 mnist_labels = Variable(train_loader.dataset.train_labels)
 mnist_size = mnist_data.size(0)
 batch_size = 128  # 64
-
 
 # TODO: batches not necessarily
 all_batches = np.arange(0, mnist_size, batch_size)
@@ -199,7 +190,7 @@ vis = visdom.Visdom()
 
 def main():
     parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', type=int, required=True)
+    parser.add_argument('-n', '--num-epochs', nargs='?', default=1000, type=int)
     args = parser.parse_args()
     for i in range(args.num_epochs):
 
@@ -222,6 +213,7 @@ def main():
         vis.image(sample[0].view(28, 28).data.numpy())
         vis.image(sample_mu[0].view(28, 28).data.numpy())
         print("epoch avg loss {}".format(epoch_loss / float(mnist_size)))
+
 
 if __name__ == '__main__':
     main()

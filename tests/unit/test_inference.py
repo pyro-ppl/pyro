@@ -1,16 +1,17 @@
+import pytest
 import torch
 import torch.optim
-from torch.autograd import Variable
 from torch import nn as nn
+from torch.autograd import Variable
 from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
 from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
-from pyro.infer.importance import Importance
+from pyro.infer.kl_qp import KL_QP
 from tests.common import TestCase
 
-from pyro.infer.kl_qp import KL_QP
+pytestmark = pytest.mark.init(rng_seed=123)
 
 
 class NormalNormalTests(TestCase):
@@ -35,6 +36,7 @@ class NormalNormalTests(TestCase):
         self.analytic_mu_n = self.sum_data * (self.lam / self.analytic_lam_n) +\
             self.mu0 * (self.lam0 / self.analytic_lam_n)
         self.n_is_samples = 5000
+        self.batch_size = 0
 
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 5000)
@@ -52,7 +54,8 @@ class NormalNormalTests(TestCase):
             pyro.map_data("aaa", self.data, lambda i,
                           x: pyro.observe(
                               "obs_%d" % i, dist.diagnormal,
-                              x, mu_latent, torch.pow(self.lam, -0.5)), batch_size=1)
+                              x, mu_latent, torch.pow(self.lam, -0.5)),
+                          batch_size=self.batch_size)
             return mu_latent
 
         def guide():
@@ -64,7 +67,8 @@ class NormalNormalTests(TestCase):
             sig_q = torch.exp(log_sig_q)
             dist.diagnormal.reparameterized = reparameterized
             pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q)
-            pyro.map_data("aaa", self.data, lambda i, x: None, batch_size=1)
+            pyro.map_data("aaa", self.data, lambda i, x: None,
+                          batch_size=self.batch_size)
 
         kl_optim = KL_QP(
             model, guide, pyro.optim(
@@ -310,6 +314,8 @@ class BernoulliBetaTests(TestCase):
         self.data.append(Variable(torch.Tensor([1.0])))
         self.data.append(Variable(torch.Tensor([1.0])))
         self.n_data = len(self.data)
+        self.batch_size = 0
+        self.n_steps = 6001
         data_sum = self.data[0] + self.data[1] + self.data[2] + self.data[3]
         self.alpha_n = self.alpha0 + data_sum  # posterior alpha
         self.beta_n = self.beta0 - data_sum + \
@@ -325,7 +331,8 @@ class BernoulliBetaTests(TestCase):
             p_latent = pyro.sample("p_latent", dist.beta, self.alpha0, self.beta0)
             pyro.map_data("aaa",
                           self.data, lambda i, x: pyro.observe(
-                              "obs_{}".format(i), dist.bernoulli, x, p_latent), batch_size=2)
+                              "obs_{}".format(i), dist.bernoulli, x, p_latent),
+                          batch_size=self.batch_size)
             return p_latent
 
         def guide():
@@ -335,11 +342,11 @@ class BernoulliBetaTests(TestCase):
                                     Variable(self.log_beta_n.data - 0.143, requires_grad=True))
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             pyro.sample("p_latent", dist.beta, alpha_q, beta_q)
-            pyro.map_data("aaa", self.data, lambda i, x: None, batch_size=2)
+            pyro.map_data("aaa", self.data, lambda i, x: None, batch_size=self.batch_size)
 
         kl_optim = KL_QP(model, guide, pyro.optim(torch.optim.Adam,
                                                   {"lr": .001, "betas": (0.97, 0.999)}))
-        for k in range(6001):
+        for k in range(self.n_steps):
             kl_optim.step()
 #             if k%1000==0:
 #                 print "alpha_q", torch.exp(pyro.param("alpha_q_log")).data.numpy()[0]
@@ -388,7 +395,7 @@ class LogNormalNormalTests(TestCase):
         self.log_tau_n = torch.log(self.tau_n)
 
     def test_elbo_reparameterized(self):
-        self.do_elbo_test(True, 7000)
+        self.do_elbo_test(True, 12000)
 
     # FIXME
     # def test_elbo_nonreparameterized(self):
@@ -421,10 +428,10 @@ class LogNormalNormalTests(TestCase):
 
         mu_error = torch.abs(
             pyro.param("mymodule$$$mu_q_log") -
-            self.log_mu_n).data.cpu().numpy()[0]
+            self.log_mu_n).data.cpu().numpy()[0][0]
         tau_error = torch.abs(
             pyro.param("mymodule$$$tau_q_log") -
-            self.log_tau_n).data.cpu().numpy()[0]
+            self.log_tau_n).data.cpu().numpy()[0][0]
         # print "mu_error", mu_error
         # print "tau_error", tau_error
         self.assertEqual(0.0, mu_error, prec=0.07)
@@ -458,14 +465,14 @@ class LogNormalNormalTests(TestCase):
 
         kl_optim = KL_QP(model, guide, pyro.optim(torch.optim.Adam,
                                                   {"lr": .0005, "betas": (0.96, 0.999)}))
-        for k in range(9001):
+        for k in range(12001):
             kl_optim.step()
 
         mu_error = torch.abs(
             pyro.param("mu_q_log") -
-            self.log_mu_n).data.cpu().numpy()[0]
+            self.log_mu_n).data.cpu().numpy()[0][0]
         tau_error = torch.abs(
             pyro.param("tau_q_log") -
-            self.log_tau_n).data.cpu().numpy()[0]
+            self.log_tau_n).data.cpu().numpy()[0][0]
         self.assertEqual(0.0, mu_error, prec=0.05)
         self.assertEqual(0.0, tau_error, prec=0.05)

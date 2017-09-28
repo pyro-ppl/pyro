@@ -1,21 +1,17 @@
 import argparse
-import torch
-import pyro
-from torch.autograd import Variable
-from pyro.infer.kl_qp import KL_QP
-from pyro.infer.abstract_infer import lw_expectation
-from pyro.distributions import DiagNormal, Normal, Bernoulli, Multinomial, Categorical
-from torch import nn
 
+import numpy as np
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
+import torch.optim as optim
 import torchvision.datasets as dset
 import torchvision.transforms as transforms
-import torch.nn.functional as F
-import torch.optim as optim
-import numpy as np
 import visdom
+from torch.autograd import Variable
+
+import pyro
+from pyro.distributions import DiagNormal, Bernoulli, Categorical
+from pyro.infer.kl_qp import KL_QP
 
 # pyro.set_cuda()
 
@@ -31,7 +27,6 @@ train_set = dset.MNIST(
     download=download)
 test_set = dset.MNIST(root=root, train=False, transform=trans)
 
-
 train_loader = torch.utils.data.DataLoader(
     dset.MNIST('../data', train=True, download=True,
                transform=transforms.Compose([
@@ -45,7 +40,6 @@ test_loader = torch.utils.data.DataLoader(
         transforms.Normalize((0.1307,), (0.3081,))
     ])),
     batch_size=128, shuffle=True)
-
 
 batch_size = 128
 kwargs = {'num_workers': 1, 'pin_memory': True}
@@ -77,7 +71,6 @@ class Encoder_c(nn.Module):
 
 
 class Encoder_o(nn.Module):
-
     def __init__(self):
         super(Encoder_o, self).__init__()
         self.fc1 = nn.Linear(784 + 10, 400)
@@ -93,6 +86,7 @@ class Encoder_o(nn.Module):
 
 
 class Decoder(nn.Module):
+
     def __init__(self):
         super(Decoder, self).__init__()
         self.fc3 = nn.Linear(20 + 10, 400)
@@ -105,7 +99,7 @@ class Decoder(nn.Module):
         h3 = self.relu(self.fc3(input_vec))
         rv = self.sigmoid(self.fc4(h3))
         # reshape to capture mu, sigma params for every pixel
-        rvs = rv.view(z.size(0), -1, 1)
+        # rvs = rv.view(z.size(0), -1, 1)
         # send back two params
         return rv  # rvs[:,:, 0]
 
@@ -161,7 +155,7 @@ def model_observed(data, cll):
 def guide_observed(data, cll):
     encoder = pyro.module("encoder_o", pt_encode_o)
     z_mu, z_sigma = encoder.forward(data, cll)
-    z = pyro.sample("latent_z", DiagNormal(z_mu, z_sigma))
+    pyro.sample("latent_z", DiagNormal(z_mu, z_sigma))
 
 
 def guide_observed2(data, cll):
@@ -171,7 +165,7 @@ def guide_observed2(data, cll):
 
     encoder = pyro.module("encoder_o", pt_encode_o)
     z_mu, z_sigma = encoder.forward(data, cll)
-    z = pyro.sample("latent_z", DiagNormal(z_mu, z_sigma))
+    pyro.sample("latent_z", DiagNormal(z_mu, z_sigma))
 
 
 def guide_latent(data):
@@ -188,7 +182,7 @@ def guide_latent2(data):
 
     encoder = pyro.module("encoder_o", pt_encode_o)
     z_mu, z_sigma = encoder.forward(data, cll)
-    z = pyro.sample("latent_z", DiagNormal(z_mu, z_sigma))
+    pyro.sample("latent_z", DiagNormal(z_mu, z_sigma))
 
 
 def model_sample(cll=None):
@@ -239,7 +233,6 @@ batch_size = 128  # 64
 mnist_data_test = Variable(test_loader.dataset.test_data.float() / 255.)
 mnist_labels_test = Variable(test_loader.dataset.test_labels)
 
-
 # TODO: batches not necessarily
 all_batches = np.arange(0, mnist_size, batch_size)
 
@@ -247,7 +240,6 @@ if all_batches[-1] != mnist_size:
     all_batches = list(all_batches) + [mnist_size]
 
 vis = visdom.Visdom(env='vae_ss_400')
-
 
 cll_clamp0 = Variable(torch.zeros(1, 10))
 cll_clamp3 = Variable(torch.zeros(1, 10))
@@ -257,12 +249,12 @@ cll_clamp0[0, 0] = 1
 cll_clamp3[0, 3] = 1
 cll_clamp9[0, 9] = 1
 
-
 loss_training = []
+
 
 def main():
     parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', type=int, required=True)
+    parser.add_argument('-n', '--num-epochs', nargs='?', default=1000, type=int)
     args = parser.parse_args()
     for i in range(args.num_epochs):
 
@@ -289,11 +281,12 @@ def main():
         sample9, sample_mu9 = model_sample(cll=cll_clamp9)
         vis.line(np.array(loss_training), opts=dict({'title': 'my title'}))
         vis.image(batch_data[0].view(28, 28).data.numpy())
-#         vis.image(sample[0].view(28, 28).data.numpy())
+        # vis.image(sample[0].view(28, 28).data.numpy())
         vis.image(sample_mu0[0].view(28, 28).data.numpy())
         vis.image(sample_mu3[0].view(28, 28).data.numpy())
         vis.image(sample_mu9[0].view(28, 28).data.numpy())
         print("epoch avg loss {}".format(epoch_loss / float(mnist_size)))
+
 
 if __name__ == '__main__':
     main()

@@ -1,21 +1,17 @@
 import argparse
-import torch
-import pyro
-from torch.autograd import Variable
-from pyro.infer.kl_qp import KL_QP
-from pyro.infer.abstract_infer import lw_expectation
-from pyro.distributions import DiagNormal, Normal, Bernoulli, Categorical
-from torch import nn
 
+import numpy as np
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
+import torch.optim as optim
 import torchvision.datasets as dset
 import torchvision.transforms as transforms
-import torch.nn.functional as F
-import torch.optim as optim
-import numpy as np
 import visdom
+from torch.autograd import Variable
+
+import pyro
+from pyro.distributions import DiagNormal, Bernoulli, Categorical
+from pyro.infer.kl_qp import KL_QP
 
 # load mnist dataset
 root = './data'
@@ -40,11 +36,11 @@ test_loader = torch.utils.data.DataLoader(
     batch_size=batch_size,
     shuffle=False, **kwargs)
 
+
 # network
 
 
 class Encoder(nn.Module):
-
     def __init__(self):
         super(Encoder, self).__init__()
         self.fc1 = nn.Linear(784, 200)
@@ -61,7 +57,6 @@ class Encoder(nn.Module):
 
 
 class Encoder_xz(nn.Module):
-
     def __init__(self):
         super(Encoder_xz, self).__init__()
         self.fc1 = nn.Linear(784, 200)
@@ -85,7 +80,7 @@ class Classifier(nn.Module):
 
     def forward(self, x):
         x = x.view(-1, 784)
-        h1 = self.relu(fc1(x))
+        h1 = self.relu(self.fc1(x))
         alpha_mult = self.softmax(self.fc21(h1))
         return alpha_mult
 
@@ -101,7 +96,6 @@ class Decoder(nn.Module):
         self.relu = nn.ReLU()
 
     def forward(self, z):
-
         h3 = self.relu(self.fc3(z))
         mu_bern = self.sigmoid(self.fc4(h3))
         alpha_mult = self.softmax(self.fc5(h3))
@@ -145,7 +139,6 @@ pt_decode_xz = Decoder_xz()
 
 
 def model(data, cll):
-
     # wrap params for use in model -- required
     decoder = pyro.module("decoder", pt_decode)
 
@@ -222,7 +215,6 @@ def per_param_args(name, param):
 # or alternatively
 adam_params = {"lr": .0001}
 
-
 inference = KL_QP(model_xz, guide_latent, pyro.optim(optim.Adam, adam_params))
 inference_c = KL_QP(model_c, guide_latent, pyro.optim(optim.Adam, adam_params))
 
@@ -236,7 +228,6 @@ mnist_labels_test_raw = Variable(test_loader.dataset.test_labels)
 mnist_labels_test = torch.zeros(mnist_labels_test_raw.size(0), 10)
 mnist_labels_test.scatter_(1, mnist_labels_test_raw.data.view(-1, 1), 1)
 mnist_labels_test = Variable(mnist_labels_test)
-
 
 # TODO: batches not necessarily
 all_batches = np.arange(0, mnist_size, batch_size)
@@ -252,7 +243,7 @@ acc_test = []
 
 def main():
     parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', type=int, required=True)
+    parser.add_argument('-n', '--num-epochs', nargs='?', default=1000, type=int)
     args = parser.parse_args()
     for i in range(args.num_epochs):
         epoch_loss = 0.
@@ -278,13 +269,14 @@ def main():
         acc_val = acc.data.numpy()[0]
         print('accuracy ' + str(acc_val))
         acc_test.append(acc_val)
-        #vis.image(batch_data[0].view(28, 28).data.numpy())
-        #vis.image(sample[0].view(28, 28).data.numpy())
+        # vis.image(batch_data[0].view(28, 28).data.numpy())
+        # vis.image(sample[0].view(28, 28).data.numpy())
         vis.image(sample_mu[0].view(28, 28).data.numpy())  # ,opts=dict({'title': str(sample_class)}))
         vis.line(np.array(acc_test), opts=dict(
             {'title': 'Test Classification Acc. given 100% Tr.-labels'}))
         # vis.image(sample_class.view(1,10).data.numpy())
         print("epoch avg loss {}".format(epoch_loss / float(mnist_size)))
+
 
 if __name__ == '__main__':
     main()

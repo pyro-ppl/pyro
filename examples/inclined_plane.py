@@ -1,13 +1,16 @@
 from __future__ import print_function
+
 import argparse
+import sys
+
 import numpy as np
 import torch
+import torch.optim as optim
 from torch.autograd import Variable
+
 import pyro
 from pyro.distributions import Uniform, DiagNormal
 from pyro.infer.kl_qp import KL_QP
-import torch.optim as optim
-import sys
 
 """
 Samantha really likes physics---but she likes pyro even more. Instead of using
@@ -22,9 +25,10 @@ the little box to slide down the inclined plane as a function of mu. Using pyro,
 can reverse the simulator and infer mu from the observed descent times.
 """
 
-little_g = 9.8   # m/s/s
+little_g = 9.8  # m/s/s
 mu0 = 0.12  # actual coefficient of friction in the experiment
 time_measurement_sigma = 0.02  # observation noise in seconds (known quantity)
+
 
 # the forward simulator, which does numerical integration of the equations of motion
 # in steps of size dx, and optionally includes measurement noise
@@ -33,10 +37,10 @@ def simulate(mu, length=2.0, phi=np.pi / 6.0, dx=0.01, noise_sigma=None):
     T = Variable(torch.zeros(1))
     velocity = Variable(torch.zeros(1))
     displacement = Variable(torch.zeros(1))
-    acceleration = Variable(torch.Tensor([little_g * np.sin(phi)])) -\
-                           (Variable(torch.Tensor([little_g * np.cos(phi)])) * mu)
+    acceleration = Variable(torch.Tensor([little_g * np.sin(phi)])) - \
+        Variable(torch.Tensor([little_g * np.cos(phi)])) * mu
 
-    if acceleration.data[0] <= 0.0:         # the box doesn't slide if the friction is too large
+    if acceleration.data[0] <= 0.0:  # the box doesn't slide if the friction is too large
         return Variable(torch.Tensor([np.inf]))
 
     while displacement.data[0] < length:  # otherwise slide to the end of the inclined plane
@@ -49,6 +53,7 @@ def simulate(mu, length=2.0, phi=np.pi / 6.0, dx=0.01, noise_sigma=None):
     else:
         return T + Variable(noise_sigma * torch.randn(1))
 
+
 # analytic formula that the simulator above is computing via
 # numerical integration (no measurement noise)
 
@@ -57,12 +62,14 @@ def analytic_T(mu, length=2.0, phi=np.pi / 6.0):
     denominator = little_g * (np.sin(phi) - mu * np.cos(phi))
     return np.sqrt(numerator / denominator)
 
+
 # generate N_obs observations using simulator and the true coefficient of friction mu0
 print("generating simulated data using the true coefficient of friction %.3f" % mu0)
 N_obs = 10
 observed_data = [simulate(Variable(torch.Tensor([mu0])), noise_sigma=time_measurement_sigma)
                  for _ in range(N_obs)]
 observed_mean = np.mean([T.data[0] for T in observed_data])
+
 
 # define model with uniform prior on mu and gaussian noise on the descent time
 
@@ -73,10 +80,11 @@ def model(observed_data):
     def observe_T(T_obs, obs_name):
         T_simulated = simulate(mu)
         T_obs_dist = DiagNormal(T_simulated, Variable(torch.Tensor([time_measurement_sigma])))
-        T = pyro.observe(obs_name, T_obs_dist, T_obs)
+        pyro.observe(obs_name, T_obs_dist, T_obs)
 
     pyro.map_data("map", observed_data, lambda i, x: observe_T(x, "obs_%d" % i), batch_size=1)
     return mu
+
 
 # define a gaussian variational approximation for the posterior over mu
 
@@ -88,16 +96,19 @@ def guide(observed_data):
     pyro.map_data("map", observed_data, lambda i, x: None, batch_size=1)
     return mu
 
+
 # do variational inference using KL_QP
 print("doing inference with simulated data")
 verbose = True
 kl_optim = KL_QP(model, guide, pyro.optim(optim.Adam, {"lr": 0.003, "betas": (0.93, 0.993)}))
+
+
 def main():
     parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', type=int, required=True)
+    parser.add_argument('-n', '--num-epochs', nargs='?', default=1000, type=int)
     args = parser.parse_args()
     for step in range(args.num_epochs):
-        loss = kl_optim.step(observed_data)
+        kl_optim.step(observed_data)  # loss
         if step % 100 == 0:
             if verbose:
                 print("[epoch %d] mean_mu: %.3f" % (step, pyro.param("mean_mu").data[0]))
@@ -122,6 +133,7 @@ def main():
           simulate(pyro.param("mean_mu")).data[0])
     print("elementary calulus gives the descent time for the inferred (mean) mu as: %.4f seconds" %
           analytic_T(pyro.param("mean_mu").data[0]))
+
 
 if __name__ == '__main__':
     main()
