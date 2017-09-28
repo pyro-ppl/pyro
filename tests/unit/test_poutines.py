@@ -9,7 +9,6 @@ from pyro.distributions import DiagNormal, Bernoulli
 import pyro.distributions as dist
 from tests.common import TestCase
 from pyro.util import ng_ones, ng_zeros
-from pyro.poutine.lambda_poutine import LambdaPoutine
 
 pytestmark = pytest.mark.init(rng_seed=123)
 
@@ -269,7 +268,8 @@ class QueuePoutineTests(TestCase):
         except ValueError:
             self.assertTrue(True)
 
-class LambdaPoutineTests(TestCase):
+
+class TraceGraphPoutineTests(TestCase):
 
     def setUp(self):
 
@@ -283,43 +283,17 @@ class LambdaPoutineTests(TestCase):
             def inner(i, _i, _x):
                 pyro.sample("z_%d_%d" % (i, _i), dist.diagnormal, mu_latent + _x, ng_ones(1))
 
-            pyro.map_data("map_outer", [[ng_ones(1)] * 4] * 4, lambda i, x:
+            pyro.map_data("map_outer", [[ng_ones(1)] * 2] * 2, lambda i, x:
                           outer(i, x), batch_size=2)
 
             return mu_latent
 
         self.model = model
+        self.expected_nodes = set(['z_0_0', 'z_0_1', 'z_1_0', 'z_1_1', 'mu_latent'])
+        self.expected_edges = set([('mu_latent', 'z_0_0'), ('mu_latent', 'z_0_1'),
+                                   ('mu_latent', 'z_1_0'), ('mu_latent', 'z_1_1')])
 
-    def test(self):
-        print "LP:\n", LambdaPoutine(self.model, "name", 1.0)()
-	self.assertTrue(True)
-
-"""
-    def test_queue_enumerate(self):
-        f = poutine.trace(poutine.queue(self.model, queue=self.queue))
-        trs = []
-        while not self.queue.empty():
-            trs.append(f())
-        self.assertTrue(len(trs) == 2 ** 3)
-
-        true_latents = set()
-        for i1 in range(2):
-            for i2 in range(2):
-                for i3 in range(2):
-                    true_latents.add((i1, i2, i3))
-
-        tr_latents = set()
-        for tr in trs:
-            tr_latents.add(tuple([tr[name]["value"].view(-1).data[0] for name in tr
-                                  if tr[name]["type"] == "sample"]))
-
-        self.assertTrue(true_latents == tr_latents)
-
-    def test_queue_max_tries(self):
-        f = poutine.queue(self.model, queue=self.queue, max_tries=3)
-        try:
-            f()
-            self.assertTrue(False)
-        except ValueError:
-            self.assertTrue(True)
-"""
+    def test_graph_structure(self):
+        tracegraph = poutine.tracegraph(self.model)()
+        self.assertTrue(set(tracegraph.get_graph().nodes()) == self.expected_nodes)
+        self.assertTrue(set(tracegraph.get_graph().edges()) == self.expected_edges)
