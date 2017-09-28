@@ -3,17 +3,16 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.nn import Parameter
+from torch.nn.functional import normalize
+
 from torch.autograd import Variable
 import pandas as pd
-import sklearn
-from sklearn import preprocessing
 
 import pyro
 from pyro import poutine
 from pyro.distributions import DiagNormal, Gamma, Bernoulli
 from pyro.infer.kl_qp import KL_QP
 import torchvision.datasets as dset
-import torchvision.transforms as transforms
 
 """
 Estimates w s.t. y = Xw, using Bayesian regularisation.
@@ -75,7 +74,7 @@ def model(data):
     latent = sigmoid(reg)
 #     prob = torch.exp(torch.addmm(p_b, x_data, p_w))
 #     latent = prob / (prob + 1)
-    bb()
+#     bb()
     pyro.observe("bernoulli", Bernoulli(latent), y_data.unsqueeze(1))
 
 
@@ -102,7 +101,8 @@ sgd_optim = pyro.optim(torch.optim.SGD, adam_params)
 # dat = build_toy_dataset(N)
 x = df.as_matrix(columns=range(D))
 y = np.squeeze(df.as_matrix(columns=[D]))
-data = Variable(torch.Tensor(df.as_matrix()))
+raw_data = Variable(torch.Tensor(df.as_matrix()))
+data = normalize(raw_data, 2, dim=1)
 
 def posterior(data):
     mu = model(data)
