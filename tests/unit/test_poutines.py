@@ -273,18 +273,18 @@ class TraceGraphPoutineTests(TestCase):
 
     def setUp(self):
 
-        def model():
+        def model(batch_size_outer=2, batch_size_inner=2):
             mu_latent = pyro.sample("mu_latent", dist.diagnormal, ng_zeros(1), ng_ones(1))
 
             def outer(i, x):
                 pyro.map_data("map_inner_%d" % i, x, lambda _i, _x:
-                              inner(i, _i, _x), batch_size=2)
+                              inner(i, _i, _x), batch_size=batch_size_inner)
 
             def inner(i, _i, _x):
                 pyro.sample("z_%d_%d" % (i, _i), dist.diagnormal, mu_latent + _x, ng_ones(1))
 
             pyro.map_data("map_outer", [[ng_ones(1)] * 2] * 2, lambda i, x:
-                          outer(i, x), batch_size=2)
+                          outer(i, x), batch_size=batch_size_outer)
 
             return mu_latent
 
@@ -297,3 +297,18 @@ class TraceGraphPoutineTests(TestCase):
         tracegraph = poutine.tracegraph(self.model)()
         self.assertTrue(set(tracegraph.get_graph().nodes()) == self.expected_nodes)
         self.assertTrue(set(tracegraph.get_graph().edges()) == self.expected_edges)
+
+    def test_scale_factors(self):
+        def _test_scale_factor(batch_size_outer, batch_size_inner, expected):
+            trace = poutine.tracegraph(self.model)(batch_size_outer=batch_size_outer,
+                                                   batch_size_inner=batch_size_inner).get_trace()
+            scale_factors = []
+            for node in ['z_0_0', 'z_0_1', 'z_1_0', 'z_1_1']:
+                if node in trace:
+                    scale_factors.append(trace[node]['scale'])
+            self.assertTrue(scale_factors == expected)
+
+        _test_scale_factor(1, 1, [4.0])
+        _test_scale_factor(2, 2, [1.0] * 4)
+        _test_scale_factor(1, 2, [2.0] * 2)
+        _test_scale_factor(2, 1, [2.0] * 2)
