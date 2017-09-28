@@ -15,7 +15,7 @@ class Fixture(object):
                  test_data,
                  scipy_arg_fn,
                  prec=0.05,
-                 min_samples=1000,
+                 min_samples=None,
                  is_discrete=False,
                  expected_support_file=None,
                  expected_support_key=''):
@@ -46,7 +46,7 @@ class Fixture(object):
         return map_tensor_wrap(zip(*dist_params))
 
     def get_scipy_logpdf(self, idx):
-        args, kwargs = self.scipy_arg_fn(self.dist_params[idx])
+        args, kwargs = self.scipy_arg_fn(*self.dist_params[idx])
         if self.is_discrete:
             log_pdf = self.scipy_dist.logpmf(self.test_data[idx], *args, **kwargs)
         else:
@@ -72,18 +72,21 @@ class Fixture(object):
         warning: does not work for some distributions like bernoulli - https://stats.stackexchange.com/a/104911
         use the min_samples for explicitly controlling the number of samples to be drawn
         """
+        if self.min_samples:
+            return self.min_samples
+        min_samples = 1000
         tol = 10.0
         required_precision = self.prec / tol
         if not self.scipy_dist:
-            return self.min_samples
-        args, kwargs = self.scipy_arg_fn(self.dist_params[idx])
+            return min_samples
+        args, kwargs = self.scipy_arg_fn(*self.dist_params[idx])
         try:
             fourth_moment = np.max(self.scipy_dist.moment(4, *args, **kwargs))
             var = np.max(self.scipy_dist.var(*args, **kwargs))
             min_computed_samples = int(math.ceil((fourth_moment - math.pow(var, 2)) / required_precision))
         except (AttributeError, ValueError):
-            return self.min_samples
-        return max(self.min_samples, min_computed_samples)
+            return min_samples
+        return max(min_samples, min_computed_samples)
 
     def get_expected_support(self):
         if not self.support_file:
@@ -103,4 +106,4 @@ def tensor_wrap(value):
 
 
 def map_tensor_wrap(list_vals):
-    return map(tensor_wrap, list_vals)
+    return list(map(tensor_wrap, list_vals))

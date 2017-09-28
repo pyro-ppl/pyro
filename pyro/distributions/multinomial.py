@@ -40,7 +40,7 @@ class Multinomial(Distribution):
     def sample(self, ps=None, n=None, *args, **kwargs):
         _ps, _n = self._sanitize_input(ps, n)
         counts = np.bincount(self.expanded_sample(_ps, _n).data.numpy(), minlength=_ps.size()[0])
-        return Variable(torch.Tensor(counts))
+        return Variable(torch.from_numpy(counts))
 
     def expanded_sample(self, ps=None, n=None, *args, **kwargs):
         _ps, _n = self._sanitize_input(ps, n)
