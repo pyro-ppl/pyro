@@ -56,9 +56,10 @@ class LambdaPoutine(Poutine):
 
     def _pyro_param(self, msg, name, *args, **kwargs):
         """
-        Scaled param: Rescale the message and continue
+        pack the message with extra information and continue
         """
         msg["scale"] = self.scale * msg["scale"]
+        msg = self._annotate_map_data_stack(msg, name)
         return super(LambdaPoutine, self)._pyro_param(msg, name, *args, **kwargs)
 
     def _pyro_map_data(self, msg, name, data, fn, batch_size=None, batch_dim=0):
