@@ -45,19 +45,16 @@ optim = PyroOptim
 _PYRO_STACK = []
 
 
-def apply_stack(initial_msg, stack=None):
+def apply_stack(initial_msg):
     """
-    execute the poutine stack according to the new two-sided blocking scheme
-    New Poutine stack mechanism:
+    Execute the poutine stack according to the new two-sided blocking scheme.
+    Poutine stack mechanism:
     1) start at the top
     2) grab the top poutine, ask to go down
     3) if down, recur
     4) if not, stop, start returning
     """
-    if stack is None:
-        # XXX what should be referenced here?
-        stack = _PYRO_STACK
-
+    stack = _PYRO_STACK
     # # XXX seems like this should happen on poutine installation, not at execution
     # assert poutine.validate_stack(stack), \
     #     "Current poutine stack violates poutine composition rules"
@@ -65,12 +62,12 @@ def apply_stack(initial_msg, stack=None):
     msg = initial_msg
 
     # work out the bottom poutine at this site
-    for i in range(len(stack) - 1, -1, -1):
-        msg = stack[i].down(msg)
+    for frame in reversed(stack):
+        msg = frame.down(msg)
 
     # go until time to stop?
-    for j in range(0, len(stack)):
-        msg = stack[j].up(msg)
+    for frame in stack:
+        msg = frame.up(msg)
         if msg["stop"]:
             break
 
