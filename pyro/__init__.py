@@ -206,6 +206,7 @@ def param(name, *args, **kwargs):
             "args": args,
             "kwargs": kwargs,
             "scale": 1.0,
+            "map_data_stack": [],
             "ret": None,
             "stop": False,
         }
