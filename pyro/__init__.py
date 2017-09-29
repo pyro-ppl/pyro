@@ -145,7 +145,7 @@ def map_data(name, data, fn, batch_size=None, batch_dim=0):
     Data subsampling with the important property that all the data are conditionally independent.
 
     With default values of `batch_size` and `batch_dim`, `map_data` behaves like `map`.
-    More precisely, `map_data('foo', data, fn)` is equivalent to `list(map(fn, enumerate(data)))`.
+    More precisely, `map_data('foo', data, fn)` is equivalent to `[fn(i, x) for i, x in enumerate(data)]`.
 
     :param str name: named argument
     :param data: data to subsample
@@ -168,7 +168,7 @@ def map_data(name, data, fn, batch_size=None, batch_dim=0):
         if isinstance(data, (torch.Tensor, Variable)):
             ret = fn(ind, ind_data)
         else:
-            ret = list(map(lambda ix: fn(*ix), zip(ind, ind_data)))
+            ret = [fn(i, x) for i, x in zip(ind, ind_data)]
         return ret
     else:
         # initialize data structure to pass up/down the stack
