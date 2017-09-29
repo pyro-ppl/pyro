@@ -7,8 +7,9 @@ from torch.autograd import Variable
 import pyro
 import pyro.distributions as dist
 from pyro.infer.tracegraph_kl_qp import TraceGraph_KL_QP
-from pyro.util import ng_zeros, ng_ones, ones
+from pyro.util import ng_zeros, ng_ones
 from tests.common import TestCase
+import numpy as np
 
 
 class NormalNormalTests(TestCase):
@@ -110,15 +111,12 @@ class NormalNormalTests(TestCase):
         self.assertEqual(0.0, log_sig_error.data.cpu().numpy()[0], prec=0.04)
 
     # this tests rao-blackwellization and baselines for a vectorized map_data
-    # inside of a list map_data (note: the baseline is trivial)
-    # with and without a superfluous random variable
-    def test_vectorized_map_data_in_elbo_without_superfluous_rv(self):
-        self._test_vectorized_map_data_in_elbo(superfluous=False, n_steps=6000)
+    # inside of a list map_data with superfluous random variables to complexify the
+    # graph structure and introduce additional baselines
+    def test_vectorized_map_data_in_elbo_with_superfluous_rvs(self):
+        self._test_vectorized_map_data_in_elbo(n_superfluous_top=2, n_superfluous_bottom=2, n_steps=6000)
 
-    def test_vectorized_map_data_in_elbo_with_superfluous_rv(self):
-        self._test_vectorized_map_data_in_elbo(superfluous=True, n_steps=8000)
-
-    def _test_vectorized_map_data_in_elbo(self, superfluous, n_steps):
+    def _test_vectorized_map_data_in_elbo(self, n_superfluous_top, n_superfluous_bottom, n_steps):
         pyro.get_param_store().clear()
         self.data_tensor = Variable(torch.zeros(9, 2))
         for _out in range(self.n_outer):
@@ -131,10 +129,13 @@ class NormalNormalTests(TestCase):
                                     reparameterized=False)
 
             def obs_inner(i, _i, _x):
-                if superfluous:
-                    pyro.sample("z_%d" % i, dist.diagnormal, ng_zeros(4 - i, 1), ng_ones(4 - i, 1),
-                                reparameterized=False)
+                for k in range(n_superfluous_top):
+                    pyro.sample("z_%d_%d" % (i, k), dist.diagnormal, ng_zeros(4 - i, 1),
+                                ng_ones(4 - i, 1), reparameterized=False)
                 pyro.observe("obs_%d" % i, dist.diagnormal, _x, mu_latent, torch.pow(self.lam, -0.5))
+                for k in range(n_superfluous_top, n_superfluous_top + n_superfluous_bottom):
+                    pyro.sample("z_%d_%d" % (i, k), dist.diagnormal, ng_zeros(4 - i, 1),
+                                ng_ones(4 - i, 1), reparameterized=False)
 
             def obs_outer(i, x):
                 pyro.map_data("map_obs_inner_%d" % i, x, lambda _i, _x:
@@ -146,28 +147,35 @@ class NormalNormalTests(TestCase):
 
             return mu_latent
 
-        pt_trivial_baseline = torch.nn.Linear(1, 1)
+        pt_mu_baseline = torch.nn.Linear(1, 1)
+        pt_superfluous_baselines = []
+        for k in range(n_superfluous_top + n_superfluous_bottom):
+            pt_superfluous_baselines.extend([torch.nn.Linear(2, 4), torch.nn.Linear(2, 3),
+                                             torch.nn.Linear(2, 2)])
 
         def guide():
             mu_q = pyro.param("mu_q", Variable(self.analytic_mu_n.data + 0.184 * torch.ones(2),
                                                requires_grad=True))
             log_sig_q = pyro.param("log_sig_q", Variable(
-                                   self.analytic_log_sig_n.data - 0.19 * torch.ones(2),
-                                   requires_grad=True))
+                                   self.analytic_log_sig_n.data - 0.19 * torch.ones(2), requires_grad=True))
             sig_q = torch.exp(log_sig_q)
-            trivial_baseline = pyro.module("baseline", pt_trivial_baseline)
+            trivial_baseline = pyro.module("mu_baseline", pt_mu_baseline)
             baseline_value = trivial_baseline(ng_ones(1))
             baseline_params = trivial_baseline.parameters()
             mu_latent = pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q, baseline_value=baseline_value,
                                     baseline_params=baseline_params, reparameterized=False)
 
             def obs_inner(i, _i, _x):
-                if superfluous:
-                    mean_i = pyro.param("mean_%d" % i, ones(4 - i, 1))
-                    pyro.sample("z_%d" % i, dist.diagnormal, mean_i, ng_ones(4 - i, 1),
+                for k in range(n_superfluous_top + n_superfluous_bottom):
+                    z_baseline = pyro.module("z_baseline_%d_%d" % (i, k),
+                                             pt_superfluous_baselines[3 * k + i])
+                    baseline_value = z_baseline(mu_latent.detach())
+                    baseline_params = z_baseline.parameters()
+                    mean_i = pyro.param("mean_%d_%d" % (i, k),
+                                        Variable(0.5 * torch.ones(4 - i, 1), requires_grad=True))
+                    pyro.sample("z_%d_%d" % (i, k), dist.diagnormal, mean_i, ng_ones(4 - i, 1),
+                                baseline_value=baseline_value, baseline_params=baseline_params,
                                 reparameterized=False)
-                else:
-                    pass
 
             def obs_outer(i, x):
                 pyro.map_data("map_obs_inner_%d" % i, x, lambda _i, _x:
@@ -181,8 +189,9 @@ class NormalNormalTests(TestCase):
 
         kl_optim = TraceGraph_KL_QP(model, guide, pyro.optim(
                                     torch.optim.Adam,
-                                    {"lr": .0008, "betas": (0.96, 0.999)}))
-        for k in range(n_steps):
+                                    {"lr": .0012, "betas": (0.96, 0.999)}))
+
+        for step in range(n_steps):
             kl_optim.step()
 
             mu_error = torch.sum(
@@ -195,19 +204,22 @@ class NormalNormalTests(TestCase):
                     self.analytic_log_sig_n -
                     pyro.param("log_sig_q"),
                     2.0))
-            if superfluous:
-                mean_0_error = torch.sum(torch.pow(pyro.param("mean_0"), 2.0))
-                mean_1_error = torch.sum(torch.pow(pyro.param("mean_1"), 2.0))
-                mean_2_error = torch.sum(torch.pow(pyro.param("mean_2"), 2.0))
-                superfluous_error = torch.max(torch.max(mean_0_error, mean_1_error), mean_2_error)
+            if n_superfluous_top > 0 or n_superfluous_bottom > 0:
+                superfluous_errors = []
+                for k in range(n_superfluous_top + n_superfluous_bottom):
+                    mean_0_error = torch.sum(torch.pow(pyro.param("mean_0_%d" % k), 2.0))
+                    mean_1_error = torch.sum(torch.pow(pyro.param("mean_1_%d" % k), 2.0))
+                    mean_2_error = torch.sum(torch.pow(pyro.param("mean_2_%d" % k), 2.0))
+                    superfluous_error = torch.max(torch.max(mean_0_error, mean_1_error), mean_2_error)
+                    superfluous_errors.append(superfluous_error.data.numpy()[0])
 
-            if k % 500 == 0 and self.verbose:
+            if step % 500 == 0 and self.verbose:
                 print("mu error, log(sigma) error:  %.4f, %.4f" % (mu_error.data.numpy()[0],
                       log_sig_error.data.numpy()[0]))
-                if superfluous:
-                    print("superfluous error: %.4f" % superfluous_error.data.numpy()[0])
+                if n_superfluous_top > 0 or n_superfluous_bottom > 0:
+                    print("superfluous error: %.4f" % np.max(superfluous_errors))
 
         self.assertEqual(0.0, mu_error.data.cpu().numpy()[0], prec=0.04)
         self.assertEqual(0.0, log_sig_error.data.cpu().numpy()[0], prec=0.04)
-        if superfluous:
-            self.assertEqual(0.0, superfluous_error.data.cpu().numpy()[0], prec=0.04)
+        if n_superfluous_top > 0 or n_superfluous_bottom > 0:
+            self.assertEqual(0.0, np.max(superfluous_errors), prec=0.04)

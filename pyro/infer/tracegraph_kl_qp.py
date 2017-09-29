@@ -196,7 +196,7 @@ class TraceGraph_KL_QP(object):
             for node in non_reparam_nodes:
                 log_pdf_key = 'log_pdf' if node not in guide_vec_batch_nodes_dict else 'batch_log_pdf'
                 downstream_cost = downstream_costs[node]
-                baseline = ng_zeros(1)
+                baseline = 0.0
                 nn_baseline, nn_baseline_input, use_decaying_avg_baseline, baseline_beta, \
                     baseline_value, baseline_params = get_baseline_kwargs(guide_trace[node]['args'][1])
                 use_nn_baseline = nn_baseline is not None
@@ -243,7 +243,7 @@ class TraceGraph_KL_QP(object):
                 else:
                     # use baseline_optim_step_fct if user provided
                     self.baseline_optim_step_fct(aggregate_baseline_params)
-                pyro.util.zero_grads(params)
+                pyro.util.zero_grads(aggregate_baseline_params)
 
         # the gradient of the surrogate loss yields our gradient estimator for the elbo
         surrogate_loss = - elbo_no_zero_expectation_terms - elbo_reinforce_terms
@@ -261,7 +261,8 @@ class TraceGraph_KL_QP(object):
             for site in guide_trace.keys():
                 if guide_trace[site]["type"] == "param":
                     all_trainable_params.append(guide_trace[site]["value"])
-        all_trainable_params = list(set(all_trainable_params))
+        # only train on non-baseline params
+        all_trainable_params = list(set(all_trainable_params).difference(aggregate_baseline_params))
 
         # compute gradients
         surrogate_loss.backward()
