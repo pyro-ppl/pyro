@@ -262,7 +262,10 @@ class TraceGraph_KL_QP(object):
                 if guide_trace[site]["type"] == "param":
                     all_trainable_params.append(guide_trace[site]["value"])
         # only train on non-baseline params
-        all_trainable_params = list(set(all_trainable_params).difference(aggregate_baseline_params))
+        if len(non_reparam_nodes) > 0:
+            all_trainable_params = list(set(all_trainable_params).difference(aggregate_baseline_params))
+        else:
+            all_trainable_params = list(set(all_trainable_params))
 
         # compute gradients
         surrogate_loss.backward()
