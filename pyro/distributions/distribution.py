@@ -35,6 +35,7 @@ class Distribution(object):
     def analytic_mean(self, *args, **kwargs):
         """
         Analytic mean of the distribution, to be implemented by derived classes.
+        Note that this is optional, and currently only used for testing distributions.
         :return: Analytic mean, assuming it can be computed analytically given the distribution parameters
         :rtype: torch.autograd.Variable.
         """
@@ -43,6 +44,7 @@ class Distribution(object):
     def analytic_var(self, *args, **kwargs):
         """
         Analytic variance of the distribution, to be implemented by derived classes.
+        Note that this is optional, and currently only used for testing distributions.
         :return: Analytic variance, assuming it can be computed analytically given the distribution parameters
         :rtype: torch.autograd.Variable.
         """

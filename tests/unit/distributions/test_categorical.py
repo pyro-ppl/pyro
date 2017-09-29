@@ -40,7 +40,7 @@ class TestCategorical(TestCase):
 
         with open('tests/test_data/support_categorical.json') as data_file:
             data = json.load(data_file)
-        self.support = list(map(lambda x: torch.Tensor(x), data['one_hot']))
+        self.support = [torch.Tensor(x) for x in data['one_hot']]
         self.nhot_support = list(map(lambda x: torch.Tensor(x), data['not_hot']))
         self.discrete_support = list(map(lambda x: torch.Tensor(x), data['discrete']))
         self.discrete_arr_support = data['discrete_arr']
@@ -57,11 +57,8 @@ class TestCategorical(TestCase):
         torch_samples = [dist.categorical(self.ps, one_hot=False, batch_size=1).data.numpy()
                          for _ in range(self.n_samples)]
         _, counts = np.unique(torch_samples, return_counts=True)
-        exp_ = float(counts[0]) / self.n_samples
-        torch_var = float(counts[0]) * np.power(0.1 * (0 - np.mean(torch_samples)), 2)
-        torch_var = np.square(np.mean(torch_samples)) / 16
-        self.assertEqual(exp_, self.analytic_mean.data.numpy()[0], prec=0.05)
-        self.assertEqual(torch_var, self.analytic_var.data.numpy()[0], prec=0.05)
+        computed_mean = float(counts[0]) / self.n_samples
+        self.assertEqual(computed_mean, self.analytic_mean.data.numpy()[0], prec=0.05)
 
     def test_discrete_log_pdf(self):
         log_px_torch = dist.categorical.batch_log_pdf(self.d_test_data, self.d_ps, self.d_vs).data[0][0]

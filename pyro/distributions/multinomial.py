@@ -115,4 +115,4 @@ class Multinomial(Distribution):
 
     def analytic_var(self, ps=None, n=None):
         _ps, _n = self._sanitize_input(ps, n)
-        return _n * ps * (1 - _ps)
+        return _n * _ps * (1 - _ps)

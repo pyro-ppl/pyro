@@ -93,7 +93,7 @@ class Fixture(object):
             return None
         with open(self.support_file) as data:
             data = json.load(data)
-        return list(map(lambda x: torch.Tensor(x), data[self.support_key]))
+        return [torch.Tensor(x) for x in data[self.support_key]]
 
     def get_test_distribution_name(self):
         return self.pyro_dist.__class__.__name__
@@ -106,4 +106,4 @@ def tensor_wrap(value):
 
 
 def map_tensor_wrap(list_vals):
-    return list(map(tensor_wrap, list_vals))
+    return [tensor_wrap(x) for x in list_vals]

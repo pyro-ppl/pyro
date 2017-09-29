@@ -41,7 +41,7 @@ def test_mean_and_variance(dist, test_data_idx):
         assert_equal(sample_mean, analytic_mean, prec=dist.prec)
         assert_equal(sample_var, analytic_var, prec=dist.prec)
     except NotImplementedError:
-        pass
+        pytest.skip('analytic mean and variance are not available')
 
 
 # Distributions tests - discrete distributions

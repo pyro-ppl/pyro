@@ -52,7 +52,7 @@ continuous_dists = [
             scipy_dist=sp.dirichlet,
             dist_params=[([2.4, 3, 6],), ([3.2, 1.2, 0.4],)],
             test_data=[[0.2, 0.45, 0.35], [0.3, 0.4, 0.3]],
-            scipy_arg_fn=lambda alpha: ((alpha,), {}))
+            scipy_arg_fn=lambda alpha: ((alpha,), {})),
 ]
 
 discrete_dists = [
@@ -90,7 +90,7 @@ discrete_dists = [
             min_samples=10000,
             is_discrete=True,
             expected_support_file='tests/test_data/support_categorical.json',
-            expected_support_key='one_hot')
+            expected_support_key='one_hot'),
 ]
 
 
