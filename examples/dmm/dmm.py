@@ -169,8 +169,9 @@ def main(num_epochs=2000, learning_rate=0.0008, beta1=.9, beta2=.999,
     transition_dim = 200
     emission_dim = 100
     rnn_dim = 600
-    val_test_frequency = 10
-    n_eval_samples = 5
+    val_test_frequency = 20
+    n_eval_samples_inner = 5
+    n_eval_samples_outer = 100
 
 
     # setup logging
@@ -204,16 +205,16 @@ def main(num_epochs=2000, learning_rate=0.0008, beta1=.9, beta2=.999,
 
     # package val/test data for model/guide
     def rep(x):
-        y = np.repeat(x, n_eval_samples, axis=0)
+        y = np.repeat(x, n_eval_samples_inner, axis=0)
         return y
 
     val_seq_lengths = rep(val_seq_lengths)
     test_seq_lengths = rep(test_seq_lengths)
     val_batch, val_batch_reversed, val_batch_mask, val_seq_lengths = poly.get_mini_batch(
-        np.arange(n_eval_samples * val_data_sequences.shape[0]), rep(val_data_sequences),
+        np.arange(n_eval_samples_inner * val_data_sequences.shape[0]), rep(val_data_sequences),
         val_seq_lengths, volatile=True, cuda=cuda)
     test_batch, test_batch_reversed, test_batch_mask, test_seq_lengths = poly.get_mini_batch(
-        np.arange(n_eval_samples * test_data_sequences.shape[0]), rep(test_data_sequences),
+        np.arange(n_eval_samples_inner * test_data_sequences.shape[0]), rep(test_data_sequences),
         test_seq_lengths, volatile=True, cuda=cuda)
 
     log("N_train_data: %d     avg. training seq. length: %.2f    N_mini_batches: %d" %
@@ -261,22 +262,36 @@ def main(num_epochs=2000, learning_rate=0.0008, beta1=.9, beta2=.999,
         log("[training epoch %04d]  %.4f \t\t\t\t(dt = %.3f sec)" %
             (epoch, epoch_nll / N_train_time_slices, epoch_time))
 
-        if epoch % val_test_frequency == 0:
+        if epoch % val_test_frequency == 0 and False:
             pt_rnn.eval()
-            val_nll = elbo_train.eval_objective(val_batch, val_batch_reversed, val_batch_mask,
-                                                val_seq_lengths, pt_rnn) / np.sum(val_seq_lengths)
-            test_nll = elbo_train.eval_objective(test_batch, test_batch_reversed, test_batch_mask,
-                                                 test_seq_lengths, pt_rnn) / np.sum(test_seq_lengths)
+            val_nlls, test_nlls = [], []
+            for _ in range(n_eval_samples_outer):
+                val_nll = elbo_train.eval_objective(val_batch, val_batch_reversed, val_batch_mask,
+                                                    val_seq_lengths, pt_rnn) / np.sum(val_seq_lengths)
+                test_nll = elbo_train.eval_objective(test_batch, test_batch_reversed, test_batch_mask,
+                                                     test_seq_lengths, pt_rnn) / np.sum(test_seq_lengths)
+                val_nlls.append(val_nll)
+                test_nlls.append(test_nll)
+            val_nll = np.mean(val_nlls)
+            test_nll = np.mean(test_nlls)
             pt_rnn.train()
             log("[val/test epoch %04d]  %.4f  %.4f" % (epoch, val_nll, test_nll))
 
     # when finished, do eval and send back validation
     # for hyper param search
     pt_rnn.eval()
-    val_nll = elbo_train.eval_objective(val_batch, val_batch_reversed, val_batch_mask,
-                                        val_seq_lengths, pt_rnn) / np.sum(val_seq_lengths)
-    return val_nll
-
+    val_nlls, test_nlls = [], []
+    for _ in range(n_eval_samples_outer):
+        val_nll = elbo_train.eval_objective(val_batch, val_batch_reversed, val_batch_mask,
+                                         val_seq_lengths, pt_rnn) / np.sum(val_seq_lengths)
+        val_nlls.append(val_nll)
+        test_nll = elbo_train.eval_objective(test_batch, test_batch_reversed, test_batch_mask,
+                                             test_seq_lengths, pt_rnn) / np.sum(test_seq_lengths)
+        test_nlls.append(test_nll)
+    test_nll, val_nll = np.mean(test_nlls), np.mean(val_nlls)
+    log("[validation score final epoch]  %.5f" % val_nll)
+    log("[test score final epoch]  %.5f" % test_nll)
+    return (test_nll, val_nll)
 
 if __name__ == '__main__':
 
