@@ -38,6 +38,13 @@ Distributions provide the following methods:
 
 Take a look at the examples[link] to see how they interact with inference algorithms.
 
+Distribution Base Class
+^^^^^^^^^^^^^^^^^^^^^^^
+.. automodule:: pyro.distributions.distribution
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Primitives
 ----------
 .. include:: pyro.distributions.txt
