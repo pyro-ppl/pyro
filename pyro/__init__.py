@@ -142,15 +142,18 @@ def observe(name, fn, val, *args, **kwargs):
 
 def map_data(name, data, fn, batch_size=None, batch_dim=0):
     """
-    :param name: named argument
-    :param data: data to subsample
-    :param observer: observe function
-    :param batch_size: number of samples per batch
-    :param batch_dim: dimension to subsample for tensor inputs
+    Data subsampling with the important property that all the data are conditionally independent.
 
-    Data subsampling with the important property that
-    all the data are conditionally independent. By
-    default `map_data` is the same as `map`.
+    With default values of `batch_size` and `batch_dim`, `map_data` behaves like `map`.
+    More precisely, `map_data('foo', data, fn)` is equivalent to `list(map(fn, enumerate(data)))`.
+
+    :param str name: named argument
+    :param data: data to subsample
+    :param callable fn: a function taking `(index, datum)` pairs, where `dataum = data[index]`
+    :param batch_size: number of samples per batch
+    :type batch_size: int or None
+    :param int batch_dim: dimension to subsample for tensor inputs
+    :return: a list of values returned by `fn`
     """
     if len(_PYRO_STACK) == 0:
         # default behavior
