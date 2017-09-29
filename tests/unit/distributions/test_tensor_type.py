@@ -16,11 +16,17 @@ def test_data():
 
 @pytest.fixture()
 def alpha():
+    """
+    alpha parameter for the Beta distribution.
+    """
     return Variable(torch.DoubleTensor([2.4]))
 
 
 @pytest.fixture()
 def beta():
+    """
+    beta parameter for the Beta distribution.
+    """
     return Variable(torch.DoubleTensor([3.7]))
 
 

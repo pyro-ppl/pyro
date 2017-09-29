@@ -70,6 +70,10 @@ class Dirichlet(Distribution):
         return _alpha / _sum_alpha
 
     def analytic_var(self, alpha):
+        """
+        :return: Analytic variance of the dirichlet distribution, with parameter alpha.
+        :rtype: torch.autograd.Variable (Vector of the same size as alpha).
+        """
         _alpha = self._sanitize_input(alpha)
         _sum_alpha = torch.sum(_alpha)
         return _alpha * (_sum_alpha - _alpha) / (torch.pow(_sum_alpha, 2) * (1 + _sum_alpha))
