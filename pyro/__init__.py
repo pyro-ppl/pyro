@@ -140,7 +140,7 @@ def observe(name, fn, val, *args, **kwargs):
         return out_msg["ret"]
 
 
-def map_data(name, data, fn, batch_size=None, batch_dim=0):
+def map_data(name, data, fn, batch_size=0, batch_dim=0):
     """
     Data subsampling with the important property that all the data are conditionally independent.
 
@@ -150,8 +150,7 @@ def map_data(name, data, fn, batch_size=None, batch_dim=0):
     :param str name: named argument
     :param data: data to subsample
     :param callable fn: a function taking `(index, datum)` pairs, where `dataum = data[index]`
-    :param batch_size: number of samples per batch
-    :type batch_size: int or None
+    :param int batch_size: number of samples per batch, or zero for the entire dataset
     :param int batch_dim: dimension to subsample for tensor inputs
     :return: a list of values returned by `fn`
     """
