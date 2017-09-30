@@ -21,6 +21,7 @@ Replicates the result in https://arxiv.org/pdf/1310.5438.pdf
 
 # use covtype dataset
 fname = "data/covtype/covtype.data"
+print "loading covtype data set..."
 with open(fname, "r+") as f:
     content = f.read()
 #     f.seek(0, 0)
@@ -29,6 +30,7 @@ df = pd.read_csv(fname, header=None)
 # def load_ds():
 #     for i,row in df.iterrows():
 #         yield Variable(torch.Tensor(row[0]))
+print "...done"
 
 # generate toy dataset
 def build_toy_dataset(N, noise_std=0.1):
@@ -58,8 +60,8 @@ def model(data):
     y_data = data[:,-1]
     mu = Variable(torch.zeros(D, 1))
     sigma = Variable(torch.ones(D, 1))
-    bias_mu = Variable(torch.zeros(batch_size, 1))
-    bias_sigma = Variable(10.0*torch.ones(batch_size, 1))
+    bias_mu = Variable(torch.zeros(1))
+    bias_sigma = Variable(10.0*torch.ones(1))
 #     mw_param = pyro.param("mean_weight", mu)
 #     sw_param = pyro.param("sigma_weight", sigma)
 #     mb_param = pyro.param("mean_bias", bias_mu)
@@ -80,10 +82,11 @@ def model(data):
 
 def guide(data):
     #sample from approximate posterior for weights
+    x_data = data[:,:-1]
     w_mu = Variable(torch.randn(D, 1), requires_grad=True)
     w_sig = Variable(-3.0*torch.ones(D,1) + 0.05*torch.randn(D, 1), requires_grad=True)
-    b_mu = Variable(torch.randn(batch_size, 1), requires_grad=True)
-    b_sig = Variable(-3.0*torch.ones(batch_size,1) + 0.05 * torch.randn(batch_size, 1), requires_grad=True)
+    b_mu = Variable(torch.randn(1), requires_grad=True)
+    b_sig = Variable(-3.0*torch.ones(1) + 0.05 * torch.randn(1), requires_grad=True)
     mw_param = pyro.param("guide_mean_weight", w_mu)
     sw_param = pyro.param("guide_sigma_weight", w_sig)
     mb_param  = pyro.param("guide_mean_bias", b_mu)
@@ -94,7 +97,7 @@ def guide(data):
     q_b = pyro.sample("bias_", DiagNormal(mb_param, sb_param))
 
 # adam_params = {"lr": 0.00001, "betas": (0.95, 0.999)}
-adam_params = {"lr": 0.00001}
+adam_params = {"lr": 0.001}
 adam_optim = pyro.optim(torch.optim.Adam, adam_params)
 sgd_optim = pyro.optim(torch.optim.SGD, adam_params)
 
@@ -110,7 +113,7 @@ def posterior(data):
     return sample
 
 nr_samples = 50
-nr_epochs = 600
+nr_epochs = 100
 all_batches = np.arange(0, N, batch_size)
 # take care of bad index
 if all_batches[-1] != N:
@@ -119,13 +122,13 @@ if all_batches[-1] != N:
 grad_step = KL_QP(model, guide, adam_optim)
 
 # apply it to minibatches of data by hand:
-epoch_loss = 0.0
 for j in range(nr_epochs):
+    epoch_loss = 0.0
     for ix, batch_start in enumerate(all_batches[:-1]):
         batch_end = all_batches[ix + 1]
         batch_data = data[batch_start: batch_end]
 #         bb()
         epoch_loss += grad_step.step(batch_data)
-    print("epoch avg loss {}".format(epoch_loss))
+    print("epoch avg loss {}".format(epoch_loss/float(N)))
 #     bb()
 
