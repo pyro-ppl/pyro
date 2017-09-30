@@ -21,7 +21,7 @@ Replicates the result in https://arxiv.org/pdf/1310.5438.pdf
 
 # use covtype dataset
 fname = "data/covtype/covtype.data"
-print "loading covtype data set..."
+print("loading covtype data set...")
 with open(fname, "r+") as f:
     content = f.read()
 #     f.seek(0, 0)
@@ -30,7 +30,7 @@ df = pd.read_csv(fname, header=None)
 # def load_ds():
 #     for i,row in df.iterrows():
 #         yield Variable(torch.Tensor(row[0]))
-print "...done"
+print("...done")
 
 # generate toy dataset
 def build_toy_dataset(N, noise_std=0.1):
@@ -104,7 +104,7 @@ sgd_optim = pyro.optim(torch.optim.SGD, adam_params)
 # dat = build_toy_dataset(N)
 x = df.as_matrix(columns=range(D))
 y = np.squeeze(df.as_matrix(columns=[D]))
-raw_data = Variable(torch.Tensor(df.as_matrix()))
+raw_data = Variable(torch.Tensor(df.as_matrix().tolist()))
 data = normalize(raw_data, 2, dim=1)
 
 def posterior(data):
