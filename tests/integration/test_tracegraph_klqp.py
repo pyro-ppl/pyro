@@ -66,7 +66,8 @@ class NormalNormalTests(TestCase):
                                    requires_grad=True))
             sig_q = torch.exp(log_sig_q)
             mu_latent = pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q,
-                                    reparameterized=reparameterized)
+                                    reparameterized=reparameterized,
+                                    use_decaying_avg_baseline=True)
             return mu_latent
 
         kl_optim = TraceGraph_KL_QP(model, guide, pyro.optim(
