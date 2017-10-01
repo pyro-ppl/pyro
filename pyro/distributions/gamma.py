@@ -74,3 +74,11 @@ class Gamma(Distribution):
         ll_3 = _alpha * torch.log(_beta)
         ll_4 = - log_gamma(_alpha)
         return ll_1 + ll_2 + ll_3 + ll_4
+
+    def analytic_mean(self, alpha=None, beta=None):
+        _alpha, _beta = self._sanitize_input(alpha, beta)
+        return _alpha / _beta
+
+    def analytic_var(self, alpha=None, beta=None):
+        _alpha, _beta = self._sanitize_input(alpha, beta)
+        return _alpha / torch.pow(_beta, 2.0)

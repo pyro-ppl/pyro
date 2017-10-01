@@ -77,3 +77,11 @@ class Bernoulli(Distribution):
         size = functools.reduce(lambda x, y: x * y, _ps.size())
         return (Variable(torch.Tensor(list(x)).view_as(_ps))
                 for x in itertools.product(torch.Tensor([0, 1]).type_as(_ps.data), repeat=size))
+
+    def analytic_mean(self, ps=None):
+        _ps = self._sanitize_input(ps)
+        return _ps
+
+    def analytic_var(self, ps=None):
+        _ps = self._sanitize_input(ps)
+        return _ps * (1 - _ps)
