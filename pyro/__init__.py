@@ -140,17 +140,19 @@ def observe(name, fn, val, *args, **kwargs):
         return out_msg["ret"]
 
 
-def map_data(name, data, fn, batch_size=None, batch_dim=0):
+def map_data(name, data, fn, batch_size=0, batch_dim=0):
     """
-    :param name: named argument
-    :param data: data to subsample
-    :param observer: observe function
-    :param batch_size: number of samples per batch
-    :param batch_dim: dimension to subsample for tensor inputs
+    Data subsampling with the important property that all the data are conditionally independent.
 
-    Data subsampling with the important property that
-    all the data are conditionally independent. By
-    default `map_data` is the same as `map`.
+    With default values of `batch_size` and `batch_dim`, `map_data` behaves like `map`.
+    More precisely, `map_data('foo', data, fn)` is equivalent to `[fn(i, x) for i, x in enumerate(data)]`.
+
+    :param str name: named argument
+    :param data: data to subsample
+    :param callable fn: a function taking `(index, datum)` pairs, where `dataum = data[index]`
+    :param int batch_size: number of samples per batch, or zero for the entire dataset
+    :param int batch_dim: dimension to subsample for tensor inputs
+    :return: a list of values returned by `fn`
     """
     if len(_PYRO_STACK) == 0:
         # default behavior
@@ -165,7 +167,7 @@ def map_data(name, data, fn, batch_size=None, batch_dim=0):
         if isinstance(data, (torch.Tensor, Variable)):
             ret = fn(ind, ind_data)
         else:
-            ret = list(map(lambda ix: fn(*ix), zip(ind, ind_data)))
+            ret = [fn(i, x) for i, x in zip(ind, ind_data)]
         return ret
     else:
         # initialize data structure to pass up/down the stack
