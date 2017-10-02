@@ -1,6 +1,17 @@
+import torch
+
+
 class Distribution(object):
     """
-    Distribution abstract base class
+    Abstract base class for probability distributions.
+
+    Instances can either be constructed from a fixed parameter and called without paramters,
+    or constructed without a parameter and called with a paramter.
+    It is not allowed to specify a parameter both during construction and when calling.
+    When calling with a parameter, it is preferred to use one of the singleton instances
+    in pyro.distributions rather than constructing a new instance without a parameter.
+
+    Derived classes must implement the `sample`, and `batch_log_pdf` methods.
     """
 
     def __init__(self, *args, **kwargs):
@@ -13,39 +24,69 @@ class Distribution(object):
 
     def __call__(self, *args, **kwargs):
         """
-        Samples on call
+        Samples a random value.
+
+        :return: A random value.
+        :rtype: torch.autograd.Variable
         """
         return self.sample(*args, **kwargs)
 
     def sample(self, *args, **kwargs):
         """
-        Virtual sample method.
+        Samples a random value.
+
+        :return: A random value.
+        :rtype: torch.autograd.Variable
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
-    def log_pdf(self, x):
-        raise NotImplementedError()
+    def log_pdf(self, x, *args, **kwargs):
+        """
+        Evaluates total log probability density for one or a batch of samples and parameters.
 
-    def batch_log_pdf(self, x, batch_size):
-        raise NotImplementedError()
+        :param torch.autograd.Variable x: A value.
+        :return: total log probability density as a one-dimensional torch.autograd.Variable of size 1.
+        :rtype: torch.autograd.Variable
+        """
+        return torch.sum(self.batch_log_pdf(x, *args, **kwargs))
 
-    def support(self):
-        raise NotImplementedError("Support not supported for {}".format(str(type(self))))
+    def batch_log_pdf(self, x, *args, **kwargs):
+        """
+        Evaluates log probability densities for one or a batch of samples and parameters.
+
+        :param torch.autograd.Variable x: A single value or a batch of values batched along axis 0.
+        :return: log probability densities as a one-dimensional torch.autograd.Variable.
+        :rtype: torch.autograd.Variable
+        """
+        raise NotImplementedError
+
+    def support(self, *args, **kwargs):
+        """
+        Returns a representation of the distribution's support.
+
+        :return: A representation of the distribution's support.
+        :rtype: torch.Tensor
+        """
+        raise NotImplementedError("Support not implemented for {}".format(type(self)))
 
     def analytic_mean(self, *args, **kwargs):
         """
         Analytic mean of the distribution, to be implemented by derived classes.
+
         Note that this is optional, and currently only used for testing distributions.
+
         :return: Analytic mean, assuming it can be computed analytically given the distribution parameters
         :rtype: torch.autograd.Variable.
         """
-        raise NotImplementedError("Method not implemented by the subclass {}".format(str(type(self))))
+        raise NotImplementedError("Method not implemented by the subclass {}".format(type(self)))
 
     def analytic_var(self, *args, **kwargs):
         """
         Analytic variance of the distribution, to be implemented by derived classes.
+
         Note that this is optional, and currently only used for testing distributions.
+
         :return: Analytic variance, assuming it can be computed analytically given the distribution parameters
         :rtype: torch.autograd.Variable.
         """
-        raise NotImplementedError("Method not implemented by the subclass {}".format(str(type(self))))
+        raise NotImplementedError("Method not implemented by the subclass {}".format(type(self)))
