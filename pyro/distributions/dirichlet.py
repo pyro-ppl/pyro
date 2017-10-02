@@ -74,7 +74,7 @@ class Dirichlet(Distribution):
 
         (Un-reparameterized).
 
-        :param alpha:
+        :param torch.autograd.Variable alpha:
         """
         alpha = self._sanitize_input(alpha)
         if alpha.dim() not in (1, 2):
@@ -112,9 +112,7 @@ class Dirichlet(Distribution):
         assert x.size() == alpha.size()
         x_sum = torch.sum(torch.mul(alpha - 1, torch.log(x)), 1)
         beta = log_beta(alpha)
-        result = x_sum - beta
-        assert result.dim() == 1
-        return result
+        return x_sum - beta
 
     def analytic_mean(self, alpha):
         _alpha = self._sanitize_input(alpha)
