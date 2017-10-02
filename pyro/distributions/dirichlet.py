@@ -89,19 +89,6 @@ class Dirichlet(Distribution):
         x = Variable(torch.Tensor(x_np))
         return x
 
-    # TODO Move this generic implementation into the Distribution base class.
-    def log_pdf(self, x, *args, **kwargs):
-        """
-        Evaluates total log probability density for one or a batch of samples and parameters.
-
-        :param torch.autograd.Variable x: A value (if x.dim() == 1) or or batch of values (if x.dim() == 2).
-        :param alpha: A vector of concentration parameters.
-        :type alpha: None or a torch.autograd.Variable of a torch.Tensor of dimension 1 or 2.
-        :return: log probability density.
-        :rtype: torch.autograd.Variable of torch.Tensor of dimension 1.
-        """
-        return torch.sum(self.batch_log_pdf(x, *args, **kwargs))
-
     # TODO Remove the batch_size argument.
     def batch_log_pdf(self, x, alpha=None, batch_size=1, *args, **kwargs):
         """
@@ -128,3 +115,17 @@ class Dirichlet(Distribution):
         result = x_sum - beta
         assert result.dim() == 1
         return result
+
+    def analytic_mean(self, alpha):
+        _alpha = self._sanitize_input(alpha)
+        _sum_alpha = torch.sum(_alpha)
+        return _alpha / _sum_alpha
+
+    def analytic_var(self, alpha):
+        """
+        :return: Analytic variance of the dirichlet distribution, with parameter alpha.
+        :rtype: torch.autograd.Variable (Vector of the same size as alpha).
+        """
+        _alpha = self._sanitize_input(alpha)
+        _sum_alpha = torch.sum(_alpha)
+        return _alpha * (_sum_alpha - _alpha) / (torch.pow(_sum_alpha, 2) * (1 + _sum_alpha))

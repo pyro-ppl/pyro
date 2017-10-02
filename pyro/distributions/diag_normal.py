@@ -81,3 +81,11 @@ class DiagNormal(Distribution):
                                  Variable(torch.ones(_sigma.size()).type_as(_mu.data)))),
                                  0.5 * torch.pow(((x - _mu) / _sigma), 2))
         return torch.sum(log_pxs, 1)
+
+    def analytic_mean(self, mu=None, sigma=None):
+        _mu, _sigma = self._sanitize_input(mu, sigma)
+        return _mu
+
+    def analytic_var(self,  mu=None, sigma=None):
+        _mu, _sigma = self._sanitize_input(mu, sigma)
+        return torch.pow(_sigma, 2)

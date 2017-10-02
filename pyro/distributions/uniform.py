@@ -62,3 +62,11 @@ class Uniform(Distribution):
         _l = x.ge(_a).type_as(_a)
         _u = x.le(_b).type_as(_b)
         return torch.sum(torch.log(_l.mul(_u)) - torch.log(_b - _a), 1)
+
+    def analytic_mean(self, a=None, b=None):
+        _a, _b = self._sanitize_input(a, b)
+        return 0.5 * (_a + _b)
+
+    def analytic_var(self, a=None, b=None):
+        _a, _b = self._sanitize_input(a, b)
+        return torch.pow(_b - _a, 2) / 12

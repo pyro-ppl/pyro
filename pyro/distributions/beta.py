@@ -70,7 +70,7 @@ class Beta(Distribution):
     def batch_log_pdf(self, x, alpha=None, beta=None, batch_size=1, *args, **kwargs):
         _alpha, _beta = self._sanitize_input(alpha, beta)
         if x.dim() == 1 and _beta.dim() == 1 and batch_size == 1:
-            return self.log_pdf(x. _alpha, _beta)
+            return self.log_pdf(x, _alpha, _beta)
         elif x.dim() == 1:
             x = x.expand(batch_size, x.size(0))
         one = Variable(torch.ones(x.size()).type_as(_alpha.data))
@@ -80,3 +80,12 @@ class Beta(Distribution):
         ll_4 = -log_gamma(_alpha)
         ll_5 = -log_gamma(_beta)
         return ll_1 + ll_2 + ll_3 + ll_4 + ll_5
+
+    def analytic_mean(self, alpha=None, beta=None):
+        _alpha, _beta = self._sanitize_input(alpha, beta)
+        return _alpha / (_alpha + _beta)
+
+    def analytic_var(self, alpha=None, beta=None):
+        _alpha, _beta = self._sanitize_input(alpha, beta)
+        return torch.pow(self.analytic_mean(_alpha, _beta), 2.0) * _beta / \
+            (_alpha * (_alpha + _beta + Variable(torch.ones([1]))))
