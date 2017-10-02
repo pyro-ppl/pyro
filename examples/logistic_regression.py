@@ -1,5 +1,3 @@
-from pdb import set_trace as bb
-import time
 import numpy as np
 import torch
 import torch.nn as nn
@@ -77,7 +75,6 @@ def model(data):
     latent = sigmoid(reg)
 #     prob = torch.exp(torch.addmm(p_b, x_data, p_w))
 #     latent = prob / (prob + 1)
-#     bb()
     pyro.observe("bernoulli", Bernoulli(latent), y_data.unsqueeze(1))
 
 
@@ -127,17 +124,10 @@ if all_batches[-1] != N:
 grad_step = KL_QP(model, guide, adam_optim)
 
 # apply it to minibatches of data by hand:
-start = time.clock()
 for j in range(nr_epochs):
     epoch_loss = 0.0
     for ix, batch_start in enumerate(all_batches[:-1]):
         batch_end = all_batches[ix + 1]
         batch_data = data[batch_start: batch_end]
-#         bb()
         epoch_loss += grad_step.step(batch_data)
     print("epoch avg loss {}".format(epoch_loss/float(N)))
-#     bb()
-end = time.clock()
-print "TOTAL TIME:", end-start
-
-posterior = inspect_post_params(None)
