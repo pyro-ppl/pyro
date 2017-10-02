@@ -23,12 +23,7 @@ fname = "data/covtype/covtype.data"
 print("loading covtype data set...")
 with open(fname, "r+") as f:
     content = f.read()
-#     f.seek(0, 0)
-#     f.write(first_line.rstrip('\r\n') + '\n' + content)
 df = pd.read_csv(fname, header=None)
-# def load_ds():
-#     for i,row in df.iterrows():
-#         yield Variable(torch.Tensor(row[0]))
 print("...done")
 
 # generate toy dataset
@@ -61,20 +56,11 @@ def model(data):
     sigma = Variable(torch.ones(D, 1))
     bias_mu = Variable(torch.zeros(1))
     bias_sigma = Variable(10.0*torch.ones(1))
-#     mw_param = pyro.param("mean_weight", mu)
-#     sw_param = pyro.param("sigma_weight", sigma)
-#     mb_param = pyro.param("mean_bias", bias_mu)
-#     sb_param = pyro.param("sigma_bias", bias_sigma)
     p_w = pyro.sample("weight_", DiagNormal(mu, sigma))
     p_b = pyro.sample("bias_", DiagNormal(bias_mu, bias_sigma))
     # exp to get log bernoulli
-#     data = data.squeeze()
-#     p_w = p_w.squeeze()
-#     prob = torch.exp(torch.dot(data, p_w) + p_b)
     reg = torch.addmm(p_b, x_data, p_w)
     latent = sigmoid(reg)
-#     prob = torch.exp(torch.addmm(p_b, x_data, p_w))
-#     latent = prob / (prob + 1)
     pyro.observe("bernoulli", Bernoulli(latent), y_data.unsqueeze(1))
 
 
