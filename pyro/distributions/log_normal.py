@@ -74,3 +74,12 @@ class LogNormal(Distribution):
         ll_2 = -torch.log(_sigma * x)
         ll_3 = -0.5 * torch.pow((torch.log(x) - _mu) / _sigma, 2.0)
         return ll_1 + ll_2 + ll_3
+
+    def analytic_mean(self, mu=None, sigma=None):
+        _mu, _sigma = self._sanitize_input(mu, sigma)
+        return torch.exp(_mu + 0.5 * torch.pow(_sigma, 2.0))
+
+    def analytic_var(self, mu=None, sigma=None):
+        _mu, _sigma = self._sanitize_input(mu, sigma)
+        return (torch.exp(torch.pow(_sigma, 2.0)) - Variable(torch.ones(1))) * \
+            torch.pow(self.analytic_mean(_mu, _sigma), 2)

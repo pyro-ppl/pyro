@@ -65,5 +65,14 @@ class NormalChol(Distribution):
 
         return ll_1 + ll_2 + ll_3
 
-    def batch_log_pdf(self, x, batch_size=1):
+    def batch_log_pdf(self, x, mu=None, L=None, batch_size=1, *args, **kwargs):
         raise NotImplementedError()
+
+    def analytic_mean(self, mu=None, L=None):
+        _mu, _L = self._sanitize_input(mu, L)
+        return _mu
+
+    def analytic_var(self,  mu=None, L=None):
+        _mu, _L = self._sanitize_input(mu, L)
+        cov = torch.mm(_L, torch.transpose(_L, 0, 1))
+        return torch.diag(cov)

@@ -1,7 +1,7 @@
 import pyro
 
 from .poutine import Poutine
-from .scale_poutine import ScalePoutine
+from .lambda_poutine import LambdaPoutine
 from .trace import Trace
 
 
@@ -86,7 +86,7 @@ class TracePoutine(Poutine):
         """
         scale = pyro.util.get_batch_scale(data, batch_size, batch_dim)
         ret = super(TracePoutine, self)._pyro_map_data(msg, name, data,
-                                                       ScalePoutine(fn, scale),
+                                                       LambdaPoutine(fn, name, scale),
                                                        # XXX watch out for changing
                                                        batch_size=batch_size,
                                                        batch_dim=batch_dim)

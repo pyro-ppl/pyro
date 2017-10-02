@@ -6,7 +6,9 @@ from torch.autograd import Variable
 import pyro
 import pyro.poutine as poutine
 from pyro.distributions import DiagNormal, Bernoulli
+import pyro.distributions as dist
 from tests.common import TestCase
+from pyro.util import ng_ones, ng_zeros
 
 pytestmark = pytest.mark.init(rng_seed=123)
 
@@ -265,3 +267,48 @@ class QueuePoutineTests(TestCase):
             self.assertTrue(False)
         except ValueError:
             self.assertTrue(True)
+
+
+class IndirectLambdaPoutineTests(TestCase):
+
+    def setUp(self):
+
+        def model(batch_size_outer=2, batch_size_inner=2):
+            mu_latent = pyro.sample("mu_latent", dist.diagnormal, ng_zeros(1), ng_ones(1))
+
+            def outer(i, x):
+                pyro.map_data("map_inner_%d" % i, x, lambda _i, _x:
+                              inner(i, _i, _x), batch_size=batch_size_inner)
+
+            def inner(i, _i, _x):
+                pyro.sample("z_%d_%d" % (i, _i), dist.diagnormal, mu_latent + _x, ng_ones(1))
+
+            pyro.map_data("map_outer", [[ng_ones(1)] * 2] * 2, lambda i, x:
+                          outer(i, x), batch_size=batch_size_outer)
+
+            return mu_latent
+
+        self.model = model
+        self.expected_nodes = set(['z_0_0', 'z_0_1', 'z_1_0', 'z_1_1', 'mu_latent'])
+        self.expected_edges = set([('mu_latent', 'z_0_0'), ('mu_latent', 'z_0_1'),
+                                   ('mu_latent', 'z_1_0'), ('mu_latent', 'z_1_1')])
+
+    def test_graph_structure(self):
+        tracegraph = poutine.tracegraph(self.model)()
+        self.assertTrue(set(tracegraph.get_graph().nodes()) == self.expected_nodes)
+        self.assertTrue(set(tracegraph.get_graph().edges()) == self.expected_edges)
+
+    def test_scale_factors(self):
+        def _test_scale_factor(batch_size_outer, batch_size_inner, expected):
+            trace = poutine.tracegraph(self.model)(batch_size_outer=batch_size_outer,
+                                                   batch_size_inner=batch_size_inner).get_trace()
+            scale_factors = []
+            for node in ['z_0_0', 'z_0_1', 'z_1_0', 'z_1_1']:
+                if node in trace:
+                    scale_factors.append(trace[node]['scale'])
+            self.assertTrue(scale_factors == expected)
+
+        _test_scale_factor(1, 1, [4.0])
+        _test_scale_factor(2, 2, [1.0] * 4)
+        _test_scale_factor(1, 2, [2.0] * 2)
+        _test_scale_factor(2, 1, [2.0] * 2)
