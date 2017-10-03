@@ -1,4 +1,3 @@
-import argparse
 import contextlib
 import os
 import sys
@@ -6,7 +5,6 @@ import unittest
 import numbers
 import warnings
 from copy import deepcopy
-from functools import wraps
 from pytest import approx
 from itertools import product
 from numpy.testing import assert_allclose
@@ -16,8 +14,6 @@ import torch
 import torch.cuda
 from torch.autograd import Variable
 
-import pyro
-
 torch.set_default_tensor_type('torch.DoubleTensor')
 
 """
@@ -26,28 +22,6 @@ Contains test utilities for assertions, approximate comparison (of tensors and o
 Code has been largely adapted from pytorch/test/common.py
 Source: https://github.com/pytorch/pytorch/blob/master/test/common.py
 """
-
-
-def run_tests():
-    parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument('--seed', type=int, default=123)
-    args, remaining = parser.parse_known_args()
-    pyro.set_rng_seed(args.seed)
-    remaining = [sys.argv[0]] + remaining
-    unittest.main(argv=remaining)
-
-
-def skipIfNoLapack(fn):
-    @wraps(fn)
-    def wrapper(*args, **kwargs):
-        try:
-            fn(*args, **kwargs)
-        except Exception as e:
-            if 'Lapack library not found' in e.args[0]:
-                raise unittest.SkipTest('Compiled without Lapack')
-            raise
-
-    return wrapper
 
 
 def suppress_warnings(fn):
