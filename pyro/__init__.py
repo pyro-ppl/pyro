@@ -188,6 +188,12 @@ def iarange(name, size, subsample_size=0):
 def irange(name, size, subsample_size=0):
     """
     Non-vectorized version of iarange.
+
+    Examples::
+
+        >>> for i in irange('data', 100, subsample_size=10):
+                if z[i]:  # Prevents vectorization.
+                    observe('obs_{}'.format(i), normal, data[i], mu, sigma)
     """
     with iarange(name, size, subsample_size) as batch:
         for i in batch:
@@ -201,10 +207,10 @@ def map_data_in_terms_of_iarange(name, data, fn, batch_size=0, batch_dim=0):
     if isinstance(data, (torch.Tensor, Variable)):
         size = data.size(batch_dim)
         with iarange(name, size, batch_size) as batch:
-            return fn(data.index_select(batch_dim, batch))
+            return fn(batch, data.index_select(batch_dim, batch))
     else:
         size = len(data)
-        return [fn(data[i]) for i in irange(name, size, batch_size)]
+        return [fn(i, data[i]) for i in irange(name, size, batch_size)]
 
 
 def map_data(name, data, fn, batch_size=0, batch_dim=0):
