@@ -1,6 +1,7 @@
 import json
 
 import numpy as np
+import pytest
 import scipy.stats as spr
 import torch
 from torch.autograd import Variable
@@ -8,6 +9,8 @@ from torch.autograd import Variable
 import pyro.distributions as dist
 from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
 from tests.common import TestCase
+
+pytestmark = pytest.mark.init(rng_seed=123)
 
 
 class TestUniform(TestCase):
@@ -45,7 +48,7 @@ class TestUniform(TestCase):
         log_px_np = spr.uniform.logpdf(self.batch_test_data.data.cpu().numpy(),
                                        loc=self.vec_a_np,
                                        scale=self.vec_range_np)
-        self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
+        self.assertEqual(log_px_torch[1], log_px_np[1][0], prec=1e-4)
 
     def test_mean_and_var(self):
         torch_samples = [dist.uniform(self.a, self.b).data.cpu().numpy()
@@ -68,18 +71,18 @@ class TestExponential(TestCase):
         self.n_samples = 10000
 
     def test_log_pdf(self):
-        log_px_torch = dist.exponential.log_pdf(self.test_data, self.lam).data[0]
+        log_px_torch = dist.exponential.log_pdf(self.test_data, self.lam).data.numpy()
         log_px_np = spr.expon.logpdf(
             self.test_data.data.cpu().numpy(),
             scale=1.0 / self.lam.data.cpu().numpy())
         self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
 
     def test_batch_log_pdf(self):
-        log_px_torch = dist.exponential.batch_log_pdf(self.test_batch_data, self.batch_lam).data[0]
+        log_px_torch = dist.exponential.batch_log_pdf(self.test_batch_data, self.batch_lam).data
         log_px_np = spr.expon.logpdf(
             self.test_data.data.cpu().numpy(),
             scale=1.0 / self.lam.data.cpu().numpy())
-        self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
+        self.assertEqual(log_px_torch[0], log_px_np[0], prec=1e-4)
 
     def test_mean_and_var(self):
         torch_samples = [dist.exponential(self.lam).data.cpu().numpy()
@@ -108,7 +111,7 @@ class TestGamma(TestCase):
         self.n_samples = 50000
 
     def test_log_pdf(self):
-        log_px_torch = dist.gamma.log_pdf(self.test_data, self.alpha, self.beta).data[0]
+        log_px_torch = dist.gamma.log_pdf(self.test_data, self.alpha, self.beta).data.numpy()
         log_px_np = spr.gamma.logpdf(
             self.test_data.data.cpu().numpy(),
             self.alpha.data.cpu().numpy(),
@@ -124,7 +127,7 @@ class TestGamma(TestCase):
             self.test_data.data.cpu().numpy(),
             self.alpha.data.cpu().numpy(),
             scale=1.0 / self.beta.data.cpu().numpy())
-        self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
+        self.assertEqual(log_px_torch[0], log_px_np[0], prec=1e-4)
 
     def test_mean_and_var(self):
         torch_samples = [dist.gamma(self.alpha, self.beta).data.cpu().numpy()
@@ -161,7 +164,7 @@ class TestMultinomial(TestCase):
         log_px_np0 = float(spr.multinomial.logpmf(np.array([2, 4, 2]), 8, self.ps.data.numpy()))
         log_px_np1 = float(spr.multinomial.logpmf(np.array([1, 4, 3]), 8, np.array([0.2, 0.4, 0.4])))
         log_px_np = [log_px_np0, log_px_np1]
-        self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
+        self.assertEqual(log_px_torch[0][0], log_px_np[0], prec=1e-4)
 
     def test_mean_and_var(self):
         torch_samples = [dist.multinomial.expanded_sample(self.ps, self.n).data.numpy() for _ in range(self.n_samples)]
@@ -283,7 +286,7 @@ class TestBeta(TestCase):
         self.n_samples = 50000
 
     def test_log_pdf(self):
-        log_px_torch = dist.beta.log_pdf(self.test_data, self.alpha, self.beta).data[0]
+        log_px_torch = dist.beta.log_pdf(self.test_data, self.alpha, self.beta).data.numpy()
         log_px_np = spr.beta.logpdf(
             self.test_data.data.cpu().numpy(),
             self.alpha.data.cpu().numpy(),
@@ -298,7 +301,7 @@ class TestBeta(TestCase):
             self.test_data.data.cpu().numpy(),
             self.alpha.data.cpu().numpy(),
             self.beta.data.cpu().numpy())
-        self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
+        self.assertEqual(log_px_torch[0], log_px_np[0], prec=1e-4)
 
     def test_mean_and_var(self):
         torch_samples = [dist.beta(self.alpha, self.beta).data.cpu().numpy()
@@ -492,7 +495,7 @@ class TestBernoulli(TestCase):
         log_px_torch = dist.bernoulli.batch_log_pdf(self.test_data, self.ps, batch_size=bs).data.numpy()
         _log_px_np = spr.bernoulli.logpmf(self.test_data.data.cpu().numpy(),
                                           p=self.ps_np)
-        log_px_np = [np.sum(_log_px_np[0]), np.sum(_log_px_np[1])]
+        log_px_np = np.transpose([np.sum(_log_px_np[0]), np.sum(_log_px_np[1])])
         self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
 
     def test_mean_and_var(self):
@@ -666,7 +669,7 @@ class TestTensorType(TestCase):
     def test_double_type(self):
         log_px_torch = dist.beta.log_pdf(self.test_data, self.alpha, self.beta).data
         self.assertTrue(isinstance(log_px_torch, torch.DoubleTensor))
-        log_px_val = log_px_torch[0]
+        log_px_val = log_px_torch.numpy()
         log_px_np = spr.beta.logpdf(
             self.test_data.data.cpu().numpy(),
             self.alpha.data.cpu().numpy(),
@@ -676,7 +679,7 @@ class TestTensorType(TestCase):
     def test_float_type(self):
         log_px_torch = dist.beta.log_pdf(self.float_test_data, self.float_alpha, self.float_beta).data
         self.assertTrue(isinstance(log_px_torch, torch.FloatTensor))
-        log_px_val = log_px_torch[0]
+        log_px_val = log_px_torch.numpy()
         log_px_np = spr.beta.logpdf(
             self.test_data.data.cpu().numpy(),
             self.alpha.data.cpu().numpy(),

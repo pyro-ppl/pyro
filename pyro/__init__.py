@@ -45,19 +45,16 @@ optim = PyroOptim
 _PYRO_STACK = []
 
 
-def apply_stack(initial_msg, stack=None):
+def apply_stack(initial_msg):
     """
-    execute the poutine stack according to the new two-sided blocking scheme
-    New Poutine stack mechanism:
+    Execute the poutine stack according to the new two-sided blocking scheme.
+    Poutine stack mechanism:
     1) start at the top
     2) grab the top poutine, ask to go down
     3) if down, recur
     4) if not, stop, start returning
     """
-    if stack is None:
-        # XXX what should be referenced here?
-        stack = _PYRO_STACK
-
+    stack = _PYRO_STACK
     # # XXX seems like this should happen on poutine installation, not at execution
     # assert poutine.validate_stack(stack), \
     #     "Current poutine stack violates poutine composition rules"
@@ -65,15 +62,13 @@ def apply_stack(initial_msg, stack=None):
     msg = initial_msg
 
     # work out the bottom poutine at this site
-    for i in range(len(stack) - 1, -1, -1):
-        msg, stop = stack[i].down(msg)
-        if stop:
-            break
+    for frame in reversed(stack):
+        msg = frame.down(msg)
 
     # go until time to stop?
-    for j in range(i, len(stack)):
-        msg, stop = stack[j].up(msg)
-        if stop:
+    for frame in stack:
+        msg = frame.up(msg)
+        if msg["stop"]:
             break
 
     return msg
@@ -102,6 +97,9 @@ def sample(name, fn, *args, **kwargs):
             "kwargs": kwargs,
             "ret": None,
             "scale": 1.0,
+            "map_data_stack": [],
+            "done": False,
+            "stop": False,
         }
         # apply the stack and return its return value
         out_msg = apply_stack(msg)
@@ -133,17 +131,22 @@ def observe(name, fn, val, *args, **kwargs):
             "kwargs": kwargs,
             "ret": None,
             "scale": 1.0,
+            "map_data_stack": [],
+            "done": False,
+            "stop": False,
         }
         # apply the stack and return its return value
         out_msg = apply_stack(msg)
         return out_msg["ret"]
 
 
-def map_data(name, data, fn, batch_size=None):
+def map_data(name, data, fn, batch_size=None, batch_dim=0):
     """
     :param name: named argument
-    :param data: data tp subsample
+    :param data: data to subsample
     :param observer: observe function
+    :param batch_size: number of samples per batch
+    :param batch_dim: dimension to subsample for tensor inputs
 
     Data subsampling with the important property that
     all the data are conditionally independent. By
@@ -151,11 +154,11 @@ def map_data(name, data, fn, batch_size=None):
     """
     if len(_PYRO_STACK) == 0:
         # default behavior
-        scale, ind = util.get_scale(data, batch_size)
+        ind = util.get_batch_indices(data, batch_size, batch_dim)
         if batch_size == 0:
             ind_data = data
         elif isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
-            ind_data = data.index_select(0, ind)
+            ind_data = data.index_select(batch_dim, ind)
         else:
             ind_data = [data[i] for i in ind]
 
@@ -172,11 +175,12 @@ def map_data(name, data, fn, batch_size=None):
             "fn": fn,
             "data": data,
             "batch_size": batch_size,
+            "batch_dim": batch_dim,
             # XXX should these be added here or during application
             "indices": None,
-            "scale": None,
             "ret": None,
             "done": False,
+            "stop": False,
         }
         # apply the stack and return its return value
         out_msg = apply_stack(msg)
@@ -201,7 +205,9 @@ def param(name, *args, **kwargs):
             "name": name,
             "args": args,
             "kwargs": kwargs,
+            "scale": 1.0,
             "ret": None,
+            "stop": False,
         }
         # apply the stack and return its return value
         out_msg = apply_stack(msg)
@@ -245,8 +251,8 @@ def module(pyro_name, nn_obj):
         if id(param) != id(current_nn_state[name]):
             current_nn_state[name].copy_(param)
 
-    missing = set(current_nn_state.keys()) - set(state_dict.keys())
-    if len(missing) > 0:
-        raise KeyError('missing keys in state_dict: "{}"'.format(missing))
+    #missing = set(current_nn_state.keys()) - set(state_dict.keys())
+    #if len(missing) > 0:
+    #    raise KeyError('missing keys in state_dict: "{}"'.format(missing))
 
     return nn_obj

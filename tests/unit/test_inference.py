@@ -1,3 +1,4 @@
+import pytest
 import torch
 import torch.optim
 from torch import nn as nn
@@ -9,6 +10,8 @@ import pyro.distributions as dist
 from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
 from pyro.infer.kl_qp import KL_QP
 from tests.common import TestCase
+
+pytestmark = pytest.mark.init(rng_seed=123)
 
 
 class NormalNormalTests(TestCase):
@@ -425,10 +428,10 @@ class LogNormalNormalTests(TestCase):
 
         mu_error = torch.abs(
             pyro.param("mymodule$$$mu_q_log") -
-            self.log_mu_n).data.cpu().numpy()[0]
+            self.log_mu_n).data.cpu().numpy()[0][0]
         tau_error = torch.abs(
             pyro.param("mymodule$$$tau_q_log") -
-            self.log_tau_n).data.cpu().numpy()[0]
+            self.log_tau_n).data.cpu().numpy()[0][0]
         # print "mu_error", mu_error
         # print "tau_error", tau_error
         self.assertEqual(0.0, mu_error, prec=0.07)
@@ -467,9 +470,9 @@ class LogNormalNormalTests(TestCase):
 
         mu_error = torch.abs(
             pyro.param("mu_q_log") -
-            self.log_mu_n).data.cpu().numpy()[0]
+            self.log_mu_n).data.cpu().numpy()[0][0]
         tau_error = torch.abs(
             pyro.param("tau_q_log") -
-            self.log_tau_n).data.cpu().numpy()[0]
+            self.log_tau_n).data.cpu().numpy()[0][0]
         self.assertEqual(0.0, mu_error, prec=0.05)
         self.assertEqual(0.0, tau_error, prec=0.05)
