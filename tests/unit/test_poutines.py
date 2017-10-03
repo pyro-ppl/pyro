@@ -7,7 +7,7 @@ import pyro
 import pyro.poutine as poutine
 from pyro.distributions import DiagNormal, Bernoulli
 import pyro.distributions as dist
-from tests.common import TestCase
+from tests.common import TestCase, assert_equal
 from pyro.util import ng_ones, ng_zeros
 
 pytestmark = pytest.mark.init(rng_seed=123)
@@ -74,7 +74,7 @@ class TracePoutineTests(NormalNormalNormalPoutineTestCase):
 
     def test_trace_return(self):
         model_trace = poutine.trace(self.model)()
-        assert eq(model_trace["latent1"]["value"], model_trace["_RETURN"]["value"])
+        assert_equal(model_trace["latent1"]["value"], model_trace["_RETURN"]["value"])
 
 
 class ReplayPoutineTests(NormalNormalNormalPoutineTestCase):
@@ -83,7 +83,7 @@ class ReplayPoutineTests(NormalNormalNormalPoutineTestCase):
         guide_trace = poutine.trace(self.guide)()
         model_trace = poutine.trace(poutine.replay(self.model, guide_trace))()
         for name in self.full_sample_sites.keys():
-            assert eq(model_trace[name]["value"], guide_trace[name]["value"])
+            assert_equal(model_trace[name]["value"], guide_trace[name]["value"])
 
     def test_replay_partial(self):
         guide_trace = poutine.trace(self.guide)()
@@ -92,7 +92,7 @@ class ReplayPoutineTests(NormalNormalNormalPoutineTestCase):
                                                    sites=self.partial_sample_sites))()
         for name in self.full_sample_sites.keys():
             if name in self.partial_sample_sites:
-                assert eq(model_trace[name]["value"], guide_trace[name]["value"])
+                assert_equal(model_trace[name]["value"], guide_trace[name]["value"])
             else:
                 assert not eq(model_trace[name]["value"],
                               guide_trace[name]["value"])
@@ -104,10 +104,10 @@ class ReplayPoutineTests(NormalNormalNormalPoutineTestCase):
         tr12 = ftr()
         tr2 = poutine.trace(poutine.replay(self.model, model_trace))()
         for name in self.full_sample_sites.keys():
-            assert eq(tr11[name]["value"], tr12[name]["value"])
-            assert eq(tr11[name]["value"], tr2[name]["value"])
-            assert eq(model_trace[name]["value"], tr11[name]["value"])
-            assert eq(model_trace[name]["value"], tr2[name]["value"])
+            assert_equal(tr11[name]["value"], tr12[name]["value"])
+            assert_equal(tr11[name]["value"], tr2[name]["value"])
+            assert_equal(model_trace[name]["value"], tr11[name]["value"])
+            assert_equal(model_trace[name]["value"], tr2[name]["value"])
 
 
 class CachePoutineTests(NormalNormalNormalPoutineTestCase):
@@ -117,7 +117,7 @@ class CachePoutineTests(NormalNormalNormalPoutineTestCase):
         model_trace_1 = cached_model()
         model_trace_2 = cached_model()
         for name in self.full_sample_sites.keys():
-            assert eq(model_trace_1[name]["value"], model_trace_2[name]["value"])
+            assert_equal(model_trace_1[name]["value"], model_trace_2[name]["value"])
 
     def test_cache_partial(self):
         cached_model = poutine.trace(
@@ -126,7 +126,7 @@ class CachePoutineTests(NormalNormalNormalPoutineTestCase):
         model_trace_2 = cached_model()
         for name in self.full_sample_sites.keys():
             if name in self.partial_sample_sites:
-                assert eq(model_trace_1[name]["value"], model_trace_2[name]["value"])
+                assert_equal(model_trace_1[name]["value"], model_trace_2[name]["value"])
             else:
                 assert not eq(model_trace_1[name]["value"], model_trace_2[name]["value"])
 
