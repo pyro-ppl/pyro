@@ -29,4 +29,4 @@ class runExample(TestCase):
                 print('ok')
             else:
                 self.fail(example + ' threw an Error. Stack trace below:\n' + str(output))
-        self.assertTrue(True)
+        assert True
