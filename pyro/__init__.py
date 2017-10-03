@@ -1,3 +1,5 @@
+from __future__ import division
+
 import contextlib
 from inspect import isclass
 
@@ -10,6 +12,7 @@ from pyro import util
 from pyro.optim.optim import PyroOptim
 from pyro.params import param_with_module_name
 from pyro.params.param_store import ParamStoreDict
+from pyro.poutine.lambda_poutine import LambdaPoutine
 from pyro.util import zeros, ones  # noqa: F401
 
 # global map of params for now
@@ -172,17 +175,22 @@ def iarange(name, size, subsample_size=0):
     if subsample_size == 0 or subsample_size >= size:
         subsample_size = size
     if subsample_size == size:
-        # There is no magic here, so we don't care about the _PYRO_STACK.
-        yield Variable(torch.arange(0, size))
-    elif len(_PYRO_STACK) == 0:
-        # TODO Push a global score factor here.
-        try:
-            yield Variable(torch.randperm(size)[0:subsample_size])
-        finally:
-            # TODO Pop a global score factor here.
-            pass
+        # If not subsampling, there is no need to scale and we can ignore the _PYRO_STACK.
+        yield Variable(torch.LongTensor(list(range(size))))
+        return
+
+    subsample = Variable(torch.randperm(size)[0:subsample_size])
+    if len(_PYRO_STACK) == 0:
+        yield subsample
     else:
-        raise NotImplementedError('TODO deal with the poutine stack')
+        # Push a global score factor.
+        scale = size / subsample_size
+        _PYRO_STACK.append(LambdaPoutine(_PYRO_STACK[-1], name, scale))
+        try:
+            yield subsample
+        finally:
+            # Pop a global score factor.
+            _PYRO_STACK.pop()
 
 
 def irange(name, size, subsample_size=0):
@@ -196,7 +204,7 @@ def irange(name, size, subsample_size=0):
                     observe('obs_{}'.format(i), normal, data[i], mu, sigma)
     """
     with iarange(name, size, subsample_size) as batch:
-        for i in batch:
+        for i in batch.data:
             yield i
 
 
@@ -213,7 +221,10 @@ def map_data_in_terms_of_iarange(name, data, fn, batch_size=0, batch_dim=0):
         return [fn(i, data[i]) for i in irange(name, size, batch_size)]
 
 
-def map_data(name, data, fn, batch_size=0, batch_dim=0):
+map_data = map_data_in_terms_of_iarange
+
+
+def map_data_old(name, data, fn, batch_size=0, batch_dim=0):
     """
     Data subsampling with the important property that all the data are conditionally independent.
 
