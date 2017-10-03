@@ -81,7 +81,7 @@ class SearchTest(HMMSamplingTestCase):
             tr_latents.add(tuple([tr[name]["value"].view(-1).data[0] for name in tr
                                   if tr[name]["type"] == "sample"]))
 
-        self.assertTrue(true_latents == tr_latents)
+        assert true_latents == tr_latents
 
     def test_marginal(self):
         posterior = pyro.infer.Search(self.model)
@@ -92,9 +92,9 @@ class SearchTest(HMMSamplingTestCase):
         for v in dd.vs:
             tr_rets.append(v.view(-1).data[0])
 
-        self.assertTrue(len(tr_rets) == 4)
+        assert len(tr_rets) == 4
         for i in range(4):
-            self.assertTrue(i + 1 in tr_rets)
+            assert i + 1 in tr_rets
 
 
 class ImportanceTest(NormalNormalSamplingTestCase):

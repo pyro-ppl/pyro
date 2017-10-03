@@ -167,13 +167,13 @@ class TestFixedModelGuide(TestCase):
         return (not bad)
 
     def test_model_fixed(self):
-        self.assertTrue(self.do_test_fixedness(model_fixed=True, guide_fixed=False))
+        assert self.do_test_fixedness(model_fixed=True, guide_fixed=False)
 
     def test_guide_fixed(self):
-        self.assertTrue(self.do_test_fixedness(model_fixed=False, guide_fixed=True))
+        assert self.do_test_fixedness(model_fixed=False, guide_fixed=True)
 
     def test_guide_and_model_fixed(self):
-        self.assertTrue(self.do_test_fixedness(model_fixed=True, guide_fixed=True))
+        assert self.do_test_fixedness(model_fixed=True, guide_fixed=True)
 
 
 class PoissonGammaTests(TestCase):
