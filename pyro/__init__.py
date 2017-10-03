@@ -146,9 +146,10 @@ def batched_range(name, size, batch_size=0, subsample=True):
 
     WARNING: Subsampling is only correct if all subsequent computation is iid.
 
-    If `subsample=False`, this simply yields a sequence of `torch.arange`s each of size `batch_size`,
-    in total covering the entire `range(size)`. If `subsample=True`, this yields a single random batch
-    of size `batch_size` and scales all subsequent log likelihood terms by `size/batch_size`.
+    If `subsample=False`, this simply yields a sequence of `torch.arange`s each
+    of size `batch_size`, in total covering the entire `range(size)`. If
+    `subsample=True`, this yields a single random batch of size `batch_size`
+    and scales all subsequent log likelihood terms by `size/batch_size`.
 
     :param str name: A name that will be used for this site in a Trace.
     :param int size: The size of the collection being subsampled (like `stop` in builtin `range`).
