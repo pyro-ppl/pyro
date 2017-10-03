@@ -1,4 +1,4 @@
-from tests import common
+import pyro
 
 
 def pytest_configure(config):
@@ -10,4 +10,4 @@ def pytest_runtest_setup(item):
     test_initialize_marker = item.get_marker("init")
     if test_initialize_marker:
         rng_seed = test_initialize_marker.kwargs["rng_seed"]
-        common.set_rng_seed(rng_seed)
+        pyro.set_rng_seed(rng_seed)

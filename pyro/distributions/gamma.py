@@ -45,40 +45,40 @@ class Gamma(Distribution):
         un-reparameterized sampler.
         """
 
-        _alpha, _beta = self._sanitize_input(alpha, beta)
-        _theta = torch.pow(_beta, -1.0)
+        alpha, beta = self._sanitize_input(alpha, beta)
+        theta = torch.pow(beta, -1.0)
         x = Variable(torch.Tensor([spr.gamma.rvs(
-            _alpha.data.numpy(), scale=_theta.data.numpy())])
-            .type_as(_alpha.data))
+            alpha.data.numpy(), scale=theta.data.numpy())])
+            .type_as(alpha.data))
         return x
 
     def log_pdf(self, x, alpha=None, beta=None, *args, **kwargs):
         """
         gamma log-likelihood
         """
-        _alpha, _beta = self._sanitize_input(alpha, beta)
-        ll_1 = -_beta * x
-        ll_2 = (_alpha - pyro.ones(_alpha.size())) * torch.log(x)
-        ll_3 = _alpha * torch.log(_beta)
-        ll_4 = - log_gamma(_alpha)
+        alpha, beta = self._sanitize_input(alpha, beta)
+        ll_1 = - beta * x
+        ll_2 = (alpha - pyro.ones(alpha.size())) * torch.log(x)
+        ll_3 = alpha * torch.log(beta)
+        ll_4 = - log_gamma(alpha)
         return ll_1 + ll_2 + ll_3 + ll_4
 
     def batch_log_pdf(self, x, alpha=None, beta=None, batch_size=1, *args, **kwargs):
-        _alpha, _beta = self._sanitize_input(alpha, beta)
-        if x.dim() == 1 and _beta.dim() == 1 and batch_size == 1:
-            return self.log_pdf(x, _alpha, _beta)
+        alpha, beta = self._sanitize_input(alpha, beta)
+        if x.dim() == 1 and beta.dim() == 1 and batch_size == 1:
+            return self.log_pdf(x, alpha, beta)
         elif x.dim() == 1:
             x = x.expand(batch_size, x.size(0))
-        ll_1 = -_beta * x
-        ll_2 = (_alpha - pyro.ones(x.size())) * torch.log(x)
-        ll_3 = _alpha * torch.log(_beta)
-        ll_4 = - log_gamma(_alpha)
+        ll_1 = - beta * x
+        ll_2 = (alpha - pyro.ones(x.size())) * torch.log(x)
+        ll_3 = alpha * torch.log(beta)
+        ll_4 = - log_gamma(alpha)
         return ll_1 + ll_2 + ll_3 + ll_4
 
     def analytic_mean(self, alpha=None, beta=None):
-        _alpha, _beta = self._sanitize_input(alpha, beta)
-        return _alpha / _beta
+        alpha, beta = self._sanitize_input(alpha, beta)
+        return alpha / beta
 
     def analytic_var(self, alpha=None, beta=None):
-        _alpha, _beta = self._sanitize_input(alpha, beta)
-        return _alpha / torch.pow(_beta, 2.0)
+        alpha, beta = self._sanitize_input(alpha, beta)
+        return alpha / torch.pow(beta, 2.0)

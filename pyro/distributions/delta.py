@@ -35,24 +35,24 @@ class Delta(Distribution):
         super(Delta, self).__init__(*args, **kwargs)
 
     def sample(self, v=None, *args, **kwargs):
-        _v = self._sanitize_input(v)
-        if isinstance(_v, Variable):
-            return _v
-        return Variable(_v)
+        v = self._sanitize_input(v)
+        if isinstance(v, Variable):
+            return v
+        return Variable(v)
 
     def batch_log_pdf(self, x, v=None, batch_size=1, *args, **kwargs):
-        _v = self._sanitize_input(v)
+        v = self._sanitize_input(v)
         if x.dim == 1:
             x = x.expand(batch_size, x.size(0))
-        return (torch.eq(x, _v.expand_as(x)) - 1).float() * 999999
+        return (torch.eq(x, v.expand_as(x)) - 1).float() * 999999
 
     def log_pdf(self, x, v=None, *args, **kwargs):
-        _v = self._sanitize_input(v)
-        if torch.equal(x.data, _v.data.expand_as(x.data)):
-            return Variable(torch.zeros(1).type_as(_v.data))
-        return Variable(torch.Tensor([-float("inf")]).type_as(_v.data))
+        v = self._sanitize_input(v)
+        if torch.equal(x.data, v.data.expand_as(x.data)):
+            return Variable(torch.zeros(1).type_as(v.data))
+        return Variable(torch.Tensor([-float("inf")]).type_as(v.data))
 
     def support(self, v=None, *args, **kwargs):
-        _v = self._sanitize_input(v)
+        v = self._sanitize_input(v)
         # univariate case
-        return (Variable(_v.data.index(i)) for i in range(_v.size(0)))
+        return (Variable(v.data.index(i)) for i in range(v.size(0)))
