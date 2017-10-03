@@ -140,6 +140,46 @@ def observe(name, fn, val, *args, **kwargs):
         return out_msg["ret"]
 
 
+def batched_range(name, size, batch_size=0, subsample=True):
+    """
+    Splits a range of indices into minibatches, optionally subsampling.
+
+    WARNING: Subsampling is only correct if all subsequent computation is iid.
+
+    If `subsample=False`, this simply yields a sequence of `torch.arange`s each of size `batch_size`,
+    in total covering the entire `range(size)`. If `subsample=True`, this yields a single random batch
+    of size `batch_size` and scales all subsequent log likelihood terms by `size/batch_size`.
+
+    :param str name: A name that will be used for this site in a Trace.
+    :param int size: The size of the collection being subsampled (like `stop` in builtin `range`).
+    :param int batch_size: Size of minibatches used in subsampling. Defaults to `size` if set to 0.
+    :param bool subsample: Whether to subsample data.
+    :return: An iterator yielding `torch.Tensor`s, each of which is a 1-dimensional range of indices.
+
+    Examples::
+
+        # This is not vectorized: we simply iterate through the batch.
+        >>> for batch in batched_range('data', 100, batch_size=10):
+                for i in batch:
+                    if z[i]:
+                        observe('obs_{}'.format(i), normal, data[i], mu, sigma)
+        # This version is vectorized:
+        >>> for i, batch in enumerate(batched_range('data', 100, batch_size=10)):
+                observe('obs_{}'.format(i), normal, data.index_select(0, batch), mu, sigma)
+    """
+    if len(_PYRO_STACK) == 0:
+        if batch_size == 0 or batch_size >= size:
+            batch_size = size
+            subsample = False
+        if subsample:
+            yield Variable(torch.randperm(size)[0:batch_size])
+        else:
+            for start in range(0, size, batch_size):
+                yield Variable(torch.arange(start, min(start + batch_size, size)))
+    else:
+        raise NotImplementedError('TODO deal with likelihood scaling')
+
+
 def map_data(name, data, fn, batch_size=0, batch_dim=0):
     """
     Data subsampling with the important property that all the data are conditionally independent.
