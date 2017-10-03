@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 from torch.nn import functional as F
-
+from torch.nn import Parameter
 from pyro.util import ng_ones
 
 
@@ -13,7 +13,8 @@ class MaskedLinear(nn.Linear):
 
     def __init__(self, in_features, out_features, mask, bias=True):
         super(MaskedLinear, self).__init__(in_features, out_features, bias)
-        self.mask = mask
+        self.register_buffer('mask', mask)
+        #self.mask = mask
 
     def forward(self, input):
         masked_weight = self.weight * self.mask
@@ -51,6 +52,10 @@ class AutoRegressiveNN(nn.Module):
 
         self.mask1 = Variable(torch.zeros(hidden_dim, input_dim))
         self.mask2 = Variable(torch.zeros(input_dim * self.output_dim_multiplier, hidden_dim))
+        #mask1 = Variable(torch.zeros(hidden_dim, input_dim))
+        #mask2 = Variable(torch.zeros(input_dim * self.output_dim_multiplier, hidden_dim))
+        #self.register_buffer('mask1', mask1)
+        #self.register_buffer('mask2', mask2)
 
         for k in range(hidden_dim):
             # fill in mask1

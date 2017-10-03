@@ -5,6 +5,8 @@ from pyro.infer.kl_qp import KL_QP
 import pyro.distributions as dist
 from pyro.util import ng_ones, zeros
 import torch.nn as nn
+from pyro.distributions.transformed_distribution import InverseAutoregressiveFlow
+from pyro.distributions.transformed_distribution import TransformedDistribution
 # from torch.autograd import Variable
 # import torch.optim as optim
 import numpy as np
@@ -82,7 +84,7 @@ class Combiner(nn.Module):
 
 class DMM(nn.Module):
 
-    def __init__(self, input_dim, z_dim, emission_dim, transition_dim, rnn_dim, max_rnn_batch):
+    def __init__(self, input_dim, z_dim, emission_dim, transition_dim, rnn_dim, max_rnn_batch, num_iafs, cuda):
 
         # instantiate pytorch modules that make up the model and the inference network
         super(DMM, self).__init__()
@@ -98,6 +100,11 @@ class DMM(nn.Module):
         self.transition_dim = transition_dim
         self.rnn_dim = rnn_dim
         self.max_rnn_batch = max_rnn_batch
+        self.num_iafs = num_iafs
+        self.pt_iafs = [InverseAutoregressiveFlow(z_dim, 100) for _ in range(num_iafs)]
+        if cuda:
+            for pt_iaf in self.pt_iafs:
+                pt_iaf.cuda()
 
     # the model
     def model(self, mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths,
@@ -143,7 +150,11 @@ class DMM(nn.Module):
 
         for t in range(1, T_max + 1):
             z_mu, z_sigma = combiner(z_prev, rnn_output[:, t - 1, :])
-            z_t = pyro.sample("z_%d" % t, dist.DiagNormal(z_mu, z_sigma),
+            z_dist = dist.DiagNormal(z_mu, z_sigma)
+            iafs = [pyro.module("iaf_%d" % i, pt_iaf) for i, pt_iaf in enumerate(self.pt_iafs)]
+            if self.num_iafs > 0:
+                z_dist = TransformedDistribution(z_dist, iafs)
+            z_t = pyro.sample("z_%d" % t, z_dist,
                             log_pdf_mask=annealing_factor * mini_batch_mask[:, t - 1:t])
             z_prev = z_t
 
@@ -154,7 +165,7 @@ def main(num_epochs=2000, learning_rate=0.0008, beta1=.9, beta2=.999,
             clip_norm=25., lr_decay=1.0, weight_decay=0.0,
             mini_batch_size=20, annealing_epochs=500,
             minimum_annealing_factor=0.0, rnn_dropout_rate=0.0,
-            rnn_num_layers=1, log='dmm.log', cuda=False):
+            rnn_num_layers=1, log='dmm.log', cuda=False, num_iafs=0):
 
     # ensure ints
     # TODO: Remove this, temp hyper param logic
@@ -222,7 +233,7 @@ def main(num_epochs=2000, learning_rate=0.0008, beta1=.9, beta2=.999,
     times = [time.time()]
 
      # create the dmm
-    dmm = DMM(input_dim, z_dim, emission_dim, transition_dim, rnn_dim, max(test_batch.data.shape[0], val_batch.data.shape[0], mini_batch_size))
+    dmm = DMM(input_dim, z_dim, emission_dim, transition_dim, rnn_dim, max(test_batch.data.shape[0], val_batch.data.shape[0], mini_batch_size), num_iafs, cuda)
 
     # easy fix, turn dmm into cuda dmm
     if cuda:
@@ -308,6 +319,7 @@ if __name__ == '__main__':
     parser.add_argument('-maf', '--minimum-annealing-factor', type=float, default=0.0)
     parser.add_argument('-rdr', '--rnn-dropout-rate', type=float, default=0.0)
     parser.add_argument('-rnl', '--rnn-num-layers', type=int, default=1)
+    parser.add_argument('-iafs', '--num-iafs', type=int, default=0)
     parser.add_argument('--cuda', action='store_true')
     parser.add_argument('-l', '--log', type=str, default='dmm.log')
     args = parser.parse_args()
