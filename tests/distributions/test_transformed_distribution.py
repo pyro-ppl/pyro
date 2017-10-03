@@ -9,9 +9,8 @@ from torch.autograd import Variable
 import pyro.distributions as dist
 from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
 from tests.common import assert_equal
-from tests.unit.distributions.dist_fixture import Fixture
+from tests.distributions.dist_fixture import Fixture
 
-pytestmark = pytest.mark.init(rng_seed=123)
 
 """
 If X is a lognormal RV, then it can be expressed as

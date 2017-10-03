@@ -1,4 +1,3 @@
-import pytest
 import torch
 import torch.optim
 from torch.autograd import Variable
@@ -7,8 +6,6 @@ import pyro
 from pyro.distributions import DiagNormal
 from pyro.infer.kl_qp import KL_QP
 from tests.common import TestCase
-
-pytestmark = pytest.mark.init(rng_seed=123)
 
 
 class OptimTests(TestCase):

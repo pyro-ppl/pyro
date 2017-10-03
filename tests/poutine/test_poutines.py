@@ -1,4 +1,3 @@
-import pytest
 import torch
 from six.moves.queue import Queue
 from torch.autograd import Variable
@@ -9,8 +8,6 @@ from pyro.distributions import DiagNormal, Bernoulli
 import pyro.distributions as dist
 from tests.common import TestCase, assert_equal
 from pyro.util import ng_ones, ng_zeros
-
-pytestmark = pytest.mark.init(rng_seed=123)
 
 
 def eq(x, y, prec=1e-10):
