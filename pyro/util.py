@@ -30,13 +30,13 @@ def memoize(fn):
     alternate in py3: https://docs.python.org/3/library/functools.html
     lru_cache
     """
-    _mem = {}
+    mem = {}
 
     def _fn(*args, **kwargs):
         kwargs_tuple = _dict_to_tuple(kwargs)
-        if (args, kwargs_tuple) not in _mem:
-            _mem[(args, kwargs_tuple)] = fn(*args, **kwargs)
-        return _mem[(args, kwargs_tuple)]
+        if (args, kwargs_tuple) not in mem:
+            mem[(args, kwargs_tuple)] = fn(*args, **kwargs)
+        return mem[(args, kwargs_tuple)]
     return _fn
 
 
