@@ -9,113 +9,98 @@ import torch.optim as optim
 from pyro.distributions.transformed_distribution import InverseAutoregressiveFlow
 from pyro.distributions.transformed_distribution import TransformedDistribution
 import torch.nn as nn
-from pyro.util import ng_ones, ng_zeros
+from pyro.util import ng_ones, ng_zeros, ones, zeros
 import sys
 import visdom
 from sklearn.datasets import make_moons
 
-visualize = False
+visualize = True
 
 if visualize:
     viz = visdom.Visdom()
 
     def make_scatter_plot(X, title):
-        win = viz.scatter(X=X,
-                          opts=dict(markersize=2, title=title))
+        viz.scatter(X=X,
+                    opts=dict(markersize=2, title=title))
 
 dim_x = 2
-dim_z = 10
-dim_h_decoder = 50
-dim_h_encoder = 50
-dim_h_iaf = 10
+dim_z = 20
+dim_h_iaf = 50
+
 
 def gen_distr(N):
     x, y = make_moons(n_samples=2 * N, noise=0.2)
     data = x[y == 0]
     return torch.Tensor(data)
 
-N = 500
-batch_size = 5
+
+N = 250
+batch_size = 10
 data = Variable(gen_distr(N))
-#mini_batches = [data[i*batch_size:(i+1)*batch_size] for i in range(N/batch_size)]
 n_mini_batches = N / batch_size
+mini_batches = [data[i*batch_size:(i+1)*batch_size] for i in range(n_mini_batches)]
+print("n_mini_batches: %d" % n_mini_batches)
 
-use_iaf = True
-N_iafs = 3
+N_iafs = 8
 pt_iafs = []
-if use_iaf:
-    for _ in range(N_iafs):
-        pt_iaf = InverseAutoregressiveFlow(dim_z, dim_h_iaf)
-        pt_iafs.append(pt_iaf)
+for _ in range(N_iafs):
+    pt_iaf = InverseAutoregressiveFlow(dim_z, dim_h_iaf)
+    pt_iafs.append(pt_iaf)
 
-#make_scatter_plot(data.data.numpy(), "training data")
+make_scatter_plot(data.data.numpy(), "training data")
 
-pt_decoder = nn.Sequential(nn.Linear(dim_z, dim_h_decoder), nn.Softplus(),
-                           #nn.Linear(dim_h_decoder, dim_h_decoder), nn.Softplus(),
-                           nn.Linear(dim_h_decoder, 2 * dim_x))
-pt_encoder = nn.Sequential(nn.Linear(dim_x, dim_h_encoder), nn.Softplus(),
-                           #nn.Linear(dim_h_encoder, dim_h_encoder), nn.Softplus(),
-                           nn.Linear(dim_h_encoder, 2 * dim_z))
+pt_linear = nn.Linear(dim_z, dim_x)
 
 def model(observed_data):
-    decoder = pyro.module("decoder", pt_decoder)
-
-    z_prior = DiagNormal(ng_zeros(observed_data.size(0), dim_z),
-                         ng_ones(observed_data.size(0), dim_z))
+    N_data = observed_data.size(0)
+    z_prior = DiagNormal(ng_zeros(N_data, dim_z),
+                         ng_ones(N_data, dim_z))
     z = pyro.sample("z", z_prior)
-    z_decoded = decoder(z)
-    mu_x = z_decoded[:, 0:dim_x]
-    sigma_x = torch.exp(z_decoded[:, dim_x:])
+    sigma_x = torch.exp(pyro.param("log_sigma_x", zeros(1, dim_x))).expand(N_data, dim_x)
+    linear = pyro.module("linear", pt_linear)
+    mu_x = linear(z)
     obs_dist = DiagNormal(mu_x, sigma_x)
-    pyro.map_data("map", observed_data, lambda i, x: pyro.observe("obs", obs_dist, x))
+    pyro.observe("obs", obs_dist, observed_data)
+    #pyro.map_data("map", observed_data, lambda i, x: pyro.observe("obs", obs_dist, x), batch_size=batch_size)
+
 
 def guide(observed_data):
-    encoder = pyro.module("encoder", pt_encoder)
-
-    x_encoded = encoder(observed_data)
-    mu_z = x_encoded[:, 0:dim_z]
-    sigma_z = torch.exp(x_encoded[:, dim_z:])
-    if use_iaf:
-        iafs = []
-        for i, pt_iaf in enumerate(pt_iafs):
-            iaf = pyro.module("iaf_%d" % i, pt_iaf)
-            iafs.append(iaf)
-        z_dist = TransformedDistribution(DiagNormal(mu_z, sigma_z), iafs)
-    else:
-        z_dist = DiagNormal(mu_z, sigma_z)
+    N_data = observed_data.size(0)
+    mu_z = pyro.param("mu_z", zeros(1, dim_z)).expand(N_data, dim_z)
+    sigma_z = torch.exp(pyro.param("log_sigma_z", zeros(1, dim_z))).expand(N_data, dim_z)
+    z_dist = DiagNormal(mu_z, sigma_z)
+    if N_iafs > 0:
+        iafs = [pyro.module("iaf_%d" % i, pt_iaf) for i, pt_iaf in enumerate(pt_iafs)]
+        z_dist = TransformedDistribution(z_dist, iafs)
     z = pyro.sample("z", z_dist)
-    pyro.map_data("map", observed_data, lambda i, x: None)
+    return z
 
-def sample_x(n_samples, return_mu=False):
-    z_prior = DiagNormal(ng_zeros(n_samples, dim_z),
-                         ng_ones(n_samples, dim_z))
-    z = z_prior.sample()
-    decoder = pyro.module("decoder", pt_decoder)
-    z_decoded = decoder(z)
-    mu_x = z_decoded[:, 0:dim_x]
-    sigma_x = torch.exp(z_decoded[:, dim_x:])
+def sample_x(N_data):
+    mu_z = pyro.param("mu_z").expand(N_data, dim_z)
+    sigma_z = torch.exp(pyro.param("log_sigma_z")).expand(N_data, dim_z)
+    z_dist = DiagNormal(mu_z, sigma_z)
+    if N_iafs > 0:
+        iafs = [pyro.module("iaf_%d" % i, pt_iaf) for i, pt_iaf in enumerate(pt_iafs)]
+        z_dist = TransformedDistribution(z_dist, iafs)
+    z = pyro.sample("z", z_dist)
+    sigma_x = torch.exp(pyro.param("log_sigma_x"))
+    linear = pyro.module("linear", pt_linear)
+    mu_x = linear(z)
     obs_dist = DiagNormal(mu_x, sigma_x)
-    if not return_mu:
-        x = obs_dist.sample()
-        return x
-    else:
-        return mu_x
+    return obs_dist.sample()
 
-n_steps = 1000
-kl_optim = KL_QP(model, guide, pyro.optim(optim.Adam, {"lr": 0.01, "betas": (0.90, 0.999)}))
+
+n_steps = 3000
+kl_optim = KL_QP(model, guide, pyro.optim(optim.Adam, {"lr": 0.001, "betas": (0.90, 0.999)}), num_particles=1)
 for step in range(n_steps):
     losses = []
-    for mini_batch in range(n_mini_batches):
-        loss = kl_optim.step(data)
+    for mini_batch in mini_batches:
+        loss = kl_optim.step(mini_batch)
         losses.append(loss)
     if step % 10 == 0:
         print("[epoch %04d] elbo = %.4f" % (step, -np.mean(losses)))
         sys.stdout.flush()
 
-if visualize:
-    samples = sample_x(N)
-    samples_mu = sample_x(N, return_mu=True)
-    title = "x samples "
-    addendum = "(with flow)" if use_iaf else "(without flow)"
-    make_scatter_plot(samples.data.numpy(), title + addendum)
-    make_scatter_plot(samples_mu.data.numpy(), title + addendum + '[mu]')
+    if step % 50 == 0 and visualize:
+        samples = sample_x(500)
+        make_scatter_plot(samples.data.numpy(), 'x samples')

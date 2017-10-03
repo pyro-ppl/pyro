@@ -39,7 +39,7 @@ class AutoRegressiveNN(nn.Module):
         if mask_encoding is None:
             # the dependency structure is chosen at random
             self.mask_encoding = 1 + torch.multinomial(torch.ones(input_dim - 1) / (input_dim - 1),
-                                                       num_samples=input_dim, replacement=True)
+                                                       num_samples=hidden_dim, replacement=True)
         else:
             # the dependency structure is given by the user
             self.mask_encoding = mask_encoding
@@ -52,14 +52,17 @@ class AutoRegressiveNN(nn.Module):
         self.mask1 = Variable(torch.zeros(hidden_dim, input_dim))
         self.mask2 = Variable(torch.zeros(input_dim * self.output_dim_multiplier, hidden_dim))
 
-        for k in range(input_dim):
+        for k in range(hidden_dim):
+            # fill in mask1
             m_k = self.mask_encoding[k]
-            permuted_k = self.permutation[k]
-            self.mask1[permuted_k, 0:m_k] = torch.ones(m_k)
-            for j in range(self.output_dim_multiplier):
-                left_index = m_k + j * input_dim
-                right_index = (j + 1) * input_dim
-                self.mask2[left_index:right_index, permuted_k] = torch.ones(input_dim - m_k)
+            slice_k = torch.cat([torch.ones(m_k), torch.zeros(input_dim - m_k)])
+            for j in range(input_dim):
+                self.mask1[k, self.permutation[j]] = slice_k[j]
+            # fill in mask2
+            slice_k = torch.cat([torch.zeros(m_k), torch.ones(input_dim - m_k)])
+            for r in range(self.output_dim_multiplier):
+                for j in range(input_dim):
+                    self.mask2[r * input_dim + self.permutation[j], k] = slice_k[j]
 
         self.lin1 = MaskedLinear(input_dim, hidden_dim, self.mask1)
         self.lin2 = MaskedLinear(hidden_dim, input_dim * output_dim_multiplier, self.mask2)
