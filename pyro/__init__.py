@@ -194,6 +194,19 @@ def irange(name, size, subsample_size=0):
             yield i
 
 
+def map_data_in_terms_of_iarange(name, data, fn, batch_size=0, batch_dim=0):
+    """
+    It's easy to implement map_data using iarange.
+    """
+    if isinstance(data, (torch.Tensor, Variable)):
+        size = data.size(batch_dim)
+        with iarange(name, size, batch_size) as batch:
+            return fn(data.index_select(batch_dim, batch))
+    else:
+        size = len(data)
+        return [fn(data[i]) for i in irange(name, size, batch_size)]
+
+
 def map_data(name, data, fn, batch_size=0, batch_dim=0):
     """
     Data subsampling with the important property that all the data are conditionally independent.
