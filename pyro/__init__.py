@@ -159,26 +159,28 @@ def batched_range(name, size, batch_size=0, subsample=True):
 
     Examples::
 
-        # This is not vectorized: we simply iterate through the batch.
+        # This version is vectorized:
+        >>> for batch in batched_range('data', 100, batch_size=10)):
+                observe('obs_{}'.format(batch[0]), normal, data.index_select(0, batch), mu, sigma)
+        # This version manually iterates through the batch to deal with control flow.
         >>> for batch in batched_range('data', 100, batch_size=10):
                 for i in batch:
-                    if z[i]:
+                    if z[i]:  # Prevents vectorization.
                         observe('obs_{}'.format(i), normal, data[i], mu, sigma)
-        # This version is vectorized:
-        >>> for i, batch in enumerate(batched_range('data', 100, batch_size=10)):
-                observe('obs_{}'.format(i), normal, data.index_select(0, batch), mu, sigma)
     """
     if len(_PYRO_STACK) == 0:
         if batch_size == 0 or batch_size >= size:
             batch_size = size
             subsample = False
+        # TODO Push a global score factor here.
         if subsample:
             yield Variable(torch.randperm(size)[0:batch_size])
         else:
             for start in range(0, size, batch_size):
                 yield Variable(torch.arange(start, min(start + batch_size, size)))
+        # TODO Pop a global score factor here.
     else:
-        raise NotImplementedError('TODO deal with likelihood scaling')
+        raise NotImplementedError('TODO deal with the poutine stack')
 
 
 def map_data(name, data, fn, batch_size=0, batch_dim=0):
