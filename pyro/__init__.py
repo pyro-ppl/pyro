@@ -168,16 +168,16 @@ def batched_range(name, size, batch_size=0, subsample=True):
                     if z[i]:  # Prevents vectorization.
                         observe('obs_{}'.format(i), normal, data[i], mu, sigma)
     """
-    if len(_PYRO_STACK) == 0:
-        if batch_size == 0 or batch_size >= size:
-            batch_size = size
-            subsample = False
+    if batch_size == 0 or batch_size >= size:
+        batch_size = size
+        subsample = False
+    if not subsample:
+        # There is no magic here, so we don't care about the _PYRO_STACK.
+        for start in range(0, size, batch_size):
+            yield Variable(torch.arange(start, min(start + batch_size, size)))
+    elif len(_PYRO_STACK) == 0:
         # TODO Push a global score factor here.
-        if subsample:
-            yield Variable(torch.randperm(size)[0:batch_size])
-        else:
-            for start in range(0, size, batch_size):
-                yield Variable(torch.arange(start, min(start + batch_size, size)))
+        yield Variable(torch.randperm(size)[0:batch_size])
         # TODO Pop a global score factor here.
     else:
         raise NotImplementedError('TODO deal with the poutine stack')
