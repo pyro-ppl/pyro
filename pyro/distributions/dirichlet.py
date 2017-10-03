@@ -41,39 +41,39 @@ class Dirichlet(Distribution):
         un-reparameterized sampler.
         """
 
-        _alpha = self._sanitize_input(alpha)
-        # _alpha = Variable(torch.Tensor([[1,2],[3,4]]))
+        alpha = self._sanitize_input(alpha)
+        # alpha = Variable(torch.Tensor([[1,2],[3,4]]))
         x = Variable(torch.Tensor(spr.dirichlet.rvs(
-                     _alpha.data.numpy()))
-                     .type_as(_alpha.data)).squeeze(0)
+                     alpha.data.numpy()))
+                     .type_as(alpha.data)).squeeze(0)
         return x
 
     def log_pdf(self, x, alpha=None, *args, **kwargs):
-        _alpha = self._sanitize_input(alpha)
-        x_sum = torch.sum(torch.mul(_alpha - 1, torch.log(x)))
-        beta = log_beta(_alpha)
+        alpha = self._sanitize_input(alpha)
+        x_sum = torch.sum(torch.mul(alpha - 1, torch.log(x)))
+        beta = log_beta(alpha)
         return x_sum - beta
 
     def batch_log_pdf(self, x, alpha=None, batch_size=1, *args, **kwargs):
-        _alpha = self._sanitize_input(alpha)
+        alpha = self._sanitize_input(alpha)
         if x.dim() == 1 and batch_size == 1:
-            return self.log_pdf(x, _alpha)
+            return self.log_pdf(x, alpha)
         elif x.dim() == 1:
             x = x.expand(batch_size, x.size(0))
-        x_sum = torch.sum(torch.mul(_alpha - 1, torch.log(x)), 1)
-        beta = log_beta(_alpha)
+        x_sum = torch.sum(torch.mul(alpha - 1, torch.log(x)), 1)
+        beta = log_beta(alpha)
         return x_sum - beta
 
     def analytic_mean(self, alpha):
-        _alpha = self._sanitize_input(alpha)
-        _sum_alpha = torch.sum(_alpha)
-        return _alpha / _sum_alpha
+        alpha = self._sanitize_input(alpha)
+        sum_alpha = torch.sum(alpha)
+        return alpha / sum_alpha
 
     def analytic_var(self, alpha):
         """
         :return: Analytic variance of the dirichlet distribution, with parameter alpha.
         :rtype: torch.autograd.Variable (Vector of the same size as alpha).
         """
-        _alpha = self._sanitize_input(alpha)
-        _sum_alpha = torch.sum(_alpha)
-        return _alpha * (_sum_alpha - _alpha) / (torch.pow(_sum_alpha, 2) * (1 + _sum_alpha))
+        alpha = self._sanitize_input(alpha)
+        sum_alpha = torch.sum(alpha)
+        return alpha * (sum_alpha - alpha) / (torch.pow(sum_alpha, 2) * (1 + sum_alpha))

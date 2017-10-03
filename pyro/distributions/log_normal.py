@@ -45,41 +45,41 @@ class LogNormal(Distribution):
         """
         Reparameterized log-normal sampler.
         """
-        _mu, _sigma = self._sanitize_input(mu, sigma)
-        eps = Variable(torch.randn(1).type_as(_mu.data))
-        z = _mu + _sigma * eps
+        mu, sigma = self._sanitize_input(mu, sigma)
+        eps = Variable(torch.randn(1).type_as(mu.data))
+        z = mu + sigma * eps
         return torch.exp(z)
 
     def log_pdf(self, x, mu=None, sigma=None, *args, **kwargs):
         """
         log-normal log-likelihood
         """
-        _mu, _sigma = self._sanitize_input(mu, sigma)
-        ll_1 = Variable(torch.Tensor([-0.5 * np.log(2.0 * np.pi)]).type_as(_mu.data))
-        ll_2 = -torch.log(_sigma * x)
-        ll_3 = -0.5 * torch.pow((torch.log(x) - _mu) / _sigma, 2.0)
+        mu, sigma = self._sanitize_input(mu, sigma)
+        ll_1 = Variable(torch.Tensor([-0.5 * np.log(2.0 * np.pi)]).type_as(mu.data))
+        ll_2 = -torch.log(sigma * x)
+        ll_3 = -0.5 * torch.pow((torch.log(x) - mu) / sigma, 2.0)
         return ll_1 + ll_2 + ll_3
 
     def batch_log_pdf(self, x, mu=None, sigma=None, batch_size=1, *args, **kwargs):
         """
         log-normal log-likelihood
         """
-        _mu, _sigma = self._sanitize_input(mu, sigma)
-        if x.dim() == 1 and _mu.dim() == 1 and batch_size == 1:
-            return self.log_pdf(x, _mu, _sigma)
+        mu, sigma = self._sanitize_input(mu, sigma)
+        if x.dim() == 1 and mu.dim() == 1 and batch_size == 1:
+            return self.log_pdf(x, mu, sigma)
         elif x.dim() == 1:
             x = x.expand(batch_size, x.size(0))
         ll_1 = Variable(torch.Tensor([-0.5 * np.log(2.0 * np.pi)])
-                        .type_as(_mu.data).expand_as(x))
-        ll_2 = -torch.log(_sigma * x)
-        ll_3 = -0.5 * torch.pow((torch.log(x) - _mu) / _sigma, 2.0)
+                        .type_as(mu.data).expand_as(x))
+        ll_2 = -torch.log(sigma * x)
+        ll_3 = -0.5 * torch.pow((torch.log(x) - mu) / sigma, 2.0)
         return ll_1 + ll_2 + ll_3
 
     def analytic_mean(self, mu=None, sigma=None):
-        _mu, _sigma = self._sanitize_input(mu, sigma)
-        return torch.exp(_mu + 0.5 * torch.pow(_sigma, 2.0))
+        mu, sigma = self._sanitize_input(mu, sigma)
+        return torch.exp(mu + 0.5 * torch.pow(sigma, 2.0))
 
     def analytic_var(self, mu=None, sigma=None):
-        _mu, _sigma = self._sanitize_input(mu, sigma)
-        return (torch.exp(torch.pow(_sigma, 2.0)) - Variable(torch.ones(1))) * \
-            torch.pow(self.analytic_mean(_mu, _sigma), 2)
+        mu, sigma = self._sanitize_input(mu, sigma)
+        return (torch.exp(torch.pow(sigma, 2.0)) - Variable(torch.ones(1))) * \
+            torch.pow(self.analytic_mean(mu, sigma), 2)
