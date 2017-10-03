@@ -9,7 +9,7 @@ from pyro import util
 from pyro.optim.optim import PyroOptim
 from pyro.params import param_with_module_name
 from pyro.params.param_store import ParamStoreDict
-from pyro.util import zeros, ones  # noqa: F401
+from pyro.util import zeros, ones, set_rng_seed  # noqa: F401
 
 # global map of params for now
 _param_store = ParamStoreDict()

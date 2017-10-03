@@ -16,13 +16,12 @@ import torch
 import torch.cuda
 from torch.autograd import Variable
 
+import pyro
+
 torch.set_default_tensor_type('torch.DoubleTensor')
 
-SEED = 0
-
 """
-Contains test utilities for assertions, approximate comparison (of tensors and other objects)
-and setting the random number generator seed.
+Contains test utilities for assertions, approximate comparison (of tensors and other objects).
 
 Code has been largely adapted from pytorch/test/common.py
 Source: https://github.com/pytorch/pytorch/blob/master/test/common.py
@@ -33,10 +32,7 @@ def run_tests():
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument('--seed', type=int, default=123)
     args, remaining = parser.parse_known_args()
-    SEED = args.seed  # noqa: F841
-    torch.manual_seed(args.seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(args.seed)
+    pyro.set_rng_seed(args.seed)
     remaining = [sys.argv[0]] + remaining
     unittest.main(argv=remaining)
 
@@ -117,13 +113,6 @@ def is_iterable(obj):
         return True
     except BaseException:
         return False
-
-
-def set_rng_seed(rng_seed=SEED):
-    torch.manual_seed(rng_seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(rng_seed)
-    np.random.seed(rng_seed)
 
 
 def _unwrap_variables(x, y):
