@@ -1,3 +1,4 @@
+import contextlib
 from inspect import isclass
 
 import torch
@@ -140,45 +141,46 @@ def observe(name, fn, val, *args, **kwargs):
         return out_msg["ret"]
 
 
-def batched_range(name, size, batch_size=0, subsample=True):
+@contextlib.contextmanager
+def iarange(name, size, subsample_size=0):
     """
-    Splits a range of indices into minibatches, optionally subsampling.
+    Context manager for ranges indexing iid variables, optionally subsampling.
 
-    WARNING: Subsampling is only correct if all subsequent computation is iid.
+    WARNING: Subsampling is only correct if all computation is iid within the context.
 
-    If `subsample=False`, this simply yields a sequence of `torch.arange`s each
-    of size `batch_size`, in total covering the entire `range(size)`. If
-    `subsample=True`, this yields a single random batch of size `batch_size`
-    and scales all subsequent log likelihood terms by `size/batch_size`.
+    By default `subsample_size=False` and this simply yields a `torch.arange(0, size)`.
+    If `0<subsample_size<=size` this yields a single random batch of size
+    `subsample_size` and scales all log likelihood terms by `size/batch_size`, within
+    this context.
 
     :param str name: A name that will be used for this site in a Trace.
     :param int size: The size of the collection being subsampled (like `stop` in builtin `range`).
-    :param int batch_size: Size of minibatches used in subsampling. Defaults to `size` if set to 0.
-    :param bool subsample: Whether to subsample data.
-    :return: An iterator yielding `torch.Tensor`s, each of which is a 1-dimensional range of indices.
+    :param int subsample_size: Size of minibatches used in subsampling. Defaults to `size` if set to 0.
+    :return: A context manager yielding a single 1-dimensional `torch.Tensor` of indices.
 
     Examples::
 
         # This version is vectorized:
-        >>> for batch in batched_range('data', 100, batch_size=10)):
-                observe('obs_{}'.format(batch[0]), normal, data.index_select(0, batch), mu, sigma)
+        >>> with iarange('data', 100, subsample_size=10) as batch:
+                observe('obs', normal, data.index_select(0, batch), mu, sigma)
         # This version manually iterates through the batch to deal with control flow.
-        >>> for batch in batched_range('data', 100, batch_size=10):
+        >>> with iarange('data', 100, subsample_size=10) as batch:
                 for i in batch:
                     if z[i]:  # Prevents vectorization.
                         observe('obs_{}'.format(i), normal, data[i], mu, sigma)
     """
-    if batch_size == 0 or batch_size >= size:
-        batch_size = size
-        subsample = False
-    if not subsample:
+    if subsample_size == 0 or subsample_size >= size:
+        subsample_size = size
+    if subsample_size == size:
         # There is no magic here, so we don't care about the _PYRO_STACK.
-        for start in range(0, size, batch_size):
-            yield Variable(torch.arange(start, min(start + batch_size, size)))
+        yield Variable(torch.arange(0, size))
     elif len(_PYRO_STACK) == 0:
         # TODO Push a global score factor here.
-        yield Variable(torch.randperm(size)[0:batch_size])
-        # TODO Pop a global score factor here.
+        try:
+            yield Variable(torch.randperm(size)[0:subsample_size])
+        finally:
+            # TODO Pop a global score factor here.
+            pass
     else:
         raise NotImplementedError('TODO deal with the poutine stack')
 
