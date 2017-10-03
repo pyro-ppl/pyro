@@ -185,6 +185,15 @@ def iarange(name, size, subsample_size=0):
         raise NotImplementedError('TODO deal with the poutine stack')
 
 
+def irange(name, size, subsample_size=0):
+    """
+    Non-vectorized version of iarange.
+    """
+    with iarange(name, size, subsample_size) as batch:
+        for i in batch:
+            yield i
+
+
 def map_data(name, data, fn, batch_size=0, batch_dim=0):
     """
     Data subsampling with the important property that all the data are conditionally independent.
