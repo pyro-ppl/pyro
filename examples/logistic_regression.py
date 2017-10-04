@@ -9,7 +9,7 @@ import pandas as pd
 
 import pyro
 from pyro import poutine
-from pyro.distributions import DiagNormal, Gamma, Bernoulli
+from pyro.distributions import DiagNormal, Categorical
 from pyro.infer.kl_qp import KL_QP
 import torchvision.datasets as dset
 
@@ -61,7 +61,7 @@ def model(data):
     # exp to get log bernoulli
     reg = torch.addmm(p_b, x_data, p_w)
     latent = sigmoid(reg)
-    pyro.observe("bernoulli", Bernoulli(latent), y_data.unsqueeze(1))
+    pyro.observe("categorical", Categorical(latent), y_data.unsqueeze(1))
 
 
 def guide(data):
