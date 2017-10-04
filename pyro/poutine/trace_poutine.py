@@ -32,7 +32,7 @@ class TracePoutine(Poutine):
         Calls this poutine and returns its trace instead of the function's return value.
         """
         self(*args, **kwargs)
-        return self.trace
+        return self.trace.copy()
 
     def _pyro_sample(self, msg):
         """
