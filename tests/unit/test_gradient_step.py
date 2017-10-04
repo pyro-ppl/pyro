@@ -10,8 +10,6 @@ from pyro.infer.kl_qp import KL_QP
 from pyro.infer.tracegraph_kl_qp import TraceGraph_KL_QP
 from pyro.util import ng_ones, ng_zeros
 
-pytestmark = pytest.mark.init(rng_seed=0)
-
 
 def floatrep(x):
     """
@@ -20,9 +18,14 @@ def floatrep(x):
     return [ord(c) for c in struct.pack('!f', x)]
 
 
+# The golden values below (mu_q_expected/log_sig_q_expected/) need to be updated each time
+# KL_QP changes its random algorithm.
+# If this leads to too much churn, simply delete this test.
+
+@pytest.mark.init(rng_seed=0)
 @pytest.mark.parametrize("kl_qp", [KL_QP, TraceGraph_KL_QP])
 @pytest.mark.parametrize("reparameterized", [True, False])
-def test_kl_qp_gradient_step(kl_qp, reparameterized):
+def test_kl_qp_gradient_step_golden(kl_qp, reparameterized):
     verbose = True
     pyro.get_param_store().clear()
     mu_q_expected = {True: [191, 150, 200, 248], False: [191, 150, 200, 248]}[reparameterized]
@@ -48,5 +51,5 @@ def test_kl_qp_gradient_step(kl_qp, reparameterized):
         print("after one step mu_q was %s; expected %s" % (new_mu_q, mu_q_expected))
         print("after one step log_sig_q was %s expected %s" % (new_log_sig_q, log_sig_q_expected))
 
-    assert(floatrep(pyro.param("mu_q").data.numpy()[0]) == mu_q_expected)
-    assert(floatrep(pyro.param("log_sig_q").data.numpy()[0]) == log_sig_q_expected)
+    assert floatrep(pyro.param("mu_q").data.numpy()[0]) == mu_q_expected
+    assert floatrep(pyro.param("log_sig_q").data.numpy()[0]) == log_sig_q_expected
