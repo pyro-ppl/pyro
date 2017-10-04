@@ -15,7 +15,7 @@ def trace(fn):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :returns: stochastic function wrapped in a TracePoutine
-    :rtype: pyro.poutine.trace_poutine.TracePoutine
+    :rtype: pyro.poutine.TracePoutine
 
     Alias for TracePoutine constructor.
 
@@ -30,7 +30,7 @@ def tracegraph(fn):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :returns: stochastic function wrapped in a TraceGraphPoutine
-    :rtype: pyro.poutine.tracegraph_poutine.TraceGraphPoutine
+    :rtype: pyro.poutine.TraceGraphPoutine
 
     Alias for TraceGraphPoutine constructor.
 
@@ -47,7 +47,7 @@ def replay(fn, trace, sites=None):
     :param trace: a Trace data structure to replay against
     :param sites: list or dict of names of sample sites in fn to replay against
     :returns: stochastic function wrapped in a ReplayPoutine
-    :rtype: pyro.poutine.replay_poutine.ReplayPoutine
+    :rtype: pyro.poutine.ReplayPoutine
 
     Alias for ReplayPoutine constructor.
 
@@ -66,7 +66,7 @@ def block(fn, hide=None, expose=None, hide_types=None, expose_types=None):
     :param hide_types: list of site types to be hidden
     :param expose_types: list of site types to be exposed while all others hidden
     :returns: stochastic function wrapped in a BlockPoutine
-    :rtype: pyro.poutine.block_poutine.BlockPoutine
+    :rtype: pyro.poutine.BlockPoutine
 
     Alias for BlockPoutine constructor.
 
@@ -83,7 +83,7 @@ def queue(fn, queue=None, max_tries=None):
     :param queue: a queue data structure like multiprocessing.Queue to hold partial traces
     :param max_tries: maximum number of attempts to compute a single complete trace
     :returns: stochastic function wrapped in a QueuePoutine
-    :rtype: pyro.poutine.queue_poutine.QueuePoutine
+    :rtype: pyro.poutine.QueuePoutine
 
     Alias for QueuePoutine constructor.
 

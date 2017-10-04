@@ -54,7 +54,9 @@ class BlockPoutine(Poutine):
         # hiding
         if (msg["name"] in self.hide) or \
            (msg["type"] in self.hide_types) or \
-           ((msg["name"] not in self.expose) and (msg["type"] not in self.expose_types) and self.hide_all):
+           ((msg["name"] not in self.expose) and
+            (msg["type"] not in self.expose_types) and self.hide_all):  # noqa: E129
+
             return True
         # otherwise expose
         else:
