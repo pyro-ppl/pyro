@@ -49,9 +49,9 @@ class Dirichlet(Distribution):
             x = x.unsqueeze(0)
         if alpha.dim() == 1:
             alpha = alpha.unsqueeze(0)
-        batch_size = max(x.size(1), alpha.size(1))
-        x = x.expand(x.size(0), batch_size)
-        alpha = alpha.expand(x.size(0), batch_size)
+        batch_size = max(x.size(0), alpha.size(0))
+        x = x.expand(batch_size, x.size(1))
+        alpha = alpha.expand(batch_size, alpha.size(1))
         return x, alpha
 
     def __init__(self, alpha=None, batch_size=1, *args, **kwargs):
