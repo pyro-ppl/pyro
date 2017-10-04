@@ -9,44 +9,69 @@ from .tracegraph_poutine import TraceGraphPoutine
 
 ############################################
 # Begin primitive operations
-# XXX should these be returned as Poutines?
 ############################################
 
 def trace(fn):
     """
-    Given a callable that contains Pyro primitive calls,
-    return a callable that records the inputs and outputs to those primitive calls
-    Adds trace data structure site constructors to primitive stacks
+    :param fn: a stochastic function (callable containing pyro primitive calls)
+    :returns: stochastic function wrapped in a TracePoutine
+    :rtype: pyro.poutine.trace_poutine.TracePoutine
 
-    tr = trace(fn)(*args, **kwargs)
+    Alias for TracePoutine constructor.
+
+    Given a callable that contains Pyro primitive calls, return a TracePoutine callable
+    that records the inputs and outputs to those primitive calls.
+    Adds trace data structure site constructors to primitive stacks
     """
     return TracePoutine(fn)
 
 
-def tracegraph(fn, graph_output=None):
+def tracegraph(fn):
+    """
+    :param fn: a stochastic function (callable containing pyro primitive calls)
+    :returns: stochastic function wrapped in a TraceGraphPoutine
+    :rtype: pyro.poutine.tracegraph_poutine.TraceGraphPoutine
 
+    Alias for TraceGraphPoutine constructor.
+
+    Given a callable that contains Pyro primitive calls,, return a TraceGraphPoutine callable
+    that records the inputs and outputs to those primitive calls and their dependencies.
+    Adds trace and tracegraph data structure site constructors to primitive stacks
+    """
     return TraceGraphPoutine(fn)
 
 
 def replay(fn, trace, sites=None):
     """
+    :param fn: a stochastic function (callable containing pyro primitive calls)
+    :param trace: a Trace data structure to replay against
+    :param sites: list or dict of names of sample sites in fn to replay against
+    :returns: stochastic function wrapped in a ReplayPoutine
+    :rtype: pyro.poutine.replay_poutine.ReplayPoutine
+
+    Alias for ReplayPoutine constructor.
+
     Given a callable that contains Pyro primitive calls,
     return a callable that runs the original, reusing the values at sites in trace
     at those sites in the new trace
-
-    ret = replay(fn, trace, sites=some_sites)(*args, **kwargs)
     """
     return ReplayPoutine(fn, trace, sites=sites)
 
 
 def block(fn, hide=None, expose=None, hide_types=None, expose_types=None):
     """
+    :param fn: a stochastic function (callable containing pyro primitive calls)
+    :param hide: list of site names to hide
+    :param expose: list of site names to be exposed while all others hidden
+    :param hide_types: list of site types to be hidden
+    :param expose_types: list of site types to be exposed while all others hidden
+    :returns: stochastic function wrapped in a BlockPoutine
+    :rtype: pyro.poutine.block_poutine.BlockPoutine
+
+    Alias for BlockPoutine constructor.
+
     Given a callable that contains Pyro primitive calls,
-    hide the primitive calls at sites
-
-    ret = block(fn, hide=["a"], expose=["b"])(*args, **kwargs)
-
-    Also expose()?
+    selectively hide some of those calls from poutines higher up the stack
     """
     return BlockPoutine(fn, hide=hide, expose=expose,
                         hide_types=hide_types, expose_types=expose_types)
@@ -54,8 +79,15 @@ def block(fn, hide=None, expose=None, hide_types=None, expose_types=None):
 
 def queue(fn, queue=None, max_tries=None):
     """
+    :param fn: a stochastic function (callable containing pyro primitive calls)
+    :param queue: a queue data structure like multiprocessing.Queue to hold partial traces
+    :param max_tries: maximum number of attempts to compute a single complete trace
+    :returns: stochastic function wrapped in a QueuePoutine
+    :rtype: pyro.poutine.queue_poutine.QueuePoutine
+
+    Alias for QueuePoutine constructor.
+
     Given a stochastic function and a queue,
     return a return value from a complete trace in the queue
     """
-
     return QueuePoutine(fn, queue=queue, max_tries=max_tries)
