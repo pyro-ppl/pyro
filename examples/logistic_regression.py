@@ -87,9 +87,12 @@ sgd_optim = pyro.optim(torch.optim.SGD, adam_params)
 
 # dat = build_toy_dataset(N)
 x = df.as_matrix(columns=range(D))
-y = np.squeeze(df.as_matrix(columns=[D]))
+y = df.as_matrix(columns=[D])
 raw_data = Variable(torch.Tensor(df.as_matrix().tolist()))
 data = normalize(raw_data, 2, dim=1)
+x_norm = normalize(Variable(torch.Tensor(x.tolist())), 2, dim=1)
+y = Variable(torch.Tensor(y.tolist()))
+data = torch.cat((x_norm, y), 1)
 
 def inspect_post_params(data):
     mw_param = pyro.param("guide_mean_weight")
