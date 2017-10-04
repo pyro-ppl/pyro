@@ -23,7 +23,7 @@ def test_kl_qp_gradient_step_golden(kl_qp, reparameterized):
     pyro.get_param_store().clear()
     mu_q_expected = {True: -1.1780080795288086, False: -1.178008079528809}[reparameterized]
     log_sig_q_expected = {True: -0.30474236607551575, False: -0.30474188923835754}[reparameterized]
-    tolerance = 1.0e-6
+    tolerance = 1.0e-7
 
     def model():
         mu_latent = pyro.sample("mu_latent", dist.diagnormal, ng_zeros(1), ng_ones(1))
