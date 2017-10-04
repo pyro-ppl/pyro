@@ -86,6 +86,7 @@ class Dirichlet(Distribution):
         x = Variable(torch.Tensor(x_np))
         return x
 
+    # TODO Remove the batch_size argument.
     def batch_log_pdf(self, x, alpha=None, batch_size=1, *args, **kwargs):
         """
         Evaluates log probabity density over one or a batch of samples.
