@@ -56,8 +56,7 @@ class ReplayPoutine(Poutine):
         """
         Return the sample in the guide trace when appropriate
         """
-        name, fn, args, kwargs = \
-            msg["name"], msg["fn"], msg["args"], msg["kwargs"]
+        name = msg["name"]
         # case 1: dict, positive: sample from guide
         if name in self.sites:
             g_name = self.sites[name]

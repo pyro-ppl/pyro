@@ -210,8 +210,8 @@ class TraceGraphPoutine(TracePoutine):
         register sample dependencies for coarse graph construction
         """
         # TODO remove unnecessary
-        name, fn, args, kwargs = \
-            msg["name"], msg["fn"], msg["args"], msg["kwargs"]
+        name, fn = \
+            msg["name"], msg["fn"]
         val = super(TraceGraphPoutine, self)._pyro_sample(msg)
         self._add_graph_node(msg, name)
         self.stochastic_nodes.append(name)
@@ -223,8 +223,7 @@ class TraceGraphPoutine(TracePoutine):
         """
         register observe dependencies for coarse graph construction
         """
-        name, fn, obs, args, kwargs = \
-            msg["name"], msg["fn"], msg["obs"], msg["args"], msg["kwargs"]
+        name = msg["name"]
         val = super(TraceGraphPoutine, self)._pyro_observe(msg)
         self._add_graph_node(msg, name)
         self.observation_nodes.append(name)

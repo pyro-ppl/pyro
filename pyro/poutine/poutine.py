@@ -68,8 +68,8 @@ class Poutine(object):
         """
         Default pyro.sample Poutine behavior
         """
-        name, fn, args, kwargs = \
-            msg["name"], msg["fn"], msg["args"], msg["kwargs"]
+        fn, args, kwargs = \
+            msg["fn"], msg["args"], msg["kwargs"]
         if msg["ret"] is not None:  # msg["done"]:
             return msg["ret"]
         val = fn(*args, **kwargs)
@@ -80,8 +80,8 @@ class Poutine(object):
         """
         Default pyro.observe Poutine behavior
         """
-        name, fn, obs, args, kwargs = \
-            msg["name"], msg["fn"], msg["obs"], msg["args"], msg["kwargs"]
+        fn, obs, args, kwargs = \
+            msg["fn"], msg["obs"], msg["args"], msg["kwargs"]
         if msg["ret"] is not None:  # msg["done"]
             return msg["ret"]
         if obs is None:
@@ -93,8 +93,8 @@ class Poutine(object):
         """
         Default pyro.map_data Poutine behavior
         """
-        name, data, fn, batch_size, batch_dim = \
-            msg["name"], msg["data"], msg["fn"], msg["batch_size"], msg["batch_dim"]
+        data, fn, batch_size, batch_dim = \
+            msg["data"], msg["fn"], msg["batch_size"], msg["batch_dim"]
         # we dont want fn to get executed more than once,
         # because then the primitive statements in it will appear multiple times
         if msg["done"]:

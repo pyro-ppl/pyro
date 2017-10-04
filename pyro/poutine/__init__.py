@@ -1,4 +1,3 @@
-from pyro.util import memoize
 from .block_poutine import BlockPoutine
 from .poutine import Poutine  # noqa: F401
 from .queue_poutine import QueuePoutine
