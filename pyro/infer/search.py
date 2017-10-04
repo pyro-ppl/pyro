@@ -6,14 +6,17 @@ from pyro.infer import TracePosterior
 
 class Search(TracePosterior):
     """
-    :param model: probabilistic model defined as a function
-    :param max_tries: the maximum number of times to try completing a trace from the queue.
-    :type max_tries: int
-    New Trace and Poutine-based implementation of systematic search
+    Trace and Poutine-based implementation of systematic search.
+
+    :param callable model: Probabilistic model defined as a function.
+    :param int max_tries: The maximum number of times to try completing a trace from the queue.
     """
     def __init__(self, model, max_tries=1e6):
         """
-        Constructor. Default max_tries to something sensible - 1e6.
+        Constructor. Default `max_tries` to something sensible - 1e6.
+
+        :param callable model: Probabilistic model defined as a function.
+        :param int max_tries: The maximum number of times to try completing a trace from the queue.
         """
         self.model = model
         self.max_tries = int(max_tries)
@@ -21,9 +24,11 @@ class Search(TracePosterior):
     def _traces(self, *args, **kwargs):
         """
         algorithm entered here
-        Returns traces from the posterior
         Running until the queue is empty and collecting the marginal histogram
         is performing exact inference
+
+        :returns: Iterator of traces from the posterior.
+        :rtype: Geneator[:class:`pyro.Trace`]
         """
         # currently only using the standard library queue
         self.queue = Queue()
@@ -37,7 +42,7 @@ class Search(TracePosterior):
 
     def log_z(self, *args, **kwargs):
         """
-        harmonic mean log-evidence estimator
+        Harmonic mean log-evidence estimator.
         """
         log_z = 0.0
         n = 0
