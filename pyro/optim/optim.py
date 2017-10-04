@@ -1,11 +1,36 @@
 import pyro
-
 from pyro.params import module_from_param_with_module_name, user_param_name
+from pyro.infer import ELBO
 
-# wrap the optim object
 
+class Optimize(object):
+    def __init__(self, model, guide,
+                 optim_constructor, optim_args,
+                 loss, loss_and_grads=None,
+                 *args, **kwargs):
 
-class PyroOptim(object):
+        self.pt_optim_constructor = optim_constructor
+        assert callable(optim_args) or isinstance(
+            optim_args, dict), "optim_args must be function that returns defaults or a defaults dictionary"
+
+        self.pt_optim_args = optim_args
+        self.optim_objects = {}
+
+        if isinstance(loss, str):
+            assert loss in ["ELBO"], "The only built-in loss supported by Optimize is ELBO"
+
+            if loss=="ELBO":
+                self.loss = ELBO(model, guide, *args, **kwargs).loss
+                self.loss_and_grads = ELBO(model, guide, *args, **kwargs).loss_and_grads
+            else:
+                raise NotImplementedError
+        else:
+            self.loss = loss
+            if loss_and_grads is None:
+                raise NotImplementedError
+            else:
+                self.loss_and_grads = loss_and_grads
+
 
     # helper to fetch the optim args if callable
     def get_optim_args(self, param):
@@ -20,26 +45,10 @@ class PyroOptim(object):
             opt_dict = self.pt_optim_args(mod_name, stripped_param_name)
 
             # must be dictionary
-            assert isinstance(
-                opt_dict, dict), "per-param optim arg must return defaults dictionary"
+            assert isinstance(opt_dict, dict), "per-param optim arg must return defaults dictionary"
             return opt_dict
         else:
             return self.pt_optim_args
-
-    # initialize with a particular sgd
-    def __init__(self, optim_constructor, optim_args):
-
-        # will call the constructor for the optim function for every new param
-        # spotted
-        self.pt_optim_constructor = optim_constructor
-
-        # must be callable or tuple
-        assert callable(optim_args) or isinstance(
-            optim_args, dict), "optim_args must be function that returns defaults or a defaults dictionary"
-
-        # hold our args to be called/used
-        self.pt_optim_args = optim_args
-        self.optim_objs = {}
 
     # when called, check params for
     def __call__(self, params, closure=None, *args, **kwargs):
