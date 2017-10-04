@@ -12,9 +12,13 @@ from pyro.util import ng_ones, ng_zeros
 
 pytestmark = pytest.mark.init(rng_seed=0)
 
-# we're going to use a representation of a float which is given by 4 integers
+
 def floatrep(x):
+    """
+    we're going to use a representation of a float which is given by 4 integers
+    """
     return [ord(c) for c in struct.pack('!f', x)]
+
 
 @pytest.mark.parametrize("kl_qp", [KL_QP, TraceGraph_KL_QP])
 @pytest.mark.parametrize("reparameterized", [True, False])
