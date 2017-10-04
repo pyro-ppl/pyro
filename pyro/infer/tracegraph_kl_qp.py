@@ -57,9 +57,9 @@ class TraceGraph_KL_QP(object):
         single step?
         """
         # call guide() and model() and record trace/tracegraph
-        guide_tracegraph = poutine.tracegraph(self.guide)(*args, **kwargs)
+        guide_tracegraph = poutine.tracegraph(self.guide).get_trace(*args, **kwargs)
         guide_trace = guide_tracegraph.get_trace()
-        model_tracegraph = poutine.tracegraph(poutine.replay(self.model, guide_trace))(*args, **kwargs)
+        model_tracegraph = poutine.tracegraph(poutine.replay(self.model, guide_trace)).get_trace(*args, **kwargs)
         model_trace = model_tracegraph.get_trace()
 
         # have the trace compute all the individual log pdf terms

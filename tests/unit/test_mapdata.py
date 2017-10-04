@@ -116,7 +116,7 @@ def test_batch_dim(batch_dim):
         return pyro.map_data("md", data, local_model,
                              batch_size=1, batch_dim=batch_dim)
 
-    tr = poutine.trace(model)()
+    tr = poutine.trace(model).get_trace()
     assert tr["xs"]["value"].size(0) == data.size(1 - batch_dim)
     assert tr["xs"]["value"].size(1) == data.size(2)
 
@@ -143,7 +143,7 @@ def test_nested_map_data():
     assert len(xs) == mean_batch_size
     assert len(xs[0]) == std_batch_size
 
-    tr = poutine.trace(model)(means, stds)
+    tr = poutine.trace(model).get_trace(means, stds)
     for name in tr.keys():
         if tr[name]["type"] == "sample":
             assert tr[name]["scale"] == 4.0 * 2.0

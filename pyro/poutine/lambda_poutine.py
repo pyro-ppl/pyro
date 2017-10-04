@@ -20,11 +20,12 @@ class LambdaPoutine(Poutine):
         self.counter = 0
         super(LambdaPoutine, self).__init__(fn)
 
-    def _enter_poutine(self, *args, **kwargs):
+    def __enter__(self):
         """
         increment counter by one each time we enter a new map_data branch
         """
         self.counter += 1
+        return super(LambdaPoutine, self).__enter__()
 
     def _annotate_map_data_stack(self, msg, name):
         """
@@ -36,38 +37,41 @@ class LambdaPoutine(Poutine):
             msg['map_data_stack'].append((self.name, self.counter))
         return msg
 
-    def _pyro_sample(self, msg, name, fn, *args, **kwargs):
+    def _pyro_sample(self, msg):  # , name, fn, *args, **kwargs):
         """
         pack the message with extra information and continue
         """
         msg["scale"] = self.scale * msg["scale"]
-        msg = self._annotate_map_data_stack(msg, name)
-        ret = super(LambdaPoutine, self)._pyro_sample(msg, name, fn, *args, **kwargs)
+        msg = self._annotate_map_data_stack(msg, msg["name"])
+        ret = super(LambdaPoutine, self)._pyro_sample(msg)  # , name, fn, *args, **kwargs)
         return ret
 
-    def _pyro_observe(self, msg, name, fn, obs, *args, **kwargs):
+    def _pyro_observe(self, msg):  # , name, fn, obs, *args, **kwargs):
         """
         pack the message with extra information and continue
         """
         msg["scale"] = self.scale * msg["scale"]
-        msg = self._annotate_map_data_stack(msg, name)
-        ret = super(LambdaPoutine, self)._pyro_observe(msg, name, fn, obs, *args, **kwargs)
+        msg = self._annotate_map_data_stack(msg, msg["name"])
+        ret = super(LambdaPoutine, self)._pyro_observe(msg)  # , name, fn, obs, *args, **kwargs)
         return ret
 
-    def _pyro_param(self, msg, name, *args, **kwargs):
+    def _pyro_param(self, msg):  # , name, *args, **kwargs):
         """
         pack the message with extra information and continue
         """
         msg["scale"] = self.scale * msg["scale"]
-        msg = self._annotate_map_data_stack(msg, name)
-        return super(LambdaPoutine, self)._pyro_param(msg, name, *args, **kwargs)
+        msg = self._annotate_map_data_stack(msg, msg["name"])
+        return super(LambdaPoutine, self)._pyro_param(msg)  # , name, *args, **kwargs)
 
-    def _pyro_map_data(self, msg, name, data, fn, batch_size=None, batch_dim=0):
+    def _pyro_map_data(self, msg):  # , name, data, fn, batch_size=None, batch_dim=0):
         """
         scaled map_data: Rescale the message and continue
         """
+        name, data, fn, batch_size, batch_dim = \
+            msg["name"], msg["data"], msg["fn"], msg["batch_size"], msg["batch_dim"]
         mapdata_scale = pyro.util.get_batch_scale(data, batch_size, batch_dim)
-        return super(LambdaPoutine, self)._pyro_map_data(msg, name, data,
-                                                         LambdaPoutine(fn, name, mapdata_scale),
-                                                         batch_size=batch_size,
-                                                         batch_dim=batch_dim)
+        msg.update({"fn": LambdaPoutine(fn, name, mapdata_scale)})
+        return super(LambdaPoutine, self)._pyro_map_data(msg)  # , name, data,
+                                                         # LambdaPoutine(fn, name, mapdata_scale),
+                                                         # batch_size=batch_size,
+                                                         # batch_dim=batch_dim)

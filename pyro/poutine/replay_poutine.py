@@ -47,14 +47,17 @@ class ReplayPoutine(Poutine):
 
             # dont reexecute
             if msg["type"] == "sample":
-                msg["done"] = True
+                # msg["done"] = True
+                msg["ret"] = self.guide_trace[msg["name"]]["value"]
 
         return msg
 
-    def _pyro_sample(self, msg, name, fn, *args, **kwargs):
+    def _pyro_sample(self, msg):  # , name, fn, *args, **kwargs):
         """
         Return the sample in the guide trace when appropriate
         """
+        name, fn, args, kwargs = \
+            msg["name"], msg["fn"], msg["args"], msg["kwargs"]
         # case 1: dict, positive: sample from guide
         if name in self.sites:
             g_name = self.sites[name]
@@ -62,23 +65,26 @@ class ReplayPoutine(Poutine):
                 "{} in sites but {} not in trace".format(name, g_name)
             assert self.guide_trace[g_name]["type"] == "sample", \
                 "site {} must be sample in guide_trace".format(g_name)
-            msg["done"] = True
+            # msg["done"] = True
             return self.guide_trace[g_name]["value"]
         # case 2: dict, negative: sample from model
         elif name not in self.sites:
-            return super(ReplayPoutine, self)._pyro_sample(msg, name, fn, *args, **kwargs)
+            return super(ReplayPoutine, self)._pyro_sample(msg)  # , name, fn, *args, **kwargs)
         else:
             raise ValueError(
                 "something went wrong with replay conditions at site " + name)
 
-    def _pyro_map_data(self, msg, name, data, fn, batch_size=None, batch_dim=0):
+    def _pyro_map_data(self, msg):  # , name, data, fn, batch_size=None, batch_dim=0):
         """
         Use the batch indices from the guide trace, already provided by down
         So all we need to do here is apply a LambdaPoutine as in TracePoutine
         """
+        name, data, fn, batch_size, batch_dim = \
+            msg["name"], msg["data"], msg["fn"], msg["batch_size"], msg["batch_dim"]
         scale = pyro.util.get_batch_scale(data, batch_size, batch_dim)
-        ret = super(ReplayPoutine, self)._pyro_map_data(msg, name, data,
-                                                        LambdaPoutine(fn, name, scale),
-                                                        batch_size=batch_size,
-                                                        batch_dim=batch_dim)
+        msg.update({"fn": LambdaPoutine(fn, name, scale)})
+        ret = super(ReplayPoutine, self)._pyro_map_data(msg)  # , name, data,
+                                                        # LambdaPoutine(fn, name, scale),
+                                                        # batch_size=batch_size,
+                                                        # batch_dim=batch_dim)
         return ret

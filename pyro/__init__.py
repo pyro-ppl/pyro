@@ -47,27 +47,35 @@ _PYRO_STACK = []
 
 def apply_stack(initial_msg):
     """
-    Execute the poutine stack according to the new two-sided blocking scheme.
-    Poutine stack mechanism:
-    1) start at the top
-    2) grab the top poutine, ask to go down
-    3) if down, recur
-    4) if not, stop, start returning
+    :param dict initial_msg: the starting version of the trace site
+    :returns: an updated message that is the final version of the trace site
+
+    Execute the poutine stack at a single site according to the following scheme:
+    1. Walk down the stack from top to bottom, collecting into the message
+        all information necessary to execute the stack at that site
+    2. For each poutine in the stack from bottom to top:
+           Execute the poutine with the message;
+           If the message field "stop" is True, stop;
+           Otherwise, continue
+    3. Return the updated message
     """
     stack = _PYRO_STACK
-    # # XXX seems like this should happen on poutine installation, not at execution
-    # assert poutine.validate_stack(stack), \
-    #     "Current poutine stack violates poutine composition rules"
+    # TODO check at runtime if stack is valid
 
+    # msg is used to pass information up and down the stack
     msg = initial_msg
 
-    # work out the bottom poutine at this site
+    # first, gather all information necessary to apply the stack to this site
     for frame in reversed(stack):
         msg = frame.down(msg)
 
     # go until time to stop?
     for frame in stack:
-        msg = frame.up(msg)
+        assert msg["type"] in ("sample", "observe", "map_data", "param"), \
+            "{} is an invalid site type, how did that get there?".format(msg["type"])
+
+        msg.update({"ret": getattr(frame, "_pyro_{}".format(msg["type"]))(msg)})
+
         if msg["stop"]:
             break
 
@@ -98,7 +106,7 @@ def sample(name, fn, *args, **kwargs):
             "ret": None,
             "scale": 1.0,
             "map_data_stack": [],
-            "done": False,
+            # "done": False,
             "stop": False,
         }
         # apply the stack and return its return value
@@ -106,7 +114,7 @@ def sample(name, fn, *args, **kwargs):
         return out_msg["ret"]
 
 
-def observe(name, fn, val, *args, **kwargs):
+def observe(name, fn, obs, *args, **kwargs):
     """
     :param name: name of observation
     :param fn: distribution class or function
@@ -126,13 +134,13 @@ def observe(name, fn, val, *args, **kwargs):
             "type": "observe",
             "name": name,
             "fn": fn,
-            "val": val,
+            "obs": obs,
             "args": args,
             "kwargs": kwargs,
             "ret": None,
             "scale": 1.0,
             "map_data_stack": [],
-            "done": False,
+            # "done": False,
             "stop": False,
         }
         # apply the stack and return its return value

@@ -19,136 +19,84 @@ class Poutine(object):
 
     def __call__(self, *args, **kwargs):
         """
-        Wrap the original function call to call the poutine object
+        A sketch of poutine behavior after rewriting as a context manager
         """
-        try:
-            # push the current stack onto the pyro global fcts
-            self._push_stack()
-            self._enter_poutine(*args, **kwargs)
+        with self:
+            return self.orig_fct(*args, **kwargs)
 
-            # run the original function overloading the fcts
-            base_r_val = self.orig_fct(*args, **kwargs)
-
-            # then return the pyro global fcts to their previous state
-            r_val = self._exit_poutine(base_r_val, *args, **kwargs)
-            self._pop_stack()
-
-            # send back the final val
-            return r_val
-        except Exception:
-            self._flush_stack()
-            raise
-
-    def _enter_poutine(self, *args, **kwargs):
+    def __enter__(self):
         """
-        A setup function called right after entry to the Poutine
-        """
-        pass
-
-    def _exit_poutine(self, r_val, *args, **kwargs):
-        """
-        A teardown function called right before exit from the Poutine
-        """
-        return r_val
-
-    def _block_up(self, msg):
-        """
-        Default behavior for stack-blocking:
-        In general, don't stop operating the stack at that site
-        """
-        return False
-
-    def up(self, msg):
-        """
-        The dispatcher that gets put into _PYRO_STACK
-        """
-        # TODO can probably condense this logic, keeping explicit for now
-        if msg["type"] == "sample":
-            ret = self._pyro_sample(msg, msg["name"],
-                                    msg["fn"],
-                                    *msg["args"], **msg["kwargs"])
-        elif msg["type"] == "observe":
-            ret = self._pyro_observe(msg, msg["name"],
-                                     msg["fn"], msg["val"],
-                                     *msg["args"], **msg["kwargs"])
-        elif msg["type"] == "param":
-            ret = self._pyro_param(msg, msg["name"],
-                                   *msg["args"], **msg["kwargs"])
-        elif msg["type"] == "map_data":
-            ret = self._pyro_map_data(msg, msg["name"],
-                                      msg["data"], msg["fn"],
-                                      batch_size=msg["batch_size"],
-                                      batch_dim=msg["batch_dim"])
-        else:
-            raise ValueError(
-                "{} is an invalid site type, how did that get there?".format(msg["type"]))
-
-        msg.update({"ret": ret})
-        msg["stop"] = self._block_up(msg)
-        return msg
-
-    def down(self, msg):
-        """
-        The dispatcher that gets put into _PYRO_STACK
-        """
-        return msg
-
-    def _push_stack(self):
-        """
-        Store the current stack of pyro functions, push this class model fcts
+        Installs this poutine at the bottom of the Pyro stack.
         """
         if not (self in pyro._PYRO_STACK):
             pyro._PYRO_STACK.insert(0, self)
+            return self
         else:
             raise ValueError("cannot install a Poutine instance twice")
 
-    def _pop_stack(self):
+    def __exit__(self, exc_type, exc_value, traceback):
         """
-        Reset global pyro attributes to the previously recorded fcts
+        Removes this poutine from the bottom of the Pyro stack.
+        If an exception is raised, removes this poutine and everything below it.
         """
-        if pyro._PYRO_STACK[0] == self:
-            pyro._PYRO_STACK.pop(0)
-        else:
-            raise ValueError("This Poutine is not on top of the stack")
-
-    def _flush_stack(self):
-        """
-        Find our dispatcher in the stack, then remove it and everything below it
-        Needed for exception handling
-        """
-        if self in pyro._PYRO_STACK:
-            loc = pyro._PYRO_STACK.index(self)
-            for i in range(0, loc + 1):
+        if exc_type is None:
+            if pyro._PYRO_STACK[0] == self:
                 pyro._PYRO_STACK.pop(0)
+            else:
+                raise ValueError("This Poutine is not on top of the stack")
+        else:
+            if self in pyro._PYRO_STACK:
+                loc = pyro._PYRO_STACK.index(self)
+                for i in range(0, loc + 1):
+                    pyro._PYRO_STACK.pop(0)
 
-    def _pyro_sample(self, msg, name, fn, *args, **kwargs):
+    # TODO change to more descriptive name that reflects functional asymmetry of up and down
+    # possibly gather?
+    def down(self, msg):
+        """
+        :param dict msg: current message at a trace site
+        :returns: the updated message at the same trace site
+
+        Adds any information to the message that poutines below it on the stack
+        may need to execute properly.
+
+        By default, does nothing, but overridden in derived classes.
+        """
+        return msg
+
+    def _pyro_sample(self, msg):  # name, fn, *args, **kwargs):
         """
         Default pyro.sample Poutine behavior
         """
-        if msg["done"]:
+        name, fn, args, kwargs = \
+            msg["name"], msg["fn"], msg["args"], msg["kwargs"]
+        if msg["ret"] is not None:  # msg["done"]:
             return msg["ret"]
         val = fn(*args, **kwargs)
-        msg["done"] = True
+        # msg["done"] = True
         return val
 
-    def _pyro_observe(self, msg, name, fn, obs, *args, **kwargs):
+    def _pyro_observe(self, msg):  # , name, fn, obs, *args, **kwargs):
         """
         Default pyro.observe Poutine behavior
         """
-        if msg["done"]:
+        name, fn, obs, args, kwargs = \
+            msg["name"], msg["fn"], msg["obs"], msg["args"], msg["kwargs"]
+        if msg["ret"] is not None:  # msg["done"]
             return msg["ret"]
         if obs is None:
             return fn(*args, **kwargs)
-        msg["done"] = True
+        # msg["done"] = True
         return obs
 
-    def _pyro_map_data(self, msg, name, data, fn, batch_size, batch_dim=0):
+    def _pyro_map_data(self, msg):  # , name, data, fn, batch_size, batch_dim=0):
         """
         Default pyro.map_data Poutine behavior
         """
+        name, data, fn, batch_size, batch_dim = \
+            msg["name"], msg["data"], msg["fn"], msg["batch_size"], msg["batch_dim"]
         # we dont want fn to get executed more than once,
         # because then the primitive statements in it will appear multiple times
-        # however, sometimes fn can return None, so we can't just check msg["ret"]
         if msg["done"]:
             return msg["ret"]
         else:
@@ -175,10 +123,12 @@ class Poutine(object):
             msg["done"] = True
             return ret
 
-    def _pyro_param(self, msg, name, *args, **kwargs):
+    def _pyro_param(self, msg):  # , name, *args, **kwargs):
         """
         overload pyro.param call
         """
+        name, args, kwargs = \
+            msg["name"], msg["args"], msg["kwargs"]
         if msg["ret"] is not None:
             return msg["ret"]
         return pyro._param_store.get_param(name, *args, **kwargs)

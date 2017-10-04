@@ -59,3 +59,23 @@ class BlockPoutine(Poutine):
         # otherwise expose
         else:
             return False
+
+    def _pyro_sample(self, msg):
+        ret = super(BlockPoutine, self)._pyro_sample(msg)
+        msg.update({"stop": self._block_up(msg)})
+        return ret
+
+    def _pyro_observe(self, msg):
+        ret = super(BlockPoutine, self)._pyro_observe(msg)
+        msg.update({"stop": self._block_up(msg)})
+        return ret
+
+    def _pyro_map_data(self, msg):
+        ret = super(BlockPoutine, self)._pyro_map_data(msg)
+        msg.update({"stop": self._block_up(msg)})
+        return ret
+
+    def _pyro_param(self, msg):
+        ret = super(BlockPoutine, self)._pyro_param(msg)
+        msg.update({"stop": self._block_up(msg)})
+        return ret

@@ -21,20 +21,12 @@ def trace(fn):
 
     tr = trace(fn)(*args, **kwargs)
     """
-
-    def _fn(*args, **kwargs):
-        p = TracePoutine(fn)
-        return p(*args, **kwargs)
-
-    return _fn
+    return TracePoutine(fn)
 
 
 def tracegraph(fn, graph_output=None):
-    def _fn(*args, **kwargs):
-        p = TraceGraphPoutine(fn)
-        return p(*args, **kwargs)
 
-    return _fn
+    return TraceGraphPoutine(fn)
 
 
 def replay(fn, trace, sites=None):
@@ -45,12 +37,7 @@ def replay(fn, trace, sites=None):
 
     ret = replay(fn, trace, sites=some_sites)(*args, **kwargs)
     """
-
-    def _fn(*args, **kwargs):
-        p = ReplayPoutine(fn, trace, sites=sites)
-        return p(*args, **kwargs)
-
-    return _fn
+    return ReplayPoutine(fn, trace, sites=sites)
 
 
 def block(fn, hide=None, expose=None, hide_types=None, expose_types=None):
@@ -62,13 +49,8 @@ def block(fn, hide=None, expose=None, hide_types=None, expose_types=None):
 
     Also expose()?
     """
-
-    def _fn(*args, **kwargs):
-        p = BlockPoutine(fn, hide=hide, expose=expose,
-                         hide_types=hide_types, expose_types=expose_types)
-        return p(*args, **kwargs)
-
-    return _fn
+    return BlockPoutine(fn, hide=hide, expose=expose,
+                        hide_types=hide_types, expose_types=expose_types)
 
 
 def queue(fn, queue=None, max_tries=None):
@@ -77,30 +59,4 @@ def queue(fn, queue=None, max_tries=None):
     return a return value from a complete trace in the queue
     """
 
-    def _fn(*args, **kwargs):
-        p = QueuePoutine(fn, queue=queue, max_tries=max_tries)
-        return p(*args, **kwargs)
-
-    return _fn
-
-
-#########################################
-# Begin composite operations
-#########################################
-
-def cache(fn, sites=None):
-    """
-    Given a callable that contains Pyro primitive calls, and sites or a pivot,
-    run the callable once to get a trace and then replay the callable
-    using the sites or pivot
-
-    An example of using the poutine API to implement new composite control operations
-    """
-    memoized_trace = memoize(block(trace(fn)))
-
-    def _fn(*args, **kwargs):
-        tr = memoized_trace(*args, **kwargs)
-        p = replay(fn, tr, sites=sites)
-        return p(*args, **kwargs)
-
-    return _fn
+    return QueuePoutine(fn, queue=queue, max_tries=max_tries)

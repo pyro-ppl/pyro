@@ -61,9 +61,9 @@ class KL_QP(object):
         log_r_per_sample = []
 
         for i in range(self.num_particles):
-            guide_trace = poutine.trace(self.guide)(*args, **kwargs)
+            guide_trace = poutine.trace(self.guide).get_trace(*args, **kwargs)
             model_trace = poutine.trace(
-                poutine.replay(self.model, guide_trace))(*args, **kwargs)
+                poutine.replay(self.model, guide_trace)).get_trace(*args, **kwargs)
 
             log_r = model_trace.log_pdf() - guide_trace.log_pdf()
             log_r_per_sample.append(log_r)

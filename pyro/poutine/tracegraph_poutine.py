@@ -137,10 +137,10 @@ class TraceGraphPoutine(TracePoutine):
 
     this can be invoked as follows to create visualizations of the TraceGraph:
 
-        guide_tracegraph = poutine.tracegraph(guide)(*args, **kwargs)
+        guide_tracegraph = poutine.tracegraph(guide).get_trace(*args, **kwargs)
         guide_tracegraph.save_visualization('guide')
         guide_trace = guide_tracegraph.get_trace()
-        model_tracegraph = poutine.tracegraph(poutine.replay(model, guide_trace))(*args, **kwargs)
+        model_tracegraph = poutine.tracegraph(poutine.replay(model, guide_trace)).get_trace(*args, **kwargs)
         model_tracegraph.save_visualization('model')
         model_trace = model_tracegraph.get_trace()
 
@@ -155,27 +155,30 @@ class TraceGraphPoutine(TracePoutine):
         assert(graph_type == 'coarse'), "only coarse graph type supported at present"
         super(TraceGraphPoutine, self).__init__(fn)
 
-    def _enter_poutine(self, *args, **kwargs):
+    def __enter__(self):
         """
         enter and set up data structures
         """
-        super(TraceGraphPoutine, self)._enter_poutine(*args, **kwargs)
         self.stochastic_nodes = []
         self.reparameterized_nodes = []
         self.observation_nodes = []
         self.nodes_seen_so_far = {}
         self.G = networkx.DiGraph()
+        return super(TraceGraphPoutine, self).__enter__()
 
-    def _exit_poutine(self, ret_val, *args, **kwargs):
+    def __exit__(self, *args):
         """
-        Return a TraceGraph object that contains the forward graph and trace
+        OUTDATED Return a TraceGraph object that contains the forward graph and trace
         """
-        self.trace = super(TraceGraphPoutine, self)._exit_poutine(ret_val, *args, **kwargs)
+        self.trace_graph = TraceGraph(self.G, self.trace,
+                                      self.stochastic_nodes,
+                                      self.reparameterized_nodes,
+                                      self.observation_nodes)
+        return super(TraceGraphPoutine, self).__exit__(*args)
 
-        trace_graph = TraceGraph(self.G, self.trace,
-                                 self.stochastic_nodes, self.reparameterized_nodes,
-                                 self.observation_nodes)
-        return trace_graph
+    def get_trace(self, *args, **kwargs):
+        self(*args, **kwargs)
+        return self.trace_graph
 
     def _add_graph_node(self, msg, name):
         """
@@ -202,24 +205,27 @@ class TraceGraphPoutine(TracePoutine):
         self.G.add_node(name)
         self.nodes_seen_so_far[name] = map_data_stack
 
-    def _pyro_sample(self, msg, name, dist, *args, **kwargs):
+    def _pyro_sample(self, msg):  # , name, dist, *args, **kwargs):
         """
         register sample dependencies for coarse graph construction
         """
-        val = super(TraceGraphPoutine, self)._pyro_sample(msg, name, dist,
-                                                          *args, **kwargs)
+        # TODO remove unnecessary
+        name, fn, args, kwargs = \
+            msg["name"], msg["fn"], msg["args"], msg["kwargs"]
+        val = super(TraceGraphPoutine, self)._pyro_sample(msg)
         self._add_graph_node(msg, name)
         self.stochastic_nodes.append(name)
-        if dist.reparameterized:
+        if hasattr(fn, "reparameterized") and fn.reparameterized:
             self.reparameterized_nodes.append(name)
         return val
 
-    def _pyro_observe(self, msg, name, fn, obs, *args, **kwargs):
+    def _pyro_observe(self, msg):  # , name, fn, obs, *args, **kwargs):
         """
         register observe dependencies for coarse graph construction
         """
-        val = super(TraceGraphPoutine, self)._pyro_observe(msg, name, fn, obs,
-                                                           *args, **kwargs)
+        name, fn, obs, args, kwargs = \
+            msg["name"], msg["fn"], msg["obs"], msg["args"], msg["kwargs"]
+        val = super(TraceGraphPoutine, self)._pyro_observe(msg)
         self._add_graph_node(msg, name)
         self.observation_nodes.append(name)
         return val

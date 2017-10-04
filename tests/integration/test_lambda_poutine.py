@@ -77,9 +77,9 @@ class NormalNormalTests(TestCase):
 
             return mu_latent
 
-        guide_tracegraph = pyro.poutine.tracegraph(guide)()
+        guide_tracegraph = pyro.poutine.tracegraph(guide).get_trace()
         guide_trace = guide_tracegraph.get_trace()
-        model_tracegraph = pyro.poutine.tracegraph(pyro.poutine.replay(model, guide_trace))()
+        model_tracegraph = pyro.poutine.tracegraph(pyro.poutine.replay(model, guide_trace)).get_trace()
         self.assertEqual(len(model_tracegraph.get_graph().edges()), 9)
         self.assertEqual(len(model_tracegraph.get_graph().nodes()), 10)
         self.assertEqual(len(guide_tracegraph.get_graph().edges()), 0)
