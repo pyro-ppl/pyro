@@ -3,15 +3,34 @@ import torch
 
 class Distribution(object):
     """
-    Abstract base class for probability distributions.
+    Base class for parametrized probability distributions.
 
-    Instances can either be constructed from a fixed parameter and called without paramters,
-    or constructed without a parameter and called with a paramter.
-    It is not allowed to specify a parameter both during construction and when calling.
-    When calling with a parameter, it is preferred to use one of the singleton instances
-    in pyro.distributions rather than constructing a new instance without a parameter.
+    Distributions in Pyro are stochastic function objects with `.sample()` and `.log_pdf()` methods.
+    Pyro provides two versions of each stochastic function lowercase versions that take parameters::
 
-    Derived classes must implement the `sample`, and `batch_log_pdf` methods.
+      x = dist.binomial(param)              # Returns a sample of size size(param).
+      p = dist.binomial.log_pdf(x, param)   # Evaluates log probability of x.
+
+    as well as UpperCase distribution classes that can construct stochatsic functions with
+    fixed parameters::
+
+      d = dist.Binomial(param)
+      x = d()                               # Samples a sample of size size(param).
+      p = d.log_pdf(x)                      # Evaluates log probability of x.
+
+    **Parameters**:
+
+        Parameters should be of type `torch.autograd.Variable` and all methods return type
+        `torch.autograd.Variable` unless otherwise noted.
+
+    **Implementing New Distributions**:
+
+        Derived classes must implement the `.sample()`, and `.batch_log_pdf()` methods.
+        Discrete classes should also implement the `.support()` method to imporove gradient estimates.
+
+    **Examples**:
+
+        Take a look at the examples[link] to see how they interact with inference algorithms.
     """
 
     def __init__(self, *args, **kwargs):
@@ -24,7 +43,10 @@ class Distribution(object):
 
     def __call__(self, *args, **kwargs):
         """
-        Samples a random value.
+        Samples a random value (just an alias for `.sample(*args, **kwargs)`).
+
+        For tensor distributions, the returned Variable should have the same `.size()` as the
+        parameters.
 
         :return: A random value.
         :rtype: torch.autograd.Variable
@@ -35,7 +57,10 @@ class Distribution(object):
         """
         Samples a random value.
 
-        :return: A random value.
+        For tensor distributions, the returned Variable should have the same `.size()` as the
+        parameters.
+
+        :return: A random value or batch of random values (if parameters are batched).
         :rtype: torch.autograd.Variable
         """
         raise NotImplementedError
@@ -55,17 +80,20 @@ class Distribution(object):
         Evaluates log probability densities for one or a batch of samples and parameters.
 
         :param torch.autograd.Variable x: A single value or a batch of values batched along axis 0.
-        :return: log probability densities as a one-dimensional torch.autograd.Variable.
+        :return: log probability densities as a one-dimensional torch.autograd.Variable
+            with same batch size as value and params.
         :rtype: torch.autograd.Variable
         """
         raise NotImplementedError
 
     def support(self, *args, **kwargs):
         """
-        Returns a representation of the distribution's support.
+        Returns a representation of the parametrized distribution's support.
 
-        :return: A representation of the distribution's support.
-        :rtype: torch.Tensor
+        This is implemented only by discrete distributions.
+
+        :return: An iterator over the distribution's discrete support.
+        :rtype: iterator
         """
         raise NotImplementedError("Support not implemented for {}".format(type(self)))
 
@@ -75,8 +103,9 @@ class Distribution(object):
 
         Note that this is optional, and currently only used for testing distributions.
 
-        :return: Analytic mean, assuming it can be computed analytically given the distribution parameters
+        :return: Analytic mean.
         :rtype: torch.autograd.Variable.
+        :raises: NotImplementedError if mean cannot be analytically computed.
         """
         raise NotImplementedError("Method not implemented by the subclass {}".format(type(self)))
 
@@ -86,7 +115,8 @@ class Distribution(object):
 
         Note that this is optional, and currently only used for testing distributions.
 
-        :return: Analytic variance, assuming it can be computed analytically given the distribution parameters
+        :return: Analytic variance.
         :rtype: torch.autograd.Variable.
+        :raises: NotImplementedError if variance cannot be analytically computed.
         """
         raise NotImplementedError("Method not implemented by the subclass {}".format(type(self)))
