@@ -6,8 +6,6 @@ from torch.autograd import Variable
 import pyro.distributions as dist
 from tests.common import assert_equal
 
-pytestmark = pytest.mark.init(rng_seed=123)
-
 
 @pytest.fixture()
 def test_data():
