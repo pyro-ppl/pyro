@@ -9,6 +9,7 @@ class Search(TracePosterior):
     :param model: probabilistic model defined as a function
     :param max_tries: the maximum number of times to try completing a trace from the queue.
     :type max_tries: int
+
     New Trace and Poutine-based implementation of systematic search
     """
     def __init__(self, model, max_tries=1e6):
