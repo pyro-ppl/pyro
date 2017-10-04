@@ -1,3 +1,4 @@
+import warnings
 from inspect import isclass
 
 import torch
@@ -45,47 +46,11 @@ optim = PyroOptim
 _PYRO_STACK = []
 
 
-def apply_stack(initial_msg):
-    """
-    :param dict initial_msg: the starting version of the trace site
-    :returns: an updated message that is the final version of the trace site
-
-    Execute the poutine stack at a single site according to the following scheme:
-    1. Walk down the stack from top to bottom, collecting into the message
-        all information necessary to execute the stack at that site
-    2. For each poutine in the stack from bottom to top:
-           Execute the poutine with the message;
-           If the message field "stop" is True, stop;
-           Otherwise, continue
-    3. Return the updated message
-    """
-    stack = _PYRO_STACK
-    # TODO check at runtime if stack is valid
-
-    # msg is used to pass information up and down the stack
-    msg = initial_msg
-
-    # first, gather all information necessary to apply the stack to this site
-    for frame in reversed(stack):
-        msg = frame.down(msg)
-
-    # go until time to stop?
-    for frame in stack:
-        assert msg["type"] in ("sample", "observe", "map_data", "param"), \
-            "{} is an invalid site type, how did that get there?".format(msg["type"])
-
-        msg.update({"ret": getattr(frame, "_pyro_{}".format(msg["type"]))(msg)})
-
-        if msg["stop"]:
-            break
-
-    return msg
-
-
-def sample(name, fn, *args, **kwargs):
+def sample(name, fn, *args, obs=None, **kwargs):
     """
     :param name: name of sample
     :param fn: distribution class or function
+    :param obs: observed datum (optional; should only be used in context of inference)
     :returns: sample
 
     Samples from the distribution and registers it in the trace data structure.
@@ -93,45 +58,15 @@ def sample(name, fn, *args, **kwargs):
     # check if stack is empty
     # if stack empty, default behavior (defined here)
     if len(_PYRO_STACK) == 0:
+        if obs is not None:
+            warnings.warn("trying to observe a value outside of inference at " + name,
+                          warnings.RuntimeWarning)
         return fn(*args, **kwargs)
     # if stack not empty, apply everything in the stack?
     else:
         # initialize data structure to pass up/down the stack
         msg = {
             "type": "sample",
-            "name": name,
-            "fn": fn,
-            "args": args,
-            "kwargs": kwargs,
-            "ret": None,
-            "scale": 1.0,
-            "map_data_stack": [],
-            "done": False,
-            "stop": False,
-        }
-        # apply the stack and return its return value
-        out_msg = apply_stack(msg)
-        return out_msg["ret"]
-
-
-def observe(name, fn, obs, *args, **kwargs):
-    """
-    :param name: name of observation
-    :param fn: distribution class or function
-    :param obs: observed datum
-    :returns: sample
-
-    Only should be used in the context of inference.
-    Calculates the score of the sample and registers
-    it in the trace data structure.
-    """
-    if len(_PYRO_STACK) == 0:
-        raise NotImplementedError(
-            "Observe has been used outside of a normalizing context.")
-    else:
-        # initialize data structure to pass up/down the stack
-        msg = {
-            "type": "observe",
             "name": name,
             "fn": fn,
             "obs": obs,
@@ -144,8 +79,24 @@ def observe(name, fn, obs, *args, **kwargs):
             "stop": False,
         }
         # apply the stack and return its return value
-        out_msg = apply_stack(msg)
+        out_msg = util.apply_stack(msg)
         return out_msg["ret"]
+
+
+def observe(name, fn, obs, *args, **kwargs):
+    """
+    :param name: name of observation
+    :param fn: distribution class or function
+    :param obs: observed datum
+    :returns: sample
+
+    Alias of pyro.sample.
+
+    Only should be used in the context of inference.
+    Calculates the score of the sample and registers
+    it in the trace data structure.
+    """
+    return sample(name, fn, *args, obs=obs, **kwargs)
 
 
 def map_data(name, data, fn, batch_size=0, batch_dim=0):
@@ -193,7 +144,7 @@ def map_data(name, data, fn, batch_size=0, batch_dim=0):
             "stop": False,
         }
         # apply the stack and return its return value
-        out_msg = apply_stack(msg)
+        out_msg = util.apply_stack(msg)
         return out_msg["ret"]
 
 
@@ -221,7 +172,7 @@ def param(name, *args, **kwargs):
             "stop": False,
         }
         # apply the stack and return its return value
-        out_msg = apply_stack(msg)
+        out_msg = util.apply_stack(msg)
         return out_msg["ret"]
 
 

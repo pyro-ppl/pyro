@@ -43,6 +43,7 @@ class Poutine(object):
             if pyro._PYRO_STACK[0] == self:
                 pyro._PYRO_STACK.pop(0)
             else:
+                # should never get here, but just in case...
                 raise ValueError("This Poutine is not on top of the stack")
         else:
             if self in pyro._PYRO_STACK:
