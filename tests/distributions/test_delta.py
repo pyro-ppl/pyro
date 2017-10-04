@@ -1,12 +1,9 @@
 import numpy as np
-import pytest
 import torch
 from torch.autograd import Variable
 
 import pyro.distributions as dist
 from tests.common import TestCase
-
-pytestmark = pytest.mark.init(rng_seed=123)
 
 
 class TestDelta(TestCase):

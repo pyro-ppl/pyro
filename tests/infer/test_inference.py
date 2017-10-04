@@ -1,4 +1,3 @@
-import pytest
 import torch
 import torch.optim
 from torch import nn as nn
@@ -10,8 +9,6 @@ import pyro.distributions as dist
 from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
 from pyro.infer.kl_qp import KL_QP
 from tests.common import TestCase
-
-pytestmark = pytest.mark.init(rng_seed=123)
 
 
 class NormalNormalTests(TestCase):
