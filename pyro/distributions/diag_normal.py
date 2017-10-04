@@ -96,6 +96,34 @@ class DiagNormal(Distribution):
             return Variable(z.data)
         return z
 
+    def _log_pdf_impl(self, x, mu=None, sigma=None, batch_size=1, *args, **kwargs):
+        assert batch_size == 1, 'DEPRECATED'
+        mu, sigma = self._sanitize_input(mu, sigma)
+        x, mu, sigma = self._expand_dims(x, mu, sigma)
+        log_pxs = -1 * torch.add(torch.add(torch.log(sigma),
+                                 0.5 * torch.log(2.0 * np.pi *
+                                 Variable(torch.ones(sigma.size()).type_as(mu.data)))),
+                                 0.5 * torch.pow(((x - mu) / sigma), 2))
+        return log_pxs
+
+    def log_pdf(self, x, mu=None, sigma=None, batch_size=1, *args, **kwargs):
+        """"
+        Evaluates total log probabity density of one or a batch of samples.
+
+        :param torch.autograd.Variable x: A value (if x.dim() == 1) or or batch of values (if x.dim() == 2).
+        :param mu: A vector of mean parameters.
+        :type mu: torch.autograd.Variable or None.
+        :param sigma: A vector of scale parameters.
+        :type sigma: torch.autograd.Variable or None.
+        :param int batch_size: DEPRECATED.
+        :return: log probability densities of each element in the batch.
+        :rtype: torch.autograd.Variable of dimension 1.
+        """
+        log_pxs = self._log_pdf_impl(x, mu, sigma, batch_size, *args, **kwargs)
+        if 'log_pdf_mask' in kwargs:
+            return torch.sum(kwargs['log_pdf_mask'] * log_pxs)
+        return torch.sum(log_pxs)
+
     def batch_log_pdf(self, x, mu=None, sigma=None, batch_size=1, *args, **kwargs):
         """"
         Evaluates log probabity density over one or a batch of samples.
@@ -109,13 +137,7 @@ class DiagNormal(Distribution):
         :return: log probability densities of each element in the batch.
         :rtype: torch.autograd.Variable of dimension 1.
         """
-        assert batch_size == 1, 'DEPRECATED'
-        mu, sigma = self._sanitize_input(mu, sigma)
-        x, mu, sigma = self._expand_dims(x, mu, sigma)
-        log_pxs = -1 * torch.add(torch.add(torch.log(sigma),
-                                 0.5 * torch.log(2.0 * np.pi *
-                                 Variable(torch.ones(sigma.size()).type_as(mu.data)))),
-                                 0.5 * torch.pow(((x - mu) / sigma), 2))
+        log_pxs = self._log_pdf_impl(x, mu, sigma, batch_size, *args, **kwargs)
         return torch.sum(log_pxs, 1)
 
     def analytic_mean(self, mu=None, sigma=None):
