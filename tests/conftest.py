@@ -25,8 +25,15 @@ def pytest_addoption(parser):
 
 
 def pytest_collection_modifyitems(config, items):
+    run_integration_tests = False
     if config.getoption("--run_integration_tests"):
-        return
-    for item in items:
-        if "integration_test" in item.keywords:
-            item.add_marker(pytest.mark.skip(reason="use --run_integration_tests option to run"))
+        run_integration_tests = True
+    if run_integration_tests:
+        for item in items:
+            if "integration_test" not in item.keywords:
+                item.add_marker(pytest.mark.skip(reason="Running only integration tests"))
+    else:
+        for item in items:
+            if "integration_test" in item.keywords:
+                item.add_marker(pytest.mark.skip(reason="Skipping integration tests. "
+                                                        "Use --run_integration_tests option to run."))

@@ -43,6 +43,7 @@ class NormalNormalTests(TestCase):
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 1000)
 
+    @pytest.mark.init(rng_seed=0)
     def test_elbo_nonreparameterized(self):
         self.do_elbo_test(False, 5000)
 
