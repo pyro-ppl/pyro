@@ -15,7 +15,12 @@ setup(
     extras_require={
         'notebooks': ['jupyter>=1.0.0'],
         'visualization': ['matplotlib>=1.3',
-                          'visdom>=0.1.4']},
+                          'visdom>=0.1.4'],
+        'dev': ['flake8',
+                'isort',
+                'pytest',
+                'pytest-xdist',
+                'yapf']},
     tests_require=['flake8', 'pytest'],
     keywords='machine learning statistics probabilistic programming bayesian modeling pytorch',
     license='MIT License',
