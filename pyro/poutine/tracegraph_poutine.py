@@ -205,7 +205,7 @@ class TraceGraphPoutine(TracePoutine):
         self.G.add_node(name)
         self.nodes_seen_so_far[name] = map_data_stack
 
-    def _pyro_sample(self, msg):  # , name, dist, *args, **kwargs):
+    def _pyro_sample(self, msg):
         """
         register sample dependencies for coarse graph construction
         """
@@ -219,7 +219,7 @@ class TraceGraphPoutine(TracePoutine):
             self.reparameterized_nodes.append(name)
         return val
 
-    def _pyro_observe(self, msg):  # , name, fn, obs, *args, **kwargs):
+    def _pyro_observe(self, msg):
         """
         register observe dependencies for coarse graph construction
         """

@@ -34,7 +34,7 @@ class TracePoutine(Poutine):
         self(*args, **kwargs)
         return self.trace
 
-    def _pyro_sample(self, msg):  # , name, dist, *args, **kwargs):
+    def _pyro_sample(self, msg):
         """
         sample
         TODO docs
@@ -49,12 +49,11 @@ class TracePoutine(Poutine):
             tr.add_args(self.trace["_INPUT"]["args"])
             self.trace = tr
 
-        val = super(TracePoutine, self)._pyro_sample(msg)  # , name, dist,
-                                                     # *args, **kwargs)
+        val = super(TracePoutine, self)._pyro_sample(msg)
         self.trace.add_sample(name, msg["scale"], val, fn, *args, **kwargs)
         return val
 
-    def _pyro_observe(self, msg):  # , name, fn, obs, *args, **kwargs):
+    def _pyro_observe(self, msg):
         """
         observe
         TODO docs
@@ -71,12 +70,11 @@ class TracePoutine(Poutine):
             tr.add_args(self.trace["_INPUT"]["args"])
             self.trace = tr
 
-        val = super(TracePoutine, self)._pyro_observe(msg)  # , name, fn, obs,
-                                                      # *args, **kwargs)
+        val = super(TracePoutine, self)._pyro_observe(msg)
         self.trace.add_observe(name, msg["scale"], val, fn, obs, *args, **kwargs)
         return val
 
-    def _pyro_param(self, msg):  # , name, *args, **kwargs):
+    def _pyro_param(self, msg):
         """
         param
         TODO docs
@@ -85,12 +83,11 @@ class TracePoutine(Poutine):
         """
         name, args, kwargs = \
             msg["name"], msg["args"], msg["kwargs"]
-        retrieved = super(TracePoutine, self)._pyro_param(msg)  # , name,
-                                                          # *args, **kwargs)
+        retrieved = super(TracePoutine, self)._pyro_param(msg)
         self.trace.add_param(name, retrieved, *args, **kwargs)
         return retrieved
 
-    def _pyro_map_data(self, msg):  # , name, data, fn, batch_size=None, batch_dim=0):
+    def _pyro_map_data(self, msg):
         """
         Trace map_data
         """
@@ -100,11 +97,6 @@ class TracePoutine(Poutine):
         scale = pyro.util.get_batch_scale(data, batch_size, batch_dim)
         msg.update({"fn": LambdaPoutine(fn, name, scale)})
 
-        ret = super(TracePoutine, self)._pyro_map_data(msg)  # , name, data,
-                                                       # LambdaPoutine(fn, name, scale),
-                                                       # # XXX watch out for changing
-                                                       # batch_size=batch_size,
-                                                       # batch_dim=batch_dim)
-
+        ret = super(TracePoutine, self)._pyro_map_data(msg)
         self.trace.add_map_data(name, fn, batch_size, batch_dim, msg["indices"])
         return ret

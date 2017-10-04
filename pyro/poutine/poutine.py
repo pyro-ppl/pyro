@@ -64,7 +64,7 @@ class Poutine(object):
         """
         return msg
 
-    def _pyro_sample(self, msg):  # name, fn, *args, **kwargs):
+    def _pyro_sample(self, msg):
         """
         Default pyro.sample Poutine behavior
         """
@@ -76,7 +76,7 @@ class Poutine(object):
         # msg["done"] = True
         return val
 
-    def _pyro_observe(self, msg):  # , name, fn, obs, *args, **kwargs):
+    def _pyro_observe(self, msg):
         """
         Default pyro.observe Poutine behavior
         """
@@ -89,7 +89,7 @@ class Poutine(object):
         # msg["done"] = True
         return obs
 
-    def _pyro_map_data(self, msg):  # , name, data, fn, batch_size, batch_dim=0):
+    def _pyro_map_data(self, msg):
         """
         Default pyro.map_data Poutine behavior
         """
@@ -123,7 +123,7 @@ class Poutine(object):
             msg["done"] = True
             return ret
 
-    def _pyro_param(self, msg):  # , name, *args, **kwargs):
+    def _pyro_param(self, msg):
         """
         overload pyro.param call
         """

@@ -110,27 +110,6 @@ class ReplayPoutineTests(NormalNormalNormalPoutineTestCase):
             assert_equal(model_trace[name]["value"], tr2[name]["value"])
 
 
-# class CachePoutineTests(NormalNormalNormalPoutineTestCase):
-# 
-#     def test_cache_full(self):
-#         cached_model = poutine.trace(poutine.cache(self.model))
-#         model_trace_1 = cached_model.get_trace()
-#         model_trace_2 = cached_model.get_trace()
-#         for name in self.full_sample_sites.keys():
-#             assert_equal(model_trace_1[name]["value"], model_trace_2[name]["value"])
-# 
-#     def test_cache_partial(self):
-#         cached_model = poutine.trace(
-#             poutine.cache(self.model, sites=self.partial_sample_sites))
-#         model_trace_1 = cached_model.get_trace()
-#         model_trace_2 = cached_model.get_trace()
-#         for name in self.full_sample_sites.keys():
-#             if name in self.partial_sample_sites:
-#                 assert_equal(model_trace_1[name]["value"], model_trace_2[name]["value"])
-#             else:
-#                 assert not eq(model_trace_1[name]["value"], model_trace_2[name]["value"])
-
-
 class BlockPoutineTests(NormalNormalNormalPoutineTestCase):
 
     def test_block_full(self):
