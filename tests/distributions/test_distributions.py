@@ -4,8 +4,6 @@ import torch
 
 from tests.common import assert_equal
 
-pytestmark = pytest.mark.init(rng_seed=123)
-
 
 def unwrap_variable(x):
     return x.data.cpu().numpy()

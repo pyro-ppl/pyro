@@ -7,8 +7,6 @@ import pyro.infer
 from pyro.distributions import DiagNormal, Bernoulli
 from tests.common import TestCase
 
-pytestmark = pytest.mark.init(rng_seed=124)
-
 
 class HMMSamplingTestCase(TestCase):
 
@@ -99,8 +97,9 @@ class SearchTest(HMMSamplingTestCase):
 
 class ImportanceTest(NormalNormalSamplingTestCase):
 
+    @pytest.mark.init(rng_seed=0)
     def test_importance_guide(self):
-        posterior = pyro.infer.Importance(self.model, guide=self.guide, num_samples=2000)
+        posterior = pyro.infer.Importance(self.model, guide=self.guide, num_samples=10000)
         marginal = pyro.infer.Marginal(posterior)
         posterior_samples = [marginal() for i in range(1000)]
         posterior_mean = torch.mean(torch.cat(posterior_samples))
@@ -110,8 +109,9 @@ class ImportanceTest(NormalNormalSamplingTestCase):
         self.assertEqual(0, torch.norm(posterior_stddev - self.mu_stddev).data[0],
                          prec=0.1)
 
+    @pytest.mark.init(rng_seed=0)
     def test_importance_prior(self):
-        posterior = pyro.infer.Importance(self.model, guide=None, num_samples=2000)
+        posterior = pyro.infer.Importance(self.model, guide=None, num_samples=10000)
         marginal = pyro.infer.Marginal(posterior)
         posterior_samples = [marginal() for i in range(1000)]
         posterior_mean = torch.mean(torch.cat(posterior_samples))
