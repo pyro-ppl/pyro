@@ -113,4 +113,5 @@ def test_data_idx(request):
 
 def pytest_collection_modifyitems(items):
     for item in items:
-        item.add_marker(pytest.mark.init(rng_seed=123))
+        if "init" not in item.keywords:
+            item.add_marker(pytest.mark.init(rng_seed=123))
