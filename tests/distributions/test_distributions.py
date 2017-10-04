@@ -12,7 +12,6 @@ def unwrap_variable(x):
 # Distribution tests - all distributions
 
 def test_log_pdf(dist, test_data_idx):
-    print torch.get_rng_state()
     pyro_log_pdf = unwrap_variable(dist.get_pyro_logpdf(test_data_idx))[0]
     scipy_log_pdf = dist.get_scipy_logpdf(test_data_idx)
     assert_equal(pyro_log_pdf, scipy_log_pdf)
