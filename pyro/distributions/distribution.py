@@ -11,7 +11,7 @@ class Distribution(object):
       x = dist.binomial(param)              # Returns a sample of size size(param).
       p = dist.binomial.log_pdf(x, param)   # Evaluates log probability of x.
 
-    as well as UpperCase distribution classes that can construct stochatsic functions with
+    as well as UpperCase distribution classes that can construct stochastic functions with
     fixed parameters::
 
       d = dist.Binomial(param)
