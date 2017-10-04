@@ -47,7 +47,7 @@ class ReplayPoutine(Poutine):
 
             # dont reexecute
             if msg["type"] == "sample":
-                # msg["done"] = True
+                msg["done"] = True
                 msg["ret"] = self.guide_trace[msg["name"]]["value"]
 
         return msg

@@ -70,7 +70,7 @@ class Poutine(object):
         """
         fn, args, kwargs = \
             msg["fn"], msg["args"], msg["kwargs"]
-        if msg["ret"] is not None:  # msg["done"]:
+        if msg["done"]:
             return msg["ret"]
         val = fn(*args, **kwargs)
         # msg["done"] = True
@@ -82,11 +82,11 @@ class Poutine(object):
         """
         fn, obs, args, kwargs = \
             msg["fn"], msg["obs"], msg["args"], msg["kwargs"]
-        if msg["ret"] is not None:  # msg["done"]
+        if msg["done"]:
             return msg["ret"]
         if obs is None:
             return fn(*args, **kwargs)
-        # msg["done"] = True
+        msg["done"] = True
         return obs
 
     def _pyro_map_data(self, msg):
@@ -129,6 +129,7 @@ class Poutine(object):
         """
         name, args, kwargs = \
             msg["name"], msg["args"], msg["kwargs"]
-        if msg["ret"] is not None:
+        if msg["done"]:
             return msg["ret"]
+        msg["done"] = True
         return pyro._param_store.get_param(name, *args, **kwargs)

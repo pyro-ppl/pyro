@@ -106,7 +106,7 @@ def sample(name, fn, *args, **kwargs):
             "ret": None,
             "scale": 1.0,
             "map_data_stack": [],
-            # "done": False,
+            "done": False,
             "stop": False,
         }
         # apply the stack and return its return value
@@ -140,7 +140,7 @@ def observe(name, fn, obs, *args, **kwargs):
             "ret": None,
             "scale": 1.0,
             "map_data_stack": [],
-            # "done": False,
+            "done": False,
             "stop": False,
         }
         # apply the stack and return its return value
@@ -217,6 +217,7 @@ def param(name, *args, **kwargs):
             "kwargs": kwargs,
             "scale": 1.0,
             "ret": None,
+            "done": False,
             "stop": False,
         }
         # apply the stack and return its return value
