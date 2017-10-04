@@ -5,13 +5,20 @@ class Distribution(object):
     """
     Abstract base class for probability distributions.
 
+    Derived classes must implement the `sample`, and `batch_log_pdf` methods.
+
     Instances can either be constructed from a fixed parameter and called without paramters,
     or constructed without a parameter and called with a paramter.
     It is not allowed to specify a parameter both during construction and when calling.
     When calling with a parameter, it is preferred to use one of the singleton instances
     in pyro.distributions rather than constructing a new instance without a parameter.
 
-    Derived classes must implement the `sample`, and `batch_log_pdf` methods.
+    **Tensor Shapes**:
+
+        - The methods `sample`, `log_pdf`, and `batch_log_pdf` often take pytorch.autograd.Variable args.
+        - All of these args must agree on their trailing dimension.
+        - Any of these args can be batched along an extra dimension 0.
+        - If values and parameters are both batched, their batch dimensions must agree.
     """
 
     def __init__(self, *args, **kwargs):
