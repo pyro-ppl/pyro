@@ -3,19 +3,12 @@ import torch.optim
 from torch.autograd import Variable
 import pytest
 
-import struct
+import numpy as np
 import pyro
 import pyro.distributions as dist
 from pyro.infer.kl_qp import KL_QP
 from pyro.infer.tracegraph_kl_qp import TraceGraph_KL_QP
 from pyro.util import ng_ones, ng_zeros
-
-
-def floatrep(x):
-    """
-    we're going to use a representation of a float which is given by 4 integers
-    """
-    return [ord(c) for c in struct.pack('!f', x)]
 
 
 # The golden values below (mu_q_expected/log_sig_q_expected/) need to be updated each time
@@ -28,8 +21,9 @@ def floatrep(x):
 def test_kl_qp_gradient_step_golden(kl_qp, reparameterized):
     verbose = True
     pyro.get_param_store().clear()
-    mu_q_expected = {True: [191, 150, 200, 248], False: [191, 150, 200, 248]}[reparameterized]
-    log_sig_q_expected = {True: [190, 156, 7, 49], False: [190, 156, 7, 33]}[reparameterized]
+    mu_q_expected = {True: -1.1780080795288086, False: -1.178008079528809}[reparameterized]
+    log_sig_q_expected = {True: -0.30474236607551575, False: -0.30474188923835754}[reparameterized]
+    tolerance = 1.0e-6
 
     def model():
         mu_latent = pyro.sample("mu_latent", dist.diagnormal, ng_zeros(1), ng_ones(1))
@@ -44,12 +38,12 @@ def test_kl_qp_gradient_step_golden(kl_qp, reparameterized):
 
     kl_optim = kl_qp(model, guide, pyro.optim(torch.optim.Adam, {"lr": 0.1}))
     kl_optim.step()
-    new_mu_q = floatrep(pyro.param("mu_q").data.numpy()[0])
-    new_log_sig_q = floatrep(pyro.param("log_sig_q").data.numpy()[0])
+    new_mu_q = pyro.param("mu_q").data.numpy()[0]
+    new_log_sig_q = pyro.param("log_sig_q").data.numpy()[0]
 
     if verbose:
-        print("after one step mu_q was %s; expected %s" % (new_mu_q, mu_q_expected))
-        print("after one step log_sig_q was %s expected %s" % (new_log_sig_q, log_sig_q_expected))
+        print("after one step mu_q was %.15f; expected %.15f" % (new_mu_q, mu_q_expected))
+        print("after one step log_sig_q was %.15f expected %.15f" % (new_log_sig_q, log_sig_q_expected))
 
-    assert floatrep(pyro.param("mu_q").data.numpy()[0]) == mu_q_expected
-    assert floatrep(pyro.param("log_sig_q").data.numpy()[0]) == log_sig_q_expected
+    assert np.fabs(new_mu_q - mu_q_expected) < tolerance
+    assert np.fabs(new_log_sig_q - log_sig_q_expected) < tolerance
