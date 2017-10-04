@@ -14,7 +14,6 @@ class MaskedLinear(nn.Linear):
     def __init__(self, in_features, out_features, mask, bias=True):
         super(MaskedLinear, self).__init__(in_features, out_features, bias)
         self.register_buffer('mask', mask)
-        #self.mask = mask
 
     def forward(self, input):
         masked_weight = self.weight * self.mask
@@ -25,16 +24,15 @@ class AutoRegressiveNN(nn.Module):
     """
     A simple implementation of a MADE-like auto-regressive neural network
     The vector mask_encoding of dimensionality input_dim encodes the binary masks
-    that encode the allowed dependencies
+    that control the allowed dependencies
     reference: https://arxiv.org/abs/1502.03509
     """
 
     def __init__(self, input_dim, hidden_dim, output_dim_multiplier=1,
-                 mask_encoding=None, output_bias=None, permutation=None):
+                 mask_encoding=None, permutation=None):
         super(AutoRegressiveNN, self).__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
-        self.output_bias = output_bias
         self.output_dim_multiplier = output_dim_multiplier
 
         if mask_encoding is None:
@@ -46,16 +44,14 @@ class AutoRegressiveNN(nn.Module):
             self.mask_encoding = mask_encoding
 
         if permutation is None:
+            # a permutation is chosen at random
             self.permutation = torch.randperm(input_dim)
         else:
+            # the permutation is chosen by the user
             self.permutation = permutation
 
         self.mask1 = Variable(torch.zeros(hidden_dim, input_dim))
         self.mask2 = Variable(torch.zeros(input_dim * self.output_dim_multiplier, hidden_dim))
-        #mask1 = Variable(torch.zeros(hidden_dim, input_dim))
-        #mask2 = Variable(torch.zeros(input_dim * self.output_dim_multiplier, hidden_dim))
-        #self.register_buffer('mask1', mask1)
-        #self.register_buffer('mask2', mask2)
 
         for k in range(hidden_dim):
             # fill in mask1
@@ -83,7 +79,4 @@ class AutoRegressiveNN(nn.Module):
     def forward(self, z):
         h = self.relu(self.lin1(z))
         out = self.lin2(h)
-        if self.output_bias is not None:
-            return out + self.output_bias * ng_ones(out.size())
-        else:
-            return out
+        return out

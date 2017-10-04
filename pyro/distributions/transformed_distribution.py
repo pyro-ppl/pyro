@@ -8,10 +8,12 @@ from torch.autograd import Variable
 
 class TransformedDistribution(Distribution):
     """
-    :param base_distribution: distribution
-    :param bijector: bijector
+    :param base_distribution: a base Distribution; samples from this distribution
+    are passed through the sequence of bijections
+    :param bijectors: either a single Bijector or a list or tuple of Bijectors
 
-    Transforms the distribution with the bijector
+    Transforms the base distribution by applying a sequence of bijectors to it.
+    This results in a scorable distribution (i.e. it has a log_pdf() method).
     """
 
     def __init__(self, base_distribution, bijectors, *args, **kwargs):
