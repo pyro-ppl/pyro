@@ -23,8 +23,6 @@ def floatrep(x):
 @pytest.mark.parametrize("kl_qp", [KL_QP, TraceGraph_KL_QP])
 @pytest.mark.parametrize("reparameterized", [True, False])
 def test_kl_qp_gradient_step(kl_qp, reparameterized):
-    if kl_qp == KL_QP and not reparameterized:
-        return
     verbose = True
     pyro.get_param_store().clear()
     mu_q_expected = {True: [191, 150, 200, 248], False: [191, 150, 200, 248]}[reparameterized]
