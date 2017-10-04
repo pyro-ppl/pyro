@@ -1,10 +1,13 @@
+# poutines
 from .block_poutine import BlockPoutine
 from .poutine import Poutine  # noqa: F401
 from .queue_poutine import QueuePoutine
 from .replay_poutine import ReplayPoutine
-from .trace import Trace  # noqa: F401
 from .trace_poutine import TracePoutine
 from .tracegraph_poutine import TraceGraphPoutine
+
+# trace data structures
+from .trace import Trace, TraceGraph  # noqa: F401
 
 
 ############################################
