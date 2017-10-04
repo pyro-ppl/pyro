@@ -7,7 +7,7 @@ def pytest_configure(config):
     config.addinivalue_line("markers",
                             "init(rng_seed): initialize the RNG using the seed provided")
     config.addinivalue_line("markers",
-                            "integration_test: mark as integration test (can be run in a separate stage)")
+                            "integration_test: mark as integration test")
 
 
 def pytest_runtest_setup(item):

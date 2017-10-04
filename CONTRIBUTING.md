@@ -5,7 +5,7 @@ Before submitting a pull request, ensure that linting and unit tests pass locall
 flake8
 py.test -vs
 ```
-Use the `--run_integration_tests` option to include running integration tests, but be aware that these may take a long time to complete. 
+Use the `--run_integration_tests` option to include running integration tests, but be aware that these may take a long time (hours) to complete. 
 
 To run unit tests locally in parallel, use the `pytest-xdist` package
 ```sh
