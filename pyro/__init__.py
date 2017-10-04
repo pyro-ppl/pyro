@@ -65,8 +65,12 @@ def sample(name, fn, *args, obs=None, **kwargs):
     # if stack not empty, apply everything in the stack?
     else:
         # initialize data structure to pass up/down the stack
+        if obs is None:
+            msg_type = "sample"
+        else:
+            msg_type = "observe"
         msg = {
-            "type": "sample",
+            "type": msg_type,
             "name": name,
             "fn": fn,
             "obs": obs,

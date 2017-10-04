@@ -74,7 +74,7 @@ class Poutine(object):
         if msg["done"]:
             return msg["ret"]
         val = fn(*args, **kwargs)
-        # msg["done"] = True
+        msg["done"] = True
         return val
 
     def _pyro_observe(self, msg):
