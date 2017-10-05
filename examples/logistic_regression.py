@@ -14,8 +14,7 @@ from pyro.infer.kl_qp import KL_QP
 import torchvision.datasets as dset
 
 """
-Estimates w s.t. y = Xw, using Bayesian regularisation.
-Replicates the result in https://arxiv.org/pdf/1310.5438.pdf
+Bayesian Logistic Regression
 """
 
 # use covtype dataset
@@ -42,14 +41,10 @@ sigmoid = torch.nn.Sigmoid()
 softplus = torch.nn.Softplus()
 
 N = 581012 # data
-# D = 39 # features
 D = 54 # features
 batch_size = 256
 
 def model(data):
-    """
-    Logistic regression model
-    """
     x_data = data[:,:-1]
     y_data = data[:,-1]
     mu = Variable(torch.zeros(D, 1))
@@ -65,7 +60,6 @@ def model(data):
 
 
 def guide(data):
-    #sample from approximate posterior for weights
     x_data = data[:,:-1]
     w_mu = Variable(torch.randn(D, 1), requires_grad=True)
     w_sig = Variable(-3.0*torch.ones(D,1) + 0.05*torch.randn(D, 1), requires_grad=True)
@@ -81,9 +75,9 @@ def guide(data):
     q_b = pyro.sample("bias_", DiagNormal(mb_param, sb_param))
 
 # adam_params = {"lr": 0.00001, "betas": (0.95, 0.999)}
-adam_params = {"lr": 0.001}
-adam_optim = pyro.optim(torch.optim.Adam, adam_params)
-sgd_optim = pyro.optim(torch.optim.SGD, adam_params)
+lr = {"lr": 0.001}
+adam_optim = pyro.optim(torch.optim.Adam, lr)
+sgd_optim = pyro.optim(torch.optim.SGD, lr)
 
 # dat = build_toy_dataset(N)
 x = df.as_matrix(columns=range(D))
