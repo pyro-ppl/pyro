@@ -5,9 +5,12 @@ import sys
 from os.path import isfile, join
 from subprocess import Popen, PIPE, STDOUT
 
+import pytest
+
 from tests.common import TestCase
 
 
+@pytest.mark.stage("test_examples")
 class runExample(TestCase):
     def setUp(self):
         self.PATH = 'examples/'

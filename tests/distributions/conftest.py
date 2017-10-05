@@ -113,5 +113,8 @@ def test_data_idx(request):
 
 def pytest_collection_modifyitems(items):
     for item in items:
-        if "init" not in item.keywords:
-            item.add_marker(pytest.mark.init(rng_seed=123))
+        if item.nodeid.startswith("tests/distributions"):
+            if "stage" not in item.keywords:
+                item.add_marker(pytest.mark.stage("unit"))
+            if "init" not in item.keywords:
+                item.add_marker(pytest.mark.init(rng_seed=123))
