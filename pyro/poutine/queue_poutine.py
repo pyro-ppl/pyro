@@ -63,22 +63,30 @@ class QueuePoutine(Poutine):
 
     def _pyro_sample(self, msg, name, fn, *args, **kwargs):
         """
-        Return the sample in the guide trace when appropriate
+        Samples continuous variables and enumerates discrete variables.
+
+        Discrete variables are those that implement a `.support()` method.
+        Discrete variables are enumerated by raising-and-replaying.
+
+        :returns: A sample.
+        :raises: ReturnExtendedTraces.
         """
-        assert hasattr(fn, "support"), "distribution has no support method"
         if name in self.guide_trace:
             assert self.guide_trace[name]["type"] == "sample", \
                 "site {} in guide_trace is not a sample".format(name)
             msg["done"] = True
             return self.guide_trace[name]["value"]
-        elif not self.pivot_seen:
-            self.pivot_seen = True
-            extended_traces = []
-            for s in fn.support(*args, **kwargs):
-                extended_traces.append(
-                    self.guide_trace.copy().add_sample(name, msg["scale"], s, fn,
-                                                       *args, **kwargs))
-            msg["done"] = True
-            raise ReturnExtendedTraces(extended_traces)
-        else:
-            raise ValueError("should never get here (malfunction at site {})".format(name))
+        assert not self.pivot_seen, "should never get here (malfunction at site {})".format(name)
+        self.pivot_seen = True
+
+        try:
+            support = fn.support(*args, **kwargs)
+        except (AttributeError, NotImplementedError):
+            # For distributions without discrete support, we sample as usual.
+            return super(QueuePoutine, self)._pyro_sample(self, msg, name, fn, *args, **kwargs)
+        extended_traces = [
+            self.guide_trace.copy().add_sample(name, msg["scale"], s, fn, *args, **kwargs)
+            for s in support
+        ]
+        msg["done"] = True
+        raise ReturnExtendedTraces(extended_traces)
