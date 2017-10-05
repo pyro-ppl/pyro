@@ -30,14 +30,25 @@ def memoize(fn):
     alternate in py3: https://docs.python.org/3/library/functools.html
     lru_cache
     """
-    _mem = {}
+    mem = {}
 
     def _fn(*args, **kwargs):
         kwargs_tuple = _dict_to_tuple(kwargs)
-        if (args, kwargs_tuple) not in _mem:
-            _mem[(args, kwargs_tuple)] = fn(*args, **kwargs)
-        return _mem[(args, kwargs_tuple)]
+        if (args, kwargs_tuple) not in mem:
+            mem[(args, kwargs_tuple)] = fn(*args, **kwargs)
+        return mem[(args, kwargs_tuple)]
     return _fn
+
+
+def set_rng_seed(rng_seed):
+    """
+    Sets seeds of torch, numpy, and torch.cuda (if available).
+    :param int rng_seed: The seed value.
+    """
+    torch.manual_seed(rng_seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(rng_seed)
+    np.random.seed(rng_seed)
 
 
 def ones(*args, **kwargs):
@@ -107,6 +118,14 @@ def log_gamma(xx):
 
 
 def log_beta(t):
+    """
+    Computes log Beta function.
+
+    :param t:
+    :type t: torch.autograd.Variable of dimension 1 or 2
+    :rtype: torch.autograd.Variable of float (if t.dim() == 1) or torch.Tensor (if t.dim() == 2)
+    """
+    assert t.dim() in (1, 2)
     if t.dim() == 1:
         numer = torch.sum(log_gamma(t))
         denom = log_gamma(torch.sum(t))

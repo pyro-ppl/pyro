@@ -14,6 +14,8 @@ from pyro.infer.tracegraph_kl_qp import TraceGraph_KL_QP
 from pyro.util import ng_ones, ng_zeros
 from tests.common import TestCase
 
+pytestmark = pytest.mark.integration_test
+
 
 class NormalNormalTests(TestCase):
 
@@ -41,6 +43,7 @@ class NormalNormalTests(TestCase):
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 1000)
 
+    @pytest.mark.init(rng_seed=0)
     def test_elbo_nonreparameterized(self):
         self.do_elbo_test(False, 5000)
 

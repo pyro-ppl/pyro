@@ -46,9 +46,9 @@ class DiagNormal(Distribution):
         """
         Reparameterized diagonal Normal sampler.
         """
-        _mu, _sigma = self._sanitize_input(mu, sigma)
-        eps = Variable(torch.randn(_mu.size()).type_as(_mu.data))
-        z = _mu + eps * _sigma
+        mu, sigma = self._sanitize_input(mu, sigma)
+        eps = Variable(torch.randn(mu.size()).type_as(mu.data))
+        z = mu + eps * sigma
         if 'reparameterized' in kwargs:
             self.reparameterized = kwargs['reparameterized']
         if not self.reparameterized:
@@ -59,11 +59,11 @@ class DiagNormal(Distribution):
         """
         Diagonal Normal log-likelihood
         """
-        _mu, _sigma = self._sanitize_input(mu, sigma)
-        log_pxs = -1 * torch.add(torch.add(torch.log(_sigma),
+        mu, sigma = self._sanitize_input(mu, sigma)
+        log_pxs = -1 * torch.add(torch.add(torch.log(sigma),
                                  0.5 * torch.log(2.0 * np.pi *
-                                 Variable(torch.ones(_sigma.size()).type_as(_mu.data)))),
-                                 0.5 * torch.pow(((x - _mu) / _sigma), 2))
+                                 Variable(torch.ones(sigma.size()).type_as(mu.data)))),
+                                 0.5 * torch.pow(((x - mu) / sigma), 2))
         return torch.sum(log_pxs)
 
     def batch_log_pdf(self, x, mu=None, sigma=None, batch_size=1, *args, **kwargs):
@@ -71,13 +71,21 @@ class DiagNormal(Distribution):
         Diagonal Normal log-likelihood
         """
         # expand to patch size of input
-        _mu, _sigma = self._sanitize_input(mu, sigma)
-        if x.dim() == 1 and _mu.dim() == 1 and batch_size == 1:
-            return self.log_pdf(x, _mu, _sigma)
+        mu, sigma = self._sanitize_input(mu, sigma)
+        if x.dim() == 1 and mu.dim() == 1 and batch_size == 1:
+            return self.log_pdf(x, mu, sigma)
         elif x.dim() == 1:
             x = x.expand(batch_size, x.size(0))
-        log_pxs = -1 * torch.add(torch.add(torch.log(_sigma),
+        log_pxs = -1 * torch.add(torch.add(torch.log(sigma),
                                  0.5 * torch.log(2.0 * np.pi *
-                                 Variable(torch.ones(_sigma.size()).type_as(_mu.data)))),
-                                 0.5 * torch.pow(((x - _mu) / _sigma), 2))
+                                 Variable(torch.ones(sigma.size()).type_as(mu.data)))),
+                                 0.5 * torch.pow(((x - mu) / sigma), 2))
         return torch.sum(log_pxs, 1)
+
+    def analytic_mean(self, mu=None, sigma=None):
+        mu, sigma = self._sanitize_input(mu, sigma)
+        return mu
+
+    def analytic_var(self,  mu=None, sigma=None):
+        mu, sigma = self._sanitize_input(mu, sigma)
+        return torch.pow(sigma, 2)
