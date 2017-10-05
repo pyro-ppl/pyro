@@ -16,4 +16,4 @@ EXAMPLES = [
 @pytest.mark.parametrize('example', EXAMPLES)
 def test_example(example):
     example = os.path.join(EXAMPLES_DIR, example)
-    check_call([sys.executable, example, '-n', '1'])
+    check_call([sys.executable, example, '--num-epochs', '1'])
