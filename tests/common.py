@@ -23,6 +23,10 @@ Code has been largely adapted from pytorch/test/common.py
 Source: https://github.com/pytorch/pytorch/blob/master/test/common.py
 """
 
+TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
+RESOURCE_DIR = os.path.join(TESTS_DIR, 'resources')
+EXAMPLES_DIR = os.path.join(os.path.dirname(TESTS_DIR), 'examples')
+
 
 def suppress_warnings(fn):
     def wrapper(*args, **kwargs):
