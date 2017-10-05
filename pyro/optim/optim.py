@@ -4,23 +4,47 @@ from pyro.infer import ELBO
 
 
 class Optimize(object):
-    def __init__(self, model, guide,
-                 optim_constructor, optim_args,
-                 loss, loss_and_grads=None,
-                 auxiliary_optim_constructor=None, auxiliary_optim_args=None,
-                 *args, **kwargs):
-
+    """
+    A unified interface for optimizing loss functions in pyro.
+    """
+    def __init__(self,
+                 model,
+                 guide,
+                 optim_constructor,
+                 optim_args,
+                 loss,
+                 loss_and_grads=None,
+                 auxiliary_optim_constructor=None,
+                 auxiliary_optim_args=None,
+                 *args,
+                 **kwargs):
+	"""
+	:param model: the model (callable)
+	:param guide: the guide (callable)
+	:param optim_constructor: the constructor used to construct the pytorch optim
+	    used to optimize the loss
+	:param optim_args: either a dictionary of arguments passed to the pytorch optim or
+	    a callable that returns such dictionaries. in the latter case, the arguments of
+	    the callable are parameter names. this allows the user to, e.g., customize learning
+	    rates on a per-parameter basis
+	:param loss: this is either a string that specifies the loss function to be used (currently
+	    the only supported loss is 'ELBO') or a user-provided loss function.
+	:param loss_and_grads: <to be filled in>
+	:param auxiliary_optim_constructor: like optim_constructor above, but to be used for the
+	    auxiliary loss, if relevant
+	:param auxiliary_optim_args: like optim_args above, but for the auxiliary optim
+	"""
         self.optim_constructor = optim_constructor
         self.auxiliary_optim_constructor = auxiliary_optim_constructor
 
         assert (auxiliary_optim_constructor is not None and auxiliary_optim_args is not None) or \
                (auxiliary_optim_constructor is None and auxiliary_optim_args is None)
         assert callable(optim_args) or isinstance(
-            optim_args, dict), "optim_args must be function that returns defaults or a defaults dictionary"
+            optim_args, dict), "optim_args must be callable that returns defaults or a defaults dictionary"
         if auxiliary_optim_args is not None:
             assert callable(auxiliary_optim_args) or isinstance(
                 auxiliary_optim_args, dict), \
-                    "auxiliary_optim_args must be function that returns defaults or a defaults dictionary"
+                    "auxiliary_optim_args must be a callable that returns defaults or a defaults dictionary"
 
         self.optim_args = optim_args
         self.auxiliary_optim_args = auxiliary_optim_args
@@ -30,20 +54,61 @@ class Optimize(object):
             assert loss in ["ELBO"], "The only built-in loss supported by Optimize is ELBO"
 
             if loss=="ELBO":
-                self.loss = ELBO(model, guide, *args, **kwargs).loss
-                self.loss_and_grads = ELBO(model, guide, *args, **kwargs).loss_and_grads
+                self.ELBO = ELBO(model, guide, *args, **kwargs)
+                self.loss = self.ELBO.loss
+                self.loss_and_grads = self.ELBO.loss_and_grads
             else:
                 raise NotImplementedError
         else:
             self.loss = loss
             if loss_and_grads is None:
-                raise NotImplementedError
+                raise NotImplementedError("User must specify loss_and_grads")
             else:
                 self.loss_and_grads = loss_and_grads
 
+    # XXX decide what __call__ behavior is
+    def __call__(self, *args, **kwargs):
+        self.step(*args, **kwargs)
+
+    def evaluate_loss(self, *args, **kwargs):
+        """
+        evaluate the loss function
+        """
+        self.loss(*args, **kwargs)
+
+    def step(self, *args, **kwargs):
+        """
+        take a gradient step on the loss function
+        """
+        loss, trainable_params_dict, baseline_loss, baseline_params = self.loss_and_grads(*args, **kwargs)
+
+        assert (baseline_loss is not None and baseline_params is not None) or \
+               (baseline_loss is None and baseline_params is None)
+
+        # we collect all relevant optim objects
+        active_optims = []
+
+        # loop over relevant params
+        for param in trainable_params_dict.values():
+
+            # if we have not seen this param before, we instantiate an optim
+            # obj to deal with it
+            if param not in self.optim_objects:
+
+                # get our constructor arguments
+                default_optim_dict = self._get_optim_args(param, self.optim_args)
+
+                # create a single optim object for that param
+                self.optim_objects[param] = self.optim_constructor([param], **default_optim_dict)
+
+            # actually perform the step for each optim object and clear gradients
+            self.optim_objects[param].step()
+            pyro.util.zero_grads([param])
+
+        return loss
 
     # helper to fetch the optim args if callable
-    def get_optim_args(self, param, optim_args):
+    def _get_optim_args(self, param, optim_args):
         # if we were passed a fct, we call fct with param info
         # arguments are (module name, param name) e.g. ('mymodule', 'bias')
         if callable(optim_args):
@@ -59,39 +124,3 @@ class Optimize(object):
             return opt_dict
         else:
             return optim_args
-
-    # decide what default call behavior is
-    def __call__(self, *args, **kwargs):
-        pass
-
-    def step(self, *args, **kwargs):
-        loss, trainable_params_dict, baseline_loss, baseline_params = self.loss_and_grad(*args, **kwargs)
-
-        assert (baseline_loss is not None and baseline_params is not None) or \
-               (baseline_loss is None and baseline_params is None)
-
-        # we collect all relevant optim objects
-        active_optims = []
-
-        # loop over relevant params
-        for p in trainable_params_dict.values():
-
-            # if we have not seen this param before, we instantiate an optim
-            # obj to deal with it
-            if p not in self.optim_objects:
-
-                # get our constructor arguments
-                default_optim_dict = self.get_optim_args(p, self.optim_args)
-
-                # create a single optim object for that param
-                self.optim_objs[p] = self.optim_constructor([p], **default_optim_dict)
-
-            # we add this to the list of params we'll be stepping on
-            active_optims.append(self.optim_objects[p])
-
-        # actually perform the step for each optim obj
-        for optim in active_optims:
-            optim.step(*args, **kwargs)
-
-        # all done, send back loss if calculated
-        return loss

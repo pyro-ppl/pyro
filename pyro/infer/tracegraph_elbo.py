@@ -10,16 +10,18 @@ class TraceGraph_ELBO(object):
     """
     A TraceGraph and Poutine-based implementation of SVI
     The gradient estimator is constructed along the lines of
+
     'Gradient Estimation Using Stochastic Computation Graphs'
     John Schulman, Nicolas Heess, Theophane Weber, Pieter Abbeel
 
-    :param model: the model (callable)
-    :param guide: the guide (callable), i.e. the variational distribution
-    :param num_particles: the number of particles (samples) used to form the estimator
+    specialized to the case of the ELBO.
     """
-
-    def __init__(self, model, guide, num_particles=1, *args, **kwargs):
-        # initialize
+    def __init__(self, model, guide, num_particles=1):
+        """
+        :param model: the model (callable)
+        :param guide: the guide (callable), i.e. the variational distribution
+        :param num_particles: the number of particles (samples) used to form the estimator
+        """
         super(TraceGraph_ELBO, self).__init__()
         self.model = model
         self.guide = guide
@@ -40,8 +42,8 @@ class TraceGraph_ELBO(object):
 
     def loss(self, *args, **kwargs):
         """
-        Evaluate Elbo by running num_particles often.
-        Returns the Elbo as a value
+        Evaluate the ELBO by running num_particles many samples/particles.
+        Returns an estimate of the ELBO as a float.
         """
         elbo = 0.0
         for model_tracegraph, guide_tracegraph in self._get_traces(*args, **kwargs):
@@ -64,10 +66,12 @@ class TraceGraph_ELBO(object):
 
     def loss_and_grads(self, *args, **kwargs):
         """
-        computes the elbo as well as the surrogate elbo. performs backward on latter.
-        num_particle many samples are used to form the estimators.
-        returns an estimate of the elbo as well as the trainable_params_dict.
-        implicitly returns gradients via param.grad for each param in the trainable_params_dict.
+        - computes the ELBO as well as the surrogate ELBO that is used to form the gradient estimator.
+        - performs backward on the latter.
+        - num_particle many samples are used to form the estimators.
+        - returns an estimate of the ELBO, the trainable_params_dict
+        - as well as the baseline loss and baseline params
+        - implicitly returns gradients via param.grad for each param in the trainable_params_dict.
         """
         elbo = 0.0
         surrogate_elbo = 0.0
@@ -127,8 +131,7 @@ class TraceGraph_ELBO(object):
                 # 2. model observe sites (as well as terms that arise from the model and guide having different
                 # dependency structures) are taken care of via 'children_in_model' below
                 guide_dag = guide_tracegraph.get_graph()
-                topo_sort_guide_nodes = list(
-                    reversed(list(networkx.topological_sort(guide_dag))))
+                topo_sort_guide_nodes = list(reversed(list(networkx.topological_sort(guide_dag))))
                 downstream_guide_cost_nodes = {}
                 downstream_costs = {}
 

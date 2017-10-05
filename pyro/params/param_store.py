@@ -11,6 +11,10 @@ class ParamStoreDict(object):
         self._params = {}
         self._param_to_name = {}
 
+    #def set_param_active()
+    #def set_param_inactive()
+
+
     def get_param(self, name, init_tensor=None):
         """
         :param name: parameter name

@@ -6,7 +6,6 @@ from torch.nn import Parameter
 
 import pyro
 from pyro import util
-from pyro.optim.optim import PyroOptim
 from pyro.params import param_with_module_name
 from pyro.params.param_store import ParamStoreDict
 from pyro.util import zeros, ones, set_rng_seed  # noqa: F401
@@ -40,7 +39,6 @@ def device(x):
 
 
 # use pyro optim class to wrap nn optim
-optim = PyroOptim
 
 _PYRO_STACK = []
 
