@@ -1,3 +1,4 @@
+import numpy as np
 from torch.autograd import Variable
 
 import pyro
@@ -71,7 +72,8 @@ class KL_QP(object):
                     model_trace = poutine.trace(
                         poutine.replay(self.model, guide_trace))(*args, **kwargs)
                     log_r = model_trace.log_pdf() - guide_trace.log_pdf()
-                    yield model_trace, guide_trace, log_r
+                    weight = np.exp(guide_trace.enum_log_pdf())
+                    yield weight, model_trace, guide_trace, log_r
                 continue
 
             guide_trace = poutine.trace(self.guide)(*args, **kwargs)
@@ -79,7 +81,7 @@ class KL_QP(object):
                 poutine.replay(self.model, guide_trace))(*args, **kwargs)
             log_r = model_trace.log_pdf() - guide_trace.log_pdf()
 
-            yield model_trace, guide_trace, log_r
+            yield 1.0, model_trace, guide_trace, log_r
 
     def eval_objective(self, *args, **kwargs):
         """
@@ -87,7 +89,7 @@ class KL_QP(object):
         Returns the Elbo as a value
         """
         elbo = 0.0
-        for model_trace, guide_trace, log_r in self.iter_traces(*args, **kwargs):
+        for weight, model_trace, guide_trace, log_r in self.iter_traces(*args, **kwargs):
             elbo_particle = 0.0
 
             for name in model_trace.keys():
@@ -98,7 +100,7 @@ class KL_QP(object):
                     elbo_particle -= guide_trace[name]["log_pdf"]
                 else:
                     pass
-            elbo += elbo_particle / self.num_particles
+            elbo += elbo_particle * (weight / self.num_particles)
         loss = -elbo
 
         return loss.data[0]
@@ -111,7 +113,7 @@ class KL_QP(object):
         elbo = 0.0
         all_trainable_params = []
 
-        for model_trace, guide_trace, log_r in self.iter_traces(*args, **kwargs):
+        for weight, model_trace, guide_trace, log_r in self.iter_traces(*args, **kwargs):
             elbo_particle = 0.0
 
             for name in model_trace.keys():
@@ -125,7 +127,7 @@ class KL_QP(object):
                         elbo_particle += Variable(log_r.data) * guide_trace[name]["log_pdf"]
                 else:
                     pass
-            elbo += elbo_particle / self.num_particles
+            elbo += elbo_particle * (weight / self.num_particles)
 
             # accumulate parameters
             # get trace params from last model run

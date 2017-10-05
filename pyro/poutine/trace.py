@@ -125,3 +125,13 @@ class Trace(dict):
                     **self[name]["args"][1]) * self[name]["scale"]
                 log_p += self[name]["batch_log_pdf"]
         return log_p
+
+    def enum_log_pdf(self):
+        """
+        Compute the enumerated log-probability of the trace.
+        """
+        log_p = 0.0
+        for name, site in self.items():
+            if site["type"] == "sample" and site.get('enum'):
+                log_p += site["log_pdf"]
+        return log_p
