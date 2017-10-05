@@ -89,7 +89,7 @@ discrete_dists = [
             prec=0.05,
             min_samples=10000,
             is_discrete=True,
-            expected_support_file=os.path.join(RESOURCE_DIR, 'support_bernoulli.json'),
+            expected_support_file=os.path.join(RESOURCE_DIR, 'support_categorical.json'),
             expected_support_key='one_hot'),
 ]
 
