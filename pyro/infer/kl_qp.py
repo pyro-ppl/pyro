@@ -125,7 +125,8 @@ class KL_QP(object):
                         elbo_particle += model_trace[name]["log_pdf"]
                         elbo_particle -= guide_trace[name]["log_pdf"]
                     else:
-                        elbo_particle += Variable(log_r.data) * guide_trace[name]["log_pdf"]
+                        elbo_particle += Variable(log_r.data) * guide_trace[name]["log_pdf"] +\
+                                         model_trace[name]["log_pdf"]
                 else:
                     pass
             elbo += elbo_particle / self.num_particles
