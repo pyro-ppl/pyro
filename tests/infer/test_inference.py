@@ -5,7 +5,7 @@ from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
-from pyro.optim import Optimize
+from pyro.optim.optim import Optimize
 from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
 from tests.common import TestCase
 
