@@ -34,6 +34,7 @@ class KL_QP(object):
                  model_fixed=False,
                  guide_fixed=False,
                  num_particles=1,
+                 enum_discrete=False,
                  *args, **kwargs):
         """
         Call parent class initially, then setup the poutines to run
@@ -57,6 +58,21 @@ class KL_QP(object):
         Method to draw,store and evaluate multiple samples in traces
         """
         for i in range(self.num_particles):
+            # THIS IS A TOTAL HACK
+            if self.enum_discrete:
+                from six.moves.queue import LifoQueue
+                from pyro.poutine.trace import Trace
+                queue = LifoQueue()
+                queue.put(Trace())
+                next_guide = poutine.queue(poutine.trace(self.guide), queue)
+                while not queue.empty():
+                    guide_trace = next_guide(*args, **kwargs)
+                    model_trace = poutine.trace(
+                        poutine.replay(self.model, guide_trace))(*args, **kwargs)
+                    log_r = model_trace.log_pdf() - guide_trace.log_pdf()
+                    yield model_trace, guide_trace, log_r
+                continue
+
             guide_trace = poutine.trace(self.guide)(*args, **kwargs)
             model_trace = poutine.trace(
                 poutine.replay(self.model, guide_trace))(*args, **kwargs)
