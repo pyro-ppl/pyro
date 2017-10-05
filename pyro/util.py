@@ -286,7 +286,7 @@ def apply_stack(initial_msg):
         assert msg["type"] in ("sample", "observe", "map_data", "param"), \
             "{} is an invalid site type, how did that get there?".format(msg["type"])
 
-        msg.update({"ret": getattr(frame, "_pyro_{}".format(msg["type"]))(msg)})
+        msg["ret"] = getattr(frame, "_pyro_{}".format(msg["type"]))(msg)
 
         if msg["stop"]:
             break

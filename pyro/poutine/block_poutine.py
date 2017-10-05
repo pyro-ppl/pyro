@@ -6,7 +6,28 @@ from .lambda_poutine import LambdaPoutine
 
 class BlockPoutine(Poutine):
     """
-    Blocks some things
+    This Poutine selectively hides pyro primitive sites from the outside world.
+
+    For example, suppose the stochastic function fn has two sample sites "a" and "b".
+    Then any poutine outside of BlockPoutine(fn, hide=["a"])
+    will not be applied to site "a" and will only see site "b":
+
+    >>> fn_inner = TracePoutine(fn)
+    >>> fn_outer = TracePoutine(BlockPoutine(TracePoutine(fn), hide=["a"]))
+    >>> trace_inner = fn_inner.get_trace()
+    >>> trace_outer  = fn_outer.get_trace()
+    >>> "a" in trace_inner
+    True
+    >>> "a" in trace_outer
+    False
+    >>> "b" in trace_inner
+    True
+    >>> "b" in trace_outer
+    
+    BlockPoutine has a flexible interface that allows users
+    to specify in several different ways
+    which sites should be hidden or exposed.
+    See the constructor for details.
     """
 
     def __init__(self, fn,
@@ -14,8 +35,21 @@ class BlockPoutine(Poutine):
                  hide=None, expose=None,
                  hide_types=None, expose_types=None):
         """
+        :param bool hide_all: hide all sites
+        :param bool expose_all: expose all sites normally
+        :param list hide: list of site names to hide, rest will be exposed normally
+        :param list expose: list of site names to expose, rest will be hidden
+        :param list hide_types: list of site types to hide, rest will be exposed normally
+        :param list expose_types: list of site types to expose normally, rest will be hidden
+
         Constructor for blocking poutine
-        Default behavior: block everything
+        Default behavior: block everything (hide_all == True)
+        
+        A site is hidden if at least one of the following holds:
+        1. msg["name"] in hide
+        2. msg["type"] in hide_types
+        3. msg["name"] not in expose and msg["type"] not in expose_types
+        4. hide_all == True
         """
         super(BlockPoutine, self).__init__(fn)
         # first, some sanity checks:
@@ -52,7 +86,14 @@ class BlockPoutine(Poutine):
 
     def _block_up(self, msg):
         """
-        A stack-blocking operation
+        :param msg: current message at a trace site, after all execution finished.
+        :returns: boolean decision to hide or expose site.
+
+        A site is hidden if at least one of the following holds:
+        1. msg["name"] in self.hide
+        2. msg["type"] in self.hide_types
+        3. msg["name"] not in self.expose and msg["type"] not in self.expose_types
+        4. self.hide_all == True
         """
         # decision rule for hiding:
         if (msg["name"] in self.hide) or \
@@ -66,26 +107,54 @@ class BlockPoutine(Poutine):
             return False
 
     def _pyro_sample(self, msg):
+        """
+        :param msg:  current message at a trace site
+        :returns: a sample from the stochastic function at the site.
+
+        Default sample behavior with a side effect.
+        Applies self._block_up to decide whether to hide the site.
+        """
         ret = super(BlockPoutine, self)._pyro_sample(msg)
-        msg.update({"stop": self._block_up(msg)})
+        msg["stop"] = self._block_up(msg)
         return ret
 
     def _pyro_observe(self, msg):
+        """
+        :param msg:  current message at a trace site
+        :returns: the observed value at the site.
+
+        Default observe behavior with a side effect.
+        Applies self._block_up to decide whether to hide the site.
+        """
         ret = super(BlockPoutine, self)._pyro_observe(msg)
-        msg.update({"stop": self._block_up(msg)})
+        msg["stop"] = self._block_up(msg)
         return ret
 
     def _pyro_map_data(self, msg):
+        """
+        :param msg:  current message at a trace site
+        :returns: the result of running the site function on the site data.
+
+        Default map_data behavior with a side effect.
+        Applies self._block_up to decide whether to hide the site.
+        """
         name, data, fn, batch_size, batch_dim = \
             msg["name"], msg["data"], msg["fn"], msg["batch_size"], msg["batch_dim"]
         scale = pyro.util.get_batch_scale(data, batch_size, batch_dim)
-        msg.update({"fn": LambdaPoutine(fn, name, scale)})
+        msg["fn"] = LambdaPoutine(fn, name, scale)
         ret = super(BlockPoutine, self)._pyro_map_data(msg)
-        msg.update({"fn": fn})
-        msg.update({"stop": self._block_up(msg)})
+        msg["fn"] = fn
+        msg["stop"] = self._block_up(msg)
         return ret
 
     def _pyro_param(self, msg):
+        """
+        :param msg:  current message at a trace site
+        :returns: the result of querying the parameter store.
+
+        Default param behavior with a side effect.
+        Applies self._block_up to decide whether to hide the site.
+        """
         ret = super(BlockPoutine, self)._pyro_param(msg)
-        msg.update({"stop": self._block_up(msg)})
+        msg["stop"] = self._block_up(msg)
         return ret

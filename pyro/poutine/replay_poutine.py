@@ -6,12 +6,16 @@ from .lambda_poutine import LambdaPoutine
 
 class ReplayPoutine(Poutine):
     """
-    Poutine for replaying from an existing execution trace
+    Poutine for replaying from an existing execution trace.
     """
 
     def __init__(self, fn, guide_trace, sites=None):
         """
+        :param fn: a stochastic function (callable containing pyro primitive calls)
+        :param guide_trace: a trace whose values should be reused
+
         Constructor.
+        Stores guide_trace in an attribute.
         """
         super(ReplayPoutine, self).__init__(fn)
         assert guide_trace is not None, "must provide guide_trace"
@@ -33,7 +37,17 @@ class ReplayPoutine(Poutine):
 
     def _prepare_site(self, msg):
         """
-        Pass indices down at a map_data
+        :param msg: current message at a trace site.
+        :returns: the same message, possibly with some fields mutated.
+
+        If the site type is "map_data",
+        passes map_data batch indices from the guide trace
+        all the way down to the bottom of the stack,
+        so that the correct indices are used.
+
+        If the site type is "sample",
+        sets the return value and the "done" flag
+        so that poutines below it do not execute their sample functions at that site.
         """
         if msg["name"] in self.sites:
             if msg["type"] == "map_data":
@@ -54,7 +68,14 @@ class ReplayPoutine(Poutine):
 
     def _pyro_sample(self, msg):  # , name, fn, *args, **kwargs):
         """
-        Return the sample in the guide trace when appropriate
+        :param msg: current message at a trace site.
+
+        At a sample site that appears in self.guide_trace,
+        returns the value from self.guide_trace instead of sampling
+        from the stochastic function at the site.
+
+        At a sample site that does not appear in self.guide_trace,
+        reverts to default Poutine._pyro_sample behavior with no additional side effects.
         """
         name = msg["name"]
         # case 1: dict, positive: sample from guide
@@ -75,13 +96,17 @@ class ReplayPoutine(Poutine):
 
     def _pyro_map_data(self, msg):
         """
-        Use the batch indices from the guide trace, already provided by down
-        So all we need to do here is apply a LambdaPoutine as in TracePoutine
+        :param msg: current message at a trace site.
+        :returns: the result of running the site function on the data.
+
+        Instead of sampling new batch indices,
+        uses the batch indices from the guide trace,
+        already provided by _prepare_site.
         """
         name, data, fn, batch_size, batch_dim = \
             msg["name"], msg["data"], msg["fn"], msg["batch_size"], msg["batch_dim"]
         scale = pyro.util.get_batch_scale(data, batch_size, batch_dim)
-        msg.update({"fn": LambdaPoutine(fn, name, scale)})
+        msg["fn"] = LambdaPoutine(fn, name, scale)
         ret = super(ReplayPoutine, self)._pyro_map_data(msg)
-        msg.update({"fn": fn})
+        msg["fn"] = fn
         return ret

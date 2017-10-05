@@ -10,14 +10,20 @@ class Poutine(object):
     and adds side effects to stochastic functions
     i.e. callables containing pyro primitive statements.
     
-    Basically
+    See the Poutine execution model writeup in the documentation
+    for a description of the entire Poutine system.
+    
+    This is the base Poutine class.
+    It implements the default behavior for all pyro primitives,
+    so that the joint distribution induced by a stochastic function fn
+    is identical to the joint distribution induced by Poutine(fn).
     """
 
     def __init__(self, fn):
         """
-        :param fn: a stochastic function (callable containing pyro primitive statements)
+        :param fn: a stochastic function (callable containing pyro primitive calls)
 
-        Constructor. Stores the stochastic function.
+        Constructor. Doesn't do much, just stores the stochastic function.
         """
         self.fn = fn
 

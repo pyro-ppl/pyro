@@ -70,5 +70,7 @@ class LambdaPoutine(Poutine):
         name, data, fn, batch_size, batch_dim = \
             msg["name"], msg["data"], msg["fn"], msg["batch_size"], msg["batch_dim"]
         mapdata_scale = pyro.util.get_batch_scale(data, batch_size, batch_dim)
-        msg.update({"fn": LambdaPoutine(fn, name, mapdata_scale)})
-        return super(LambdaPoutine, self)._pyro_map_data(msg)
+        msg["fn"] = LambdaPoutine(fn, name, mapdata_scale)
+        ret = super(LambdaPoutine, self)._pyro_map_data(msg)
+        msg["fn"] = fn
+        return ret

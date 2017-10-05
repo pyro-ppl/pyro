@@ -18,6 +18,17 @@ class TracePoutine(Poutine):
     """
 
     def __call__(self, *args, **kwargs):
+        """
+        Runs the stochastic function stored in this poutine,
+        with additional side effects.
+
+        Resets self.trace to an empty trace,
+        installs itself on the global execution stack,
+        runs self.fn with the given arguments,
+        uninstalls itself from the global execution stack,
+        stores the arguments and return value of the function in special sites,
+        and returns self.fn's return value
+        """
         self.trace = Trace()
         self.trace.add_args((args, kwargs))
         ret = super(TracePoutine, self).__call__(*args, **kwargs)
@@ -29,6 +40,7 @@ class TracePoutine(Poutine):
         :returns: data structure
         :rtype: pyro.poutine.Trace
 
+        Helper method for a very common use case.
         Calls this poutine and returns its trace instead of the function's return value.
         """
         self(*args, **kwargs)
@@ -36,8 +48,13 @@ class TracePoutine(Poutine):
 
     def _pyro_sample(self, msg):
         """
-        sample
-        TODO docs
+        :param msg: current message at a trace site.
+        :returns: a sample from the stochastic function at the site.
+
+        Implements default pyro.sample Poutine behavior with a side effect
+        call the function at the site,
+        store the result in self.trace,
+        and return the result
         """
         name, fn, args, kwargs = \
             msg["name"], msg["fn"], msg["args"], msg["kwargs"]
@@ -55,10 +72,16 @@ class TracePoutine(Poutine):
 
     def _pyro_observe(self, msg):
         """
-        observe
-        TODO docs
-        Expected behavior:
-        TODO
+        :param msg: current message at a trace site.
+        :returns: the observed value at the site.
+
+        Implements default pyro.observe Poutine behavior with an additional side effect:
+        if the observation at the site is not None,
+        then store the observation in self.trace
+        and return the observation,
+        else call the function,
+        then store the return value in self.trace
+        and return the return value.
         """
         name, fn, obs, args, kwargs = \
             msg["name"], msg["fn"], msg["obs"], msg["args"], msg["kwargs"]
@@ -76,10 +99,16 @@ class TracePoutine(Poutine):
 
     def _pyro_param(self, msg):
         """
-        param
-        TODO docs
-        Expected behavior:
-        TODO
+        :param msg: current message at a trace site.
+        :returns: the result of querying the parameter store
+
+        Implements default pyro.param Poutine behavior with an additional side effect:
+        queries the parameter store with the site name and varargs
+        and returns the result of the query.
+        
+        If the parameter doesn't exist, create it using the site varargs.
+        If it does exist, grab it from the parameter store.
+        Store the parameter in self.trace, and then return the parameter.
         """
         name, args, kwargs = \
             msg["name"], msg["args"], msg["kwargs"]
@@ -89,15 +118,26 @@ class TracePoutine(Poutine):
 
     def _pyro_map_data(self, msg):
         """
-        Trace map_data
+        :param msg: current message at a trace site.
+        :returns: the result of running the site function on the data.
+
+        Implements default pyro.map_data Poutine behavior with an additional side effect:
+        If the site input is a tensor, apply the site function to the tensor,
+        possibly with subsampling, store the return value in self.trace,
+        and return the return value.
+        If the site input is a list or tuple, map the site function
+        over enumerate(site_input), possibly with subsampling,
+        store the return values in self.trace,
+        and return the return values.
         """
         name, data, fn, batch_size, batch_dim = \
             msg["name"], msg["data"], msg["fn"], msg["batch_size"], msg["batch_dim"]
 
         scale = pyro.util.get_batch_scale(data, batch_size, batch_dim)
-        msg.update({"fn": LambdaPoutine(fn, name, scale)})
+        msg["fn"] = LambdaPoutine(fn, name, scale)
 
         ret = super(TracePoutine, self)._pyro_map_data(msg)
-        msg.update({"fn": fn})
+
+        msg["fn"] = fn
         self.trace.add_map_data(name, fn, batch_size, batch_dim, msg["indices"])
         return ret
