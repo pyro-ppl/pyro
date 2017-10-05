@@ -1,4 +1,3 @@
-import pytest
 import torch
 from torch import nn as nn
 from torch.autograd import Variable
@@ -9,8 +8,6 @@ import pyro.distributions as dist
 from pyro.optim import Optimize
 from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
 from tests.common import TestCase
-
-pytestmark = pytest.mark.init(rng_seed=123)
 
 
 def param_mse(name, target):
