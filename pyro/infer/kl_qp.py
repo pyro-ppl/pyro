@@ -49,6 +49,7 @@ class KL_QP(object):
         self.model_fixed = model_fixed
         self.guide_fixed = guide_fixed
         self.num_particles = num_particles
+        self.enum_discrete = enum_discrete
 
     def __call__(self, *args, **kwargs):
         return self.step(*args, **kwargs)
