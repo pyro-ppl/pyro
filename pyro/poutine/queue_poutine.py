@@ -76,14 +76,17 @@ class QueuePoutine(Poutine):
                 "site {} in guide_trace is not a sample".format(name)
             msg["done"] = True
             return self.guide_trace[name]["value"]
-        assert not self.pivot_seen, "should never get here (malfunction at site {})".format(name)
-        self.pivot_seen = True
 
         try:
             support = fn.support(*args, **kwargs)
         except (AttributeError, NotImplementedError):
             # For distributions without discrete support, we sample as usual.
-            return super(QueuePoutine, self)._pyro_sample(self, msg, name, fn, *args, **kwargs)
+            r_val = super(QueuePoutine, self)._pyro_sample(msg, name, fn, *args, **kwargs)
+            self.guide_trace.add_sample(name, msg["scale"], r_val, fn, *args, **kwargs)
+            return r_val
+
+        assert not self.pivot_seen, "should never get here (malfunction at site {})".format(name)
+        self.pivot_seen = True
         extended_traces = [
             self.guide_trace.copy().add_sample(name, msg["scale"], s, fn, *args, **kwargs)
             for s in support
