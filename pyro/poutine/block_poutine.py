@@ -54,7 +54,7 @@ class BlockPoutine(Poutine):
         """
         A stack-blocking operation
         """
-        # hiding
+        # decision rule for hiding:
         if (msg["name"] in self.hide) or \
            (msg["type"] in self.hide_types) or \
            ((msg["name"] not in self.expose) and
