@@ -14,7 +14,8 @@ class TraceGraph_ELBO(object):
     'Gradient Estimation Using Stochastic Computation Graphs'
     John Schulman, Nicolas Heess, Theophane Weber, Pieter Abbeel
 
-    specialized to the case of the ELBO.
+    specialized to the case of the ELBO. It supports arbitrary
+    dependeny structure for the model and guide.
     """
     def __init__(self, model, guide, num_particles=1):
         """
@@ -69,19 +70,12 @@ class TraceGraph_ELBO(object):
         - computes the ELBO as well as the surrogate ELBO that is used to form the gradient estimator.
         - performs backward on the latter.
         - num_particle many samples are used to form the estimators.
-        - returns an estimate of the ELBO, the trainable_params_dict
-        - as well as the baseline loss and baseline params
-        - implicitly returns gradients via param.grad for each param in the trainable_params_dict.
+        - returns an estimate of the ELBO as well as the baseline loss (if present)
         """
         elbo = 0.0
         surrogate_elbo = 0.0
         baseline_loss = 0.0
-        trainable_params_dict = {}
-        baseline_params = set()
-
-        def add_to_trainable_params_dict(param_name, param_value):
-            if param_name not in trainable_params_dict:
-                trainable_params_dict[param_name] = param_value
+        trainable_params = set()
 
         for model_tracegraph, guide_tracegraph in self._get_traces(*args, **kwargs):
             guide_trace, model_trace = guide_tracegraph.get_trace(), model_tracegraph.get_trace()
@@ -216,7 +210,7 @@ class TraceGraph_ELBO(object):
 
                 for _loss, _params in baseline_losses_particle:
                     baseline_loss += _loss / self.num_particles
-                    baseline_params.update(_params)
+                    trainable_params.update(set(_params))
 
                 surrogate_elbo += elbo_no_zero_expectation_terms_particle / self.num_particles
                 surrogate_elbo += elbo_reinforce_terms_particle / self.num_particles
@@ -224,15 +218,20 @@ class TraceGraph_ELBO(object):
                 # grab model parameters to train
                 for name in model_trace.keys():
                     if model_trace[name]["type"] == "param":
-                        add_to_trainable_params_dict(name, model_trace[name]["value"])
+                        trainable_params.add(model_trace[name]["value"])
 
                 # grab guide parameters to train
                 for name in guide_trace.keys():
                     if guide_trace[name]["type"] == "param":
-                        add_to_trainable_params_dict(name, guide_trace[name]["value"])
+                        trainable_params.add(guide_trace[name]["value"])
 
             surrogate_loss = -surrogate_elbo
             surrogate_loss.backward()
+            if baseline_loss != 0.0:
+                baseline_loss.backward()
+
+            pyro.get_param_store().mark_params_active(trainable_params)
+
             loss = -elbo
 
-            return loss, trainable_params_dict, baseline_loss, baseline_params
+            return loss

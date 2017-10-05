@@ -1,3 +1,4 @@
+import pyro
 from .trace_elbo import Trace_ELBO
 from .tracegraph_elbo import TraceGraph_ELBO
 

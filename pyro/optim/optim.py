@@ -35,10 +35,9 @@ class Optimize(object):
 	:param auxiliary_optim_args: like optim_args above, but for the auxiliary optim
 	"""
         self.optim_constructor = optim_constructor
-        self.auxiliary_optim_constructor = auxiliary_optim_constructor
+        self.auxiliary_optim_constructor = optim_constructor if auxiliary_optim_constructor is None else\
+            auxiliary_optim_constructor
 
-        assert (auxiliary_optim_constructor is not None and auxiliary_optim_args is not None) or \
-               (auxiliary_optim_constructor is None and auxiliary_optim_args is None)
         assert callable(optim_args) or isinstance(
             optim_args, dict), "optim_args must be callable that returns defaults or a defaults dictionary"
         if auxiliary_optim_args is not None:
@@ -80,30 +79,39 @@ class Optimize(object):
         """
         take a gradient step on the loss function
         """
-        loss, trainable_params_dict, baseline_loss, baseline_params = self.loss_and_grads(*args, **kwargs)
 
-        assert (baseline_loss is not None and baseline_params is not None) or \
-               (baseline_loss is None and baseline_params is None)
+        loss_scope = kwargs.pop('loss_scope', 'default')
+        auxiliary_scope = kwargs.pop('auxiliary_scope', 'baseline')
 
-        # we collect all relevant optim objects
-        active_optims = []
+        # get loss and compute gradients
+        loss = self.loss_and_grads(*args, **kwargs)
 
         # loop over relevant params
-        for param in trainable_params_dict.values():
+        loss_params = pyro.get_param_store().get_active_params(scope=loss_scope)
+        auxiliary_params = pyro.get_param_store().get_active_params(scope=auxiliary_scope)
 
-            # if we have not seen this param before, we instantiate an optim
-            # obj to deal with it
-            if param not in self.optim_objects:
+        def step_params(params, optim_constructor, optim_args):
+            for param in params:
 
-                # get our constructor arguments
-                default_optim_dict = self._get_optim_args(param, self.optim_args)
+                # if we have not seen this param before, we instantiate an optim for it
+                if param not in self.optim_objects:
 
-                # create a single optim object for that param
-                self.optim_objects[param] = self.optim_constructor([param], **default_optim_dict)
+                    # get our constructor arguments
+                    optim_args_dict = self._get_optim_args(param, optim_args)
 
-            # actually perform the step for each optim object and clear gradients
-            self.optim_objects[param].step()
-            pyro.util.zero_grads([param])
+                    # create a single optim object for that param
+                    self.optim_objects[param] = optim_constructor([param], **optim_args_dict)
+
+                # actually perform the step for this optim object
+                self.optim_objects[param].step()
+
+            # zero gradients and mark parameters as inactive
+            pyro.util.zero_grads(params)
+            pyro.get_param_store().mark_params_inactive(params)
+
+        # do gradient steps corresponding to loss and (if present) auxiliary loss
+        step_params(loss_params, self.optim_constructor, self.optim_args)
+        step_params(auxiliary_params, self.auxiliary_optim_constructor, self.auxiliary_optim_args)
 
         return loss
 

@@ -1,3 +1,4 @@
+import pyro
 import pyro.poutine as poutine
 
 
@@ -60,11 +61,12 @@ class Trace_ELBO(object):
 
         elbo = 0.0
         surrogate_elbo = 0.0
-        trainable_params_dict = {}
+        trainable_params = set()
+        #trainable_params_dict = {}
 
-        def add_to_trainable_params_dict(param_name, param_value):
-            if param_name not in trainable_params_dict:
-                trainable_params_dict[param_name] = param_value
+        ##def add_to_trainable_params_dict(param_name, param_value):
+        #    if param_name not in trainable_params_dict:
+        #        trainable_params_dict[param_name] = param_value
 
         # grab a trace from the generator
         for model_trace, guide_trace, log_r in self._get_traces(*args, **kwargs):
@@ -90,15 +92,17 @@ class Trace_ELBO(object):
             # grab model parameters to train
             for name in model_trace.keys():
                 if model_trace[name]["type"] == "param":
-                    add_to_trainable_params_dict(name, model_trace[name]["value"])
+                    trainable_params.add(model_trace[name]["value"])
 
             # grab guide parameters to train
             for name in guide_trace.keys():
                 if guide_trace[name]["type"] == "param":
-                    add_to_trainable_params_dict(name, guide_trace[name]["value"])
+                    trainable_params.add(guide_trace[name]["value"])
 
         surrogate_loss = -surrogate_elbo
         surrogate_loss.backward()
         loss = -elbo
 
-        return loss, trainable_params_dict, None, None
+        pyro.get_param_store().mark_params_active(trainable_params)
+
+        return loss

@@ -216,7 +216,7 @@ def param(name, *args, **kwargs):
 
 # hand off behavior to poutine if necessary?
 # for now default calls out to pyro.param -- which is handled by poutine
-def module(pyro_name, nn_obj):
+def module(pyro_name, nn_obj, scope="default"):
     """
     :param pyro_name: name of module
     :param nn_obj: pytorch nn module
@@ -235,7 +235,8 @@ def module(pyro_name, nn_obj):
 
     state_dict = {}
     for param_name, param in nn_obj.named_parameters():
-        state_dict[param_name] = pyro.param(param_with_module_name(pyro_name, param_name), param)
+        state_dict[param_name] = pyro.param(param_with_module_name(pyro_name, param_name), param,
+                                            scope=scope)
 
     current_nn_state = nn_obj.state_dict()
     for name, param in state_dict.items():
