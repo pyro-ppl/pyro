@@ -83,4 +83,5 @@ class ReplayPoutine(Poutine):
         scale = pyro.util.get_batch_scale(data, batch_size, batch_dim)
         msg.update({"fn": LambdaPoutine(fn, name, scale)})
         ret = super(ReplayPoutine, self)._pyro_map_data(msg)
+        msg.update({"fn": fn})
         return ret

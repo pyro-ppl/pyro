@@ -1,4 +1,7 @@
+import pyro
+
 from .poutine import Poutine
+from .lambda_poutine import LambdaPoutine
 
 
 class BlockPoutine(Poutine):
@@ -73,7 +76,12 @@ class BlockPoutine(Poutine):
         return ret
 
     def _pyro_map_data(self, msg):
+        name, data, fn, batch_size, batch_dim = \
+            msg["name"], msg["data"], msg["fn"], msg["batch_size"], msg["batch_dim"]
+        scale = pyro.util.get_batch_scale(data, batch_size, batch_dim)
+        msg.update({"fn": LambdaPoutine(fn, name, scale)})
         ret = super(BlockPoutine, self)._pyro_map_data(msg)
+        msg.update({"fn": fn})
         msg.update({"stop": self._block_up(msg)})
         return ret
 

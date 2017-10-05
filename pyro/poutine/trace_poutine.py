@@ -98,5 +98,6 @@ class TracePoutine(Poutine):
         msg.update({"fn": LambdaPoutine(fn, name, scale)})
 
         ret = super(TracePoutine, self)._pyro_map_data(msg)
+        msg.update({"fn": fn})
         self.trace.add_map_data(name, fn, batch_size, batch_dim, msg["indices"])
         return ret
