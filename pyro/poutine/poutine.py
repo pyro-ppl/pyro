@@ -9,10 +9,10 @@ class Poutine(object):
     Context manager class that modifies behavior
     and adds side effects to stochastic functions
     i.e. callables containing pyro primitive statements.
-    
+
     See the Poutine execution model writeup in the documentation
     for a description of the entire Poutine system.
-    
+
     This is the base Poutine class.
     It implements the default behavior for all pyro primitives,
     so that the joint distribution induced by a stochastic function fn
@@ -46,11 +46,11 @@ class Poutine(object):
 
         Installs this poutine at the bottom of the Pyro stack.
         Called before every execution of self.fn via self.__call__().
-        
+
         Can be overloaded to add any additional per-call setup functionality,
         but the derived class must always push itself onto the stack, usually
         by calling super(Derived, self).__enter__().
-        
+
         Derived versions cannot be overridden to take arguments
         and must always return self.
         """
@@ -79,7 +79,7 @@ class Poutine(object):
         :param traceback: traceback for exception handling
         :returns: None
         :rtype: None
-        
+
         Removes this poutine from the bottom of the Pyro stack.
         If an exception is raised, removes this poutine and everything below it.
         Always called after every execution of self.fn via self.__call__.
@@ -87,10 +87,10 @@ class Poutine(object):
         Can be overloaded by derived classes to add any other per-call teardown functionality,
         but the stack must always be popped by the derived class,
         usually by calling super(Derived, self).__exit__(*args).
-        
+
         Derived versions cannot be overridden to take other arguments,
         and must always return None or False.
-        
+
         The arguments are the mandatory arguments used by a with statement.
         Users should never be specifying these.
         They are all None unless the body of the with statement raised an exception.
@@ -134,7 +134,7 @@ class Poutine(object):
 
         Implements default pyro.sample Poutine behavior:
         call the function at the site and return the result.
-        
+
         Derived classes often compute a side effect,
         then call super(Derived, self)._pyro_sample(msg).
         """
@@ -163,7 +163,7 @@ class Poutine(object):
         Implements default pyro.observe Poutine behavior:
         if the observation at the site is not None, return the observation;
         else call the function and return the result.
-        
+
         Derived classes often compute a side effect,
         then call super(Derived, self)._pyro_observe(msg).
         """
@@ -194,7 +194,7 @@ class Poutine(object):
         possibly with subsampling.
         If the site input is a list or tuple, map the site function
         over enumerate(site_input), possibly with subsampling.
-        
+
         Derived classes often compute a side effect,
         then call super(Derived, self)._pyro_map_data(msg).
         """
@@ -242,10 +242,10 @@ class Poutine(object):
         Implements default pyro.param Poutine behavior:
         queries the parameter store with the site name and varargs
         and returns the result of the query.
-        
+
         If the parameter doesn't exist, create it using the site varargs.
         If it does exist, grab it from the parameter store.
-        
+
         Derived classes often compute a side effect,
         then call super(Derived, self)._pyro_param(msg).
         """

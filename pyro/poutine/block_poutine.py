@@ -23,7 +23,7 @@ class BlockPoutine(Poutine):
     >>> "b" in trace_inner
     True
     >>> "b" in trace_outer
-    
+
     BlockPoutine has a flexible interface that allows users
     to specify in several different ways
     which sites should be hidden or exposed.
@@ -44,7 +44,7 @@ class BlockPoutine(Poutine):
 
         Constructor for blocking poutine
         Default behavior: block everything (hide_all == True)
-        
+
         A site is hidden if at least one of the following holds:
         1. msg["name"] in hide
         2. msg["type"] in hide_types

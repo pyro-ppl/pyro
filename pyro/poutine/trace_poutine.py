@@ -105,7 +105,7 @@ class TracePoutine(Poutine):
         Implements default pyro.param Poutine behavior with an additional side effect:
         queries the parameter store with the site name and varargs
         and returns the result of the query.
-        
+
         If the parameter doesn't exist, create it using the site varargs.
         If it does exist, grab it from the parameter store.
         Store the parameter in self.trace, and then return the parameter.
