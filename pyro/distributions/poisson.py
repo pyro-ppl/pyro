@@ -37,36 +37,36 @@ class Poisson(Distribution):
         """
         Poisson sampler.
         """
-        _lam = self._sanitize_input(lam)
-        x = npr.poisson(lam=_lam.data.numpy()).astype("float")
-        return Variable(torch.Tensor(x).type_as(_lam.data))
+        lam = self._sanitize_input(lam)
+        x = npr.poisson(lam=lam.data.numpy()).astype("float")
+        return Variable(torch.Tensor(x).type_as(lam.data))
 
     def log_pdf(self, x, lam=None, *args, **kwargs):
         """
         Poisson log-likelihood
         Warning: need pytorch implementation of log gamma in order to be differentiable
         """
-        _lam = self._sanitize_input(lam)
-        ll_1 = torch.sum(x * torch.log(_lam))
-        ll_2 = -torch.sum(_lam)
+        lam = self._sanitize_input(lam)
+        ll_1 = torch.sum(x * torch.log(lam))
+        ll_2 = -torch.sum(lam)
         ll_3 = -torch.sum(log_gamma(x + 1.0))
         return ll_1 + ll_2 + ll_3
 
     def batch_log_pdf(self, x, lam=None, batch_size=1, *args, **kwargs):
-        _lam = self._sanitize_input(lam)
-        if x.dim() == 1 and _lam.dim() == 1 and batch_size == 1:
-            return self.log_pdf(x, _lam)
+        lam = self._sanitize_input(lam)
+        if x.dim() == 1 and lam.dim() == 1 and batch_size == 1:
+            return self.log_pdf(x, lam)
         elif x.dim() == 1:
             x = x.expand(batch_size, x.size(0))
-        ll_1 = torch.sum(x * torch.log(_lam), 1)
-        ll_2 = -torch.sum(_lam, 1)
+        ll_1 = torch.sum(x * torch.log(lam), 1)
+        ll_2 = -torch.sum(lam, 1)
         ll_3 = -torch.sum(log_gamma(x + 1.0), 1)
         return ll_1 + ll_2 + ll_3
 
     def analytic_mean(self, lam=None):
-        _lam = self._sanitize_input(lam)
-        return _lam
+        lam = self._sanitize_input(lam)
+        return lam
 
     def analytic_var(self, lam=None):
-        _lam = self._sanitize_input(lam)
-        return _lam
+        lam = self._sanitize_input(lam)
+        return lam

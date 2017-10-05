@@ -1,15 +1,12 @@
 import json
 
 import numpy as np
-import pytest
 import scipy.stats as sp
 import torch
 from torch.autograd import Variable
 
 import pyro.distributions as dist
 from tests.common import TestCase
-
-pytestmark = pytest.mark.init(rng_seed=123)
 
 
 class TestCategorical(TestCase):
@@ -38,7 +35,7 @@ class TestCategorical(TestCase):
 
         self.n_samples = 50000
 
-        with open('tests/test_data/support_categorical.json') as data_file:
+        with open('tests/resources/support_categorical.json') as data_file:
             data = json.load(data_file)
         self.support = [torch.Tensor(x) for x in data['one_hot']]
         self.nhot_support = list(map(lambda x: torch.Tensor(x), data['not_hot']))
@@ -81,13 +78,13 @@ class TestCategorical(TestCase):
     def test_discrete_support(self):
         s = list(dist.categorical.support(self.d_ps, self.d_vs))
         v = [torch.equal(x.data, y) for x, y in zip(s, self.discrete_support)]
-        self.assertTrue(all(v))
+        assert all(v)
 
     def test_discrete_arr_support(self):
         s = list(dist.categorical.support(self.d_ps, self.d_vs_arr))
-        self.assertTrue(s == self.discrete_arr_support)
+        assert s == self.discrete_arr_support
 
     def test_nhot_support(self):
         s = list(dist.categorical.support(self.batch_ps, one_hot=False))
         v = [torch.equal(x.data, y) for x, y in zip(s, self.nhot_support)]
-        self.assertTrue(all(v))
+        assert all(v)
