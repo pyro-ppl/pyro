@@ -23,15 +23,17 @@ def pytest_addoption(parser):
                      help="Only run tests matching the stage NAME.")
 
 
-def pytest_collection_modifyitems(session, config, items):
+def pytest_collection_modifyitems(config, items):
     test_stages = set(config.getoption("--stage"))
     if not test_stages:
-        test_stages = ["unit"]
+        test_stages = set(["unit"])
+    if "all" in test_stages:
+        return
     selected_items = []
     deselected_items = []
     for item in items:
         stage_marker = item.get_marker("stage")
-        if not stage_marker or stage_marker.args[0] in test_stages:
+        if not stage_marker or not test_stages.isdisjoint(stage_marker.args):
             selected_items.append(item)
         else:
             deselected_items.append(item)

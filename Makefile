@@ -22,7 +22,7 @@ integration-test: lint FORCE
 	pytest -vx -n auto --stage integration
 
 test-all: lint FORCE
-    pytest -vx -n auto --stage unit --stage integration --stage test_examples
+    pytest -vx -n auto --stage all
 
 clean: FORCE
 	git clean -dfx -e pyro-egg.info
