@@ -15,8 +15,6 @@ import pyro.distributions as dist
 from pyro.infer.tracegraph_kl_qp import TraceGraph_KL_QP
 from tests.common import TestCase
 
-pytestmark = pytest.mark.integration_test
-
 
 class GaussianChainTests(TestCase):
     # chain of normals with known covariances and latent means

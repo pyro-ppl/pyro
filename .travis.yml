@@ -34,11 +34,15 @@ jobs:
           script: flake8
         - stage: unit test
           python: 2.7
-          script: pytest -vs --cov=pyro -m "not integration_test"
+          script: pytest -vs --cov=pyro
+        - python: 2.7
+          script: pytest -vs --cov=pyro --stage test_examples
         - python: 3.5
-          script: pytest -vs --cov=pyro -m "not integration_test"
+          script: pytest -vs --cov=pyro
+        - python: 3.5
+          script: pytest -vs --cov=pyro --stage test_examples
         - stage: integration test
           python: 2.7
-          script: pytest -vs --cov=pyro -m "integration_test" --run_integration_test
+          script: pytest -vs --cov=pyro --stage integration
         - python: 3.5
-          script: pytest -vs --cov=pyro -m "integration_test" --run_integration_test
+          script: pytest -vs --cov=pyro --stage integration

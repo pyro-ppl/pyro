@@ -1,0 +1,8 @@
+import pytest
+
+
+def pytest_collection_modifyitems(items):
+    for item in items:
+        if item.nodeid.startswith("tests/integration_tests"):
+            if "stage" not in item.keywords:
+                item.add_marker(pytest.mark.stage("integration"))
