@@ -19,6 +19,12 @@ class ParamStoreDict(object):
         self._active_params = set()
         self._param_scopes = defaultdict(lambda: set())
 
+    def get_all_param_names(self):
+        """
+        get all parameter names in param store
+        """
+        return self._params.keys()
+
     def get_active_params(self, scope=None):
         """
         :param scope: optional argument specifying that only active params of a particular
@@ -58,6 +64,16 @@ class ParamStoreDict(object):
         """
         self._active_params.difference_update(set(params))
 
+    def delete_scope(self, scope):
+        """
+        :param scope: scope to remove
+        :type socpe: str
+
+        Removes the scope; any parameters in that scope are untouched but are no longer
+        associated with that scope.
+        """
+        self._param_scopes.pop(scope)
+
     def add_param_to_scope(self, param_name, scope):
         """
         :param param_name: either a single parameter name or an iterable of parameter names
@@ -67,6 +83,7 @@ class ParamStoreDict(object):
         """
 
         def add_single_param_to_scope(name, scope):
+            assert name in self._params
             if isinstance(scope, str):
                 self._param_scopes[scope].add(self._params[name])
             else:
@@ -80,6 +97,31 @@ class ParamStoreDict(object):
             for p in param_name:
                 assert isinstance(p, str), "param_name must be a string or an iterable of strings"
                 add_single_param_to_scope(p, scope)
+
+    def remove_param_from_scope(self, param_name, scope):
+        """
+        :param param_name: either a single parameter name or an iterable of parameter names
+        :param scope: either a single string or an iterable of strings
+
+        Removes the parameter(s) specified by param_name to the scope(s) specified by scope.
+        The parameter(s) are unchanged but will no longer be associated with the specified scope(s).
+        """
+
+        def remove_single_param_from_scope(name, scope):
+            assert name in self._params
+            if isinstance(scope, str):
+                self._param_scopes[scope].discard(self._params[name])
+            else:
+                for s in scope:
+                    assert isinstance(s, str), "scope must be a string or an iterable of strings"
+                    self._param_scopes[s].discard(self._params[name])
+
+        if isinstance(param_name, str):
+            remove_single_param_from_scope(param_name, scope)
+        else:
+            for p in param_name:
+                assert isinstance(p, str), "param_name must be a string or an iterable of strings"
+                remove_single_param_from_scope(p, scope)
 
     def get_param(self, name, init_tensor=None, scope="default"):
         """

@@ -16,24 +16,33 @@ class Optimize(object):
                  loss_and_grads=None,
                  auxiliary_optim_constructor=None,
                  auxiliary_optim_args=None,
+                 loss_scope='default',
+                 auxiliary_scope='baseline',
                  *args,
                  **kwargs):
-	"""
-	:param model: the model (callable containing pyro primitives)
-	:param guide: the guide (callable containing pyro primitives)
-	:param optim_constructor: the constructor used to construct the pytorch optim
-	    used to optimize the loss
-	:param optim_args: either a dictionary of arguments passed to the pytorch optim or
-	    a callable that returns such dictionaries. in the latter case, the arguments of
-	    the callable are (module_name, parameter_name). this allows the user to, e.g.,
+        """
+        :param model: the model (callable containing pyro primitives)
+        :param guide: the guide (callable containing pyro primitives)
+        :param optim_constructor: the constructor used to construct the pytorch optim
+            used to optimize the loss
+        :param optim_args: either a dictionary of arguments passed to the pytorch optim or
+            a callable that returns such dictionaries. in the latter case, the arguments of
+            the callable are (module_name, parameter_name). this allows the user to, e.g.,
             customize learning rates on a per-parameter basis
-	:param loss: this is either a string that specifies the loss function to be used (currently
-	    the only supported built-in loss is 'ELBO') or a user-provided loss function.
-	:param loss_and_grads: <to be filled in>
-	:param auxiliary_optim_constructor: like optim_constructor above, but to be used for the
-	    auxiliary loss, if relevant
-	:param auxiliary_optim_args: like optim_args above, but for the auxiliary optim
-	"""
+        :param loss: this is either a string that specifies the loss function to be used (currently
+            the only supported built-in loss is 'ELBO') or a user-provided loss function.
+        :param loss_and_grads: if specified, this user-provided callable computes gradients for use in step()
+            and marks which parameters in the param store are to be optimized
+        :param auxiliary_optim_constructor: like optim_constructor above, but to be used for the
+            auxiliary loss, if relevant
+        :param auxiliary_optim_args: like optim_args above, but for the auxiliary optim
+        :param loss_scope: the scope of the parameters in the loss that are to be optimized upon step()
+        :param auxiliary_scope: the scope of the parameters in the auxiliary loss
+            that are to be optimized upon step()
+        """
+        self.loss_scope = loss_scope
+        self.auxiliary_scope = auxiliary_scope
+
         self.optim_constructor = optim_constructor
         self.auxiliary_optim_constructor = optim_constructor if auxiliary_optim_constructor is None else\
             auxiliary_optim_constructor
@@ -52,21 +61,25 @@ class Optimize(object):
         if isinstance(loss, str):
             assert loss in ["ELBO"], "The only built-in loss supported by Optimize is ELBO"
 
-            if loss=="ELBO":
+            if loss == "ELBO":
                 self.ELBO = ELBO(model, guide, *args, **kwargs)
                 self.loss = self.ELBO.loss
                 self.loss_and_grads = self.ELBO.loss_and_grads
             else:
                 raise NotImplementedError
-        else:
+        else:  # the user provided a loss function
             self.loss = loss
             if loss_and_grads is None:
-                # XXX what should go here precisely?
-                raise NotImplementedError("User must specify loss_and_grads")
-            else:
-                self.loss_and_grads = loss_and_grads
+                # default implementation of loss_and_grads:
+                # marks all parameters in param store as active
+                # and calls backward() on loss
+                def loss_and_grads(*args, **kwargs):
+                    _loss = self.loss(*args, **kwargs)
+                    _loss.backward()
+                    pyro.get_param_store().mark_params_active(pyro.get_param_store().get_all_param_names())
+                    return _loss
+            self.loss_and_grads = loss_and_grads
 
-    # XXX decide what __call__ behavior is
     def __call__(self, *args, **kwargs):
         self.step(*args, **kwargs)
 
@@ -78,24 +91,17 @@ class Optimize(object):
 
     def step(self, *args, **kwargs):
         """
-        take a gradient step on the loss function
+        take a gradient step on the loss function (and auxiliary loss function if present)
         """
-
-        loss_scope = kwargs.pop('loss_scope', 'default')
-        auxiliary_scope = kwargs.pop('auxiliary_scope', 'baseline')
-
         # get loss and compute gradients
         loss = self.loss_and_grads(*args, **kwargs)
 
         # loop over relevant params
-        loss_params = pyro.get_param_store().get_active_params(scope=loss_scope)
-        #print 'loss_params:', len(loss_params)
-        auxiliary_params = pyro.get_param_store().get_active_params(scope=auxiliary_scope)
+        loss_params = pyro.get_param_store().get_active_params(scope=self.loss_scope)
+        auxiliary_params = pyro.get_param_store().get_active_params(scope=self.auxiliary_scope)
 
         def step_params(params, optim_constructor, optim_args):
             for param in params:
-            #    print "stepping on", pyro.get_param_store().param_name(param)
-            #    print "param grad:", param.grad.data.numpy()
 
                 # if we have not seen this param before, we instantiate an optim for it
                 if param not in self.optim_objects:

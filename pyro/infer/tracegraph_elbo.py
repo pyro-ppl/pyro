@@ -72,7 +72,7 @@ class TraceGraph_ELBO(object):
         """
         Computes the ELBO as well as the surrogate ELBO that is used to form the gradient estimator.
         Performs backward on the latter. Num_particle many samples are used to form the estimators.
-	If present, a baseline loss is also constructed and differentiated.
+        If present, a baseline loss is also constructed and differentiated.
         :returns: returns an estimate of the ELBO
         :rtype: torch.autograd.Variable
         """

@@ -84,8 +84,6 @@ class NormalNormalTests(TestCase):
 
             mu_error = param_mse("mu_q", self.analytic_mu_n)
             log_sig_error = param_mse("log_sig_q", self.analytic_log_sig_n)
-            if k % 500 ==0:
-                print "mu/log_sig errors:", mu_error, log_sig_error
 
         self.assertEqual(0.0, mu_error, prec=0.05)
         self.assertEqual(0.0, log_sig_error, prec=0.05)
@@ -136,7 +134,7 @@ class TestFixedModelGuide(TestCase):
         guide_unchanged = (torch.equal(pyro.param("alpha_q_log").data, self.alpha_q_log_0)) and\
                           (torch.equal(pyro.param("beta_q_log").data, self.beta_q_log_0))
         bad = ('model' not in loss_scope and (not model_unchanged)) or \
-	      ('guide' not in loss_scope and (not guide_unchanged))
+              ('guide' not in loss_scope and (not guide_unchanged))
         return (not bad)
 
     def test_model_fixed(self):
@@ -150,6 +148,7 @@ class TestFixedModelGuide(TestCase):
 
     def test_guide_and_model_free(self):
         assert self.do_test_fixedness(loss_scope=["model", "guide"])
+
 
 class PoissonGammaTests(TestCase):
     def setUp(self):
