@@ -62,11 +62,6 @@ class Trace_ELBO(object):
         elbo = 0.0
         surrogate_elbo = 0.0
         trainable_params = set()
-        #trainable_params_dict = {}
-
-        ##def add_to_trainable_params_dict(param_name, param_value):
-        #    if param_name not in trainable_params_dict:
-        #        trainable_params_dict[param_name] = param_value
 
         # grab a trace from the generator
         for model_trace, guide_trace, log_r in self._get_traces(*args, **kwargs):
@@ -84,7 +79,8 @@ class Trace_ELBO(object):
                     if model_trace[name]["fn"].reparameterized:
                         surrogate_elbo_particle += lp_lq
                     else:
-                        surrogate_elbo_particle += log_r.detach() * guide_trace[name]["log_pdf"]
+                        surrogate_elbo_particle += model_trace[name]["log_pdf"] + \
+                            log_r.detach() * guide_trace[name]["log_pdf"]
 
             elbo += elbo_particle / self.num_particles
             surrogate_elbo += surrogate_elbo_particle / self.num_particles

@@ -11,6 +11,9 @@ class ParamStoreDict(object):
         self._param_scopes = defaultdict(lambda: set())
 
     def clear(self):
+        """
+        clear the parameter store
+        """
         self._params = {}
         self._param_to_name = {}
         self._active_params = set()
@@ -18,12 +21,28 @@ class ParamStoreDict(object):
 
     def get_active_params(self, scope=None):
         """
-        returns all active params in the ParamStore as a set.
+        :param scope: optional argument specifying that only active params of a particular
+            scope or scopes should be returned
+        :type scope: string or iterable over strings
+        :returns: all active params in the ParamStore, possibly filtered to a particular scope or scopes
+        :rtype: set
         """
-        if scope is None:
+        if scope is None:  # return all active params
             return self._active_params
-        else:
+        elif isinstance(scope, str) and scope not in self._param_scopes:
+            # return empty set, since scope doesn't exist; XXX RAISE WARNING
+            return set()
+        elif isinstance(scope, str):  # only return active params in the scope
             return self._active_params.intersection(self._param_scopes[scope])
+        elif isinstance(scope, list) or isinstance(scope, tuple):
+            params_to_return = set()
+            for s in scope:
+                assert isinstance(s, str)
+                if s in self._param_scopes:
+                    params_to_return.update(self._param_scopes[s])
+            return params_to_return.intersection(self._active_params)
+        else:
+            raise TypeError
 
     def mark_params_active(self, params):
         """
@@ -39,12 +58,39 @@ class ParamStoreDict(object):
         """
         self._active_params.difference_update(set(params))
 
+    def add_param_to_scope(self, param_name, scope):
+        """
+        :param param_name: either a single parameter name or an iterable of parameter names
+        :param scope: either a single string or an iterable of strings
+
+        Adds the parameter(s) specified by param_name to the scope(s) specified by scope.
+        """
+
+        def add_single_param_to_scope(name, scope):
+            if isinstance(scope, str):
+                self._param_scopes[scope].add(self._params[name])
+            else:
+                for s in scope:
+                    assert isinstance(s, str), "scope must be a string or an iterable of strings"
+                    self._param_scopes[s].add(self._params[name])
+
+        if isinstance(param_name, str):
+            add_single_param_to_scope(param_name, scope)
+        else:
+            for p in param_name:
+                assert isinstance(p, str), "param_name must be a string or an iterable of strings"
+                add_single_param_to_scope(p, scope)
+
     def get_param(self, name, init_tensor=None, scope="default"):
         """
         :param name: parameter name
         :type name: str
         :param init_tensor: initial tensor
+        :type init_tensor: torch.autograd.Variable
+        :param scope: the scope to assign to the parameter
+        :type scope: a string or iterable of strings
         :returns: parameter
+        :rtype: torch.autograd.Variable
 
         Get parameter from its name. If it does not yet exist in the
         param store, it will be created and stored
@@ -66,18 +112,14 @@ class ParamStoreDict(object):
             self._param_to_name[self._params[name]] = name
 
             # keep track of param scope
-            if isinstance(scope, str):
-                self._param_scopes[scope].add(self._params[name])
-            else:
-                for s in scope:
-                    assert isinstance(s, str), "scope must be a string or an iterable of strings"
-                    self._param_scopes[s].add(self._params[name])
+            self.add_param_to_scope(name, scope)
 
         # send back the guaranteed to exist param
         return self._params[name]
 
     def param_name(self, p):
         """
+        XXX Is this used anywhere???
         :param p: parameter
         :returns: parameter name
 
@@ -93,7 +135,7 @@ class ParamStoreDict(object):
         :param filename: file name to save to
         :type name: str
 
-        Save parameters to disk
+        Save parameters to disk XXX FIX ME (include scopes etc.)
         """
         with open(filename, "wb") as output_file:
             output_file.write(cloudpickle.dumps(self._params))
@@ -103,7 +145,7 @@ class ParamStoreDict(object):
         :param filename: file name to load from
         :type name: str
 
-        Loads parameters from disk
+        Loads parameters from disk XXX FIX ME (include scopes etc.)
         """
         with open(filename, "rb") as input_file:
             loaded_params = cloudpickle.loads(input_file.read())

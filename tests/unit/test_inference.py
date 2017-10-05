@@ -8,10 +8,17 @@ import pyro
 import pyro.distributions as dist
 from pyro.optim import Optimize
 from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
-from pyro.infer.kl_qp import KL_QP
 from tests.common import TestCase
 
 pytestmark = pytest.mark.init(rng_seed=123)
+
+
+def param_mse(name, target):
+    return torch.sum(torch.pow(target - pyro.param(name), 2.0)).data.numpy()[0]
+
+
+def param_abs_error(name, target):
+    return torch.sum(torch.abs(target - pyro.param(name))).data.numpy()[0]
 
 
 class NormalNormalTests(TestCase):
@@ -35,7 +42,7 @@ class NormalNormalTests(TestCase):
         self.analytic_log_sig_n = -0.5 * torch.log(self.analytic_lam_n)
         self.analytic_mu_n = self.sum_data * (self.lam / self.analytic_lam_n) +\
             self.mu0 * (self.lam0 / self.analytic_lam_n)
-        self.batch_size = 0
+        self.batch_size = 4
 
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 5000)
@@ -60,7 +67,7 @@ class NormalNormalTests(TestCase):
             mu_q = pyro.param("mu_q", Variable(self.analytic_mu_n.data + 0.134 * torch.ones(2),
                                                requires_grad=True))
             log_sig_q = pyro.param("log_sig_q", Variable(
-                                   self.analytic_log_sig_n.data - 0.09 * torch.ones(2),
+                                   self.analytic_log_sig_n.data - 0.14 * torch.ones(2),
                                    requires_grad=True))
             sig_q = torch.exp(log_sig_q)
             pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q, reparameterized=reparameterized,
@@ -75,20 +82,15 @@ class NormalNormalTests(TestCase):
         for k in range(n_steps):
             optim.step()
 
-        mu_error = torch.sum(
-            torch.pow(
-                self.analytic_mu_n -
-                pyro.param("mu_q"),
-                2.0))
-        log_sig_error = torch.sum(
-            torch.pow(
-                self.analytic_log_sig_n -
-                pyro.param("log_sig_q"),
-                2.0))
-        self.assertEqual(0.0, mu_error.data.cpu().numpy()[0], prec=0.05)
-        self.assertEqual(0.0, log_sig_error.data.cpu().numpy()[0], prec=0.05)
+            mu_error = param_mse("mu_q", self.analytic_mu_n)
+            log_sig_error = param_mse("log_sig_q", self.analytic_log_sig_n)
+            if k % 500 ==0:
+                print "mu/log_sig errors:", mu_error, log_sig_error
 
-"""
+        self.assertEqual(0.0, mu_error, prec=0.05)
+        self.assertEqual(0.0, log_sig_error, prec=0.05)
+
+
 class TestFixedModelGuide(TestCase):
     def setUp(self):
         self.data = Variable(torch.Tensor([2.0]))
@@ -97,16 +99,16 @@ class TestFixedModelGuide(TestCase):
         self.alpha_p_log_0 = 0.11 * torch.ones(1)
         self.beta_p_log_0 = 0.13 * torch.ones(1)
 
-    def do_test_fixedness(self, model_fixed, guide_fixed):
+    def do_test_fixedness(self, loss_scope):
         pyro.get_param_store().clear()
 
         def model():
             alpha_p_log = pyro.param(
                 "alpha_p_log", Variable(
-                    self.alpha_p_log_0, requires_grad=True))
+                    self.alpha_p_log_0.clone(), requires_grad=True), scope="model")
             beta_p_log = pyro.param(
                 "beta_p_log", Variable(
-                    self.beta_p_log_0, requires_grad=True))
+                    self.beta_p_log_0.clone(), requires_grad=True), scope="model")
             alpha_p, beta_p = torch.exp(alpha_p_log), torch.exp(beta_p_log)
             lambda_latent = pyro.sample("lambda_latent", dist.gamma, alpha_p, beta_p)
             pyro.observe("obs", dist.poisson, self.data, lambda_latent)
@@ -115,34 +117,39 @@ class TestFixedModelGuide(TestCase):
         def guide():
             alpha_q_log = pyro.param(
                 "alpha_q_log", Variable(
-                    self.alpha_q_log_0, requires_grad=True))
+                    self.alpha_q_log_0.clone(), requires_grad=True), scope="guide")
             beta_q_log = pyro.param(
                 "beta_q_log", Variable(
-                    self.beta_q_log_0, requires_grad=True))
+                    self.beta_q_log_0.clone(), requires_grad=True), scope="guide")
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             pyro.sample("lambda_latent", dist.gamma, alpha_q, beta_q)
 
-        kl_optim = KL_QP(model, guide, pyro.optim(torch.optim.Adam, {"lr": .001}),
-                         model_fixed=model_fixed, guide_fixed=guide_fixed)
-        for _ in range(10):
-            kl_optim.step()
+        optim = Optimize(model, guide,
+                         torch.optim.Adam, {"lr": .01},
+                         loss="ELBO", trace_graph=False)
+
+        for _ in range(3):
+            optim.step(loss_scope=loss_scope)
 
         model_unchanged = (torch.equal(pyro.param("alpha_p_log").data, self.alpha_p_log_0)) and\
                           (torch.equal(pyro.param("beta_p_log").data, self.beta_p_log_0))
         guide_unchanged = (torch.equal(pyro.param("alpha_q_log").data, self.alpha_q_log_0)) and\
                           (torch.equal(pyro.param("beta_q_log").data, self.beta_q_log_0))
-        bad = (model_fixed and (not model_unchanged)) or (guide_fixed and (not guide_unchanged))
+        bad = ('model' not in loss_scope and (not model_unchanged)) or \
+	      ('guide' not in loss_scope and (not guide_unchanged))
         return (not bad)
 
     def test_model_fixed(self):
-        assert self.do_test_fixedness(model_fixed=True, guide_fixed=False)
+        assert self.do_test_fixedness(loss_scope="guide")
 
     def test_guide_fixed(self):
-        assert self.do_test_fixedness(model_fixed=False, guide_fixed=True)
+        assert self.do_test_fixedness(loss_scope="model")
 
-    def test_guide_and_model_fixed(self):
-        assert self.do_test_fixedness(model_fixed=True, guide_fixed=True)
-"""
+    def test_guide_and_model_both_fixed(self):
+        assert self.do_test_fixedness(loss_scope="")
+
+    def test_guide_and_model_free(self):
+        assert self.do_test_fixedness(loss_scope=["model", "guide"])
 
 class PoissonGammaTests(TestCase):
     def setUp(self):
@@ -197,14 +204,11 @@ class PoissonGammaTests(TestCase):
         for k in range(25000):
             optim.step()
 
-        alpha_error = torch.abs(
-            pyro.param("alpha_q_log") -
-            self.log_alpha_n).data.cpu().numpy()[0]
-        beta_error = torch.abs(
-            pyro.param("beta_q_log") -
-            self.log_beta_n).data.cpu().numpy()[0]
+        alpha_error = param_abs_error("alpha_q_log", self.log_alpha_n)
+        beta_error = param_abs_error("beta_q_log", self.log_beta_n)
         self.assertEqual(0.0, alpha_error, prec=0.08)
         self.assertEqual(0.0, beta_error, prec=0.08)
+
 
 class ExponentialGammaTests(TestCase):
     def setUp(self):
@@ -247,14 +251,8 @@ class ExponentialGammaTests(TestCase):
         for k in range(10001):
             optim.step()
 
-        alpha_error = torch.abs(
-            pyro.param("alpha_q_log") -
-            self.log_alpha_n).data.cpu().numpy()[0]
-        beta_error = torch.abs(
-            pyro.param("beta_q_log") -
-            self.log_beta_n).data.cpu().numpy()[0]
-        # print "alpha_error", alpha_error
-        # print "beta_error", beta_error
+        alpha_error = param_abs_error("alpha_q_log", self.log_alpha_n)
+        beta_error = param_abs_error("beta_q_log", self.log_beta_n)
         self.assertEqual(0.0, alpha_error, prec=0.08)
         self.assertEqual(0.0, beta_error, prec=0.08)
 
@@ -307,15 +305,8 @@ class BernoulliBetaTests(TestCase):
         for k in range(10001):
             optim.step()
 
-            alpha_error = torch.abs(
-                pyro.param("alpha_q_log") -
-                self.log_alpha_n).data.cpu().numpy()[0]
-            beta_error = torch.abs(
-                pyro.param("beta_q_log") -
-                self.log_beta_n).data.cpu().numpy()[0]
-
-            if k%500==0:
-                print "errors:", alpha_error, beta_error
+            alpha_error = param_abs_error("alpha_q_log", self.log_alpha_n)
+            beta_error = param_abs_error("beta_q_log", self.log_beta_n)
 
         self.assertEqual(0.0, alpha_error, prec=0.08)
         self.assertEqual(0.0, beta_error, prec=0.08)
@@ -380,14 +371,8 @@ class LogNormalNormalTests(TestCase):
         for k in range(n_steps):
             optim.step()
 
-        mu_error = torch.abs(
-            pyro.param("mymodule$$$mu_q_log") -
-            self.log_mu_n).data.cpu().numpy()[0][0]
-        tau_error = torch.abs(
-            pyro.param("mymodule$$$tau_q_log") -
-            self.log_tau_n).data.cpu().numpy()[0][0]
-        # print "mu_error", mu_error
-        # print "tau_error", tau_error
+        mu_error = param_abs_error("mymodule$$$mu_q_log", self.log_mu_n)
+        tau_error = param_abs_error("mymodule$$$tau_q_log", self.log_tau_n)
         self.assertEqual(0.0, mu_error, prec=0.07)
         self.assertEqual(0.0, tau_error, prec=0.07)
 
@@ -424,11 +409,7 @@ class LogNormalNormalTests(TestCase):
         for k in range(12001):
             optim.step()
 
-        mu_error = torch.abs(
-            pyro.param("mu_q_log") -
-            self.log_mu_n).data.cpu().numpy()[0][0]
-        tau_error = torch.abs(
-            pyro.param("tau_q_log") -
-            self.log_tau_n).data.cpu().numpy()[0][0]
+        mu_error = param_abs_error("mu_q_log", self.log_mu_n)
+        tau_error = param_abs_error("tau_q_log", self.log_tau_n)
         self.assertEqual(0.0, mu_error, prec=0.05)
         self.assertEqual(0.0, tau_error, prec=0.05)

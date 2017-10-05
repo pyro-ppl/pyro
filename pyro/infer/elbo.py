@@ -33,17 +33,16 @@ class ELBO(object):
     def loss(self, *args, **kwargs):
         """
         Evaluates the ELBO with an estimator that uses num_particles many samples/particles.
-        Returns the ELBO as a float.
+        :returns: returns an estimate of the ELBO
+        :rtype: float
         """
         return self.which_elbo.loss(*args, **kwargs)
 
     def loss_and_grads(self, *args, **kwargs):
         """
-        - computes the ELBO as well as the surrogate ELBO that is used to form the gradient estimator.
-	- performs backward on the latter.
-        - num_particle many samples are used to form the estimators.
-        - returns an estimate of the ELBO as well as the trainable_params_dict.
-        - if trace_graph is True, we also return the baseline loss and baseline params
-        - implicitly returns gradients via param.grad for each param in the trainable_params_dict.
+        Computes the ELBO as well as the surrogate ELBO that is used to form the gradient estimator.
+	Performs backward on the latter. Num_particle many samples are used to form the estimators.
+        :returns: returns an estimate of the ELBO
+        :rtype: torch.autograd.Variable
         """
         return self.which_elbo.loss_and_grads(*args, **kwargs)

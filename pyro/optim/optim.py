@@ -19,16 +19,16 @@ class Optimize(object):
                  *args,
                  **kwargs):
 	"""
-	:param model: the model (callable)
-	:param guide: the guide (callable)
+	:param model: the model (callable containing pyro primitives)
+	:param guide: the guide (callable containing pyro primitives)
 	:param optim_constructor: the constructor used to construct the pytorch optim
 	    used to optimize the loss
 	:param optim_args: either a dictionary of arguments passed to the pytorch optim or
 	    a callable that returns such dictionaries. in the latter case, the arguments of
-	    the callable are parameter names. this allows the user to, e.g., customize learning
-	    rates on a per-parameter basis
+	    the callable are (module_name, parameter_name). this allows the user to, e.g.,
+            customize learning rates on a per-parameter basis
 	:param loss: this is either a string that specifies the loss function to be used (currently
-	    the only supported loss is 'ELBO') or a user-provided loss function.
+	    the only supported built-in loss is 'ELBO') or a user-provided loss function.
 	:param loss_and_grads: <to be filled in>
 	:param auxiliary_optim_constructor: like optim_constructor above, but to be used for the
 	    auxiliary loss, if relevant
@@ -61,6 +61,7 @@ class Optimize(object):
         else:
             self.loss = loss
             if loss_and_grads is None:
+                # XXX what should go here precisely?
                 raise NotImplementedError("User must specify loss_and_grads")
             else:
                 self.loss_and_grads = loss_and_grads
@@ -88,10 +89,13 @@ class Optimize(object):
 
         # loop over relevant params
         loss_params = pyro.get_param_store().get_active_params(scope=loss_scope)
+        #print 'loss_params:', len(loss_params)
         auxiliary_params = pyro.get_param_store().get_active_params(scope=auxiliary_scope)
 
         def step_params(params, optim_constructor, optim_args):
             for param in params:
+            #    print "stepping on", pyro.get_param_store().param_name(param)
+            #    print "param grad:", param.grad.data.numpy()
 
                 # if we have not seen this param before, we instantiate an optim for it
                 if param not in self.optim_objects:
