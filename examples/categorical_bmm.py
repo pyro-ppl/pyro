@@ -12,16 +12,6 @@ import pyro
 from pyro.distributions import Bernoulli, Categorical
 from pyro.infer.kl_qp import KL_QP
 
-import sys, warnings, traceback, torch
-def warn_with_traceback(message, category, filename, lineno, file=None, line=None):
-    sys.stderr.write(warnings.formatwarning(message, category, filename, lineno, line))
-    traceback.print_stack(sys._getframe(2))
-warnings.showwarning = warn_with_traceback; warnings.simplefilter('always', UserWarning);
-# warnings.showwarning = warn_with_traceback; warnings.simplefilter('error', UserWarning);
-torch.utils.backcompat.broadcast_warning.enabled = True
-torch.utils.backcompat.keepdim_warning.enabled = True
-
-
 
 mnist = dset.MNIST(
     root='./data',
