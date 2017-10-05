@@ -12,7 +12,7 @@ EXAMPLES = [
     if not f.endswith('__init__.py')
 ]
 
- 
+
 @pytest.mark.stage("test_examples")
 @pytest.mark.parametrize('example', EXAMPLES)
 def test_example(example):
