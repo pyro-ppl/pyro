@@ -51,9 +51,7 @@ class Poutine(object):
                 for i in range(0, loc + 1):
                     pyro._PYRO_STACK.pop(0)
 
-    # TODO change to more descriptive name that reflects functional asymmetry of up and down
-    # possibly gather?
-    def down(self, msg):
+    def prepare_site(self, msg):
         """
         :param dict msg: current message at a trace site
         :returns: the updated message at the same trace site

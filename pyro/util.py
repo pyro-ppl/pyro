@@ -279,7 +279,7 @@ def apply_stack(initial_msg):
 
     # first, gather all information necessary to apply the stack to this site
     for frame in reversed(stack):
-        msg = frame.down(msg)
+        msg = frame.prepare_site(msg)
 
     # go until time to stop?
     for frame in stack:

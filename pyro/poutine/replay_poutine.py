@@ -31,7 +31,7 @@ class ReplayPoutine(Poutine):
             raise TypeError(
                 "unrecognized type {} for sites".format(str(type(sites))))
 
-    def down(self, msg):
+    def prepare_site(self, msg):
         """
         Pass indices down at a map_data
         """
