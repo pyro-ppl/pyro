@@ -23,6 +23,7 @@ class BlockPoutine(Poutine):
     >>> "b" in trace_inner
     True
     >>> "b" in trace_outer
+    True
 
     BlockPoutine has a flexible interface that allows users
     to specify in several different ways
