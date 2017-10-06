@@ -9,6 +9,7 @@ from torch.autograd import Variable
 from torch.nn import Parameter
 
 import pyro
+from pyro import util
 from pyro.optim.optim import PyroOptim
 from pyro.params import param_with_module_name
 from pyro.params.param_store import ParamStoreDict
