@@ -31,7 +31,7 @@ jobs:
           python: "2.7"
           addons: true
           install: pip install flake8
-          script: flake8
+          script: make lint
         - stage: unit test
           python: 2.7
           env: STAGE=unit
