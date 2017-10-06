@@ -9,6 +9,8 @@ import pyro.poutine as poutine
 from pyro.infer.kl_qp import KL_QP
 from tests.common import assert_equal
 
+pytestmark = pytest.mark.stage("integration", "integration_batch_1")
+
 
 @pytest.mark.parametrize("batch_size", [3, 5, 7, 8, 0])
 @pytest.mark.parametrize("map_type", ["tensor", "list"])

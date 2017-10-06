@@ -11,7 +11,7 @@ from pyro.infer.tracegraph_kl_qp import TraceGraph_KL_QP
 from pyro.util import ng_zeros
 from tests.common import TestCase
 
-pytestmark = pytest.mark.integration_test
+pytestmark = pytest.mark.stage("integration", "integration_batch_2")
 
 
 class NormalNormalTests(TestCase):

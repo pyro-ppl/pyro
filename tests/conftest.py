@@ -1,13 +1,11 @@
-import pytest
-
 import pyro
 
 
 def pytest_configure(config):
     config.addinivalue_line("markers",
-                            "init(rng_seed): initialize the RNG using the seed provided")
+                            "init(rng_seed): initialize the RNG using the seed provided.")
     config.addinivalue_line("markers",
-                            "integration_test: mark as integration test")
+                            "stage(NAME): mark test to run when testing stage matches NAME.")
 
 
 def pytest_runtest_setup(item):
@@ -18,22 +16,24 @@ def pytest_runtest_setup(item):
 
 
 def pytest_addoption(parser):
-    parser.addoption('--run_integration_tests',
-                     action='store_true',
-                     default=False,
-                     help='Do not skip integration tests')
+    parser.addoption("--stage",
+                     action="append",
+                     metavar="NAME",
+                     default=[],
+                     help="Only run tests matching the stage NAME.")
 
 
 def pytest_collection_modifyitems(config, items):
-    run_integration_tests = False
-    if config.getoption("--run_integration_tests"):
-        run_integration_tests = True
-    if run_integration_tests:
-        for item in items:
-            if "integration_test" not in item.keywords:
-                item.add_marker(pytest.mark.skip(reason="Running only integration tests"))
-    else:
-        for item in items:
-            if "integration_test" in item.keywords:
-                item.add_marker(pytest.mark.skip(reason="Skipping integration tests. "
-                                                        "Use --run_integration_tests option to run."))
+    test_stages = set(config.getoption("--stage"))
+    if not test_stages or "all" in test_stages:
+        return
+    selected_items = []
+    deselected_items = []
+    for item in items:
+        stage_marker = item.get_marker("stage")
+        if not stage_marker or not test_stages.isdisjoint(stage_marker.args):
+            selected_items.append(item)
+        else:
+            deselected_items.append(item)
+    config.hook.pytest_deselected(items=deselected_items)
+    items[:] = selected_items
