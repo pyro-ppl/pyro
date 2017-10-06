@@ -84,7 +84,7 @@ def model(data):
     b_prior = DiagNormalPrior(bias_mu, bias_sigma)
     priors = {'weight': w_prior, 'bias': b_prior}
     lifted_fn = poutine.lift(log_reg, priors)
-    latent = log_reg(x_data)
+    latent = lifted_fn(x_data)
     pyro.observe("categorical", Categorical(latent), y_data.unsqueeze(1))
 
 
