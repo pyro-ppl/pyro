@@ -376,11 +376,11 @@ class LogNormalNormalTests(TestCase):
         # lognormal-normal model
         # putting some of the parameters inside of a torch module to
         # make sure that that functionality is ok (XXX: do this somewhere else in the future)
-        self.mu0 = Variable(torch.Tensor([[1.0]]))  # normal prior hyperparameter
+        self.mu0 = Variable(torch.Tensor([1.0]))  # normal prior hyperparameter
         # normal prior hyperparameter
-        self.tau0 = Variable(torch.Tensor([[1.0]]))
+        self.tau0 = Variable(torch.Tensor([1.0]))
         # known precision for observation likelihood
-        self.tau = Variable(torch.Tensor([[2.5]]))
+        self.tau = Variable(torch.Tensor([2.5]))
         self.n_data = 2
         self.data = Variable(torch.Tensor([[1.5], [2.2]]))  # two observations
         self.tau_n = self.tau0 + \
@@ -425,10 +425,10 @@ class LogNormalNormalTests(TestCase):
 
         mu_error = torch.abs(
             pyro.param("mymodule$$$mu_q_log") -
-            self.log_mu_n).data.cpu().numpy()[0][0]
+            self.log_mu_n).data.cpu().numpy()[0]
         tau_error = torch.abs(
             pyro.param("mymodule$$$tau_q_log") -
-            self.log_tau_n).data.cpu().numpy()[0][0]
+            self.log_tau_n).data.cpu().numpy()[0]
         # print "mu_error", mu_error
         # print "tau_error", tau_error
         self.assertEqual(0.0, mu_error, prec=0.07)
@@ -467,9 +467,9 @@ class LogNormalNormalTests(TestCase):
 
         mu_error = torch.abs(
             pyro.param("mu_q_log") -
-            self.log_mu_n).data.cpu().numpy()[0][0]
+            self.log_mu_n).data.cpu().numpy()[0]
         tau_error = torch.abs(
             pyro.param("tau_q_log") -
-            self.log_tau_n).data.cpu().numpy()[0][0]
+            self.log_tau_n).data.cpu().numpy()[0]
         self.assertEqual(0.0, mu_error, prec=0.05)
         self.assertEqual(0.0, tau_error, prec=0.05)
