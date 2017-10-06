@@ -126,10 +126,11 @@ def per_param_args(name, param):
 
 
 # or alternatively
-adam_params = {"lr": .0001}
+adam_params = {"lr": .001}
 
-kl_optim = KL_QP(model, guide, pyro.optim(optim.Adam, adam_params))
-kl_eval = KL_QP(model=model, guide=guide, optim_step_fct=pyro.optim(optim.Adam, adam_params), num_particles=10)
+kl_optim = KL_QP(model, guide, pyro.optim(optim.Adam, adam_params), num_particles=1, n_s=1, analytic=True)
+kl_eval = KL_QP(model=model, guide=guide, optim_step_fct=pyro.optim(optim.Adam, adam_params),
+                num_particles=10, analytic=True)
 
 # num_steps = 1
 mnist_data = Variable(train_loader.dataset.train_data.float() / 255.)
@@ -142,9 +143,11 @@ all_batches = np.arange(0, mnist_size, batch_size)
 if all_batches[-1] != mnist_size:
     all_batches = list(all_batches) + [mnist_size]
 
-vis = visdom.Visdom(env='vae_mnist')
-
 loss_training = []
+
+vis_on = False
+if vis_on:
+    vis = visdom.Visdom(env='vae_mnist')
 
 
 def main():
@@ -162,17 +165,20 @@ def main():
             batch_data = mnist_data[batch_start:batch_end]
 
             epoch_loss += kl_optim.step(batch_data)
-
-            epoch_eval_loss += kl_eval.eval_objective(batch_data)
+            if np.mod(i, 5) == 0:
+                epoch_eval_loss += kl_eval.eval_objective(batch_data)
 
         loss_training.append(-epoch_loss / float(mnist_size))
         sample, sample_mu = model_sample()
-        vis.line(np.array(loss_training), opts=dict({'title': 'Training ELBO in nats'}))
-        # vis.image(batch_data[0].view(28, 28).data.numpy())
-        # vis.image(sample[0].view(28, 28).data.numpy())
-        vis.image(sample_mu[0].view(28, 28).data.numpy())
-        print("epoch avg loss {}".format(epoch_loss / float(mnist_size)))
-        print("epoch eval loss {}".format(epoch_eval_loss / float(mnist_size)))
+        if vis_on:
+            vis.line(np.array(loss_training), opts=dict({'title': 'Training ELBO in nats'}))
+            # vis.image(batch_data[0].view(28, 28).data.numpy())
+            # vis.image(sample[0].view(28, 28).data.numpy())
+            vis.image(sample_mu[0].view(28, 28).data.numpy())
+
+        print("epoch "+str(i)+" avg loss {}".format(epoch_loss / float(mnist_size)))
+        if np.mod(i, 5) == 0:
+            print("epoch "+str(i)+" eval loss {}".format(epoch_eval_loss / float(mnist_size)))
 
 
 if __name__ == '__main__':

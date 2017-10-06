@@ -1,7 +1,7 @@
 from torch.autograd import Variable
-
 import pyro
 import pyro.poutine as poutine
+from pyro.distributions.util import KLdiv
 
 
 class KL_QP(object):
@@ -10,6 +10,8 @@ class KL_QP(object):
     :param guide: guide used for sampling defined as a function
     :param optim: optimization function
     :param model_fixed: flag that controls whether the model parameters are fixed during optimization
+    :param n_s_kldiv: number of kl-divergence samples if we sample it. At 1 uses guide-samples
+    :param analytic: flag to detemrine if algorithm should look for analytical expression for kl div
     :type model_fixed: bool
     :param guide_fixed: flag that controls whether the guide parameters are fixed during optimization
     :type guide_fixed: bool
@@ -34,6 +36,8 @@ class KL_QP(object):
                  model_fixed=False,
                  guide_fixed=False,
                  num_particles=1,
+                 num_kl_samples=1,
+                 analytic=True,
                  *args, **kwargs):
         """
         Call parent class initially, then setup the poutines to run
@@ -48,6 +52,8 @@ class KL_QP(object):
         self.model_fixed = model_fixed
         self.guide_fixed = guide_fixed
         self.num_particles = num_particles
+        self.num_kl_samples = num_kl_samples
+        self.analytic = analytic
 
     def __call__(self, *args, **kwargs):
         return self.step(*args, **kwargs)
@@ -72,14 +78,40 @@ class KL_QP(object):
 
         return model_traces, guide_traces, log_r_per_sample
 
+    def eval_kld(self, m_site=None, g_site=None, analytic=False, num_kl_samples=1):
+        """
+        Method to evaluate the log-ratio
+        If nr_sample=1, it reverts to just scoring the already sampled particles from the guide
+        If, however, we want a better approximation to that local divergence, it will sample more particles
+        from the local distributions or evaluate analytically
+        :input n_s controls how often we would sample from the kl-divergence to evaluiate it, set to '10'.
+        :input analytic determines if analytical forms for objectives are pursued
+        :input m_site is a site of a model trace
+        :input g_site is a site of a guide_trace
+
+        """
+        if analytic:
+            kld_obj = KLdiv(dist_q=m_site['fn'], dist_p=g_site['fn'])
+            return kld_obj.eval(analytical=analytic, num_kl_samples=num_kl_samples)
+        else:
+            if num_kl_samples == 1:
+                return m_site["log_pdf"] - g_site["log_pdf"]
+            else:
+                kld_obj = KLdiv(dist_q=m_site['fn'], dist_p=g_site['fn'])
+                return kld_obj.eval(analytical=analytic, num_kl_samples=num_kl_samples)
+
     def eval_objective(self, *args, **kwargs):
         """
         Evaluate Elbo by running num_particles often.
         Returns the Elbo as a value
+        :parameter num_kl_samples :controls how often we would sample from the
+                                   kl-divergence to evaluiate it, set to '10'.
         """
         model_traces = []
         guide_traces = []
         log_r_per_sample = []
+        num_kl_samples = self.num_kl_samples
+        analytic = self.analytic
 
         [model_traces, guide_traces, log_r_per_sample] = self.populate_traces(*args, **kwargs)
 
@@ -93,8 +125,9 @@ class KL_QP(object):
                 if model_trace[name]["type"] == "observe":
                     elbo_particle += model_trace[name]["log_pdf"]
                 elif model_trace[name]["type"] == "sample":
-                    elbo_particle += model_trace[name]["log_pdf"]
-                    elbo_particle -= guide_trace[name]["log_pdf"]
+                    kld = self.eval_kld(m_site=guide_trace[name], g_site=model_trace[name],
+                                        analytic=analytic, num_kl_samples=num_kl_samples)
+                    elbo_particle -= kld.sum()
                 else:
                     pass
             elbo += elbo_particle / self.num_particles
@@ -106,9 +139,13 @@ class KL_QP(object):
         """
         Computes a surrogate loss, which, when differentiated yields an estimate of the gradient of the Elbo.
         Num_particle many samples are used to form the surrogate loss.
+        :parameter num_kl_samples :controls how often we would sample from
+                                   the kl-divergence to evaluiate it, set to '10'.
         """
 
         [model_traces, guide_traces, log_r_per_sample] = self.populate_traces(*args, **kwargs)
+        num_kl_samples = self.num_kl_samples
+        analytic = self.analytic
 
         elbo = 0.0
         for i in range(self.num_particles):
@@ -122,8 +159,9 @@ class KL_QP(object):
                     elbo_particle += model_trace[name]["log_pdf"]
                 elif model_trace[name]["type"] == "sample":
                     if model_trace[name]["fn"].reparameterized:
-                        elbo_particle += model_trace[name]["log_pdf"]
-                        elbo_particle -= guide_trace[name]["log_pdf"]
+                        kld = self.eval_kld(m_site=guide_trace[name], g_site=model_trace[name],
+                                            analytic=analytic, num_kl_samples=num_kl_samples)
+                        elbo_particle -= kld.sum()
                     else:
                         elbo_particle += Variable(log_r.data) * guide_trace[name]["log_pdf"] +\
                                          model_trace[name]["log_pdf"]
