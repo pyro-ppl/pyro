@@ -4,7 +4,7 @@ from torch.autograd import Variable
 
 import pyro
 from pyro.distributions import DiagNormal
-from pyro.infer.kl_qp import KL_QP
+from pyro.optim.optim import Optimize
 from tests.common import TestCase
 
 
@@ -51,11 +51,9 @@ class OptimTests(TestCase):
             elif param_name == free_param:
                 return {'lr': 0.01}
 
-        kl_optim = KL_QP(
-            model, guide, pyro.optim(
-                torch.optim.Adam, optim_params))
+        optim = Optimize(model, guide, torch.optim.Adam, optim_params, loss="ELBO")
         for k in range(3):
-            kl_optim.step()
+            optim.step()
 
         free_param_unchanged = torch.equal(
             pyro.param(free_param).data, torch.zeros(1))

@@ -77,8 +77,6 @@ class TraceGraph_ELBO(object):
         :rtype: torch.autograd.Variable
         """
         elbo = 0.0
-        surrogate_elbo = 0.0
-        baseline_loss = 0.0
         trainable_params = set()
 
         for model_tracegraph, guide_tracegraph in self._get_traces(*args, **kwargs):
@@ -105,7 +103,10 @@ class TraceGraph_ELBO(object):
                                   not zero_expectation)
                     cost_nodes.extend([cost_node1, cost_node2])
 
-            elbo_particle, elbo_reinforce_terms_particle = 0.0, 0.0
+            elbo_particle = 0.0
+            surrogate_elbo_particle = 0.0
+            baseline_loss_particle = 0.0
+            elbo_reinforce_terms_particle = 0.0
             elbo_no_zero_expectation_terms_particle = 0.0
 
             # compute the elbo; if all stochastic nodes are reparameterizable, we're done
@@ -119,6 +120,7 @@ class TraceGraph_ELBO(object):
             for cost_node in cost_nodes:
                 if cost_node[1]:
                     elbo_no_zero_expectation_terms_particle += cost_node[0]
+            surrogate_elbo_particle += elbo_no_zero_expectation_terms_particle / self.num_particles
 
             # the following computations are only necessary if we have non-reparameterizable nodes
             if len(non_reparam_nodes) > 0:
@@ -207,35 +209,34 @@ class TraceGraph_ELBO(object):
                             (baseline_loss_particle, nn_params))
                     if use_nn_baseline or use_decaying_avg_baseline:
                         elbo_reinforce_terms_particle += guide_trace[node]['log_pdf'] * \
-                         (downstream_cost - baseline.data).detach()
+                         (downstream_cost - baseline).detach()
                     else:
                         elbo_reinforce_terms_particle += guide_trace[node]['log_pdf'] * \
                          downstream_cost.detach()
 
                 for _loss, _params in baseline_losses_particle:
-                    baseline_loss += _loss / self.num_particles
+                    baseline_loss_particle += _loss / self.num_particles
                     trainable_params.update(set(_params))
 
-                surrogate_elbo += elbo_no_zero_expectation_terms_particle / self.num_particles
-                surrogate_elbo += elbo_reinforce_terms_particle / self.num_particles
+                surrogate_elbo_particle += elbo_reinforce_terms_particle / self.num_particles
 
-                # grab model parameters to train
-                for name in model_trace.keys():
-                    if model_trace[name]["type"] == "param":
-                        trainable_params.add(model_trace[name]["value"])
+            # grab model parameters to train
+            for name in model_trace.keys():
+                if model_trace[name]["type"] == "param":
+                    trainable_params.add(model_trace[name]["value"])
 
-                # grab guide parameters to train
-                for name in guide_trace.keys():
-                    if guide_trace[name]["type"] == "param":
-                        trainable_params.add(guide_trace[name]["value"])
-
-            surrogate_loss = -surrogate_elbo
-            surrogate_loss.backward()
-            if baseline_loss != 0.0:
-                baseline_loss.backward()
+            # grab guide parameters to train
+            for name in guide_trace.keys():
+                if guide_trace[name]["type"] == "param":
+                    trainable_params.add(guide_trace[name]["value"])
 
             pyro.get_param_store().mark_params_active(trainable_params)
 
-            loss = -elbo
+            surrogate_loss_particle = -surrogate_elbo_particle
+            surrogate_loss_particle.backward()
+            if not isinstance(baseline_loss_particle, float):
+                baseline_loss_particle.backward()
 
-            return loss
+        loss = -elbo
+
+        return loss
