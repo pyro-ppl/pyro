@@ -44,6 +44,26 @@ N = 581012 # data
 D = 54 # features
 batch_size = 256
 
+class DiagNormalPrior(pyro.distributions.Distribution):
+    def __init__(self, mu, sigma, *args, **kwargs):
+        self.mu = mu
+        self.sigma = sigma
+        self.dist = DiagNormal(self.mu, self.sigma)
+        super(DiagNormalPrior, self).__init__(*args, **kwargs)
+
+    def sample(self, *args, **kwargs):
+        return self.dist()
+
+    def log_pdf(self, x, *args, **kwargs):
+        return self.dist.log_pdf(x)
+
+def log_reg(x_data):
+    p_w = pyro.param("weight", Variable(torch.zeros(D, 1), requires_grad=True))
+    p_b = pyro.param("bias", Variable(torch.ones(1), requires_grad=True))
+    reg = torch.addmm(p_b, x_data, p_w)
+    latent = sigmoid(reg)
+    return latent
+
 def model(data):
     x_data = data[:,:-1]
     y_data = data[:,-1]
@@ -51,11 +71,11 @@ def model(data):
     sigma = Variable(torch.ones(D, 1))
     bias_mu = Variable(torch.zeros(1))
     bias_sigma = Variable(10.0*torch.ones(1))
-    p_w = pyro.sample("weight_", DiagNormal(mu, sigma))
-    p_b = pyro.sample("bias_", DiagNormal(bias_mu, bias_sigma))
-    # exp to get log bernoulli
-    reg = torch.addmm(p_b, x_data, p_w)
-    latent = sigmoid(reg)
+    w_prior = DiagNormalPrior(mu, sigma)
+    b_prior = DiagNormalPrior(bias_mu, bias_sigma)
+    priors = {'weight': w_prior, 'bias': b_prior}
+    lifted_fn = poutine.lift(log_reg, priors)
+    latent = log_reg(x_data)
     pyro.observe("categorical", Categorical(latent), y_data.unsqueeze(1))
 
 
@@ -68,11 +88,14 @@ def guide(data):
     mw_param = pyro.param("guide_mean_weight", w_mu)
     sw_param = pyro.param("guide_sigma_weight", w_sig)
     mb_param  = pyro.param("guide_mean_bias", b_mu)
-    sb_param = pyro.param("guide_sigma__bias", b_sig)
+    sb_param = pyro.param("guide_sigma_bias", b_sig)
     sw_param = torch.exp(sw_param)
     sb_param = torch.exp(sb_param)
-    q_w = pyro.sample("weight_", DiagNormal(mw_param, sw_param))
-    q_b = pyro.sample("bias_", DiagNormal(mb_param, sb_param))
+    w_prior = DiagNormalPrior(mw_param, sw_param)
+    b_prior = DiagNormalPrior(mb_param, sb_param)
+    priors = {'weight': w_prior, 'bias': b_prior}
+    lifted_fn = poutine.lift(log_reg, priors)
+    lifted_fn(x_data)
 
 # adam_params = {"lr": 0.00001, "betas": (0.95, 0.999)}
 lr = {"lr": 0.001}
