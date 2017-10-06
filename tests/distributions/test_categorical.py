@@ -1,4 +1,5 @@
 import json
+import os
 
 import numpy as np
 import scipy.stats as sp
@@ -6,7 +7,7 @@ import torch
 from torch.autograd import Variable
 
 import pyro.distributions as dist
-from tests.common import TestCase
+from tests.common import RESOURCE_DIR, TestCase
 
 
 class TestCategorical(TestCase):
@@ -35,7 +36,7 @@ class TestCategorical(TestCase):
 
         self.n_samples = 50000
 
-        with open('tests/resources/support_categorical.json') as data_file:
+        with open(os.path.join(RESOURCE_DIR, 'support_categorical.json')) as data_file:
             data = json.load(data_file)
         self.support = [torch.Tensor(x) for x in data['one_hot']]
         self.nhot_support = list(map(lambda x: torch.Tensor(x), data['not_hot']))
