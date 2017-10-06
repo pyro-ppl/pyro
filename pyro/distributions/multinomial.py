@@ -38,53 +38,49 @@ class Multinomial(Distribution):
         super(Multinomial, self).__init__(*args, **kwargs)
 
     def sample(self, ps=None, n=None, *args, **kwargs):
-        _ps, _n = self._sanitize_input(ps, n)
-        _, counts = np.unique([self.expanded_sample().data.numpy()], return_counts=True)
-        return Variable(torch.Tensor(counts).type_as(_ps.data))
+        ps, n = self._sanitize_input(ps, n)
+        counts = np.bincount(self.expanded_sample(ps, n).data.numpy(), minlength=ps.size()[0])
+        return Variable(torch.from_numpy(counts))
 
     def expanded_sample(self, ps=None, n=None, *args, **kwargs):
-        _ps, _n = self._sanitize_input(ps, n)
+        ps, n = self._sanitize_input(ps, n)
         # get the int from Variable or Tensor
-        if _n.data.dim() == 2:
-            _n = int(_n.data[0][0])
+        if n.data.dim() == 2:
+            n = int(n.data[0][0])
         else:
-            _n = int(_n.data[0])
-        return Variable(torch.multinomial(_ps.data, _n, replacement=True).type_as(_ps.data))
+            n = int(n.data[0])
+        return Variable(torch.multinomial(ps.data, n, replacement=True))
 
     def batch_log_pdf(self, x, ps=None, n=None, batch_size=1, *args, **kwargs):
         """
         hack replacement for batching multinomail score
         """
         # FIXME: torch.split so tensor is differentiable
-        _ps, _n = self._sanitize_input(ps, n)
+        ps, n = self._sanitize_input(ps, n)
         if x.dim() == 1:
             x = x.expand(batch_size, x.size(0))
         out_arr = [[self._get_tensor(self.log_pdf([
                     x.narrow(0, ix, ix + 1),
-                    _ps.narrow(0, ix, ix + 1)
-                    ], _ps, _n))[0]]
+                    ps.narrow(0, ix, ix + 1)
+                    ], ps, n))[0]]
                    for ix in range(int(x.size(0)))]
-        return Variable(torch.Tensor(out_arr).type_as(_ps.data))
+        return Variable(torch.Tensor(out_arr).type_as(ps.data))
 
-    def log_pdf(self, _x, ps=None, n=None, *args, **kwargs):
+    def log_pdf(self, x, ps=None, n=None, *args, **kwargs):
         """
         Multinomial log-likelihood
         """
         # probably use gamma function when added
-        _ps, _n = self._sanitize_input(ps, n)
-        ttype = _ps.data.type()
-        if isinstance(_x, list):
-            x = _x[0]
-            ps = _x[1]
-        else:
-            x = _x
-            ps = _ps
+        ps, n = self._sanitize_input(ps, n)
+        ttype = ps.data.type()
+        if isinstance(x, list):
+            x, ps = x[:2]
         prob = torch.sum(torch.mul(x, torch.log(ps)))
         logfactsum = self._log_factorial(torch.sum(x), ttype)
         # this is disgusting because theres no clean way to do this ..yet
         logfactct = torch.sum(Variable(torch.Tensor(
-            [self._log_factorial(_xi, ttype) for _xi in self._get_array(x)])
-            .type_as(_ps.data)))
+            [self._log_factorial(xi, ttype) for xi in self._get_array(x)])
+            .type_as(ps.data)))
         return prob + logfactsum - logfactct
 
 #     https://stackoverflow.com/questions/13903922/multinomial-pmf-in-python-scipy-numpy
@@ -108,3 +104,11 @@ class Multinomial(Distribution):
             return var.data
         # nested tensor arrays because of batches"
         return var.data.numpy()[0]
+
+    def analytic_mean(self, ps=None, n=None):
+        ps, n = self._sanitize_input(ps, n)
+        return n * ps
+
+    def analytic_var(self, ps=None, n=None):
+        ps, n = self._sanitize_input(ps, n)
+        return n * ps * (1 - ps)

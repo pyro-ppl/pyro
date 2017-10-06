@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+import pytest
 import torch
 import torch.optim
 from torch.autograd import Variable
@@ -10,6 +11,8 @@ from pyro.infer.tracegraph_kl_qp import TraceGraph_KL_QP
 from pyro.util import ng_zeros, ng_ones
 from tests.common import TestCase
 import numpy as np
+
+pytestmark = pytest.mark.stage("integration", "integration_batch_2")
 
 
 class NormalNormalTests(TestCase):

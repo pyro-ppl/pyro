@@ -37,27 +37,35 @@ class Exponential(Distribution):
         """
         reparameterized sampler.
         """
-        _lam = self._sanitize_input(lam)
-        eps = Variable(torch.rand(_lam.size()).type_as(_lam.data))
-        x = -torch.log(eps) / _lam
+        lam = self._sanitize_input(lam)
+        eps = Variable(torch.rand(lam.size()).type_as(lam.data))
+        x = -torch.log(eps) / lam
         return x
 
     def log_pdf(self, x, lam=None, *args, **kwargs):
         """
         exponential log-likelihood
         """
-        _lam = self._sanitize_input(lam)
-        ll = -_lam * x + torch.log(_lam)
+        lam = self._sanitize_input(lam)
+        ll = - lam * x + torch.log(lam)
         return torch.sum(ll)
 
     def batch_log_pdf(self, x, lam=None, batch_size=1, *args, **kwargs):
         """
         exponential log-likelihood
         """
-        _lam = self._sanitize_input(lam)
-        if x.dim() == 1 and _lam.dim() == 1 and batch_size == 1:
-            return self.log_pdf(x, _lam)
+        lam = self._sanitize_input(lam)
+        if x.dim() == 1 and lam.dim() == 1 and batch_size == 1:
+            return self.log_pdf(x, lam)
         elif x.dim() == 1:
             x = x.expand(batch_size, x.size(0))
-        ll = -_lam * x + torch.log(_lam)
+        ll = - lam * x + torch.log(lam)
         return torch.sum(ll, 1)
+
+    def analytic_mean(self, lam=None):
+        lam = self._sanitize_input(lam)
+        return torch.pow(lam, -1.0)
+
+    def analytic_var(self, lam=None):
+        lam = self._sanitize_input(lam)
+        return torch.pow(lam, -2.0)

@@ -41,29 +41,38 @@ class NormalChol(Distribution):
         """
         Reparameterized Normal cholesky sampler.
         """
-        _mu, _L = self._sanitize_input(mu, L)
-        eps = Variable(torch.randn(_mu.size()).type_as(_mu.data))
+        mu, L = self._sanitize_input(mu, L)
+        eps = Variable(torch.randn(mu.size()).type_as(mu.data))
         if eps.dim() == 1:
             eps = eps.unsqueeze(1)
-        z = _mu + torch.mm(_L, eps).squeeze()
+        z = mu + torch.mm(L, eps).squeeze()
         return z
 
     def log_pdf(self, x, mu=None, L=None, *args, **kwargs):
         """
         Normal cholesky log-likelihood
         """
-        _mu, _L = self._sanitize_input(mu, L)
-        ll_1 = Variable(torch.Tensor([-0.5 * _mu.size(0) * np.log(2.0 * np.pi)])
-                        .type_as(_mu.data))
-        ll_2 = -torch.sum(torch.log(torch.diag(_L)))
+        mu, L = self._sanitize_input(mu, L)
+        ll_1 = Variable(torch.Tensor([-0.5 * mu.size(0) * np.log(2.0 * np.pi)])
+                        .type_as(mu.data))
+        ll_2 = -torch.sum(torch.log(torch.diag(L)))
         x_chol = Variable(
             torch.trtrs(
-                (x - _mu).unsqueeze(1).data,
-                _L.data,
+                (x - mu).unsqueeze(1).data,
+                L.data,
                 False)[0])
         ll_3 = -0.5 * torch.sum(torch.pow(x_chol, 2.0))
 
         return ll_1 + ll_2 + ll_3
 
-    def batch_log_pdf(self, x, batch_size=1):
+    def batch_log_pdf(self, x, mu=None, L=None, batch_size=1, *args, **kwargs):
         raise NotImplementedError()
+
+    def analytic_mean(self, mu=None, L=None):
+        mu, L = self._sanitize_input(mu, L)
+        return mu
+
+    def analytic_var(self,  mu=None, L=None):
+        mu, L = self._sanitize_input(mu, L)
+        cov = torch.mm(L, torch.transpose(L, 0, 1))
+        return torch.diag(cov)
