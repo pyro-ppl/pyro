@@ -46,7 +46,7 @@ optim = PyroOptim
 _PYRO_STACK = []
 
 
-def sample(name, fn, *args, obs=None, **kwargs):
+def sample(name, fn, *args, **kwargs):
     """
     :param name: name of sample
     :param fn: distribution class or function
@@ -55,6 +55,7 @@ def sample(name, fn, *args, obs=None, **kwargs):
 
     Samples from the distribution and registers it in the trace data structure.
     """
+    obs = kwargs.pop("obs", None)
     # check if stack is empty
     # if stack empty, default behavior (defined here)
     if len(_PYRO_STACK) == 0:
@@ -100,7 +101,8 @@ def observe(name, fn, obs, *args, **kwargs):
     Calculates the score of the sample and registers
     it in the trace data structure.
     """
-    return sample(name, fn, *args, obs=obs, **kwargs)
+    kwargs.update({"obs": obs})
+    return sample(name, fn, *args, **kwargs)
 
 
 def map_data(name, data, fn, batch_size=0, batch_dim=0):
