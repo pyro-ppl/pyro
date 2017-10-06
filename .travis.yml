@@ -35,13 +35,13 @@ jobs:
         - stage: unit test
           python: 2.7
           env: STAGE=unit
-          script: pytest -vs --cov=pyro
+          script: pytest -vs --cov=pyro --stage unit
         - python: 2.7
           env: STAGE=examples
           script: pytest -vs --cov=pyro --stage test_examples
         - python: 3.5
           env: STAGE=unit
-          script: pytest -vs --cov=pyro
+          script: pytest -vs --cov=pyro --stage unit
         - python: 3.5
           env: STAGE=examples
           script: pytest -vs --cov=pyro --stage test_examples

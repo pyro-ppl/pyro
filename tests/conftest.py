@@ -25,9 +25,7 @@ def pytest_addoption(parser):
 
 def pytest_collection_modifyitems(config, items):
     test_stages = set(config.getoption("--stage"))
-    if not test_stages:
-        test_stages = set(["unit"])
-    if "all" in test_stages:
+    if not test_stages or "all" in test_stages:
         return
     selected_items = []
     deselected_items = []
