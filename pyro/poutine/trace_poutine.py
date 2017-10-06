@@ -1,7 +1,4 @@
-import pyro
-
 from .poutine import Poutine
-from .lambda_poutine import LambdaPoutine
 from .trace import Trace
 
 
@@ -79,17 +76,3 @@ class TracePoutine(Poutine):
                                                           *args, **kwargs)
         self.trace.add_param(name, retrieved, *args, **kwargs)
         return retrieved
-
-    def _pyro_map_data(self, msg, name, data, fn, batch_size=None, batch_dim=0):
-        """
-        Trace map_data
-        """
-        scale = pyro.util.get_batch_scale(data, batch_size, batch_dim)
-        ret = super(TracePoutine, self)._pyro_map_data(msg, name, data,
-                                                       LambdaPoutine(fn, name, scale),
-                                                       # XXX watch out for changing
-                                                       batch_size=batch_size,
-                                                       batch_dim=batch_dim)
-
-        self.trace.add_map_data(name, fn, batch_size, batch_dim, msg["indices"])
-        return ret
