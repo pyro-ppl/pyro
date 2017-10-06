@@ -12,6 +12,7 @@ import pyro
 from pyro.distributions import Bernoulli, Categorical
 from pyro.infer.kl_qp import KL_QP
 
+
 mnist = dset.MNIST(
     root='./data',
     train=True,
@@ -44,7 +45,7 @@ def local_model(i, datum):
     # do MLE for class means
     mu = pyro.param("mean_of_class_" + str(cll[0]), mean_param)
     mu_param = softmax(mu)
-    pyro.observe("obs_" + str(i), Bernoulli(mu_param), datum)
+    pyro.observe("obs_" + str(i), Bernoulli(mu_param), datum.view(1, -1))
     return cll
 
 

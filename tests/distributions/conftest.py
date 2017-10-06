@@ -1,4 +1,5 @@
 import math
+import os
 
 import numpy as np
 import pytest
@@ -6,6 +7,7 @@ import scipy.stats as sp
 
 import pyro.distributions as dist
 from tests.distributions.dist_fixture import Fixture
+from tests.common import RESOURCE_DIR
 
 continuous_dists = [
     Fixture(pyro_dist=dist.uniform,
@@ -70,7 +72,7 @@ discrete_dists = [
             prec=0.01,
             min_samples=10000,
             is_discrete=True,
-            expected_support_file='tests/resources/support_bernoulli.json',
+            expected_support_file=os.path.join(RESOURCE_DIR, 'support_bernoulli.json'),
             expected_support_key='expected'),
     Fixture(pyro_dist=dist.poisson,
             scipy_dist=sp.poisson,
@@ -87,7 +89,7 @@ discrete_dists = [
             prec=0.05,
             min_samples=10000,
             is_discrete=True,
-            expected_support_file='tests/resources/support_categorical.json',
+            expected_support_file=os.path.join(RESOURCE_DIR, 'support_categorical.json'),
             expected_support_key='one_hot'),
 ]
 
@@ -113,5 +115,8 @@ def test_data_idx(request):
 
 def pytest_collection_modifyitems(items):
     for item in items:
-        if "init" not in item.keywords:
-            item.add_marker(pytest.mark.init(rng_seed=123))
+        if item.nodeid.startswith("tests/distributions"):
+            if "stage" not in item.keywords:
+                item.add_marker(pytest.mark.stage("unit"))
+            if "init" not in item.keywords:
+                item.add_marker(pytest.mark.init(rng_seed=123))
