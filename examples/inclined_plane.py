@@ -5,7 +5,6 @@ import sys
 
 import numpy as np
 import torch
-import torch.optim as optim
 from torch.autograd import Variable
 
 import pyro
@@ -103,6 +102,7 @@ verbose = True
 
 adam_params = {"lr": 0.003, "betas": (0.93, 0.993)}
 optim = Optimize(model, guide, torch.optim.Adam, adam_params, loss="ELBO")
+
 
 def main():
     parser = argparse.ArgumentParser(description="parse args")

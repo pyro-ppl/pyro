@@ -3,7 +3,6 @@ import argparse
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.optim as optim
 import torchvision.datasets as dset
 import torchvision.transforms as transforms
 import visdom
