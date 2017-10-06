@@ -1,7 +1,4 @@
-import pyro
-
 from .poutine import Poutine
-from .lambda_poutine import LambdaPoutine
 
 
 class BlockPoutine(Poutine):
