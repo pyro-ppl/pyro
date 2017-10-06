@@ -23,6 +23,13 @@ class Distribution(object):
         Parameters should be of type `torch.autograd.Variable` and all methods return type
         `torch.autograd.Variable` unless otherwise noted.
 
+    **Tensor Shapes**:
+
+        - The methods `sample`, `log_pdf`, and `batch_log_pdf` often take pytorch.autograd.Variable args.
+        - All of these args must agree on their trailing dimension.
+        - Any of these args can be batched along an extra dimension 0.
+        - If values and parameters are both batched, their batch dimensions must agree.
+
     **Implementing New Distributions**:
 
         Derived classes must implement the `.sample()`, and `.batch_log_pdf()` methods.

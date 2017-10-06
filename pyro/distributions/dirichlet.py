@@ -35,12 +35,11 @@ class Dirichlet(Distribution):
             raise TypeError('Expected x a Tensor or Variable, got a {}'.format(type(x)))
         if not isinstance(alpha, Variable):
             raise TypeError('Expected alpha a Variable, got a {}'.format(type(alpha)))
+
         if x.dim() not in (1, 2):
             raise ValueError('Expected x.dim() in (1,2), actual: {}'.format(x.dim()))
         if alpha.dim() not in (1, 2):
             raise ValueError('Expected alpha.dim() in (1,2), actual: {}'.format(alpha.dim()))
-        if x.size(-1) != alpha.size(-1):
-            raise ValueError('x and alpha size mismatch: {} vs {}'.format(x.size(-1), alpha.size(-1)))
         if x.dim() == 2 and alpha.dim() == 2 and x.size(0) != alpha.size(0):
             # Disallow broadcasting, e.g. disallow resizing (1,4) -> (4,4).
             raise ValueError('Batch sizes disagree: {} vs {}'.format(x.size(0), alpha.size(0)))
@@ -60,11 +59,8 @@ class Dirichlet(Distribution):
         :type alpha: None or a torch.autograd.Variable of a torch.Tensor of dimension 1 or 2.
         :param int batch_size: DEPRECATED.
         """
-        if alpha is None:
-            self.alpha = None
-        else:
-            assert alpha.dim() in (1, 2)
-            self.alpha = alpha
+        assert batch_size == 1, 'DEPRECATED'
+        self.alpha = alpha
         self.reparameterized = False
         super(Dirichlet, self).__init__(*args, **kwargs)
 
@@ -74,7 +70,8 @@ class Dirichlet(Distribution):
 
         (Un-reparameterized).
 
-        :param torch.autograd.Variable alpha:
+        :param alpha: A vector of concentration parameters.
+        :type alpha: None or a torch.autograd.Variable of a torch.Tensor of dimension 1 or 2.
         """
         alpha = self._sanitize_input(alpha)
         if alpha.dim() not in (1, 2):
@@ -94,17 +91,14 @@ class Dirichlet(Distribution):
         """
         Evaluates log probabity density over one or a batch of samples.
 
-        Each of alpha and x can be either a single value or a batch of values batched along dimension 0.
-        If they are both batches, their batch sizes must agree.
-        In any case, the rightmost size must agree.
-
         :param torch.autograd.Variable x: A value (if x.dim() == 1) or or batch of values (if x.dim() == 2).
         :param alpha: A vector of concentration parameters.
         :type alpha: torch.autograd.Variable or None.
         :param int batch_size: DEPRECATED.
         :return: log probability densities of each element in the batch.
-        :rtype: torch.autograd.Variable of torch.Tensor of dimension 1.
+        :rtype: torch.autograd.Variable of dimension 1.
         """
+        assert batch_size == 1, 'DEPRECATED'
         alpha = self._sanitize_input(alpha)
         x, alpha = self._expand_dims(x, alpha)
         assert x.dim() == 2
