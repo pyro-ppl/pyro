@@ -17,14 +17,12 @@ from tests.common import TestCase
 pytestmark = pytest.mark.stage("integration", "integration_batch_2")
 
 
-
 def param_mse(name, target):
     return torch.sum(torch.pow(target - pyro.param(name), 2.0)).data.numpy()[0]
 
 
 def param_abs_error(name, target):
     return torch.sum(torch.abs(target - pyro.param(name))).data.numpy()[0]
-
 
 
 class NormalNormalTests(TestCase):
@@ -82,9 +80,9 @@ class NormalNormalTests(TestCase):
                                     reparameterized=reparameterized)
             return mu_latent
 
-	optim = Optimize(model, guide,
-			 torch.optim.Adam, {"lr": .0015, "betas": (0.97, 0.999)},
-			 loss="ELBO", trace_graph=True)
+        optim = Optimize(model, guide,
+                         torch.optim.Adam, {"lr": .0015, "betas": (0.97, 0.999)},
+                         loss="ELBO", trace_graph=True)
 
         for k in range(n_steps):
             optim.step()
@@ -204,8 +202,8 @@ class NormalNormalNormalTests(TestCase):
         optim = Optimize(model, guide,
                          torch.optim.Adam, {"lr": lr, "betas": (0.97, 0.999)},
                          loss="ELBO", trace_graph=True,
-			 auxiliary_optim_constructor=torch.optim.Adam,
-			 auxiliary_optim_args={"lr": 5.0 * lr, "betas": (0.90, 0.999)})
+                         auxiliary_optim_constructor=torch.optim.Adam,
+                         auxiliary_optim_args={"lr": 5.0 * lr, "betas": (0.90, 0.999)})
 
         for k in range(n_steps):
             optim.step()

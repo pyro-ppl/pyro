@@ -13,6 +13,7 @@ from pyro.optim.optim import Optimize
 # KL_QP changes its random algorithm.
 # If this leads to too much churn, simply delete this test.
 
+
 @pytest.mark.init(rng_seed=0)
 @pytest.mark.parametrize("trace_graph", [False, True])
 @pytest.mark.parametrize("reparameterized", [True, False])
@@ -35,8 +36,8 @@ def test_kl_qp_gradient_step_golden(trace_graph, reparameterized):
         return pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q, reparameterized=reparameterized)
 
     optim = Optimize(model, guide,
-		     torch.optim.Adam, {"lr": .10},
-		     loss="ELBO", trace_graph=trace_graph)
+                     torch.optim.Adam, {"lr": .10},
+                     loss="ELBO", trace_graph=trace_graph)
     optim.step()
 
     new_mu_q = pyro.param("mu_q").data.numpy()[0]
