@@ -1,4 +1,4 @@
-import numpy as np
+import torch
 from torch.autograd import Variable
 
 import pyro
@@ -72,7 +72,7 @@ class KL_QP(object):
                     model_trace = poutine.trace(
                         poutine.replay(self.model, guide_trace))(*args, **kwargs)
                     log_r = model_trace.log_pdf() - guide_trace.log_pdf()
-                    weight = np.exp(guide_trace.enum_log_pdf().data[0])  # Block gradients.
+                    weight = torch.exp(guide_trace.enum_log_pdf().detach())  # Block gradients.
                     yield weight, model_trace, guide_trace, log_r
                 continue
 
