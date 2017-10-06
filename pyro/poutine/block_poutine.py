@@ -131,23 +131,6 @@ class BlockPoutine(Poutine):
         msg["stop"] = self._block_up(msg)
         return ret
 
-    def _pyro_map_data(self, msg):
-        """
-        :param msg:  current message at a trace site
-        :returns: the result of running the site function on the site data.
-
-        Default map_data behavior with a side effect.
-        Applies self._block_up to decide whether to hide the site.
-        """
-        name, data, fn, batch_size, batch_dim = \
-            msg["name"], msg["data"], msg["fn"], msg["batch_size"], msg["batch_dim"]
-        scale = pyro.util.get_batch_scale(data, batch_size, batch_dim)
-        msg["fn"] = LambdaPoutine(fn, name, scale)
-        ret = super(BlockPoutine, self)._pyro_map_data(msg)
-        msg["fn"] = fn
-        msg["stop"] = self._block_up(msg)
-        return ret
-
     def _pyro_param(self, msg):
         """
         :param msg:  current message at a trace site
