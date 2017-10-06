@@ -1,4 +1,3 @@
-import pyro
 from .poutine import Poutine
 
 
@@ -61,13 +60,3 @@ class LambdaPoutine(Poutine):
         msg["scale"] = self.scale * msg["scale"]
         msg = self._annotate_map_data_stack(msg, name)
         return super(LambdaPoutine, self)._pyro_param(msg, name, *args, **kwargs)
-
-    def _pyro_map_data(self, msg, name, data, fn, batch_size=None, batch_dim=0):
-        """
-        scaled map_data: Rescale the message and continue
-        """
-        mapdata_scale = pyro.util.get_batch_scale(data, batch_size, batch_dim)
-        return super(LambdaPoutine, self)._pyro_map_data(msg, name, data,
-                                                         LambdaPoutine(fn, name, mapdata_scale),
-                                                         batch_size=batch_size,
-                                                         batch_dim=batch_dim)

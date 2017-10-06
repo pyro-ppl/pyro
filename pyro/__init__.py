@@ -8,7 +8,6 @@ from torch.autograd import Variable
 from torch.nn import Parameter
 
 import pyro
-from pyro import util
 from pyro.optim.optim import PyroOptim
 from pyro.params import param_with_module_name
 from pyro.params.param_store import ParamStoreDict
@@ -218,23 +217,7 @@ def irange(name, size, subsample_size=0):
                 indep_context._flush_stack()
 
 
-def map_data_in_terms_of_iarange(name, data, fn, batch_size=0, batch_dim=0):
-    """
-    It's easy to implement map_data using iarange.
-    """
-    if isinstance(data, (torch.Tensor, Variable)):
-        size = data.size(batch_dim)
-        with iarange(name, size, batch_size) as batch:
-            return fn(batch, data.index_select(batch_dim, batch))
-    else:
-        size = len(data)
-        return [fn(i, data[i]) for i in irange(name, size, batch_size)]
-
-
-map_data = map_data_in_terms_of_iarange
-
-
-def map_data_old(name, data, fn, batch_size=0, batch_dim=0):
+def map_data(name, data, fn, batch_size=0, batch_dim=0):
     """
     Data subsampling with the important property that all the data are conditionally independent.
 
@@ -248,39 +231,13 @@ def map_data_old(name, data, fn, batch_size=0, batch_dim=0):
     :param int batch_dim: dimension to subsample for tensor inputs
     :return: a list of values returned by `fn`
     """
-    if len(_PYRO_STACK) == 0:
-        # default behavior
-        ind = util.get_batch_indices(data, batch_size, batch_dim)
-        if batch_size == 0:
-            ind_data = data
-        elif isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
-            ind_data = data.index_select(batch_dim, ind)
-        else:
-            ind_data = [data[i] for i in ind]
-
-        if isinstance(data, (torch.Tensor, Variable)):
-            ret = fn(ind, ind_data)
-        else:
-            ret = [fn(i, x) for i, x in zip(ind, ind_data)]
-        return ret
+    if isinstance(data, (torch.Tensor, Variable)):
+        size = data.size(batch_dim)
+        with iarange(name, size, batch_size) as batch:
+            return fn(batch, data.index_select(batch_dim, batch))
     else:
-        # initialize data structure to pass up/down the stack
-        msg = {
-            "type": "map_data",
-            "name": name,
-            "fn": fn,
-            "data": data,
-            "batch_size": batch_size,
-            "batch_dim": batch_dim,
-            # XXX should these be added here or during application
-            "indices": None,
-            "ret": None,
-            "done": False,
-            "stop": False,
-        }
-        # apply the stack and return its return value
-        out_msg = apply_stack(msg)
-        return out_msg["ret"]
+        size = len(data)
+        return [fn(i, data[i]) for i in irange(name, size, batch_size)]
 
 
 # XXX this should have the same call signature as torch.Tensor constructors
