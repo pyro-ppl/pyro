@@ -183,14 +183,16 @@ def iarange(name, size, subsample_size=0):
     if len(_PYRO_STACK) == 0:
         yield subsample
     else:
-        # Push a global score factor.
+        # Wrap computation in a scaling context.
         scale = size / subsample_size
-        _PYRO_STACK.append(LambdaPoutine(_PYRO_STACK[-1], name, scale))
+        scale_context = LambdaPoutine(None, name, scale)
         try:
+            scale_context._push_stack()
+            scale_context._enter_poutine()
             yield subsample
+            scale_context._pop_stack()
         finally:
-            # Pop a global score factor.
-            _PYRO_STACK.pop()
+            scale_context._flush_stack()
 
 
 def irange(name, size, subsample_size=0):
@@ -204,8 +206,16 @@ def irange(name, size, subsample_size=0):
                     observe('obs_{}'.format(i), normal, data[i], mu, sigma)
     """
     with iarange(name, size, subsample_size) as batch:
+        # Wrap computation in an independence context.
+        indep_context = LambdaPoutine(None, name, 1.0)
         for i in batch.data:
-            yield i
+            try:
+                indep_context._push_stack()
+                indep_context._enter_poutine()
+                yield i
+                indep_context._pop_stack()
+            finally:
+                indep_context._flush_stack()
 
 
 def map_data_in_terms_of_iarange(name, data, fn, batch_size=0, batch_dim=0):
