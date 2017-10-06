@@ -121,10 +121,10 @@ class TestFixedModelGuide(TestCase):
 
         optim = Optimize(model, guide,
                          torch.optim.Adam, {"lr": .01},
-                         loss="ELBO", trace_graph=False)
+                         loss="ELBO", trace_graph=False, loss_scope=loss_scope)
 
         for _ in range(3):
-            optim.step(loss_scope=loss_scope)
+            optim.step()
 
         model_unchanged = (torch.equal(pyro.param("alpha_p_log").data, self.alpha_p_log_0)) and\
                           (torch.equal(pyro.param("beta_p_log").data, self.beta_p_log_0))

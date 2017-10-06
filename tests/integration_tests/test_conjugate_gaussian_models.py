@@ -12,7 +12,7 @@ from torch.autograd import Variable
 
 import pyro
 import pyro.distributions as dist
-from pyro.infer.tracegraph_kl_qp import TraceGraph_KL_QP
+from pyro.optim.optim import Optimize
 from tests.common import TestCase
 
 
@@ -79,16 +79,15 @@ class GaussianChainTests(TestCase):
 
     def test_elbo_nonreparameterized_N_is_3(self):
         self.setup_chain(3)
-        self.do_elbo_test(False, 16000, 0.001, 0.05, difficulty=0.6)
+        self.do_elbo_test(False, 5000, 0.001, 0.04, difficulty=0.6)
 
-    @pytest.mark.xfail(reason="flaky - does not meet the precision threshold for passing")
     def test_elbo_nonreparameterized_N_is_5(self):
         self.setup_chain(5)
-        self.do_elbo_test(False, 24000, 0.001, 0.06, difficulty=0.6)
+        self.do_elbo_test(False, 5000, 0.001, 0.06, difficulty=0.6)
 
     def test_elbo_nonreparameterized_N_is_7(self):
         self.setup_chain(7)
-        self.do_elbo_test(False, 32000, 0.001, 0.05, difficulty=0.6)
+        self.do_elbo_test(False, 5000, 0.001, 0.05, difficulty=0.6)
 
     def do_elbo_test(self, reparameterized, n_steps, lr, prec, difficulty=1.0):
         if self.verbose:
@@ -140,16 +139,17 @@ class GaussianChainTests(TestCase):
                 node_flagged = True if self.which_nodes_reparam[k - 1] == 1.0 else False
                 repa = True if reparameterized else node_flagged
                 mu_latent = pyro.sample("mu_latent_%d" % k, latent_dist, reparameterized=repa,
-                                        decaying_avg_baseline=True)
+                                        use_decaying_avg_baseline=True)
                 previous_sample = mu_latent
             return previous_sample
 
-        kl_optim = TraceGraph_KL_QP(model, guide, pyro.optim(torch.optim.Adam,
-                                    {"lr": lr, "betas": (0.95, 0.999)}))
+        optim = Optimize(model, guide,
+                         torch.optim.Adam, {"lr": lr, "betas": (0.95, 0.999)},
+                         loss="ELBO", trace_graph=True)
 
         for step in range(n_steps):
             t0 = time.time()
-            kl_optim.step(Verbose=(step == 0))
+            optim.step(Verbose=(step == 0))
 
             if (step % 5000 == 0 or step == n_steps - 1) and self.verbose:
                 kappa_errors, log_sig_errors, mu_errors = [], [], []
@@ -436,17 +436,18 @@ class GaussianPyramidTests(TestCase):
                 node_flagged = True if self.which_nodes_reparam[i] == 1.0 else False
                 repa = True if reparameterized else node_flagged
                 latent_node = pyro.sample(node, latent_dist_node, reparameterized=repa,
-                                          decaying_avg_baseline=True, baseline_beta=0.96)
+                                          use_decaying_avg_baseline=True, baseline_beta=0.96)
                 latents_dict[node] = latent_node
 
             return latents_dict['mu_latent_1']
 
-        kl_optim = TraceGraph_KL_QP(model, guide, pyro.optim(torch.optim.Adam,
-                                    {"lr": lr, "betas": (beta1, 0.999)}))
+        optim = Optimize(model, guide,
+                         torch.optim.Adam, {"lr": lr, "betas": (beta1, 0.999)},
+                         loss="ELBO", trace_graph=True)
 
         for step in range(n_steps):
             t0 = time.time()
-            kl_optim.step(Verbose=(step == 0))
+            optim.step(Verbose=(step == 0))
 
             if (step % 5000 == 0 or step == n_steps - 1) and self.verbose:
                 log_sig_errors = []
