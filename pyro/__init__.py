@@ -1,5 +1,6 @@
 from __future__ import division
 
+import warnings
 import contextlib
 from inspect import isclass
 
@@ -148,14 +149,8 @@ def iarange(name, size, subsample_size=0):
     else:
         # Wrap computation in a scaling context.
         scale = size / subsample_size
-        scale_context = LambdaPoutine(None, name, scale)
-        try:
-            scale_context._push_stack()
-            scale_context._enter_poutine()
+        with LambdaPoutine(None, name, scale):
             yield subsample
-            scale_context._pop_stack()
-        finally:
-            scale_context._flush_stack()
 
 
 def irange(name, size, subsample_size=0):
@@ -172,13 +167,8 @@ def irange(name, size, subsample_size=0):
         # Wrap computation in an independence context.
         indep_context = LambdaPoutine(None, name, 1.0)
         for i in batch.data:
-            try:
-                indep_context._push_stack()
-                indep_context._enter_poutine()
+            with indep_context:
                 yield i
-                indep_context._pop_stack()
-            finally:
-                indep_context._flush_stack()
 
 
 def map_data(name, data, fn, batch_size=0, batch_dim=0):

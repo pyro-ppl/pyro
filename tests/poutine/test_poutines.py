@@ -261,7 +261,7 @@ class QueuePoutineMixedTest(TestCase):
 
     def test_queue_single(self):
         f = poutine.trace(poutine.queue(self.model, queue=self.queue))
-        tr = f()
+        tr = f.get_trace()
         for name in self.sites:
             assert name in tr
 
@@ -269,7 +269,7 @@ class QueuePoutineMixedTest(TestCase):
         f = poutine.trace(poutine.queue(self.model, queue=self.queue))
         trs = []
         while not self.queue.empty():
-            trs.append(f())
+            trs.append(f.get_trace())
         assert len(trs) == 2
 
         values = [

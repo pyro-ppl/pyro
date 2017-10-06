@@ -83,7 +83,7 @@ class QueuePoutine(Poutine):
             support = fn.support(*args, **kwargs)
         except (AttributeError, NotImplementedError):
             # For distributions without discrete support, we sample as usual.
-            r_val = super(QueuePoutine, self)._pyro_sample(msg, name, fn, *args, **kwargs)
+            r_val = super(QueuePoutine, self)._pyro_sample(msg)
             self.guide_trace.add_sample(name, msg["scale"], r_val, fn, *args, **kwargs)
             return r_val
 
