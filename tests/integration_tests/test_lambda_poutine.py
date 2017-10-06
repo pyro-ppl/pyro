@@ -7,7 +7,7 @@ from torch.autograd import Variable
 
 import pyro
 import pyro.distributions as dist
-from pyro.infer.tracegraph_kl_qp import TraceGraph_KL_QP
+from pyro.optim import Optimize
 from pyro.util import ng_zeros
 from tests.common import TestCase
 
@@ -88,11 +88,12 @@ class NormalNormalTests(TestCase):
         self.assertEqual(len(guide_tracegraph.get_graph().edges()), 0)
         self.assertEqual(len(guide_tracegraph.get_graph().nodes()), 1)
 
-        kl_optim = TraceGraph_KL_QP(model, guide, pyro.optim(
-                                    torch.optim.Adam,
-                                    {"lr": .0008, "betas": (0.96, 0.999)}))
+        optim = Optimize(model, guide,
+                         torch.optim.Adam, {"lr": .0008, "betas": (0.96, 0.999)},
+                         loss="ELBO", trace_graph=True)
+
         for k in range(n_steps):
-            kl_optim.step()
+            optim.step()
 
             mu_error = torch.sum(
                 torch.pow(

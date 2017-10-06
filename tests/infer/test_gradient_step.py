@@ -10,7 +10,7 @@ from pyro.util import ng_ones, ng_zeros
 from pyro.optim.optim import Optimize
 
 # The golden values below (mu_q_expected/log_sig_q_expected/) need to be updated each time
-# KL_QP changes its random algorithm.
+# ELBO changes its random algorithm.
 # If this leads to too much churn, simply delete this test.
 
 
