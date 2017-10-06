@@ -1,4 +1,6 @@
-import warnings
+from __future__ import division
+
+import contextlib
 from inspect import isclass
 
 import torch
@@ -6,10 +8,10 @@ from torch.autograd import Variable
 from torch.nn import Parameter
 
 import pyro
-from pyro import util
 from pyro.optim.optim import PyroOptim
 from pyro.params import param_with_module_name
 from pyro.params.param_store import ParamStoreDict
+from pyro.poutine.lambda_poutine import LambdaPoutine
 from pyro.util import zeros, ones, set_rng_seed  # noqa: F401
 
 # global map of params for now
@@ -105,6 +107,80 @@ def observe(name, fn, obs, *args, **kwargs):
     return sample(name, fn, *args, **kwargs)
 
 
+@contextlib.contextmanager
+def iarange(name, size, subsample_size=0):
+    """
+    Context manager for ranges indexing iid variables, optionally subsampling.
+
+    WARNING: Subsampling is only correct if all computation is iid within the context.
+
+    By default `subsample_size=False` and this simply yields a `torch.arange(0, size)`.
+    If `0<subsample_size<=size` this yields a single random batch of size
+    `subsample_size` and scales all log likelihood terms by `size/batch_size`, within
+    this context.
+
+    :param str name: A name that will be used for this site in a Trace.
+    :param int size: The size of the collection being subsampled (like `stop` in builtin `range`).
+    :param int subsample_size: Size of minibatches used in subsampling. Defaults to `size` if set to 0.
+    :return: A context manager yielding a single 1-dimensional `torch.Tensor` of indices.
+
+    Examples::
+
+        # This version is vectorized:
+        >>> with iarange('data', 100, subsample_size=10) as batch:
+                observe('obs', normal, data.index_select(0, batch), mu, sigma)
+        # This version manually iterates through the batch to deal with control flow.
+        >>> with iarange('data', 100, subsample_size=10) as batch:
+                for i in batch:
+                    if z[i]:  # Prevents vectorization.
+                        observe('obs_{}'.format(i), normal, data[i], mu, sigma)
+    """
+    if subsample_size == 0 or subsample_size >= size:
+        subsample_size = size
+    if subsample_size == size:
+        # If not subsampling, there is no need to scale and we can ignore the _PYRO_STACK.
+        yield Variable(torch.LongTensor(list(range(size))))
+        return
+
+    subsample = Variable(torch.randperm(size)[0:subsample_size])
+    if len(_PYRO_STACK) == 0:
+        yield subsample
+    else:
+        # Wrap computation in a scaling context.
+        scale = size / subsample_size
+        scale_context = LambdaPoutine(None, name, scale)
+        try:
+            scale_context._push_stack()
+            scale_context._enter_poutine()
+            yield subsample
+            scale_context._pop_stack()
+        finally:
+            scale_context._flush_stack()
+
+
+def irange(name, size, subsample_size=0):
+    """
+    Non-vectorized version of iarange.
+
+    Examples::
+
+        >>> for i in irange('data', 100, subsample_size=10):
+                if z[i]:  # Prevents vectorization.
+                    observe('obs_{}'.format(i), normal, data[i], mu, sigma)
+    """
+    with iarange(name, size, subsample_size) as batch:
+        # Wrap computation in an independence context.
+        indep_context = LambdaPoutine(None, name, 1.0)
+        for i in batch.data:
+            try:
+                indep_context._push_stack()
+                indep_context._enter_poutine()
+                yield i
+                indep_context._pop_stack()
+            finally:
+                indep_context._flush_stack()
+
+
 def map_data(name, data, fn, batch_size=0, batch_dim=0):
     """
     Data subsampling with the important property that all the data are conditionally independent.
@@ -119,39 +195,13 @@ def map_data(name, data, fn, batch_size=0, batch_dim=0):
     :param int batch_dim: dimension to subsample for tensor inputs
     :return: a list of values returned by `fn`
     """
-    if len(_PYRO_STACK) == 0:
-        # default behavior
-        ind = util.get_batch_indices(data, batch_size, batch_dim)
-        if batch_size == 0:
-            ind_data = data
-        elif isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
-            ind_data = data.index_select(batch_dim, ind)
-        else:
-            ind_data = [data[i] for i in ind]
-
-        if isinstance(data, (torch.Tensor, Variable)):
-            ret = fn(ind, ind_data)
-        else:
-            ret = [fn(i, x) for i, x in zip(ind, ind_data)]
-        return ret
+    if isinstance(data, (torch.Tensor, Variable)):
+        size = data.size(batch_dim)
+        with iarange(name, size, batch_size) as batch:
+            return fn(batch, data.index_select(batch_dim, batch))
     else:
-        # initialize data structure to pass up/down the stack
-        msg = {
-            "type": "map_data",
-            "name": name,
-            "fn": fn,
-            "data": data,
-            "batch_size": batch_size,
-            "batch_dim": batch_dim,
-            # XXX should these be added here or during application
-            "indices": None,
-            "ret": None,
-            "done": False,
-            "stop": False,
-        }
-        # apply the stack and return its return value
-        out_msg = util.apply_stack(msg)
-        return out_msg["ret"]
+        size = len(data)
+        return [fn(i, data[i]) for i in irange(name, size, batch_size)]
 
 
 # XXX this should have the same call signature as torch.Tensor constructors

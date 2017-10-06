@@ -1,6 +1,3 @@
-import torch
-from torch.autograd import Variable
-
 import pyro
 
 
@@ -183,56 +180,6 @@ class Poutine(object):
 
         msg["done"] = True
         return obs
-
-    def _pyro_map_data(self, msg):
-        """
-        :param msg: current message at a trace site.
-        :returns: the result of running the site function on the data.
-
-        Implements default pyro.map_data Poutine behavior:
-        If the site input is a tensor, apply the site function to the tensor,
-        possibly with subsampling.
-        If the site input is a list or tuple, map the site function
-        over enumerate(site_input), possibly with subsampling.
-
-        Derived classes often compute a side effect,
-        then call super(Derived, self)._pyro_map_data(msg).
-        """
-        data, fn, batch_size, batch_dim = \
-            msg["data"], msg["fn"], msg["batch_size"], msg["batch_dim"]
-
-        # msg["done"] enforces the guarantee in the poutine execution model
-        # that a site's non-effectful primary computation should only be executed once:
-        # if the site already has a stored return value,
-        # don't reexecute the function at the site,
-        # and do any side effects using the stored return value.
-        if msg["done"]:
-            return msg["ret"]
-        else:
-            # this code is verbatim from the top-level definition.
-            if batch_size is None:
-                batch_size = 0
-            assert batch_size >= 0, "cannot have negative batch sizes"
-            if msg["indices"] is None:
-                ind = pyro.util.get_batch_indices(data, batch_size, batch_dim)
-                msg["indices"] = ind
-
-            if batch_size == 0:
-                ind_data = data
-            elif isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
-                ind_data = data.index_select(batch_dim, msg["indices"])
-            else:
-                ind_data = [data[i] for i in msg["indices"]]
-
-            if isinstance(data, (torch.Tensor, Variable)):
-                ret = fn(msg["indices"], ind_data)
-            else:
-                ret = list(map(lambda ix: fn(*ix), zip(msg["indices"], ind_data)))
-
-            # after fn has been called, update msg["done"]
-            # to prevent it from being called again.
-            msg["done"] = True
-            return ret
 
     def _pyro_param(self, msg):
         """

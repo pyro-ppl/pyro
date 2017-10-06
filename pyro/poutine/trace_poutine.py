@@ -1,7 +1,4 @@
-import pyro
-
 from .poutine import Poutine
-from .lambda_poutine import LambdaPoutine
 from .trace import Trace
 
 
@@ -115,29 +112,3 @@ class TracePoutine(Poutine):
         retrieved = super(TracePoutine, self)._pyro_param(msg)
         self.trace.add_param(name, retrieved, *args, **kwargs)
         return retrieved
-
-    def _pyro_map_data(self, msg):
-        """
-        :param msg: current message at a trace site.
-        :returns: the result of running the site function on the data.
-
-        Implements default pyro.map_data Poutine behavior with an additional side effect:
-        If the site input is a tensor, apply the site function to the tensor,
-        possibly with subsampling, store the return value in self.trace,
-        and return the return value.
-        If the site input is a list or tuple, map the site function
-        over enumerate(site_input), possibly with subsampling,
-        store the return values in self.trace,
-        and return the return values.
-        """
-        name, data, fn, batch_size, batch_dim = \
-            msg["name"], msg["data"], msg["fn"], msg["batch_size"], msg["batch_dim"]
-
-        scale = pyro.util.get_batch_scale(data, batch_size, batch_dim)
-        msg["fn"] = LambdaPoutine(fn, name, scale)
-
-        ret = super(TracePoutine, self)._pyro_map_data(msg)
-
-        msg["fn"] = fn
-        self.trace.add_map_data(name, fn, batch_size, batch_dim, msg["indices"])
-        return ret

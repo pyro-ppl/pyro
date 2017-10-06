@@ -1,7 +1,4 @@
-import pyro
-
 from .poutine import Poutine
-from .lambda_poutine import LambdaPoutine
 
 
 class ReplayPoutine(Poutine):
@@ -50,16 +47,6 @@ class ReplayPoutine(Poutine):
         so that poutines below it do not execute their sample functions at that site.
         """
         if msg["name"] in self.sites:
-            if msg["type"] == "map_data":
-                guide_type = self.guide_trace[msg["name"]]["type"]
-                assert self.guide_trace[msg["name"]]["type"] == "map_data", \
-                    "{} is {}, not map_data, in guide_trace".format(msg["name"],
-                                                                    guide_type)
-                msg["indices"] = self.guide_trace[msg["name"]]["indices"]
-                msg["batch_size"] = self.guide_trace[msg["name"]]["batch_size"]
-                msg["batch_dim"] = self.guide_trace[msg["name"]]["batch_dim"]
-
-            # dont reexecute
             if msg["type"] == "sample":
                 msg["done"] = True
                 msg["ret"] = self.guide_trace[msg["name"]]["value"]
@@ -93,20 +80,3 @@ class ReplayPoutine(Poutine):
         else:
             raise ValueError(
                 "something went wrong with replay conditions at site " + name)
-
-    def _pyro_map_data(self, msg):
-        """
-        :param msg: current message at a trace site.
-        :returns: the result of running the site function on the data.
-
-        Instead of sampling new batch indices,
-        uses the batch indices from the guide trace,
-        already provided by _prepare_site.
-        """
-        name, data, fn, batch_size, batch_dim = \
-            msg["name"], msg["data"], msg["fn"], msg["batch_size"], msg["batch_dim"]
-        scale = pyro.util.get_batch_scale(data, batch_size, batch_dim)
-        msg["fn"] = LambdaPoutine(fn, name, scale)
-        ret = super(ReplayPoutine, self)._pyro_map_data(msg)
-        msg["fn"] = fn
-        return ret

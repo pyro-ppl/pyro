@@ -1,4 +1,3 @@
-import pyro
 from .poutine import Poutine
 
 
@@ -27,50 +26,13 @@ class LambdaPoutine(Poutine):
         self.counter += 1
         return super(LambdaPoutine, self).__enter__()
 
-    def _annotate_map_data_stack(self, msg, name):
+    def _prepare_site(self, msg):
         """
         construct the message that is consumed by TraceGraphPoutine;
         map_data_stack encodes the nested sequence of map_data branches
         that the site at name is within
         """
+        msg["scale"] = self.scale * msg["scale"]
         if len(msg['map_data_stack']) == 0 or msg['map_data_stack'][0] != self.name:
-            msg['map_data_stack'].append((self.name, self.counter))
+            msg['map_data_stack'].insert(0, (self.name, self.counter))
         return msg
-
-    def _pyro_sample(self, msg):
-        """
-        pack the message with extra information and continue
-        """
-        msg["scale"] = self.scale * msg["scale"]
-        msg = self._annotate_map_data_stack(msg, msg["name"])
-        ret = super(LambdaPoutine, self)._pyro_sample(msg)
-        return ret
-
-    def _pyro_observe(self, msg):
-        """
-        pack the message with extra information and continue
-        """
-        msg["scale"] = self.scale * msg["scale"]
-        msg = self._annotate_map_data_stack(msg, msg["name"])
-        ret = super(LambdaPoutine, self)._pyro_observe(msg)
-        return ret
-
-    def _pyro_param(self, msg):
-        """
-        pack the message with extra information and continue
-        """
-        msg["scale"] = self.scale * msg["scale"]
-        msg = self._annotate_map_data_stack(msg, msg["name"])
-        return super(LambdaPoutine, self)._pyro_param(msg)
-
-    def _pyro_map_data(self, msg):
-        """
-        scaled map_data: Rescale the message and continue
-        """
-        name, data, fn, batch_size, batch_dim = \
-            msg["name"], msg["data"], msg["fn"], msg["batch_size"], msg["batch_dim"]
-        mapdata_scale = pyro.util.get_batch_scale(data, batch_size, batch_dim)
-        msg["fn"] = LambdaPoutine(fn, name, mapdata_scale)
-        ret = super(LambdaPoutine, self)._pyro_map_data(msg)
-        msg["fn"] = fn
-        return ret
