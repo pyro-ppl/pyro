@@ -16,13 +16,13 @@ format: FORCE
 	isort -i *.py pyro/*.py pyro/*/*.py
 
 test: lint FORCE
-	pytest -vx -n auto
+	pytest -vx -n auto --stage unit
 
 integration-test: lint FORCE
 	pytest -vx -n auto --stage integration
 
 test-all: lint FORCE
-	pytest -vx -n auto --stage all
+	pytest -vx -n auto
 
 clean: FORCE
 	git clean -dfx -e pyro-egg.info
