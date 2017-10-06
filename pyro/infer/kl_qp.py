@@ -52,42 +52,26 @@ class KL_QP(object):
     def __call__(self, *args, **kwargs):
         return self.step(*args, **kwargs)
 
-    def populate_traces(self, *args, **kwargs):
+    def iter_traces(self, *args, **kwargs):
         """
         Method to draw,store and evaluate multiple samples in traces
         """
-        model_traces = []
-        guide_traces = []
-        log_r_per_sample = []
-
         for i in range(self.num_particles):
             guide_trace = poutine.trace(self.guide)(*args, **kwargs)
             model_trace = poutine.trace(
                 poutine.replay(self.model, guide_trace))(*args, **kwargs)
-
             log_r = model_trace.log_pdf() - guide_trace.log_pdf()
-            log_r_per_sample.append(log_r)
-            model_traces.append(model_trace)
-            guide_traces.append(guide_trace)
 
-        return model_traces, guide_traces, log_r_per_sample
+            yield model_trace, guide_trace, log_r
 
     def eval_objective(self, *args, **kwargs):
         """
         Evaluate Elbo by running num_particles often.
         Returns the Elbo as a value
         """
-        model_traces = []
-        guide_traces = []
-        log_r_per_sample = []
-
-        [model_traces, guide_traces, log_r_per_sample] = self.populate_traces(*args, **kwargs)
-
         elbo = 0.0
-        for i in range(self.num_particles):
+        for model_trace, guide_trace, log_r in self.iter_traces(*args, **kwargs):
             elbo_particle = 0.0
-            model_trace = model_traces[i]
-            guide_trace = guide_traces[i]
 
             for name in model_trace.keys():
                 if model_trace[name]["type"] == "observe":
@@ -107,15 +91,11 @@ class KL_QP(object):
         Computes a surrogate loss, which, when differentiated yields an estimate of the gradient of the Elbo.
         Num_particle many samples are used to form the surrogate loss.
         """
-
-        [model_traces, guide_traces, log_r_per_sample] = self.populate_traces(*args, **kwargs)
-
         elbo = 0.0
-        for i in range(self.num_particles):
+        all_trainable_params = []
+
+        for model_trace, guide_trace, log_r in self.iter_traces(*args, **kwargs):
             elbo_particle = 0.0
-            model_trace = model_traces[i]
-            guide_trace = guide_traces[i]
-            log_r = log_r_per_sample[i]
 
             for name in model_trace.keys():
                 if model_trace[name]["type"] == "observe":
@@ -131,22 +111,18 @@ class KL_QP(object):
                     pass
             elbo += elbo_particle / self.num_particles
 
-        # accumulate parameters
-        all_trainable_params = []
-        # get trace params from last model run
-        if not self.model_fixed:
-            for i in range(self.num_particles):
-                model_trace = model_traces[i]
+            # accumulate parameters
+            # get trace params from last model run
+            if not self.model_fixed:
                 for name in model_trace.keys():
                     if model_trace[name]["type"] == "param":
                         all_trainable_params.append(model_trace[name]["value"])
-        # get trace params from last guide run
-        if not self.guide_fixed:
-            for i in range(self.num_particles):
-                guide_trace = guide_traces[i]
+            # get trace params from last guide run
+            if not self.guide_fixed:
                 for name in guide_trace.keys():
                     if guide_trace[name]["type"] == "param":
                         all_trainable_params.append(guide_trace[name]["value"])
+
         all_trainable_params = list(set(all_trainable_params))
         loss = -elbo
 
