@@ -9,6 +9,7 @@ import pytest
 
 from tests.common import TestCase
 
+
 @pytest.mark.xfail(reason="refactoring")
 @pytest.mark.stage("test_examples")
 class runExample(TestCase):
