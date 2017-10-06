@@ -87,7 +87,7 @@ class Optimize(object):
         """
         evaluate the loss function
         """
-        self.loss(*args, **kwargs)
+        return self.loss(*args, **kwargs)
 
     def step(self, *args, **kwargs):
         """

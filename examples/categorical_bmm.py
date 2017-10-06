@@ -10,7 +10,7 @@ from torch.nn import Softmax
 
 import pyro
 from pyro.distributions import Bernoulli, Categorical
-from pyro.infer.kl_qp import KL_QP
+from pyro.optim import Optimize
 
 
 mnist = dset.MNIST(
@@ -67,10 +67,7 @@ def inspect_posterior_samples(i):
     return dat
 
 
-optim_fct = pyro.optim(torch.optim.Adam, {'lr': .0001})
-
-inference = KL_QP(local_model, local_guide, optim_fct)
-
+inference = Optimize(local_model, local_guide, torch.optim.Adam, {'lr': .0001}, loss="ELBO")
 vis = visdom.Visdom()
 
 nr_epochs = 50

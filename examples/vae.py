@@ -11,7 +11,7 @@ from torch.autograd import Variable
 
 import pyro
 from pyro.distributions import DiagNormal
-from pyro.infer.kl_qp import KL_QP
+from pyro.optim import Optimize
 from pyro.util import ng_zeros, ng_ones
 
 # load mnist dataset
@@ -136,7 +136,7 @@ def per_param_args(name, param):
 # or alternatively
 adam_params = {"lr": .0001}
 
-kl_optim = KL_QP(model, guide, pyro.optim(optim.Adam, per_param_args))
+optim = Optimize(model, guide, torch.optim.Adam, per_param_args, loss="ELBO")
 
 # num_steps = 1
 mnist_data = Variable(train_loader.dataset.train_data.float() / 255.)
@@ -163,7 +163,7 @@ def main():
 
             # get batch
             batch_data = mnist_data[batch_start:batch_end]
-            epoch_loss += kl_optim.step(batch_data)
+            epoch_loss += optim.step(batch_data)
 
             sample = model_sample()
         vis.image(batch_data[0].contiguous().view(28, 28).data.numpy())

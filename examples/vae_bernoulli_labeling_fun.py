@@ -11,7 +11,7 @@ from torch.autograd import Variable
 
 import pyro
 from pyro.distributions import DiagNormal, Bernoulli, Categorical
-from pyro.infer.kl_qp import KL_QP
+from pyro.optim import Optimize
 
 # load mnist dataset
 root = './data'
@@ -215,8 +215,8 @@ def per_param_args(name, param):
 # or alternatively
 adam_params = {"lr": .0001}
 
-inference = KL_QP(model_xz, guide_latent, pyro.optim(optim.Adam, adam_params))
-inference_c = KL_QP(model_c, guide_latent, pyro.optim(optim.Adam, adam_params))
+inference = Optimize(model_xz, guide_latent, torch.optim.Adam, adam_params, loss="ELBO")
+inference_c = Optimize(model_c, guide_latent, torch.optim.Adam, adam_params, loss="ELBO")
 
 mnist_data = Variable(train_loader.dataset.train_data.float() / 255.)
 mnist_labels = Variable(train_loader.dataset.train_labels)

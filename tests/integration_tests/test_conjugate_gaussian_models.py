@@ -67,15 +67,15 @@ class GaussianChainTests(TestCase):
 
     def test_elbo_reparameterized_N_is_3(self):
         self.setup_chain(3)
-        self.do_elbo_test(True, 8000, 0.0015, 0.04, difficulty=1.0)
+        self.do_elbo_test(True, 4000, 0.0015, 0.03, difficulty=1.0)
 
     def test_elbo_reparameterized_N_is_8(self):
         self.setup_chain(8)
-        self.do_elbo_test(True, 10000, 0.0015, 0.04, difficulty=1.0)
+        self.do_elbo_test(True, 5000, 0.0015, 0.03, difficulty=1.0)
 
     def test_elbo_reparameterized_N_is_17(self):
         self.setup_chain(17)
-        self.do_elbo_test(True, 13000, 0.0015, 0.04, difficulty=1.0)
+        self.do_elbo_test(True, 5000, 0.0015, 0.03, difficulty=1.0)
 
     def test_elbo_nonreparameterized_N_is_3(self):
         self.setup_chain(3)
@@ -239,31 +239,30 @@ class GaussianPyramidTests(TestCase):
 
     def test_elbo_reparameterized_three_layers(self):
         self.setup_pyramid(3)
-        self.do_elbo_test(True, 20000, 0.0015, 0.04, 0.92,
+        self.do_elbo_test(True, 10000, 0.0015, 0.04, 0.92,
                           difficulty=0.8, model_permutation=False)
 
     @pytest.mark.skipif("CI" in os.environ, reason="slow test")
     def test_elbo_reparameterized_four_layers(self):
         self.setup_pyramid(4)
-        self.do_elbo_test(True, 30000, 0.0015, 0.04, 0.92,
+        self.do_elbo_test(True, 20000, 0.0015, 0.04, 0.92,
                           difficulty=0.8, model_permutation=False)
 
     def test_elbo_nonreparameterized_two_layers(self):
         self.setup_pyramid(2)
-        self.do_elbo_test(False, 25000, 0.001, 0.06, 0.95, difficulty=0.4, model_permutation=False)
+        self.do_elbo_test(False, 8000, 0.001, 0.04, 0.95, difficulty=0.5, model_permutation=False)
 
     def test_elbo_nonreparameterized_three_layers(self):
         self.setup_pyramid(3)
-        self.do_elbo_test(False, 35000, 0.001, 0.06, 0.95, difficulty=0.4, model_permutation=False)
+        self.do_elbo_test(False, 15000, 0.001, 0.04, 0.95, difficulty=0.5, model_permutation=False)
 
     def test_elbo_nonreparameterized_two_layers_model_permuted(self):
         self.setup_pyramid(2)
-        self.do_elbo_test(False, 40000, 0.0007, 0.06, 0.97, difficulty=0.4, model_permutation=True)
+        self.do_elbo_test(False, 10000, 0.0007, 0.05, 0.96, difficulty=0.5, model_permutation=True)
 
-    @pytest.mark.skipif("CI" in os.environ, reason="slow test")
     def test_elbo_nonreparameterized_three_layers_model_permuted(self):
         self.setup_pyramid(3)
-        self.do_elbo_test(False, 60000, 0.0007, 0.06, 0.97, difficulty=0.4, model_permutation=True)
+        self.do_elbo_test(False, 15000, 0.0007, 0.05, 0.96, difficulty=0.4, model_permutation=True)
 
     def calculate_variational_targets(self):
         # calculate (some of the) variational parameters corresponding to exact posterior

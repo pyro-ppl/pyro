@@ -11,7 +11,7 @@ from torch.autograd import Variable
 
 import pyro
 from pyro.distributions import DiagNormal, Bernoulli
-from pyro.infer.kl_qp import KL_QP
+from pyro.optim import Optimize
 
 # load mnist dataset
 root = './data'
@@ -128,8 +128,8 @@ def per_param_args(name, param):
 # or alternatively
 adam_params = {"lr": .0001}
 
-kl_optim = KL_QP(model, guide, pyro.optim(optim.Adam, adam_params))
-kl_eval = KL_QP(model=model, guide=guide, optim_step_fct=pyro.optim(optim.Adam, adam_params), num_particles=10)
+elbo_grad = Optimize(model, guide, torch.optim.Adam, adam_params, loss="ELBO")
+elbo_eval = Optimize(model, guide, torch.optim.Adam, adam_params, loss="ELBO", num_particles=10)
 
 # num_steps = 1
 mnist_data = Variable(train_loader.dataset.train_data.float() / 255.)
@@ -161,16 +161,16 @@ def main():
             # get batch
             batch_data = mnist_data[batch_start:batch_end]
 
-            epoch_loss += kl_optim.step(batch_data)
+            epoch_loss += elbo_grad.step(batch_data)
 
-            epoch_eval_loss += kl_eval.eval_objective(batch_data)
+            epoch_eval_loss += elbo_eval.evaluate_loss(batch_data)
 
         loss_training.append(-epoch_loss / float(mnist_size))
         sample, sample_mu = model_sample()
-        vis.line(np.array(loss_training), opts=dict({'title': 'Training ELBO in nats'}))
+        # vis.line(np.array(loss_training), opts=dict({'title': 'Training ELBO in nats'}))
         # vis.image(batch_data[0].view(28, 28).data.numpy())
         # vis.image(sample[0].view(28, 28).data.numpy())
-        vis.image(sample_mu[0].view(28, 28).data.numpy())
+        # vis.image(sample_mu[0].view(28, 28).data.numpy())
         print("epoch avg loss {}".format(epoch_loss / float(mnist_size)))
         print("epoch eval loss {}".format(epoch_eval_loss / float(mnist_size)))
 

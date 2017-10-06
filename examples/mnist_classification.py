@@ -11,7 +11,7 @@ from torch.autograd import Variable
 
 import pyro
 from pyro.distributions import Categorical
-from pyro.infer.kl_qp import KL_QP
+from pyro.optim import Optimize
 
 # load mnist dataset
 root = './data'
@@ -75,7 +75,7 @@ def guide(data, cll):
 # or alternatively
 adam_params = {"lr": .0001}
 
-inference_opt = KL_QP(model_obs, guide, pyro.optim(optim.Adam, adam_params))
+inference_opt = Optimize(model_obs, guide, torch.optim.Adam, adam_params, loss="ELBO")
 
 mnist_data = Variable(train_loader.dataset.train_data.float() / 255.)
 mnist_labels = Variable(train_loader.dataset.train_labels)

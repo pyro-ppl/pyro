@@ -10,7 +10,7 @@ from torch.autograd import Variable
 
 import pyro
 from pyro.distributions import Uniform, DiagNormal
-from pyro.infer.kl_qp import KL_QP
+from pyro.optim import Optimize
 
 """
 Samantha really likes physics---but she likes pyro even more. Instead of using
@@ -100,15 +100,16 @@ def guide(observed_data):
 # do variational inference using KL_QP
 print("doing inference with simulated data")
 verbose = True
-kl_optim = KL_QP(model, guide, pyro.optim(optim.Adam, {"lr": 0.003, "betas": (0.93, 0.993)}))
 
+adam_params = {"lr": 0.003, "betas": (0.93, 0.993)}
+optim = Optimize(model, guide, torch.optim.Adam, adam_params, loss="ELBO")
 
 def main():
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', nargs='?', default=1000, type=int)
     args = parser.parse_args()
     for step in range(args.num_epochs):
-        kl_optim.step(observed_data)  # loss
+        optim.step(observed_data)  # loss
         if step % 100 == 0:
             if verbose:
                 print("[epoch %d] mean_mu: %.3f" % (step, pyro.param("mean_mu").data[0]))
