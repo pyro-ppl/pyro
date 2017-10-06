@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 from torch.nn import Parameter
 from torch.nn.functional import normalize
+from pdb import set_trace as bb
 
 from torch.autograd import Variable
 import pandas as pd
@@ -18,12 +19,12 @@ Bayesian Logistic Regression
 """
 
 # use covtype dataset
-fname = "data/covtype/covtype.data"
-print("loading covtype data set...")
-with open(fname, "r+") as f:
-    content = f.read()
-df = pd.read_csv(fname, header=None)
-print("...done")
+# fname = "data/covtype/covtype.data"
+# print("loading covtype data set...")
+# with open(fname, "r+") as f:
+#     content = f.read()
+# df = pd.read_csv(fname, header=None)
+# print("...done")
 
 # generate toy dataset
 def build_toy_dataset(N, noise_std=0.1):
@@ -35,15 +36,23 @@ def build_toy_dataset(N, noise_std=0.1):
   X = (X - 4.0) / 4.0
   X = X.reshape((N, D))
   y = y.reshape((N, 1))
+  X, y = Variable(torch.Tensor(X)), Variable(torch.Tensor(y))
+  return torch.cat((X,y), 1)
   return Variable(torch.Tensor(X)), Variable(torch.Tensor(y))
 
 sigmoid = torch.nn.Sigmoid()
 softplus = torch.nn.Softplus()
 
-N = 581012 # data
-D = 54 # features
+# N = 581012 # data
+# D = 54 # features
+N = 10000 # toy data
+D = 1
 batch_size = 256
 
+"""
+Custom prior we specify. This can be anything, but for this example
+we use DiagNormal
+"""
 class DiagNormalPrior(pyro.distributions.Distribution):
     def __init__(self, mu, sigma, *args, **kwargs):
         self.mu = mu
@@ -103,15 +112,17 @@ adam_optim = pyro.optim(torch.optim.Adam, lr)
 sgd_optim = pyro.optim(torch.optim.SGD, lr)
 
 # dat = build_toy_dataset(N)
-x = df.as_matrix(columns=range(D))
-y = df.as_matrix(columns=[D])
-raw_data = Variable(torch.Tensor(df.as_matrix().tolist()))
-data = normalize(raw_data, 2, dim=1)
-x_norm = normalize(Variable(torch.Tensor(x.tolist())), 2, dim=1)
-y = Variable(torch.Tensor(y.tolist()))
-data = torch.cat((x_norm, y), 1)
+# x = df.as_matrix(columns=range(D))
+# y = df.as_matrix(columns=[D])
+# raw_data = Variable(torch.Tensor(df.as_matrix().tolist()))
+# data = normalize(raw_data, 2, dim=1)
+# x_norm = normalize(Variable(torch.Tensor(x.tolist())), 2, dim=1)
+# y = Variable(torch.Tensor(y.tolist()))
+# data = torch.cat((x_norm, y), 1)
+data = build_toy_dataset(N)
 
-def inspect_post_params(data):
+def inspect_post_params():
+    print pyro.get_param_store._params
     mw_param = pyro.param("guide_mean_weight")
     sw_param = pyro.param("guide_sigma_weight")
     mb_param  = pyro.param("guide_mean_bias")
@@ -136,4 +147,5 @@ for j in range(nr_epochs):
         batch_end = all_batches[ix + 1]
         batch_data = data[batch_start: batch_end]
         epoch_loss += grad_step.step(batch_data)
+        print pyro.get_param_store()._params
     print("epoch avg loss {}".format(epoch_loss/float(N)))
