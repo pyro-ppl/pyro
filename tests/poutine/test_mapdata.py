@@ -6,7 +6,7 @@ import pytest
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.infer.kl_qp import KL_QP
+from pyro.optim import Optimize
 from tests.common import assert_equal
 
 pytestmark = pytest.mark.stage("integration", "integration_batch_1")
@@ -78,11 +78,12 @@ def test_elbo_mapdata(batch_size, map_type):
         else:
             pass
 
-    kl_optim = KL_QP(
-        model, guide, pyro.optim(
-            torch.optim.Adam, {"lr": 0.0008, "betas": (0.95, 0.999)}))
+    optim = Optimize(model, guide,
+                     torch.optim.Adam, {"lr": 0.0008, "betas": (0.95, 0.999)},
+                     loss="ELBO", trace_graph=False)
+
     for k in range(n_steps):
-        kl_optim.step()
+        optim.step()
 
         mu_error = torch.sum(
             torch.pow(
