@@ -95,21 +95,26 @@ class Trace(dict):
         """
         return Trace(self)
 
-    def log_pdf(self):
+    def log_pdf(self, vec_batch_nodes_dict={}):
         """
         Compute the local and overall log-probabilities of the trace
         """
+
         log_p = 0.0
         for name in self.keys():
             if self[name]["type"] in ("observe", "sample"):
-                self[name]["log_pdf"] = self[name]["fn"].log_pdf(
-                    self[name]["value"],
-                    *self[name]["args"][0],
-                    **self[name]["args"][1]) * self[name]["scale"]
-                log_p += self[name]["log_pdf"]
-                # if self[name]["scale"] == 1.0:
-                #     print(name, self[name]["scale"])
-                #     pdb.set_trace()
+                if name not in vec_batch_nodes_dict:
+                    self[name]["log_pdf"] = self[name]["fn"].log_pdf(
+                        self[name]["value"],
+                        *self[name]["args"][0],
+                        **self[name]["args"][1]) * self[name]["scale"]
+                    log_p += self[name]["log_pdf"]
+                else:
+                    self[name]["batch_log_pdf"] = self[name]["fn"].batch_log_pdf(
+                        self[name]["value"],
+                        *self[name]["args"][0],
+                        **self[name]["args"][1]) * self[name]["scale"]
+                    log_p += self[name]["batch_log_pdf"].sum()
         return log_p
 
     def batch_log_pdf(self):
