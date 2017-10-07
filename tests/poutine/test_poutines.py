@@ -258,7 +258,6 @@ class QueuePoutineDiscreteTest(TestCase):
             f()
             assert False
         except ValueError:
-<<<<<<< HEAD:tests/unit/test_poutines.py
             self.assertTrue(True)
 
 
@@ -366,8 +365,6 @@ class LiftPoutineTests(TestCase):
                 dist_name = name[3:]
                 self.assertTrue(dist_name + "_prior" == lifted_tr[key_name]['fn'].__name__)
                 self.assertTrue(lifted_tr[key_name]["type"] == "sample")
-=======
-            assert True
 
 
 class QueuePoutineMixedTest(TestCase):
@@ -463,4 +460,3 @@ class IndirectLambdaPoutineTests(TestCase):
         _test_scale_factor(2, 2, [1.0] * 4)
         _test_scale_factor(1, 2, [2.0] * 2)
         _test_scale_factor(2, 1, [2.0] * 2)
->>>>>>> dev:tests/poutine/test_poutines.py
