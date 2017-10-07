@@ -1,4 +1,3 @@
-import pyro
 from pyro import params
 from .poutine import Poutine
 
