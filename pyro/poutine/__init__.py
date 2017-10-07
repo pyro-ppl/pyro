@@ -92,8 +92,13 @@ def escape(fn, escape_fn=None):
     :param escape_fn: function that takes a partial trace and a site
     and returns a boolean value to decide whether to exit at that site
     :returns: stochastic function wrapped in EscapePoutine
-    
-    aa
+
+    Alias for EscapePoutine constructor.
+
+    Given a callable that contains Pyro primitive calls,
+    evaluate escape_fn on each site, and if the result is True,
+    raise a NonlocalExit exception that stops execution
+    and returns the offending site.
     """
     return EscapePoutine(fn, escape_fn)
 

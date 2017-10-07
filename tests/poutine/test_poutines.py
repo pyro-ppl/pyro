@@ -9,7 +9,7 @@ from pyro.distributions import DiagNormal, Bernoulli
 import pyro.distributions as dist
 from tests.common import TestCase, assert_equal
 from pyro.util import ng_ones, ng_zeros, \
-    NonlocalExit, enum_extend, mc_extend, discrete_escape, all_escape
+    NonlocalExit, discrete_escape, all_escape
 
 
 def eq(x, y, prec=1e-10):

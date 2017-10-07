@@ -258,10 +258,10 @@ def enum_extend(trace, msg, num_samples=None):
     :param msg: the message at a pyro primitive site
     :param num_samples: maximum number of extended traces to return.
     :returns: a list of traces, copies of input trace with one extra site
-    
+
     Utility function to copy and extend a trace with sites based on the input site
     whose values are enumerated from the support of the input site's distribution.
-    
+
     Used for exact inference and integrating out discrete variables.
     """
     if num_samples is None:
@@ -285,7 +285,7 @@ def mc_extend(trace, msg, num_samples=None):
     :param msg: the message at a pyro primitive site
     :param num_samples: maximum number of extended traces to return.
     :returns: a list of traces, copies of input trace with one extra site
-    
+
     Utility function to copy and extend a trace with sites based on the input site
     whose values are sampled from the input site's function.
 
