@@ -1,9 +1,8 @@
 import pyro
-import torch
 from pyro import params
 from pyro.distributions import Distribution
 from .poutine import Poutine
-from pdb import set_trace as bb
+
 
 class LiftPoutine(Poutine):
     """
@@ -30,21 +29,9 @@ class LiftPoutine(Poutine):
         if isinstance(self.prior, dict):
             if param_name in self.prior.keys():
                 msg["fn"] = self.prior[param_name]
-        elif isinstance(self.prior, Distribution):
+        elif callable(self.prior):
             # prior is a distribution
             msg["fn"] = self.prior
-        elif callable(self.prior):
-            # prior is stochastic fn
-            prior_trace = pyro.poutine.trace(self.prior)(*msg['args'])
-            if name in prior_trace.keys():
-                # store the distribution sampled from to score against
-                msg['fn'] = prior_trace[name]['fn']
-                msg["done"] = True
-
-                # return sample from the prior
-                return prior_trace[name]['value']
-            else:
-                return pyro._param_store.get_param(name, *args, **kwargs)
         else:
             # otherwise leave as is
             return pyro._param_store.get_param(name, *args, **kwargs)
