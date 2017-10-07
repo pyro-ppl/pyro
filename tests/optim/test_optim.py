@@ -1,10 +1,10 @@
 import torch
-import torch.optim
 from torch.autograd import Variable
 
 import pyro
+import pyro.optim as optim
+from pyro.infer import SVI
 from pyro.distributions import DiagNormal
-from pyro.optim.optim import Optimize
 from tests.common import TestCase
 
 
@@ -51,9 +51,11 @@ class OptimTests(TestCase):
             elif param_name == free_param:
                 return {'lr': 0.01}
 
-        optim = Optimize(model, guide, torch.optim.Adam, optim_params, loss="ELBO")
+        adam = optim.Adam(optim_params)
+        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
+
         for k in range(3):
-            optim.step()
+            svi.step()
 
         free_param_unchanged = torch.equal(
             pyro.param(free_param).data, torch.zeros(1))

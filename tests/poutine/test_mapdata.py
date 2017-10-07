@@ -1,12 +1,12 @@
 import torch
-import torch.optim
 from torch.autograd import Variable
 import pytest
 
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.optim import Optimize
+import pyro.optim as optim
+from pyro.infer import SVI
 from tests.common import assert_equal
 
 pytestmark = pytest.mark.stage("integration", "integration_batch_1")
@@ -78,12 +78,11 @@ def test_elbo_mapdata(batch_size, map_type):
         else:
             pass
 
-    optim = Optimize(model, guide,
-                     torch.optim.Adam, {"lr": 0.0008, "betas": (0.95, 0.999)},
-                     loss="ELBO", trace_graph=False)
+    adam = optim.Adam({"lr": 0.0008, "betas": (0.95, 0.999)})
+    svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
 
     for k in range(n_steps):
-        optim.step()
+        svi.step()
 
         mu_error = torch.sum(
             torch.pow(

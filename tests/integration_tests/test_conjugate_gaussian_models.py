@@ -7,13 +7,17 @@ import networkx
 import numpy as np
 import pytest
 import torch
-import torch.optim
 from torch.autograd import Variable
 
 import pyro
 import pyro.distributions as dist
-from pyro.optim.optim import Optimize
+from pyro.infer import SVI
+import pyro.optim as optim
 from tests.common import TestCase
+
+
+def param_mse(name, target):
+    return torch.sum(torch.pow(target - pyro.param(name), 2.0)).data.numpy()[0]
 
 
 @pytest.mark.stage("integration", "integration_batch_1")
@@ -143,30 +147,23 @@ class GaussianChainTests(TestCase):
                 previous_sample = mu_latent
             return previous_sample
 
-        optim = Optimize(model, guide,
-                         torch.optim.Adam, {"lr": lr, "betas": (0.95, 0.999)},
-                         loss="ELBO", trace_graph=True)
+        adam = optim.Adam({"lr": lr, "betas": (0.95, 0.999)})
+        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
 
         for step in range(n_steps):
             t0 = time.time()
-            optim.step(Verbose=(step == 0))
+            svi.step()
 
             if (step % 5000 == 0 or step == n_steps - 1) and self.verbose:
                 kappa_errors, log_sig_errors, mu_errors = [], [], []
                 for k in range(1, self.N + 1):
                     if k != self.N:
-                        kappa_q = pyro.param("kappa_q_%d" % k)
-                        kappa_error = torch.sum(torch.pow(self.target_kappas[k] - kappa_q, 2.0))
-                        kappa_errors.append(kappa_error.data.numpy()[0])
+                        kappa_error = param_mse("kappa_q_%d" % k, self.target_kappas[k])
+                        kappa_errors.append(kappa_error)
 
-                    mu_q = pyro.param("mu_q_%d" % k)
-                    mu_error = torch.sum(torch.pow(self.target_mus[k] - mu_q, 2.0))
-                    mu_errors.append(mu_error.data.numpy()[0])
-
-                    log_sig_q = pyro.param("log_sig_q_%d" % k)
-                    target_log_sig = -0.5 * torch.log(self.lambda_posts[k])
-                    log_sig_error = torch.sum(torch.pow(target_log_sig - log_sig_q, 2.0))
-                    log_sig_errors.append(log_sig_error.data.numpy()[0])
+                    mu_errors.append(param_mse("mu_q_%d" % k, self.target_mus[k]))
+                    log_sig_error = param_mse("log_sig_q_%d" % k, -0.5 * torch.log(self.lambda_posts[k]))
+                    log_sig_errors.append(log_sig_error)
 
                 max_errors = (np.max(mu_errors), np.max(log_sig_errors), np.max(kappa_errors))
                 min_errors = (np.min(mu_errors), np.min(log_sig_errors), np.min(kappa_errors))
@@ -440,31 +437,27 @@ class GaussianPyramidTests(TestCase):
 
             return latents_dict['mu_latent_1']
 
-        optim = Optimize(model, guide,
-                         torch.optim.Adam, {"lr": lr, "betas": (beta1, 0.999)},
-                         loss="ELBO", trace_graph=True)
+        adam = optim.Adam({"lr": lr, "betas": (beta1, 0.999)})
+        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
 
         for step in range(n_steps):
             t0 = time.time()
-            optim.step(Verbose=(step == 0))
+            svi.step()
 
             if (step % 5000 == 0 or step == n_steps - 1) and self.verbose:
                 log_sig_errors = []
                 for node in self.target_lambdas:
                     target_log_sig = -0.5 * torch.log(self.target_lambdas[node])
-                    log_sig_node = pyro.param('log_sig_' + node)
-                    log_sig_error = torch.sum(torch.pow(target_log_sig - log_sig_node, 2.0))
-                    log_sig_errors.append(log_sig_error.data.numpy()[0])
+                    log_sig_error = param_mse('log_sig_' + node, target_log_sig)
+                    log_sig_errors.append(log_sig_error)
                 max_log_sig_error = np.max(log_sig_errors)
                 min_log_sig_error = np.min(log_sig_errors)
                 mean_log_sig_error = np.mean(log_sig_errors)
                 leftmost_node = self.q_topo_sort[0]
-                leftmost_constant = pyro.param('constant_term_' + leftmost_node)
-                leftmost_constant_error = torch.sum(torch.pow(self.target_leftmost_constant -
-                                                    leftmost_constant, 2.0)).data.numpy()[0]
-                almost_leftmost_constant = pyro.param('constant_term_' + leftmost_node[:-1] + 'R')
-                almost_leftmost_constant_error = torch.sum(torch.pow(self.target_almost_leftmost_constant -
-                                                           almost_leftmost_constant, 2.0)).data.numpy()[0]
+                leftmost_constant_error = param_mse('constant_term_' + leftmost_node,
+                                                    self.target_leftmost_constant)
+                almost_leftmost_constant_error = param_mse('constant_term_' + leftmost_node[:-1] + 'R',
+                                                    self.target_almost_leftmost_constant)
 
                 print("[mean function constant errors (partial)]   %.4f  %.4f" %
                       (leftmost_constant_error, almost_leftmost_constant_error))
