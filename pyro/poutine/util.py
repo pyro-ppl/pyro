@@ -1,6 +1,3 @@
-import inspect
-
-
 class NonlocalExit(Exception):
     """
     TODO doc
@@ -55,12 +52,10 @@ def discrete_escape(trace, msg):
     """
     TODO doc
     """
-    xx = (msg["type"] == "sample") and \
+    return (msg["type"] == "sample") and \
         (msg["name"] not in trace) and \
         (hasattr(msg["fn"], "enumerable")) and \
         (msg["fn"].enumerable)
-    print(xx)
-    return xx
 
 
 def all_escape(trace, msg):

@@ -88,7 +88,7 @@ def block(fn, hide=None, expose=None, hide_types=None, expose_types=None):
 
 def escape(fn, escape_fn=None):
     """
-    TODO doc
+    :param fn: a stochastic function (callable containing pyro primitive calls)
     """
     return EscapePoutine(fn, escape_fn)
 
@@ -100,10 +100,14 @@ def escape(fn, escape_fn=None):
 def queue(fn, queue, max_tries=None,
           extend_fn=None, escape_fn=None, num_samples=None):
     """
-    TODO doc
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param queue: a queue data structure like multiprocessing.Queue to hold partial traces
     :param max_tries: maximum number of attempts to compute a single complete trace
+    :param extend_fn: function (possibly stochastic) that takes a partial trace and a site
+    and returns a list of extended traces
+    :param escape_fn: function (possibly stochastic) that takes a partial trace and a site
+    and returns a boolean value to decide whether to exit
+    :param num_samples: optional number of extended traces for extend_fn to return
     :returns: stochastic function wrapped in poutine logic
 
     Given a stochastic function and a queue,
@@ -128,10 +132,11 @@ def queue(fn, queue, max_tries=None,
         for i in range(max_tries):
             next_trace = queue.get()
             try:
-                return escape(replay(fn, next_trace),
-                              functools.partial(escape_fn, next_trace))(*args, **kwargs)
+                ftr = trace(escape(replay(fn, next_trace),
+                                   functools.partial(escape_fn, next_trace)))
+                return ftr(*args, **kwargs)
             except NonlocalExit as site_container:
-                for tr in extend_fn(next_trace, site_container.site,
+                for tr in extend_fn(ftr.trace.copy(), site_container.site,
                                     num_samples=num_samples):
                     queue.put(tr)
 
