@@ -101,7 +101,7 @@ class Poutine(object):
                 pyro._PYRO_STACK.pop(0)
             else:
                 # should never get here, but just in case...
-                raise ValueError("This Poutine is not on top of the stack")
+                raise ValueError("This Poutine is not on the bottom of the stack")
         else:  # the wrapped function or block raised an exception
             # poutine exception handling:
             # when the callee or enclosed block raises an exception,
