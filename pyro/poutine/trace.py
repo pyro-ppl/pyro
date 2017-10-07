@@ -252,4 +252,3 @@ class TraceGraph(object):
             g.edge(label1, label2)
 
         g.render(graph_output, view=False, cleanup=True)
-
