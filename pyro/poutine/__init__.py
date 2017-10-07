@@ -140,10 +140,10 @@ def queue(fn, queue, max_tries=None,
 
     def _fn(*args, **kwargs):
 
-        assert not queue.empty(), \
-            "trying to get() from an empty queue will deadlock"
-
         for i in range(max_tries):
+            assert not queue.empty(), \
+                "trying to get() from an empty queue will deadlock"
+
             next_trace = queue.get()
             try:
                 ftr = trace(escape(replay(fn, next_trace),
