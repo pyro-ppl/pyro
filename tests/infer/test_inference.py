@@ -320,11 +320,11 @@ class LogNormalNormalTests(TestCase):
         # lognormal-normal model
         # putting some of the parameters inside of a torch module to
         # make sure that that functionality is ok (XXX: do this somewhere else in the future)
-        self.mu0 = Variable(torch.Tensor([[1.0]]))  # normal prior hyperparameter
+        self.mu0 = Variable(torch.Tensor([1.0]))  # normal prior hyperparameter
         # normal prior hyperparameter
-        self.tau0 = Variable(torch.Tensor([[1.0]]))
+        self.tau0 = Variable(torch.Tensor([1.0]))
         # known precision for observation likelihood
-        self.tau = Variable(torch.Tensor([[2.5]]))
+        self.tau = Variable(torch.Tensor([2.5]))
         self.n_data = 2
         self.data = Variable(torch.Tensor([[1.5], [2.2]]))  # two observations
         self.tau_n = self.tau0 + \

@@ -194,7 +194,7 @@ class BlockPoutineTests(NormalNormalNormalPoutineTestCase):
                 name not in guide_trace
 
 
-class QueuePoutineTests(TestCase):
+class QueuePoutineDiscreteTest(TestCase):
 
     def setUp(self):
 
@@ -258,6 +258,56 @@ class QueuePoutineTests(TestCase):
             assert False
         except ValueError:
             assert True
+
+
+class QueuePoutineMixedTest(TestCase):
+
+    def setUp(self):
+
+        # Simple model with 1 continuous + 1 discrete + 1 continuous variable.
+        def model():
+            p = Variable(torch.Tensor([0.5]))
+            mu = Variable(torch.zeros(1))
+            sigma = Variable(torch.ones(1))
+
+            x = pyro.sample("x", DiagNormal(mu, sigma))  # Before the discrete variable.
+            y = pyro.sample("y", Bernoulli(p))
+            z = pyro.sample("z", DiagNormal(mu, sigma))  # After the discrete variable.
+            return dict(x=x, y=y, z=z)
+
+        self.sites = ["x", "y", "z", "_INPUT", "_RETURN"]
+        self.model = model
+        self.queue = Queue()
+        self.queue.put(poutine.Trace())
+
+    def test_queue_single(self):
+        f = poutine.trace(poutine.queue(self.model, queue=self.queue))
+        tr = f()
+        for name in self.sites:
+            assert name in tr
+
+    def test_queue_enumerate(self):
+        f = poutine.trace(poutine.queue(self.model, queue=self.queue))
+        trs = []
+        while not self.queue.empty():
+            trs.append(f())
+        assert len(trs) == 2
+
+        values = [
+            {name: tr[name]['value'].view(-1).data[0] for name in tr.keys()
+             if tr[name]['type'] == 'sample'}
+            for tr in trs
+        ]
+
+        expected_ys = set([0, 1])
+        actual_ys = set([value["y"] for value in values])
+        assert actual_ys == expected_ys
+
+        # Check that x was sampled the same on all each paths.
+        assert values[0]["x"] == values[1]["x"]
+
+        # Check that y was sampled differently on each path.
+        assert values[0]["z"] != values[1]["z"]  # Almost surely true.
 
 
 class IndirectLambdaPoutineTests(TestCase):

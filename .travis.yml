@@ -31,17 +31,17 @@ jobs:
           python: "2.7"
           addons: true
           install: pip install flake8
-          script: flake8
+          script: make lint
         - stage: unit test
           python: 2.7
           env: STAGE=unit
-          script: pytest -vs --cov=pyro
+          script: pytest -vs --cov=pyro --stage unit
         - python: 2.7
           env: STAGE=examples
           script: pytest -vs --cov=pyro --stage test_examples
         - python: 3.5
           env: STAGE=unit
-          script: pytest -vs --cov=pyro
+          script: pytest -vs --cov=pyro --stage unit
         - python: 3.5
           env: STAGE=examples
           script: pytest -vs --cov=pyro --stage test_examples
