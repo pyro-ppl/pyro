@@ -1,13 +1,18 @@
+import functools
+
 # poutines
 from .block_poutine import BlockPoutine
 from .poutine import Poutine  # noqa: F401
-from .queue_poutine import QueuePoutine
 from .replay_poutine import ReplayPoutine
 from .trace_poutine import TracePoutine
 from .tracegraph_poutine import TraceGraphPoutine
+from .escape_poutine import EscapePoutine
 
 # trace data structures
 from .trace import Trace, TraceGraph  # noqa: F401
+
+# other stuff
+import util
 
 
 ############################################
@@ -81,8 +86,21 @@ def block(fn, hide=None, expose=None, hide_types=None, expose_types=None):
                         hide_types=hide_types, expose_types=expose_types)
 
 
-def queue(fn, queue=None, max_tries=None):
+def escape(fn, escape_fn=None):
     """
+    TODO doc
+    """
+    return EscapePoutine(fn, escape_fn)
+
+
+##################################
+# Begin composite operations
+##################################
+
+def queue(fn, queue, max_tries=None,
+          extend_fn=None, escape_fn=None, num_samples=None):
+    """
+    TODO doc
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param queue: a queue data structure like multiprocessing.Queue to hold partial traces
     :param max_tries: maximum number of attempts to compute a single complete trace
@@ -94,4 +112,31 @@ def queue(fn, queue=None, max_tries=None):
     Given a stochastic function and a queue,
     return a return value from a complete trace in the queue
     """
-    return QueuePoutine(fn, queue=queue, max_tries=max_tries)
+
+    if max_tries is None:
+        max_tries = 1e6
+
+    if extend_fn is None:
+        extend_fn = util.enum_extend
+
+    if escape_fn is None:
+        escape_fn = util.discrete_escape
+
+    if num_samples is None:
+        num_samples = -1
+
+    def _fn(*args, **kwargs):
+        for i in range(max_tries):
+            next_trace = queue.get()
+            try:
+                return escape(replay(fn, next_trace),
+                              functools.partial(escape_fn, next_trace))(*args, **kwargs)
+            except util.NonlocalExit as site_container:
+                for tr in extend_fn(next_trace, site_container.site,
+                                    num_samples=num_samples):
+                    queue.put(tr)
+
+        raise ValueError("max tries ({}) exceeded".format(str(max_tries)))
+
+    return _fn
+
