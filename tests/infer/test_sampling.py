@@ -1,3 +1,4 @@
+import pytest
 import torch
 from torch.autograd import Variable
 
@@ -78,7 +79,7 @@ class SearchTest(HMMSamplingTestCase):
             tr_latents.add(tuple([tr[name]["value"].view(-1).data[0] for name in tr
                                   if tr[name]["type"] == "sample"]))
 
-        self.assertTrue(true_latents == tr_latents)
+        assert true_latents == tr_latents
 
     def test_marginal(self):
         posterior = pyro.infer.Search(self.model)
@@ -89,15 +90,16 @@ class SearchTest(HMMSamplingTestCase):
         for v in dd.vs:
             tr_rets.append(v.view(-1).data[0])
 
-        self.assertTrue(len(tr_rets) == 4)
+        assert len(tr_rets) == 4
         for i in range(4):
-            self.assertTrue(i + 1 in tr_rets)
+            assert i + 1 in tr_rets
 
 
 class ImportanceTest(NormalNormalSamplingTestCase):
 
+    @pytest.mark.init(rng_seed=0)
     def test_importance_guide(self):
-        posterior = pyro.infer.Importance(self.model, guide=self.guide, num_samples=2000)
+        posterior = pyro.infer.Importance(self.model, guide=self.guide, num_samples=10000)
         marginal = pyro.infer.Marginal(posterior)
         posterior_samples = [marginal() for i in range(1000)]
         posterior_mean = torch.mean(torch.cat(posterior_samples))
@@ -107,8 +109,9 @@ class ImportanceTest(NormalNormalSamplingTestCase):
         self.assertEqual(0, torch.norm(posterior_stddev - self.mu_stddev).data[0],
                          prec=0.1)
 
+    @pytest.mark.init(rng_seed=0)
     def test_importance_prior(self):
-        posterior = pyro.infer.Importance(self.model, guide=None, num_samples=2000)
+        posterior = pyro.infer.Importance(self.model, guide=None, num_samples=10000)
         marginal = pyro.infer.Marginal(posterior)
         posterior_samples = [marginal() for i in range(1000)]
         posterior_mean = torch.mean(torch.cat(posterior_samples))

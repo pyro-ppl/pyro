@@ -16,6 +16,7 @@ from pyro.infer.tracegraph_kl_qp import TraceGraph_KL_QP
 from tests.common import TestCase
 
 
+@pytest.mark.stage("integration", "integration_batch_1")
 class GaussianChainTests(TestCase):
     # chain of normals with known covariances and latent means
 
@@ -180,6 +181,7 @@ class GaussianChainTests(TestCase):
         self.assertEqual(0.0, max_errors[2], prec=prec)
 
 
+@pytest.mark.stage("integration", "integration_batch_2")
 class GaussianPyramidTests(TestCase):
 
     def setUp(self):
@@ -207,7 +209,7 @@ class GaussianPyramidTests(TestCase):
         self.N_data = Variable(torch.Tensor([self.N_data]))
         self.q_dag = self.construct_q_dag()
         # compute the order in which guide samples are generated
-        self.q_topo_sort = networkx.topological_sort(self.q_dag)
+        self.q_topo_sort = list(networkx.topological_sort(self.q_dag))
         self.which_nodes_reparam = self.setup_reparam_mask(len(self.q_topo_sort))
         self.calculate_variational_targets()
         self.set_model_permutations()

@@ -2,6 +2,7 @@ import graphviz
 import networkx
 
 from .trace_poutine import TracePoutine
+from collections import defaultdict
 
 
 class TraceGraph(object):
@@ -13,14 +14,15 @@ class TraceGraph(object):
     """
 
     def __init__(self, G, trace, stochastic_nodes, reparameterized_nodes,
-                 param_nodes, observation_nodes):
+                 observation_nodes,
+                 vectorized_map_data_info):
         self.G = G
         self.trace = trace
-        self.param_nodes = param_nodes
         self.reparameterized_nodes = reparameterized_nodes
         self.stochastic_nodes = stochastic_nodes
         self.nonreparam_stochastic_nodes = list(set(stochastic_nodes) - set(reparameterized_nodes))
         self.observation_nodes = observation_nodes
+        self.vectorized_map_data_info = vectorized_map_data_info
 
     def get_stochastic_nodes(self):
         """
@@ -106,7 +108,6 @@ class TraceGraph(object):
         """
         render graph and save to file
         :param graph_output: the graph will be saved to graph_output.pdf
-        -- parameter nodes are light blue
         -- non-reparameterized stochastic nodes are salmon
         -- reparameterized stochastic nodes are half salmon, half grey
         -- observation nodes are green
@@ -114,14 +115,14 @@ class TraceGraph(object):
         g = graphviz.Digraph()
         for label in self.G.nodes():
             shape = 'ellipse'
-            if label in self.param_nodes:
-                fillcolor = 'lightblue'
-            elif label in self.stochastic_nodes and label not in self.reparameterized_nodes:
+            if label in self.stochastic_nodes and label not in self.reparameterized_nodes:
                 fillcolor = 'salmon'
             elif label in self.reparameterized_nodes:
                 fillcolor = 'lightgrey;.5:salmon'
             elif label in self.observation_nodes:
                 fillcolor = 'darkolivegreen3'
+            else:
+                fillcolor = 'grey'
             g.node(label, label=label, shape=shape, style='filled', fillcolor=fillcolor)
 
         for label1, label2 in self.G.edges():
@@ -135,12 +136,27 @@ class TraceGraphPoutine(TracePoutine):
     trace graph poutine, used to generate a TraceGraph
     -- currently only supports 'coarse' graphs, i.e. overly-conservative ones constructed
        by following the sequential ordering of the execution trace
-    TODO: add map data constructs
+    TODO: add constructs for vectorized map data
+
+    this can be invoked as follows to create visualizations of the TraceGraph:
+
+        guide_tracegraph = poutine.tracegraph(guide)(*args, **kwargs)
+        guide_tracegraph.save_visualization('guide')
+        guide_trace = guide_tracegraph.get_trace()
+        model_tracegraph = poutine.tracegraph(poutine.replay(model, guide_trace))(*args, **kwargs)
+        model_tracegraph.save_visualization('model')
+        model_trace = model_tracegraph.get_trace()
+
+    if the visualization proves difficult to parse, one can also directly interrogate the networkx
+    graph object, e.g.:
+
+        print model_tracegraph.get_graph().nodes()
+        print model_tracegraph.get_graph().edges()
+
     """
-    def __init__(self, fn, graph_type='coarse', include_params=False):
+    def __init__(self, fn, graph_type='coarse'):
         assert(graph_type == 'coarse'), "only coarse graph type supported at present"
         super(TraceGraphPoutine, self).__init__(fn)
-        self.include_params = include_params
 
     def _enter_poutine(self, *args, **kwargs):
         """
@@ -149,9 +165,8 @@ class TraceGraphPoutine(TracePoutine):
         super(TraceGraphPoutine, self)._enter_poutine(*args, **kwargs)
         self.stochastic_nodes = []
         self.reparameterized_nodes = []
-        self.param_nodes = []
         self.observation_nodes = []
-        self.prev_node = '___ROOT_NODE___'
+        self.nodes_seen_so_far = {}
         self.G = networkx.DiGraph()
 
     def _exit_poutine(self, ret_val, *args, **kwargs):
@@ -159,41 +174,110 @@ class TraceGraphPoutine(TracePoutine):
         Return a TraceGraph object that contains the forward graph and trace
         """
         self.trace = super(TraceGraphPoutine, self)._exit_poutine(ret_val, *args, **kwargs)
-        self.G.remove_node('___ROOT_NODE___')
+
+        vectorized_map_data_info = self._get_vectorized_map_data_info()
 
         trace_graph = TraceGraph(self.G, self.trace,
                                  self.stochastic_nodes, self.reparameterized_nodes,
-                                 self.param_nodes, self.observation_nodes)
+                                 self.observation_nodes,
+                                 vectorized_map_data_info)
         return trace_graph
 
-    def _add_graph_node(self, name):
-        self.G.add_edge(self.prev_node, name)
-        for ancestor in networkx.ancestors(self.G, self.prev_node):
-            self.G.add_edge(ancestor, name)
-        self.prev_node = name
+    def _get_vectorized_map_data_info(self):
+        """
+        this determines whether the vectorized map_datas are rao-blackwellizable by tracegraph_kl_qp
+        also gathers information to be consumed by downstream by tracegraph_kl_qp
+        XXX this logic should probably sit elsewhere
+        """
+        vectorized_map_data_info = {'rao-blackwellization-condition': True}
+        vec_md_stacks = set()
+
+        for node, stack in self.nodes_seen_so_far.items():
+            vec_mds = list(filter(lambda x: x[2] == 'tensor', stack))
+            # check for nested vectorized map datas
+            if len(vec_mds) > 1:
+                vectorized_map_data_info['rao-blackwellization-condition'] = False
+            # check that vectorized map datas only found at innermost position
+            if len(vec_mds) > 0 and stack[-1][2] == 'list':
+                vectorized_map_data_info['rao-blackwellization-condition'] = False
+            # for now enforce batch_dim = 0 for vectorized map_data
+            # since needed batch_log_pdf infrastructure missing
+            if len(vec_mds) > 0 and vec_mds[0][3] != 0:
+                vectorized_map_data_info['rao-blackwellization-condition'] = False
+            # enforce that if there are multiple vectorized map_datas, they are all
+            # independent of one another because of enclosing list map_datas
+            # (step 1: collect the stacks)
+            if len(vec_mds) > 0:
+                vec_md_stacks.add(stack)
+            # bail, since condition false
+            if not vectorized_map_data_info['rao-blackwellization-condition']:
+                break
+
+        # enforce that if there are multiple vectorized map_datas, they are all
+        # independent of one another because of enclosing list map_datas
+        # (step 2: explicitly check this)
+        if vectorized_map_data_info['rao-blackwellization-condition']:
+            vec_md_stacks = list(vec_md_stacks)
+            for i, stack_i in enumerate(vec_md_stacks):
+                for j, stack_j in enumerate(vec_md_stacks):
+                    # only check unique pairs
+                    if i <= j:
+                        continue
+                    ij_independent = False
+                    for md_i, md_j in zip(stack_i, stack_j):
+                        if md_i[0] == md_j[0] and md_i[1] != md_j[1]:
+                            ij_independent = True
+                    if not ij_independent:
+                        vectorized_map_data_info['rao-blackwellization-condition'] = False
+                        break
+
+        # construct data structure consumed by tracegraph_kl_qp
+        if vectorized_map_data_info['rao-blackwellization-condition']:
+            vectorized_map_data_info['nodes'] = defaultdict(lambda: [])
+            for node, stack in self.nodes_seen_so_far.items():
+                vec_mds = list(filter(lambda x: x[2] == 'tensor', stack))
+                if len(vec_mds) > 0:
+                    node_batch_dim_pair = (node, vec_mds[0][3])
+                    vectorized_map_data_info['nodes'][vec_mds[0][0]].append(node_batch_dim_pair)
+
+        return vectorized_map_data_info
+
+    def _add_graph_node(self, msg, name):
+        """
+        used internally to attach the node at the current site to any nodes
+        that it could depend on. 90% of the logic is for making sure independencies
+        from (list) map_data are taken into account. note that this has potentially
+        bad asymptotics because the result is a (possibly) very dense graph
+        """
+        map_data_stack = tuple(reversed(msg['map_data_stack']))
+
+        # for each node seen thus far we determine whether the current
+        # node should depend on it. in this context the answer is always yes
+        # unless map_data is telling us otherwise
+        for node in self.nodes_seen_so_far:
+            node_independent = False
+            node_map_data_stack = self.nodes_seen_so_far[node]
+            for query, target in zip(map_data_stack, node_map_data_stack):
+                if query[0] == target[0] and query[1] != target[1]:
+                    node_independent = True
+                    break
+            if not node_independent:
+                self.G.add_edge(node, name)
+
+        self.G.add_node(name)
+        self.nodes_seen_so_far[name] = map_data_stack
 
     def _pyro_sample(self, msg, name, dist, *args, **kwargs):
         """
-        register sampled variable for coarse graph construction
+        register sample dependencies for coarse graph construction
         """
         val = super(TraceGraphPoutine, self)._pyro_sample(msg, name, dist,
                                                           *args, **kwargs)
-        self._add_graph_node(name)
+        self._add_graph_node(msg, name)
         self.stochastic_nodes.append(name)
         if dist.reparameterized:
             self.reparameterized_nodes.append(name)
         return val
-
-    def _pyro_param(self, msg, name, *args, **kwargs):
-        """
-        register parameter for coarse graph construction
-        """
-        retrieved = super(TraceGraphPoutine, self)._pyro_param(msg, name,
-                                                               *args, **kwargs)
-        if self.include_params:
-            self._add_graph_node(name)
-            self.param_nodes.append(name)
-        return retrieved
 
     def _pyro_observe(self, msg, name, fn, obs, *args, **kwargs):
         """
@@ -201,6 +285,6 @@ class TraceGraphPoutine(TracePoutine):
         """
         val = super(TraceGraphPoutine, self)._pyro_observe(msg, name, fn, obs,
                                                            *args, **kwargs)
+        self._add_graph_node(msg, name)
         self.observation_nodes.append(name)
-        self._add_graph_node(name)
         return val

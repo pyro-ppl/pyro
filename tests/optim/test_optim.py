@@ -62,4 +62,4 @@ class OptimTests(TestCase):
         fixed_param_unchanged = torch.equal(
             pyro.param(fixed_param).data, torch.zeros(1))
         passed_test = fixed_param_unchanged and not free_param_unchanged
-        self.assertTrue(passed_test)
+        assert passed_test

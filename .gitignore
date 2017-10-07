@@ -66,6 +66,7 @@ nosetests.xml
 coverage.xml
 *,cover
 .hypothesis/
+paramstore.unittest.out
 
 # Translations
 *.mo
