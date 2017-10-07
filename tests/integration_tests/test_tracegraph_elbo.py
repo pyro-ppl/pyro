@@ -13,6 +13,7 @@ import pyro.optim as optim
 from pyro.infer import SVI
 from pyro.util import ng_ones, ng_zeros
 from tests.common import TestCase
+import numpy as np
 
 pytestmark = pytest.mark.stage("integration", "integration_batch_2")
 
@@ -199,11 +200,11 @@ class NormalNormalNormalTests(TestCase):
 
             return mu_latent
 
-        optim = Optimize(model, guide,
-                         torch.optim.Adam, {"lr": lr, "betas": (0.97, 0.999)},
-                         loss="ELBO", trace_graph=True,
-                         auxiliary_optim_constructor=torch.optim.Adam,
-                         auxiliary_optim_args={"lr": 5.0 * lr, "betas": (0.90, 0.999)})
+        # optim = Optimize(model, guide,
+        #                 torch.optim.Adam, {"lr": lr, "betas": (0.97, 0.999)},
+        #                 loss="ELBO", trace_graph=True,
+        #                 auxiliary_optim_constructor=torch.optim.Adam,
+        #                 auxiliary_optim_args={"lr": 5.0 * lr, "betas": (0.90, 0.999)})
 
         adam = optim.Adam({"lr": .0015, "betas": (0.97, 0.999)})
         svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
@@ -595,22 +596,13 @@ class RaoBlackwellizationTests(TestCase):
         for k in range(n_steps):
             svi.step()
 
-            mu_error = torch.sum(
-                torch.pow(
-                    self.analytic_mu_n -
-                    pyro.param("mu_q"),
-                    2.0))
-            log_sig_error = torch.sum(
-                torch.pow(
-                    self.analytic_log_sig_n -
-                    pyro.param("log_sig_q"),
-                    2.0))
+            mu_error = param_mse("mu_q", self.analytic_mu_n)
+            log_sig_error = param_mse("log_sig_q", self.analytic_log_sig_n)
             if k % 500 == 0 and self.verbose:
-                print("mu error, log(sigma) error:  %.4f, %.4f" % (mu_error.data.numpy()[0],
-                      log_sig_error.data.numpy()[0]))
+                print("mu error, log(sigma) error:  %.4f, %.4f" % (mu_error, log_sig_error))
 
-        self.assertEqual(0.0, mu_error.data.cpu().numpy()[0], prec=0.04)
-        self.assertEqual(0.0, log_sig_error.data.cpu().numpy()[0], prec=0.04)
+        self.assertEqual(0.0, mu_error, prec=0.04)
+        self.assertEqual(0.0, log_sig_error, prec=0.04)
 
     # this tests rao-blackwellization and baselines for a vectorized map_data
     # inside of a list map_data with superfluous random variables to complexify the
@@ -696,7 +688,7 @@ class RaoBlackwellizationTests(TestCase):
             svi.step()
 
             mu_error = param_abs_error("mu_q", self.analytic_mu_n)
-            tau_error = param_abs_error("log_sig_q", self.analytic_log_sig_n)
+            log_sig_error = param_abs_error("log_sig_q", self.analytic_log_sig_n)
 
             if n_superfluous_top > 0 or n_superfluous_bottom > 0:
                 superfluous_errors = []
@@ -708,7 +700,7 @@ class RaoBlackwellizationTests(TestCase):
                     superfluous_errors.append(superfluous_error.data.numpy()[0])
 
             if step % 500 == 0 and self.verbose:
-                print("mu error, log(sigma) error:  %.4f, %.4f" % (mu_error, log_sig_error)
+                print("mu error, log(sigma) error:  %.4f, %.4f" % (mu_error, log_sig_error))
                 if n_superfluous_top > 0 or n_superfluous_bottom > 0:
                     print("superfluous error: %.4f" % np.max(superfluous_errors))
 

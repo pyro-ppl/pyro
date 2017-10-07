@@ -457,7 +457,7 @@ class GaussianPyramidTests(TestCase):
                 leftmost_constant_error = param_mse('constant_term_' + leftmost_node,
                                                     self.target_leftmost_constant)
                 almost_leftmost_constant_error = param_mse('constant_term_' + leftmost_node[:-1] + 'R',
-                                                    self.target_almost_leftmost_constant)
+                                                           self.target_almost_leftmost_constant)
 
                 print("[mean function constant errors (partial)]   %.4f  %.4f" %
                       (leftmost_constant_error, almost_leftmost_constant_error))

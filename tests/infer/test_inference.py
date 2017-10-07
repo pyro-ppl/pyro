@@ -85,6 +85,7 @@ class NormalNormalTests(TestCase):
         self.assertEqual(0.0, mu_error, prec=0.05)
         self.assertEqual(0.0, log_sig_error, prec=0.05)
 
+
 class TestFixedModelGuide(TestCase):
     def setUp(self):
         self.data = Variable(torch.Tensor([2.0]))
