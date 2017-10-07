@@ -42,7 +42,7 @@ class NormalNormalTests(TestCase):
         self.verbose = False
 
     # this tests rao-blackwellization in elbo for nested list map_datas
-    def test_nested_list_map_data_in_elbo(self, n_steps=8000):
+    def test_nested_list_map_data_in_elbo(self, n_steps=10000):
         pyro.get_param_store().clear()
 
         def model():
@@ -71,7 +71,7 @@ class NormalNormalTests(TestCase):
                                    requires_grad=True))
             sig_q = torch.exp(log_sig_q)
             mu_latent = pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q,
-                                    reparameterized=False)
+                                    reparameterized=False, use_avg_decaying_baseline=True)
 
             def obs_outer(i, x):
                 pyro.map_data("map_obs_inner_%d" % i, x, lambda _i, _x:
