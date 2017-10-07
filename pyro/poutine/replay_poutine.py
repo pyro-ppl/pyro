@@ -53,7 +53,7 @@ class ReplayPoutine(Poutine):
 
         return msg
 
-    def _pyro_sample(self, msg):  # , name, fn, *args, **kwargs):
+    def _pyro_sample(self, msg):
         """
         :param msg: current message at a trace site.
 
@@ -72,11 +72,11 @@ class ReplayPoutine(Poutine):
                 "{} in sites but {} not in trace".format(name, g_name)
             assert self.guide_trace[g_name]["type"] == "sample", \
                 "site {} must be sample in guide_trace".format(g_name)
-            # msg["done"] = True
+            msg["done"] = True
             return self.guide_trace[g_name]["value"]
         # case 2: dict, negative: sample from model
         elif name not in self.sites:
-            return super(ReplayPoutine, self)._pyro_sample(msg)  # , name, fn, *args, **kwargs)
+            return super(ReplayPoutine, self)._pyro_sample(msg)
         else:
             raise ValueError(
                 "something went wrong with replay conditions at site " + name)

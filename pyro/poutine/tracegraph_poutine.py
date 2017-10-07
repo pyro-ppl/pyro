@@ -44,7 +44,7 @@ class TraceGraphPoutine(TracePoutine):
 
     def __exit__(self, *args):
         """
-        OUTDATED Return a TraceGraph object that contains the forward graph and trace
+        Construct a TraceGraph object that contains the forward graph and trace
         """
         self.trace_graph = TraceGraph(self.G, self.trace,
                                       self.stochastic_nodes,
@@ -85,7 +85,6 @@ class TraceGraphPoutine(TracePoutine):
         """
         register sample dependencies for coarse graph construction
         """
-        # TODO remove unnecessary
         name, fn = \
             msg["name"], msg["fn"]
         val = super(TraceGraphPoutine, self)._pyro_sample(msg)

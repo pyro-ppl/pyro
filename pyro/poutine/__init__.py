@@ -48,7 +48,8 @@ def replay(fn, trace, sites=None):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param trace: a Trace data structure to replay against
-    :param sites: list or dict of names of sample sites in fn to replay against
+    :param sites: list or dict of names of sample sites in fn to replay against,
+    defaulting to all sites
     :returns: stochastic function wrapped in a ReplayPoutine
     :rtype: pyro.poutine.ReplayPoutine
 
