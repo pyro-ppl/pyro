@@ -71,87 +71,87 @@ class Categorical(Distribution):
         super(Categorical, self).__init__(batch_size=1, *args, **kwargs)
 
     def sample(self, ps=None, vs=None, one_hot=True, *args, **kwargs):
-        _ps, _vs, _one_hot = self._sanitize_input(ps, vs, one_hot)
-        _vs = self._process_v(_vs)
-        _ps, _vs = self._process_p(_ps, _vs)
-        sample = Variable(torch.multinomial(_ps.data, 1, replacement=True).type_as(_ps.data))
-        if _vs is not None:
-            if isinstance(_vs, np.ndarray):
+        ps, vs, one_hot = self._sanitize_input(ps, vs, one_hot)
+        vs = self._process_v(vs)
+        ps, vs = self._process_p(ps, vs)
+        sample = Variable(torch.multinomial(ps.data, 1, replacement=True).type_as(ps.data))
+        if vs is not None:
+            if isinstance(vs, np.ndarray):
                 # always returns a 2-d (unsqueezed 1-d) list
-                if _vs.ndim == 1:
-                    _vs = np.expand_dims(_vs, axis=0)
-                r = np.arange(_vs.shape[0])
-                # if _vs.shape[0] == 1:
-                #     return _vs[r, sample.squeeze().data.numpy().astype("int")][0]
+                if vs.ndim == 1:
+                    vs = np.expand_dims(vs, axis=0)
+                r = np.arange(vs.shape[0])
+                # if vs.shape[0] == 1:
+                #     return vs[r, sample.squeeze().data.numpy().astype("int")][0]
                 # else:
-                return _vs[r, sample.squeeze().data.numpy().astype("int")].tolist()
-            # _vs is a torch.Tensor
-            return torch.gather(_vs, 1, sample.long())
-        if _one_hot:
+                return vs[r, sample.squeeze().data.numpy().astype("int")].tolist()
+            # vs is a torch.Tensor
+            return torch.gather(vs, 1, sample.long())
+        if one_hot:
             # convert to onehot vector
-            return to_one_hot(sample, _ps)
+            return to_one_hot(sample, ps)
         return sample
 
     def batch_log_pdf(self, x, ps=None, vs=None, one_hot=True, batch_size=1, *args, **kwargs):
-        _ps, _vs, _one_hot = self._sanitize_input(ps, vs, one_hot)
-        _vs = self._process_v(_vs)
-        _ps, _vs = self._process_p(_ps, _vs, batch_size)
+        ps, vs, one_hot = self._sanitize_input(ps, vs, one_hot)
+        vs = self._process_v(vs)
+        ps, vs = self._process_p(ps, vs, batch_size)
         if not isinstance(x, list):
             if x.dim() == 1 and batch_size == 1:
                 x = x.unsqueeze(0)
-            if _ps.size(0) != x.size(0):
+            if ps.size(0) != x.size(0):
                 # convert to int to one-hot
-                _ps = _ps.expand_as(x)
+                ps = ps.expand_as(x)
             else:
-                _ps = _ps
-        if _vs is not None:
+                ps = ps
+        if vs is not None:
             # get index of tensor
-            if isinstance(_vs, np.ndarray):
-                # x is a list if _vs was a list or np.array
-                bm = torch.Tensor((_vs == np.array(x)).tolist())
-                ix = len(_vs.shape) - 1
-                _x = torch.nonzero(bm).select(ix, ix)
+            if isinstance(vs, np.ndarray):
+                # x is a list if vs was a list or np.array
+                bm = torch.Tensor((vs == np.array(x)).tolist())
+                ix = len(vs.shape) - 1
+                x = torch.nonzero(bm).select(ix, ix)
             else:
                 # x is a Variable(Tensor) as are ps and vs
-                ix = _vs.dim() - 1
-                _x = torch.nonzero(_vs.eq(x.expand_as(_vs)).data).select(ix, ix)
-            x = Variable(_x).unsqueeze(1)
-        elif _one_hot:
-            return torch.sum(x * torch.log(_ps), 1)
-        return torch.log(torch.gather(_ps, 1, x.long()))
+                ix = vs.dim() - 1
+                x = torch.nonzero(vs.eq(x.expand_as(vs)).data).select(ix, ix)
+            x = Variable(x).unsqueeze(1)
+        elif one_hot:
+            return torch.sum(x * torch.log(ps), 1)
+        return torch.log(torch.gather(ps, 1, x.long()))
 
     def log_pdf(self, x, ps=None, vs=None, one_hot=True, batch_size=1, *args, **kwargs):
         return torch.sum(self.batch_log_pdf(x, ps, vs, one_hot, batch_size, *args, **kwargs))
 
     def support(self, ps=None, vs=None, one_hot=True, *args, **kwargs):
-        _ps, _vs, _one_hot = self._sanitize_input(ps, vs, one_hot)
-        r = _ps.size(0)
-        c = _ps.size(1)
-        _vs = self._process_v(_vs)
-        _ps, _vs = self._process_p(_ps, _vs)
+        ps, vs, one_hot = self._sanitize_input(ps, vs, one_hot)
+        r = ps.size(0)
+        c = ps.size(1)
+        vs = self._process_v(vs)
+        ps, vs = self._process_p(ps, vs)
 
-        if _vs is not None:
-            if isinstance(_vs, np.ndarray):
+        if vs is not None:
+            if isinstance(vs, np.ndarray):
                 # vs is an array, so the support must be of type array
-                r_np = _vs.shape[0]
-                c_np = _vs.shape[1]
+                r_np = vs.shape[0]
+                c_np = vs.shape[1]
                 np.expand_dims(np.arange(r_np), axis=1)
                 torch.ones(r_np, 1)
-                return (_vs[np.arange(r_np), torch.Tensor(list(x)).numpy().astype(int)]
+                return (vs[np.arange(r_np), torch.Tensor(list(x)).numpy().astype(int)]
                         .reshape(r_np, 1).tolist()
                         for x in itertools.product(torch.arange(0, c_np), repeat=r_np))
             # vs is a tensor so support is of type tensor
-            return (torch.sum(_vs * Variable(torch.Tensor(list(x)).type_as(_ps.data)), 1)
+            return (torch.sum(vs * Variable(torch.Tensor(list(x)).type_as(ps.data)), 1)
                     for x in itertools.product(torch.eye(c).numpy().tolist(),
                     repeat=r))
 
-        if _one_hot:
-            return (Variable(torch.Tensor(list(x)).type_as(_ps.data))
+        if one_hot:
+            return (Variable(torch.Tensor(list(x)).type_as(ps.data))
                     for x in itertools.product(torch.eye(c).numpy().tolist(),
                     repeat=r))
 
         if r == 1:
-            return (Variable(torch.Tensor([[i]]).type_as(_ps.data)) for i in range(c))
-        return (Variable(torch.Tensor(list(x)).unsqueeze(1).type_as(_ps.data))
+            return (Variable(torch.Tensor([[i]]).type_as(ps.data)) for i in range(c))
+        return (Variable(torch.Tensor(list(x)).unsqueeze(1).type_as(ps.data))
                 for x in itertools.product(torch.arange(0, c),
                 repeat=r))

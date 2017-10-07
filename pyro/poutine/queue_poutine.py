@@ -40,45 +40,58 @@ class QueuePoutine(Poutine):
                 ret_val = super(QueuePoutine, self).__call__(*args, **kwargs)
                 return ret_val
             except ReturnExtendedTraces as returned_traces:
-                self._exit_poutine(None, *args, **kwargs)
-                self._flush_stack()
                 for tr in returned_traces.traces:
                     self.queue.put(tr)
         raise ValueError("max tries ({}) exceeded".format(str(self.max_tries)))
 
-    def _enter_poutine(self, *args, **kwargs):
+    def __enter__(self):
         """
         Set a guide trace and a pivot switch
         """
         self.pivot_seen = False
         self.guide_trace = self.queue.get()
+        return super(QueuePoutine, self).__enter__()
 
-    def _exit_poutine(self, r_val, *args, **kwargs):
+    def __exit__(self, *args):
         """
         Forget the guide and pivot switch
         """
         self.pivot_seen = False
         self.guide_trace = None  # XXX what to put here?
-        return r_val
+        return super(QueuePoutine, self).__exit__(*args)
 
-    def _pyro_sample(self, msg, name, fn, *args, **kwargs):
+    def _pyro_sample(self, msg):
         """
-        Return the sample in the guide trace when appropriate
+        Samples continuous variables and enumerates discrete variables.
+
+        Discrete variables are those that implement a `.support()` method.
+        Discrete variables are enumerated by raising-and-replaying.
+
+        :returns: A sample.
+        :raises: ReturnExtendedTraces.
         """
+        name, fn, args, kwargs = \
+            msg["name"], msg["fn"], msg["args"], msg["kwargs"]
         assert hasattr(fn, "support"), "distribution has no support method"
         if name in self.guide_trace:
             assert self.guide_trace[name]["type"] == "sample", \
                 "site {} in guide_trace is not a sample".format(name)
             msg["done"] = True
             return self.guide_trace[name]["value"]
-        elif not self.pivot_seen:
-            self.pivot_seen = True
-            extended_traces = []
-            for s in fn.support(*args, **kwargs):
-                extended_traces.append(
-                    self.guide_trace.copy().add_sample(name, msg["scale"], s, fn,
-                                                       *args, **kwargs))
-            msg["done"] = True
-            raise ReturnExtendedTraces(extended_traces)
-        else:
-            raise ValueError("should never get here (malfunction at site {})".format(name))
+
+        try:
+            support = fn.support(*args, **kwargs)
+        except (AttributeError, NotImplementedError):
+            # For distributions without discrete support, we sample as usual.
+            r_val = super(QueuePoutine, self)._pyro_sample(msg)
+            self.guide_trace.add_sample(name, msg["scale"], r_val, fn, *args, **kwargs)
+            return r_val
+
+        assert not self.pivot_seen, "should never get here (malfunction at site {})".format(name)
+        self.pivot_seen = True
+        extended_traces = [
+            self.guide_trace.copy().add_sample(name, msg["scale"], s, fn, *args, **kwargs)
+            for s in support
+        ]
+        msg["done"] = True
+        raise ReturnExtendedTraces(extended_traces)

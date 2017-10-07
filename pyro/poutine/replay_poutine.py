@@ -1,17 +1,18 @@
-import pyro
-
 from .poutine import Poutine
-from .scale_poutine import ScalePoutine
 
 
 class ReplayPoutine(Poutine):
     """
-    Poutine for replaying from an existing execution trace
+    Poutine for replaying from an existing execution trace.
     """
 
     def __init__(self, fn, guide_trace, sites=None):
         """
+        :param fn: a stochastic function (callable containing pyro primitive calls)
+        :param guide_trace: a trace whose values should be reused
+
         Constructor.
+        Stores guide_trace in an attribute.
         """
         super(ReplayPoutine, self).__init__(fn)
         assert guide_trace is not None, "must provide guide_trace"
@@ -31,30 +32,39 @@ class ReplayPoutine(Poutine):
             raise TypeError(
                 "unrecognized type {} for sites".format(str(type(sites))))
 
-    def down(self, msg):
+    def _prepare_site(self, msg):
         """
-        Pass indices down at a map_data
+        :param msg: current message at a trace site.
+        :returns: the same message, possibly with some fields mutated.
+
+        If the site type is "map_data",
+        passes map_data batch indices from the guide trace
+        all the way down to the bottom of the stack,
+        so that the correct indices are used.
+
+        If the site type is "sample",
+        sets the return value and the "done" flag
+        so that poutines below it do not execute their sample functions at that site.
         """
         if msg["name"] in self.sites:
-            if msg["type"] == "map_data":
-                guide_type = self.guide_trace[msg["name"]]["type"]
-                assert self.guide_trace[msg["name"]]["type"] == "map_data", \
-                    "{} is {}, not map_data, in guide_trace".format(msg["name"],
-                                                                    guide_type)
-                msg["indices"] = self.guide_trace[msg["name"]]["indices"]
-                msg["batch_size"] = self.guide_trace[msg["name"]]["batch_size"]
-                msg["batch_dim"] = self.guide_trace[msg["name"]]["batch_dim"]
-
-            # dont reexecute
             if msg["type"] == "sample":
                 msg["done"] = True
+                msg["ret"] = self.guide_trace[msg["name"]]["value"]
 
         return msg
 
-    def _pyro_sample(self, msg, name, fn, *args, **kwargs):
+    def _pyro_sample(self, msg):
         """
-        Return the sample in the guide trace when appropriate
+        :param msg: current message at a trace site.
+
+        At a sample site that appears in self.guide_trace,
+        returns the value from self.guide_trace instead of sampling
+        from the stochastic function at the site.
+
+        At a sample site that does not appear in self.guide_trace,
+        reverts to default Poutine._pyro_sample behavior with no additional side effects.
         """
+        name = msg["name"]
         # case 1: dict, positive: sample from guide
         if name in self.sites:
             g_name = self.sites[name]
@@ -65,19 +75,5 @@ class ReplayPoutine(Poutine):
             msg["done"] = True
             return self.guide_trace[g_name]["value"]
         # case 2: dict, negative: sample from model
-        elif name not in self.sites:
-            return super(ReplayPoutine, self)._pyro_sample(msg, name, fn, *args, **kwargs)
         else:
-            raise ValueError(
-                "something went wrong with replay conditions at site " + name)
-
-    def _pyro_map_data(self, msg, name, data, fn, batch_size=None, batch_dim=0):
-        """
-        Use the batch indices from the guide trace, already provided by down
-        So all we need to do here is apply a ScalePoutine as in TracePoutine
-        """
-        scale = pyro.util.get_batch_scale(data, batch_size, batch_dim)
-        return super(ReplayPoutine, self)._pyro_map_data(msg, name, data,
-                                                         ScalePoutine(fn, scale),
-                                                         batch_size=batch_size,
-                                                         batch_dim=batch_dim)
+            return super(ReplayPoutine, self)._pyro_sample(msg)

@@ -22,6 +22,7 @@ install:
           pip install http://download.pytorch.org/whl/cu75/torch-0.2.0.post2-cp35-cp35m-manylinux1_x86_64.whl;
       fi
     - pip install torchvision
+    - pip freeze
 
 jobs:
     fast_finish: true
@@ -30,14 +31,30 @@ jobs:
           python: "2.7"
           addons: true
           install: pip install flake8
-          script: flake8
+          script: make lint
         - stage: unit test
           python: 2.7
-          script: pytest -vs --cov=pyro tests/unit
+          env: STAGE=unit
+          script: pytest -vs --cov=pyro --stage unit
+        - python: 2.7
+          env: STAGE=examples
+          script: pytest -vs --cov=pyro --stage test_examples
         - python: 3.5
-          script: pytest -vs --cov=pyro tests/unit
+          env: STAGE=unit
+          script: pytest -vs --cov=pyro --stage unit
+        - python: 3.5
+          env: STAGE=examples
+          script: pytest -vs --cov=pyro --stage test_examples
         - stage: integration test
           python: 2.7
-          script: pytest -vs --cov=pyro tests/integration
+          env: STAGE=integration_batch_1
+          script: pytest -vs --cov=pyro --stage integration_batch_1
+        - python: 2.7
+          env: STAGE=integration_batch_2
+          script: pytest -vs --cov=pyro --stage integration_batch_2
         - python: 3.5
-          script: pytest -vs --cov=pyro tests/integration
+          env: STAGE=integration_batch_1
+          script: pytest -vs --cov=pyro --stage integration_batch_1
+        - python: 3.5
+          env: STAGE=integration_batch_2
+          script: pytest -vs --cov=pyro --stage integration_batch_2

@@ -48,35 +48,44 @@ class Beta(Distribution):
         """
         Un-reparameterizeable sampler.
         """
-        _alpha, _beta = self._sanitize_input(alpha, beta)
+        alpha, beta = self._sanitize_input(alpha, beta)
         x = Variable(torch.Tensor(
-            [spr.beta.rvs(_alpha.data.cpu().numpy(), _beta.data.cpu().numpy())])
-            .type_as(_alpha.data))
+            [spr.beta.rvs(alpha.data.cpu().numpy(), beta.data.cpu().numpy())])
+            .type_as(alpha.data))
         return x
 
     def log_pdf(self, x, alpha=None, beta=None, *args, **kwargs):
         """
         Beta log-likelihood
         """
-        _alpha, _beta = self._sanitize_input(alpha, beta)
-        one = Variable(torch.ones(_alpha.size()).type_as(_alpha.data))
-        ll_1 = (_alpha - one) * torch.log(x)
-        ll_2 = (_beta - one) * torch.log(one - x)
-        ll_3 = log_gamma(_alpha + _beta)
-        ll_4 = -log_gamma(_alpha)
-        ll_5 = -log_gamma(_beta)
+        alpha, beta = self._sanitize_input(alpha, beta)
+        one = Variable(torch.ones(alpha.size()).type_as(alpha.data))
+        ll_1 = (alpha - one) * torch.log(x)
+        ll_2 = (beta - one) * torch.log(one - x)
+        ll_3 = log_gamma(alpha + beta)
+        ll_4 = -log_gamma(alpha)
+        ll_5 = -log_gamma(beta)
         return ll_1 + ll_2 + ll_3 + ll_4 + ll_5
 
     def batch_log_pdf(self, x, alpha=None, beta=None, batch_size=1, *args, **kwargs):
-        _alpha, _beta = self._sanitize_input(alpha, beta)
-        if x.dim() == 1 and _beta.dim() == 1 and batch_size == 1:
-            return self.log_pdf(x. _alpha, _beta)
+        alpha, beta = self._sanitize_input(alpha, beta)
+        if x.dim() == 1 and beta.dim() == 1 and batch_size == 1:
+            return self.log_pdf(x, alpha, beta)
         elif x.dim() == 1:
             x = x.expand(batch_size, x.size(0))
-        one = Variable(torch.ones(x.size()).type_as(_alpha.data))
-        ll_1 = (_alpha - one) * torch.log(x)
-        ll_2 = (_beta - one) * torch.log(one - x)
-        ll_3 = log_gamma(_alpha + _beta)
-        ll_4 = -log_gamma(_alpha)
-        ll_5 = -log_gamma(_beta)
+        one = Variable(torch.ones(x.size()).type_as(alpha.data))
+        ll_1 = (alpha - one) * torch.log(x)
+        ll_2 = (beta - one) * torch.log(one - x)
+        ll_3 = log_gamma(alpha + beta)
+        ll_4 = -log_gamma(alpha)
+        ll_5 = -log_gamma(beta)
         return ll_1 + ll_2 + ll_3 + ll_4 + ll_5
+
+    def analytic_mean(self, alpha=None, beta=None):
+        alpha, beta = self._sanitize_input(alpha, beta)
+        return alpha / (alpha + beta)
+
+    def analytic_var(self, alpha=None, beta=None):
+        alpha, beta = self._sanitize_input(alpha, beta)
+        return torch.pow(self.analytic_mean(alpha, beta), 2.0) * beta / \
+            (alpha * (alpha + beta + Variable(torch.ones([1]))))

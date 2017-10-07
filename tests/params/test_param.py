@@ -35,13 +35,13 @@ class ParamStoreDictTests(TestCase):
         myparam_copy = copy(pyro.param("myparam").data.numpy())
         param_store_params = copy(pyro.get_param_store()._params)
         param_store_param_to_name = copy(pyro.get_param_store()._param_to_name)
-        self.assertTrue(len(list(param_store_params.keys())) == 5)
-        self.assertTrue(len(list(param_store_param_to_name.values())) == 5)
+        assert len(list(param_store_params.keys())) == 5
+        assert len(list(param_store_param_to_name.values())) == 5
 
         pyro.get_param_store().save('paramstore.unittest.out')
         pyro.get_param_store().clear()
-        self.assertTrue(len(list(pyro.get_param_store()._params)) == 0)
-        self.assertTrue(len(list(pyro.get_param_store()._param_to_name)) == 0)
+        assert len(list(pyro.get_param_store()._params)) == 0
+        assert len(list(pyro.get_param_store()._param_to_name)) == 0
         pyro.get_param_store().load('paramstore.unittest.out')
 
         def modules_are_equal():
@@ -51,16 +51,14 @@ class ParamStoreDictTests(TestCase):
                                 self.linear_module.bias.data.numpy())) == 0.0
             return (weights_equal and bias_equal)
 
-        self.assertFalse(modules_are_equal())
+        assert not modules_are_equal()
         pyro.module("mymodule", self.linear_module3)
-        self.assertTrue(modules_are_equal())
+        assert modules_are_equal()
 
         myparam = pyro.param("myparam")
-        self.assertFalse(myparam_copy_stale == myparam.data.numpy())
-        self.assertTrue(myparam_copy == myparam.data.numpy())
-        self.assertTrue(sorted(param_store_params.keys()) ==
-                        sorted(pyro.get_param_store()._params.keys()))
-        self.assertTrue(sorted(param_store_param_to_name.values()) ==
-                        sorted(pyro.get_param_store()._param_to_name.values()))
-        self.assertTrue(sorted(pyro.get_param_store()._params.keys()) ==
-                        sorted(pyro.get_param_store()._param_to_name.values()))
+        store = pyro.get_param_store()
+        assert myparam_copy_stale != myparam.data.numpy()
+        assert myparam_copy == myparam.data.numpy()
+        assert sorted(param_store_params.keys()) == sorted(store._params.keys())
+        assert sorted(param_store_param_to_name.values()) == sorted(store._param_to_name.values())
+        assert sorted(store._params.keys()) == sorted(store._param_to_name.values())

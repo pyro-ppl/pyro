@@ -1,3 +1,4 @@
+import pyro
 import numpy as np
 import torch
 from torch.autograd import Variable
@@ -30,14 +31,25 @@ def memoize(fn):
     alternate in py3: https://docs.python.org/3/library/functools.html
     lru_cache
     """
-    _mem = {}
+    mem = {}
 
     def _fn(*args, **kwargs):
         kwargs_tuple = _dict_to_tuple(kwargs)
-        if (args, kwargs_tuple) not in _mem:
-            _mem[(args, kwargs_tuple)] = fn(*args, **kwargs)
-        return _mem[(args, kwargs_tuple)]
+        if (args, kwargs_tuple) not in mem:
+            mem[(args, kwargs_tuple)] = fn(*args, **kwargs)
+        return mem[(args, kwargs_tuple)]
     return _fn
+
+
+def set_rng_seed(rng_seed):
+    """
+    Sets seeds of torch, numpy, and torch.cuda (if available).
+    :param int rng_seed: The seed value.
+    """
+    torch.manual_seed(rng_seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(rng_seed)
+    np.random.seed(rng_seed)
 
 
 def ones(*args, **kwargs):
@@ -107,6 +119,14 @@ def log_gamma(xx):
 
 
 def log_beta(t):
+    """
+    Computes log Beta function.
+
+    :param t:
+    :type t: torch.autograd.Variable of dimension 1 or 2
+    :rtype: torch.autograd.Variable of float (if t.dim() == 1) or torch.Tensor (if t.dim() == 2)
+    """
+    assert t.dim() in (1, 2)
     if t.dim() == 1:
         numer = torch.sum(log_gamma(t))
         denom = log_gamma(torch.sum(t))
@@ -179,59 +199,38 @@ def basic_histogram(ps, vs):
             "vs": [v for v in hist.keys()]}
 
 
-def get_batch_indices(data, batch_size, batch_dim):
+def apply_stack(initial_msg):
     """
-    Compute batch indices used for subsampling in map_data
-    Weirdly complicated because of type ambiguity
+    :param dict initial_msg: the starting version of the trace site
+    :returns: an updated message that is the final version of the trace site
+
+    Execute the poutine stack at a single site according to the following scheme:
+    1. Walk down the stack from top to bottom, collecting into the message
+        all information necessary to execute the stack at that site
+    2. For each poutine in the stack from bottom to top:
+           Execute the poutine with the message;
+           If the message field "stop" is True, stop;
+           Otherwise, continue
+    3. Return the updated message
     """
-    if isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
-        assert batch_dim >= 0, \
-            "batch_dim must be nonnegative"
-        assert batch_size <= data.size(batch_dim), \
-            "batch must be smaller than dataset size"
-        if batch_size > 0:
-            ind = Variable(torch.randperm(data.size(batch_dim))[0:batch_size])
-        else:
-            # if batch_size == 0, don't index (saves time/space)
-            ind = Variable(torch.arange(0, data.size(batch_dim)))
-    else:
-        # handle lists and other ordered sequence types (e.g. tuples but not sets)
-        assert batch_dim == 0, \
-            "batch dim for non-tensor map_data must be 0"
-        assert batch_size <= len(data), \
-            "batch must be smaller than dataset size"
-        # if batch_size > 0, select a random set of indices and store it
-        if batch_size > 0:
-            ind = torch.randperm(len(data))[0:batch_size].numpy().tolist()
-        else:
-            ind = list(range(len(data)))
+    stack = pyro._PYRO_STACK
+    # TODO check at runtime if stack is valid
 
-    return ind
+    # msg is used to pass information up and down the stack
+    msg = initial_msg
 
+    # first, gather all information necessary to apply the stack to this site
+    for frame in reversed(stack):
+        msg = frame._prepare_site(msg)
 
-def get_batch_scale(data, batch_size, batch_dim):
-    """
-    Compute scale used for subsampling in map_data
-    Weirdly complicated because of type ambiguity
-    """
-    if isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
-        assert batch_size <= data.size(batch_dim), \
-            "batch must be smaller than dataset size"
-        if batch_size > 0:
-            scale = float(data.size(batch_dim)) / float(batch_size)
-        else:
-            # if batch_size == 0, don't index (saves time/space)
-            scale = 1.0
-    else:
-        # handle lists and other ordered sequence types (e.g. tuples but not sets)
-        assert batch_dim == 0, \
-            "batch_dim for non-tensor map_data must be 0"
-        assert batch_size <= len(data), \
-            "batch must be smaller than dataset size"
-        # if batch_size > 0, select a random set of indices and store it
-        if batch_size > 0:
-            scale = float(len(data)) / float(batch_size)
-        else:
-            scale = 1.0
+    # go until time to stop?
+    for frame in stack:
+        assert msg["type"] in ("sample", "observe", "map_data", "param"), \
+            "{} is an invalid site type, how did that get there?".format(msg["type"])
 
-    return scale
+        msg["ret"] = getattr(frame, "_pyro_{}".format(msg["type"]))(msg)
+
+        if msg["stop"]:
+            break
+
+    return msg

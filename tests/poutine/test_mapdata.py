@@ -7,10 +7,9 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer.kl_qp import KL_QP
+from tests.common import assert_equal
 
-
-def eq(x, y, prec=1e-10):
-    return (torch.norm(x - y, 1).data[0] < prec)
+pytestmark = pytest.mark.stage("integration", "integration_batch_1")
 
 
 @pytest.mark.parametrize("batch_size", [3, 5, 7, 8, 0])
@@ -99,8 +98,8 @@ def test_elbo_mapdata(batch_size, map_type):
         if verbose and k % 1000 == 0:
             print("errors", mu_error.data.numpy()[0], log_sig_error.data.numpy()[0])
 
-    assert eq(Variable(torch.zeros(1)), mu_error, prec=0.06)
-    assert eq(Variable(torch.zeros(1)), log_sig_error, prec=0.07)
+    assert_equal(Variable(torch.zeros(1)), mu_error, prec=0.06)
+    assert_equal(Variable(torch.zeros(1)), log_sig_error, prec=0.07)
 
 
 @pytest.mark.parametrize("batch_dim", [0, 1])
@@ -117,7 +116,7 @@ def test_batch_dim(batch_dim):
         return pyro.map_data("md", data, local_model,
                              batch_size=1, batch_dim=batch_dim)
 
-    tr = poutine.trace(model)()
+    tr = poutine.trace(model).get_trace()
     assert tr["xs"]["value"].size(0) == data.size(1 - batch_dim)
     assert tr["xs"]["value"].size(1) == data.size(2)
 
@@ -144,7 +143,7 @@ def test_nested_map_data():
     assert len(xs) == mean_batch_size
     assert len(xs[0]) == std_batch_size
 
-    tr = poutine.trace(model)(means, stds)
+    tr = poutine.trace(model).get_trace(means, stds)
     for name in tr.keys():
         if tr[name]["type"] == "sample":
             assert tr[name]["scale"] == 4.0 * 2.0
