@@ -375,7 +375,7 @@ class EscapePoutineTests(TestCase):
         try:
             poutine.escape(tm, functools.partial(all_escape, poutine.Trace()))()
             assert False
-        except NonlocalExit as e:
+        except NonlocalExit:
             assert "x" in tm.trace
             try:
                 tem = poutine.trace(
@@ -383,5 +383,5 @@ class EscapePoutineTests(TestCase):
                                                                  poutine.Trace())))
                 tem()
                 assert False
-            except NonlocalExit as e2:
+            except NonlocalExit:
                 assert "x" not in tem.trace
