@@ -3,19 +3,17 @@ from pyro.params import module_from_param_with_module_name, user_param_name
 from pyro.infer import ELBO
 
 
-class Optimize(object):
+class SVI(object):
     """
-    A unified interface for optimizing loss functions in pyro.
+    A unified interface for stochastic variational inference in pyro.
     """
     def __init__(self,
                  model,
                  guide,
-                 optim_constructor,
-                 optim_args,
+                 loss_optim,
                  loss,
                  loss_and_grads=None,
-                 auxiliary_optim_constructor=None,
-                 auxiliary_optim_args=None,
+                 auxiliary_optim,
                  loss_scope='default',
                  auxiliary_scope='baseline',
                  *args,

@@ -7,7 +7,7 @@ from torch.autograd import Variable
 import pyro
 import pyro.distributions as dist
 from pyro.optim import Optimize
-from pyro.util import ng_zeros
+from pyro.util import ng_zeros, ng_ones
 from tests.common import TestCase
 import numpy as np
 
@@ -190,12 +190,12 @@ class NormalNormalTests(TestCase):
 
             return mu_latent
 
-        kl_optim = TraceGraph_KL_QP(model, guide, pyro.optim(
-                                    torch.optim.Adam,
-                                    {"lr": .0012, "betas": (0.96, 0.999)}))
+        optim = Optimize(model, guide,
+                         torch.optim.Adam, {"lr": .0012, "betas": (0.96, 0.999)},
+                         loss="ELBO", trace_graph=True)
 
         for step in range(n_steps):
-            kl_optim.step()
+            optim.step()
 
             mu_error = torch.sum(
                 torch.pow(

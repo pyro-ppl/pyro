@@ -8,7 +8,6 @@ from torch.autograd import Variable
 from torch.nn import Parameter
 
 import pyro
-from pyro import util
 from pyro.params import param_with_module_name
 from pyro.params.param_store import ParamStoreDict
 from pyro.poutine.lambda_poutine import LambdaPoutine
