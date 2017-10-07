@@ -150,7 +150,7 @@ def iarange(name, size, subsample_size=0):
     else:
         # Wrap computation in a scaling context.
         scale = size / subsample_size
-        with LambdaPoutine(None, name, scale):
+        with LambdaPoutine(None, name, scale, 'tensor', 0, subsample_size):
             yield subsample
 
 
@@ -166,7 +166,7 @@ def irange(name, size, subsample_size=0):
     """
     with iarange(name, size, subsample_size) as batch:
         # Wrap computation in an independence context.
-        indep_context = LambdaPoutine(None, name, 1.0)
+        indep_context = LambdaPoutine(None, name, 1.0, 'list', 0, subsample_size)
         for i in batch.data:
             with indep_context:
                 yield i
@@ -214,6 +214,7 @@ def param(name, *args, **kwargs):
             "args": args,
             "kwargs": kwargs,
             "scale": 1.0,
+            "map_data_stack": [],
             "ret": None,
             "done": False,
             "stop": False,
