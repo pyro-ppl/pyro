@@ -37,7 +37,7 @@ class Search(TracePosterior):
         p = poutine.trace(
             poutine.queue(self.model, queue=self.queue, max_tries=self.max_tries))
         while not self.queue.empty():
-            tr = p(*args, **kwargs)
+            tr = p.get_trace(*args, **kwargs)
             yield (tr, tr.log_pdf())
 
     def log_z(self, *args, **kwargs):
