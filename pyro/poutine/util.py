@@ -1,3 +1,6 @@
+import inspect
+
+
 class NonlocalExit(Exception):
     """
     TODO doc
@@ -26,8 +29,8 @@ def enum_extend(trace, msg, num_samples=None):
         msg_copy = msg.copy()
         msg_copy.update({"ret": s})
         extended_traces.append(trace.copy().add_sample(
-            msg["name"], msg["scale"], msg["ret"], msg["fn"],
-            *msg["args"][0], **msg["args"][1]))
+            msg_copy["name"], msg_copy["scale"], msg_copy["ret"],
+            msg_copy["fn"], *msg_copy["args"], **msg_copy["kwargs"]))
     return extended_traces
 
 
@@ -43,8 +46,8 @@ def mc_extend(trace, msg, num_samples=None):
         msg_copy = msg.copy()
         msg_copy.update({"ret": msg["fn"](*msg["args"], **msg["kwargs"])})
         extended_traces.append(trace.copy().add_sample(
-            msg["name"], msg["scale"], msg["ret"], msg["fn"],
-            *msg["args"], **msg["kwargs"]))
+            msg_copy["name"], msg_copy["scale"], msg_copy["ret"],
+            msg_copy["fn"], *msg_copy["args"], **msg_copy["kwargs"]))
     return extended_traces
 
 
@@ -52,9 +55,12 @@ def discrete_escape(trace, msg):
     """
     TODO doc
     """
-    return (msg["type"] == "sample") and \
+    xx = (msg["type"] == "sample") and \
         (msg["name"] not in trace) and \
-        (hasattr(msg["fn"], "support"))
+        (hasattr(msg["fn"], "enumerable")) and \
+        (msg["fn"].enumerable)
+    print(xx)
+    return xx
 
 
 def all_escape(trace, msg):

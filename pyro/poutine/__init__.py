@@ -12,7 +12,7 @@ from .escape_poutine import EscapePoutine
 from .trace import Trace, TraceGraph  # noqa: F401
 
 # other stuff
-import util
+from .util import *  # XXX narrow this import
 
 
 ############################################
@@ -104,23 +104,22 @@ def queue(fn, queue, max_tries=None,
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param queue: a queue data structure like multiprocessing.Queue to hold partial traces
     :param max_tries: maximum number of attempts to compute a single complete trace
-    :returns: stochastic function wrapped in a QueuePoutine
-    :rtype: pyro.poutine.QueuePoutine
-
-    Alias for QueuePoutine constructor.
+    :returns: stochastic function wrapped in poutine logic
 
     Given a stochastic function and a queue,
     return a return value from a complete trace in the queue
     """
 
     if max_tries is None:
-        max_tries = 1e6
+        max_tries = int(1e6)
 
     if extend_fn is None:
-        extend_fn = util.enum_extend
+        # XXX should be util.enum_extend
+        extend_fn = enum_extend
 
     if escape_fn is None:
-        escape_fn = util.discrete_escape
+        # XXX should be util.discrete_escape
+        escape_fn = discrete_escape
 
     if num_samples is None:
         num_samples = -1
@@ -131,7 +130,7 @@ def queue(fn, queue, max_tries=None,
             try:
                 return escape(replay(fn, next_trace),
                               functools.partial(escape_fn, next_trace))(*args, **kwargs)
-            except util.NonlocalExit as site_container:
+            except NonlocalExit as site_container:
                 for tr in extend_fn(next_trace, site_container.site,
                                     num_samples=num_samples):
                     queue.put(tr)
@@ -139,4 +138,3 @@ def queue(fn, queue, max_tries=None,
         raise ValueError("max tries ({}) exceeded".format(str(max_tries)))
 
     return _fn
-

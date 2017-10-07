@@ -223,12 +223,12 @@ class QueuePoutineDiscreteTest(TestCase):
                 for i3 in range(2):
                     true_latents.add((i1, i2, i3))
 
-        tr_latents = set()
+        tr_latents = []
         for tr in trs:
-            tr_latents.add(tuple([tr[name]["value"].view(-1).data[0] for name in tr
-                                  if tr[name]["type"] == "sample"]))
+            tr_latents.append(tuple([int(tr[name]["value"].view(-1).data[0]) for name in tr
+                                     if tr[name]["type"] == "sample"]))
 
-        assert true_latents == tr_latents
+        assert true_latents == set(tr_latents)
 
     def test_queue_max_tries(self):
         f = poutine.queue(self.model, queue=self.queue, max_tries=3)

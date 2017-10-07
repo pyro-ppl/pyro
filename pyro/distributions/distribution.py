@@ -40,6 +40,7 @@ class Distribution(object):
         Currently takes no explicit arguments.
         """
         self.reparameterized = False
+        self.enumerable = False
 
     def __call__(self, *args, **kwargs):
         """

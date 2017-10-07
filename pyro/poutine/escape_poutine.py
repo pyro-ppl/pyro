@@ -1,5 +1,4 @@
-import util
-
+from .util import NonlocalExit
 from .poutine import Poutine
 
 
@@ -20,6 +19,6 @@ class EscapePoutine(Poutine):
         """
         if self.escape_fn(msg):
             msg["done"] = True
-            raise util.NonlocalExit(msg)
+            raise NonlocalExit(msg)
         else:
             return super(EscapePoutine, self)._pyro_sample(msg)

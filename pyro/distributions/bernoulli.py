@@ -35,6 +35,7 @@ class Bernoulli(Distribution):
             if ps.dim() == 1:
                 self.ps = ps.expand(batch_size, ps.size(0))
         super(Bernoulli, self).__init__(*args, **kwargs)
+        self.enumerable = True
 
     def sample(self, ps=None, *args, **kwargs):
         """
