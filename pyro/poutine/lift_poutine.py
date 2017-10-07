@@ -29,6 +29,8 @@ class LiftPoutine(Poutine):
         if isinstance(self.prior, dict):
             if param_name in self.prior.keys():
                 msg["fn"] = self.prior[param_name]
+            else:
+                return pyro._param_store.get_param(name, *args, **kwargs)
         elif callable(self.prior):
             # prior is a distribution
             msg["fn"] = self.prior

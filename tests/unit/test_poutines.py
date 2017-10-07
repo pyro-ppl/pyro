@@ -319,6 +319,7 @@ class LiftPoutineTests(TestCase):
         self.guide = guide
         self.prior = mu1_prior
         self.prior_dict = {"mu1": mu1_prior, "sigma1": sigma1_prior, "mu2": mu2_prior, "sigma2": sigma2_prior}
+        self.partial_dict = {"mu1": mu1_prior, "sigma1": sigma1_prior}
         self.nn_prior = {"fc.bias": bias_prior, "fc.weight": weight_prior}
         self.data = Variable(torch.randn(2, 2))
 
@@ -339,6 +340,17 @@ class LiftPoutineTests(TestCase):
                 self.assertTrue(name + "_prior" == lifted_tr[name]['fn'].__name__)
             if tr[name]["type"] == "param":
                 self.assertTrue(lifted_tr[name]["type"] == "sample")
+
+    def test_unlifted_param(self):
+        tr = poutine.trace(self.guide)()
+        lifted_tr = poutine.trace(poutine.lift(self.guide, prior=self.partial_dict))()
+        for name in tr.keys():
+            self.assertTrue(name in lifted_tr)
+            if name in ('sigma1', 'mu1'):
+                self.assertTrue(name + "_prior" == lifted_tr[name]['fn'].__name__)
+                self.assertTrue(lifted_tr[name]["type"] == "sample")
+            if name in ('sigma2', 'mu2'):
+                self.assertTrue(lifted_tr[name]["type"] == "param")
 
     def test_random_module(self):
         pyro.clear_param_store()
