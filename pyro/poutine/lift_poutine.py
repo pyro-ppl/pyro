@@ -15,7 +15,7 @@ class LiftPoutine(Poutine):
         self.prior = prior
         super(LiftPoutine, self).__init__(fn)
 
-    def down(self, msg):
+    def _prepare_site(self, msg):
         if msg["type"] == "param":
             msg["done"] = True
         return msg

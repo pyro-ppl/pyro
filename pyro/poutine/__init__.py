@@ -88,10 +88,7 @@ def lift(fn, prior):
     create a stochastic function where all param calls are replaced by sampling from prior
     prior should be a callable with the same signature as pyro.param
     """
-    def _fn(*args, **kwargs):
-        p = LiftPoutine(fn, prior)
-        return p(*args, **kwargs)
-    return _fn
+    return LiftPoutine(fn, prior)
 
 
 def queue(fn, queue=None, max_tries=None):
