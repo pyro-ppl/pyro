@@ -12,7 +12,7 @@ from .escape_poutine import EscapePoutine
 from .trace import Trace, TraceGraph  # noqa: F401
 
 # other stuff
-from .util import *  # XXX narrow this import
+from pyro import util
 
 
 ############################################
@@ -89,6 +89,11 @@ def block(fn, hide=None, expose=None, hide_types=None, expose_types=None):
 def escape(fn, escape_fn=None):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
+    :param escape_fn: function that takes a partial trace and a site
+    and returns a boolean value to decide whether to exit at that site
+    :returns: stochastic function wrapped in EscapePoutine
+    
+    aa
     """
     return EscapePoutine(fn, escape_fn)
 
@@ -119,11 +124,11 @@ def queue(fn, queue, max_tries=None,
 
     if extend_fn is None:
         # XXX should be util.enum_extend
-        extend_fn = enum_extend
+        extend_fn = util.enum_extend
 
     if escape_fn is None:
         # XXX should be util.discrete_escape
-        escape_fn = discrete_escape
+        escape_fn = util.discrete_escape
 
     if num_samples is None:
         num_samples = -1
@@ -135,7 +140,7 @@ def queue(fn, queue, max_tries=None,
                 ftr = trace(escape(replay(fn, next_trace),
                                    functools.partial(escape_fn, next_trace)))
                 return ftr(*args, **kwargs)
-            except NonlocalExit as site_container:
+            except util.NonlocalExit as site_container:
                 for tr in extend_fn(ftr.trace.copy(), site_container.site,
                                     num_samples=num_samples):
                     queue.put(tr)
