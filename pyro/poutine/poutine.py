@@ -175,11 +175,12 @@ class Poutine(object):
         if msg["done"]:
             return msg["ret"]
 
+        msg["done"] = True
+
         if obs is None:
             return fn(*args, **kwargs)
-
-        msg["done"] = True
-        return obs
+        else:
+            return obs
 
     def _pyro_param(self, msg):
         """

@@ -347,3 +347,32 @@ class ConditionPoutineTests(NormalNormalNormalPoutineTestCase):
         data = {"latent2": Variable(torch.randn(2))}
         tr3 = poutine.trace(poutine.do(self.model, data=data)).get_trace()
         self.assertTrue("latent2" not in tr3)
+
+    def test_trace_data(self):
+        tr1 = poutine.trace(
+            poutine.block(self.model, expose_types=["sample"])).get_trace()
+        tr2 = poutine.trace(
+            poutine.condition(self.model, data=tr1)).get_trace()
+        assert tr2["latent2"]["type"] == "observe"
+        assert eq(tr2["latent2"]["value"], tr1["latent2"]["value"])
+
+    def test_stack_overwrite_failure(self):
+        data1 = {"latent2": Variable(torch.randn(2))}
+        data2 = {"latent2": Variable(torch.randn(2))}
+        try:
+            poutine.condition(poutine.condition(self.model, data=data1),
+                              data=data2)()
+            assert False
+        except AssertionError:
+            assert True
+
+    def test_stack_success(self):
+        data1 = {"latent1": Variable(torch.randn(2))}
+        data2 = {"latent2": Variable(torch.randn(2))}
+        tr = poutine.trace(
+            poutine.condition(poutine.condition(self.model, data=data1),
+                              data=data2)).get_trace()
+        assert tr["latent1"]["type"] == "observe"
+        assert eq(tr["latent1"]["value"], data1["latent1"])
+        assert tr["latent2"]["type"] == "observe"
+        assert eq(tr["latent2"]["value"], data2["latent2"])
