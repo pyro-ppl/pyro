@@ -16,11 +16,14 @@ class LiftPoutine(Poutine):
         super(LiftPoutine, self).__init__(fn)
 
     def _prepare_site(self, msg):
-        if msg["type"] == "param":
-            msg["done"] = True
+        name = msg["name"]
+        param_name = params.user_param_name(name)
+        if isinstance(self.prior, dict) and param_name in self.prior.keys():
+            if msg["type"] == "param":
+                msg["done"] = True
         return msg
 
-    def _pyro_param(self, msg, *args, **kwargs):
+    def _pyro_param(self, msg):
         """
         prototype override of param->sample
         """
@@ -30,13 +33,13 @@ class LiftPoutine(Poutine):
             if param_name in self.prior.keys():
                 msg["fn"] = self.prior[param_name]
             else:
-                return pyro._param_store.get_param(name, *args, **kwargs)
+                return super(LiftPoutine, self)._pyro_param(msg)
         elif callable(self.prior):
             # prior is a distribution
             msg["fn"] = self.prior
         else:
             # otherwise leave as is
-            return pyro._param_store.get_param(name, *args, **kwargs)
+            return super(LiftPoutine, self)._pyro_param(msg)
         msg["type"] = "sample"
         msg["done"] = False
         return self._pyro_sample(msg)
