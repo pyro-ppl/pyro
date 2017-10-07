@@ -20,10 +20,11 @@ class LiftPoutine(Poutine):
             msg["done"] = True
         return msg
 
-    def _pyro_param(self, msg, name, *args, **kwargs):
+    def _pyro_param(self, msg, *args, **kwargs):
         """
         prototype override of param->sample
         """
+        name = msg["name"]
         param_name = params.user_param_name(name)
         if isinstance(self.prior, dict):
             if param_name in self.prior.keys():
@@ -38,4 +39,4 @@ class LiftPoutine(Poutine):
             return pyro._param_store.get_param(name, *args, **kwargs)
         msg["type"] = "sample"
         msg["done"] = False
-        return self._pyro_sample(msg, name, msg["fn"], *args, **kwargs)
+        return self._pyro_sample(msg)

@@ -299,16 +299,16 @@ class LiftPoutineTests(TestCase):
         self.data = Variable(torch.randn(2, 2))
 
     def test_lift_simple(self):
-        tr = poutine.trace(self.guide)()
-        lifted_tr = poutine.trace(poutine.lift(self.guide, prior=self.prior))()
+        tr = poutine.trace(self.guide).get_trace()
+        lifted_tr = poutine.trace(poutine.lift(self.guide, prior=self.prior)).get_trace()
         for name in tr.keys():
             self.assertTrue(name in lifted_tr)
             if tr[name]["type"] == "param":
                 self.assertTrue(lifted_tr[name]["type"] == "sample")
 
     def test_prior_dict(self):
-        tr = poutine.trace(self.guide)()
-        lifted_tr = poutine.trace(poutine.lift(self.guide, prior=self.prior_dict))()
+        tr = poutine.trace(self.guide).get_trace()
+        lifted_tr = poutine.trace(poutine.lift(self.guide, prior=self.prior_dict)).get_trace()
         for name in tr.keys():
             self.assertTrue(name in lifted_tr)
             if name in {'sigma1', 'mu1', 'sigma2', 'mu2'}:
@@ -317,8 +317,8 @@ class LiftPoutineTests(TestCase):
                 self.assertTrue(lifted_tr[name]["type"] == "sample")
 
     def test_unlifted_param(self):
-        tr = poutine.trace(self.guide)()
-        lifted_tr = poutine.trace(poutine.lift(self.guide, prior=self.partial_dict))()
+        tr = poutine.trace(self.guide).get_trace()
+        lifted_tr = poutine.trace(poutine.lift(self.guide, prior=self.partial_dict)).get_trace()
         for name in tr.keys():
             self.assertTrue(name in lifted_tr)
             if name in ('sigma1', 'mu1'):
@@ -329,7 +329,7 @@ class LiftPoutineTests(TestCase):
 
     def test_random_module(self):
         pyro.clear_param_store()
-        lifted_tr = poutine.trace(pyro.random_module("name", self.model, prior=self.prior))()
+        lifted_tr = poutine.trace(pyro.random_module("name", self.model, prior=self.prior)).get_trace()
         for name in lifted_tr.keys():
             if lifted_tr[name]["type"] == "param":
                 self.assertTrue(lifted_tr[name]["type"] == "sample")
@@ -337,7 +337,7 @@ class LiftPoutineTests(TestCase):
     def test_random_module_prior_dict(self):
         pyro.clear_param_store()
         lifted_nn = pyro.random_module("name", self.model, prior=self.nn_prior)
-        lifted_tr = poutine.trace(lifted_nn)()
+        lifted_tr = poutine.trace(lifted_nn).get_trace()
         for key_name in lifted_tr.keys():
             name = pyro.params.user_param_name(key_name)
             if name in {'fc.weight', 'fc.prior'}:

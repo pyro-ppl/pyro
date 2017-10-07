@@ -95,7 +95,7 @@ def sample(name, fn, *args, **kwargs):
             "stop": False,
         }
         # apply the stack and return its return value
-        out_msg = util.apply_stack(msg)
+        out_msg = apply_stack(msg)
         return out_msg["ret"]
 
 
@@ -227,7 +227,7 @@ def param(name, *args, **kwargs):
             "stop": False,
         }
         # apply the stack and return its return value
-        out_msg = util.apply_stack(msg)
+        out_msg = apply_stack(msg)
         return out_msg["ret"]
 
 
