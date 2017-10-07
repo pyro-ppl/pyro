@@ -82,6 +82,7 @@ def block(fn, hide=None, expose=None, hide_types=None, expose_types=None):
     return BlockPoutine(fn, hide=hide, expose=expose,
                         hide_types=hide_types, expose_types=expose_types)
 
+
 def lift(fn, prior):
     """
     Given a stochastic function with param calls and a prior distribution,

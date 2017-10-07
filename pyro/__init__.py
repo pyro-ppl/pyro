@@ -6,7 +6,6 @@ from inspect import isclass
 
 import torch
 from torch.autograd import Variable
-from torch.nn import Parameter
 
 import pyro
 import pyro.poutine as poutine
