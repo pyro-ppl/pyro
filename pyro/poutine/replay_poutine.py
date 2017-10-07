@@ -75,8 +75,5 @@ class ReplayPoutine(Poutine):
             msg["done"] = True
             return self.guide_trace[g_name]["value"]
         # case 2: dict, negative: sample from model
-        elif name not in self.sites:
-            return super(ReplayPoutine, self)._pyro_sample(msg)
         else:
-            raise ValueError(
-                "something went wrong with replay conditions at site " + name)
+            return super(ReplayPoutine, self)._pyro_sample(msg)
