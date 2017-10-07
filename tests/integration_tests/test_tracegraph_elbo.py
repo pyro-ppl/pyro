@@ -2,7 +2,6 @@ from __future__ import print_function
 
 import pytest
 import torch
-import torch.optim
 from torch import nn as nn
 from torch.autograd import Variable
 from torch.nn import Parameter
@@ -10,7 +9,8 @@ from torch.nn import Parameter
 import pyro
 import pyro.distributions as dist
 from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
-from pyro.optim.optim import Optimize
+import pyro.optim as optim
+from pyro.infer import SVI
 from pyro.util import ng_ones, ng_zeros
 from tests.common import TestCase
 
@@ -81,12 +81,11 @@ class NormalNormalTests(TestCase):
                                     use_decaying_avg_baseline=True)
             return mu_latent
 
-        optim = Optimize(model, guide,
-                         torch.optim.Adam, {"lr": .0015, "betas": (0.97, 0.999)},
-                         loss="ELBO", trace_graph=True)
+        adam = optim.Adam({"lr": .0015, "betas": (0.97, 0.999)})
+        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
 
         for k in range(n_steps):
-            optim.step()
+            svi.step()
 
             mu_error = param_mse("mu_q", self.analytic_mu_n)
             log_sig_error = param_mse("log_sig_q", self.analytic_log_sig_n)
@@ -206,8 +205,11 @@ class NormalNormalNormalTests(TestCase):
                          auxiliary_optim_constructor=torch.optim.Adam,
                          auxiliary_optim_args={"lr": 5.0 * lr, "betas": (0.90, 0.999)})
 
+        adam = optim.Adam({"lr": .0015, "betas": (0.97, 0.999)})
+        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
+
         for k in range(n_steps):
-            optim.step()
+            svi.step()
 
             mu_error = param_mse("mu_q", self.analytic_mu_n)
             log_sig_error = param_mse("log_sig_q", self.analytic_log_sig_n)
@@ -275,7 +277,7 @@ class BernoulliBetaTests(TestCase):
                          loss="ELBO", trace_graph=True)
 
         for k in range(12000):
-            optim.step()
+            svi.step()
 
             alpha_error = param_abs_error("alpha_q_log", self.log_alpha_n)
             beta_error = param_abs_error("beta_q_log", self.log_beta_n)
@@ -339,7 +341,7 @@ class PoissonGammaTests(TestCase):
                          loss="ELBO", trace_graph=True)
 
         for k in range(7000):
-            optim.step()
+            svi.step()
             alpha_error = param_abs_error("alpha_q_log", self.log_alpha_n)
             beta_error = param_abs_error("beta_q_log", self.log_beta_n)
             if k % 500 == 0 and self.verbose:
@@ -391,7 +393,7 @@ class ExponentialGammaTests(TestCase):
                          loss="ELBO", trace_graph=True)
 
         for k in range(8000):
-            optim.step()
+            svi.step()
 
             alpha_error = param_abs_error("alpha_q_log", self.log_alpha_n)
             beta_error = param_abs_error("beta_q_log", self.log_beta_n)
@@ -464,7 +466,7 @@ class LogNormalNormalTests(TestCase):
                          loss="ELBO", trace_graph=True)
 
         for k in range(n_steps):
-            optim.step()
+            svi.step()
 
             mu_error = param_abs_error("mymodule$$$mu_q_log", self.log_mu_n)
             tau_error = param_abs_error("mymodule$$$tau_q_log", self.log_tau_n)
@@ -505,7 +507,7 @@ class LogNormalNormalTests(TestCase):
                          loss="ELBO", trace_graph=True)
 
         for k in range(7000):
-            optim.step()
+            svi.step()
 
             mu_error = param_abs_error("mu_q_log", self.log_mu_n)
             tau_error = param_abs_error("tau_q_log", self.log_tau_n)

@@ -7,7 +7,8 @@ import numpy as np
 import pyro
 import pyro.distributions as dist
 from pyro.util import ng_ones, ng_zeros
-from pyro.optim.optim import Optimize
+import pyro.optim as optim
+from pyro.infer import SVI
 
 # The golden values below (mu_q_expected/log_sig_q_expected/) need to be updated each time
 # ELBO changes its random algorithm.
@@ -35,10 +36,9 @@ def test_kl_qp_gradient_step_golden(trace_graph, reparameterized):
         sig_q = torch.exp(log_sig_q)
         return pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q, reparameterized=reparameterized)
 
-    optim = Optimize(model, guide,
-                     torch.optim.Adam, {"lr": .10},
-                     loss="ELBO", trace_graph=trace_graph)
-    optim.step()
+    adam = optim.Adam({"lr": .10})
+    svi = SVI(model, guide, adam, loss="ELBO", trace_graph=trace_graph)
+    svi.step()
 
     new_mu_q = pyro.param("mu_q").data.numpy()[0]
     new_log_sig_q = pyro.param("log_sig_q").data.numpy()[0]

@@ -5,7 +5,8 @@ from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
-from pyro.optim.optim import Optimize
+from pyro.infer.svi import SVI
+import pyro.optim as optim
 from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
 from tests.common import TestCase
 
@@ -72,19 +73,17 @@ class NormalNormalTests(TestCase):
             pyro.map_data("aaa", self.data, lambda i, x: None,
                           batch_size=self.batch_size)
 
-        optim = Optimize(model, guide,
-                         torch.optim.Adam, {"lr": .001},
-                         loss="ELBO", trace_graph=False)
+        adam = optim.Adam({"lr": .001})
+        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
 
         for k in range(n_steps):
-            optim.step()
+            svi.step()
 
             mu_error = param_mse("mu_q", self.analytic_mu_n)
             log_sig_error = param_mse("log_sig_q", self.analytic_log_sig_n)
 
         self.assertEqual(0.0, mu_error, prec=0.05)
         self.assertEqual(0.0, log_sig_error, prec=0.05)
-
 
 class TestFixedModelGuide(TestCase):
     def setUp(self):
@@ -94,7 +93,7 @@ class TestFixedModelGuide(TestCase):
         self.alpha_p_log_0 = 0.11 * torch.ones(1)
         self.beta_p_log_0 = 0.13 * torch.ones(1)
 
-    def do_test_fixedness(self, loss_scope):
+    def do_test_fixedness(self, tags):
         pyro.get_param_store().clear()
 
         def model():
@@ -119,32 +118,37 @@ class TestFixedModelGuide(TestCase):
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             pyro.sample("lambda_latent", dist.gamma, alpha_q, beta_q)
 
-        optim = Optimize(model, guide,
-                         torch.optim.Adam, {"lr": .01},
-                         loss="ELBO", trace_graph=False, loss_scope=loss_scope)
+        def per_param_args(module_name, param_name):
+            for pq in ['_p_', '_q_']:
+                if pq in param_name and pq[1] in tags:
+                    return {'lr': 0.01}
+            return {'lr': 0.0}
+
+        adam = optim.Adam(per_param_args)
+        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
 
         for _ in range(3):
-            optim.step()
+            svi.step()
 
         model_unchanged = (torch.equal(pyro.param("alpha_p_log").data, self.alpha_p_log_0)) and\
                           (torch.equal(pyro.param("beta_p_log").data, self.beta_p_log_0))
         guide_unchanged = (torch.equal(pyro.param("alpha_q_log").data, self.alpha_q_log_0)) and\
                           (torch.equal(pyro.param("beta_q_log").data, self.beta_q_log_0))
-        bad = ('model' not in loss_scope and (not model_unchanged)) or \
-              ('guide' not in loss_scope and (not guide_unchanged))
+        bad = ('p' not in tags and (not model_unchanged)) or \
+              ('q' not in tags and (not guide_unchanged))
         return (not bad)
 
     def test_model_fixed(self):
-        assert self.do_test_fixedness(loss_scope="guide")
+        assert self.do_test_fixedness(tags=["q"])
 
     def test_guide_fixed(self):
-        assert self.do_test_fixedness(loss_scope="model")
+        assert self.do_test_fixedness(tags=["p"])
 
     def test_guide_and_model_both_fixed(self):
-        assert self.do_test_fixedness(loss_scope="")
+        assert self.do_test_fixedness(tags=[])
 
     def test_guide_and_model_free(self):
-        assert self.do_test_fixedness(loss_scope=["model", "guide"])
+        assert self.do_test_fixedness(tags=["p", "q"])
 
 
 class PoissonGammaTests(TestCase):
@@ -193,12 +197,11 @@ class PoissonGammaTests(TestCase):
             pyro.sample("lambda_latent", dist.gamma, alpha_q, beta_q)
             pyro.map_data("aaa", self.data, lambda i, x: None, batch_size=3)
 
-        optim = Optimize(model, guide,
-                         torch.optim.Adam, {"lr": .0002, "betas": (0.97, 0.999)},
-                         loss="ELBO", trace_graph=False)
+        adam = optim.Adam({"lr": .0002, "betas": (0.97, 0.999)})
+        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
 
         for k in range(25000):
-            optim.step()
+            svi.step()
 
         alpha_error = param_abs_error("alpha_q_log", self.log_alpha_n)
         beta_error = param_abs_error("beta_q_log", self.log_beta_n)
@@ -240,12 +243,11 @@ class ExponentialGammaTests(TestCase):
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             pyro.sample("lambda_latent", dist.gamma, alpha_q, beta_q)
 
-        optim = Optimize(model, guide,
-                         torch.optim.Adam, {"lr": .0003, "betas": (0.97, 0.999)},
-                         loss="ELBO", trace_graph=False)
+        adam = optim.Adam({"lr": .0003, "betas": (0.97, 0.999)})
+        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
 
         for k in range(10001):
-            optim.step()
+            svi.step()
 
         alpha_error = param_abs_error("alpha_q_log", self.log_alpha_n)
         beta_error = param_abs_error("beta_q_log", self.log_beta_n)
@@ -294,12 +296,11 @@ class BernoulliBetaTests(TestCase):
             pyro.sample("p_latent", dist.beta, alpha_q, beta_q, use_avg_decaying_baseline=True)
             pyro.map_data("aaa", self.data, lambda i, x: None, batch_size=self.batch_size)
 
-        optim = Optimize(model, guide,
-                         torch.optim.Adam, {"lr": .001, "betas": (0.97, 0.999)},
-                         loss="ELBO", trace_graph=True)
+        adam = optim.Adam({"lr": .001, "betas": (0.97, 0.999)})
+        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
 
         for k in range(10001):
-            optim.step()
+            svi.step()
 
             alpha_error = param_abs_error("alpha_q_log", self.log_alpha_n)
             beta_error = param_abs_error("beta_q_log", self.log_beta_n)
@@ -360,12 +361,11 @@ class LogNormalNormalTests(TestCase):
             sigma = torch.pow(tau_q, -0.5)
             pyro.sample("mu_latent", dist.diagnormal, mu_q, sigma, reparameterized=reparameterized)
 
-        optim = Optimize(model, guide,
-                         torch.optim.Adam, {"lr": .0005, "betas": (0.96, 0.999)},
-                         loss="ELBO", trace_graph=False)
+        adam = optim.Adam({"lr": .0005, "betas": (0.96, 0.999)})
+        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
 
         for k in range(n_steps):
-            optim.step()
+            svi.step()
 
         mu_error = param_abs_error("mymodule$$$mu_q_log", self.log_mu_n)
         tau_error = param_abs_error("mymodule$$$tau_q_log", self.log_tau_n)
@@ -398,12 +398,11 @@ class LogNormalNormalTests(TestCase):
             mu_q, tau_q = torch.exp(mu_q_log), torch.exp(tau_q_log)
             pyro.sample("mu_latent", dist.diagnormal, mu_q, torch.pow(tau_q, -0.5))
 
-        optim = Optimize(model, guide,
-                         torch.optim.Adam, {"lr": .0005, "betas": (0.96, 0.999)},
-                         loss="ELBO", trace_graph=False)
+        adam = optim.Adam({"lr": .0005, "betas": (0.96, 0.999)})
+        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
 
         for k in range(12001):
-            optim.step()
+            svi.step()
 
         mu_error = param_abs_error("mu_q_log", self.log_mu_n)
         tau_error = param_abs_error("tau_q_log", self.log_tau_n)

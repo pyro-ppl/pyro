@@ -1,1 +1,5 @@
-from .optim import Optimize   # noqa: F401
+import torch
+from .optim import PyroOptim
+
+def Adam(optim_args):
+    return PyroOptim(torch.optim.Adam, optim_args)
