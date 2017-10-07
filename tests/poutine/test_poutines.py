@@ -362,7 +362,6 @@ class ConditionPoutineTests(NormalNormalNormalPoutineTestCase):
         try:
             poutine.condition(poutine.condition(self.model, data=data1),
                               data=data2)()
-            assert False
         except AssertionError:
             assert True
 

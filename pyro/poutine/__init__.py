@@ -6,6 +6,7 @@ from .replay_poutine import ReplayPoutine
 from .trace_poutine import TracePoutine
 from .tracegraph_poutine import TraceGraphPoutine
 from .condition_poutine import ConditionPoutine
+from .lambda_poutine import LambdaPoutine  # noqa: F401
 
 # trace data structures
 from .trace import Trace, TraceGraph  # noqa: F401
