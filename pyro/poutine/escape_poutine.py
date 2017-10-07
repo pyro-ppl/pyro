@@ -4,7 +4,7 @@ from .poutine import Poutine
 
 class EscapePoutine(Poutine):
     """
-    Poutine that does a nonlocal exit.
+    Poutine that does a nonlocal exit by raising a util.NonlocalExit exception
     """
     def __init__(self, fn, escape_fn):
         """

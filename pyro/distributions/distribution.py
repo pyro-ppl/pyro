@@ -33,6 +33,8 @@ class Distribution(object):
         Take a look at the examples[link] to see how they interact with inference algorithms.
     """
 
+    enumerable = False
+
     def __init__(self, *args, **kwargs):
         """
         Constructor for base distribution class.
@@ -40,7 +42,6 @@ class Distribution(object):
         Currently takes no explicit arguments.
         """
         self.reparameterized = False
-        self.enumerable = False
 
     def __call__(self, *args, **kwargs):
         """

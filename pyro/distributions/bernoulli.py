@@ -14,6 +14,7 @@ class Bernoulli(Distribution):
     Distribution over a vector of independent Bernoulli variables. Each element
     of the vector takes on a value in ``{0, 1}``.
     """
+    enumerable = True
 
     def _sanitize_input(self, ps):
         if ps is not None:
@@ -35,7 +36,6 @@ class Bernoulli(Distribution):
             if ps.dim() == 1:
                 self.ps = ps.expand(batch_size, ps.size(0))
         super(Bernoulli, self).__init__(*args, **kwargs)
-        self.enumerable = True
 
     def sample(self, ps=None, *args, **kwargs):
         """

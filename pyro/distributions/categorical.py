@@ -19,6 +19,7 @@ class Categorical(Distribution):
     ``ps[i]``.  If ``one_hot=True``, ``sample`` returns a one-hot vector.
     Else, ``sample`` returns the category selected.
     """
+    enumerable = True
 
     def _sanitize_input(self, ps, vs, one_hot):
         if ps is not None:
@@ -69,7 +70,6 @@ class Categorical(Distribution):
         self.ps, self.vs = self._process_p(ps, vs, batch_size)
         self.one_hot = one_hot
         super(Categorical, self).__init__(batch_size=1, *args, **kwargs)
-        self.enumerable = True
 
     def sample(self, ps=None, vs=None, one_hot=True, *args, **kwargs):
         ps, vs, one_hot = self._sanitize_input(ps, vs, one_hot)

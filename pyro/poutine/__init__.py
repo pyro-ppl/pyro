@@ -139,6 +139,10 @@ def queue(fn, queue, max_tries=None,
         num_samples = -1
 
     def _fn(*args, **kwargs):
+
+        assert not queue.empty(), \
+            "trying to get() from an empty queue will deadlock"
+
         for i in range(max_tries):
             next_trace = queue.get()
             try:
