@@ -1,5 +1,6 @@
 from __future__ import division
 
+import warnings
 import contextlib
 from inspect import isclass
 
@@ -13,7 +14,7 @@ from pyro.optim.optim import PyroOptim
 from pyro.params import param_with_module_name
 from pyro.params.param_store import ParamStoreDict
 from pyro.poutine.lambda_poutine import LambdaPoutine
-from pyro.util import zeros, ones, set_rng_seed  # noqa: F401
+from pyro.util import zeros, ones, set_rng_seed, apply_stack  # noqa: F401
 
 # global map of params for now
 _param_store = ParamStoreDict()
@@ -55,54 +56,36 @@ optim = PyroOptim
 _PYRO_STACK = []
 
 
-def apply_stack(initial_msg):
-    """
-    Execute the poutine stack according to the new two-sided blocking scheme.
-    Poutine stack mechanism:
-    1) start at the top
-    2) grab the top poutine, ask to go down
-    3) if down, recur
-    4) if not, stop, start returning
-    """
-    stack = _PYRO_STACK
-    # # XXX seems like this should happen on poutine installation, not at execution
-    # assert poutine.validate_stack(stack), \
-    #     "Current poutine stack violates poutine composition rules"
-
-    msg = initial_msg
-
-    # work out the bottom poutine at this site
-    for frame in reversed(stack):
-        msg = frame.down(msg)
-
-    # go until time to stop?
-    for frame in stack:
-        msg = frame.up(msg)
-        if msg["stop"]:
-            break
-
-    return msg
-
-
 def sample(name, fn, *args, **kwargs):
     """
     :param name: name of sample
     :param fn: distribution class or function
+    :param obs: observed datum (optional; should only be used in context of inference)
+    optionally specified in kwargs
     :returns: sample
 
     Samples from the distribution and registers it in the trace data structure.
     """
+    obs = kwargs.pop("obs", None)
     # check if stack is empty
     # if stack empty, default behavior (defined here)
     if len(_PYRO_STACK) == 0:
+        if obs is not None:
+            warnings.warn("trying to observe a value outside of inference at " + name,
+                          warnings.RuntimeWarning)
         return fn(*args, **kwargs)
     # if stack not empty, apply everything in the stack?
     else:
         # initialize data structure to pass up/down the stack
+        if obs is None:
+            msg_type = "sample"
+        else:
+            msg_type = "observe"
         msg = {
-            "type": "sample",
+            "type": msg_type,
             "name": name,
             "fn": fn,
+            "obs": obs,
             "args": args,
             "kwargs": kwargs,
             "ret": None,
@@ -112,42 +95,25 @@ def sample(name, fn, *args, **kwargs):
             "stop": False,
         }
         # apply the stack and return its return value
-        out_msg = apply_stack(msg)
+        out_msg = util.apply_stack(msg)
         return out_msg["ret"]
 
 
-def observe(name, fn, val, *args, **kwargs):
+def observe(name, fn, obs, *args, **kwargs):
     """
     :param name: name of observation
     :param fn: distribution class or function
     :param obs: observed datum
     :returns: sample
 
+    Alias of pyro.sample.
+
     Only should be used in the context of inference.
     Calculates the score of the sample and registers
     it in the trace data structure.
     """
-    if len(_PYRO_STACK) == 0:
-        raise NotImplementedError(
-            "Observe has been used outside of a normalizing context.")
-    else:
-        # initialize data structure to pass up/down the stack
-        msg = {
-            "type": "observe",
-            "name": name,
-            "fn": fn,
-            "val": val,
-            "args": args,
-            "kwargs": kwargs,
-            "ret": None,
-            "scale": 1.0,
-            "map_data_stack": [],
-            "done": False,
-            "stop": False,
-        }
-        # apply the stack and return its return value
-        out_msg = apply_stack(msg)
-        return out_msg["ret"]
+    kwargs.update({"obs": obs})
+    return sample(name, fn, *args, **kwargs)
 
 
 @contextlib.contextmanager
@@ -191,14 +157,8 @@ def iarange(name, size, subsample_size=0):
     else:
         # Wrap computation in a scaling context.
         scale = size / subsample_size
-        scale_context = LambdaPoutine(None, name, scale, 'tensor', 0, subsample_size)
-        try:
-            scale_context._push_stack()
-            scale_context._enter_poutine()
+        with LambdaPoutine(None, name, scale, 'tensor', 0, subsample_size):
             yield subsample
-            scale_context._pop_stack()
-        finally:
-            scale_context._flush_stack()
 
 
 def irange(name, size, subsample_size=0):
@@ -215,13 +175,8 @@ def irange(name, size, subsample_size=0):
         # Wrap computation in an independence context.
         indep_context = LambdaPoutine(None, name, 1.0, 'list', 0, subsample_size)
         for i in batch.data:
-            try:
-                indep_context._push_stack()
-                indep_context._enter_poutine()
+            with indep_context:
                 yield i
-                indep_context._pop_stack()
-            finally:
-                indep_context._flush_stack()
 
 
 def map_data(name, data, fn, batch_size=0, batch_dim=0):
@@ -268,10 +223,11 @@ def param(name, *args, **kwargs):
             "scale": 1.0,
             "map_data_stack": [],
             "ret": None,
+            "done": False,
             "stop": False,
         }
         # apply the stack and return its return value
-        out_msg = apply_stack(msg)
+        out_msg = util.apply_stack(msg)
         return out_msg["ret"]
 
 

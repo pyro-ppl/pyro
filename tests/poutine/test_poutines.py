@@ -61,8 +61,8 @@ class NormalNormalNormalPoutineTestCase(TestCase):
 class TracePoutineTests(NormalNormalNormalPoutineTestCase):
 
     def test_trace_full(self):
-        guide_trace = poutine.trace(self.guide)()
-        model_trace = poutine.trace(self.model)()
+        guide_trace = poutine.trace(self.guide).get_trace()
+        model_trace = poutine.trace(self.model).get_trace()
         for name in model_trace.keys():
             assert name in self.model_sites
 
@@ -71,23 +71,23 @@ class TracePoutineTests(NormalNormalNormalPoutineTestCase):
             assert guide_trace[name]["type"] != "observe"
 
     def test_trace_return(self):
-        model_trace = poutine.trace(self.model)()
+        model_trace = poutine.trace(self.model).get_trace()
         assert_equal(model_trace["latent1"]["value"], model_trace["_RETURN"]["value"])
 
 
 class ReplayPoutineTests(NormalNormalNormalPoutineTestCase):
 
     def test_replay_full(self):
-        guide_trace = poutine.trace(self.guide)()
-        model_trace = poutine.trace(poutine.replay(self.model, guide_trace))()
+        guide_trace = poutine.trace(self.guide).get_trace()
+        model_trace = poutine.trace(poutine.replay(self.model, guide_trace)).get_trace()
         for name in self.full_sample_sites.keys():
             assert_equal(model_trace[name]["value"], guide_trace[name]["value"])
 
     def test_replay_partial(self):
-        guide_trace = poutine.trace(self.guide)()
+        guide_trace = poutine.trace(self.guide).get_trace()
         model_trace = poutine.trace(poutine.replay(self.model,
                                                    guide_trace,
-                                                   sites=self.partial_sample_sites))()
+                                                   sites=self.partial_sample_sites)).get_trace()
         for name in self.full_sample_sites.keys():
             if name in self.partial_sample_sites:
                 assert_equal(model_trace[name]["value"], guide_trace[name]["value"])
@@ -96,11 +96,11 @@ class ReplayPoutineTests(NormalNormalNormalPoutineTestCase):
                               guide_trace[name]["value"])
 
     def test_replay_full_repeat(self):
-        model_trace = poutine.trace(self.model)()
+        model_trace = poutine.trace(self.model).get_trace()
         ftr = poutine.trace(poutine.replay(self.model, model_trace))
-        tr11 = ftr()
-        tr12 = ftr()
-        tr2 = poutine.trace(poutine.replay(self.model, model_trace))()
+        tr11 = ftr.get_trace()
+        tr12 = ftr.get_trace()
+        tr2 = poutine.trace(poutine.replay(self.model, model_trace)).get_trace()
         for name in self.full_sample_sites.keys():
             assert_equal(tr11[name]["value"], tr12[name]["value"])
             assert_equal(tr11[name]["value"], tr2[name]["value"])
@@ -108,32 +108,11 @@ class ReplayPoutineTests(NormalNormalNormalPoutineTestCase):
             assert_equal(model_trace[name]["value"], tr2[name]["value"])
 
 
-class CachePoutineTests(NormalNormalNormalPoutineTestCase):
-
-    def test_cache_full(self):
-        cached_model = poutine.trace(poutine.cache(self.model))
-        model_trace_1 = cached_model()
-        model_trace_2 = cached_model()
-        for name in self.full_sample_sites.keys():
-            assert_equal(model_trace_1[name]["value"], model_trace_2[name]["value"])
-
-    def test_cache_partial(self):
-        cached_model = poutine.trace(
-            poutine.cache(self.model, sites=self.partial_sample_sites))
-        model_trace_1 = cached_model()
-        model_trace_2 = cached_model()
-        for name in self.full_sample_sites.keys():
-            if name in self.partial_sample_sites:
-                assert_equal(model_trace_1[name]["value"], model_trace_2[name]["value"])
-            else:
-                assert not eq(model_trace_1[name]["value"], model_trace_2[name]["value"])
-
-
 class BlockPoutineTests(NormalNormalNormalPoutineTestCase):
 
     def test_block_full(self):
-        model_trace = poutine.trace(poutine.block(self.model))()
-        guide_trace = poutine.trace(poutine.block(self.guide))()
+        model_trace = poutine.trace(poutine.block(self.model)).get_trace()
+        guide_trace = poutine.trace(poutine.block(self.guide)).get_trace()
         for name in model_trace.keys():
             assert model_trace[name]["type"] in ("args", "return")
         for name in guide_trace.keys():
@@ -141,9 +120,9 @@ class BlockPoutineTests(NormalNormalNormalPoutineTestCase):
 
     def test_block_full_hide(self):
         model_trace = poutine.trace(poutine.block(self.model,
-                                                  hide=self.model_sites))()
+                                                  hide=self.model_sites)).get_trace()
         guide_trace = poutine.trace(poutine.block(self.guide,
-                                                  hide=self.guide_sites))()
+                                                  hide=self.guide_sites)).get_trace()
         for name in model_trace.keys():
             assert model_trace[name]["type"] in ("args", "return")
         for name in guide_trace.keys():
@@ -151,9 +130,9 @@ class BlockPoutineTests(NormalNormalNormalPoutineTestCase):
 
     def test_block_full_expose(self):
         model_trace = poutine.trace(poutine.block(self.model,
-                                                  expose=self.model_sites))()
+                                                  expose=self.model_sites)).get_trace()
         guide_trace = poutine.trace(poutine.block(self.guide,
-                                                  expose=self.guide_sites))()
+                                                  expose=self.guide_sites)).get_trace()
         for name in self.model_sites:
             assert name in model_trace
         for name in self.guide_sites:
@@ -170,9 +149,9 @@ class BlockPoutineTests(NormalNormalNormalPoutineTestCase):
 
     def test_block_partial_hide(self):
         model_trace = poutine.trace(
-            poutine.block(self.model, hide=self.partial_sample_sites.keys()))()
+            poutine.block(self.model, hide=self.partial_sample_sites.keys())).get_trace()
         guide_trace = poutine.trace(
-            poutine.block(self.guide, hide=self.partial_sample_sites.keys()))()
+            poutine.block(self.guide, hide=self.partial_sample_sites.keys())).get_trace()
         for name in self.full_sample_sites.keys():
             if name in self.partial_sample_sites:
                 name not in model_trace
@@ -183,9 +162,9 @@ class BlockPoutineTests(NormalNormalNormalPoutineTestCase):
 
     def test_block_partial_expose(self):
         model_trace = poutine.trace(
-            poutine.block(self.model, expose=self.partial_sample_sites.keys()))()
+            poutine.block(self.model, expose=self.partial_sample_sites.keys())).get_trace()
         guide_trace = poutine.trace(
-            poutine.block(self.guide, expose=self.partial_sample_sites.keys()))()
+            poutine.block(self.guide, expose=self.partial_sample_sites.keys())).get_trace()
         for name in self.full_sample_sites.keys():
             if name in self.partial_sample_sites:
                 assert name in model_trace
@@ -228,7 +207,7 @@ class QueuePoutineDiscreteTest(TestCase):
 
     def test_queue_single(self):
         f = poutine.trace(poutine.queue(self.model, queue=self.queue))
-        tr = f()
+        tr = f.get_trace()
         for name in self.sites:
             assert name in tr
 
@@ -236,7 +215,7 @@ class QueuePoutineDiscreteTest(TestCase):
         f = poutine.trace(poutine.queue(self.model, queue=self.queue))
         trs = []
         while not self.queue.empty():
-            trs.append(f())
+            trs.append(f.get_trace())
         assert len(trs) == 2 ** 3
 
         true_latents = set()
@@ -389,7 +368,7 @@ class QueuePoutineMixedTest(TestCase):
 
     def test_queue_single(self):
         f = poutine.trace(poutine.queue(self.model, queue=self.queue))
-        tr = f()
+        tr = f.get_trace()
         for name in self.sites:
             assert name in tr
 
@@ -397,7 +376,7 @@ class QueuePoutineMixedTest(TestCase):
         f = poutine.trace(poutine.queue(self.model, queue=self.queue))
         trs = []
         while not self.queue.empty():
-            trs.append(f())
+            trs.append(f.get_trace())
         assert len(trs) == 2
 
         values = [
@@ -442,14 +421,14 @@ class IndirectLambdaPoutineTests(TestCase):
                                    ('mu_latent', 'z_1_0'), ('mu_latent', 'z_1_1')])
 
     def test_graph_structure(self):
-        tracegraph = poutine.tracegraph(self.model)()
+        tracegraph = poutine.tracegraph(self.model).get_trace()
         assert set(tracegraph.get_graph().nodes()) == self.expected_nodes
         assert set(tracegraph.get_graph().edges()) == self.expected_edges
 
     def test_scale_factors(self):
         def _test_scale_factor(batch_size_outer, batch_size_inner, expected):
-            trace = poutine.tracegraph(self.model)(batch_size_outer=batch_size_outer,
-                                                   batch_size_inner=batch_size_inner).get_trace()
+            trace = poutine.tracegraph(self.model).get_trace(batch_size_outer=batch_size_outer,
+                                                             batch_size_inner=batch_size_inner).get_trace()
             scale_factors = []
             for node in ['z_0_0', 'z_0_1', 'z_1_0', 'z_1_1']:
                 if node in trace:

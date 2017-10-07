@@ -57,9 +57,10 @@ class KL_QP(object):
         Method to draw,store and evaluate multiple samples in traces
         """
         for i in range(self.num_particles):
-            guide_trace = poutine.trace(self.guide)(*args, **kwargs)
+            guide_trace = poutine.trace(self.guide).get_trace(*args, **kwargs)
             model_trace = poutine.trace(
-                poutine.replay(self.model, guide_trace))(*args, **kwargs)
+                poutine.replay(self.model, guide_trace)).get_trace(*args, **kwargs)
+
             log_r = model_trace.log_pdf() - guide_trace.log_pdf()
 
             yield model_trace, guide_trace, log_r

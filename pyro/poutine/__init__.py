@@ -1,89 +1,86 @@
-from pyro.util import memoize
+# poutines
 from .block_poutine import BlockPoutine
 from .poutine import Poutine  # noqa: F401
 from .queue_poutine import QueuePoutine
 from .replay_poutine import ReplayPoutine
-from .trace import Trace  # noqa: F401
 from .trace_poutine import TracePoutine
 from .tracegraph_poutine import TraceGraphPoutine
 from .lift_poutine import LiftPoutine
 
+# trace data structures
+from .trace import Trace, TraceGraph  # noqa: F401
+
+
 ############################################
 # Begin primitive operations
-# XXX should these be returned as Poutines?
 ############################################
 
 
 def trace(fn):
     """
-    Given a callable that contains Pyro primitive calls,
-    return a callable that records the inputs and outputs to those primitive calls
+    :param fn: a stochastic function (callable containing pyro primitive calls)
+    :returns: stochastic function wrapped in a TracePoutine
+    :rtype: pyro.poutine.TracePoutine
+
+    Alias for TracePoutine constructor.
+
+    Given a callable that contains Pyro primitive calls, return a TracePoutine callable
+    that records the inputs and outputs to those primitive calls.
     Adds trace data structure site constructors to primitive stacks
-
-    tr = trace(fn)(*args, **kwargs)
     """
-
-    def _fn(*args, **kwargs):
-        p = TracePoutine(fn)
-        return p(*args, **kwargs)
-
-    return _fn
+    return TracePoutine(fn)
 
 
-def tracegraph(fn, graph_output=None):
-    def _fn(*args, **kwargs):
-        p = TraceGraphPoutine(fn)
-        return p(*args, **kwargs)
+def tracegraph(fn):
+    """
+    :param fn: a stochastic function (callable containing pyro primitive calls)
+    :returns: stochastic function wrapped in a TraceGraphPoutine
+    :rtype: pyro.poutine.TraceGraphPoutine
 
-    return _fn
+    Alias for TraceGraphPoutine constructor.
+
+    Given a callable that contains Pyro primitive calls,, return a TraceGraphPoutine callable
+    that records the inputs and outputs to those primitive calls and their dependencies.
+    Adds trace and tracegraph data structure site constructors to primitive stacks
+    """
+    return TraceGraphPoutine(fn)
 
 
 def replay(fn, trace, sites=None):
     """
+    :param fn: a stochastic function (callable containing pyro primitive calls)
+    :param trace: a Trace data structure to replay against
+    :param sites: list or dict of names of sample sites in fn to replay against,
+    defaulting to all sites
+    :returns: stochastic function wrapped in a ReplayPoutine
+    :rtype: pyro.poutine.ReplayPoutine
+
+    Alias for ReplayPoutine constructor.
+
     Given a callable that contains Pyro primitive calls,
     return a callable that runs the original, reusing the values at sites in trace
     at those sites in the new trace
-
-    ret = replay(fn, trace, sites=some_sites)(*args, **kwargs)
     """
-
-    def _fn(*args, **kwargs):
-        p = ReplayPoutine(fn, trace, sites=sites)
-        return p(*args, **kwargs)
-
-    return _fn
+    return ReplayPoutine(fn, trace, sites=sites)
 
 
 def block(fn, hide=None, expose=None, hide_types=None, expose_types=None):
     """
+    :param fn: a stochastic function (callable containing pyro primitive calls)
+    :param hide: list of site names to hide
+    :param expose: list of site names to be exposed while all others hidden
+    :param hide_types: list of site types to be hidden
+    :param expose_types: list of site types to be exposed while all others hidden
+    :returns: stochastic function wrapped in a BlockPoutine
+    :rtype: pyro.poutine.BlockPoutine
+
+    Alias for BlockPoutine constructor.
+
     Given a callable that contains Pyro primitive calls,
-    hide the primitive calls at sites
-
-    ret = block(fn, hide=["a"], expose=["b"])(*args, **kwargs)
-
-    Also expose()?
+    selectively hide some of those calls from poutines higher up the stack
     """
-
-    def _fn(*args, **kwargs):
-        p = BlockPoutine(fn, hide=hide, expose=expose,
-                         hide_types=hide_types, expose_types=expose_types)
-        return p(*args, **kwargs)
-
-    return _fn
-
-
-def queue(fn, queue=None, max_tries=None):
-    """
-    Given a stochastic function and a queue,
-    return a return value from a complete trace in the queue
-    """
-
-    def _fn(*args, **kwargs):
-        p = QueuePoutine(fn, queue=queue, max_tries=max_tries)
-        return p(*args, **kwargs)
-
-    return _fn
-
+    return BlockPoutine(fn, hide=hide, expose=expose,
+                        hide_types=hide_types, expose_types=expose_types)
 
 def lift(fn, prior):
     """
@@ -97,23 +94,15 @@ def lift(fn, prior):
     return _fn
 
 
-#########################################
-# Begin composite operations
-#########################################
-
-def cache(fn, sites=None):
+def queue(fn, queue=None, max_tries=None):
     """
-    Given a callable that contains Pyro primitive calls, and sites or a pivot,
-    run the callable once to get a trace and then replay the callable
-    using the sites or pivot
-
-    An example of using the poutine API to implement new composite control operations
+    :param fn: a stochastic function (callable containing pyro primitive calls)
+    :param queue: a queue data structure like multiprocessing.Queue to hold partial traces
+    :param max_tries: maximum number of attempts to compute a single complete trace
+    :returns: stochastic function wrapped in a QueuePoutine
+    :rtype: pyro.poutine.QueuePoutine
+    Alias for QueuePoutine constructor.
+    Given a stochastic function and a queue,
+    return a return value from a complete trace in the queue
     """
-    memoized_trace = memoize(block(trace(fn)))
-
-    def _fn(*args, **kwargs):
-        tr = memoized_trace(*args, **kwargs)
-        p = replay(fn, tr, sites=sites)
-        return p(*args, **kwargs)
-
-    return _fn
+    return QueuePoutine(fn, queue=queue, max_tries=max_tries)

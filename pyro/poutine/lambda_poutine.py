@@ -22,13 +22,14 @@ class LambdaPoutine(Poutine):
         self.batch_size = batch_size
         super(LambdaPoutine, self).__init__(fn)
 
-    def _enter_poutine(self, *args, **kwargs):
+    def __enter__(self):
         """
         increment counter by one each time we enter a new map_data branch
         """
         self.counter += 1
+        return super(LambdaPoutine, self).__enter__()
 
-    def down(self, msg):
+    def _prepare_site(self, msg):
         """
         construct the message that is consumed by TraceGraphPoutine;
         map_data_stack encodes the nested sequence of map_data branches
