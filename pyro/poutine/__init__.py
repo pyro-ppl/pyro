@@ -6,6 +6,8 @@ from .poutine import Poutine  # noqa: F401
 from .replay_poutine import ReplayPoutine
 from .trace_poutine import TracePoutine
 from .tracegraph_poutine import TraceGraphPoutine
+from .condition_poutine import ConditionPoutine
+from .lambda_poutine import LambdaPoutine  # noqa: F401
 from .escape_poutine import EscapePoutine
 
 # trace data structures
@@ -103,9 +105,44 @@ def escape(fn, escape_fn=None):
     return EscapePoutine(fn, escape_fn)
 
 
-##################################
+def condition(fn, data):
+    """
+    :param fn: a stochastic function (callable containing pyro primitive calls)
+    :param data: a dict or a Trace
+    :returns: stochastic function wrapped in a ConditionPoutine
+    :rtype: pyro.poutine.ConditionPoutine
+
+    Alias for ConditionPoutine constructor.
+
+    Given a stochastic function with some sample statements
+    and a dictionary of observations at names,
+    change the sample statements at those names into observes
+    with those values
+    """
+    return ConditionPoutine(fn, data=data)
+
+
+#########################################
 # Begin composite operations
-##################################
+#########################################
+
+def do(fn, data):
+    """
+    :param fn: a stochastic function (callable containing pyro primitive calls)
+    :param data: a dict or a Trace
+    :returns: stochastic function wrapped in a BlockPoutine and ConditionPoutine
+    :rtype: pyro.poutine.BlockPoutine
+
+    Given a stochastic function with some sample statements
+    and a dictionary of values at names,
+    set the return values of those sites equal to the values
+    and hide them from the rest of the stack
+    as if they were hard-coded to those values
+    by using BlockPoutine
+    """
+    return BlockPoutine(ConditionPoutine(fn, data=data),
+                        hide=list(data.keys()))
+
 
 def queue(fn, queue, max_tries=None,
           extend_fn=None, escape_fn=None, num_samples=None):

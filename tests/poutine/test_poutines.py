@@ -1,4 +1,5 @@
 import torch
+import pytest
 import functools
 from six.moves.queue import Queue
 from torch.autograd import Variable
@@ -334,6 +335,48 @@ class IndirectLambdaPoutineTests(TestCase):
         _test_scale_factor(2, 2, [1.0] * 4)
         _test_scale_factor(1, 2, [2.0] * 2)
         _test_scale_factor(2, 1, [2.0] * 2)
+
+
+class ConditionPoutineTests(NormalNormalNormalPoutineTestCase):
+
+    def test_condition(self):
+        data = {"latent2": Variable(torch.randn(2))}
+        tr2 = poutine.trace(poutine.condition(self.model, data=data)).get_trace()
+        assert "latent2" in tr2
+        assert tr2["latent2"]["type"] == "observe"
+        assert tr2["latent2"]["value"] is data["latent2"]
+
+    def test_do(self):
+        data = {"latent2": Variable(torch.randn(2))}
+        tr3 = poutine.trace(poutine.do(self.model, data=data)).get_trace()
+        assert "latent2" not in tr3
+
+    def test_trace_data(self):
+        tr1 = poutine.trace(
+            poutine.block(self.model, expose_types=["sample"])).get_trace()
+        tr2 = poutine.trace(
+            poutine.condition(self.model, data=tr1)).get_trace()
+        assert tr2["latent2"]["type"] == "observe"
+        assert tr2["latent2"]["value"] is tr1["latent2"]["value"]
+
+    def test_stack_overwrite_failure(self):
+        data1 = {"latent2": Variable(torch.randn(2))}
+        data2 = {"latent2": Variable(torch.randn(2))}
+        cm = poutine.condition(poutine.condition(self.model, data=data1),
+                               data=data2)
+        with pytest.raises(AssertionError):
+            cm()
+
+    def test_stack_success(self):
+        data1 = {"latent1": Variable(torch.randn(2))}
+        data2 = {"latent2": Variable(torch.randn(2))}
+        tr = poutine.trace(
+            poutine.condition(poutine.condition(self.model, data=data1),
+                              data=data2)).get_trace()
+        assert tr["latent1"]["type"] == "observe"
+        assert tr["latent1"]["value"] is data1["latent1"]
+        assert tr["latent2"]["type"] == "observe"
+        assert tr["latent2"]["value"] is data2["latent2"]
 
 
 class EscapePoutineTests(TestCase):
