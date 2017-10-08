@@ -211,7 +211,8 @@ class ParamStoreDict(object):
         Save parameters to disk
         """
         with open(filename, "wb") as output_file:
-            to_save = (self._params, self._param_tags)
+            param_tags = {k: [tag for tag in self._param_tags[k]] for k in self._param_tags}
+            to_save = (self._params, param_tags)
             output_file.write(cloudpickle.dumps(to_save))
 
     def load(self, filename):
@@ -229,6 +230,7 @@ class ParamStoreDict(object):
                 self._params[param_name] = param
                 self._param_to_name[param] = param_name
 
-            for param_name, tag in loaded_param_tags.items():
-                self._param_tags[param_name].add(tag)
-                self._tag_params[tag].add(param)
+            for param_name, tags in loaded_param_tags.items():
+                for tag in tags:
+                    self._param_tags[param_name].add(tag)
+                    self._tag_params[tag].add(param)
