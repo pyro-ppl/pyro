@@ -94,7 +94,7 @@ class TestFixedModelGuide(TestCase):
         self.alpha_p_log_0 = 0.11 * torch.ones(1)
         self.beta_p_log_0 = 0.13 * torch.ones(1)
 
-    def do_test_fixedness(self, tags):
+    def do_test_fixedness(self, fixed_tags):
         pyro.get_param_store().clear()
 
         def model():
@@ -119,11 +119,11 @@ class TestFixedModelGuide(TestCase):
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             pyro.sample("lambda_latent", dist.gamma, alpha_q, beta_q)
 
-        def per_param_args(module_name, param_name):
-            for pq in ['_p_', '_q_']:
-                if pq in param_name and pq[1] in tags:
-                    return {'lr': 0.01}
-            return {'lr': 0.0}
+        def per_param_args(module_name, param_name, tags):
+            if tags in fixed_tags:
+                    return {'lr': 0.0}
+            else:
+                return {'lr': 0.0}
 
         adam = optim.Adam(per_param_args)
         svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
@@ -135,21 +135,22 @@ class TestFixedModelGuide(TestCase):
                           (torch.equal(pyro.param("beta_p_log").data, self.beta_p_log_0))
         guide_unchanged = (torch.equal(pyro.param("alpha_q_log").data, self.alpha_q_log_0)) and\
                           (torch.equal(pyro.param("beta_q_log").data, self.beta_q_log_0))
-        bad = ('p' not in tags and (not model_unchanged)) or \
-              ('q' not in tags and (not guide_unchanged))
-        return (not bad)
+        model_changed = not model_unchanged
+        guide_changed = not guide_unchanged
+        error = ('model' in fixed_tags and model_changed) or ('guide' in fixed_tags and guide_changed)
+        return (not error)
 
     def test_model_fixed(self):
-        assert self.do_test_fixedness(tags=["q"])
+        assert self.do_test_fixedness(fixed_tags=["model"])
 
     def test_guide_fixed(self):
-        assert self.do_test_fixedness(tags=["p"])
+        assert self.do_test_fixedness(fixed_tags=["guide"])
 
     def test_guide_and_model_both_fixed(self):
-        assert self.do_test_fixedness(tags=[])
+        assert self.do_test_fixedness(fixed_tags=["model", "guide"])
 
     def test_guide_and_model_free(self):
-        assert self.do_test_fixedness(tags=["p", "q"])
+        assert self.do_test_fixedness(fixed_tags=["bogus_tag"])
 
 
 class PoissonGammaTests(TestCase):
