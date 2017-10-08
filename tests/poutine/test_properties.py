@@ -49,8 +49,7 @@ def trivial_model():
     return []
 
 
-@register_model(replay={'trace': {'normal_0': {'type': 'sample',
-                                               'value': ng_zeros(1)}}},
+@register_model(replay={'trace': {'normal_0': {'type': 'sample', 'value': ng_zeros(1)}}},
                 block={'hide': ['normal_0']},
                 condition={'data': {'normal_0': ng_zeros(1)}},
                 do={'data': {'normal_0': ng_zeros(1)}})
@@ -59,8 +58,7 @@ def normal_model():
     return [normal_0]
 
 
-@register_model(replay={'trace': {'normal_0': {'type': 'sample',
-                                               'value': ng_zeros(1)}}},
+@register_model(replay={'trace': {'normal_0': {'type': 'sample', 'value': ng_zeros(1)}}},
                 block={'hide': ['normal_0']},
                 condition={'data': {'normal_0': ng_zeros(1)}},
                 do={'data': {'normal_0': ng_zeros(1)}})
@@ -69,6 +67,18 @@ def normal_normal_model():
     normal_1 = ng_ones(1)
     pyro.observe('normal_1', dist.diagnormal, normal_1, ng_zeros(1), ng_ones(1))
     return [normal_0, normal_1]
+
+
+@register_model(replay={'trace': {'bern_0': {'type': 'sample', 'value': ng_ones(1)}}},
+                block={'hide': ['bern_0']},
+                condition={'data': {'bern_0': ng_ones(1)}},
+                do={'data': {'bern_0': ng_ones(1)}})
+def bernoulli_normal_model():
+    bern_0 = pyro.sample('bern_0', dist.bernoulli, ng_zeros(1) * 1e-2)
+    mu = ng_ones(1) if bern_0.data[0] else -ng_ones(1)
+    normal_0 = ng_ones(1)
+    pyro.observe('normal_0', dist.diagnormal, normal_0, mu, ng_ones(1) * 1e-2)
+    return [bern_0, normal_0]
 
 
 def get_trace(fn, *args, **kwargs):
