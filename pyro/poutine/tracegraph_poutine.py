@@ -1,134 +1,8 @@
-import graphviz
 import networkx
 
-from .trace_poutine import TracePoutine
 from collections import defaultdict
-
-
-class TraceGraph(object):
-    """
-    -- encapsulates the forward graph as well as the trace of a stochastic function,
-       along with some helper functions to access different node types.
-    -- returned by TraceGraphPoutine
-    -- visualization handled by save_visualization()
-    """
-
-    def __init__(self, G, trace, stochastic_nodes, reparameterized_nodes,
-                 observation_nodes,
-                 vectorized_map_data_info):
-        self.G = G
-        self.trace = trace
-        self.reparameterized_nodes = reparameterized_nodes
-        self.stochastic_nodes = stochastic_nodes
-        self.nonreparam_stochastic_nodes = list(set(stochastic_nodes) - set(reparameterized_nodes))
-        self.observation_nodes = observation_nodes
-        self.vectorized_map_data_info = vectorized_map_data_info
-
-    def get_stochastic_nodes(self):
-        """
-        get all sample nodes in graph
-        """
-        return self.stochastic_nodes
-
-    def get_nonreparam_stochastic_nodes(self):
-        """
-        get all non-reparameterized sample nodes in graph
-        """
-        return self.nonreparam_stochastic_nodes
-
-    def get_reparam_stochastic_nodes(self):
-        """
-        get all reparameterized sample nodes in graph
-        """
-        return self.reparameterized_nodes
-
-    def get_nodes(self):
-        """
-        get all nodes in graph
-        """
-        return self.G.nodes()
-
-    def get_children(self, node, with_self=False):
-        """
-        get children of a named node
-        :param node: the name of the node in the tracegraph
-        :param with_self: whether to include `node` among the children
-        """
-        children = self.G.successors(node)
-        if with_self:
-            children.append(node)
-        return children
-
-    def get_parents(self, node, with_self=False):
-        """
-        get parents of a named node
-        :param node: the name of the node in the tracegraph
-        :param with_self: whether to include `node` among the parents
-        """
-        parents = self.G.predecessors(node)
-        if with_self:
-            parents.append(node)
-        return parents
-
-    def get_ancestors(self, node, with_self=False):
-        """
-        get ancestors of a named node
-        :param node: the name of the node in the tracegraph
-        :param with_self: whether to include `node` among the ancestors
-        """
-        ancestors = list(networkx.ancestors(self.G, node))
-        if with_self:
-            ancestors.append(node)
-        return ancestors
-
-    def get_descendants(self, node, with_self=False):
-        """
-        get descendants of a named node
-        :param node: the name of the node in the tracegraph
-        :param with_self: whether to include `node` among the descendants
-        """
-        descendants = list(networkx.descendants(self.G, node))
-        if with_self:
-            descendants.append(node)
-        return descendants
-
-    def get_trace(self):
-        """
-        get the Trace associated with the TraceGraph
-        """
-        return self.trace
-
-    def get_graph(self):
-        """
-        get the graph associated with the TraceGraph
-        """
-        return self.G
-
-    def save_visualization(self, graph_output):
-        """
-        render graph and save to file
-        :param graph_output: the graph will be saved to graph_output.pdf
-        -- non-reparameterized stochastic nodes are salmon
-        -- reparameterized stochastic nodes are half salmon, half grey
-        -- observation nodes are green
-        """
-        g = graphviz.Digraph()
-        for label in self.G.nodes():
-            shape = 'ellipse'
-            if label in self.stochastic_nodes and label not in self.reparameterized_nodes:
-                fillcolor = 'salmon'
-            elif label in self.reparameterized_nodes:
-                fillcolor = 'lightgrey;.5:salmon'
-            elif label in self.observation_nodes:
-                fillcolor = 'darkolivegreen3'
-            else:
-                fillcolor = 'grey'
-            g.node(label, label=label, shape=shape, style='filled', fillcolor=fillcolor)
-
-        for label1, label2 in self.G.edges():
-            g.edge(label1, label2)
-
-        g.render(graph_output, view=False, cleanup=True)
+from .trace_poutine import TracePoutine
+from .trace import TraceGraph
 
 
 class TraceGraphPoutine(TracePoutine):
@@ -140,10 +14,10 @@ class TraceGraphPoutine(TracePoutine):
 
     this can be invoked as follows to create visualizations of the TraceGraph:
 
-        guide_tracegraph = poutine.tracegraph(guide)(*args, **kwargs)
+        guide_tracegraph = poutine.tracegraph(guide).get_trace(*args, **kwargs)
         guide_tracegraph.save_visualization('guide')
         guide_trace = guide_tracegraph.get_trace()
-        model_tracegraph = poutine.tracegraph(poutine.replay(model, guide_trace))(*args, **kwargs)
+        model_tracegraph = poutine.tracegraph(poutine.replay(model, guide_trace)).get_trace(*args, **kwargs)
         model_tracegraph.save_visualization('model')
         model_trace = model_tracegraph.get_trace()
 
@@ -158,30 +32,31 @@ class TraceGraphPoutine(TracePoutine):
         assert(graph_type == 'coarse'), "only coarse graph type supported at present"
         super(TraceGraphPoutine, self).__init__(fn)
 
-    def _enter_poutine(self, *args, **kwargs):
+    def __enter__(self):
         """
         enter and set up data structures
         """
-        super(TraceGraphPoutine, self)._enter_poutine(*args, **kwargs)
         self.stochastic_nodes = []
         self.reparameterized_nodes = []
         self.observation_nodes = []
         self.nodes_seen_so_far = {}
         self.G = networkx.DiGraph()
+        return super(TraceGraphPoutine, self).__enter__()
 
-    def _exit_poutine(self, ret_val, *args, **kwargs):
+    def __exit__(self, *args):
         """
-        Return a TraceGraph object that contains the forward graph and trace
+        Construct a TraceGraph object that contains the forward graph and trace
         """
-        self.trace = super(TraceGraphPoutine, self)._exit_poutine(ret_val, *args, **kwargs)
-
         vectorized_map_data_info = self._get_vectorized_map_data_info()
+        self.trace_graph = TraceGraph(self.G, self.trace,
+                                      self.stochastic_nodes,
+                                      self.reparameterized_nodes,
+                                      self.observation_nodes, vectorized_map_data_info)
+        return super(TraceGraphPoutine, self).__exit__(*args)
 
-        trace_graph = TraceGraph(self.G, self.trace,
-                                 self.stochastic_nodes, self.reparameterized_nodes,
-                                 self.observation_nodes,
-                                 vectorized_map_data_info)
-        return trace_graph
+    def get_trace(self, *args, **kwargs):
+        self(*args, **kwargs)
+        return self.trace_graph
 
     def _get_vectorized_map_data_info(self):
         """
@@ -267,24 +142,25 @@ class TraceGraphPoutine(TracePoutine):
         self.G.add_node(name)
         self.nodes_seen_so_far[name] = map_data_stack
 
-    def _pyro_sample(self, msg, name, dist, *args, **kwargs):
+    def _pyro_sample(self, msg):
         """
         register sample dependencies for coarse graph construction
         """
-        val = super(TraceGraphPoutine, self)._pyro_sample(msg, name, dist,
-                                                          *args, **kwargs)
+        name, fn = \
+            msg["name"], msg["fn"]
+        val = super(TraceGraphPoutine, self)._pyro_sample(msg)
         self._add_graph_node(msg, name)
         self.stochastic_nodes.append(name)
-        if dist.reparameterized:
+        if hasattr(fn, "reparameterized") and fn.reparameterized:
             self.reparameterized_nodes.append(name)
         return val
 
-    def _pyro_observe(self, msg, name, fn, obs, *args, **kwargs):
+    def _pyro_observe(self, msg):
         """
         register observe dependencies for coarse graph construction
         """
-        val = super(TraceGraphPoutine, self)._pyro_observe(msg, name, fn, obs,
-                                                           *args, **kwargs)
+        name = msg["name"]
+        val = super(TraceGraphPoutine, self)._pyro_observe(msg)
         self._add_graph_node(msg, name)
         self.observation_nodes.append(name)
         return val

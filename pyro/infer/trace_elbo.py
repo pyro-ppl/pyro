@@ -25,8 +25,8 @@ class Trace_ELBO(object):
         """
 
         for i in range(self.num_particles):
-            guide_trace = poutine.trace(self.guide)(*args, **kwargs)
-            model_trace = poutine.trace(poutine.replay(self.model, guide_trace))(*args, **kwargs)
+            guide_trace = poutine.trace(self.guide).get_trace(*args, **kwargs)
+            model_trace = poutine.trace(poutine.replay(self.model, guide_trace)).get_trace(*args, **kwargs)
             log_r = model_trace.log_pdf() - guide_trace.log_pdf()
             yield model_trace, guide_trace, log_r
 
@@ -79,6 +79,7 @@ class Trace_ELBO(object):
                     if model_trace[name]["fn"].reparameterized:
                         surrogate_elbo_particle += lp_lq
                     else:
+                        # XXX should the user be able to control inclusion of the -logq term below?
                         surrogate_elbo_particle += model_trace[name]["log_pdf"] + \
                             log_r.detach() * guide_trace[name]["log_pdf"]
 

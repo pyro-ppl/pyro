@@ -1,3 +1,4 @@
+import pyro
 import numpy as np
 import torch
 from torch.autograd import Variable
@@ -196,3 +197,40 @@ def basic_histogram(ps, vs):
         hist[v] = hist[v] + ps[i]
     return {"ps": torch.cat([hist[v] for v in hist.keys()]),
             "vs": [v for v in hist.keys()]}
+
+
+def apply_stack(initial_msg):
+    """
+    :param dict initial_msg: the starting version of the trace site
+    :returns: an updated message that is the final version of the trace site
+
+    Execute the poutine stack at a single site according to the following scheme:
+    1. Walk down the stack from top to bottom, collecting into the message
+        all information necessary to execute the stack at that site
+    2. For each poutine in the stack from bottom to top:
+           Execute the poutine with the message;
+           If the message field "stop" is True, stop;
+           Otherwise, continue
+    3. Return the updated message
+    """
+    stack = pyro._PYRO_STACK
+    # TODO check at runtime if stack is valid
+
+    # msg is used to pass information up and down the stack
+    msg = initial_msg
+
+    # first, gather all information necessary to apply the stack to this site
+    for frame in reversed(stack):
+        msg = frame._prepare_site(msg)
+
+    # go until time to stop?
+    for frame in stack:
+        assert msg["type"] in ("sample", "observe", "map_data", "param"), \
+            "{} is an invalid site type, how did that get there?".format(msg["type"])
+
+        msg["ret"] = getattr(frame, "_pyro_{}".format(msg["type"]))(msg)
+
+        if msg["stop"]:
+            break
+
+    return msg

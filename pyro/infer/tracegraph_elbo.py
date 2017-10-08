@@ -37,10 +37,10 @@ class TraceGraph_ELBO(object):
         """
 
         for i in range(self.num_particles):
-            guide_tracegraph = poutine.tracegraph(self.guide)(*args, **kwargs)
+            guide_tracegraph = poutine.tracegraph(self.guide).get_trace(*args, **kwargs)
             guide_trace = guide_tracegraph.get_trace()
             model_tracegraph = poutine.tracegraph(
-                poutine.replay(self.model, guide_trace))(*args, **kwargs)
+                poutine.replay(self.model, guide_trace)).get_trace(*args, **kwargs)
             yield model_tracegraph, guide_tracegraph
 
     def loss(self, *args, **kwargs):
@@ -72,7 +72,7 @@ class TraceGraph_ELBO(object):
         """
         Computes the ELBO as well as the surrogate ELBO that is used to form the gradient estimator.
         Performs backward on the latter. Num_particle many samples are used to form the estimators.
-        If present, a baseline loss is also constructed and differentiated.
+        If baselines are present, a baseline loss is also constructed and differentiated.
         :returns: returns an estimate of the ELBO
         :rtype: torch.autograd.Variable
         """
@@ -82,24 +82,47 @@ class TraceGraph_ELBO(object):
         for model_tracegraph, guide_tracegraph in self._get_traces(*args, **kwargs):
             guide_trace, model_trace = guide_tracegraph.get_trace(), model_tracegraph.get_trace()
 
-            # have the trace compute all the individual log pdf terms
+            # get info regarding rao-blackwellization of vectorized map_data
+            guide_vec_md_info = guide_tracegraph.vectorized_map_data_info
+            model_vec_md_info = model_tracegraph.vectorized_map_data_info
+            guide_vec_md_condition = guide_vec_md_info['rao-blackwellization-condition']
+            model_vec_md_condition = model_vec_md_info['rao-blackwellization-condition']
+            do_vec_rb = guide_vec_md_condition and model_vec_md_condition
+            guide_vec_md_nodes = guide_vec_md_info['nodes'] if do_vec_rb else None
+            model_vec_md_nodes = model_vec_md_info['nodes'] if do_vec_rb else None
+
+            def get_vec_batch_nodes_dict(vec_batch_nodes):
+                vec_batch_nodes = vec_batch_nodes.values() if vec_batch_nodes is not None else []
+                vec_batch_nodes = [item for sublist in vec_batch_nodes for item in sublist]
+                vec_batch_nodes_dict = {}
+                for pair in vec_batch_nodes:
+                    vec_batch_nodes_dict[pair[0]] = pair[1]
+                return vec_batch_nodes_dict
+
+            # these dictionaries encode which sites are batched
+            guide_vec_batch_nodes_dict = get_vec_batch_nodes_dict(guide_vec_md_nodes)
+            model_vec_batch_nodes_dict = get_vec_batch_nodes_dict(model_vec_md_nodes)
+
+            # have the trace compute all the individual (batch) log pdf terms
             # so that they are available below
-            guide_trace.log_pdf(), model_trace.log_pdf()
+            guide_trace.log_pdf(vec_batch_nodes_dict=guide_vec_batch_nodes_dict)
+            model_trace.log_pdf(vec_batch_nodes_dict=model_vec_batch_nodes_dict)
 
             # prepare a list of all the cost nodes, each of which is +- log_pdf
             cost_nodes = []
             non_reparam_nodes = set(guide_tracegraph.get_nonreparam_stochastic_nodes())
             for site in model_trace.keys():
                 model_trace_site = model_trace[site]
+                log_pdf_key = 'log_pdf' if site not in model_vec_batch_nodes_dict else 'batch_log_pdf'
                 if model_trace_site["type"] == "observe":
-                    cost_node = (model_trace_site["log_pdf"], True)
+                    cost_node = (model_trace_site[log_pdf_key], True)
                     cost_nodes.append(cost_node)
                 elif model_trace_site["type"] == "sample":
                     # cost node from model sample
-                    cost_node1 = (model_trace_site["log_pdf"], True)
+                    cost_node1 = (model_trace_site[log_pdf_key], True)
                     # cost node from guide sample
                     zero_expectation = site in non_reparam_nodes
-                    cost_node2 = (-guide_trace[site]["log_pdf"],
+                    cost_node2 = (-guide_trace[site][log_pdf_key],
                                   not zero_expectation)
                     cost_nodes.extend([cost_node1, cost_node2])
 
@@ -117,6 +140,7 @@ class TraceGraph_ELBO(object):
 
             # compute the elbo, removing terms whose gradient is zero
             # this is the bit that's actually differentiated
+            # XXX should the user be able to control if these terms are included?
             for cost_node in cost_nodes:
                 if cost_node[1]:
                     elbo_no_zero_expectation_terms_particle += cost_node[0]
@@ -136,23 +160,31 @@ class TraceGraph_ELBO(object):
                 downstream_costs = {}
 
                 for node in topo_sort_guide_nodes:
-                    downstream_costs[
-                        node] = model_trace[node]["log_pdf"] - guide_trace[node]["log_pdf"]
+                    node_log_pdf_key = 'log_pdf' if node not in guide_vec_batch_nodes_dict else 'batch_log_pdf'
+                    downstream_costs[node] = model_trace[node][node_log_pdf_key] - \
+                        guide_trace[node][node_log_pdf_key]
                     nodes_included_in_sum = set([node])
                     downstream_guide_cost_nodes[node] = set([node])
                     for child in guide_tracegraph.get_children(node):
                         child_cost_nodes = downstream_guide_cost_nodes[child]
-                        downstream_guide_cost_nodes[node].update(
-                            child_cost_nodes)
-                        if nodes_included_in_sum.isdisjoint(
-                                child_cost_nodes):  # avoid duplicates
-                            downstream_costs[node] += downstream_costs[child]
+                        downstream_guide_cost_nodes[node].update(child_cost_nodes)
+                        if nodes_included_in_sum.isdisjoint(child_cost_nodes):  # avoid duplicates
+                            if node_log_pdf_key == 'log_pdf':
+                                downstream_costs[node] += downstream_costs[child].sum()
+                            else:
+                                downstream_costs[node] += downstream_costs[child]
                             nodes_included_in_sum.update(child_cost_nodes)
                     missing_downstream_costs = downstream_guide_cost_nodes[node] - nodes_included_in_sum
                     # include terms we missed because we had to avoid duplicates
                     for missing_node in missing_downstream_costs:
-                        downstream_costs[node] += model_trace[missing_node]["log_pdf"] - \
-                             guide_trace[missing_node]["log_pdf"]
+                        mn_log_pdf_key = 'log_pdf' if missing_node not in \
+                                            guide_vec_batch_nodes_dict else 'batch_log_pdf'
+                        if node_log_pdf_key == 'log_pdf':
+                            downstream_costs[node] += (model_trace[missing_node][mn_log_pdf_key] -
+                                                       guide_trace[missing_node][mn_log_pdf_key]).sum()
+                        else:
+                            downstream_costs[node] += model_trace[missing_node][mn_log_pdf_key] - \
+                                                      guide_trace[missing_node][mn_log_pdf_key]
 
                 # finish assembling complete downstream costs
                 # (the above computation may be missing terms from model)
@@ -166,9 +198,15 @@ class TraceGraph_ELBO(object):
                     children_in_model.difference_update(
                         downstream_guide_cost_nodes[site])
                     for child in children_in_model:
-                        assert (model_trace[child]["type"] in ("sample",
-                                                               "observe"))
-                        downstream_costs[site] += model_trace[child]["log_pdf"]
+                        child_log_pdf_key = 'log_pdf' if child not in model_vec_batch_nodes_dict \
+                            else 'batch_log_pdf'
+                        site_log_pdf_key = 'log_pdf' if site not in guide_vec_batch_nodes_dict \
+                            else 'batch_log_pdf'
+                        assert (model_trace[child]["type"] in ("sample", "observe"))
+                        if site_log_pdf_key == 'log_pdf':
+                            downstream_costs[site] += model_trace[child][child_log_pdf_key].sum()
+                        else:
+                            downstream_costs[site] += model_trace[child][child_log_pdf_key]
 
                 # construct all the reinforce-like terms.
                 # we include only downstream costs to reduce variance
@@ -176,47 +214,55 @@ class TraceGraph_ELBO(object):
                 # XXX should the average baseline be in the param store as below?
 
                 # for extracting baseline options from kwargs
+                # XXX default for baseline_beta currently set here
                 def get_baseline_kwargs(kwargs):
                     return kwargs.get('nn_baseline', None), \
-                        kwargs.get('nn_baseline_input', None), \
-                        kwargs.get('use_decaying_avg_baseline', False), \
-                        kwargs.get('baseline_beta', 0.90)  # default decay rate for avg_baseline
+                           kwargs.get('nn_baseline_input', None), \
+                           kwargs.get('use_decaying_avg_baseline', False), \
+                           kwargs.get('baseline_beta', 0.90), \
+                           kwargs.get('baseline_value', None), \
+                           kwargs.get('baseline_params', None)
 
-                # this [] will be used to store information need to construct baseline losses below
                 baseline_losses_particle = []
                 for node in non_reparam_nodes:
+                    log_pdf_key = 'log_pdf' if node not in guide_vec_batch_nodes_dict else 'batch_log_pdf'
                     downstream_cost = downstream_costs[node]
                     baseline = 0.0
-                    nn_baseline, nn_baseline_input, use_decaying_avg_baseline, \
-                        baseline_beta = get_baseline_kwargs(guide_trace[node]['args'][1])
+                    nn_baseline, nn_baseline_input, use_decaying_avg_baseline, baseline_beta, \
+                        baseline_value, baseline_params = get_baseline_kwargs(guide_trace[node]['args'][1])
                     use_nn_baseline = nn_baseline is not None
+                    use_baseline_value = baseline_value is not None
+                    assert(not (use_nn_baseline and use_baseline_value)), \
+                        "cannot use baseline_value and nn_baseline simultaneously"
                     if use_decaying_avg_baseline:
-                        avg_downstream_cost_old = pyro.param(
-                            "__baseline_avg_downstream_cost_" + node,
-                            ng_zeros(1))
+                        avg_downstream_cost_old = pyro.param("__baseline_avg_downstream_cost_" + node,
+                                                             ng_zeros(1))
                         avg_downstream_cost_new = (1 - baseline_beta) * downstream_cost + \
                             baseline_beta * avg_downstream_cost_old
                         avg_downstream_cost_old.data = avg_downstream_cost_new.data  # XXX copy_() ?
                         baseline += avg_downstream_cost_old
                     if use_nn_baseline:
                         # block nn_baseline_input gradients except in baseline loss
-                        baseline += nn_baseline(
-                            detach_iterable(nn_baseline_input))
+                        baseline += nn_baseline(detach_iterable(nn_baseline_input))
                         nn_params = nn_baseline.parameters()
-                        baseline_loss_particle = torch.pow(
-                            downstream_cost.detach() - baseline, 2.0)
-                        baseline_losses_particle.append(
-                            (baseline_loss_particle, nn_params))
-                    if use_nn_baseline or use_decaying_avg_baseline:
-                        elbo_reinforce_terms_particle += guide_trace[node]['log_pdf'] * \
-                         (downstream_cost - baseline).detach()
+                        baseline_loss = torch.pow(downstream_cost.detach() - baseline, 2.0).sum()
+                        baseline_losses_particle.append((baseline_loss, nn_params))
+                    elif use_baseline_value:
+                        # it's on the user to make sure baseline_value tape only points to baseline params
+                        baseline += baseline_value
+                        nn_params = baseline_params
+                        baseline_loss = torch.pow(downstream_cost.detach() - baseline, 2.0).sum()
+                        baseline_losses_particle.append((baseline_loss, nn_params))
+                    if use_nn_baseline or use_decaying_avg_baseline or use_baseline_value:
+                        elbo_reinforce_terms_particle += (guide_trace[node][log_pdf_key] *
+                                                          (downstream_cost - baseline).detach()).sum()
                     else:
-                        elbo_reinforce_terms_particle += guide_trace[node]['log_pdf'] * \
-                         downstream_cost.detach()
+                        elbo_reinforce_terms_particle += (guide_trace[node][log_pdf_key] *
+                                                          downstream_cost.detach()).sum()
 
-                for _loss, _params in baseline_losses_particle:
-                    baseline_loss_particle += _loss / self.num_particles
-                    trainable_params.update(set(_params))
+                    for _loss, _params in baseline_losses_particle:
+                        baseline_loss_particle += _loss / self.num_particles
+                        trainable_params.update(set(_params))
 
                 surrogate_elbo_particle += elbo_reinforce_terms_particle / self.num_particles
 
