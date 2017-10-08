@@ -65,7 +65,8 @@ class ParamStoreDict(object):
             this information is used to determine which parameters are being optimized,
             e.g. in the context of pyro.infer.SVI
         """
-        assert(all([p in self._params for p in params])), "some of these parameters are not in the param store"
+        assert(all([p in self._param_to_name for p in params])), \
+            "some of these parameters are not in the param store"
         self._active_params.update(set(params))
 
     def mark_params_inactive(self, params):
@@ -74,7 +75,8 @@ class ParamStoreDict(object):
             this information is used to determine which parameters are being optimized,
             e.g. in the context of pyro.infer.SVI
         """
-        assert(all([p in self._params for p in params])), "some of these parameters are not in the param store"
+        assert(all([p in self._param_to_name for p in params])), \
+            "some of these parameters are not in the param store"
         self._active_params.difference_update(set(params))
 
     def delete_tag(self, tag):
@@ -110,11 +112,8 @@ class ParamStoreDict(object):
 
         Tags the parameter(s) specified by param_names with the tag(s) specified by tags.
         """
-        assert(all([p in self._params for p in param_names])), \
-            "some of these parameters are not in the param store"
-
         def tag_single_param(name, tags):
-            assert name in self._params
+            assert name in self._params, "<%s> is not a parameter in the paramstore" % name
             if isinstance(tags, str):
                 self._param_tags[tags].add(self._params[name])
                 self._tag_params[name].add(tags)
@@ -138,11 +137,8 @@ class ParamStoreDict(object):
 
         Disassociates the parameter(s) specified by param_names with the tag(s) specified by tags.
         """
-        assert(all([p in self._params for p in param_names])), \
-            "some of these parameters are not in the param store"
-
         def untag_single_param(name, tags):
-            assert name in self._params
+            assert name in self._params, "<%s> is not a parameter in the paramstore" % name
             if isinstance(tags, str):
                 self._param_tags[tags].discard(self._params[name])
                 self._tag_params[name].discard(tags)
