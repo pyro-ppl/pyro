@@ -100,10 +100,10 @@ class TestFixedModelGuide(TestCase):
         def model():
             alpha_p_log = pyro.param(
                 "alpha_p_log", Variable(
-                    self.alpha_p_log_0.clone(), requires_grad=True), scope="model")
+                    self.alpha_p_log_0.clone(), requires_grad=True), tags="model")
             beta_p_log = pyro.param(
                 "beta_p_log", Variable(
-                    self.beta_p_log_0.clone(), requires_grad=True), scope="model")
+                    self.beta_p_log_0.clone(), requires_grad=True), tags="model")
             alpha_p, beta_p = torch.exp(alpha_p_log), torch.exp(beta_p_log)
             lambda_latent = pyro.sample("lambda_latent", dist.gamma, alpha_p, beta_p)
             pyro.observe("obs", dist.poisson, self.data, lambda_latent)
@@ -112,10 +112,10 @@ class TestFixedModelGuide(TestCase):
         def guide():
             alpha_q_log = pyro.param(
                 "alpha_q_log", Variable(
-                    self.alpha_q_log_0.clone(), requires_grad=True), scope="guide")
+                    self.alpha_q_log_0.clone(), requires_grad=True), tags="guide")
             beta_q_log = pyro.param(
                 "beta_q_log", Variable(
-                    self.beta_q_log_0.clone(), requires_grad=True), scope="guide")
+                    self.beta_q_log_0.clone(), requires_grad=True), tags="guide")
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             pyro.sample("lambda_latent", dist.gamma, alpha_q, beta_q)
 

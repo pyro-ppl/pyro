@@ -223,15 +223,14 @@ def param(name, *args, **kwargs):
         return out_msg["ret"]
 
 
-# hand off behavior to poutine if necessary?
-# for now default calls out to pyro.param -- which is handled by poutine
-def module(pyro_name, nn_obj, scope="default"):
+def module(pyro_name, nn_obj, tags="default"):
     """
     :param pyro_name: name of module
-    :param nn_obj: pytorch nn module
-    :returns: pytorch nn object
+    :param nn_obj: torch.nn.Module
+    :param tags: option; tags for any parameters inside the module
+    :returns: torch.nn.Module
 
-    Takes a pytorch nn module and registers its parameters with the param store.
+    Takes a torch.nn.Module and registers its parameters with the param store.
     In conjunction with the param store save() and load() functionality, this
     allows the user to save and load nn modules
     """
@@ -245,7 +244,7 @@ def module(pyro_name, nn_obj, scope="default"):
     state_dict = {}
     for param_name, param in nn_obj.named_parameters():
         state_dict[param_name] = pyro.param(param_with_module_name(pyro_name, param_name), param,
-                                            scope=scope)
+                                            tags=tags)
 
     current_nn_state = nn_obj.state_dict()
     for name, param in state_dict.items():
@@ -261,6 +260,7 @@ def module(pyro_name, nn_obj, scope="default"):
         if id(param) != id(current_nn_state[name]):
             current_nn_state[name].copy_(param)
 
+    # the KeyError below may not be correct; see github issue
     missing = set(current_nn_state.keys()) - set(state_dict.keys())
     if len(missing) > 0:
         raise KeyError('missing keys in state_dict: "{}"'.format(missing))

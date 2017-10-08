@@ -8,7 +8,7 @@ from pyro.util import ng_zeros, detach_iterable
 
 class TraceGraph_ELBO(object):
     """
-    A TraceGraph and Poutine-based implementation of SVI
+    A TraceGraph implementation of ELBO-based SVI
     The gradient estimator is constructed along the lines of
 
     'Gradient Estimation Using Stochastic Computation Graphs'
@@ -19,38 +19,33 @@ class TraceGraph_ELBO(object):
     dependency information as recorded in the TraceGraph is used
     to reduce the variance of the gradient estimator.
     """
-    def __init__(self, model, guide, num_particles=1):
+    def __init__(self, num_particles=1):
         """
-        :param model: the model (callable)
-        :param guide: the guide (callable), i.e. the variational distribution
         :param num_particles: the number of particles (samples) used to form the estimator
         """
         super(TraceGraph_ELBO, self).__init__()
-        self.model = model
-        self.guide = guide
         self.num_particles = num_particles
 
-    def _get_traces(self, *args, **kwargs):
+    def _get_traces(self, model, guide, *args, **kwargs):
         """
         runs the guide and runs the model against the guide with
         the result packaged as a tracegraph generator
         """
 
         for i in range(self.num_particles):
-            guide_tracegraph = poutine.tracegraph(self.guide).get_trace(*args, **kwargs)
+            guide_tracegraph = poutine.tracegraph(guide).get_trace(*args, **kwargs)
             guide_trace = guide_tracegraph.get_trace()
-            model_tracegraph = poutine.tracegraph(
-                poutine.replay(self.model, guide_trace)).get_trace(*args, **kwargs)
+            model_tracegraph = poutine.tracegraph(poutine.replay(model, guide_trace)).get_trace(*args, **kwargs)
             yield model_tracegraph, guide_tracegraph
 
-    def loss(self, *args, **kwargs):
+    def loss(self, model, guide, *args, **kwargs):
         """
         Evaluates the ELBO with an estimator that uses num_particles many samples/particles.
         :returns: returns an estimate of the ELBO
         :rtype: float
         """
         elbo = 0.0
-        for model_tracegraph, guide_tracegraph in self._get_traces(*args, **kwargs):
+        for model_tracegraph, guide_tracegraph in self._get_traces(model, guide, *args, **kwargs):
             guide_trace, model_trace = guide_tracegraph.get_trace(), model_tracegraph.get_trace()
             guide_trace.log_pdf(), model_trace.log_pdf()
 
@@ -68,7 +63,7 @@ class TraceGraph_ELBO(object):
         loss = -elbo
         return loss.data[0]
 
-    def loss_and_grads(self, *args, **kwargs):
+    def loss_and_grads(self, model, guide, *args, **kwargs):
         """
         Computes the ELBO as well as the surrogate ELBO that is used to form the gradient estimator.
         Performs backward on the latter. Num_particle many samples are used to form the estimators.
@@ -79,7 +74,7 @@ class TraceGraph_ELBO(object):
         elbo = 0.0
         trainable_params = set()
 
-        for model_tracegraph, guide_tracegraph in self._get_traces(*args, **kwargs):
+        for model_tracegraph, guide_tracegraph in self._get_traces(model, guide):
             guide_trace, model_trace = guide_tracegraph.get_trace(), model_tracegraph.get_trace()
 
             # get info regarding rao-blackwellization of vectorized map_data
@@ -221,15 +216,14 @@ class TraceGraph_ELBO(object):
                            kwargs.get('use_decaying_avg_baseline', False), \
                            kwargs.get('baseline_beta', 0.90), \
                            kwargs.get('baseline_value', None), \
-                           kwargs.get('baseline_params', None)
 
-                baseline_losses_particle = []
+                baseline_loss_particle = 0.0
                 for node in non_reparam_nodes:
                     log_pdf_key = 'log_pdf' if node not in guide_vec_batch_nodes_dict else 'batch_log_pdf'
                     downstream_cost = downstream_costs[node]
                     baseline = 0.0
                     nn_baseline, nn_baseline_input, use_decaying_avg_baseline, baseline_beta, \
-                        baseline_value, baseline_params = get_baseline_kwargs(guide_trace[node]['args'][1])
+                        baseline_value = get_baseline_kwargs(guide_trace[node]['args'][1])
                     use_nn_baseline = nn_baseline is not None
                     use_baseline_value = baseline_value is not None
                     assert(not (use_nn_baseline and use_baseline_value)), \
@@ -244,15 +238,15 @@ class TraceGraph_ELBO(object):
                     if use_nn_baseline:
                         # block nn_baseline_input gradients except in baseline loss
                         baseline += nn_baseline(detach_iterable(nn_baseline_input))
-                        nn_params = nn_baseline.parameters()
+                        # shouldn't need this is param is properly registered
+                        # nn_params = nn_baseline.parameters()
                         baseline_loss = torch.pow(downstream_cost.detach() - baseline, 2.0).sum()
-                        baseline_losses_particle.append((baseline_loss, nn_params))
+                        baseline_loss_particle += baseline_loss
                     elif use_baseline_value:
                         # it's on the user to make sure baseline_value tape only points to baseline params
                         baseline += baseline_value
-                        nn_params = baseline_params
                         baseline_loss = torch.pow(downstream_cost.detach() - baseline, 2.0).sum()
-                        baseline_losses_particle.append((baseline_loss, nn_params))
+                        baseline_loss_particle += baseline_loss
                     if use_nn_baseline or use_decaying_avg_baseline or use_baseline_value:
                         elbo_reinforce_terms_particle += (guide_trace[node][log_pdf_key] *
                                                           (downstream_cost - baseline).detach()).sum()
@@ -260,11 +254,14 @@ class TraceGraph_ELBO(object):
                         elbo_reinforce_terms_particle += (guide_trace[node][log_pdf_key] *
                                                           downstream_cost.detach()).sum()
 
-                    for _loss, _params in baseline_losses_particle:
-                        baseline_loss_particle += _loss / self.num_particles
-                        trainable_params.update(set(_params))
+                    # for _loss, _params in baseline_losses_particle:
+                    #    baseline_loss_particle += _loss / self.num_particles
+                        # shouldn't need this is param is properly registered
+                        # trainable_params.update(set(_params))
 
                 surrogate_elbo_particle += elbo_reinforce_terms_particle / self.num_particles
+                if not isinstance(baseline_loss_particle, float):
+                    baseline_loss_particle.backward()
 
             # grab model parameters to train
             for name in model_trace.keys():
@@ -280,8 +277,6 @@ class TraceGraph_ELBO(object):
 
             surrogate_loss_particle = -surrogate_elbo_particle
             surrogate_loss_particle.backward()
-            if not isinstance(baseline_loss_particle, float):
-                baseline_loss_particle.backward()
 
         loss = -elbo
 

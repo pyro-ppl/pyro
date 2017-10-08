@@ -155,7 +155,7 @@ class NormalNormalNormalTests(TestCase):
                     h = self.sigmoid(self.lin1(x))
                     return self.lin2(h)
 
-            mu_prime_baseline = pyro.module("mu_prime_baseline", VanillaBaselineNN(2, 5), scope="baseline")
+            mu_prime_baseline = pyro.module("mu_prime_baseline", VanillaBaselineNN(2, 5), tags="baseline")
         else:
             mu_prime_baseline = None
 
@@ -607,7 +607,6 @@ class RaoBlackwellizationTests(TestCase):
     # this tests rao-blackwellization and baselines for a vectorized map_data
     # inside of a list map_data with superfluous random variables to complexify the
     # graph structure and introduce additional baselines
-    @pytest.mark.xfail(reason="refactoring; make sure baselines at higher LR first")
     def test_vectorized_map_data_in_elbo_with_superfluous_rvs(self):
         self._test_vectorized_map_data_in_elbo(n_superfluous_top=2, n_superfluous_bottom=2, n_steps=9000)
 
@@ -654,22 +653,20 @@ class RaoBlackwellizationTests(TestCase):
             log_sig_q = pyro.param("log_sig_q", Variable(
                                    self.analytic_log_sig_n.data - 0.19 * torch.ones(2), requires_grad=True))
             sig_q = torch.exp(log_sig_q)
-            trivial_baseline = pyro.module("mu_baseline", pt_mu_baseline)
+            trivial_baseline = pyro.module("mu_baseline", pt_mu_baseline, tags="baseline")
             baseline_value = trivial_baseline(ng_ones(1))
-            baseline_params = trivial_baseline.parameters()
             mu_latent = pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q, baseline_value=baseline_value,
-                                    baseline_params=baseline_params, reparameterized=False)
+                                    reparameterized=False)
 
             def obs_inner(i, _i, _x):
                 for k in range(n_superfluous_top + n_superfluous_bottom):
                     z_baseline = pyro.module("z_baseline_%d_%d" % (i, k),
-                                             pt_superfluous_baselines[3 * k + i])
+                                             pt_superfluous_baselines[3 * k + i], tags="baseline")
                     baseline_value = z_baseline(mu_latent.detach())
-                    baseline_params = z_baseline.parameters()
                     mean_i = pyro.param("mean_%d_%d" % (i, k),
                                         Variable(0.5 * torch.ones(4 - i, 1), requires_grad=True))
                     pyro.sample("z_%d_%d" % (i, k), dist.diagnormal, mean_i, ng_ones(4 - i, 1),
-                                baseline_value=baseline_value, baseline_params=baseline_params,
+                                baseline_value=baseline_value,
                                 reparameterized=False)
 
             def obs_outer(i, x):
@@ -682,7 +679,13 @@ class RaoBlackwellizationTests(TestCase):
 
             return mu_latent
 
-        adam = optim.Adam({"lr": 0.0012, "betas": (0.95, 0.999)})
+        def per_param_callable(module_name, param_name, tags):
+            if 'baseline' in tags:
+                return {"lr": 0.010, "betas": (0.95, 0.999)}
+            else:
+                return {"lr": 0.0012, "betas": (0.95, 0.999)}
+
+        adam = optim.Adam(per_param_callable)
         svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
 
         for step in range(n_steps):
@@ -706,6 +709,6 @@ class RaoBlackwellizationTests(TestCase):
                     print("superfluous error: %.4f" % np.max(superfluous_errors))
 
         self.assertEqual(0.0, mu_error, prec=0.04)
-        self.assertEqual(0.0, log_sig_error, prec=0.04)
+        self.assertEqual(0.0, log_sig_error, prec=0.05)
         if n_superfluous_top > 0 or n_superfluous_bottom > 0:
             self.assertEqual(0.0, np.max(superfluous_errors), prec=0.04)

@@ -5,10 +5,14 @@ import cloudpickle
 class ParamStoreDict(object):
 
     def __init__(self):
+        """
+        initialize param store data structures
+        """
         self._params = {}
         self._param_to_name = {}
         self._active_params = set()
-        self._param_scopes = defaultdict(lambda: set())
+        self._param_tags = defaultdict(lambda: set())
+        self._tag_params = defaultdict(lambda: set())
 
     def clear(self):
         """
@@ -17,7 +21,8 @@ class ParamStoreDict(object):
         self._params = {}
         self._param_to_name = {}
         self._active_params = set()
-        self._param_scopes = defaultdict(lambda: set())
+        self._param_tags = defaultdict(lambda: set())
+        self._tag_params = defaultdict(lambda: set())
 
     def get_all_param_names(self):
         """
@@ -25,27 +30,27 @@ class ParamStoreDict(object):
         """
         return self._params.keys()
 
-    def get_active_params(self, scope=None):
+    def get_active_params(self, tags=None):
         """
-        :param scope: optional argument specifying that only active params of a particular
-            scope or scopes should be returned
-        :type scope: string or iterable over strings
-        :returns: all active params in the ParamStore, possibly filtered to a particular scope or scopes
+        :param tag: optional argument specifying that only active params carrying a particular
+            tag or any of several tags should be returned
+        :type tags: string or iterable over strings
+        :returns: all active params in the ParamStore, possibly filtered to a particular tag or tags
         :rtype: set
         """
-        if scope is None:  # return all active params
+        if tags is None:  # return all active params
             return self._active_params
-        elif isinstance(scope, str) and scope not in self._param_scopes:
-            # return empty set, since scope doesn't exist; XXX RAISE WARNING
+        elif isinstance(tags, str) and tags not in self._param_tags:
+            # return empty set, since tag doesn't exist; XXXraise warning?
             return set()
-        elif isinstance(scope, str):  # only return active params in the scope
-            return self._active_params.intersection(self._param_scopes[scope])
-        elif isinstance(scope, list) or isinstance(scope, tuple):
+        elif isinstance(tags, str):  # only return active params in the tag
+            return self._active_params.intersection(self._param_tags[tags])
+        elif isinstance(tags, list) or isinstance(tags, tuple):
             params_to_return = set()
-            for s in scope:
-                assert isinstance(s, str)
-                if s in self._param_scopes:
-                    params_to_return.update(self._param_scopes[s])
+            for tag in tags:
+                assert isinstance(tag, str)
+                if tag in self._param_tags:
+                    params_to_return.update(self._param_tags[tag])
             return params_to_return.intersection(self._active_params)
         else:
             raise TypeError
@@ -53,84 +58,104 @@ class ParamStoreDict(object):
     def mark_params_active(self, params):
         """
         :param params: iterable of params the user wishes to mark as active in the ParamStore.
-            this information is used by pyro.optim.Optimize
+            this information is used to determine which parameters are being optimized,
+            e.g. in the context of pyro.infer.SVI
         """
         self._active_params.update(set(params))
 
     def mark_params_inactive(self, params):
         """
         :param params: iterable of params the user wishes to mark as inactive in the ParamStore.
-            this information is used by pyro.optim.Optimize
+            this information is used to determine which parameters are being optimized,
+            e.g. in the context of pyro.infer.SVI
         """
         self._active_params.difference_update(set(params))
 
-    def delete_scope(self, scope):
+    def delete_tag(self, tag):
         """
-        :param scope: scope to remove
-        :type socpe: str
+        :param tag: tag to remove
+        :type tag: str
 
-        Removes the scope; any parameters in that scope are untouched but are no longer
-        associated with that scope.
+        Removes the tag; any parameters with that tag are unaffected but are no longer
+        associated with that tag.
         """
-        self._param_scopes.pop(scope)
+        self._param_tags.pop(tag)
+        for p, tags in self._tag_params.items():
+            if tag in tags:
+                tags.remove(tag)
 
-    def add_param_to_scope(self, param_name, scope):
+    def get_param_tags(self, param_name):
         """
-        :param param_name: either a single parameter name or an iterable of parameter names
-        :param scope: either a single string or an iterable of strings
+        :param param_name: a (single) parameter name
+        :type param_name: str
+        :rtype: set
 
-        Adds the parameter(s) specified by param_name to the scope(s) specified by scope.
+        Return the tags associated with the parameter
         """
+        if param_name in self._tag_params:
+            return self._tag_params[param_name]
+        return set()
 
-        def add_single_param_to_scope(name, scope):
-            assert name in self._params
-            if isinstance(scope, str):
-                self._param_scopes[scope].add(self._params[name])
-            else:
-                for s in scope:
-                    assert isinstance(s, str), "scope must be a string or an iterable of strings"
-                    self._param_scopes[s].add(self._params[name])
-
-        if isinstance(param_name, str):
-            add_single_param_to_scope(param_name, scope)
-        else:
-            for p in param_name:
-                assert isinstance(p, str), "param_name must be a string or an iterable of strings"
-                add_single_param_to_scope(p, scope)
-
-    def remove_param_from_scope(self, param_name, scope):
+    def tag_params(self, param_names, tags):
         """
         :param param_name: either a single parameter name or an iterable of parameter names
-        :param scope: either a single string or an iterable of strings
+        :param tags: either a single string or an iterable of strings
 
-        Removes the parameter(s) specified by param_name to the scope(s) specified by scope.
-        The parameter(s) are unchanged but will no longer be associated with the specified scope(s).
+        Tags the parameter(s) specified by param_names with the tag(s) specified by tags.
         """
 
-        def remove_single_param_from_scope(name, scope):
+        def tag_single_param(name, tags):
             assert name in self._params
-            if isinstance(scope, str):
-                self._param_scopes[scope].discard(self._params[name])
+            if isinstance(tags, str):
+                self._param_tags[tags].add(self._params[name])
+                self._tag_params[name].add(tags)
             else:
-                for s in scope:
-                    assert isinstance(s, str), "scope must be a string or an iterable of strings"
-                    self._param_scopes[s].discard(self._params[name])
+                for tag in tags:
+                    assert isinstance(tag, str), "tags must be a string or an iterable of strings"
+                    self._param_tags[tag].add(self._params[name])
+                    self._tag_params[name].add(tag)
 
-        if isinstance(param_name, str):
-            remove_single_param_from_scope(param_name, scope)
+        if isinstance(param_names, str):
+            tag_single_param(param_names, tags)
         else:
-            for p in param_name:
-                assert isinstance(p, str), "param_name must be a string or an iterable of strings"
-                remove_single_param_from_scope(p, scope)
+            for p in param_names:
+                assert isinstance(p, str), "param_names must be a string or an iterable of strings"
+                tag_single_param(p, tags)
 
-    def get_param(self, name, init_tensor=None, scope="default"):
+    def untag_params(self, param_names, tags):
+        """
+        :param param_name: either a single parameter name or an iterable of parameter names
+        :param tags: either a single string or an iterable of strings
+
+        Disassociates the parameter(s) specified by param_names with the tag(s) specified by tags.
+        """
+
+        def untag_single_param(name, tags):
+            assert name in self._params
+            if isinstance(tags, str):
+                self._param_tags[tags].discard(self._params[name])
+                self._tag_params[name].discard(tags)
+            else:
+                for tag in tags:
+                    assert isinstance(tag, str), "tags must be a string or an iterable of strings"
+                    self._param_tags[tag].discard(self._params[name])
+                    self._tag_params[name].discard(tag)
+
+        if isinstance(param_names, str):
+            untag_single_param(param_names, tags)
+        else:
+            for p in param_names:
+                assert isinstance(p, str), "param_names must be a string or an iterable of strings"
+                untag_single_param(p, tags)
+
+    def get_param(self, name, init_tensor=None, tags="default"):
         """
         :param name: parameter name
         :type name: str
         :param init_tensor: initial tensor
         :type init_tensor: torch.autograd.Variable
-        :param scope: the scope to assign to the parameter
-        :type scope: a string or iterable of strings
+        :param tags: the tag(s) to assign to the parameter
+        :type tags: a string or iterable of strings
         :returns: parameter
         :rtype: torch.autograd.Variable
 
@@ -153,8 +178,8 @@ class ParamStoreDict(object):
             # keep track of each tensor and it's name
             self._param_to_name[self._params[name]] = name
 
-            # keep track of param scope
-            self.add_param_to_scope(name, scope)
+            # keep track of param tags
+            self.tag_params(name, tags)
 
         # send back the guaranteed to exist param
         return self._params[name]
@@ -177,7 +202,7 @@ class ParamStoreDict(object):
         :param filename: file name to save to
         :type name: str
 
-        Save parameters to disk XXX FIX ME (include scopes etc.)
+        Save parameters to disk XXX FIX ME (include tags etc.)
         """
         with open(filename, "wb") as output_file:
             output_file.write(cloudpickle.dumps(self._params))
@@ -187,7 +212,7 @@ class ParamStoreDict(object):
         :param filename: file name to load from
         :type name: str
 
-        Loads parameters from disk XXX FIX ME (include scopes etc.)
+        Loads parameters from disk XXX FIX ME (include tags etc.)
         """
         with open(filename, "rb") as input_file:
             loaded_params = cloudpickle.loads(input_file.read())

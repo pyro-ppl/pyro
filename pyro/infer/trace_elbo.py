@@ -4,40 +4,36 @@ import pyro.poutine as poutine
 
 class Trace_ELBO(object):
     """
-    :param model: probabilistic model defined as a function
-    :param guide: guide used for sampling defined as a function
+    A trace implementation of ELBO-based SVI
     """
     def __init__(self,
-                 model,
-                 guide,
-                 num_particles=1,
-                 *args, **kwargs):
-        # initialize
+                 num_particles=1):
+        """
+        :param num_particles: the number of particles/samples used to form the ELBO (gradient) estimators
+        """
         super(Trace_ELBO, self).__init__()
-        self.model = model
-        self.guide = guide
         self.num_particles = num_particles
 
-    def _get_traces(self, *args, **kwargs):
+    def _get_traces(self, model, guide, *args, **kwargs):
         """
         runs the guide and runs the model against the guide with
         the result packaged as a trace generator
         """
 
         for i in range(self.num_particles):
-            guide_trace = poutine.trace(self.guide).get_trace(*args, **kwargs)
-            model_trace = poutine.trace(poutine.replay(self.model, guide_trace)).get_trace(*args, **kwargs)
+            guide_trace = poutine.trace(guide).get_trace(*args, **kwargs)
+            model_trace = poutine.trace(poutine.replay(model, guide_trace)).get_trace(*args, **kwargs)
             log_r = model_trace.log_pdf() - guide_trace.log_pdf()
             yield model_trace, guide_trace, log_r
 
-    def loss(self, *args, **kwargs):
+    def loss(self, model, guide, *args, **kwargs):
         """
         Evaluates the ELBO with an estimator that uses num_particles many samples/particles.
         :returns: returns an estimate of the ELBO
         :rtype: float
         """
         elbo = 0.0
-        for model_trace, guide_trace, log_r in self._get_traces(*args, **kwargs):
+        for model_trace, guide_trace, log_r in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = 0.0
 
             for name in model_trace.keys():
@@ -52,7 +48,7 @@ class Trace_ELBO(object):
         loss = -elbo
         return loss.data[0]
 
-    def loss_and_grads(self, *args, **kwargs):
+    def loss_and_grads(self, model, guide, *args, **kwargs):
         """
         Computes the ELBO as well as the surrogate ELBO that is used to form the gradient estimator.
         Performs backward on the latter. Num_particle many samples are used to form the estimators.
@@ -64,7 +60,7 @@ class Trace_ELBO(object):
         trainable_params = set()
 
         # grab a trace from the generator
-        for model_trace, guide_trace, log_r in self._get_traces(*args, **kwargs):
+        for model_trace, guide_trace, log_r in self._get_traces(model, guide):
             elbo_particle = 0.0
             surrogate_elbo_particle = 0.0
 
