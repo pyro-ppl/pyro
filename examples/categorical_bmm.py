@@ -66,6 +66,7 @@ def inspect_posterior_samples(i):
     dat = pyro.sample("obs_" + str(i), Bernoulli(mu))
     return dat
 
+
 adam = Adam({"lr": 0.0001})
 svi = SVI(local_model, local_guide, adam, loss="ELBO")
 vis = visdom.Visdom()

@@ -161,7 +161,6 @@ def model_sample():
     return img, img_mu, cll
 
 
-
 adam = Adam({"lr": 0.0001})
 inference = SVI(model, guide, adam, loss="ELBO")
 inference_latent = SVI(model_latent, guide, adam, loss="ELBO")

@@ -104,6 +104,7 @@ verbose = True
 adam = Adam({"lr": 0.003, "betas": (0.93, 0.993)})
 svi = SVI(model, guide, adam, loss="ELBO")
 
+
 def main():
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', nargs='?', default=1000, type=int)

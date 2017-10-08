@@ -107,6 +107,7 @@ if all_batches[-1] != mnist_size:
 adam = Adam({"lr": 0.01})
 grad_step = SVI(factor_analysis_model, factor_analysis_guide, adam, loss="ELBO")
 
+
 # apply it to minibatches of data by hand:
 def main():
     parser = argparse.ArgumentParser(description="parse args")

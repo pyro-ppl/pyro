@@ -125,7 +125,6 @@ def model_sample():
     return img_mu
 
 
-
 adam = Adam({"lr": 0.0001})
 svi = SVI(model, guide, adam, loss="ELBO")
 
