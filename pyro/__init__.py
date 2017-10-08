@@ -12,7 +12,7 @@ import pyro.poutine as poutine
 from pyro.optim.optim import PyroOptim
 from pyro.params import param_with_module_name
 from pyro.params.param_store import ParamStoreDict
-from pyro.poutine.lambda_poutine import LambdaPoutine
+from pyro.poutine import LambdaPoutine, condition, do  # noqa: F401
 from pyro.util import zeros, ones, set_rng_seed, apply_stack  # noqa: F401
 
 # global map of params for now

@@ -12,6 +12,8 @@ class Histogram(pyro.distributions.Distribution):
     """
     Abstract Histogram distribution.  For now, should not be using outside Marginal.
     """
+    enumerable = True
+
     @pyro.util.memoize
     def _dist(self, *args, **kwargs):
         """
