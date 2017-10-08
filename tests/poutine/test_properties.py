@@ -66,14 +66,31 @@ def get_trace(fn, *args, **kwargs):
 
 @pytest.mark.parametrize('model', EXAMPLE_MODELS, ids=EXAMPLE_MODEL_IDS)
 @pytest.mark.parametrize('poutine_name', [
-    'trace',
-    'tracegraph',
-    'replay',
     'block',
     'do',
+    'replay',
+    'trace',
+    'tracegraph',
 ])
 def test_idempotent(poutine_name, model):
     p = model.bind_poutine(poutine_name)
     expected_trace = get_trace(p(model))
     actual_trace = get_trace(p(p(model)))
+    assert_equal(actual_trace, expected_trace, prec=0)
+
+
+@pytest.mark.parametrize('model', EXAMPLE_MODELS, ids=EXAMPLE_MODEL_IDS)
+@pytest.mark.parametrize('p1_name,p2_name', [
+    ('trace', 'condition'),
+    ('trace', 'do'),
+    ('trace', 'replay'),
+    ('tracegraph', 'condition'),
+    ('tracegraph', 'do'),
+    ('tracegraph', 'replay'),
+])
+def test_commutes(p1_name, p2_name, model):
+    p1 = model.bind_poutine(p1_name)
+    p2 = model.bind_poutine(p2_name)
+    expected_trace = get_trace(p1(p2(model)))
+    actual_trace = get_trace(p2(p1(model)))
     assert_equal(actual_trace, expected_trace, prec=0)
