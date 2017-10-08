@@ -39,7 +39,6 @@ class NormalNormalNormalPoutineTestCase(TestCase):
             sigma1 = pyro.param("sigma1", Variable(torch.ones(2), requires_grad=True))
             pyro.sample("latent1", DiagNormal(mu1, sigma1))
 
-
             mu2 = pyro.param("mu2", Variable(torch.randn(2), requires_grad=True))
             sigma2 = pyro.param("sigma2", Variable(torch.ones(2), requires_grad=True))
             latent2 = pyro.sample("latent2", DiagNormal(mu2, sigma2))
