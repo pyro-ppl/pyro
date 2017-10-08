@@ -130,7 +130,7 @@ class TraceGraph_ELBO(object):
             # compute the elbo; if all stochastic nodes are reparameterizable, we're done
             # this bit is never differentiated: it's here for getting an estimate of the elbo itself
             for cost_node in cost_nodes:
-                elbo_particle += cost_node[0]
+                elbo_particle += cost_node[0].sum()
             elbo += elbo_particle / self.num_particles
 
             # compute the elbo, removing terms whose gradient is zero
@@ -138,7 +138,7 @@ class TraceGraph_ELBO(object):
             # XXX should the user be able to control if these terms are included?
             for cost_node in cost_nodes:
                 if cost_node[1]:
-                    elbo_no_zero_expectation_terms_particle += cost_node[0]
+                    elbo_no_zero_expectation_terms_particle += cost_node[0].sum()
             surrogate_elbo_particle += elbo_no_zero_expectation_terms_particle / self.num_particles
 
             # the following computations are only necessary if we have non-reparameterizable nodes
@@ -187,11 +187,9 @@ class TraceGraph_ELBO(object):
                 for site in non_reparam_nodes:
                     children_in_model = set()
                     for node in downstream_guide_cost_nodes[site]:
-                        children_in_model.update(
-                            model_tracegraph.get_children(node))
+                        children_in_model.update(model_tracegraph.get_children(node))
                     # remove terms accounted for above
-                    children_in_model.difference_update(
-                        downstream_guide_cost_nodes[site])
+                    children_in_model.difference_update(downstream_guide_cost_nodes[site])
                     for child in children_in_model:
                         child_log_pdf_key = 'log_pdf' if child not in model_vec_batch_nodes_dict \
                             else 'batch_log_pdf'
@@ -215,7 +213,7 @@ class TraceGraph_ELBO(object):
                            kwargs.get('nn_baseline_input', None), \
                            kwargs.get('use_decaying_avg_baseline', False), \
                            kwargs.get('baseline_beta', 0.90), \
-                           kwargs.get('baseline_value', None), \
+                           kwargs.get('baseline_value', None)
 
                 baseline_loss_particle = 0.0
                 for node in non_reparam_nodes:
@@ -241,23 +239,18 @@ class TraceGraph_ELBO(object):
                         # shouldn't need this is param is properly registered
                         # nn_params = nn_baseline.parameters()
                         baseline_loss = torch.pow(downstream_cost.detach() - baseline, 2.0).sum()
-                        baseline_loss_particle += baseline_loss
+                        baseline_loss_particle += baseline_loss / self.num_particles
                     elif use_baseline_value:
                         # it's on the user to make sure baseline_value tape only points to baseline params
                         baseline += baseline_value
                         baseline_loss = torch.pow(downstream_cost.detach() - baseline, 2.0).sum()
-                        baseline_loss_particle += baseline_loss
+                        baseline_loss_particle += baseline_loss / self.num_particles
                     if use_nn_baseline or use_decaying_avg_baseline or use_baseline_value:
                         elbo_reinforce_terms_particle += (guide_trace[node][log_pdf_key] *
                                                           (downstream_cost - baseline).detach()).sum()
                     else:
                         elbo_reinforce_terms_particle += (guide_trace[node][log_pdf_key] *
                                                           downstream_cost.detach()).sum()
-
-                    # for _loss, _params in baseline_losses_particle:
-                    #    baseline_loss_particle += _loss / self.num_particles
-                        # shouldn't need this is param is properly registered
-                        # trainable_params.update(set(_params))
 
                 surrogate_elbo_particle += elbo_reinforce_terms_particle / self.num_particles
                 if not isinstance(baseline_loss_particle, float):

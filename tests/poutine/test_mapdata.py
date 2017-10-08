@@ -12,8 +12,10 @@ from tests.common import assert_equal
 pytestmark = pytest.mark.stage("integration", "integration_batch_1")
 
 
-@pytest.mark.parametrize("batch_size", [3, 5, 7, 8, 0])
-@pytest.mark.parametrize("map_type", ["tensor", "list"])
+@pytest.mark.parametrize("batch_size", [7])
+@pytest.mark.parametrize("map_type", ["tensor"])
+#@pytest.mark.parametrize("batch_size", [3, 5, 7, 8, 0])
+#@pytest.mark.parametrize("map_type", ["tensor", "list"])
 def test_elbo_mapdata(batch_size, map_type):
     # normal-normal: known covariance
     lam0 = Variable(torch.Tensor([0.1, 0.1]))   # precision of prior
