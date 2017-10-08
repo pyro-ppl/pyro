@@ -2,10 +2,92 @@ import graphviz
 import networkx
 
 
+class Site(dict):
+    """
+    TODO docs
+    """
+
+    def __init__(self, name=None, type=None,
+                 value=None, obs=None,
+                 fn=None, args=None, kwargs=None,
+                 scale=1.0, map_data_stack=[],
+                 done=False, stop=False):
+        """
+        Constructor
+        """
+        if scale is None:
+            scale = 1.0
+
+        if map_data_stack is None:
+            map_data_stack = []
+
+        if done is None:
+            done = False
+
+        if stop is None:
+            stop = False
+
+        self["name"] = name
+        # XXX restrict language keyword?
+        self["site_type"] = type
+        self["value"] = value
+        self["obs"] = obs
+        self["fn"] = fn
+        self["args"] = args
+        self["kwargs"] = kwargs
+        self["scale"] = scale
+        self["map_data_stack"] = map_data_stack
+        self["done"] = done
+        self["stop"] = stop
+
+
+class ArgSite(Site):
+    """
+    input site
+    TODO docs
+    """
+
+    def __init__(self, *args, **kwargs):
+        """
+        TODO docs
+        constructor
+        """
+        self["name"] = "_INPUT"
+        self["type"] = "args"
+        self["args"] = args
+        self["kwargs"] = kwargs
+
+
+class ReturnSite(Site):
+    """
+    return site
+    TODO docs
+    """
+
+    def __init__(self, value):
+        """
+        TODO docs
+        constructor
+        """
+        self["name"] = "_RETURN"
+        self["type"] = "return"
+        self["value"] = value
+
+
 class Trace(dict):
     """
     Execution trace data structure
     """
+    def add_site(self, site):
+        """
+        TODO docs
+        add site
+        """
+        assert site["name"] not in self, \
+            "{} site {} already in trace".format(site["type"], site["name"])
+        # XXX should copy in case site gets mutated, or dont bother?
+        self[site["name"]] = site.copy()
+        return self
 
     def add_sample(self, name, scale, val, fn, *args, **kwargs):
         """
