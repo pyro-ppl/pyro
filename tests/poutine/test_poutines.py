@@ -378,9 +378,8 @@ class ConditionPoutineTests(NormalNormalNormalPoutineTestCase):
         assert tr["latent2"]["type"] == "observe"
         assert tr["latent2"]["value"] is data2["latent2"]
 
-        pyro.get_param_store().clear()
-
     def test_do_propagation(self):
+        pyro.get_param_store().clear()
 
         def model():
             z = pyro.sample("z", DiagNormal(10.0 * ng_ones(1), 0.0001 * ng_ones(1)))
