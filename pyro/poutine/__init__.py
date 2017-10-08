@@ -85,9 +85,13 @@ def block(fn, hide=None, expose=None, hide_types=None, expose_types=None):
 
 def lift(fn, prior):
     """
+    :param fn: function whose parameters will be lifted to random values
+    :param prior: prior function in the form of a Distribution or a dict of stochastic fns
+    :returns: stochastic function wrapped in LiftPoutine
+    
     Given a stochastic function with param calls and a prior distribution,
-    create a stochastic function where all param calls are replaced by sampling from prior
-    prior should be a callable with the same signature as pyro.param
+    create a stochastic function where all param calls are replaced by sampling from prior.
+    Prior should be a callable or a dict of names to callables.
     """
     return LiftPoutine(fn, prior)
 

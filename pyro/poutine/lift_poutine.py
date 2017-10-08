@@ -6,7 +6,7 @@ class LiftPoutine(Poutine):
     """
     Implements the param->sample lifting operation that turns params into rvs
     """
-    # XXX docs
+
     def __init__(self, fn, prior):
         """
         constructor
@@ -24,7 +24,13 @@ class LiftPoutine(Poutine):
 
     def _pyro_param(self, msg):
         """
-        prototype override of param->sample
+        Overrides the `pyro.param` call with samples sampled from the 
+        distribution specified in the prior. The prior can be a 
+        pyro.distributions object or a dict of distributions keyed 
+        on the param names. If the param name does not match the 
+        name the keys in the prior, that param name is unchanged.
+        
+        TODO: any stochastic fn
         """
         name = msg["name"]
         param_name = params.user_param_name(name)
