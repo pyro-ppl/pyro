@@ -1,4 +1,6 @@
 import torch
+import pytest
+import functools
 from six.moves.queue import Queue
 from torch.autograd import Variable
 
@@ -7,7 +9,8 @@ import pyro.poutine as poutine
 from pyro.distributions import DiagNormal, Bernoulli
 import pyro.distributions as dist
 from tests.common import TestCase, assert_equal
-from pyro.util import ng_ones, ng_zeros
+from pyro.util import ng_ones, ng_zeros, \
+    NonlocalExit, discrete_escape, all_escape
 
 
 def eq(x, y, prec=1e-10):
@@ -223,12 +226,12 @@ class QueuePoutineDiscreteTest(TestCase):
                 for i3 in range(2):
                     true_latents.add((i1, i2, i3))
 
-        tr_latents = set()
+        tr_latents = []
         for tr in trs:
-            tr_latents.add(tuple([tr[name]["value"].view(-1).data[0] for name in tr
-                                  if tr[name]["type"] == "sample"]))
+            tr_latents.append(tuple([int(tr[name]["value"].view(-1).data[0]) for name in tr
+                                     if tr[name]["type"] == "sample"]))
 
-        assert true_latents == tr_latents
+        assert true_latents == set(tr_latents)
 
     def test_queue_max_tries(self):
         f = poutine.queue(self.model, queue=self.queue, max_tries=3)
@@ -332,3 +335,113 @@ class IndirectLambdaPoutineTests(TestCase):
         _test_scale_factor(2, 2, [1.0] * 4)
         _test_scale_factor(1, 2, [2.0] * 2)
         _test_scale_factor(2, 1, [2.0] * 2)
+
+
+class ConditionPoutineTests(NormalNormalNormalPoutineTestCase):
+
+    def test_condition(self):
+        data = {"latent2": Variable(torch.randn(2))}
+        tr2 = poutine.trace(poutine.condition(self.model, data=data)).get_trace()
+        assert "latent2" in tr2
+        assert tr2["latent2"]["type"] == "observe"
+        assert tr2["latent2"]["value"] is data["latent2"]
+
+    def test_do(self):
+        data = {"latent2": Variable(torch.randn(2))}
+        tr3 = poutine.trace(poutine.do(self.model, data=data)).get_trace()
+        assert "latent2" not in tr3
+
+    def test_trace_data(self):
+        tr1 = poutine.trace(
+            poutine.block(self.model, expose_types=["sample"])).get_trace()
+        tr2 = poutine.trace(
+            poutine.condition(self.model, data=tr1)).get_trace()
+        assert tr2["latent2"]["type"] == "observe"
+        assert tr2["latent2"]["value"] is tr1["latent2"]["value"]
+
+    def test_stack_overwrite_failure(self):
+        data1 = {"latent2": Variable(torch.randn(2))}
+        data2 = {"latent2": Variable(torch.randn(2))}
+        cm = poutine.condition(poutine.condition(self.model, data=data1),
+                               data=data2)
+        with pytest.raises(AssertionError):
+            cm()
+
+    def test_stack_success(self):
+        data1 = {"latent1": Variable(torch.randn(2))}
+        data2 = {"latent2": Variable(torch.randn(2))}
+        tr = poutine.trace(
+            poutine.condition(poutine.condition(self.model, data=data1),
+                              data=data2)).get_trace()
+        assert tr["latent1"]["type"] == "observe"
+        assert tr["latent1"]["value"] is data1["latent1"]
+        assert tr["latent2"]["type"] == "observe"
+        assert tr["latent2"]["value"] is data2["latent2"]
+
+    def test_do_propagation(self):
+        pyro.get_param_store().clear()
+
+        def model():
+            z = pyro.sample("z", DiagNormal(10.0 * ng_ones(1), 0.0001 * ng_ones(1)))
+            latent_prob = torch.exp(z) / (torch.exp(z) + ng_ones(1))
+            flip = pyro.sample("flip", Bernoulli(latent_prob))
+            return flip
+
+        sample_from_model = model()
+        z_data = {"z": -10.0 * ng_ones(1)}
+        # under model flip = 1 with high probability; so do indirect DO surgery to make flip = 0
+        sample_from_do_model = poutine.trace(poutine.do(model, data=z_data)).get_trace()['_RETURN']['value']
+
+        assert eq(sample_from_model, ng_ones(1))
+        assert eq(sample_from_do_model, ng_zeros(1))
+
+
+class EscapePoutineTests(TestCase):
+
+    def setUp(self):
+
+        # Simple model with 1 continuous + 1 discrete + 1 continuous variable.
+        def model():
+            p = Variable(torch.Tensor([0.5]))
+            mu = Variable(torch.zeros(1))
+            sigma = Variable(torch.ones(1))
+
+            x = pyro.sample("x", DiagNormal(mu, sigma))  # Before the discrete variable.
+            y = pyro.sample("y", Bernoulli(p))
+            z = pyro.sample("z", DiagNormal(mu, sigma))  # After the discrete variable.
+            return dict(x=x, y=y, z=z)
+
+        self.sites = ["x", "y", "z", "_INPUT", "_RETURN"]
+        self.model = model
+
+    def test_discrete_escape(self):
+        try:
+            poutine.escape(self.model, functools.partial(discrete_escape,
+                                                         poutine.Trace()))()
+            assert False
+        except NonlocalExit as e:
+            assert e.site["name"] == "y"
+
+    def test_all_escape(self):
+        try:
+            poutine.escape(self.model, functools.partial(all_escape,
+                                                         poutine.Trace()))()
+            assert False
+        except NonlocalExit as e:
+            assert e.site["name"] == "x"
+
+    def test_trace_compose(self):
+        tm = poutine.trace(self.model)
+        try:
+            poutine.escape(tm, functools.partial(all_escape, poutine.Trace()))()
+            assert False
+        except NonlocalExit:
+            assert "x" in tm.trace
+            try:
+                tem = poutine.trace(
+                    poutine.escape(self.model, functools.partial(all_escape,
+                                                                 poutine.Trace())))
+                tem()
+                assert False
+            except NonlocalExit:
+                assert "x" not in tem.trace
