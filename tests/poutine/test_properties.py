@@ -54,9 +54,21 @@ def trivial_model():
                 block={'hide': ['normal_0']},
                 condition={'data': {'normal_0': ng_zeros(1)}},
                 do={'data': {'normal_0': ng_zeros(1)}})
-def diagnormal_model():
-    diagnormal_0 = pyro.sample('normal_0', dist.diagnormal, ng_zeros(1), ng_ones(1))
-    return [diagnormal_0]
+def normal_model():
+    normal_0 = pyro.sample('normal_0', dist.diagnormal, ng_zeros(1), ng_ones(1))
+    return [normal_0]
+
+
+@register_model(replay={'trace': {'normal_0': {'type': 'sample',
+                                               'value': ng_zeros(1)}}},
+                block={'hide': ['normal_0']},
+                condition={'data': {'normal_0': ng_zeros(1)}},
+                do={'data': {'normal_0': ng_zeros(1)}})
+def normal_normal_model():
+    normal_0 = pyro.sample('normal_0', dist.diagnormal, ng_zeros(1), ng_ones(1))
+    normal_1 = ng_ones(1)
+    pyro.observe('normal_1', dist.diagnormal, normal_1, ng_zeros(1), ng_ones(1))
+    return [normal_0, normal_1]
 
 
 def get_trace(fn, *args, **kwargs):
