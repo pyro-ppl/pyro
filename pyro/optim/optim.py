@@ -20,6 +20,8 @@ class PyroOptim(object):
 
         # hold our args to be called/used
         self.pt_optim_args = optim_args
+
+        # holds the torch optimizer objects
         self.optim_objs = {}
 
     def __call__(self, params,  *args, **kwargs):
@@ -60,8 +62,7 @@ class PyroOptim(object):
             opt_dict = self.pt_optim_args(module_name, stripped_param_name, tags)
 
             # must be dictionary
-            assert isinstance(
-                opt_dict, dict), "per-param optim arg must return defaults dictionary"
+            assert isinstance(opt_dict, dict), "per-param optim arg must return defaults dictionary"
             return opt_dict
         else:
             return self.pt_optim_args

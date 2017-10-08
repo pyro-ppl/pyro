@@ -17,7 +17,7 @@ class SVI(object):
         """
         :param model: the model (callable containing pyro primitives)
         :param guide: the guide (callable containing pyro primitives)
-        :param optim: a pyro optim factory
+        :param optim: a pyro optim factory that returns pyro.optim.PyroOptim objects
         :param loss: this is either a string that specifies the loss function to be used (currently
             the only supported built-in loss is 'ELBO') or a user-provided loss function;
             in the case this is a built-in loss loss_and_grads will be filled in accordingly

@@ -18,6 +18,8 @@ class Trace_ELBO(object):
         """
         runs the guide and runs the model against the guide with
         the result packaged as a trace generator
+
+        XXX support for automatically settings args/kwargs to volatile?
         """
 
         for i in range(self.num_particles):
@@ -43,17 +45,17 @@ class Trace_ELBO(object):
                     elbo_particle += model_trace[name]["log_pdf"]
                     elbo_particle -= guide_trace[name]["log_pdf"]
 
-            elbo += elbo_particle / self.num_particles
+            elbo += elbo_particle.data[0] / self.num_particles
 
         loss = -elbo
-        return loss.data[0]
+        return loss
 
     def loss_and_grads(self, model, guide, *args, **kwargs):
         """
         Computes the ELBO as well as the surrogate ELBO that is used to form the gradient estimator.
         Performs backward on the latter. Num_particle many samples are used to form the estimators.
         :returns: returns an estimate of the ELBO
-        :rtype: torch.autograd.Variable
+        :rtype: float
         """
         elbo = 0.0
         surrogate_elbo = 0.0
@@ -79,7 +81,7 @@ class Trace_ELBO(object):
                         surrogate_elbo_particle += model_trace[name]["log_pdf"] + \
                             log_r.detach() * guide_trace[name]["log_pdf"]
 
-            elbo += elbo_particle / self.num_particles
+            elbo += elbo_particle.data[0] / self.num_particles
             surrogate_elbo += surrogate_elbo_particle / self.num_particles
 
             # grab model parameters to train

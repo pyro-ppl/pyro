@@ -3,16 +3,20 @@ import cloudpickle
 
 
 class ParamStoreDict(object):
+    """
+    Global store for parameters in pyro. The typical user interacts with the paramstore
+    primarily through the primitive pyro.param.
+    """
 
     def __init__(self):
         """
         initialize param store data structures
         """
-        self._params = {}
-        self._param_to_name = {}
-        self._active_params = set()
-        self._param_tags = defaultdict(lambda: set())
-        self._tag_params = defaultdict(lambda: set())
+        self._params = {}  # dictionary from param name to param
+        self._param_to_name = {}  # dictionary from param to param name
+        self._active_params = set()  # set of all currently active params
+        self._param_tags = defaultdict(lambda: set())  # dictionary from tag to param names
+        self._tag_params = defaultdict(lambda: set())  # dictionary from param name to tags
 
     def clear(self):
         """
@@ -61,6 +65,7 @@ class ParamStoreDict(object):
             this information is used to determine which parameters are being optimized,
             e.g. in the context of pyro.infer.SVI
         """
+        assert(all([p in self._params for p in params])), "some of these parameters are not in the param store"
         self._active_params.update(set(params))
 
     def mark_params_inactive(self, params):
@@ -69,6 +74,7 @@ class ParamStoreDict(object):
             this information is used to determine which parameters are being optimized,
             e.g. in the context of pyro.infer.SVI
         """
+        assert(all([p in self._params for p in params])), "some of these parameters are not in the param store"
         self._active_params.difference_update(set(params))
 
     def delete_tag(self, tag):
@@ -79,6 +85,7 @@ class ParamStoreDict(object):
         Removes the tag; any parameters with that tag are unaffected but are no longer
         associated with that tag.
         """
+        assert(tag in self._param_tags), "this tag does not exist"
         self._param_tags.pop(tag)
         for p, tags in self._tag_params.items():
             if tag in tags:
@@ -103,6 +110,8 @@ class ParamStoreDict(object):
 
         Tags the parameter(s) specified by param_names with the tag(s) specified by tags.
         """
+        assert(all([p in self._params for p in param_names])), \
+            "some of these parameters are not in the param store"
 
         def tag_single_param(name, tags):
             assert name in self._params
@@ -129,6 +138,8 @@ class ParamStoreDict(object):
 
         Disassociates the parameter(s) specified by param_names with the tag(s) specified by tags.
         """
+        assert(all([p in self._params for p in param_names])), \
+            "some of these parameters are not in the param store"
 
         def untag_single_param(name, tags):
             assert name in self._params
@@ -162,7 +173,6 @@ class ParamStoreDict(object):
         Get parameter from its name. If it does not yet exist in the
         param store, it will be created and stored
         """
-        # make sure the param exists in our group
         if name not in self._params:
             # if not create the init tensor through
             assert init_tensor is not None,\
@@ -202,20 +212,27 @@ class ParamStoreDict(object):
         :param filename: file name to save to
         :type name: str
 
-        Save parameters to disk XXX FIX ME (include tags etc.)
+        Save parameters to disk
         """
         with open(filename, "wb") as output_file:
-            output_file.write(cloudpickle.dumps(self._params))
+            to_save = (self._params, self._param_tags)
+            output_file.write(cloudpickle.dumps(to_save))
 
     def load(self, filename):
         """
         :param filename: file name to load from
         :type name: str
 
-        Loads parameters from disk XXX FIX ME (include tags etc.)
+        Loads parameters from disk
         """
         with open(filename, "rb") as input_file:
-            loaded_params = cloudpickle.loads(input_file.read())
+            loaded_param_data = cloudpickle.loads(input_file.read())
+            loaded_params, loaded_param_tags = loaded_param_data
+
             for param_name, param in loaded_params.items():
                 self._params[param_name] = param
                 self._param_to_name[param] = param_name
+
+            for param_name, tag in loaded_param_tags.items():
+                self._param_tags[param_name].add(tag)
+                self._tag_params[tag].add(param)

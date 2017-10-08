@@ -30,6 +30,8 @@ class TraceGraph_ELBO(object):
         """
         runs the guide and runs the model against the guide with
         the result packaged as a tracegraph generator
+
+        XXX support for automatically settings args/kwargs to volatile?
         """
 
         for i in range(self.num_particles):
@@ -58,10 +60,10 @@ class TraceGraph_ELBO(object):
                     elbo_particle += model_trace[name]["log_pdf"]
                     elbo_particle -= guide_trace[name]["log_pdf"]
 
-            elbo += elbo_particle / self.num_particles
+            elbo += elbo_particle.data[0] / self.num_particles
 
         loss = -elbo
-        return loss.data[0]
+        return loss
 
     def loss_and_grads(self, model, guide, *args, **kwargs):
         """
@@ -69,7 +71,7 @@ class TraceGraph_ELBO(object):
         Performs backward on the latter. Num_particle many samples are used to form the estimators.
         If baselines are present, a baseline loss is also constructed and differentiated.
         :returns: returns an estimate of the ELBO
-        :rtype: torch.autograd.Variable
+        :rtype: float
         """
         elbo = 0.0
         trainable_params = set()
@@ -131,7 +133,7 @@ class TraceGraph_ELBO(object):
             # this bit is never differentiated: it's here for getting an estimate of the elbo itself
             for cost_node in cost_nodes:
                 elbo_particle += cost_node[0].sum()
-            elbo += elbo_particle / self.num_particles
+            elbo += elbo_particle.data[0] / self.num_particles
 
             # compute the elbo, removing terms whose gradient is zero
             # this is the bit that's actually differentiated
@@ -228,7 +230,7 @@ class TraceGraph_ELBO(object):
                         "cannot use baseline_value and nn_baseline simultaneously"
                     if use_decaying_avg_baseline:
                         avg_downstream_cost_old = pyro.param("__baseline_avg_downstream_cost_" + node,
-                                                             ng_zeros(1))
+                                                             ng_zeros(1), tags="__tracegraph_elbo_internal_tag")
                         avg_downstream_cost_new = (1 - baseline_beta) * downstream_cost + \
                             baseline_beta * avg_downstream_cost_old
                         avg_downstream_cost_old.data = avg_downstream_cost_new.data  # XXX copy_() ?
@@ -236,13 +238,11 @@ class TraceGraph_ELBO(object):
                     if use_nn_baseline:
                         # block nn_baseline_input gradients except in baseline loss
                         baseline += nn_baseline(detach_iterable(nn_baseline_input))
-                        # shouldn't need this is param is properly registered
-                        # nn_params = nn_baseline.parameters()
-                        baseline_loss = torch.pow(downstream_cost.detach() - baseline, 2.0).sum()
-                        baseline_loss_particle += baseline_loss / self.num_particles
                     elif use_baseline_value:
                         # it's on the user to make sure baseline_value tape only points to baseline params
                         baseline += baseline_value
+                    if use_nn_baseline or use_baseline_value:
+                        # construct baseline loss
                         baseline_loss = torch.pow(downstream_cost.detach() - baseline, 2.0).sum()
                         baseline_loss_particle += baseline_loss / self.num_particles
                     if use_nn_baseline or use_decaying_avg_baseline or use_baseline_value:
@@ -266,6 +266,7 @@ class TraceGraph_ELBO(object):
                 if guide_trace[name]["type"] == "param":
                     trainable_params.add(guide_trace[name]["value"])
 
+            # mark all params seen in trace as active so that gradient steps are taken downstream
             pyro.get_param_store().mark_params_active(trainable_params)
 
             surrogate_loss_particle = -surrogate_elbo_particle

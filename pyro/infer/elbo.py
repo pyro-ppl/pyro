@@ -10,7 +10,9 @@ class ELBO(object):
         in the case that some of the random variables are non-reparameterized.
         note: for a model with many random variables, keeping track of the dependency information
         can be expensive.
-    Note: ELBO dispatches to Trace_ELBO and TraceGraph_ELBO
+
+    ELBO is the top-level interface for stochastic variational inference via optimization of the
+    evidence lower bound. ELBO dispatches to Trace_ELBO and TraceGraph_ELBO.
     """
     def __init__(self,
                  num_particles=1,
@@ -36,6 +38,6 @@ class ELBO(object):
         Computes the ELBO as well as the surrogate ELBO that is used to form the gradient estimator.
         Performs backward on the latter. Num_particle many samples are used to form the estimators.
         :returns: returns an estimate of the ELBO
-        :rtype: torch.autograd.Variable
+        :rtype: float
         """
         return self.which_elbo.loss_and_grads(model, guide, *args, **kwargs)

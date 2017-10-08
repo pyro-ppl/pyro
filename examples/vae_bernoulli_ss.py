@@ -257,9 +257,9 @@ def main():
             batch_class = Variable(batch_class)
 
             if np.mod(ix, 1) == 0:
-                epoch_loss += inference_observed_class.step(batch_data, batch_class).data[0]
+                epoch_loss += inference_observed_class.step(batch_data, batch_class)
             else:
-                epoch_loss += inference_latent_class.step(batch_data).data[0]
+                epoch_loss += inference_latent_class.step(batch_data)
         loss_training.append(epoch_loss / float(mnist_size))
 
         sample0, sample_mu0 = model_sample(cll=cll_clamp0)

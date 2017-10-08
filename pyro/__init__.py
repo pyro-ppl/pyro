@@ -226,13 +226,16 @@ def param(name, *args, **kwargs):
 def module(pyro_name, nn_obj, tags="default"):
     """
     :param pyro_name: name of module
-    :param nn_obj: torch.nn.Module
-    :param tags: option; tags for any parameters inside the module
+    :type pyro_name: str
+    :param nn_obj: the module to be registered with pyro
+    :type nn_obj: torch.nn.Module
+    :param tags: optional; tags to associate with any parameters inside the module
+    :type tags: string or iterable of strings
     :returns: torch.nn.Module
 
     Takes a torch.nn.Module and registers its parameters with the param store.
     In conjunction with the param store save() and load() functionality, this
-    allows the user to save and load nn modules
+    allows the user to save and load modules.
     """
     assert hasattr(nn_obj, "parameters"), "module has no parameters"
     assert _MODULE_NAMESPACE_DIVIDER not in pyro_name, "improper module name, since contains %s" %\
