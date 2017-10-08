@@ -12,6 +12,7 @@ class Delta(Distribution):
     its support. Delta distribution parameterized by a random choice should not
     be used with MCMC based inference, as doing so produces incorrect results.
     """
+    enumerable = True
 
     def _sanitize_input(self, v):
         if v is not None:

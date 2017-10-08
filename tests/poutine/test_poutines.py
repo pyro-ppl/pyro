@@ -1,4 +1,5 @@
 import torch
+import functools
 from six.moves.queue import Queue
 from torch.autograd import Variable
 
@@ -7,7 +8,8 @@ import pyro.poutine as poutine
 from pyro.distributions import DiagNormal, Bernoulli
 import pyro.distributions as dist
 from tests.common import TestCase, assert_equal
-from pyro.util import ng_ones, ng_zeros
+from pyro.util import ng_ones, ng_zeros, \
+    NonlocalExit, discrete_escape, all_escape
 
 
 def eq(x, y, prec=1e-10):
@@ -223,12 +225,12 @@ class QueuePoutineDiscreteTest(TestCase):
                 for i3 in range(2):
                     true_latents.add((i1, i2, i3))
 
-        tr_latents = set()
+        tr_latents = []
         for tr in trs:
-            tr_latents.add(tuple([tr[name]["value"].view(-1).data[0] for name in tr
-                                  if tr[name]["type"] == "sample"]))
+            tr_latents.append(tuple([int(tr[name]["value"].view(-1).data[0]) for name in tr
+                                     if tr[name]["type"] == "sample"]))
 
-        assert true_latents == tr_latents
+        assert true_latents == set(tr_latents)
 
     def test_queue_max_tries(self):
         f = poutine.queue(self.model, queue=self.queue, max_tries=3)
@@ -332,3 +334,54 @@ class IndirectLambdaPoutineTests(TestCase):
         _test_scale_factor(2, 2, [1.0] * 4)
         _test_scale_factor(1, 2, [2.0] * 2)
         _test_scale_factor(2, 1, [2.0] * 2)
+
+
+class EscapePoutineTests(TestCase):
+
+    def setUp(self):
+
+        # Simple model with 1 continuous + 1 discrete + 1 continuous variable.
+        def model():
+            p = Variable(torch.Tensor([0.5]))
+            mu = Variable(torch.zeros(1))
+            sigma = Variable(torch.ones(1))
+
+            x = pyro.sample("x", DiagNormal(mu, sigma))  # Before the discrete variable.
+            y = pyro.sample("y", Bernoulli(p))
+            z = pyro.sample("z", DiagNormal(mu, sigma))  # After the discrete variable.
+            return dict(x=x, y=y, z=z)
+
+        self.sites = ["x", "y", "z", "_INPUT", "_RETURN"]
+        self.model = model
+
+    def test_discrete_escape(self):
+        try:
+            poutine.escape(self.model, functools.partial(discrete_escape,
+                                                         poutine.Trace()))()
+            assert False
+        except NonlocalExit as e:
+            assert e.site["name"] == "y"
+
+    def test_all_escape(self):
+        try:
+            poutine.escape(self.model, functools.partial(all_escape,
+                                                         poutine.Trace()))()
+            assert False
+        except NonlocalExit as e:
+            assert e.site["name"] == "x"
+
+    def test_trace_compose(self):
+        tm = poutine.trace(self.model)
+        try:
+            poutine.escape(tm, functools.partial(all_escape, poutine.Trace()))()
+            assert False
+        except NonlocalExit:
+            assert "x" in tm.trace
+            try:
+                tem = poutine.trace(
+                    poutine.escape(self.model, functools.partial(all_escape,
+                                                                 poutine.Trace())))
+                tem()
+                assert False
+            except NonlocalExit:
+                assert "x" not in tem.trace

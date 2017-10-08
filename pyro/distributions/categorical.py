@@ -19,6 +19,7 @@ class Categorical(Distribution):
     ``ps[i]``.  If ``one_hot=True``, ``sample`` returns a one-hot vector.
     Else, ``sample`` returns the category selected.
     """
+    enumerable = True
 
     def _sanitize_input(self, ps, vs, one_hot):
         if ps is not None:
