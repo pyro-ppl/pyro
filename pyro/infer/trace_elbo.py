@@ -60,7 +60,7 @@ class Trace_ELBO(object):
         trainable_params = set()
 
         # grab a trace from the generator
-        for model_trace, guide_trace, log_r in self._get_traces(model, guide):
+        for model_trace, guide_trace, log_r in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = 0.0
             surrogate_elbo_particle = 0.0
 

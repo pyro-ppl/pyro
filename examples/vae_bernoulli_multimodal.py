@@ -10,7 +10,8 @@ from torch.autograd import Variable
 
 import pyro
 from pyro.distributions import DiagNormal, Bernoulli, Categorical
-from pyro.optim import Optimize
+from pyro.infer import SVI
+from pyro.optim import Adam
 
 # load mnist dataset
 root = './data'
@@ -160,18 +161,10 @@ def model_sample():
     return img, img_mu, cll
 
 
-def per_param_args(name, param):
-    if name == "decoder":
-        return {"lr": .0001}
-    else:
-        return {"lr": .0001}
 
-
-# or alternatively
-adam_params = {"lr": .0001}
-
-inference = Optimize(model, guide, torch.optim.Adam, adam_params, loss="ELBO")
-inference_latent = Optimize(model_latent, guide, torch.optim.Adam, adam_params, loss="ELBO")
+adam = Adam({"lr": 0.0001})
+inference = SVI(model, guide, adam, loss="ELBO")
+inference_latent = SVI(model_latent, guide, adam, loss="ELBO")
 
 mnist_data = Variable(train_loader.dataset.train_data.float() / 255.)
 mnist_labels = Variable(train_loader.dataset.train_labels)

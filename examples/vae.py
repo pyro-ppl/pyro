@@ -10,8 +10,9 @@ from torch.autograd import Variable
 
 import pyro
 from pyro.distributions import DiagNormal
-from pyro.optim import Optimize
 from pyro.util import ng_zeros, ng_ones
+from pyro.infer import SVI
+from pyro.optim import Adam
 
 # load mnist dataset
 root = './data'
@@ -124,18 +125,9 @@ def model_sample():
     return img_mu
 
 
-def per_param_args(name, param):
-    # vary hyperparams based on model
-    if name == "decoder":
-        return {"lr": .0001}
-    else:
-        return {"lr": .0001}
 
-
-# or alternatively
-adam_params = {"lr": .0001}
-
-optim = Optimize(model, guide, torch.optim.Adam, per_param_args, loss="ELBO")
+adam = Adam({"lr": 0.0001})
+svi = SVI(model, guide, adam, loss="ELBO")
 
 # num_steps = 1
 mnist_data = Variable(train_loader.dataset.train_data.float() / 255.)
@@ -162,7 +154,7 @@ def main():
 
             # get batch
             batch_data = mnist_data[batch_start:batch_end]
-            epoch_loss += optim.step(batch_data)
+            epoch_loss += svi.step(batch_data)
 
             sample = model_sample()
         vis.image(batch_data[0].contiguous().view(28, 28).data.numpy())

@@ -10,7 +10,8 @@ from torch.autograd import Variable
 
 import pyro
 from pyro.distributions import DiagNormal, Bernoulli
-from pyro.optim import Optimize
+from pyro.infer import SVI
+from pyro.optim import Adam
 
 # load mnist dataset
 root = './data'
@@ -117,18 +118,9 @@ def model_sample():
     return img, img_mu
 
 
-def per_param_args(name, param):
-    if name == "decoder":
-        return {"lr": .0001}
-    else:
-        return {"lr": .0001}
-
-
-# or alternatively
-adam_params = {"lr": .0001}
-
-elbo_grad = Optimize(model, guide, torch.optim.Adam, adam_params, loss="ELBO")
-elbo_eval = Optimize(model, guide, torch.optim.Adam, adam_params, loss="ELBO", num_particles=10)
+adam = Adam({"lr": 0.0001})
+svi_grad = SVI(model, guide, adam, loss="ELBO")
+svi_eval = SVI(model, guide, adam, loss="ELBO", num_particles=10)
 
 # num_steps = 1
 mnist_data = Variable(train_loader.dataset.train_data.float() / 255.)
@@ -160,9 +152,9 @@ def main():
             # get batch
             batch_data = mnist_data[batch_start:batch_end]
 
-            epoch_loss += elbo_grad.step(batch_data)
+            epoch_loss += svi_grad.step(batch_data)
 
-            epoch_eval_loss += elbo_eval.evaluate_loss(batch_data)
+            epoch_eval_loss += svi_eval.evaluate_loss(batch_data)
 
         loss_training.append(-epoch_loss / float(mnist_size))
         sample, sample_mu = model_sample()

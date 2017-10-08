@@ -8,7 +8,8 @@ from torch.autograd import Variable
 import pyro
 from pyro.distributions import Bernoulli
 from pyro.distributions import DiagNormal
-from pyro.optim import Optimize
+from pyro.infer import SVI
+from pyro.optim import Adam
 
 mnist = dset.MNIST(
     root='./',
@@ -103,9 +104,8 @@ all_batches = np.arange(0, mnist_size, batch_size)
 if all_batches[-1] != mnist_size:
     all_batches = list(all_batches) + [mnist_size]
 
-adam_params = {"lr": 0.01}
-grad_step = Optimize(factor_analysis_model, factor_analysis_guide, torch.optim.Adam, adam_params, loss="ELBO")
-
+adam = Adam({"lr": 0.01})
+grad_step = SVI(factor_analysis_model, factor_analysis_guide, adam, loss="ELBO")
 
 # apply it to minibatches of data by hand:
 def main():

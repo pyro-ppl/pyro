@@ -13,7 +13,6 @@ EXAMPLES = [
 ]
 
 
-@pytest.mark.xfail(reason="refactoring")
 @pytest.mark.stage("test_examples")
 @pytest.mark.parametrize('example', EXAMPLES)
 def test_example(example):

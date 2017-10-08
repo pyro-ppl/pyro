@@ -74,7 +74,7 @@ class TraceGraph_ELBO(object):
         elbo = 0.0
         trainable_params = set()
 
-        for model_tracegraph, guide_tracegraph in self._get_traces(model, guide):
+        for model_tracegraph, guide_tracegraph in self._get_traces(model, guide, *args, **kwargs):
             guide_trace, model_trace = guide_tracegraph.get_trace(), model_tracegraph.get_trace()
 
             # get info regarding rao-blackwellization of vectorized map_data

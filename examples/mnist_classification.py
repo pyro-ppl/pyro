@@ -10,7 +10,8 @@ from torch.autograd import Variable
 
 import pyro
 from pyro.distributions import Categorical
-from pyro.optim import Optimize
+from pyro.infer import SVI
+from pyro.optim import Adam
 
 # load mnist dataset
 root = './data'
@@ -71,10 +72,8 @@ def guide(data, cll):
     return lambda foo: None
 
 
-# or alternatively
-adam_params = {"lr": .0001}
-
-inference_opt = Optimize(model_obs, guide, torch.optim.Adam, adam_params, loss="ELBO")
+adam = Adam({"lr": 0.0001})
+inference_opt = SVI(model_obs, guide, adam, loss="ELBO")
 
 mnist_data = Variable(train_loader.dataset.train_data.float() / 255.)
 mnist_labels = Variable(train_loader.dataset.train_labels)

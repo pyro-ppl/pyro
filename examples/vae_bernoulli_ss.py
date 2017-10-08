@@ -10,7 +10,8 @@ from torch.autograd import Variable
 
 import pyro
 from pyro.distributions import DiagNormal, Bernoulli, Categorical
-from pyro.optim import Optimize
+from pyro.infer import SVI
+from pyro.optim import Adam
 
 # pyro.set_cuda()
 
@@ -205,19 +206,10 @@ def model_sample(cll=None):
     return img, img_mu
 
 
-def per_param_args(name, param):
-    if name == "decoder":
-        return {"lr": .0001}
-    else:
-        return {"lr": .0001}
-
-
-# or alternatively
-adam_params = {"lr": .0001}
-
-inference_latent_class = Optimize(model_latent, guide_latent, torch.optim.Adam, adam_params, loss="ELBO")
-inference_observed_class = Optimize(model_observed, guide_observed, torch.optim.Adam, adam_params, loss="ELBO")
-inference_observed_class_scored = Optimize(model_observed, guide_observed2, torch.optim.Adam, adam_params, loss="ELBO")
+adam = Adam({"lr": 0.0001})
+inference_latent_class = SVI(model_latent, guide_latent, adam, loss="ELBO")
+inference_observed_class = SVI(model_observed, guide_observed, adam, loss="ELBO")
+inference_observed_class_scored = SVI(model_observed, guide_observed2, adam, loss="ELBO")
 
 mnist_data = Variable(train_loader.dataset.train_data.float() / 255.)
 mnist_labels = Variable(train_loader.dataset.train_labels)
@@ -265,9 +257,9 @@ def main():
             batch_class = Variable(batch_class)
 
             if np.mod(ix, 1) == 0:
-                epoch_loss += inference_observed_class.step(batch_data, batch_class)
+                epoch_loss += inference_observed_class.step(batch_data, batch_class).data[0]
             else:
-                epoch_loss += inference_latent_class.step(batch_data)
+                epoch_loss += inference_latent_class.step(batch_data).data[0]
         loss_training.append(epoch_loss / float(mnist_size))
 
         sample0, sample_mu0 = model_sample(cll=cll_clamp0)
