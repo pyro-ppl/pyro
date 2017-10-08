@@ -1,4 +1,5 @@
 import torch
+import pytest
 from six.moves.queue import Queue
 from torch.autograd import Variable
 
@@ -339,14 +340,14 @@ class ConditionPoutineTests(NormalNormalNormalPoutineTestCase):
     def test_condition(self):
         data = {"latent2": Variable(torch.randn(2))}
         tr2 = poutine.trace(poutine.condition(self.model, data=data)).get_trace()
-        self.assertTrue("latent2" in tr2)
-        self.assertTrue(tr2["latent2"]["type"] == "observe")
-        self.assertTrue(eq(tr2["latent2"]["value"], data["latent2"]))
+        assert "latent2" in tr2
+        assert tr2["latent2"]["type"] == "observe"
+        assert tr2["latent2"]["value"] is data["latent2"]
 
     def test_do(self):
         data = {"latent2": Variable(torch.randn(2))}
         tr3 = poutine.trace(poutine.do(self.model, data=data)).get_trace()
-        self.assertTrue("latent2" not in tr3)
+        assert "latent2" not in tr3
 
     def test_trace_data(self):
         tr1 = poutine.trace(
@@ -354,16 +355,15 @@ class ConditionPoutineTests(NormalNormalNormalPoutineTestCase):
         tr2 = poutine.trace(
             poutine.condition(self.model, data=tr1)).get_trace()
         assert tr2["latent2"]["type"] == "observe"
-        assert eq(tr2["latent2"]["value"], tr1["latent2"]["value"])
+        assert tr2["latent2"]["value"] is tr1["latent2"]["value"]
 
     def test_stack_overwrite_failure(self):
         data1 = {"latent2": Variable(torch.randn(2))}
         data2 = {"latent2": Variable(torch.randn(2))}
-        try:
-            poutine.condition(poutine.condition(self.model, data=data1),
-                              data=data2)()
-        except AssertionError:
-            assert True
+        cm = poutine.condition(poutine.condition(self.model, data=data1),
+                               data=data2)
+        with pytest.raises(AssertionError):
+            cm()
 
     def test_stack_success(self):
         data1 = {"latent1": Variable(torch.randn(2))}
@@ -372,6 +372,6 @@ class ConditionPoutineTests(NormalNormalNormalPoutineTestCase):
             poutine.condition(poutine.condition(self.model, data=data1),
                               data=data2)).get_trace()
         assert tr["latent1"]["type"] == "observe"
-        assert eq(tr["latent1"]["value"], data1["latent1"])
+        assert tr["latent1"]["value"] is data1["latent1"]
         assert tr["latent2"]["type"] == "observe"
-        assert eq(tr["latent2"]["value"], data2["latent2"])
+        assert tr["latent2"]["value"] is data2["latent2"]

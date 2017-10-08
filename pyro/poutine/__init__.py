@@ -98,8 +98,15 @@ def queue(fn, queue=None, max_tries=None):
     return QueuePoutine(fn, queue=queue, max_tries=max_tries)
 
 
-def condition(fn, data=None):
+def condition(fn, data):
     """
+    :param fn: a stochastic function (callable containing pyro primitive calls)
+    :param data: a dict or a Trace
+    :returns: stochastic function wrapped in a ConditionPoutine
+    :rtype: pyro.poutine.ConditionPoutine
+
+    Alias for ConditionPoutine constructor.
+
     Given a stochastic function with some sample statements
     and a dictionary of observations at names,
     change the sample statements at those names into observes
@@ -112,16 +119,19 @@ def condition(fn, data=None):
 # Begin composite operations
 #########################################
 
-def do(fn, data=None):
+def do(fn, data):
     """
-    Given a stochastic functuon with some sample statements
+    :param fn: a stochastic function (callable containing pyro primitive calls)
+    :param data: a dict or a Trace
+    :returns: stochastic function wrapped in a BlockPoutine and ConditionPoutine
+    :rtype: pyro.poutine.BlockPoutine
+
+    Given a stochastic function with some sample statements
     and a dictionary of values at names,
     set the return values of those sites equal to the values
     and hide them from the rest of the stack
     as if they were hard-coded to those values
+    by using BlockPoutine
     """
-    if data is None:
-        data = {}
-
     return BlockPoutine(ConditionPoutine(fn, data=data),
                         hide=list(data.keys()))

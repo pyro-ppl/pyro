@@ -6,7 +6,7 @@ class ConditionPoutine(Poutine):
     """
     Adds values at observe sites to condition on data and override sampling
     """
-    def __init__(self, fn, data=None):
+    def __init__(self, fn, data):
         """
         :param fn: a stochastic function (callable containing pyro primitive calls)
         :param data: a dict or a Trace
@@ -14,8 +14,6 @@ class ConditionPoutine(Poutine):
         Constructor. Doesn't do much, just stores the stochastic function
         and the data to condition on.
         """
-        if data is None:
-            data = {}
         self.data = data
         super(ConditionPoutine, self).__init__(fn)
 
