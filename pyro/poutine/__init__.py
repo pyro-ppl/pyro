@@ -104,6 +104,7 @@ def escape(fn, escape_fn=None):
     """
     return EscapePoutine(fn, escape_fn)
 
+
 def condition(fn, data):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
