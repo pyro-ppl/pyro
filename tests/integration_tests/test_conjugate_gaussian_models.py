@@ -245,6 +245,7 @@ class GaussianPyramidTests(TestCase):
         self.do_elbo_test(True, 20000, 0.0015, 0.04, 0.92,
                           difficulty=0.8, model_permutation=False)
 
+    @pytest.mark.stage("integration", "integration_batch_1")
     def test_elbo_nonreparameterized_two_layers(self):
         self.setup_pyramid(2)
         self.do_elbo_test(False, 8000, 0.001, 0.04, 0.95, difficulty=0.5, model_permutation=False)
@@ -257,6 +258,7 @@ class GaussianPyramidTests(TestCase):
         self.setup_pyramid(2)
         self.do_elbo_test(False, 10000, 0.0007, 0.05, 0.96, difficulty=0.5, model_permutation=True)
 
+    @pytest.mark.stage("integration", "integration_batch_1")
     def test_elbo_nonreparameterized_three_layers_model_permuted(self):
         self.setup_pyramid(3)
         self.do_elbo_test(False, 15000, 0.0007, 0.05, 0.96, difficulty=0.4, model_permutation=True)
