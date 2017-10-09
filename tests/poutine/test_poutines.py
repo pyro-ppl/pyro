@@ -257,33 +257,33 @@ class LiftPoutineTests(TestCase):
     def setUp(self):
         pyro.get_param_store().clear()
 
-        def mu1_prior(tensor):
+        def mu1_prior(tensor, *args, **kwargs):
             flat_tensor = tensor.view(-1)
             m = Variable(torch.zeros(flat_tensor.size(0)))
             s = Variable(torch.ones(flat_tensor.size(0)))
             return DiagNormal(m, s).sample().view(tensor.size())
 
-        def sigma1_prior(tensor):
+        def sigma1_prior(tensor, *args, **kwargs):
             flat_tensor = tensor.view(-1)
             m = Variable(torch.zeros(flat_tensor.size(0)))
             s = Variable(torch.ones(flat_tensor.size(0)))
             return DiagNormal(m, s).sample().view(tensor.size())
 
-        def mu2_prior(tensor):
+        def mu2_prior(tensor, *args, **kwargs):
             flat_tensor = tensor.view(-1)
             m = Variable(torch.zeros(flat_tensor.size(0)))
             return Bernoulli(m).sample().view(tensor.size())
 
-        def sigma2_prior(tensor):
+        def sigma2_prior(tensor, *args, **kwargs):
             return sigma1_prior(tensor)
 
-        def bias_prior(tensor):
+        def bias_prior(tensor, *args, **kwargs):
             return mu2_prior(tensor)
 
-        def weight_prior(tensor):
+        def weight_prior(tensor, *args, **kwargs):
             return sigma1_prior(tensor)
 
-        def stoch_fn(tensor):
+        def stoch_fn(tensor, *args, **kwargs):
             mu = Variable(torch.zeros(tensor.size()))
             sigma = Variable(torch.ones(tensor.size()))
             return pyro.sample("sample", DiagNormal(mu, sigma))
