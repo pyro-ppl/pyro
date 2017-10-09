@@ -3,8 +3,8 @@ import pytest
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.util import ng_zeros, ng_ones
-from tests.common import assert_equal, freeze_rng_state
+from pyro.util import ng_zeros, ng_ones, set_rng_seed
+from tests.common import assert_equal
 
 EXAMPLE_MODELS = []
 EXAMPLE_MODEL_IDS = []
@@ -65,7 +65,7 @@ def normal_model():
 def normal_normal_model():
     normal_0 = pyro.sample('normal_0', dist.diagnormal, ng_zeros(1), ng_ones(1))
     normal_1 = ng_ones(1)
-    pyro.observe('normal_1', dist.diagnormal, normal_1, ng_zeros(1), ng_ones(1))
+    pyro.observe('normal_1', dist.diagnormal, normal_1, normal_0, ng_ones(1))
     return [normal_0, normal_1]
 
 
@@ -82,8 +82,8 @@ def bernoulli_normal_model():
 
 
 def get_trace(fn, *args, **kwargs):
-    with freeze_rng_state():
-        return poutine.trace(fn).get_trace(*args, **kwargs)
+    set_rng_seed(123)
+    return poutine.trace(fn).get_trace(*args, **kwargs)
 
 
 @pytest.mark.parametrize('model', EXAMPLE_MODELS, ids=EXAMPLE_MODEL_IDS)
