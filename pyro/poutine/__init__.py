@@ -6,14 +6,13 @@ from .poutine import Poutine  # noqa: F401
 from .replay_poutine import ReplayPoutine
 from .trace_poutine import TracePoutine
 from .tracegraph_poutine import TraceGraphPoutine
+from .lift_poutine import LiftPoutine
 from .condition_poutine import ConditionPoutine
 from .lambda_poutine import LambdaPoutine  # noqa: F401
 from .escape_poutine import EscapePoutine
 
 # trace data structures
 from .trace import Trace, TraceGraph  # noqa: F401
-
-# other stuff
 from pyro import util
 
 
@@ -67,6 +66,19 @@ def replay(fn, trace, sites=None):
     at those sites in the new trace
     """
     return ReplayPoutine(fn, trace, sites=sites)
+
+
+def lift(fn, prior):
+    """
+    :param fn: function whose parameters will be lifted to random values
+    :param prior: prior function in the form of a Distribution or a dict of stochastic fns
+    :returns: stochastic function wrapped in LiftPoutine
+
+    Given a stochastic function with param calls and a prior distribution,
+    create a stochastic function where all param calls are replaced by sampling from prior.
+    Prior should be a callable or a dict of names to callables.
+    """
+    return LiftPoutine(fn, prior)
 
 
 def block(fn, hide=None, expose=None, hide_types=None, expose_types=None):
