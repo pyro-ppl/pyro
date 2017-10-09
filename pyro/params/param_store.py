@@ -45,7 +45,7 @@ class ParamStoreDict(object):
         if tags is None:  # return all active params
             return self._active_params
         elif isinstance(tags, str) and tags not in self._param_tags:
-            # return empty set, since tag doesn't exist; XXXraise warning?
+            # return empty set, since tag doesn't exist; XXX raise warning?
             return set()
         elif isinstance(tags, str):  # only return active params in the tag
             return self._active_params.intersection(self._param_tags[tags])

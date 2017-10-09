@@ -30,9 +30,10 @@ class Trace_ELBO(object):
 
     def loss(self, model, guide, *args, **kwargs):
         """
-        Evaluates the ELBO with an estimator that uses num_particles many samples/particles.
         :returns: returns an estimate of the ELBO
         :rtype: float
+
+        Evaluates the ELBO with an estimator that uses num_particles many samples/particles.
         """
         elbo = 0.0
         for model_trace, guide_trace, log_r in self._get_traces(model, guide, *args, **kwargs):
@@ -52,10 +53,11 @@ class Trace_ELBO(object):
 
     def loss_and_grads(self, model, guide, *args, **kwargs):
         """
-        Computes the ELBO as well as the surrogate ELBO that is used to form the gradient estimator.
-        Performs backward on the latter. Num_particle many samples are used to form the estimators.
         :returns: returns an estimate of the ELBO
         :rtype: float
+
+        Computes the ELBO as well as the surrogate ELBO that is used to form the gradient estimator.
+        Performs backward on the latter. Num_particle many samples are used to form the estimators.
         """
         elbo = 0.0
         surrogate_elbo = 0.0

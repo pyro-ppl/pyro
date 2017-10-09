@@ -53,20 +53,28 @@ class SVI(object):
 
     def __call__(self, *args, **kwargs):
         """
-        convenience method for doing a gradient step
+        :returns: estimate of the loss
+        :rtype:  float
+
+        Convenience method for doing a gradient step.
         """
         self.step(*args, **kwargs)
 
     def evaluate_loss(self, *args, **kwargs):
         """
-        evaluate the loss function
+        :returns: estimate of the loss
+        :rtype:  float
+
+        Evaluate the loss function.
         """
         return self.loss(self.model, self.guide, *args, **kwargs)
 
     def step(self, *args, **kwargs):
         """
-        take a gradient step on the loss function
-        (and auxiliary loss function if present in loss_and_grads)
+        :returns: estimate of the loss
+        :rtype:  float
+
+        Take a gradient step on the loss function (and auxiliary loss function if present in loss_and_grads).
         """
         # get loss and compute gradients
         loss = self.loss_and_grads(self.model, self.guide, *args, **kwargs)

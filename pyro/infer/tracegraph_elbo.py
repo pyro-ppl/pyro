@@ -15,7 +15,8 @@ class TraceGraph_ELBO(object):
     John Schulman, Nicolas Heess, Theophane Weber, Pieter Abbeel
 
     specialized to the case of the ELBO. It supports arbitrary
-    dependency structure for the model and guide. Where possible,
+    dependency structure for the model and guide as well as baselines
+    for non-reparameteriable random variables. Where possible,
     dependency information as recorded in the TraceGraph is used
     to reduce the variance of the gradient estimator.
     """
@@ -42,9 +43,10 @@ class TraceGraph_ELBO(object):
 
     def loss(self, model, guide, *args, **kwargs):
         """
-        Evaluates the ELBO with an estimator that uses num_particles many samples/particles.
         :returns: returns an estimate of the ELBO
         :rtype: float
+
+        Evaluates the ELBO with an estimator that uses num_particles many samples/particles.
         """
         elbo = 0.0
         for model_tracegraph, guide_tracegraph in self._get_traces(model, guide, *args, **kwargs):
@@ -67,11 +69,12 @@ class TraceGraph_ELBO(object):
 
     def loss_and_grads(self, model, guide, *args, **kwargs):
         """
+        :returns: returns an estimate of the ELBO
+        :rtype: float
+
         Computes the ELBO as well as the surrogate ELBO that is used to form the gradient estimator.
         Performs backward on the latter. Num_particle many samples are used to form the estimators.
         If baselines are present, a baseline loss is also constructed and differentiated.
-        :returns: returns an estimate of the ELBO
-        :rtype: float
         """
         elbo = 0.0
         trainable_params = set()
