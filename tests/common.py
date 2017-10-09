@@ -1,4 +1,3 @@
-import argparse
 import contextlib
 import os
 import sys
@@ -6,7 +5,6 @@ import unittest
 import numbers
 import warnings
 from copy import deepcopy
-from functools import wraps
 from pytest import approx
 from itertools import product
 from numpy.testing import assert_allclose
@@ -18,40 +16,16 @@ from torch.autograd import Variable
 
 torch.set_default_tensor_type('torch.DoubleTensor')
 
-SEED = 0
-
 """
-Contains test utilities for assertions, approximate comparison (of tensors and other objects)
-and setting the random number generator seed.
+Contains test utilities for assertions, approximate comparison (of tensors and other objects).
 
 Code has been largely adapted from pytorch/test/common.py
 Source: https://github.com/pytorch/pytorch/blob/master/test/common.py
 """
 
-
-def run_tests():
-    parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument('--seed', type=int, default=123)
-    args, remaining = parser.parse_known_args()
-    SEED = args.seed  # noqa: F841
-    torch.manual_seed(args.seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(args.seed)
-    remaining = [sys.argv[0]] + remaining
-    unittest.main(argv=remaining)
-
-
-def skipIfNoLapack(fn):
-    @wraps(fn)
-    def wrapper(*args, **kwargs):
-        try:
-            fn(*args, **kwargs)
-        except Exception as e:
-            if 'Lapack library not found' in e.args[0]:
-                raise unittest.SkipTest('Compiled without Lapack')
-            raise
-
-    return wrapper
+TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
+RESOURCE_DIR = os.path.join(TESTS_DIR, 'resources')
+EXAMPLES_DIR = os.path.join(os.path.dirname(TESTS_DIR), 'examples')
 
 
 def suppress_warnings(fn):
@@ -119,13 +93,6 @@ def is_iterable(obj):
         return False
 
 
-def set_rng_seed(rng_seed=SEED):
-    torch.manual_seed(rng_seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(rng_seed)
-    np.random.seed(rng_seed)
-
-
 def _unwrap_variables(x, y):
     if isinstance(x, Variable) and isinstance(y, Variable):
         return x.data, y.data
@@ -138,7 +105,9 @@ def _unwrap_variables(x, y):
 
 def assert_tensors_equal(a, b, prec=1e-5, msg=''):
     assert a.size() == b.size(), msg
-    if a.numel() > 0:
+    if prec == 0:
+        assert (a == b).all(), msg
+    elif a.numel() > 0:
         b = b.type_as(a)
         b = b.cuda(device=a.get_device()) if a.is_cuda else b.cpu()
         # check that NaNs are in the same locations
@@ -177,11 +146,12 @@ def _safe_coalesce(t):
     return tg
 
 
+# TODO Split this into assert_equal() and assert_close() or assert_almost_equal().
 def assert_equal(x, y, prec=1e-5, msg=''):
     x, y = _unwrap_variables(x, y)
 
     if torch.is_tensor(x) and torch.is_tensor(y):
-        assert_equal(x.is_sparse, y.is_sparse)
+        assert_equal(x.is_sparse, y.is_sparse, prec, msg)
         if x.is_sparse:
             x = _safe_coalesce(x)
             y = _safe_coalesce(y)
@@ -190,13 +160,30 @@ def assert_equal(x, y, prec=1e-5, msg=''):
         else:
             assert_tensors_equal(x, y, prec, msg)
     elif type(x) == np.ndarray and type(y) == np.ndarray:
-        assert_allclose(x, y, atol=prec, equal_nan=True)
+        if prec == 0:
+            assert (x == y).all(), msg
+        else:
+            assert_allclose(x, y, atol=prec, equal_nan=True)
     elif isinstance(x, numbers.Number) and isinstance(y, numbers.Number):
-        assert x == approx(y, abs=prec), msg
+        if prec == 0:
+            assert x == y, msg
+        else:
+            assert x == approx(y, abs=prec), msg
     elif type(x) != type(y):
         raise AssertionError("cannot compare {} and {}".format(type(x), type(y)))
+    elif isinstance(x, str):
+        assert x == y, msg
+    elif isinstance(x, dict):
+        assert set(x.keys()) == set(y.keys())
+        for key, x_val in x.items():
+            assert_equal(x_val, y[key], prec, msg)
     elif is_iterable(x) and is_iterable(y):
-        assert list(x) == approx(list(y), prec)
+        if prec == 0:
+            assert len(x) == len(y)
+            for xi, yi in zip(x, y):
+                assert_equal(xi, yi, prec, msg)
+        else:
+            assert list(x) == approx(list(y), prec), msg
     else:
         assert x == y, msg
 

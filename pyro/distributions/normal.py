@@ -42,26 +42,26 @@ class Normal(Distribution):
         """
         Reparameterized Normal sampler.
         """
-        _mu, _sigma = self._sanitize_input(mu, sigma)
-        l_chol = Variable(torch.potrf(_sigma.data, False).type_as(_mu.data))
-        eps = Variable(torch.randn(_mu.size()).type_as(_mu.data))
+        mu, sigma = self._sanitize_input(mu, sigma)
+        l_chol = Variable(torch.potrf(sigma.data, False).type_as(mu.data))
+        eps = Variable(torch.randn(mu.size()).type_as(mu.data))
         if eps.dim() == 1:
             eps = eps.unsqueeze(1)
-        z = _mu + torch.mm(l_chol, eps).squeeze()
+        z = mu + torch.mm(l_chol, eps).squeeze()
         return z
 
     def log_pdf(self, x, mu=None, sigma=None, batch_size=1, *args, **kwargs):
         """
         Normal log-likelihood
         """
-        _mu, _sigma = self._sanitize_input(mu, sigma)
-        l_chol = Variable(torch.potrf(_sigma.data, False).type_as(_mu.data))
-        ll_1 = Variable(torch.Tensor([-0.5 * _mu.size(0) * np.log(2.0 * np.pi)])
-                        .type_as(_mu.data))
+        mu, sigma = self._sanitize_input(mu, sigma)
+        l_chol = Variable(torch.potrf(sigma.data, False).type_as(mu.data))
+        ll_1 = Variable(torch.Tensor([-0.5 * mu.size(0) * np.log(2.0 * np.pi)])
+                        .type_as(mu.data))
         ll_2 = -torch.sum(torch.log(torch.diag(l_chol)))
         x_chol = Variable(
             torch.trtrs(
-                (x - _mu).data,
+                (x - mu).data,
                 l_chol.data,
                 False)[0])
         ll_3 = -0.5 * torch.sum(torch.pow(x_chol, 2.0))

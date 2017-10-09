@@ -1,3 +1,4 @@
+import pyro
 import numpy as np
 import torch
 from torch.autograd import Variable
@@ -30,14 +31,25 @@ def memoize(fn):
     alternate in py3: https://docs.python.org/3/library/functools.html
     lru_cache
     """
-    _mem = {}
+    mem = {}
 
     def _fn(*args, **kwargs):
         kwargs_tuple = _dict_to_tuple(kwargs)
-        if (args, kwargs_tuple) not in _mem:
-            _mem[(args, kwargs_tuple)] = fn(*args, **kwargs)
-        return _mem[(args, kwargs_tuple)]
+        if (args, kwargs_tuple) not in mem:
+            mem[(args, kwargs_tuple)] = fn(*args, **kwargs)
+        return mem[(args, kwargs_tuple)]
     return _fn
+
+
+def set_rng_seed(rng_seed):
+    """
+    Sets seeds of torch, numpy, and torch.cuda (if available).
+    :param int rng_seed: The seed value.
+    """
+    torch.manual_seed(rng_seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(rng_seed)
+    np.random.seed(rng_seed)
 
 
 def ones(*args, **kwargs):
@@ -107,6 +119,14 @@ def log_gamma(xx):
 
 
 def log_beta(t):
+    """
+    Computes log Beta function.
+
+    :param t:
+    :type t: torch.autograd.Variable of dimension 1 or 2
+    :rtype: torch.autograd.Variable of float (if t.dim() == 1) or torch.Tensor (if t.dim() == 2)
+    """
+    assert t.dim() in (1, 2)
     if t.dim() == 1:
         numer = torch.sum(log_gamma(t))
         denom = log_gamma(torch.sum(t))
@@ -179,59 +199,137 @@ def basic_histogram(ps, vs):
             "vs": [v for v in hist.keys()]}
 
 
-def get_batch_indices(data, batch_size, batch_dim):
+def apply_stack(initial_msg):
     """
-    Compute batch indices used for subsampling in map_data
-    Weirdly complicated because of type ambiguity
+    :param dict initial_msg: the starting version of the trace site
+    :returns: an updated message that is the final version of the trace site
+
+    Execute the poutine stack at a single site according to the following scheme:
+    1. Walk down the stack from top to bottom, collecting into the message
+        all information necessary to execute the stack at that site
+    2. For each poutine in the stack from bottom to top:
+           Execute the poutine with the message;
+           If the message field "stop" is True, stop;
+           Otherwise, continue
+    3. Return the updated message
     """
-    if isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
-        assert batch_dim >= 0, \
-            "batch_dim must be nonnegative"
-        assert batch_size <= data.size(batch_dim), \
-            "batch must be smaller than dataset size"
-        if batch_size > 0:
-            ind = Variable(torch.randperm(data.size(batch_dim))[0:batch_size])
-        else:
-            # if batch_size == 0, don't index (saves time/space)
-            ind = Variable(torch.arange(0, data.size(batch_dim)))
-    else:
-        # handle lists and other ordered sequence types (e.g. tuples but not sets)
-        assert batch_dim == 0, \
-            "batch dim for non-tensor map_data must be 0"
-        assert batch_size <= len(data), \
-            "batch must be smaller than dataset size"
-        # if batch_size > 0, select a random set of indices and store it
-        if batch_size > 0:
-            ind = torch.randperm(len(data))[0:batch_size].numpy().tolist()
-        else:
-            ind = list(range(len(data)))
+    stack = pyro._PYRO_STACK
+    # TODO check at runtime if stack is valid
 
-    return ind
+    # msg is used to pass information up and down the stack
+    msg = initial_msg
+
+    # first, gather all information necessary to apply the stack to this site
+    for frame in reversed(stack):
+        msg = frame._prepare_site(msg)
+
+    # go until time to stop?
+    for frame in stack:
+        assert msg["type"] in ("sample", "observe", "map_data", "param"), \
+            "{} is an invalid site type, how did that get there?".format(msg["type"])
+
+        msg["ret"] = getattr(frame, "_pyro_{}".format(msg["type"]))(msg)
+
+        if msg["stop"]:
+            break
+
+    return msg
 
 
-def get_batch_scale(data, batch_size, batch_dim):
+class NonlocalExit(Exception):
     """
-    Compute scale used for subsampling in map_data
-    Weirdly complicated because of type ambiguity
-    """
-    if isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
-        assert batch_size <= data.size(batch_dim), \
-            "batch must be smaller than dataset size"
-        if batch_size > 0:
-            scale = float(data.size(batch_dim)) / float(batch_size)
-        else:
-            # if batch_size == 0, don't index (saves time/space)
-            scale = 1.0
-    else:
-        # handle lists and other ordered sequence types (e.g. tuples but not sets)
-        assert batch_dim == 0, \
-            "batch_dim for non-tensor map_data must be 0"
-        assert batch_size <= len(data), \
-            "batch must be smaller than dataset size"
-        # if batch_size > 0, select a random set of indices and store it
-        if batch_size > 0:
-            scale = float(len(data)) / float(batch_size)
-        else:
-            scale = 1.0
+    Exception for exiting nonlocally from poutine execution.
 
-    return scale
+    Used by poutine.EscapePoutine to return site information.
+    """
+    def __init__(self, site, *args, **kwargs):
+        """
+        :param site: message at a pyro site
+
+        constructor.  Just stores the input site.
+        """
+        super(NonlocalExit, self).__init__(*args, **kwargs)
+        self.site = site
+
+
+def enum_extend(trace, msg, num_samples=None):
+    """
+    :param trace: a partial trace
+    :param msg: the message at a pyro primitive site
+    :param num_samples: maximum number of extended traces to return.
+    :returns: a list of traces, copies of input trace with one extra site
+
+    Utility function to copy and extend a trace with sites based on the input site
+    whose values are enumerated from the support of the input site's distribution.
+
+    Used for exact inference and integrating out discrete variables.
+    """
+    if num_samples is None:
+        num_samples = -1
+
+    extended_traces = []
+    for i, s in enumerate(msg["fn"].support(*msg["args"], **msg["kwargs"])):
+        if i > num_samples and num_samples >= 0:
+            break
+        msg_copy = msg.copy()
+        msg_copy.update(ret=s)
+        extended_traces.append(trace.copy().add_sample(
+            msg_copy["name"], msg_copy["scale"], msg_copy["ret"],
+            msg_copy["fn"], *msg_copy["args"], **msg_copy["kwargs"]))
+    return extended_traces
+
+
+def mc_extend(trace, msg, num_samples=None):
+    """
+    :param trace: a partial trace
+    :param msg: the message at a pyro primitive site
+    :param num_samples: maximum number of extended traces to return.
+    :returns: a list of traces, copies of input trace with one extra site
+
+    Utility function to copy and extend a trace with sites based on the input site
+    whose values are sampled from the input site's function.
+
+    Used for Monte Carlo marginalization of individual sample sites.
+    """
+    if num_samples is None:
+        num_samples = 1
+
+    extended_traces = []
+    for i in range(num_samples):
+        msg_copy = msg.copy()
+        msg_copy["ret"] = msg_copy["fn"](*msg_copy["args"], **msg_copy["kwargs"])
+        extended_traces.append(trace.copy().add_sample(
+            msg_copy["name"], msg_copy["scale"], msg_copy["ret"],
+            msg_copy["fn"], *msg_copy["args"], **msg_copy["kwargs"]))
+    return extended_traces
+
+
+def discrete_escape(trace, msg):
+    """
+    :param trace: a partial trace
+    :param msg: the message at a pyro primitive site
+    :returns: boolean decision value
+
+    Utility function that checks if a sample site is discrete and not already in a trace.
+
+    Used by EscapePoutine to decide whether to do a nonlocal exit at a site.
+    Subroutine for integrating out discrete variables for variance reduction.
+    """
+    return (msg["type"] == "sample") and \
+        (msg["name"] not in trace) and \
+        (getattr(msg["fn"], "enumerable", False))
+
+
+def all_escape(trace, msg):
+    """
+    :param trace: a partial trace
+    :param msg: the message at a pyro primitive site
+    :returns: boolean decision value
+
+    Utility function that checks if a site is not already in a trace.
+
+    Used by EscapePoutine to decide whether to do a nonlocal exit at a site.
+    Subroutine for approximately integrating out variables for variance reduction.
+    """
+    return (msg["type"] == "sample") and \
+        (msg["name"] not in trace)

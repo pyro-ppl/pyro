@@ -37,36 +37,36 @@ class Uniform(Distribution):
         """
         Reparameterized Uniform sampler.
         """
-        _a, _b = self._sanitize_input(a, b)
-        eps = Variable(torch.rand(_a.size()).type_as(_a.data))
-        return _a + torch.mul(eps, _b - _a)
+        a, b = self._sanitize_input(a, b)
+        eps = Variable(torch.rand(a.size()).type_as(a.data))
+        return a + torch.mul(eps, b - a)
 
     def log_pdf(self, x, a=None, b=None, *args, **kwargs):
         """
         Uniform log-likelihood
         """
-        _a, _b = self._sanitize_input(a, b)
+        a, b = self._sanitize_input(a, b)
         if x.dim() == 1:
-            if x.le(_a).data[0] or x.ge(_b).data[0]:
-                return Variable(torch.Tensor([-float("inf")]).type_as(_a.data))
+            if x.le(a).data[0] or x.ge(b).data[0]:
+                return Variable(torch.Tensor([-float("inf")]).type_as(a.data))
         else:
             # x is 2-d
-            if x.le(_a).data[0, 0] or x.ge(_b).data[0, 0]:
-                return Variable(torch.Tensor([[-np.inf]]).type_as(_a.data))
-        return torch.sum(-torch.log(_b - _a))
+            if x.le(a).data[0, 0] or x.ge(b).data[0, 0]:
+                return Variable(torch.Tensor([[-np.inf]]).type_as(a.data))
+        return torch.sum(-torch.log(b - a))
 
     def batch_log_pdf(self, x, a=None, b=None, batch_size=1, *args, **kwargs):
-        _a, _b = self._sanitize_input(a, b)
-        if x.dim() == 1 and _a.dim() == 1 and batch_size == 1:
-            return self.log_pdf(x, _a, _b)
-        _l = x.ge(_a).type_as(_a)
-        _u = x.le(_b).type_as(_b)
-        return torch.sum(torch.log(_l.mul(_u)) - torch.log(_b - _a), 1)
+        a, b = self._sanitize_input(a, b)
+        if x.dim() == 1 and a.dim() == 1 and batch_size == 1:
+            return self.log_pdf(x, a, b)
+        l = x.ge(a).type_as(a)
+        u = x.le(b).type_as(b)
+        return torch.sum(torch.log(l.mul(u)) - torch.log(b - a), 1)
 
     def analytic_mean(self, a=None, b=None):
-        _a, _b = self._sanitize_input(a, b)
-        return 0.5 * (_a + _b)
+        a, b = self._sanitize_input(a, b)
+        return 0.5 * (a + b)
 
     def analytic_var(self, a=None, b=None):
-        _a, _b = self._sanitize_input(a, b)
-        return torch.pow(_b - _a, 2) / 12
+        a, b = self._sanitize_input(a, b)
+        return torch.pow(b - a, 2) / 12

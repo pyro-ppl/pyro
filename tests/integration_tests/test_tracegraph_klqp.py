@@ -14,6 +14,8 @@ from pyro.infer.tracegraph_kl_qp import TraceGraph_KL_QP
 from pyro.util import ng_ones, ng_zeros
 from tests.common import TestCase
 
+pytestmark = pytest.mark.stage("integration", "integration_batch_2")
+
 
 class NormalNormalTests(TestCase):
 
@@ -41,6 +43,7 @@ class NormalNormalTests(TestCase):
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 1000)
 
+    @pytest.mark.init(rng_seed=0)
     def test_elbo_nonreparameterized(self):
         self.do_elbo_test(False, 5000)
 
@@ -66,7 +69,8 @@ class NormalNormalTests(TestCase):
                                    requires_grad=True))
             sig_q = torch.exp(log_sig_q)
             mu_latent = pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q,
-                                    reparameterized=reparameterized)
+                                    reparameterized=reparameterized,
+                                    use_decaying_avg_baseline=True)
             return mu_latent
 
         kl_optim = TraceGraph_KL_QP(model, guide, pyro.optim(
@@ -437,11 +441,11 @@ class LogNormalNormalTests(TestCase):
         # lognormal-normal model
         # putting some of the parameters inside of a torch module to
         # make sure that that functionality is ok (XXX: do this somewhere else in the future)
-        self.mu0 = Variable(torch.Tensor([[1.0]]))  # normal prior hyperparameter
+        self.mu0 = Variable(torch.Tensor([1.0]))  # normal prior hyperparameter
         # normal prior hyperparameter
-        self.tau0 = Variable(torch.Tensor([[1.0]]))
+        self.tau0 = Variable(torch.Tensor([1.0]))
         # known precision for observation likelihood
-        self.tau = Variable(torch.Tensor([[2.5]]))
+        self.tau = Variable(torch.Tensor([2.5]))
         self.n_data = 2
         self.data = Variable(torch.Tensor([[1.5], [2.2]]))  # two observations
         self.tau_n = self.tau0 + \
@@ -488,10 +492,10 @@ class LogNormalNormalTests(TestCase):
 
             mu_error = torch.abs(
                 pyro.param("mymodule$$$mu_q_log") -
-                self.log_mu_n).data.cpu().numpy()[0][0]
+                self.log_mu_n).data.cpu().numpy()[0]
             tau_error = torch.abs(
                 pyro.param("mymodule$$$tau_q_log") -
-                self.log_tau_n).data.cpu().numpy()[0][0]
+                self.log_tau_n).data.cpu().numpy()[0]
             if k % 500 == 0 and self.verbose:
                 print("mu_error, tau_error = %.4f, %.4f" % (mu_error, tau_error))
 
@@ -532,10 +536,10 @@ class LogNormalNormalTests(TestCase):
 
             mu_error = torch.abs(
                 pyro.param("mu_q_log") -
-                self.log_mu_n).data.cpu().numpy()[0][0]
+                self.log_mu_n).data.cpu().numpy()[0]
             tau_error = torch.abs(
                 pyro.param("tau_q_log") -
-                self.log_tau_n).data.cpu().numpy()[0][0]
+                self.log_tau_n).data.cpu().numpy()[0]
             if k % 500 == 0 and self.verbose:
                 print("mu_error, tau_error = %.4f, %.4f" % (mu_error, tau_error))
 
