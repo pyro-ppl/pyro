@@ -7,24 +7,19 @@ from pyro.util import ng_ones, zeros
 import torch.nn as nn
 from pyro.distributions.transformed_distribution import InverseAutoregressiveFlow
 from pyro.distributions.transformed_distribution import TransformedDistribution
-# from torch.autograd import Variable
-# import torch.optim as optim
 import numpy as np
 import time
-
-# need to handle python 2 vs 3
-try:
-    import cPickle
-except:
-    import pickle as cPickle
-
+import six.moves.cPickle as pickle
 import polyphonic_data_loader as poly
 from pyro.optim import ClippedAdam
 import logging
 from os.path import join, dirname
 
-# parameterizes p(x_t | z_t)
+
 class Emitter(nn.Module):
+    """
+    Parameterizes the bernoulli observation likelihood p(x_t | z_t)
+    """
     def __init__(self, input_dim, z_dim, emission_dim):
         super(Emitter, self).__init__()
         self.lin1 = nn.Linear(z_dim, emission_dim)
@@ -40,8 +35,10 @@ class Emitter(nn.Module):
         return ps
 
 
-# parameterizes p(z_t | z_{t-1})
 class GatedTransition(nn.Module):
+    """
+    Parameterizes the gaussian latent transition probability p(z_t | z_{t-1})
+    """
     def __init__(self, z_dim, transition_dim):
         super(GatedTransition, self).__init__()
         self.lin_g1 = nn.Linear(z_dim, transition_dim)
@@ -64,9 +61,11 @@ class GatedTransition(nn.Module):
         return mu, sigma
 
 
-# parameterizes q(z_t | z_{t-1}, x_{t:T})
-# the dependence on x_{t:T} is through the hidden state of the RNN (see pt_rnn below)
 class Combiner(nn.Module):
+    """
+    Parameterizes q(z_t | z_{t-1}, x_{t:T})
+    The dependence on x_{t:T} is through the hidden state of the RNN (see pt_rnn below)
+    """
     def __init__(self, z_dim, rnn_dim):
         super(Combiner, self).__init__()
         self.lin_z = nn.Linear(z_dim, rnn_dim)
@@ -83,8 +82,11 @@ class Combiner(nn.Module):
 
 
 class DMM(nn.Module):
-
-    def __init__(self, input_dim, z_dim, emission_dim, transition_dim, rnn_dim, max_rnn_batch, num_iafs, cuda):
+    """
+    This pytorch Module encapsulates the model as well as the variational distribution (the guide)
+    for the Deep Markov Model
+    """
+    def __init__(self, input_dim, z_dim, emission_dim, transition_dim, rnn_dim, num_iafs, cuda):
 
         # instantiate pytorch modules that make up the model and the inference network
         super(DMM, self).__init__()
@@ -99,7 +101,6 @@ class DMM(nn.Module):
         self.emission_dim = emission_dim
         self.transition_dim = transition_dim
         self.rnn_dim = rnn_dim
-        self.max_rnn_batch = max_rnn_batch
         self.num_iafs = num_iafs
         self.pt_iafs = [InverseAutoregressiveFlow(z_dim, 100) for _ in range(num_iafs)]
         if cuda:
@@ -108,7 +109,7 @@ class DMM(nn.Module):
 
     # the model
     def model(self, mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths,
-            pt_rnn, annealing_factor=1.0):
+              pt_rnn, annealing_factor=1.0):
 
         T_max = np.max(mini_batch_seq_lengths)
         emitter = pyro.module("emitter", self.pt_emitter)
@@ -118,17 +119,17 @@ class DMM(nn.Module):
         for t in range(1, T_max + 1):
             z_mu, z_sigma = trans(z_prev)
             z_t = pyro.sample("z_%d" % t, dist.DiagNormal(z_mu, z_sigma),
-                            log_pdf_mask=annealing_factor * mini_batch_mask[:, t - 1:t])
+                              log_pdf_mask=annealing_factor * mini_batch_mask[:, t - 1:t])
             emission_probs_t = emitter(z_t)
             pyro.observe("obs_x_%d" % t, dist.bernoulli, mini_batch[:, t - 1, :], emission_probs_t,
-                        log_pdf_mask=mini_batch_mask[:, t - 1:t])
+                         log_pdf_mask=mini_batch_mask[:, t - 1:t])
             z_prev = z_t
 
         return z_prev
 
     # the guide
     def guide(self, mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths,
-            pt_rnn, annealing_factor=1.0):
+              pt_rnn, annealing_factor=1.0):
 
         T_max = np.max(mini_batch_seq_lengths)
         rnn = pyro.module("rnn", pt_rnn)
@@ -155,17 +156,18 @@ class DMM(nn.Module):
             if self.num_iafs > 0:
                 z_dist = TransformedDistribution(z_dist, iafs)
             z_t = pyro.sample("z_%d" % t, z_dist,
-                            log_pdf_mask=annealing_factor * mini_batch_mask[:, t - 1:t])
+                              log_pdf_mask=annealing_factor * mini_batch_mask[:, t - 1:t])
             z_prev = z_t
 
         return z_prev
 
+
 # setup, training, and evaluation
 def main(num_epochs=2000, learning_rate=0.0008, beta1=.9, beta2=.999,
-            clip_norm=25., lr_decay=1.0, weight_decay=0.0,
-            mini_batch_size=20, annealing_epochs=500,
-            minimum_annealing_factor=0.0, rnn_dropout_rate=0.0,
-            rnn_num_layers=1, log='dmm.log', cuda=False, num_iafs=0):
+         clip_norm=25., lr_decay=1.0, weight_decay=0.0,
+         mini_batch_size=20, annealing_epochs=500,
+         minimum_annealing_factor=0.0, rnn_dropout_rate=0.0,
+         rnn_num_layers=1, log='dmm.log', cuda=False, num_iafs=0):
 
     # ensure ints
     # TODO: Remove this, temp hyper param logic
@@ -173,7 +175,6 @@ def main(num_epochs=2000, learning_rate=0.0008, beta1=.9, beta2=.999,
     mini_batch_size = int(mini_batch_size)
     annealing_epochs = int(annealing_epochs)
     rnn_num_layers = int(rnn_num_layers)
-
 
     input_dim = 88
     z_dim = 100
@@ -183,7 +184,6 @@ def main(num_epochs=2000, learning_rate=0.0008, beta1=.9, beta2=.999,
     val_test_frequency = 20
     n_eval_samples_inner = 5
     n_eval_samples_outer = 100
-
 
     # setup logging
     logging.basicConfig(level=logging.DEBUG, format='%(message)s', filename=args.log, filemode='w')
@@ -202,7 +202,7 @@ def main(num_epochs=2000, learning_rate=0.0008, beta1=.9, beta2=.999,
 
     jsb_file_loc = join(dirname(__file__), "jsb_processed.pkl")
     # ingest data from disk
-    data = cPickle.load(open(jsb_file_loc, "rb"))
+    data = pickle.load(open(jsb_file_loc, "rb"))
     training_seq_lengths = data['train']['sequence_lengths']
     training_data_sequences = data['train']['sequences']
     test_seq_lengths = data['test']['sequence_lengths']
@@ -211,8 +211,8 @@ def main(num_epochs=2000, learning_rate=0.0008, beta1=.9, beta2=.999,
     val_data_sequences = data['valid']['sequences']
     N_train_data = len(training_seq_lengths)
     N_train_time_slices = np.sum(training_seq_lengths)
-    N_mini_batches = int(N_train_data / args.mini_batch_size +\
-        int(N_train_data % args.mini_batch_size > 0))
+    N_mini_batches = int(N_train_data / args.mini_batch_size +
+                         int(N_train_data % args.mini_batch_size > 0))
 
     # package val/test data for model/guide
     def rep(x):
@@ -232,8 +232,8 @@ def main(num_epochs=2000, learning_rate=0.0008, beta1=.9, beta2=.999,
         (N_train_data, np.mean(training_seq_lengths), N_mini_batches))
     times = [time.time()]
 
-     # create the dmm
-    dmm = DMM(input_dim, z_dim, emission_dim, transition_dim, rnn_dim, max(test_batch.data.shape[0], val_batch.data.shape[0], mini_batch_size), num_iafs, cuda)
+    # create the dmm
+    dmm = DMM(input_dim, z_dim, emission_dim, transition_dim, rnn_dim, num_iafs, cuda)
 
     # easy fix, turn dmm into cuda dmm
     if cuda:
@@ -294,7 +294,7 @@ def main(num_epochs=2000, learning_rate=0.0008, beta1=.9, beta2=.999,
     val_nlls, test_nlls = [], []
     for _ in range(n_eval_samples_outer):
         val_nll = elbo_train.eval_objective(val_batch, val_batch_reversed, val_batch_mask,
-                                         val_seq_lengths, pt_rnn) / np.sum(val_seq_lengths)
+                                            val_seq_lengths, pt_rnn) / np.sum(val_seq_lengths)
         val_nlls.append(val_nll)
         test_nll = elbo_train.eval_objective(test_batch, test_batch_reversed, test_batch_mask,
                                              test_seq_lengths, pt_rnn) / np.sum(test_seq_lengths)
@@ -303,6 +303,7 @@ def main(num_epochs=2000, learning_rate=0.0008, beta1=.9, beta2=.999,
     log("[validation score final epoch]  %.5f" % val_nll)
     log("[test score final epoch]  %.5f" % test_nll)
     return (test_nll, val_nll)
+
 
 if __name__ == '__main__':
 
