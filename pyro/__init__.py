@@ -55,7 +55,7 @@ def sample(name, fn, *args, **kwargs):
     :param name: name of sample
     :param fn: distribution class or function
     :param obs: observed datum (optional; should only be used in context of inference)
-    optionally specified in kwargs
+        optionally specified in kwargs
     :returns: sample
 
     Samples from the distribution and registers it in the trace data structure.
