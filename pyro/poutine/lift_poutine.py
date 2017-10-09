@@ -35,13 +35,17 @@ class LiftPoutine(Poutine):
         name = msg["name"]
         param_name = params.user_param_name(name)
         if isinstance(self.prior, dict):
+            # prior is a dict of distributions
             if param_name in self.prior.keys():
                 msg["fn"] = self.prior[param_name]
             else:
                 return super(LiftPoutine, self)._pyro_param(msg)
-        elif callable(self.prior):
+        elif isinstance(self.prior, pyro.distributions.Distribution)
             # prior is a distribution
             msg["fn"] = self.prior
+        elif callable(self.prior):
+            # prior is a stochastic fn
+            msg["stop"] = True
         else:
             # otherwise leave as is
             return super(LiftPoutine, self)._pyro_param(msg)
