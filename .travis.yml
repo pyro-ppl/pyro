@@ -27,15 +27,15 @@ install:
 jobs:
     fast_finish: true
     include:
-        - stage: lint
+        - stage: lint/docs
           python: 2.7
           addons: true
-          install: pip install flake8
-          script: make lint
-        - stage: docs
-          python: 2.7
-          install: pip install sphinx
-          script: make docs
+          install:
+            - pip install flake8
+            - pip install -r docs/requirements.txt
+          script:
+            - make lint
+            - make docs
         - stage: unit test
           python: 2.7
           env: STAGE=unit
