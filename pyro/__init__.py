@@ -10,6 +10,7 @@ from torch.nn import Parameter
 
 import pyro
 import pyro.util as util
+
 from pyro.params import param_with_module_name
 from pyro.params.param_store import ParamStoreDict
 from pyro.poutine.lambda_poutine import LambdaPoutine
