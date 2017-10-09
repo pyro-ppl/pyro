@@ -1,5 +1,8 @@
 import torch
+import pytest
+import functools
 from six.moves.queue import Queue
+import torch.nn as nn
 from torch.autograd import Variable
 
 import pyro
@@ -7,7 +10,8 @@ import pyro.poutine as poutine
 from pyro.distributions import DiagNormal, Bernoulli
 import pyro.distributions as dist
 from tests.common import TestCase, assert_equal
-from pyro.util import ng_ones, ng_zeros
+from pyro.util import ng_ones, ng_zeros, \
+    NonlocalExit, discrete_escape, all_escape
 
 
 def eq(x, y, prec=1e-10):
@@ -223,12 +227,12 @@ class QueuePoutineDiscreteTest(TestCase):
                 for i3 in range(2):
                     true_latents.add((i1, i2, i3))
 
-        tr_latents = set()
+        tr_latents = []
         for tr in trs:
-            tr_latents.add(tuple([tr[name]["value"].view(-1).data[0] for name in tr
-                                  if tr[name]["type"] == "sample"]))
+            tr_latents.append(tuple([int(tr[name]["value"].view(-1).data[0]) for name in tr
+                                     if tr[name]["type"] == "sample"]))
 
-        assert true_latents == tr_latents
+        assert true_latents == set(tr_latents)
 
     def test_queue_max_tries(self):
         f = poutine.queue(self.model, queue=self.queue, max_tries=3)
@@ -236,7 +240,120 @@ class QueuePoutineDiscreteTest(TestCase):
             f()
             assert False
         except ValueError:
-            assert True
+            self.assertTrue(True)
+
+
+class Model(nn.Module):
+    def __init__(self):
+        super(Model, self).__init__()
+        self.fc = nn.Linear(2, 1)
+
+    def forward(self, x):
+        return self.fc(x)
+
+
+class LiftPoutineTests(TestCase):
+
+    def setUp(self):
+        pyro.get_param_store().clear()
+
+        def mu1_prior(tensor):
+            flat_tensor = tensor.view(-1)
+            m = Variable(torch.zeros(flat_tensor.size(0)))
+            s = Variable(torch.ones(flat_tensor.size(0)))
+            return DiagNormal(m, s).sample().view(tensor.size())
+
+        def sigma1_prior(tensor):
+            flat_tensor = tensor.view(-1)
+            m = Variable(torch.zeros(flat_tensor.size(0)))
+            s = Variable(torch.ones(flat_tensor.size(0)))
+            return DiagNormal(m, s).sample().view(tensor.size())
+
+        def mu2_prior(tensor):
+            flat_tensor = tensor.view(-1)
+            m = Variable(torch.zeros(flat_tensor.size(0)))
+            return Bernoulli(m).sample().view(tensor.size())
+
+        def sigma2_prior(tensor):
+            return sigma1_prior(tensor)
+
+        def bias_prior(tensor):
+            return mu2_prior(tensor)
+
+        def weight_prior(tensor):
+            return sigma1_prior(tensor)
+
+        def stoch_fn(tensor):
+            mu = Variable(torch.zeros(tensor.size()))
+            sigma = Variable(torch.ones(tensor.size()))
+            return pyro.sample("sample", DiagNormal(mu, sigma))
+
+        def guide():
+            mu1 = pyro.param("mu1", Variable(torch.randn(2), requires_grad=True))
+            sigma1 = pyro.param("sigma1", Variable(torch.ones(2), requires_grad=True))
+            pyro.sample("latent1", DiagNormal(mu1, sigma1))
+
+            mu2 = pyro.param("mu2", Variable(torch.randn(2), requires_grad=True))
+            sigma2 = pyro.param("sigma2", Variable(torch.ones(2), requires_grad=True))
+            latent2 = pyro.sample("latent2", DiagNormal(mu2, sigma2))
+            return latent2
+
+        self.model = Model()
+        self.guide = guide
+        self.prior = mu1_prior
+        self.prior_dict = {"mu1": mu1_prior, "sigma1": sigma1_prior, "mu2": mu2_prior, "sigma2": sigma2_prior}
+        self.partial_dict = {"mu1": mu1_prior, "sigma1": sigma1_prior}
+        self.nn_prior = {"fc.bias": bias_prior, "fc.weight": weight_prior}
+        self.fn = stoch_fn
+        self.data = Variable(torch.randn(2, 2))
+
+    def test_splice(self):
+        tr = poutine.trace(self.guide).get_trace()
+        lifted_tr = poutine.trace(poutine.lift(self.guide, prior=self.prior)).get_trace()
+        for name in tr.keys():
+            if name in ('mu1', 'mu2', 'sigma1', 'sigma2'):
+                self.assertFalse(name in lifted_tr)
+            else:
+                self.assertTrue(name in lifted_tr)
+
+    def test_prior_dict(self):
+        tr = poutine.trace(self.guide).get_trace()
+        lifted_tr = poutine.trace(poutine.lift(self.guide, prior=self.prior_dict)).get_trace()
+        for name in tr.keys():
+            self.assertTrue(name in lifted_tr)
+            if name in {'sigma1', 'mu1', 'sigma2', 'mu2'}:
+                self.assertTrue(name + "_prior" == lifted_tr[name]['fn'].__name__)
+            if tr[name]["type"] == "param":
+                self.assertTrue(lifted_tr[name]["type"] == "sample")
+
+    def test_unlifted_param(self):
+        tr = poutine.trace(self.guide).get_trace()
+        lifted_tr = poutine.trace(poutine.lift(self.guide, prior=self.partial_dict)).get_trace()
+        for name in tr.keys():
+            self.assertTrue(name in lifted_tr)
+            if name in ('sigma1', 'mu1'):
+                self.assertTrue(name + "_prior" == lifted_tr[name]['fn'].__name__)
+                self.assertTrue(lifted_tr[name]["type"] == "sample")
+            if name in ('sigma2', 'mu2'):
+                self.assertTrue(lifted_tr[name]["type"] == "param")
+
+    def test_random_module(self):
+        pyro.clear_param_store()
+        lifted_tr = poutine.trace(pyro.random_module("name", self.model, prior=self.prior)).get_trace()
+        for name in lifted_tr.keys():
+            if lifted_tr[name]["type"] == "param":
+                self.assertTrue(lifted_tr[name]["type"] == "sample")
+
+    def test_random_module_prior_dict(self):
+        pyro.clear_param_store()
+        lifted_nn = pyro.random_module("name", self.model, prior=self.nn_prior)
+        lifted_tr = poutine.trace(lifted_nn).get_trace()
+        for key_name in lifted_tr.keys():
+            name = pyro.params.user_param_name(key_name)
+            if name in {'fc.weight', 'fc.prior'}:
+                dist_name = name[3:]
+                self.assertTrue(dist_name + "_prior" == lifted_tr[key_name]['fn'].__name__)
+                self.assertTrue(lifted_tr[key_name]["type"] == "sample")
 
 
 class QueuePoutineMixedTest(TestCase):
@@ -332,3 +449,113 @@ class IndirectLambdaPoutineTests(TestCase):
         _test_scale_factor(2, 2, [1.0] * 4)
         _test_scale_factor(1, 2, [2.0] * 2)
         _test_scale_factor(2, 1, [2.0] * 2)
+
+
+class ConditionPoutineTests(NormalNormalNormalPoutineTestCase):
+
+    def test_condition(self):
+        data = {"latent2": Variable(torch.randn(2))}
+        tr2 = poutine.trace(poutine.condition(self.model, data=data)).get_trace()
+        assert "latent2" in tr2
+        assert tr2["latent2"]["type"] == "observe"
+        assert tr2["latent2"]["value"] is data["latent2"]
+
+    def test_do(self):
+        data = {"latent2": Variable(torch.randn(2))}
+        tr3 = poutine.trace(poutine.do(self.model, data=data)).get_trace()
+        assert "latent2" not in tr3
+
+    def test_trace_data(self):
+        tr1 = poutine.trace(
+            poutine.block(self.model, expose_types=["sample"])).get_trace()
+        tr2 = poutine.trace(
+            poutine.condition(self.model, data=tr1)).get_trace()
+        assert tr2["latent2"]["type"] == "observe"
+        assert tr2["latent2"]["value"] is tr1["latent2"]["value"]
+
+    def test_stack_overwrite_failure(self):
+        data1 = {"latent2": Variable(torch.randn(2))}
+        data2 = {"latent2": Variable(torch.randn(2))}
+        cm = poutine.condition(poutine.condition(self.model, data=data1),
+                               data=data2)
+        with pytest.raises(AssertionError):
+            cm()
+
+    def test_stack_success(self):
+        data1 = {"latent1": Variable(torch.randn(2))}
+        data2 = {"latent2": Variable(torch.randn(2))}
+        tr = poutine.trace(
+            poutine.condition(poutine.condition(self.model, data=data1),
+                              data=data2)).get_trace()
+        assert tr["latent1"]["type"] == "observe"
+        assert tr["latent1"]["value"] is data1["latent1"]
+        assert tr["latent2"]["type"] == "observe"
+        assert tr["latent2"]["value"] is data2["latent2"]
+
+    def test_do_propagation(self):
+        pyro.get_param_store().clear()
+
+        def model():
+            z = pyro.sample("z", DiagNormal(10.0 * ng_ones(1), 0.0001 * ng_ones(1)))
+            latent_prob = torch.exp(z) / (torch.exp(z) + ng_ones(1))
+            flip = pyro.sample("flip", Bernoulli(latent_prob))
+            return flip
+
+        sample_from_model = model()
+        z_data = {"z": -10.0 * ng_ones(1)}
+        # under model flip = 1 with high probability; so do indirect DO surgery to make flip = 0
+        sample_from_do_model = poutine.trace(poutine.do(model, data=z_data)).get_trace()['_RETURN']['value']
+
+        assert eq(sample_from_model, ng_ones(1))
+        assert eq(sample_from_do_model, ng_zeros(1))
+
+
+class EscapePoutineTests(TestCase):
+
+    def setUp(self):
+
+        # Simple model with 1 continuous + 1 discrete + 1 continuous variable.
+        def model():
+            p = Variable(torch.Tensor([0.5]))
+            mu = Variable(torch.zeros(1))
+            sigma = Variable(torch.ones(1))
+
+            x = pyro.sample("x", DiagNormal(mu, sigma))  # Before the discrete variable.
+            y = pyro.sample("y", Bernoulli(p))
+            z = pyro.sample("z", DiagNormal(mu, sigma))  # After the discrete variable.
+            return dict(x=x, y=y, z=z)
+
+        self.sites = ["x", "y", "z", "_INPUT", "_RETURN"]
+        self.model = model
+
+    def test_discrete_escape(self):
+        try:
+            poutine.escape(self.model, functools.partial(discrete_escape,
+                                                         poutine.Trace()))()
+            assert False
+        except NonlocalExit as e:
+            assert e.site["name"] == "y"
+
+    def test_all_escape(self):
+        try:
+            poutine.escape(self.model, functools.partial(all_escape,
+                                                         poutine.Trace()))()
+            assert False
+        except NonlocalExit as e:
+            assert e.site["name"] == "x"
+
+    def test_trace_compose(self):
+        tm = poutine.trace(self.model)
+        try:
+            poutine.escape(tm, functools.partial(all_escape, poutine.Trace()))()
+            assert False
+        except NonlocalExit:
+            assert "x" in tm.trace
+            try:
+                tem = poutine.trace(
+                    poutine.escape(self.model, functools.partial(all_escape,
+                                                                 poutine.Trace())))
+                tem()
+                assert False
+            except NonlocalExit:
+                assert "x" not in tem.trace

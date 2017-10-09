@@ -1,13 +1,19 @@
+import functools
+
 # poutines
 from .block_poutine import BlockPoutine
 from .poutine import Poutine  # noqa: F401
-from .queue_poutine import QueuePoutine
 from .replay_poutine import ReplayPoutine
 from .trace_poutine import TracePoutine
 from .tracegraph_poutine import TraceGraphPoutine
+from .lift_poutine import LiftPoutine
+from .condition_poutine import ConditionPoutine
+from .lambda_poutine import LambdaPoutine  # noqa: F401
+from .escape_poutine import EscapePoutine
 
 # trace data structures
 from .trace import Trace, TraceGraph  # noqa: F401
+from pyro import util
 
 
 ############################################
@@ -62,6 +68,19 @@ def replay(fn, trace, sites=None):
     return ReplayPoutine(fn, trace, sites=sites)
 
 
+def lift(fn, prior):
+    """
+    :param fn: function whose parameters will be lifted to random values
+    :param prior: prior function in the form of a Distribution or a dict of stochastic fns
+    :returns: stochastic function wrapped in LiftPoutine
+
+    Given a stochastic function with param calls and a prior distribution,
+    create a stochastic function where all param calls are replaced by sampling from prior.
+    Prior should be a callable or a dict of names to callables.
+    """
+    return LiftPoutine(fn, prior)
+
+
 def block(fn, hide=None, expose=None, hide_types=None, expose_types=None):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
@@ -81,17 +100,109 @@ def block(fn, hide=None, expose=None, hide_types=None, expose_types=None):
                         hide_types=hide_types, expose_types=expose_types)
 
 
-def queue(fn, queue=None, max_tries=None):
+def escape(fn, escape_fn=None):
+    """
+    :param fn: a stochastic function (callable containing pyro primitive calls)
+    :param escape_fn: function that takes a partial trace and a site
+    and returns a boolean value to decide whether to exit at that site
+    :returns: stochastic function wrapped in EscapePoutine
+
+    Alias for EscapePoutine constructor.
+
+    Given a callable that contains Pyro primitive calls,
+    evaluate escape_fn on each site, and if the result is True,
+    raise a NonlocalExit exception that stops execution
+    and returns the offending site.
+    """
+    return EscapePoutine(fn, escape_fn)
+
+
+def condition(fn, data):
+    """
+    :param fn: a stochastic function (callable containing pyro primitive calls)
+    :param data: a dict or a Trace
+    :returns: stochastic function wrapped in a ConditionPoutine
+    :rtype: pyro.poutine.ConditionPoutine
+
+    Alias for ConditionPoutine constructor.
+
+    Given a stochastic function with some sample statements
+    and a dictionary of observations at names,
+    change the sample statements at those names into observes
+    with those values
+    """
+    return ConditionPoutine(fn, data=data)
+
+
+#########################################
+# Begin composite operations
+#########################################
+
+def do(fn, data):
+    """
+    :param fn: a stochastic function (callable containing pyro primitive calls)
+    :param data: a dict or a Trace
+    :returns: stochastic function wrapped in a BlockPoutine and ConditionPoutine
+    :rtype: pyro.poutine.BlockPoutine
+
+    Given a stochastic function with some sample statements
+    and a dictionary of values at names,
+    set the return values of those sites equal to the values
+    and hide them from the rest of the stack
+    as if they were hard-coded to those values
+    by using BlockPoutine
+    """
+    return BlockPoutine(ConditionPoutine(fn, data=data),
+                        hide=list(data.keys()))
+
+
+def queue(fn, queue, max_tries=None,
+          extend_fn=None, escape_fn=None, num_samples=None):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param queue: a queue data structure like multiprocessing.Queue to hold partial traces
     :param max_tries: maximum number of attempts to compute a single complete trace
-    :returns: stochastic function wrapped in a QueuePoutine
-    :rtype: pyro.poutine.QueuePoutine
-
-    Alias for QueuePoutine constructor.
+    :param extend_fn: function (possibly stochastic) that takes a partial trace and a site
+    and returns a list of extended traces
+    :param escape_fn: function (possibly stochastic) that takes a partial trace and a site
+    and returns a boolean value to decide whether to exit
+    :param num_samples: optional number of extended traces for extend_fn to return
+    :returns: stochastic function wrapped in poutine logic
 
     Given a stochastic function and a queue,
     return a return value from a complete trace in the queue
     """
-    return QueuePoutine(fn, queue=queue, max_tries=max_tries)
+
+    if max_tries is None:
+        max_tries = int(1e6)
+
+    if extend_fn is None:
+        # XXX should be util.enum_extend
+        extend_fn = util.enum_extend
+
+    if escape_fn is None:
+        # XXX should be util.discrete_escape
+        escape_fn = util.discrete_escape
+
+    if num_samples is None:
+        num_samples = -1
+
+    def _fn(*args, **kwargs):
+
+        for i in range(max_tries):
+            assert not queue.empty(), \
+                "trying to get() from an empty queue will deadlock"
+
+            next_trace = queue.get()
+            try:
+                ftr = trace(escape(replay(fn, next_trace),
+                                   functools.partial(escape_fn, next_trace)))
+                return ftr(*args, **kwargs)
+            except util.NonlocalExit as site_container:
+                for tr in extend_fn(ftr.trace.copy(), site_container.site,
+                                    num_samples=num_samples):
+                    queue.put(tr)
+
+        raise ValueError("max tries ({}) exceeded".format(str(max_tries)))
+
+    return _fn
