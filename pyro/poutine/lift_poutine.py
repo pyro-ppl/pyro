@@ -1,4 +1,5 @@
 from pyro import params
+from pyro.distributions import Distribution
 from .poutine import Poutine
 
 
@@ -40,12 +41,14 @@ class LiftPoutine(Poutine):
                 msg["fn"] = self.prior[param_name]
             else:
                 return super(LiftPoutine, self)._pyro_param(msg)
-        elif isinstance(self.prior, pyro.distributions.Distribution)
+        elif isinstance(self.prior, Distribution):
             # prior is a distribution
             msg["fn"] = self.prior
         elif callable(self.prior):
-            # prior is a stochastic fn
-            msg["stop"] = True
+            if not isinstance(self.prior, Distribution):
+                # prior is a stochastic fn. do not add in trace as sample
+                msg["stop"] = True
+            msg["fn"] = self.prior
         else:
             # otherwise leave as is
             return super(LiftPoutine, self)._pyro_param(msg)

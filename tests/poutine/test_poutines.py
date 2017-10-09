@@ -283,6 +283,11 @@ class LiftPoutineTests(TestCase):
         def weight_prior(tensor):
             return sigma1_prior(tensor)
 
+        def stoch_fn(tensor):
+            mu = Variable(torch.zeros(tensor.size()))
+            sigma = Variable(torch.ones(tensor.size()))
+            return pyro.sample("sample", DiagNormal(mu, sigma))
+
         def guide():
             mu1 = pyro.param("mu1", Variable(torch.randn(2), requires_grad=True))
             sigma1 = pyro.param("sigma1", Variable(torch.ones(2), requires_grad=True))
@@ -299,15 +304,17 @@ class LiftPoutineTests(TestCase):
         self.prior_dict = {"mu1": mu1_prior, "sigma1": sigma1_prior, "mu2": mu2_prior, "sigma2": sigma2_prior}
         self.partial_dict = {"mu1": mu1_prior, "sigma1": sigma1_prior}
         self.nn_prior = {"fc.bias": bias_prior, "fc.weight": weight_prior}
+        self.fn = stoch_fn
         self.data = Variable(torch.randn(2, 2))
 
-    def test_lift_simple(self):
+    def test_splice(self):
         tr = poutine.trace(self.guide).get_trace()
         lifted_tr = poutine.trace(poutine.lift(self.guide, prior=self.prior)).get_trace()
         for name in tr.keys():
-            self.assertTrue(name in lifted_tr)
-            if tr[name]["type"] == "param":
-                self.assertTrue(lifted_tr[name]["type"] == "sample")
+            if name in ('mu1', 'mu2', 'sigma1', 'sigma2'):
+                self.assertFalse(name in lifted_tr)
+            else:
+                self.assertTrue(name in lifted_tr)
 
     def test_prior_dict(self):
         tr = poutine.trace(self.guide).get_trace()
