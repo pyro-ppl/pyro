@@ -10,7 +10,7 @@ import pandas as pd
 
 import pyro
 from pyro import poutine
-from pyro.distributions import DiagNormal, Categorical
+from pyro.distributions import DiagNormal, Bernoulli
 from pyro.infer.kl_qp import KL_QP
 import torchvision.datasets as dset
 
@@ -85,19 +85,19 @@ def model(data):
     priors = {'weight': w_prior, 'bias': b_prior}
     lifted_fn = poutine.lift(log_reg, priors)
     latent = lifted_fn(x_data)
-    pyro.observe("categorical", Categorical(latent), y_data.unsqueeze(1))
+    pyro.observe("obs", Bernoulli(latent), y_data.unsqueeze(1))
 
 
 def guide(data):
     x_data = data[:,:-1]
     w_mu = Variable(torch.randn(D, 1), requires_grad=True)
-    w_sig = Variable(-3.0*torch.ones(D,1) + 0.05*torch.randn(D, 1), requires_grad=True)
+    w_log_sig = Variable(-3.0*torch.ones(D,1) + 0.05*torch.randn(D, 1), requires_grad=True)
     b_mu = Variable(torch.randn(1), requires_grad=True)
-    b_sig = Variable(-3.0*torch.ones(1) + 0.05 * torch.randn(1), requires_grad=True)
+    b_log_sig = Variable(-3.0*torch.ones(1) + 0.05 * torch.randn(1), requires_grad=True)
     mw_param = pyro.param("guide_mean_weight", w_mu)
-    sw_param = pyro.param("guide_sigma_weight", w_sig)
+    sw_param = pyro.param("guide_sigma_weight", w_log_sig)
     mb_param  = pyro.param("guide_mean_bias", b_mu)
-    sb_param = pyro.param("guide_sigma_bias", b_sig)
+    sb_param = pyro.param("guide_sigma_bias", b_log_sig)
     sw_param = torch.exp(sw_param)
     sb_param = torch.exp(sb_param)
     w_prior = DiagNormalPrior(mw_param, sw_param)
@@ -132,7 +132,7 @@ def inspect_post_params():
     return iter(tuples)
 
 nr_samples = 50
-nr_epochs = 50
+nr_epochs = 1000
 all_batches = np.arange(0, N, batch_size)
 # take care of bad index
 if all_batches[-1] != N:
