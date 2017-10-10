@@ -93,38 +93,33 @@ class Trace(dict):
 
     def log_pdf(self, vec_batch_nodes_dict={}):
         """
-        Compute the local and overall log-probabilities of the trace
+        Compute the local and overall log-probabilities of the trace.
         """
-
         log_p = 0.0
-        for name in self.keys():
-            if self[name]["type"] in ("observe", "sample"):
+        for name, site in self.items():
+            if site["type"] in ("observe", "sample"):
+                args, kwargs = site["args"]
                 if name not in vec_batch_nodes_dict:
-                    self[name]["log_pdf"] = self[name]["fn"].log_pdf(
-                        self[name]["value"],
-                        *self[name]["args"][0],
-                        **self[name]["args"][1]) * self[name]["scale"]
-                    log_p += self[name]["log_pdf"]
+                    site["log_pdf"] = site["fn"].log_pdf(
+                        site["value"], *args, **kwargs) * site["scale"]
+                    log_p += site["log_pdf"]
                 else:
-                    self[name]["batch_log_pdf"] = self[name]["fn"].batch_log_pdf(
-                        self[name]["value"],
-                        *self[name]["args"][0],
-                        **self[name]["args"][1]) * self[name]["scale"]
-                    log_p += self[name]["batch_log_pdf"].sum()
+                    site["batch_log_pdf"] = site["fn"].batch_log_pdf(
+                        site["value"], *args, **kwargs) * site["scale"]
+                    log_p += site["batch_log_pdf"].sum()
         return log_p
 
     def batch_log_pdf(self):
         """
-        Compute the local and overall log-probabilities of the trace
+        Compute the batched local and overall log-probabilities of the trace.
         """
         log_p = 0.0
-        for name in self.keys():
-            if self[name]["type"] in ("observe", "sample"):
-                self[name]["batch_log_pdf"] = self[name]["fn"].batch_log_pdf(
-                    self[name]["value"],
-                    *self[name]["args"][0],
-                    **self[name]["args"][1]) * self[name]["scale"]
-                log_p += self[name]["batch_log_pdf"]
+        for name, site in self.items():
+            if site["type"] in ("observe", "sample"):
+                args, kwargs = site["args"]
+                site["batch_log_pdf"] = site["fn"].batch_log_pdf(
+                    site["value"], *args, **kwargs) * site["scale"]
+                log_p += site["batch_log_pdf"]
         return log_p
 
 
