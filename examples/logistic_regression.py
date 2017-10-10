@@ -131,6 +131,7 @@ if all_batches[-1] != N:
 
 grad_step = KL_QP(model, guide, adam_optim)
 
+
 # apply it to minibatches of data by hand:
 def main():
     parser = argparse.ArgumentParser(description="parse args")
