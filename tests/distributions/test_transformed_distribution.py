@@ -7,21 +7,53 @@ import torch
 from torch.autograd import Variable
 
 import pyro.distributions as dist
-from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
+from pyro.distributions.transformed_distribution import Bijector, TransformedDistribution
 from tests.common import assert_equal
 from tests.distributions.dist_fixture import Fixture
 
 
-"""
-If X is a lognormal RV, then it can be expressed as
-X = e^(mu + sigma * Z),
-where Z is drawn from a standard normal
+class AffineExp(Bijector):
+    """
+    :param a_init: a
+    :param b_init: b
 
-This is the same as sampling Z from a standard normal, and doing an AffineExp transformation:
-Y = e^(a * Z + b),
-where a = sigma
-and, b = mu
-"""
+    `y = exp(ax + b)`
+
+    If X is a lognormal RV, then it can be expressed as
+    X = e^(mu + sigma * Z),
+    where Z is drawn from a standard normal
+
+    This is the same as sampling Z from a standard normal, and doing an AffineExp transformation:
+    Y = e^(a * Z + b),
+    where a = sigma
+    """
+    def __init__(self, a_init, b_init):
+        """
+        Constructor for univariate affine bijector followed by exp
+        """
+        super(AffineExp, self).__init__()
+        self.a = a_init
+        self.b = b_init
+
+    def __call__(self, x, *args, **kwargs):
+        """
+        Invoke bijection x=>y
+        """
+        y = self.a * x + self.b
+        return torch.exp(y)
+
+    def inverse(self, y, *args, **kwargs):
+        """
+        Invert y => x
+        """
+        x = (torch.log(y) - self.b) / self.a
+        return x
+
+    def log_det_jacobian(self, y, *args, **kwargs):
+        """
+        Calculates the determinant of the log jacobian
+        """
+        return torch.log(torch.abs(self.a)) + torch.log(y)
 
 
 @pytest.fixture()
