@@ -105,10 +105,10 @@ class TraceGraph_ELBO(object):
 
             # have the trace compute all the individual (batch) log pdf terms
             # so that they are available below
-	    guide_trace.batch_log_pdf(site_filter=lambda name, site: name in guide_vec_batch_nodes_dict)
-	    guide_trace.log_pdf()
-	    model_trace.batch_log_pdf(site_filter=lambda name, site: name in model_vec_batch_nodes_dict)
-	    model_trace.log_pdf()
+            guide_trace.batch_log_pdf(site_filter=lambda name, site: name in guide_vec_batch_nodes_dict)
+            guide_trace.log_pdf()
+            model_trace.batch_log_pdf(site_filter=lambda name, site: name in model_vec_batch_nodes_dict)
+            model_trace.log_pdf()
 
             # prepare a list of all the cost nodes, each of which is +- log_pdf
             cost_nodes = []
