@@ -12,6 +12,7 @@ from tests.common import assert_equal
 pytestmark = pytest.mark.stage("integration", "integration_batch_1")
 
 
+@pytest.mark.init(rng_seed=161)
 @pytest.mark.parametrize("batch_size", [3, 5, 7, 8, 0])
 @pytest.mark.parametrize("map_type", ["tensor", "list"])
 def test_elbo_mapdata(batch_size, map_type):
@@ -33,7 +34,7 @@ def test_elbo_mapdata(batch_size, map_type):
     analytic_mu_n = sum_data * (lam / analytic_lam_n) +\
         mu0 * (lam0 / analytic_lam_n)
     verbose = True
-    n_steps = 10000
+    n_steps = 6000
 
     if verbose:
         print("DOING ELBO TEST [bs = {}, map_type = {}]".format(
@@ -62,10 +63,10 @@ def test_elbo_mapdata(batch_size, map_type):
         return mu_latent
 
     def guide():
-        mu_q = pyro.param("mu_q", Variable(analytic_mu_n.data + 0.434 * torch.randn(2),
+        mu_q = pyro.param("mu_q", Variable(analytic_mu_n.data + torch.Tensor([-0.22, 0.31]),
                                            requires_grad=True))
         log_sig_q = pyro.param("log_sig_q", Variable(
-            analytic_log_sig_n.data - 0.39 * torch.randn(2),
+            analytic_log_sig_n.data - torch.Tensor([-0.22, 0.31]),
             requires_grad=True))
         sig_q = torch.exp(log_sig_q)
         pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q)
@@ -95,11 +96,11 @@ def test_elbo_mapdata(batch_size, map_type):
                 pyro.param("log_sig_q"),
                 2.0))
 
-        if verbose and k % 1000 == 0:
+        if verbose and k % 500 == 0:
             print("errors", mu_error.data.numpy()[0], log_sig_error.data.numpy()[0])
 
-    assert_equal(Variable(torch.zeros(1)), mu_error, prec=0.06)
-    assert_equal(Variable(torch.zeros(1)), log_sig_error, prec=0.07)
+    assert_equal(Variable(torch.zeros(1)), mu_error, prec=0.04)
+    assert_equal(Variable(torch.zeros(1)), log_sig_error, prec=0.05)
 
 
 @pytest.mark.parametrize("batch_dim", [0, 1])

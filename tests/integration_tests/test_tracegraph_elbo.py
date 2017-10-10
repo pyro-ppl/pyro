@@ -516,10 +516,10 @@ class LogNormalNormalTests(TestCase):
         self.assertEqual(0.0, tau_error, prec=0.05)
 
 
+@pytest.mark.init(rng_seed=0)
 @pytest.mark.stage("integration", "integration_batch_1")
 class RaoBlackwellizationTests(TestCase):
     def setUp(self):
-        torch.manual_seed(0)
         # normal-normal; known covariance
         self.lam0 = Variable(torch.Tensor([0.1, 0.1]))   # precision of prior
         self.mu0 = Variable(torch.Tensor([0.0, 0.5]))   # prior mean
@@ -565,10 +565,10 @@ class RaoBlackwellizationTests(TestCase):
             return mu_latent
 
         def guide():
-            mu_q = pyro.param("mu_q", Variable(self.analytic_mu_n.data + 0.184 * torch.ones(2),
+            mu_q = pyro.param("mu_q", Variable(self.analytic_mu_n.data + 0.234 * torch.ones(2),
                                                requires_grad=True))
             log_sig_q = pyro.param("log_sig_q", Variable(
-                                   self.analytic_log_sig_n.data - 0.19 * torch.ones(2),
+                                   self.analytic_log_sig_n.data - 0.21 * torch.ones(2),
                                    requires_grad=True))
             sig_q = torch.exp(log_sig_q)
             mu_latent = pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q,
@@ -649,10 +649,10 @@ class RaoBlackwellizationTests(TestCase):
                                              torch.nn.Linear(2, 2)])
 
         def guide():
-            mu_q = pyro.param("mu_q", Variable(self.analytic_mu_n.data + 0.184 * torch.ones(2),
+            mu_q = pyro.param("mu_q", Variable(self.analytic_mu_n.data + 0.234 * torch.ones(2),
                                                requires_grad=True))
             log_sig_q = pyro.param("log_sig_q", Variable(
-                                   self.analytic_log_sig_n.data - 0.19 * torch.ones(2), requires_grad=True))
+                                   self.analytic_log_sig_n.data - 0.21 * torch.ones(2), requires_grad=True))
             sig_q = torch.exp(log_sig_q)
             trivial_baseline = pyro.module("mu_baseline", pt_mu_baseline, tags="baseline")
             baseline_value = trivial_baseline(ng_ones(1))
