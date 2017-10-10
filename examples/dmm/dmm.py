@@ -3,8 +3,8 @@ An implementation of a Deep Markov Model in pyro based on reference [1].
 This is essentially the DKS variant outlined in the paper. The primary difference
 between this implementation and theirs is that in our version any KL divergence terms
 in the ELBO are estimated via sampling, while they make use of the analytic formulae. We
-also explore including normalizing flows in the posterior over the latents (in which case
-analytic formulae for the KL divergences are in any case unavailable).
+also explore including normalizing flows in the variational distribution over the latents
+(in which case analytic formulae for the KL divergences are in any case unavailable).
 
 Reference:
 
@@ -119,8 +119,8 @@ class DMM(nn.Module):
         self.rnn_dim = rnn_dim
         self.pt_iafs = [InverseAutoregressiveFlow(z_dim, 100) for _ in range(args.num_iafs)]
         if cuda:
-            for pt_iaf in self.pt_iafs:
-                pt_iaf.cuda()
+            self.cuda()
+            map(lambda pt_iaf: pt_iaf.cuda(), self.pit_iafs)
 
     # the model
     def model(self, mini_batch, mini_batch_reversed, mini_batch_mask,
@@ -147,18 +147,16 @@ class DMM(nn.Module):
               mini_batch_seq_lengths, annealing_factor=1.0):
 
         T_max = np.max(mini_batch_seq_lengths)
-        rnn = pyro.module("rnn", pt_rnn)
+        rnn = pyro.module("rnn", self.pt_rnn)
         combiner = pyro.module("combiner", self.pt_combiner)
 
         # complicated rnn behavior for gpus
-        # must provide the whole state tensor at time of gpu running
-        # on gpu, must provide batch_size number of hidden states
         if 'cuda' in mini_batch.data.type():
-            h_0 = pyro.param("h_0", zeros(pt_rnn.num_layers, 1, self.rnn_dim, type_as=mini_batch.data))
+            h_0 = pyro.param("h_0", zeros(self.pt_rnn.num_layers, 1, self.rnn_dim, type_as=mini_batch.data))
             h_0 = h_0.expand(*[h_0.data.shape[0], mini_batch.data.shape[0], h_0.data.shape[2]]).contiguous()
         else:
             # on cpu, hidden size starts as 1 and is created
-            h_0 = pyro.param("h_0", zeros(pt_rnn.num_layers, 1, self.rnn_dim, type_as=mini_batch.data))
+            h_0 = pyro.param("h_0", zeros(self.pt_rnn.num_layers, 1, self.rnn_dim, type_as=mini_batch.data))
 
         rnn_output, _ = rnn(mini_batch_reversed, h_0)
         rnn_output = poly.pad_and_reverse(rnn_output, mini_batch_seq_lengths)
@@ -168,7 +166,7 @@ class DMM(nn.Module):
             z_mu, z_sigma = combiner(z_prev, rnn_output[:, t - 1, :])
             z_dist = dist.DiagNormal(z_mu, z_sigma)
             iafs = [pyro.module("iaf_%d" % i, pt_iaf) for i, pt_iaf in enumerate(self.pt_iafs)]
-            if self.num_iafs > 0:
+            if len(iafs) > 0:
                 z_dist = TransformedDistribution(z_dist, iafs)
             z_t = pyro.sample("z_%d" % t, z_dist,
                               log_pdf_mask=annealing_factor * mini_batch_mask[:, t - 1:t])
@@ -178,14 +176,13 @@ class DMM(nn.Module):
 
 
 # setup, training, and evaluation
-def main(num_epochs=2000, learning_rate=0.0008, beta1=.9, beta2=.999,
-         clip_norm=25., lr_decay=1.0, weight_decay=0.0,
-         mini_batch_size=20, annealing_epochs=500,
+def main(num_epochs=7000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
+         clip_norm=25.0, lr_decay=1.0, weight_decay=0.10,
+         mini_batch_size=20, annealing_epochs=1000,
          minimum_annealing_factor=0.0, rnn_dropout_rate=0.0,
          rnn_num_layers=1, log='dmm.log', cuda=False, num_iafs=0):
 
     # ensure ints
-    # TODO: Remove this, temp hyper param logic
     num_epochs = int(num_epochs)
     mini_batch_size = int(mini_batch_size)
     annealing_epochs = int(annealing_epochs)
@@ -210,10 +207,6 @@ def main(num_epochs=2000, learning_rate=0.0008, beta1=.9, beta2=.999,
         logging.info(s)
 
     log(args)
-
-    pt_rnn = nn.RNN(input_size=input_dim, hidden_size=rnn_dim, nonlinearity='relu',
-                    batch_first=True, bidirectional=False, num_layers=args.rnn_num_layers,
-                    dropout=args.rnn_dropout_rate)
 
     jsb_file_loc = join(dirname(__file__), "jsb_processed.pkl")
     # ingest data from disk
@@ -248,12 +241,7 @@ def main(num_epochs=2000, learning_rate=0.0008, beta1=.9, beta2=.999,
     times = [time.time()]
 
     # create the dmm
-    dmm = DMM(input_dim, z_dim, emission_dim, transition_dim, rnn_dim, num_iafs, cuda)
-
-    # easy fix, turn dmm into cuda dmm
-    if cuda:
-        dmm = dmm.cuda()
-        pt_rnn = pt_rnn.cuda()
+    dmm = DMM(input_dim, z_dim, emission_dim, transition_dim, rnn_dim, cuda)
 
     # setup optimizers
     adam_params = {"lr": args.learning_rate, "betas": (args.beta1, args.beta2),
@@ -289,30 +277,30 @@ def main(num_epochs=2000, learning_rate=0.0008, beta1=.9, beta2=.999,
             (epoch, epoch_nll / N_train_time_slices, epoch_time))
 
         if epoch % val_test_frequency == 0 and False:
-            pt_rnn.eval()
+            dmm.pt_rnn.eval()
             val_nlls, test_nlls = [], []
             for _ in range(n_eval_samples_outer):
                 val_nll = elbo_train.eval_objective(val_batch, val_batch_reversed, val_batch_mask,
-                                                    val_seq_lengths, pt_rnn) / np.sum(val_seq_lengths)
+                                                    val_seq_lengths) / np.sum(val_seq_lengths)
                 test_nll = elbo_train.eval_objective(test_batch, test_batch_reversed, test_batch_mask,
-                                                     test_seq_lengths, pt_rnn) / np.sum(test_seq_lengths)
+                                                     test_seq_lengths) / np.sum(test_seq_lengths)
                 val_nlls.append(val_nll)
                 test_nlls.append(test_nll)
             val_nll = np.mean(val_nlls)
             test_nll = np.mean(test_nlls)
-            pt_rnn.train()
+            dmm.pt_rnn.train()
             log("[val/test epoch %04d]  %.4f  %.4f" % (epoch, val_nll, test_nll))
 
     # when finished, do eval and send back validation
     # for hyper param search
-    pt_rnn.eval()
+    dmm.pt_rnn.eval()
     val_nlls, test_nlls = [], []
     for _ in range(n_eval_samples_outer):
         val_nll = elbo_train.eval_objective(val_batch, val_batch_reversed, val_batch_mask,
-                                            val_seq_lengths, pt_rnn) / np.sum(val_seq_lengths)
+                                            val_seq_lengths) / np.sum(val_seq_lengths)
         val_nlls.append(val_nll)
         test_nll = elbo_train.eval_objective(test_batch, test_batch_reversed, test_batch_mask,
-                                             test_seq_lengths, pt_rnn) / np.sum(test_seq_lengths)
+                                             test_seq_lengths) / np.sum(test_seq_lengths)
         test_nlls.append(test_nll)
     test_nll, val_nll = np.mean(test_nlls), np.mean(val_nlls)
     log("[validation score final epoch]  %.5f" % val_nll)
