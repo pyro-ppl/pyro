@@ -4,44 +4,58 @@ import torch.nn as nn
 from pyro.distributions.distribution import Distribution
 from pyro.nn import AutoRegressiveNN
 from pyro.util import ng_ones
-
+from torch.autograd import Variable
 
 class TransformedDistribution(Distribution):
     """
-    :param base_distribution: distribution
-    :param bijector: bijector
+    :param base_distribution: a base Distribution; samples from this distribution
+    are passed through the sequence of bijections
+    :param bijectors: either a single Bijector or a list or tuple of Bijectors
 
-    Transforms the distribution with the bijector
+    Transforms the base distribution by applying a sequence of bijectors to it.
+    This results in a scorable distribution (i.e. it has a log_pdf() method).
     """
 
-    def __init__(self, base_distribution, bijector, *args, **kwargs):
+    def __init__(self, base_distribution, bijectors, *args, **kwargs):
         """
-        Constructor; takes base distribution and bijector as arguments
+        Constructor; takes base distribution and bijector(s) as arguments
         """
         super(TransformedDistribution, self).__init__(*args, **kwargs)
         self.reparameterized = base_distribution.reparameterized
         self.base_dist = base_distribution
-        self.bijector = bijector
+        if type(bijectors) is list or type(bijectors) is tuple:
+           self.bijectors = bijectors
+        else:
+           self.bijectors = [bijectors]
 
     def sample(self, *args, **kwargs):
         """
-        Sample from base and pass through bijector
+        Sample from base and pass through bijector(s)
         """
         x = self.base_dist.sample(*args, **kwargs)
-        y = self.bijector(x)
-        if self.bijector.add_inverse_to_cache:
-            self.bijector.add_intermediate_to_cache(x, y, 'x')
-        return y
+        next_input = x
+        for bijector in self.bijectors:
+           y = bijector(next_input)
+           if bijector.add_inverse_to_cache:
+               bijector.add_intermediate_to_cache(next_input, y, 'x')
+           next_input = y
+        return next_input
 
     def log_pdf(self, y, *args, **kwargs):
         """
-        Scores the sample by inverting the bijector
+        Scores the sample by inverting the bijector(s)
         """
-        x = self.bijector.inverse(y)
-        log_pdf_1 = self.base_dist.log_pdf(x, *args, **kwargs)
-        log_pdf_2 = -self.bijector.log_det_jacobian(y)
-        return log_pdf_1 + log_pdf_2
-
+        inverses = []
+        next_to_invert = y
+        for bijector in reversed(self.bijectors):
+            inverse = bijector.inverse(next_to_invert)
+            inverses.append(inverse)
+            next_to_invert = inverse
+        log_pdf_base = self.base_dist.log_pdf(inverses[-1], *args, **kwargs)
+        log_det_jacobian = self.bijectors[-1].log_det_jacobian(y)
+        for bijector, inverse in zip(list(reversed(self.bijectors))[1:], inverses[:-1]):
+            log_det_jacobian += bijector.log_det_jacobian(inverse)
+        return log_pdf_base - log_det_jacobian
 
 class Bijector(nn.Module):
     def __init__(self, *args, **kwargs):
@@ -72,24 +86,28 @@ class InverseAutoregressiveFlow(Bijector):
 
     Inverse Autoregressive Flow
     """
-    def __init__(self, input_dim, hidden_dim, s_bias=2.0):
+    def __init__(self, input_dim, hidden_dim, sigmoid_bias=2.0, permutation=None):
         super(InverseAutoregressiveFlow, self).__init__()
-        self.arn_s = AutoRegressiveNN(input_dim, hidden_dim, output_bias=s_bias)
-        self.arn_m = AutoRegressiveNN(input_dim, hidden_dim,
-                                      lin1=self.arn_s.get_lin1(),
-                                      mask_encoding=self.arn_s.get_mask_encoding())
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.arn = AutoRegressiveNN(input_dim, hidden_dim, output_dim_multiplier=2,
+                                    permutation=permutation)
         self.sigmoid = nn.Sigmoid()
+        self.sigmoid_bias = Variable(torch.Tensor([sigmoid_bias]))
         self.intermediates_cache = {}
         self.add_inverse_to_cache = True
+
+    def get_arn(self):
+        return self.arn
 
     def __call__(self, x, *args, **kwargs):
         """
         Invoke bijection x=>y
         """
-        s = self.arn_s(x)
-        sigma = self.sigmoid(s)
-        m = self.arn_m(x)
-        y = sigma * x + (ng_ones(sigma.size()) - sigma) * m
+        hidden = self.arn(x)
+        sigma = self.sigmoid(hidden[:, 0:self.input_dim] + self.sigmoid_bias.type_as(hidden))
+        mean = hidden[:, self.input_dim:]
+        y = sigma * x + (ng_ones(sigma.size()).type_as(sigma) - sigma) * mean
         self.add_intermediate_to_cache(sigma, y, 'sigma')
         return y
 
