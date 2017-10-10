@@ -1,4 +1,5 @@
 import functools
+from six.moves.queue import LifoQueue
 
 # poutines
 from .block_poutine import BlockPoutine
@@ -206,3 +207,25 @@ def queue(fn, queue, max_tries=None,
         raise ValueError("max tries ({}) exceeded".format(str(max_tries)))
 
     return _fn
+
+
+def iter_discrete_traces(fn, *args, **kwargs):
+    """
+    Iterate over all discrete choices of a stochastic function.
+
+    This behaves like `trace(fn).get_trace` when sampling continuous variables.
+
+    :param callable fn: A stochastic function.
+    :returns: An iterator over traces of `fn`.
+    """
+    queue = LifoQueue()
+    queue.put(Trace())
+    while not queue.empty():
+        partial_trace = queue.get()
+        escape_fn = functools.partial(util.discrete_escape, partial_trace)
+        traced_fn = trace(escape(replay(fn, partial_trace), escape_fn))
+        try:
+            yield traced_fn.get_trace(*args, **kwargs)
+        except util.NonlocalExit as e:
+            for tr in util.enum_extend(traced_fn.trace.copy(), e.site):
+                queue.put(tr)
