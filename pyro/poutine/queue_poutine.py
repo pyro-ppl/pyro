@@ -91,7 +91,5 @@ class QueuePoutine(Poutine):
             self.guide_trace.copy().add_sample(name, msg["scale"], s, fn, *args, **kwargs)
             for s in support
         ]
-        for t in extended_traces:
-            t[name]['enum'] = True
         msg["done"] = True
         raise ReturnExtendedTraces(extended_traces)

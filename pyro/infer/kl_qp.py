@@ -64,6 +64,10 @@ class KL_QP(object):
             if self.enum_discrete:
                 from six.moves.queue import LifoQueue
                 from pyro.poutine.trace import Trace
+
+                def is_discrete(name, site):
+                    return getattr(site, "enumerable", False)
+
                 queue = LifoQueue()
                 queue.put(Trace())
                 next_guide = poutine.queue(poutine.trace(self.guide), queue)
@@ -72,7 +76,8 @@ class KL_QP(object):
                     model_trace = poutine.trace(
                         poutine.replay(self.model, guide_trace))(*args, **kwargs)
                     log_r = model_trace.log_pdf() - guide_trace.log_pdf()
-                    weight = torch.exp(guide_trace.enum_log_pdf().detach())  # Block gradients.
+                    log_q_discrete = guide_trace.log_pdf(is_discrete)
+                    weight = torch.exp(log_q_discrete.detach())  # Block gradients.
                     yield weight, model_trace, guide_trace, log_r
                 continue
 
