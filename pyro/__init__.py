@@ -267,9 +267,10 @@ def module(pyro_name, nn_obj):
         if id(param) != id(current_nn_state[name]):
             current_nn_state[name].copy_(param)
 
-    #missing = set(current_nn_state.keys()) - set(state_dict.keys())
-    #if len(missing) > 0:
-    #    raise KeyError('missing keys in state_dict: "{}"'.format(missing))
+    ### XXX the KeyError below may be incorrect; see github issue
+    missing = set(current_nn_state.keys()) - set(state_dict.keys())
+    if len(missing) > 0:
+        raise KeyError('missing keys in state_dict: "{}"'.format(missing))
 
     nn_obj.load_state_dict(current_nn_state)
     return nn_obj
