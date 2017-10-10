@@ -99,13 +99,13 @@ class AutoRegressiveNN(nn.Module):
         self.relu = nn.ReLU()
 
     def get_mask_encoding(self):
-	"""
+        """
         Get the mask encoding associated with the neural network: basically the quantity m(k) in the MADE paper.
         """
         return self.mask_encoding
 
     def get_permutation(self):
-	"""
+        """
         Get the permutation applied to the inputs (by default this is chosen at random)
         """
         return self.permutation
