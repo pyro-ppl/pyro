@@ -61,7 +61,8 @@ class KL_QP(object):
         """
         for i in range(self.num_particles):
             if self.enum_discrete:
-                for scale, guide_trace in iter_discrete_traces(self.guide, *args, **kwargs):
+                guide_traces = iter_discrete_traces(poutine.trace, self.guide, *args, **kwargs)
+                for scale, guide_trace in guide_traces:
                     model_trace = poutine.trace(
                         poutine.replay(self.model, guide_trace))(*args, **kwargs)
                     guide_trace = scale_trace(guide_trace, scale)

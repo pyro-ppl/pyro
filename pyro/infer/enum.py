@@ -12,7 +12,7 @@ def site_is_discrete(name, site):
     return getattr(site, "enumerable", False)
 
 
-def iter_discrete_traces(fn, *args, **kwargs):
+def iter_discrete_traces(poutine_trace, fn, *args, **kwargs):
     """
     Iterate over all discrete choices of a stochastic function.
 
@@ -22,6 +22,8 @@ def iter_discrete_traces(fn, *args, **kwargs):
     This yields `(scale, trace)` pairs, where `scale` is the probability of the
     discrete choices made in the `trace`.
 
+    :param callable poutine_trace: A trace poutine, either `poutine.trace` or
+        `poutine.tracegraph`.
     :param callable fn: A stochastic function.
     :returns: An iterator over (scale, trace) pairs.
     """
@@ -30,7 +32,7 @@ def iter_discrete_traces(fn, *args, **kwargs):
     while not queue.empty():
         partial_trace = queue.get()
         escape_fn = functools.partial(util.discrete_escape, partial_trace)
-        traced_fn = poutine.trace(poutine.escape(poutine.replay(fn, partial_trace), escape_fn))
+        traced_fn = poutine_trace(poutine.escape(poutine.replay(fn, partial_trace), escape_fn))
         try:
             full_trace = traced_fn.get_trace(*args, **kwargs)
         except util.NonlocalExit as e:
