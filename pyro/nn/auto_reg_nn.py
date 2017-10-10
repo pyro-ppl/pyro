@@ -40,7 +40,7 @@ class AutoRegressiveNN(nn.Module):
 
     def __init__(self, input_dim, hidden_dim, output_dim_multiplier=1,
                  mask_encoding=None, permutation=None):
-	"""
+        """
         :param input_dim: the dimensionality of the input
         :type input_dim: int
         :param hidden_dim: the dimensionality of the hidden units
