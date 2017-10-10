@@ -49,7 +49,7 @@ def iter_discrete_traces(poutine_trace, fn, *args, **kwargs):
 
 def scale_trace(trace, scale):
     """
-    Scale all sample and observe sites in a trace.
+    Scale all sample and observe sites in a trace (copies the trace).
 
     :param Trace trace: A pyro trace.
     :param scale: A nonnegative scaling constant.
@@ -60,6 +60,8 @@ def scale_trace(trace, scale):
     trace = trace.copy()
     for name, site in trace.items():
         if "scale" in site:
+            site = site.copy()
+            trace[name] = site
             site["scale"] = site["scale"] * scale
         # Clear memoized computations.
         if site["type"] in ("observe", "sample"):
