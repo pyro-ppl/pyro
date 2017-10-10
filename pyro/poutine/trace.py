@@ -91,35 +91,41 @@ class Trace(dict):
         """
         return Trace(self)
 
-    def log_pdf(self, vec_batch_nodes_dict={}):
+    def log_pdf(self, site_filter=lambda name, site: True):
         """
         Compute the local and overall log-probabilities of the trace.
+
+        The local computation is memoized.
         """
         log_p = 0.0
         for name, site in self.items():
-            if site["type"] in ("observe", "sample"):
-                args, kwargs = site["args"]
-                if name not in vec_batch_nodes_dict:
+            if site["type"] in ("observe", "sample") and site_filter(name, site):
+                try:
+                    log_p += site["log_pdf"]
+                except KeyError:
+                    args, kwargs = site["args"]
                     site["log_pdf"] = site["fn"].log_pdf(
                         site["value"], *args, **kwargs) * site["scale"]
                     log_p += site["log_pdf"]
-                else:
-                    site["batch_log_pdf"] = site["fn"].batch_log_pdf(
-                        site["value"], *args, **kwargs) * site["scale"]
-                    log_p += site["batch_log_pdf"].sum()
         return log_p
 
-    def batch_log_pdf(self):
+    def batch_log_pdf(self, site_filter=lambda name, site: True):
         """
         Compute the batched local and overall log-probabilities of the trace.
+
+        The local computation is memoized, and also stores the local `.log_pdf()`.
         """
         log_p = 0.0
         for name, site in self.items():
-            if site["type"] in ("observe", "sample"):
-                args, kwargs = site["args"]
-                site["batch_log_pdf"] = site["fn"].batch_log_pdf(
-                    site["value"], *args, **kwargs) * site["scale"]
-                log_p += site["batch_log_pdf"]
+            if site["type"] in ("observe", "sample") and site_filter(name, site):
+                try:
+                    log_p += site["batch_log_pdf"]
+                except KeyError:
+                    args, kwargs = site["args"]
+                    site["batch_log_pdf"] = site["fn"].batch_log_pdf(
+                        site["value"], *args, **kwargs) * site["scale"]
+                    site["log_pdf"] = site["batch_log_pdf"].sum()
+                    log_p += site["batch_log_pdf"]
         return log_p
 
 
