@@ -1,5 +1,6 @@
 import pyro
 from pyro.infer import ELBO
+import copy
 
 
 class SVI(object):
@@ -44,11 +45,20 @@ class SVI(object):
                 # default implementation of loss_and_grads:
                 # marks all parameters in param store as active
                 # and calls backward() on loss
+
+                self._loss = copy.copy(loss)
+
+                def new_loss(model, guide, *args, **kwargs):
+                    return self._loss(model, guide, *args, **kwargs).data[0]
+
+                self.loss = new_loss
+
                 def loss_and_grads(model, guide, *args, **kwargs):
-                    _loss = self.loss(model, guide, *args, **kwargs)
+                    _loss = self._loss(model, guide, *args, **kwargs)
                     _loss.backward()
                     pyro.get_param_store().mark_params_active(pyro.get_param_store().get_all_param_names())
                     return _loss
+
             self.loss_and_grads = loss_and_grads
 
     def __call__(self, *args, **kwargs):
