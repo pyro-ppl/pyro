@@ -30,13 +30,7 @@ class BranchPoutine(Poutine):
         args, kwargs = msg["args"], msg["kwargs"]
         val = fn.support(*args, **kwargs)
         log_pdf = fn.batch_log_pdf(val, *args, **kwargs)
-        while log_pdf.dim() > 1:
-            log_pdf = log_pdf.sum(-1)
-        scale = torch.exp(log_pdf)
-
-        # This expands scale to correctly broadcast with val.
-        scale.resize_((scale.size(0),) + (1,) * (val.dim() - 1))
-        msg["scale"] = msg["scale"] * scale
+        msg["scale"] = msg["scale"] * torch.exp(log_pdf)
 
         msg["done"] = True
         return val
