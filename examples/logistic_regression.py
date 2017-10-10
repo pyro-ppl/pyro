@@ -1,4 +1,5 @@
 import numpy as np
+import argparse
 import torch
 import torch.nn as nn
 from torch.nn.functional import normalize  # noqa: F401
@@ -123,7 +124,6 @@ sgd_optim = pyro.optim(torch.optim.SGD, lr)
 # data = torch.cat((x_norm, y), 1)
 data = build_toy_dataset(N)
 
-nr_epochs = 10000
 all_batches = np.arange(0, N, batch_size)
 # take care of bad index
 if all_batches[-1] != N:
@@ -132,10 +132,18 @@ if all_batches[-1] != N:
 grad_step = KL_QP(model, guide, adam_optim)
 
 # apply it to minibatches of data by hand:
-for j in range(nr_epochs):
-    epoch_loss = 0.0
-    for ix, batch_start in enumerate(all_batches[:-1]):
-        batch_end = all_batches[ix + 1]
-        batch_data = data[batch_start: batch_end]
-        epoch_loss += grad_step.step(batch_data)
-    print("epoch avg loss {}".format(epoch_loss/float(N)))
+def main():
+    parser = argparse.ArgumentParser(description="parse args")
+    parser.add_argument('-n', '--num-epochs', nargs='?', default=1000, type=int)
+    args = parser.parse_args()
+    for j in range(args.num_epochs):
+        epoch_loss = 0.0
+        for ix, batch_start in enumerate(all_batches[:-1]):
+            batch_end = all_batches[ix + 1]
+            batch_data = data[batch_start: batch_end]
+            epoch_loss += grad_step.step(batch_data)
+        print("epoch avg loss {}".format(epoch_loss/float(N)))
+
+
+if __name__ == '__main__':
+    main()
