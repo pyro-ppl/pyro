@@ -34,7 +34,6 @@ jobs:
               - pip install -r docs/requirements.txt
           script:
               - make lint
-              - pytest -s -v tests/poutine/test_mapdata.py::test_elbo_mapdata
             # - make docs
         - stage: unit test
           python: 2.7
