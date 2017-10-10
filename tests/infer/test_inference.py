@@ -6,7 +6,8 @@ from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
-from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
+from pyro.distributions.transformed_distribution import TransformedDistribution
+from tests.distributions.test_transformed_distribution import AffineExp
 from pyro.infer.kl_qp import KL_QP
 from tests.common import TestCase
 
