@@ -1,7 +1,9 @@
 import functools
+import math
 from six.moves.queue import LifoQueue
 
 import torch
+from torch.autograd import Variable
 
 from pyro import util
 from pyro import poutine
@@ -9,7 +11,7 @@ from pyro.poutine.trace import Trace
 
 
 def site_is_discrete(name, site):
-    return getattr(site, "enumerable", False)
+    return getattr(site["fn"], "enumerable", False)
 
 
 def iter_discrete_traces(poutine_trace, fn, *args, **kwargs):
@@ -37,13 +39,16 @@ def iter_discrete_traces(poutine_trace, fn, *args, **kwargs):
             full_trace = traced_fn.get_trace(*args, **kwargs)
         except util.NonlocalExit as e:
             for extended_trace in util.enum_extend(traced_fn.trace.copy(), e.site):
-                # TODO Scale traces by the choice probability.
                 queue.put(extended_trace)
             continue
 
         # Scale trace by probability of discrete choices.
-        log_pdf = full_trace.log_pdf(site_filter=site_is_discrete).detach()
-        scale = torch.exp(log_pdf).data[0]
+        log_pdf = full_trace.log_pdf(site_filter=site_is_discrete)
+        if isinstance(log_pdf, Variable):
+            log_pdf = log_pdf.data
+        if isinstance(log_pdf, torch.Tensor):
+            log_pdf = log_pdf[0]
+        scale = math.exp(log_pdf)
         yield scale, full_trace
 
 
