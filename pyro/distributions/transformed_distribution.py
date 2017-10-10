@@ -28,9 +28,9 @@ class TransformedDistribution(Distribution):
         self.reparameterized = base_distribution.reparameterized
         self.base_dist = base_distribution
         if type(bijectors) is list or type(bijectors) is tuple:
-           self.bijectors = bijectors
+            self.bijectors = bijectors
         else:
-           self.bijectors = [bijectors]
+            self.bijectors = [bijectors]
 
     def sample(self, *args, **kwargs):
         """
@@ -42,10 +42,10 @@ class TransformedDistribution(Distribution):
         x = self.base_dist.sample(*args, **kwargs)
         next_input = x
         for bijector in self.bijectors:
-           y = bijector(next_input)
-           if bijector.add_inverse_to_cache:
-               bijector._add_intermediate_to_cache(next_input, y, 'x')
-           next_input = y
+            y = bijector(next_input)
+            if bijector.add_inverse_to_cache:
+                bijector._add_intermediate_to_cache(next_input, y, 'x')
+            next_input = y
         return next_input
 
     def log_pdf(self, y, *args, **kwargs):
