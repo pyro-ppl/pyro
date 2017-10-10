@@ -5,7 +5,7 @@ import torch.nn as nn
 from torch.nn.functional import normalize  # noqa: F401
 
 from torch.autograd import Variable
-import pandas as pd  # noqa: F401
+# import pandas as pd  # noqa: F401
 
 import pyro
 from pyro import poutine
