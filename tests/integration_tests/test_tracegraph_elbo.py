@@ -515,6 +515,7 @@ class LogNormalNormalTests(TestCase):
         self.assertEqual(0.0, tau_error, prec=0.05)
 
 
+pytestmark = pytest.mark.stage("integration", "integration_batch_1")
 class RaoBlackwellizationTests(TestCase):
 
     def setUp(self):
