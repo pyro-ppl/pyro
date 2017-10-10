@@ -81,9 +81,10 @@ class KL_QP(object):
                     yield weight, model_trace, guide_trace, log_r
                 continue
 
-            guide_trace = poutine.trace(self.guide)(*args, **kwargs)
+            guide_trace = poutine.trace(self.guide).get_trace(*args, **kwargs)
             model_trace = poutine.trace(
-                poutine.replay(self.model, guide_trace))(*args, **kwargs)
+                poutine.replay(self.model, guide_trace)).get_trace(*args, **kwargs)
+
             log_r = model_trace.log_pdf() - guide_trace.log_pdf()
 
             yield 1.0, model_trace, guide_trace, log_r
