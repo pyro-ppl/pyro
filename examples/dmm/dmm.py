@@ -1,19 +1,33 @@
+"""
+An implementation of a Deep Markov Model in pyro based on reference [1].
+This is essentially the DKS variant outlined in the paper. The primary difference
+between this implementation and theirs is that in our version any KL divergence terms
+in the ELBO are estimated via sampling, while they make use of the analytic formulae. We
+also explore including normalizing flows in the posterior over the latents (in which case
+analytic formulae for the KL divergences are in any case unavailable).
+
+Reference:
+
+[1] Structured Inference Networks for Nonlinear State Space Models [arXiv:1609.09869]
+    Rahul G. Krishnan, Uri Shalit, David Sontag
+"""
+
 import argparse
 import torch
 import pyro
+import numpy as np
+import time
 from pyro.infer.kl_qp import KL_QP
 import pyro.distributions as dist
 from pyro.util import ng_ones, zeros
 import torch.nn as nn
 from pyro.distributions.transformed_distribution import InverseAutoregressiveFlow
 from pyro.distributions.transformed_distribution import TransformedDistribution
-import numpy as np
-import time
 import six.moves.cPickle as pickle
 import polyphonic_data_loader as poly
 from pyro.optim import ClippedAdam
-import logging
 from os.path import join, dirname
+import logging
 
 
 class Emitter(nn.Module):
@@ -63,8 +77,9 @@ class GatedTransition(nn.Module):
 
 class Combiner(nn.Module):
     """
-    Parameterizes q(z_t | z_{t-1}, x_{t:T})
-    The dependence on x_{t:T} is through the hidden state of the RNN (see pt_rnn below)
+    Parameterizes q(z_t | z_{t-1}, x_{t:T}), which is the basic building block of the
+    guide (i.e. the variational distribution). The dependence on x_{t:T} is through the
+    hidden state of the RNN (see pt_rnn below)
     """
     def __init__(self, z_dim, rnn_dim):
         super(Combiner, self).__init__()
@@ -86,30 +101,30 @@ class DMM(nn.Module):
     This pytorch Module encapsulates the model as well as the variational distribution (the guide)
     for the Deep Markov Model
     """
-    def __init__(self, input_dim, z_dim, emission_dim, transition_dim, rnn_dim, num_iafs, cuda):
-
-        # instantiate pytorch modules that make up the model and the inference network
+    def __init__(self, input_dim, z_dim, emission_dim, transition_dim, rnn_dim, args):
         super(DMM, self).__init__()
-
-        # rnn instantiated below
+        # instantiate pytorch modules
         self.pt_emitter = Emitter(input_dim, z_dim, emission_dim)
         self.pt_trans = GatedTransition(z_dim, transition_dim)
         self.pt_combiner = Combiner(z_dim, rnn_dim)
+        self.pt_rnn = nn.RNN(input_size=input_dim, hidden_size=rnn_dim, nonlinearity='relu',
+                             batch_first=True, bidirectional=False, num_layers=args.rnn_num_layers,
+                             dropout=args.rnn_dropout_rate)
 
+        self.args = args
         self.input_dim = input_dim
         self.z_dim = z_dim
         self.emission_dim = emission_dim
         self.transition_dim = transition_dim
         self.rnn_dim = rnn_dim
-        self.num_iafs = num_iafs
-        self.pt_iafs = [InverseAutoregressiveFlow(z_dim, 100) for _ in range(num_iafs)]
+        self.pt_iafs = [InverseAutoregressiveFlow(z_dim, 100) for _ in range(args.num_iafs)]
         if cuda:
             for pt_iaf in self.pt_iafs:
                 pt_iaf.cuda()
 
     # the model
-    def model(self, mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths,
-              pt_rnn, annealing_factor=1.0):
+    def model(self, mini_batch, mini_batch_reversed, mini_batch_mask,
+              mini_batch_seq_lengths, annealing_factor=1.0):
 
         T_max = np.max(mini_batch_seq_lengths)
         emitter = pyro.module("emitter", self.pt_emitter)
@@ -127,9 +142,9 @@ class DMM(nn.Module):
 
         return z_prev
 
-    # the guide
-    def guide(self, mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths,
-              pt_rnn, annealing_factor=1.0):
+    # the guide (i.e. the variational distribution)
+    def guide(self, mini_batch, mini_batch_reversed, mini_batch_mask,
+              mini_batch_seq_lengths, annealing_factor=1.0):
 
         T_max = np.max(mini_batch_seq_lengths)
         rnn = pyro.module("rnn", pt_rnn)
