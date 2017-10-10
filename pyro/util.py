@@ -53,25 +53,51 @@ def set_rng_seed(rng_seed):
 
 
 def ones(*args, **kwargs):
-    # retype the tensor before the param call (to preserve gradients on GPUs)
+    """
+    :param type_as: optional argument for tensor type
+    :type type_as: a torch tensor
+
+    A convenience function for Parameter(torch.ones(...))
+    """
     retype = kwargs.pop('type_as', None)
     p_tensor = torch.ones(*args, **kwargs)
     return Parameter(p_tensor if retype is None else p_tensor.type_as(retype))
 
 
 def zeros(*args, **kwargs):
-    # retype the tensor before the param call (to preserve gradients on GPUs)
+    """
+    :param type_as: optional argument for tensor type
+    :type type_as: a torch tensor
+
+    A convenience function for Parameter(torch.zeros(...))
+    """
     retype = kwargs.pop('type_as', None)
     p_tensor = torch.zeros(*args, **kwargs)
     return Parameter(p_tensor if retype is None else p_tensor.type_as(retype))
 
 
 def ng_ones(*args, **kwargs):
-    return Variable(torch.ones(*args, **kwargs), requires_grad=False)
+    """
+    :param type_as: optional argument for tensor type
+    :type type_as: a torch tensor
+
+    A convenience function for Variable(torch.ones(...), requires_grad=False)
+    """
+    retype = kwargs.pop('type_as', None)
+    p_tensor = torch.ones(*args, **kwargs)
+    return Variable(p_tensor if retype is None else p_tensor.type_as(retype), requires_grad=False)
 
 
 def ng_zeros(*args, **kwargs):
-    return Variable(torch.zeros(*args, **kwargs), requires_grad=False)
+    """
+    :param type_as: optional argument for tensor type
+    :type type_as: a torch tensor
+
+    A convenience function for Variable(torch.ones(...), requires_grad=False)
+    """
+    retype = kwargs.pop('type_as', None)
+    p_tensor = torch.zeros(*args, **kwargs)
+    return Variable(p_tensor if retype is None else p_tensor.type_as(retype), requires_grad=False)
 
 
 def log_sum_exp(vecs):

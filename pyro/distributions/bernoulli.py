@@ -54,6 +54,9 @@ class Bernoulli(Distribution):
         xmul = torch.mul(x, ps)
         xmul_1 = torch.mul(x_1, ps_1)
         logsum = torch.log(torch.add(xmul, xmul_1))
+        # XXX this allows for the user to mask out certain parts of the score, for example
+        # when the data is a ragged tensor. also useful for KL annealing. this entire logic
+        # will likely be done in a better/cleaner way in the future
         if 'log_pdf_mask' in kwargs:
             return torch.sum(kwargs['log_pdf_mask'] * logsum)
         return torch.sum(logsum)
