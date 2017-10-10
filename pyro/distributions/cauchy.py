@@ -35,7 +35,7 @@ class Cauchy(Distribution):
         """
         self.mu = mu
         self.gamma = gamma
-        if mu is not None
+        if mu is not None:
 	# this will be deprecated in a future PR
             if mu.dim() == 1 and batch_size > 1:
                 self.mu = mu.expand(batch_size, mu.size(0))
@@ -49,14 +49,14 @@ class Cauchy(Distribution):
 
         mu, gamma = self._sanitize_input(mu, gamma)
 	sample = Variable(torch.Tensor([spr.cauchy.rvs(
-            mu, gamma)]).type_as(mu.data))
+            mu.data.numpy(), gamma.data.numpy())]).type_as(mu.data))
 	return sample
 
     def log_pdf(self, x, mu=None, gamma=None, batch_size=1, *args, **kwargs):
         """
         Cauchy log-likelihood
         """
-        return torch.sum(self.batch_log_pdf(x, mu, gamma, batch_size, *args, **kwargs))
+        return self.batch_log_pdf(x, mu, gamma, batch_size, *args, **kwargs)
 
     def batch_log_pdf(self, x, mu=None, gamma=None, batch_size=1, *args, **kwargs):
         """
@@ -64,18 +64,15 @@ class Cauchy(Distribution):
         """
         # expand to patch size of input
         mu, gamma = self._sanitize_input(mu, gamma)
-        if x.dim() == 1 and mu.dim() == 1 and batch_size == 1:
-            return self.log_pdf(x, mu, gamma)
-        elif x.dim() == 1:
+        if x.dim() != mu.dim():
             x = x.expand(batch_size, x.size(0))
-        mu, gamma = self._sanitize_input(mu, gamma)
         x_0 = torch.pow((x - mu)/gamma, 2)
         px = np.pi * gamma * (1 + x_0)
         return -1 * torch.log(px)
 
     def analytic_mean(self, mu=None, gamma=None):
-	raise ValueError("Cauchy has no defined mean".format(type(self)))
+	raise ValueError("Cauchy has no defined mean")
 
     def analytic_var(self,  mu=None, gamma=None):
-	raise ValueError("Cauchy has no defined variance".format(type(self)))
+	raise ValueError("Cauchy has no defined variance")
 
