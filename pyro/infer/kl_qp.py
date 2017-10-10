@@ -1,8 +1,8 @@
-import torch
 from torch.autograd import Variable
 
 import pyro
 import pyro.poutine as poutine
+from pyro.infer.enum import iter_discrete_traces, scale_trace
 
 
 class KL_QP(object):
@@ -60,25 +60,14 @@ class KL_QP(object):
         Method to draw,store and evaluate multiple samples in traces
         """
         for i in range(self.num_particles):
-            # THIS IS A TOTAL HACK
             if self.enum_discrete:
-                from six.moves.queue import LifoQueue
-                from pyro.poutine.trace import Trace
-
-                def is_discrete(name, site):
-                    return getattr(site, "enumerable", False)
-
-                queue = LifoQueue()
-                queue.put(Trace())
-                next_guide = poutine.queue(poutine.trace(self.guide), queue)
-                while not queue.empty():
-                    guide_trace = next_guide(*args, **kwargs)
+                for scale, guide_trace in iter_discrete_traces(self.guide, *args, **kwargs):
                     model_trace = poutine.trace(
                         poutine.replay(self.model, guide_trace))(*args, **kwargs)
+                    guide_trace = scale_trace(guide_trace, scale)
+                    model_trace = scale_trace(model_trace, scale)
                     log_r = model_trace.log_pdf() - guide_trace.log_pdf()
-                    log_q_discrete = guide_trace.log_pdf(is_discrete)
-                    weight = torch.exp(log_q_discrete.detach())  # Block gradients.
-                    yield weight, model_trace, guide_trace, log_r
+                    yield model_trace, guide_trace, log_r
                 continue
 
             guide_trace = poutine.trace(self.guide).get_trace(*args, **kwargs)
@@ -87,7 +76,7 @@ class KL_QP(object):
 
             log_r = model_trace.log_pdf() - guide_trace.log_pdf()
 
-            yield 1.0, model_trace, guide_trace, log_r
+            yield model_trace, guide_trace, log_r
 
     def eval_objective(self, *args, **kwargs):
         """
@@ -95,7 +84,7 @@ class KL_QP(object):
         Returns the Elbo as a value
         """
         elbo = 0.0
-        for weight, model_trace, guide_trace, log_r in self.iter_traces(*args, **kwargs):
+        for model_trace, guide_trace, log_r in self.iter_traces(*args, **kwargs):
             elbo_particle = 0.0
 
             for name in model_trace.keys():
@@ -106,7 +95,7 @@ class KL_QP(object):
                     elbo_particle -= guide_trace[name]["log_pdf"]
                 else:
                     pass
-            elbo += elbo_particle * (weight / self.num_particles)
+            elbo += elbo_particle / self.num_particles
         loss = -elbo
 
         return loss.data[0]
@@ -119,7 +108,7 @@ class KL_QP(object):
         elbo = 0.0
         all_trainable_params = []
 
-        for weight, model_trace, guide_trace, log_r in self.iter_traces(*args, **kwargs):
+        for model_trace, guide_trace, log_r in self.iter_traces(*args, **kwargs):
             elbo_particle = 0.0
 
             for name in model_trace.keys():
@@ -134,7 +123,7 @@ class KL_QP(object):
                                          model_trace[name]["log_pdf"]
                 else:
                     pass
-            elbo += elbo_particle * (weight / self.num_particles)
+            elbo += elbo_particle / self.num_particles
 
             # accumulate parameters
             # get trace params from last model run
