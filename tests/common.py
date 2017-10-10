@@ -105,7 +105,9 @@ def _unwrap_variables(x, y):
 
 def assert_tensors_equal(a, b, prec=1e-5, msg=''):
     assert a.size() == b.size(), msg
-    if a.numel() > 0:
+    if prec == 0:
+        assert (a == b).all(), msg
+    elif a.numel() > 0:
         b = b.type_as(a)
         b = b.cuda(device=a.get_device()) if a.is_cuda else b.cpu()
         # check that NaNs are in the same locations
@@ -144,11 +146,12 @@ def _safe_coalesce(t):
     return tg
 
 
+# TODO Split this into assert_equal() and assert_close() or assert_almost_equal().
 def assert_equal(x, y, prec=1e-5, msg=''):
     x, y = _unwrap_variables(x, y)
 
     if torch.is_tensor(x) and torch.is_tensor(y):
-        assert_equal(x.is_sparse, y.is_sparse)
+        assert_equal(x.is_sparse, y.is_sparse, prec, msg)
         if x.is_sparse:
             x = _safe_coalesce(x)
             y = _safe_coalesce(y)
@@ -157,13 +160,30 @@ def assert_equal(x, y, prec=1e-5, msg=''):
         else:
             assert_tensors_equal(x, y, prec, msg)
     elif type(x) == np.ndarray and type(y) == np.ndarray:
-        assert_allclose(x, y, atol=prec, equal_nan=True)
+        if prec == 0:
+            assert (x == y).all(), msg
+        else:
+            assert_allclose(x, y, atol=prec, equal_nan=True)
     elif isinstance(x, numbers.Number) and isinstance(y, numbers.Number):
-        assert x == approx(y, abs=prec), msg
+        if prec == 0:
+            assert x == y, msg
+        else:
+            assert x == approx(y, abs=prec), msg
     elif type(x) != type(y):
         raise AssertionError("cannot compare {} and {}".format(type(x), type(y)))
+    elif isinstance(x, str):
+        assert x == y, msg
+    elif isinstance(x, dict):
+        assert set(x.keys()) == set(y.keys())
+        for key, x_val in x.items():
+            assert_equal(x_val, y[key], prec, msg)
     elif is_iterable(x) and is_iterable(y):
-        assert list(x) == approx(list(y), prec)
+        if prec == 0:
+            assert len(x) == len(y)
+            for xi, yi in zip(x, y):
+                assert_equal(xi, yi, prec, msg)
+        else:
+            assert list(x) == approx(list(y), prec), msg
     else:
         assert x == y, msg
 

@@ -6,15 +6,14 @@ from inspect import isclass
 
 import torch
 from torch.autograd import Variable
-from torch.nn import Parameter
 
 import pyro
-from pyro import util
+import pyro.poutine as poutine
 from pyro.optim.optim import PyroOptim
 from pyro.params import param_with_module_name
 from pyro.params.param_store import ParamStoreDict
 from pyro.poutine import LambdaPoutine, condition, do  # noqa: F401
-from pyro.util import zeros, ones, set_rng_seed  # noqa: F401
+from pyro.util import zeros, ones, set_rng_seed, apply_stack  # noqa: F401
 
 # global map of params for now
 _param_store = ParamStoreDict()
@@ -27,8 +26,14 @@ def get_param_store():
     """
     Returns the param store
     """
-
     return _param_store
+
+
+def clear_param_store():
+    """
+    Clears the param store
+    """
+    return _param_store.clear()
 
 
 def device(x):
@@ -55,7 +60,7 @@ def sample(name, fn, *args, **kwargs):
     :param name: name of sample
     :param fn: distribution class or function
     :param obs: observed datum (optional; should only be used in context of inference)
-    optionally specified in kwargs
+        optionally specified in kwargs
     :returns: sample
 
     Samples from the distribution and registers it in the trace data structure.
@@ -89,7 +94,7 @@ def sample(name, fn, *args, **kwargs):
             "stop": False,
         }
         # apply the stack and return its return value
-        out_msg = util.apply_stack(msg)
+        out_msg = apply_stack(msg)
         return out_msg["ret"]
 
 
@@ -221,7 +226,7 @@ def param(name, *args, **kwargs):
             "stop": False,
         }
         # apply the stack and return its return value
-        out_msg = util.apply_stack(msg)
+        out_msg = apply_stack(msg)
         return out_msg["ret"]
 
 
@@ -252,7 +257,7 @@ def module(pyro_name, nn_obj):
     for name, param in state_dict.items():
         if name not in current_nn_state:
             raise KeyError('unexpected key "{}" in state_dict'.format(name))
-        if isinstance(param, Parameter):
+        if isinstance(param, Variable):
             # backwards compatibility for serialized parameters
             param = param.data
 
@@ -266,4 +271,20 @@ def module(pyro_name, nn_obj):
     if len(missing) > 0:
         raise KeyError('missing keys in state_dict: "{}"'.format(missing))
 
+    nn_obj.load_state_dict(current_nn_state)
     return nn_obj
+
+
+def random_module(name, nn_module, prior, *args, **kwargs):
+    """
+    :param name: name of pyro module
+    :param nn_module: pytorch nn module
+    :param prior: prior distribution or iterable over distributions
+    :returns: a callable which returns a sampled module
+
+    Places a prior over the parameters of the nn module
+    """
+    assert hasattr(nn_module, "parameters"), "Module is not a NN module."
+    # register params in param store
+    lifted_fn = poutine.lift(pyro.module, prior, *args, **kwargs)
+    return lambda: lifted_fn(name, nn_module)

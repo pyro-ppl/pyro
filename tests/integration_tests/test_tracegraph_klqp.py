@@ -9,7 +9,8 @@ from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
-from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
+from pyro.distributions.transformed_distribution import TransformedDistribution
+from tests.distributions.test_transformed_distribution import AffineExp
 from pyro.infer.tracegraph_kl_qp import TraceGraph_KL_QP
 from pyro.util import ng_ones, ng_zeros
 from tests.common import TestCase
