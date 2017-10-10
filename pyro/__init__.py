@@ -1,15 +1,19 @@
+from __future__ import division
+
+import warnings
+import contextlib
 from inspect import isclass
 
 import torch
 from torch.autograd import Variable
-from torch.nn import Parameter
 
 import pyro
-from pyro import util
+import pyro.poutine as poutine
 from pyro.optim.optim import PyroOptim
 from pyro.params import param_with_module_name
 from pyro.params.param_store import ParamStoreDict
-from pyro.util import zeros, ones  # noqa: F401
+from pyro.poutine import LambdaPoutine, condition, do  # noqa: F401
+from pyro.util import zeros, ones, set_rng_seed, apply_stack  # noqa: F401
 
 # global map of params for now
 _param_store = ParamStoreDict()
@@ -22,8 +26,14 @@ def get_param_store():
     """
     Returns the param store
     """
-
     return _param_store
+
+
+def clear_param_store():
+    """
+    Clears the param store
+    """
+    return _param_store.clear()
 
 
 def device(x):
@@ -45,54 +55,36 @@ optim = PyroOptim
 _PYRO_STACK = []
 
 
-def apply_stack(initial_msg):
-    """
-    Execute the poutine stack according to the new two-sided blocking scheme.
-    Poutine stack mechanism:
-    1) start at the top
-    2) grab the top poutine, ask to go down
-    3) if down, recur
-    4) if not, stop, start returning
-    """
-    stack = _PYRO_STACK
-    # # XXX seems like this should happen on poutine installation, not at execution
-    # assert poutine.validate_stack(stack), \
-    #     "Current poutine stack violates poutine composition rules"
-
-    msg = initial_msg
-
-    # work out the bottom poutine at this site
-    for frame in reversed(stack):
-        msg = frame.down(msg)
-
-    # go until time to stop?
-    for frame in stack:
-        msg = frame.up(msg)
-        if msg["stop"]:
-            break
-
-    return msg
-
-
 def sample(name, fn, *args, **kwargs):
     """
     :param name: name of sample
     :param fn: distribution class or function
+    :param obs: observed datum (optional; should only be used in context of inference)
+        optionally specified in kwargs
     :returns: sample
 
     Samples from the distribution and registers it in the trace data structure.
     """
+    obs = kwargs.pop("obs", None)
     # check if stack is empty
     # if stack empty, default behavior (defined here)
     if len(_PYRO_STACK) == 0:
+        if obs is not None:
+            warnings.warn("trying to observe a value outside of inference at " + name,
+                          warnings.RuntimeWarning)
         return fn(*args, **kwargs)
     # if stack not empty, apply everything in the stack?
     else:
         # initialize data structure to pass up/down the stack
+        if obs is None:
+            msg_type = "sample"
+        else:
+            msg_type = "observe"
         msg = {
-            "type": "sample",
+            "type": msg_type,
             "name": name,
             "fn": fn,
+            "obs": obs,
             "args": args,
             "kwargs": kwargs,
             "ret": None,
@@ -106,85 +98,107 @@ def sample(name, fn, *args, **kwargs):
         return out_msg["ret"]
 
 
-def observe(name, fn, val, *args, **kwargs):
+def observe(name, fn, obs, *args, **kwargs):
     """
     :param name: name of observation
     :param fn: distribution class or function
     :param obs: observed datum
     :returns: sample
 
+    Alias of pyro.sample.
+
     Only should be used in the context of inference.
     Calculates the score of the sample and registers
     it in the trace data structure.
     """
-    if len(_PYRO_STACK) == 0:
-        raise NotImplementedError(
-            "Observe has been used outside of a normalizing context.")
-    else:
-        # initialize data structure to pass up/down the stack
-        msg = {
-            "type": "observe",
-            "name": name,
-            "fn": fn,
-            "val": val,
-            "args": args,
-            "kwargs": kwargs,
-            "ret": None,
-            "scale": 1.0,
-            "map_data_stack": [],
-            "done": False,
-            "stop": False,
-        }
-        # apply the stack and return its return value
-        out_msg = apply_stack(msg)
-        return out_msg["ret"]
+    kwargs.update({"obs": obs})
+    return sample(name, fn, *args, **kwargs)
 
 
-def map_data(name, data, fn, batch_size=None, batch_dim=0):
+@contextlib.contextmanager
+def iarange(name, size, subsample_size=0):
     """
-    :param name: named argument
+    Context manager for ranges indexing iid variables, optionally subsampling.
+
+    WARNING: Subsampling is only correct if all computation is iid within the context.
+
+    By default `subsample_size=False` and this simply yields a `torch.arange(0, size)`.
+    If `0<subsample_size<=size` this yields a single random batch of size
+    `subsample_size` and scales all log likelihood terms by `size/batch_size`, within
+    this context.
+
+    :param str name: A name that will be used for this site in a Trace.
+    :param int size: The size of the collection being subsampled (like `stop` in builtin `range`).
+    :param int subsample_size: Size of minibatches used in subsampling. Defaults to `size` if set to 0.
+    :return: A context manager yielding a single 1-dimensional `torch.Tensor` of indices.
+
+    Examples::
+
+        # This version is vectorized:
+        >>> with iarange('data', 100, subsample_size=10) as batch:
+                observe('obs', normal, data.index_select(0, batch), mu, sigma)
+        # This version manually iterates through the batch to deal with control flow.
+        >>> with iarange('data', 100, subsample_size=10) as batch:
+                for i in batch:
+                    if z[i]:  # Prevents vectorization.
+                        observe('obs_{}'.format(i), normal, data[i], mu, sigma)
+    """
+    if subsample_size == 0 or subsample_size >= size:
+        subsample_size = size
+    if subsample_size == size:
+        # If not subsampling, there is no need to scale and we can ignore the _PYRO_STACK.
+        yield Variable(torch.LongTensor(list(range(size))))
+        return
+
+    subsample = Variable(torch.randperm(size)[0:subsample_size])
+    if len(_PYRO_STACK) == 0:
+        yield subsample
+    else:
+        # Wrap computation in a scaling context.
+        scale = size / subsample_size
+        with LambdaPoutine(None, name, scale, 'tensor', 0, subsample_size):
+            yield subsample
+
+
+def irange(name, size, subsample_size=0):
+    """
+    Non-vectorized version of iarange.
+
+    Examples::
+
+        >>> for i in irange('data', 100, subsample_size=10):
+                if z[i]:  # Prevents vectorization.
+                    observe('obs_{}'.format(i), normal, data[i], mu, sigma)
+    """
+    with iarange(name, size, subsample_size) as batch:
+        # Wrap computation in an independence context.
+        indep_context = LambdaPoutine(None, name, 1.0, 'list', 0, subsample_size)
+        for i in batch.data:
+            with indep_context:
+                yield i
+
+
+def map_data(name, data, fn, batch_size=0, batch_dim=0):
+    """
+    Data subsampling with the important property that all the data are conditionally independent.
+
+    With default values of `batch_size` and `batch_dim`, `map_data` behaves like `map`.
+    More precisely, `map_data('foo', data, fn)` is equivalent to `[fn(i, x) for i, x in enumerate(data)]`.
+
+    :param str name: named argument
     :param data: data to subsample
-    :param observer: observe function
-    :param batch_size: number of samples per batch
-    :param batch_dim: dimension to subsample for tensor inputs
-
-    Data subsampling with the important property that
-    all the data are conditionally independent. By
-    default `map_data` is the same as `map`.
+    :param callable fn: a function taking `(index, datum)` pairs, where `dataum = data[index]`
+    :param int batch_size: number of samples per batch, or zero for the entire dataset
+    :param int batch_dim: dimension to subsample for tensor inputs
+    :return: a list of values returned by `fn`
     """
-    if len(_PYRO_STACK) == 0:
-        # default behavior
-        ind = util.get_batch_indices(data, batch_size, batch_dim)
-        if batch_size == 0:
-            ind_data = data
-        elif isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
-            ind_data = data.index_select(batch_dim, ind)
-        else:
-            ind_data = [data[i] for i in ind]
-
-        if isinstance(data, (torch.Tensor, Variable)):
-            ret = fn(ind, ind_data)
-        else:
-            ret = list(map(lambda ix: fn(*ix), zip(ind, ind_data)))
-        return ret
+    if isinstance(data, (torch.Tensor, Variable)):
+        size = data.size(batch_dim)
+        with iarange(name, size, batch_size) as batch:
+            return fn(batch, data.index_select(batch_dim, batch))
     else:
-        # initialize data structure to pass up/down the stack
-        msg = {
-            "type": "map_data",
-            "name": name,
-            "fn": fn,
-            "data": data,
-            "batch_size": batch_size,
-            "batch_dim": batch_dim,
-            # XXX should these be added here or during application
-            "indices": None,
-            "ret": None,
-            "done": False,
-            "stop": False,
-        }
-        # apply the stack and return its return value
-        out_msg = apply_stack(msg)
-        return out_msg["ret"]
+        size = len(data)
+        return [fn(i, data[i]) for i in irange(name, size, batch_size)]
 
 
 # XXX this should have the same call signature as torch.Tensor constructors
@@ -206,7 +220,9 @@ def param(name, *args, **kwargs):
             "args": args,
             "kwargs": kwargs,
             "scale": 1.0,
+            "map_data_stack": [],
             "ret": None,
+            "done": False,
             "stop": False,
         }
         # apply the stack and return its return value
@@ -241,7 +257,7 @@ def module(pyro_name, nn_obj):
     for name, param in state_dict.items():
         if name not in current_nn_state:
             raise KeyError('unexpected key "{}" in state_dict'.format(name))
-        if isinstance(param, Parameter):
+        if isinstance(param, Variable):
             # backwards compatibility for serialized parameters
             param = param.data
 
@@ -255,4 +271,20 @@ def module(pyro_name, nn_obj):
     #if len(missing) > 0:
     #    raise KeyError('missing keys in state_dict: "{}"'.format(missing))
 
+    nn_obj.load_state_dict(current_nn_state)
     return nn_obj
+
+
+def random_module(name, nn_module, prior, *args, **kwargs):
+    """
+    :param name: name of pyro module
+    :param nn_module: pytorch nn module
+    :param prior: prior distribution or iterable over distributions
+    :returns: a callable which returns a sampled module
+
+    Places a prior over the parameters of the nn module
+    """
+    assert hasattr(nn_module, "parameters"), "Module is not a NN module."
+    # register params in param store
+    lifted_fn = poutine.lift(pyro.module, prior, *args, **kwargs)
+    return lambda: lifted_fn(name, nn_module)

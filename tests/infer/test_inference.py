@@ -1,4 +1,3 @@
-import pytest
 import torch
 import torch.optim
 from torch import nn as nn
@@ -7,11 +6,10 @@ from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
-from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
+from pyro.distributions.transformed_distribution import TransformedDistribution
+from tests.distributions.test_transformed_distribution import AffineExp
 from pyro.infer.kl_qp import KL_QP
 from tests.common import TestCase
-
-pytestmark = pytest.mark.init(rng_seed=123)
 
 
 class NormalNormalTests(TestCase):
@@ -167,13 +165,13 @@ class TestFixedModelGuide(TestCase):
         return (not bad)
 
     def test_model_fixed(self):
-        self.assertTrue(self.do_test_fixedness(model_fixed=True, guide_fixed=False))
+        assert self.do_test_fixedness(model_fixed=True, guide_fixed=False)
 
     def test_guide_fixed(self):
-        self.assertTrue(self.do_test_fixedness(model_fixed=False, guide_fixed=True))
+        assert self.do_test_fixedness(model_fixed=False, guide_fixed=True)
 
     def test_guide_and_model_fixed(self):
-        self.assertTrue(self.do_test_fixedness(model_fixed=True, guide_fixed=True))
+        assert self.do_test_fixedness(model_fixed=True, guide_fixed=True)
 
 
 class PoissonGammaTests(TestCase):
@@ -379,11 +377,11 @@ class LogNormalNormalTests(TestCase):
         # lognormal-normal model
         # putting some of the parameters inside of a torch module to
         # make sure that that functionality is ok (XXX: do this somewhere else in the future)
-        self.mu0 = Variable(torch.Tensor([[1.0]]))  # normal prior hyperparameter
+        self.mu0 = Variable(torch.Tensor([1.0]))  # normal prior hyperparameter
         # normal prior hyperparameter
-        self.tau0 = Variable(torch.Tensor([[1.0]]))
+        self.tau0 = Variable(torch.Tensor([1.0]))
         # known precision for observation likelihood
-        self.tau = Variable(torch.Tensor([[2.5]]))
+        self.tau = Variable(torch.Tensor([2.5]))
         self.n_data = 2
         self.data = Variable(torch.Tensor([[1.5], [2.2]]))  # two observations
         self.tau_n = self.tau0 + \
@@ -428,10 +426,10 @@ class LogNormalNormalTests(TestCase):
 
         mu_error = torch.abs(
             pyro.param("mymodule$$$mu_q_log") -
-            self.log_mu_n).data.cpu().numpy()[0][0]
+            self.log_mu_n).data.cpu().numpy()[0]
         tau_error = torch.abs(
             pyro.param("mymodule$$$tau_q_log") -
-            self.log_tau_n).data.cpu().numpy()[0][0]
+            self.log_tau_n).data.cpu().numpy()[0]
         # print "mu_error", mu_error
         # print "tau_error", tau_error
         self.assertEqual(0.0, mu_error, prec=0.07)
@@ -470,9 +468,9 @@ class LogNormalNormalTests(TestCase):
 
         mu_error = torch.abs(
             pyro.param("mu_q_log") -
-            self.log_mu_n).data.cpu().numpy()[0][0]
+            self.log_mu_n).data.cpu().numpy()[0]
         tau_error = torch.abs(
             pyro.param("tau_q_log") -
-            self.log_tau_n).data.cpu().numpy()[0][0]
+            self.log_tau_n).data.cpu().numpy()[0]
         self.assertEqual(0.0, mu_error, prec=0.05)
         self.assertEqual(0.0, tau_error, prec=0.05)

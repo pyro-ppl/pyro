@@ -16,6 +16,7 @@ from pyro.infer.tracegraph_kl_qp import TraceGraph_KL_QP
 from tests.common import TestCase
 
 
+@pytest.mark.stage("integration", "integration_batch_1")
 class GaussianChainTests(TestCase):
     # chain of normals with known covariances and latent means
 
@@ -180,6 +181,7 @@ class GaussianChainTests(TestCase):
         self.assertEqual(0.0, max_errors[2], prec=prec)
 
 
+@pytest.mark.stage("integration", "integration_batch_2")
 class GaussianPyramidTests(TestCase):
 
     def setUp(self):

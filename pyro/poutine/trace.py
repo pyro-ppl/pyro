@@ -1,9 +1,5 @@
-def get_parents(node, trace):
-    """
-    Get the parents of a node in a trace
-    TODO docs
-    """
-    raise NotImplementedError("not implemented yet")
+import graphviz
+import networkx
 
 
 class Trace(dict):
@@ -95,33 +91,165 @@ class Trace(dict):
         """
         return Trace(self)
 
-    def log_pdf(self):
+    def log_pdf(self, site_filter=lambda name, site: True):
         """
-        Compute the local and overall log-probabilities of the trace
+        Compute the local and overall log-probabilities of the trace.
+
+        The local computation is memoized.
         """
         log_p = 0.0
-        for name in self.keys():
-            if self[name]["type"] in ("observe", "sample"):
-                self[name]["log_pdf"] = self[name]["fn"].log_pdf(
-                    self[name]["value"],
-                    *self[name]["args"][0],
-                    **self[name]["args"][1]) * self[name]["scale"]
-                log_p += self[name]["log_pdf"]
-                # if self[name]["scale"] == 1.0:
-                #     print(name, self[name]["scale"])
-                #     pdb.set_trace()
+        for name, site in self.items():
+            if site["type"] in ("observe", "sample") and site_filter(name, site):
+                try:
+                    log_p += site["log_pdf"]
+                except KeyError:
+                    args, kwargs = site["args"]
+                    site["log_pdf"] = site["fn"].log_pdf(
+                        site["value"], *args, **kwargs) * site["scale"]
+                    log_p += site["log_pdf"]
         return log_p
 
-    def batch_log_pdf(self):
+    def batch_log_pdf(self, site_filter=lambda name, site: True):
         """
-        Compute the local and overall log-probabilities of the trace
+        Compute the batched local and overall log-probabilities of the trace.
+
+        The local computation is memoized, and also stores the local `.log_pdf()`.
         """
         log_p = 0.0
-        for name in self.keys():
-            if self[name]["type"] in ("observe", "sample"):
-                self[name]["batch_log_pdf"] = self[name]["fn"].batch_log_pdf(
-                    self[name]["value"],
-                    *self[name]["args"][0],
-                    **self[name]["args"][1]) * self[name]["scale"]
-                log_p += self[name]["batch_log_pdf"]
+        for name, site in self.items():
+            if site["type"] in ("observe", "sample") and site_filter(name, site):
+                try:
+                    log_p += site["batch_log_pdf"]
+                except KeyError:
+                    args, kwargs = site["args"]
+                    site["batch_log_pdf"] = site["fn"].batch_log_pdf(
+                        site["value"], *args, **kwargs) * site["scale"]
+                    site["log_pdf"] = site["batch_log_pdf"].sum()
+                    log_p += site["batch_log_pdf"]
         return log_p
+
+
+class TraceGraph(object):
+    """
+    -- encapsulates the forward graph as well as the trace of a stochastic function,
+       along with some helper functions to access different node types.
+    -- returned by TraceGraphPoutine
+    -- visualization handled by save_visualization()
+    """
+
+    def __init__(self, G, trace, stochastic_nodes, reparameterized_nodes,
+                 observation_nodes,
+                 vectorized_map_data_info):
+        self.G = G
+        self.trace = trace
+        self.reparameterized_nodes = reparameterized_nodes
+        self.stochastic_nodes = stochastic_nodes
+        self.nonreparam_stochastic_nodes = list(set(stochastic_nodes) - set(reparameterized_nodes))
+        self.observation_nodes = observation_nodes
+        self.vectorized_map_data_info = vectorized_map_data_info
+
+    def get_stochastic_nodes(self):
+        """
+        get all sample nodes in graph
+        """
+        return self.stochastic_nodes
+
+    def get_nonreparam_stochastic_nodes(self):
+        """
+        get all non-reparameterized sample nodes in graph
+        """
+        return self.nonreparam_stochastic_nodes
+
+    def get_reparam_stochastic_nodes(self):
+        """
+        get all reparameterized sample nodes in graph
+        """
+        return self.reparameterized_nodes
+
+    def get_nodes(self):
+        """
+        get all nodes in graph
+        """
+        return self.G.nodes()
+
+    def get_children(self, node, with_self=False):
+        """
+        get children of a named node
+        :param node: the name of the node in the tracegraph
+        :param with_self: whether to include `node` among the children
+        """
+        children = self.G.successors(node)
+        if with_self:
+            children.append(node)
+        return children
+
+    def get_parents(self, node, with_self=False):
+        """
+        get parents of a named node
+        :param node: the name of the node in the tracegraph
+        :param with_self: whether to include `node` among the parents
+        """
+        parents = self.G.predecessors(node)
+        if with_self:
+            parents.append(node)
+        return parents
+
+    def get_ancestors(self, node, with_self=False):
+        """
+        get ancestors of a named node
+        :param node: the name of the node in the tracegraph
+        :param with_self: whether to include `node` among the ancestors
+        """
+        ancestors = list(networkx.ancestors(self.G, node))
+        if with_self:
+            ancestors.append(node)
+        return ancestors
+
+    def get_descendants(self, node, with_self=False):
+        """
+        get descendants of a named node
+        :param node: the name of the node in the tracegraph
+        :param with_self: whether to include `node` among the descendants
+        """
+        descendants = list(networkx.descendants(self.G, node))
+        if with_self:
+            descendants.append(node)
+        return descendants
+
+    def get_trace(self):
+        """
+        get the Trace associated with the TraceGraph
+        """
+        return self.trace
+
+    def get_graph(self):
+        """
+        get the graph associated with the TraceGraph
+        """
+        return self.G
+
+    def save_visualization(self, graph_output):
+        """
+        render graph and save to file
+        :param graph_output: the graph will be saved to graph_output.pdf
+        -- non-reparameterized stochastic nodes are salmon
+        -- reparameterized stochastic nodes are half salmon, half grey
+        -- observation nodes are green
+        """
+        g = graphviz.Digraph()
+        for label in self.G.nodes():
+            shape = 'ellipse'
+            if label in self.stochastic_nodes and label not in self.reparameterized_nodes:
+                fillcolor = 'salmon'
+            elif label in self.reparameterized_nodes:
+                fillcolor = 'lightgrey;.5:salmon'
+            elif label in self.observation_nodes:
+                fillcolor = 'darkolivegreen3'
+            else:
+                fillcolor = 'grey'
+            g.node(label, label=label, shape=shape, style='filled', fillcolor=fillcolor)
+
+        for label1, label2 in self.G.edges():
+            g.edge(label1, label2)
+
+        g.render(graph_output, view=False, cleanup=True)
