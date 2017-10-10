@@ -4,6 +4,7 @@ from six.moves.queue import LifoQueue
 # poutines
 from .block_poutine import BlockPoutine
 from .poutine import Poutine  # noqa: F401
+from .branch_poutine import BranchPoutine
 from .replay_poutine import ReplayPoutine
 from .trace_poutine import TracePoutine
 from .tracegraph_poutine import TraceGraphPoutine
@@ -209,23 +210,64 @@ def queue(fn, queue, max_tries=None,
     return _fn
 
 
-def iter_discrete_traces(fn, *args, **kwargs):
+def iter_discrete(fn):
     """
     Iterate over all discrete choices of a stochastic function.
 
-    This behaves like `trace(fn).get_trace` when sampling continuous variables.
+    When sampling continuous random variables, this behaves like `fn`.
+    When sampling discrete random variables, this iterates over all choices
+    and scales entire traces by the discrete choice probability.
 
     :param callable fn: A stochastic function.
-    :returns: An iterator over traces of `fn`.
+    :returns: An iterator over results of `fn`.
     """
-    queue = LifoQueue()
-    queue.put(Trace())
-    while not queue.empty():
-        partial_trace = queue.get()
-        escape_fn = functools.partial(util.discrete_escape, partial_trace)
-        traced_fn = trace(escape(replay(fn, partial_trace), escape_fn))
-        try:
-            yield traced_fn.get_trace(*args, **kwargs)
-        except util.NonlocalExit as e:
-            for tr in util.enum_extend(traced_fn.trace.copy(), e.site):
-                queue.put(tr)
+
+    @functools.wraps(fn)
+    def iter_fn(*args, **kwargs):
+        queue = LifoQueue()
+        queue.put(Trace())
+        while not queue.empty():
+            partial_trace = queue.get()
+            escape_fn = functools.partial(util.discrete_escape, partial_trace)
+            traced_fn = trace(escape(replay(fn, partial_trace), escape_fn))
+            try:
+                yield traced_fn(*args, **kwargs)
+            except util.NonlocalExit as e:
+                for tr in util.enum_extend(traced_fn.trace.copy(), e.site):
+                    # TODO Scale traces by the choice probability.
+                    queue.put(tr)
+
+    return iter_fn
+
+
+def branch_discrete(fn):
+    """
+    Batch over all discrete choices of a stochastic function.
+
+    When sampling continuous random variables, this behaves like `fn`.
+    When sampling discrete random variables, this batches over all choices
+    and scales entire traces by the discrete choice probability.
+
+    Note that this changes the tensor shapes of the resulting program by
+    adding tensor dimensions on the left. To write programs that work
+    correctly with `branch_discrete`, simply index tensors from the right.
+
+    :param callable fn: A stochastic function.
+    :returns: A stochastic function wrapped in a BranchPoutine.
+    :rtype: pyro.poutine.BranchPoutine
+
+    Examples:
+
+        >>> def gaussian_mixture_model():
+                ps = pyro.get_param("ps", Variable(torch.ones(10) / 10))
+                mus = pyro.get_param("mus", Variable(torch.zeros(10))
+                sigma = pyro.get_param("sigma", Variable(torch.ones(1))
+                z = pyro.sample("z", dist.categorical, ps, one_hot=False)
+                x = pyro.samples("x", dist.diagnormal, mus[z], sigma)
+                return x
+        >>> gaussian_mixture_model().size()
+        (1L,)
+        >>> branch_discrete(gaussian_mixture_model)().size()
+        (10L, 1L)
+    """
+    return BranchPoutine(fn)

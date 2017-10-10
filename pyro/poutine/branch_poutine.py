@@ -28,7 +28,7 @@ class BranchPoutine(Poutine):
 
         # Expand val by one batch dim and set a vectorized scale.
         args, kwargs = msg["args"], msg["kwargs"]
-        val = fn.support(*args, **kwargs)
+        val = torch.stack(fn.support(*args, **kwargs))
         log_pdf = fn.batch_log_pdf(val, *args, **kwargs)
         msg["scale"] = msg["scale"] * torch.exp(log_pdf)
 
