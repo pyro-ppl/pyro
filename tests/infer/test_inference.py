@@ -7,7 +7,8 @@ import pyro
 import pyro.distributions as dist
 from pyro.infer.svi import SVI
 import pyro.optim as optim
-from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
+from pyro.distributions.transformed_distribution import TransformedDistribution
+from tests.distributions.test_transformed_distribution import AffineExp
 from tests.common import TestCase
 
 

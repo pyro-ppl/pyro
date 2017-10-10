@@ -8,7 +8,8 @@ from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
-from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
+from pyro.distributions.transformed_distribution import TransformedDistribution
+from tests.distributions.test_transformed_distribution import AffineExp
 import pyro.optim as optim
 from pyro.infer import SVI
 from pyro.util import ng_ones, ng_zeros
