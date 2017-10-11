@@ -268,7 +268,7 @@ def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
                 = poly.get_mini_batch(mini_batch_indices, training_data_sequences,
                                       training_seq_lengths, cuda=cuda)
             loss = elbo.step(mini_batch, mini_batch_reversed, mini_batch_mask,
-                                   mini_batch_seq_lengths, annealing_factor)
+                             mini_batch_seq_lengths, annealing_factor)
             epoch_nll += loss
 
         times.append(time.time())

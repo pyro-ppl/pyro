@@ -248,7 +248,7 @@ def module(pyro_name, nn_obj, tags="default"):
         _MODULE_NAMESPACE_DIVIDER
 
     if isclass(nn_obj):
-        raise NotImplementedError("pyro.module does not support class constructors for " + \
+        raise NotImplementedError("pyro.module does not support class constructors for " +
                                   "the argument nn_obj")
 
     def _cdata(t):
