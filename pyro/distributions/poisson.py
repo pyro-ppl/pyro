@@ -42,6 +42,10 @@ class Poisson(Distribution):
         return Variable(torch.Tensor(x).type_as(lam.data))
 
     def batch_log_pdf(self, x, lam=None, batch_size=1, *args, **kwargs):
+        """
+        Poisson log-likelihood
+        NOTE: Requires Pytorch implementation of log_gamma to be differentiable
+        """
         lam = self._sanitize_input(lam)
         if x.dim() == 1:
             x = x.expand(batch_size, x.size(0))
