@@ -33,10 +33,10 @@ class TestCategorical(TestCase):
 
         self.n_samples = 50000
 
-        self.support_non_vec = torch.Tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
-        self.support = torch.Tensor([[[1, 0, 0], [1, 0, 0]], [[0, 1, 0], [0, 1, 0]], [[0, 0, 1], [0, 0, 1]]])
-        self.nhot_support_non_vec = torch.Tensor([0, 1, 2])
-        self.nhot_support = torch.Tensor([[0, 0], [1, 1], [2, 2]])
+        self.support_non_vec = torch.LongTensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+        self.support = torch.LongTensor([[[1, 0, 0], [1, 0, 0]], [[0, 1, 0], [0, 1, 0]], [[0, 0, 1], [0, 0, 1]]])
+        self.nhot_support_non_vec = torch.LongTensor([0, 1, 2])
+        self.nhot_support = torch.LongTensor([[0, 0], [1, 1], [2, 2]])
         self.discrete_support_non_vec = torch.Tensor([0, 1, 2])
         self.discrete_support = torch.Tensor([[0, 3], [1, 4], [2, 5]])
         self.discrete_arr_support_non_vec = ['a', 'b', 'c']

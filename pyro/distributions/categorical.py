@@ -126,10 +126,17 @@ class Categorical(Distribution):
         """
         Returns the categorical distribution's support, as a tensor along the first dimension.
 
-        The last dimension is taken as representing the event probabilities, p_k, which
-        must sum to 1. The remaining dimensions are considered batch dimensions.
-
+        :param ps: numpy.ndarray where the last dimension denotes the event probabilities, *p_k*,
+            whichmust sum to 1. The remaining dimensions are considered batch dimensions.
+        :param vs: Optional parameter, enumerating the items in the support. This could either
+            have a numeric or string type. This should have the same dimension as ``ps``.
+        :param one_hot: Denotes whether one hot encoding is enabled. This is True by default.
+            When set to false, and no explicit ``vs`` is provided, the last dimension gives
+            the one-hot encoded value from the support.
         :return: torch variable or numpy array enumerating the support of the categorical distribution.
+            Each item in the return value, when enumerated along the first dimensions, yields a
+            value from the distribution's support which has the same dimension as would be returned by
+            sample. If ``one_hot=True``, the last dimension is used for the one-hot encoding.
         :rtype: torch.autograd.Variable or numpy.ndarray.
         """
         ps, vs, one_hot = self._sanitize_input(ps, vs, one_hot)
@@ -146,10 +153,10 @@ class Categorical(Distribution):
                 return torch.t(vs)
         if one_hot:
             if not batch_size:
-                return Variable(torch.stack([t.expand_as(ps) for t in torch.eye(event_size)]))
-            return Variable(torch.stack([t.expand_as(ps) for t in torch.eye(event_size)]))
+                return Variable(torch.stack([t.expand_as(ps) for t in torch.eye(event_size).long()]))
+            return Variable(torch.stack([t.expand_as(ps) for t in torch.eye(event_size).long()]))
         else:
             if not batch_size:
-                return Variable(torch.arange(0, event_size))
-            return Variable(torch.stack([torch.Tensor([t]).expand(*batch_size)
-                                         for t in torch.arange(0, event_size)]))
+                return Variable(torch.arange(0, event_size)).long()
+            return Variable(torch.stack([torch.LongTensor([t]).expand(*batch_size)
+                                         for t in torch.arange(0, event_size).long()]))
