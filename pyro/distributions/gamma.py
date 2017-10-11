@@ -52,23 +52,14 @@ class Gamma(Distribution):
             .type_as(alpha.data))
         return x
 
-    def log_pdf(self, x, alpha=None, beta=None, *args, **kwargs):
-        """
-        gamma log-likelihood
-        """
-        alpha, beta = self._sanitize_input(alpha, beta)
-        ll_1 = - beta * x
-        ll_2 = (alpha - pyro.ones(alpha.size())) * torch.log(x)
-        ll_3 = alpha * torch.log(beta)
-        ll_4 = - log_gamma(alpha)
-        return ll_1 + ll_2 + ll_3 + ll_4
-
     def batch_log_pdf(self, x, alpha=None, beta=None, batch_size=1, *args, **kwargs):
         alpha, beta = self._sanitize_input(alpha, beta)
-        if x.dim() == 1 and beta.dim() == 1 and batch_size == 1:
-            return self.log_pdf(x, alpha, beta)
-        elif x.dim() == 1:
+        assert alpha.dim() == beta.dim()
+        if x.dim() == 1:
             x = x.expand(batch_size, x.size(0))
+        if alpha.size() != x.size():
+            alpha = alpha.expand_as(x)
+            beta = beta.expand_as(x)
         ll_1 = - beta * x
         ll_2 = (alpha - pyro.ones(x.size())) * torch.log(x)
         ll_3 = alpha * torch.log(beta)
