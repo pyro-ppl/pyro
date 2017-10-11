@@ -23,18 +23,27 @@ def test_elbo_mapdata(batch_size, map_type):
     lam = Variable(torch.Tensor([6.0, 4.0]))
     data = []
     sum_data = Variable(torch.zeros(2))
-    for i in range(8):
-        data.append(Variable(torch.Tensor([0.3, 0.1]) + 1.2 * torch.randn(2) / torch.sqrt(lam0.data)))
+
+    def add_data_point(x, y):
+        data.append(Variable(torch.Tensor([x, y])))
         sum_data.data.add_(data[-1].data)
 
+    add_data_point(0.1, 0.21)
+    add_data_point(0.16, 0.11)
+    add_data_point(0.06, 0.31)
+    add_data_point(-0.01, 0.07)
+    add_data_point(0.23, 0.25)
+    add_data_point(0.19, 0.18)
+    add_data_point(0.09, 0.41)
+    add_data_point(-0.04, 0.17)
+
     n_data = Variable(torch.Tensor([len(data)]))
-    analytic_lam_n = lam0 + \
-        n_data.expand_as(lam) * lam
+    analytic_lam_n = lam0 + n_data.expand_as(lam) * lam
     analytic_log_sig_n = -0.5 * torch.log(analytic_lam_n)
     analytic_mu_n = sum_data * (lam / analytic_lam_n) +\
         mu0 * (lam0 / analytic_lam_n)
     verbose = True
-    n_steps = 3000
+    n_steps = 7000
 
     if verbose:
         print("DOING ELBO TEST [bs = {}, map_type = {}]".format(
@@ -63,10 +72,10 @@ def test_elbo_mapdata(batch_size, map_type):
         return mu_latent
 
     def guide():
-        mu_q = pyro.param("mu_q", Variable(analytic_mu_n.data + torch.Tensor([-0.22, 0.31]),
+        mu_q = pyro.param("mu_q", Variable(analytic_mu_n.data + torch.Tensor([-0.18, 0.23]),
                                            requires_grad=True))
         log_sig_q = pyro.param("log_sig_q", Variable(
-            analytic_log_sig_n.data - torch.Tensor([-0.22, 0.31]),
+            analytic_log_sig_n.data - torch.Tensor([-0.18, 0.23]),
             requires_grad=True))
         sig_q = torch.exp(log_sig_q)
         pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q)
@@ -99,8 +108,8 @@ def test_elbo_mapdata(batch_size, map_type):
         if verbose and k % 500 == 0:
             print("errors", mu_error.data.numpy()[0], log_sig_error.data.numpy()[0])
 
-    assert_equal(Variable(torch.zeros(1)), mu_error, prec=0.04)
-    assert_equal(Variable(torch.zeros(1)), log_sig_error, prec=0.05)
+    assert_equal(Variable(torch.zeros(1)), mu_error, prec=0.05)
+    assert_equal(Variable(torch.zeros(1)), log_sig_error, prec=0.06)
 
 
 @pytest.mark.parametrize("batch_dim", [0, 1])
