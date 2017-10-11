@@ -151,6 +151,18 @@ def to_one_hot(x, ps):
     return Variable(batch_one_hot.type(ttype))
 
 
+def subsample_range(size, batch_size):
+    """
+    :param int size: the size of the range to subsample from
+    :param int batch_size: the size of the returned subsample
+    :returns: a random subsample of `range(size)`
+    :rtype: torch.autograd.Variable of torch.LongTensor
+
+    Randomly select a subsample of a range of indices.
+    """
+    return Variable(torch.randperm(size)[:batch_size])
+
+
 def tensor_histogram(ps, vs):
     """
     make a histogram from weighted Variable/Tensor/ndarray samples
@@ -225,7 +237,7 @@ def apply_stack(initial_msg):
 
     # go until time to stop?
     for frame in stack:
-        assert msg["type"] in ("sample", "observe", "map_data", "param"), \
+        assert msg["type"] in ("sample", "observe", "managed", "param"), \
             "{} is an invalid site type, how did that get there?".format(msg["type"])
 
         msg["ret"] = getattr(frame, "_pyro_{}".format(msg["type"]))(msg)

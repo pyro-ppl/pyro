@@ -182,6 +182,35 @@ class Poutine(object):
         else:
             return obs
 
+    def _pyro_managed(self, msg):
+        """
+        :param msg: current message at a trace site.
+        :returns: the result of running a managed computation.
+
+        Implements default pyro.managed Poutine behavior:
+        executes a simple function.
+
+        Derived classes often compute a side effect,
+        then call super(Derived, self)._pyro_managed(msg).
+        """
+        fn, args, kwargs = \
+            msg["fn"], msg["args"], msg["kwargs"]
+
+        # msg["done"] enforces the guarantee in the poutine execution model
+        # that a site's non-effectful primary computation should only be executed once:
+        # if the site already has a stored return value,
+        # don't reexecute the function at the site,
+        # and do any side effects using the stored return value.
+        if msg["done"]:
+            return msg["ret"]
+
+        # Execute the managed function.
+        ret = fn(*args, **kwargs)
+
+        # After executing, update msg["done"] to prevent it from being queried again.
+        msg["done"] = True
+        return ret
+
     def _pyro_param(self, msg):
         """
         :param msg: current message at a trace site.

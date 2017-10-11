@@ -94,6 +94,23 @@ class TracePoutine(Poutine):
         self.trace.add_observe(name, msg["scale"], val, fn, obs, *args, **kwargs)
         return val
 
+    def _pyro_managed(self, msg):
+        """
+        :param msg: current message at a trace site.
+        :returns: the result of running a managed computation.
+
+        Implements default pyro.managed Poutine behavior:
+        executes a simple function.
+
+        Derived classes often compute a side effect,
+        then call super(Derived, self)._pyro_managed(msg).
+        """
+        name, fn, args, kwargs = \
+            msg["name"], msg["fn"], msg["args"], msg["kwargs"]
+        retrieved = super(TracePoutine, self)._pyro_managed(msg)
+        self.trace.add_managed(name, retrieved, fn, *args, **kwargs)
+        return retrieved
+
     def _pyro_param(self, msg):
         """
         :param msg: current message at a trace site.

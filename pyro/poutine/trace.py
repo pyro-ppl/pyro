@@ -36,17 +36,17 @@ class Trace(dict):
         self[name] = site
         return self
 
-    def add_map_data(self, name, fn, batch_size, batch_dim, ind):
+    def add_managed(self, name, val, fn, *args, **kwargs):
         """
-        map_data site
+        managed site
         """
-        assert name not in self, "map_data {} already in trace".format(name)
+        assert name not in self, "managed {} already in trace".format(name)
         site = {}
-        site["type"] = "map_data"
-        site["indices"] = ind
-        site["batch_size"] = batch_size
-        site["batch_dim"] = batch_dim
+        site["type"] = "managed"
+        site["value"] = val
         site["fn"] = fn
+        site["args"] = args
+        site["kwargs"] = kwargs
         self[name] = site
         return self
 
