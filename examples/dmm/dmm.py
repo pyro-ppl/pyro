@@ -3,7 +3,7 @@ An implementation of a Deep Markov Model in pyro based on reference [1].
 This is essentially the DKS variant outlined in the paper. The primary difference
 between this implementation and theirs is that in our version any KL divergence terms
 in the ELBO are estimated via sampling, while they make use of the analytic formulae. We
-also explore including normalizing flows in the variational distribution over the latents
+also illustrate including normalizing flows in the variational distribution over the latents
 (in which case analytic formulae for the KL divergences are in any case unavailable).
 
 Reference:
@@ -17,7 +17,6 @@ import torch
 import pyro
 import numpy as np
 import time
-from pyro.infer.kl_qp import KL_QP
 import pyro.distributions as dist
 from pyro.util import ng_ones, zeros
 import torch.nn as nn
@@ -25,6 +24,7 @@ from pyro.distributions.transformed_distribution import InverseAutoregressiveFlo
 from pyro.distributions.transformed_distribution import TransformedDistribution
 import six.moves.cPickle as pickle
 import polyphonic_data_loader as poly
+from pyro.infer import SVI
 from pyro.optim import ClippedAdam
 from os.path import join, dirname
 import logging
@@ -103,7 +103,7 @@ class DMM(nn.Module):
     """
     def __init__(self, input_dim, z_dim, emission_dim, transition_dim, rnn_dim, args):
         super(DMM, self).__init__()
-        # instantiate pytorch modules
+        # instantiate pytorch modules used in the model and guide below
         self.pt_emitter = Emitter(input_dim, z_dim, emission_dim)
         self.pt_trans = GatedTransition(z_dim, transition_dim)
         self.pt_combiner = Combiner(z_dim, rnn_dim)
@@ -112,17 +112,16 @@ class DMM(nn.Module):
                              dropout=args.rnn_dropout_rate)
 
         self.args = args
-        self.input_dim = input_dim
         self.z_dim = z_dim
-        self.emission_dim = emission_dim
-        self.transition_dim = transition_dim
         self.rnn_dim = rnn_dim
         self.pt_iafs = [InverseAutoregressiveFlow(z_dim, 100) for _ in range(args.num_iafs)]
-        if cuda:
-            self.cuda()
-            map(lambda pt_iaf: pt_iaf.cuda(), self.pit_iafs)
 
-    # the model
+        # if on gpu cuda-ize all pytorch (sub)modules
+        if args.cuda:
+            self.cuda()
+            map(lambda pt_iaf: pt_iaf.cuda(), self.pt_iafs)
+
+    # the model p(x|z)p(z)
     def model(self, mini_batch, mini_batch_reversed, mini_batch_mask,
               mini_batch_seq_lengths, annealing_factor=1.0):
 
@@ -142,7 +141,7 @@ class DMM(nn.Module):
 
         return z_prev
 
-    # the guide (i.e. the variational distribution)
+    # the guide q(z|x) (i.e. the variational distribution)
     def guide(self, mini_batch, mini_batch_reversed, mini_batch_mask,
               mini_batch_seq_lengths, annealing_factor=1.0):
 
@@ -151,12 +150,9 @@ class DMM(nn.Module):
         combiner = pyro.module("combiner", self.pt_combiner)
 
         # complicated rnn behavior for gpus
-        if 'cuda' in mini_batch.data.type():
-            h_0 = pyro.param("h_0", zeros(self.pt_rnn.num_layers, 1, self.rnn_dim, type_as=mini_batch.data))
+        h_0 = pyro.param("h_0", zeros(self.pt_rnn.num_layers, 1, self.rnn_dim, type_as=mini_batch.data))
+        if self.args.cuda:
             h_0 = h_0.expand(*[h_0.data.shape[0], mini_batch.data.shape[0], h_0.data.shape[2]]).contiguous()
-        else:
-            # on cpu, hidden size starts as 1 and is created
-            h_0 = pyro.param("h_0", zeros(self.pt_rnn.num_layers, 1, self.rnn_dim, type_as=mini_batch.data))
 
         rnn_output, _ = rnn(mini_batch_reversed, h_0)
         rnn_output = poly.pad_and_reverse(rnn_output, mini_batch_seq_lengths)
@@ -176,26 +172,26 @@ class DMM(nn.Module):
 
 
 # setup, training, and evaluation
-def main(num_epochs=7000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
-         clip_norm=25.0, lr_decay=1.0, weight_decay=0.10,
+def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
+         clip_norm=20.0, lr_decay=1.0, weight_decay=0.10,
          mini_batch_size=20, annealing_epochs=1000,
-         minimum_annealing_factor=0.0, rnn_dropout_rate=0.0,
+         minimum_annealing_factor=0.0, rnn_dropout_rate=0.1,
          rnn_num_layers=1, log='dmm.log', cuda=False, num_iafs=0):
 
     # ensure ints
     num_epochs = int(num_epochs)
     mini_batch_size = int(mini_batch_size)
     annealing_epochs = int(annealing_epochs)
-    rnn_num_layers = int(rnn_num_layers)
 
     input_dim = 88
     z_dim = 100
     transition_dim = 200
     emission_dim = 100
     rnn_dim = 600
-    val_test_frequency = 20
-    n_eval_samples_inner = 5
-    n_eval_samples_outer = 100
+    val_test_frequency = 1e6
+    expensive_val_test_points = [num_epochs - 1, num_epochs - 1001]
+    n_eval_samples_inner = 1
+    n_eval_samples_outer = 10
 
     # setup logging
     logging.basicConfig(level=logging.DEBUG, format='%(message)s', filename=args.log, filemode='w')
@@ -240,20 +236,25 @@ def main(num_epochs=7000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
         (N_train_data, np.mean(training_seq_lengths), N_mini_batches))
     times = [time.time()]
 
-    # create the dmm
-    dmm = DMM(input_dim, z_dim, emission_dim, transition_dim, rnn_dim, cuda)
+    # instantiate the dmm
+    dmm = DMM(input_dim, z_dim, emission_dim, transition_dim, rnn_dim, args)
 
-    # setup optimizers
+    # setup optimizer
     adam_params = {"lr": args.learning_rate, "betas": (args.beta1, args.beta2),
                    "clip_norm": args.clip_norm, "lrd": args.lr_decay,
                    "weight_decay": args.weight_decay}
-    elbo_train = KL_QP(dmm.model, dmm.guide, pyro.optim(ClippedAdam, adam_params))
+    adam = ClippedAdam(adam_params)
+
+    # setup inference algorithm
+    elbo = SVI(dmm.model, dmm.guide, adam, "ELBO", trace_graph=False)
     annealing_factor = 1.0
+    expensive_evaluations = []
 
     for epoch in range(args.num_epochs):
         epoch_nll = 0.0
         shuffled_indices = np.arange(N_train_data)
         np.random.shuffle(shuffled_indices)
+
         for which in range(N_mini_batches):
             if args.annealing_epochs > 0 and epoch < args.annealing_epochs:
                 min_af = args.minimum_annealing_factor
@@ -266,62 +267,57 @@ def main(num_epochs=7000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
             mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths \
                 = poly.get_mini_batch(mini_batch_indices, training_data_sequences,
                                       training_seq_lengths, cuda=cuda)
-            loss = elbo_train.step(mini_batch, mini_batch_reversed, mini_batch_mask,
-                                   mini_batch_seq_lengths, pt_rnn, annealing_factor)
-            if epoch < 1:
-                log("minibatch loss:  %.4f  [annealing factor: %.4f]" % (loss, annealing_factor))
+            loss = elbo.step(mini_batch, mini_batch_reversed, mini_batch_mask,
+                                   mini_batch_seq_lengths, annealing_factor)
             epoch_nll += loss
+
         times.append(time.time())
         epoch_time = times[-1] - times[-2]
         log("[training epoch %04d]  %.4f \t\t\t\t(dt = %.3f sec)" %
             (epoch, epoch_nll / N_train_time_slices, epoch_time))
 
-        if epoch % val_test_frequency == 0 and False:
+        def do_evaluation(n_samples):
             dmm.pt_rnn.eval()
             val_nlls, test_nlls = [], []
-            for _ in range(n_eval_samples_outer):
-                val_nll = elbo_train.eval_objective(val_batch, val_batch_reversed, val_batch_mask,
-                                                    val_seq_lengths) / np.sum(val_seq_lengths)
-                test_nll = elbo_train.eval_objective(test_batch, test_batch_reversed, test_batch_mask,
-                                                     test_seq_lengths) / np.sum(test_seq_lengths)
+
+            for _ in range(n_samples):
+                val_nll = elbo.evaluate_loss(val_batch, val_batch_reversed, val_batch_mask,
+                                             val_seq_lengths) / np.sum(val_seq_lengths)
+                test_nll = elbo.evaluate_loss(test_batch, test_batch_reversed, test_batch_mask,
+                                              test_seq_lengths) / np.sum(test_seq_lengths)
                 val_nlls.append(val_nll)
                 test_nlls.append(test_nll)
-            val_nll = np.mean(val_nlls)
-            test_nll = np.mean(test_nlls)
+
             dmm.pt_rnn.train()
+            val_nll, test_nll = np.mean(val_nlls), np.mean(test_nlls)
+            return val_nll, test_nll
+
+        if epoch % val_test_frequency == 0 and epoch > 0:
+            val_nll, test_nll = do_evaluation(n_samples=1)
             log("[val/test epoch %04d]  %.4f  %.4f" % (epoch, val_nll, test_nll))
 
-    # when finished, do eval and send back validation
-    # for hyper param search
-    dmm.pt_rnn.eval()
-    val_nlls, test_nlls = [], []
-    for _ in range(n_eval_samples_outer):
-        val_nll = elbo_train.eval_objective(val_batch, val_batch_reversed, val_batch_mask,
-                                            val_seq_lengths) / np.sum(val_seq_lengths)
-        val_nlls.append(val_nll)
-        test_nll = elbo_train.eval_objective(test_batch, test_batch_reversed, test_batch_mask,
-                                             test_seq_lengths) / np.sum(test_seq_lengths)
-        test_nlls.append(test_nll)
-    test_nll, val_nll = np.mean(test_nlls), np.mean(val_nlls)
-    log("[validation score final epoch]  %.5f" % val_nll)
-    log("[test score final epoch]  %.5f" % test_nll)
-    return (test_nll, val_nll)
+        if epoch in expensive_val_test_points:
+            val_nll, test_nll = do_evaluation(n_samples=n_eval_samples_outer)
+            log("[EXPENSIVE val/test epoch %04d]  %.4f  %.4f" % (epoch, val_nll, test_nll))
+            expensive_evaluations.append((val_nll, test_nll))
+
+    return expensive_evaluations
 
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', type=int, default=2000)
+    parser.add_argument('-n', '--num-epochs', type=int, default=5000)
     parser.add_argument('-lr', '--learning-rate', type=float, default=0.0008)
     parser.add_argument('-b1', '--beta1', type=float, default=0.90)
     parser.add_argument('-b2', '--beta2', type=float, default=0.999)
-    parser.add_argument('-cn', '--clip-norm', type=float, default=25.0)
+    parser.add_argument('-cn', '--clip-norm', type=float, default=20.0)
     parser.add_argument('-lrd', '--lr-decay', type=float, default=1.0)
-    parser.add_argument('-wd', '--weight-decay', type=float, default=0.0)
+    parser.add_argument('-wd', '--weight-decay', type=float, default=0.1)
     parser.add_argument('-mbs', '--mini-batch-size', type=int, default=20)
-    parser.add_argument('-ae', '--annealing-epochs', type=int, default=500)
+    parser.add_argument('-ae', '--annealing-epochs', type=int, default=1000)
     parser.add_argument('-maf', '--minimum-annealing-factor', type=float, default=0.0)
-    parser.add_argument('-rdr', '--rnn-dropout-rate', type=float, default=0.0)
+    parser.add_argument('-rdr', '--rnn-dropout-rate', type=float, default=0.1)
     parser.add_argument('-rnl', '--rnn-num-layers', type=int, default=1)
     parser.add_argument('-iafs', '--num-iafs', type=int, default=0)
     parser.add_argument('--cuda', action='store_true')

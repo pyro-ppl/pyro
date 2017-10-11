@@ -1,5 +1,5 @@
 import math
-from .optimizer import Optimizer
+from torch.optim.optimizer import Optimizer
 
 
 class ClippedAdam(Optimizer):
