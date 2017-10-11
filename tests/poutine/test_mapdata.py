@@ -34,7 +34,7 @@ def test_elbo_mapdata(batch_size, map_type):
     analytic_mu_n = sum_data * (lam / analytic_lam_n) +\
         mu0 * (lam0 / analytic_lam_n)
     verbose = True
-    n_steps = 6000
+    n_steps = 3000
 
     if verbose:
         print("DOING ELBO TEST [bs = {}, map_type = {}]".format(

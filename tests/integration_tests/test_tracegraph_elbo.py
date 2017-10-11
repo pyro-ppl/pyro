@@ -543,7 +543,7 @@ class RaoBlackwellizationTests(TestCase):
         self.verbose = True
 
     # this tests rao-blackwellization in elbo for nested list map_datas
-    def test_nested_list_map_data_in_elbo(self, n_steps=10000):
+    def test_nested_list_map_data_in_elbo(self, n_steps=11000):
         pyro.get_param_store().clear()
 
         def model():
@@ -609,7 +609,7 @@ class RaoBlackwellizationTests(TestCase):
     # inside of a list map_data with superfluous random variables to complexify the
     # graph structure and introduce additional baselines
     def test_vectorized_map_data_in_elbo_with_superfluous_rvs(self):
-        self._test_vectorized_map_data_in_elbo(n_superfluous_top=2, n_superfluous_bottom=2, n_steps=9000)
+        self._test_vectorized_map_data_in_elbo(n_superfluous_top=2, n_superfluous_bottom=2, n_steps=6000)
 
     def _test_vectorized_map_data_in_elbo(self, n_superfluous_top, n_superfluous_bottom, n_steps):
         pyro.get_param_store().clear()
@@ -649,10 +649,10 @@ class RaoBlackwellizationTests(TestCase):
                                              torch.nn.Linear(2, 2)])
 
         def guide():
-            mu_q = pyro.param("mu_q", Variable(self.analytic_mu_n.data + 0.234 * torch.ones(2),
+            mu_q = pyro.param("mu_q", Variable(self.analytic_mu_n.data + 0.094 * torch.ones(2),
                                                requires_grad=True))
             log_sig_q = pyro.param("log_sig_q", Variable(
-                                   self.analytic_log_sig_n.data - 0.21 * torch.ones(2), requires_grad=True))
+                                   self.analytic_log_sig_n.data - 0.11 * torch.ones(2), requires_grad=True))
             sig_q = torch.exp(log_sig_q)
             trivial_baseline = pyro.module("mu_baseline", pt_mu_baseline, tags="baseline")
             baseline_value = trivial_baseline(ng_ones(1))
