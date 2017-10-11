@@ -337,13 +337,15 @@ def all_escape(trace, msg):
         (msg["name"] not in trace)
 
 
-def get_vectorized_map_data_info(nodes):
+def get_vectorized_map_data_info(trace):
     """
     this determines whether the vectorized map_datas
     are rao-blackwellizable by tracegraph_kl_qp
     also gathers information to be consumed by downstream by tracegraph_kl_qp
     XXX this logic should probably sit elsewhere
     """
+    nodes = trace.nodes
+
     vectorized_map_data_info = {'rao-blackwellization-condition': True}
     vec_md_stacks = set()
 
@@ -427,3 +429,33 @@ def save_visualization(trace, graph_output):
         g.edge(label1, label2)
 
     g.render(graph_output, view=False, cleanup=True)
+
+
+def identify_dense_edges(input_trace):
+    """
+    Method to add all edges based on the map_data_stack information
+    stored at each site.
+    """
+    # XXX should copy or not?
+    trace = input_trace.copy()
+
+    for name, node in trace.nodes.items():
+        if node["type"] in ("sample", "observe"):
+            # XXX why tuple?
+            map_data_stack = tuple(reversed(node["map_data_stack"]))
+            for past_name, past_node in trace.nodes.items():
+                if past_node["type"] in ("sample", "observe"):
+                    if past_name == name:
+                        break
+                    past_node_independent = False
+                    past_node_map_data_stack = tuple(
+                        reversed(past_node["map_data_stack"]))
+                    for query, target in zip(map_data_stack,
+                                             past_node_map_data_stack):
+                        if query[0] == target[0] and query[1] != target[1]:
+                            past_node_independent = True
+                            break
+                    if not past_node_independent:
+                        trace.add_edge(past_name, name)
+
+    return trace

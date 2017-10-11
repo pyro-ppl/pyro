@@ -1,8 +1,6 @@
 import collections
 import networkx
 
-from pyro import util
-
 
 class Trace(networkx.DiGraph):
     """
@@ -42,43 +40,13 @@ class Trace(networkx.DiGraph):
         # XXX should copy in case site gets mutated, or dont bother?
         super(Trace, self).add_node(site_name, *args, **kwargs.copy())
 
-    def identify_edges(self):
-        """
-        Method to add all edges based on the map_data_stack information
-        stored at each site.
-        """
-        if self.graph_type == "dense":
-            # XXX will this iterate over nodes?
-            for name, node in self.nodes.items():
-                if node["type"] in ("sample", "observe"):
-                    # XXX why tuple?
-                    map_data_stack = tuple(reversed(node["map_data_stack"]))
-                    for past_name, past_node in self.nodes.items():
-                        if past_node["type"] in ("sample", "observe"):
-                            if past_name == name:
-                                break
-                            past_node_independent = False
-                            past_node_map_data_stack = tuple(
-                                reversed(past_node["map_data_stack"]))
-                            for query, target in zip(map_data_stack,
-                                                     past_node_map_data_stack):
-                                if query[0] == target[0] and query[1] != target[1]:
-                                    past_node_independent = True
-                                    break
-                            if not past_node_independent:
-                                self.add_edge(past_name, name)
-
-            self.vectorized_map_data_info = util.get_vectorized_map_data_info(self.nodes)
-
     def copy(self):
         """
         Makes a shallow copy of self with nodes and edges preserved.
         Identical to super(Trace, self).copy(), but preserves the type
         and the self.graph_type and self.vectorized_map_data_info attributes
         """
-        cp = Trace(self, graph_type=self.graph_type)
-        cp.vectorized_map_data_info = util.get_vectorized_map_data_info(cp.nodes)
-        return cp
+        return Trace(self, graph_type=self.graph_type)
 
     def log_pdf(self, site_filter=lambda name, site: True):
         """

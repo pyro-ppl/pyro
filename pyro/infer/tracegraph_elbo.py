@@ -83,8 +83,8 @@ class TraceGraph_ELBO(object):
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
 
             # get info regarding rao-blackwellization of vectorized map_data
-            guide_vec_md_info = guide_trace.vectorized_map_data_info
-            model_vec_md_info = model_trace.vectorized_map_data_info
+            guide_vec_md_info = guide_trace.graph["vectorized_map_data_info"]
+            model_vec_md_info = model_trace.graph["vectorized_map_data_info"]
             guide_vec_md_condition = guide_vec_md_info['rao-blackwellization-condition']
             model_vec_md_condition = model_vec_md_info['rao-blackwellization-condition']
             do_vec_rb = guide_vec_md_condition and model_vec_md_condition

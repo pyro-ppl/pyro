@@ -1,3 +1,4 @@
+from pyro import util
 from .poutine import Poutine
 from .trace import Trace
 
@@ -33,7 +34,10 @@ class TracePoutine(Poutine):
         Adds appropriate edges based on map_data_stack information
         upon exiting the context.
         """
-        self.trace.identify_edges()
+        if self.graph_type == "dense":
+            self.trace = util.identify_dense_edges(self.trace)
+            self.trace.graph["vectorized_map_data_info"] = \
+                util.get_vectorized_map_data_info(self.trace)
         return super(TracePoutine, self).__exit__(*args, **kwargs)
 
     def __call__(self, *args, **kwargs):
