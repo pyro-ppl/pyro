@@ -16,8 +16,9 @@ class TracePoutine(Poutine):
 
     def __init__(self, fn, graph_type=None):
         """
-        :param fn: a
-        :param graph_type: a
+        :param fn: a stochastic function (callable containing pyro primitive calls)
+        :param string graph_type: string that specifies the type of graph
+        to construct (currently only "flat" or "dense" supported)
 
         Constructor.
         """
