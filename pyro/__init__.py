@@ -9,7 +9,7 @@ from torch.autograd import Variable
 
 import pyro
 import pyro.poutine as poutine
-from pyro.optim.optim import PyroOptim
+
 from pyro.params import param_with_module_name
 from pyro.params.param_store import ParamStoreDict
 from pyro.poutine import LambdaPoutine, condition, do  # noqa: F401
@@ -50,7 +50,6 @@ def device(x):
 
 
 # use pyro optim class to wrap nn optim
-optim = PyroOptim
 
 _PYRO_STACK = []
 
@@ -230,17 +229,19 @@ def param(name, *args, **kwargs):
         return out_msg["ret"]
 
 
-# hand off behavior to poutine if necessary?
-# for now default calls out to pyro.param -- which is handled by poutine
-def module(pyro_name, nn_obj):
+def module(pyro_name, nn_obj, tags="default"):
     """
     :param pyro_name: name of module
-    :param nn_obj: pytorch nn module
-    :returns: pytorch nn object
+    :type pyro_name: str
+    :param nn_obj: the module to be registered with pyro
+    :type nn_obj: torch.nn.Module
+    :param tags: optional; tags to associate with any parameters inside the module
+    :type tags: string or iterable of strings
+    :returns: torch.nn.Module
 
-    Takes a pytorch nn module and registers its parameters with the param store.
+    Takes a torch.nn.Module and registers its parameters with the param store.
     In conjunction with the param store save() and load() functionality, this
-    allows the user to save and load nn modules
+    allows the user to save and load modules.
     """
     assert hasattr(nn_obj, "parameters"), "module has no parameters"
     assert _MODULE_NAMESPACE_DIVIDER not in pyro_name, "improper module name, since contains %s" %\
@@ -251,7 +252,8 @@ def module(pyro_name, nn_obj):
 
     state_dict = {}
     for param_name, param in nn_obj.named_parameters():
-        state_dict[param_name] = pyro.param(param_with_module_name(pyro_name, param_name), param)
+        state_dict[param_name] = pyro.param(param_with_module_name(pyro_name, param_name), param,
+                                            tags=tags)
 
     current_nn_state = nn_obj.state_dict()
     for name, param in state_dict.items():
@@ -267,6 +269,7 @@ def module(pyro_name, nn_obj):
         if id(param) != id(current_nn_state[name]):
             current_nn_state[name].copy_(param)
 
+    # the KeyError below may not be correct; see github issue
     missing = set(current_nn_state.keys()) - set(state_dict.keys())
     if len(missing) > 0:
         raise KeyError('missing keys in state_dict: "{}"'.format(missing))
