@@ -5,14 +5,13 @@ from .block_poutine import BlockPoutine
 from .poutine import Poutine  # noqa: F401
 from .replay_poutine import ReplayPoutine
 from .trace_poutine import TracePoutine
-from .tracegraph_poutine import TraceGraphPoutine
 from .lift_poutine import LiftPoutine
 from .condition_poutine import ConditionPoutine
 from .lambda_poutine import LambdaPoutine  # noqa: F401
 from .escape_poutine import EscapePoutine
 
 # trace data structures
-from .trace import Trace, TraceGraph  # noqa: F401
+from .trace import Trace  # noqa: F401
 from pyro import util
 
 
@@ -20,7 +19,7 @@ from pyro import util
 # Begin primitive operations
 ############################################
 
-def trace(fn):
+def trace(fn, graph_type=None):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :returns: stochastic function wrapped in a TracePoutine
@@ -29,25 +28,12 @@ def trace(fn):
     Alias for TracePoutine constructor.
 
     Given a callable that contains Pyro primitive calls, return a TracePoutine callable
-    that records the inputs and outputs to those primitive calls.
+    that records the inputs and outputs to those primitive calls
+    and their dependencies.
+
     Adds trace data structure site constructors to primitive stacks
     """
-    return TracePoutine(fn)
-
-
-def tracegraph(fn):
-    """
-    :param fn: a stochastic function (callable containing pyro primitive calls)
-    :returns: stochastic function wrapped in a TraceGraphPoutine
-    :rtype: pyro.poutine.TraceGraphPoutine
-
-    Alias for TraceGraphPoutine constructor.
-
-    Given a callable that contains Pyro primitive calls,, return a TraceGraphPoutine callable
-    that records the inputs and outputs to those primitive calls and their dependencies.
-    Adds trace and tracegraph data structure site constructors to primitive stacks
-    """
-    return TraceGraphPoutine(fn)
+    return TracePoutine(fn, graph_type=graph_type)
 
 
 def replay(fn, trace, sites=None):
