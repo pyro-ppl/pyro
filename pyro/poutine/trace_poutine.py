@@ -72,11 +72,14 @@ class TracePoutine(Poutine):
             tr = Trace()
             tr.add_node("_INPUT",
                         name="_INPUT", type="input",
-                        args=self.trace["args"], kwargs=self.trace["kwargs"])
+                        args=self.trace.nodes["_INPUT"]["args"],
+                        kwargs=self.trace.nodes["_INPUT"]["kwargs"])
             self.trace = tr
 
         val = super(TracePoutine, self)._pyro_sample(msg)
-        self.trace.add_node(msg["name"], value=val, **msg)
+        site = msg.copy()
+        site.update(value=val)
+        self.trace.add_node(msg["name"], **site)
         return val
 
     def _pyro_observe(self, msg):
@@ -99,11 +102,14 @@ class TracePoutine(Poutine):
             tr = Trace()
             tr.add_node("_INPUT",
                         name="_INPUT", type="input",
-                        args=self.trace["args"], kwargs=self.trace["kwargs"])
+                        args=self.trace.nodes["_INPUT"]["args"],
+                        kwargs=self.trace.nodes["_INPUT"]["kwargs"])
             self.trace = tr
 
         val = super(TracePoutine, self)._pyro_observe(msg)
-        self.trace.add_node(msg["name"], value=val, **msg)
+        site = msg.copy()
+        site.update(value=val)
+        self.trace.add_node(msg["name"], **site)
         return val
 
     def _pyro_param(self, msg):
@@ -120,5 +126,7 @@ class TracePoutine(Poutine):
         Store the parameter in self.trace, and then return the parameter.
         """
         val = super(TracePoutine, self)._pyro_param(msg)
-        self.trace.add_node(msg["name"], value=val, **msg)
+        site = msg.copy()
+        site.update(value=val)
+        self.trace.add_node(msg["name"], **site)
         return val

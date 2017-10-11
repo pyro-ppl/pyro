@@ -19,19 +19,21 @@ class Trace(networkx.DiGraph):
         graph_type = kwargs.pop("graph_type", "flat")
         assert graph_type in ("flat", "dense"), \
             "{} not a valid graph type".format(graph_type)
+        self.graph_type = graph_type
         super(Trace, self).__init__(*args, **kwargs)
 
-    def add_node(self, name, *args, **kwargs):
+    def add_node(self, site_name, *args, **kwargs):
         """
         TODO docs
         add site
         """
         # XXX should do more validation than this
-        assert name not in self, \
-            "site {} already in trace".format(name)
+        if kwargs["type"] != "param":
+            assert site_name not in self, \
+                "site {} already in trace".format(site_name)
 
         # XXX should copy in case site gets mutated, or dont bother?
-        super(Trace, self).add_node(name, *args.copy(), **kwargs.copy())
+        super(Trace, self).add_node(site_name, *args, **kwargs.copy())
 
     def identify_edges(self):
         """
@@ -39,23 +41,29 @@ class Trace(networkx.DiGraph):
         """
         if self.graph_type == "dense":
             # XXX will this iterate over nodes?
-            for node in self.nodes:
-                # XXX why tuple?
-                map_data_stack = tuple(reversed(node["map_data_stack"]))
-                for past_node in self.nodes:
-                    if past_node == node:
-                        break
-                    past_node_independent = False
-                    past_node_map_data_stack = tuple(
-                        reversed(past_node["map_data_stack"]))
-                    for query, target in zip(map_data_stack, past_node_map_data_stack):
-                        if query[0] == target[0] and query[1] != target[1]:
-                            past_node_independent = True
-                            break
-                    if not past_node_independent:
-                        self.add_edge(past_node, node)
+            for name, node in self.nodes.items():
+                if node["type"] in ("sample", "observe", "param"):
+                    # XXX why tuple?
+                    map_data_stack = tuple(reversed(node["map_data_stack"]))
+                    for past_name, past_node in self.nodes.items():
+                        if past_node["type"] in ("sample", "observe", "param"):
+                            if past_name == name:
+                                break
+                            past_node_independent = False
+                            past_node_map_data_stack = tuple(
+                                reversed(past_node["map_data_stack"]))
+                            for query, target in zip(map_data_stack,
+                                                     past_node_map_data_stack):
+                                if query[0] == target[0] and query[1] != target[1]:
+                                    past_node_independent = True
+                                    break
+                            if not past_node_independent:
+                                self.add_edge(past_name, name)
 
-            self.vectorized_map_data_info = util.vectorized_map_data_info(self.nodes)
+            self.vectorized_map_data_info = util.get_vectorized_map_data_info(self.nodes)
+
+    def copy(self):
+        return Trace(self)
 
     # XXX not updated?
     def log_pdf(self, site_filter=lambda name, site: True):

@@ -274,10 +274,10 @@ def enum_extend(trace, msg, num_samples=None):
         if i > num_samples and num_samples >= 0:
             break
         msg_copy = msg.copy()
-        msg_copy.update(ret=s)
-        extended_traces.append(trace.copy().add_sample(
-            msg_copy["name"], msg_copy["scale"], msg_copy["value"],
-            msg_copy["fn"], *msg_copy["args"], **msg_copy["kwargs"]))
+        msg_copy.update(value=s)
+        tr_cp = trace.copy()
+        tr_cp.add_node(msg["name"], **msg_copy)
+        extended_traces.append(tr_cp)
     return extended_traces
 
 
@@ -300,9 +300,9 @@ def mc_extend(trace, msg, num_samples=None):
     for i in range(num_samples):
         msg_copy = msg.copy()
         msg_copy["value"] = msg_copy["fn"](*msg_copy["args"], **msg_copy["kwargs"])
-        extended_traces.append(trace.copy().add_sample(
-            msg_copy["name"], msg_copy["scale"], msg_copy["value"],
-            msg_copy["fn"], *msg_copy["args"], **msg_copy["kwargs"]))
+        tr_cp = trace.copy()
+        tr_cp.add_node(msg_copy["name"], **msg_copy)
+        extended_traces.append(tr_cp)
     return extended_traces
 
 
@@ -348,26 +348,27 @@ def get_vectorized_map_data_info(nodes):
     vec_md_stacks = set()
 
     for name, node in nodes.items():
-        stack = tuple(reversed(node["map_data_stack"]))
-        vec_mds = list(filter(lambda x: x[2] == 'tensor', stack))
-        # check for nested vectorized map datas
-        if len(vec_mds) > 1:
-            vectorized_map_data_info['rao-blackwellization-condition'] = False
-        # check that vectorized map datas only found at innermost position
-        if len(vec_mds) > 0 and stack[-1][2] == 'list':
-            vectorized_map_data_info['rao-blackwellization-condition'] = False
-        # for now enforce batch_dim = 0 for vectorized map_data
-        # since needed batch_log_pdf infrastructure missing
-        if len(vec_mds) > 0 and vec_mds[0][3] != 0:
-            vectorized_map_data_info['rao-blackwellization-condition'] = False
-        # enforce that if there are multiple vectorized map_datas, they are all
-        # independent of one another because of enclosing list map_datas
-        # (step 1: collect the stacks)
-        if len(vec_mds) > 0:
-            vec_md_stacks.add(stack)
-        # bail, since condition false
-        if not vectorized_map_data_info['rao-blackwellization-condition']:
-            break
+        if node["type"] in ("sample", "observe", "param"):
+            stack = tuple(reversed(node["map_data_stack"]))
+            vec_mds = list(filter(lambda x: x[2] == 'tensor', stack))
+            # check for nested vectorized map datas
+            if len(vec_mds) > 1:
+                vectorized_map_data_info['rao-blackwellization-condition'] = False
+            # check that vectorized map datas only found at innermost position
+            if len(vec_mds) > 0 and stack[-1][2] == 'list':
+                vectorized_map_data_info['rao-blackwellization-condition'] = False
+            # for now enforce batch_dim = 0 for vectorized map_data
+            # since needed batch_log_pdf infrastructure missing
+            if len(vec_mds) > 0 and vec_mds[0][3] != 0:
+                vectorized_map_data_info['rao-blackwellization-condition'] = False
+            # enforce that if there are multiple vectorized map_datas, they are all
+            # independent of one another because of enclosing list map_datas
+            # (step 1: collect the stacks)
+            if len(vec_mds) > 0:
+                vec_md_stacks.add(stack)
+            # bail, since condition false
+            if not vectorized_map_data_info['rao-blackwellization-condition']:
+                break
 
     # enforce that if there are multiple vectorized map_datas, they are all
     # independent of one another because of enclosing list map_datas
@@ -391,11 +392,12 @@ def get_vectorized_map_data_info(nodes):
     if vectorized_map_data_info['rao-blackwellization-condition']:
         vectorized_map_data_info['nodes'] = defaultdict(list)  # XXX lambda: [])
         for name, node in nodes.items():
-            stack = tuple(reversed(node["map_data_stack"]))
-            vec_mds = list(filter(lambda x: x[2] == 'tensor', stack))
-            if len(vec_mds) > 0:
-                node_batch_dim_pair = (node, vec_mds[0][3])
-                vectorized_map_data_info['nodes'][vec_mds[0][0]].append(node_batch_dim_pair)
+            if node["type"] in ("sample", "observe", "param"):
+                stack = tuple(reversed(node["map_data_stack"]))
+                vec_mds = list(filter(lambda x: x[2] == 'tensor', stack))
+                if len(vec_mds) > 0:
+                    node_batch_dim_pair = (node, vec_mds[0][3])
+                    vectorized_map_data_info['nodes'][vec_mds[0][0]].append(node_batch_dim_pair)
 
     return vectorized_map_data_info
 
