@@ -71,7 +71,7 @@ def sample(name, fn, *args, **kwargs):
     if len(_PYRO_STACK) == 0:
         if obs is not None:
             warnings.warn("trying to observe a value outside of inference at " + name,
-                          warnings.RuntimeWarning)
+                          RuntimeWarning)
         return fn(*args, **kwargs)
     # if stack not empty, apply everything in the stack?
     else:
