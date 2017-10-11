@@ -6,6 +6,7 @@ import pyro
 import pyro.distributions as dist
 from pyro import poutine
 from pyro.infer.enum import iter_discrete_traces, scale_trace
+from pyro.poutine.trace import TraceGraph
 from tests.common import assert_equal
 
 
@@ -28,10 +29,7 @@ def model2():
 
 
 @pytest.mark.parametrize("model", [model1, model2])
-@pytest.mark.parametrize("trace_type", [
-    "trace",
-    pytest.mark.xfail("tracegraph", reason="TraceGraph.copy() is not implemented"),
-])
+@pytest.mark.parametrize("trace_type", ["trace", "tracegraph"])
 def test_scale_trace(trace_type, model):
     pyro.get_param_store().clear()
     scale = 1.234
@@ -41,7 +39,11 @@ def test_scale_trace(trace_type, model):
 
     assert type(tr1) is type(tr2)
     assert tr1 is not tr2, "scale_trace() did not make a copy"
-    assert tr1.keys() == tr2.keys()
+    if isinstance(tr1, TraceGraph):
+        tr1 = tr1.trace
+        tr2 = tr2.trace
+
+    assert set(tr1.keys()) == set(tr2.keys())
     for name, site1 in tr1.items():
         if "scale" in site1:
             site2 = tr2[name]
@@ -52,10 +54,7 @@ def test_scale_trace(trace_type, model):
     assert_equal(tr2.batch_log_pdf(), scale * tr1.batch_log_pdf())
 
 
-@pytest.mark.parametrize("trace_type", [
-    "trace",
-    pytest.mark.xfail("tracegraph", reason="TraceGraph.copy() is not implemented"),
-])
+@pytest.mark.parametrize("trace_type", ["trace", "tracegraph"])
 def test_iter_discrete_traces(trace_type):
     pyro.get_param_store().clear()
     poutine_trace = getattr(poutine, trace_type)
@@ -66,6 +65,8 @@ def test_iter_discrete_traces(trace_type):
     assert len(traces) == 2 * len(ps)
 
     for scale, trace in traces:
+        if isinstance(trace, TraceGraph):
+            trace = trace.trace
         x = trace["x"]["value"].data.squeeze().long()[0]
         y = trace["y"]["value"].data.squeeze().long()[0]
         expected_scale = [1 - p[0], p[0]][x] * ps[y]

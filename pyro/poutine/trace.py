@@ -1,3 +1,4 @@
+import copy
 import graphviz
 import networkx
 
@@ -147,6 +148,17 @@ class TraceGraph(object):
         self.nonreparam_stochastic_nodes = list(set(stochastic_nodes) - set(reparameterized_nodes))
         self.observation_nodes = observation_nodes
         self.vectorized_map_data_info = vectorized_map_data_info
+
+    def copy(self):
+        """
+        Make a copy (for dynamic programming)
+        """
+        return TraceGraph(self.G.copy(),
+                          self.trace.copy(),
+                          copy.copy(self.stochastic_nodes),
+                          copy.copy(self.reparameterized_nodes),
+                          copy.copy(self.observation_nodes),
+                          copy.copy(self.vectorized_map_data_info))
 
     def get_stochastic_nodes(self):
         """

@@ -7,7 +7,7 @@ from torch.autograd import Variable
 
 from pyro import util
 from pyro import poutine
-from pyro.poutine.trace import Trace
+from pyro.poutine.trace import Trace, TraceGraph
 
 
 def site_is_discrete(name, site):
@@ -43,7 +43,10 @@ def iter_discrete_traces(poutine_trace, fn, *args, **kwargs):
             continue
 
         # Scale trace by probability of discrete choices.
-        log_pdf = full_trace.log_pdf(site_filter=site_is_discrete)
+        if isinstance(full_trace, TraceGraph):
+            log_pdf = full_trace.trace.log_pdf(site_filter=site_is_discrete)
+        else:
+            log_pdf = full_trace.log_pdf(site_filter=site_is_discrete)
         if isinstance(log_pdf, Variable):
             log_pdf = log_pdf.data
         if isinstance(log_pdf, torch.Tensor):
@@ -63,6 +66,9 @@ def scale_trace(trace, scale):
     :rtype: Trace
     """
     trace = trace.copy()
+    if isinstance(trace, TraceGraph):
+        trace.trace = scale_trace(trace.trace, scale)
+        return trace
     for name, site in trace.items():
         if "scale" in site:
             site = site.copy()
