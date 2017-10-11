@@ -42,12 +42,12 @@ class ReplayPoutine(Poutine):
         all the way down to the bottom of the stack,
         so that the correct indices are used.
 
-        If the site type is "sample",
+        If the site type is "sample" or "managed",
         sets the return value and the "done" flag
         so that poutines below it do not execute their sample functions at that site.
         """
         if msg["name"] in self.sites:
-            if msg["type"] == "sample":
+            if msg["type"] in ("sample", "managed"):
                 msg["done"] = True
                 msg["ret"] = self.guide_trace[msg["name"]]["value"]
 
@@ -77,3 +77,28 @@ class ReplayPoutine(Poutine):
         # case 2: dict, negative: sample from model
         else:
             return super(ReplayPoutine, self)._pyro_sample(msg)
+
+    def _pyro_managed(self, msg):
+        """
+        :param msg: current message at a trace site.
+
+        At a managed site that appears in self.guide_trace,
+        returns the value from self.guide_trace instead of executing
+        from the managed function.
+
+        At a sample site that does not appear in self.guide_trace,
+        reverts to default Poutine._pyro_managed behavior with no additional side effects.
+        """
+        name = msg["name"]
+        # case 1: dict, positive: replay from guide
+        if name in self.sites:
+            g_name = self.sites[name]
+            assert g_name in self.guide_trace, \
+                "{} in sites but {} not in trace".format(name, g_name)
+            assert self.guide_trace[g_name]["type"] == "managed", \
+                "site {} must be managed in guide_trace".format(g_name)
+            msg["done"] = True
+            return self.guide_trace[g_name]["value"]
+        # case 2: dict, negative: execute from model
+        else:
+            return super(ReplayPoutine, self)._pyro_managed(msg)

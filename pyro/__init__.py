@@ -9,6 +9,7 @@ from torch.autograd import Variable
 
 import pyro
 import pyro.poutine as poutine
+import pyro.util as util
 
 from pyro.params import param_with_module_name
 from pyro.params.param_store import ParamStoreDict
@@ -114,6 +115,33 @@ def observe(name, fn, obs, *args, **kwargs):
     return sample(name, fn, *args, **kwargs)
 
 
+def managed(name, fn, *args, **kwargs):
+    """
+    :param name: name of subsampling site
+    :param callable fn: a function to execute
+
+    Executes a nondeterministic function in a managed way.
+    """
+    if len(_PYRO_STACK) == 0:
+        return fn(*args, **kwargs)
+    else:
+        msg = {
+            "type": "managed",
+            "name": name,
+            "fn": fn,
+            "args": args,
+            "kwargs": kwargs,
+            "ret": None,
+            "scale": 1.0,
+            "map_data_stack": [],
+            "done": False,
+            "stop": False,
+        }
+        # apply the stack and return its return value
+        out_msg = apply_stack(msg)
+        return out_msg["ret"]
+
+
 @contextlib.contextmanager
 def iarange(name, size, subsample_size=0):
     """
@@ -149,7 +177,7 @@ def iarange(name, size, subsample_size=0):
         yield Variable(torch.LongTensor(list(range(size))))
         return
 
-    subsample = Variable(torch.randperm(size)[0:subsample_size])
+    subsample = managed(name, util.subsample_range, size, subsample_size)
     if len(_PYRO_STACK) == 0:
         yield subsample
     else:
