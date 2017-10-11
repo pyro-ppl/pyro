@@ -339,7 +339,7 @@ def all_escape(trace, msg):
 
 def get_vectorized_map_data_info(nodes):
     """
-    this determines whether the vectorized map_datas 
+    this determines whether the vectorized map_datas
     are rao-blackwellizable by tracegraph_kl_qp
     also gathers information to be consumed by downstream by tracegraph_kl_qp
     XXX this logic should probably sit elsewhere
