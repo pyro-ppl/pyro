@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import torch
 from torch.autograd import Variable
 import pytest
@@ -157,3 +159,31 @@ def test_nested_map_data():
     for name in tr.keys():
         if tr[name]["type"] == "sample":
             assert tr[name]["scale"] == 4.0 * 2.0
+
+
+@pytest.mark.xfail(reason="https://github.com/uber/pyro/issues/235")
+def test_replay_iarange():
+    pyro.set_rng_seed(0)
+
+    def model():
+        with pyro.iarange('iarange', 10, 2) as batch:
+            return list(batch.data)
+
+    traced_model = poutine.trace(model)
+    expected = traced_model()
+    actual = poutine.replay(model, traced_model.trace)()
+    assert actual == expected
+
+
+@pytest.mark.xfail(reason="https://github.com/uber/pyro/issues/235")
+def test_replay_map_data():
+    pyro.set_rng_seed(0)
+    data = list(range(10))
+
+    def model():
+        return pyro.map_data('mapdata', data, lambda i, x: i, batch_size=2)
+
+    traced_model = poutine.trace(model)
+    expected = traced_model()
+    actual = poutine.replay(model, traced_model.trace)()
+    assert actual == expected
