@@ -98,6 +98,7 @@ def get_mini_batch_mask(mini_batch, seq_lengths):
         mask[b, 0:seq_lengths[b]] = np.ones(seq_lengths[b])
     return mask
 
+
 # this function prepares a mini-batch for training or evaluation
 # it returns a mini-batch in forward temporal order (`mini_batch`) as
 # as a mini-batch in reverse temporal order (`mini_batch_reversed`).

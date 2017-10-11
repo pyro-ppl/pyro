@@ -229,9 +229,9 @@ def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
     emission_dim = 100
     rnn_dim = 600
     val_test_frequency = 1e6
-    expensive_val_test_points = [num_epochs - 1, num_epochs - 1001]
+    expensive_val_test_points = [num_epochs - 1, num_epochs - 1501]
     n_eval_samples_inner = 1
-    n_eval_samples_outer = 1000
+    n_eval_samples_outer = 200
 
     # setup logging
     logging.basicConfig(level=logging.DEBUG, format='%(message)s', filename=args.log, filemode='w')
@@ -341,7 +341,7 @@ def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
                 val_nlls.append(val_nll)
                 test_nlls.append(test_nll)
 
-            # put the RNN into training mode (i.e. turn on drop-out if applicable)
+            # put the RNN back into training mode (i.e. turn on drop-out if applicable)
             dmm.pt_rnn.train()
             val_nll, test_nll = np.mean(val_nlls), np.mean(test_nlls)
             return val_nll, test_nll
