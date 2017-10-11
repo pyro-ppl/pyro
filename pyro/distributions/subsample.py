@@ -1,8 +1,8 @@
 import torch
 from torch.autograd import Variable
-from scipy.special import gammaln
 
 from pyro.distributions.distribution import Distribution
+from pyro.util import log_gamma
 
 
 class Subsample(Distribution):
@@ -56,4 +56,4 @@ class Subsample(Distribution):
             subsample_size = x.size(-1)
         elif subsample_size != x.size(-1):
             raise ValueError("subsample does not match subsample_size")
-        return gammaln(1 + size) - gammaln(1 + size - subsample_size)
+        return log_gamma(1 + size) - log_gamma(1 + size - subsample_size)
