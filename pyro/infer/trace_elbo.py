@@ -1,5 +1,6 @@
 import pyro
 import pyro.poutine as poutine
+from pyro.infer.enum import iter_discrete_traces, scale_trace
 
 
 class Trace_ELBO(object):
@@ -7,12 +8,15 @@ class Trace_ELBO(object):
     A trace implementation of ELBO-based SVI
     """
     def __init__(self,
-                 num_particles=1):
+                 num_particles=1,
+                 enum_discrete=False):
         """
         :param num_particles: the number of particles/samples used to form the ELBO (gradient) estimators
+        :param bool enum_discrete: whether to sum over discrete latent variables, rather than sample them
         """
         super(Trace_ELBO, self).__init__()
         self.num_particles = num_particles
+        self.enum_discrete = enum_discrete
 
     def _get_traces(self, model, guide, *args, **kwargs):
         """
@@ -23,6 +27,18 @@ class Trace_ELBO(object):
         """
 
         for i in range(self.num_particles):
+            if self.enum_discrete:
+                # This iterates over a bag of traces, for each particle.
+                guide_traces = iter_discrete_traces(poutine.trace, self.guide, *args, **kwargs)
+                for scale, guide_trace in guide_traces:
+                    model_trace = poutine.trace(
+                        poutine.replay(self.model, guide_trace))(*args, **kwargs)
+                    guide_trace = scale_trace(guide_trace, scale)
+                    model_trace = scale_trace(model_trace, scale)
+                    log_r = model_trace.log_pdf() - guide_trace.log_pdf()
+                    yield model_trace, guide_trace, log_r
+                continue
+
             guide_trace = poutine.trace(guide).get_trace(*args, **kwargs)
             model_trace = poutine.trace(poutine.replay(model, guide_trace)).get_trace(*args, **kwargs)
             log_r = model_trace.log_pdf() - guide_trace.log_pdf()
