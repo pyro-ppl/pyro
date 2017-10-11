@@ -3,7 +3,7 @@ import torch
 import pyro
 from torch.autograd import Variable
 from pyro.infer.kl_qp import KL_QP
-from pyro.infer.abstract_infer import lw_expectation
+#from pyro.infer.abstract_infer import lw_expectation
 from pyro.distributions import DiagNormal, Normal, Bernoulli, Multinomial, Categorical
 from torch import nn
 
@@ -32,7 +32,6 @@ train_set = dset.MNIST(
     download=download)
 test_set = dset.MNIST(root=root, train=False, transform=trans)
 
-
 train_loader = torch.utils.data.DataLoader(
     dset.MNIST('../data', train=True, download=True,
                transform=transforms.Compose([
@@ -47,7 +46,6 @@ test_loader = torch.utils.data.DataLoader(
     ])),
     batch_size=128, shuffle=True)
 
-
 batch_size = 128
 kwargs = {'num_workers': 1, 'pin_memory': True}
 train_loader = torch.utils.data.DataLoader(
@@ -59,11 +57,12 @@ test_loader = torch.utils.data.DataLoader(
     batch_size=batch_size,
     shuffle=False, **kwargs)
 
+
 # network
 
 
 def workflow(data, classes):
-    z_mu,z_sigma = pt_encode_o.forward(data,classes)
+    z_mu, z_sigma = pt_encode_o.forward(data, classes)
     import numpy as np
     import matplotlib
     matplotlib.use('Agg')
@@ -72,31 +71,30 @@ def workflow(data, classes):
     import sklearn
     from  sklearn import manifold
     from sklearn.manifold import TSNE
-    model_tsne = TSNE(n_components=2,random_state=0)
+    model_tsne = TSNE(n_components=2, random_state=0)
     z_states = z_mu.data.cpu().numpy()
     z_embed = model_tsne.fit_transform(z_states)
 
     classes = classes.data.cpu().numpy()
-    fig666= plt.figure()
+    fig666 = plt.figure()
 
     colors = []
     for ic in range(10):
         ind_vec = np.zeros_like(classes)
-        ind_vec[:,ic]=1
-        ind_class = classes[:,ic]==1
-        #bb()
+        ind_vec[:, ic] = 1
+        ind_class = classes[:, ic] == 1
+        # bb()
         color = plt.cm.Set1(ic)
-        plt.scatter(z_embed[ind_class,0],z_embed[ind_class,1],s=10,color=color)
+        plt.scatter(z_embed[ind_class, 0], z_embed[ind_class, 1], s=10, color=color)
         plt.title("Latent Variable Embeddings colour coded by class for VAE-SS")
-        fig666.savefig('./results/vaeSS_embedding_'+str(ic)+'.png')
-        #bb()
-
+        fig666.savefig('./results/vaeSS_embedding_' + str(ic) + '.png')
+        # bb()
 
     fig666.savefig('./results/vaeSS_embedding.png')
     pass
 
-class Encoder_c(nn.Module):
 
+class Encoder_c(nn.Module):
     def __init__(self):
         super(Encoder_c, self).__init__()
         self.fc1 = nn.Linear(784, 200)
@@ -111,7 +109,6 @@ class Encoder_c(nn.Module):
 
 
 class Encoder_o(nn.Module):
-
     def __init__(self):
         super(Encoder_o, self).__init__()
         self.fc1 = nn.Linear(784 + 10, 400)
@@ -191,7 +188,7 @@ def model_observed(data, cll):
     # score against actual images
     pyro.observe("obs", Bernoulli(img_mu), data.view(-1, 784))
 
-    #this here is the extra Term to yield a joint KL loss like in the paper. Difference: no annealing.
+    # this here is the extra Term to yield a joint KL loss like in the paper. Difference: no annealing.
     encoder_c = pyro.module("encoder_c", pt_encode_c)
     alpha = encoder_c.forward(data)
     pyro.observe("observed_class", Categorical(alpha), cll)
@@ -282,7 +279,6 @@ mnist_labels_test = torch.zeros(mnist_labels_test_raw.size(0), 10)
 mnist_labels_test.scatter_(1, mnist_labels_test_raw.data.view(-1, 1), 1)
 mnist_labels_test = Variable(mnist_labels_test)
 
-
 # TODO: batches not necessarily
 all_batches = np.arange(0, mnist_size, batch_size)
 
@@ -290,7 +286,6 @@ if all_batches[-1] != mnist_size:
     all_batches = list(all_batches) + [mnist_size]
 
 vis = visdom.Visdom(env='vae_ss_400')
-
 
 cll_clamp0 = Variable(torch.zeros(1, 10))
 cll_clamp3 = Variable(torch.zeros(1, 10))
@@ -301,12 +296,29 @@ cll_clamp3[0, 3] = 1
 cll_clamp9[0, 9] = 1
 
 
+def to_ind(ys):
+    res, ind = torch.topk(ys, 1)  # Do MLE
+    return ind
+
+def classify(xs):
+    alpha = pt_encode_c.forward(xs)
+    return to_ind(alpha)
+
+def get_accuracy(data, true_labels):
+    model_labels = classify(data)
+    assert model_labels.size() == true_labels.size()
+    accuracy =  (torch.sum(model_labels == true_labels)).data[0]/ (1.0*len(model_labels))
+    return accuracy
+
+
 loss_training = []
 
 def main():
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', nargs='?', default=1000, type=int)
+    parser.add_argument('-sup', '--supervision-perc', default=50, type=int, choices=[100,50,25,10,5,4,2,1])
     args = parser.parse_args()
+    num_mod_batches = 100/args.supervision_perc
     for i in range(args.num_epochs):
 
         epoch_loss = 0.
@@ -321,8 +333,8 @@ def main():
             batch_class.scatter_(1, batch_class_raw.data.view(-1, 1), 1)
             batch_class = Variable(batch_class)
 
-            if np.mod(ix, 1) == 0:
-                #determines how much of the data is dropped out
+            if np.mod(ix, num_mod_batches) == 0:
+                # determines how much of the data is dropped out
                 epoch_loss += inference_observed_class.step(batch_data, batch_class)
 
             else:
@@ -330,25 +342,28 @@ def main():
 
         loss_training.append(epoch_loss / float(mnist_size))
 
-        if np.mod(i,5)==0:
-            if i>0:
-                workflow(mnist_data_test,mnist_labels_test)
+        """
+        if np.mod(i, 5) == 0:
+            if i > 0:
+                workflow(mnist_data_test, mnist_labels_test)
 
-        if 0:#np.mod(i,8)==0:
+        if 0:  # np.mod(i,8)==0:
             for rr in range(5):
                 sample0, sample_mu0 = model_sample(cll=cll_clamp0)
                 sample3, sample_mu3 = model_sample(cll=cll_clamp3)
                 sample9, sample_mu9 = model_sample(cll=cll_clamp9)
                 vis.line(np.array(loss_training), opts=dict({'title': 'my title'}))
                 vis.image(batch_data[0].view(28, 28).data.numpy())
-                #vis.image(sample[0].view(28, 28).data.numpy())
+                # vis.image(sample[0].view(28, 28).data.numpy())
                 vis.image(sample_mu0[0].view(28, 28).data.numpy())
                 vis.image(sample_mu3[0].view(28, 28).data.numpy())
                 vis.image(sample_mu9[0].view(28, 28).data.numpy())
-                
-        print("epoch "+str(i)+" avg loss {}".format(epoch_loss / float(mnist_size)))
+        """
+        print("epoch " + str(i) + " avg loss {}".format(epoch_loss / float(mnist_size)))
+        print("train accuracy: {}".format(get_accuracy(mnist_data, mnist_labels.view(-1,1))))
 
-        pass
+    print("test accuracy: {}".format(get_accuracy(mnist_data_test, mnist_labels_test_raw.view(-1,1))))
+
 
 if __name__ == '__main__':
     main()
