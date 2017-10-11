@@ -10,6 +10,7 @@ from pyro.poutine.trace import TraceGraph
 from tests.common import assert_equal
 
 
+# A model with continuous and discrete variables, no batching.
 def model1():
     p = pyro.param("p", Variable(torch.Tensor([0.1, 0.9])))
     mu = pyro.param("mu", Variable(torch.Tensor([-1.0, 1.0])))
@@ -20,6 +21,7 @@ def model1():
     return dict(x=x, y=y, z=z)
 
 
+# A purely discrete model, no batching.
 def model2():
     p = pyro.param("p", Variable(torch.Tensor([0.05])))
     ps = pyro.param("ps", Variable(torch.Tensor([0.1, 0.2, 0.3, 0.4])))
@@ -28,7 +30,24 @@ def model2():
     return dict(x=x, y=y)
 
 
-@pytest.mark.parametrize("model", [model1, model2])
+# A discrete model with batching.
+def model3():
+    p = pyro.param("p", Variable(torch.Tensor([[0.05], [0.15], [0.25]])))
+    ps = pyro.param("ps", Variable(torch.Tensor([[0.1, 0.2, 0.3, 0.4],
+                                                 [0.4, 0.3, 0.2, 0.1]])))
+    x = pyro.sample("x", dist.Bernoulli(p))
+    y = pyro.sample("y", dist.Categorical(ps, one_hot=False))
+    assert x.size() == (3, 1)
+    assert y.size() == (2, 1)
+    return dict(x=x, y=y)
+
+
+@pytest.mark.parametrize("model", [
+    model1,
+    model2,
+    pytest.param(model3,
+                 marks=pytest.mark.xfail(reason="tensor shape mismatch")),
+])
 @pytest.mark.parametrize("trace_type", ["trace", "tracegraph"])
 def test_scale_trace(trace_type, model):
     pyro.get_param_store().clear()
@@ -55,7 +74,7 @@ def test_scale_trace(trace_type, model):
 
 
 @pytest.mark.parametrize("trace_type", ["trace", "tracegraph"])
-def test_iter_discrete_traces(trace_type):
+def test_iter_discrete_traces_scalar(trace_type):
     pyro.get_param_store().clear()
     poutine_trace = getattr(poutine, trace_type)
     traces = list(iter_discrete_traces(poutine_trace, model2))
@@ -67,7 +86,29 @@ def test_iter_discrete_traces(trace_type):
     for scale, trace in traces:
         if isinstance(trace, TraceGraph):
             trace = trace.trace
+        x = trace["x"]["value"].data.long().view(-1)[0]
+        y = trace["y"]["value"].data.long().view(-1)[0]
+        expected_scale = [1 - p[0], p[0]][x] * ps[y]
+        assert_equal(scale, expected_scale)
+
+
+@pytest.mark.xfail(reason=".support iterates over cartesian products")
+@pytest.mark.parametrize("trace_type", ["trace", "tracegraph"])
+def test_iter_discrete_traces_vector(trace_type):
+    pyro.get_param_store().clear()
+    poutine_trace = getattr(poutine, trace_type)
+    traces = list(iter_discrete_traces(poutine_trace, model3))
+
+    p = pyro.param("p").data
+    ps = pyro.param("ps").data
+    assert len(traces) == 2 * ps.size(-1)
+
+    for scale, trace in traces:
+        if isinstance(trace, TraceGraph):
+            trace = trace.trace
         x = trace["x"]["value"].data.squeeze().long()[0]
         y = trace["y"]["value"].data.squeeze().long()[0]
-        expected_scale = [1 - p[0], p[0]][x] * ps[y]
+        expected_scale = torch.exp(dist.Bernoulli(p).log_pdf(x) *
+                                   dist.Categorical(ps, one_hot=False).log_pdf(y))
+        expected_scale = expected_scale.data.view(-1)[0]
         assert_equal(scale, expected_scale)
