@@ -126,6 +126,11 @@ class Categorical(Distribution):
         """
         Returns the categorical distribution's support, as a tensor along the first dimension.
 
+        Note that this returns support values of all the batched RVs in lock-step, rather
+        than the full cartesian product. To iterate over the cartesian product, you must
+        construct univariate Categoricals and use itertools.product() over all univariate
+        variables (but this is very expensive).
+
         :param ps: numpy.ndarray where the last dimension denotes the event probabilities, *p_k*,
             whichmust sum to 1. The remaining dimensions are considered batch dimensions.
         :param vs: Optional parameter, enumerating the items in the support. This could either
@@ -152,9 +157,7 @@ class Categorical(Distribution):
             else:
                 return torch.t(vs)
         if one_hot:
-            if not batch_size:
-                return Variable(torch.stack([t.expand_as(ps) for t in torch.eye(event_size).long()]))
-            return Variable(torch.stack([t.expand_as(ps) for t in torch.eye(event_size).long()]))
+            return Variable(torch.stack([t.expand_as(ps) for t in torch.eye(event_size)]))
         else:
             if not batch_size:
                 return Variable(torch.arange(0, event_size)).long()

@@ -33,10 +33,12 @@ class TestCategorical(TestCase):
 
         self.n_samples = 50000
 
-        self.support_non_vec = torch.LongTensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
-        self.support = torch.LongTensor([[[1, 0, 0], [1, 0, 0]], [[0, 1, 0], [0, 1, 0]], [[0, 0, 1], [0, 0, 1]]])
-        self.nhot_support_non_vec = torch.LongTensor([0, 1, 2])
-        self.nhot_support = torch.LongTensor([[0, 0], [1, 1], [2, 2]])
+        self.support_one_hot_non_vec = torch.Tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+        self.support_one_hot = torch.Tensor([[[1, 0, 0], [1, 0, 0]],
+                                             [[0, 1, 0], [0, 1, 0]],
+                                             [[0, 0, 1], [0, 0, 1]]])
+        self.support_non_vec = torch.LongTensor([0, 1, 2])
+        self.support = torch.LongTensor([[0, 0], [1, 1], [2, 2]])
         self.discrete_support_non_vec = torch.Tensor([0, 1, 2])
         self.discrete_support = torch.Tensor([[0, 3], [1, 4], [2, 5]])
         self.discrete_arr_support_non_vec = ['a', 'b', 'c']
@@ -75,13 +77,13 @@ class TestCategorical(TestCase):
         self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
         self.assertEqual(log_px_torch2, log_px_np2, prec=1e-4)
 
-    def test_support_non_vectorized(self):
+    def test_one_hot_support_non_vectorized(self):
         s = dist.categorical.support(self.d_ps[0].squeeze(0))
-        assert_equal(s.data, self.support_non_vec)
+        assert_equal(s.data, self.support_one_hot_non_vec)
 
-    def test_support(self):
+    def test_one_hot_support(self):
         s = dist.categorical.support(self.d_ps)
-        assert_equal(s.data, self.support)
+        assert_equal(s.data, self.support_one_hot)
 
     def test_discrete_support_non_vectorized(self):
         s = dist.categorical.support(self.d_ps[0].squeeze(0), self.d_vs[0].squeeze(0))
@@ -99,10 +101,10 @@ class TestCategorical(TestCase):
         s = dist.categorical.support(self.d_ps, self.d_vs_arr).tolist()
         assert_equal(s, self.discrete_arr_support)
 
-    def test_nhot_support_non_vectorized(self):
+    def test_support_non_vectorized(self):
         s = dist.categorical.support(self.batch_ps[0].squeeze(0), one_hot=False)
-        assert_equal(s.data, self.nhot_support_non_vec)
+        assert_equal(s.data, self.support_non_vec)
 
-    def test_nhot_support(self):
+    def test_support(self):
         s = dist.categorical.support(self.batch_ps, one_hot=False)
-        assert_equal(s.data, self.nhot_support)
+        assert_equal(s.data, self.support)
