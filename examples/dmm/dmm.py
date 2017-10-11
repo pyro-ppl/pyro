@@ -43,6 +43,10 @@ class Emitter(nn.Module):
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, z):
+        """
+        Given the latent z at a particular time step t we return the vector of probabilities
+        that parameterizes the bernoulli distribution p(x_t|z_t)
+        """
         h1 = self.relu(self.lin1(z))
         h2 = self.relu(self.lin2(h1))
         ps = self.sigmoid(self.lin3(h2))
@@ -68,6 +72,10 @@ class GatedTransition(nn.Module):
         self.softplus = nn.Softplus()
 
     def forward(self, z):
+        """
+        Given the latent z_{t-1} corresponding to the time step t-1 we return the mean and sigma vectors
+        that parameterize the (diagonal) gaussian distribution p(z_t | z_{t-1})
+        """
         g = self.sigmoid(self.lin_g2(self.relu(self.lin_g1(z))))
         h = self.lin_h2(self.relu(self.lin_h1(z)))
         mu = (ng_ones(g.size()).type_as(g) - g) * self.lin_mu(z) + g * h
@@ -90,6 +98,11 @@ class Combiner(nn.Module):
         self.softplus = nn.Softplus()
 
     def forward(self, z, h_rnn):
+        """
+        Given the latent z at at a particular time step t-1 as well as the hidden state of
+        the RNN h(x_{t:T}) we return the mean and sigma vectors that parameterize the (diagonal)
+        gaussian distribution p(z_t | z_{t-1})
+        """
         h_combined = 0.5 * (self.tanh(self.lin_z(z)) + h_rnn)
         mu = self.lin_mu(h_combined)
         sigma = self.softplus(self.lin_sig(h_combined))
@@ -110,11 +123,12 @@ class DMM(nn.Module):
         self.pt_rnn = nn.RNN(input_size=input_dim, hidden_size=rnn_dim, nonlinearity='relu',
                              batch_first=True, bidirectional=False, num_layers=args.rnn_num_layers,
                              dropout=args.rnn_dropout_rate)
+        # if we're using normalizing flows, instantiate those too
+        self.pt_iafs = [InverseAutoregressiveFlow(z_dim, 100) for _ in range(args.num_iafs)]
 
         self.args = args
         self.z_dim = z_dim
         self.rnn_dim = rnn_dim
-        self.pt_iafs = [InverseAutoregressiveFlow(z_dim, 100) for _ in range(args.num_iafs)]
 
         # if on gpu cuda-ize all pytorch (sub)modules
         if args.cuda:
@@ -125,50 +139,76 @@ class DMM(nn.Module):
     def model(self, mini_batch, mini_batch_reversed, mini_batch_mask,
               mini_batch_seq_lengths, annealing_factor=1.0):
 
+        # this is the number of time steps we need to process in the mini-batch
         T_max = np.max(mini_batch_seq_lengths)
+
+        # register the emitter and transmition pytorch modules with pyro
         emitter = pyro.module("emitter", self.pt_emitter)
         trans = pyro.module("transition", self.pt_trans)
+
+        # define a (trainable) parameter z_0 that helps define the probability
+        # distribution p(z_1), which isn't conditioned on any previous latents
         z_prev = pyro.param("z_0", zeros(self.z_dim, type_as=mini_batch.data))
 
+        # sample the latents z and observed x's one time step at a time
         for t in range(1, T_max + 1):
+            # the next three lines of code sample z_t ~ p(z_t | z_{t-1})
+            # note that log_pdf_mask takes care of both
+            # (i)  KL annealing; and
+            # (ii) raggedness in the observed data (i.e. different sequences in the mini-batch
+            #      (have different lengths)
             z_mu, z_sigma = trans(z_prev)
             z_t = pyro.sample("z_%d" % t, dist.DiagNormal(z_mu, z_sigma),
                               log_pdf_mask=annealing_factor * mini_batch_mask[:, t - 1:t])
+            # the next three lines observe x_t according to the distribution p(x_t|z_t)
+            z_mu, z_sigma = trans(z_prev)
             emission_probs_t = emitter(z_t)
             pyro.observe("obs_x_%d" % t, dist.bernoulli, mini_batch[:, t - 1, :], emission_probs_t,
                          log_pdf_mask=mini_batch_mask[:, t - 1:t])
+            # the lqtent sampled at this time step will be conditioned upon in the next time step
             z_prev = z_t
-
-        return z_prev
 
     # the guide q(z|x) (i.e. the variational distribution)
     def guide(self, mini_batch, mini_batch_reversed, mini_batch_mask,
               mini_batch_seq_lengths, annealing_factor=1.0):
 
+        # this is the number of time steps we need to process in the mini-batch
         T_max = np.max(mini_batch_seq_lengths)
+        # register the combiner and rnn pytorch modules with pyro
         rnn = pyro.module("rnn", self.pt_rnn)
         combiner = pyro.module("combiner", self.pt_combiner)
 
-        # complicated rnn behavior for gpus
+        # define a parameter for the initial state of the rnn
         h_0 = pyro.param("h_0", zeros(self.pt_rnn.num_layers, 1, self.rnn_dim, type_as=mini_batch.data))
+        # if on gpu we need all of h_0 in cuda memory
         if self.args.cuda:
             h_0 = h_0.expand(*[h_0.data.shape[0], mini_batch.data.shape[0], h_0.data.shape[2]]).contiguous()
 
+        # push the observed x's through the rnn; rnn_output contains the hidden at each time step
         rnn_output, _ = rnn(mini_batch_reversed, h_0)
+        # reverse the time-ordering in the hidden state and un-pack it
         rnn_output = poly.pad_and_reverse(rnn_output, mini_batch_seq_lengths)
+        # define a (trainable) parameter z_0 that helps define the probability
+        # distribution p(z_1), which isn't conditioned on any previous latents
         z_prev = pyro.param("z_q_0", zeros(self.z_dim, type_as=mini_batch.data))
 
+        # sample the latents z one time step at a time
         for t in range(1, T_max + 1):
+            # the next two lines assemble the distribution q(z_t | z_{t-1}, x_{t:T})
             z_mu, z_sigma = combiner(z_prev, rnn_output[:, t - 1, :])
             z_dist = dist.DiagNormal(z_mu, z_sigma)
+
+            # if we are including normalizing flows, we register each normalizing flow module with pyro
+            # and replace z_dist with a transformed distribution (so that z_dist above is the base distribution
+            # of the normalizing flow and not q(z_t|...) itself)
             iafs = [pyro.module("iaf_%d" % i, pt_iaf) for i, pt_iaf in enumerate(self.pt_iafs)]
             if len(iafs) > 0:
                 z_dist = TransformedDistribution(z_dist, iafs)
+            # sample z_t from the distribution z_dist
             z_t = pyro.sample("z_%d" % t, z_dist,
                               log_pdf_mask=annealing_factor * mini_batch_mask[:, t - 1:t])
+            # the lqtent sampled at this time step will be conditioned upon in the next time step
             z_prev = z_t
-
-        return z_prev
 
 
 # setup, training, and evaluation
@@ -191,7 +231,7 @@ def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
     val_test_frequency = 1e6
     expensive_val_test_points = [num_epochs - 1, num_epochs - 1001]
     n_eval_samples_inner = 1
-    n_eval_samples_outer = 10
+    n_eval_samples_outer = 1000
 
     # setup logging
     logging.basicConfig(level=logging.DEBUG, format='%(message)s', filename=args.log, filemode='w')
@@ -247,28 +287,38 @@ def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
 
     # setup inference algorithm
     elbo = SVI(dmm.model, dmm.guide, adam, "ELBO", trace_graph=False)
+    # by default the KL annealing factor is unity
     annealing_factor = 1.0
     expensive_evaluations = []
 
+    # training loop
     for epoch in range(args.num_epochs):
         epoch_nll = 0.0
+        # prepare mini-batch subsampling indices
         shuffled_indices = np.arange(N_train_data)
         np.random.shuffle(shuffled_indices)
 
+        # process each mini-batch
         for which in range(N_mini_batches):
             if args.annealing_epochs > 0 and epoch < args.annealing_epochs:
+                # compute the KL annealing factor approriate for the current mini-batch in the current epoch
                 min_af = args.minimum_annealing_factor
                 annealing_factor = min_af + (1.0 - min_af) * \
                     (float(which + epoch * N_mini_batches + 1) /
                      float(args.annealing_epochs * N_mini_batches))
+
+            # compute which mini-batch indices we should grab
             mini_batch_start = (which * args.mini_batch_size)
             mini_batch_end = np.min([(which + 1) * args.mini_batch_size, N_train_data])
             mini_batch_indices = shuffled_indices[mini_batch_start:mini_batch_end]
+            # grab the actual mini-batch using the helper function in the data loader
             mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths \
                 = poly.get_mini_batch(mini_batch_indices, training_data_sequences,
                                       training_seq_lengths, cuda=cuda)
+            # do an actual gradient step
             loss = elbo.step(mini_batch, mini_batch_reversed, mini_batch_mask,
                              mini_batch_seq_lengths, annealing_factor)
+            # keep track of the training loss
             epoch_nll += loss
 
         times.append(time.time())
@@ -276,10 +326,13 @@ def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
         log("[training epoch %04d]  %.4f \t\t\t\t(dt = %.3f sec)" %
             (epoch, epoch_nll / N_train_time_slices, epoch_time))
 
+        # helper function for doing evaluation
         def do_evaluation(n_samples):
+            # put the RNN into evaluation mode (i.e. turn off drop-out if applicable)
             dmm.pt_rnn.eval()
             val_nlls, test_nlls = [], []
 
+            # compute the validation and test loss n_samples many times
             for _ in range(n_samples):
                 val_nll = elbo.evaluate_loss(val_batch, val_batch_reversed, val_batch_mask,
                                              val_seq_lengths) / np.sum(val_seq_lengths)
@@ -288,6 +341,7 @@ def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
                 val_nlls.append(val_nll)
                 test_nlls.append(test_nll)
 
+            # put the RNN into training mode (i.e. turn on drop-out if applicable)
             dmm.pt_rnn.train()
             val_nll, test_nll = np.mean(val_nlls), np.mean(test_nlls)
             return val_nll, test_nll
@@ -304,6 +358,7 @@ def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
     return expensive_evaluations
 
 
+# parse command-line arguments and execute the main method
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description="parse args")
