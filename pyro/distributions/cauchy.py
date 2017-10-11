@@ -36,7 +36,7 @@ class Cauchy(Distribution):
         self.mu = mu
         self.gamma = gamma
         if mu is not None:
-	# this will be deprecated in a future PR
+            # this will be deprecated in a future PR
             if mu.dim() == 1 and batch_size > 1:
                 self.mu = mu.expand(batch_size, mu.size(0))
                 self.gamma = gamma.expand(batch_size, gamma.size(0))
@@ -48,9 +48,10 @@ class Cauchy(Distribution):
         """
 
         mu, gamma = self._sanitize_input(mu, gamma)
-	sample = Variable(torch.Tensor([spr.cauchy.rvs(
-            mu.data.numpy(), gamma.data.numpy())]).type_as(mu.data))
-	return sample
+        sample = Variable(torch.Tensor([spr.cauchy.rvs(
+                          mu.data.numpy(), gamma.data.numpy())])
+                          .type_as(mu.data))
+        return sample
 
     def log_pdf(self, x, mu=None, gamma=None, batch_size=1, *args, **kwargs):
         """
@@ -71,8 +72,7 @@ class Cauchy(Distribution):
         return -1 * torch.log(px)
 
     def analytic_mean(self, mu=None, gamma=None):
-	raise ValueError("Cauchy has no defined mean")
+        raise ValueError("Cauchy has no defined mean")
 
     def analytic_var(self,  mu=None, gamma=None):
-	raise ValueError("Cauchy has no defined variance")
-
+        raise ValueError("Cauchy has no defined variance")
