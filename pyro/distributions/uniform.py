@@ -57,6 +57,7 @@ class Uniform(Distribution):
 
     def batch_log_pdf(self, x, a=None, b=None, batch_size=1, *args, **kwargs):
         a, b = self._sanitize_input(a, b)
+        assert a.dim() == b.dim()
         if x.dim() == 1 and a.dim() == 1 and batch_size == 1:
             return self.log_pdf(x, a, b)
         l = x.ge(a).type_as(a)

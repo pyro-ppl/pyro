@@ -119,9 +119,6 @@ class Categorical(Distribution):
             return torch.sum(x * torch.log(ps), 1)
         return torch.log(torch.gather(ps, 1, x.long()))
 
-    def log_pdf(self, x, ps=None, vs=None, one_hot=True, batch_size=1, *args, **kwargs):
-        return torch.sum(self.batch_log_pdf(x, ps, vs, one_hot, batch_size, *args, **kwargs))
-
     def support(self, ps=None, vs=None, one_hot=True, *args, **kwargs):
         """
         Returns the categorical distribution's support, as a tensor along the first dimension.
