@@ -3,7 +3,6 @@ import argparse
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.optim as optim
 import torchvision.datasets as dset
 import torchvision.transforms as transforms
 import visdom
@@ -11,7 +10,8 @@ from torch.autograd import Variable
 
 import pyro
 from pyro.distributions import DiagNormal, Bernoulli, Categorical
-from pyro.infer.kl_qp import KL_QP
+from pyro.infer import SVI
+from pyro.optim import Adam
 
 # pyro.set_cuda()
 
@@ -206,24 +206,10 @@ def model_sample(cll=None):
     return img, img_mu
 
 
-def per_param_args(name, param):
-    if name == "decoder":
-        return {"lr": .0001}
-    else:
-        return {"lr": .0001}
-
-
-# or alternatively
-adam_params = {"lr": .0001}
-
-inference_latent_class = KL_QP(model_latent, guide_latent, pyro.optim(optim.Adam, adam_params))
-inference_observed_class = KL_QP(
-    model_observed, guide_observed, pyro.optim(
-        optim.Adam, adam_params))
-
-inference_observed_class_scored = KL_QP(
-    model_observed, guide_observed2, pyro.optim(
-        optim.Adam, adam_params))
+adam = Adam({"lr": 0.0001})
+inference_latent_class = SVI(model_latent, guide_latent, adam, loss="ELBO")
+inference_observed_class = SVI(model_observed, guide_observed, adam, loss="ELBO")
+inference_observed_class_scored = SVI(model_observed, guide_observed2, adam, loss="ELBO")
 
 mnist_data = Variable(train_loader.dataset.train_data.float() / 255.)
 mnist_labels = Variable(train_loader.dataset.train_labels)

@@ -3,7 +3,6 @@ import argparse
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.optim as optim
 import torchvision.datasets as dset
 import torchvision.transforms as transforms
 import visdom
@@ -11,7 +10,8 @@ from torch.autograd import Variable
 
 import pyro
 from pyro.distributions import Categorical
-from pyro.infer.kl_qp import KL_QP
+from pyro.infer import SVI
+from pyro.optim import Adam
 
 # load mnist dataset
 root = './data'
@@ -72,10 +72,8 @@ def guide(data, cll):
     return lambda foo: None
 
 
-# or alternatively
-adam_params = {"lr": .0001}
-
-inference_opt = KL_QP(model_obs, guide, pyro.optim(optim.Adam, adam_params))
+adam = Adam({"lr": 0.0001})
+inference_opt = SVI(model_obs, guide, adam, loss="ELBO")
 
 mnist_data = Variable(train_loader.dataset.train_data.float() / 255.)
 mnist_labels = Variable(train_loader.dataset.train_labels)

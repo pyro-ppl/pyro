@@ -8,7 +8,8 @@ from torch.autograd import Variable
 import pyro
 from pyro.distributions import Bernoulli
 from pyro.distributions import DiagNormal
-from pyro.infer.kl_qp import KL_QP
+from pyro.infer import SVI
+from pyro.optim import Adam
 
 mnist = dset.MNIST(
     root='./',
@@ -91,9 +92,6 @@ def factor_analysis_guide(i, data):
     inference_model(data)
 
 
-adam_params = {"lr": 0.01}
-adam_optim = pyro.optim(torch.optim.Adam, adam_params)
-
 dat = mnist.train_data
 mnist_size = dat.size(0)
 m_data = dat.view(mnist_size, -1)
@@ -106,7 +104,8 @@ all_batches = np.arange(0, mnist_size, batch_size)
 if all_batches[-1] != mnist_size:
     all_batches = list(all_batches) + [mnist_size]
 
-grad_step = KL_QP(factor_analysis_model, factor_analysis_guide, adam_optim)
+adam = Adam({"lr": 0.01})
+grad_step = SVI(factor_analysis_model, factor_analysis_guide, adam, loss="ELBO")
 
 
 # apply it to minibatches of data by hand:

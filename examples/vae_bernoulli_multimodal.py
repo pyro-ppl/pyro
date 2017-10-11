@@ -3,7 +3,6 @@ import argparse
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.optim as optim
 import torchvision.datasets as dset
 import torchvision.transforms as transforms
 import visdom
@@ -11,7 +10,8 @@ from torch.autograd import Variable
 
 import pyro
 from pyro.distributions import DiagNormal, Bernoulli, Categorical
-from pyro.infer.kl_qp import KL_QP
+from pyro.infer import SVI
+from pyro.optim import Adam
 
 # load mnist dataset
 root = './data'
@@ -161,18 +161,9 @@ def model_sample():
     return img, img_mu, cll
 
 
-def per_param_args(name, param):
-    if name == "decoder":
-        return {"lr": .0001}
-    else:
-        return {"lr": .0001}
-
-
-# or alternatively
-adam_params = {"lr": .0001}
-
-inference = KL_QP(model, guide, pyro.optim(optim.Adam, adam_params))
-inference_latent = KL_QP(model_latent, guide, pyro.optim(optim.Adam, adam_params))
+adam = Adam({"lr": 0.0001})
+inference = SVI(model, guide, adam, loss="ELBO")
+inference_latent = SVI(model_latent, guide, adam, loss="ELBO")
 
 mnist_data = Variable(train_loader.dataset.train_data.float() / 255.)
 mnist_labels = Variable(train_loader.dataset.train_labels)
