@@ -431,14 +431,11 @@ def save_visualization(trace, graph_output):
     g.render(graph_output, view=False, cleanup=True)
 
 
-def identify_dense_edges(input_trace):
+def identify_dense_edges(trace):
     """
     Method to add all edges based on the map_data_stack information
     stored at each site.
     """
-    # XXX should copy or not?
-    trace = input_trace.copy()
-
     for name, node in trace.nodes.items():
         if node["type"] in ("sample", "observe"):
             # XXX why tuple?
