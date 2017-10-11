@@ -1,4 +1,3 @@
-import scipy.stats as spr
 import numpy as np
 import torch
 from torch.autograd import Variable
