@@ -16,13 +16,24 @@ class TracePoutine(Poutine):
 
     def __init__(self, fn, graph_type=None):
         """
-        TODO docs
+        :param fn: a
+        :param graph_type: a
+
+        Constructor.
         """
         if graph_type is None:
             graph_type = "flat"
         assert graph_type in ("flat", "dense")
         self.graph_type = graph_type
         super(TracePoutine, self).__init__(fn)
+
+    def __exit__(self, *args, **kwargs):
+        """
+        Adds appropriate edges based on map_data_stack information
+        upon exiting the context.
+        """
+        self.trace.identify_edges()
+        return super(TracePoutine, self).__exit__(*args, **kwargs)
 
     def __call__(self, *args, **kwargs):
         """
@@ -42,7 +53,6 @@ class TracePoutine(Poutine):
                             args=args, kwargs=kwargs)
         ret = super(TracePoutine, self).__call__(*args, **kwargs)
         self.trace.add_node("_RETURN", name="_RETURN", type="return", value=ret)
-        self.trace.identify_edges()
         return ret
 
     def get_trace(self, *args, **kwargs):

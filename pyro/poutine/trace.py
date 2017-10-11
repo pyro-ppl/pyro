@@ -13,8 +13,10 @@ class Trace(networkx.DiGraph):
 
     def __init__(self, *args, **kwargs):
         """
-        TODO docs
-        constructor
+        :param string graph_type: string specifying the kind of trace graph to construct
+
+        Constructor. Currently identical to networkx.DiGraph(*args, **kwargs),
+        except for storing the graph_type attribute
         """
         graph_type = kwargs.pop("graph_type", "flat")
         assert graph_type in ("flat", "dense"), \
@@ -24,8 +26,13 @@ class Trace(networkx.DiGraph):
 
     def add_node(self, site_name, *args, **kwargs):
         """
-        TODO docs
-        add site
+        :param string site_name: the name of the site to be added
+
+        Adds a site to the trace.
+
+        Identical to super(Trace, self).add_node,
+        but raises an error when attempting to add a duplicate node
+        instead of silently overwriting.
         """
         # XXX should do more validation than this
         if kwargs["type"] != "param":
@@ -37,16 +44,17 @@ class Trace(networkx.DiGraph):
 
     def identify_edges(self):
         """
-        TODO docs
+        Method to add all edges based on the map_data_stack information
+        stored at each site.
         """
         if self.graph_type == "dense":
             # XXX will this iterate over nodes?
             for name, node in self.nodes.items():
-                if node["type"] in ("sample", "observe", "param"):
+                if node["type"] in ("sample", "observe"):
                     # XXX why tuple?
                     map_data_stack = tuple(reversed(node["map_data_stack"]))
                     for past_name, past_node in self.nodes.items():
-                        if past_node["type"] in ("sample", "observe", "param"):
+                        if past_node["type"] in ("sample", "observe"):
                             if past_name == name:
                                 break
                             past_node_independent = False
@@ -63,6 +71,11 @@ class Trace(networkx.DiGraph):
             self.vectorized_map_data_info = util.get_vectorized_map_data_info(self.nodes)
 
     def copy(self):
+        """
+        Makes a shallow copy of self with nodes and edges preserved.
+        Identical to super(Trace, self).copy(), but preserves the type
+        and the self.graph_type and self.vectorized_map_data_info attributes
+        """
         cp = Trace(self, graph_type=self.graph_type)
         cp.vectorized_map_data_info = util.get_vectorized_map_data_info(cp.nodes)
         return cp
@@ -108,7 +121,7 @@ class Trace(networkx.DiGraph):
     @property
     def observation_nodes(self):
         """
-        TODO docs
+        Gets a list of names of observe sites
         """
         return [name for name, node in self.nodes.items()
                 if node["type"] == "observe"]
@@ -116,7 +129,7 @@ class Trace(networkx.DiGraph):
     @property
     def stochastic_nodes(self):
         """
-        TODO docs
+        Gets a list of names of sample sites
         """
         return [name for name, node in self.nodes.items()
                 if node["type"] == "sample"]
@@ -124,7 +137,8 @@ class Trace(networkx.DiGraph):
     @property
     def reparameterized_nodes(self):
         """
-        TODO docs
+        Gets a list of names of sample sites whose stochastic functions
+        are reparameterizable primitive distributions
         """
         return [name for name, node in self.nodes.items()
                 if node["type"] == "sample" and
@@ -133,6 +147,7 @@ class Trace(networkx.DiGraph):
     @property
     def nonreparam_stochastic_nodes(self):
         """
-        TODO docs
+        Gets a list of names of sample sites whose stochastic functions
+        are not reparameterizable primitive distributions
         """
         return list(set(self.stochastic_nodes) - set(self.reparameterized_nodes))

@@ -584,11 +584,12 @@ class RaoBlackwellizationTests(TestCase):
             return mu_latent
 
         guide_trace = pyro.poutine.trace(guide, graph_type="dense").get_trace()
-        model_trace = pyro.poutine.trace(pyro.poutine.replay(model, guide_trace)).get_trace()
+        model_trace = pyro.poutine.trace(pyro.poutine.replay(model, guide_trace),
+                                         graph_type="dense").get_trace()
         self.assertEqual(len(model_trace.edges()), 9)
-        self.assertEqual(len(model_trace.nodes()), 10)
+        self.assertEqual(len(model_trace.nodes()), 12)
         self.assertEqual(len(guide_trace.edges()), 0)
-        self.assertEqual(len(guide_trace.nodes()), 1)
+        self.assertEqual(len(guide_trace.nodes()), 5)
 
         adam = optim.Adam({"lr": 0.0008, "betas": (0.96, 0.999)})
         svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
