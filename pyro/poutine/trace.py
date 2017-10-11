@@ -44,7 +44,7 @@ class Trace(networkx.DiGraph):
         """
         Makes a shallow copy of self with nodes and edges preserved.
         Identical to super(Trace, self).copy(), but preserves the type
-        and the self.graph_type and self.vectorized_map_data_info attributes
+        and the self.graph_type attribute
         """
         return Trace(self, graph_type=self.graph_type)
 
