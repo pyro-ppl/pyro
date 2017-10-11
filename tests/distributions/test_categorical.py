@@ -75,26 +75,34 @@ class TestCategorical(TestCase):
         self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
         self.assertEqual(log_px_torch2, log_px_np2, prec=1e-4)
 
-    def test_discrete_support(self):
-        s = dist.categorical.support(self.d_ps, self.d_vs)
-        assert_equal(s.data, self.discrete_support)
+    def test_support_non_vectorized(self):
+        s = dist.categorical.support(self.d_ps[0].squeeze(0))
+        assert_equal(s.data, self.support_non_vec)
 
-    def test_discrete_arr_support(self):
-        s = dist.categorical.support(self.d_ps, self.d_vs_arr).tolist()
-        assert_equal(s, self.discrete_arr_support)
-
-    def test_nhot_support(self):
-        s = dist.categorical.support(self.batch_ps, one_hot=False)
-        assert_equal(s.data, self.nhot_support)
+    def test_support(self):
+        s = dist.categorical.support(self.d_ps)
+        assert_equal(s.data, self.support)
 
     def test_discrete_support_non_vectorized(self):
         s = dist.categorical.support(self.d_ps[0].squeeze(0), self.d_vs[0].squeeze(0))
         assert_equal(s.data, self.discrete_support_non_vec)
 
+    def test_discrete_support(self):
+        s = dist.categorical.support(self.d_ps, self.d_vs)
+        assert_equal(s.data, self.discrete_support)
+
     def test_discrete_arr_support_non_vectorized(self):
         s = dist.categorical.support(self.d_ps[0].squeeze(0), self.d_vs_arr[0]).tolist()
         assert_equal(s, self.discrete_arr_support_non_vec)
 
+    def test_discrete_arr_support(self):
+        s = dist.categorical.support(self.d_ps, self.d_vs_arr).tolist()
+        assert_equal(s, self.discrete_arr_support)
+
     def test_nhot_support_non_vectorized(self):
         s = dist.categorical.support(self.batch_ps[0].squeeze(0), one_hot=False)
         assert_equal(s.data, self.nhot_support_non_vec)
+
+    def test_nhot_support(self):
+        s = dist.categorical.support(self.batch_ps, one_hot=False)
+        assert_equal(s.data, self.nhot_support)
