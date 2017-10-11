@@ -63,9 +63,10 @@ class Trace(networkx.DiGraph):
             self.vectorized_map_data_info = util.get_vectorized_map_data_info(self.nodes)
 
     def copy(self):
-        return Trace(self)
+        cp = Trace(self, graph_type=self.graph_type)
+        cp.vectorized_map_data_info = util.get_vectorized_map_data_info(cp.nodes)
+        return cp
 
-    # XXX not updated?
     def log_pdf(self, site_filter=lambda name, site: True):
         """
         Compute the local and overall log-probabilities of the trace.
@@ -78,13 +79,12 @@ class Trace(networkx.DiGraph):
                 try:
                     log_p += site["log_pdf"]
                 except KeyError:
-                    args, kwargs = site["args"]
+                    args, kwargs = site["args"], site["kwargs"]
                     site["log_pdf"] = site["fn"].log_pdf(
                         site["value"], *args, **kwargs) * site["scale"]
                     log_p += site["log_pdf"]
         return log_p
 
-    # XXX not updated?
     def batch_log_pdf(self, site_filter=lambda name, site: True):
         """
         Compute the batched local and overall log-probabilities of the trace.
@@ -98,7 +98,7 @@ class Trace(networkx.DiGraph):
                 try:
                     log_p += site["batch_log_pdf"]
                 except KeyError:
-                    args, kwargs = site["args"]
+                    args, kwargs = site["args"], site["kwargs"]
                     site["batch_log_pdf"] = site["fn"].batch_log_pdf(
                         site["value"], *args, **kwargs) * site["scale"]
                     site["log_pdf"] = site["batch_log_pdf"].sum()

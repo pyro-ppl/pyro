@@ -20,6 +20,7 @@ class TracePoutine(Poutine):
         """
         if graph_type is None:
             graph_type = "flat"
+        assert graph_type in ("flat", "dense")
         self.graph_type = graph_type
         super(TracePoutine, self).__init__(fn)
 
@@ -69,7 +70,7 @@ class TracePoutine(Poutine):
             # XXX temporary solution - right now, if the name appears in the trace,
             # we assume that this was intentional and that the poutine restarted,
             # so we should reset self.trace to be empty
-            tr = Trace()
+            tr = Trace(graph_type=self.graph_type)
             tr.add_node("_INPUT",
                         name="_INPUT", type="input",
                         args=self.trace.nodes["_INPUT"]["args"],
@@ -99,7 +100,7 @@ class TracePoutine(Poutine):
             # XXX temporary solution - right now, if the name appears in the trace,
             # we assume that this was intentional and that the poutine restarted,
             # so we should reset self.trace to be empty
-            tr = Trace()
+            tr = Trace(graph_type=self.graph_type)
             tr.add_node("_INPUT",
                         name="_INPUT", type="input",
                         args=self.trace.nodes["_INPUT"]["args"],

@@ -22,6 +22,7 @@ from pyro import util
 def trace(fn, graph_type=None):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
+    :param graph_type: string that specifies the kind of graph to construct
     :returns: stochastic function wrapped in a TracePoutine
     :rtype: pyro.poutine.TracePoutine
 

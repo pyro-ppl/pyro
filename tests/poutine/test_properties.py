@@ -92,7 +92,6 @@ def get_trace(fn, *args, **kwargs):
     'do',
     'replay',
     'trace',
-    'tracegraph',
 ])
 def test_idempotent(poutine_name, model):
     p = model.bind_poutine(poutine_name)
@@ -106,9 +105,6 @@ def test_idempotent(poutine_name, model):
     ('trace', 'condition'),
     ('trace', 'do'),
     ('trace', 'replay'),
-    ('tracegraph', 'condition'),
-    ('tracegraph', 'do'),
-    ('tracegraph', 'replay'),
 ])
 def test_commutes(p1_name, p2_name, model):
     p1 = model.bind_poutine(p1_name)
