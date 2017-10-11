@@ -44,11 +44,12 @@ class Cauchy(Distribution):
 
     def sample(self, mu=None, gamma=None, *args, **kwargs):
         """
-        Reparameterized diagonal Normal sampler.
+        Cauchy sampler.
         """
         mu, gamma = self._sanitize_input(mu, gamma)
         assert mu.dim() == gamma.dim()
         if mu.dim() > 1:
+            # mu and gamma must be size 1 Variables
             mu = mu.squeeze()
             gamma = gamma.squeeze()
         sample = Variable(torch.zeros(mu.size()))
