@@ -161,7 +161,6 @@ def test_nested_map_data():
             assert tr[name]["scale"] == 4.0 * 2.0
 
 
-@pytest.mark.xfail(reason="https://github.com/uber/pyro/issues/235")
 def test_replay_iarange():
     pyro.set_rng_seed(0)
 
@@ -175,7 +174,6 @@ def test_replay_iarange():
     assert actual == expected
 
 
-@pytest.mark.xfail(reason="https://github.com/uber/pyro/issues/235")
 def test_replay_map_data():
     pyro.set_rng_seed(0)
     data = list(range(10))
