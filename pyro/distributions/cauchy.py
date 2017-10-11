@@ -56,12 +56,6 @@ class Cauchy(Distribution):
         sample.data.cauchy_(mu.data[0], gamma.data[0])
         return sample
 
-    def log_pdf(self, x, mu=None, gamma=None, batch_size=1, *args, **kwargs):
-        """
-        Cauchy log-likelihood
-        """
-        return self.batch_log_pdf(x, mu, gamma, batch_size, *args, **kwargs)
-
     def batch_log_pdf(self, x, mu=None, gamma=None, batch_size=1, *args, **kwargs):
         """
         Cauchy log-likelihood
