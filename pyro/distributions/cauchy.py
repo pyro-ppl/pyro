@@ -46,11 +46,13 @@ class Cauchy(Distribution):
         """
         Reparameterized diagonal Normal sampler.
         """
-
         mu, gamma = self._sanitize_input(mu, gamma)
-        sample = Variable(torch.Tensor([spr.cauchy.rvs(
-                          mu.data.numpy(), gamma.data.numpy())])
-                          .type_as(mu.data))
+        assert mu.dim() == gamma.dim()
+        if mu.dim() > 1:
+            mu = mu.squeeze()
+            gamma = gamma.squeeze()
+        sample = Variable(torch.zeros(mu.size()))
+        sample.data.cauchy_(mu.data[0], gamma.data[0])
         return sample
 
     def log_pdf(self, x, mu=None, gamma=None, batch_size=1, *args, **kwargs):
