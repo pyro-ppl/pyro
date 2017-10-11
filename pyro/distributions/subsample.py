@@ -14,6 +14,7 @@ class Subsample(Distribution):
     :returns: a random subsample of `range(size)`
     :rtype: torch.autograd.Variable of torch.LongTensor
     """
+    reparameterized = False
 
     def _sanitize_inputs(self, size, subsample_size):
         if size is None:
@@ -56,4 +57,5 @@ class Subsample(Distribution):
             subsample_size = x.size(-1)
         elif subsample_size != x.size(-1):
             raise ValueError("subsample does not match subsample_size")
+        size = Variable(torch.Tensor([size]))
         return log_gamma(1 + size) - log_gamma(1 + size - subsample_size)
