@@ -11,9 +11,8 @@ import pyro.optim as optim
 from pyro.infer import SVI
 from tests.common import assert_equal
 
-pytestmark = pytest.mark.stage("integration", "integration_batch_1")
 
-
+@pytest.mark.stage("integration", "integration_batch_1")
 @pytest.mark.init(rng_seed=161)
 @pytest.mark.parametrize("batch_size", [3, 5, 7, 8, 0])
 @pytest.mark.parametrize("map_type", ["tensor", "list"])
@@ -157,7 +156,7 @@ def test_nested_map_data():
 
     tr = poutine.trace(model).get_trace(means, stds)
     for name in tr.keys():
-        if tr[name]["type"] == "sample":
+        if tr[name]["type"] == "sample" and name.startswith("x_"):
             assert tr[name]["scale"] == 4.0 * 2.0
 
 

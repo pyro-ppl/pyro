@@ -151,6 +151,7 @@ def iarange(name, size, subsample_size=0):
         return
 
     subsample = sample(name, Subsample(size, subsample_size))
+    # subsample = Variable(torch.randperm(size)[:subsample_size])
     if len(_PYRO_STACK) == 0:
         yield subsample
     else:
