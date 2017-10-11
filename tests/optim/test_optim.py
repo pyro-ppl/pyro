@@ -1,10 +1,10 @@
 import torch
-import torch.optim
 from torch.autograd import Variable
 
 import pyro
+import pyro.optim as optim
+from pyro.infer import SVI
 from pyro.distributions import DiagNormal
-from pyro.infer.kl_qp import KL_QP
 from tests.common import TestCase
 
 
@@ -45,17 +45,17 @@ class OptimTests(TestCase):
             sig_q = torch.exp(log_sig_q)
             pyro.sample("mu_latent", DiagNormal(mu_q, sig_q))
 
-        def optim_params(module_name, param_name):
+        def optim_params(module_name, param_name, tags):
             if param_name == fixed_param:
                 return {'lr': 0.00}
             elif param_name == free_param:
                 return {'lr': 0.01}
 
-        kl_optim = KL_QP(
-            model, guide, pyro.optim(
-                torch.optim.Adam, optim_params))
+        adam = optim.Adam(optim_params)
+        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
+
         for k in range(3):
-            kl_optim.step()
+            svi.step()
 
         free_param_unchanged = torch.equal(
             pyro.param(free_param).data, torch.zeros(1))

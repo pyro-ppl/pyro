@@ -10,8 +10,8 @@ from torch.nn import Softmax
 
 import pyro
 from pyro.distributions import Bernoulli, Categorical
-from pyro.infer.kl_qp import KL_QP
-
+from pyro.infer import SVI
+from pyro.optim import Adam
 
 mnist = dset.MNIST(
     root='./data',
@@ -67,10 +67,8 @@ def inspect_posterior_samples(i):
     return dat
 
 
-optim_fct = pyro.optim(torch.optim.Adam, {'lr': .0001})
-
-inference = KL_QP(local_model, local_guide, optim_fct)
-
+adam = Adam({"lr": 0.0001})
+svi = SVI(local_model, local_guide, adam, loss="ELBO")
 vis = visdom.Visdom()
 
 nr_epochs = 50
@@ -101,7 +99,7 @@ def main():
             batch_class = torch.zeros(bs_size, 10)  # maybe it needs a FloatTensor
             batch_class.scatter_(1, batch_class_raw.data.view(-1, 1), 1)
             batch_class = Variable(batch_class)
-            epoch_loss += inference.step(ix, batch_data)
+            epoch_loss += svi.step(ix, batch_data)
 
             # optional  visualization!
             #      vis.image(batch_data[0].view(28, 28).data.numpy())
