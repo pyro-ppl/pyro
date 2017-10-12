@@ -51,5 +51,5 @@ def test_support(discrete_dist):
         pytest.skip("Support not tested for distribution")
     actual_support_non_vec = discrete_dist.pyro_dist.support(*discrete_dist.get_dist_params(0))
     actual_support = discrete_dist.pyro_dist.support(*discrete_dist.get_dist_params())
-    assert_equal(actual_support.data.cpu().numpy(), np.array(expected_support))
-    assert_equal(actual_support_non_vec.data.cpu().numpy(), np.array(expected_support_non_vec))
+    assert_equal(actual_support.data, torch.Tensor(expected_support))
+    assert_equal(actual_support_non_vec.data, torch.Tensor(expected_support_non_vec))

@@ -37,5 +37,5 @@ class TestDelta(TestCase):
     def test_support(self):
         actual_support = dist.delta.support(self.vs)
         actual_support_non_vec = dist.delta.support(self.v)
-        assert_equal(actual_support.data.cpu().numpy(), np.array(self.expected_support))
-        assert_equal(actual_support_non_vec.data.cpu().numpy(), np.array(self.expected_support_non_vec))
+        assert_equal(actual_support.data, torch.Tensor(self.expected_support))
+        assert_equal(actual_support_non_vec.data, torch.Tensor(self.expected_support_non_vec))
