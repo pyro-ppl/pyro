@@ -10,6 +10,7 @@ from torch.autograd import Variable
 import pyro
 import pyro.poutine as poutine
 
+from pyro.distributions.subsample import Subsample
 from pyro.params import param_with_module_name
 from pyro.params.param_store import ParamStoreDict
 from pyro.poutine import LambdaPoutine, condition, do  # noqa: F401
@@ -149,7 +150,7 @@ def iarange(name, size, subsample_size=0):
         yield Variable(torch.LongTensor(list(range(size))))
         return
 
-    subsample = Variable(torch.randperm(size)[0:subsample_size])
+    subsample = sample(name, Subsample(size, subsample_size))
     if len(_PYRO_STACK) == 0:
         yield subsample
     else:
