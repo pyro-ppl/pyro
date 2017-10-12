@@ -57,8 +57,9 @@ def test_scale_trace(graph_type, model):
     assert tr1 is not tr2, "scale_trace() did not make a copy"
     assert set(tr1.nodes.keys()) == set(tr2.nodes.keys())
     for name, site1 in tr1.nodes.items():
+        site2 = tr2.nodes[name]
+        assert site1 is not site2, "Trace.copy() was too shallow"
         if "scale" in site1:
-            site2 = tr2.nodes[name]
             assert_equal(site2["scale"], scale * site1["scale"], msg=(site1, site2))
 
     # These check that memoized values were cleared.
