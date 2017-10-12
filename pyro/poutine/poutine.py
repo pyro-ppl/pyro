@@ -144,7 +144,7 @@ class Poutine(object):
         # don't reexecute the function at the site,
         # and do any side effects using the stored return value.
         if msg["done"]:
-            return msg["ret"]
+            return msg["value"]
 
         val = fn(*args, **kwargs)
 
@@ -173,7 +173,7 @@ class Poutine(object):
         # don't reexecute the function at the site,
         # and do any side effects using the stored return value.
         if msg["done"]:
-            return msg["ret"]
+            return msg["value"]
 
         msg["done"] = True
 
@@ -206,7 +206,7 @@ class Poutine(object):
         # don't reexecute the function at the site,
         # and do any side effects using the stored return value.
         if msg["done"]:
-            return msg["ret"]
+            return msg["value"]
 
         ret = pyro._param_store.get_param(name, *args, **kwargs)
 

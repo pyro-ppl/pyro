@@ -76,8 +76,9 @@ class SearchTest(HMMSamplingTestCase):
 
         tr_latents = set()
         for tr, _ in posterior._traces():
-            tr_latents.add(tuple([tr[name]["value"].view(-1).data[0] for name in tr
-                                  if tr[name]["type"] == "sample"]))
+            tr_latents.add(tuple([tr.nodes[name]["value"].view(-1).data[0]
+                                  for name in tr.nodes.keys()
+                                  if tr.nodes[name]["type"] == "sample"]))
 
         assert true_latents == tr_latents
 
