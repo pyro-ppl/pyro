@@ -29,29 +29,14 @@ class Categorical(Distribution):
         else:
             raise ValueError("Parameter(s) were None")
 
-    def _process_v(self, vs):
+    def _process_vs(self, vs):
         if vs is not None:
-            if isinstance(vs, tuple):
-                # recursively turn tuples into lists
-                vs = [list(x) for x in vs]
             if isinstance(vs, list):
                 vs = np.array(vs)
             elif not isinstance(vs, (Variable, torch.Tensor, np.ndarray)):
                 raise TypeError(("vs should be of type: list, Variable, Tensor, tuple, or numpy array"
                                  "but was of {}".format(str(type(vs)))))
         return vs
-
-    def _process_p(self, ps, vs, batch_size=1):
-        if ps is not None:
-            if ps.dim() == 1:
-                ps = ps.unsqueeze(0)
-                if isinstance(vs, Variable):
-                    vs = vs.unsqueeze(0)
-            elif batch_size > 1:
-                ps = ps.expand(batch_size, ps.size(0))
-                if isinstance(vs, Variable):
-                    vs = vs.expand(batch_size, vs.size(0))
-        return ps, vs
 
     def __init__(self, ps=None, vs=None, one_hot=True, batch_size=1, *args, **kwargs):
         """
@@ -64,60 +49,53 @@ class Categorical(Distribution):
         """
         self.ps = ps
         # vs is None, Variable(Tensor), or numpy.array
-        vs = self._process_v(vs)
-        self.ps, self.vs = self._process_p(ps, vs, batch_size)
+        self.vs = self._process_vs(vs)
         self.one_hot = one_hot
         super(Categorical, self).__init__(batch_size=1, *args, **kwargs)
 
     def sample(self, ps=None, vs=None, one_hot=True, *args, **kwargs):
         ps, vs, one_hot = self._sanitize_input(ps, vs, one_hot)
-        vs = self._process_v(vs)
-        ps, vs = self._process_p(ps, vs)
-        sample = Variable(torch.multinomial(ps.data, 1, replacement=True).type_as(ps.data))
+        vs = self._process_vs(vs)
+        sample_size = ps.size()[:-1] + (1,)
+        sample = torch.multinomial(ps.data, 1, replacement=True).expand(*sample_size)
+        sample_one_hot = torch.zeros(ps.size()).scatter_(-1, sample, 1)
+
         if vs is not None:
             if isinstance(vs, np.ndarray):
-                # always returns a 2-d (unsqueezed 1-d) list
-                if vs.ndim == 1:
-                    vs = np.expand_dims(vs, axis=0)
-                r = np.arange(vs.shape[0])
-                # if vs.shape[0] == 1:
-                #     return vs[r, sample.squeeze().data.numpy().astype("int")][0]
-                # else:
-                return vs[r, sample.squeeze().data.numpy().astype("int")].tolist()
-            # vs is a torch.Tensor
-            return torch.gather(vs, 1, sample.long())
+                sample_bool_index = sample_one_hot.cpu().numpy().astype(bool)
+                return vs[sample_bool_index].reshape(*sample_size)
+            else:
+                return vs.masked_select(sample_one_hot.byte()).expand(*sample_size)
         if one_hot:
-            # convert to onehot vector
-            return to_one_hot(sample, ps)
-        return sample
+            return Variable(sample_one_hot)
+        else:
+            return Variable(sample)
 
     def batch_log_pdf(self, x, ps=None, vs=None, one_hot=True, batch_size=1, *args, **kwargs):
         ps, vs, one_hot = self._sanitize_input(ps, vs, one_hot)
-        vs = self._process_v(vs)
-        ps, vs = self._process_p(ps, vs, batch_size)
-        if not isinstance(x, list):
-            if x.dim() == 1 and batch_size == 1:
-                x = x.unsqueeze(0)
-            if ps.size(0) != x.size(0):
-                # convert to int to one-hot
-                ps = ps.expand_as(x)
+        vs = self._process_vs(vs)
+        if isinstance(x, list):
+            x = np.array(x)
+        # numpy mask for the probability tensor
+        if isinstance(x, np.ndarray):
+            sample_size = x.shape[:-1] + (1,)
+            batch_vs_size = x.shape[:-1] + (vs.shape[-1],)
+            vs = np.broadcast_to(vs, batch_vs_size)
+            boolean_mask = torch.Tensor((vs == x).astype(int))
+        # pytorch mask for the probability tensor
+        else:
+            sample_size = x.size()[:-1] + (1,)
+            batch_ps_size = x.size()[:-1] + (ps.size()[-1],)
+            ps = ps.expand(*batch_ps_size)
+            if vs is not None:
+                vs = vs.expand(*batch_ps_size)
+                boolean_mask = vs == x
+            elif one_hot:
+                boolean_mask = x
             else:
-                ps = ps
-        if vs is not None:
-            # get index of tensor
-            if isinstance(vs, np.ndarray):
-                # x is a list if vs was a list or np.array
-                bm = torch.Tensor((vs == np.array(x)).tolist())
-                ix = len(vs.shape) - 1
-                x = torch.nonzero(bm).select(ix, ix)
-            else:
-                # x is a Variable(Tensor) as are ps and vs
-                ix = vs.dim() - 1
-                x = torch.nonzero(vs.eq(x.expand_as(vs)).data).select(ix, ix)
-            x = Variable(x).unsqueeze(1)
-        elif one_hot:
-            return torch.sum(x * torch.log(ps), 1)
-        return torch.log(torch.gather(ps, 1, x.long()))
+                boolean_mask = torch.zeros(ps.size()).scatter_(-1, x.data.long(), 1)
+        # apply log function to masked probability tensor
+        return torch.log(ps.masked_select(boolean_mask.byte()).contiguous().view(*sample_size))
 
     def support(self, ps=None, vs=None, one_hot=True, *args, **kwargs):
         """
@@ -142,21 +120,18 @@ class Categorical(Distribution):
         :rtype: torch.autograd.Variable or numpy.ndarray.
         """
         ps, vs, one_hot = self._sanitize_input(ps, vs, one_hot)
-        vs = self._process_v(vs)
+        vs = self._process_vs(vs)
         event_size = ps.size()[-1]
-        batch_size = ps.size()[:-1]
+        sample_size = ps.size()[:-1] + (1,)
+        support_samples_size = (event_size, ) + sample_size
 
         if vs is not None:
-            if not batch_size:
-                return vs
             if isinstance(vs, np.ndarray):
-                return vs.transpose()
+                return vs.transpose().reshape(*support_samples_size)
             else:
-                return torch.t(vs)
+                return torch.transpose(vs, 0, -1).contiguous().view(*support_samples_size)
         if one_hot:
             return Variable(torch.stack([t.expand_as(ps) for t in torch.eye(event_size)]))
         else:
-            if not batch_size:
-                return Variable(torch.arange(0, event_size)).long()
-            return Variable(torch.stack([torch.LongTensor([t]).expand(*batch_size)
+            return Variable(torch.stack([torch.LongTensor([t]).expand(*sample_size)
                                          for t in torch.arange(0, event_size).long()]))
