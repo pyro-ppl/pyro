@@ -57,7 +57,7 @@ class Trace(networkx.DiGraph):
         """
         log_p = 0.0
         for name, site in self.nodes.items():
-            if site["type"] in ("observe", "sample") and site_filter(name, site):
+            if site["type"] == "sample" and site_filter(name, site):
                 try:
                     log_p += site["log_pdf"]
                 except KeyError:
@@ -76,7 +76,7 @@ class Trace(networkx.DiGraph):
         log_p = 0.0
         # XXX will this iterate over nodes?
         for name, site in self.nodes.items():
-            if site["type"] in ("observe", "sample") and site_filter(name, site):
+            if site["type"] == "sample" and site_filter(name, site):
                 try:
                     log_p += site["batch_log_pdf"]
                 except KeyError:
@@ -93,7 +93,8 @@ class Trace(networkx.DiGraph):
         Gets a list of names of observe sites
         """
         return [name for name, node in self.nodes.items()
-                if node["type"] == "observe"]
+                if node["type"] == "sample" and
+                node["is_observed"]]
 
     @property
     def stochastic_nodes(self):
@@ -101,7 +102,8 @@ class Trace(networkx.DiGraph):
         Gets a list of names of sample sites
         """
         return [name for name, node in self.nodes.items()
-                if node["type"] == "sample"]
+                if node["type"] == "sample" and
+                not node["is_observed"]]
 
     @property
     def reparameterized_nodes(self):
@@ -111,6 +113,7 @@ class Trace(networkx.DiGraph):
         """
         return [name for name, node in self.nodes.items()
                 if node["type"] == "sample" and
+                not node["is_observed"] and
                 getattr(node["fn"], "reparameterized", False)]
 
     @property
