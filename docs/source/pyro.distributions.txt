@@ -91,6 +91,13 @@ Poisson
     :undoc-members:
     :show-inheritance:
 
+Subsample
+-----------------------
+.. automodule:: pyro.distributions.subsample
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 TransformedDistribution
 -----------------------
 .. automodule:: pyro.distributions.transformed_distribution
