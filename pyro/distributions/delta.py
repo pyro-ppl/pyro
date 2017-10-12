@@ -57,11 +57,6 @@ class Delta(Distribution):
         """
         Returns the delta distribution's support, as a tensor along the first dimension.
 
-        Note that this returns support values of all the batched RVs in lock-step, rather
-        than the full cartesian product. To iterate over the cartesian product, you must
-        construct univariate Deltas and use itertools.product() over all univariate
-        variables.
-
         :param v: torch variable where each element of the tensor represents the point at
             which the delta distribution is concentrated.
         :return: torch variable enumerating the support of the delta distribution.
