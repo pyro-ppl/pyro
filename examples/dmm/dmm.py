@@ -1,10 +1,10 @@
 """
-An implementation of a Deep Markov Model in pyro based on reference [1].
+An implementation of a Deep Markov Model in Pyro based on reference [1].
 This is essentially the DKS variant outlined in the paper. The primary difference
 between this implementation and theirs is that in our version any KL divergence terms
 in the ELBO are estimated via sampling, while they make use of the analytic formulae. We
-also illustrate including normalizing flows in the variational distribution over the latents
-(in which case analytic formulae for the KL divergences are in any case unavailable).
+also illustrate using normalizing flows in the variational distribution (in which case
+analytic formulae for the KL divergences are in any case unavailable).
 
 Reference:
 
@@ -87,7 +87,7 @@ class Combiner(nn.Module):
     """
     Parameterizes q(z_t | z_{t-1}, x_{t:T}), which is the basic building block of the
     guide (i.e. the variational distribution). The dependence on x_{t:T} is through the
-    hidden state of the RNN (see pt_rnn below)
+    hidden state of the RNN (see the pytorch module `rnn` below)
     """
     def __init__(self, z_dim, rnn_dim):
         super(Combiner, self).__init__()
@@ -117,14 +117,14 @@ class DMM(nn.Module):
     def __init__(self, input_dim, z_dim, emission_dim, transition_dim, rnn_dim, args):
         super(DMM, self).__init__()
         # instantiate pytorch modules used in the model and guide below
-        self.pt_emitter = Emitter(input_dim, z_dim, emission_dim)
-        self.pt_trans = GatedTransition(z_dim, transition_dim)
-        self.pt_combiner = Combiner(z_dim, rnn_dim)
-        self.pt_rnn = nn.RNN(input_size=input_dim, hidden_size=rnn_dim, nonlinearity='relu',
-                             batch_first=True, bidirectional=False, num_layers=args.rnn_num_layers,
-                             dropout=args.rnn_dropout_rate)
+        self.emitter = Emitter(input_dim, z_dim, emission_dim)
+        self.trans = GatedTransition(z_dim, transition_dim)
+        self.combiner = Combiner(z_dim, rnn_dim)
+        self.rnn = nn.RNN(input_size=input_dim, hidden_size=rnn_dim, nonlinearity='relu',
+                          batch_first=True, bidirectional=False, num_layers=args.rnn_num_layers,
+                          dropout=args.rnn_dropout_rate)
         # if we're using normalizing flows, instantiate those too
-        self.pt_iafs = [InverseAutoregressiveFlow(z_dim, 100) for _ in range(args.num_iafs)]
+        self.iafs = [InverseAutoregressiveFlow(z_dim, 100) for _ in range(args.num_iafs)]
 
         self.args = args
         self.z_dim = z_dim
@@ -133,7 +133,7 @@ class DMM(nn.Module):
         # if on gpu cuda-ize all pytorch (sub)modules
         if args.cuda:
             self.cuda()
-            map(lambda pt_iaf: pt_iaf.cuda(), self.pt_iafs)
+            map(lambda iaf: iaf.cuda(), self.iafs)
 
     # the model p(x|z)p(z)
     def model(self, mini_batch, mini_batch_reversed, mini_batch_mask,
@@ -143,11 +143,11 @@ class DMM(nn.Module):
         T_max = np.max(mini_batch_seq_lengths)
 
         # register the emitter and transmition pytorch modules with pyro
-        emitter = pyro.module("emitter", self.pt_emitter)
-        trans = pyro.module("transition", self.pt_trans)
+        pyro.module("emitter", self.emitter)
+        pyro.module("transition", self.trans)
 
         # define a (trainable) parameter z_0 that helps define the probability
-        # distribution p(z_1), which isn't conditioned on any previous latents
+        # distribution p(z_1) since it can't be conditioned on any previous latents
         z_prev = pyro.param("z_0", zeros(self.z_dim, type_as=mini_batch.data))
 
         # sample the latents z and observed x's one time step at a time
@@ -156,7 +156,7 @@ class DMM(nn.Module):
             # note that log_pdf_mask takes care of both
             # (i)  KL annealing; and
             # (ii) raggedness in the observed data (i.e. different sequences in the mini-batch
-            #      (have different lengths)
+            #      have different lengths)
             z_mu, z_sigma = trans(z_prev)
             z_t = pyro.sample("z_%d" % t, dist.DiagNormal(z_mu, z_sigma),
                               log_pdf_mask=annealing_factor * mini_batch_mask[:, t - 1:t])
@@ -175,11 +175,11 @@ class DMM(nn.Module):
         # this is the number of time steps we need to process in the mini-batch
         T_max = np.max(mini_batch_seq_lengths)
         # register the combiner and rnn pytorch modules with pyro
-        rnn = pyro.module("rnn", self.pt_rnn)
-        combiner = pyro.module("combiner", self.pt_combiner)
+        pyro.module("rnn", self.rnn)
+        pyro.module("combiner", self.combiner)
 
         # define a parameter for the initial state of the rnn
-        h_0 = pyro.param("h_0", zeros(self.pt_rnn.num_layers, 1, self.rnn_dim, type_as=mini_batch.data))
+        h_0 = pyro.param("h_0", zeros(self.rnn.num_layers, 1, self.rnn_dim, type_as=mini_batch.data))
         # if on gpu we need all of h_0 in cuda memory
         if self.args.cuda:
             h_0 = h_0.expand(*[h_0.data.shape[0], mini_batch.data.shape[0], h_0.data.shape[2]]).contiguous()
@@ -201,7 +201,7 @@ class DMM(nn.Module):
             # if we are including normalizing flows, we register each normalizing flow module with pyro
             # and replace z_dist with a transformed distribution (so that z_dist above is the base distribution
             # of the normalizing flow and not q(z_t|...) itself)
-            iafs = [pyro.module("iaf_%d" % i, pt_iaf) for i, pt_iaf in enumerate(self.pt_iafs)]
+            iafs = [pyro.module("iaf_%d" % i, iaf) for i, iaf in enumerate(self.iafs)]
             if len(iafs) > 0:
                 z_dist = TransformedDistribution(z_dist, iafs)
             # sample z_t from the distribution z_dist
@@ -329,7 +329,7 @@ def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
         # helper function for doing evaluation
         def do_evaluation(n_samples):
             # put the RNN into evaluation mode (i.e. turn off drop-out if applicable)
-            dmm.pt_rnn.eval()
+            dmm.rnn.eval()
             val_nlls, test_nlls = [], []
 
             # compute the validation and test loss n_samples many times
@@ -342,7 +342,7 @@ def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
                 test_nlls.append(test_nll)
 
             # put the RNN back into training mode (i.e. turn on drop-out if applicable)
-            dmm.pt_rnn.train()
+            dmm.rnn.train()
             val_nll, test_nll = np.mean(val_nlls), np.mean(test_nlls)
             return val_nll, test_nll
 
