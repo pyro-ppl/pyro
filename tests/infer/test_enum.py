@@ -37,16 +37,11 @@ def model3():
     x = pyro.sample("x", dist.Bernoulli(p))
     y = pyro.sample("y", dist.Categorical(ps, one_hot=False))
     assert x.size() == (3, 1)
-    assert y.size() == (2,)
+    assert y.size() == (2, 1)
     return dict(x=x, y=y)
 
 
-@pytest.mark.parametrize("model", [
-    model1,
-    model2,
-    pytest.param(model3,
-                 marks=pytest.mark.xfail(reason="tensor shape mismatch")),
-])
+@pytest.mark.parametrize("model", [model1, model2, model3])
 @pytest.mark.parametrize("graph_type", ["flat", "dense"])
 def test_scale_trace(graph_type, model):
     pyro.get_param_store().clear()
