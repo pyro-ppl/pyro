@@ -29,10 +29,10 @@ class Trace_ELBO(object):
         for i in range(self.num_particles):
             if self.enum_discrete:
                 # This iterates over a bag of traces, for each particle.
-                guide_traces = iter_discrete_traces(poutine.trace, self.guide, *args, **kwargs)
-                for scale, guide_trace in guide_traces:
+                for scale, guide_trace in iter_discrete_traces("flat", self.guide, *args, **kwargs):
                     model_trace = poutine.trace(
-                        poutine.replay(self.model, guide_trace))(*args, **kwargs)
+                        poutine.replay(self.model, guide_trace),
+                        graph_type="flat")(*args, **kwargs)
                     guide_trace = scale_trace(guide_trace, scale)
                     model_trace = scale_trace(model_trace, scale)
                     log_r = model_trace.log_pdf() - guide_trace.log_pdf()
