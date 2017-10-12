@@ -49,7 +49,7 @@ class ReplayPoutine(Poutine):
         if msg["name"] in self.sites:
             if msg["type"] == "sample":
                 msg["done"] = True
-                msg["value"] = self.guide_trace.nodes[msg["name"]]["value"]
+                msg["value"] = self.guide_trace.nodes[self.sites[msg["name"]]]["value"]
 
         return msg
 
@@ -67,10 +67,13 @@ class ReplayPoutine(Poutine):
         name = msg["name"]
         # case 1: dict, positive: sample from guide
         if name in self.sites:
+            assert msg["obs"] is None, \
+                "site {} is an obs and should not be overwritten".format(name)
             g_name = self.sites[name]
             assert g_name in self.guide_trace, \
                 "{} in sites but {} not in trace".format(name, g_name)
-            assert self.guide_trace.nodes[g_name]["type"] == "sample", \
+            assert self.guide_trace.nodes[g_name]["type"] == "sample" and \
+                self.guide_trace.nodes[g_name]["obs"] is None, \
                 "site {} must be sample in guide_trace".format(g_name)
             msg["done"] = True
             return self.guide_trace.nodes[g_name]["value"]

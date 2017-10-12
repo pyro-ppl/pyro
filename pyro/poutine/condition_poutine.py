@@ -28,23 +28,6 @@ class ConditionPoutine(Poutine):
             msg["done"] = True
         return msg
 
-    def _pyro_observe(self, msg):
-        """
-        :param msg: current message at a trace site.
-        :returns: the observed value at the site.
-
-        Implements default pyro.observe Poutine behavior,
-        with an additional side effect:
-        If msg["name"] is in self.data, raise an error,
-        to avoid overwriting existing observations.
-        if the observation at the site is not None, return the observation;
-        else call the function and return the result.
-        """
-        name = msg["name"]
-        assert name not in self.data, \
-            "Should not change values of existing observes..."
-        return super(ConditionPoutine, self)._pyro_observe(msg)
-
     def _pyro_sample(self, msg):
         """
         :param msg: current message at a trace site.
@@ -58,13 +41,16 @@ class ConditionPoutine(Poutine):
         with no additional effects.
         """
         name = msg["name"]
+        if msg["obs"] is not None:
+            assert name not in self.data, \
+                "should not change values of existing observes"
+
         if name in self.data:
             msg["done"] = False
-            msg["type"] = "observe"
             if isinstance(self.data, Trace):
                 msg["obs"] = self.data.nodes[name]["value"]
             else:
                 msg["obs"] = self.data[name]
-            return super(ConditionPoutine, self)._pyro_observe(msg)
+            return super(ConditionPoutine, self)._pyro_sample(msg)
         else:
             return super(ConditionPoutine, self)._pyro_sample(msg)
