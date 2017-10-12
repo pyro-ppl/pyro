@@ -53,6 +53,11 @@ continuous_dists = [
             dist_params=[([2.4, 3, 6],), ([3.2, 1.2, 0.4],)],
             test_data=[[0.2, 0.45, 0.35], [0.3, 0.4, 0.3]],
             scipy_arg_fn=lambda alpha: ((alpha,), {})),
+    Fixture(pyro_dist=dist.cauchy,
+            scipy_dist=sp.cauchy,
+            dist_params=[(0.5, 1.2), (0.3, 1.0)],
+            test_data=[(0.2), (0.35)],
+            scipy_arg_fn=lambda mu, gamma: ((), {"loc": mu, "scale": gamma})),
 ]
 
 discrete_dists = [
@@ -88,9 +93,7 @@ discrete_dists = [
             scipy_arg_fn=lambda ps: ((1, np.array(ps)), {}),
             prec=0.05,
             min_samples=10000,
-            is_discrete=True,
-            expected_support_file=os.path.join(RESOURCE_DIR, 'support_categorical.json'),
-            expected_support_key='one_hot'),
+            is_discrete=True),
 ]
 
 

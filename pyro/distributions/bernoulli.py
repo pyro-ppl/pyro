@@ -44,23 +44,9 @@ class Bernoulli(Distribution):
         ps = self._sanitize_input(ps)
         return Variable(torch.bernoulli(ps.data).type_as(ps.data))
 
-    def log_pdf(self, x, ps=None, batch_size=1, *args, **kwargs):
-        """
-        Bernoulli log-likelihood
-        """
-        ps = self._sanitize_input(ps)
-        x_1 = x - 1
-        ps_1 = ps - 1
-        xmul = torch.mul(x, ps)
-        xmul_1 = torch.mul(x_1, ps_1)
-        logsum = torch.log(torch.add(xmul, xmul_1))
-        return torch.sum(logsum)
-
     def batch_log_pdf(self, x, ps=None, batch_size=1, *args, **kwargs):
         ps = self._sanitize_input(ps)
-        if x.dim() == 1 and ps.dim() == 1 and batch_size == 1:
-            return self.log_pdf(x, ps)
-        elif x.dim() == 1:
+        if x.dim() == 1:
             x = x.expand(batch_size, x.size(0))
         if ps.size() != x.size():
             ps = ps.expand_as(x)
