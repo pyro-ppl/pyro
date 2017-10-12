@@ -19,7 +19,7 @@ class ReplayPoutine(Poutine):
         self.guide_trace = guide_trace
         # case 1: no sites
         if sites is None:
-            self.sites = {site: site for site in guide_trace.keys()}
+            self.sites = {site: site for site in guide_trace.nodes.keys()}
         # case 2: sites is a list/tuple/set
         elif isinstance(sites, (list, tuple, set)):
             self.sites = {site: site for site in sites}
@@ -49,7 +49,7 @@ class ReplayPoutine(Poutine):
         if msg["name"] in self.sites:
             if msg["type"] == "sample":
                 msg["done"] = True
-                msg["ret"] = self.guide_trace[msg["name"]]["value"]
+                msg["value"] = self.guide_trace.nodes[msg["name"]]["value"]
 
         return msg
 
@@ -70,10 +70,10 @@ class ReplayPoutine(Poutine):
             g_name = self.sites[name]
             assert g_name in self.guide_trace, \
                 "{} in sites but {} not in trace".format(name, g_name)
-            assert self.guide_trace[g_name]["type"] == "sample", \
+            assert self.guide_trace.nodes[g_name]["type"] == "sample", \
                 "site {} must be sample in guide_trace".format(g_name)
             msg["done"] = True
-            return self.guide_trace[g_name]["value"]
+            return self.guide_trace.nodes[g_name]["value"]
         # case 2: dict, negative: sample from model
         else:
             return super(ReplayPoutine, self)._pyro_sample(msg)
