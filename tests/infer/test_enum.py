@@ -178,12 +178,11 @@ def test_gmm_batch_iter_discrete_traces(model, data_size, graph_type):
 ], ids=['single', 'batched'])
 @pytest.mark.parametrize("enum_discrete", [
     False,
-    True,
-    # pytest.param(
-    #     True,
-    #     marks=pytest.mark.xfail(
-    #         run=False,
-    #         reason="pytorch segfaults at 0.2.0_4, fixed by 0.2.0+f964105")),
+    pytest.param(
+        True,
+        marks=pytest.mark.xfail(
+            run=False,
+            reason="pytorch segfaults at 0.2.0_4, fixed by 0.2.0+f964105")),
 ], ids=['naive', 'summed'])
 def test_gmm_elbo_smoke(model, guide, enum_discrete, trace_graph):
     pyro.get_param_store().clear()
