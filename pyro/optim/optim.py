@@ -50,7 +50,6 @@ class PyroOptim(object):
                 if param_name in self._state_waiting_to_be_consumed:
                     state = self._state_waiting_to_be_consumed.pop(param_name)
                     self.optim_objs[p].load_state_dict(state)
-                    print "parameter %s loading up on old state" % param_name
 
             # actually perform the step for the optim object
             self.optim_objs[p].step(*args, **kwargs)
