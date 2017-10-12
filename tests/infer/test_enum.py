@@ -132,7 +132,10 @@ def test_gmm_iter_discrete_traces(model, data_size, graph_type):
 
 
 @pytest.mark.parametrize("trace_graph", [False, True])
-@pytest.mark.parametrize("enum_discrete", [False, True])
+@pytest.mark.parametrize("enum_discrete", [
+    False,
+    pytest.param(True, marks=pytest.mark.xfail(run=False, reason="segfault")),
+])
 def test_gmm_elbo_single_datum(enum_discrete, trace_graph):
     pyro.get_param_store().clear()
     data = Variable(torch.Tensor([0, 1, 9]))
