@@ -11,7 +11,7 @@ setup(
         'funcy>=1.7.5',
         'cloudpickle>=0.3.1',
         'graphviz>=0.8',
-        'networkx>=1.11',
+        'networkx>=2.0.0',
         'torch',
     ],
     extras_require={

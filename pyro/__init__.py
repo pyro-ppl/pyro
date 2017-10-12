@@ -86,7 +86,7 @@ def sample(name, fn, *args, **kwargs):
             "obs": obs,
             "args": args,
             "kwargs": kwargs,
-            "ret": None,
+            "value": None,
             "scale": 1.0,
             "map_data_stack": [],
             "done": False,
@@ -94,7 +94,7 @@ def sample(name, fn, *args, **kwargs):
         }
         # apply the stack and return its return value
         out_msg = apply_stack(msg)
-        return out_msg["ret"]
+        return out_msg["value"]
 
 
 def observe(name, fn, obs, *args, **kwargs):
@@ -220,13 +220,13 @@ def param(name, *args, **kwargs):
             "kwargs": kwargs,
             "scale": 1.0,
             "map_data_stack": [],
-            "ret": None,
+            "value": None,
             "done": False,
             "stop": False,
         }
         # apply the stack and return its return value
         out_msg = apply_stack(msg)
-        return out_msg["ret"]
+        return out_msg["value"]
 
 
 def module(pyro_name, nn_obj, tags="default"):

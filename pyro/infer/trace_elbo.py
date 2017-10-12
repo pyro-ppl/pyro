@@ -55,12 +55,12 @@ class Trace_ELBO(object):
         for model_trace, guide_trace, log_r in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = 0.0
 
-            for name in model_trace.keys():
-                if model_trace[name]["type"] == "observe":
-                    elbo_particle += model_trace[name]["log_pdf"]
-                elif model_trace[name]["type"] == "sample":
-                    elbo_particle += model_trace[name]["log_pdf"]
-                    elbo_particle -= guide_trace[name]["log_pdf"]
+            for name in model_trace.nodes.keys():
+                if model_trace.nodes[name]["type"] == "observe":
+                    elbo_particle += model_trace.nodes[name]["log_pdf"]
+                elif model_trace.nodes[name]["type"] == "sample":
+                    elbo_particle += model_trace.nodes[name]["log_pdf"]
+                    elbo_particle -= guide_trace.nodes[name]["log_pdf"]
 
             elbo += elbo_particle.data[0] / self.num_particles
 
@@ -85,32 +85,32 @@ class Trace_ELBO(object):
             surrogate_elbo_particle = 0.0
 
             # compute elbo and surrogate elbo
-            for name in model_trace.keys():
-                if model_trace[name]["type"] == "observe":
-                    elbo_particle += model_trace[name]["log_pdf"]
-                    surrogate_elbo_particle += model_trace[name]["log_pdf"]
-                elif model_trace[name]["type"] == "sample":
-                    lp_lq = model_trace[name]["log_pdf"] - guide_trace[name]["log_pdf"]
+            for name in model_trace.nodes.keys():
+                if model_trace.nodes[name]["type"] == "observe":
+                    elbo_particle += model_trace.nodes[name]["log_pdf"]
+                    surrogate_elbo_particle += model_trace.nodes[name]["log_pdf"]
+                elif model_trace.nodes[name]["type"] == "sample":
+                    lp_lq = model_trace.nodes[name]["log_pdf"] - guide_trace.nodes[name]["log_pdf"]
                     elbo_particle += lp_lq
-                    if model_trace[name]["fn"].reparameterized:
+                    if model_trace.nodes[name]["fn"].reparameterized:
                         surrogate_elbo_particle += lp_lq
                     else:
                         # XXX should the user be able to control inclusion of the -logq term below?
-                        surrogate_elbo_particle += model_trace[name]["log_pdf"] + \
-                            log_r.detach() * guide_trace[name]["log_pdf"]
+                        surrogate_elbo_particle += model_trace.nodes[name]["log_pdf"] + \
+                            log_r.detach() * guide_trace.nodes[name]["log_pdf"]
 
             elbo += elbo_particle.data[0] / self.num_particles
             surrogate_elbo += surrogate_elbo_particle / self.num_particles
 
             # grab model parameters to train
-            for name in model_trace.keys():
-                if model_trace[name]["type"] == "param":
-                    trainable_params.add(model_trace[name]["value"])
+            for name in model_trace.nodes.keys():
+                if model_trace.nodes[name]["type"] == "param":
+                    trainable_params.add(model_trace.nodes[name]["value"])
 
             # grab guide parameters to train
-            for name in guide_trace.keys():
-                if guide_trace[name]["type"] == "param":
-                    trainable_params.add(guide_trace[name]["value"])
+            for name in guide_trace.nodes.keys():
+                if guide_trace.nodes[name]["type"] == "param":
+                    trainable_params.add(guide_trace.nodes[name]["value"])
 
         surrogate_loss = -surrogate_elbo
         surrogate_loss.backward()

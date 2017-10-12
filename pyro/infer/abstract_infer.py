@@ -66,7 +66,7 @@ class Marginal(Histogram):
 
     def _gen_weighted_samples(self, *args, **kwargs):
         for tr, log_weight in self.trace_dist._traces(*args, **kwargs):
-            yield (tr["_RETURN"]["value"], log_weight)
+            yield (tr.nodes["_RETURN"]["value"], log_weight)
 
 
 class TracePosterior(object):
