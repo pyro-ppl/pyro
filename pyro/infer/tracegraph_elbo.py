@@ -273,7 +273,7 @@ class TraceGraph_ELBO(object):
 
                 surrogate_elbo_particle += elbo_reinforce_terms_particle / self.num_particles
                 if not isinstance(baseline_loss_particle, float):
-                    baseline_loss_particle.backward()
+                    baseline_loss_particle.sum().backward()
 
             # grab model parameters to train
             for name in model_trace.nodes.keys():
@@ -289,7 +289,7 @@ class TraceGraph_ELBO(object):
             pyro.get_param_store().mark_params_active(trainable_params)
 
             surrogate_loss_particle = -surrogate_elbo_particle
-            surrogate_loss_particle.backward()
+            surrogate_loss_particle.sum().backward()
 
         loss = -elbo
 

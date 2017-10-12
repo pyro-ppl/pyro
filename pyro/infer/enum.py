@@ -1,5 +1,4 @@
 import functools
-import math
 from six.moves.queue import LifoQueue
 
 import torch
@@ -43,12 +42,12 @@ def iter_discrete_traces(graph_type, fn, *args, **kwargs):
             continue
 
         # Scale trace by probability of discrete choices.
-        log_pdf = full_trace.log_pdf(site_filter=site_is_discrete)
-        if isinstance(log_pdf, Variable):
-            log_pdf = log_pdf.data
+        log_pdf = full_trace.batch_log_pdf(site_filter=site_is_discrete)
+        if isinstance(log_pdf, float):
+            log_pdf = torch.Tensor(log_pdf)
         if isinstance(log_pdf, torch.Tensor):
-            log_pdf = log_pdf[0]
-        scale = math.exp(log_pdf)
+            log_pdf = Variable(log_pdf)
+        scale = torch.exp(log_pdf.detach())
         yield scale, full_trace
 
 

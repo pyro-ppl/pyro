@@ -112,7 +112,7 @@ class Trace_ELBO(object):
                     trainable_params.add(guide_trace.nodes[name]["value"])
 
         surrogate_loss = -surrogate_elbo
-        surrogate_loss.backward()
+        surrogate_loss.sum().backward()
         loss = -elbo
 
         pyro.get_param_store().mark_params_active(trainable_params)

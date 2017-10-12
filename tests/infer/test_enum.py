@@ -83,7 +83,7 @@ def test_iter_discrete_traces_scalar(graph_type):
     for scale, trace in traces:
         x = trace.nodes["x"]["value"].data.long().view(-1)[0]
         y = trace.nodes["y"]["value"].data.long().view(-1)[0]
-        expected_scale = [1 - p[0], p[0]][x] * ps[y]
+        expected_scale = Variable(torch.Tensor([[[1 - p[0], p[0]][x] * ps[y]]]))
         assert_equal(scale, expected_scale)
 
 
@@ -106,7 +106,7 @@ def test_iter_discrete_traces_vector(graph_type):
         assert_equal(scale, expected_scale)
 
 
-# A simple Gaussian mixture model.
+# A simple Gaussian mixture model, with no vectorization.
 def gmm_model(data):
     p = Variable(torch.Tensor([0.5]))
     sigma = Variable(torch.Tensor([1.0]))
@@ -135,19 +135,61 @@ def test_gmm_iter_discrete_traces(model, data_size, graph_type):
     pyro.get_param_store().clear()
     data = Variable(torch.arange(0, data_size))
     traces = list(iter_discrete_traces(graph_type, model, data=data))
+    # This non-vectorized version is exponential in data_size:
     assert len(traces) == 2 ** data_size
 
 
-@pytest.mark.parametrize("trace_graph", [False, True])
+# A Gaussian mixture model, with vectorized batching.
+def gmm_batch_model(data):
+    p = Variable(torch.ones(2) * 0.5)
+    sigma = Variable(torch.ones(1))
+    mus = pyro.param("mus", Variable(torch.Tensor([-1, 1]), requires_grad=True))
+    with pyro.iarange("data", len(data)) as batch:
+        n = len(batch)
+        z = pyro.sample("z", dist.Categorical(p.unsqueeze(0).expand(n, 2)))
+        assert z.size() == (n, 2)
+        mu = torch.mv(z, mus)
+        pyro.observe("x", dist.DiagNormal(mu, sigma.expand(n)), data[batch])
+
+
+def gmm_batch_guide(data):
+    with pyro.iarange("data", len(data)) as batch:
+        n = len(batch)
+        ps = pyro.param("ps", Variable(torch.ones(n, 2) * 0.5, requires_grad=True))
+        z = pyro.sample("z", dist.Categorical(ps))
+        assert z.size() == (n, 2)
+
+
+@pytest.mark.parametrize("data_size", [1, 2, 3])
+@pytest.mark.parametrize("graph_type", ["flat", "dense"])
+@pytest.mark.parametrize("model", [gmm_batch_model, gmm_batch_guide])
+def test_gmm_batch_iter_discrete_traces(model, data_size, graph_type):
+    pyro.get_param_store().clear()
+    data = Variable(torch.arange(0, data_size))
+    traces = list(iter_discrete_traces(graph_type, model, data=data))
+    # This vectorized version is independent of data_size:
+    assert len(traces) == 2
+
+
+@pytest.mark.parametrize("trace_graph", [False, True], ids=['dense', 'flat'])
+@pytest.mark.parametrize("model,guide", [
+    (gmm_model, gmm_guide),
+    (gmm_batch_model, gmm_batch_guide),
+], ids=['single', 'batched'])
 @pytest.mark.parametrize("enum_discrete", [
     False,
-    pytest.param(True, marks=pytest.mark.xfail(run=False, reason="segfault")),
-])
-def test_gmm_elbo_single_datum(enum_discrete, trace_graph):
+    True,
+    # pytest.param(
+    #     True,
+    #     marks=pytest.mark.xfail(
+    #         run=False,
+    #         reason="pytorch segfaults at 0.2.0_4, fixed by 0.2.0+f964105")),
+], ids=['naive', 'summed'])
+def test_gmm_elbo_smoke(model, guide, enum_discrete, trace_graph):
     pyro.get_param_store().clear()
     data = Variable(torch.Tensor([0, 1, 9]))
 
     optimizer = pyro.optim.Adam({"lr": .001})
-    inference = SVI(gmm_model, gmm_guide, optimizer, loss="ELBO",
+    inference = SVI(model, guide, optimizer, loss="ELBO",
                     trace_graph=trace_graph, enum_discrete=enum_discrete)
     inference.step(data)
