@@ -24,6 +24,11 @@ install:
     - pip install torchvision
     - pip freeze
 
+branches:
+    only:
+        - master
+        - dev
+
 jobs:
     fast_finish: true
     include:
