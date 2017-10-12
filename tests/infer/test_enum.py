@@ -99,29 +99,45 @@ def test_iter_discrete_traces_vector(graph_type):
         assert_equal(scale, expected_scale)
 
 
-@pytest.mark.parametrize("trace_graph", [False, True])
-@pytest.mark.parametrize("enum_discrete", [
-    False,
-    pytest.param(True, marks=pytest.mark.xfail(run=False)),
-])
-def test_elbo_single_datum(enum_discrete, trace_graph):
+# A simple Gaussian mixture model.
+def gmm_model(data):
+    p = Variable(torch.Tensor([0.5]))
+    sigma = Variable(torch.Tensor([1.0]))
+    mus = pyro.param("mus", Variable(torch.Tensor([-1, 1]), requires_grad=True))
+    for i in pyro.irange("data", len(data)):
+        z = pyro.sample("z_{}".format(i), dist.Bernoulli(p))
+        assert z.size() == (1, 1)
+        z = z.long().data[0, 0]
+        print('model{} z_{} = {}'.format(' ' * i, i, z))
+        pyro.observe("x_{}".format(i), dist.DiagNormal(mus[z], sigma), data[i])
+
+
+def gmm_guide(data):
+    for i in pyro.irange("data", len(data)):
+        p = pyro.param("p_{}".format(i), Variable(torch.Tensor([0.5]), requires_grad=True))
+        z = pyro.sample("z_{}".format(i), dist.Bernoulli(p))
+        assert z.size() == (1, 1)
+        z = z.long().data[0, 0]
+        print('guide{} z_{} = {}'.format(' ' * i, i, z))
+
+
+@pytest.mark.parametrize("data_size", [1, 2, 3])
+@pytest.mark.parametrize("graph_type", ["flat", "dense"])
+@pytest.mark.parametrize("model", [gmm_model, gmm_guide])
+def test_gmm_iter_discrete_traces(model, data_size, graph_type):
     pyro.get_param_store().clear()
-    data = Variable(torch.Tensor([0, 1, 7, 8, 9]))
+    data = Variable(torch.arange(0, data_size))
+    traces = list(iter_discrete_traces(graph_type, model, data=data))
+    assert len(traces) == 2 ** data_size
 
-    def model():
-        cat = dist.Categorical(Variable(torch.Tensor([0.5, 0.5])), one_hot=False)
-        sigma = Variable(torch.Tensor([1.0]))
-        mus = pyro.param("mus", Variable(torch.Tensor([-1, 1]), requires_grad=True))
-        for i in pyro.irange("data", len(data)):
-            z = pyro.sample("z_{}".format(i), cat).long()
-            pyro.observe("x_{}".format(i), dist.DiagNormal(mus[z[0]], sigma), data[i])
 
-    def guide():
-        for i in pyro.irange("data", len(data)):
-            p = pyro.param("p_{}".format(i), Variable(torch.Tensor([0.5, 0.5]), requires_grad=True))
-            pyro.sample("z_{}".format(i), dist.Categorical(p, one_hot=False))
+@pytest.mark.parametrize("trace_graph", [False, True])
+@pytest.mark.parametrize("enum_discrete", [False, True])
+def test_gmm_elbo_single_datum(enum_discrete, trace_graph):
+    pyro.get_param_store().clear()
+    data = Variable(torch.Tensor([0, 1, 9]))
 
     optimizer = pyro.optim.Adam({"lr": .001})
-    inference = SVI(model, guide, optimizer, loss="ELBO",
+    inference = SVI(gmm_model, gmm_guide, optimizer, loss="ELBO",
                     trace_graph=trace_graph, enum_discrete=enum_discrete)
-    inference.step()
+    inference.step(data)
