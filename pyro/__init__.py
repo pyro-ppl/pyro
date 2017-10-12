@@ -10,6 +10,7 @@ from torch.autograd import Variable
 import pyro
 import pyro.poutine as poutine
 
+from pyro.distributions.subsample import Subsample
 from pyro.params import param_with_module_name
 from pyro.params.param_store import ParamStoreDict
 from pyro.poutine import LambdaPoutine, condition, do  # noqa: F401
@@ -71,6 +72,7 @@ def sample(name, fn, *args, **kwargs):
         if obs is not None:
             warnings.warn("trying to observe a value outside of inference at " + name,
                           warnings.RuntimeWarning)
+            return obs
         return fn(*args, **kwargs)
     # if stack not empty, apply everything in the stack?
     else:
@@ -82,7 +84,7 @@ def sample(name, fn, *args, **kwargs):
             "is_observed": False,
             "args": args,
             "kwargs": kwargs,
-            "ret": None,
+            "value": None,
             "scale": 1.0,
             "map_data_stack": [],
             "done": False,
@@ -94,7 +96,7 @@ def sample(name, fn, *args, **kwargs):
             msg["is_observed"] = True
         # apply the stack and return its return value
         out_msg = apply_stack(msg)
-        return out_msg["ret"]
+        return out_msg["value"]
 
 
 def observe(name, fn, obs, *args, **kwargs):
@@ -149,7 +151,7 @@ def iarange(name, size, subsample_size=0):
         yield Variable(torch.LongTensor(list(range(size))))
         return
 
-    subsample = Variable(torch.randperm(size)[0:subsample_size])
+    subsample = sample(name, Subsample(size, subsample_size))
     if len(_PYRO_STACK) == 0:
         yield subsample
     else:
@@ -220,13 +222,13 @@ def param(name, *args, **kwargs):
             "kwargs": kwargs,
             "scale": 1.0,
             "map_data_stack": [],
-            "ret": None,
+            "value": None,
             "done": False,
             "stop": False,
         }
         # apply the stack and return its return value
         out_msg = apply_stack(msg)
-        return out_msg["ret"]
+        return out_msg["val"]
 
 
 def module(pyro_name, nn_obj, tags="default", load_from_param_store=False):
