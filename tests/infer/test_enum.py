@@ -4,7 +4,9 @@ from torch.autograd import Variable
 
 import pyro
 import pyro.distributions as dist
+import pyro.optim
 from pyro import poutine
+from pyro.infer import SVI
 from pyro.infer.enum import iter_discrete_traces, scale_trace
 from tests.common import assert_equal
 
@@ -78,7 +80,7 @@ def test_iter_discrete_traces_scalar(graph_type):
         assert_equal(scale, expected_scale)
 
 
-@pytest.mark.xfail
+@pytest.mark.xfail(reason="https://github.com/uber/pyro/issues/220")
 @pytest.mark.parametrize("graph_type", ["flat", "dense"])
 def test_iter_discrete_traces_vector(graph_type):
     pyro.get_param_store().clear()
@@ -95,3 +97,31 @@ def test_iter_discrete_traces_vector(graph_type):
                                    dist.Categorical(ps, one_hot=False).log_pdf(y))
         expected_scale = expected_scale.data.view(-1)[0]
         assert_equal(scale, expected_scale)
+
+
+@pytest.mark.parametrize("trace_graph", [False, True])
+@pytest.mark.parametrize("enum_discrete", [
+    False,
+    pytest.param(True, marks=pytest.mark.xfail(run=False)),
+])
+def test_elbo_single_datum(enum_discrete, trace_graph):
+    pyro.get_param_store().clear()
+    data = Variable(torch.Tensor([0, 1, 7, 8, 9]))
+
+    def model():
+        cat = dist.Categorical(Variable(torch.Tensor([0.5, 0.5])), one_hot=False)
+        sigma = Variable(torch.Tensor([1.0]))
+        mus = pyro.param("mus", Variable(torch.Tensor([-1, 1]), requires_grad=True))
+        for i in pyro.irange("data", len(data)):
+            z = pyro.sample("z_{}".format(i), cat).long()
+            pyro.observe("x_{}".format(i), dist.DiagNormal(mus[z[0]], sigma), data[i])
+
+    def guide():
+        for i in pyro.irange("data", len(data)):
+            p = pyro.param("p_{}".format(i), Variable(torch.Tensor([0.5, 0.5]), requires_grad=True))
+            pyro.sample("z_{}".format(i), dist.Categorical(p, one_hot=False))
+
+    optimizer = pyro.optim.Adam({"lr": .001})
+    inference = SVI(model, guide, optimizer, loss="ELBO",
+                    trace_graph=trace_graph, enum_discrete=enum_discrete)
+    inference.step()
