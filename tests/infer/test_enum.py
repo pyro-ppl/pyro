@@ -12,7 +12,7 @@ from tests.common import assert_equal
 
 
 # A model with continuous and discrete variables, no batching.
-def model1():
+def model0():
     p = pyro.param("p", Variable(torch.Tensor([0.1, 0.9])))
     mu = pyro.param("mu", Variable(torch.Tensor([-1.0, 1.0])))
     sigma = pyro.param("sigma", Variable(torch.Tensor([2.0, 3.0])))
@@ -23,7 +23,7 @@ def model1():
 
 
 # A purely discrete model, no batching.
-def model2():
+def model1():
     p = pyro.param("p", Variable(torch.Tensor([0.05])))
     ps = pyro.param("ps", Variable(torch.Tensor([0.1, 0.2, 0.3, 0.4])))
     x = pyro.sample("x", dist.Bernoulli(p))
@@ -32,18 +32,22 @@ def model2():
 
 
 # A discrete model with batching.
-def model3():
-    p = pyro.param("p", Variable(torch.Tensor([[0.05], [0.15], [0.25]])))
+def model2():
+    p = pyro.param("p", Variable(torch.Tensor([[0.05], [0.15]])))
     ps = pyro.param("ps", Variable(torch.Tensor([[0.1, 0.2, 0.3, 0.4],
                                                  [0.4, 0.3, 0.2, 0.1]])))
     x = pyro.sample("x", dist.Bernoulli(p))
     y = pyro.sample("y", dist.Categorical(ps, one_hot=False))
-    assert x.size() == (3, 1)
+    assert x.size() == (2, 1)
     assert y.size() == (2, 1)
     return dict(x=x, y=y)
 
 
-@pytest.mark.parametrize("model", [model1, model2, model3])
+@pytest.mark.parametrize("model", [
+    model0,
+    model1,
+    pytest.param(model2, marks=pytest.mark.xfail(reason="https://github.com/uber/pyro/issues/253")),
+])
 @pytest.mark.parametrize("graph_type", ["flat", "dense"])
 def test_scale_trace(graph_type, model):
     pyro.get_param_store().clear()
@@ -67,7 +71,7 @@ def test_scale_trace(graph_type, model):
 @pytest.mark.parametrize("graph_type", ["flat", "dense"])
 def test_iter_discrete_traces_scalar(graph_type):
     pyro.get_param_store().clear()
-    traces = list(iter_discrete_traces(graph_type, model2))
+    traces = list(iter_discrete_traces(graph_type, model1))
 
     p = pyro.param("p").data
     ps = pyro.param("ps").data
@@ -84,7 +88,7 @@ def test_iter_discrete_traces_scalar(graph_type):
 @pytest.mark.parametrize("graph_type", ["flat", "dense"])
 def test_iter_discrete_traces_vector(graph_type):
     pyro.get_param_store().clear()
-    traces = list(iter_discrete_traces(graph_type, model3))
+    traces = list(iter_discrete_traces(graph_type, model2))
 
     p = pyro.param("p").data
     ps = pyro.param("ps").data
@@ -101,6 +105,7 @@ def test_iter_discrete_traces_vector(graph_type):
 
 # A simple Gaussian mixture model.
 def gmm_model(data):
+    # p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
     p = Variable(torch.Tensor([0.5]))
     sigma = Variable(torch.Tensor([1.0]))
     mus = pyro.param("mus", Variable(torch.Tensor([-1, 1]), requires_grad=True))
@@ -108,7 +113,7 @@ def gmm_model(data):
         z = pyro.sample("z_{}".format(i), dist.Bernoulli(p))
         assert z.size() == (1, 1)
         z = z.long().data[0, 0]
-        print('model{} z_{} = {}'.format(' ' * i, i, z))
+        print("M{} z_{} = {}".format("  " * i, i, z))
         pyro.observe("x_{}".format(i), dist.DiagNormal(mus[z], sigma), data[i])
 
 
@@ -118,7 +123,7 @@ def gmm_guide(data):
         z = pyro.sample("z_{}".format(i), dist.Bernoulli(p))
         assert z.size() == (1, 1)
         z = z.long().data[0, 0]
-        print('guide{} z_{} = {}'.format(' ' * i, i, z))
+        print("G{} z_{} = {}".format("  " * i, i, z))
 
 
 @pytest.mark.parametrize("data_size", [1, 2, 3])
@@ -144,3 +149,8 @@ def test_gmm_elbo_single_datum(enum_discrete, trace_graph):
     inference = SVI(gmm_model, gmm_guide, optimizer, loss="ELBO",
                     trace_graph=trace_graph, enum_discrete=enum_discrete)
     inference.step(data)
+
+
+# This is useful for reproducing the segfaulting test.
+if __name__ == '__main__':
+    test_gmm_elbo_single_datum(enum_discrete=True, trace_graph=False)
