@@ -1,4 +1,3 @@
-import os
 import sys
 
 import pytest
@@ -109,7 +108,6 @@ def test_iter_discrete_traces_vector(graph_type):
 
 # A simple Gaussian mixture model.
 def gmm_model(data):
-    # p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
     p = Variable(torch.Tensor([0.5]))
     sigma = Variable(torch.Tensor([1.0]))
     mus = pyro.param("mus", Variable(torch.Tensor([-1, 1]), requires_grad=True))
@@ -153,8 +151,3 @@ def test_gmm_elbo_single_datum(enum_discrete, trace_graph):
     inference = SVI(gmm_model, gmm_guide, optimizer, loss="ELBO",
                     trace_graph=trace_graph, enum_discrete=enum_discrete)
     inference.step(data)
-
-
-# This is useful for reproducing the segfaulting test.
-if __name__ == '__main__':
-    test_gmm_elbo_single_datum(enum_discrete=True, trace_graph=False)
