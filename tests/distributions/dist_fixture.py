@@ -1,4 +1,3 @@
-import json
 import math
 import numbers
 
@@ -17,8 +16,8 @@ class Fixture(object):
                  prec=0.05,
                  min_samples=None,
                  is_discrete=False,
-                 expected_support_file=None,
-                 expected_support_key=''):
+                 expected_support_non_vec=None,
+                 expected_support=None):
         self.pyro_dist = pyro_dist
         self.scipy_dist = scipy_dist
         self.dist_params = dist_params
@@ -27,8 +26,8 @@ class Fixture(object):
         self.min_samples = min_samples
         self.prec = prec
         self.is_discrete = is_discrete
-        self.support_file = expected_support_file
-        self.support_key = expected_support_key
+        self.expected_support_non_vec = expected_support_non_vec
+        self.expected_support = expected_support
 
     def get_samples(self, num_samples, *dist_params):
         return [self.pyro_dist(*dist_params).data.cpu().numpy() for _ in range(num_samples)]
@@ -46,6 +45,8 @@ class Fixture(object):
         return map_tensor_wrap(zip(*dist_params))
 
     def get_scipy_logpdf(self, idx):
+        if not self.scipy_arg_fn:
+            return
         args, kwargs = self.scipy_arg_fn(*self.dist_params[idx])
         if self.is_discrete:
             log_pdf = self.scipy_dist.logpmf(self.test_data[idx], *args, **kwargs)
@@ -54,6 +55,8 @@ class Fixture(object):
         return np.sum(log_pdf)
 
     def get_scipy_batch_logpdf(self):
+        if not self.scipy_arg_fn:
+            return
         return [self.get_scipy_logpdf(i) for i in range(len(self.test_data))]
 
     def get_pyro_logpdf(self, idx):
@@ -87,13 +90,6 @@ class Fixture(object):
         except (AttributeError, ValueError):
             return min_samples
         return max(min_samples, min_computed_samples)
-
-    def get_expected_support(self):
-        if not self.support_file:
-            return None
-        with open(self.support_file) as data:
-            data = json.load(data)
-        return [torch.Tensor(x) for x in data[self.support_key]]
 
     def get_test_distribution_name(self):
         return self.pyro_dist.__class__.__name__

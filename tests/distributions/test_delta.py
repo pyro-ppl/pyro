@@ -3,7 +3,7 @@ import torch
 from torch.autograd import Variable
 
 import pyro.distributions as dist
-from tests.common import TestCase
+from tests.common import TestCase, assert_equal
 
 
 class TestDelta(TestCase):
@@ -12,6 +12,8 @@ class TestDelta(TestCase):
         self.vs = Variable(torch.Tensor([[0], [1], [2], [3]]))
         self.test_data = Variable(torch.Tensor([3, 3, 3]))
         self.batch_test_data = Variable(torch.arange(0, 4).unsqueeze(1).expand(4, 3))
+        self.expected_support = [[0], [1], [2], [3]]
+        self.expected_support_non_vec = [3]
         self.analytic_mean = 3
         self.analytic_var = 0
         self.n_samples = 10
@@ -31,3 +33,9 @@ class TestDelta(TestCase):
         torch_var = np.var(torch_samples)
         self.assertEqual(torch_mean, self.analytic_mean)
         self.assertEqual(torch_var, self.analytic_var)
+
+    def test_support(self):
+        actual_support = dist.delta.support(self.vs)
+        actual_support_non_vec = dist.delta.support(self.v)
+        assert_equal(actual_support.data, torch.Tensor(self.expected_support))
+        assert_equal(actual_support_non_vec.data, torch.Tensor(self.expected_support_non_vec))

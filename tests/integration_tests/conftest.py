@@ -6,3 +6,5 @@ def pytest_collection_modifyitems(items):
         if item.nodeid.startswith("tests/integration_tests"):
             if "stage" not in item.keywords:
                 item.add_marker(pytest.mark.stage("integration"))
+            if "init" not in item.keywords:
+                item.add_marker(pytest.mark.init(rng_seed=123))
