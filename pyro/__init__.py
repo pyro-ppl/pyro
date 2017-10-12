@@ -10,6 +10,7 @@ from torch.autograd import Variable
 import pyro
 import pyro.poutine as poutine
 
+from pyro.distributions.subsample import Subsample
 from pyro.params import param_with_module_name
 from pyro.params.param_store import ParamStoreDict
 from pyro.poutine import LambdaPoutine, condition, do  # noqa: F401
@@ -150,7 +151,7 @@ def iarange(name, size, subsample_size=0):
         yield Variable(torch.LongTensor(list(range(size))))
         return
 
-    subsample = Variable(torch.randperm(size)[0:subsample_size])
+    subsample = sample(name, Subsample(size, subsample_size))
     if len(_PYRO_STACK) == 0:
         yield subsample
     else:
@@ -249,33 +250,25 @@ def module(pyro_name, nn_obj, tags="default"):
         _MODULE_NAMESPACE_DIVIDER
 
     if isclass(nn_obj):
-        raise NotImplementedError("Not yet supporting class constructor")
+        raise NotImplementedError("pyro.module does not support class constructors for " +
+                                  "the argument nn_obj")
 
-    state_dict = {}
+    def _cdata(t):
+        if isinstance(t, torch.autograd.Variable):
+            return t.data._cdata
+        else:
+            return t._cdata
+
+    def _copy_in_place(source, target):
+        t = target.data if isinstance(target, torch.autograd.Variable) else target
+        s = source.data if isinstance(source, torch.autograd.Variable) else source
+        t.copy_(s)
+
     for param_name, param in nn_obj.named_parameters():
-        state_dict[param_name] = pyro.param(param_with_module_name(pyro_name, param_name), param,
-                                            tags=tags)
+        returned_param = pyro.param(param_with_module_name(pyro_name, param_name), param, tags=tags)
+        if _cdata(param) != _cdata(returned_param):
+            _copy_in_place(source=returned_param, target=param)
 
-    current_nn_state = nn_obj.state_dict()
-    for name, param in state_dict.items():
-        if name not in current_nn_state:
-            raise KeyError('unexpected key "{}" in state_dict'.format(name))
-        if isinstance(param, Variable):
-            # backwards compatibility for serialized parameters
-            param = param.data
-
-        # only copy if the param has actually changed
-        # Note: apart from the following line, the rest of this code
-        # logic is borrowed from torch.nn.Module.load_state_dict
-        if id(param) != id(current_nn_state[name]):
-            current_nn_state[name].copy_(param)
-
-    # the KeyError below may not be correct; see github issue
-    missing = set(current_nn_state.keys()) - set(state_dict.keys())
-    if len(missing) > 0:
-        raise KeyError('missing keys in state_dict: "{}"'.format(missing))
-
-    nn_obj.load_state_dict(current_nn_state)
     return nn_obj
 
 

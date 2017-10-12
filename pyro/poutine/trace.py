@@ -1,4 +1,5 @@
 import collections
+
 import networkx
 
 
@@ -46,7 +47,7 @@ class Trace(networkx.DiGraph):
         Identical to super(Trace, self).copy(), but preserves the type
         and the self.graph_type attribute
         """
-        return Trace(self, graph_type=self.graph_type)
+        return Trace(super(Trace, self).copy(), graph_type=self.graph_type)
 
     def log_pdf(self, site_filter=lambda name, site: True):
         """

@@ -3,6 +3,7 @@ import torch
 
 import pyro
 import pyro.poutine as poutine
+from pyro.infer.enum import iter_discrete_traces, scale_trace
 from pyro.util import ng_zeros, detach_iterable
 
 
@@ -20,12 +21,14 @@ class TraceGraph_ELBO(object):
     dependency information as recorded in the TraceGraph is used
     to reduce the variance of the gradient estimator.
     """
-    def __init__(self, num_particles=1):
+    def __init__(self, num_particles=1, enum_discrete=False):
         """
         :param num_particles: the number of particles (samples) used to form the estimator
+        :param bool enum_discrete: whether to sum over discrete latent variables, rather than sample them
         """
         super(TraceGraph_ELBO, self).__init__()
         self.num_particles = num_particles
+        self.enum_discrete = enum_discrete
 
     def _get_traces(self, model, guide, *args, **kwargs):
         """
@@ -37,6 +40,16 @@ class TraceGraph_ELBO(object):
 
         # import pdb; pdb.set_trace()
         for i in range(self.num_particles):
+            if self.enum_discrete:
+                # This iterates over a bag of traces, for each particle.
+                for scale, guide_trace in iter_discrete_traces("dense", guide, *args, **kwargs):
+                    model_trace = poutine.trace(poutine.replay(model, guide_trace),
+                                                graph_type="dense").get_trace(*args, **kwargs)
+                    guide_trace = scale_trace(guide_trace, scale)
+                    model_trace = scale_trace(model_trace, scale)
+                    yield model_trace, guide_trace
+                continue
+
             guide_trace = poutine.trace(guide,
                                         graph_type="dense").get_trace(*args, **kwargs)
             model_trace = poutine.trace(poutine.replay(model, guide_trace),

@@ -10,20 +10,22 @@ class ELBO(object):
         in the case that some of the random variables are non-reparameterized.
         note: for a model with many random variables, keeping track of the dependency information
         can be expensive.
+    :param bool enum_discrete: whether to sum over discrete latent variables, rather than sample them
 
     ELBO is the top-level interface for stochastic variational inference via optimization of the
     evidence lower bound. ELBO dispatches to Trace_ELBO and TraceGraph_ELBO.
     """
     def __init__(self,
                  num_particles=1,
-                 trace_graph=False):
+                 trace_graph=False,
+                 enum_discrete=False):
         super(ELBO, self).__init__()
         self.num_particles = num_particles
         self.trace_graph = trace_graph
         if self.trace_graph:
-            self.which_elbo = TraceGraph_ELBO(num_particles=num_particles)
+            self.which_elbo = TraceGraph_ELBO(num_particles=num_particles, enum_discrete=enum_discrete)
         else:
-            self.which_elbo = Trace_ELBO(num_particles=num_particles)
+            self.which_elbo = Trace_ELBO(num_particles=num_particles, enum_discrete=enum_discrete)
 
     def loss(self, model, guide, *args, **kwargs):
         """
