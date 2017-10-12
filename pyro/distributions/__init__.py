@@ -2,6 +2,7 @@
 from pyro.distributions.bernoulli import Bernoulli
 from pyro.distributions.beta import Beta
 from pyro.distributions.categorical import Categorical
+from pyro.distributions.cauchy import Cauchy
 from pyro.distributions.delta import Delta
 from pyro.distributions.distribution import Distribution  # noqa: F401
 # specific distributions
@@ -31,3 +32,4 @@ normalchol = NormalChol()
 poisson = Poisson()
 uniform = Uniform()
 dirichlet = Dirichlet()
+cauchy = Cauchy()
