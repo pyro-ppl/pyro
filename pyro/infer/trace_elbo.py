@@ -41,7 +41,7 @@ class Trace_ELBO(object):
 
             for name in model_trace.nodes.keys():
                 if model_trace.nodes[name]["type"] == "sample":
-                    if model_trace.nodes[name]["obs"] is not None:
+                    if model_trace.nodes[name]["is_observed"]:
                         elbo_particle += model_trace.nodes[name]["log_pdf"]
                     else:
                         elbo_particle += model_trace.nodes[name]["log_pdf"]
@@ -72,7 +72,7 @@ class Trace_ELBO(object):
             # compute elbo and surrogate elbo
             for name in model_trace.nodes.keys():
                 if model_trace.nodes[name]["type"] == "sample":
-                    if model_trace.nodes[name]["obs"] is not None:
+                    if model_trace.nodes[name]["is_observed"]:
                         elbo_particle += model_trace.nodes[name]["log_pdf"]
                         surrogate_elbo_particle += model_trace.nodes[name]["log_pdf"]
                     else:

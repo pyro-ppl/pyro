@@ -147,8 +147,9 @@ class Poutine(object):
         if msg["done"]:
             return msg["value"]
 
-        if msg["obs"] is not None:
-            val = msg["obs"]
+        if msg["is_observed"]:
+            assert msg["value"] is not None
+            val = msg["value"]
         else:
             val = fn(*args, **kwargs)
 

@@ -21,7 +21,7 @@ class ReplayPoutine(Poutine):
         if sites is None:
             self.sites = {site: site for site in guide_trace.nodes.keys()
                           if guide_trace.nodes[site]["type"] == "sample"
-                          and guide_trace.nodes[site]["obs"] is None}
+                          and not guide_trace.nodes[site]["is_observed"]}
         # case 2: sites is a list/tuple/set
         elif isinstance(sites, (list, tuple, set)):
             self.sites = {site: site for site in sites}
@@ -49,7 +49,7 @@ class ReplayPoutine(Poutine):
         so that poutines below it do not execute their sample functions at that site.
         """
         if msg["name"] in self.sites:
-            if msg["type"] == "sample" and msg["obs"] is None:
+            if msg["type"] == "sample" and not msg["is_observed"]:
                 msg["done"] = True
                 msg["value"] = self.guide_trace.nodes[self.sites[msg["name"]]]["value"]
 
@@ -69,13 +69,13 @@ class ReplayPoutine(Poutine):
         name = msg["name"]
         # case 1: dict, positive: sample from guide
         if name in self.sites:
-            assert msg["obs"] is None, \
-                "site {} is an obs and should not be overwritten".format(name)
+            assert not msg["is_observed"], \
+                "site {} is observed and should not be overwritten".format(name)
             g_name = self.sites[name]
             assert g_name in self.guide_trace, \
                 "{} in sites but {} not in trace".format(name, g_name)
             assert self.guide_trace.nodes[g_name]["type"] == "sample" and \
-                self.guide_trace.nodes[g_name]["obs"] is None, \
+                not self.guide_trace.nodes[g_name]["is_observed"], \
                 "site {} must be sample in guide_trace".format(g_name)
             msg["done"] = True
             return self.guide_trace.nodes[g_name]["value"]

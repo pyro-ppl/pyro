@@ -71,6 +71,7 @@ def sample(name, fn, *args, **kwargs):
         if obs is not None:
             warnings.warn("trying to observe a value outside of inference at " + name,
                           RuntimeWarning)
+            return obs
         return fn(*args, **kwargs)
     # if stack not empty, apply everything in the stack?
     else:
@@ -79,7 +80,7 @@ def sample(name, fn, *args, **kwargs):
             "type": "sample",
             "name": name,
             "fn": fn,
-            "obs": obs,
+            "is_observed": False,
             "args": args,
             "kwargs": kwargs,
             "value": None,
@@ -88,6 +89,10 @@ def sample(name, fn, *args, **kwargs):
             "done": False,
             "stop": False,
         }
+        # handle observation
+        if obs is not None:
+            msg["value"] = obs
+            msg["is_observed"] = True
         # apply the stack and return its return value
         out_msg = apply_stack(msg)
         return out_msg["value"]

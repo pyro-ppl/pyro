@@ -318,7 +318,7 @@ def discrete_escape(trace, msg):
     Subroutine for integrating out discrete variables for variance reduction.
     """
     return (msg["type"] == "sample") and \
-        (msg["obs"] is None) and \
+        (not msg["is_observed"]) and \
         (msg["name"] not in trace) and \
         (getattr(msg["fn"], "enumerable", False))
 
@@ -335,7 +335,7 @@ def all_escape(trace, msg):
     Subroutine for approximately integrating out variables for variance reduction.
     """
     return (msg["type"] == "sample") and \
-        (msg["obs"] is None) and \
+        (not msg["is_observed"]) and \
         (msg["name"] not in trace)
 
 

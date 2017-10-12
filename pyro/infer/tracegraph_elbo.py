@@ -58,7 +58,7 @@ class TraceGraph_ELBO(object):
 
             for name in model_trace.nodes.keys():
                 if model_trace.nodes[name]["type"] == "sample":
-                    if model_trace.nodes[name]["obs"] is not None:
+                    if model_trace.nodes[name]["is_observed"]:
                         elbo_particle += model_trace.nodes[name]["log_pdf"]
                     else:
                         elbo_particle += model_trace.nodes[name]["log_pdf"]
@@ -118,7 +118,7 @@ class TraceGraph_ELBO(object):
                 model_trace_site = model_trace.nodes[site]
                 log_pdf_key = 'log_pdf' if site not in model_vec_batch_nodes_dict else 'batch_log_pdf'
                 if model_trace_site["type"] == "sample":
-                    if model_trace_site["obs"] is not None:
+                    if model_trace_site["is_observed"]:
                         cost_node = (model_trace_site[log_pdf_key], True)
                         cost_nodes.append(cost_node)
                     else:

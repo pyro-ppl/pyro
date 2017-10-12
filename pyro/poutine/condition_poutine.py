@@ -41,16 +41,17 @@ class ConditionPoutine(Poutine):
         with no additional effects.
         """
         name = msg["name"]
-        if msg["obs"] is not None:
+        if msg["is_observed"]:
             assert name not in self.data, \
                 "should not change values of existing observes"
 
         if name in self.data:
             msg["done"] = False
             if isinstance(self.data, Trace):
-                msg["obs"] = self.data.nodes[name]["value"]
+                msg["value"] = self.data.nodes[name]["value"]
             else:
-                msg["obs"] = self.data[name]
+                msg["value"] = self.data[name]
+            msg["is_observed"] = True
             return super(ConditionPoutine, self)._pyro_sample(msg)
         else:
             return super(ConditionPoutine, self)._pyro_sample(msg)

@@ -79,7 +79,7 @@ class SearchTest(HMMSamplingTestCase):
             tr_latents.add(tuple([tr.nodes[name]["value"].view(-1).data[0]
                                   for name in tr.nodes.keys()
                                   if tr.nodes[name]["type"] == "sample"
-                                  and tr.nodes[name]["obs"] is None]))
+                                  and not tr.nodes[name]["is_observed"]]))
 
         assert true_latents == tr_latents
 

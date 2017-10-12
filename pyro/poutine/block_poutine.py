@@ -94,7 +94,7 @@ class BlockPoutine(Poutine):
         4. self.hide_all == True
         """
         # handle observes
-        if msg["type"] == "sample" and msg["obs"] is not None:
+        if msg["type"] == "sample" and msg["is_observed"]:
             msg_type = "observe"
         else:
             msg_type = msg["type"]

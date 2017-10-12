@@ -74,7 +74,7 @@ class TracePoutineTests(NormalNormalNormalPoutineTestCase):
             assert guide_trace.nodes[name]["type"] in \
                 ("args", "return", "sample", "param")
             if guide_trace.nodes[name]["type"] == "sample":
-                assert guide_trace.nodes[name]["obs"] is None
+                assert not guide_trace.nodes[name]["is_observed"]
 
     def test_trace_return(self):
         model_trace = poutine.trace(self.model).get_trace()
@@ -237,7 +237,7 @@ class QueuePoutineDiscreteTest(TestCase):
         for tr in trs:
             tr_latents.append(tuple([int(tr.nodes[name]["value"].view(-1).data[0]) for name in tr
                                      if tr.nodes[name]["type"] == "sample"
-                                     and tr.nodes[name]["obs"] is None]))
+                                     and not tr.nodes[name]["is_observed"]]))
 
         assert true_latents == set(tr_latents)
 
@@ -332,7 +332,7 @@ class LiftPoutineTests(TestCase):
                 self.assertTrue(name + "_prior" == lifted_tr.nodes[name]['fn'].__name__)
             if tr.nodes[name]["type"] == "param":
                 self.assertTrue(lifted_tr.nodes[name]["type"] == "sample"
-                                and lifted_tr.nodes[name]["obs"] is None)
+                                and not lifted_tr.nodes[name]["is_observed"])
 
     def test_unlifted_param(self):
         tr = poutine.trace(self.guide).get_trace()
@@ -342,7 +342,7 @@ class LiftPoutineTests(TestCase):
             if name in ('sigma1', 'mu1'):
                 self.assertTrue(name + "_prior" == lifted_tr.nodes[name]['fn'].__name__)
                 self.assertTrue(lifted_tr.nodes[name]["type"] == "sample"
-                                and lifted_tr.nodes[name]["obs"] is None)
+                                and not lifted_tr.nodes[name]["is_observed"])
             if name in ('sigma2', 'mu2'):
                 self.assertTrue(lifted_tr.nodes[name]["type"] == "param")
 
@@ -352,7 +352,7 @@ class LiftPoutineTests(TestCase):
         for name in lifted_tr.nodes.keys():
             if lifted_tr.nodes[name]["type"] == "param":
                 self.assertTrue(lifted_tr.nodes[name]["type"] == "sample"
-                                and lifted_tr.nodes[name]["obs"] is None)
+                                and not lifted_tr.nodes[name]["is_observed"])
 
     def test_random_module_prior_dict(self):
         pyro.clear_param_store()
@@ -365,7 +365,7 @@ class LiftPoutineTests(TestCase):
                 self.assertTrue(
                     dist_name + "_prior" == lifted_tr.nodes[key_name]['fn'].__name__)
                 self.assertTrue(lifted_tr.nodes[key_name]["type"] == "sample"
-                                and lifted_tr.nodes[key_name]["obs"] is None)
+                                and not lifted_tr.nodes[key_name]["is_observed"])
 
 
 class QueuePoutineMixedTest(TestCase):
@@ -471,7 +471,7 @@ class ConditionPoutineTests(NormalNormalNormalPoutineTestCase):
         tr2 = poutine.trace(poutine.condition(self.model, data=data)).get_trace()
         assert "latent2" in tr2
         assert tr2.nodes["latent2"]["type"] == "sample" and \
-            tr2.nodes["latent2"]["obs"] is not None
+            tr2.nodes["latent2"]["is_observed"]
         assert tr2.nodes["latent2"]["value"] is data["latent2"]
 
     def test_do(self):
@@ -485,7 +485,7 @@ class ConditionPoutineTests(NormalNormalNormalPoutineTestCase):
         tr2 = poutine.trace(
             poutine.condition(self.model, data=tr1)).get_trace()
         assert tr2.nodes["latent2"]["type"] == "sample" and \
-            tr2.nodes["latent2"]["obs"] is not None
+            tr2.nodes["latent2"]["is_observed"]
         assert tr2.nodes["latent2"]["value"] is tr1.nodes["latent2"]["value"]
 
     def test_stack_overwrite_failure(self):
@@ -503,10 +503,10 @@ class ConditionPoutineTests(NormalNormalNormalPoutineTestCase):
             poutine.condition(poutine.condition(self.model, data=data1),
                               data=data2)).get_trace()
         assert tr.nodes["latent1"]["type"] == "sample" and \
-            tr.nodes["latent1"]["obs"] is not None
+            tr.nodes["latent1"]["is_observed"]
         assert tr.nodes["latent1"]["value"] is data1["latent1"]
         assert tr.nodes["latent2"]["type"] == "sample" and \
-            tr.nodes["latent2"]["obs"] is not None
+            tr.nodes["latent2"]["is_observed"]
         assert tr.nodes["latent2"]["value"] is data2["latent2"]
 
     def test_do_propagation(self):

@@ -93,7 +93,7 @@ class Trace(networkx.DiGraph):
         """
         return [name for name, node in self.nodes.items()
                 if node["type"] == "sample" and
-                node["obs"] is not None]
+                node["is_observed"]]
 
     @property
     def stochastic_nodes(self):
@@ -102,7 +102,7 @@ class Trace(networkx.DiGraph):
         """
         return [name for name, node in self.nodes.items()
                 if node["type"] == "sample" and
-                node["obs"] is None]
+                not node["is_observed"]]
 
     @property
     def reparameterized_nodes(self):
@@ -112,7 +112,7 @@ class Trace(networkx.DiGraph):
         """
         return [name for name, node in self.nodes.items()
                 if node["type"] == "sample" and
-                node["obs"] is None and
+                not node["is_observed"] and
                 getattr(node["fn"], "reparameterized", False)]
 
     @property
