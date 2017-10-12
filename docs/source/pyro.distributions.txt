@@ -20,6 +20,13 @@ Categorical
     :undoc-members:
     :show-inheritance:
 
+Cauchy
+------
+.. automodule:: pyro.distributions.cauchy
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Delta
 -----
 .. automodule:: pyro.distributions.delta
