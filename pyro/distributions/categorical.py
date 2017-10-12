@@ -129,7 +129,7 @@ class Categorical(Distribution):
         variables (but this is very expensive).
 
         :param ps: numpy.ndarray where the last dimension denotes the event probabilities, *p_k*,
-            whichmust sum to 1. The remaining dimensions are considered batch dimensions.
+            which must sum to 1. The remaining dimensions are considered batch dimensions.
         :param vs: Optional parameter, enumerating the items in the support. This could either
             have a numeric or string type. This should have the same dimension as ``ps``.
         :param one_hot: Denotes whether one hot encoding is enabled. This is True by default.

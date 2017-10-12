@@ -1,5 +1,4 @@
 import math
-import os
 
 import numpy as np
 import pytest
@@ -7,7 +6,6 @@ import scipy.stats as sp
 
 import pyro.distributions as dist
 from tests.distributions.dist_fixture import Fixture
-from tests.common import RESOURCE_DIR
 
 continuous_dists = [
     Fixture(pyro_dist=dist.uniform,
@@ -66,14 +64,14 @@ discrete_dists = [
             is_discrete=True),
     Fixture(pyro_dist=dist.bernoulli,
             scipy_dist=sp.bernoulli,
-            dist_params=[([0.25, 0.5, 0.75],), ([0.3, 0.5, 0.7],)],
-            test_data=[[1, 0, 1], [1, 0, 0]],
+            dist_params=[([0.25],), ([0.3],)],
+            test_data=[[1], [0]],
             scipy_arg_fn=lambda ps: ((), {"p": ps}),
             prec=0.01,
             min_samples=10000,
             is_discrete=True,
-            expected_support_file=os.path.join(RESOURCE_DIR, 'support_bernoulli.json'),
-            expected_support_key='expected'),
+            expected_support_non_vec=[[0], [1]],
+            expected_support=[[[0], [0]], [[1], [1]]]),
     Fixture(pyro_dist=dist.poisson,
             scipy_dist=sp.poisson,
             dist_params=[(2,), (4.5,), (3.,), (5.1,), (6,), (3.2,), (1,)],
