@@ -28,6 +28,8 @@ from pyro.infer import SVI
 from pyro.optim import ClippedAdam
 from os.path import join, dirname
 import logging
+import cloudpickle
+import os.path
 
 
 class Emitter(nn.Module):
@@ -123,8 +125,11 @@ class DMM(nn.Module):
         self.rnn = nn.RNN(input_size=input_dim, hidden_size=rnn_dim, nonlinearity='relu',
                           batch_first=True, bidirectional=False, num_layers=args.rnn_num_layers,
                           dropout=args.rnn_dropout_rate)
+
         # if we're using normalizing flows, instantiate those too
         self.iafs = [InverseAutoregressiveFlow(z_dim, 100) for _ in range(args.num_iafs)]
+        # make sure each iaf is an attribute of dmm so that pytorch module logic knows about it
+        map(lambda i: self.__setattr__('iaf_%d' % i, self.iafs[i]), range(args.num_iafs))
 
         self.args = args
         self.z_dim = z_dim
@@ -133,7 +138,6 @@ class DMM(nn.Module):
         # if on gpu cuda-ize all pytorch (sub)modules
         if args.cuda:
             self.cuda()
-            map(lambda iaf: iaf.cuda(), self.iafs)
 
     # the model p(x|z)p(z)
     def model(self, mini_batch, mini_batch_reversed, mini_batch_mask,
@@ -142,12 +146,11 @@ class DMM(nn.Module):
         # this is the number of time steps we need to process in the mini-batch
         T_max = np.max(mini_batch_seq_lengths)
 
-        # register the emitter and transmition pytorch modules with pyro
-        pyro.module("emitter", self.emitter)
-        pyro.module("transition", self.trans)
+        # register all pytorch (sub)modules with pyro
+        pyro.module("dmm", self)
 
-        # define a (trainable) parameter z_0 that helps define the probability
-        # distribution p(z_1) since it can't be conditioned on any previous latents
+        # define a (trainable) parameter z_0 that helps define the probability distribution p(z_1)
+        # (since for t = 1 there are no previous latents to condition on)
         z_prev = pyro.param("z_0", zeros(self.z_dim, type_as=mini_batch.data))
 
         # sample the latents z and observed x's one time step at a time
@@ -157,12 +160,12 @@ class DMM(nn.Module):
             # (i)  KL annealing; and
             # (ii) raggedness in the observed data (i.e. different sequences in the mini-batch
             #      have different lengths)
-            z_mu, z_sigma = trans(z_prev)
+            z_mu, z_sigma = self.trans(z_prev)
             z_t = pyro.sample("z_%d" % t, dist.DiagNormal(z_mu, z_sigma),
                               log_pdf_mask=annealing_factor * mini_batch_mask[:, t - 1:t])
             # the next three lines observe x_t according to the distribution p(x_t|z_t)
-            z_mu, z_sigma = trans(z_prev)
-            emission_probs_t = emitter(z_t)
+            z_mu, z_sigma = self.trans(z_prev)
+            emission_probs_t = self.emitter(z_t)
             pyro.observe("obs_x_%d" % t, dist.bernoulli, mini_batch[:, t - 1, :], emission_probs_t,
                          log_pdf_mask=mini_batch_mask[:, t - 1:t])
             # the lqtent sampled at this time step will be conditioned upon in the next time step
@@ -174,36 +177,35 @@ class DMM(nn.Module):
 
         # this is the number of time steps we need to process in the mini-batch
         T_max = np.max(mini_batch_seq_lengths)
-        # register the combiner and rnn pytorch modules with pyro
-        pyro.module("rnn", self.rnn)
-        pyro.module("combiner", self.combiner)
+        # register all pytorch (sub)modules with pyro
+        pyro.module("dmm", self)
 
         # define a parameter for the initial state of the rnn
         h_0 = pyro.param("h_0", zeros(self.rnn.num_layers, 1, self.rnn_dim, type_as=mini_batch.data))
-        # if on gpu we need all of h_0 in cuda memory
+        # if on gpu we need the fully broadcast view of h_0 in cuda memory
         if self.args.cuda:
             h_0 = h_0.expand(*[h_0.data.shape[0], mini_batch.data.shape[0], h_0.data.shape[2]]).contiguous()
 
         # push the observed x's through the rnn; rnn_output contains the hidden at each time step
-        rnn_output, _ = rnn(mini_batch_reversed, h_0)
+        rnn_output, _ = self.rnn(mini_batch_reversed, h_0)
         # reverse the time-ordering in the hidden state and un-pack it
         rnn_output = poly.pad_and_reverse(rnn_output, mini_batch_seq_lengths)
-        # define a (trainable) parameter z_0 that helps define the probability
-        # distribution p(z_1), which isn't conditioned on any previous latents
+        # define a (trainable) parameter z_0 that helps define the probability distribution p(z_1)
+        # (since for t = 1 there are no previous latents to condition on)
         z_prev = pyro.param("z_q_0", zeros(self.z_dim, type_as=mini_batch.data))
 
         # sample the latents z one time step at a time
         for t in range(1, T_max + 1):
             # the next two lines assemble the distribution q(z_t | z_{t-1}, x_{t:T})
-            z_mu, z_sigma = combiner(z_prev, rnn_output[:, t - 1, :])
+            z_mu, z_sigma = self.combiner(z_prev, rnn_output[:, t - 1, :])
             z_dist = dist.DiagNormal(z_mu, z_sigma)
 
             # if we are including normalizing flows, we register each normalizing flow module with pyro
             # and replace z_dist with a transformed distribution (so that z_dist above is the base distribution
             # of the normalizing flow and not q(z_t|...) itself)
-            iafs = [pyro.module("iaf_%d" % i, iaf) for i, iaf in enumerate(self.iafs)]
-            if len(iafs) > 0:
-                z_dist = TransformedDistribution(z_dist, iafs)
+            if args.num_iafs > 0:
+                map(lambda i: pyro.module("iaf_%d" % i, self.iafs[i]), range(args.num_iafs))
+                z_dist = TransformedDistribution(z_dist, self.iafs)
             # sample z_t from the distribution z_dist
             z_t = pyro.sample("z_%d" % t, z_dist,
                               log_pdf_mask=annealing_factor * mini_batch_mask[:, t - 1:t])
@@ -216,8 +218,11 @@ def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
          clip_norm=20.0, lr_decay=1.0, weight_decay=0.10,
          mini_batch_size=20, annealing_epochs=1000,
          minimum_annealing_factor=0.0, rnn_dropout_rate=0.1,
-         rnn_num_layers=1, log='dmm.log', cuda=False, num_iafs=0):
+         rnn_num_layers=1, log='dmm.log', cuda=False, num_iafs=0,
+         load_opt='', load_model='', checkpoint_freq=0,
+         save_opt='', save_model=''):
 
+    # XXX pas what's going on here
     # ensure ints
     num_epochs = int(num_epochs)
     mini_batch_size = int(mini_batch_size)
@@ -228,10 +233,10 @@ def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
     transition_dim = 200
     emission_dim = 100
     rnn_dim = 600
-    val_test_frequency = 1e6
+    val_test_frequency = 30
     expensive_val_test_points = [num_epochs - 1, num_epochs - 1501]
     n_eval_samples_inner = 1
-    n_eval_samples_outer = 200
+    n_eval_samples_outer = 10
 
     # setup logging
     logging.basicConfig(level=logging.DEBUG, format='%(message)s', filename=args.log, filemode='w')
@@ -258,7 +263,7 @@ def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
     N_mini_batches = int(N_train_data / args.mini_batch_size +
                          int(N_train_data % args.mini_batch_size > 0))
 
-    # package val/test data for model/guide
+    # package repeated copies of val/test data for faster evaluation
     def rep(x):
         y = np.repeat(x, n_eval_samples_inner, axis=0)
         return y
@@ -291,6 +296,15 @@ def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
     annealing_factor = 1.0
     expensive_evaluations = []
 
+    # if provided load model and optimizer states from checkpoints
+    if args.load_opt != '' and args.load_model !='':
+        assert os.path.exists(args.load_opt) and os.path.exists(args.load_model)
+        log("loading model from %s..." % args.load_model)
+	dmm.load_state_dict(torch.load(args.load_model))
+        log("loading optimizer states from %s..." % args.load_opt)
+        adam.load(args.load_opt)
+        log("done loading model and optimizer states.")
+
     # training loop
     for epoch in range(args.num_epochs):
         epoch_nll = 0.0
@@ -298,7 +312,15 @@ def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
         shuffled_indices = np.arange(N_train_data)
         np.random.shuffle(shuffled_indices)
 
-        # process each mini-batch
+        # if specified, save model and optimizer states to disk every checkpoint_freq epochs
+	if args.checkpoint_freq > 0 and epoch > 0 and epoch % args.checkpoint_freq == 0:
+            log("saving model to %s..." % args.save_model)
+ 	    torch.save(dmm.state_dict(), args.save_model)
+            log("saving optimizer states to %s..." % args.save_opt)
+	    adam.save(args.save_opt)
+            log("done loading model and optimizer states from disk.")
+
+	# process each mini-batch
         for which in range(N_mini_batches):
             if args.annealing_epochs > 0 and epoch < args.annealing_epochs:
                 # compute the KL annealing factor approriate for the current mini-batch in the current epoch
@@ -375,6 +397,11 @@ if __name__ == '__main__':
     parser.add_argument('-rdr', '--rnn-dropout-rate', type=float, default=0.1)
     parser.add_argument('-rnl', '--rnn-num-layers', type=int, default=1)
     parser.add_argument('-iafs', '--num-iafs', type=int, default=0)
+    parser.add_argument('-cf', '--checkpoint-freq', type=int, default=0)
+    parser.add_argument('-lopt', '--load-opt', type=str, default='')
+    parser.add_argument('-lmod', '--load-model', type=str, default='')
+    parser.add_argument('-sopt', '--save-opt', type=str)
+    parser.add_argument('-smod', '--save-model', type=str)
     parser.add_argument('--cuda', action='store_true')
     parser.add_argument('-l', '--log', type=str, default='dmm.log')
     args = parser.parse_args()
