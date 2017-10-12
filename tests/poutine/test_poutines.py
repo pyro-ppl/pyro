@@ -71,7 +71,8 @@ class TracePoutineTests(NormalNormalNormalPoutineTestCase):
 
         for name in guide_trace.nodes.keys():
             assert name in self.guide_sites
-            assert guide_trace.nodes[name]["type"] in ("sample", "param")
+            assert guide_trace.nodes[name]["type"] in \
+                ("args", "return", "sample", "param")
             if guide_trace.nodes[name]["type"] == "sample":
                 assert guide_trace.nodes[name]["obs"] is None
 

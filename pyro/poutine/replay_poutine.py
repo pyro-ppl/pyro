@@ -19,7 +19,9 @@ class ReplayPoutine(Poutine):
         self.guide_trace = guide_trace
         # case 1: no sites
         if sites is None:
-            self.sites = {site: site for site in guide_trace.nodes.keys()}
+            self.sites = {site: site for site in guide_trace.nodes.keys()
+                          if guide_trace.nodes[site]["type"] == "sample"
+                          and guide_trace.nodes[site]["obs"] is None}
         # case 2: sites is a list/tuple/set
         elif isinstance(sites, (list, tuple, set)):
             self.sites = {site: site for site in sites}
@@ -47,7 +49,7 @@ class ReplayPoutine(Poutine):
         so that poutines below it do not execute their sample functions at that site.
         """
         if msg["name"] in self.sites:
-            if msg["type"] == "sample":
+            if msg["type"] == "sample" and msg["obs"] is None:
                 msg["done"] = True
                 msg["value"] = self.guide_trace.nodes[self.sites[msg["name"]]]["value"]
 
