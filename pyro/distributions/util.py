@@ -43,18 +43,3 @@ def log_beta(t):
         numer = torch.sum(log_gamma(t), 1)
         denom = log_gamma(torch.sum(t, 1))
     return numer - denom
-
-
-def to_one_hot(x, ps):
-    if isinstance(x, Variable):
-        ttype = x.data.type()
-    elif isinstance(x, torch.Tensor):
-        ttype = x.type()
-    batch_size = x.size(0)
-    classes = ps.size(1)
-    # create an empty array for one-hots
-    batch_one_hot = torch.zeros(batch_size, classes)
-    # this operation writes ones where needed
-    batch_one_hot.scatter_(1, x.data.view(-1, 1).long(), 1)
-
-    return Variable(batch_one_hot.type(ttype))

@@ -3,7 +3,6 @@ import torch
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
-from pyro.distributions.util import to_one_hot
 
 
 class Categorical(Distribution):
@@ -123,7 +122,7 @@ class Categorical(Distribution):
         vs = self._process_vs(vs)
         event_size = ps.size()[-1]
         sample_size = ps.size()[:-1] + (1,)
-        support_samples_size = (event_size, ) + sample_size
+        support_samples_size = (event_size,) + sample_size
 
         if vs is not None:
             if isinstance(vs, np.ndarray):
