@@ -10,7 +10,8 @@ from torch.autograd import Variable
 import pyro
 from pyro import poutine
 from pyro.distributions import DiagNormal, Bernoulli
-from pyro.infer.kl_qp import KL_QP
+from pyro.infer import SVI
+from pyro.optim import Adam
 
 """
 Bayesian Logistic Regression
@@ -111,8 +112,8 @@ def guide(data):
 
 # adam_params = {"lr": 0.00001, "betas": (0.95, 0.999)}
 lr = {"lr": 0.001}
-adam_optim = pyro.optim(torch.optim.Adam, lr)
-sgd_optim = pyro.optim(torch.optim.SGD, lr)
+adam = Adam({"lr": 0.001})
+svi = SVI(model, guide, adam, loss="ELBO")
 
 # dat = build_toy_dataset(N)
 # x = df.as_matrix(columns=range(D))
@@ -129,7 +130,6 @@ all_batches = np.arange(0, N, batch_size)
 if all_batches[-1] != N:
     all_batches = list(all_batches) + [N]
 
-grad_step = KL_QP(model, guide, adam_optim)
 
 
 # apply it to minibatches of data by hand:
@@ -142,7 +142,7 @@ def main():
         for ix, batch_start in enumerate(all_batches[:-1]):
             batch_end = all_batches[ix + 1]
             batch_data = data[batch_start: batch_end]
-            epoch_loss += grad_step.step(batch_data)
+            epoch_loss += svi.step(batch_data)
         print("epoch avg loss {}".format(epoch_loss/float(N)))
 
 
