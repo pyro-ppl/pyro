@@ -223,7 +223,7 @@ class ParamStoreDict(object):
         """
         Get the paramstore state.
         """
-        param_tags = {k: [tag for tag in self._param_tags[k]] for k in self._param_tags}
+        param_tags = {k: list(tags) for k, tags in self._param_tags.items()}
         state = (self._params, param_tags)
         return state
 
@@ -261,4 +261,4 @@ class ParamStoreDict(object):
         """
         with open(filename, "rb") as input_file:
             state = cloudpickle.loads(input_file.read())
-            self.set_state(state)
+        self.set_state(state)

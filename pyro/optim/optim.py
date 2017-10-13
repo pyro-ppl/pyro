@@ -91,7 +91,7 @@ class PyroOptim(object):
         """
         with open(filename, "rb") as input_file:
             state = cloudpickle.loads(input_file.read())
-            self.set_state(state)
+        self.set_state(state)
 
     # helper to fetch the optim args if callable
     def get_optim_args(self, param):
