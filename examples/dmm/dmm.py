@@ -222,12 +222,6 @@ def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
          load_opt='', load_model='', checkpoint_freq=0,
          save_opt='', save_model=''):
 
-    # XXX pas what's going on here
-    # ensure ints
-    num_epochs = int(num_epochs)
-    mini_batch_size = int(mini_batch_size)
-    annealing_epochs = int(annealing_epochs)
-
     input_dim = 88
     z_dim = 100
     transition_dim = 200
