@@ -72,11 +72,12 @@ class TraceGraph_ELBO(object):
             elbo_particle = 0.0
 
             for name in model_trace.nodes.keys():
-                if model_trace.nodes[name]["type"] == "observe":
-                    elbo_particle += model_trace.nodes[name]["log_pdf"]
-                elif model_trace.nodes[name]["type"] == "sample":
-                    elbo_particle += model_trace.nodes[name]["log_pdf"]
-                    elbo_particle -= guide_trace.nodes[name]["log_pdf"]
+                if model_trace.nodes[name]["type"] == "sample":
+                    if model_trace.nodes[name]["is_observed"]:
+                        elbo_particle += model_trace.nodes[name]["log_pdf"]
+                    else:
+                        elbo_particle += model_trace.nodes[name]["log_pdf"]
+                        elbo_particle -= guide_trace.nodes[name]["log_pdf"]
 
             elbo += elbo_particle.data[0] / self.num_particles
 
@@ -131,17 +132,18 @@ class TraceGraph_ELBO(object):
             for site in model_trace.nodes.keys():
                 model_trace_site = model_trace.nodes[site]
                 log_pdf_key = 'log_pdf' if site not in model_vec_batch_nodes_dict else 'batch_log_pdf'
-                if model_trace_site["type"] == "observe":
-                    cost_node = (model_trace_site[log_pdf_key], True)
-                    cost_nodes.append(cost_node)
-                elif model_trace_site["type"] == "sample":
-                    # cost node from model sample
-                    cost_node1 = (model_trace_site[log_pdf_key], True)
-                    # cost node from guide sample
-                    zero_expectation = site in non_reparam_nodes
-                    cost_node2 = (-guide_trace.nodes[site][log_pdf_key],
-                                  not zero_expectation)
-                    cost_nodes.extend([cost_node1, cost_node2])
+                if model_trace_site["type"] == "sample":
+                    if model_trace_site["is_observed"]:
+                        cost_node = (model_trace_site[log_pdf_key], True)
+                        cost_nodes.append(cost_node)
+                    else:
+                        # cost node from model sample
+                        cost_node1 = (model_trace_site[log_pdf_key], True)
+                        # cost node from guide sample
+                        zero_expectation = site in non_reparam_nodes
+                        cost_node2 = (-guide_trace.nodes[site][log_pdf_key],
+                                      not zero_expectation)
+                        cost_nodes.extend([cost_node1, cost_node2])
 
             elbo_particle = 0.0
             surrogate_elbo_particle = 0.0
@@ -173,7 +175,7 @@ class TraceGraph_ELBO(object):
                 # dependency structures) are taken care of via 'children_in_model' below
                 topo_sort_guide_nodes = list(reversed(list(networkx.topological_sort(guide_trace))))
                 topo_sort_guide_nodes = [x for x in topo_sort_guide_nodes
-                                         if guide_trace.nodes[x]["type"] in ("sample", "observe")]
+                                         if guide_trace.nodes[x]["type"] == "sample"]
                 downstream_guide_cost_nodes = {}
                 downstream_costs = {}
 
@@ -218,7 +220,7 @@ class TraceGraph_ELBO(object):
                             else 'batch_log_pdf'
                         site_log_pdf_key = 'log_pdf' if site not in guide_vec_batch_nodes_dict \
                             else 'batch_log_pdf'
-                        assert (model_trace.nodes[child]["type"] in ("sample", "observe"))
+                        assert (model_trace.nodes[child]["type"] == "sample")
                         if site_log_pdf_key == 'log_pdf':
                             downstream_costs[site] += model_trace.nodes[child][child_log_pdf_key].sum()
                         else:

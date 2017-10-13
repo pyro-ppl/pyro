@@ -56,11 +56,12 @@ class Trace_ELBO(object):
 
             log_pdf = "batch_log_pdf" if self.enum_discrete else "log_pdf"
             for name in model_trace.nodes.keys():
-                if model_trace.nodes[name]["type"] == "observe":
-                    elbo_particle += model_trace.nodes[name][log_pdf]
-                elif model_trace.nodes[name]["type"] == "sample":
-                    elbo_particle += model_trace.nodes[name][log_pdf]
-                    elbo_particle -= guide_trace.nodes[name][log_pdf]
+                if model_trace.nodes[name]["type"] == "sample":
+                    if model_trace.nodes[name]["is_observed"]:
+                        elbo_particle += model_trace.nodes[name][log_pdf]
+                    else:
+                        elbo_particle += model_trace.nodes[name][log_pdf]
+                        elbo_particle -= guide_trace.nodes[name][log_pdf]
 
             elbo += elbo_particle.data[0] / self.num_particles
 
@@ -87,18 +88,19 @@ class Trace_ELBO(object):
             # compute elbo and surrogate elbo
             log_pdf = "batch_log_pdf" if self.enum_discrete else "log_pdf"
             for name in model_trace.nodes.keys():
-                if model_trace.nodes[name]["type"] == "observe":
-                    elbo_particle += model_trace.nodes[name][log_pdf]
-                    surrogate_elbo_particle += model_trace.nodes[name][log_pdf]
-                elif model_trace.nodes[name]["type"] == "sample":
-                    lp_lq = model_trace.nodes[name][log_pdf] - guide_trace.nodes[name][log_pdf]
-                    elbo_particle += lp_lq
-                    if model_trace.nodes[name]["fn"].reparameterized:
-                        surrogate_elbo_particle += lp_lq
+                if model_trace.nodes[name]["type"] == "sample":
+                    if model_trace.nodes[name]["is_observed"]:
+                        elbo_particle += model_trace.nodes[name][log_pdf]
+                        surrogate_elbo_particle += model_trace.nodes[name][log_pdf]
                     else:
-                        # XXX should the user be able to control inclusion of the -logq term below?
-                        surrogate_elbo_particle += model_trace.nodes[name][log_pdf] + \
-                            log_r.detach() * guide_trace.nodes[name][log_pdf]
+                        lp_lq = model_trace.nodes[name][log_pdf] - guide_trace.nodes[name][log_pdf]
+                        elbo_particle += lp_lq
+                        if model_trace.nodes[name]["fn"].reparameterized:
+                            surrogate_elbo_particle += lp_lq
+                        else:
+                            # XXX should the user be able to control inclusion of the -logq term below?
+                            surrogate_elbo_particle += model_trace.nodes[name][log_pdf] + \
+                                log_r.detach() * guide_trace.nodes[name][log_pdf]
 
             elbo += elbo_particle.data[0] / self.num_particles
             surrogate_elbo += surrogate_elbo_particle / self.num_particles

@@ -227,7 +227,7 @@ def apply_stack(initial_msg):
 
     # go until time to stop?
     for frame in stack:
-        assert msg["type"] in ("sample", "observe", "map_data", "param"), \
+        assert msg["type"] in ("sample", "param"), \
             "{} is an invalid site type, how did that get there?".format(msg["type"])
 
         msg["value"] = getattr(frame, "_pyro_{}".format(msg["type"]))(msg)
@@ -318,6 +318,7 @@ def discrete_escape(trace, msg):
     Subroutine for integrating out discrete variables for variance reduction.
     """
     return (msg["type"] == "sample") and \
+        (not msg["is_observed"]) and \
         (msg["name"] not in trace) and \
         (getattr(msg["fn"], "enumerable", False))
 
@@ -334,6 +335,7 @@ def all_escape(trace, msg):
     Subroutine for approximately integrating out variables for variance reduction.
     """
     return (msg["type"] == "sample") and \
+        (not msg["is_observed"]) and \
         (msg["name"] not in trace)
 
 
@@ -350,7 +352,7 @@ def get_vectorized_map_data_info(trace):
     vec_md_stacks = set()
 
     for name, node in nodes.items():
-        if node["type"] in ("sample", "observe", "param"):
+        if node["type"] in ("sample", "param"):
             stack = tuple(reversed(node["map_data_stack"]))
             vec_mds = list(filter(lambda x: x[2] == 'tensor', stack))
             # check for nested vectorized map datas
@@ -394,7 +396,7 @@ def get_vectorized_map_data_info(trace):
     if vectorized_map_data_info['rao-blackwellization-condition']:
         vectorized_map_data_info['nodes'] = defaultdict(list)
         for name, node in nodes.items():
-            if node["type"] in ("sample", "observe", "param"):
+            if node["type"] in ("sample", "param"):
                 stack = tuple(reversed(node["map_data_stack"]))
                 vec_mds = list(filter(lambda x: x[2] == 'tensor', stack))
                 if len(vec_mds) > 0:
@@ -437,11 +439,11 @@ def identify_dense_edges(trace):
     stored at each site.
     """
     for name, node in trace.nodes.items():
-        if node["type"] in ("sample", "observe"):
+        if node["type"] == "sample":
             # XXX why tuple?
             map_data_stack = tuple(reversed(node["map_data_stack"]))
             for past_name, past_node in trace.nodes.items():
-                if past_node["type"] in ("sample", "observe"):
+                if past_node["type"] == "sample":
                     if past_name == name:
                         break
                     past_node_independent = False
