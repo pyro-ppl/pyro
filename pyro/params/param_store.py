@@ -156,7 +156,7 @@ class ParamStoreDict(object):
                 untag_single_param(p, tags)
 
     def replace_param(self, param_name, new_param, old_param):
-	"""
+        """
         :param param_name: parameter name
         :type param_name: str
         :param new_param: the paramater to be put into the paramstore
