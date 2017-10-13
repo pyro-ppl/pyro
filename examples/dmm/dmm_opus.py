@@ -116,27 +116,29 @@ class DMM(nn.Module):
     This pytorch Module encapsulates the model as well as the variational distribution (the guide)
     for the Deep Markov Model
     """
-    def __init__(self, input_dim, z_dim, emission_dim, transition_dim, rnn_dim, args):
+    def __init__(self, input_dim, z_dim, emission_dim, transition_dim, rnn_dim,
+                    rnn_num_layers, rnn_dropout_rate, num_iafs, iaf_dim, cuda):
         super(DMM, self).__init__()
         # instantiate pytorch modules used in the model and guide below
         self.emitter = Emitter(input_dim, z_dim, emission_dim)
         self.trans = GatedTransition(z_dim, transition_dim)
         self.combiner = Combiner(z_dim, rnn_dim)
         self.rnn = nn.RNN(input_size=input_dim, hidden_size=rnn_dim, nonlinearity='relu',
-                          batch_first=True, bidirectional=False, num_layers=args.rnn_num_layers,
-                          dropout=args.rnn_dropout_rate)
+                          batch_first=True, bidirectional=False, num_layers=rnn_num_layers,
+                          dropout=rnn_dropout_rate)
 
         # if we're using normalizing flows, instantiate those too
-        self.iafs = [InverseAutoregressiveFlow(z_dim, args.iaf_dim) for _ in range(args.num_iafs)]
+        self.iafs = [InverseAutoregressiveFlow(z_dim, iaf_dim) for _ in range(num_iafs)]
         # make sure each iaf is an attribute of DMM so that pytorch module logic knows about it
-        map(lambda i: self.__setattr__('iaf_%d' % i, self.iafs[i]), range(args.num_iafs))
+        map(lambda i: self.__setattr__('iaf_%d' % i, self.iafs[i]), range(num_iafs))
 
-        self.args = args
+        self.use_cuda = cuda
         self.z_dim = z_dim
         self.rnn_dim = rnn_dim
+        self.num_iafs = num_iafs
 
         # if on gpu cuda-ize all pytorch (sub)modules
-        if args.cuda:
+        if self.use_cuda:
             self.cuda()
 
     # the model p(x_{1:T} | z_{1:T}) p(z_{1:T})
@@ -183,7 +185,7 @@ class DMM(nn.Module):
         # define a (trainable) parameter for the initial hidden state of the rnn
         h_0 = pyro.param("h_0", zeros(self.rnn.num_layers, 1, self.rnn_dim, type_as=mini_batch.data))
         # if on gpu we need the fully broadcast view of h_0 in cuda memory
-        if self.args.cuda:
+        if self.use_cuda:
             h_0 = h_0.expand(*[h_0.data.shape[0], mini_batch.data.shape[0], h_0.data.shape[2]]).contiguous()
 
         # push the observed x's through the rnn; rnn_output contains the hidden state at each time step
@@ -203,7 +205,7 @@ class DMM(nn.Module):
             # if we are including normalizing flows, we apply the sequence of transformations
             # parameterized by self.iafs to the base distribution defined in the previous line
             # to yield a transformed distribution that we use for q(z_t|...)
-            if args.num_iafs > 0:
+            if self.num_iafs > 0:
                 z_dist = TransformedDistribution(z_dist, self.iafs)
             # sample z_t from the distribution z_dist
             z_t = pyro.sample("z_%d" % t, z_dist,
@@ -211,13 +213,31 @@ class DMM(nn.Module):
             # the lqtent sampled at this time step will be conditioned upon in the next time step
             z_prev = z_t
 
+# logging function
+def main(*args, **kwargs):
+
+    log_name = kwargs.pop('log_name', 'dmm.log')
+
+    # setup logging
+    logging.basicConfig(level=logging.DEBUG, format='%(message)s', filename=log_name, filemode='w')
+    console = logging.StreamHandler()
+    console.setLevel(logging.INFO)
+    logging.getLogger('').addHandler(console)
+
+    def log(s):
+        logging.info(s)
+
+    log(kwargs)
+    kwargs['log'] = log
+
+    main_log(*args ,**kwargs)
 
 # setup, training, and evaluation
-def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
+def main_log(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
          clip_norm=20.0, lr_decay=1.0, weight_decay=0.10,
          mini_batch_size=20, annealing_epochs=1000,
          minimum_annealing_factor=0.0, rnn_dropout_rate=0.1,
-         rnn_num_layers=1, log='dmm.log', cuda=False, num_iafs=0, iaf_dim=100,
+         rnn_num_layers=1, log=lambda x: None, cuda=False, num_iafs=0, iaf_dim=100,
          load_opt='', load_model='', checkpoint_freq=0,
          save_opt='', save_model=''):
 
@@ -231,16 +251,6 @@ def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
     n_eval_samples_inner = 1
     n_eval_samples_outer = 100
 
-    # setup logging
-    logging.basicConfig(level=logging.DEBUG, format='%(message)s', filename=args.log, filemode='w')
-    console = logging.StreamHandler()
-    console.setLevel(logging.INFO)
-    logging.getLogger('').addHandler(console)
-
-    def log(s):
-        logging.info(s)
-
-    log(args)
 
     jsb_file_loc = join(dirname(__file__), "jsb_processed.pkl")
     # ingest training/validation/test  data from disk
@@ -253,8 +263,8 @@ def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
     val_data_sequences = data['valid']['sequences']
     N_train_data = len(training_seq_lengths)
     N_train_time_slices = np.sum(training_seq_lengths)
-    N_mini_batches = int(N_train_data / args.mini_batch_size +
-                         int(N_train_data % args.mini_batch_size > 0))
+    N_mini_batches = int(N_train_data / mini_batch_size +
+                         int(N_train_data % mini_batch_size > 0))
 
     # package repeated copies of val/test data for faster evaluation
     def rep(x):
@@ -276,12 +286,13 @@ def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
     times = [time.time()]
 
     # instantiate the dmm
-    dmm = DMM(input_dim, z_dim, emission_dim, transition_dim, rnn_dim, args)
+    dmm = DMM(input_dim, z_dim, emission_dim, transition_dim, rnn_dim,
+                rnn_num_layers, rnn_dropout_rate, num_iafs, iaf_dim, cuda)
 
     # setup optimizer
-    adam_params = {"lr": args.learning_rate, "betas": (args.beta1, args.beta2),
-                   "clip_norm": args.clip_norm, "lrd": args.lr_decay,
-                   "weight_decay": args.weight_decay}
+    adam_params = {"lr": learning_rate, "betas": (beta1, beta2),
+                   "clip_norm": clip_norm, "lrd": lr_decay,
+                   "weight_decay": weight_decay}
     adam = ClippedAdam(adam_params)
 
     # setup inference algorithm
@@ -291,41 +302,41 @@ def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
     expensive_evaluations = []
 
     # if provided load model and optimizer states from checkpoint files
-    if args.load_opt != '' and args.load_model !='':
-        assert os.path.exists(args.load_opt) and os.path.exists(args.load_model)
-        log("loading model from %s..." % args.load_model)
-	dmm.load_state_dict(torch.load(args.load_model))
-        log("loading optimizer states from %s..." % args.load_opt)
-        adam.load(args.load_opt)
+    if load_opt != '' and load_model !='':
+        assert os.path.exists(load_opt) and os.path.exists(load_model)
+        log("loading model from %s..." % load_model)
+        dmm.load_state_dict(torch.load(load_model))
+        log("loading optimizer states from %s..." % load_opt)
+        adam.load(load_opt)
         log("done loading model and optimizer states.")
 
     # training loop
-    for epoch in range(args.num_epochs):
+    for epoch in range(num_epochs):
         epoch_nll = 0.0
         # prepare mini-batch subsampling indices
         shuffled_indices = np.arange(N_train_data)
         np.random.shuffle(shuffled_indices)
 
         # if specified, save model and optimizer states to disk every checkpoint_freq epochs
-	if args.checkpoint_freq > 0 and epoch > 0 and epoch % args.checkpoint_freq == 0:
-            log("saving model to %s..." % args.save_model)
- 	    torch.save(dmm.state_dict(), args.save_model)
-            log("saving optimizer states to %s..." % args.save_opt)
-	    adam.save(args.save_opt)
+        if checkpoint_freq > 0 and epoch > 0 and epoch % checkpoint_freq == 0:
+            log("saving model to %s..." % save_model)
+            torch.save(dmm.state_dict(), save_model)
+            log("saving optimizer states to %s..." % save_opt)
+            adam.save(save_opt)
             log("done loading model and optimizer states from disk.")
 
-	# process each mini-batch
+	    # process each mini-batch
         for which in range(N_mini_batches):
-            if args.annealing_epochs > 0 and epoch < args.annealing_epochs:
+            if annealing_epochs > 0 and epoch < annealing_epochs:
                 # compute the KL annealing factor approriate for the current mini-batch in the current epoch
-                min_af = args.minimum_annealing_factor
+                min_af = minimum_annealing_factor
                 annealing_factor = min_af + (1.0 - min_af) * \
                     (float(which + epoch * N_mini_batches + 1) /
-                     float(args.annealing_epochs * N_mini_batches))
+                     float(annealing_epochs * N_mini_batches))
 
             # compute which mini-batch indices we should grab
-            mini_batch_start = (which * args.mini_batch_size)
-            mini_batch_end = np.min([(which + 1) * args.mini_batch_size, N_train_data])
+            mini_batch_start = (which * mini_batch_size)
+            mini_batch_end = np.min([(which + 1) * mini_batch_size, N_train_data])
             mini_batch_indices = shuffled_indices[mini_batch_start:mini_batch_end]
             # grab the actual mini-batch using the helper function in the data loader
             mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths \
@@ -371,7 +382,7 @@ def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
             log("[EXPENSIVE val/test epoch %04d]  %.4f  %.4f" % (epoch, val_nll, test_nll))
             expensive_evaluations.append((val_nll, test_nll))
 
-    return (expensive_evaluations[-1][0], expensive_evaluations)
+    return (expensive_evaluations[-1][0] if len(expensive_evaluations) > 0 else 0, expensive_evaluations)
 
 
 # parse command-line arguments and execute the main method
@@ -398,7 +409,7 @@ if __name__ == '__main__':
     parser.add_argument('-sopt', '--save-opt', type=str, default='')
     parser.add_argument('-smod', '--save-model', type=str, default='')
     parser.add_argument('--cuda', action='store_true')
-    parser.add_argument('-l', '--log', type=str, default='dmm.log')
+    parser.add_argument('-l', '--log_name', type=str, default='dmm.log')
     args = parser.parse_args()
 
     main(**vars(args))

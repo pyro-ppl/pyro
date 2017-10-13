@@ -272,7 +272,6 @@ def module(pyro_name, nn_obj, tags="default", load_from_param_store=False):
         # optional: if the data behind the parameter in the actual module is stale w.r.t. the parameter
         # registered with pyro then overwrite it with the paramstore copy
         if load_from_param_store and _cdata(param) != _cdata(returned_param):
-            print "did an inplace copy for %s" % full_param_name
             _copy_in_place(source=returned_param, target=param)
             pyro.get_param_store().replace_param(full_param_name, new_param=param, old_param=returned_param)
 
