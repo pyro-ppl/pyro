@@ -6,7 +6,7 @@ import pyro.optim as optim
 from pyro.infer import SVI
 from pyro.distributions import DiagNormal
 from tests.common import TestCase
-from copy import copy
+
 
 class OptimTests(TestCase):
 
@@ -58,7 +58,6 @@ class OptimTests(TestCase):
 
         svi.step()
         adam_initial_step_count = adam.get_state()['mu_q']['state'].items()[0][1]['step']
-        saved_adam_state = adam.get_state()
         adam.save('adam.unittest.save')
         svi.step()
         adam_final_step_count = adam.get_state()['mu_q']['state'].items()[0][1]['step']
