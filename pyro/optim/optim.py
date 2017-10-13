@@ -50,7 +50,7 @@ class PyroOptim(object):
                 if param_name in self._state_waiting_to_be_consumed:
                     state = self._state_waiting_to_be_consumed.pop(param_name)
                     self.optim_objs[p].load_state_dict(state)
-                    print "parameter %s loading up on old state" % param_name
+                    # print "parameter %s loading up on old state" % param_name
 
             # actually perform the step for the optim object
             self.optim_objs[p].step(*args, **kwargs)
@@ -65,7 +65,7 @@ class PyroOptim(object):
         for param in self.optim_objs:
             param_name = pyro.get_param_store().param_name(param)
             state_dict[param_name] = self.optim_objs[param].state_dict()
-        print "optim get state returned keys:", state_dict.keys()
+        # print "optim get state returned keys:", state_dict.keys()
         return state_dict
 
 
@@ -73,7 +73,7 @@ class PyroOptim(object):
         """
         Set the state associated with all the optimizers
         """
-        print "optim set state with keys:", state_dict.keys()
+        # print "optim set state with keys:", state_dict.keys()
         self._state_waiting_to_be_consumed = state_dict
 
 

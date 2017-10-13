@@ -157,11 +157,11 @@ class ParamStoreDict(object):
 
 
     def replace_param(self, param_name, new_param, old_param):
-	"""
-	replace the param param_name with current value old_param with the new value new_param
-	"""
+        """
+        replace the param param_name with current value old_param with the new value new_param
+        """
         assert id(self._params[param_name]) == id(old_param)
-	self._params[param_name] = new_param
+        self._params[param_name] = new_param
         self._param_to_name[new_param] = param_name
         self._param_to_name.pop(old_param)
 
@@ -221,7 +221,7 @@ class ParamStoreDict(object):
         """
         param_tags = {k: [tag for tag in self._param_tags[k]] for k in self._param_tags}
         state = (self._params, param_tags)
-        print "paramstore getstate keys:", state[0].keys()
+        # print "paramstore getstate keys:", state[0].keys()
         return state
 
 
@@ -229,7 +229,7 @@ class ParamStoreDict(object):
         """
         Set the paramstore state.
         """
-        print "paramstore setstate keys:", state[0].keys()
+        # print "paramstore setstate keys:", state[0].keys()
         assert isinstance(state, tuple) and len(state) == 2, "malformed paramstore state"
         loaded_params, loaded_param_tags = state
 
