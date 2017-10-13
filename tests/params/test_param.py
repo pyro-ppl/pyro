@@ -20,7 +20,7 @@ class ParamStoreDictTests(TestCase):
 
     def test_save_and_load(self):
         lin = pyro.module("mymodule", self.linear_module)
-        lin2 = pyro.module("mymodule2", self.linear_module2)  # noqa: F841
+        pyro.module("mymodule2", self.linear_module2)
         x = Variable(torch.randn(1, 3))
         myparam = pyro.param("myparam", Variable(1.234 * torch.ones(1), requires_grad=True))
 
@@ -52,7 +52,9 @@ class ParamStoreDictTests(TestCase):
             return (weights_equal and bias_equal)
 
         assert not modules_are_equal()
-        pyro.module("mymodule", self.linear_module3)
+        pyro.module("mymodule", self.linear_module3, load_from_param_store=False)
+        assert not modules_are_equal()
+        pyro.module("mymodule", self.linear_module3, load_from_param_store=True)
         assert modules_are_equal()
 
         myparam = pyro.param("myparam")
