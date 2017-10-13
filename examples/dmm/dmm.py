@@ -2,9 +2,9 @@
 An implementation of a Deep Markov Model in Pyro based on reference [1].
 This is essentially the DKS variant outlined in the paper. The primary difference
 between this implementation and theirs is that in our version any KL divergence terms
-in the ELBO are estimated via sampling, while they make use of the analytic formulae. We
-also illustrate using normalizing flows in the variational distribution (in which case
-analytic formulae for the KL divergences are in any case unavailable).
+in the ELBO are estimated via sampling, while they make use of the analytic formulae.
+We also illustrate the use of normalizing flows in the variational distribution (in which
+case analytic formulae for the KL divergences are in any case unavailable).
 
 Reference:
 
@@ -127,8 +127,8 @@ class DMM(nn.Module):
                           dropout=args.rnn_dropout_rate)
 
         # if we're using normalizing flows, instantiate those too
-        self.iafs = [InverseAutoregressiveFlow(z_dim, 100) for _ in range(args.num_iafs)]
-        # make sure each iaf is an attribute of dmm so that pytorch module logic knows about it
+        self.iafs = [InverseAutoregressiveFlow(z_dim, args.iaf_dim) for _ in range(args.num_iafs)]
+        # make sure each iaf is an attribute of DMM so that pytorch module logic knows about it
         map(lambda i: self.__setattr__('iaf_%d' % i, self.iafs[i]), range(args.num_iafs))
 
         self.args = args
@@ -139,7 +139,7 @@ class DMM(nn.Module):
         if args.cuda:
             self.cuda()
 
-    # the model p(x|z)p(z)
+    # the model p(x_{1:T} | z_{1:T}) p(z_{1:T})
     def model(self, mini_batch, mini_batch_reversed, mini_batch_mask,
               mini_batch_seq_lengths, annealing_factor=1.0):
 
@@ -180,13 +180,13 @@ class DMM(nn.Module):
         # register all pytorch (sub)modules with pyro
         pyro.module("dmm", self)
 
-        # define a parameter for the initial state of the rnn
+        # define a (trainable) parameter for the initial hidden state of the rnn
         h_0 = pyro.param("h_0", zeros(self.rnn.num_layers, 1, self.rnn_dim, type_as=mini_batch.data))
         # if on gpu we need the fully broadcast view of h_0 in cuda memory
         if self.args.cuda:
             h_0 = h_0.expand(*[h_0.data.shape[0], mini_batch.data.shape[0], h_0.data.shape[2]]).contiguous()
 
-        # push the observed x's through the rnn; rnn_output contains the hidden at each time step
+        # push the observed x's through the rnn; rnn_output contains the hidden state at each time step
         rnn_output, _ = self.rnn(mini_batch_reversed, h_0)
         # reverse the time-ordering in the hidden state and un-pack it
         rnn_output = poly.pad_and_reverse(rnn_output, mini_batch_seq_lengths)
@@ -200,11 +200,10 @@ class DMM(nn.Module):
             z_mu, z_sigma = self.combiner(z_prev, rnn_output[:, t - 1, :])
             z_dist = dist.DiagNormal(z_mu, z_sigma)
 
-            # if we are including normalizing flows, we register each normalizing flow module with pyro
-            # and replace z_dist with a transformed distribution (so that z_dist above is the base distribution
-            # of the normalizing flow and not q(z_t|...) itself)
+            # if we are including normalizing flows, we apply the sequence of transformations
+            # parameterized by self.iafs to the base distribution defined in the previous line
+            # to yield a transformed distribution that we use for q(z_t|...)
             if args.num_iafs > 0:
-                map(lambda i: pyro.module("iaf_%d" % i, self.iafs[i]), range(args.num_iafs))
                 z_dist = TransformedDistribution(z_dist, self.iafs)
             # sample z_t from the distribution z_dist
             z_t = pyro.sample("z_%d" % t, z_dist,
@@ -218,7 +217,7 @@ def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
          clip_norm=20.0, lr_decay=1.0, weight_decay=0.10,
          mini_batch_size=20, annealing_epochs=1000,
          minimum_annealing_factor=0.0, rnn_dropout_rate=0.1,
-         rnn_num_layers=1, log='dmm.log', cuda=False, num_iafs=0,
+         rnn_num_layers=1, log='dmm.log', cuda=False, num_iafs=0, iaf_dim=100,
          load_opt='', load_model='', checkpoint_freq=0,
          save_opt='', save_model=''):
 
@@ -227,10 +226,10 @@ def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
     transition_dim = 200
     emission_dim = 100
     rnn_dim = 600
-    val_test_frequency = 30
+    val_test_frequency = 0
     expensive_val_test_points = [num_epochs - 1, num_epochs - 1501]
     n_eval_samples_inner = 1
-    n_eval_samples_outer = 10
+    n_eval_samples_outer = 100
 
     # setup logging
     logging.basicConfig(level=logging.DEBUG, format='%(message)s', filename=args.log, filemode='w')
@@ -244,7 +243,7 @@ def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
     log(args)
 
     jsb_file_loc = join(dirname(__file__), "jsb_processed.pkl")
-    # ingest data from disk
+    # ingest training/validation/test  data from disk
     data = pickle.load(open(jsb_file_loc, "rb"))
     training_seq_lengths = data['train']['sequence_lengths']
     training_data_sequences = data['train']['sequences']
@@ -262,6 +261,7 @@ def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
         y = np.repeat(x, n_eval_samples_inner, axis=0)
         return y
 
+    # get the validation/test data ready for the dmm: pack into sequences, etc.
     val_seq_lengths = rep(val_seq_lengths)
     test_seq_lengths = rep(test_seq_lengths)
     val_batch, val_batch_reversed, val_batch_mask, val_seq_lengths = poly.get_mini_batch(
@@ -290,7 +290,7 @@ def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
     annealing_factor = 1.0
     expensive_evaluations = []
 
-    # if provided load model and optimizer states from checkpoints
+    # if provided load model and optimizer states from checkpoint files
     if args.load_opt != '' and args.load_model !='':
         assert os.path.exists(args.load_opt) and os.path.exists(args.load_model)
         log("loading model from %s..." % args.load_model)
@@ -362,7 +362,7 @@ def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
             val_nll, test_nll = np.mean(val_nlls), np.mean(test_nlls)
             return val_nll, test_nll
 
-        if epoch % val_test_frequency == 0 and epoch > 0:
+        if epoch % val_test_frequency == 0 and epoch > 0 and val_test_frequency > 0:
             val_nll, test_nll = do_evaluation(n_samples=1)
             log("[val/test epoch %04d]  %.4f  %.4f" % (epoch, val_nll, test_nll))
 
@@ -391,6 +391,7 @@ if __name__ == '__main__':
     parser.add_argument('-rdr', '--rnn-dropout-rate', type=float, default=0.1)
     parser.add_argument('-rnl', '--rnn-num-layers', type=int, default=1)
     parser.add_argument('-iafs', '--num-iafs', type=int, default=0)
+    parser.add_argument('-id', '--iaf-dim', type=int, default=100)
     parser.add_argument('-cf', '--checkpoint-freq', type=int, default=0)
     parser.add_argument('-lopt', '--load-opt', type=str, default='')
     parser.add_argument('-lmod', '--load-model', type=str, default='')

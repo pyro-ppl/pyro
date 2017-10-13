@@ -69,7 +69,8 @@ download_if_absent(raw_file, "http://www-etud.iro.umontreal.ca/~boulanni/JSB%20C
 process_data(output=out_file, rawdata=raw_file)
 
 
-# this function takes a mini-batch and reverses each sequence (w.r.t axis=1)
+# this function takes a mini-batch and reverses each sequence
+# (w.r.t the temporal axis, i.e. axis=1)
 def reverse_sequences(mini_batch, seq_lengths):
     reversed_mini_batch = mini_batch.copy()
     for b in range(mini_batch.shape[0]):

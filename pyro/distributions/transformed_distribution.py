@@ -66,9 +66,9 @@ class TransformedDistribution(Distribution):
             inverses.append(inverse)
             next_to_invert = inverse
         log_pdf_base = self.base_dist.log_pdf(inverses[-1], *args, **kwargs)
-        log_det_jacobian = self.bijectors[-1].log_det_jacobian(y)
+        log_det_jacobian = self.bijectors[-1].log_det_jacobian(y, *args, **kwargs)
         for bijector, inverse in zip(list(reversed(self.bijectors))[1:], inverses[:-1]):
-            log_det_jacobian += bijector.log_det_jacobian(inverse)
+            log_det_jacobian += bijector.log_det_jacobian(inverse, *args, **kwargs)
         return log_pdf_base - log_det_jacobian
 
 
@@ -215,4 +215,6 @@ class InverseAutoregressiveFlow(Bijector):
         else:
             raise KeyError("Bijector InverseAutoregressiveFlow expected to find" +
                            "key in intermediates cache but didn't")
+        if 'log_pdf_mask' in kwargs:
+            return torch.sum(kwargs['log_pdf_mask'] * torch.log(sigma))
         return torch.sum(torch.log(sigma))
