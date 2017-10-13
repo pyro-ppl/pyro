@@ -57,13 +57,13 @@ class OptimTests(TestCase):
         svi2 = SVI(model, guide, adam2, loss="ELBO", trace_graph=True)
 
         svi.step()
-        adam_initial_step_count = adam.get_state()['mu_q']['state'].items()[0][1]['step']
+        adam_initial_step_count = list(adam.get_state()['mu_q']['state'].items())[0][1]['step']
         adam.save('adam.unittest.save')
         svi.step()
-        adam_final_step_count = adam.get_state()['mu_q']['state'].items()[0][1]['step']
+        adam_final_step_count = list(adam.get_state()['mu_q']['state'].items())[0][1]['step']
         adam2.load('adam.unittest.save')
         svi2.step()
-        adam2_step_count_after_load_and_step = adam2.get_state()['mu_q']['state'].items()[0][1]['step']
+        adam2_step_count_after_load_and_step = list(adam2.get_state()['mu_q']['state'].items())[0][1]['step']
 
         assert adam_initial_step_count == 1
         assert adam_final_step_count == 2
