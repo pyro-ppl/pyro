@@ -362,7 +362,7 @@ def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
             val_nll, test_nll = np.mean(val_nlls), np.mean(test_nlls)
             return val_nll, test_nll
 
-        if epoch % val_test_frequency == 0 and epoch > 0 and val_test_frequency > 0:
+        if epoch > 0 and val_test_frequency > 0 and epoch % val_test_frequency > 0:
             val_nll, test_nll = do_evaluation(n_samples=1)
             log("[val/test epoch %04d]  %.4f  %.4f" % (epoch, val_nll, test_nll))
 
@@ -395,8 +395,8 @@ if __name__ == '__main__':
     parser.add_argument('-cf', '--checkpoint-freq', type=int, default=0)
     parser.add_argument('-lopt', '--load-opt', type=str, default='')
     parser.add_argument('-lmod', '--load-model', type=str, default='')
-    parser.add_argument('-sopt', '--save-opt', type=str)
-    parser.add_argument('-smod', '--save-model', type=str)
+    parser.add_argument('-sopt', '--save-opt', type=str, default='')
+    parser.add_argument('-smod', '--save-model', type=str, default='')
     parser.add_argument('--cuda', action='store_true')
     parser.add_argument('-l', '--log', type=str, default='dmm.log')
     args = parser.parse_args()
