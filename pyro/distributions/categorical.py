@@ -78,7 +78,7 @@ class Categorical(Distribution):
             x = np.array(x)
         # probability tensor mask when data is numpy
         if isinstance(x, np.ndarray):
-            sample_size = x.shape[:-1] + (1,)
+            batch_pdf_size = x.shape[:-1] + (1,)
             batch_vs_size = x.shape[:-1] + (vs.shape[-1],)
             vs = np.broadcast_to(vs, batch_vs_size)
             boolean_mask = torch.Tensor((vs == x).astype(int))
