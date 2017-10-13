@@ -371,7 +371,7 @@ def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
             log("[EXPENSIVE val/test epoch %04d]  %.4f  %.4f" % (epoch, val_nll, test_nll))
             expensive_evaluations.append((val_nll, test_nll))
 
-    return expensive_evaluations
+    return (expensive_evaluations[-1][0], expensive_evaluations)
 
 
 # parse command-line arguments and execute the main method
