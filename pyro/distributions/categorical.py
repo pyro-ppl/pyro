@@ -80,7 +80,7 @@ class Categorical(Distribution):
             batch_pdf_size = x.shape[:-1] + (1,)
             batch_vs_size = x.shape[:-1] + (vs.shape[-1],)
             vs = np.broadcast_to(vs, batch_vs_size)
-            boolean_mask = torch.Tensor((vs == x).astype(int))
+            boolean_mask = torch.Tensor(list((vs == x).astype(int)))
         # probability tensor mask when data is pytorch tensor
         else:
             batch_pdf_size = x.size()[:-1] + (1,)
