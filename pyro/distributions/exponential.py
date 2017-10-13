@@ -42,23 +42,15 @@ class Exponential(Distribution):
         x = -torch.log(eps) / lam
         return x
 
-    def log_pdf(self, x, lam=None, *args, **kwargs):
-        """
-        exponential log-likelihood
-        """
-        lam = self._sanitize_input(lam)
-        ll = - lam * x + torch.log(lam)
-        return torch.sum(ll)
-
     def batch_log_pdf(self, x, lam=None, batch_size=1, *args, **kwargs):
         """
         exponential log-likelihood
         """
         lam = self._sanitize_input(lam)
-        if x.dim() == 1 and lam.dim() == 1 and batch_size == 1:
-            return self.log_pdf(x, lam)
-        elif x.dim() == 1:
+        if x.dim() == 1:
             x = x.expand(batch_size, x.size(0))
+        if lam.size() != x.size():
+            lam = lam.expand_as(x)
         ll = - lam * x + torch.log(lam)
         return torch.sum(ll, 1)
 

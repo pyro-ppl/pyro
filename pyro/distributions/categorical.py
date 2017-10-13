@@ -1,5 +1,3 @@
-import itertools
-
 import numpy as np
 import torch
 from torch.autograd import Variable
@@ -121,38 +119,44 @@ class Categorical(Distribution):
             return torch.sum(x * torch.log(ps), 1)
         return torch.log(torch.gather(ps, 1, x.long()))
 
-    def log_pdf(self, x, ps=None, vs=None, one_hot=True, batch_size=1, *args, **kwargs):
-        return torch.sum(self.batch_log_pdf(x, ps, vs, one_hot, batch_size, *args, **kwargs))
-
     def support(self, ps=None, vs=None, one_hot=True, *args, **kwargs):
+        """
+        Returns the categorical distribution's support, as a tensor along the first dimension.
+
+        Note that this returns support values of all the batched RVs in lock-step, rather
+        than the full cartesian product. To iterate over the cartesian product, you must
+        construct univariate Categoricals and use itertools.product() over all univariate
+        variables (but this is very expensive).
+
+        :param ps: numpy.ndarray where the last dimension denotes the event probabilities, *p_k*,
+            which must sum to 1. The remaining dimensions are considered batch dimensions.
+        :param vs: Optional parameter, enumerating the items in the support. This could either
+            have a numeric or string type. This should have the same dimension as ``ps``.
+        :param one_hot: Denotes whether one hot encoding is enabled. This is True by default.
+            When set to false, and no explicit ``vs`` is provided, the last dimension gives
+            the one-hot encoded value from the support.
+        :return: torch variable or numpy array enumerating the support of the categorical distribution.
+            Each item in the return value, when enumerated along the first dimensions, yields a
+            value from the distribution's support which has the same dimension as would be returned by
+            sample. If ``one_hot=True``, the last dimension is used for the one-hot encoding.
+        :rtype: torch.autograd.Variable or numpy.ndarray.
+        """
         ps, vs, one_hot = self._sanitize_input(ps, vs, one_hot)
-        r = ps.size(0)
-        c = ps.size(1)
         vs = self._process_v(vs)
-        ps, vs = self._process_p(ps, vs)
+        event_size = ps.size()[-1]
+        batch_size = ps.size()[:-1]
 
         if vs is not None:
+            if not batch_size:
+                return vs
             if isinstance(vs, np.ndarray):
-                # vs is an array, so the support must be of type array
-                r_np = vs.shape[0]
-                c_np = vs.shape[1]
-                np.expand_dims(np.arange(r_np), axis=1)
-                torch.ones(r_np, 1)
-                return (vs[np.arange(r_np), torch.Tensor(list(x)).numpy().astype(int)]
-                        .reshape(r_np, 1).tolist()
-                        for x in itertools.product(torch.arange(0, c_np), repeat=r_np))
-            # vs is a tensor so support is of type tensor
-            return (torch.sum(vs * Variable(torch.Tensor(list(x)).type_as(ps.data)), 1)
-                    for x in itertools.product(torch.eye(c).numpy().tolist(),
-                    repeat=r))
-
+                return vs.transpose()
+            else:
+                return torch.t(vs)
         if one_hot:
-            return (Variable(torch.Tensor(list(x)).type_as(ps.data))
-                    for x in itertools.product(torch.eye(c).numpy().tolist(),
-                    repeat=r))
-
-        if r == 1:
-            return (Variable(torch.Tensor([[i]]).type_as(ps.data)) for i in range(c))
-        return (Variable(torch.Tensor(list(x)).unsqueeze(1).type_as(ps.data))
-                for x in itertools.product(torch.arange(0, c),
-                repeat=r))
+            return Variable(torch.stack([t.expand_as(ps) for t in torch.eye(event_size)]))
+        else:
+            if not batch_size:
+                return Variable(torch.arange(0, event_size)).long()
+            return Variable(torch.stack([torch.LongTensor([t]).expand(*batch_size)
+                                         for t in torch.arange(0, event_size).long()]))

@@ -62,7 +62,7 @@ class ConditionPoutine(Poutine):
             msg["done"] = False
             msg["type"] = "observe"
             if isinstance(self.data, Trace):
-                msg["obs"] = self.data[name]["value"]
+                msg["obs"] = self.data.nodes[name]["value"]
             else:
                 msg["obs"] = self.data[name]
             return super(ConditionPoutine, self)._pyro_observe(msg)

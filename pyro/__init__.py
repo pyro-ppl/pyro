@@ -9,7 +9,8 @@ from torch.autograd import Variable
 
 import pyro
 import pyro.poutine as poutine
-from pyro.optim.optim import PyroOptim
+
+from pyro.distributions.subsample import Subsample
 from pyro.params import param_with_module_name
 from pyro.params.param_store import ParamStoreDict
 from pyro.poutine import LambdaPoutine, condition, do  # noqa: F401
@@ -50,7 +51,6 @@ def device(x):
 
 
 # use pyro optim class to wrap nn optim
-optim = PyroOptim
 
 _PYRO_STACK = []
 
@@ -71,7 +71,7 @@ def sample(name, fn, *args, **kwargs):
     if len(_PYRO_STACK) == 0:
         if obs is not None:
             warnings.warn("trying to observe a value outside of inference at " + name,
-                          warnings.RuntimeWarning)
+                          RuntimeWarning)
         return fn(*args, **kwargs)
     # if stack not empty, apply everything in the stack?
     else:
@@ -87,7 +87,7 @@ def sample(name, fn, *args, **kwargs):
             "obs": obs,
             "args": args,
             "kwargs": kwargs,
-            "ret": None,
+            "value": None,
             "scale": 1.0,
             "map_data_stack": [],
             "done": False,
@@ -95,7 +95,7 @@ def sample(name, fn, *args, **kwargs):
         }
         # apply the stack and return its return value
         out_msg = apply_stack(msg)
-        return out_msg["ret"]
+        return out_msg["value"]
 
 
 def observe(name, fn, obs, *args, **kwargs):
@@ -150,7 +150,7 @@ def iarange(name, size, subsample_size=0):
         yield Variable(torch.LongTensor(list(range(size))))
         return
 
-    subsample = Variable(torch.randperm(size)[0:subsample_size])
+    subsample = sample(name, Subsample(size, subsample_size))
     if len(_PYRO_STACK) == 0:
         yield subsample
     else:
@@ -221,57 +221,53 @@ def param(name, *args, **kwargs):
             "kwargs": kwargs,
             "scale": 1.0,
             "map_data_stack": [],
-            "ret": None,
+            "value": None,
             "done": False,
             "stop": False,
         }
         # apply the stack and return its return value
         out_msg = apply_stack(msg)
-        return out_msg["ret"]
+        return out_msg["value"]
 
 
-# hand off behavior to poutine if necessary?
-# for now default calls out to pyro.param -- which is handled by poutine
-def module(pyro_name, nn_obj):
+def module(pyro_name, nn_obj, tags="default"):
     """
     :param pyro_name: name of module
-    :param nn_obj: pytorch nn module
-    :returns: pytorch nn object
+    :type pyro_name: str
+    :param nn_obj: the module to be registered with pyro
+    :type nn_obj: torch.nn.Module
+    :param tags: optional; tags to associate with any parameters inside the module
+    :type tags: string or iterable of strings
+    :returns: torch.nn.Module
 
-    Takes a pytorch nn module and registers its parameters with the param store.
+    Takes a torch.nn.Module and registers its parameters with the param store.
     In conjunction with the param store save() and load() functionality, this
-    allows the user to save and load nn modules
+    allows the user to save and load modules.
     """
     assert hasattr(nn_obj, "parameters"), "module has no parameters"
     assert _MODULE_NAMESPACE_DIVIDER not in pyro_name, "improper module name, since contains %s" %\
         _MODULE_NAMESPACE_DIVIDER
 
     if isclass(nn_obj):
-        raise NotImplementedError("Not yet supporting class constructor")
+        raise NotImplementedError("pyro.module does not support class constructors for " +
+                                  "the argument nn_obj")
 
-    state_dict = {}
+    def _cdata(t):
+        if isinstance(t, torch.autograd.Variable):
+            return t.data._cdata
+        else:
+            return t._cdata
+
+    def _copy_in_place(source, target):
+        t = target.data if isinstance(target, torch.autograd.Variable) else target
+        s = source.data if isinstance(source, torch.autograd.Variable) else source
+        t.copy_(s)
+
     for param_name, param in nn_obj.named_parameters():
-        state_dict[param_name] = pyro.param(param_with_module_name(pyro_name, param_name), param)
+        returned_param = pyro.param(param_with_module_name(pyro_name, param_name), param, tags=tags)
+        if _cdata(param) != _cdata(returned_param):
+            _copy_in_place(source=returned_param, target=param)
 
-    current_nn_state = nn_obj.state_dict()
-    for name, param in state_dict.items():
-        if name not in current_nn_state:
-            raise KeyError('unexpected key "{}" in state_dict'.format(name))
-        if isinstance(param, Variable):
-            # backwards compatibility for serialized parameters
-            param = param.data
-
-        # only copy if the param has actually changed
-        # Note: apart from the following line, the rest of this code
-        # logic is borrowed from torch.nn.Module.load_state_dict
-        if id(param) != id(current_nn_state[name]):
-            current_nn_state[name].copy_(param)
-
-    missing = set(current_nn_state.keys()) - set(state_dict.keys())
-    if len(missing) > 0:
-        raise KeyError('missing keys in state_dict: "{}"'.format(missing))
-
-    nn_obj.load_state_dict(current_nn_state)
     return nn_obj
 
 

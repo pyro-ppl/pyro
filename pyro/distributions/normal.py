@@ -55,6 +55,12 @@ class Normal(Distribution):
         Normal log-likelihood
         """
         mu, sigma = self._sanitize_input(mu, sigma)
+        assert mu.dim() == sigma.dim()
+        if x.dim() == 1:
+            x = x.expand(batch_size, x.size(0))
+        if mu.size() != x.size():
+            mu = mu.expand_as(x)
+            sigma = sigma.expand_as(x)
         l_chol = Variable(torch.potrf(sigma.data, False).type_as(mu.data))
         ll_1 = Variable(torch.Tensor([-0.5 * mu.size(0) * np.log(2.0 * np.pi)])
                         .type_as(mu.data))

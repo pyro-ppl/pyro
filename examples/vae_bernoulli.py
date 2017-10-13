@@ -3,7 +3,6 @@ import argparse
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.optim as optim
 import torchvision.datasets as dset
 import torchvision.transforms as transforms
 import visdom
@@ -11,7 +10,8 @@ from torch.autograd import Variable
 
 import pyro
 from pyro.distributions import DiagNormal, Bernoulli
-from pyro.infer.kl_qp import KL_QP
+from pyro.infer import SVI
+from pyro.optim import Adam
 
 # load mnist dataset
 root = './data'
@@ -118,18 +118,9 @@ def model_sample():
     return img, img_mu
 
 
-def per_param_args(name, param):
-    if name == "decoder":
-        return {"lr": .0001}
-    else:
-        return {"lr": .0001}
-
-
-# or alternatively
-adam_params = {"lr": .0001}
-
-kl_optim = KL_QP(model, guide, pyro.optim(optim.Adam, adam_params))
-kl_eval = KL_QP(model=model, guide=guide, optim_step_fct=pyro.optim(optim.Adam, adam_params), num_particles=10)
+adam = Adam({"lr": 0.0001})
+svi_grad = SVI(model, guide, adam, loss="ELBO")
+svi_eval = SVI(model, guide, adam, loss="ELBO", num_particles=10)
 
 # num_steps = 1
 mnist_data = Variable(train_loader.dataset.train_data.float() / 255.)
@@ -161,16 +152,16 @@ def main():
             # get batch
             batch_data = mnist_data[batch_start:batch_end]
 
-            epoch_loss += kl_optim.step(batch_data)
+            epoch_loss += svi_grad.step(batch_data)
 
-            epoch_eval_loss += kl_eval.eval_objective(batch_data)
+            epoch_eval_loss += svi_eval.evaluate_loss(batch_data)
 
         loss_training.append(-epoch_loss / float(mnist_size))
         sample, sample_mu = model_sample()
-        vis.line(np.array(loss_training), opts=dict({'title': 'Training ELBO in nats'}))
+        # vis.line(np.array(loss_training), opts=dict({'title': 'Training ELBO in nats'}))
         # vis.image(batch_data[0].view(28, 28).data.numpy())
         # vis.image(sample[0].view(28, 28).data.numpy())
-        vis.image(sample_mu[0].view(28, 28).data.numpy())
+        # vis.image(sample_mu[0].view(28, 28).data.numpy())
         print("epoch avg loss {}".format(epoch_loss / float(mnist_size)))
         print("epoch eval loss {}".format(epoch_eval_loss / float(mnist_size)))
 

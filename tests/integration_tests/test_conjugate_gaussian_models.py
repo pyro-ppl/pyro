@@ -7,16 +7,21 @@ import networkx
 import numpy as np
 import pytest
 import torch
-import torch.optim
 from torch.autograd import Variable
 
 import pyro
 import pyro.distributions as dist
-from pyro.infer.tracegraph_kl_qp import TraceGraph_KL_QP
+from pyro.infer import SVI
+import pyro.optim as optim
 from tests.common import TestCase
 
 
+def param_mse(name, target):
+    return torch.sum(torch.pow(target - pyro.param(name), 2.0)).data.numpy()[0]
+
+
 @pytest.mark.stage("integration", "integration_batch_1")
+@pytest.mark.init(rng_seed=0)
 class GaussianChainTests(TestCase):
     # chain of normals with known covariances and latent means
 
@@ -32,7 +37,6 @@ class GaussianChainTests(TestCase):
         self.verbose = True
 
     def setup_chain(self, N):
-        torch.manual_seed(0)
         self.N = N  # number of latent variables in the chain
         lambdas = [1.5 * (k + 1) / N for k in range(N + 1)]
         self.lambdas = list(map(lambda x: Variable(torch.Tensor([x])), lambdas))
@@ -67,28 +71,27 @@ class GaussianChainTests(TestCase):
 
     def test_elbo_reparameterized_N_is_3(self):
         self.setup_chain(3)
-        self.do_elbo_test(True, 8000, 0.0015, 0.04, difficulty=1.0)
+        self.do_elbo_test(True, 4000, 0.0015, 0.03, difficulty=1.0)
 
     def test_elbo_reparameterized_N_is_8(self):
         self.setup_chain(8)
-        self.do_elbo_test(True, 10000, 0.0015, 0.04, difficulty=1.0)
+        self.do_elbo_test(True, 5000, 0.0015, 0.03, difficulty=1.0)
 
     def test_elbo_reparameterized_N_is_17(self):
         self.setup_chain(17)
-        self.do_elbo_test(True, 13000, 0.0015, 0.04, difficulty=1.0)
+        self.do_elbo_test(True, 5000, 0.0015, 0.03, difficulty=1.0)
 
     def test_elbo_nonreparameterized_N_is_3(self):
         self.setup_chain(3)
-        self.do_elbo_test(False, 16000, 0.001, 0.05, difficulty=0.6)
+        self.do_elbo_test(False, 5000, 0.001, 0.04, difficulty=0.6)
 
-    @pytest.mark.xfail(reason="flaky - does not meet the precision threshold for passing")
     def test_elbo_nonreparameterized_N_is_5(self):
         self.setup_chain(5)
-        self.do_elbo_test(False, 24000, 0.001, 0.06, difficulty=0.6)
+        self.do_elbo_test(False, 5000, 0.001, 0.06, difficulty=0.6)
 
     def test_elbo_nonreparameterized_N_is_7(self):
         self.setup_chain(7)
-        self.do_elbo_test(False, 32000, 0.001, 0.05, difficulty=0.6)
+        self.do_elbo_test(False, 5000, 0.001, 0.05, difficulty=0.6)
 
     def do_elbo_test(self, reparameterized, n_steps, lr, prec, difficulty=1.0):
         if self.verbose:
@@ -140,33 +143,27 @@ class GaussianChainTests(TestCase):
                 node_flagged = True if self.which_nodes_reparam[k - 1] == 1.0 else False
                 repa = True if reparameterized else node_flagged
                 mu_latent = pyro.sample("mu_latent_%d" % k, latent_dist, reparameterized=repa,
-                                        decaying_avg_baseline=True)
+                                        use_decaying_avg_baseline=True)
                 previous_sample = mu_latent
             return previous_sample
 
-        kl_optim = TraceGraph_KL_QP(model, guide, pyro.optim(torch.optim.Adam,
-                                    {"lr": lr, "betas": (0.95, 0.999)}))
+        adam = optim.Adam({"lr": lr, "betas": (0.95, 0.999)})
+        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
 
         for step in range(n_steps):
             t0 = time.time()
-            kl_optim.step(Verbose=(step == 0))
+            svi.step()
 
             if (step % 5000 == 0 or step == n_steps - 1) and self.verbose:
                 kappa_errors, log_sig_errors, mu_errors = [], [], []
                 for k in range(1, self.N + 1):
                     if k != self.N:
-                        kappa_q = pyro.param("kappa_q_%d" % k)
-                        kappa_error = torch.sum(torch.pow(self.target_kappas[k] - kappa_q, 2.0))
-                        kappa_errors.append(kappa_error.data.numpy()[0])
+                        kappa_error = param_mse("kappa_q_%d" % k, self.target_kappas[k])
+                        kappa_errors.append(kappa_error)
 
-                    mu_q = pyro.param("mu_q_%d" % k)
-                    mu_error = torch.sum(torch.pow(self.target_mus[k] - mu_q, 2.0))
-                    mu_errors.append(mu_error.data.numpy()[0])
-
-                    log_sig_q = pyro.param("log_sig_q_%d" % k)
-                    target_log_sig = -0.5 * torch.log(self.lambda_posts[k])
-                    log_sig_error = torch.sum(torch.pow(target_log_sig - log_sig_q, 2.0))
-                    log_sig_errors.append(log_sig_error.data.numpy()[0])
+                    mu_errors.append(param_mse("mu_q_%d" % k, self.target_mus[k]))
+                    log_sig_error = param_mse("log_sig_q_%d" % k, -0.5 * torch.log(self.lambda_posts[k]))
+                    log_sig_errors.append(log_sig_error)
 
                 max_errors = (np.max(mu_errors), np.max(log_sig_errors), np.max(kappa_errors))
                 min_errors = (np.min(mu_errors), np.min(log_sig_errors), np.min(kappa_errors))
@@ -182,6 +179,7 @@ class GaussianChainTests(TestCase):
 
 
 @pytest.mark.stage("integration", "integration_batch_2")
+@pytest.mark.init(rng_seed=0)
 class GaussianPyramidTests(TestCase):
 
     def setUp(self):
@@ -191,7 +189,6 @@ class GaussianPyramidTests(TestCase):
     def setup_pyramid(self, N):
         # pyramid of normals with known covariances and latent means
         assert(N > 1)
-        torch.manual_seed(0)
         self.N = N  # number of layers in the pyramid
         lambdas = [1.1 * (k + 1) / N for k in range(N + 2)]
         self.lambdas = list(map(lambda x: Variable(torch.Tensor([x])), lambdas))
@@ -239,31 +236,32 @@ class GaussianPyramidTests(TestCase):
 
     def test_elbo_reparameterized_three_layers(self):
         self.setup_pyramid(3)
-        self.do_elbo_test(True, 20000, 0.0015, 0.04, 0.92,
+        self.do_elbo_test(True, 10000, 0.0015, 0.04, 0.92,
                           difficulty=0.8, model_permutation=False)
 
     @pytest.mark.skipif("CI" in os.environ, reason="slow test")
     def test_elbo_reparameterized_four_layers(self):
         self.setup_pyramid(4)
-        self.do_elbo_test(True, 30000, 0.0015, 0.04, 0.92,
+        self.do_elbo_test(True, 20000, 0.0015, 0.04, 0.92,
                           difficulty=0.8, model_permutation=False)
 
+    @pytest.mark.stage("integration", "integration_batch_1")
     def test_elbo_nonreparameterized_two_layers(self):
         self.setup_pyramid(2)
-        self.do_elbo_test(False, 25000, 0.001, 0.06, 0.95, difficulty=0.4, model_permutation=False)
+        self.do_elbo_test(False, 8000, 0.001, 0.04, 0.95, difficulty=0.5, model_permutation=False)
 
     def test_elbo_nonreparameterized_three_layers(self):
         self.setup_pyramid(3)
-        self.do_elbo_test(False, 35000, 0.001, 0.06, 0.95, difficulty=0.4, model_permutation=False)
+        self.do_elbo_test(False, 15000, 0.001, 0.04, 0.95, difficulty=0.5, model_permutation=False)
 
     def test_elbo_nonreparameterized_two_layers_model_permuted(self):
         self.setup_pyramid(2)
-        self.do_elbo_test(False, 40000, 0.0007, 0.06, 0.97, difficulty=0.4, model_permutation=True)
+        self.do_elbo_test(False, 10000, 0.0007, 0.05, 0.96, difficulty=0.5, model_permutation=True)
 
-    @pytest.mark.skipif("CI" in os.environ, reason="slow test")
+    @pytest.mark.stage("integration", "integration_batch_1")
     def test_elbo_nonreparameterized_three_layers_model_permuted(self):
         self.setup_pyramid(3)
-        self.do_elbo_test(False, 60000, 0.0007, 0.06, 0.97, difficulty=0.4, model_permutation=True)
+        self.do_elbo_test(False, 15000, 0.0007, 0.05, 0.96, difficulty=0.4, model_permutation=True)
 
     def calculate_variational_targets(self):
         # calculate (some of the) variational parameters corresponding to exact posterior
@@ -436,35 +434,32 @@ class GaussianPyramidTests(TestCase):
                 node_flagged = True if self.which_nodes_reparam[i] == 1.0 else False
                 repa = True if reparameterized else node_flagged
                 latent_node = pyro.sample(node, latent_dist_node, reparameterized=repa,
-                                          decaying_avg_baseline=True, baseline_beta=0.96)
+                                          use_decaying_avg_baseline=True, baseline_beta=0.96)
                 latents_dict[node] = latent_node
 
             return latents_dict['mu_latent_1']
 
-        kl_optim = TraceGraph_KL_QP(model, guide, pyro.optim(torch.optim.Adam,
-                                    {"lr": lr, "betas": (beta1, 0.999)}))
+        adam = optim.Adam({"lr": lr, "betas": (beta1, 0.999)})
+        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
 
         for step in range(n_steps):
             t0 = time.time()
-            kl_optim.step(Verbose=(step == 0))
+            svi.step()
 
             if (step % 5000 == 0 or step == n_steps - 1) and self.verbose:
                 log_sig_errors = []
                 for node in self.target_lambdas:
                     target_log_sig = -0.5 * torch.log(self.target_lambdas[node])
-                    log_sig_node = pyro.param('log_sig_' + node)
-                    log_sig_error = torch.sum(torch.pow(target_log_sig - log_sig_node, 2.0))
-                    log_sig_errors.append(log_sig_error.data.numpy()[0])
+                    log_sig_error = param_mse('log_sig_' + node, target_log_sig)
+                    log_sig_errors.append(log_sig_error)
                 max_log_sig_error = np.max(log_sig_errors)
                 min_log_sig_error = np.min(log_sig_errors)
                 mean_log_sig_error = np.mean(log_sig_errors)
                 leftmost_node = self.q_topo_sort[0]
-                leftmost_constant = pyro.param('constant_term_' + leftmost_node)
-                leftmost_constant_error = torch.sum(torch.pow(self.target_leftmost_constant -
-                                                    leftmost_constant, 2.0)).data.numpy()[0]
-                almost_leftmost_constant = pyro.param('constant_term_' + leftmost_node[:-1] + 'R')
-                almost_leftmost_constant_error = torch.sum(torch.pow(self.target_almost_leftmost_constant -
-                                                           almost_leftmost_constant, 2.0)).data.numpy()[0]
+                leftmost_constant_error = param_mse('constant_term_' + leftmost_node,
+                                                    self.target_leftmost_constant)
+                almost_leftmost_constant_error = param_mse('constant_term_' + leftmost_node[:-1] + 'R',
+                                                           self.target_almost_leftmost_constant)
 
                 print("[mean function constant errors (partial)]   %.4f  %.4f" %
                       (leftmost_constant_error, almost_leftmost_constant_error))
