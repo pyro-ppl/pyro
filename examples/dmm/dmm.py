@@ -38,50 +38,65 @@ class Emitter(nn.Module):
     """
     def __init__(self, input_dim, z_dim, emission_dim):
         super(Emitter, self).__init__()
-        self.lin1 = nn.Linear(z_dim, emission_dim)
-        self.lin2 = nn.Linear(emission_dim, emission_dim)
-        self.lin3 = nn.Linear(emission_dim, input_dim)
+        # initialize the three linear transformations used in the neural network
+        self.lin_z_to_hidden = nn.Linear(z_dim, emission_dim)
+        self.lin_hidden_to_hidden = nn.Linear(emission_dim, emission_dim)
+        self.lin_hidden_to_input = nn.Linear(emission_dim, input_dim)
+        # initialize the two non-linearities used in the neural network
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
 
-    def forward(self, z):
+    def forward(self, z_t):
         """
-        Given the latent z at a particular time step t we return the vector of probabilities
+        Given the latent z at a particular time step t we return the vector of probabilities `ps`
         that parameterizes the bernoulli distribution p(x_t|z_t)
         """
-        h1 = self.relu(self.lin1(z))
-        h2 = self.relu(self.lin2(h1))
-        ps = self.sigmoid(self.lin3(h2))
+        h1 = self.relu(self.lin_z_to_hidden(z_t))
+        h2 = self.relu(self.lin_hidden_to_hidden(h1))
+        ps = self.sigmoid(self.lin_hidden_to_input(h2))
         return ps
 
 
 class GatedTransition(nn.Module):
     """
     Parameterizes the gaussian latent transition probability p(z_t | z_{t-1})
+    See section 5 in the reference for comparison.
     """
     def __init__(self, z_dim, transition_dim):
         super(GatedTransition, self).__init__()
-        self.lin_g1 = nn.Linear(z_dim, transition_dim)
-        self.lin_g2 = nn.Linear(transition_dim, z_dim)
-        self.lin_h1 = nn.Linear(z_dim, transition_dim)
-        self.lin_h2 = nn.Linear(transition_dim, z_dim)
-        self.lin_mu = nn.Linear(z_dim, z_dim)
-        self.lin_mu.weight.data = torch.eye(z_dim)
-        self.lin_mu.bias.data = torch.zeros(z_dim)
+        # initialize the six linear transformations used in the neural network
+        self.lin_gate_z_to_hidden = nn.Linear(z_dim, transition_dim)
+        self.lin_gate_hidden_to_z = nn.Linear(transition_dim, z_dim)
+        self.lin_proposed_mean_z_to_hidden = nn.Linear(z_dim, transition_dim)
+        self.lin_proposed_mean_hidden_to_z = nn.Linear(transition_dim, z_dim)
+        self.lin_z_to_mu = nn.Linear(z_dim, z_dim)
         self.lin_sig = nn.Linear(z_dim, z_dim)
+        # modify lin_z_to_mu so that it's starts out as the identity function
+        self.lin_z_to_mu.weight.data = torch.eye(z_dim)
+        self.lin_z_to_mu.bias.data = torch.zeros(z_dim)
+        # initialize the three non-linearities used in the neural network
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
         self.softplus = nn.Softplus()
 
-    def forward(self, z):
+    def forward(self, z_t_1):
         """
         Given the latent z_{t-1} corresponding to the time step t-1 we return the mean and sigma vectors
         that parameterize the (diagonal) gaussian distribution p(z_t | z_{t-1})
         """
-        g = self.sigmoid(self.lin_g2(self.relu(self.lin_g1(z))))
-        h = self.lin_h2(self.relu(self.lin_h1(z)))
-        mu = (ng_ones(g.size()).type_as(g) - g) * self.lin_mu(z) + g * h
-        sigma = self.softplus(self.lin_sig(self.relu(h)))
+        # compute the gating function and one minus the gating function
+        gate_intermediate = self.relu(self.lin_gate_z_to_hidden(z_t_1))
+        gate = self.sigmoid(self.lin_gate_hidden_to_z(gate_intermediate))
+        one_minus_gate = ng_ones(gate.size()).type_as(gate) - gate
+        # compute the 'proposed mean'
+        proposed_mean_intermediate = self.relu(self.lin_proposed_mean_z_to_hidden(z_t_1))
+        proposed_mean = self.lin_proposed_mean_hidden_to_z(proposed_mean_intermediate)
+        # assemble the actual mean used to sample z_t, which mixes a linear transformation of
+        # z_{t-1} with the proposed mean modulated by the gating function
+        mu = one_minus_gate * self.lin_z_to_mu(z_t_1) + gate * proposed_mean
+        # compute the sigma used to sample z_t, using the proposed mean from above as input
+        sigma = self.softplus(self.lin_sig(self.relu(proposed_mean)))
+        # return mu, sigma which can be fed into DiagNormal
         return mu, sigma
 
 
@@ -93,21 +108,27 @@ class Combiner(nn.Module):
     """
     def __init__(self, z_dim, rnn_dim):
         super(Combiner, self).__init__()
-        self.lin_z = nn.Linear(z_dim, rnn_dim)
-        self.lin_mu = nn.Linear(rnn_dim, z_dim)
-        self.lin_sig = nn.Linear(rnn_dim, z_dim)
+        # initialize the three linear transformations used in the neural network
+        self.lin_z_to_hidden = nn.Linear(z_dim, rnn_dim)
+        self.lin_hidden_to_mu = nn.Linear(rnn_dim, z_dim)
+        self.lin_hidden_to_sigma = nn.Linear(rnn_dim, z_dim)
+        # initialize the two non-linearities used in the neural network
         self.tanh = nn.Tanh()
         self.softplus = nn.Softplus()
 
-    def forward(self, z, h_rnn):
+    def forward(self, z_t_1, h_rnn):
         """
         Given the latent z at at a particular time step t-1 as well as the hidden state of
         the RNN h(x_{t:T}) we return the mean and sigma vectors that parameterize the (diagonal)
         gaussian distribution p(z_t | z_{t-1})
         """
-        h_combined = 0.5 * (self.tanh(self.lin_z(z)) + h_rnn)
-        mu = self.lin_mu(h_combined)
-        sigma = self.softplus(self.lin_sig(h_combined))
+        # combine the rnn hidden state with a transformed version of z_t_1
+        h_combined = 0.5 * (self.tanh(self.lin_z_to_hidden(z_t_1)) + h_rnn)
+        # use the combined hidden state to compute the mean used to sample z_t
+        mu = self.lin_hidden_to_mu(h_combined)
+        # use the combined hidden state to compute the sigma used to sample z_t
+        sigma = self.softplus(self.lin_hidden_to_sigma(h_combined))
+        # return mu, sigma which can be fed into DiagNormal
         return mu, sigma
 
 
@@ -171,7 +192,7 @@ class DMM(nn.Module):
             # the lqtent sampled at this time step will be conditioned upon in the next time step
             z_prev = z_t
 
-    # the guide q(z|x) (i.e. the variational distribution)
+    # the guide q(z_{1:T} | x_{1:T}) (i.e. the variational distribution)
     def guide(self, mini_batch, mini_batch_reversed, mini_batch_mask,
               mini_batch_seq_lengths, annealing_factor=1.0):
 
