@@ -71,20 +71,20 @@ class Categorical(Distribution):
         else:
             return Variable(sample)
 
-    def batch_log_pdf(self, x, ps=None, vs=None, one_hot=True, batch_size=1, *args, **kwargs):
+    def batch_log_pdf(self, x, ps=None, vs=None, one_hot=True, *args, **kwargs):
         ps, vs, one_hot = self._sanitize_input(ps, vs, one_hot)
         vs = self._process_vs(vs)
         if isinstance(x, list):
             x = np.array(x)
-        # numpy mask for the probability tensor
+        # probability tensor mask when data is numpy
         if isinstance(x, np.ndarray):
             sample_size = x.shape[:-1] + (1,)
             batch_vs_size = x.shape[:-1] + (vs.shape[-1],)
             vs = np.broadcast_to(vs, batch_vs_size)
             boolean_mask = torch.Tensor((vs == x).astype(int))
-        # pytorch mask for the probability tensor
+        # probability tensor mask when data is pytorch tensor
         else:
-            sample_size = x.size()[:-1] + (1,)
+            batch_pdf_size = x.size()[:-1] + (1,)
             batch_ps_size = x.size()[:-1] + (ps.size()[-1],)
             ps = ps.expand(*batch_ps_size)
             if vs is not None:
@@ -95,7 +95,7 @@ class Categorical(Distribution):
             else:
                 boolean_mask = torch.zeros(ps.size()).scatter_(-1, x.data.long(), 1)
         # apply log function to masked probability tensor
-        return torch.log(ps.masked_select(boolean_mask.byte()).contiguous().view(*sample_size))
+        return torch.log(ps.masked_select(boolean_mask.byte()).contiguous().view(*batch_pdf_size))
 
     def support(self, ps=None, vs=None, one_hot=True, *args, **kwargs):
         """
