@@ -41,6 +41,8 @@ class TraceGraph_ELBO(object):
         # import pdb; pdb.set_trace()
         for i in range(self.num_particles):
             if self.enum_discrete:
+                import warnings
+                warnings.warn('THIS IS BROKEN')
                 # This iterates over a bag of traces, for each particle.
                 for scale, guide_trace in iter_discrete_traces("dense", guide, *args, **kwargs):
                     model_trace = poutine.trace(poutine.replay(model, guide_trace),
