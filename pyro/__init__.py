@@ -117,7 +117,7 @@ def observe(name, fn, obs, *args, **kwargs):
 
 
 @contextlib.contextmanager
-def iarange(name, size, subsample_size=0):
+def iarange(name, size, subsample_size=0, subsample=None):
     """
     Context manager for ranges indexing iid variables, optionally subsampling.
 
@@ -131,6 +131,9 @@ def iarange(name, size, subsample_size=0):
     :param str name: A name that will be used for this site in a Trace.
     :param int size: The size of the collection being subsampled (like `stop` in builtin `range`).
     :param int subsample_size: Size of minibatches used in subsampling. Defaults to `size` if set to 0.
+    :param subsample: Optional custom subsample for user-defined subsampling schemes.
+        If specified, then `subsample_size` will be set to `len(subsample)`.
+    :type subsample: Anything supporting `len()`.
     :return: A context manager yielding a single 1-dimensional `torch.Tensor` of indices.
 
     Examples::
@@ -138,20 +141,29 @@ def iarange(name, size, subsample_size=0):
         # This version is vectorized:
         >>> with iarange('data', 100, subsample_size=10) as batch:
                 observe('obs', normal, data.index_select(0, batch), mu, sigma)
+
         # This version manually iterates through the batch to deal with control flow.
         >>> with iarange('data', 100, subsample_size=10) as batch:
                 for i in batch:
                     if z[i]:  # Prevents vectorization.
                         observe('obs_{}'.format(i), normal, data[i], mu, sigma)
+
+        # This wraps a user-defined subsampling method for use in pyro:
+        >>> with iarange('data', 100, subsample=my_custom_subsample) as batch:
+                assert batch is my_custom_subsample
+                observe('obs', normal, data.index_select(0, batch), mu, sigma)
     """
-    if subsample_size == 0 or subsample_size >= size:
+    if subsample is not None:
+        subsample_size = len(subsample)
+        assert subsample_size <= size, 'subsample is larger than size'
+    elif subsample_size == 0 or subsample_size >= size:
         subsample_size = size
     if subsample_size == size:
         # If not subsampling, there is no need to scale and we can ignore the _PYRO_STACK.
         yield Variable(torch.LongTensor(list(range(size))))
         return
 
-    subsample = sample(name, Subsample(size, subsample_size))
+    subsample = sample(name, Subsample(size, subsample_size), obs=subsample)
     if len(_PYRO_STACK) == 0:
         yield subsample
     else:
@@ -161,9 +173,17 @@ def iarange(name, size, subsample_size=0):
             yield subsample
 
 
-def irange(name, size, subsample_size=0):
+def irange(name, size, subsample_size=0, subsample=None):
     """
-    Non-vectorized version of iarange.
+    Non-vectorized version of `iarange`. See `iarange` for details.
+
+    :param str name: A name that will be used for this site in a Trace.
+    :param int size: The size of the collection being subsampled (like `stop` in builtin `range`).
+    :param int subsample_size: Size of minibatches used in subsampling. Defaults to `size` if set to 0.
+    :param subsample: Optional custom subsample for user-defined subsampling schemes.
+        If specified, then `subsample_size` will be set to `len(subsample)`.
+    :type subsample: Anything supporting `len()`.
+    :return: A context manager yielding a single 1-dimensional `torch.Tensor` of indices.
 
     Examples::
 
@@ -171,7 +191,10 @@ def irange(name, size, subsample_size=0):
                 if z[i]:  # Prevents vectorization.
                     observe('obs_{}'.format(i), normal, data[i], mu, sigma)
     """
-    with iarange(name, size, subsample_size) as batch:
+    if subsample is not None:
+        subsample_size = len(subsample)
+
+    with iarange(name, size, subsample_size, subsample) as batch:
         # Wrap computation in an independence context.
         indep_context = LambdaPoutine(None, name, 1.0, 'list', 0, subsample_size)
         for i in batch.data:

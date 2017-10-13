@@ -160,27 +160,65 @@ def test_nested_map_data():
             assert tr.nodes[name]["scale"] == 4.0 * 2.0
 
 
-def test_replay_iarange():
+def iarange_model():
+    with pyro.iarange('iarange', 20, 5) as batch:
+        result = list(batch.data)
+    return result
+
+
+def irange_model():
+    result = []
+    for i in pyro.irange('irange', 20, 5):
+        result.append(i)
+    return result
+
+
+def map_data_model():
+    return pyro.map_data('mapdata', range(20), lambda i, x: i, batch_size=5)
+
+
+@pytest.mark.parametrize('model', [
+    iarange_model,
+    irange_model,
+    map_data_model,
+], ids=['iarange', 'irange', 'map_data'])
+def test_replay(model):
     pyro.set_rng_seed(0)
 
-    def model():
-        with pyro.iarange('iarange', 10, 2) as batch:
-            return list(batch.data)
-
     traced_model = poutine.trace(model)
-    expected = traced_model()
-    actual = poutine.replay(model, traced_model.trace)()
-    assert actual == expected
+    original = traced_model()
+
+    replayed = poutine.replay(model, traced_model.trace)()
+    assert replayed == original
+
+    different = traced_model()
+    assert different != original
 
 
-def test_replay_map_data():
+def iarange_custom_model(subsample):
+    with pyro.iarange('iarange', 20, subsample=subsample) as batch:
+        result = list(batch.data)
+    return result
+
+
+def irange_custom_model(subsample):
+    result = []
+    for i in pyro.irange('irange', 20, subsample=subsample):
+        result.append(i)
+    return result
+
+
+@pytest.mark.xfail
+@pytest.mark.parametrize('model', [iarange_custom_model, irange_custom_model],
+                         ids=['iarange', 'irange'])
+def test_replay_custom(model):
     pyro.set_rng_seed(0)
-    data = list(range(10))
-
-    def model():
-        return pyro.map_data('mapdata', data, lambda i, x: i, batch_size=2)
 
     traced_model = poutine.trace(model)
-    expected = traced_model()
-    actual = poutine.replay(model, traced_model.trace)()
-    assert actual == expected
+    original = traced_model([1, 2, 3, 4])
+
+    replayed = poutine.replay(model, traced_model.trace)([5, 6, 7, 8])
+    assert replayed == original
+
+    different = traced_model([5, 6, 7, 8])
+    assert different != original
