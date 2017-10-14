@@ -12,22 +12,21 @@ Reference:
     Rahul G. Krishnan, Uri Shalit, David Sontag
 """
 
-import argparse
 import torch
-import pyro
+import torch.nn as nn
 import numpy as np
-import time
+import pyro
+from pyro.infer import SVI
+from pyro.optim import ClippedAdam
 import pyro.distributions as dist
 from pyro.util import ng_ones
-import torch.nn as nn
 from pyro.distributions.transformed_distribution import InverseAutoregressiveFlow
 from pyro.distributions.transformed_distribution import TransformedDistribution
 import six.moves.cPickle as pickle
 import polyphonic_data_loader as poly
-from pyro.infer import SVI
-from pyro.optim import ClippedAdam
-from os.path import join, dirname
-import os.path
+from os.path import join, dirname, exists
+import argparse
+import time
 from util import get_logger
 
 
