@@ -27,10 +27,17 @@ class TransformedDistribution(Distribution):
         super(TransformedDistribution, self).__init__(*args, **kwargs)
         self.reparameterized = base_distribution.reparameterized
         self.base_dist = base_distribution
-        if type(bijectors) is list or type(bijectors) is tuple:
+        if isinstance(bijectors, Bijector):
+            self.bijectors = nn.ModuleList([bijectors])
+        elif isinstance(bijectors, nn.ModuleList):
+            for bijector in bijectors:
+                assert isinstance(bijector, Bijector), \
+                    "bijectors must be a Bijector or a ListModule of Bijectors"
             self.bijectors = bijectors
-        else:
-            self.bijectors = [bijectors]
+        #if type(bijectors) is list or type(bijectors) is tuple:
+        #    self.bijectors = bijectors
+        #else:
+        #    self.bijectors = [bijectors]
 
     def sample(self, *args, **kwargs):
         """

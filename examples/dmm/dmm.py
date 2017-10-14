@@ -201,6 +201,7 @@ class DMM(nn.Module):
         # register all pytorch (sub)modules with pyro
         pyro.module("dmm", self)
 
+        # make a self.parameter
         # define a (trainable) parameter for the initial hidden state of the rnn
         h_0 = pyro.param("h_0", zeros(self.rnn.num_layers, 1, self.rnn_dim, type_as=mini_batch.data))
         # if on gpu we need the fully broadcast view of h_0 in cuda memory
