@@ -32,7 +32,7 @@ class TransformedDistribution(Distribution):
         elif isinstance(bijectors, nn.ModuleList):
             for bijector in bijectors:
                 assert isinstance(bijector, Bijector), \
-                    "bijectors must be a Bijector or a ListModule of Bijectors"
+                    "bijectors must be a Bijector or a nn.ModuleList of Bijectors"
             self.bijectors = bijectors
 
     def sample(self, *args, **kwargs):
