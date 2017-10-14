@@ -19,7 +19,7 @@ class TransformedDistribution(Distribution):
             are passed through the sequence of `Bijector`s to yield a sample from the
             `TransformedDistribution`
         :type base_distribution: pyro.distribution.Distribution
-        :param bijectors: either a single Bijector or a list or tuple of Bijectors
+        :param bijectors: either a single Bijector or a sequence of Bijectors wrapped in a nn.ModuleList
         :returns: the transformed distribution
 
         Constructor; takes base distribution and bijector(s) as arguments
@@ -32,12 +32,8 @@ class TransformedDistribution(Distribution):
         elif isinstance(bijectors, nn.ModuleList):
             for bijector in bijectors:
                 assert isinstance(bijector, Bijector), \
-                    "bijectors must be a Bijector or a ListModule of Bijectors"
+                    "bijectors must be a Bijector or a nn.ModuleList of Bijectors"
             self.bijectors = bijectors
-        #if type(bijectors) is list or type(bijectors) is tuple:
-        #    self.bijectors = bijectors
-        #else:
-        #    self.bijectors = [bijectors]
 
     def sample(self, *args, **kwargs):
         """
@@ -120,8 +116,8 @@ class InverseAutoregressiveFlow(Bijector):
     Example usage:
 
     base_dist = DiagNormal(...)
-    pt_iaf = InverseAutoregressiveFlow(...)
-    iaf = pyro.module("my_iaf", pt_iaf)
+    iaf = InverseAutoregressiveFlow(...)
+    pyro.module("my_iaf", iaf)
     iaf_dist = TransformedDistribution(base_dist, iaf)
 
     Note that this implementation is only meant to be used in settings where the inverse of the Bijector

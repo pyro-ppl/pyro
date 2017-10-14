@@ -54,25 +54,14 @@ class Beta(Distribution):
             .type_as(alpha.data))
         return x
 
-    def log_pdf(self, x, alpha=None, beta=None, *args, **kwargs):
-        """
-        Beta log-likelihood
-        """
-        alpha, beta = self._sanitize_input(alpha, beta)
-        one = Variable(torch.ones(alpha.size()).type_as(alpha.data))
-        ll_1 = (alpha - one) * torch.log(x)
-        ll_2 = (beta - one) * torch.log(one - x)
-        ll_3 = log_gamma(alpha + beta)
-        ll_4 = -log_gamma(alpha)
-        ll_5 = -log_gamma(beta)
-        return ll_1 + ll_2 + ll_3 + ll_4 + ll_5
-
     def batch_log_pdf(self, x, alpha=None, beta=None, batch_size=1, *args, **kwargs):
         alpha, beta = self._sanitize_input(alpha, beta)
-        if x.dim() == 1 and beta.dim() == 1 and batch_size == 1:
-            return self.log_pdf(x, alpha, beta)
-        elif x.dim() == 1:
+        assert alpha.dim() == beta.dim()
+        if x.dim() == 1:
             x = x.expand(batch_size, x.size(0))
+        if alpha.size() != x.size():
+            alpha = alpha.expand_as(x)
+            beta = beta.expand_as(x)
         one = Variable(torch.ones(x.size()).type_as(alpha.data))
         ll_1 = (alpha - one) * torch.log(x)
         ll_2 = (beta - one) * torch.log(one - x)

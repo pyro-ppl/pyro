@@ -21,6 +21,7 @@ def param_mse(name, target):
 
 
 @pytest.mark.stage("integration", "integration_batch_1")
+@pytest.mark.init(rng_seed=0)
 class GaussianChainTests(TestCase):
     # chain of normals with known covariances and latent means
 
@@ -36,7 +37,6 @@ class GaussianChainTests(TestCase):
         self.verbose = True
 
     def setup_chain(self, N):
-        torch.manual_seed(0)
         self.N = N  # number of latent variables in the chain
         lambdas = [1.5 * (k + 1) / N for k in range(N + 1)]
         self.lambdas = list(map(lambda x: Variable(torch.Tensor([x])), lambdas))
@@ -179,6 +179,7 @@ class GaussianChainTests(TestCase):
 
 
 @pytest.mark.stage("integration", "integration_batch_2")
+@pytest.mark.init(rng_seed=0)
 class GaussianPyramidTests(TestCase):
 
     def setUp(self):
@@ -188,7 +189,6 @@ class GaussianPyramidTests(TestCase):
     def setup_pyramid(self, N):
         # pyramid of normals with known covariances and latent means
         assert(N > 1)
-        torch.manual_seed(0)
         self.N = N  # number of layers in the pyramid
         lambdas = [1.1 * (k + 1) / N for k in range(N + 2)]
         self.lambdas = list(map(lambda x: Variable(torch.Tensor([x])), lambdas))

@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import torch
 from torch.autograd import Variable
 import pytest
@@ -9,9 +11,8 @@ import pyro.optim as optim
 from pyro.infer import SVI
 from tests.common import assert_equal
 
-pytestmark = pytest.mark.stage("integration", "integration_batch_1")
 
-
+@pytest.mark.stage("integration", "integration_batch_1")
 @pytest.mark.init(rng_seed=161)
 @pytest.mark.parametrize("batch_size", [3, 5, 7, 8, 0])
 @pytest.mark.parametrize("map_type", ["tensor", "list"])
@@ -127,8 +128,8 @@ def test_batch_dim(batch_dim):
                              batch_size=1, batch_dim=batch_dim)
 
     tr = poutine.trace(model).get_trace()
-    assert tr["xs"]["value"].size(0) == data.size(1 - batch_dim)
-    assert tr["xs"]["value"].size(1) == data.size(2)
+    assert tr.nodes["xs"]["value"].size(0) == data.size(1 - batch_dim)
+    assert tr.nodes["xs"]["value"].size(1) == data.size(2)
 
 
 def test_nested_map_data():
@@ -154,6 +155,32 @@ def test_nested_map_data():
     assert len(xs[0]) == std_batch_size
 
     tr = poutine.trace(model).get_trace(means, stds)
-    for name in tr.keys():
-        if tr[name]["type"] == "sample":
-            assert tr[name]["scale"] == 4.0 * 2.0
+    for name in tr.nodes.keys():
+        if tr.nodes[name]["type"] == "sample" and name.startswith("x_"):
+            assert tr.nodes[name]["scale"] == 4.0 * 2.0
+
+
+def test_replay_iarange():
+    pyro.set_rng_seed(0)
+
+    def model():
+        with pyro.iarange('iarange', 10, 2) as batch:
+            return list(batch.data)
+
+    traced_model = poutine.trace(model)
+    expected = traced_model()
+    actual = poutine.replay(model, traced_model.trace)()
+    assert actual == expected
+
+
+def test_replay_map_data():
+    pyro.set_rng_seed(0)
+    data = list(range(10))
+
+    def model():
+        return pyro.map_data('mapdata', data, lambda i, x: i, batch_size=2)
+
+    traced_model = poutine.trace(model)
+    expected = traced_model()
+    actual = poutine.replay(model, traced_model.trace)()
+    assert actual == expected

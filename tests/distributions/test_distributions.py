@@ -38,16 +38,18 @@ def test_mean_and_variance(dist, test_data_idx):
         analytic_var = unwrap_variable(dist.pyro_dist.analytic_var(*dist_params))
         assert_equal(sample_mean, analytic_mean, prec=dist.prec)
         assert_equal(sample_var, analytic_var, prec=dist.prec)
-    except NotImplementedError:
+    except (NotImplementedError, ValueError):
         pytest.skip('analytic mean and variance are not available')
 
 
 # Distributions tests - discrete distributions
 
 def test_support(discrete_dist):
-    expected_support = discrete_dist.get_expected_support()
+    expected_support = discrete_dist.expected_support
+    expected_support_non_vec = discrete_dist.expected_support_non_vec
     if not expected_support:
         pytest.skip("Support not tested for distribution")
-    actual_support = list(discrete_dist.pyro_dist.support(*discrete_dist.get_dist_params()))
-    v = [torch.equal(x.data, y) for x, y in zip(actual_support, expected_support)]
-    assert all(v)
+    actual_support_non_vec = discrete_dist.pyro_dist.support(*discrete_dist.get_dist_params(0))
+    actual_support = discrete_dist.pyro_dist.support(*discrete_dist.get_dist_params())
+    assert_equal(actual_support.data, torch.Tensor(expected_support))
+    assert_equal(actual_support_non_vec.data, torch.Tensor(expected_support_non_vec))

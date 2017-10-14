@@ -66,4 +66,5 @@ class LiftPoutine(Poutine):
             return super(LiftPoutine, self)._pyro_param(msg)
         msg["type"] = "sample"
         msg["done"] = False
+        msg["is_observed"] = False
         return self._pyro_sample(msg)

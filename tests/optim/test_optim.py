@@ -52,14 +52,23 @@ class OptimTests(TestCase):
                 return {'lr': 0.01}
 
         adam = optim.Adam(optim_params)
+        adam2 = optim.Adam(optim_params)
         svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
+        svi2 = SVI(model, guide, adam2, loss="ELBO", trace_graph=True)
 
-        for k in range(3):
-            svi.step()
+        svi.step()
+        adam_initial_step_count = list(adam.get_state()['mu_q']['state'].items())[0][1]['step']
+        adam.save('adam.unittest.save')
+        svi.step()
+        adam_final_step_count = list(adam.get_state()['mu_q']['state'].items())[0][1]['step']
+        adam2.load('adam.unittest.save')
+        svi2.step()
+        adam2_step_count_after_load_and_step = list(adam2.get_state()['mu_q']['state'].items())[0][1]['step']
 
-        free_param_unchanged = torch.equal(
-            pyro.param(free_param).data, torch.zeros(1))
-        fixed_param_unchanged = torch.equal(
-            pyro.param(fixed_param).data, torch.zeros(1))
-        passed_test = fixed_param_unchanged and not free_param_unchanged
-        assert passed_test
+        assert adam_initial_step_count == 1
+        assert adam_final_step_count == 2
+        assert adam2_step_count_after_load_and_step == 2
+
+        free_param_unchanged = torch.equal(pyro.param(free_param).data, torch.zeros(1))
+        fixed_param_unchanged = torch.equal(pyro.param(fixed_param).data, torch.zeros(1))
+        assert fixed_param_unchanged and not free_param_unchanged

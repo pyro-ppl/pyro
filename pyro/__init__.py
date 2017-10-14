@@ -10,6 +10,7 @@ from torch.autograd import Variable
 import pyro
 import pyro.poutine as poutine
 
+from pyro.distributions.subsample import Subsample
 from pyro.params import param_with_module_name
 from pyro.params.param_store import ParamStoreDict
 from pyro.poutine import LambdaPoutine, condition, do  # noqa: F401
@@ -70,31 +71,32 @@ def sample(name, fn, *args, **kwargs):
     if len(_PYRO_STACK) == 0:
         if obs is not None:
             warnings.warn("trying to observe a value outside of inference at " + name,
-                          warnings.RuntimeWarning)
+                          RuntimeWarning)
+            return obs
         return fn(*args, **kwargs)
     # if stack not empty, apply everything in the stack?
     else:
         # initialize data structure to pass up/down the stack
-        if obs is None:
-            msg_type = "sample"
-        else:
-            msg_type = "observe"
         msg = {
-            "type": msg_type,
+            "type": "sample",
             "name": name,
             "fn": fn,
-            "obs": obs,
+            "is_observed": False,
             "args": args,
             "kwargs": kwargs,
-            "ret": None,
+            "value": None,
             "scale": 1.0,
             "map_data_stack": [],
             "done": False,
             "stop": False,
         }
+        # handle observation
+        if obs is not None:
+            msg["value"] = obs
+            msg["is_observed"] = True
         # apply the stack and return its return value
         out_msg = apply_stack(msg)
-        return out_msg["ret"]
+        return out_msg["value"]
 
 
 def observe(name, fn, obs, *args, **kwargs):
@@ -149,7 +151,7 @@ def iarange(name, size, subsample_size=0):
         yield Variable(torch.LongTensor(list(range(size))))
         return
 
-    subsample = Variable(torch.randperm(size)[0:subsample_size])
+    subsample = sample(name, Subsample(size, subsample_size))
     if len(_PYRO_STACK) == 0:
         yield subsample
     else:
@@ -220,13 +222,13 @@ def param(name, *args, **kwargs):
             "kwargs": kwargs,
             "scale": 1.0,
             "map_data_stack": [],
-            "ret": None,
+            "value": None,
             "done": False,
             "stop": False,
         }
         # apply the stack and return its return value
         out_msg = apply_stack(msg)
-        return out_msg["ret"]
+        return out_msg["value"]
 
 
 def module(pyro_name, nn_obj, tags="default", load_from_param_store=False):
@@ -237,6 +239,9 @@ def module(pyro_name, nn_obj, tags="default", load_from_param_store=False):
     :type nn_obj: torch.nn.Module
     :param tags: optional; tags to associate with any parameters inside the module
     :type tags: string or iterable of strings
+    :param load_from_param_store: whether to overwrite parameters in the pytorch module with the values found
+        in the paramstore
+    :type load_from_param_store: bool
     :returns: torch.nn.Module
 
     Takes a torch.nn.Module and registers its parameters with the param store.

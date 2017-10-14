@@ -3,6 +3,7 @@ import torch
 
 import pyro
 import pyro.poutine as poutine
+from pyro.infer.enum import iter_discrete_traces, scale_trace
 from pyro.util import ng_zeros, detach_iterable
 
 
@@ -20,12 +21,14 @@ class TraceGraph_ELBO(object):
     dependency information as recorded in the TraceGraph is used
     to reduce the variance of the gradient estimator.
     """
-    def __init__(self, num_particles=1):
+    def __init__(self, num_particles=1, enum_discrete=False):
         """
         :param num_particles: the number of particles (samples) used to form the estimator
+        :param bool enum_discrete: whether to sum over discrete latent variables, rather than sample them
         """
         super(TraceGraph_ELBO, self).__init__()
         self.num_particles = num_particles
+        self.enum_discrete = enum_discrete
 
     def _get_traces(self, model, guide, *args, **kwargs):
         """
@@ -35,11 +38,23 @@ class TraceGraph_ELBO(object):
         XXX support for automatically settings args/kwargs to volatile?
         """
 
+        # import pdb; pdb.set_trace()
         for i in range(self.num_particles):
-            guide_tracegraph = poutine.tracegraph(guide).get_trace(*args, **kwargs)
-            guide_trace = guide_tracegraph.get_trace()
-            model_tracegraph = poutine.tracegraph(poutine.replay(model, guide_trace)).get_trace(*args, **kwargs)
-            yield model_tracegraph, guide_tracegraph
+            if self.enum_discrete:
+                # This iterates over a bag of traces, for each particle.
+                for scale, guide_trace in iter_discrete_traces("dense", guide, *args, **kwargs):
+                    model_trace = poutine.trace(poutine.replay(model, guide_trace),
+                                                graph_type="dense").get_trace(*args, **kwargs)
+                    guide_trace = scale_trace(guide_trace, scale)
+                    model_trace = scale_trace(model_trace, scale)
+                    yield model_trace, guide_trace
+                continue
+
+            guide_trace = poutine.trace(guide,
+                                        graph_type="dense").get_trace(*args, **kwargs)
+            model_trace = poutine.trace(poutine.replay(model, guide_trace),
+                                        graph_type="dense").get_trace(*args, **kwargs)
+            yield model_trace, guide_trace
 
     def loss(self, model, guide, *args, **kwargs):
         """
@@ -49,18 +64,18 @@ class TraceGraph_ELBO(object):
         Evaluates the ELBO with an estimator that uses num_particles many samples/particles.
         """
         elbo = 0.0
-        for model_tracegraph, guide_tracegraph in self._get_traces(model, guide, *args, **kwargs):
-            guide_trace, model_trace = guide_tracegraph.get_trace(), model_tracegraph.get_trace()
+        for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
             guide_trace.log_pdf(), model_trace.log_pdf()
 
             elbo_particle = 0.0
 
-            for name in model_trace.keys():
-                if model_trace[name]["type"] == "observe":
-                    elbo_particle += model_trace[name]["log_pdf"]
-                elif model_trace[name]["type"] == "sample":
-                    elbo_particle += model_trace[name]["log_pdf"]
-                    elbo_particle -= guide_trace[name]["log_pdf"]
+            for name in model_trace.nodes.keys():
+                if model_trace.nodes[name]["type"] == "sample":
+                    if model_trace.nodes[name]["is_observed"]:
+                        elbo_particle += model_trace.nodes[name]["log_pdf"]
+                    else:
+                        elbo_particle += model_trace.nodes[name]["log_pdf"]
+                        elbo_particle -= guide_trace.nodes[name]["log_pdf"]
 
             elbo += elbo_particle.data[0] / self.num_particles
 
@@ -79,12 +94,11 @@ class TraceGraph_ELBO(object):
         elbo = 0.0
         trainable_params = set()
 
-        for model_tracegraph, guide_tracegraph in self._get_traces(model, guide, *args, **kwargs):
-            guide_trace, model_trace = guide_tracegraph.get_trace(), model_tracegraph.get_trace()
+        for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
 
             # get info regarding rao-blackwellization of vectorized map_data
-            guide_vec_md_info = guide_tracegraph.vectorized_map_data_info
-            model_vec_md_info = model_tracegraph.vectorized_map_data_info
+            guide_vec_md_info = guide_trace.graph["vectorized_map_data_info"]
+            model_vec_md_info = model_trace.graph["vectorized_map_data_info"]
             guide_vec_md_condition = guide_vec_md_info['rao-blackwellization-condition']
             model_vec_md_condition = model_vec_md_info['rao-blackwellization-condition']
             do_vec_rb = guide_vec_md_condition and model_vec_md_condition
@@ -112,21 +126,22 @@ class TraceGraph_ELBO(object):
 
             # prepare a list of all the cost nodes, each of which is +- log_pdf
             cost_nodes = []
-            non_reparam_nodes = set(guide_tracegraph.get_nonreparam_stochastic_nodes())
-            for site in model_trace.keys():
-                model_trace_site = model_trace[site]
+            non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
+            for site in model_trace.nodes.keys():
+                model_trace_site = model_trace.nodes[site]
                 log_pdf_key = 'log_pdf' if site not in model_vec_batch_nodes_dict else 'batch_log_pdf'
-                if model_trace_site["type"] == "observe":
-                    cost_node = (model_trace_site[log_pdf_key], True)
-                    cost_nodes.append(cost_node)
-                elif model_trace_site["type"] == "sample":
-                    # cost node from model sample
-                    cost_node1 = (model_trace_site[log_pdf_key], True)
-                    # cost node from guide sample
-                    zero_expectation = site in non_reparam_nodes
-                    cost_node2 = (-guide_trace[site][log_pdf_key],
-                                  not zero_expectation)
-                    cost_nodes.extend([cost_node1, cost_node2])
+                if model_trace_site["type"] == "sample":
+                    if model_trace_site["is_observed"]:
+                        cost_node = (model_trace_site[log_pdf_key], True)
+                        cost_nodes.append(cost_node)
+                    else:
+                        # cost node from model sample
+                        cost_node1 = (model_trace_site[log_pdf_key], True)
+                        # cost node from guide sample
+                        zero_expectation = site in non_reparam_nodes
+                        cost_node2 = (-guide_trace.nodes[site][log_pdf_key],
+                                      not zero_expectation)
+                        cost_nodes.extend([cost_node1, cost_node2])
 
             elbo_particle = 0.0
             surrogate_elbo_particle = 0.0
@@ -156,18 +171,19 @@ class TraceGraph_ELBO(object):
                 # 1. downstream costs used for rao-blackwellization
                 # 2. model observe sites (as well as terms that arise from the model and guide having different
                 # dependency structures) are taken care of via 'children_in_model' below
-                guide_dag = guide_tracegraph.get_graph()
-                topo_sort_guide_nodes = list(reversed(list(networkx.topological_sort(guide_dag))))
+                topo_sort_guide_nodes = list(reversed(list(networkx.topological_sort(guide_trace))))
+                topo_sort_guide_nodes = [x for x in topo_sort_guide_nodes
+                                         if guide_trace.nodes[x]["type"] == "sample"]
                 downstream_guide_cost_nodes = {}
                 downstream_costs = {}
 
                 for node in topo_sort_guide_nodes:
                     node_log_pdf_key = 'log_pdf' if node not in guide_vec_batch_nodes_dict else 'batch_log_pdf'
-                    downstream_costs[node] = model_trace[node][node_log_pdf_key] - \
-                        guide_trace[node][node_log_pdf_key]
+                    downstream_costs[node] = model_trace.nodes[node][node_log_pdf_key] - \
+                        guide_trace.nodes[node][node_log_pdf_key]
                     nodes_included_in_sum = set([node])
                     downstream_guide_cost_nodes[node] = set([node])
-                    for child in guide_tracegraph.get_children(node):
+                    for child in guide_trace.successors(node):
                         child_cost_nodes = downstream_guide_cost_nodes[child]
                         downstream_guide_cost_nodes[node].update(child_cost_nodes)
                         if nodes_included_in_sum.isdisjoint(child_cost_nodes):  # avoid duplicates
@@ -182,11 +198,11 @@ class TraceGraph_ELBO(object):
                         mn_log_pdf_key = 'log_pdf' if missing_node not in \
                                             guide_vec_batch_nodes_dict else 'batch_log_pdf'
                         if node_log_pdf_key == 'log_pdf':
-                            downstream_costs[node] += (model_trace[missing_node][mn_log_pdf_key] -
-                                                       guide_trace[missing_node][mn_log_pdf_key]).sum()
+                            downstream_costs[node] += (model_trace.nodes[missing_node][mn_log_pdf_key] -
+                                                       guide_trace.nodes[missing_node][mn_log_pdf_key]).sum()
                         else:
-                            downstream_costs[node] += model_trace[missing_node][mn_log_pdf_key] - \
-                                                      guide_trace[missing_node][mn_log_pdf_key]
+                            downstream_costs[node] += model_trace.nodes[missing_node][mn_log_pdf_key] - \
+                                                      guide_trace.nodes[missing_node][mn_log_pdf_key]
 
                 # finish assembling complete downstream costs
                 # (the above computation may be missing terms from model)
@@ -194,7 +210,7 @@ class TraceGraph_ELBO(object):
                 for site in non_reparam_nodes:
                     children_in_model = set()
                     for node in downstream_guide_cost_nodes[site]:
-                        children_in_model.update(model_tracegraph.get_children(node))
+                        children_in_model.update(model_trace.successors(node))
                     # remove terms accounted for above
                     children_in_model.difference_update(downstream_guide_cost_nodes[site])
                     for child in children_in_model:
@@ -202,11 +218,11 @@ class TraceGraph_ELBO(object):
                             else 'batch_log_pdf'
                         site_log_pdf_key = 'log_pdf' if site not in guide_vec_batch_nodes_dict \
                             else 'batch_log_pdf'
-                        assert (model_trace[child]["type"] in ("sample", "observe"))
+                        assert (model_trace.nodes[child]["type"] == "sample")
                         if site_log_pdf_key == 'log_pdf':
-                            downstream_costs[site] += model_trace[child][child_log_pdf_key].sum()
+                            downstream_costs[site] += model_trace.nodes[child][child_log_pdf_key].sum()
                         else:
-                            downstream_costs[site] += model_trace[child][child_log_pdf_key]
+                            downstream_costs[site] += model_trace.nodes[child][child_log_pdf_key]
 
                 # construct all the reinforce-like terms.
                 # we include only downstream costs to reduce variance
@@ -228,7 +244,7 @@ class TraceGraph_ELBO(object):
                     downstream_cost = downstream_costs[node]
                     baseline = 0.0
                     nn_baseline, nn_baseline_input, use_decaying_avg_baseline, baseline_beta, \
-                        baseline_value = get_baseline_kwargs(guide_trace[node]['args'][1])
+                        baseline_value = get_baseline_kwargs(guide_trace.nodes[node]['kwargs'])
                     use_nn_baseline = nn_baseline is not None
                     use_baseline_value = baseline_value is not None
                     assert(not (use_nn_baseline and use_baseline_value)), \
@@ -251,10 +267,10 @@ class TraceGraph_ELBO(object):
                         baseline_loss = torch.pow(downstream_cost.detach() - baseline, 2.0).sum()
                         baseline_loss_particle += baseline_loss / self.num_particles
                     if use_nn_baseline or use_decaying_avg_baseline or use_baseline_value:
-                        elbo_reinforce_terms_particle += (guide_trace[node][log_pdf_key] *
+                        elbo_reinforce_terms_particle += (guide_trace.nodes[node][log_pdf_key] *
                                                           (downstream_cost - baseline).detach()).sum()
                     else:
-                        elbo_reinforce_terms_particle += (guide_trace[node][log_pdf_key] *
+                        elbo_reinforce_terms_particle += (guide_trace.nodes[node][log_pdf_key] *
                                                           downstream_cost.detach()).sum()
 
                 surrogate_elbo_particle += elbo_reinforce_terms_particle / self.num_particles
@@ -262,14 +278,14 @@ class TraceGraph_ELBO(object):
                     baseline_loss_particle.backward()
 
             # grab model parameters to train
-            for name in model_trace.keys():
-                if model_trace[name]["type"] == "param":
-                    trainable_params.add(model_trace[name]["value"])
+            for name in model_trace.nodes.keys():
+                if model_trace.nodes[name]["type"] == "param":
+                    trainable_params.add(model_trace.nodes[name]["value"])
 
             # grab guide parameters to train
-            for name in guide_trace.keys():
-                if guide_trace[name]["type"] == "param":
-                    trainable_params.add(guide_trace[name]["value"])
+            for name in guide_trace.nodes.keys():
+                if guide_trace.nodes[name]["type"] == "param":
+                    trainable_params.add(guide_trace.nodes[name]["value"])
 
             # mark all params seen in trace as active so that gradient steps are taken downstream
             pyro.get_param_store().mark_params_active(trainable_params)

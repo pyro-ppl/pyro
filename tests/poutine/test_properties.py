@@ -41,7 +41,7 @@ def register_model(**poutine_kwargs):
     return register_fn
 
 
-@register_model(replay={'trace': {}},
+@register_model(replay={'trace': poutine.Trace()},
                 block={},
                 condition={'data': {}},
                 do={'data': {}})
@@ -49,7 +49,11 @@ def trivial_model():
     return []
 
 
-@register_model(replay={'trace': {'normal_0': {'type': 'sample', 'value': ng_zeros(1)}}},
+tr_normal = poutine.Trace()
+tr_normal.add_node("normal_0", type="sample", is_observed=False, value=ng_zeros(1))
+
+
+@register_model(replay={'trace': tr_normal},
                 block={'hide': ['normal_0']},
                 condition={'data': {'normal_0': ng_zeros(1)}},
                 do={'data': {'normal_0': ng_zeros(1)}})
@@ -58,7 +62,11 @@ def normal_model():
     return [normal_0]
 
 
-@register_model(replay={'trace': {'normal_0': {'type': 'sample', 'value': ng_zeros(1)}}},
+tr_normal_normal = poutine.Trace()
+tr_normal_normal.add_node("normal_0", type="sample", is_observed=False, value=ng_zeros(1))
+
+
+@register_model(replay={'trace': tr_normal_normal},
                 block={'hide': ['normal_0']},
                 condition={'data': {'normal_0': ng_zeros(1)}},
                 do={'data': {'normal_0': ng_zeros(1)}})
@@ -69,7 +77,11 @@ def normal_normal_model():
     return [normal_0, normal_1]
 
 
-@register_model(replay={'trace': {'bern_0': {'type': 'sample', 'value': ng_ones(1)}}},
+tr_bernoulli_normal = poutine.Trace()
+tr_bernoulli_normal.add_node("bern_0", type="sample", is_observed=False, value=ng_ones(1))
+
+
+@register_model(replay={'trace': tr_bernoulli_normal},
                 block={'hide': ['bern_0']},
                 condition={'data': {'bern_0': ng_ones(1)}},
                 do={'data': {'bern_0': ng_ones(1)}})
@@ -92,7 +104,6 @@ def get_trace(fn, *args, **kwargs):
     'do',
     'replay',
     'trace',
-    'tracegraph',
 ])
 def test_idempotent(poutine_name, model):
     p = model.bind_poutine(poutine_name)
@@ -106,9 +117,6 @@ def test_idempotent(poutine_name, model):
     ('trace', 'condition'),
     ('trace', 'do'),
     ('trace', 'replay'),
-    ('tracegraph', 'condition'),
-    ('tracegraph', 'do'),
-    ('tracegraph', 'replay'),
 ])
 def test_commutes(p1_name, p2_name, model):
     p1 = model.bind_poutine(p1_name)

@@ -50,11 +50,9 @@ class PyroOptim(object):
                 if param_name in self._state_waiting_to_be_consumed:
                     state = self._state_waiting_to_be_consumed.pop(param_name)
                     self.optim_objs[p].load_state_dict(state)
-                    # print "parameter %s loading up on old state" % param_name
 
             # actually perform the step for the optim object
             self.optim_objs[p].step(*args, **kwargs)
-
 
     def get_state(self):
         """
@@ -65,17 +63,14 @@ class PyroOptim(object):
         for param in self.optim_objs:
             param_name = pyro.get_param_store().param_name(param)
             state_dict[param_name] = self.optim_objs[param].state_dict()
-        # print "optim get state returned keys:", state_dict.keys()
         return state_dict
-
 
     def set_state(self, state_dict):
         """
-        Set the state associated with all the optimizers
+        Set the state associated with all the optimizers using the state obtained
+        from a previous call to get_state()
         """
-        # print "optim set state with keys:", state_dict.keys()
         self._state_waiting_to_be_consumed = state_dict
-
 
     def save(self, filename):
         """
@@ -87,7 +82,6 @@ class PyroOptim(object):
         with open(filename, "wb") as output_file:
             output_file.write(cloudpickle.dumps(self.get_state()))
 
-
     def load(self, filename):
         """
         :param filename: file name to load from
@@ -97,8 +91,7 @@ class PyroOptim(object):
         """
         with open(filename, "rb") as input_file:
             state = cloudpickle.loads(input_file.read())
-            self.set_state(state)
-
+        self.set_state(state)
 
     # helper to fetch the optim args if callable
     def get_optim_args(self, param):

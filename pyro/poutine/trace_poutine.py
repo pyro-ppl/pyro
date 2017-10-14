@@ -1,3 +1,4 @@
+from pyro import util
 from .poutine import Poutine
 from .trace import Trace
 
@@ -14,6 +15,31 @@ class TracePoutine(Poutine):
     We can also use this for visualization.
     """
 
+    def __init__(self, fn, graph_type=None):
+        """
+        :param fn: a stochastic function (callable containing pyro primitive calls)
+        :param string graph_type: string that specifies the type of graph
+        to construct (currently only "flat" or "dense" supported)
+
+        Constructor.
+        """
+        if graph_type is None:
+            graph_type = "flat"
+        assert graph_type in ("flat", "dense")
+        self.graph_type = graph_type
+        super(TracePoutine, self).__init__(fn)
+
+    def __exit__(self, *args, **kwargs):
+        """
+        Adds appropriate edges based on map_data_stack information
+        upon exiting the context.
+        """
+        if self.graph_type == "dense":
+            self.trace = util.identify_dense_edges(self.trace)
+            self.trace.graph["vectorized_map_data_info"] = \
+                util.get_vectorized_map_data_info(self.trace)
+        return super(TracePoutine, self).__exit__(*args, **kwargs)
+
     def __call__(self, *args, **kwargs):
         """
         Runs the stochastic function stored in this poutine,
@@ -26,10 +52,12 @@ class TracePoutine(Poutine):
         stores the arguments and return value of the function in special sites,
         and returns self.fn's return value
         """
-        self.trace = Trace()
-        self.trace.add_args((args, kwargs))
+        self.trace = Trace(graph_type=self.graph_type)
+        self.trace.add_node("_INPUT",
+                            name="_INPUT", type="args",
+                            args=args, kwargs=kwargs)
         ret = super(TracePoutine, self).__call__(*args, **kwargs)
-        self.trace.add_return(ret)
+        self.trace.add_node("_RETURN", name="_RETURN", type="return", value=ret)
         return ret
 
     def get_trace(self, *args, **kwargs):
@@ -48,31 +76,7 @@ class TracePoutine(Poutine):
         :param msg: current message at a trace site.
         :returns: a sample from the stochastic function at the site.
 
-        Implements default pyro.sample Poutine behavior with a side effect
-        call the function at the site,
-        store the result in self.trace,
-        and return the result
-        """
-        name, fn, args, kwargs = \
-            msg["name"], msg["fn"], msg["args"], msg["kwargs"]
-        if name in self.trace:
-            # XXX temporary solution - right now, if the name appears in the trace,
-            # we assume that this was intentional and that the poutine restarted,
-            # so we should reset self.trace to be empty
-            tr = Trace()
-            tr.add_args(self.trace["_INPUT"]["args"])
-            self.trace = tr
-
-        val = super(TracePoutine, self)._pyro_sample(msg)
-        self.trace.add_sample(name, msg["scale"], val, fn, *args, **kwargs)
-        return val
-
-    def _pyro_observe(self, msg):
-        """
-        :param msg: current message at a trace site.
-        :returns: the observed value at the site.
-
-        Implements default pyro.observe Poutine behavior with an additional side effect:
+        Implements default pyro.sample Poutine behavior with an additional side effect:
         if the observation at the site is not None,
         then store the observation in self.trace
         and return the observation,
@@ -80,18 +84,21 @@ class TracePoutine(Poutine):
         then store the return value in self.trace
         and return the return value.
         """
-        name, fn, obs, args, kwargs = \
-            msg["name"], msg["fn"], msg["obs"], msg["args"], msg["kwargs"]
-        if name in self.trace:
+        if msg["name"] in self.trace:
             # XXX temporary solution - right now, if the name appears in the trace,
             # we assume that this was intentional and that the poutine restarted,
             # so we should reset self.trace to be empty
-            tr = Trace()
-            tr.add_args(self.trace["_INPUT"]["args"])
+            tr = Trace(graph_type=self.graph_type)
+            tr.add_node("_INPUT",
+                        name="_INPUT", type="input",
+                        args=self.trace.nodes["_INPUT"]["args"],
+                        kwargs=self.trace.nodes["_INPUT"]["kwargs"])
             self.trace = tr
 
-        val = super(TracePoutine, self)._pyro_observe(msg)
-        self.trace.add_observe(name, msg["scale"], val, fn, obs, *args, **kwargs)
+        val = super(TracePoutine, self)._pyro_sample(msg)
+        site = msg.copy()
+        site.update(value=val)
+        self.trace.add_node(msg["name"], **site)
         return val
 
     def _pyro_param(self, msg):
@@ -107,8 +114,8 @@ class TracePoutine(Poutine):
         If it does exist, grab it from the parameter store.
         Store the parameter in self.trace, and then return the parameter.
         """
-        name, args, kwargs = \
-            msg["name"], msg["args"], msg["kwargs"]
-        retrieved = super(TracePoutine, self)._pyro_param(msg)
-        self.trace.add_param(name, retrieved, *args, **kwargs)
-        return retrieved
+        val = super(TracePoutine, self)._pyro_param(msg)
+        site = msg.copy()
+        site.update(value=val)
+        self.trace.add_node(msg["name"], **site)
+        return val

@@ -155,16 +155,21 @@ class ParamStoreDict(object):
                 assert isinstance(p, str), "param_names must be a string or an iterable of strings"
                 untag_single_param(p, tags)
 
-
     def replace_param(self, param_name, new_param, old_param):
         """
-        replace the param param_name with current value old_param with the new value new_param
+        :param param_name: parameter name
+        :type param_name: str
+        :param new_param: the paramater to be put into the paramstore
+        :type new_param: torch.autograd.Variable
+        :param old_param: the paramater to be removed from the paramstore
+        :type new_param: torch.autograd.Variable
+
+        Replace the param param_name with current value old_param with the new value new_param
         """
         assert id(self._params[param_name]) == id(old_param)
         self._params[param_name] = new_param
         self._param_to_name[new_param] = param_name
         self._param_to_name.pop(old_param)
-
 
     def get_param(self, name, init_tensor=None, tags="default"):
         """
@@ -214,22 +219,18 @@ class ParamStoreDict(object):
 
         return self._param_to_name[p]
 
-
     def get_state(self):
         """
         Get the paramstore state.
         """
-        param_tags = {k: [tag for tag in self._param_tags[k]] for k in self._param_tags}
+        param_tags = {k: list(tags) for k, tags in self._param_tags.items()}
         state = (self._params, param_tags)
-        # print "paramstore getstate keys:", state[0].keys()
         return state
-
 
     def set_state(self, state):
         """
-        Set the paramstore state.
+        Set the paramstore state using state from a previous get_state() call
         """
-        # print "paramstore setstate keys:", state[0].keys()
         assert isinstance(state, tuple) and len(state) == 2, "malformed paramstore state"
         loaded_params, loaded_param_tags = state
 
@@ -241,7 +242,6 @@ class ParamStoreDict(object):
             for tag in tags:
                 self._param_tags[param_name].add(tag)
 
-
     def save(self, filename):
         """
         :param filename: file name to save to
@@ -252,7 +252,6 @@ class ParamStoreDict(object):
         with open(filename, "wb") as output_file:
             output_file.write(cloudpickle.dumps(self.get_state()))
 
-
     def load(self, filename):
         """
         :param filename: file name to load from
@@ -262,4 +261,4 @@ class ParamStoreDict(object):
         """
         with open(filename, "rb") as input_file:
             state = cloudpickle.loads(input_file.read())
-            self.set_state(state)
+        self.set_state(state)

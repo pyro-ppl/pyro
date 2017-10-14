@@ -54,6 +54,14 @@ class Delta(Distribution):
         return Variable(torch.Tensor([-float("inf")]).type_as(v.data))
 
     def support(self, v=None, *args, **kwargs):
+        """
+        Returns the delta distribution's support, as a tensor along the first dimension.
+
+        :param v: torch variable where each element of the tensor represents the point at
+            which the delta distribution is concentrated.
+        :return: torch variable enumerating the support of the delta distribution.
+        :rtype: torch.autograd.Variable.
+        """
         v = self._sanitize_input(v)
         # univariate case
-        return (Variable(v.data.index(i)) for i in range(v.size(0)))
+        return Variable(v.data)

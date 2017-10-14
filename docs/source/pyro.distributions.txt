@@ -20,6 +20,13 @@ Categorical
     :undoc-members:
     :show-inheritance:
 
+Cauchy
+------
+.. automodule:: pyro.distributions.cauchy
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Delta
 -----
 .. automodule:: pyro.distributions.delta
@@ -80,6 +87,13 @@ NormalChol
 Poisson
 -------
 .. automodule:: pyro.distributions.poisson
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+Subsample
+-----------------------
+.. automodule:: pyro.distributions.subsample
     :members:
     :undoc-members:
     :show-inheritance:
