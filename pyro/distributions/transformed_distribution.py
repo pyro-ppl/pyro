@@ -19,7 +19,7 @@ class TransformedDistribution(Distribution):
             are passed through the sequence of `Bijector`s to yield a sample from the
             `TransformedDistribution`
         :type base_distribution: pyro.distribution.Distribution
-        :param bijectors: either a single Bijector or a list or tuple of Bijectors
+        :param bijectors: either a single Bijector or a sequence of Bijectors wrapped in a nn.ModuleList
         :returns: the transformed distribution
 
         Constructor; takes base distribution and bijector(s) as arguments
@@ -27,10 +27,13 @@ class TransformedDistribution(Distribution):
         super(TransformedDistribution, self).__init__(*args, **kwargs)
         self.reparameterized = base_distribution.reparameterized
         self.base_dist = base_distribution
-        if type(bijectors) is list or type(bijectors) is tuple:
+        if isinstance(bijectors, Bijector):
+            self.bijectors = nn.ModuleList([bijectors])
+        elif isinstance(bijectors, nn.ModuleList):
+            for bijector in bijectors:
+                assert isinstance(bijector, Bijector), \
+                    "bijectors must be a Bijector or a nn.ModuleList of Bijectors"
             self.bijectors = bijectors
-        else:
-            self.bijectors = [bijectors]
 
     def sample(self, *args, **kwargs):
         """
@@ -66,9 +69,9 @@ class TransformedDistribution(Distribution):
             inverses.append(inverse)
             next_to_invert = inverse
         log_pdf_base = self.base_dist.log_pdf(inverses[-1], *args, **kwargs)
-        log_det_jacobian = self.bijectors[-1].log_det_jacobian(y)
+        log_det_jacobian = self.bijectors[-1].log_det_jacobian(y, *args, **kwargs)
         for bijector, inverse in zip(list(reversed(self.bijectors))[1:], inverses[:-1]):
-            log_det_jacobian += bijector.log_det_jacobian(inverse)
+            log_det_jacobian += bijector.log_det_jacobian(inverse, *args, **kwargs)
         return log_pdf_base - log_det_jacobian
 
 
@@ -113,8 +116,8 @@ class InverseAutoregressiveFlow(Bijector):
     Example usage:
 
     base_dist = DiagNormal(...)
-    pt_iaf = InverseAutoregressiveFlow(...)
-    iaf = pyro.module("my_iaf", pt_iaf)
+    iaf = InverseAutoregressiveFlow(...)
+    pyro.module("my_iaf", iaf)
     iaf_dist = TransformedDistribution(base_dist, iaf)
 
     Note that this implementation is only meant to be used in settings where the inverse of the Bijector
@@ -215,4 +218,6 @@ class InverseAutoregressiveFlow(Bijector):
         else:
             raise KeyError("Bijector InverseAutoregressiveFlow expected to find" +
                            "key in intermediates cache but didn't")
+        if 'log_pdf_mask' in kwargs:
+            return torch.sum(kwargs['log_pdf_mask'] * torch.log(sigma))
         return torch.sum(torch.log(sigma))
