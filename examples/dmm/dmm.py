@@ -18,7 +18,7 @@ import pyro
 import numpy as np
 import time
 import pyro.distributions as dist
-from pyro.util import ng_ones, zeros
+from pyro.util import ng_ones
 import torch.nn as nn
 from pyro.distributions.transformed_distribution import InverseAutoregressiveFlow
 from pyro.distributions.transformed_distribution import TransformedDistribution
@@ -27,9 +27,8 @@ import polyphonic_data_loader as poly
 from pyro.infer import SVI
 from pyro.optim import ClippedAdam
 from os.path import join, dirname
-import logging
-import cloudpickle
 import os.path
+from util import get_logger
 
 
 class Emitter(nn.Module):
@@ -120,7 +119,7 @@ class Combiner(nn.Module):
         """
         Given the latent z at at a particular time step t-1 as well as the hidden state of
         the RNN h(x_{t:T}) we return the mean and sigma vectors that parameterize the (diagonal)
-        gaussian distribution p(z_t | z_{t-1})
+        gaussian distribution q(z_t | z_{t-1}, x_{t:T})
         """
         # combine the rnn hidden state with a transformed version of z_t_1
         h_combined = 0.5 * (self.tanh(self.lin_z_to_hidden(z_t_1)) + h_rnn)
@@ -137,27 +136,29 @@ class DMM(nn.Module):
     This pytorch Module encapsulates the model as well as the variational distribution (the guide)
     for the Deep Markov Model
     """
-    def __init__(self, input_dim, z_dim, emission_dim, transition_dim, rnn_dim, args):
+    def __init__(self, input_dim, z_dim, emission_dim, transition_dim, rnn_dim,
+                 rnn_dropout_rate, num_iafs, iaf_dim, use_cuda):
         super(DMM, self).__init__()
         # instantiate pytorch modules used in the model and guide below
         self.emitter = Emitter(input_dim, z_dim, emission_dim)
         self.trans = GatedTransition(z_dim, transition_dim)
         self.combiner = Combiner(z_dim, rnn_dim)
         self.rnn = nn.RNN(input_size=input_dim, hidden_size=rnn_dim, nonlinearity='relu',
-                          batch_first=True, bidirectional=False, num_layers=args.rnn_num_layers,
-                          dropout=args.rnn_dropout_rate)
+                          batch_first=True, bidirectional=False, num_layers=1, dropout=rnn_dropout_rate)
 
         # if we're using normalizing flows, instantiate those too
-        self.iafs = [InverseAutoregressiveFlow(z_dim, args.iaf_dim) for _ in range(args.num_iafs)]
-        # make sure each iaf is an attribute of DMM so that pytorch module logic knows about it
-        map(lambda i: self.__setattr__('iaf_%d' % i, self.iafs[i]), range(args.num_iafs))
+        iafs = [InverseAutoregressiveFlow(z_dim, iaf_dim) for _ in range(num_iafs)]
+        self.iafs = nn.ModuleList(iafs)
 
-        self.args = args
-        self.z_dim = z_dim
-        self.rnn_dim = rnn_dim
+        # define a (trainable) parameter z_0 that helps define the probability distribution p(z_1)
+        # (since for t = 1 there are no previous latents to condition on)
+        self.z_0 = nn.Parameter(torch.zeros(z_dim))
+        # define a (trainable) parameter for the initial hidden state of the rnn
+        self.h_0 = nn.Parameter(torch.zeros(1, 1, rnn_dim))
 
+        self.use_cuda = use_cuda
         # if on gpu cuda-ize all pytorch (sub)modules
-        if args.cuda:
+        if use_cuda:
             self.cuda()
 
     # the model p(x_{1:T} | z_{1:T}) p(z_{1:T})
@@ -170,9 +171,8 @@ class DMM(nn.Module):
         # register all pytorch (sub)modules with pyro
         pyro.module("dmm", self)
 
-        # define a (trainable) parameter z_0 that helps define the probability distribution p(z_1)
-        # (since for t = 1 there are no previous latents to condition on)
-        z_prev = pyro.param("z_0", zeros(self.z_dim, type_as=mini_batch.data))
+        # set z_prev = z_0 to setup the recursive conditioning in p(z_t | z_{t-1})
+        z_prev = self.z_0
 
         # sample the latents z and observed x's one time step at a time
         for t in range(1, T_max + 1):
@@ -189,7 +189,8 @@ class DMM(nn.Module):
             emission_probs_t = self.emitter(z_t)
             pyro.observe("obs_x_%d" % t, dist.bernoulli, mini_batch[:, t - 1, :], emission_probs_t,
                          log_pdf_mask=mini_batch_mask[:, t - 1:t])
-            # the lqtent sampled at this time step will be conditioned upon in the next time step
+            # the latent sampled at this time step will be conditioned upon in the next time step
+            # so keep track of it
             z_prev = z_t
 
     # the guide q(z_{1:T} | x_{1:T}) (i.e. the variational distribution)
@@ -201,20 +202,15 @@ class DMM(nn.Module):
         # register all pytorch (sub)modules with pyro
         pyro.module("dmm", self)
 
-        # make a self.parameter
-        # define a (trainable) parameter for the initial hidden state of the rnn
-        h_0 = pyro.param("h_0", zeros(self.rnn.num_layers, 1, self.rnn_dim, type_as=mini_batch.data))
-        # if on gpu we need the fully broadcast view of h_0 in cuda memory
-        if self.args.cuda:
-            h_0 = h_0.expand(*[h_0.data.shape[0], mini_batch.data.shape[0], h_0.data.shape[2]]).contiguous()
-
+        # if on gpu we need the fully broadcast view of the rnn initial state to be in contiguous gpu memory
+        h_0_contig = self.h_0 if not self.use_cuda \
+            else self.h_0.expand(1, mini_batch.size(0), self.rnn.hidden_size).contiguous()
         # push the observed x's through the rnn; rnn_output contains the hidden state at each time step
-        rnn_output, _ = self.rnn(mini_batch_reversed, h_0)
+        rnn_output, _ = self.rnn(mini_batch_reversed, h_0_contig)
         # reverse the time-ordering in the hidden state and un-pack it
         rnn_output = poly.pad_and_reverse(rnn_output, mini_batch_seq_lengths)
-        # define a (trainable) parameter z_0 that helps define the probability distribution p(z_1)
-        # (since for t = 1 there are no previous latents to condition on)
-        z_prev = pyro.param("z_q_0", zeros(self.z_dim, type_as=mini_batch.data))
+        # set z_prev = z_0 to setup the recursive conditioning in p(z_t | z_{t-1})
+        z_prev = self.z_0
 
         # sample the latents z one time step at a time
         for t in range(1, T_max + 1):
@@ -222,46 +218,34 @@ class DMM(nn.Module):
             z_mu, z_sigma = self.combiner(z_prev, rnn_output[:, t - 1, :])
             z_dist = dist.DiagNormal(z_mu, z_sigma)
 
-            # if we are including normalizing flows, we apply the sequence of transformations
+            # if we are using normalizing flows, we apply the sequence of transformations
             # parameterized by self.iafs to the base distribution defined in the previous line
             # to yield a transformed distribution that we use for q(z_t|...)
-            if args.num_iafs > 0:
+            if self.iafs.__len__() > 0:
                 z_dist = TransformedDistribution(z_dist, self.iafs)
             # sample z_t from the distribution z_dist
             z_t = pyro.sample("z_%d" % t, z_dist,
                               log_pdf_mask=annealing_factor * mini_batch_mask[:, t - 1:t])
-            # the lqtent sampled at this time step will be conditioned upon in the next time step
+            # the latent sampled at this time step will be conditioned upon in the next time step
+            # so keep track of it
             z_prev = z_t
 
 
 # setup, training, and evaluation
-def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
-         clip_norm=20.0, lr_decay=1.0, weight_decay=0.10,
-         mini_batch_size=20, annealing_epochs=1000,
-         minimum_annealing_factor=0.0, rnn_dropout_rate=0.1,
-         rnn_num_layers=1, log='dmm.log', cuda=False, num_iafs=0, iaf_dim=100,
-         load_opt='', load_model='', checkpoint_freq=0,
-         save_opt='', save_model=''):
-
+def main(args):
+    # define various model hyperparameters
     input_dim = 88
     z_dim = 100
     transition_dim = 200
     emission_dim = 100
     rnn_dim = 600
     val_test_frequency = 0
-    expensive_val_test_points = [num_epochs - 1, num_epochs - 1501]
+    expensive_val_test_points = [args.num_epochs - 1, args.num_epochs - 1501]
     n_eval_samples_inner = 1
     n_eval_samples_outer = 100
 
     # setup logging
-    logging.basicConfig(level=logging.DEBUG, format='%(message)s', filename=args.log, filemode='w')
-    console = logging.StreamHandler()
-    console.setLevel(logging.INFO)
-    logging.getLogger('').addHandler(console)
-
-    def log(s):
-        logging.info(s)
-
+    log = get_logger(args.log)
     log(args)
 
     jsb_file_loc = join(dirname(__file__), "jsb_processed.pkl")
@@ -278,7 +262,7 @@ def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
     N_mini_batches = int(N_train_data / args.mini_batch_size +
                          int(N_train_data % args.mini_batch_size > 0))
 
-    # package repeated copies of val/test data for faster evaluation
+    # package repeated copies of val/test data for faster evaluation (vectorization)
     def rep(x):
         y = np.repeat(x, n_eval_samples_inner, axis=0)
         return y
@@ -288,17 +272,17 @@ def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
     test_seq_lengths = rep(test_seq_lengths)
     val_batch, val_batch_reversed, val_batch_mask, val_seq_lengths = poly.get_mini_batch(
         np.arange(n_eval_samples_inner * val_data_sequences.shape[0]), rep(val_data_sequences),
-        val_seq_lengths, volatile=True, cuda=cuda)
+        val_seq_lengths, volatile=True, cuda=args.cuda)
     test_batch, test_batch_reversed, test_batch_mask, test_seq_lengths = poly.get_mini_batch(
         np.arange(n_eval_samples_inner * test_data_sequences.shape[0]), rep(test_data_sequences),
-        test_seq_lengths, volatile=True, cuda=cuda)
+        test_seq_lengths, volatile=True, cuda=args.cuda)
 
     log("N_train_data: %d     avg. training seq. length: %.2f    N_mini_batches: %d" %
         (N_train_data, np.mean(training_seq_lengths), N_mini_batches))
-    times = [time.time()]
 
     # instantiate the dmm
-    dmm = DMM(input_dim, z_dim, emission_dim, transition_dim, rnn_dim, args)
+    dmm = DMM(input_dim, z_dim, emission_dim, transition_dim, rnn_dim,
+              args.rnn_dropout_rate, args.num_iafs, args.iaf_dim, args.cuda)
 
     # setup optimizer
     adam_params = {"lr": args.learning_rate, "betas": (args.beta1, args.beta2),
@@ -308,83 +292,101 @@ def main(num_epochs=5000, learning_rate=0.0008, beta1=0.9, beta2=0.999,
 
     # setup inference algorithm
     elbo = SVI(dmm.model, dmm.guide, adam, "ELBO", trace_graph=False)
-    # by default the KL annealing factor is unity
-    annealing_factor = 1.0
     expensive_evaluations = []
 
-    # if provided load model and optimizer states from checkpoint files
-    if args.load_opt != '' and args.load_model !='':
-        assert os.path.exists(args.load_opt) and os.path.exists(args.load_model)
+    # now we're going to define some functions we need to form the main training loop
+
+    # saves the model and optimizer states to disk
+    def save_checkpoint():
+        log("saving model to %s..." % args.save_model)
+        torch.save(dmm.state_dict(), args.save_model)
+        log("saving optimizer states to %s..." % args.save_opt)
+        adam.save(args.save_opt)
+        log("done saving model and optimizer checkpoints to disk.")
+
+    # loads the model and optimizer states from disk
+    def load_checkpoint():
+        assert os.path.exists(args.load_opt) and os.path.exists(args.load_model), \
+            "--load-model and/or --load-opt misspecified"
         log("loading model from %s..." % args.load_model)
-	dmm.load_state_dict(torch.load(args.load_model))
+        dmm.load_state_dict(torch.load(args.load_model))
         log("loading optimizer states from %s..." % args.load_opt)
         adam.load(args.load_opt)
         log("done loading model and optimizer states.")
 
+    # prepare a mini-batch and take a gradient step to minimize -elbo
+    def process_minibatch(epoch, which_mini_batch, shuffled_indices):
+        if args.annealing_epochs > 0 and epoch < args.annealing_epochs:
+            # compute the KL annealing factor approriate for the current mini-batch in the current epoch
+            min_af = args.minimum_annealing_factor
+            annealing_factor = min_af + (1.0 - min_af) * \
+                (float(which_mini_batch + epoch * N_mini_batches + 1) /
+                 float(args.annealing_epochs * N_mini_batches))
+        else:
+            # by default the KL annealing factor is unity
+            annealing_factor = 1.0
+
+        # compute which mini-batch indices we should grab
+        mini_batch_start = (which_mini_batch * args.mini_batch_size)
+        mini_batch_end = np.min([(which_mini_batch + 1) * args.mini_batch_size, N_train_data])
+        mini_batch_indices = shuffled_indices[mini_batch_start:mini_batch_end]
+        # grab the fully prepped mini-batch using the helper function in the data loader
+        mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths \
+            = poly.get_mini_batch(mini_batch_indices, training_data_sequences,
+                                  training_seq_lengths, cuda=args.cuda)
+        # do an actual gradient step
+        loss = elbo.step(mini_batch, mini_batch_reversed, mini_batch_mask,
+                         mini_batch_seq_lengths, annealing_factor)
+        # keep track of the training loss
+        return loss
+
+    # helper function for doing evaluation
+    def do_evaluation(n_samples):
+        # put the RNN into evaluation mode (i.e. turn off drop-out if applicable)
+        dmm.rnn.eval()
+        val_nlls, test_nlls = [], []
+
+        # compute the validation and test loss n_samples many times
+        for _ in range(n_samples):
+            val_nll = elbo.evaluate_loss(val_batch, val_batch_reversed, val_batch_mask,
+                                         val_seq_lengths) / np.sum(val_seq_lengths)
+            test_nll = elbo.evaluate_loss(test_batch, test_batch_reversed, test_batch_mask,
+                                          test_seq_lengths) / np.sum(test_seq_lengths)
+            val_nlls.append(val_nll)
+            test_nlls.append(test_nll)
+
+        # put the RNN back into training mode (i.e. turn on drop-out if applicable)
+        dmm.rnn.train()
+        val_nll, test_nll = np.mean(val_nlls), np.mean(test_nlls)
+        return val_nll, test_nll
+
+    # if checkpoint files provided, load model and optimizer states from disk before we start training
+    if args.load_opt != '' and args.load_model != '':
+        load_checkpoint()
+
     # training loop
+    times = [time.time()]
     for epoch in range(args.num_epochs):
+        # if specified, save model and optimizer states to disk every checkpoint_freq epochs
+        if args.checkpoint_freq > 0 and epoch > 0 and epoch % args.checkpoint_freq == 0:
+            save_checkpoint(dmm, adam, args.save_model, args.save_opt)
+
+        # accumulator for our estimate of the negative log likelihood (or rather -elbo) for this epoch
         epoch_nll = 0.0
         # prepare mini-batch subsampling indices
         shuffled_indices = np.arange(N_train_data)
         np.random.shuffle(shuffled_indices)
 
-        # if specified, save model and optimizer states to disk every checkpoint_freq epochs
-	if args.checkpoint_freq > 0 and epoch > 0 and epoch % args.checkpoint_freq == 0:
-            log("saving model to %s..." % args.save_model)
- 	    torch.save(dmm.state_dict(), args.save_model)
-            log("saving optimizer states to %s..." % args.save_opt)
-	    adam.save(args.save_opt)
-            log("done loading model and optimizer states from disk.")
-
-	# process each mini-batch
-        for which in range(N_mini_batches):
-            if args.annealing_epochs > 0 and epoch < args.annealing_epochs:
-                # compute the KL annealing factor approriate for the current mini-batch in the current epoch
-                min_af = args.minimum_annealing_factor
-                annealing_factor = min_af + (1.0 - min_af) * \
-                    (float(which + epoch * N_mini_batches + 1) /
-                     float(args.annealing_epochs * N_mini_batches))
-
-            # compute which mini-batch indices we should grab
-            mini_batch_start = (which * args.mini_batch_size)
-            mini_batch_end = np.min([(which + 1) * args.mini_batch_size, N_train_data])
-            mini_batch_indices = shuffled_indices[mini_batch_start:mini_batch_end]
-            # grab the actual mini-batch using the helper function in the data loader
-            mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths \
-                = poly.get_mini_batch(mini_batch_indices, training_data_sequences,
-                                      training_seq_lengths, cuda=cuda)
-            # do an actual gradient step
-            loss = elbo.step(mini_batch, mini_batch_reversed, mini_batch_mask,
-                             mini_batch_seq_lengths, annealing_factor)
-            # keep track of the training loss
-            epoch_nll += loss
+        # process each mini-batch; this is where we take gradient steps
+        for which_mini_batch in range(N_mini_batches):
+            epoch_nll += process_minibatch(epoch, which_mini_batch, shuffled_indices)
 
         times.append(time.time())
         epoch_time = times[-1] - times[-2]
         log("[training epoch %04d]  %.4f \t\t\t\t(dt = %.3f sec)" %
             (epoch, epoch_nll / N_train_time_slices, epoch_time))
 
-        # helper function for doing evaluation
-        def do_evaluation(n_samples):
-            # put the RNN into evaluation mode (i.e. turn off drop-out if applicable)
-            dmm.rnn.eval()
-            val_nlls, test_nlls = [], []
-
-            # compute the validation and test loss n_samples many times
-            for _ in range(n_samples):
-                val_nll = elbo.evaluate_loss(val_batch, val_batch_reversed, val_batch_mask,
-                                             val_seq_lengths) / np.sum(val_seq_lengths)
-                test_nll = elbo.evaluate_loss(test_batch, test_batch_reversed, test_batch_mask,
-                                              test_seq_lengths) / np.sum(test_seq_lengths)
-                val_nlls.append(val_nll)
-                test_nlls.append(test_nll)
-
-            # put the RNN back into training mode (i.e. turn on drop-out if applicable)
-            dmm.rnn.train()
-            val_nll, test_nll = np.mean(val_nlls), np.mean(test_nlls)
-            return val_nll, test_nll
-
-        if epoch % val_test_frequency == 0 and epoch > 0 and val_test_frequency > 0:
+        if val_test_frequency > 0 and epoch > 0 and epoch % val_test_frequency:
             val_nll, test_nll = do_evaluation(n_samples=1)
             log("[val/test epoch %04d]  %.4f  %.4f" % (epoch, val_nll, test_nll))
 
@@ -411,7 +413,6 @@ if __name__ == '__main__':
     parser.add_argument('-ae', '--annealing-epochs', type=int, default=1000)
     parser.add_argument('-maf', '--minimum-annealing-factor', type=float, default=0.0)
     parser.add_argument('-rdr', '--rnn-dropout-rate', type=float, default=0.1)
-    parser.add_argument('-rnl', '--rnn-num-layers', type=int, default=1)
     parser.add_argument('-iafs', '--num-iafs', type=int, default=0)
     parser.add_argument('-id', '--iaf-dim', type=int, default=100)
     parser.add_argument('-cf', '--checkpoint-freq', type=int, default=0)
@@ -423,4 +424,4 @@ if __name__ == '__main__':
     parser.add_argument('-l', '--log', type=str, default='dmm.log')
     args = parser.parse_args()
 
-    main(**vars(args))
+    main(args)
