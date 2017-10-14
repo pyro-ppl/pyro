@@ -9,7 +9,7 @@ class Categorical(Distribution):
     """
     :param ps: probabilities (can be unnormalized) *(vector or real array [0,
                Infinity))*
-    :param vs: support *(any numpy array, Variable, or list)*
+    :param vs: support *(any numpy array, Variable, or python list)*
     :param one_hot: if ``True``, ``sample()`` returns a one_hot sample. ``True`` by default.
 
     Discrete distribution over elements of ``vs`` with ``P(vs[i])`` proportional to
@@ -53,6 +53,15 @@ class Categorical(Distribution):
         super(Categorical, self).__init__(batch_size=1, *args, **kwargs)
 
     def sample(self, ps=None, vs=None, one_hot=True, *args, **kwargs):
+        """
+        Returns a sample which has the same shape as ``ps`` (or ``vs``), except
+        that if ``one_hot=True`` (and no ``vs`` is specified), the last dimension
+        will have the same size as the number of events. The type of the sample
+        is numpy.ndarray if vs is a list or a numpy array, else a tensor is returned.
+
+        :return: sample from the Categorical distribution
+        :rtype: numpy.ndarray or torch.LongTensor
+        """
         ps, vs, one_hot = self._sanitize_input(ps, vs, one_hot)
         vs = self._process_vs(vs)
         sample_size = ps.size()[:-1] + (1,)
@@ -64,13 +73,27 @@ class Categorical(Distribution):
                 sample_bool_index = sample_one_hot.cpu().numpy().astype(bool)
                 return vs[sample_bool_index].reshape(*sample_size)
             else:
-                return vs.masked_select(sample_one_hot.byte()).expand(*sample_size)
+                return vs.masked_select(sample_one_hot.byte())
         if one_hot:
             return Variable(sample_one_hot)
-        else:
-            return Variable(sample)
+        return Variable(sample)
 
     def batch_log_pdf(self, x, ps=None, vs=None, one_hot=True, *args, **kwargs):
+        """
+        Evaluates log probability densities for one or a batch of samples and parameters.
+        The last dimension for ``ps`` encodes the event probabilities, and the remaining
+        dimensions are considered batch dimensions.
+
+        ``ps`` and ``vs`` are first broadcasted to the size of the data ``x``. The
+        data tensor is used to to create a mask over ``vs`` where a 1 in the mask
+        indicates that the corresponding value in ``vs`` was selected. Since, ``ps``
+        and ``vs`` have the same size, this mask when applied over ``ps`` gives
+        the probabilities of the selected events. The method returns the logarithm
+        of these probabilities.
+
+        :return: tensor with log probabilities for each of the batches.
+        :rtype: torch.autograd.Variable
+        """
         ps, vs, one_hot = self._sanitize_input(ps, vs, one_hot)
         vs = self._process_vs(vs)
         if isinstance(x, list):
