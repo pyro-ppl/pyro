@@ -305,7 +305,7 @@ def main(args):
 
     # loads the model and optimizer states from disk
     def load_checkpoint():
-        assert os.path.exists(args.load_opt) and os.path.exists(args.load_model), \
+        assert exists(args.load_opt) and exists(args.load_model), \
             "--load-model and/or --load-opt misspecified"
         log("loading model from %s..." % args.load_model)
         dmm.load_state_dict(torch.load(args.load_model))

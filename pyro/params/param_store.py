@@ -1,6 +1,6 @@
 from collections import defaultdict
 import cloudpickle
-from copy import copy
+
 
 class ParamStoreDict(object):
     """
