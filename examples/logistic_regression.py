@@ -17,8 +17,8 @@ from pyro.optim import Adam
 Bayesian Logistic Regression
 """
 
-# use covtype dataset
-# fname = "data/covtype/covtype.data"
+# use UCI dataset
+# fname = "data/covtype.data"
 # print("loading covtype data set...")
 # with open(fname, "r+") as f:
 #     content = f.read()
@@ -50,13 +50,13 @@ N = 1000  # toy data
 D = 1
 batch_size = 256
 
+
 """
 Custom prior we specify. This can be anything, but for this example
 we use DiagNormal
 """
-
-
 class DiagNormalPrior(pyro.distributions.Distribution):
+
     def __init__(self, mu, sigma, *args, **kwargs):
         self.mu = mu
         self.sigma = sigma
@@ -79,8 +79,6 @@ def log_reg(x_data):
 
 
 def model(data):
-    x_data = data[:, :-1]
-    y_data = data[:, -1]
     mu = Variable(torch.zeros(D, 1))
     sigma = Variable(3 * torch.ones(D, 1))
     bias_mu = Variable(torch.zeros(1))
@@ -88,9 +86,15 @@ def model(data):
     w_prior = DiagNormalPrior(mu, sigma)
     b_prior = DiagNormalPrior(bias_mu, bias_sigma)
     priors = {'weight': w_prior, 'bias': b_prior}
-    lifted_fn = poutine.lift(log_reg, priors)
-    latent = lifted_fn(x_data)
-    pyro.observe("obs", Bernoulli(latent), y_data.unsqueeze(1))
+
+    def observe(data):
+        x_data = data[:, :-1]
+        y_data = data[:, -1]
+        lifted_fn = poutine.lift(log_reg, priors)
+        latent = lifted_fn(x_data)
+        pyro.observe("obs", Bernoulli(latent), y_data.unsqueeze(1))
+
+    pyro.map_data("map", data, lambda i, d: observe(d), batch_size=10)
 
 
 def guide(data):
@@ -107,7 +111,7 @@ def guide(data):
     b_prior = DiagNormalPrior(mb_param, sb_param)
     priors = {'weight': w_prior, 'bias': b_prior}
     lifted_fn = poutine.lift(log_reg, priors)
-    lifted_fn(x_data)
+    pyro.map_data("map", x_data, lambda i, d: lifted_fn(d), batch_size=10)
 
 
 # adam_params = {"lr": 0.00001, "betas": (0.95, 0.999)}
@@ -115,7 +119,7 @@ lr = {"lr": 0.001}
 adam = Adam({"lr": 0.001})
 svi = SVI(model, guide, adam, loss="ELBO")
 
-# dat = build_toy_dataset(N)
+# For UCI dataset
 # x = df.as_matrix(columns=range(D))
 # y = df.as_matrix(columns=[D])
 # raw_data = Variable(torch.Tensor(df.as_matrix().tolist()))
@@ -123,6 +127,8 @@ svi = SVI(model, guide, adam, loss="ELBO")
 # x_norm = normalize(Variable(torch.Tensor(x.tolist())), 2, dim=1)
 # y = Variable(torch.Tensor(y.tolist()))
 # data = torch.cat((x_norm, y), 1)
+
+# For toy dataset
 data = build_toy_dataset(N)
 
 all_batches = np.arange(0, N, batch_size)
@@ -132,18 +138,21 @@ if all_batches[-1] != N:
 
 
 
-# apply it to minibatches of data by hand:
 def main():
     parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', nargs='?', default=1000, type=int)
+    parser.add_argument('-n', '--num-epochs', nargs='?', default=100000, type=int)
     args = parser.parse_args()
     for j in range(args.num_epochs):
-        epoch_loss = 0.0
-        for ix, batch_start in enumerate(all_batches[:-1]):
-            batch_end = all_batches[ix + 1]
-            batch_data = data[batch_start: batch_end]
-            epoch_loss += svi.step(batch_data)
-        print("epoch avg loss {}".format(epoch_loss/float(N)))
+        epoch_loss = svi.step(data)
+#         # mini batch
+#         epoch_loss = 0.0
+#         for ix, batch_start in enumerate(all_batches[:-1]):
+#             batch_end = all_batches[ix + 1]
+#             batch_data = data[batch_start: batch_end]
+#             epoch_loss += svi.step(batch_data)
+        if j % 200 == 0:
+            print pyro.get_param_store()._params
+            print("epoch avg loss {}".format(epoch_loss/float(N)))
 
 
 if __name__ == '__main__':
