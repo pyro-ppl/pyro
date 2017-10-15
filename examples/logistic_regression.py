@@ -51,10 +51,8 @@ D = 1
 batch_size = 256
 
 
-"""
-Custom prior we specify. This can be anything, but for this example
-we use DiagNormal
-"""
+# Custom prior we specify. This can be anything, but for this example
+# we use DiagNormal
 class DiagNormalPrior(pyro.distributions.Distribution):
 
     def __init__(self, mu, sigma, *args, **kwargs):
@@ -114,8 +112,6 @@ def guide(data):
     pyro.map_data("map", x_data, lambda i, d: lifted_fn(d), batch_size=10)
 
 
-# adam_params = {"lr": 0.00001, "betas": (0.95, 0.999)}
-lr = {"lr": 0.001}
 adam = Adam({"lr": 0.001})
 svi = SVI(model, guide, adam, loss="ELBO")
 
@@ -137,10 +133,9 @@ if all_batches[-1] != N:
     all_batches = list(all_batches) + [N]
 
 
-
 def main():
     parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', nargs='?', default=100000, type=int)
+    parser.add_argument('-n', '--num-epochs', nargs='?', default=10000, type=int)
     args = parser.parse_args()
     for j in range(args.num_epochs):
         epoch_loss = svi.step(data)
