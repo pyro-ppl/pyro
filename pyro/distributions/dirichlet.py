@@ -4,7 +4,7 @@ import torch
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
-from pyro.util import log_beta
+from pyro.distributions.util import log_beta
 
 
 class Dirichlet(Distribution):

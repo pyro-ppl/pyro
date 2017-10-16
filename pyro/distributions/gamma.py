@@ -4,7 +4,7 @@ from torch.autograd import Variable
 
 import pyro
 from pyro.distributions.distribution import Distribution
-from pyro.util import log_gamma
+from pyro.distributions.util import log_gamma
 
 
 class Gamma(Distribution):
