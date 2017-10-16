@@ -7,6 +7,7 @@ understanding with generative models." Advances in Neural Information
 Processing Systems. 2016.
 """
 
+import os
 import time
 import argparse
 from functools import partial
@@ -85,13 +86,18 @@ parser.add_argument('--no-masking', action='store_true', default=False,
 parser.add_argument('--seed', type=int, help='random seed', default=None)
 
 args = parser.parse_args()
-print(args)
+#print(args)
 
 if args.seed is not None:
     pyro.set_rng_seed(args.seed)
 
 # Load data.
-X_np = np.load('./data/multi_mnist_train_uint8.npz')['X'].astype(np.float32)
+infile = './data/multi_mnist_train_uint8.npz'
+if not os.path.exists(infile):
+    print('Could not find the dataset at {}'.format(infile))
+    print('Run "python multi_mnist.py" to generate it.')
+    exit()
+X_np = np.load(infile)['x'].astype(np.float32)
 X_np /= 255.0
 X = Variable(torch.from_numpy(X_np))
 X_size = X.size(0)
@@ -158,7 +164,7 @@ if args.viz:
     vis.images(draw_many(x, post_process_latents(z)))
 
 t0 = time.time()
-examples_to_viz = torch.cat([X[12:16], X[61:65]])
+examples_to_viz = X[9:14]
 
 
 # Do inference.
