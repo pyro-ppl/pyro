@@ -27,8 +27,16 @@ Bayesian Logistic Regression
 
 # generate toy dataset
 
+def build_linear_dataset(N, noise_std=0.1):
+    D = 1
+    X = np.linspace(-6, 6, num=N)
+    y = 3 * X + 1 + np.random.normal(0, noise_std, size=N)
+    X = X.reshape((N, D))
+    y = y.reshape((N, 1))
+    X, y = Variable(torch.Tensor(X)), Variable(torch.Tensor(y))
+    return torch.cat((X, y), 1)
 
-def build_toy_dataset(N, noise_std=0.1):
+def build_logistic_dataset(N, noise_std=0.1):
     D = 1
     X = np.linspace(-6, 6, num=N)
     y = np.tanh(X) + np.random.normal(0, noise_std, size=N)
@@ -75,22 +83,27 @@ def log_reg(x_data):
     latent = sigmoid(reg)
     return latent
 
+def lin_reg(x_data):
+    p_w = pyro.param("weight", Variable(torch.zeros(1), requires_grad=True))
+    p_b = pyro.param("bias", Variable(torch.ones(1), requires_grad=True))
+    latent = p_w.squeeze() * x_data.squeeze() + p_b
+    return latent
 
 def model(data):
     mu = Variable(torch.zeros(D, 1))
-    sigma = Variable(3 * torch.ones(D, 1))
+    sigma = Variable(torch.ones(D, 1))
     bias_mu = Variable(torch.zeros(1))
-    bias_sigma = Variable(3 * torch.ones(1))
-    w_prior = DiagNormalPrior(mu, sigma)
-    b_prior = DiagNormalPrior(bias_mu, bias_sigma)
+    bias_sigma = Variable(torch.ones(1))
+    w_prior = DiagNormal(mu, sigma)
+    b_prior = DiagNormal(bias_mu, bias_sigma)
     priors = {'weight': w_prior, 'bias': b_prior}
+    lifted_fn = poutine.lift(lin_reg, priors)
 
     def observe(data):
         x_data = data[:, :-1]
         y_data = data[:, -1]
-        lifted_fn = poutine.lift(log_reg, priors)
         latent = lifted_fn(x_data)
-        pyro.observe("obs", Bernoulli(latent), y_data.unsqueeze(1))
+        pyro.observe("obs", DiagNormal(latent, Variable(torch.ones(10))), y_data.squeeze())
 
     pyro.map_data("map", data, lambda i, d: observe(d), batch_size=10)
 
@@ -105,14 +118,14 @@ def guide(data):
     sw_param = softplus(pyro.param("guide_sigma_weight", w_log_sig))
     mb_param = pyro.param("guide_mean_bias", b_mu)
     sb_param = softplus(pyro.param("guide_sigma_bias", b_log_sig))
-    w_prior = DiagNormalPrior(mw_param, sw_param)
-    b_prior = DiagNormalPrior(mb_param, sb_param)
+    w_prior = DiagNormal(mw_param, sw_param)
+    b_prior = DiagNormal(mb_param, sb_param)
     priors = {'weight': w_prior, 'bias': b_prior}
-    lifted_fn = poutine.lift(log_reg, priors)
+    lifted_fn = poutine.lift(lin_reg, priors)
     pyro.map_data("map", x_data, lambda i, d: lifted_fn(d), batch_size=10)
 
 
-adam = Adam({"lr": 0.001})
+adam = Adam({"lr": 0.01})
 svi = SVI(model, guide, adam, loss="ELBO")
 
 # For UCI dataset
@@ -125,7 +138,7 @@ svi = SVI(model, guide, adam, loss="ELBO")
 # data = torch.cat((x_norm, y), 1)
 
 # For toy dataset
-data = build_toy_dataset(N)
+data = build_linear_dataset(N)
 
 all_batches = np.arange(0, N, batch_size)
 # take care of bad index
