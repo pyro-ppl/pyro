@@ -61,23 +61,6 @@ D = 1
 batch_size = 256
 
 
-# Custom prior we specify. This can be anything, but for this example
-# we use DiagNormal
-class DiagNormalPrior(pyro.distributions.Distribution):
-
-    def __init__(self, mu, sigma, *args, **kwargs):
-        self.mu = mu
-        self.sigma = sigma
-        self.dist = DiagNormal(self.mu, self.sigma)
-        super(DiagNormalPrior, self).__init__(*args, **kwargs)
-
-    def sample(self, *args, **kwargs):
-        return self.dist()
-
-    def log_pdf(self, x, *args, **kwargs):
-        return self.dist.log_pdf(x)
-
-
 def log_reg(x_data):
     p_w = pyro.param("weight", Variable(torch.zeros(D, 1), requires_grad=True))
     p_b = pyro.param("bias", Variable(torch.ones(1), requires_grad=True))
