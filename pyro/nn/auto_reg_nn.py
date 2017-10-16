@@ -22,10 +22,10 @@ class MaskedLinear(nn.Linear):
         Constructor
         """
         super(MaskedLinear, self).__init__(in_features, out_features, bias)
-        self.register_buffer('mask', mask)
+        self.register_buffer('mask', mask.data)
 
     def forward(self, _input):
-        masked_weight = self.weight * self.mask
+        masked_weight = self.weight * torch.autograd.Variable(self.mask)
         return F.linear(_input, masked_weight, self.bias)
 
 
