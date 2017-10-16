@@ -180,7 +180,7 @@ class InverseAutoregressiveFlow(Bijector):
         hidden = self.arn(x)
         sigma = self.sigmoid(hidden[:, 0:self.input_dim] + self.sigmoid_bias.type_as(hidden))
         mean = hidden[:, self.input_dim:]
-        y = sigma * x + (Variable(torch.ones(sigma.size()).type_as(sigma)) - sigma) * mean
+        y = sigma * x + (Variable(torch.ones(sigma.size())).type_as(sigma) - sigma) * mean
         self._add_intermediate_to_cache(sigma, y, 'sigma')
         return y
 
