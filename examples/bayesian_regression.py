@@ -146,7 +146,6 @@ def main():
 #             batch_data = data[batch_start: batch_end]
 #             epoch_loss += svi.step(batch_data)
         if j % 200 == 0:
-            print pyro.get_param_store()._params
             print("epoch avg loss {}".format(epoch_loss/float(N)))
 
 
