@@ -9,7 +9,7 @@ from torch.autograd import Variable
 
 import pyro
 from pyro import poutine
-from pyro.distributions import DiagNormal, Bernoulli
+from pyro.distributions import DiagNormal, Bernoulli  # noqa: F401
 from pyro.infer import SVI
 from pyro.optim import Adam
 
@@ -27,6 +27,7 @@ Bayesian Logistic Regression
 
 # generate toy dataset
 
+
 def build_linear_dataset(N, noise_std=0.1):
     D = 1
     X = np.linspace(-6, 6, num=N)
@@ -35,6 +36,7 @@ def build_linear_dataset(N, noise_std=0.1):
     y = y.reshape((N, 1))
     X, y = Variable(torch.Tensor(X)), Variable(torch.Tensor(y))
     return torch.cat((X, y), 1)
+
 
 def build_logistic_dataset(N, noise_std=0.1):
     D = 1
@@ -83,11 +85,13 @@ def log_reg(x_data):
     latent = sigmoid(reg)
     return latent
 
+
 def lin_reg(x_data):
     p_w = pyro.param("weight", Variable(torch.zeros(1), requires_grad=True))
     p_b = pyro.param("bias", Variable(torch.ones(1), requires_grad=True))
     latent = p_w.squeeze() * x_data.squeeze() + p_b
     return latent
+
 
 def model(data):
     mu = Variable(torch.zeros(D, 1))
