@@ -1,19 +1,47 @@
+SVI
+---
+
 .. automodule:: pyro.infer.svi
     :members:
     :undoc-members:
     :show-inheritance:
+
+ELBO
+----
 
 .. automodule:: pyro.infer.elbo
     :members:
     :undoc-members:
     :show-inheritance:
 
+Importance
+----------
+
 .. automodule:: pyro.infer.importance
     :members:
     :undoc-members:
     :show-inheritance:
 
+Search
+------
+
 .. automodule:: pyro.infer.search
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+Trace_ELBO
+----------
+
+.. automodule:: pyro.infer.trace_elbo
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+TraceGraph_ELBO
+---------------
+
+.. automodule:: pyro.infer.tracegraph_elbo
     :members:
     :undoc-members:
     :show-inheritance:
