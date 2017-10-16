@@ -3,7 +3,7 @@ import torch
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
-from pyro.util import to_one_hot
+from pyro.distributions.util import to_one_hot
 
 
 class Categorical(Distribution):
