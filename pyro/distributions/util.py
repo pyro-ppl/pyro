@@ -1,6 +1,7 @@
 import torch
 from torch.autograd import Variable
 
+
 def log_gamma(xx):
     if isinstance(xx, Variable):
         ttype = xx.data.type()
