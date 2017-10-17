@@ -74,7 +74,7 @@ class DiagNormal(Distribution):
         batch_probs = torch.sum(log_pxs, 1)
         if 'log_pdf_mask' in kwargs:
             mask = kwargs['log_pdf_mask']
-            if not mask is None:
+            if mask is not None:
                 batch_probs = batch_probs * mask.view(-1)
         return batch_probs
 
