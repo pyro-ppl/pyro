@@ -1,6 +1,3 @@
-import torch
-from torch.autograd import Variable
-
 import pyro
 import pyro.poutine as poutine
 from pyro.infer.enum import iter_discrete_traces
