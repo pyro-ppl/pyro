@@ -17,17 +17,15 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import numpy as np
-import os
-import os.path
-from os.path import join, dirname
+from os.path import join, dirname, exists
 from six.moves.urllib.request import urlretrieve
 import six.moves.cPickle as pickle
-
+from pyro.util import ng_zeros
 
 # this function downloads the raw data if it hasn't been already
 def download_if_absent(saveas, url):
 
-    if not os.path.exists(saveas):
+    if not exists(saveas):
         print("Couldn't find polyphonic music data at {}".format(saveas))
         print("downloading polyphonic music data from %s..." % url)
         urlretrieve(url, saveas)
@@ -37,7 +35,7 @@ def download_if_absent(saveas, url):
 def process_data(output="jsb_processed.pkl", rawdata="jsb_raw.pkl",
                  T_max=160, min_note=21, note_range=88):
 
-    if os.path.exists(output):
+    if exists(output):
         return
 
     print("processing raw polyphonic music data...")
@@ -69,9 +67,9 @@ download_if_absent(raw_file, "http://www-etud.iro.umontreal.ca/~boulanni/JSB%20C
 process_data(output=out_file, rawdata=raw_file)
 
 
-# this function takes a mini-batch and reverses each sequence
-# (w.r.t the temporal axis, i.e. axis=1)
-def reverse_sequences(mini_batch, seq_lengths):
+# this function takes a numpy mini-batch and reverses each sequence
+# (w.r.t. the temporal axis, i.e. axis=1)
+def reverse_sequences_numpy(mini_batch, seq_lengths):
     reversed_mini_batch = mini_batch.copy()
     for b in range(mini_batch.shape[0]):
         T = seq_lengths[b]
@@ -79,16 +77,27 @@ def reverse_sequences(mini_batch, seq_lengths):
     return reversed_mini_batch
 
 
+# this function takes a torch mini-batch and reverses each sequence
+# (w.r.t. the temporal axis, i.e. axis=1)
+# in contrast to `reverse_sequences_numpy`, this function preserves gradients
+def reverse_sequences_torch(mini_batch, seq_lengths):
+    reversed_mini_batch = ng_zeros(mini_batch.size(), type_as=mini_batch.data)
+    for b in range(mini_batch.size(0)):
+        T = seq_lengths[b]
+        time_slice = np.arange(T - 1, -1, -1)
+        time_slice = Variable(torch.cuda.LongTensor(time_slice)) if 'cuda' in mini_batch.data.type() \
+            else Variable(torch.LongTensor(time_slice))
+        reversed_sequence = torch.index_select(mini_batch[b, :, :], 0, time_slice)
+        reversed_mini_batch[b, 0:T, :] = reversed_sequence
+    return reversed_mini_batch
+
+
 # this function takes the hidden state as output by the pytorch rnn and
 # unpacks it it; it also reverses each sequence temporally
 def pad_and_reverse(rnn_output, seq_lengths):
     rnn_output, _ = nn.utils.rnn.pad_packed_sequence(rnn_output, batch_first=True)
-    if 'cuda' in rnn_output.data.type():
-        rev_output = reverse_sequences(rnn_output.cpu().data.numpy(), seq_lengths)
-    else:
-        rev_output = reverse_sequences(rnn_output.data.numpy(), seq_lengths)
-
-    return Variable(torch.Tensor(rev_output).type_as(rnn_output.data))
+    reversed_output = reverse_sequences_torch(rnn_output, seq_lengths)
+    return reversed_output
 
 
 # this function returns a 0/1 mask that can be used to mask out a mini-batch
@@ -111,7 +120,7 @@ def get_mini_batch(mini_batch_indices, sequences, seq_lengths, volatile=False, c
     sorted_seq_lengths = seq_lengths[sorted_seq_length_indices]
     sorted_mini_batch_indices = mini_batch_indices[sorted_seq_length_indices]
     mini_batch = sequences[sorted_mini_batch_indices, :, :]
-    mini_batch_reversed = Variable(torch.Tensor(reverse_sequences(mini_batch, sorted_seq_lengths)),
+    mini_batch_reversed = Variable(torch.Tensor(reverse_sequences_numpy(mini_batch, sorted_seq_lengths)),
                                    volatile=volatile)
 
     # need to cuda before it's packed

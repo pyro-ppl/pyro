@@ -28,7 +28,7 @@ from os.path import join, dirname, exists
 import argparse
 import time
 from util import get_logger
-
+import uuid
 
 class Emitter(nn.Module):
     """
@@ -46,8 +46,8 @@ class Emitter(nn.Module):
 
     def forward(self, z_t):
         """
-        Given the latent z at a particular time step t we return the vector of probabilities `ps`
-        that parameterizes the bernoulli distribution p(x_t|z_t)
+        Given the latent z at a particular time step t we return the vector of
+        probabilities `ps` that parameterizes the bernoulli distribution p(x_t|z_t)
         """
         h1 = self.relu(self.lin_z_to_hidden(z_t))
         h2 = self.relu(self.lin_hidden_to_hidden(h1))
@@ -67,9 +67,10 @@ class GatedTransition(nn.Module):
         self.lin_gate_hidden_to_z = nn.Linear(transition_dim, z_dim)
         self.lin_proposed_mean_z_to_hidden = nn.Linear(z_dim, transition_dim)
         self.lin_proposed_mean_hidden_to_z = nn.Linear(transition_dim, z_dim)
-        self.lin_z_to_mu = nn.Linear(z_dim, z_dim)
         self.lin_sig = nn.Linear(z_dim, z_dim)
-        # modify lin_z_to_mu so that it's starts out as the identity function
+        self.lin_z_to_mu = nn.Linear(z_dim, z_dim)
+        # modify the default initialization of lin_z_to_mu
+        # so that it's starts out as the identity function
         self.lin_z_to_mu.weight.data = torch.eye(z_dim)
         self.lin_z_to_mu.bias.data = torch.zeros(z_dim)
         # initialize the three non-linearities used in the neural network
@@ -79,8 +80,9 @@ class GatedTransition(nn.Module):
 
     def forward(self, z_t_1):
         """
-        Given the latent z_{t-1} corresponding to the time step t-1 we return the mean and sigma vectors
-        that parameterize the (diagonal) gaussian distribution p(z_t | z_{t-1})
+        Given the latent z_{t-1} corresponding to the time step t-1
+        we return the mean and sigma vectors that parameterize the
+        (diagonal) gaussian distribution p(z_t | z_{t-1})
         """
         # compute the gating function and one minus the gating function
         gate_intermediate = self.relu(self.lin_gate_z_to_hidden(z_t_1))
@@ -89,8 +91,8 @@ class GatedTransition(nn.Module):
         # compute the 'proposed mean'
         proposed_mean_intermediate = self.relu(self.lin_proposed_mean_z_to_hidden(z_t_1))
         proposed_mean = self.lin_proposed_mean_hidden_to_z(proposed_mean_intermediate)
-        # assemble the actual mean used to sample z_t, which mixes a linear transformation of
-        # z_{t-1} with the proposed mean modulated by the gating function
+        # assemble the actual mean used to sample z_t, which mixes a linear transformation
+        # of z_{t-1} with the proposed mean modulated by the gating function
         mu = one_minus_gate * self.lin_z_to_mu(z_t_1) + gate * proposed_mean
         # compute the sigma used to sample z_t, using the proposed mean from above as input
         sigma = self.softplus(self.lin_sig(self.relu(proposed_mean)))
@@ -100,9 +102,9 @@ class GatedTransition(nn.Module):
 
 class Combiner(nn.Module):
     """
-    Parameterizes q(z_t | z_{t-1}, x_{t:T}), which is the basic building block of the
-    guide (i.e. the variational distribution). The dependence on x_{t:T} is through the
-    hidden state of the RNN (see the pytorch module `rnn` below)
+    Parameterizes q(z_t | z_{t-1}, x_{t:T}), which is the basic building block
+    of the guide (i.e. the variational distribution). The dependence on x_{t:T} is
+    through the hidden state of the RNN (see the pytorch module `rnn` below)
     """
     def __init__(self, z_dim, rnn_dim):
         super(Combiner, self).__init__()
@@ -116,9 +118,9 @@ class Combiner(nn.Module):
 
     def forward(self, z_t_1, h_rnn):
         """
-        Given the latent z at at a particular time step t-1 as well as the hidden state of
-        the RNN h(x_{t:T}) we return the mean and sigma vectors that parameterize the (diagonal)
-        gaussian distribution q(z_t | z_{t-1}, x_{t:T})
+        Given the latent z at at a particular time step t-1 as well as the hidden
+        state of the RNN h(x_{t:T}) we return the mean and sigma vectors that
+        parameterize the (diagonal) gaussian distribution q(z_t | z_{t-1}, x_{t:T})
         """
         # combine the rnn hidden state with a transformed version of z_t_1
         h_combined = 0.5 * (self.tanh(self.lin_z_to_hidden(z_t_1)) + h_rnn)
@@ -135,23 +137,26 @@ class DMM(nn.Module):
     This pytorch Module encapsulates the model as well as the variational distribution (the guide)
     for the Deep Markov Model
     """
-    def __init__(self, input_dim, z_dim, emission_dim, transition_dim, rnn_dim,
-                 rnn_dropout_rate, num_iafs, iaf_dim, use_cuda):
+    def __init__(self, input_dim=88, z_dim=100, emission_dim=100, transition_dim=200, rnn_dim=600,
+                 rnn_dropout_rate=0.0, num_iafs=0, iaf_dim=50, use_cuda=False):
         super(DMM, self).__init__()
         # instantiate pytorch modules used in the model and guide below
         self.emitter = Emitter(input_dim, z_dim, emission_dim)
         self.trans = GatedTransition(z_dim, transition_dim)
         self.combiner = Combiner(z_dim, rnn_dim)
         self.rnn = nn.RNN(input_size=input_dim, hidden_size=rnn_dim, nonlinearity='relu',
-                          batch_first=True, bidirectional=False, num_layers=1, dropout=rnn_dropout_rate)
+                          batch_first=True, bidirectional=False, num_layers=1,
+                          dropout=rnn_dropout_rate)
 
         # if we're using normalizing flows, instantiate those too
         iafs = [InverseAutoregressiveFlow(z_dim, iaf_dim) for _ in range(num_iafs)]
         self.iafs = nn.ModuleList(iafs)
 
-        # define a (trainable) parameter z_0 that helps define the probability distribution p(z_1)
+        # define a (trainable) parameters z_0 and z_q_0 that help define the probability
+        # distributions p(z_1) and q(z_1)
         # (since for t = 1 there are no previous latents to condition on)
         self.z_0 = nn.Parameter(torch.zeros(z_dim))
+        self.z_q_0 = nn.Parameter(torch.zeros(z_dim))
         # define a (trainable) parameter for the initial hidden state of the rnn
         self.h_0 = nn.Parameter(torch.zeros(1, 1, rnn_dim))
 
@@ -168,6 +173,7 @@ class DMM(nn.Module):
         T_max = np.max(mini_batch_seq_lengths)
 
         # register all pytorch (sub)modules with pyro
+        # this needs to happen in both the model and guide
         pyro.module("dmm", self)
 
         # set z_prev = z_0 to setup the recursive conditioning in p(z_t | z_{t-1})
@@ -176,20 +182,26 @@ class DMM(nn.Module):
         # sample the latents z and observed x's one time step at a time
         for t in range(1, T_max + 1):
             # the next three lines of code sample z_t ~ p(z_t | z_{t-1})
-            # note that log_pdf_mask takes care of both
+            # note that (both here and elsewhere) log_pdf_mask takes care of both
             # (i)  KL annealing; and
-            # (ii) raggedness in the observed data (i.e. different sequences in the mini-batch
-            #      have different lengths)
+            # (ii) raggedness in the observed data (i.e. different sequences
+            #      in the mini-batch have different lengths)
+
+            # first compute the parameters of the diagonal gaussian distribution p(z_t | z_{t-1})
             z_mu, z_sigma = self.trans(z_prev)
+            # then sample z_t according to dist.DiagNormal(z_mu, z_sigma)
             z_t = pyro.sample("z_%d" % t, dist.DiagNormal(z_mu, z_sigma),
                               log_pdf_mask=annealing_factor * mini_batch_mask[:, t - 1:t])
-            # the next three lines observe x_t according to the distribution p(x_t|z_t)
-            z_mu, z_sigma = self.trans(z_prev)
+
+            # compute the probabilities that parameterize the bernoulli likelihood
             emission_probs_t = self.emitter(z_t)
-            pyro.observe("obs_x_%d" % t, dist.bernoulli, mini_batch[:, t - 1, :], emission_probs_t,
+            # the next statement instructs pyro to observe x_t according to the
+            # bernoulli distribution p(x_t|z_t)
+            pyro.observe("obs_x_%d" % t, dist.bernoulli, mini_batch[:, t - 1, :],
+                         emission_probs_t,
                          log_pdf_mask=mini_batch_mask[:, t - 1:t])
-            # the latent sampled at this time step will be conditioned upon in the next time step
-            # so keep track of it
+            # the latent sampled at this time step will be conditioned upon
+            # in the next time step so keep track of it
             z_prev = z_t
 
     # the guide q(z_{1:T} | x_{1:T}) (i.e. the variational distribution)
@@ -201,15 +213,17 @@ class DMM(nn.Module):
         # register all pytorch (sub)modules with pyro
         pyro.module("dmm", self)
 
-        # if on gpu we need the fully broadcast view of the rnn initial state to be in contiguous gpu memory
+        # if on gpu we need the fully broadcast view of the rnn initial state
+        # to be in contiguous gpu memory
         h_0_contig = self.h_0 if not self.use_cuda \
             else self.h_0.expand(1, mini_batch.size(0), self.rnn.hidden_size).contiguous()
-        # push the observed x's through the rnn; rnn_output contains the hidden state at each time step
+        # push the observed x's through the rnn;
+        # rnn_output contains the hidden state at each time step
         rnn_output, _ = self.rnn(mini_batch_reversed, h_0_contig)
         # reverse the time-ordering in the hidden state and un-pack it
         rnn_output = poly.pad_and_reverse(rnn_output, mini_batch_seq_lengths)
-        # set z_prev = z_0 to setup the recursive conditioning in p(z_t | z_{t-1})
-        z_prev = self.z_0
+        # set z_prev = z_q_0 to setup the recursive conditioning in q(z_t |...)
+        z_prev = self.z_q_0
 
         # sample the latents z one time step at a time
         for t in range(1, T_max + 1):
@@ -232,23 +246,21 @@ class DMM(nn.Module):
 
 # setup, training, and evaluation
 def main(args):
-    # define various model hyperparameters
-    input_dim = 88
-    z_dim = 100
-    transition_dim = 200
-    emission_dim = 100
-    rnn_dim = 600
-    val_test_frequency = 0
-    expensive_val_test_points = [args.num_epochs - 1, args.num_epochs - 1501]
-    n_eval_samples_inner = 1
-    n_eval_samples_outer = 100
+    # define training loop parameters
+    val_test_frequency = 50000
+    expensive_val_test_points = [args.num_epochs - 1, args.num_epochs - 1001, args.num_epochs - 2001]
+    n_eval_samples_inner = 5
+    n_eval_samples_outer = 20
+    n_checkpoint_reloads = 0
+    n_restarts = 0
+    best_val_nll = 99.99
 
     # setup logging
     log = get_logger(args.log)
     log(args)
 
     jsb_file_loc = join(dirname(__file__), "jsb_processed.pkl")
-    # ingest training/validation/test  data from disk
+    # ingest training/validation/test data from disk
     data = pickle.load(open(jsb_file_loc, "rb"))
     training_seq_lengths = data['train']['sequence_lengths']
     training_data_sequences = data['train']['sequences']
@@ -261,7 +273,8 @@ def main(args):
     N_mini_batches = int(N_train_data / args.mini_batch_size +
                          int(N_train_data % args.mini_batch_size > 0))
 
-    # package repeated copies of val/test data for faster evaluation (vectorization)
+    # package repeated copies of val/test data for faster evaluation
+    # (i.e. set us up for vectorization)
     def rep(x):
         y = np.repeat(x, n_eval_samples_inner, axis=0)
         return y
@@ -280,8 +293,8 @@ def main(args):
         (N_train_data, np.mean(training_seq_lengths), N_mini_batches))
 
     # instantiate the dmm
-    dmm = DMM(input_dim, z_dim, emission_dim, transition_dim, rnn_dim,
-              args.rnn_dropout_rate, args.num_iafs, args.iaf_dim, args.cuda)
+    dmm = DMM(rnn_dropout_rate=args.rnn_dropout_rate, num_iafs=args.num_iafs,
+              iaf_dim=args.iaf_dim, use_cuda=args.cuda)
 
     # setup optimizer
     adam_params = {"lr": args.learning_rate, "betas": (args.beta1, args.beta2),
@@ -359,20 +372,52 @@ def main(args):
         val_nll, test_nll = np.mean(val_nlls), np.mean(test_nlls)
         return val_nll, test_nll
 
+    # check if the last n_check losses are all nan
+    def nan_check(losses, n_check=3):
+        if len(losses) >= n_check and all(map(lambda loss: np.isnan(loss) or np.isinf(loss), losses[-n_check:])):
+                return 'restart'
+        return 'continue'
+
+    # recover from a string of nans (this is pretty simplistic)
+    def recover_from_nan(epoch, n_checkpoint_relaods, n_restarts):
+        log('!!!Encountered a string of nans... trying to recover!!!')
+        if args.checkpoint_freq > 0 and epoch >= args.checkpoint_freq:
+            if n_checkpoint_reloads > 1:
+                return n_checkpoint_reloads + 1, n_restarts
+            # we should have a checkpoint so load that
+            args.load_opt = args.save_opt
+            args.load_model = args.save_model
+            load_checkpoint()
+            # if we're getting a lot of nans let's lower the learning rate
+            return n_checkpoint_reloads + 1, n_restarts
+        else:
+            # there's no checkpoint so just reinstantiate the dmm, adam and elbo
+            if n_restarts > 3:
+                return n_checkpoint_reloads, n_restarts + 1
+            log('Reinstantiated DMM, ClippedAdam, and SVI')
+            global dmm, adam, elbo
+            pyro.get_param_store().clear()
+            dmm = DMM(rnn_dropout_rate=args.rnn_dropout_rate, num_iafs=args.num_iafs,
+                      iaf_dim=args.iaf_dim, use_cuda=args.cuda)
+            adam = ClippedAdam(adam_params)
+            elbo = SVI(dmm.model, dmm.guide, adam, "ELBO", trace_graph=False)
+            return n_checkpoint_reloads, n_restarts + 1
+
     # if checkpoint files provided, load model and optimizer states from disk before we start training
     if args.load_opt != '' and args.load_model != '':
         load_checkpoint()
 
     # training loop
     times = [time.time()]
+    losses = []
     for epoch in range(args.num_epochs):
         # if specified, save model and optimizer states to disk every checkpoint_freq epochs
         if args.checkpoint_freq > 0 and epoch > 0 and epoch % args.checkpoint_freq == 0:
-            save_checkpoint(dmm, adam, args.save_model, args.save_opt)
+            save_checkpoint()
 
         # accumulator for our estimate of the negative log likelihood (or rather -elbo) for this epoch
         epoch_nll = 0.0
-        # prepare mini-batch subsampling indices
+        # prepare mini-batch subsampling indices for this epoch
         shuffled_indices = np.arange(N_train_data)
         np.random.shuffle(shuffled_indices)
 
@@ -380,12 +425,13 @@ def main(args):
         for which_mini_batch in range(N_mini_batches):
             epoch_nll += process_minibatch(epoch, which_mini_batch, shuffled_indices)
 
+        # report training diagnostics
         times.append(time.time())
         epoch_time = times[-1] - times[-2]
         log("[training epoch %04d]  %.4f \t\t\t\t(dt = %.3f sec)" %
             (epoch, epoch_nll / N_train_time_slices, epoch_time))
 
-        if val_test_frequency > 0 and epoch > 0 and epoch % val_test_frequency:
+        if val_test_frequency > 0 and epoch > 0 and epoch % val_test_frequency == 0:
             val_nll, test_nll = do_evaluation(n_samples=1)
             log("[val/test epoch %04d]  %.4f  %.4f" % (epoch, val_nll, test_nll))
 
@@ -393,8 +439,18 @@ def main(args):
             val_nll, test_nll = do_evaluation(n_samples=n_eval_samples_outer)
             log("[EXPENSIVE val/test epoch %04d]  %.4f  %.4f" % (epoch, val_nll, test_nll))
             expensive_evaluations.append((val_nll, test_nll))
+            if val_nll < best_val_nll:
+                best_val_nll = val_nll
 
-    return expensive_evaluations
+        # check for nans
+        losses.append(epoch_nll)
+        if nan_check(losses) == 'restart':
+            losses = []
+            n_checkpoint_reloads, n_restarts = recover_from_nan(epoch, n_checkpoint_reloads, n_restarts)
+            if n_checkpoint_reloads == 3 or n_restarts == 5:
+                return (99.99, [])
+
+    return (best_val_nll, expensive_evaluations)
 
 
 # parse command-line arguments and execute the main method
@@ -417,10 +473,11 @@ if __name__ == '__main__':
     parser.add_argument('-cf', '--checkpoint-freq', type=int, default=0)
     parser.add_argument('-lopt', '--load-opt', type=str, default='')
     parser.add_argument('-lmod', '--load-model', type=str, default='')
-    parser.add_argument('-sopt', '--save-opt', type=str)
-    parser.add_argument('-smod', '--save-model', type=str)
+    default_name = str(uuid.uuid4())
+    parser.add_argument('-sopt', '--save-opt', type=str, default=default_name+'.opt.chk')
+    parser.add_argument('-smod', '--save-model', type=str, default=default_name+'.mod.chk')
     parser.add_argument('--cuda', action='store_true')
-    parser.add_argument('-l', '--log', type=str, default='dmm.log')
+    parser.add_argument('-l', '--log', type=str, default=default_name+'.log')
     args = parser.parse_args()
 
     main(args)
