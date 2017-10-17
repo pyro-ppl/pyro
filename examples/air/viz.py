@@ -65,8 +65,8 @@ z_obj = namedtuple('z', 's,x,y,pres')
 
 # Take the latent values returned by the batch version of the model,
 # and munge them into the format expected by the viz code.
-def post_process_latents(z):
-    z_where, z_pres = z
+def post_process_latents(latents):
+    z_where, z_pres = latents
     z_where = [z.cpu() for z in z_where]
     z_pres = [z.cpu() for z in z_pres]
     z_where_t = torch.stack(z_where).transpose(0, 1)
