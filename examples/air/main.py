@@ -59,8 +59,8 @@ parser.add_argument('--checkpoint', action='store_true',
                     help='periodically persist parameters')
 parser.add_argument('--checkpoint-every', type=int, default=1000,
                     help='number of steps between checkpoints')
-# parser.add_argument('--cuda', action='store_true',
-#                     help='use cuda')
+parser.add_argument('--cuda', action='store_true', default=False,
+                    help='use cuda')
 parser.add_argument('-t', '--model-steps', type=int, default=3,
                     help='number of time steps')
 parser.add_argument('--rnn-hidden-size', type=int, default=256,
@@ -101,9 +101,8 @@ X_np = np.load(infile)['x'].astype(np.float32)
 X_np /= 255.0
 X = Variable(torch.from_numpy(X_np))
 X_size = X.size(0)
-# TODO: cuda
-# X = device(X)
-
+if args.cuda:
+    X = X.cuda()
 
 # Yields the following distribution over the number of steps (when
 # taking a maximum of 3 steps):
@@ -153,9 +152,9 @@ air = AIR(
     z_what_size=args.encoder_latent_size,
     encoder_hidden_size=args.encoder_hidden_size,
     decoder_hidden_size=args.encoder_hidden_size,
+    use_cuda=args.cuda,
     **model_args
 )
-
 
 vis = visdom.Visdom(env=args.visdom_env)
 # Viz sample from prior.

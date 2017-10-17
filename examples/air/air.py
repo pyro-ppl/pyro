@@ -19,7 +19,7 @@ from pyro.distributions import DiagNormal, Bernoulli
 from modules import Identity, Encoder, Decoder, MLP, Predict
 
 
-# TODO: reinstate cuda support
+# TODO: cleaner cuda support.
 
 # TODO: viz depends on PIL. add to setup.py?
 
@@ -51,7 +51,8 @@ class AIR(nn.Module):
                  decoder_output_bias=None,
                  use_masking=True,
                  use_baselines=True,
-                 baseline_scalar=None):
+                 baseline_scalar=None,
+                 use_cuda=False):
 
         super(AIR, self).__init__()
 
@@ -81,10 +82,11 @@ class AIR(nn.Module):
 
         self.z_pres_size = 1
         self.z_where_size = 3
-        # TODO: cuda
-        # (Can we arrange to move to GPU with optimizable params?)
-        self.z_where_mu_prior = Variable(torch.FloatTensor([3.0, 0, 0]))
-        self.z_where_sigma_prior = Variable(torch.FloatTensor([0.1, 1, 1]))
+        # By making these parameters they will be moved to the gpu
+        # when necessary. (They are not registered with pyro for
+        # optimization.)
+        self.z_where_mu_prior = nn.Parameter(torch.FloatTensor([3.0, 0, 0]), requires_grad=False)
+        self.z_where_sigma_prior = nn.Parameter(torch.FloatTensor([0.1, 1, 1]), requires_grad=False)
 
         # Create nn modules.
         if self.embed_inputs:
@@ -110,6 +112,10 @@ class AIR(nn.Module):
         #     MLP(x_size ** 2, embed_size, embed_hidden_size, embed_hidden_layers),
         #     nn.ReLU()) if embed_inputs and use_baselines else Identity()
 
+        self.use_cuda = use_cuda
+        if use_cuda:
+            self.cuda()
+
     def prior(self, n, **kwargs):
         pyro.module("decode", self.decode)
         return self.local_model(n, **kwargs)
@@ -127,8 +133,8 @@ class AIR(nn.Module):
     def local_model(self, n, batch=None, **kwargs):
 
         state = ModelState(
-            x=ng_zeros([n, self.x_size, self.x_size]),
-            z_pres=ng_ones([n, self.z_pres_size]),
+            x=self.ng_zeros([n, self.x_size, self.x_size]),
+            z_pres=self.ng_ones([n, self.z_pres_size]),
             z_where=None)
 
         z_pres = []
@@ -164,8 +170,8 @@ class AIR(nn.Module):
 
         # Sample latent code for contents of the attention window.
         z_what = pyro.sample('z_what_{}'.format(t),
-                             DiagNormal(ng_zeros([self.z_what_size]),
-                                        ng_ones([self.z_what_size]),
+                             DiagNormal(self.ng_zeros([self.z_what_size]),
+                                        self.ng_ones([self.z_what_size]),
                                         batch_size=n),
                              log_pdf_mask=sample_mask)
 
@@ -196,7 +202,7 @@ class AIR(nn.Module):
                 observe_mask = prev.z_pres - z_pres
 
             pyro.observe("obs_{}".format(t),
-                         DiagNormal(x.view(n, -1), ng_ones([1, 1]) * 0.3),
+                         DiagNormal(x.view(n, -1), self.ng_ones([1, 1]) * 0.3),
                          batch.view(n, -1),
                          log_pdf_mask=observe_mask)
 
@@ -228,13 +234,13 @@ class AIR(nn.Module):
 
         # Initial state.
         state = GuideState(
-            h=ng_zeros(n, self.rnn_hidden_size),
-            c=ng_zeros(n, self.rnn_hidden_size),
-            bl_h=ng_zeros(n, self.rnn_hidden_size),
-            bl_c=ng_zeros(n, self.rnn_hidden_size),
-            z_pres=ng_ones(n, self.z_pres_size),
-            z_where=ng_zeros(n, self.z_where_size),
-            z_what=ng_zeros(n, self.z_what_size))
+            h=self.ng_zeros(n, self.rnn_hidden_size),
+            c=self.ng_zeros(n, self.rnn_hidden_size),
+            bl_h=self.ng_zeros(n, self.rnn_hidden_size),
+            bl_c=self.ng_zeros(n, self.rnn_hidden_size),
+            z_pres=self.ng_ones(n, self.z_pres_size),
+            z_where=self.ng_zeros(n, self.z_where_size),
+            z_what=self.ng_zeros(n, self.z_what_size))
 
         z_pres = []
         z_where = []
@@ -306,6 +312,20 @@ class AIR(nn.Module):
 
         return bl_value, bl_h, bl_c
 
+    # HACK: Helpers to create zeros/ones on cpu/gpu as appropriate.
+    # What's the correct way to do this?
+    def ng_zeros(self, *args, **kwargs):
+        t = ng_zeros(*args, **kwargs)
+        if self.use_cuda:
+            t = t.cuda()
+        return t
+
+    def ng_ones(self, *args, **kwargs):
+        t = ng_ones(*args, **kwargs)
+        if self.use_cuda:
+            t = t.cuda()
+        return t
+
 
 # Spatial transformer helpers.
 
@@ -318,7 +338,7 @@ def expand_z_where(z_where):
     # [s,x,y] -> [[s,0,x],
     #             [0,s,y]]
     n = z_where.size(0)
-    out = torch.cat((ng_zeros([1, 1]).expand(n, 1), z_where), 1)
+    out = torch.cat((ng_zeros([1, 1]).type_as(z_where).expand(n, 1), z_where), 1)
     ix = Variable(expansion_indices)
     if z_where.is_cuda:
         ix = ix.cuda()
@@ -336,7 +356,7 @@ def z_where_inv(z_where):
     # These are the parameters required to perform the inverse of the
     # spatial transform performed in the generative model.
     n = z_where.size(0)
-    out = torch.cat((ng_ones([1, 1]).expand(n, 1), -z_where[:, 1:]), 1)
+    out = torch.cat((ng_ones([1, 1]).type_as(z_where).expand(n, 1), -z_where[:, 1:]), 1)
     # Divide all entries by the scale.
     out = out / z_where[:, 0:1]
     return out
