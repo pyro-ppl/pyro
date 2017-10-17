@@ -78,13 +78,13 @@ class Trace(networkx.DiGraph):
         for name, site in self.nodes.items():
             if site["type"] == "sample" and site_filter(name, site):
                 try:
-                    log_p += site["batch_log_pdf"]
+                    log_p = log_p + site["batch_log_pdf"]
                 except KeyError:
                     args, kwargs = site["args"], site["kwargs"]
                     site["batch_log_pdf"] = site["fn"].batch_log_pdf(
                         site["value"], *args, **kwargs) * site["scale"]
                     site["log_pdf"] = site["batch_log_pdf"].sum()
-                    log_p += site["batch_log_pdf"]
+                    log_p = log_p + site["batch_log_pdf"]
         return log_p
 
     @property

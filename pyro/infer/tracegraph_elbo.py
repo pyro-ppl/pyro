@@ -3,7 +3,6 @@ import torch
 
 import pyro
 import pyro.poutine as poutine
-from pyro.infer.enum import iter_discrete_traces, scale_trace
 from pyro.util import ng_zeros, detach_iterable
 
 
@@ -41,16 +40,7 @@ class TraceGraph_ELBO(object):
         # import pdb; pdb.set_trace()
         for i in range(self.num_particles):
             if self.enum_discrete:
-                import warnings
-                warnings.warn('THIS IS BROKEN')
-                # This iterates over a bag of traces, for each particle.
-                for scale, guide_trace in iter_discrete_traces("dense", guide, *args, **kwargs):
-                    model_trace = poutine.trace(poutine.replay(model, guide_trace),
-                                                graph_type="dense").get_trace(*args, **kwargs)
-                    guide_trace = scale_trace(guide_trace, scale)
-                    model_trace = scale_trace(model_trace, scale)
-                    yield model_trace, guide_trace
-                continue
+                raise NotImplementedError("https://github.com/uber/pyro/issues/220")
 
             guide_trace = poutine.trace(guide,
                                         graph_type="dense").get_trace(*args, **kwargs)
@@ -277,7 +267,7 @@ class TraceGraph_ELBO(object):
 
                 surrogate_elbo_particle += elbo_reinforce_terms_particle / self.num_particles
                 if not isinstance(baseline_loss_particle, float):
-                    baseline_loss_particle.sum().backward()
+                    baseline_loss_particle.backward()
 
             # grab model parameters to train
             for name in model_trace.nodes.keys():
@@ -293,7 +283,7 @@ class TraceGraph_ELBO(object):
             pyro.get_param_store().mark_params_active(trainable_params)
 
             surrogate_loss_particle = -surrogate_elbo_particle
-            surrogate_loss_particle.sum().backward()
+            surrogate_loss_particle.backward()
 
         loss = -elbo
 

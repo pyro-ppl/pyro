@@ -49,24 +49,3 @@ def iter_discrete_traces(graph_type, fn, *args, **kwargs):
             log_pdf = Variable(log_pdf)
         scale = torch.exp(log_pdf.detach())
         yield scale, full_trace
-
-
-def scale_trace(trace, scale):
-    """
-    Scale all sample and observe sites in a trace (copies the trace).
-
-    :param Trace trace: A pyro trace.
-    :param scale: A nonnegative scaling constant.
-    :type scale: float or torch.Tensor or torch.autograd.Variable
-    :returns: A scaled copy of the trace.
-    :rtype: Trace
-    """
-    trace = trace.copy()
-    for name, site in trace.nodes.items():
-        if "scale" in site:
-            site["scale"] = site["scale"] * scale
-        # Clear memoized computations.
-        if site["type"] in ("observe", "sample"):
-            site.pop("log_pdf", None)
-            site.pop("batch_log_pdf", None)
-    return trace

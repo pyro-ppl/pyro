@@ -1,6 +1,9 @@
+import torch
+from torch.autograd import Variable
+
 import pyro
 import pyro.poutine as poutine
-from pyro.infer.enum import iter_discrete_traces, scale_trace
+from pyro.infer.enum import iter_discrete_traces
 
 
 class Trace_ELBO(object):
@@ -32,16 +35,16 @@ class Trace_ELBO(object):
                 for scale, guide_trace in iter_discrete_traces("flat", guide, *args, **kwargs):
                     model_trace = poutine.trace(poutine.replay(model, guide_trace),
                                                 graph_type="flat").get_trace(*args, **kwargs)
-                    guide_trace = scale_trace(guide_trace, scale)
-                    model_trace = scale_trace(model_trace, scale)
                     log_r = model_trace.batch_log_pdf() - guide_trace.batch_log_pdf()
-                    yield model_trace, guide_trace, log_r
+                    weight = scale / self.num_particles
+                    yield weight, model_trace, guide_trace, log_r
                 continue
 
             guide_trace = poutine.trace(guide).get_trace(*args, **kwargs)
             model_trace = poutine.trace(poutine.replay(model, guide_trace)).get_trace(*args, **kwargs)
             log_r = model_trace.log_pdf() - guide_trace.log_pdf()
-            yield model_trace, guide_trace, log_r
+            weight = 1.0 / self.num_particles
+            yield weight, model_trace, guide_trace, log_r
 
     def loss(self, model, guide, *args, **kwargs):
         """
@@ -51,7 +54,7 @@ class Trace_ELBO(object):
         Evaluates the ELBO with an estimator that uses num_particles many samples/particles.
         """
         elbo = 0.0
-        for model_trace, guide_trace, log_r in self._get_traces(model, guide, *args, **kwargs):
+        for weight, model_trace, guide_trace, log_r in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = 0.0
 
             log_pdf = "batch_log_pdf" if self.enum_discrete else "log_pdf"
@@ -63,7 +66,7 @@ class Trace_ELBO(object):
                         elbo_particle += model_trace.nodes[name][log_pdf]
                         elbo_particle -= guide_trace.nodes[name][log_pdf]
 
-            elbo += elbo_particle.data[0] / self.num_particles
+            elbo += (weight * elbo_particle).data.sum()
 
         loss = -elbo
         return loss
@@ -81,9 +84,9 @@ class Trace_ELBO(object):
         trainable_params = set()
 
         # grab a trace from the generator
-        for model_trace, guide_trace, log_r in self._get_traces(model, guide, *args, **kwargs):
-            elbo_particle = 0.0
-            surrogate_elbo_particle = 0.0
+        for weight, model_trace, guide_trace, log_r in self._get_traces(model, guide, *args, **kwargs):
+            elbo_particle = weight * 0
+            surrogate_elbo_particle = weight * 0
 
             # compute elbo and surrogate elbo
             log_pdf = "batch_log_pdf" if self.enum_discrete else "log_pdf"
@@ -102,8 +105,8 @@ class Trace_ELBO(object):
                             surrogate_elbo_particle += model_trace.nodes[name][log_pdf] + \
                                 log_r.detach() * guide_trace.nodes[name][log_pdf]
 
-            elbo += elbo_particle.data[0] / self.num_particles
-            surrogate_elbo += surrogate_elbo_particle / self.num_particles
+            elbo += (weight * elbo_particle).sum()
+            surrogate_elbo += (weight * surrogate_elbo_particle).sum()
 
             # grab model parameters to train
             for name in model_trace.nodes.keys():
@@ -116,7 +119,7 @@ class Trace_ELBO(object):
                     trainable_params.add(guide_trace.nodes[name]["value"])
 
         surrogate_loss = -surrogate_elbo
-        surrogate_loss.sum().backward()
+        surrogate_loss.backward()
         loss = -elbo
 
         pyro.get_param_store().mark_params_active(trainable_params)

@@ -1,5 +1,3 @@
-import sys
-
 import pytest
 import torch
 from torch.autograd import Variable
@@ -7,25 +5,13 @@ from torch.autograd import Variable
 import pyro
 import pyro.distributions as dist
 import pyro.optim
-from pyro import poutine
 from pyro.infer import SVI
-from pyro.infer.enum import iter_discrete_traces, scale_trace
+from pyro.infer.enum import iter_discrete_traces
 from tests.common import assert_equal
 
 
-# A model with continuous and discrete variables, no batching.
-def model0():
-    p = pyro.param("p", Variable(torch.Tensor([0.1, 0.9])))
-    mu = pyro.param("mu", Variable(torch.Tensor([-1.0, 1.0])))
-    sigma = pyro.param("sigma", Variable(torch.Tensor([2.0, 3.0])))
-    x = pyro.sample("x", dist.Bernoulli(p))
-    y = pyro.sample("y", dist.DiagNormal(mu, sigma))
-    z = pyro.sample("z", dist.DiagNormal(y, sigma))
-    return dict(x=x, y=y, z=z)
-
-
 # A purely discrete model, no batching.
-def model1():
+def model0():
     p = pyro.param("p", Variable(torch.Tensor([0.05])))
     ps = pyro.param("ps", Variable(torch.Tensor([0.1, 0.2, 0.3, 0.4])))
     x = pyro.sample("x", dist.Bernoulli(p))
@@ -34,7 +20,7 @@ def model1():
 
 
 # A discrete model with batching.
-def model2():
+def model1():
     p = pyro.param("p", Variable(torch.Tensor([[0.05], [0.15]])))
     ps = pyro.param("ps", Variable(torch.Tensor([[0.1, 0.2, 0.3, 0.4],
                                                  [0.4, 0.3, 0.2, 0.1]])))
@@ -45,36 +31,10 @@ def model2():
     return dict(x=x, y=y)
 
 
-@pytest.mark.parametrize("model", [
-    model0,
-    pytest.param(model1, marks=pytest.mark.xfail(sys.version_info >= (3, 0),
-                                                 reason="spurrious failure, probably pytorch")),
-    pytest.param(model2, marks=pytest.mark.xfail(reason="https://github.com/uber/pyro/issues/253")),
-])
-@pytest.mark.parametrize("graph_type", ["flat", "dense"])
-def test_scale_trace(graph_type, model):
-    pyro.get_param_store().clear()
-    scale = 1.234
-    tr1 = poutine.trace(model, graph_type=graph_type).get_trace()
-    tr2 = scale_trace(tr1, scale)
-
-    assert tr1 is not tr2, "scale_trace() did not make a copy"
-    assert set(tr1.nodes.keys()) == set(tr2.nodes.keys())
-    for name, site1 in tr1.nodes.items():
-        site2 = tr2.nodes[name]
-        assert site1 is not site2, "Trace.copy() was too shallow"
-        if "scale" in site1:
-            assert_equal(site2["scale"], scale * site1["scale"], msg=(site1, site2))
-
-    # These check that memoized values were cleared.
-    assert_equal(tr2.log_pdf(), scale * tr1.log_pdf())
-    assert_equal(tr2.batch_log_pdf(), scale * tr1.batch_log_pdf())
-
-
 @pytest.mark.parametrize("graph_type", ["flat", "dense"])
 def test_iter_discrete_traces_scalar(graph_type):
     pyro.get_param_store().clear()
-    traces = list(iter_discrete_traces(graph_type, model1))
+    traces = list(iter_discrete_traces(graph_type, model0))
 
     p = pyro.param("p").data
     ps = pyro.param("ps").data
@@ -91,7 +51,7 @@ def test_iter_discrete_traces_scalar(graph_type):
 @pytest.mark.parametrize("graph_type", ["flat", "dense"])
 def test_iter_discrete_traces_vector(graph_type):
     pyro.get_param_store().clear()
-    traces = list(iter_discrete_traces(graph_type, model2))
+    traces = list(iter_discrete_traces(graph_type, model1))
 
     p = pyro.param("p").data
     ps = pyro.param("ps").data
@@ -171,18 +131,22 @@ def test_gmm_batch_iter_discrete_traces(model, data_size, graph_type):
     assert len(traces) == 2
 
 
-@pytest.mark.parametrize("trace_graph", [False, True], ids=['dense', 'flat'])
+@pytest.mark.parametrize("trace_graph", [
+    False,
+    pytest.param(True, marks=pytest.mark.skip),
+], ids=['dense', 'flat'])
 @pytest.mark.parametrize("model,guide", [
     (gmm_model, gmm_guide),
     (gmm_batch_model, gmm_batch_guide),
 ], ids=['single', 'batched'])
 @pytest.mark.parametrize("enum_discrete", [
     False,
-    pytest.param(
-        True,
-        marks=pytest.mark.xfail(
-            run=False,
-            reason="pytorch segfaults at 0.2.0_4, fixed by 0.2.0+f964105")),
+    True,
+    # pytest.param(
+    #     True,
+    #     marks=pytest.mark.xfail(
+    #         run=False,
+    #         reason="pytorch segfaults at 0.2.0_4, fixed by 0.2.0+f964105")),
 ], ids=['naive', 'summed'])
 def test_gmm_elbo_smoke(model, guide, enum_discrete, trace_graph):
     pyro.get_param_store().clear()
