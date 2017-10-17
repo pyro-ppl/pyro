@@ -86,7 +86,7 @@ parser.add_argument('--no-masking', action='store_true', default=False,
 parser.add_argument('--seed', type=int, help='random seed', default=None)
 
 args = parser.parse_args()
-#print(args)
+# print(args)
 
 if args.seed is not None:
     pyro.set_rng_seed(args.seed)
@@ -103,6 +103,7 @@ X = Variable(torch.from_numpy(X_np))
 X_size = X.size(0)
 if args.cuda:
     X = X.cuda()
+
 
 # Yields the following distribution over the number of steps (when
 # taking a maximum of 3 steps):
