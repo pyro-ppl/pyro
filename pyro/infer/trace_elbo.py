@@ -52,7 +52,7 @@ class Trace_ELBO(object):
         """
         elbo = 0.0
         for weight, model_trace, guide_trace, log_r in self._get_traces(model, guide, *args, **kwargs):
-            elbo_particle = 0.0
+            elbo_particle = weight * 0
 
             log_pdf = "batch_log_pdf" if self.enum_discrete else "log_pdf"
             for name in model_trace.nodes.keys():
