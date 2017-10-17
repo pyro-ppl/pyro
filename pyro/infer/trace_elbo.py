@@ -68,7 +68,7 @@ class Trace_ELBO(object):
         loss = -elbo
         return loss
 
-    def _compute_loss_and_grads(self, traces):
+    def _compute_loss_and_grads(self, traces, use_reparam_trick=True):
         """
         :args: an iterable of traces
         :returns: returns an estimate of the ELBO
@@ -95,7 +95,7 @@ class Trace_ELBO(object):
                     else:
                         lp_lq = model_trace.nodes[name]["log_pdf"] - guide_trace.nodes[name]["log_pdf"]
                         elbo_particle += lp_lq
-                        if model_trace.nodes[name]["fn"].reparameterized:
+                        if model_trace.nodes[name]["fn"].reparameterized and use_reparam_trick:
                             surrogate_elbo_particle += lp_lq
                         else:
                             # XXX should the user be able to control inclusion of the -logq term below?
