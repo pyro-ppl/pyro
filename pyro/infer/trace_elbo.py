@@ -18,7 +18,7 @@ class Trace_ELBO(object):
         self.num_particles = num_particles
         self.enum_discrete = enum_discrete
 
-    def _get_traces(self, model, guide, *args, **kwargs):
+    def _iter_traces(self, model, guide, *args, **kwargs):
         """
         runs the guide and runs the model against the guide with
         the result packaged as a trace generator
@@ -43,15 +43,16 @@ class Trace_ELBO(object):
             log_r = model_trace.log_pdf() - guide_trace.log_pdf()
             yield model_trace, guide_trace, log_r
 
-    def loss(self, model, guide, *args, **kwargs):
+    def _compute_loss(self, traces):
         """
-        :returns: returns an estimate of the ELBO
-        :rtype: float
+        :args: an iterable of traces
+        :returns: an estimate of the ELBO
+        :rtype: torch.autograd.Variable
 
         Evaluates the ELBO with an estimator that uses num_particles many samples/particles.
         """
         elbo = 0.0
-        for model_trace, guide_trace, log_r in self._get_traces(model, guide, *args, **kwargs):
+        for model_trace, guide_trace, log_r in traces:
             elbo_particle = 0.0
 
             for name in model_trace.nodes.keys():
@@ -62,15 +63,16 @@ class Trace_ELBO(object):
                         elbo_particle += model_trace.nodes[name]["log_pdf"]
                         elbo_particle -= guide_trace.nodes[name]["log_pdf"]
 
-            elbo += elbo_particle.data[0] / self.num_particles
+            elbo += elbo_particle / self.num_particles
 
         loss = -elbo
         return loss
 
-    def loss_and_grads(self, model, guide, *args, **kwargs):
+    def _compute_loss_and_grads(self, traces):
         """
+        :args: an iterable of traces
         :returns: returns an estimate of the ELBO
-        :rtype: float
+        :rtype: torch.autograd.Variable
 
         Computes the ELBO as well as the surrogate ELBO that is used to form the gradient estimator.
         Performs backward on the latter. Num_particle many samples are used to form the estimators.
@@ -80,7 +82,7 @@ class Trace_ELBO(object):
         trainable_params = set()
 
         # grab a trace from the generator
-        for model_trace, guide_trace, log_r in self._get_traces(model, guide, *args, **kwargs):
+        for model_trace, guide_trace, log_r in traces:
             elbo_particle = 0.0
             surrogate_elbo_particle = 0.0
 
@@ -100,7 +102,7 @@ class Trace_ELBO(object):
                             surrogate_elbo_particle += model_trace.nodes[name]["log_pdf"] + \
                                 log_r.detach() * guide_trace.nodes[name]["log_pdf"]
 
-            elbo += elbo_particle.data[0] / self.num_particles
+            elbo += elbo_particle / self.num_particles
             surrogate_elbo += surrogate_elbo_particle / self.num_particles
 
             # grab model parameters to train
@@ -113,10 +115,33 @@ class Trace_ELBO(object):
                 if guide_trace.nodes[name]["type"] == "param":
                     trainable_params.add(guide_trace.nodes[name]["value"])
 
+        loss = -elbo
         surrogate_loss = -surrogate_elbo
         surrogate_loss.backward()
-        loss = -elbo
 
         pyro.get_param_store().mark_params_active(trainable_params)
 
         return loss
+
+    def loss(self, model, guide, *args, **kwargs):
+        """
+        :returns: returns an estimate of the ELBO
+        :rtype: float
+
+        Evaluates the ELBO with an estimator that uses num_particles many samples/particles.
+        """
+        traces = self._iter_traces(model, guide, *args, **kwargs)
+        loss = self._compute_loss(traces)
+        return loss.data[0]
+
+    def loss_and_grads(self, model, guide, *args, **kwargs):
+        """
+        :returns: returns an estimate of the ELBO
+        :rtype: float
+
+        Computes the ELBO as well as the surrogate ELBO that is used to form the gradient estimator.
+        Performs backward on the latter. Num_particle many samples are used to form the estimators.
+        """
+        traces = self._iter_traces(model, guide, *args, **kwargs)
+        loss = self._compute_loss_and_grads(traces)
+        return loss.data[0]
