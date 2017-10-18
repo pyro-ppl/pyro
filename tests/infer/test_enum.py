@@ -53,7 +53,7 @@ def model2():
 ])
 @pytest.mark.parametrize("graph_type", ["flat", "dense"])
 def test_scale_trace(graph_type, model):
-    pyro.get_param_store().clear()
+    pyro.clear_param_store()
     scale = 1.234
     tr1 = poutine.trace(model, graph_type=graph_type).get_trace()
     tr2 = scale_trace(tr1, scale)
@@ -73,7 +73,7 @@ def test_scale_trace(graph_type, model):
 
 @pytest.mark.parametrize("graph_type", ["flat", "dense"])
 def test_iter_discrete_traces_scalar(graph_type):
-    pyro.get_param_store().clear()
+    pyro.clear_param_store()
     traces = list(iter_discrete_traces(graph_type, model1))
 
     p = pyro.param("p").data
@@ -90,7 +90,7 @@ def test_iter_discrete_traces_scalar(graph_type):
 @pytest.mark.xfail(reason="https://github.com/uber/pyro/issues/220")
 @pytest.mark.parametrize("graph_type", ["flat", "dense"])
 def test_iter_discrete_traces_vector(graph_type):
-    pyro.get_param_store().clear()
+    pyro.clear_param_store()
     traces = list(iter_discrete_traces(graph_type, model2))
 
     p = pyro.param("p").data
@@ -132,7 +132,7 @@ def gmm_guide(data):
 @pytest.mark.parametrize("graph_type", ["flat", "dense"])
 @pytest.mark.parametrize("model", [gmm_model, gmm_guide])
 def test_gmm_iter_discrete_traces(model, data_size, graph_type):
-    pyro.get_param_store().clear()
+    pyro.clear_param_store()
     data = Variable(torch.arange(0, data_size))
     traces = list(iter_discrete_traces(graph_type, model, data=data))
     assert len(traces) == 2 ** data_size
@@ -144,7 +144,7 @@ def test_gmm_iter_discrete_traces(model, data_size, graph_type):
     pytest.param(True, marks=pytest.mark.xfail(run=False, reason="segfault")),
 ])
 def test_gmm_elbo_single_datum(enum_discrete, trace_graph):
-    pyro.get_param_store().clear()
+    pyro.clear_param_store()
     data = Variable(torch.Tensor([0, 1, 9]))
 
     optimizer = pyro.optim.Adam({"lr": .001})
