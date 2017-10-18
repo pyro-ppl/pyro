@@ -61,7 +61,7 @@ class Distribution(object):
         """
         self.reparameterized = False
 
-    def batch_size():
+    def batch_size(self):
         """
         The left-hand tensor size of samples from this distribution, used for batching.
 
@@ -70,7 +70,7 @@ class Distribution(object):
         """
         raise NotImplementedError
 
-    def event_size():
+    def event_size(self):
         """
         The right-hand tensor size of this distribution, used for individual events.
 
@@ -79,7 +79,7 @@ class Distribution(object):
         """
         raise NotImplementedError
 
-    def size():
+    def size(self):
         """
         The size of batch events from this distribution.
 
