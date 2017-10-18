@@ -169,7 +169,7 @@ def finite_difference(eval_loss, delta=0.1):
     """
     params = pyro.get_param_store().get_all_param_names()
     assert params, "no params found"
-    grads = {name: torch.zeros_like(pyro.param(name)) for name in params}
+    grads = {name: Variable(torch.zeros(pyro.param(name).size())) for name in params}
     for name in params:
         value = pyro.param(name).data
         for index in itertools.product(*map(range, value.size())):
@@ -225,7 +225,7 @@ def test_bern_elbo_gradient(enum_discrete, trace_graph):
 @pytest.mark.parametrize("trace_graph", [False, True], ids=["dense", "flat"])
 def test_gmm_elbo_gradient(model, guide, enum_discrete, trace_graph):
     pyro.clear_param_store()
-    num_particles = 1000
+    num_particles = 2000
     data = Variable(torch.Tensor([-1, 1]))
 
     print("Computing gradients using surrogate loss")
