@@ -90,7 +90,7 @@ def gmm_model(data, verbose=False):
 
 def gmm_guide(data, verbose=False):
     for i in pyro.irange("data", len(data)):
-        p = pyro.param("p_{}".format(i), Variable(torch.Tensor([0.5]), requires_grad=True))
+        p = pyro.param("p_{}".format(i), Variable(torch.Tensor([0.6]), requires_grad=True))
         z = pyro.sample("z_{}".format(i), dist.Bernoulli(p))
         assert z.size() == (1, 1)
         z = z.long().data[0, 0]
@@ -126,7 +126,7 @@ def gmm_batch_model(data):
 def gmm_batch_guide(data):
     with pyro.iarange("data", len(data)) as batch:
         n = len(batch)
-        ps = pyro.param("ps", Variable(torch.ones(n, 1) * 0.5, requires_grad=True))
+        ps = pyro.param("ps", Variable(torch.ones(n, 1) * 0.6, requires_grad=True))
         ps = torch.cat([ps, 1 - ps], dim=1)
         z = pyro.sample("z", dist.Categorical(ps))
         assert z.size() == (n, 2)
@@ -217,11 +217,17 @@ def test_bern_elbo_gradient(enum_discrete, trace_graph):
     assert_equal(actual_grads, expected_grads, prec=0.1)
 
 
-@pytest.mark.parametrize("model,guide", [
-    (gmm_model, gmm_guide),
-    (gmm_batch_model, gmm_batch_guide),
-], ids=["single", "batch"])
-@pytest.mark.parametrize("enum_discrete", [True, False], ids=["sum", "sample"])
+# XXX This test fails in the batch-sum case with two distinct errors:
+# - the gradient of the global parameter sigma is erroneously scaled by batch_size.
+# - the gradient of the local parameters ps are erroneously the same for all data points.
+
+# @pytest.mark.parametrize("model,guide", [
+#     (gmm_model, gmm_guide),
+#     (gmm_batch_model, gmm_batch_guide),
+# ], ids=["single", "batch"])
+# @pytest.mark.parametrize("enum_discrete", [True, False], ids=["sum", "sample"])
+@pytest.mark.parametrize("model,guide", [(gmm_batch_model, gmm_batch_guide)], ids=["batch"])  # DEBUG
+@pytest.mark.parametrize("enum_discrete", [True], ids=["sum"])  # DEBUG
 @pytest.mark.parametrize("trace_graph", [False, True], ids=["dense", "flat"])
 def test_gmm_elbo_gradient(model, guide, enum_discrete, trace_graph):
     pyro.clear_param_store()
