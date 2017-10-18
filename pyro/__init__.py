@@ -260,7 +260,7 @@ def module(pyro_name, nn_obj, tags="default", load_from_param_store=False):
 
     # basically get a unique identifier for the data based on where it is in memory
     def _cdata(t):
-        if isinstance(t, torch.autograd.Variable):
+        if isinstance(t, Variable):
             return t.data._cdata
         return t._cdata
 
@@ -276,6 +276,10 @@ def module(pyro_name, nn_obj, tags="default", load_from_param_store=False):
         if _cdata(param) != _cdata(returned_param):
             target_state_dict[param_name] = returned_param
             if load_from_param_store:
+                if isinstance(param, Variable) and isinstance(returned_param, Variable):
+                    param.data.copy_(returned_param.data)
+                else:
+                    param.copy_(returned_param)
                 pyro.get_param_store().replace_param(full_param_name, new_param=param, old_param=returned_param)
 
     if target_state_dict:
