@@ -206,10 +206,11 @@ class AIR(nn.Module):
             else:
                 observe_mask = prev.z_pres - z_pres
 
-            pyro.observe("obs_{}".format(t),
-                         DiagNormal(x.view(n, -1), self.ng_ones([1, 1]) * 0.3),
-                         batch.view(n, -1),
-                         log_pdf_mask=observe_mask)
+            if self.use_masking or t == (self.num_steps - 1):
+                pyro.observe("obs_{}".format(t),
+                             DiagNormal(x.view(n, -1), self.ng_ones([1, 1]) * 0.3),
+                             batch.view(n, -1),
+                             log_pdf_mask=observe_mask)
 
         return ModelState(x=x, z_pres=z_pres, z_where=z_where)
 
