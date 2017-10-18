@@ -87,7 +87,8 @@ class Trace(networkx.DiGraph):
                         site["value"], *args, **kwargs) * site["scale"]
                     site["log_pdf"] = site["batch_log_pdf"].sum()
                     site_log_p = site["batch_log_pdf"]
-                log_p += site_log_p
+                # Here log_p may be broadcast to a larger tensor:
+                log_p = log_p + site_log_p
         return log_p
 
     @property
