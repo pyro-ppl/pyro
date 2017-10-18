@@ -27,10 +27,10 @@ class Decoder(nn.Module):
 
     def forward(self, z):
         h = self.relu(self.f(z))
-        out = self.sigmoid(self.g(h))
+        a = self.g(h)
         if self.bias is not None:
-            out = out + self.bias
-        return out
+            a = a + self.bias
+        return self.sigmoid(a)
 
 # Takes the output of the rnn to parameters for guide distributions
 # for z_where and z_pres.
