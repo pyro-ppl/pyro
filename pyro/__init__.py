@@ -16,7 +16,7 @@ from pyro.distributions.subsample import Subsample
 from pyro.params import param_with_module_name
 from pyro.params.param_store import ParamStoreDict
 from pyro.poutine import LambdaPoutine, condition, do  # noqa: F401
-from pyro.util import zeros, ones, set_rng_seed, apply_stack  # noqa: F401
+from pyro.util import zeros, ones, set_rng_seed, apply_stack, get_tensor_data # noqa: F401
 
 # global map of params for now
 _param_store = ParamStoreDict()
@@ -258,12 +258,6 @@ def module(pyro_name, nn_obj, tags="default", load_from_param_store=False):
         raise NotImplementedError("pyro.module does not support class constructors for " +
                                   "the argument nn_obj")
 
-    # basically get a unique identifier for the data based on where it is in memory
-    def _cdata(t):
-        if isinstance(t, Variable):
-            return t.data._cdata
-        return t._cdata
-
     target_state_dict = OrderedDict()
 
     for param_name, param in nn_obj.named_parameters():
@@ -271,15 +265,12 @@ def module(pyro_name, nn_obj, tags="default", load_from_param_store=False):
         # this only does something substantive if the parameter hasn't been seen before
         full_param_name = param_with_module_name(pyro_name, param_name)
         returned_param = pyro.param(full_param_name, param, tags=tags)
-        # optional: if the data behind the parameter in the actual module is stale w.r.t. the parameter
 
-        if _cdata(param) != _cdata(returned_param):
+        if get_tensor_data(param)._cdata != get_tensor_data(returned_param)._cdata:
             target_state_dict[param_name] = returned_param
             if load_from_param_store:
-                if isinstance(param, Variable) and isinstance(returned_param, Variable):
-                    param.data.copy_(returned_param.data)
-                else:
-                    param.copy_(returned_param)
+                # optional: if the data behind the parameter in the actual module is stale w.r.t. the parameter
+                get_tensor_data(param).copy_(get_tensor_data(returned_param.data))
                 pyro.get_param_store().replace_param(full_param_name, new_param=param, old_param=returned_param)
 
     if target_state_dict:

@@ -26,6 +26,12 @@ def _dict_to_tuple(d):
         return d
 
 
+def get_tensor_data(t):
+    if isinstance(t, Variable):
+        return t.data
+    return t
+
+
 def memoize(fn):
     """
     https://stackoverflow.com/questions/1988804/what-is-memoization-and-how-can-i-use-it-in-python
