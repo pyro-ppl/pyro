@@ -42,7 +42,8 @@ class DiagNormal(Distribution):
         super(DiagNormal, self).__init__(*args, **kwargs)
         self.reparameterized = True
 
-    def batch_size(self):
+    @property
+    def batch_shape(self):
         """
         The left-hand tensor size of samples from this distribution, used for batching.
 
@@ -53,7 +54,8 @@ class DiagNormal(Distribution):
         event_dim = 1
         return self.mu.size()[:-event_dim]
 
-    def event_size(self):
+    @property
+    def event_shape(self):
         """
         The right-hand tensor size of this distribution, used for individual events.
 

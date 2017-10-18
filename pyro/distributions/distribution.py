@@ -33,7 +33,7 @@ class Distribution(object):
 
     These two shapes are related by the equation::
 
-      d.size() == d.batch_size() + d.event_size()
+      d.shape == d.batch_shape + d.event_shape
 
     Distributions also provide a vectorized `.batch_log_pdf()` method that
     evaluates the log probability density of each event in a batch
@@ -61,7 +61,8 @@ class Distribution(object):
         """
         self.reparameterized = False
 
-    def batch_size(self):
+    @property
+    def batch_shape(self):
         """
         The left-hand tensor size of samples from this distribution, used for batching.
 
@@ -70,7 +71,8 @@ class Distribution(object):
         """
         raise NotImplementedError
 
-    def event_size(self):
+    @property
+    def event_shape(self):
         """
         The right-hand tensor size of this distribution, used for individual events.
 
@@ -79,35 +81,15 @@ class Distribution(object):
         """
         raise NotImplementedError
 
-    def size(self):
+    @property
+    def shape(self):
         """
         The size of batch events from this distribution.
 
         :return: Tensor shape used for individual events.
         :rtype: torch.Size
         """
-        return self.batch_size() + self.event_size()
-
-    def batch_dim(self):
-        return len(self.batch_size())
-
-    def event_dim(self):
-        return len(self.event_size())
-
-    def dim(self):
-        return len(self.size())
-
-    @property
-    def batch_shape(self):
-        return self.batch_size()
-
-    @property
-    def event_shape(self):
-        return self.event_size()
-
-    @property
-    def shape(self):
-        return self.size()
+        return self.batch_shape + self.event_shape
 
     def __call__(self, *args, **kwargs):
         """
