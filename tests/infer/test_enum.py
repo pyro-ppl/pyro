@@ -51,7 +51,7 @@ def test_iter_discrete_traces_scalar(graph_type):
     for scale, trace in traces:
         x = trace.nodes["x"]["value"].data.long().view(-1)[0]
         y = trace.nodes["y"]["value"].data.long().view(-1)[0]
-        expected_scale = Variable(torch.Tensor([[[1 - p[0], p[0]][x] * ps[y]]]))
+        expected_scale = Variable(torch.Tensor([[1 - p[0], p[0]][x] * ps[y]]))
         assert_equal(scale, expected_scale)
 
 
@@ -226,7 +226,7 @@ def test_bern_elbo_gradient(enum_discrete, trace_graph):
 def test_gmm_elbo_gradient(model, guide, enum_discrete, trace_graph):
     pyro.clear_param_store()
     num_particles = 1000
-    data = Variable(torch.Tensor([-1, 1, 1, 2]))
+    data = Variable(torch.Tensor([-1, 1]))
 
     print("Computing gradients using surrogate loss")
     Elbo = TraceGraph_ELBO if trace_graph else Trace_ELBO
