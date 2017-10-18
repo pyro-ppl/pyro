@@ -268,7 +268,8 @@ def module(pyro_name, nn_obj, tags="default", load_from_param_store=False):
         if get_tensor_data(param)._cdata != get_tensor_data(returned_param)._cdata:
             target_state_dict[param_name] = returned_param
             if load_from_param_store:
-                # optional: if the data behind the parameter in the actual module is stale w.r.t. the parameter
+                # optional: if the data behind the parameter in the actual module
+                # is stale w.r.t. the parameter, use the latest value in the param store
                 get_tensor_data(param).copy_(get_tensor_data(returned_param.data))
                 pyro.get_param_store().replace_param(full_param_name, new_param=param, old_param=returned_param)
 
@@ -278,6 +279,7 @@ def module(pyro_name, nn_obj, tags="default", load_from_param_store=False):
             for _param_name, _param in mod.named_parameters():
                 mod_param_name = name + '.' + _param_name
                 if mod_param_name in target_state_dict.keys():
+                    # overwrite the existing parameters in the submodule
                     mod._parameters[_param_name] = target_state_dict[mod_param_name]
     return nn_obj
 
