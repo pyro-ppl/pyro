@@ -13,7 +13,7 @@ from tests.common import TestCase
 class ParamStoreDictTests(TestCase):
 
     def setUp(self):
-        pyro.get_param_store().clear()
+        pyro.clear_param_store()
         self.linear_module = nn.Linear(3, 2)
         self.linear_module2 = nn.Linear(3, 2)
         self.linear_module3 = nn.Linear(3, 2)
@@ -39,7 +39,7 @@ class ParamStoreDictTests(TestCase):
         assert len(list(param_store_param_to_name.values())) == 5
 
         pyro.get_param_store().save('paramstore.unittest.out')
-        pyro.get_param_store().clear()
+        pyro.clear_param_store()
         assert len(list(pyro.get_param_store()._params)) == 0
         assert len(list(pyro.get_param_store()._param_to_name)) == 0
         pyro.get_param_store().load('paramstore.unittest.out')
