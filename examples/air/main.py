@@ -201,3 +201,5 @@ for i in range(args.num_steps):
         vis.images(draw_many(examples_to_viz, z_wheres))
         # Show reconstructions of data.
         vis.images(draw_many(recons, z_wheres))
+
+        # TODO: Report accuracy on predictions of object counts.
