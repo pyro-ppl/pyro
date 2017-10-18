@@ -275,12 +275,12 @@ def module(pyro_name, nn_obj, tags="default", load_from_param_store=False):
 
     if target_state_dict:
         # WARNING: this is very dangerous. better method?
-        for name, mod in nn_obj.named_children():
-            for _param_name, _param in mod.named_parameters():
-                mod_param_name = name + '.' + _param_name
-                if mod_param_name in target_state_dict.keys():
-                    # overwrite the existing parameters in the submodule
-                    mod._parameters[_param_name] = target_state_dict[mod_param_name]
+        for name, param in nn_obj.named_parameters():
+            name_arr = name.rsplit('.', 1)
+            mod_name, param_name = name_arr[0], name_arr[1]
+            if name in target_state_dict.keys():
+                getattr(nn_obj, mod_name)._parameters[param_name] = target_state_dict[name]
+
     return nn_obj
 
 
