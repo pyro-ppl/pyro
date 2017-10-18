@@ -42,6 +42,28 @@ class DiagNormal(Distribution):
         super(DiagNormal, self).__init__(*args, **kwargs)
         self.reparameterized = True
 
+    def batch_size():
+        """
+        The left-hand tensor size of samples from this distribution, used for batching.
+
+        :return: Tensor shape used for batching.
+        :rtype: torch.Size
+        """
+        assert self.mu is not None
+        event_dim = 1
+        return self.mu.size()[:-event_dim]
+
+    def event_size():
+        """
+        The right-hand tensor size of this distribution, used for individual events.
+
+        :return: Tensor shape used for individual events.
+        :rtype: torch.Size
+        """
+        assert self.mu is not None
+        event_dim = 1
+        return self.mu.size()[-event_dim:]
+
     def sample(self, mu=None, sigma=None, *args, **kwargs):
         """
         Reparameterized diagonal Normal sampler.
