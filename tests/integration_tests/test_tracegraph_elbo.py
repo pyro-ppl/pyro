@@ -60,7 +60,7 @@ class NormalNormalTests(TestCase):
     def do_elbo_test(self, reparameterized, n_steps):
         if self.verbose:
             print(" - - - - - DO NORMALNORMAL ELBO TEST  [reparameterized = %s] - - - - - " % reparameterized)
-        pyro.get_param_store().clear()
+        pyro.clear_param_store()
 
         def model():
             mu_latent = pyro.sample("mu_latent", dist.diagnormal,
@@ -141,7 +141,7 @@ class NormalNormalNormalTests(TestCase):
             print(" - - - - - DO NORMALNORMALNORMAL ELBO TEST - - - - - -")
             print("[reparameterized = %s, %s; nn_baseline = %s, decaying_baseline = %s]" %
                   (repa1, repa2, use_nn_baseline, use_decaying_avg_baseline))
-        pyro.get_param_store().clear()
+        pyro.clear_param_store()
 
         if use_nn_baseline:
 
@@ -255,7 +255,7 @@ class BernoulliBetaTests(TestCase):
     def test_elbo_nonreparameterized(self):
         if self.verbose:
             print(" - - - - - DO BERNOULLI-BETA ELBO TEST - - - - - ")
-        pyro.get_param_store().clear()
+        pyro.clear_param_store()
 
         def model():
             p_latent = pyro.sample("p_latent", dist.beta, self.alpha0, self.beta0)
@@ -313,7 +313,7 @@ class PoissonGammaTests(TestCase):
     def test_elbo_nonreparameterized(self):
         if self.verbose:
             print(" - - - - - DO POISSON-GAMMA ELBO TEST - - - - - ")
-        pyro.get_param_store().clear()
+        pyro.clear_param_store()
 
         def model():
             lambda_latent = pyro.sample("lambda_latent", dist.gamma, self.alpha0, self.beta0)
@@ -370,7 +370,7 @@ class ExponentialGammaTests(TestCase):
     def test_elbo_nonreparameterized(self):
         if self.verbose:
             print(" - - - - - DO EXPONENTIAL-GAMMA ELBO TEST - - - - - ")
-        pyro.get_param_store().clear()
+        pyro.clear_param_store()
 
         def model():
             lambda_latent = pyro.sample("lambda_latent", dist.gamma, self.alpha0, self.beta0)
@@ -441,7 +441,7 @@ class LogNormalNormalTests(TestCase):
     def do_elbo_test(self, reparameterized, n_steps, beta1, lr):
         if self.verbose:
             print(" - - - - - DO LOGNORMAL-NORMAL ELBO TEST [repa = %s] - - - - - " % reparameterized)
-        pyro.get_param_store().clear()
+        pyro.clear_param_store()
         pt_guide = LogNormalNormalGuide(self.log_mu_n.data + 0.17,
                                         self.log_tau_n.data - 0.143)
 
@@ -477,7 +477,7 @@ class LogNormalNormalTests(TestCase):
     def test_elbo_with_transformed_distribution(self):
         if self.verbose:
             print(" - - - - - DO LOGNORMAL-NORMAL ELBO TEST [uses TransformedDistribution] - - - - - ")
-        pyro.get_param_store().clear()
+        pyro.clear_param_store()
 
         def model():
             mu_latent = pyro.sample("mu_latent", dist.diagnormal,
@@ -544,7 +544,7 @@ class RaoBlackwellizationTests(TestCase):
 
     # this tests rao-blackwellization in elbo for nested list map_datas
     def test_nested_list_map_data_in_elbo(self, n_steps=11000):
-        pyro.get_param_store().clear()
+        pyro.clear_param_store()
 
         def model():
             mu_latent = pyro.sample("mu_latent", dist.diagnormal,
@@ -612,7 +612,7 @@ class RaoBlackwellizationTests(TestCase):
         self._test_vectorized_map_data_in_elbo(n_superfluous_top=2, n_superfluous_bottom=2, n_steps=6000)
 
     def _test_vectorized_map_data_in_elbo(self, n_superfluous_top, n_superfluous_bottom, n_steps):
-        pyro.get_param_store().clear()
+        pyro.clear_param_store()
         self.data_tensor = Variable(torch.zeros(9, 2))
         for _out in range(self.n_outer):
             for _in in range(self.n_inner):

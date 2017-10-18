@@ -50,7 +50,7 @@ class NormalNormalTests(TestCase):
         self.do_elbo_test(False, 15000)
 
     def do_elbo_test(self, reparameterized, n_steps):
-        pyro.get_param_store().clear()
+        pyro.clear_param_store()
 
         def model():
             mu_latent = pyro.sample("mu_latent", dist.diagnormal,
@@ -96,7 +96,7 @@ class TestFixedModelGuide(TestCase):
         self.beta_p_log_0 = 0.13 * torch.ones(1)
 
     def do_test_fixedness(self, fixed_tags):
-        pyro.get_param_store().clear()
+        pyro.clear_param_store()
 
         def model():
             alpha_p_log = pyro.param(
@@ -174,7 +174,7 @@ class PoissonGammaTests(TestCase):
         self.log_beta_n = torch.log(self.beta_n)
 
     def test_elbo_nonreparameterized(self):
-        pyro.get_param_store().clear()
+        pyro.clear_param_store()
 
         def model():
             lambda_latent = pyro.sample("lambda_latent", dist.gamma, self.alpha0, self.beta0)
@@ -228,7 +228,7 @@ class ExponentialGammaTests(TestCase):
         self.log_beta_n = torch.log(self.beta_n)
 
     def test_elbo_nonreparameterized(self):
-        pyro.get_param_store().clear()
+        pyro.clear_param_store()
 
         def model():
             lambda_latent = pyro.sample("lambda_latent", dist.gamma, self.alpha0, self.beta0)
@@ -280,7 +280,7 @@ class BernoulliBetaTests(TestCase):
         self.log_beta_n = torch.log(self.beta_n)
 
     def test_elbo_nonreparameterized(self):
-        pyro.get_param_store().clear()
+        pyro.clear_param_store()
 
         def model():
             p_latent = pyro.sample("p_latent", dist.beta, self.alpha0, self.beta0)
@@ -346,7 +346,7 @@ class LogNormalNormalTests(TestCase):
         self.do_elbo_test(False, 15000)
 
     def do_elbo_test(self, reparameterized, n_steps):
-        pyro.get_param_store().clear()
+        pyro.clear_param_store()
         pt_guide = LogNormalNormalGuide(self.log_mu_n.data + 0.17,
                                         self.log_tau_n.data - 0.143)
 
@@ -376,7 +376,7 @@ class LogNormalNormalTests(TestCase):
         self.assertEqual(0.0, tau_error, prec=0.07)
 
     def test_elbo_with_transformed_distribution(self):
-        pyro.get_param_store().clear()
+        pyro.clear_param_store()
 
         def model():
             zero = Variable(torch.zeros(1, 1))
