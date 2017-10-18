@@ -95,6 +95,7 @@ class GatedTransition(nn.Module):
         # of z_{t-1} with the proposed mean modulated by the gating function
         mu = one_minus_gate * self.lin_z_to_mu(z_t_1) + gate * proposed_mean
         # compute the sigma used to sample z_t, using the proposed mean from above as input
+        # the softplus ensures that sigma is positive
         sigma = self.softplus(self.lin_sig(self.relu(proposed_mean)))
         # return mu, sigma which can be fed into DiagNormal
         return mu, sigma
@@ -338,7 +339,7 @@ def main(args):
             # by default the KL annealing factor is unity
             annealing_factor = 1.0
 
-        # compute which mini-batch indices we should grab
+        # compute which sequences in the training set we should grab
         mini_batch_start = (which_mini_batch * args.mini_batch_size)
         mini_batch_end = np.min([(which_mini_batch + 1) * args.mini_batch_size, N_train_data])
         mini_batch_indices = shuffled_indices[mini_batch_start:mini_batch_end]
