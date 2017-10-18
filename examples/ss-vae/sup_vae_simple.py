@@ -4,13 +4,22 @@ import pyro
 from torch.autograd import Variable
 from pyro.distributions import DiagNormal, Bernoulli, Categorical, Delta
 from networks import Encoder_c, Encoder_o, Decoder, USE_CUDA
-torch.set_default_tensor_type('torch.cuda.FloatTensor')
+
+if USE_CUDA:
+    torch.set_default_tensor_type('torch.cuda.FloatTensor')
 from data import DatasetWrapper, fn_x_MNIST, fn_y_MNIST
 from data import DatasetWrapper, fn_x_MNIST, fn_y_MNIST, bb
 from torchvision.datasets import MNIST
 from inference import BaseInference
-from pyro.infer.kl_qp import KL_QP
+from pyro.infer import SVI
+from pyro.optim import Adam
 
+
+import argparse
+parser = argparse.ArgumentParser(description="parse args")
+parser.add_argument('-n', '--num-epochs', nargs='?', default=100, type=int)
+parser.add_argument('--hack', default=0, type=int, choices=[0,1,2])
+args = parser.parse_args()
 
 SEED = 0
 if SEED is not None:
@@ -20,16 +29,25 @@ if SEED is not None:
 
 OUTPUT_SIZE= 10 # 10 labels in MNIST
 LATENT_SIZE = 20
-NUM_EPOCHS=10
+NUM_EPOCHS=args.num_epochs
 tensor_sizes= {
     "output_size" : OUTPUT_SIZE,
     "latent_size" : LATENT_SIZE,
     "input_size" : 784,
-    "hidden_sizes": [400]
+    "hidden_sizes": [200]
 }
 BATCH_SIZE = 600
 adam_params = {"lr": 0.0001}
 
+
+HACK_ID = args.hack
+"""
+0 -> basic version with no q(y|x) learning
+1 -> adding an extra observe in the model -- in some sense we are changing out prior 
+p(y|x) and making it same as the posterior
+2 -> extra auxiliary loss 
+"""
+HACK_MULTIPLIER=0.1
 #networks
 nn_alpha_y = Encoder_c(tensor_sizes)
 nn_mu_sigma_z = Encoder_o(tensor_sizes)
@@ -38,7 +56,19 @@ if USE_CUDA:
     nn_alpha_y.cuda()
     nn_mu_sigma_z.cuda()
     nn_mu_x.cuda()
-    
+
+
+def model_classify(ix,xs,ys):
+    #this here is the extra Term to yield an extra loss that we do gradient descend on separately, different to the Kingma paper. Also requries an extra kl-qp class later.
+    nn_alpha = pyro.module("nn_alpha_y", nn_alpha_y)
+    alpha = nn_alpha.forward(xs)
+    pyro.observe("y_hack", Categorical(alpha), ys, log_pdf_mask=HACK_MULTIPLIER)
+    pass
+
+def guide_classify(ix,xs,ys):
+    return None
+
+
 """
     The model corresponds to:
         p(z) = DiagNormal(0,I)
@@ -51,12 +81,19 @@ def model(ix,xs,ys):
     const_sigma = Variable(torch.ones([BATCH_SIZE, LATENT_SIZE]))
     zs = pyro.sample("z", DiagNormal(const_mu, const_sigma))
 
-    alpha = Variable(torch.ones([BATCH_SIZE, OUTPUT_SIZE]) / (1.0 * OUTPUT_SIZE))
-    ys = pyro.sample("y", Categorical(alpha))
 
     nn_mu = pyro.module("nn_mu_x", nn_mu_x)
     mu = nn_mu.forward(zs, ys)
     pyro.observe("x", Bernoulli(mu), xs)
+
+    alpha_prior = Variable(torch.ones([BATCH_SIZE, OUTPUT_SIZE]) / (1.0 * OUTPUT_SIZE))
+    pyro.observe("y", Categorical(alpha_prior), ys)
+    if HACK_ID == 1:
+        nn_alpha = pyro.module("nn_alpha_y", nn_alpha_y)
+        alpha = nn_alpha.forward(xs)
+        # else: #HACK_ID 0 or 2
+        #    alpha = Variable(torch.ones([BATCH_SIZE, OUTPUT_SIZE]) / (1.0 * OUTPUT_SIZE))
+        pyro.observe("y_hack", Categorical(alpha), ys, log_pdf_mask=HACK_MULTIPLIER)
 
 """
     The guide corresponds to:
@@ -67,9 +104,9 @@ def model(ix,xs,ys):
 """
 def guide(ix,xs,ys):
 
-    nn_alpha = pyro.module("nn_alpha_y", nn_alpha_y)
-    alpha = nn_alpha.forward(xs)
-    ys = pyro.sample("y", Categorical(alpha))
+    #nn_alpha = pyro.module("nn_alpha_y", nn_alpha_y)
+    #alpha = nn_alpha.forward(xs)
+    #ys = pyro.sample("y", Categorical(alpha))
 
     nn_mu_sigma = pyro.module("nn_mu_sigma_z", nn_mu_sigma_z)
     mu, sigma = nn_mu_sigma.forward(xs, ys)
@@ -82,8 +119,8 @@ data = DatasetWrapper(MNIST, y_transform=fn_y_MNIST,loading_batch_size=BATCH_SIZ
                       testing_batch_size=BATCH_SIZE)
 
 class SSVAEInfer(BaseInference):
-    def __init__(self,data,inference_technique):
-        super(SSVAEInfer,self).__init__(data, inference_technique)
+    def __init__(self,data,techniques,conditions):
+        super(SSVAEInfer,self).__init__(data, techniques,conditions)
         self.num_bactches = (len(self.data.train_batch_end_points)-1)
 
     def classify(self,xs):
@@ -95,7 +132,16 @@ class SSVAEInfer(BaseInference):
         ys = ys.scatter_(1, ind, 1.0)
         return ys
 
-optim=pyro.optim(torch.optim.Adam, adam_params)
-inference_technique = KL_QP(model, guide, optim)
-inference = SSVAEInfer(data, inference_technique)
+adam = Adam(adam_params)
+loss_observed = SVI(model, guide, adam, loss="ELBO")
+losses = [loss_observed]
+def condition_true(ix,xs,ys):
+    return True
+conditions = [condition_true]
+if HACK_ID == 2:
+    loss_aux = SVI(model_classify, guide_classify, adam, loss="ELBO")
+    losses.append(loss_aux)
+    conditions.append(condition_true)
+inference = SSVAEInfer(data, losses, conditions)
+
 inference.run(num_epochs=NUM_EPOCHS)

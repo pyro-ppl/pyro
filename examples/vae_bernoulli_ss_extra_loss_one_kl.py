@@ -111,9 +111,9 @@ class Encoder_c(nn.Module):
 class Encoder_o(nn.Module):
     def __init__(self):
         super(Encoder_o, self).__init__()
-        self.fc1 = nn.Linear(784 + 10, 400)
-        self.fc21 = nn.Linear(400, 20)
-        self.fc22 = nn.Linear(400, 20)
+        self.fc1 = nn.Linear(784 + 10, 200)
+        self.fc21 = nn.Linear(200, 20)
+        self.fc22 = nn.Linear(200, 20)
         self.relu = nn.ReLU()
 
     def forward(self, x, cll):
@@ -126,8 +126,8 @@ class Encoder_o(nn.Module):
 class Decoder(nn.Module):
     def __init__(self):
         super(Decoder, self).__init__()
-        self.fc3 = nn.Linear(20 + 10, 400)
-        self.fc4 = nn.Linear(400, 1 * 784)
+        self.fc3 = nn.Linear(20 + 10, 200)
+        self.fc4 = nn.Linear(200, 1 * 784)
         self.sigmoid = nn.Sigmoid()
         self.relu = nn.ReLU()
 
@@ -168,7 +168,26 @@ def model_latent_backup(data):
 def model_latent(data):
     alpha = Variable(torch.ones([data.size(0), 10])) / 10.
     cll = pyro.sample('latent_class', Categorical(alpha))
-    model_observed(data, cll)
+    # wrap params for use in model -- required
+    decoder = pyro.module("decoder", pt_decode)
+
+    # sample from prior
+    z_mu, z_sigma = Variable(torch.zeros([data.size(0), 20])), Variable(
+        torch.ones([data.size(0), 20]))
+
+    # sample
+    z = pyro.sample("latent_z", DiagNormal(z_mu, z_sigma))
+
+    # decode into size of imgx2 for mu/sigma
+    img_mu = decoder.forward(z, cll)
+
+    # score against actual images
+    pyro.observe("obs", Bernoulli(img_mu), data.view(-1, 784))
+
+    # this here is the extra Term to yield a joint KL loss like in the paper. Difference: no annealing.
+    #encoder_c = pyro.module("encoder_c", pt_encode_c)
+    #alpha = encoder_c.forward(data)
+    pass
 
 
 def model_observed(data, cll):
@@ -257,7 +276,7 @@ def per_param_args(name, param):
 
 
 # or alternatively
-adam_params = {"lr": .0001}
+adam_params = {"lr": .001}
 
 inference_latent_class = KL_QP(model_latent, guide_latent, pyro.optim(optim.Adam, adam_params))
 inference_observed_class = KL_QP(
@@ -285,7 +304,7 @@ all_batches = np.arange(0, mnist_size, batch_size)
 if all_batches[-1] != mnist_size:
     all_batches = list(all_batches) + [mnist_size]
 
-vis = visdom.Visdom(env='vae_ss_400')
+vis = visdom.Visdom(env='vae_ss_200')
 
 cll_clamp0 = Variable(torch.zeros(1, 10))
 cll_clamp3 = Variable(torch.zeros(1, 10))
@@ -321,7 +340,7 @@ def main():
     num_mod_batches = 100/args.supervision_perc
     for i in range(args.num_epochs):
 
-        epoch_loss = 0.
+        epoch_loss = [0.,0.]
         for ix, batch_start in enumerate(all_batches[:-1]):
             batch_end = all_batches[ix + 1]
 
@@ -335,12 +354,17 @@ def main():
 
             if np.mod(ix, num_mod_batches) == 0:
                 # determines how much of the data is dropped out
-                epoch_loss += inference_observed_class.step(batch_data, batch_class)
+                epoch_loss[0] += inference_observed_class.step(batch_data, batch_class)
 
             else:
-                epoch_loss += inference_latent_class.step(batch_data)
+                epoch_loss[1] += inference_latent_class.step(batch_data)
 
-        loss_training.append(epoch_loss / float(mnist_size))
+	scaled_loss_obs = epoch_loss[0] / float(args.supervision_perc * mnist_size / 100.)
+	if args.supervision_perc == 100:
+		scaled_loss_latent = 0.0
+	else:
+		scaled_loss_latent = epoch_loss[1] / float((100-args.supervision_perc) * mnist_size / 100.)
+        loss_training.append((scaled_loss_obs,scaled_loss_latent))
 
         """
         if np.mod(i, 5) == 0:
@@ -359,7 +383,7 @@ def main():
                 vis.image(sample_mu3[0].view(28, 28).data.numpy())
                 vis.image(sample_mu9[0].view(28, 28).data.numpy())
         """
-        print("epoch " + str(i) + " avg loss {}".format(epoch_loss / float(mnist_size)))
+        print("epoch " + str(i) + " avg loss obs {} latent {}".format(loss_training[i][0],loss_training[i][1]))
         print("train accuracy: {}".format(get_accuracy(mnist_data, mnist_labels.view(-1,1))))
 
     print("test accuracy: {}".format(get_accuracy(mnist_data_test, mnist_labels_test_raw.view(-1,1))))

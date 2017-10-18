@@ -18,6 +18,7 @@ class NNWithSizes(nn.Module):
         self.hidden_sizes = tensor_sizes["hidden_sizes"]
         self.latent_size = tensor_sizes["latent_size"]
 
+import math
 
 class Encoder_c(NNWithSizes):
     def __init__(self,tensor_sizes):
@@ -28,10 +29,14 @@ class Encoder_c(NNWithSizes):
             self.fc21 = nn.DataParallel(self.fc21)
         self.relu = nn.ReLU()
         self.softmax = nn.Softmax()
+        #self.softplus = nn.Softplus()
 
     def forward(self, x):
         h1 = self.relu(self.fc1(x))
-        return self.softmax(self.fc21(h1))
+        #h1 = self.softplus(self.fc1(x))
+        rval = self.softmax(self.fc21(h1))
+        #print rval
+        return rval
 
 class Encoder_o(NNWithSizes):
     def __init__(self,tensor_sizes):
@@ -49,7 +54,9 @@ class Encoder_o(NNWithSizes):
     def forward(self, x, cll):
         input_vec = torch.cat((x, cll), 1)
         h1 = self.relu(self.fc1(input_vec))
-        return self.fc21(h1), torch.exp(self.fc22(h1))
+        rval = self.fc21(h1), torch.exp(self.fc22(h1))
+        #print rval
+        return rval
 
 class Decoder(NNWithSizes):
     def __init__(self,tensor_sizes):
@@ -66,6 +73,7 @@ class Decoder(NNWithSizes):
         input_vec = torch.cat((z, cll), 1)
         h3 = self.relu(self.fc3(input_vec))
         rv = self.sigmoid(self.fc4(h3))
+        #print rv
         return rv
 
 

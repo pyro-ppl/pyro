@@ -3,7 +3,7 @@ import torch
 import pyro
 from torch.autograd import Variable
 from pyro.infer.kl_qp import KL_QP
-from pyro.infer.abstract_infer import lw_expectation
+#from pyro.infer.abstract_infer import lw_expectation
 from pyro.distributions import DiagNormal, Normal, Bernoulli, Multinomial, Categorical
 from torch import nn
 
@@ -295,6 +295,22 @@ cll_clamp3[0, 3] = 1
 cll_clamp9[0, 9] = 1
 
 
+
+def to_ind(ys):
+    res, ind = torch.topk(ys, 1)  # Do MLE
+    return ind
+
+def classify(xs):
+    alpha = pt_encode_c.forward(xs)
+    return to_ind(alpha)
+
+def get_accuracy(data, true_labels):
+    model_labels = classify(data)
+    assert model_labels.size() == true_labels.size()
+    accuracy =  (torch.sum(model_labels == true_labels)).data[0]/ (1.0*len(model_labels))
+    return accuracy
+
+
 loss_training = []
 
 def main():
@@ -303,7 +319,7 @@ def main():
     args = parser.parse_args()
     for i in range(args.num_epochs):
 
-        epoch_loss = 0.
+        epoch_loss = [0.,0.]
         for ix, batch_start in enumerate(all_batches[:-1]):
             batch_end = all_batches[ix + 1]
 
@@ -315,15 +331,16 @@ def main():
             batch_class.scatter_(1, batch_class_raw.data.view(-1, 1), 1)
             batch_class = Variable(batch_class)
 
-            if np.mod(ix, 1) == 0:
+            if np.mod(ix, 20) == 0:
                 #determines how much of the data is dropped out
-                epoch_loss += inference_observed_class.step(batch_data, batch_class)
+                epoch_loss[0] += inference_observed_class.step(batch_data, batch_class)
 
             else:
-                epoch_loss += inference_latent_class.step(batch_data)
+                epoch_loss[1] += inference_latent_class.step(batch_data)
 
-        loss_training.append(epoch_loss / float(mnist_size))
+        loss_training.append((epoch_loss[0] / float(mnist_size/5.), epoch_loss[1] / float(4*mnist_size)/5))
 
+	"""
         if np.mod(i,5)==0:
             if i>0:
                 workflow(mnist_data_test,mnist_labels_test)
@@ -339,10 +356,13 @@ def main():
                 vis.image(sample_mu0[0].view(28, 28).data.numpy())
                 vis.image(sample_mu3[0].view(28, 28).data.numpy())
                 vis.image(sample_mu9[0].view(28, 28).data.numpy())
+	"""
                 
-        print("epoch "+str(i)+" avg loss {}".format(epoch_loss / float(mnist_size)))
+        print("epoch "+str(i)+" avg obs loss {} latent loss {}".format(epoch_loss[0] / float(mnist_size/5.), epoch_loss[1] / float(4*mnist_size)/5))
+	print("train accuracy: {}".format(get_accuracy(mnist_data, mnist_labels.view(-1,1))))
 
-        pass
+    print("test accuracy: {}".format(get_accuracy(mnist_data_test, mnist_labels_test_raw.view(-1,1))))
+
 
 if __name__ == '__main__':
     main()

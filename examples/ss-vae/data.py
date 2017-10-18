@@ -71,6 +71,7 @@ class DatasetWrapper(object):
         if all_batches[-1] != self.train_data_size:
             all_batches = list(all_batches) + [self.train_data_size]
         self.train_batch_end_points = all_batches
+        self.num_train_batches = len(all_batches)-1
 
     def set_testing_vars(self, testing_batch_size, *args, **kwargs):
         test_data = self.test_loader.dataset.test_data
@@ -90,6 +91,7 @@ class DatasetWrapper(object):
         if all_batches[-1] != self.test_data_size:
             all_batches = list(all_batches) + [self.test_data_size]
         self.test_batch_end_points = all_batches
+        self.num_test_batches = len(all_batches)-1
 
     def get_batch(self,ix,training=True):
         try:
