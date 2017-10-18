@@ -14,6 +14,7 @@ from examples import util
 from examples.util import RESULTS_DIR
 from pyro.distributions import DiagNormal, Bernoulli
 from pyro.infer import SVI
+from pyro.optim import Adam
 from pyro.util import ng_zeros, ng_ones
 
 """
@@ -84,7 +85,7 @@ class VAE(object):
             self.vae_decoder.eval()
 
     @abstractmethod
-    def loss_function(self, x):
+    def compute_loss_and_gradient(self, x):
         """
         Given a batch of data `x`, run the optimizer (backpropagate the gradient),
         and return the computed loss.
@@ -114,7 +115,7 @@ class VAE(object):
         train_loss = 0
         for batch_idx, (data, _) in enumerate(self.train_loader):
             data = Variable(data)
-            loss = self.loss_function(data)
+            loss = self.compute_loss_and_gradient(data)
             train_loss += loss
         print('====> Epoch: {} Training loss: {:.4f}'.format(
             epoch, train_loss / len(self.train_loader.dataset)))
@@ -125,7 +126,7 @@ class VAE(object):
         for i, (data, _) in enumerate(self.test_loader):
             data = Variable(data, volatile=True)
             recon_x = self.model_eval(data)[0]
-            test_loss += self.loss_function(data)
+            test_loss += self.compute_loss_and_gradient(data)
             if i == 0:
                 n = min(data.size(0), 8)
                 comparison = torch.cat([data[:n],
@@ -148,7 +149,7 @@ class PytorchVAEImpl(VAE):
         super(PytorchVAEImpl, self).__init__(*args, **kwargs)
         self.optimizer = self.initialize_optimizer(lr=1e-3)
 
-    def loss_function(self, x):
+    def compute_loss_and_gradient(self, x):
         self.optimizer.zero_grad()
         recon_x, mu, logvar = self.model_eval(x)
         binary_cross_entropy = functional.binary_cross_entropy(recon_x, x.view(-1, 784))
@@ -192,13 +193,13 @@ class PyroVAEImpl(VAE):
         z_mu, z_sigma = encoder.forward(data)
         pyro.sample('latent', DiagNormal(z_mu, z_sigma))
 
-    def loss_function(self, x):
+    def compute_loss_and_gradient(self, x):
         if self.mode == TRAIN:
             return self.optimizer.step(x)
         return self.optimizer.evaluate_loss(x)
 
     def initialize_optimizer(self, lr):
-        adam = pyro.optim.Adam({'lr': lr})
+        adam = Adam({'lr': lr})
         return SVI(self.model, self.guide, adam, loss='ELBO')
 
 
