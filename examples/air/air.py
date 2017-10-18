@@ -14,7 +14,7 @@ from torch.autograd import Variable
 
 import pyro
 from pyro.util import ng_zeros, ng_ones
-from pyro.distributions import DiagNormal, Bernoulli
+from pyro.distributions import DiagNormal, Bernoulli, Uniform, Delta
 
 from modules import Identity, Encoder, Decoder, MLP, Predict
 
@@ -52,7 +52,8 @@ class AIR(nn.Module):
                  use_masking=True,
                  use_baselines=True,
                  baseline_scalar=None,
-                 use_cuda=False):
+                 use_cuda=False,
+                 fudge_z_pres=False):
 
         super(AIR, self).__init__()
 
@@ -69,9 +70,10 @@ class AIR(nn.Module):
         self.predict_hidden_size = predict_hidden_size
         self.predict_hidden_layers = predict_hidden_layers
         self.decoder_output_bias = decoder_output_bias
-        self.use_masking = use_masking
-        self.use_baselines = use_baselines
+        self.use_masking = use_masking and not fudge_z_pres
+        self.use_baselines = use_baselines and not fudge_z_pres
         self.baseline_scalar = baseline_scalar
+        self.fudge_z_pres = fudge_z_pres
 
         # TODO: Replace with single arg describing embed net, if
         # required. Do something similar for the predict net.
@@ -150,8 +152,11 @@ class AIR(nn.Module):
     def model_step(self, t, n, prev, batch, z_pres_prior_p=default_z_pres_prior_p):
 
         # Sample presence indicators.
-        z_pres = pyro.sample('z_pres_{}'.format(t),
-                             Bernoulli(z_pres_prior_p(t) * prev.z_pres))
+        if not self.fudge_z_pres:
+            z_pres_dist = Bernoulli(z_pres_prior_p(t) * prev.z_pres)
+        else:
+            z_pres_dist = Uniform(self.ng_zeros(n), self.ng_ones(n))
+        z_pres = pyro.sample('z_pres_{}'.format(t), z_pres_dist)
 
         # If zero is sampled for a data point, then no more objects will
         # be added to its canvas. We can't straight-forwardly avoid
@@ -264,8 +269,12 @@ class AIR(nn.Module):
         bl_value, bl_h, bl_c = self.baseline_step(prev, inputs)
 
         # Sample presence.
+        if not self.fudge_z_pres:
+            z_pres_dist = Bernoulli(z_pres_p * prev.z_pres)
+        else:
+            z_pres_dist = Delta(z_pres_p * prev.z_pres)
         z_pres = pyro.sample('z_pres_{}'.format(t),
-                             Bernoulli(z_pres_p * prev.z_pres),
+                             z_pres_dist,
                              baseline_value=bl_value)
 
         log_pdf_mask = z_pres if self.use_masking else None

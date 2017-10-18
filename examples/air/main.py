@@ -83,6 +83,8 @@ parser.add_argument('--anneal-prior-over', type=int, default=100000,
                     help='number of steps over which to anneal the prior')
 parser.add_argument('--no-masking', action='store_true', default=False,
                     help='do not mask out the costs of unused choices')
+parser.add_argument('--fudge-z-pres', action='store_true', default=False,
+                    help='fudge z_pres to remove discreteness for testing')
 parser.add_argument('--seed', type=int, help='random seed', default=None)
 
 args = parser.parse_args()
@@ -143,7 +145,8 @@ model_arg_keys = ['window_size',
                   'predict_hidden_size',
                   'predict_hidden_layers',
                   'decoder_output_bias',
-                  'baseline_scalar']
+                  'baseline_scalar',
+                  'fudge_z_pres']
 model_args = {key: getattr(args, key) for key in model_arg_keys if key in args}
 air = AIR(
     num_steps=args.model_steps,

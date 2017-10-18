@@ -45,7 +45,9 @@ class Delta(Distribution):
         v = self._sanitize_input(v)
         if x.dim == 1:
             x = x.expand(batch_size, x.size(0))
-        return (torch.eq(x, v.expand_as(x)) - 1).float() * 999999
+        # TODO: Add for AIR 'fudge_z_pres' mode -- clean up.
+        ret = (torch.eq(x, v.expand_as(x)) - 1).float() * 999999
+        return ret.view(-1)
 
     def log_pdf(self, x, v=None, *args, **kwargs):
         v = self._sanitize_input(v)
