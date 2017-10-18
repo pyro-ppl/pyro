@@ -3,6 +3,8 @@ from __future__ import division
 import warnings
 import contextlib
 from inspect import isclass
+from collections import OrderedDict
+from pdb import set_trace as bb
 
 import torch
 from torch.autograd import Variable
@@ -269,17 +271,28 @@ def module(pyro_name, nn_obj, tags="default", load_from_param_store=False):
         s = source.data if isinstance(source, torch.autograd.Variable) else source
         t.copy_(s)
 
+    target_state_dict = OrderedDict()
+
     for param_name, param in nn_obj.named_parameters():
         # register the parameter in the module with pyro
         # this only does something substantive if the parameter hasn't been seen before
         full_param_name = param_with_module_name(pyro_name, param_name)
         returned_param = pyro.param(full_param_name, param, tags=tags)
         # optional: if the data behind the parameter in the actual module is stale w.r.t. the parameter
-        # registered with pyro then overwrite it with the paramstore copy
-        if load_from_param_store and _cdata(param) != _cdata(returned_param):
-            _copy_in_place(source=returned_param, target=param)
-            pyro.get_param_store().replace_param(full_param_name, new_param=param, old_param=returned_param)
 
+        if _cdata(param) != _cdata(returned_param):
+        #     # _copy_in_place(source=returned_param, target=param)
+            target_state_dict[param_name] = returned_param
+            if load_from_param_store:
+                pyro.get_param_store().replace_param(full_param_name, new_param=param, old_param=returned_param)
+
+    if target_state_dict:
+        # WARNING: this is very dangerous. better method?
+        for name, mod in nn_obj.named_children():
+            for _param_name, _param in mod.named_parameters():
+                mod_param_name = name + '.' + _param_name
+                if mod_param_name in target_state_dict.keys():
+                    mod._parameters[_param_name] = target_state_dict[mod_param_name]
     return nn_obj
 
 
@@ -294,5 +307,5 @@ def random_module(name, nn_module, prior, *args, **kwargs):
     """
     assert hasattr(nn_module, "parameters"), "Module is not a NN module."
     # register params in param store
-    lifted_fn = poutine.lift(pyro.module, prior, *args, **kwargs)
-    return lambda: lifted_fn(name, nn_module)
+    lifted_fn = poutine.lift(pyro.module, prior)
+    return lambda: lifted_fn(name, nn_module, *args, **kwargs)
