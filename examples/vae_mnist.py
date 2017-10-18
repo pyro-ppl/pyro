@@ -14,14 +14,13 @@ from examples import util
 from examples.util import RESULTS_DIR
 from pyro.distributions import DiagNormal, Bernoulli
 from pyro.infer import SVI
-from pyro.optim import Adam
 from pyro.util import ng_zeros, ng_ones
 
 """
-Comparison of VAE implementation in pyTorch and Pyro. This example can be 
+Comparison of VAE implementation in pyTorch and Pyro. This example can be
 used for profiling purposes.
 
-The pyTorch VAE example is taken (with minor modification) from pytorch/examples 
+The pyTorch VAE example is taken (with minor modification) from pytorch/examples.
 Source: https://github.com/pytorch/examples/tree/master/vae
 """
 
