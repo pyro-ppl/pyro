@@ -37,18 +37,18 @@ parser.add_argument('--baseline-scalar', type=int,
                     help='scale the output of the baseline nets by this value')
 parser.add_argument('--no-baselines', action='store_true', default=False,
                     help='do not use data dependent baselines')
-parser.add_argument('--predict-hidden-layers', type=int,
-                    help='number of hidden layers for predict nets')
-parser.add_argument('--predict-hidden-size', type=int, default=256,
-                    help='size of hidden layers for predict nets')
-parser.add_argument('--no-embed', action='store_true',
-                    help='do not use input embedding nets')
-parser.add_argument('--embed-size', type=int, default=256,
-                    help='size input embedding')
-parser.add_argument('--embed-hidden-size', type=int, default=256,
-                    help='size of hidden layers for input embed nets')
-parser.add_argument('--embed-hidden-layers', type=int,
-                    help='number of hidden layers for input embed nets')
+parser.add_argument('--encoder-net', type=int, nargs='+', default=[200],
+                    help='encoder net hidden layer sizes')
+parser.add_argument('--decoder-net', type=int, nargs='+', default=[200],
+                    help='decoder net hidden layer sizes')
+parser.add_argument('--predict-net', type=int, nargs='+',
+                    help='predict net hidden layer sizes')
+parser.add_argument('--embed-net', type=int, nargs='+',
+                    help='embed net architecture')
+parser.add_argument('--bl-predict-net', type=int, nargs='+',
+                    help='baseline predict net hidden layer sizes')
+parser.add_argument('--non-linearity', type=str,
+                    help='non linearity to use throughout')
 parser.add_argument('--viz', action='store_true', default=False,
                     help='generate vizualizations during optimization')
 parser.add_argument('--viz-every', type=int, default=100,
@@ -65,8 +65,6 @@ parser.add_argument('-t', '--model-steps', type=int, default=3,
                     help='number of time steps')
 parser.add_argument('--rnn-hidden-size', type=int, default=256,
                     help='rnn hidden size')
-parser.add_argument('--encoder-hidden-size', type=int, default=200,
-                    help='attention window encoder/decoder nets hidden size')
 parser.add_argument('--encoder-latent-size', type=int, default=50,
                     help='attention window encoder/decoder latent space size')
 parser.add_argument('--decoder-output-bias', type=float,
@@ -86,6 +84,8 @@ parser.add_argument('--no-masking', action='store_true', default=False,
 parser.add_argument('--fudge-z-pres', action='store_true', default=False,
                     help='fudge z_pres to remove discreteness for testing')
 parser.add_argument('--seed', type=int, help='random seed', default=None)
+parser.add_argument('--print-modules', action='store_true',
+                    help='write the network architecture to stdout')
 
 args = parser.parse_args()
 # print(args)
@@ -142,11 +142,16 @@ def z_pres_prior_p(opt_step, time_step):
 
 model_arg_keys = ['window_size',
                   'rnn_hidden_size',
-                  'predict_hidden_size',
-                  'predict_hidden_layers',
                   'decoder_output_bias',
                   'baseline_scalar',
-                  'fudge_z_pres']
+                  'encoder_net',
+                  'decoder_net',
+                  'predict_net',
+                  'embed_net',
+                  'bl_predict_net',
+                  'non_linearity',
+                  'fudge_z_pres',
+                  'print_modules']
 model_args = {key: getattr(args, key) for key in model_arg_keys if key in args}
 air = AIR(
     num_steps=args.model_steps,
@@ -154,8 +159,6 @@ air = AIR(
     use_masking=not args.no_masking,
     use_baselines=not args.no_baselines,
     z_what_size=args.encoder_latent_size,
-    encoder_hidden_size=args.encoder_hidden_size,
-    decoder_hidden_size=args.encoder_hidden_size,
     use_cuda=args.cuda,
     **model_args
 )

@@ -44,43 +44,32 @@ class AIR(nn.Module):
                  window_size,
                  z_what_size,
                  rnn_hidden_size,
-                 encoder_hidden_size,
-                 decoder_hidden_size,
-                 predict_hidden_size=None,
-                 predict_hidden_layers=0,
+                 encoder_net=[],
+                 decoder_net=[],
+                 predict_net=[],
+                 embed_net=None,
+                 bl_predict_net=[],
+                 non_linearity='ReLU',
                  decoder_output_bias=None,
                  use_masking=True,
                  use_baselines=True,
                  baseline_scalar=None,
                  use_cuda=False,
-                 fudge_z_pres=False):
+                 fudge_z_pres=False,
+                 print_modules=False):
 
         super(AIR, self).__init__()
-
-        if predict_hidden_layers > 0 and predict_hidden_size is None:
-            raise ValueError('predict_hidden_size must be specified with predict_hidden_layers > 0')
 
         self.num_steps = num_steps
         self.x_size = x_size
         self.window_size = window_size
         self.z_what_size = z_what_size
         self.rnn_hidden_size = rnn_hidden_size
-        self.encoder_hidden_size = encoder_hidden_size
-        self.decoder_hidden_size = decoder_hidden_size
-        self.predict_hidden_size = predict_hidden_size
-        self.predict_hidden_layers = predict_hidden_layers
         self.decoder_output_bias = decoder_output_bias
         self.use_masking = use_masking and not fudge_z_pres
         self.use_baselines = use_baselines and not fudge_z_pres
         self.baseline_scalar = baseline_scalar
         self.fudge_z_pres = fudge_z_pres
-
-        # TODO: Replace with single arg describing embed net, if
-        # required. Do something similar for the predict net.
-        self.embed_inputs = False
-        self.embed_size = None
-        self.embed_hidden_size = None
-        self.embed_hidden_layers = 0
 
         self.z_pres_size = 1
         self.z_where_size = 3
@@ -91,28 +80,22 @@ class AIR(nn.Module):
         self.z_where_sigma_prior = nn.Parameter(torch.FloatTensor([0.1, 1, 1]), requires_grad=False)
 
         # Create nn modules.
-        if self.embed_inputs:
-            rnn_input_size = self.embed_size
-        else:
-            rnn_input_size = x_size ** 2
+        rnn_input_size = x_size ** 2 if embed_net is None else embed_net[-1]
         rnn_input_size += self.z_where_size + z_what_size + self.z_pres_size
+        nl = getattr(nn, non_linearity)
 
         self.rnn = nn.LSTMCell(rnn_input_size, rnn_hidden_size)
-        self.encode = Encoder(window_size ** 2, z_what_size, encoder_hidden_size)
-        self.decode = Decoder(window_size ** 2, z_what_size, decoder_hidden_size, decoder_output_bias)
-        self.predict = Predict(rnn_hidden_size, predict_hidden_size, predict_hidden_layers,
-                               self.z_pres_size, self.z_where_size)
-        self.embed = Identity()
-        # nn.Sequential(
-        #     MLP(x_size ** 2, embed_size, embed_hidden_size, embed_hidden_layers),
-        #     nn.ReLU()) if embed_inputs else Identity()
+        self.encode = Encoder(window_size ** 2, encoder_net, z_what_size, nl)
+        self.decode = Decoder(window_size ** 2, decoder_net, z_what_size, decoder_output_bias, nl)
+        self.predict = Predict(rnn_hidden_size, predict_net, self.z_pres_size, self.z_where_size, nl)
+        self.embed = Identity() if embed_net is None else MLP(x_size ** 2, embed_net, nl, True)
 
         self.bl_rnn = nn.LSTMCell(rnn_input_size, rnn_hidden_size)
-        self.bl_predict = MLP(rnn_hidden_size, 1, predict_hidden_size, predict_hidden_layers)
-        self.bl_embed = Identity()
-        # nn.Sequential(
-        #     MLP(x_size ** 2, embed_size, embed_hidden_size, embed_hidden_layers),
-        #     nn.ReLU()) if embed_inputs and use_baselines else Identity()
+        self.bl_predict = MLP(rnn_hidden_size, bl_predict_net + [1], nl)
+        self.bl_embed = Identity() if embed_net is None else MLP(x_size ** 2, embed_net, nl, True)
+
+        if print_modules:
+            print(self)
 
         self.use_cuda = use_cuda
         if use_cuda:
