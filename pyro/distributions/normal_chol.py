@@ -15,7 +15,7 @@ class NormalChol(Distribution):
     parameterized by its mean and its cholesky decomposition ``L``. Parameters
     must have dimensions <= 2.
     """
-    reparameterized = True
+    reparameterized = False  # This is treated as non-reparameterized because chol does not support autograd.
 
     def _sanitize_input(self, mu, sigma):
         if mu is not None:
