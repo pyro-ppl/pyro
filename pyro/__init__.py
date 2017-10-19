@@ -225,6 +225,10 @@ def map_data(name, data, fn, batch_size=0, batch_dim=0):
     if isinstance(data, (torch.Tensor, Variable)):
         size = data.size(batch_dim)
         with iarange(name, size, batch_size) as batch:
+            if isinstance(data, Variable) and 'cuda' in data.data.type():
+                return fn(batch, data.index_select(batch_dim, batch.cuda()))
+            elif isinstance(data, torch.Tensor) and 'cuda' in data.type():
+                return fn(batch, data.index_select(batch_dim, batch.cuda()))
             return fn(batch, data.index_select(batch_dim, batch))
     else:
         size = len(data)

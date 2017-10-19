@@ -12,6 +12,11 @@ from pyro.infer import SVI
 from pyro.infer.enum import iter_discrete_traces, scale_trace
 from tests.common import assert_equal
 
+torch.set_default_tensor_type('torch.cuda.FloatTensor')
+
+
+
+
 
 # A model with continuous and discrete variables, no batching.
 def model0():

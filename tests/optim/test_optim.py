@@ -7,6 +7,7 @@ from pyro.infer import SVI
 from pyro.distributions import DiagNormal
 from tests.common import TestCase
 
+torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
 class OptimTests(TestCase):
 

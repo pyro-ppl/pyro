@@ -11,13 +11,14 @@ from pyro.distributions.transformed_distribution import TransformedDistribution
 from tests.distributions.test_transformed_distribution import AffineExp
 from tests.common import TestCase
 
+torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
 def param_mse(name, target):
-    return torch.sum(torch.pow(target - pyro.param(name), 2.0)).data.numpy()[0]
+    return torch.sum(torch.pow(target - pyro.param(name), 2.0)).data.cpu().numpy()[0]
 
 
 def param_abs_error(name, target):
-    return torch.sum(torch.abs(target - pyro.param(name))).data.numpy()[0]
+    return torch.sum(torch.abs(target - pyro.param(name))).data.cpu().numpy()[0]
 
 
 class NormalNormalTests(TestCase):

@@ -12,6 +12,8 @@ from pyro.infer import SVI
 from tests.common import assert_equal
 
 
+torch.set_default_tensor_type('torch.cuda.FloatTensor')
+
 @pytest.mark.stage("integration", "integration_batch_1")
 @pytest.mark.init(rng_seed=161)
 @pytest.mark.parametrize("batch_size", [3, 5, 7, 8, 0])
@@ -107,7 +109,7 @@ def test_elbo_mapdata(batch_size, map_type):
                 2.0))
 
         if verbose and k % 500 == 0:
-            print("errors", mu_error.data.numpy()[0], log_sig_error.data.numpy()[0])
+            print("errors", mu_error.data.cpu().numpy()[0], log_sig_error.data.cpu().numpy()[0])
 
     assert_equal(Variable(torch.zeros(1)), mu_error, prec=0.05)
     assert_equal(Variable(torch.zeros(1)), log_sig_error, prec=0.06)

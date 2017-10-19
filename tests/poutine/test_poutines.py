@@ -14,6 +14,8 @@ from pyro.util import ng_ones, ng_zeros, \
     NonlocalExit, discrete_escape, all_escape
 
 
+torch.set_default_tensor_type('torch.cuda.FloatTensor')
+
 def eq(x, y, prec=1e-10):
     return (torch.norm(x - y).data[0] < prec)
 

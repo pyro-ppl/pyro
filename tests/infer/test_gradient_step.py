@@ -14,6 +14,10 @@ from pyro.infer import SVI
 # ELBO changes its random algorithm.
 # If this leads to too much churn, simply delete this test.
 
+torch.set_default_tensor_type('torch.cuda.FloatTensor')
+
+
+
 
 @pytest.mark.init(rng_seed=0)
 @pytest.mark.parametrize("trace_graph", [False, True])
@@ -40,8 +44,8 @@ def test_kl_qp_gradient_step_golden(trace_graph, reparameterized):
     svi = SVI(model, guide, adam, loss="ELBO", trace_graph=trace_graph)
     svi.step()
 
-    new_mu_q = pyro.param("mu_q").data.numpy()[0]
-    new_log_sig_q = pyro.param("log_sig_q").data.numpy()[0]
+    new_mu_q = pyro.param("mu_q").data.cpu().numpy()[0]
+    new_log_sig_q = pyro.param("log_sig_q").data.cpu().numpy()[0]
 
     if verbose:
         print("\nafter one step mu_q was %.15f; expected %.15f" % (new_mu_q, mu_q_expected))
