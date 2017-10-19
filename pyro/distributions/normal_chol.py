@@ -15,6 +15,7 @@ class NormalChol(Distribution):
     parameterized by its mean and its cholesky decomposition ``L``. Parameters
     must have dimensions <= 2.
     """
+    reparameterized = True
 
     def _sanitize_input(self, mu, sigma):
         if mu is not None:
@@ -35,7 +36,6 @@ class NormalChol(Distribution):
         self.mu = mu
         self.L = L
         super(NormalChol, self).__init__(*args, **kwargs)
-        self.reparameterized = False
 
     def sample(self, mu=None, L=None, *args, **kwargs):
         """

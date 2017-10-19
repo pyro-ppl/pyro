@@ -41,7 +41,6 @@ class Beta(Distribution):
             else:
                 self.alpha = alpha
                 self.beta = beta
-        self.reparameterized = False
         super(Beta, self).__init__(*args, **kwargs)
 
     def sample(self, alpha=None, beta=None, *args, **kwargs):

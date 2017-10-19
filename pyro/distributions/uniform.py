@@ -12,6 +12,7 @@ class Uniform(Distribution):
 
     Continuous uniform distribution over ``[a, b]``
     """
+    reparameterized = True
 
     def _sanitize_input(self, alpha, beta):
         if alpha is not None:

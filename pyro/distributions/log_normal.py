@@ -13,6 +13,7 @@ class LogNormal(Distribution):
     A distribution over probability vectors obtained by exp-transforming a random
     variable drawn from ``Normal({mu: mu, sigma: sigma})``.
     """
+    reparameterized = True
 
     def _sanitize_input(self, mu, sigma):
         if mu is not None:
@@ -39,7 +40,6 @@ class LogNormal(Distribution):
                 self.mu = mu.expand(batch_size, mu.size(0))
                 self.sigma = sigma.expand(batch_size, sigma.size(0))
         super(LogNormal, self).__init__(*args, **kwargs)
-        self.reparameterized = True
 
     def sample(self, mu=None, sigma=None, *args, **kwargs):
         """
