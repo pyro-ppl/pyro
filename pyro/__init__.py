@@ -10,7 +10,7 @@ from torch.autograd import Variable
 import pyro
 import pyro.poutine as poutine
 
-from pyro.distributions.subsample import Subsample
+from pyro.distributions.distribution import Distribution
 from pyro.params import param_with_module_name
 from pyro.params.param_store import ParamStoreDict
 from pyro.poutine import LambdaPoutine, condition, do  # noqa: F401
@@ -116,6 +116,35 @@ def observe(name, fn, obs, *args, **kwargs):
     return sample(name, fn, *args, **kwargs)
 
 
+class _Subsample(Distribution):
+    """
+    Randomly select a subsample of a range of indices.
+
+    Internal use only. This should only be used by `iarange`.
+    """
+
+    def __init__(self, size, subsample_size):
+        """
+        :param int size: the size of the range to subsample from
+        :param int subsample_size: the size of the returned subsample
+        """
+        self.size = size
+        self.subsample_size = subsample_size
+
+    def sample(self):
+        """
+        :returns: a random subsample of `range(size)`
+        :rtype: torch.autograd.Variable of torch.LongTensor
+        """
+        assert 0 <= self.subsample_size <= self.size
+        return Variable(torch.randperm(self.size)[:self.subsample_size])
+
+    def batch_log_pdf(self, x):
+        # This is zero so that iarange can provide an unbiased estimate of
+        # the non-subsampled batch_log_pdf.
+        return Variable(torch.zeros(0))
+
+
 @contextlib.contextmanager
 def iarange(name, size, subsample_size=0):
     """
@@ -151,7 +180,7 @@ def iarange(name, size, subsample_size=0):
         yield Variable(torch.LongTensor(list(range(size))))
         return
 
-    subsample = sample(name, Subsample(size, subsample_size))
+    subsample = sample(name, _Subsample(size, subsample_size))
     if len(_PYRO_STACK) == 0:
         yield subsample
     else:
