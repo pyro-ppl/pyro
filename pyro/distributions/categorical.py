@@ -52,6 +52,31 @@ class Categorical(Distribution):
         self.one_hot = one_hot
         super(Categorical, self).__init__(batch_size=1, *args, **kwargs)
 
+    @property
+    def batch_shape(self):
+        """
+        The left-hand tensor size of samples from this distribution, used for batching.
+
+        :return: Tensor shape used for batching.
+        :rtype: torch.Size
+        """
+        assert self.ps is not None
+        return self.ps.shape[:-1]
+
+    @property
+    def event_shape(self):
+        """
+        The right-hand tensor size of this distribution, used for individual events.
+
+        :return: Tensor shape used for individual events.
+        :rtype: torch.Size
+        """
+        assert self.ps is not None
+        if self.one_hot:
+            return self.ps.shape[-1:]
+        else:
+            return torch.Size((1,))
+
     def sample(self, ps=None, vs=None, one_hot=True, *args, **kwargs):
         """
         Returns a sample which has the same shape as ``ps`` (or ``vs``), except

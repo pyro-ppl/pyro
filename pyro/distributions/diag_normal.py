@@ -52,7 +52,7 @@ class DiagNormal(Distribution):
         """
         assert self.mu is not None
         event_dim = 1
-        return self.mu.size()[:-event_dim]
+        return self.mu.shape[:-event_dim]
 
     @property
     def event_shape(self):
@@ -64,7 +64,7 @@ class DiagNormal(Distribution):
         """
         assert self.mu is not None
         event_dim = 1
-        return self.mu.size()[-event_dim:]
+        return self.mu.shape[-event_dim:]
 
     def sample(self, mu=None, sigma=None, *args, **kwargs):
         """

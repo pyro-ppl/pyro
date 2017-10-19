@@ -68,6 +68,28 @@ class Dirichlet(Distribution):
         self.reparameterized = False
         super(Dirichlet, self).__init__(*args, **kwargs)
 
+    @property
+    def batch_shape(self):
+        """
+        The left-hand tensor size of samples from this distribution, used for batching.
+
+        :return: Tensor shape used for batching.
+        :rtype: torch.Size
+        """
+        assert self.alpha is not None
+        return self.alpha.shape[:-1]
+
+    @property
+    def event_shape(self):
+        """
+        The right-hand tensor size of this distribution, used for individual events.
+
+        :return: Tensor shape used for individual events.
+        :rtype: torch.Size
+        """
+        assert self.alpha is not None
+        return self.alpha.shape[-1:]
+
     def sample(self, alpha=None, *args, **kwargs):
         """
         Draws either a single sample (if alpha.dim() == 1), or one sample per param (if alpha.dim() == 2).

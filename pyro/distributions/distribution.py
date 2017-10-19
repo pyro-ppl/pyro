@@ -37,12 +37,12 @@ class Distribution(object):
 
     Distributions also provide a vectorized `.batch_log_pdf()` method that
     evaluates the log probability density of each event in a batch
-    independently, returning a tensor of shape `d.batch_size()`.
+    independently, returning a tensor of shape `d.batch_shape`.
 
     **Implementing New Distributions**:
 
-    Derived classes must implement the following methods: `.batch_size()`,
-    `.event_size()`, `.sample()`, and `.batch_log_pdf()`.
+    Derived classes must implement the following methods: `.batch_shape`,
+    `.event_shape`, `.sample()`, and `.batch_log_pdf()`.
     Discrete classes should also implement the `.support()` method to imporove
     gradient estimates.
 
