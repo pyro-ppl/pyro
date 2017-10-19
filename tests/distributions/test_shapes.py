@@ -4,16 +4,6 @@ import pyro.distributions as dist
 from pyro.util import ng_zeros, ng_ones
 
 
-def test_diag_normal_shape():
-    mu = ng_zeros(3, 2)
-    sigma = ng_ones(3, 2)
-    d = dist.DiagNormal(mu, sigma)
-    assert d.batch_shape() == (3,)
-    assert d.event_shape() == (2,)
-    assert d.shape() == (3, 2)
-    assert d.sample().size() == d.shape()
-
-
 @pytest.mark.parametrize('one_hot', [True, False])
 def test_categorical_shape(one_hot):
     ps = ng_ones(3, 2) / 2
@@ -28,6 +18,16 @@ def test_categorical_shape(one_hot):
     assert d.sample().size() == d.shape()
 
 
+def test_diag_normal_shape():
+    mu = ng_zeros(3, 2)
+    sigma = ng_ones(3, 2)
+    d = dist.DiagNormal(mu, sigma)
+    assert d.batch_shape() == (3,)
+    assert d.event_shape() == (2,)
+    assert d.shape() == (3, 2)
+    assert d.sample().size() == d.shape()
+
+
 def test_dirichlet_shape():
     alpha = ng_ones(3, 2) / 2
     d = dist.Dirichlet(alpha)
@@ -38,15 +38,6 @@ def test_dirichlet_shape():
 
 
 @pytest.mark.xfail(reason="https://github.com/uber/pyro/issues/278")
-def test_diag_normal_batch_log_pdf_shape():
-    mu = ng_zeros(3, 2)
-    sigma = ng_ones(3, 2)
-    x = ng_zeros(3, 2)
-    d = dist.DiagNormal(mu, sigma)
-    assert d.batch_log_pdf(x).size() == (3, 1)
-
-
-@pytest.mark.xfail(reason="https://github.com/uber/pyro/issues/278")
 def test_bernoulli_batch_log_pdf_shape():
     ps = ng_ones(3, 2)
     x = ng_ones(3, 2)
@@ -54,9 +45,22 @@ def test_bernoulli_batch_log_pdf_shape():
     assert d.batch_log_pdf(x).size() == (3, 1)
 
 
-@pytest.mark.xfail(reason="unknown")
-def test_categorical_batch_log_pdf_shape():
+@pytest.mark.parametrize('one_hot', [True, False])
+def test_categorical_batch_log_pdf_shape(one_hot):
     ps = ng_ones(3, 2, 4) / 4
-    x = ng_ones(3, 2)
-    d = dist.Categorical(ps, one_hot=False)
+    if one_hot:
+        x = ng_zeros(3, 2, 4)
+        x[:, :, 0] = 1
+    else:
+        x = ng_zeros(3, 2, 1)
+    d = dist.Categorical(ps, one_hot=one_hot)
+    assert d.batch_log_pdf(x).size() == (3, 2, 1)
+
+
+@pytest.mark.xfail(reason="https://github.com/uber/pyro/issues/278")
+def test_diag_normal_batch_log_pdf_shape():
+    mu = ng_zeros(3, 2)
+    sigma = ng_ones(3, 2)
+    x = ng_zeros(3, 2)
+    d = dist.DiagNormal(mu, sigma)
     assert d.batch_log_pdf(x).size() == (3, 1)
