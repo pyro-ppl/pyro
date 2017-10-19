@@ -102,7 +102,7 @@ class Trace_ELBO(object):
                             surrogate_elbo_particle += model_trace.nodes[name][log_pdf] + \
                                 log_r.detach() * guide_trace.nodes[name][log_pdf]
 
-            elbo += (weight * elbo_particle).sum()
+            elbo += (weight * elbo_particle).data.sum()
             surrogate_elbo += (weight * surrogate_elbo_particle).sum()
 
             # grab model parameters to train
