@@ -16,6 +16,7 @@ from pyro.optim import Adam
 Bayesian Regression
 """
 
+
 # generate toy dataset
 def build_linear_dataset(N, noise_std=0.1):
     D = 1
