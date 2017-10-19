@@ -9,6 +9,7 @@ from torch.autograd import Variable
 import pyro
 from tests.common import TestCase
 
+torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
 class ParamStoreDictTests(TestCase):
 
@@ -28,11 +29,11 @@ class ParamStoreDictTests(TestCase):
         cost.backward()
         params = list(self.linear_module.parameters()) + [myparam]
         optim = torch.optim.Adam(params, lr=.01)
-        myparam_copy_stale = copy(pyro.param("myparam").data.numpy())
+        myparam_copy_stale = copy(pyro.param("myparam").data.cpu().numpy())
 
         optim.step()
 
-        myparam_copy = copy(pyro.param("myparam").data.numpy())
+        myparam_copy = copy(pyro.param("myparam").data.cpu().numpy())
         param_store_params = copy(pyro.get_param_store()._params)
         param_store_param_to_name = copy(pyro.get_param_store()._param_to_name)
         assert len(list(param_store_params.keys())) == 5
@@ -45,10 +46,10 @@ class ParamStoreDictTests(TestCase):
         pyro.get_param_store().load('paramstore.unittest.out')
 
         def modules_are_equal():
-            weights_equal = np.sum(np.fabs(self.linear_module3.weight.data.numpy() -
-                                   self.linear_module.weight.data.numpy())) == 0.0
-            bias_equal = np.sum(np.fabs(self.linear_module3.bias.data.numpy() -
-                                self.linear_module.bias.data.numpy())) == 0.0
+            weights_equal = np.sum(np.fabs(self.linear_module3.weight.data.cpu().numpy() -
+                                   self.linear_module.weight.data.cpu().numpy())) == 0.0
+            bias_equal = np.sum(np.fabs(self.linear_module3.bias.data.cpu().numpy() -
+                                self.linear_module.bias.data.cpu().numpy())) == 0.0
             return (weights_equal and bias_equal)
 
         assert not modules_are_equal()
@@ -59,8 +60,8 @@ class ParamStoreDictTests(TestCase):
 
         myparam = pyro.param("myparam")
         store = pyro.get_param_store()
-        assert myparam_copy_stale != myparam.data.numpy()
-        assert myparam_copy == myparam.data.numpy()
+        assert myparam_copy_stale != myparam.data.cpu().numpy()
+        assert myparam_copy == myparam.data.cpu().numpy()
         assert sorted(param_store_params.keys()) == sorted(store._params.keys())
         assert sorted(param_store_param_to_name.values()) == sorted(store._param_to_name.values())
         assert sorted(store._params.keys()) == sorted(store._param_to_name.values())

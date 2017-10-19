@@ -7,6 +7,9 @@ import pyro.infer
 from pyro.distributions import DiagNormal, Bernoulli
 from tests.common import TestCase
 
+torch.set_default_tensor_type('torch.cuda.FloatTensor')
+
+
 
 class HMMSamplingTestCase(TestCase):
 
