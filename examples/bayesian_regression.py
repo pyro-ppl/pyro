@@ -103,26 +103,41 @@ def guide(data):
 adam = Adam({"lr": 0.01})
 svi = SVI(model, guide, adam, loss="ELBO")
 
-data = build_linear_dataset(N)
+
+def load_data(reg_type):
+    if reg_type == 'linear':
+        return build_linear_dataset(N)
+    elif reg_type == 'logistic':
+        return build_logistic_dataset(N)
+    raise ValueError('data set type should be "logistic" or "linear".')
+
 
 # batching data below
-# all_batches = np.arange(0, N, batch_size)
-# if all_batches[-1] != N:
-#     all_batches = list(all_batches) + [N]
+def batch_indices():
+    all_batches = np.arange(0, N, batch_size)
+    if all_batches[-1] != N:
+        all_batches = list(all_batches) + [N]
+    return all_batches
 
 
 def main():
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', nargs='?', default=1000, type=int)
+    parser.add_argument('-b', '--batch', nargs='?', default=False, type=bool)
+    parser.add_argument('-t', '--regression-type', nargs='?', default='linear', type=str)
     args = parser.parse_args()
+    data = load_data(args.regression_type)
+    all_batches = batch_indices()
     for j in range(args.num_epochs):
-        epoch_loss = svi.step(data)
-#         # mini batch
-#         epoch_loss = 0.0
-#         for ix, batch_start in enumerate(all_batches[:-1]):
-#             batch_end = all_batches[ix + 1]
-#             batch_data = data[batch_start: batch_end]
-#             epoch_loss += svi.step(batch_data)
+        if not args.batch:
+            epoch_loss = svi.step(data)
+        else:
+            # mini batch
+            epoch_loss = 0.0
+            for ix, batch_start in enumerate(all_batches[:-1]):
+                batch_end = all_batches[ix + 1]
+                batch_data = data[batch_start: batch_end]
+                epoch_loss += svi.step(batch_data)
         if j % 100 == 0:
             print("epoch avg loss {}".format(epoch_loss/float(N)))
 
