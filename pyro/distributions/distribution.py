@@ -64,7 +64,7 @@ class Distribution(object):
 
     Take a look at the examples[link] to see how they interact with inference algorithms.
     """
-
+    reparameterized = False
     enumerable = False
 
     def __init__(self, *args, **kwargs):
@@ -73,7 +73,6 @@ class Distribution(object):
 
         Currently takes no explicit arguments.
         """
-        self.reparameterized = False
 
     @property
     def batch_shape(self):

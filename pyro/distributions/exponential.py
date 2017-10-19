@@ -10,6 +10,7 @@ class Exponential(Distribution):
 
     Exponential parameterized by lambda
     """
+    reparameterized = True
 
     def _sanitize_input(self, lam):
         if lam is not None:
@@ -30,7 +31,6 @@ class Exponential(Distribution):
         if lam is not None:
             if lam.dim() == 1 and batch_size > 1:
                 self.lam = lam.expand(batch_size, lam.size(0))
-        self.reparameterized = True
         super(Exponential, self).__init__(*args, **kwargs)
 
     def sample(self, lam=None, *args, **kwargs):
