@@ -44,24 +44,12 @@ class DiagNormal(Distribution):
 
     @property
     def batch_shape(self):
-        """
-        The left-hand tensor size of samples from this distribution, used for batching.
-
-        :return: Tensor shape used for batching.
-        :rtype: torch.Size
-        """
         assert self.mu is not None
         event_dim = 1
         return self.mu.shape[:-event_dim]
 
     @property
     def event_shape(self):
-        """
-        The right-hand tensor size of this distribution, used for individual events.
-
-        :return: Tensor shape used for individual events.
-        :rtype: torch.Size
-        """
         assert self.mu is not None
         event_dim = 1
         return self.mu.shape[-event_dim:]

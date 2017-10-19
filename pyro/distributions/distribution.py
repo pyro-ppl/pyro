@@ -25,26 +25,40 @@ class Distribution(object):
 
     **Tensor Shapes**:
 
-    Pyro distinguishes two different roles for tensor dimensions:
+    Pyro distinguishes two different roles for tensor shapes of samples:
 
     - The leftmost dimension corresponds to *batching*, which is treated
       specially during inference.
     - The rightmost dimensions correspond to *event shape*.
 
-    These two shapes are related by the equation::
+    These shapes are related by the equation::
 
-      d.shape == d.batch_shape + d.event_shape
+      assert d.shape == d.batch_shape + d.event_shape
 
     Distributions also provide a vectorized `.batch_log_pdf()` method that
     evaluates the log probability density of each event in a batch
-    independently, returning a tensor of shape `d.batch_shape`.
+    independently, returning a tensor of shape `d.batch_shape`::
+
+      x = d.sample()
+      assert x.shape == d.shape
+      assert d.batch_log_pdf(x).shape == d.shape
+
+    Distributions may also support broadcasting of the `.log_pdf()` and
+    `.batch_log_pdf()` methods, which may each be evaluated with a sample
+    tensor `x` that is larger than (but broadcastable from) the parameters.
+    In this case, `d.shape` will return a shape that is broadcastable to
+    `d.batch_log_pdf().shape`. For example::
+
+      x = d.sample()
+      xx = torch.stack([x, x])
+      d.batch_log_pdf(xx) + torch.zeros(d.shape)  # Should broadcast correctly.
 
     **Implementing New Distributions**:
 
     Derived classes must implement the following methods: `.batch_shape`,
     `.event_shape`, `.sample()`, and `.batch_log_pdf()`.
-    Discrete classes should also implement the `.support()` method to imporove
-    gradient estimates.
+    Discrete classes should also implement the `.support()` method to improve
+    gradient estimates and set `.enumerable = True`.
 
     **Examples**:
 
@@ -64,7 +78,9 @@ class Distribution(object):
     @property
     def batch_shape(self):
         """
-        The left-hand tensor size of samples from this distribution, used for batching.
+        The left-hand tensor shape of samples, used for batching.
+
+        Samples are of shape `d().shape == d.batch_shape + d.event_shape`.
 
         :return: Tensor shape used for batching.
         :rtype: torch.Size
@@ -74,7 +90,9 @@ class Distribution(object):
     @property
     def event_shape(self):
         """
-        The right-hand tensor size of this distribution, used for individual events.
+        The right-hand tensor shape of samples, used for individual events.
+
+        Samples are of shape `d().shape == d.batch_shape + d.event_shape`.
 
         :return: Tensor shape used for individual events.
         :rtype: torch.Size
@@ -84,9 +102,11 @@ class Distribution(object):
     @property
     def shape(self):
         """
-        The size of batch events from this distribution.
+        The tensor shape of samples from this distribution.
 
-        :return: Tensor shape used for individual events.
+        Samples are of shape `d().shape == d.batch_shape + d.event_shape`.
+
+        :return: Tensor shape of samples.
         :rtype: torch.Size
         """
         return self.batch_shape + self.event_shape
