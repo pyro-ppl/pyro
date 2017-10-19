@@ -52,9 +52,9 @@ class ParamStoreDictTests(TestCase):
             return (weights_equal and bias_equal)
 
         assert not modules_are_equal()
-        pyro.module("mymodule", self.linear_module3, load_from_param_store=False)
+        pyro.module("mymodule", self.linear_module3, update_module_params=False)
         assert not modules_are_equal()
-        pyro.module("mymodule", self.linear_module3, load_from_param_store=True)
+        pyro.module("mymodule", self.linear_module3, update_module_params=True)
         assert modules_are_equal()
 
         myparam = pyro.param("myparam")
