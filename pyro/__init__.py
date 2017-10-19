@@ -15,10 +15,10 @@ from pyro.distributions.subsample import Subsample
 from pyro.params import param_with_module_name
 from pyro.params.param_store import ParamStoreDict
 from pyro.poutine import LambdaPoutine, condition, do  # noqa: F401
-from pyro.util import (
-                       zeros, # noqa: F401
-                       ones, # noqa: F401
-                       set_rng_seed, # noqa: F401
+from pyro.util import (  # noqa: F401
+                       zeros,
+                       ones,
+                       set_rng_seed,
                        apply_stack,
                        get_tensor_data,
                        deep_getattr
