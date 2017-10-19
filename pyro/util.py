@@ -1,11 +1,11 @@
 import pyro
 import graphviz
 import numpy as np
+import functools
 import torch
 from torch.autograd import Variable
 from torch.nn import Parameter
 from collections import defaultdict
-
 
 def detach_iterable(iterable):
     if isinstance(iterable, Variable):
@@ -413,4 +413,4 @@ def deep_getattr(obj, name):
     Python getattr() for arbitrarily deep attributes
     Throws an AttirbuteError if bad attribute
     """
-    return reduce(getattr, name.split("."), obj)
+    return functools.reduce(getattr, name.split("."), obj)
