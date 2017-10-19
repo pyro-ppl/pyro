@@ -407,6 +407,7 @@ def identify_dense_edges(trace):
 
     return trace
 
+
 def deep_getattr(obj, name):
     """
     Python getattr() for arbitrarily deep attributes

@@ -1,6 +1,5 @@
 from __future__ import division
 
-from pdb import set_trace as bb
 import warnings
 import contextlib
 from inspect import isclass
@@ -16,8 +15,14 @@ from pyro.distributions.subsample import Subsample
 from pyro.params import param_with_module_name
 from pyro.params.param_store import ParamStoreDict
 from pyro.poutine import LambdaPoutine, condition, do  # noqa: F401
-from pyro.util import zeros, ones, set_rng_seed, apply_stack, \
-                      get_tensor_data, deep_getattr  # noqa: F401
+from pyro.util import (
+                       zeros, # noqa: F401
+                       ones, # noqa: F401
+                       set_rng_seed, # noqa: F401
+                       apply_stack,
+                       get_tensor_data,
+                       deep_getattr
+                       )
 
 # global map of params for now
 _param_store = ParamStoreDict()
