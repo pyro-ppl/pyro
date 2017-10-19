@@ -54,12 +54,12 @@ class Categorical(Distribution):
 
     def batch_shape(self, ps=None, vs=None, one_hot=True, *args, **kwargs):
         ps, vs, one_hot = self._sanitize_input(ps, vs, one_hot)
-        return self.ps.size()[:-1]
+        return ps.size()[:-1]
 
     def event_shape(self, ps=None, vs=None, one_hot=True, *args, **kwargs):
         ps, vs, one_hot = self._sanitize_input(ps, vs, one_hot)
-        if self.one_hot:
-            return self.ps.size()[-1:]
+        if one_hot:
+            return ps.size()[-1:]
         else:
             return torch.Size((1,))
 

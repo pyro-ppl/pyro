@@ -103,6 +103,13 @@ class Distribution(object):
         """
         raise NotImplementedError
 
+    def event_dim(self, *args, **kwargs):
+        """
+        :return: Number of dimensions of individual events.
+        :rtype: int
+        """
+        return len(self.event_shape(*args, **kwargs))
+
     def shape(self, *args, **kwargs):
         """
         The tensor shape of samples from this distribution.

@@ -1,8 +1,9 @@
 import numpy as np
 import pytest
 import torch
+from torch.autograd import Variable
 
-from tests.common import assert_equal
+from tests.common import assert_equal, xfail_if_not_implemented
 
 
 def unwrap_variable(x):
@@ -25,6 +26,46 @@ def test_batch_log_pdf(dist):
         pytest.skip("Batch log pdf not tested for distribution")
     logpdf_sum_np = np.sum(dist.get_scipy_batch_logpdf())
     assert_equal(logpdf_sum_pyro, logpdf_sum_np)
+
+
+def wrap_in_variables(args):
+    args = list(args)
+    for i, arg in enumerate(args):
+        if isinstance(arg, (int, float)):
+            arg = Variable(torch.Tensor([arg]))
+        elif isinstance(arg, (list, tuple)):
+            arg = Variable(torch.Tensor(arg))
+        args[i] = arg
+    return args
+
+
+def test_shape(dist):
+    d = dist.pyro_dist
+    for args in dist.dist_params:
+        args = wrap_in_variables(args)
+        with xfail_if_not_implemented():
+            assert d.shape(*args) == d.batch_shape(*args) + d.event_shape(*args)
+
+
+def test_sample_shape(dist):
+    d = dist.pyro_dist
+    for args in dist.dist_params:
+        args = wrap_in_variables(args)
+        x = dist.pyro_dist.sample(*args)
+        with xfail_if_not_implemented():
+            assert x.size() == d.shape(*args)
+
+
+def test_batch_log_pdf_shape(dist):
+    if dist.pyro_dist.__class__.__name__ == 'Multinomial':
+        pytest.xfail('Fixture parameters are not tensors')
+    d = dist.pyro_dist
+    for args in dist.dist_params:
+        args = wrap_in_variables(args)
+        x = d.sample(*args)
+        with xfail_if_not_implemented():
+            log_p = d.batch_log_pdf(x, *args)
+            assert log_p.size() == d.batch_shape(*args) + (1,)
 
 
 def test_mean_and_variance(dist, test_data_idx):

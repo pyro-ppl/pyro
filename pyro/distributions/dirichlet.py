@@ -69,11 +69,11 @@ class Dirichlet(Distribution):
 
     def batch_shape(self, alpha=None, *args, **kwargs):
         alpha = self._sanitize_input(alpha)
-        return self.alpha.size()[:-1]
+        return alpha.size()[:-1]
 
     def event_shape(self, alpha=None, *args, **kwargs):
         alpha = self._sanitize_input(alpha)
-        return self.alpha.size()[-1:]
+        return alpha.size()[-1:]
 
     def sample(self, alpha=None, *args, **kwargs):
         """

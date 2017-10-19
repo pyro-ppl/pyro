@@ -1,5 +1,6 @@
 import contextlib
 import os
+import pytest
 import sys
 import unittest
 import numbers
@@ -75,6 +76,14 @@ def freeze_rng_state():
     if torch.cuda.is_available():
         torch.cuda.set_rng_state(cuda_rng_state)
     torch.set_rng_state(rng_state)
+
+
+@contextlib.contextmanager
+def xfail_if_not_implemented():
+    try:
+        yield
+    except NotImplementedError as e:
+        pytest.xfail(reason=str(e))
 
 
 def iter_indices(tensor):

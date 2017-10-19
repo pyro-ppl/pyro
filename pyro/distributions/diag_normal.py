@@ -45,12 +45,12 @@ class DiagNormal(Distribution):
     def batch_shape(self, mu=None, sigma=None, *args, **kwargs):
         mu, sigma = self._sanitize_input(mu, sigma)
         event_dim = 1
-        return self.mu.size()[:-event_dim]
+        return mu.size()[:-event_dim]
 
     def event_shape(self, mu=None, sigma=None, *args, **kwargs):
         mu, sigma = self._sanitize_input(mu, sigma)
         event_dim = 1
-        return self.mu.size()[-event_dim:]
+        return mu.size()[-event_dim:]
 
     def sample(self, mu=None, sigma=None, *args, **kwargs):
         """
