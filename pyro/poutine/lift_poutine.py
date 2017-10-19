@@ -51,11 +51,14 @@ class LiftPoutine(Poutine):
             # prior is a dict of distributions
             if param_name in self.prior.keys():
                 msg["fn"] = self.prior[param_name]
+                if isinstance(msg['fn'], Distribution):
+                    msg["args"] = ()
             else:
                 return super(LiftPoutine, self)._pyro_param(msg)
         elif isinstance(self.prior, Distribution):
             # prior is a distribution
             msg["fn"] = self.prior
+            msg["args"] = ()
         elif callable(self.prior):
             if not isinstance(self.prior, Distribution):
                 # prior is a stochastic fn. block sample

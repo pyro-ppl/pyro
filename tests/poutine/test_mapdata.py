@@ -49,7 +49,7 @@ def test_elbo_mapdata(batch_size, map_type):
     if verbose:
         print("DOING ELBO TEST [bs = {}, map_type = {}]".format(
             batch_size, map_type))
-    pyro.get_param_store().clear()
+    pyro.clear_param_store()
 
     def model():
         mu_latent = pyro.sample("mu_latent", dist.diagnormal,

@@ -13,6 +13,7 @@ class Normal(Distribution):
 
     Gaussian Distribution over a tensor of independent variables.
     """
+    reparameterized = False  # This is treated as non-reparameterized because chol does not support autograd.
 
     def _sanitize_input(self, mu, sigma):
         if mu is not None:
@@ -36,7 +37,6 @@ class Normal(Distribution):
             else:
                 self.mu = mu.expand(batch_size, mu.size(0))
         super(Normal, self).__init__(*args, **kwargs)
-        self.reparameterized = False
 
     def sample(self, mu=None, sigma=None, *args, **kwargs):
         """

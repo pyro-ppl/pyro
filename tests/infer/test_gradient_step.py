@@ -20,7 +20,7 @@ from pyro.infer import SVI
 @pytest.mark.parametrize("reparameterized", [True, False])
 def test_kl_qp_gradient_step_golden(trace_graph, reparameterized):
     verbose = True
-    pyro.get_param_store().clear()
+    pyro.clear_param_store()
     mu_q_expected = {True: -1.1780080795288086, False: -1.178008079528809}[reparameterized]
     log_sig_q_expected = {True: -0.30474236607551575, False: -0.30474188923835754}[reparameterized]
     tolerance = 1.0e-7

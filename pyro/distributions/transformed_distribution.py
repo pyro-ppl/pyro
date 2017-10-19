@@ -3,14 +3,13 @@ import torch.nn as nn
 
 from pyro.distributions.distribution import Distribution
 from pyro.nn import AutoRegressiveNN
-from pyro.util import ng_ones
 from torch.autograd import Variable
 
 
 class TransformedDistribution(Distribution):
     """
     Transforms the base distribution by applying a sequence of `Bijector`s to it.
-    This results in a scorable distribution (i.e. it has a log_pdf() method).
+    This results in a scorable distribution (i.e. it has a `log_pdf()` method).
     """
 
     def __init__(self, base_distribution, bijectors, *args, **kwargs):
@@ -103,7 +102,7 @@ class Bijector(nn.Module):
         """
         Virtual logdet jacobian method.
 
-        Computes the log det jacobian |dy/dx|
+        Computes the log det jacobian `|dy/dx|`
         """
         raise NotImplementedError()
 
@@ -181,7 +180,7 @@ class InverseAutoregressiveFlow(Bijector):
         hidden = self.arn(x)
         sigma = self.sigmoid(hidden[:, 0:self.input_dim] + self.sigmoid_bias.type_as(hidden))
         mean = hidden[:, self.input_dim:]
-        y = sigma * x + (ng_ones(sigma.size()).type_as(sigma) - sigma) * mean
+        y = sigma * x + (Variable(torch.ones(sigma.size())).type_as(sigma) - sigma) * mean
         self._add_intermediate_to_cache(sigma, y, 'sigma')
         return y
 

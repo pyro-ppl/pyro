@@ -16,6 +16,7 @@ class DiagNormal(Distribution):
     distribution is over tensors that have the same shape as the parameters ``mu``
     and ``sigma``, which in turn must have the same shape as each other.
     """
+    reparameterized = True
 
     def _sanitize_input(self, mu, sigma):
         if mu is not None:
@@ -40,7 +41,16 @@ class DiagNormal(Distribution):
                 self.mu = mu.expand(batch_size, mu.size(0))
                 self.sigma = sigma.expand(batch_size, sigma.size(0))
         super(DiagNormal, self).__init__(*args, **kwargs)
-        self.reparameterized = True
+
+    def batch_shape(self, mu=None, sigma=None, *args, **kwargs):
+        mu, sigma = self._sanitize_input(mu, sigma)
+        event_dim = 1
+        return mu.size()[:-event_dim]
+
+    def event_shape(self, mu=None, sigma=None, *args, **kwargs):
+        mu, sigma = self._sanitize_input(mu, sigma)
+        event_dim = 1
+        return mu.size()[-event_dim:]
 
     def sample(self, mu=None, sigma=None, *args, **kwargs):
         """
