@@ -70,12 +70,12 @@ class Dirichlet(Distribution):
     @property
     def batch_shape(self):
         assert self.alpha is not None
-        return self.alpha.shape[:-1]
+        return self.alpha.size()[:-1]
 
     @property
     def event_shape(self):
         assert self.alpha is not None
-        return self.alpha.shape[-1:]
+        return self.alpha.size()[-1:]
 
     def sample(self, alpha=None, *args, **kwargs):
         """

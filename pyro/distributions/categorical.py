@@ -55,13 +55,13 @@ class Categorical(Distribution):
     @property
     def batch_shape(self):
         assert self.ps is not None
-        return self.ps.shape[:-1]
+        return self.ps.size()[:-1]
 
     @property
     def event_shape(self):
         assert self.ps is not None
         if self.one_hot:
-            return self.ps.shape[-1:]
+            return self.ps.size()[-1:]
         else:
             return torch.Size((1,))
 
