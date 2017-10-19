@@ -28,7 +28,6 @@ from os.path import join, dirname, exists
 import argparse
 import time
 from util import get_logger
-import uuid
 
 
 class Emitter(nn.Module):
@@ -249,11 +248,6 @@ class DMM(nn.Module):
 
 # setup, training, and evaluation
 def main(args):
-    # how often we do validation/test evaluation during training
-    val_test_frequency = 50
-    # the number of samples we use to do the evaluation
-    n_eval_samples = 5
-
     # setup logging
     log = get_logger(args.log)
     log(args)
@@ -275,6 +269,11 @@ def main(args):
     log("N_train_data: %d     avg. training seq. length: %.2f    N_mini_batches: %d" %
         (N_train_data, np.mean(training_seq_lengths), N_mini_batches))
 
+    # how often we do validation/test evaluation during training
+    val_test_frequency = 50
+    # the number of samples we use to do the evaluation
+    n_eval_samples = 5
+
     # package repeated copies of val/test data for faster evaluation
     # (i.e. set us up for vectorization)
     def rep(x):
@@ -285,10 +284,10 @@ def main(args):
     val_seq_lengths = rep(val_seq_lengths)
     test_seq_lengths = rep(test_seq_lengths)
     val_batch, val_batch_reversed, val_batch_mask, val_seq_lengths = poly.get_mini_batch(
-        np.arange(n_eval_samples_inner * val_data_sequences.shape[0]), rep(val_data_sequences),
+        np.arange(n_eval_samples * val_data_sequences.shape[0]), rep(val_data_sequences),
         val_seq_lengths, volatile=True, cuda=args.cuda)
     test_batch, test_batch_reversed, test_batch_mask, test_seq_lengths = poly.get_mini_batch(
-        np.arange(n_eval_samples_inner * test_data_sequences.shape[0]), rep(test_data_sequences),
+        np.arange(n_eval_samples * test_data_sequences.shape[0]), rep(test_data_sequences),
         test_seq_lengths, volatile=True, cuda=args.cuda)
 
     # instantiate the dmm
@@ -369,7 +368,9 @@ def main(args):
     if args.load_opt != '' and args.load_model != '':
         load_checkpoint()
 
-    # training loop
+    #################
+    # TRAINING LOOP #
+    #################
     times = [time.time()]
     for epoch in range(args.num_epochs):
         # if specified, save model and optimizer states to disk every checkpoint_freq epochs
