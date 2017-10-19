@@ -22,6 +22,7 @@ from six.moves.urllib.request import urlretrieve
 import six.moves.cPickle as pickle
 from pyro.util import ng_zeros
 
+
 # this function downloads the raw data if it hasn't been already
 def download_if_absent(saveas, url):
 
@@ -79,7 +80,8 @@ def reverse_sequences_numpy(mini_batch, seq_lengths):
 
 # this function takes a torch mini-batch and reverses each sequence
 # (w.r.t. the temporal axis, i.e. axis=1)
-# in contrast to `reverse_sequences_numpy`, this function preserves gradients
+# in contrast to `reverse_sequences_numpy`, this function plays
+# nice with torch autograd
 def reverse_sequences_torch(mini_batch, seq_lengths):
     reversed_mini_batch = ng_zeros(mini_batch.size(), type_as=mini_batch.data)
     for b in range(mini_batch.size(0)):
@@ -115,11 +117,18 @@ def get_mini_batch_mask(mini_batch, seq_lengths):
 # it also deals with the fact that packed sequences (which are what what we
 # feed to the pytorch rnn) need to be sorted by sequence length.
 def get_mini_batch(mini_batch_indices, sequences, seq_lengths, volatile=False, cuda=False):
+    # get the sequence lengths of the mini-batch
     seq_lengths = seq_lengths[mini_batch_indices]
+    # sort the sequence lengths
     sorted_seq_length_indices = np.argsort(seq_lengths)[::-1]
     sorted_seq_lengths = seq_lengths[sorted_seq_length_indices]
     sorted_mini_batch_indices = mini_batch_indices[sorted_seq_length_indices]
-    mini_batch = sequences[sorted_mini_batch_indices, :, :]
+
+    # compute the length of the longest sequence in the mini-batch
+    T_max = np.max(seq_lengths)
+    # this is the sorted mini-batch
+    mini_batch = sequences[sorted_mini_batch_indices, 0:T_max, :]
+    # this is the sorted mini-batch in reverse temporal order
     mini_batch_reversed = Variable(torch.Tensor(reverse_sequences_numpy(mini_batch, sorted_seq_lengths)),
                                    volatile=volatile)
 

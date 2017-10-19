@@ -30,6 +30,7 @@ import time
 from util import get_logger
 import uuid
 
+
 class Emitter(nn.Module):
     """
     Parameterizes the bernoulli observation likelihood p(x_t | z_t)
@@ -135,11 +136,12 @@ class Combiner(nn.Module):
 
 class DMM(nn.Module):
     """
-    This pytorch Module encapsulates the model as well as the variational distribution (the guide)
-    for the Deep Markov Model
+    This pytorch Module encapsulates the model as well as the
+    variational distribution (the guide) for the Deep Markov Model
     """
-    def __init__(self, input_dim=88, z_dim=100, emission_dim=100, transition_dim=200, rnn_dim=600,
-                 rnn_dropout_rate=0.0, num_iafs=0, iaf_dim=50, use_cuda=False):
+    def __init__(self, input_dim=88, z_dim=100, emission_dim=100,
+                 transition_dim=200, rnn_dim=600, rnn_dropout_rate=0.0,
+                 num_iafs=0, iaf_dim=50, use_cuda=False):
         super(DMM, self).__init__()
         # instantiate pytorch modules used in the model and guide below
         self.emitter = Emitter(input_dim, z_dim, emission_dim)
@@ -171,7 +173,7 @@ class DMM(nn.Module):
               mini_batch_seq_lengths, annealing_factor=1.0):
 
         # this is the number of time steps we need to process in the mini-batch
-        T_max = np.max(mini_batch_seq_lengths)
+        T_max = mini_batch.size(1)
 
         # register all pytorch (sub)modules with pyro
         # this needs to happen in both the model and guide
@@ -210,7 +212,7 @@ class DMM(nn.Module):
               mini_batch_seq_lengths, annealing_factor=1.0):
 
         # this is the number of time steps we need to process in the mini-batch
-        T_max = np.max(mini_batch_seq_lengths)
+        T_max = mini_batch.size(1)
         # register all pytorch (sub)modules with pyro
         pyro.module("dmm", self)
 
@@ -247,14 +249,10 @@ class DMM(nn.Module):
 
 # setup, training, and evaluation
 def main(args):
-    # define training loop parameters
-    val_test_frequency = 50000
-    expensive_val_test_points = [args.num_epochs - 1, args.num_epochs - 1001, args.num_epochs - 2001]
-    n_eval_samples_inner = 5
-    n_eval_samples_outer = 20
-    n_checkpoint_reloads = 0
-    n_restarts = 0
-    best_val_nll = 99.99
+    # how often we do validation/test evaluation during training
+    val_test_frequency = 50
+    # the number of samples we use to do the evaluation
+    n_eval_samples = 5
 
     # setup logging
     log = get_logger(args.log)
@@ -274,10 +272,13 @@ def main(args):
     N_mini_batches = int(N_train_data / args.mini_batch_size +
                          int(N_train_data % args.mini_batch_size > 0))
 
+    log("N_train_data: %d     avg. training seq. length: %.2f    N_mini_batches: %d" %
+        (N_train_data, np.mean(training_seq_lengths), N_mini_batches))
+
     # package repeated copies of val/test data for faster evaluation
     # (i.e. set us up for vectorization)
     def rep(x):
-        y = np.repeat(x, n_eval_samples_inner, axis=0)
+        y = np.repeat(x, n_eval_samples, axis=0)
         return y
 
     # get the validation/test data ready for the dmm: pack into sequences, etc.
@@ -289,9 +290,6 @@ def main(args):
     test_batch, test_batch_reversed, test_batch_mask, test_seq_lengths = poly.get_mini_batch(
         np.arange(n_eval_samples_inner * test_data_sequences.shape[0]), rep(test_data_sequences),
         test_seq_lengths, volatile=True, cuda=args.cuda)
-
-    log("N_train_data: %d     avg. training seq. length: %.2f    N_mini_batches: %d" %
-        (N_train_data, np.mean(training_seq_lengths), N_mini_batches))
 
     # instantiate the dmm
     dmm = DMM(rnn_dropout_rate=args.rnn_dropout_rate, num_iafs=args.num_iafs,
@@ -305,7 +303,6 @@ def main(args):
 
     # setup inference algorithm
     elbo = SVI(dmm.model, dmm.guide, adam, "ELBO", trace_graph=False)
-    expensive_evaluations = []
 
     # now we're going to define some functions we need to form the main training loop
 
@@ -343,7 +340,7 @@ def main(args):
         mini_batch_start = (which_mini_batch * args.mini_batch_size)
         mini_batch_end = np.min([(which_mini_batch + 1) * args.mini_batch_size, N_train_data])
         mini_batch_indices = shuffled_indices[mini_batch_start:mini_batch_end]
-        # grab the fully prepped mini-batch using the helper function in the data loader
+        # grab a fully prepped mini-batch using the helper function in the data loader
         mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths \
             = poly.get_mini_batch(mini_batch_indices, training_data_sequences,
                                   training_seq_lengths, cuda=args.cuda)
@@ -354,55 +351,19 @@ def main(args):
         return loss
 
     # helper function for doing evaluation
-    def do_evaluation(n_samples):
+    def do_evaluation():
         # put the RNN into evaluation mode (i.e. turn off drop-out if applicable)
         dmm.rnn.eval()
-        val_nlls, test_nlls = [], []
 
         # compute the validation and test loss n_samples many times
-        for _ in range(n_samples):
-            val_nll = elbo.evaluate_loss(val_batch, val_batch_reversed, val_batch_mask,
-                                         val_seq_lengths) / np.sum(val_seq_lengths)
-            test_nll = elbo.evaluate_loss(test_batch, test_batch_reversed, test_batch_mask,
-                                          test_seq_lengths) / np.sum(test_seq_lengths)
-            val_nlls.append(val_nll)
-            test_nlls.append(test_nll)
+        val_nll = elbo.evaluate_loss(val_batch, val_batch_reversed, val_batch_mask,
+                                     val_seq_lengths) / np.sum(val_seq_lengths)
+        test_nll = elbo.evaluate_loss(test_batch, test_batch_reversed, test_batch_mask,
+                                      test_seq_lengths) / np.sum(test_seq_lengths)
 
         # put the RNN back into training mode (i.e. turn on drop-out if applicable)
         dmm.rnn.train()
-        val_nll, test_nll = np.mean(val_nlls), np.mean(test_nlls)
         return val_nll, test_nll
-
-    # check if the last n_check losses are all nan
-    def nan_check(losses, n_check=3):
-        if len(losses) >= n_check and all(map(lambda loss: np.isnan(loss) or np.isinf(loss), losses[-n_check:])):
-                return 'restart'
-        return 'continue'
-
-    # recover from a string of nans (this is pretty simplistic)
-    def recover_from_nan(epoch, n_checkpoint_relaods, n_restarts):
-        log('!!!Encountered a string of nans... trying to recover!!!')
-        if args.checkpoint_freq > 0 and epoch >= args.checkpoint_freq:
-            if n_checkpoint_reloads > 1:
-                return n_checkpoint_reloads + 1, n_restarts
-            # we should have a checkpoint so load that
-            args.load_opt = args.save_opt
-            args.load_model = args.save_model
-            load_checkpoint()
-            # if we're getting a lot of nans let's lower the learning rate
-            return n_checkpoint_reloads + 1, n_restarts
-        else:
-            # there's no checkpoint so just reinstantiate the dmm, adam and elbo
-            if n_restarts > 3:
-                return n_checkpoint_reloads, n_restarts + 1
-            log('Reinstantiated DMM, ClippedAdam, and SVI')
-            global dmm, adam, elbo
-            pyro.get_param_store().clear()
-            dmm = DMM(rnn_dropout_rate=args.rnn_dropout_rate, num_iafs=args.num_iafs,
-                      iaf_dim=args.iaf_dim, use_cuda=args.cuda)
-            adam = ClippedAdam(adam_params)
-            elbo = SVI(dmm.model, dmm.guide, adam, "ELBO", trace_graph=False)
-            return n_checkpoint_reloads, n_restarts + 1
 
     # if checkpoint files provided, load model and optimizer states from disk before we start training
     if args.load_opt != '' and args.load_model != '':
@@ -410,7 +371,6 @@ def main(args):
 
     # training loop
     times = [time.time()]
-    losses = []
     for epoch in range(args.num_epochs):
         # if specified, save model and optimizer states to disk every checkpoint_freq epochs
         if args.checkpoint_freq > 0 and epoch > 0 and epoch % args.checkpoint_freq == 0:
@@ -432,26 +392,10 @@ def main(args):
         log("[training epoch %04d]  %.4f \t\t\t\t(dt = %.3f sec)" %
             (epoch, epoch_nll / N_train_time_slices, epoch_time))
 
+        # do evaluation on test and validation data and report results
         if val_test_frequency > 0 and epoch > 0 and epoch % val_test_frequency == 0:
-            val_nll, test_nll = do_evaluation(n_samples=1)
+            val_nll, test_nll = do_evaluation()
             log("[val/test epoch %04d]  %.4f  %.4f" % (epoch, val_nll, test_nll))
-
-        if epoch in expensive_val_test_points:
-            val_nll, test_nll = do_evaluation(n_samples=n_eval_samples_outer)
-            log("[EXPENSIVE val/test epoch %04d]  %.4f  %.4f" % (epoch, val_nll, test_nll))
-            expensive_evaluations.append((val_nll, test_nll))
-            if val_nll < best_val_nll:
-                best_val_nll = val_nll
-
-        # check for nans
-        losses.append(epoch_nll)
-        if nan_check(losses) == 'restart':
-            losses = []
-            n_checkpoint_reloads, n_restarts = recover_from_nan(epoch, n_checkpoint_reloads, n_restarts)
-            if n_checkpoint_reloads == 3 or n_restarts == 5:
-                return (99.99, [])
-
-    return (best_val_nll, expensive_evaluations)
 
 
 # parse command-line arguments and execute the main method
@@ -459,26 +403,25 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', type=int, default=5000)
-    parser.add_argument('-lr', '--learning-rate', type=float, default=0.0008)
-    parser.add_argument('-b1', '--beta1', type=float, default=0.90)
+    parser.add_argument('-lr', '--learning-rate', type=float, default=0.0004)
+    parser.add_argument('-b1', '--beta1', type=float, default=0.96)
     parser.add_argument('-b2', '--beta2', type=float, default=0.999)
     parser.add_argument('-cn', '--clip-norm', type=float, default=20.0)
-    parser.add_argument('-lrd', '--lr-decay', type=float, default=1.0)
-    parser.add_argument('-wd', '--weight-decay', type=float, default=0.1)
+    parser.add_argument('-lrd', '--lr-decay', type=float, default=0.99996)
+    parser.add_argument('-wd', '--weight-decay', type=float, default=0.6)
     parser.add_argument('-mbs', '--mini-batch-size', type=int, default=20)
     parser.add_argument('-ae', '--annealing-epochs', type=int, default=1000)
-    parser.add_argument('-maf', '--minimum-annealing-factor', type=float, default=0.0)
+    parser.add_argument('-maf', '--minimum-annealing-factor', type=float, default=0.1)
     parser.add_argument('-rdr', '--rnn-dropout-rate', type=float, default=0.1)
     parser.add_argument('-iafs', '--num-iafs', type=int, default=0)
     parser.add_argument('-id', '--iaf-dim', type=int, default=100)
     parser.add_argument('-cf', '--checkpoint-freq', type=int, default=0)
     parser.add_argument('-lopt', '--load-opt', type=str, default='')
     parser.add_argument('-lmod', '--load-model', type=str, default='')
-    default_name = str(uuid.uuid4())
-    parser.add_argument('-sopt', '--save-opt', type=str, default=default_name+'.opt.chk')
-    parser.add_argument('-smod', '--save-model', type=str, default=default_name+'.mod.chk')
+    parser.add_argument('-sopt', '--save-opt', type=str, default='')
+    parser.add_argument('-smod', '--save-model', type=str, default='')
     parser.add_argument('--cuda', action='store_true')
-    parser.add_argument('-l', '--log', type=str, default=default_name+'.log')
+    parser.add_argument('-l', '--log', type=str, default='dmm.log')
     args = parser.parse_args()
 
     main(args)
