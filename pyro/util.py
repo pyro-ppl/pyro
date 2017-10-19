@@ -406,3 +406,10 @@ def identify_dense_edges(trace):
                         trace.add_edge(past_name, name)
 
     return trace
+
+def deep_getattr(obj, name):
+    """
+    Python getattr() for arbitrarily deep attributes
+    Throws an AttirbuteError if bad attribute
+    """
+    return reduce(getattr, name.split("."), obj)

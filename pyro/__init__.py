@@ -1,5 +1,6 @@
 from __future__ import division
 
+from pdb import set_trace as bb
 import warnings
 import contextlib
 from inspect import isclass
@@ -15,7 +16,8 @@ from pyro.distributions.subsample import Subsample
 from pyro.params import param_with_module_name
 from pyro.params.param_store import ParamStoreDict
 from pyro.poutine import LambdaPoutine, condition, do  # noqa: F401
-from pyro.util import zeros, ones, set_rng_seed, apply_stack, get_tensor_data  # noqa: F401
+from pyro.util import zeros, ones, set_rng_seed, apply_stack, \
+                      get_tensor_data, deep_getattr  # noqa: F401
 
 # global map of params for now
 _param_store = ParamStoreDict()
@@ -232,7 +234,7 @@ def param(name, *args, **kwargs):
         return out_msg["value"]
 
 
-def module(pyro_name, nn_obj, tags="default", load_from_param_store=False):
+def module(pyro_name, nn_obj, tags="default", update_module_params=True):
     """
     :param pyro_name: name of module
     :type pyro_name: str
@@ -267,19 +269,22 @@ def module(pyro_name, nn_obj, tags="default", load_from_param_store=False):
 
         if get_tensor_data(param)._cdata != get_tensor_data(returned_param)._cdata:
             target_state_dict[param_name] = returned_param
-            if load_from_param_store:
-                # optional: if the data behind the parameter in the actual module
-                # is stale w.r.t. the parameter, use the latest value in the param store
-                get_tensor_data(param).copy_(get_tensor_data(returned_param.data))
-                pyro.get_param_store().replace_param(full_param_name, new_param=param, old_param=returned_param)
 
-    if target_state_dict:
+    if target_state_dict and update_module_params:
         # WARNING: this is very dangerous. better method?
         for name, param in nn_obj.named_parameters():
+            is_param = False
             name_arr = name.rsplit('.', 1)
-            mod_name, param_name = name_arr[0], name_arr[1]
+            if len(name_arr) > 1:
+                mod_name, param_name = name_arr[0], name_arr[1]
+            else:
+                is_param = True
+                mod_name = name
             if name in target_state_dict.keys():
-                getattr(nn_obj, mod_name)._parameters[param_name] = target_state_dict[name]
+                if not is_param:
+                    deep_getattr(nn_obj, mod_name)._parameters[param_name] = target_state_dict[name]
+                else:
+                    nn_obj._parameters[mod_name] = target_state_dict[name]
 
     return nn_obj
 
@@ -296,4 +301,4 @@ def random_module(name, nn_module, prior, *args, **kwargs):
     assert hasattr(nn_module, "parameters"), "Module is not a NN module."
     # register params in param store
     lifted_fn = poutine.lift(pyro.module, prior)
-    return lambda: lifted_fn(name, nn_module, *args, **kwargs)
+    return lambda: lifted_fn(name, nn_module, update_module_params=True, *args, **kwargs)
