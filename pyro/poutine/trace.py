@@ -57,7 +57,7 @@ class Trace(networkx.DiGraph):
 
         The local computation is memoized.
         """
-        log_p = Variable(torch.zeros(1))
+        log_p = 0.0
         for name, site in self.nodes.items():
             if site["type"] == "sample" and site_filter(name, site):
                 try:
