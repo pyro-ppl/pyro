@@ -9,7 +9,7 @@ from torch.autograd import Variable
 class TransformedDistribution(Distribution):
     """
     Transforms the base distribution by applying a sequence of `Bijector`s to it.
-    This results in a scorable distribution (i.e. it has a log_pdf() method).
+    This results in a scorable distribution (i.e. it has a `log_pdf()` method).
     """
 
     def __init__(self, base_distribution, bijectors, *args, **kwargs):
@@ -102,7 +102,7 @@ class Bijector(nn.Module):
         """
         Virtual logdet jacobian method.
 
-        Computes the log det jacobian |dy/dx|
+        Computes the log det jacobian `|dy/dx|`
         """
         raise NotImplementedError()
 

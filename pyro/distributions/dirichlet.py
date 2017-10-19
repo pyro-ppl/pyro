@@ -67,6 +67,14 @@ class Dirichlet(Distribution):
             self.alpha = alpha
         super(Dirichlet, self).__init__(*args, **kwargs)
 
+    def batch_shape(self, alpha=None, *args, **kwargs):
+        alpha = self._sanitize_input(alpha)
+        return alpha.size()[:-1]
+
+    def event_shape(self, alpha=None, *args, **kwargs):
+        alpha = self._sanitize_input(alpha)
+        return alpha.size()[-1:]
+
     def sample(self, alpha=None, *args, **kwargs):
         """
         Draws either a single sample (if alpha.dim() == 1), or one sample per param (if alpha.dim() == 2).

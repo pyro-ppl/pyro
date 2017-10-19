@@ -42,6 +42,16 @@ class DiagNormal(Distribution):
                 self.sigma = sigma.expand(batch_size, sigma.size(0))
         super(DiagNormal, self).__init__(*args, **kwargs)
 
+    def batch_shape(self, mu=None, sigma=None, *args, **kwargs):
+        mu, sigma = self._sanitize_input(mu, sigma)
+        event_dim = 1
+        return mu.size()[:-event_dim]
+
+    def event_shape(self, mu=None, sigma=None, *args, **kwargs):
+        mu, sigma = self._sanitize_input(mu, sigma)
+        event_dim = 1
+        return mu.size()[-event_dim:]
+
     def sample(self, mu=None, sigma=None, *args, **kwargs):
         """
         Reparameterized diagonal Normal sampler.

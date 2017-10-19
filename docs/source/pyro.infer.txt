@@ -1,9 +1,9 @@
-.. automodule:: pyro.infer.importance
+.. automodule:: pyro.infer.elbo
     :members:
     :undoc-members:
     :show-inheritance:
 
-.. automodule:: pyro.infer.kl_qp
+.. automodule:: pyro.infer.importance
     :members:
     :undoc-members:
     :show-inheritance:
