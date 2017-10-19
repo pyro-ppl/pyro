@@ -217,21 +217,19 @@ def test_bern_elbo_gradient(enum_discrete, trace_graph):
     assert_equal(actual_grads, expected_grads, prec=0.1)
 
 
-# XXX This test fails in the batch-sum case with two distinct errors:
-# - the gradient of the global parameter sigma is erroneously scaled by batch_size.
-# - the gradient of the local parameters ps are erroneously the same for all data points.
-
-# @pytest.mark.parametrize("model,guide", [
-#     (gmm_model, gmm_guide),
-#     (gmm_batch_model, gmm_batch_guide),
-# ], ids=["single", "batch"])
-# @pytest.mark.parametrize("enum_discrete", [True, False], ids=["sum", "sample"])
-@pytest.mark.parametrize("model,guide", [(gmm_batch_model, gmm_batch_guide)], ids=["batch"])  # DEBUG
-@pytest.mark.parametrize("enum_discrete", [True], ids=["sum"])  # DEBUG
+@pytest.mark.parametrize("model,guide", [
+    (gmm_model, gmm_guide),
+    (gmm_batch_model, gmm_batch_guide),
+], ids=["single", "batch"])
+@pytest.mark.parametrize("enum_discrete", [
+    pytest.param(True,
+                 marks=pytest.mark.xfail(reason="https://github.com/uber/pyro/issues/278")),
+    False,
+], ids=["sum", "sample"])
 @pytest.mark.parametrize("trace_graph", [False, True], ids=["dense", "flat"])
 def test_gmm_elbo_gradient(model, guide, enum_discrete, trace_graph):
     pyro.clear_param_store()
-    num_particles = 2000
+    num_particles = 4000
     data = Variable(torch.Tensor([-1, 1]))
 
     print("Computing gradients using surrogate loss")
