@@ -7,6 +7,7 @@ from torch.autograd import Variable
 from torch.nn import Parameter
 from collections import defaultdict
 
+
 def detach_iterable(iterable):
     if isinstance(iterable, Variable):
         return iterable.detach()
