@@ -2,7 +2,7 @@ import torch
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
-from pyro.util import log_gamma
+from pyro.distributions.util import log_gamma
 
 
 class Subsample(Distribution):
@@ -14,7 +14,6 @@ class Subsample(Distribution):
     :returns: a random subsample of `range(size)`
     :rtype: torch.autograd.Variable of torch.LongTensor
     """
-    reparameterized = False
 
     def _sanitize_inputs(self, size, subsample_size):
         if size is None:

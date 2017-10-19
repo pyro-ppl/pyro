@@ -254,7 +254,7 @@ def param(name, *args, **kwargs):
         return out_msg["value"]
 
 
-def module(pyro_name, nn_obj, tags="default"):
+def module(pyro_name, nn_obj, tags="default", load_from_param_store=False):
     """
     :param pyro_name: name of module
     :type pyro_name: str
@@ -262,6 +262,9 @@ def module(pyro_name, nn_obj, tags="default"):
     :type nn_obj: torch.nn.Module
     :param tags: optional; tags to associate with any parameters inside the module
     :type tags: string or iterable of strings
+    :param load_from_param_store: whether to overwrite parameters in the pytorch module with the values found
+        in the paramstore
+    :type load_from_param_store: bool
     :returns: torch.nn.Module
 
     Takes a torch.nn.Module and registers its parameters with the param store.
@@ -276,21 +279,29 @@ def module(pyro_name, nn_obj, tags="default"):
         raise NotImplementedError("pyro.module does not support class constructors for " +
                                   "the argument nn_obj")
 
+    # basically get a unique identifier for the data based on where it is in memory
     def _cdata(t):
         if isinstance(t, torch.autograd.Variable):
             return t.data._cdata
         else:
             return t._cdata
 
+    # copy in place; supports both Variable and Tensor args
     def _copy_in_place(source, target):
         t = target.data if isinstance(target, torch.autograd.Variable) else target
         s = source.data if isinstance(source, torch.autograd.Variable) else source
         t.copy_(s)
 
     for param_name, param in nn_obj.named_parameters():
-        returned_param = pyro.param(param_with_module_name(pyro_name, param_name), param, tags=tags)
-        if _cdata(param) != _cdata(returned_param):
+        # register the parameter in the module with pyro
+        # this only does something substantive if the parameter hasn't been seen before
+        full_param_name = param_with_module_name(pyro_name, param_name)
+        returned_param = pyro.param(full_param_name, param, tags=tags)
+        # optional: if the data behind the parameter in the actual module is stale w.r.t. the parameter
+        # registered with pyro then overwrite it with the paramstore copy
+        if load_from_param_store and _cdata(param) != _cdata(returned_param):
             _copy_in_place(source=returned_param, target=param)
+            pyro.get_param_store().replace_param(full_param_name, new_param=param, old_param=returned_param)
 
     return nn_obj
 

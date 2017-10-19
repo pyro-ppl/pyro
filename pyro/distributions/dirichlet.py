@@ -4,7 +4,7 @@ import torch
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
-from pyro.util import log_beta
+from pyro.distributions.util import log_beta
 
 
 class Dirichlet(Distribution):
@@ -65,7 +65,6 @@ class Dirichlet(Distribution):
         else:
             assert alpha.dim() in (1, 2)
             self.alpha = alpha
-        self.reparameterized = False
         super(Dirichlet, self).__init__(*args, **kwargs)
 
     def sample(self, alpha=None, *args, **kwargs):
