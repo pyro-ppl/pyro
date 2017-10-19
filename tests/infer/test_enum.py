@@ -13,9 +13,8 @@ from pyro.infer.trace_elbo import Trace_ELBO
 from pyro.infer.tracegraph_elbo import TraceGraph_ELBO
 from tests.common import assert_equal, xfail_if_not_implemented
 
-segfaults_on_old_pytorch = pytest.mark.skipif(
-        torch.__version__ == "0.2.0_4",
-        reason="pytorch segfaults at 0.2.0_4, fixed by 0.2.0+f964105")
+segfaults_on_old_pytorch = pytest.mark.skip(
+    reason="pytorch segfaults at 0.2.0_4, fixed by 0.2.0+f964105")
 
 
 # A purely discrete model, no batching.
