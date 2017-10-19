@@ -13,7 +13,10 @@ from pyro.infer.trace_elbo import Trace_ELBO
 from pyro.infer.tracegraph_elbo import TraceGraph_ELBO
 from tests.common import assert_equal, xfail_if_not_implemented
 
-segfaults_on_old_pytorch = pytest.mark.skip(
+# XXX Remove this after Pytorch 0.2.1.
+pytorch_is_release = ('+' not in torch.__version__)
+segfaults_on_old_pytorch = pytest.mark.skipif(
+    pytorch_is_release,
     reason="pytorch segfaults at 0.2.0_4, fixed by 0.2.0+f964105")
 
 
@@ -142,15 +145,13 @@ def test_gmm_batch_iter_discrete_traces(model, data_size, graph_type):
     assert len(traces) == 2
 
 
+@segfaults_on_old_pytorch
 @pytest.mark.parametrize("trace_graph", [False, True], ids=["dense", "flat"])
 @pytest.mark.parametrize("model,guide", [
     (gmm_model, gmm_guide),
     (gmm_batch_model, gmm_batch_guide),
 ], ids=["single", "batch"])
-@pytest.mark.parametrize("enum_discrete", [
-    False,
-    pytest.param(True, marks=segfaults_on_old_pytorch),
-], ids=["sample", "sum"])
+@pytest.mark.parametrize("enum_discrete", [False, True], ids=["sample", "sum"])
 def test_svi_step_smoke(model, guide, enum_discrete, trace_graph):
     pyro.clear_param_store()
     data = Variable(torch.Tensor([0, 1, 9]))
@@ -182,6 +183,7 @@ def finite_difference(eval_loss, delta=0.1):
     return grads
 
 
+@segfaults_on_old_pytorch
 @pytest.mark.parametrize("enum_discrete", [True, False], ids=["sum", "sample"])
 @pytest.mark.parametrize("trace_graph", [False, True], ids=["dense", "flat"])
 def test_bern_elbo_gradient(enum_discrete, trace_graph):
@@ -216,6 +218,7 @@ def test_bern_elbo_gradient(enum_discrete, trace_graph):
     assert_equal(actual_grads, expected_grads, prec=0.1)
 
 
+@segfaults_on_old_pytorch
 @pytest.mark.parametrize("model,guide", [
     (gmm_model, gmm_guide),
     (gmm_batch_model, gmm_batch_guide),
