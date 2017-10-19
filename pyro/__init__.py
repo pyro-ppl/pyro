@@ -163,7 +163,8 @@ def iarange(name, size, subsample_size=0, subsample=None):
         yield Variable(torch.LongTensor(list(range(size))))
         return
 
-    subsample = sample(name, Subsample(size, subsample_size), obs=subsample)
+    if subsample is None:
+        subsample = sample(name, Subsample(size, subsample_size))
     if len(_PYRO_STACK) == 0:
         yield subsample
     else:
@@ -197,7 +198,9 @@ def irange(name, size, subsample_size=0, subsample=None):
     with iarange(name, size, subsample_size, subsample) as batch:
         # Wrap computation in an independence context.
         indep_context = LambdaPoutine(None, name, 1.0, 'list', 0, subsample_size)
-        for i in batch.data:
+        if isinstance(batch, Variable):
+            batch = batch.data
+        for i in batch:
             with indep_context:
                 yield i
 

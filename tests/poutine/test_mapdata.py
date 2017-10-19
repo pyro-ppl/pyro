@@ -197,7 +197,7 @@ def test_replay(model):
 
 def iarange_custom_model(subsample):
     with pyro.iarange('iarange', 20, subsample=subsample) as batch:
-        result = list(batch.data)
+        result = batch
     return result
 
 
@@ -208,17 +208,11 @@ def irange_custom_model(subsample):
     return result
 
 
-@pytest.mark.xfail
 @pytest.mark.parametrize('model', [iarange_custom_model, irange_custom_model],
                          ids=['iarange', 'irange'])
-def test_replay_custom(model):
+def test_custom_subsample(model):
     pyro.set_rng_seed(0)
 
-    traced_model = poutine.trace(model)
-    original = traced_model([1, 2, 3, 4])
-
-    replayed = poutine.replay(model, traced_model.trace)([5, 6, 7, 8])
-    assert replayed == original
-
-    different = traced_model([5, 6, 7, 8])
-    assert different != original
+    subsample = [1, 3, 5, 7]
+    assert model(subsample) == subsample
+    assert poutine.trace(model)(subsample) == subsample
