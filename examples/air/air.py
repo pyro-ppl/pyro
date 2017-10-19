@@ -54,8 +54,8 @@ class AIR(nn.Module):
                  use_masking=True,
                  use_baselines=True,
                  baseline_scalar=None,
-                 use_cuda=False,
                  fudge_z_pres=False,
+                 use_cuda=False,
                  print_modules=False):
 
         super(AIR, self).__init__()
@@ -65,11 +65,11 @@ class AIR(nn.Module):
         self.window_size = window_size
         self.z_what_size = z_what_size
         self.rnn_hidden_size = rnn_hidden_size
-        self.decoder_output_bias = decoder_output_bias
         self.use_masking = use_masking and not fudge_z_pres
         self.use_baselines = use_baselines and not fudge_z_pres
         self.baseline_scalar = baseline_scalar
         self.fudge_z_pres = fudge_z_pres
+        self.use_cuda = use_cuda
 
         self.z_pres_size = 1
         self.z_where_size = 3
@@ -97,7 +97,6 @@ class AIR(nn.Module):
         if print_modules:
             print(self)
 
-        self.use_cuda = use_cuda
         if use_cuda:
             self.cuda()
 

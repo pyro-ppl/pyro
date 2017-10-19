@@ -33,7 +33,7 @@ parser.add_argument('-b', '--batch-size', type=int, default=64,
                     help='batch size')
 parser.add_argument('--progress-every', type=int, default=1,
                     help='number of steps between writing progress to stdout')
-parser.add_argument('--baseline-scalar', type=int,
+parser.add_argument('--baseline-scalar', type=float,
                     help='scale the output of the baseline nets by this value')
 parser.add_argument('--no-baselines', action='store_true', default=False,
                     help='do not use data dependent baselines')
@@ -55,10 +55,10 @@ parser.add_argument('--viz-every', type=int, default=100,
                     help='number of steps between vizualizations')
 parser.add_argument('--visdom-env', default='main',
                     help='visdom enviroment name')
-parser.add_argument('--checkpoint', action='store_true',
-                    help='periodically persist parameters')
-parser.add_argument('--checkpoint-every', type=int, default=1000,
-                    help='number of steps between checkpoints')
+# parser.add_argument('--checkpoint', action='store_true',
+#                     help='periodically persist parameters')
+# parser.add_argument('--checkpoint-every', type=int, default=1000,
+#                     help='number of steps between checkpoints')
 parser.add_argument('--cuda', action='store_true', default=False,
                     help='use cuda')
 parser.add_argument('-t', '--model-steps', type=int, default=3,
