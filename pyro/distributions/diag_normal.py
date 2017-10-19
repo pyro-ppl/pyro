@@ -42,15 +42,13 @@ class DiagNormal(Distribution):
                 self.sigma = sigma.expand(batch_size, sigma.size(0))
         super(DiagNormal, self).__init__(*args, **kwargs)
 
-    @property
-    def batch_shape(self):
-        assert self.mu is not None
+    def batch_shape(self, mu=None, sigma=None, *args, **kwargs):
+        mu, sigma = self._sanitize_input(mu, sigma)
         event_dim = 1
         return self.mu.size()[:-event_dim]
 
-    @property
-    def event_shape(self):
-        assert self.mu is not None
+    def event_shape(self, mu=None, sigma=None, *args, **kwargs):
+        mu, sigma = self._sanitize_input(mu, sigma)
         event_dim = 1
         return self.mu.size()[-event_dim:]
 

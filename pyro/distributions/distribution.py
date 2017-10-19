@@ -25,39 +25,46 @@ class Distribution(object):
 
     **Tensor Shapes**:
 
+    Distributions provide a method `.shape()` for the tensor shape of samples::
+
+      x = d.sample(*args, **kwargs)
+      assert x.shape == d.shape(*args, **kwargs)
+
     Pyro distinguishes two different roles for tensor shapes of samples:
 
-    - The leftmost dimension corresponds to *batching*, which is treated
-      specially during inference.
+    - The leftmost dimension corresponds to iid *batching*, which can be
+      treated specially during inference via the `.batch_log_pdf()` method.
     - The rightmost dimensions correspond to *event shape*.
 
     These shapes are related by the equation::
 
-      assert d.shape == d.batch_shape + d.event_shape
+      assert d.shape(*args, **kwargs) == (d.batch_shape(*args, **kwargs) +
+                                          d.event_shape(*args, **kwargs))
 
-    Distributions also provide a vectorized `.batch_log_pdf()` method that
-    evaluates the log probability density of each event in a batch
-    independently, returning a tensor of shape `d.batch_shape`::
+    Distributions provide a vectorized `.batch_log_pdf()` method that evaluates
+    the log probability density of each event in a batch independently,
+    returning a tensor of shape `d.batch_shape() + (1,)`::
 
-      x = d.sample()
-      assert x.shape == d.shape
-      assert d.batch_log_pdf(x).shape == d.shape
+      x = d.sample(*args, **kwargs)
+      assert x.shape == d.shape(*args, **kwargs)
+      log_p = d.batch_log_pdf(x, *args, **kwargs)
+      assert log_p.shape == d.batch_shape(*args, **kwargs) + (1,)
 
     Distributions may also support broadcasting of the `.log_pdf()` and
     `.batch_log_pdf()` methods, which may each be evaluated with a sample
     tensor `x` that is larger than (but broadcastable from) the parameters.
-    In this case, `d.shape` will return a shape that is broadcastable to
+    In this case, `d.batch_shape()` will return a shape that is broadcastable to
     `d.batch_log_pdf().shape`. For example::
 
       x = d.sample()
       xx = torch.stack([x, x])
-      d.batch_log_pdf(xx) + torch.zeros(d.shape)  # Should broadcast correctly.
+      d.batch_log_pdf(xx) + torch.zeros(d.batch_shape() + (1,))  # Broadcast.
 
     **Implementing New Distributions**:
 
-    Derived classes must implement the following methods: `.batch_shape`,
-    `.event_shape`, `.sample()`, and `.batch_log_pdf()`.
-    Discrete classes should also implement the `.support()` method to improve
+    Derived classes must implement the following methods: `.sample()`,
+    `.batch_log_pdf()`, `.batch_shape()`, and `.event_shape()`, .
+    Discrete classes may also implement the `.support()` method to improve
     gradient estimates and set `.enumerable = True`.
 
     **Examples**:
@@ -74,41 +81,38 @@ class Distribution(object):
         Currently takes no explicit arguments.
         """
 
-    @property
-    def batch_shape(self):
+    def batch_shape(self, *args, **kwargs):
         """
         The left-hand tensor shape of samples, used for batching.
 
-        Samples are of shape `d().shape == d.batch_shape + d.event_shape`.
+        Samples are of shape `d().shape == d.batch_shape() + d.event_shape()`.
 
         :return: Tensor shape used for batching.
         :rtype: torch.Size
         """
         raise NotImplementedError
 
-    @property
-    def event_shape(self):
+    def event_shape(self, *args, **kwargs):
         """
         The right-hand tensor shape of samples, used for individual events.
 
-        Samples are of shape `d().shape == d.batch_shape + d.event_shape`.
+        Samples are of shape `d().shape == d.batch_shape() + d.event_shape()`.
 
         :return: Tensor shape used for individual events.
         :rtype: torch.Size
         """
         raise NotImplementedError
 
-    @property
-    def shape(self):
+    def shape(self, *args, **kwargs):
         """
         The tensor shape of samples from this distribution.
 
-        Samples are of shape `d().shape == d.batch_shape + d.event_shape`.
+        Samples are of shape `d().shape == d.batch_shape() + d.event_shape()`.
 
         :return: Tensor shape of samples.
         :rtype: torch.Size
         """
-        return self.batch_shape + self.event_shape
+        return self.batch_shape(*args, **kwargs) + self.event_shape(*args, **kwargs)
 
     def __call__(self, *args, **kwargs):
         """

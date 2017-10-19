@@ -67,14 +67,12 @@ class Dirichlet(Distribution):
             self.alpha = alpha
         super(Dirichlet, self).__init__(*args, **kwargs)
 
-    @property
-    def batch_shape(self):
-        assert self.alpha is not None
+    def batch_shape(self, alpha=None, *args, **kwargs):
+        alpha = self._sanitize_input(alpha)
         return self.alpha.size()[:-1]
 
-    @property
-    def event_shape(self):
-        assert self.alpha is not None
+    def event_shape(self, alpha=None, *args, **kwargs):
+        alpha = self._sanitize_input(alpha)
         return self.alpha.size()[-1:]
 
     def sample(self, alpha=None, *args, **kwargs):

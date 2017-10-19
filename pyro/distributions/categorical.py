@@ -52,14 +52,12 @@ class Categorical(Distribution):
         self.one_hot = one_hot
         super(Categorical, self).__init__(batch_size=1, *args, **kwargs)
 
-    @property
-    def batch_shape(self):
-        assert self.ps is not None
+    def batch_shape(self, ps=None, vs=None, one_hot=True, *args, **kwargs):
+        ps, vs, one_hot = self._sanitize_input(ps, vs, one_hot)
         return self.ps.size()[:-1]
 
-    @property
-    def event_shape(self):
-        assert self.ps is not None
+    def event_shape(self, ps=None, vs=None, one_hot=True, *args, **kwargs):
+        ps, vs, one_hot = self._sanitize_input(ps, vs, one_hot)
         if self.one_hot:
             return self.ps.size()[-1:]
         else:
