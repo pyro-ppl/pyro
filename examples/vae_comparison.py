@@ -104,7 +104,7 @@ class VAE(object):
         :return: reconstructed image, and the latent z's mean and variance.
         """
         z_mu, z_sigma = self.vae_encoder(x)
-        if self.vae_encoder.training:
+        if self.mode == TRAIN:
             z = DiagNormal(z_mu, z_sigma).sample()
         else:
             z = z_mu
