@@ -5,7 +5,6 @@ import torch.nn as nn
 from torch.nn.functional import normalize  # noqa: F401
 
 from torch.autograd import Variable
-# import pandas as pd  # noqa: F401
 
 import pyro
 from pyro import poutine
@@ -14,20 +13,10 @@ from pyro.infer import SVI
 from pyro.optim import Adam
 
 """
-Bayesian Logistic Regression
+Bayesian Regression
 """
 
-# use UCI dataset
-# fname = "data/covtype.data"
-# print("loading covtype data set...")
-# with open(fname, "r+") as f:
-#     content = f.read()
-# df = pd.read_csv(fname, header=None)
-# print("...done")
-
 # generate toy dataset
-
-
 def build_linear_dataset(N, noise_std=0.1):
     D = 1
     X = np.linspace(-6, 6, num=N)
@@ -54,8 +43,6 @@ def build_logistic_dataset(N, noise_std=0.1):
 sigmoid = nn.Sigmoid()
 softplus = nn.Softplus()
 
-# N = 581012  # data
-# D = 54  # features
 N = 1000  # toy data
 D = 1
 batch_size = 256
@@ -115,27 +102,17 @@ def guide(data):
 adam = Adam({"lr": 0.01})
 svi = SVI(model, guide, adam, loss="ELBO")
 
-# For UCI dataset
-# x = df.as_matrix(columns=range(D))
-# y = df.as_matrix(columns=[D])
-# raw_data = Variable(torch.Tensor(df.as_matrix().tolist()))
-# data = normalize(raw_data, 2, dim=1)
-# x_norm = normalize(Variable(torch.Tensor(x.tolist())), 2, dim=1)
-# y = Variable(torch.Tensor(y.tolist()))
-# data = torch.cat((x_norm, y), 1)
-
-# For toy dataset
 data = build_linear_dataset(N)
 
-all_batches = np.arange(0, N, batch_size)
-# take care of bad index
-if all_batches[-1] != N:
-    all_batches = list(all_batches) + [N]
+# batching data below
+# all_batches = np.arange(0, N, batch_size)
+# if all_batches[-1] != N:
+#     all_batches = list(all_batches) + [N]
 
 
 def main():
     parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', nargs='?', default=10000, type=int)
+    parser.add_argument('-n', '--num-epochs', nargs='?', default=1000, type=int)
     args = parser.parse_args()
     for j in range(args.num_epochs):
         epoch_loss = svi.step(data)
@@ -145,7 +122,7 @@ def main():
 #             batch_end = all_batches[ix + 1]
 #             batch_data = data[batch_start: batch_end]
 #             epoch_loss += svi.step(batch_data)
-        if j % 200 == 0:
+        if j % 100 == 0:
             print("epoch avg loss {}".format(epoch_loss/float(N)))
 
 
