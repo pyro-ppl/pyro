@@ -106,7 +106,7 @@ class Multinomial(Distribution):
         if var.data.dim() == 1:
             return var.data
         # nested tensor arrays because of batches"
-        return var.data.numpy()[0]
+        return var.data.cpu().numpy()[0]
 
     def analytic_mean(self, ps=None, n=None):
         ps, n = self._sanitize_input(ps, n)
