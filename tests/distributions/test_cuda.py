@@ -1,3 +1,5 @@
+import pytest
+
 from tests.common import assert_equal, cuda_tensors, requires_cuda, xfail_if_not_implemented
 
 
@@ -7,7 +9,10 @@ def test_sample(dist):
 
         # Compute CPU value.
         params = dist.get_dist_params(idx)
-        cpu_value = dist.pyro_dist.sample(**params)
+        try:
+            cpu_value = dist.pyro_dist.sample(**params)
+        except ValueError as e:
+            pytest.xfail('CPU version fails: {}'.format(e))
         assert not cpu_value.is_cuda
 
         # Compute GPU value.
