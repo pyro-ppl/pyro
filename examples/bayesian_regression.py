@@ -77,17 +77,14 @@ def model(data):
     priors = {'weight': w_prior, 'bias': b_prior}
     lifted_fn = poutine.lift(reg_fn, priors)
 
-    def observe(data, is_linear):
+    with pyro.iarange("map", N, subsample=data):
         x_data = data[:, :-1]
         y_data = data[:, -1]
         latent = lifted_fn(x_data)
-        if is_linear:
+        if reg_fn.__name__ == 'lin_reg':
             pyro.observe("obs", DiagNormal(latent, Variable(torch.ones(data.size(0)))), y_data.squeeze())
         else:
             pyro.observe("obs", Bernoulli(latent.squeeze()), y_data)
-
-    with pyro.iarange("map", N, subsample=data):
-        observe(data, reg_fn.__name__ == 'lin_reg')
 
 
 def guide(data):
