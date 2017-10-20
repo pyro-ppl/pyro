@@ -23,7 +23,7 @@ def fn_y_MNIST(y):
 
 class DatasetWrapper(object):
     def __init__(self, dataset, root="./data", download=True, y_transform=fn_y_MNIST,
-                 loading_batch_size=128, x_transform=fn_x_MNIST,
+                 x_transform=fn_x_MNIST,
                  training_batch_size=512, testing_batch_size=512, training_size=None, *args, **kwargs):
 
         self.train_set = dataset(root=root, train=True, download=download)
@@ -33,11 +33,11 @@ class DatasetWrapper(object):
         self.x_transform = x_transform
         self.y_transform = y_transform
 
-        kwargs = {'num_workers': 1, 'pin_memory': True}
+        kwargs = {'num_workers': 2, 'pin_memory': True}
         self.train_loader = tdata.DataLoader(dataset=self.train_set,
-                                             batch_size=loading_batch_size, shuffle=True, **kwargs)
+                                             batch_size=training_batch_size, shuffle=True, **kwargs)
         self.test_loader = tdata.DataLoader(dataset=self.test_set,
-                                            batch_size=loading_batch_size, shuffle=False, **kwargs)
+                                            batch_size=testing_batch_size, shuffle=False, **kwargs)
         print(" Training set size: {}, Testing set size: {}". format(
             len(self.train_loader.dataset.train_data), len(self.test_loader.dataset.test_data)))
 
