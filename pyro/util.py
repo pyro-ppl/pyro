@@ -95,64 +95,6 @@ def zero_grads(tensors):
                 p.grad = Variable(data.new().resize_as_(data).zero_())
 
 
-def log_gamma(xx):
-    if isinstance(xx, Variable):
-        ttype = xx.data.type()
-    elif isinstance(xx, torch.Tensor):
-        ttype = xx.type()
-    gamma_coeff = [
-        76.18009172947146,
-        -86.50532032941677,
-        24.01409824083091,
-        -1.231739572450155,
-        0.1208650973866179e-2,
-        -0.5395239384953e-5
-    ]
-    magic1 = 1.000000000190015
-    magic2 = 2.5066282746310005
-    x = xx - 1.0
-    t = x + 5.5
-    t = t - (x + 0.5) * torch.log(t)
-    ser = Variable(torch.ones(x.size()).type(ttype)) * magic1
-    for c in gamma_coeff:
-        x = x + 1.0
-        ser = ser + torch.pow(x / c, -1)
-    return torch.log(ser * magic2) - t
-
-
-def log_beta(t):
-    """
-    Computes log Beta function.
-
-    :param t:
-    :type t: torch.autograd.Variable of dimension 1 or 2
-    :rtype: torch.autograd.Variable of float (if t.dim() == 1) or torch.Tensor (if t.dim() == 2)
-    """
-    assert t.dim() in (1, 2)
-    if t.dim() == 1:
-        numer = torch.sum(log_gamma(t))
-        denom = log_gamma(torch.sum(t))
-    else:
-        numer = torch.sum(log_gamma(t), 1)
-        denom = log_gamma(torch.sum(t, 1))
-    return numer - denom
-
-
-def to_one_hot(x, ps):
-    if isinstance(x, Variable):
-        ttype = x.data.type()
-    elif isinstance(x, torch.Tensor):
-        ttype = x.type()
-    batch_size = x.size(0)
-    classes = ps.size(1)
-    # create an empty array for one-hots
-    batch_one_hot = torch.zeros(batch_size, classes)
-    # this operation writes ones where needed
-    batch_one_hot.scatter_(1, x.data.view(-1, 1).long(), 1)
-
-    return Variable(batch_one_hot.type(ttype))
-
-
 def tensor_histogram(ps, vs):
     """
     make a histogram from weighted Variable/Tensor/ndarray samples
@@ -227,7 +169,7 @@ def apply_stack(initial_msg):
 
     # go until time to stop?
     for frame in stack:
-        assert msg["type"] in ("sample", "observe", "map_data", "param"), \
+        assert msg["type"] in ("sample", "param"), \
             "{} is an invalid site type, how did that get there?".format(msg["type"])
 
         msg["value"] = getattr(frame, "_pyro_{}".format(msg["type"]))(msg)
@@ -318,6 +260,7 @@ def discrete_escape(trace, msg):
     Subroutine for integrating out discrete variables for variance reduction.
     """
     return (msg["type"] == "sample") and \
+        (not msg["is_observed"]) and \
         (msg["name"] not in trace) and \
         (getattr(msg["fn"], "enumerable", False))
 
@@ -334,6 +277,7 @@ def all_escape(trace, msg):
     Subroutine for approximately integrating out variables for variance reduction.
     """
     return (msg["type"] == "sample") and \
+        (not msg["is_observed"]) and \
         (msg["name"] not in trace)
 
 
@@ -350,7 +294,7 @@ def get_vectorized_map_data_info(trace):
     vec_md_stacks = set()
 
     for name, node in nodes.items():
-        if node["type"] in ("sample", "observe", "param"):
+        if node["type"] in ("sample", "param"):
             stack = tuple(reversed(node["map_data_stack"]))
             vec_mds = list(filter(lambda x: x[2] == 'tensor', stack))
             # check for nested vectorized map datas
@@ -394,7 +338,7 @@ def get_vectorized_map_data_info(trace):
     if vectorized_map_data_info['rao-blackwellization-condition']:
         vectorized_map_data_info['nodes'] = defaultdict(list)
         for name, node in nodes.items():
-            if node["type"] in ("sample", "observe", "param"):
+            if node["type"] in ("sample", "param"):
                 stack = tuple(reversed(node["map_data_stack"]))
                 vec_mds = list(filter(lambda x: x[2] == 'tensor', stack))
                 if len(vec_mds) > 0:
@@ -437,11 +381,11 @@ def identify_dense_edges(trace):
     stored at each site.
     """
     for name, node in trace.nodes.items():
-        if node["type"] in ("sample", "observe"):
+        if node["type"] == "sample":
             # XXX why tuple?
             map_data_stack = tuple(reversed(node["map_data_stack"]))
             for past_name, past_node in trace.nodes.items():
-                if past_node["type"] in ("sample", "observe"):
+                if past_node["type"] == "sample":
                     if past_name == name:
                         break
                     past_node_independent = False

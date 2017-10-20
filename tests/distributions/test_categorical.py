@@ -37,18 +37,18 @@ class TestCategorical(TestCase):
         self.support_one_hot = torch.Tensor([[[1, 0, 0], [1, 0, 0]],
                                              [[0, 1, 0], [0, 1, 0]],
                                              [[0, 0, 1], [0, 0, 1]]])
-        self.support_non_vec = torch.LongTensor([0, 1, 2])
-        self.support = torch.LongTensor([[0, 0], [1, 1], [2, 2]])
-        self.discrete_support_non_vec = torch.Tensor([0, 1, 2])
-        self.discrete_support = torch.Tensor([[0, 3], [1, 4], [2, 5]])
-        self.discrete_arr_support_non_vec = ['a', 'b', 'c']
-        self.discrete_arr_support = [['a', 'd'], ['b', 'e'], ['c', 'f']]
+        self.support_non_vec = torch.LongTensor([[0], [1], [2]])
+        self.support = torch.LongTensor([[[0], [0]], [[1], [1]], [[2], [2]]])
+        self.discrete_support_non_vec = torch.Tensor([[0], [1], [2]])
+        self.discrete_support = torch.Tensor([[[0], [3]], [[1], [4]], [[2], [5]]])
+        self.discrete_arr_support_non_vec = [['a'], ['b'], ['c']]
+        self.discrete_arr_support = [[['a'], ['d']], [['b'], ['e']], [['c'], ['f']]]
 
     def test_nhot_log_pdf(self):
         log_px_torch = dist.categorical.batch_log_pdf(self.test_data_nhot,
                                                       self.ps,
                                                       one_hot=False,
-                                                      batch_size=1).data[0][0]
+                                                      batch_size=1).data[0]
         log_px_np = float(sp.multinomial.logpmf(np.array([0, 0, 1]), 1, self.ps.data.numpy()))
         self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
 

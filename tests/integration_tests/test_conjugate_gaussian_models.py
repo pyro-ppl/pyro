@@ -107,7 +107,7 @@ class GaussianChainTests(TestCase):
                 print("target_kappas: " + array_to_string(self.target_kappas[1:]))
                 print("lambda_posts: " + array_to_string(self.lambda_posts[1:]))
                 print("lambda_tilde_posts: " + array_to_string(self.lambda_tilde_posts))
-        pyro.get_param_store().clear()
+        pyro.clear_param_store()
 
         def model(*args, **kwargs):
             next_mean = self.mu0
@@ -367,7 +367,7 @@ class GaussianPyramidTests(TestCase):
                   "(with a total of %d RVs) [reparameterized=%s; %d/%d; perm=%s] - - -") %
                   (self.N, (2 ** self.N) - 1, reparameterized, n_repa_nodes,
                    len(self.q_topo_sort), model_permutation))
-        pyro.get_param_store().clear()
+        pyro.clear_param_store()
 
         def model(*args, **kwargs):
             top_latent_dist = dist.DiagNormal(self.mu0, torch.pow(self.lambdas[0], -0.5))

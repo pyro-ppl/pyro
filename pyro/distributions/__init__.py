@@ -16,7 +16,6 @@ from pyro.distributions.normal import Normal
 from pyro.distributions.normal_chol import NormalChol
 from pyro.distributions.poisson import Poisson
 from pyro.distributions.uniform import Uniform
-from pyro.distributions.subsample import Subsample
 
 # function aliases
 diagnormal = DiagNormal()
@@ -34,4 +33,3 @@ poisson = Poisson()
 uniform = Uniform()
 dirichlet = Dirichlet()
 cauchy = Cauchy()
-subsample = Subsample()

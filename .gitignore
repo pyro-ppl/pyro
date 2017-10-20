@@ -67,6 +67,7 @@ coverage.xml
 *,cover
 .hypothesis/
 paramstore.unittest.out
+adam.unittest.save
 
 # Translations
 *.mo

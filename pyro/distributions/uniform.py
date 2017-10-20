@@ -12,6 +12,7 @@ class Uniform(Distribution):
 
     Continuous uniform distribution over ``[a, b]``
     """
+    reparameterized = False  # XXX Why is this marked non-differentiable?
 
     def _sanitize_input(self, alpha, beta):
         if alpha is not None:

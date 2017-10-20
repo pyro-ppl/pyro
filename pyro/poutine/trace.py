@@ -1,5 +1,8 @@
 import collections
+
 import networkx
+import torch
+from torch.autograd import Variable
 
 
 class Trace(networkx.DiGraph):
@@ -46,7 +49,7 @@ class Trace(networkx.DiGraph):
         Identical to super(Trace, self).copy(), but preserves the type
         and the self.graph_type attribute
         """
-        return Trace(self, graph_type=self.graph_type)
+        return Trace(super(Trace, self).copy(), graph_type=self.graph_type)
 
     def log_pdf(self, site_filter=lambda name, site: True):
         """
@@ -54,16 +57,17 @@ class Trace(networkx.DiGraph):
 
         The local computation is memoized.
         """
-        log_p = 0.0
+        log_p = Variable(torch.zeros(1))
         for name, site in self.nodes.items():
-            if site["type"] in ("observe", "sample") and site_filter(name, site):
+            if site["type"] == "sample" and site_filter(name, site):
                 try:
-                    log_p += site["log_pdf"]
+                    site_log_p = site["log_pdf"]
                 except KeyError:
                     args, kwargs = site["args"], site["kwargs"]
-                    site["log_pdf"] = site["fn"].log_pdf(
+                    site_log_p = site["fn"].log_pdf(
                         site["value"], *args, **kwargs) * site["scale"]
-                    log_p += site["log_pdf"]
+                    site["log_pdf"] = site_log_p
+                log_p += site_log_p
         return log_p
 
     def batch_log_pdf(self, site_filter=lambda name, site: True):
@@ -72,18 +76,25 @@ class Trace(networkx.DiGraph):
 
         The local computation is memoized, and also stores the local `.log_pdf()`.
         """
-        log_p = 0.0
-        # XXX will this iterate over nodes?
+        log_p = Variable(torch.zeros(1))
         for name, site in self.nodes.items():
-            if site["type"] in ("observe", "sample") and site_filter(name, site):
+            if site["type"] == "sample" and site_filter(name, site):
                 try:
-                    log_p += site["batch_log_pdf"]
+                    site_log_p = site["batch_log_pdf"]
                 except KeyError:
                     args, kwargs = site["args"], site["kwargs"]
-                    site["batch_log_pdf"] = site["fn"].batch_log_pdf(
+                    site_log_p = site["fn"].batch_log_pdf(
                         site["value"], *args, **kwargs) * site["scale"]
-                    site["log_pdf"] = site["batch_log_pdf"].sum()
-                    log_p += site["batch_log_pdf"]
+
+                    # The following line is a quick fix for size mismatch issues,
+                    # and should be reverted after this issue is fixed:
+                    # https://github.com/uber/pyro/issues/278
+                    site_log_p = site_log_p.squeeze()
+
+                    site["batch_log_pdf"] = site_log_p
+                    site["log_pdf"] = site_log_p.sum()
+                # Here log_p may be broadcast to a larger tensor:
+                log_p = log_p + site_log_p
         return log_p
 
     @property
@@ -92,7 +103,8 @@ class Trace(networkx.DiGraph):
         Gets a list of names of observe sites
         """
         return [name for name, node in self.nodes.items()
-                if node["type"] == "observe"]
+                if node["type"] == "sample" and
+                node["is_observed"]]
 
     @property
     def stochastic_nodes(self):
@@ -100,7 +112,8 @@ class Trace(networkx.DiGraph):
         Gets a list of names of sample sites
         """
         return [name for name, node in self.nodes.items()
-                if node["type"] == "sample"]
+                if node["type"] == "sample" and
+                not node["is_observed"]]
 
     @property
     def reparameterized_nodes(self):
@@ -110,6 +123,7 @@ class Trace(networkx.DiGraph):
         """
         return [name for name, node in self.nodes.items()
                 if node["type"] == "sample" and
+                not node["is_observed"] and
                 getattr(node["fn"], "reparameterized", False)]
 
     @property

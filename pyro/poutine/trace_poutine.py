@@ -76,34 +76,7 @@ class TracePoutine(Poutine):
         :param msg: current message at a trace site.
         :returns: a sample from the stochastic function at the site.
 
-        Implements default pyro.sample Poutine behavior with a side effect
-        call the function at the site,
-        store the result in self.trace,
-        and return the result
-        """
-        if msg["name"] in self.trace:
-            # XXX temporary solution - right now, if the name appears in the trace,
-            # we assume that this was intentional and that the poutine restarted,
-            # so we should reset self.trace to be empty
-            tr = Trace(graph_type=self.graph_type)
-            tr.add_node("_INPUT",
-                        name="_INPUT", type="input",
-                        args=self.trace.nodes["_INPUT"]["args"],
-                        kwargs=self.trace.nodes["_INPUT"]["kwargs"])
-            self.trace = tr
-
-        val = super(TracePoutine, self)._pyro_sample(msg)
-        site = msg.copy()
-        site.update(value=val)
-        self.trace.add_node(msg["name"], **site)
-        return val
-
-    def _pyro_observe(self, msg):
-        """
-        :param msg: current message at a trace site.
-        :returns: the observed value at the site.
-
-        Implements default pyro.observe Poutine behavior with an additional side effect:
+        Implements default pyro.sample Poutine behavior with an additional side effect:
         if the observation at the site is not None,
         then store the observation in self.trace
         and return the observation,
@@ -122,7 +95,7 @@ class TracePoutine(Poutine):
                         kwargs=self.trace.nodes["_INPUT"]["kwargs"])
             self.trace = tr
 
-        val = super(TracePoutine, self)._pyro_observe(msg)
+        val = super(TracePoutine, self)._pyro_sample(msg)
         site = msg.copy()
         site.update(value=val)
         self.trace.add_node(msg["name"], **site)
