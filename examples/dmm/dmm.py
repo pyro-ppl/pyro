@@ -32,7 +32,7 @@ from util import get_logger
 
 class Emitter(nn.Module):
     """
-    Parameterizes the bernoulli observation likelihood p(x_t | z_t)
+    Parameterizes the bernoulli observation likelihood `p(x_t | z_t)`
     """
     def __init__(self, input_dim, z_dim, emission_dim):
         super(Emitter, self).__init__()
@@ -47,7 +47,7 @@ class Emitter(nn.Module):
     def forward(self, z_t):
         """
         Given the latent z at a particular time step t we return the vector of
-        probabilities `ps` that parameterizes the bernoulli distribution p(x_t|z_t)
+        probabilities `ps` that parameterizes the bernoulli distribution `p(x_t|z_t)`
         """
         h1 = self.relu(self.lin_z_to_hidden(z_t))
         h2 = self.relu(self.lin_hidden_to_hidden(h1))
@@ -57,7 +57,7 @@ class Emitter(nn.Module):
 
 class GatedTransition(nn.Module):
     """
-    Parameterizes the gaussian latent transition probability p(z_t | z_{t-1})
+    Parameterizes the gaussian latent transition probability `p(z_t | z_{t-1})`
     See section 5 in the reference for comparison.
     """
     def __init__(self, z_dim, transition_dim):
@@ -80,9 +80,9 @@ class GatedTransition(nn.Module):
 
     def forward(self, z_t_1):
         """
-        Given the latent z_{t-1} corresponding to the time step t-1
+        Given the latent `z_{t-1}` corresponding to the time step t-1
         we return the mean and sigma vectors that parameterize the
-        (diagonal) gaussian distribution p(z_t | z_{t-1})
+        (diagonal) gaussian distribution `p(z_t | z_{t-1})`
         """
         # compute the gating function and one minus the gating function
         gate_intermediate = self.relu(self.lin_gate_z_to_hidden(z_t_1))
@@ -103,9 +103,9 @@ class GatedTransition(nn.Module):
 
 class Combiner(nn.Module):
     """
-    Parameterizes q(z_t | z_{t-1}, x_{t:T}), which is the basic building block
-    of the guide (i.e. the variational distribution). The dependence on x_{t:T} is
-    through the hidden state of the RNN (see the pytorch module `rnn` below)
+    Parameterizes `q(z_t | z_{t-1}, x_{t:T})`, which is the basic building block
+    of the guide (i.e. the variational distribution). The dependence on `x_{t:T}` is
+    through the hidden state of the RNN (see the PyTorch module `rnn` below)
     """
     def __init__(self, z_dim, rnn_dim):
         super(Combiner, self).__init__()
@@ -120,8 +120,8 @@ class Combiner(nn.Module):
     def forward(self, z_t_1, h_rnn):
         """
         Given the latent z at at a particular time step t-1 as well as the hidden
-        state of the RNN h(x_{t:T}) we return the mean and sigma vectors that
-        parameterize the (diagonal) gaussian distribution q(z_t | z_{t-1}, x_{t:T})
+        state of the RNN `h(x_{t:T})` we return the mean and sigma vectors that
+        parameterize the (diagonal) gaussian distribution `q(z_t | z_{t-1}, x_{t:T})`
         """
         # combine the rnn hidden state with a transformed version of z_t_1
         h_combined = 0.5 * (self.tanh(self.lin_z_to_hidden(z_t_1)) + h_rnn)
@@ -135,14 +135,14 @@ class Combiner(nn.Module):
 
 class DMM(nn.Module):
     """
-    This pytorch Module encapsulates the model as well as the
+    This PyTorch Module encapsulates the model as well as the
     variational distribution (the guide) for the Deep Markov Model
     """
     def __init__(self, input_dim=88, z_dim=100, emission_dim=100,
                  transition_dim=200, rnn_dim=600, rnn_dropout_rate=0.0,
                  num_iafs=0, iaf_dim=50, use_cuda=False):
         super(DMM, self).__init__()
-        # instantiate pytorch modules used in the model and guide below
+        # instantiate PyTorch modules used in the model and guide below
         self.emitter = Emitter(input_dim, z_dim, emission_dim)
         self.trans = GatedTransition(z_dim, transition_dim)
         self.combiner = Combiner(z_dim, rnn_dim)
@@ -163,7 +163,7 @@ class DMM(nn.Module):
         self.h_0 = nn.Parameter(torch.zeros(1, 1, rnn_dim))
 
         self.use_cuda = use_cuda
-        # if on gpu cuda-ize all pytorch (sub)modules
+        # if on gpu cuda-ize all PyTorch (sub)modules
         if use_cuda:
             self.cuda()
 
@@ -174,7 +174,7 @@ class DMM(nn.Module):
         # this is the number of time steps we need to process in the mini-batch
         T_max = mini_batch.size(1)
 
-        # register all pytorch (sub)modules with pyro
+        # register all PyTorch (sub)modules with pyro
         # this needs to happen in both the model and guide
         pyro.module("dmm", self)
 
@@ -212,7 +212,7 @@ class DMM(nn.Module):
 
         # this is the number of time steps we need to process in the mini-batch
         T_max = mini_batch.size(1)
-        # register all pytorch (sub)modules with pyro
+        # register all PyTorch (sub)modules with pyro
         pyro.module("dmm", self)
 
         # if on gpu we need the fully broadcast view of the rnn initial state

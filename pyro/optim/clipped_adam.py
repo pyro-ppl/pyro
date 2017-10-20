@@ -4,21 +4,23 @@ from torch.optim.optimizer import Optimizer
 
 class ClippedAdam(Optimizer):
     """
+    :param params: iterable of parameters to optimize or dicts defining parameter groups
+    :param lr: learning rate (default: 1e-3)
+    :param Tuple betas: coefficients used for computing
+        running averages of gradient and its square (default: (0.9, 0.999))
+    :param eps: term added to the denominator to improve
+        numerical stability (default: 1e-8)
+    :param weight_decay: weight decay (L2 penalty) (default: 0)
+    :param clip_norm: magnitude of norm to which gradients are clipped (default: 10.0)
+    :param lrd: rate at which learning rate decays (default: 1.0)
+
     Small modification to the Adam algorithm implemented in torch.optim.Adam
     to include gradient clipping and learning rate decay.
 
-    Arguments:
-        params (iterable): iterable of parameters to optimize or dicts defining
-            parameter groups
-        lr (float, optional): learning rate (default: 1e-3)
-        betas (Tuple[float, float], optional): coefficients used for computing
-            running averages of gradient and its square (default: (0.9, 0.999))
-        eps (float, optional): term added to the denominator to improve
-            numerical stability (default: 1e-8)
-        weight_decay (float, optional): weight decay (L2 penalty) (default: 0)
+    Reference
 
-    .. _Adam\: A Method for Stochastic Optimization:
-        https://arxiv.org/abs/1412.6980
+    `A Method for Stochastic Optimization`, Diederik P. Kingma, Jimmy Ba
+    https://arxiv.org/abs/1412.6980
     """
     def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8,
                  weight_decay=0, clip_norm=10.0, lrd=1.0):
@@ -29,11 +31,9 @@ class ClippedAdam(Optimizer):
 
     def step(self, closure=None):
         """
-        Performs a single optimization step.
+        :param closure:: An optional closure that reevaluates the model and returns the loss.
 
-        Arguments:
-            closure (callable, optional): A closure that reevaluates the model
-                and returns the loss.
+        Performs a single optimization step.
         """
         loss = None
         if closure is not None:

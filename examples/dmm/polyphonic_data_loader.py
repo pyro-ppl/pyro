@@ -17,7 +17,7 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import numpy as np
-from os.path import join, dirname, exists
+from os.path import join, dirname, exists, abspath
 from six.moves.urllib.request import urlretrieve
 import six.moves.cPickle as pickle
 from pyro.util import ng_zeros
@@ -61,7 +61,7 @@ def process_data(output="jsb_processed.pkl", rawdata="jsb_raw.pkl",
 
 
 # this logic will be initiated upon import
-base_loc = dirname(__file__)
+base_loc = dirname(abspath(__file__))
 raw_file = join(base_loc, "jsb_raw.pkl")
 out_file = join(base_loc, "jsb_processed.pkl")
 download_if_absent(raw_file, "http://www-etud.iro.umontreal.ca/~boulanni/JSB%20Chorales.pickle")
@@ -94,7 +94,7 @@ def reverse_sequences_torch(mini_batch, seq_lengths):
     return reversed_mini_batch
 
 
-# this function takes the hidden state as output by the pytorch rnn and
+# this function takes the hidden state as output by the PyTorch rnn and
 # unpacks it it; it also reverses each sequence temporally
 def pad_and_reverse(rnn_output, seq_lengths):
     rnn_output, _ = nn.utils.rnn.pad_packed_sequence(rnn_output, batch_first=True)
@@ -115,7 +115,7 @@ def get_mini_batch_mask(mini_batch, seq_lengths):
 # it returns a mini-batch in forward temporal order (`mini_batch`) as
 # as a mini-batch in reverse temporal order (`mini_batch_reversed`).
 # it also deals with the fact that packed sequences (which are what what we
-# feed to the pytorch rnn) need to be sorted by sequence length.
+# feed to the PyTorch rnn) need to be sorted by sequence length.
 def get_mini_batch(mini_batch_indices, sequences, seq_lengths, volatile=False, cuda=False):
     # get the sequence lengths of the mini-batch
     seq_lengths = seq_lengths[mini_batch_indices]
@@ -129,21 +129,24 @@ def get_mini_batch(mini_batch_indices, sequences, seq_lengths, volatile=False, c
     # this is the sorted mini-batch
     mini_batch = sequences[sorted_mini_batch_indices, 0:T_max, :]
     # this is the sorted mini-batch in reverse temporal order
-    mini_batch_reversed = Variable(torch.Tensor(reverse_sequences_numpy(mini_batch, sorted_seq_lengths)),
-                                   volatile=volatile)
+    mini_batch_reversed = reverse_sequences_numpy(mini_batch, sorted_seq_lengths)
+    # get mask for mini-batch
+    mini_batch_mask = get_mini_batch_mask(mini_batch, sorted_seq_lengths)
 
-    # need to cuda before it's packed
+    # wrap in PyTorch Variables
+    mini_batch = Variable(torch.Tensor(mini_batch), volatile=volatile)
+    mini_batch_reversed = Variable(torch.Tensor(mini_batch_reversed), volatile=volatile)
+    mini_batch_mask = Variable(torch.Tensor(mini_batch_mask), volatile=volatile)
+
+    # cuda() here because need to cuda() before packing
     if cuda:
+        mini_batch = mini_batch.cuda()
+        mini_batch_mask = mini_batch_mask.cuda()
         mini_batch_reversed = mini_batch_reversed.cuda()
 
+    # do sequence packing
     mini_batch_reversed = nn.utils.rnn.pack_padded_sequence(mini_batch_reversed,
                                                             sorted_seq_lengths,
                                                             batch_first=True)
-    mini_batch_mask = Variable(torch.Tensor(get_mini_batch_mask(mini_batch, sorted_seq_lengths)),
-                               volatile=volatile)
-    if cuda:
-        return Variable(torch.Tensor(mini_batch), volatile=volatile).cuda(), mini_batch_reversed, \
-            mini_batch_mask.cuda(), sorted_seq_lengths
-    else:
-        return Variable(torch.Tensor(mini_batch), volatile=volatile), mini_batch_reversed, \
-            mini_batch_mask, sorted_seq_lengths
+
+    return mini_batch, mini_batch_reversed, mini_batch_mask, sorted_seq_lengths
