@@ -52,6 +52,17 @@ class Categorical(Distribution):
         self.one_hot = one_hot
         super(Categorical, self).__init__(batch_size=1, *args, **kwargs)
 
+    def batch_shape(self, ps=None, vs=None, one_hot=True, *args, **kwargs):
+        ps, vs, one_hot = self._sanitize_input(ps, vs, one_hot)
+        return ps.size()[:-1]
+
+    def event_shape(self, ps=None, vs=None, one_hot=True, *args, **kwargs):
+        ps, vs, one_hot = self._sanitize_input(ps, vs, one_hot)
+        if one_hot:
+            return ps.size()[-1:]
+        else:
+            return torch.Size((1,))
+
     def sample(self, ps=None, vs=None, one_hot=True, *args, **kwargs):
         """
         Returns a sample which has the same shape as ``ps`` (or ``vs``), except

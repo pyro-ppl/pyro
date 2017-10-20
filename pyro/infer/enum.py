@@ -1,5 +1,4 @@
 import functools
-import math
 from six.moves.queue import LifoQueue
 
 import torch
@@ -43,31 +42,10 @@ def iter_discrete_traces(graph_type, fn, *args, **kwargs):
             continue
 
         # Scale trace by probability of discrete choices.
-        log_pdf = full_trace.log_pdf(site_filter=site_is_discrete)
-        if isinstance(log_pdf, Variable):
-            log_pdf = log_pdf.data
+        log_pdf = full_trace.batch_log_pdf(site_filter=site_is_discrete)
+        if isinstance(log_pdf, float):
+            log_pdf = torch.Tensor(log_pdf)
         if isinstance(log_pdf, torch.Tensor):
-            log_pdf = log_pdf[0]
-        scale = math.exp(log_pdf)
+            log_pdf = Variable(log_pdf)
+        scale = torch.exp(log_pdf.detach())
         yield scale, full_trace
-
-
-def scale_trace(trace, scale):
-    """
-    Scale all sample and observe sites in a trace (copies the trace).
-
-    :param Trace trace: A pyro trace.
-    :param scale: A nonnegative scaling constant.
-    :type scale: float or torch.Tensor or torch.autograd.Variable
-    :returns: A scaled copy of the trace.
-    :rtype: Trace
-    """
-    trace = trace.copy()
-    for name, site in trace.nodes.items():
-        if "scale" in site:
-            site["scale"] = site["scale"] * scale
-        # Clear memoized computations.
-        if site["type"] in ("observe", "sample"):
-            site.pop("log_pdf", None)
-            site.pop("batch_log_pdf", None)
-    return trace
