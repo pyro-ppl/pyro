@@ -80,7 +80,10 @@ def model(data):
         latent = lifted_fn(x_data)
         pyro.observe("obs", DiagNormal(latent, Variable(torch.ones(10))), y_data.squeeze())
 
-    with pyro.iarange("map", data.size(0), 10) as batch:
+    batch_size = 10
+    data = data[torch.randperm(data.size(0))]
+    subsample = data[0:batch_size]
+    with pyro.iarange("map", N, subsample=subsample) as batch:
         observe(data.index_select(0, batch))
 
 
@@ -98,7 +101,10 @@ def guide(data):
     b_prior = DiagNormal(mb_param, sb_param)
     priors = {'weight': w_prior, 'bias': b_prior}
     lifted_fn = poutine.lift(lin_reg, priors)
-    with pyro.iarange("map", x_data.size(0), 10) as batch:
+    batch_size = 10
+    x_data = x_data[torch.randperm(x_data.size(0))]
+    subsample = x_data[0:batch_size]
+    with pyro.iarange("map", N, subsample=subsample) as batch:
         lifted_fn(x_data.index_select(0, batch))
 
 
