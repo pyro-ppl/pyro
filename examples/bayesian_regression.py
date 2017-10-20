@@ -3,6 +3,7 @@ import argparse
 import torch
 import torch.nn as nn
 from torch.nn.functional import normalize  # noqa: F401
+from pdb import set_trace as bb
 
 from torch.autograd import Variable
 
@@ -80,7 +81,7 @@ def model(data):
         latent = lifted_fn(x_data)
         pyro.observe("obs", DiagNormal(latent, Variable(torch.ones(10))), y_data.squeeze())
 
-    with pyro.iarange("map", N, 10) as batch:
+    with pyro.iarange("map", data.size(0), 10) as batch:
         observe(data.index_select(0, batch))
 
 
@@ -98,8 +99,8 @@ def guide(data):
     b_prior = DiagNormal(mb_param, sb_param)
     priors = {'weight': w_prior, 'bias': b_prior}
     lifted_fn = poutine.lift(lin_reg, priors)
-    with pyro.iarange("map", N, 10) as batch:
-        lifted_fn(data.index_select(0, batch))
+    with pyro.iarange("map", x_data.size(0), 10) as batch:
+        lifted_fn(x_data.index_select(0, batch))
 
 
 adam = Adam({"lr": 0.01})
@@ -114,11 +115,11 @@ def load_data(reg_type):
     raise ValueError('data set type should be "logistic" or "linear".')
 
 
-# batching data below
-def shuffled_indices():
-    all_batches = np.arange(0, N)
-    np.random.shuffle(all_batches)
-    return all_batches
+# get batch indices
+all_batches = np.arange(0, N, batch_size)
+if all_batches[-1] != N:
+    all_batches = list(all_batches) + [N]
+
 
 
 def main():
@@ -134,7 +135,8 @@ def main():
         else:
             # mini batch
             epoch_loss = 0.0
-            all_batches = shuffled_indices()
+            # shuffle data
+            data = data[torch.randperm(N)]
             for ix, batch_start in enumerate(all_batches[:-1]):
                 batch_end = all_batches[ix + 1]
                 batch_data = data[batch_start: batch_end]
