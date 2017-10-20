@@ -272,7 +272,7 @@ def main(args):
     # how often we do validation/test evaluation during training
     val_test_frequency = 50
     # the number of samples we use to do the evaluation
-    n_eval_samples = 5
+    n_eval_samples = 1
 
     # package repeated copies of val/test data for faster evaluation
     # (i.e. set us up for vectorization)
