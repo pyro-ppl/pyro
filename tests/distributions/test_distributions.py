@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 import torch
 
-from tests.common import assert_equal, cuda_tensors, requires_cuda, xfail_if_not_implemented
+from tests.common import assert_equal, xfail_if_not_implemented
 
 SINGLE_TEST_DATUM_IDX = 0
 BATCH_TEST_DATA_IDX = -1
@@ -19,24 +19,6 @@ def test_log_pdf(dist):
     pyro_log_pdf = unwrap_variable(dist.get_pyro_logpdf(SINGLE_TEST_DATUM_IDX))[0]
     scipy_log_pdf = dist.get_scipy_logpdf(SINGLE_TEST_DATUM_IDX)
     assert_equal(pyro_log_pdf, scipy_log_pdf)
-
-
-@requires_cuda
-def test_log_pdf_cuda(dist):
-    idx = SINGLE_TEST_DATUM_IDX
-
-    data = dist.get_test_data(idx)
-    kwargs = dist.get_dist_params(idx)
-    cpu_log_pdf = dist.pyro_dist.log_pdf(data, **kwargs)
-    assert not cpu_log_pdf.is_cuda
-
-    with cuda_tensors():
-        data = dist.get_test_data(idx)
-        kwargs = dist.get_dist_params(idx)
-    cuda_log_pdf = dist.pyro_dist.log_pdf(data, **kwargs)
-    assert cuda_log_pdf.is_cuda
-
-    assert_equal(cpu_log_pdf, cuda_log_pdf.cpu())
 
 
 def test_batch_log_pdf(dist):
