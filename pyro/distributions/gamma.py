@@ -47,7 +47,7 @@ class Gamma(Distribution):
         alpha, beta = self._sanitize_input(alpha, beta)
         theta = torch.pow(beta, -1.0)
         x = Variable(torch.Tensor([spr.gamma.rvs(
-            alpha.data.numpy(), scale=theta.data.numpy())])
+            alpha.data.cpu().numpy(), scale=theta.data.cpu().numpy())])
             .type_as(alpha.data))
         return x
 
