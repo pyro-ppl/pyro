@@ -1,5 +1,3 @@
-import math
-
 import numpy as np
 import pytest
 import scipy.stats as sp
@@ -27,6 +25,7 @@ class AffineExp(Bijector):
     Y = e^(a * Z + b),
     where a = sigma
     """
+
     def __init__(self, a_init, b_init):
         """
         Constructor for univariate affine bijector followed by exp
@@ -58,13 +57,12 @@ class AffineExp(Bijector):
 
 @pytest.fixture()
 def lognormal():
-    return Fixture(dist.lognormal,
-                   sp.lognorm,
-                   [(1.4, 0.4)],
-                   [5.5],
-                   lambda mean, sigma: ((sigma,), {"scale": math.exp(mean)}),
-                   prec=0.1,
-                   min_samples=20000)
+    return Fixture(pyro_dist=dist.lognormal,
+                   scipy_dist=sp.lognorm,
+                   examples=[
+                       {'mu': [1.4], 'sigma': [0.4], 'test_data': [5.5]},
+                   ],
+                   scipy_arg_fn=lambda mu, sigma: ((np.array(sigma),), {"scale": np.exp(np.array(mu))}))
 
 
 def unwrap_variable(x):
@@ -80,14 +78,15 @@ def test_mean_and_var_on_transformed_distribution(lognormal):
     mu_z = Variable(torch.zeros(1))
     sigma_z = Variable(torch.ones(1))
     dist_params = lognormal.get_dist_params(0)
-    mu_lognorm, sigma_lognorm = lognormal.get_dist_params(0)
+    mu_lognorm = dist_params['mu']
+    sigma_lognorm = dist_params['sigma']
     trans_dist = get_transformed_dist(dist.diagnormal, sigma_lognorm, mu_lognorm)
     torch_samples = [trans_dist.sample(mu_z, sigma_z).data.cpu().numpy()
                      for _ in range(lognormal.get_num_samples(0))]
     torch_mean = np.mean(torch_samples)
     torch_var = np.var(torch_samples)
-    analytic_mean = unwrap_variable(lognormal.pyro_dist.analytic_mean(*dist_params))[0]
-    analytic_var = unwrap_variable(lognormal.pyro_dist.analytic_var(*dist_params))[0]
+    analytic_mean = unwrap_variable(lognormal.pyro_dist.analytic_mean(**dist_params))[0]
+    analytic_var = unwrap_variable(lognormal.pyro_dist.analytic_var(**dist_params))[0]
     assert_equal(torch_mean, analytic_mean, prec=0.1)
     assert_equal(torch_var, analytic_var, prec=0.1)
 
@@ -95,7 +94,9 @@ def test_mean_and_var_on_transformed_distribution(lognormal):
 def test_log_pdf_on_transformed_distribution(lognormal):
     mu_z = Variable(torch.zeros(1))
     sigma_z = Variable(torch.ones(1))
-    mu_lognorm, sigma_lognorm = lognormal.get_dist_params(0)
+    dist_params = lognormal.get_dist_params(0)
+    mu_lognorm = dist_params['mu']
+    sigma_lognorm = dist_params['sigma']
     trans_dist = get_transformed_dist(dist.diagnormal, sigma_lognorm, mu_lognorm)
     test_data = lognormal.get_test_data(0)
     log_px_torch = trans_dist.log_pdf(test_data, mu_z, sigma_z).data[0]
