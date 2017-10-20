@@ -239,7 +239,7 @@ def param(name, *args, **kwargs):
         return out_msg["value"]
 
 
-def module(pyro_name, nn_obj, tags="default", update_module_params=True):
+def module(pyro_name, nn_obj, tags="default", update_module_params=False):
     """
     :param pyro_name: name of module
     :type pyro_name: str
@@ -306,4 +306,5 @@ def random_module(name, nn_module, prior, *args, **kwargs):
     assert hasattr(nn_module, "parameters"), "Module is not a NN module."
     # register params in param store
     lifted_fn = poutine.lift(pyro.module, prior)
+    # update_module_params must be True or the lifted module will not update local params
     return lambda: lifted_fn(name, nn_module, update_module_params=True, *args, **kwargs)
