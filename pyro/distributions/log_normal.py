@@ -25,7 +25,7 @@ class LogNormal(Distribution):
         else:
             raise ValueError("Parameter(s) were None")
 
-    def __init__(self, mu=None, sigma=None, batch_size=1, *args, **kwargs):
+    def __init__(self, mu=None, sigma=None, batch_size=None, *args, **kwargs):
         """
         Params:
           `mu` - mean
@@ -36,10 +36,20 @@ class LogNormal(Distribution):
         if mu is not None:
             if mu.dim() != sigma.dim():
                 raise ValueError("Mu and sigma need to have the same dimensions.")
-            elif mu.dim() == 1:
+            elif mu.dim() == 1 and batch_size is not None:
                 self.mu = mu.expand(batch_size, mu.size(0))
                 self.sigma = sigma.expand(batch_size, sigma.size(0))
         super(LogNormal, self).__init__(*args, **kwargs)
+
+    def batch_shape(self, mu=None, sigma=None, *args, **kwargs):
+        mu, sigma = self._sanitize_input(mu, sigma)
+        event_dim = 1
+        return mu.size()[:-event_dim]
+
+    def event_shape(self, mu=None, sigma=None, *args, **kwargs):
+        mu, sigma = self._sanitize_input(mu, sigma)
+        event_dim = 1
+        return mu.size()[-event_dim:]
 
     def sample(self, mu=None, sigma=None, *args, **kwargs):
         """
@@ -50,14 +60,12 @@ class LogNormal(Distribution):
         z = mu + sigma * eps
         return torch.exp(z)
 
-    def batch_log_pdf(self, x, mu=None, sigma=None, batch_size=1, *args, **kwargs):
+    def batch_log_pdf(self, x, mu=None, sigma=None, *args, **kwargs):
         """
         log-normal log-likelihood
         """
         mu, sigma = self._sanitize_input(mu, sigma)
         assert mu.dim() == sigma.dim()
-        if x.dim() == 1:
-            x = x.expand(batch_size, x.size(0))
         if mu.size() != sigma.size():
             mu = mu.expand_as(x)
             sigma = sigma.expand_as(x)
@@ -65,7 +73,9 @@ class LogNormal(Distribution):
                         .type_as(mu.data).expand_as(x))
         ll_2 = -torch.log(sigma * x)
         ll_3 = -0.5 * torch.pow((torch.log(x) - mu) / sigma, 2.0)
-        return ll_1 + ll_2 + ll_3
+        log_pdf = torch.sum(ll_1 + ll_2 + ll_3, -1)
+        batch_log_pdf_shape = x.size()[:-1] + (1,)
+        return log_pdf.contiguous().view(batch_log_pdf_shape)
 
     def analytic_mean(self, mu=None, sigma=None):
         mu, sigma = self._sanitize_input(mu, sigma)

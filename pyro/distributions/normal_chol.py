@@ -37,15 +37,24 @@ class NormalChol(Distribution):
         self.L = L
         super(NormalChol, self).__init__(*args, **kwargs)
 
+    def batch_shape(self, mu=None, L=None, *args, **kwargs):
+        mu, L = self._sanitize_input(mu, L)
+        event_dim = 1
+        return mu.size()[:-event_dim]
+
+    def event_shape(self, mu=None, L=None, *args, **kwargs):
+        mu, L = self._sanitize_input(mu, L)
+        event_dim = 1
+        return mu.size()[-event_dim:]
+
     def sample(self, mu=None, L=None, *args, **kwargs):
         """
         Reparameterized Normal cholesky sampler.
         """
         mu, L = self._sanitize_input(mu, L)
         eps = Variable(torch.randn(mu.size()).type_as(mu.data))
-        if eps.dim() == 1:
-            eps = eps.unsqueeze(1)
-        z = mu + torch.mm(L, eps).squeeze()
+        eps = eps.unsqueeze(-1)
+        z = mu + torch.matmul(L, eps).squeeze()
         return z
 
     def log_pdf(self, x, mu=None, L=None, *args, **kwargs):

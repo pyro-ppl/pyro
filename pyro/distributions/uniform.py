@@ -34,6 +34,16 @@ class Uniform(Distribution):
         self.b = b
         super(Uniform, self).__init__(*args, **kwargs)
 
+    def batch_shape(self, a=None, b=None, *args, **kwargs):
+        a, b = self._sanitize_input(a, b)
+        event_dim = 1
+        return a.size()[:-event_dim]
+
+    def event_shape(self, a=None, b=None, *args, **kwargs):
+        a, b = self._sanitize_input(a, b)
+        event_dim = 1
+        return a.size()[-event_dim:]
+
     def sample(self, a=None, b=None, *args, **kwargs):
         """
         Reparameterized Uniform sampler.
@@ -56,14 +66,16 @@ class Uniform(Distribution):
                 return Variable(torch.Tensor([[-np.inf]]).type_as(a.data))
         return torch.sum(-torch.log(b - a))
 
-    def batch_log_pdf(self, x, a=None, b=None, batch_size=1, *args, **kwargs):
+    def batch_log_pdf(self, x, a=None, b=None, *args, **kwargs):
         a, b = self._sanitize_input(a, b)
         assert a.dim() == b.dim()
-        if x.dim() == 1 and a.dim() == 1 and batch_size == 1:
-            return self.log_pdf(x, a, b)
+        if x.size != a.size():
+            a = a.expand_as(x)
+            b = b.expand_as(x)
         l = x.ge(a).type_as(a)
         u = x.le(b).type_as(b)
-        return torch.sum(torch.log(l.mul(u)) - torch.log(b - a), 1)
+        batch_log_pdf_shape = self.batch_shape(a, b) + (1,)
+        return torch.sum(torch.log(l.mul(u)) - torch.log(b - a), -1).contiguous().view(batch_log_pdf_shape)
 
     def analytic_mean(self, a=None, b=None):
         a, b = self._sanitize_input(a, b)

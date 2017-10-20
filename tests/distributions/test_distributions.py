@@ -1,3 +1,4 @@
+import functools
 import numpy as np
 import pytest
 import torch
@@ -33,28 +34,44 @@ def test_batch_log_pdf(dist):
 
 def test_shape(dist):
     d = dist.pyro_dist
-    args = dist.get_dist_params(SINGLE_TEST_DATUM_IDX)
+    dist_params = dist.get_dist_params(SINGLE_TEST_DATUM_IDX)
     with xfail_if_not_implemented():
-        assert d.shape(**args) == d.batch_shape(**args) + d.event_shape(**args)
+        assert d.shape(**dist_params) == d.batch_shape(**dist_params) + d.event_shape(**dist_params)
 
 
 def test_sample_shape(dist):
     d = dist.pyro_dist
-    args = dist.get_dist_params(SINGLE_TEST_DATUM_IDX)
-    x = dist.pyro_dist.sample(**args)
-    with xfail_if_not_implemented():
-        assert x.size() == d.shape(**args)
+    for idx in range(dist.get_num_test_data()):
+        dist_params = dist.get_dist_params(idx)
+        x_func = dist.pyro_dist.sample(**dist_params)
+        x_obj = dist.pyro_dist_obj(**dist_params).sample()
+        assert_equal(x_obj.size(), x_func.size())
+        with xfail_if_not_implemented():
+            assert x_func.size() == d.shape(**dist_params)
 
 
 def test_batch_log_pdf_shape(dist):
     if dist.pyro_dist.__class__.__name__ == 'Multinomial':
         pytest.xfail('Fixture parameters are not tensors')
     d = dist.pyro_dist
-    args = dist.get_dist_params(SINGLE_TEST_DATUM_IDX)
-    x = d.sample(**args)
-    with xfail_if_not_implemented():
-        log_p = d.batch_log_pdf(x, **args)
-        assert log_p.size() == d.batch_shape(**args) + (1,)
+    for idx in range(dist.get_num_test_data()):
+        dist_params = dist.get_dist_params(idx)
+        x = dist.get_test_data(idx)
+        # Addresses the case where the param values need to
+        # be broadcasted to data size
+        broadcasted_params = {}
+        for p in dist_params:
+            if dist_params[p].dim() < x.dim():
+                broadcasted_params[p] = dist_params[p].expand_as(x)
+            else:
+                broadcasted_params[p] = dist_params[p]
+        with xfail_if_not_implemented():
+            expected_shape = d.batch_shape(**broadcasted_params) + (1,)
+            log_p_func = d.batch_log_pdf(x, **dist_params)
+            log_p_obj = dist.pyro_dist_obj(**dist_params).batch_log_pdf(x)
+            # assert that the functional
+            assert_equal(log_p_func.size(), log_p_obj.size())
+            assert log_p_func.size() == expected_shape
 
 
 def test_mean_and_variance(dist):
@@ -83,3 +100,17 @@ def test_support(discrete_dist):
     actual_support = discrete_dist.pyro_dist.support(**discrete_dist.get_dist_params(BATCH_TEST_DATA_IDX))
     assert_equal(actual_support.data, torch.Tensor(expected_support))
     assert_equal(actual_support_non_vec.data, torch.Tensor(expected_support_non_vec))
+
+
+def get_broadcasted_shape(*shapes):
+    """
+    Returns the shape of the broadcasted tensor resulting from adding
+    tensors having shape ``shapes``.
+
+    :param shapes:
+    :type shapes: torch.Size
+    :return: returns
+    :rtype: torch.Size
+    """
+    return functools.reduce(lambda a, b: (torch.Tensor(a) + torch.Tensor(b)).size(),
+                            shapes)

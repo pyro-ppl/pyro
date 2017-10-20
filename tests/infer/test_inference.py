@@ -379,8 +379,8 @@ class LogNormalNormalTests(TestCase):
         pyro.clear_param_store()
 
         def model():
-            zero = Variable(torch.zeros(1, 1))
-            one = Variable(torch.ones(1, 1))
+            zero = Variable(torch.zeros(1))
+            one = Variable(torch.ones(1))
             mu_latent = pyro.sample("mu_latent", dist.diagnormal,
                                     self.mu0, torch.pow(self.tau0, -0.5))
             bijector = AffineExp(torch.pow(self.tau, -0.5), mu_latent)

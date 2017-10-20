@@ -38,7 +38,7 @@ class Categorical(Distribution):
                                  "but was of {}".format(str(type(vs)))))
         return vs
 
-    def __init__(self, ps=None, vs=None, one_hot=True, batch_size=1, *args, **kwargs):
+    def __init__(self, ps=None, vs=None, one_hot=True, batch_size=None, *args, **kwargs):
         """
         Instantiates a discrete distribution.
         Params:

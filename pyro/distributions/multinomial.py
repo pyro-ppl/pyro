@@ -23,7 +23,7 @@ class Multinomial(Distribution):
         else:
             raise ValueError("Parameter(s) were None")
 
-    def __init__(self, ps=None, n=None, batch_size=1, *args, **kwargs):
+    def __init__(self, ps=None, n=None, batch_size=None, *args, **kwargs):
         """
         Params:
           ps - probabilities
@@ -32,7 +32,7 @@ class Multinomial(Distribution):
         self.ps = ps
         self.n = n
         if ps is not None:
-            if ps.dim() == 1 and batch_size > 1:
+            if ps.dim() == 1 and batch_size is not None:
                 self.ps = ps.expand(batch_size, ps.size(0))
                 self.n = n.expand(batch_size, n.size(0))
         super(Multinomial, self).__init__(*args, **kwargs)

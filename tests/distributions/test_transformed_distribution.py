@@ -5,6 +5,7 @@ import torch
 from torch.autograd import Variable
 
 import pyro.distributions as dist
+from pyro.distributions import LogNormal
 from pyro.distributions.transformed_distribution import Bijector, TransformedDistribution
 from tests.common import assert_equal
 from tests.distributions.dist_fixture import Fixture
@@ -57,7 +58,7 @@ class AffineExp(Bijector):
 
 @pytest.fixture()
 def lognormal():
-    return Fixture(pyro_dist=dist.lognormal,
+    return Fixture(pyro_dist=(dist.lognormal, LogNormal),
                    scipy_dist=sp.lognorm,
                    examples=[
                        {'mu': [1.4], 'sigma': [0.4], 'test_data': [5.5]},
