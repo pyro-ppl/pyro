@@ -185,7 +185,7 @@ def assert_equal(x, y, prec=1e-5, msg=''):
     elif isinstance(x, dict):
         assert set(x.keys()) == set(y.keys())
         for key, x_val in x.items():
-            assert_equal(x_val, y[key], prec, msg)
+            assert_equal(x_val, y[key], prec, msg='{} {}'.format(key, msg))
     elif is_iterable(x) and is_iterable(y):
         if prec == 0:
             assert len(x) == len(y)
