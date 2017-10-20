@@ -3,7 +3,6 @@ import argparse
 import torch
 import torch.nn as nn
 from torch.nn.functional import normalize  # noqa: F401
-from pdb import set_trace as bb
 
 from torch.autograd import Variable
 
@@ -119,7 +118,6 @@ def load_data(reg_type):
 all_batches = np.arange(0, N, batch_size)
 if all_batches[-1] != N:
     all_batches = list(all_batches) + [N]
-
 
 
 def main():
