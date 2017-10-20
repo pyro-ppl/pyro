@@ -247,8 +247,8 @@ def module(pyro_name, nn_obj, tags="default", update_module_params=True):
     :type nn_obj: torch.nn.Module
     :param tags: optional; tags to associate with any parameters inside the module
     :type tags: string or iterable of strings
-    :param load_from_param_store: whether to overwrite parameters in the pytorch module with the values found
-        in the paramstore
+    :param update_module_params: flag to determine whether to overwrite parameters in the pytorch module with the values found
+        in the paramstore. Defaults to `True`
     :type load_from_param_store: bool
     :returns: torch.nn.Module
 
