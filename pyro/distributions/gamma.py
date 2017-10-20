@@ -2,7 +2,6 @@ import scipy.stats as spr
 import torch
 from torch.autograd import Variable
 
-import pyro
 from pyro.distributions.distribution import Distribution
 from pyro.distributions.util import log_gamma
 
