@@ -127,7 +127,7 @@ class Categorical(Distribution):
             elif one_hot:
                 boolean_mask = x
             else:
-                boolean_mask = torch_zeros_like(ps).scatter_(-1, x.data.long(), 1)
+                boolean_mask = torch_zeros_like(ps.data).scatter_(-1, x.data.long(), 1)
         # apply log function to masked probability tensor
         return torch.log(ps.masked_select(boolean_mask.byte()).contiguous().view(*batch_pdf_size))
 
