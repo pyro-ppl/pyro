@@ -56,6 +56,11 @@ continuous_dists = [
             dist_params=[(0.5, 1.2), (0.3, 1.0)],
             test_data=[(0.2), (0.35)],
             scipy_arg_fn=lambda mu, gamma: ((), {"loc": mu, "scale": gamma})),
+    Fixture(pyro_dist=dist.halfcauchy,
+            scipy_dist=sp.halfcauchy,
+            dist_params=[(0.5, 1.2), (0.3, 1.0)],
+            test_data=[(1.0), (0.35)],
+            scipy_arg_fn=lambda mu, gamma: ((), {"loc": mu, "scale": gamma})),
 ]
 
 discrete_dists = [
