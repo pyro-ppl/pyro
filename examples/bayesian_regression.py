@@ -44,9 +44,9 @@ def build_logistic_dataset(N, noise_std=0.1):
 sigmoid = nn.Sigmoid()
 softplus = nn.Softplus()
 
-N = 1000  # toy data
-D = 1
-batch_size = 256
+N = 1000  # size of toy data
+D = 1  # number of features
+batch_size = 256  # batch size
 
 
 def log_reg(x_data):
@@ -80,7 +80,8 @@ def model(data):
         latent = lifted_fn(x_data)
         pyro.observe("obs", DiagNormal(latent, Variable(torch.ones(10))), y_data.squeeze())
 
-    pyro.map_data("map", data, lambda i, d: observe(d), batch_size=10)
+    with pyro.iarange("map", N, 10) as batch:
+        observe(data.index_select(0, batch))
 
 
 def guide(data):
@@ -97,7 +98,8 @@ def guide(data):
     b_prior = DiagNormal(mb_param, sb_param)
     priors = {'weight': w_prior, 'bias': b_prior}
     lifted_fn = poutine.lift(lin_reg, priors)
-    pyro.map_data("map", x_data, lambda i, d: lifted_fn(d), batch_size=10)
+    with pyro.iarange("map", N, 10) as batch:
+        lifted_fn(data.index_select(0, batch))
 
 
 adam = Adam({"lr": 0.01})
@@ -113,27 +115,26 @@ def load_data(reg_type):
 
 
 # batching data below
-def batch_indices():
-    all_batches = np.arange(0, N, batch_size)
-    if all_batches[-1] != N:
-        all_batches = list(all_batches) + [N]
+def shuffled_indices():
+    all_batches = np.arange(0, N)
+    np.random.shuffle(all_batches)
     return all_batches
 
 
 def main():
     parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', nargs='?', default=1000, type=int)
-    parser.add_argument('-b', '--batch', nargs='?', default=False, type=bool)
-    parser.add_argument('-t', '--regression-type', nargs='?', default='linear', type=str)
+    parser.add_argument('-n', '--num-epochs', default=1000, type=int)
+    parser.add_argument('-b', '--batch', default=False, type=bool)
+    parser.add_argument('-t', '--regression-type', default='linear', type=str)
     args = parser.parse_args()
     data = load_data(args.regression_type)
-    all_batches = batch_indices()
     for j in range(args.num_epochs):
         if not args.batch:
             epoch_loss = svi.step(data)
         else:
             # mini batch
             epoch_loss = 0.0
+            all_batches = shuffled_indices()
             for ix, batch_start in enumerate(all_batches[:-1]):
                 batch_end = all_batches[ix + 1]
                 batch_data = data[batch_start: batch_end]
