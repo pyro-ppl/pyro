@@ -72,10 +72,8 @@ def test_module_sequential(nn_module):
 def test_random_module(nn_module):
     pyro.clear_param_store()
     nn_module = nn_module()
-    mu = Variable(torch.zeros(2, 2))
-    sigma = Variable(torch.ones(2, 2))
-    prior = dist.DiagNormal(mu, sigma)
-    prior = dist.Bernoulli(sigma)
+    p = Variable(torch.ones(2, 2))
+    prior = dist.Bernoulli(p)
     lifted_mod = pyro.random_module("module", nn_module, prior)
     lifted_mod()
     for name, parameter in nn_module.named_parameters():
