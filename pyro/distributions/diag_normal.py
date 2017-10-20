@@ -81,6 +81,11 @@ class DiagNormal(Distribution):
                                  0.5 * torch.log(2.0 * np.pi *
                                  Variable(torch.ones(sigma.size()).type_as(mu.data)))),
                                  0.5 * torch.pow(((x - mu) / sigma), 2))
+        # XXX this allows for the user to mask out certain parts of the score, for example
+        # when the data is a ragged tensor. also useful for KL annealing. this entire logic
+        # will likely be done in a better/cleaner way in the future
+        if 'log_pdf_mask' in kwargs:
+            return torch.sum(kwargs['log_pdf_mask'] * log_pxs, 1)
         return torch.sum(log_pxs, 1)
 
     def analytic_mean(self, mu=None, sigma=None):

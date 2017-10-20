@@ -75,6 +75,13 @@ continuous_dists = [
                 {'mu': [[0.5], [0.3]], 'gamma': [[1.2], [1.0]], 'test_data': [[0.2], [0.35]]}
             ],
             scipy_arg_fn=lambda mu, gamma: ((), {"loc": np.array(mu), "scale": np.array(gamma)})),
+    Fixture(pyro_dist=dist.halfcauchy,
+            scipy_dist=sp.halfcauchy,
+            examples=[
+                {'mu': [0.5], 'gamma': [1.2], 'test_data': [1.0]},
+                {'mu': [[0.5], [0.3]], 'gamma': [[1.2], [1.0]], 'test_data': [[1.0], [0.35]]}
+            ],
+            scipy_arg_fn=lambda mu, gamma: ((), {"loc": np.array(mu), "scale": np.array(gamma)})),
 ]
 
 discrete_dists = [
