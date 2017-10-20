@@ -50,7 +50,7 @@ class HalfCauchy(Distribution):
             mu = mu.squeeze()
             gamma = gamma.squeeze()
         sample = Variable(torch.Tensor([spr.halfcauchy.rvs(
-                     mu.data.numpy(), scale=gamma.data.numpy())])
+                     mu.data.cpu().numpy(), scale=gamma.data.cpu().numpy())])
                      .type_as(mu.data))
         return sample
 
