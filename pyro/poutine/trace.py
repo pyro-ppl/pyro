@@ -1,8 +1,6 @@
 import collections
 
 import networkx
-import torch
-from torch.autograd import Variable
 
 
 class Trace(networkx.DiGraph):
