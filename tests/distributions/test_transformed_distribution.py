@@ -1,5 +1,3 @@
-import math
-
 import numpy as np
 import pytest
 import scipy.stats as sp
@@ -27,6 +25,7 @@ class AffineExp(Bijector):
     Y = e^(a * Z + b),
     where a = sigma
     """
+
     def __init__(self, a_init, b_init):
         """
         Constructor for univariate affine bijector followed by exp
