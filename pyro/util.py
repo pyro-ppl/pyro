@@ -1,6 +1,7 @@
 import pyro
 import graphviz
 import numpy as np
+import functools
 import torch
 from torch.autograd import Variable
 from torch.nn import Parameter
@@ -24,6 +25,12 @@ def _dict_to_tuple(d):
         return tuple([(k, _dict_to_tuple(d[k])) for k in sorted(d.keys())])
     else:
         return d
+
+
+def get_tensor_data(t):
+    if isinstance(t, Variable):
+        return t.data
+    return t
 
 
 def memoize(fn):
@@ -428,3 +435,11 @@ def identify_dense_edges(trace):
                         trace.add_edge(past_name, name)
 
     return trace
+
+
+def deep_getattr(obj, name):
+    """
+    Python getattr() for arbitrarily deep attributes
+    Throws an AttirbuteError if bad attribute
+    """
+    return functools.reduce(getattr, name.split("."), obj)
