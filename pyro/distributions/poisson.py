@@ -62,9 +62,9 @@ class Poisson(Distribution):
         ll_1 = torch.sum(x * torch.log(lam), -1)
         ll_2 = -torch.sum(lam, -1)
         ll_3 = -torch.sum(log_gamma(x + 1.0), -1)
-        log_pdf = ll_1 + ll_2 + ll_3
+        batch_log_pdf = ll_1 + ll_2 + ll_3
         batch_log_pdf_shape = self.batch_shape(lam) + (1,)
-        return log_pdf.contiguous().view(batch_log_pdf_shape)
+        return batch_log_pdf.contiguous().view(batch_log_pdf_shape)
 
     def analytic_mean(self, lam=None):
         lam = self._sanitize_input(lam)

@@ -76,9 +76,9 @@ class Beta(Distribution):
         ll_3 = log_gamma(alpha + beta)
         ll_4 = -log_gamma(alpha)
         ll_5 = -log_gamma(beta)
-        log_pdf = torch.sum(ll_1 + ll_2 + ll_3 + ll_4 + ll_5, -1)
+        batch_log_pdf = torch.sum(ll_1 + ll_2 + ll_3 + ll_4 + ll_5, -1)
         batch_log_pdf_shape = self.batch_shape(alpha, beta) + (1,)
-        return log_pdf.contiguous().view(batch_log_pdf_shape)
+        return batch_log_pdf.contiguous().view(batch_log_pdf_shape)
 
     def analytic_mean(self, alpha=None, beta=None):
         alpha, beta = self._sanitize_input(alpha, beta)

@@ -84,9 +84,9 @@ class DiagNormal(Distribution):
         # will likely be done in a better/cleaner way in the future
         if 'log_pdf_mask' in kwargs:
             return torch.sum(kwargs['log_pdf_mask'] * log_pxs, -1)
-        log_pxs = torch.sum(log_pxs, -1)
+        batch_log_pdf = torch.sum(log_pxs, -1)
         batch_log_pdf_shape = x.size()[:-1] + (1,)
-        return log_pxs.contiguous().view(batch_log_pdf_shape)
+        return batch_log_pdf.contiguous().view(batch_log_pdf_shape)
 
     def analytic_mean(self, mu=None, sigma=None):
         mu, sigma = self._sanitize_input(mu, sigma)

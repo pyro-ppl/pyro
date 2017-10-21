@@ -73,9 +73,9 @@ class LogNormal(Distribution):
                         .type_as(mu.data).expand_as(x))
         ll_2 = -torch.log(sigma * x)
         ll_3 = -0.5 * torch.pow((torch.log(x) - mu) / sigma, 2.0)
-        log_pdf = torch.sum(ll_1 + ll_2 + ll_3, -1)
+        batch_log_pdf = torch.sum(ll_1 + ll_2 + ll_3, -1)
         batch_log_pdf_shape = x.size()[:-1] + (1,)
-        return log_pdf.contiguous().view(batch_log_pdf_shape)
+        return batch_log_pdf.contiguous().view(batch_log_pdf_shape)
 
     def analytic_mean(self, mu=None, sigma=None):
         mu, sigma = self._sanitize_input(mu, sigma)

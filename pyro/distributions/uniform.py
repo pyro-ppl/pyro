@@ -52,20 +52,6 @@ class Uniform(Distribution):
         eps = Variable(torch.rand(a.size()).type_as(a.data))
         return a + torch.mul(eps, b - a)
 
-    def log_pdf(self, x, a=None, b=None, *args, **kwargs):
-        """
-        Uniform log-likelihood
-        """
-        a, b = self._sanitize_input(a, b)
-        if x.dim() == 1:
-            if x.le(a).data[0] or x.ge(b).data[0]:
-                return Variable(torch.Tensor([-float("inf")]).type_as(a.data))
-        else:
-            # x is 2-d
-            if x.le(a).data[0, 0] or x.ge(b).data[0, 0]:
-                return Variable(torch.Tensor([[-np.inf]]).type_as(a.data))
-        return torch.sum(-torch.log(b - a))
-
     def batch_log_pdf(self, x, a=None, b=None, *args, **kwargs):
         a, b = self._sanitize_input(a, b)
         assert a.dim() == b.dim()

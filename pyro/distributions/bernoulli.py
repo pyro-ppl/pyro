@@ -57,8 +57,10 @@ class Bernoulli(Distribution):
             ps = ps.expand_as(x)
         x_1 = x - 1
         ps_1 = ps - 1
-        xmul = torch.mul(x.type_as(ps), ps)
-        xmul_1 = torch.mul(x_1.type_as(ps), ps_1)
+        x = x.type_as(ps)
+        x_1 = x_1.type_as(x_1)
+        xmul = torch.mul(x, ps)
+        xmul_1 = torch.mul(x_1, ps_1)
         logsum = torch.log(torch.add(xmul, xmul_1))
 
         # XXX this allows for the user to mask out certain parts of the score, for example
