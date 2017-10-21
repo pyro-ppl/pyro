@@ -38,7 +38,7 @@ class Poisson(Distribution):
         Poisson sampler.
         """
         lam = self._sanitize_input(lam)
-        x = npr.poisson(lam=lam.data.numpy()).astype("float")
+        x = npr.poisson(lam=lam.data.cpu().numpy()).astype("float")
         return Variable(torch.Tensor(x).type_as(lam.data))
 
     def batch_log_pdf(self, x, lam=None, batch_size=1, *args, **kwargs):

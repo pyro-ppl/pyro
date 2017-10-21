@@ -56,11 +56,9 @@ class NormalChol(Distribution):
         ll_1 = Variable(torch.Tensor([-0.5 * mu.size(0) * np.log(2.0 * np.pi)])
                         .type_as(mu.data))
         ll_2 = -torch.sum(torch.log(torch.diag(L)))
-        x_chol = Variable(
-            torch.trtrs(
-                (x - mu).unsqueeze(1).data,
-                L.data,
-                False)[0])
+        # torch.trtrs() does not support cuda tensors.
+        x_chols = torch.trtrs((x - mu).unsqueeze(1).data.cpu(), L.data.cpu(), False)
+        x_chol = Variable(x_chols[0].type_as(mu.data))
         ll_3 = -0.5 * torch.sum(torch.pow(x_chol, 2.0))
 
         return ll_1 + ll_2 + ll_3

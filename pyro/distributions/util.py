@@ -43,3 +43,31 @@ def log_beta(t):
         numer = torch.sum(log_gamma(t), 1)
         denom = log_gamma(torch.sum(t, 1))
     return numer - denom
+
+
+def torch_zeros_like(x):
+    """
+    Polyfill for `torch.zeros_like()`.
+    """
+    # Work around https://github.com/pytorch/pytorch/issues/2906
+    if isinstance(x, Variable):
+        return Variable(torch_zeros_like(x.data))
+    # Support Pytorch before https://github.com/pytorch/pytorch/pull/2489
+    try:
+        return torch.zeros_like(x)
+    except AttributeError:
+        return torch.zeros(x.size()).type_as(x)
+
+
+def torch_ones_like(x):
+    """
+    Polyfill for `torch.ones_like()`.
+    """
+    # Work around https://github.com/pytorch/pytorch/issues/2906
+    if isinstance(x, Variable):
+        return Variable(torch_ones_like(x.data))
+    # Support Pytorch before https://github.com/pytorch/pytorch/pull/2489
+    try:
+        return torch.ones_like(x)
+    except AttributeError:
+        return torch.ones(x.size()).type_as(x)

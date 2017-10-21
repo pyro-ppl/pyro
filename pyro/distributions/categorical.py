@@ -3,6 +3,7 @@ import torch
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
+from pyro.distributions.util import torch_zeros_like
 
 
 class Categorical(Distribution):
@@ -77,7 +78,7 @@ class Categorical(Distribution):
         vs = self._process_vs(vs)
         sample_size = ps.size()[:-1] + (1,)
         sample = torch.multinomial(ps.data, 1, replacement=True).expand(*sample_size)
-        sample_one_hot = torch.zeros(ps.size()).scatter_(-1, sample, 1)
+        sample_one_hot = torch_zeros_like(ps.data).scatter_(-1, sample, 1)
 
         if vs is not None:
             if isinstance(vs, np.ndarray):
@@ -126,7 +127,7 @@ class Categorical(Distribution):
             elif one_hot:
                 boolean_mask = x
             else:
-                boolean_mask = torch.zeros(ps.size()).scatter_(-1, x.data.long(), 1)
+                boolean_mask = torch_zeros_like(ps.data).scatter_(-1, x.data.long(), 1)
         # apply log function to masked probability tensor
         return torch.log(ps.masked_select(boolean_mask.byte()).contiguous().view(*batch_pdf_size))
 

@@ -3,6 +3,7 @@ import torch
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
+from pyro.distributions.util import torch_zeros_like
 
 
 class Cauchy(Distribution):
@@ -51,9 +52,8 @@ class Cauchy(Distribution):
             # mu and gamma must be size 1 Variables
             mu = mu.squeeze()
             gamma = gamma.squeeze()
-        sample = Variable(torch.zeros(mu.size()))
-        sample.data.cauchy_(mu.data[0], gamma.data[0])
-        return sample
+        sample = torch_zeros_like(mu.data).cauchy_(mu.data[0], gamma.data[0])
+        return Variable(sample)
 
     def batch_log_pdf(self, x, mu=None, gamma=None, batch_size=1, *args, **kwargs):
         """
