@@ -3,6 +3,7 @@ import argparse
 import torch
 import torch.nn as nn
 from torch.nn.functional import normalize  # noqa: F401
+from pdb import set_trace as bb
 
 from torch.autograd import Variable
 
@@ -15,7 +16,6 @@ from pyro.optim import Adam
 """
 Bayesian Regression
 """
-
 
 # generate toy dataset
 def build_linear_dataset(N, noise_std=0.1):
@@ -41,30 +41,23 @@ def build_logistic_dataset(N, noise_std=0.1):
     return torch.cat((X, y), 1)
 
 
-def log_reg(x_data):
-    p_w = pyro.param("weight", Variable(torch.zeros(D, 1), requires_grad=True))
-    p_b = pyro.param("bias", Variable(torch.ones(1), requires_grad=True))
-    reg = torch.addmm(p_b, x_data, p_w)
-    latent = sigmoid(reg)
-    return latent
+class Regression(nn.Module):
+    def __init__(self):
+        super(Regression, self).__init__()
+        self.linear = nn.Linear(1, 1)
+
+    def forward(self, x):
+        return self.linear(x)
 
 
-def lin_reg(x_data):
-    p_w = pyro.param("weight", Variable(torch.zeros(1), requires_grad=True))
-    p_b = pyro.param("bias", Variable(torch.ones(1), requires_grad=True))
-    latent = p_w.squeeze() * x_data.squeeze() + p_b
-    return latent
-
-
-sigmoid = nn.Sigmoid()
 softplus = nn.Softplus()
+regression = Regression()
 
 N = 1000  # size of toy data
 D = 1  # number of features
 batch_size = 256  # batch size
 
 # type of regression
-reg_fn = lin_reg
 
 
 def model(data):
@@ -74,21 +67,19 @@ def model(data):
     bias_sigma = Variable(torch.ones(1))
     w_prior = DiagNormal(mu, sigma)
     b_prior = DiagNormal(bias_mu, bias_sigma)
-    priors = {'weight': w_prior, 'bias': b_prior}
-    lifted_fn = poutine.lift(reg_fn, priors)
+    priors = {'linear.weight': w_prior, 'linear.bias': b_prior}
+    lifted_module = pyro.random_module("module", regression, priors)
+    # sample a nn
+    lifted_nn = lifted_module()
 
     with pyro.iarange("map", N, subsample=data):
         x_data = data[:, :-1]
         y_data = data[:, -1]
-        latent = lifted_fn(x_data)
-        if reg_fn.__name__ == 'lin_reg':
-            pyro.observe("obs", DiagNormal(latent, Variable(torch.ones(data.size(0)))), y_data.squeeze())
-        else:
-            pyro.observe("obs", Bernoulli(latent.squeeze()), y_data)
+        latent = lifted_nn(x_data).squeeze()
+        pyro.observe("obs", DiagNormal(latent, Variable(torch.ones(data.size(0)))), y_data.squeeze())
 
 
 def guide(data):
-    x_data = data[:, :-1]
     w_mu = Variable(torch.randn(D, 1), requires_grad=True)
     w_log_sig = Variable(-3.0 * torch.ones(D, 1) + 0.05 * torch.randn(D, 1), requires_grad=True)
     b_mu = Variable(torch.randn(1), requires_grad=True)
@@ -99,18 +90,16 @@ def guide(data):
     sb_param = softplus(pyro.param("guide_sigma_bias", b_log_sig))
     w_prior = DiagNormal(mw_param, sw_param)
     b_prior = DiagNormal(mb_param, sb_param)
-    priors = {'weight': w_prior, 'bias': b_prior}
-    with pyro.iarange("map", N, subsample=x_data):
-        lifted_fn = poutine.lift(reg_fn, priors)
-        lifted_fn(x_data)
+    priors = {'linear.weight': w_prior, 'linear.bias': b_prior}
+    lifted_module = pyro.random_module("module", regression, priors)
+    # sample a nn
+    lifted_nn = lifted_module()
 
 
 def load_data(reg_type):
-    global reg_fn
     if reg_type == 'linear':
         return build_linear_dataset(N)
     elif reg_type == 'logistic':
-        reg_fn = log_reg
         return build_logistic_dataset(N)
     raise ValueError('data set type should be "logistic" or "linear".')
 
