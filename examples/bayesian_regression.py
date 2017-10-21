@@ -18,24 +18,22 @@ Bayesian Regression
 """
 
 # generate toy dataset
-def build_linear_dataset(N, noise_std=0.1):
-    D = 1
+def build_linear_dataset(N, p, noise_std=0.1):
     X = np.linspace(-6, 6, num=N)
     y = 3 * X + 1 + np.random.normal(0, noise_std, size=N)
-    X = X.reshape((N, D))
+    X = X.reshape((N, p))
     y = y.reshape((N, 1))
     X, y = Variable(torch.Tensor(X)), Variable(torch.Tensor(y))
     return torch.cat((X, y), 1)
 
 
-def build_logistic_dataset(N, noise_std=0.1):
-    D = 1
+def build_logistic_dataset(N, p, noise_std=0.1):
     X = np.linspace(-6, 6, num=N)
     y = np.tanh(X) + np.random.normal(0, noise_std, size=N)
     y[y < 0.5] = 0
     y[y >= 0.5] = 1
     X = (X - 4.0) / 4.0
-    X = X.reshape((N, D))
+    X = X.reshape((N, p))
     y = y.reshape((N, 1))
     X, y = Variable(torch.Tensor(X)), Variable(torch.Tensor(y))
     return torch.cat((X, y), 1)
@@ -53,16 +51,16 @@ class Regression(nn.Module):
 softplus = nn.Softplus()
 regression = Regression()
 
-N = 1000  # size of toy data
-D = 1  # number of features
+N = 100  # size of toy data
+p = 1  # number of features
 batch_size = 256  # batch size
 
 # type of regression
 
 
 def model(data):
-    mu = Variable(torch.zeros(D, 1))
-    sigma = Variable(torch.ones(D, 1))
+    mu = Variable(torch.zeros(p, 1))
+    sigma = Variable(torch.ones(p, 1))
     bias_mu = Variable(torch.zeros(1))
     bias_sigma = Variable(torch.ones(1))
     w_prior = DiagNormal(mu, sigma)
@@ -80,8 +78,8 @@ def model(data):
 
 
 def guide(data):
-    w_mu = Variable(torch.randn(D, 1), requires_grad=True)
-    w_log_sig = Variable(-3.0 * torch.ones(D, 1) + 0.05 * torch.randn(D, 1), requires_grad=True)
+    w_mu = Variable(torch.randn(p, 1), requires_grad=True)
+    w_log_sig = Variable(-3.0 * torch.ones(p, 1) + 0.05 * torch.randn(p, 1), requires_grad=True)
     b_mu = Variable(torch.randn(1), requires_grad=True)
     b_log_sig = Variable(-3.0 * torch.ones(1) + 0.05 * torch.randn(1), requires_grad=True)
     mw_param = pyro.param("guide_mean_weight", w_mu)
@@ -98,9 +96,9 @@ def guide(data):
 
 def load_data(reg_type):
     if reg_type == 'linear':
-        return build_linear_dataset(N)
+        return build_linear_dataset(N, p)
     elif reg_type == 'logistic':
-        return build_logistic_dataset(N)
+        return build_logistic_dataset(N, p)
     raise ValueError('data set type should be "logistic" or "linear".')
 
 
