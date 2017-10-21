@@ -3,6 +3,7 @@ run_outputs*
 data
 examples/processed
 examples/raw
+examples/dmm/*.pkl
 processed
 raw
 
