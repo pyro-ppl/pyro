@@ -37,13 +37,23 @@ class Multinomial(Distribution):
                 self.n = n.expand(batch_size, n.size(0))
         super(Multinomial, self).__init__(*args, **kwargs)
 
+    def batch_shape(self, ps=None, n=None, *args, **kwargs):
+        ps, n = self._sanitize_input(ps, n)
+        return ps.size()[:-1]
+
+    def event_shape(self, ps=None, n=None, *args, **kwargs):
+        ps, n = self._sanitize_input(ps, n)
+        return ps.size()[-1:]
+
     def sample(self, ps=None, n=None, *args, **kwargs):
         ps, n = self._sanitize_input(ps, n)
-        counts = np.bincount(self.expanded_sample(ps, n).data.cpu().numpy(), minlength=ps.size()[0])
+        counts = np.apply_along_axis(lambda x: np.bincount(x, minlength=ps.size()[-1]),
+                                     axis=-1,
+                                     arr=self.expanded_sample(ps, n).data.numpy())
         counts = torch.from_numpy(counts)
         if ps.is_cuda:
             counts = counts.cuda()
-        return Variable(counts)
+        return Variable(torch.from_numpy(counts))
 
     def expanded_sample(self, ps=None, n=None, *args, **kwargs):
         ps, n = self._sanitize_input(ps, n)
@@ -54,14 +64,12 @@ class Multinomial(Distribution):
             n = int(n.data.cpu()[0])
         return Variable(torch.multinomial(ps.data, n, replacement=True))
 
-    def batch_log_pdf(self, x, ps=None, n=None, batch_size=1, *args, **kwargs):
+    def batch_log_pdf(self, x, ps=None, n=None, *args, **kwargs):
         """
         hack replacement for batching multinomail score
         """
         # FIXME: torch.split so tensor is differentiable
         ps, n = self._sanitize_input(ps, n)
-        if x.dim() == 1:
-            x = x.expand(batch_size, x.size(0))
         out_arr = [[self._get_tensor(self.log_pdf([
                     x.narrow(0, ix, ix + 1),
                     ps.narrow(0, ix, ix + 1)

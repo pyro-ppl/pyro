@@ -134,6 +134,7 @@ discrete_dists = [
             scipy_dist=sp.multinomial,
             examples=[
                 {'ps': [0.1, 0.6, 0.3], 'n': [8], 'test_data': [2, 4, 2]},
+                {'ps': [0.1, 0.6, 0.3], 'n': [8], 'test_data': [[2, 4, 2], [2, 4, 2]]},
                 {'ps': [[0.1, 0.6, 0.3], [0.2, 0.4, 0.4]], 'n': [[8], [8]], 'test_data': [[2, 4, 2], [1, 4, 3]]}
             ],
             scipy_arg_fn=lambda ps, n: ((n, np.array(ps)), {}),
