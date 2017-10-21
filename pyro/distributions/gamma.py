@@ -2,7 +2,6 @@ import scipy.stats as spr
 import torch
 from torch.autograd import Variable
 
-import pyro
 from pyro.distributions.distribution import Distribution
 from pyro.distributions.util import log_gamma
 
@@ -37,7 +36,6 @@ class Gamma(Distribution):
             if alpha.dim() == 1 and beta.dim() == 1:
                 self.alpha = alpha.expand(batch_size, alpha.size(0))
                 self.beta = beta.expand(batch_size, beta.size(0))
-        self.reparameterized = False
         super(Gamma, self).__init__(*args, **kwargs)
 
     def sample(self, alpha=None, beta=None, *args, **kwargs):
@@ -48,7 +46,7 @@ class Gamma(Distribution):
         alpha, beta = self._sanitize_input(alpha, beta)
         theta = torch.pow(beta, -1.0)
         x = Variable(torch.Tensor([spr.gamma.rvs(
-            alpha.data.numpy(), scale=theta.data.numpy())])
+            alpha.data.cpu().numpy(), scale=theta.data.cpu().numpy())])
             .type_as(alpha.data))
         return x
 
@@ -61,7 +59,7 @@ class Gamma(Distribution):
             alpha = alpha.expand_as(x)
             beta = beta.expand_as(x)
         ll_1 = - beta * x
-        ll_2 = (alpha - pyro.ones(x.size())) * torch.log(x)
+        ll_2 = (alpha - 1.0) * torch.log(x)
         ll_3 = alpha * torch.log(beta)
         ll_4 = - log_gamma(alpha)
         return ll_1 + ll_2 + ll_3 + ll_4

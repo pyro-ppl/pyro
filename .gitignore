@@ -3,6 +3,7 @@ run_outputs*
 data
 examples/processed
 examples/raw
+examples/dmm/*.pkl
 processed
 raw
 
@@ -67,7 +68,7 @@ coverage.xml
 *,cover
 .hypothesis/
 paramstore.unittest.out
-adam.unittest.out
+adam.unittest.save
 
 # Translations
 *.mo

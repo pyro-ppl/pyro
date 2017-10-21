@@ -56,8 +56,7 @@ def set_rng_seed(rng_seed):
 
 def ones(*args, **kwargs):
     """
-    :param type_as: optional argument for tensor type
-    :type type_as: torch.Tensor
+    :param torch.Tensor type_as: optional argument for tensor type
 
     A convenience function for Parameter(torch.ones(...))
     """
@@ -68,8 +67,7 @@ def ones(*args, **kwargs):
 
 def zeros(*args, **kwargs):
     """
-    :param type_as: optional argument for tensor type
-    :type type_as: torch.Tensor
+    :param torch.Tensor type_as: optional argument for tensor type
 
     A convenience function for Parameter(torch.zeros(...))
     """
@@ -80,8 +78,7 @@ def zeros(*args, **kwargs):
 
 def ng_ones(*args, **kwargs):
     """
-    :param type_as: optional argument for tensor type
-    :type type_as: torch.Tensor
+    :param torch.Tensor type_as: optional argument for tensor type
 
     A convenience function for Variable(torch.ones(...), requires_grad=False)
     """
@@ -92,8 +89,7 @@ def ng_ones(*args, **kwargs):
 
 def ng_zeros(*args, **kwargs):
     """
-    :param type_as: optional argument for tensor type
-    :type type_as: torch.Tensor
+    :param torch.Tensor type_as: optional argument for tensor type
 
     A convenience function for Variable(torch.ones(...), requires_grad=False)
     """
