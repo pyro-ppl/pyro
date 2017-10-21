@@ -5,6 +5,7 @@ from abc import ABCMeta, abstractmethod
 
 import torch
 import torch.nn as nn
+from six import add_metaclass
 from torch.autograd import Variable
 from torch.nn import functional
 from torchvision.utils import save_image
@@ -18,10 +19,10 @@ from pyro.optim import Adam
 from pyro.util import ng_zeros, ng_ones
 
 """
-Comparison of VAE implementation in pyTorch and Pyro. This example can be
+Comparison of VAE implementation in PyTorch and Pyro. This example can be
 used for profiling purposes.
 
-The pyTorch VAE example is taken (with minor modification) from pytorch/examples.
+The PyTorch VAE example is taken (with minor modification) from pytorch/examples.
 Source: https://github.com/pytorch/examples/tree/master/vae
 """
 
@@ -59,12 +60,12 @@ class Decoder(nn.Module):
         return self.sigmoid(self.fc4(h3))
 
 
+@add_metaclass(ABCMeta)
 class VAE(object):
     """
     Abstract class for the variational auto-encoder. The abstract method
     for training the network is implemented by subclasses.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, args, train_loader, test_loader):
         self.args = args
@@ -103,12 +104,12 @@ class VAE(object):
         :param x: batch of data or a single datum (MNIST image).
         :return: reconstructed image, and the latent z's mean and variance.
         """
-        z_mu, z_sigma = self.vae_encoder(x)
+        z_mean, z_var = self.vae_encoder(x)
         if self.mode == TRAIN:
-            z = DiagNormal(z_mu, z_sigma).sample()
+            z = DiagNormal(z_mean, z_var.sqrt()).sample()
         else:
-            z = z_mu
-        return self.vae_decoder(z), z_mu, z_sigma
+            z = z_mean
+        return self.vae_decoder(z), z_mean, z_var
 
     def train(self, epoch):
         self.set_train(is_train=True)
@@ -123,13 +124,13 @@ class VAE(object):
     def test(self, epoch):
         self.set_train(is_train=False)
         test_loss = 0
-        for i, (data, _) in enumerate(self.test_loader):
-            data = Variable(data, volatile=True)
-            recon_x = self.model_eval(data)[0]
-            test_loss += self.compute_loss_and_gradient(data)
+        for i, (x, _) in enumerate(self.test_loader):
+            x = Variable(x, volatile=True)
+            recon_x = self.model_eval(x)[0]
+            test_loss += self.compute_loss_and_gradient(x)
             if i == 0:
-                n = min(data.size(0), 8)
-                comparison = torch.cat([data[:n],
+                n = min(x.size(0), 8)
+                comparison = torch.cat([x[:n],
                                         recon_x.view(self.args.batch_size, 1, 28, 28)[:n]])
                 save_image(comparison.data.cpu(),
                            os.path.join(OUTPUT_DIR, 'reconstruction_' + str(epoch) + '.png'),
@@ -151,13 +152,13 @@ class PytorchVAEImpl(VAE):
 
     def compute_loss_and_gradient(self, x):
         self.optimizer.zero_grad()
-        recon_x, mu, logvar = self.model_eval(x)
+        recon_x, z_mean, z_var = self.model_eval(x)
         binary_cross_entropy = functional.binary_cross_entropy(recon_x, x.view(-1, 784))
-        # Uses analytical KL divergence.
+        # Uses analytical KL divergence expression for D_kl(q(z|x) || p(z))
         # Refer to Appendix B from VAE paper:
         # Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
         # (https://arxiv.org/abs/1312.6114)
-        kl_div = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        kl_div = -0.5 * torch.sum(1 + z_var.log() - z_mean.pow(2) - z_var)
         kl_div /= self.args.batch_size * 784
         loss = binary_cross_entropy + kl_div
         if self.mode == TRAIN:
@@ -174,7 +175,7 @@ class PyroVAEImpl(VAE):
     """
     Implementation of VAE using Pyro. Only the model and the guide specification
     is needed to run the optimizer (the objective function does not need to be
-    specified as in the pyTorch implementation).
+    specified as in the PyTorch implementation).
     """
 
     def __init__(self, *args, **kwargs):
@@ -183,15 +184,15 @@ class PyroVAEImpl(VAE):
 
     def model(self, data):
         decoder = pyro.module('decoder', self.vae_decoder)
-        z_mu, z_sigma = ng_zeros([data.size(0), 20]), ng_ones([data.size(0), 20])
-        z = pyro.sample('latent', DiagNormal(z_mu, z_sigma))
+        z_mean, z_std = ng_zeros([data.size(0), 20]), ng_ones([data.size(0), 20])
+        z = pyro.sample('latent', DiagNormal(z_mean, z_std))
         img = decoder.forward(z)
         pyro.observe('obs', Bernoulli(img), data.view(-1, 784))
 
     def guide(self, data):
         encoder = pyro.module('encoder', self.vae_encoder)
-        z_mu, z_sigma = encoder.forward(data)
-        pyro.sample('latent', DiagNormal(z_mu, z_sigma))
+        z_mean, z_var = encoder.forward(data)
+        pyro.sample('latent', DiagNormal(z_mean, z_var.sqrt()))
 
     def compute_loss_and_gradient(self, x):
         if self.mode == TRAIN:
@@ -199,8 +200,8 @@ class PyroVAEImpl(VAE):
         return self.optimizer.evaluate_loss(x)
 
     def initialize_optimizer(self, lr):
-        adam = Adam({'lr': lr})
-        return SVI(self.model, self.guide, adam, loss='ELBO')
+        optimizer = Adam({'lr': lr})
+        return SVI(self.model, self.guide, optimizer, loss='ELBO')
 
 
 def setup(args):
@@ -236,7 +237,7 @@ def main():
         print('Running Pyro VAE implementation')
     elif args.impl == 'pytorch':
         vae = PytorchVAEImpl(args, train_loader, test_loader)
-        print('Running pyTorch VAE implementation')
+        print('Running PyTorch VAE implementation')
     else:
         raise ValueError('Incorrect implementation specified: {}'.format(args.impl))
     for i in range(args.num_epochs):
