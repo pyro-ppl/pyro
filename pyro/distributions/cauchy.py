@@ -27,7 +27,7 @@ class Cauchy(Distribution):
         else:
             raise ValueError("Parameter(s) were None")
 
-    def __init__(self, mu=None, gamma=None, batch_size=1, *args, **kwargs):
+    def __init__(self, mu=None, gamma=None, batch_size=None, *args, **kwargs):
         """
         Params:
           `mu` - mean
@@ -37,10 +37,20 @@ class Cauchy(Distribution):
         self.gamma = gamma
         if mu is not None:
             # this will be deprecated in a future PR
-            if mu.dim() == 1 and batch_size > 1:
+            if mu.dim() == 1 and batch_size is not None:
                 self.mu = mu.expand(batch_size, mu.size(0))
                 self.gamma = gamma.expand(batch_size, gamma.size(0))
         super(Cauchy, self).__init__(*args, **kwargs)
+
+    def batch_shape(self, mu=None, gamma=None, *args, **kwargs):
+        mu, gamma = self._sanitize_input(mu, gamma)
+        event_dim = 1
+        return mu.size()[:-event_dim]
+
+    def event_shape(self, mu=None, gamma=None, *args, **kwargs):
+        mu, gamma = self._sanitize_input(mu, gamma)
+        event_dim = 1
+        return mu.size()[-event_dim:]
 
     def sample(self, mu=None, gamma=None, *args, **kwargs):
         """
@@ -48,21 +58,23 @@ class Cauchy(Distribution):
         """
         mu, gamma = self._sanitize_input(mu, gamma)
         assert mu.dim() == gamma.dim()
+        mu_val, gamma_val = mu, gamma
         if mu.dim() > 1:
             # mu and gamma must be size 1 Variables
-            mu = mu.squeeze()
-            gamma = gamma.squeeze()
-        sample = torch_zeros_like(mu.data).cauchy_(mu.data[0], gamma.data[0])
-        return Variable(sample)
+            mu_val = mu.squeeze()
+            gamma_val = gamma.squeeze()
+        sample = Variable(torch_zeros_like(mu.data))
+        # FIXME: This just fills the entire tensor with the first value
+        # Refer to (https://github.com/uber/pyro/issues/302)
+        sample.data.cauchy_(mu_val.data[0], gamma_val.data[0])
+        return sample
 
-    def batch_log_pdf(self, x, mu=None, gamma=None, batch_size=1, *args, **kwargs):
+    def batch_log_pdf(self, x, mu=None, gamma=None, *args, **kwargs):
         """
         Cauchy log-likelihood
         """
         # expand to patch size of input
         mu, gamma = self._sanitize_input(mu, gamma)
-        if x.dim() != mu.dim():
-            x = x.expand(batch_size, x.size(0))
         x_0 = torch.pow((x - mu)/gamma, 2)
         px = np.pi * gamma * (1 + x_0)
         return -1 * torch.log(px)
