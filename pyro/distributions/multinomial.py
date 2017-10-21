@@ -49,11 +49,11 @@ class Multinomial(Distribution):
         ps, n = self._sanitize_input(ps, n)
         counts = np.apply_along_axis(lambda x: np.bincount(x, minlength=ps.size()[-1]),
                                      axis=-1,
-                                     arr=self.expanded_sample(ps, n).data.numpy())
+                                     arr=self.expanded_sample(ps, n).data.cpu().numpy())
         counts = torch.from_numpy(counts)
         if ps.is_cuda:
             counts = counts.cuda()
-        return Variable(torch.from_numpy(counts))
+        return Variable(counts)
 
     def expanded_sample(self, ps=None, n=None, *args, **kwargs):
         ps, n = self._sanitize_input(ps, n)

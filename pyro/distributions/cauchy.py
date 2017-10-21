@@ -63,7 +63,7 @@ class Cauchy(Distribution):
             # mu and gamma must be size 1 Variables
             mu_val = mu.squeeze()
             gamma_val = gamma.squeeze()
-        sample = Variable(torch_zeros_like(mu.size()))
+        sample = Variable(torch_zeros_like(mu.data))
         # FIXME: This just fills the entire tensor with the first value
         # Refer to (https://github.com/uber/pyro/issues/302)
         sample.data.cauchy_(mu_val.data[0], gamma_val.data[0])
