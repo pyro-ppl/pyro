@@ -30,12 +30,13 @@ def build_linear_dataset(N, p, noise_std=0.1):
 
 
 # NN with one linear layer
-class Regression(nn.Module):
+class RegressionModel(nn.Module):
     def __init__(self, p):
-        super(Regression, self).__init__()
+        super(RegressionModel, self).__init__()
         self.linear = nn.Linear(p, 1)
 
     def forward(self, x):
+        # x * w + b
         return self.linear(x)
 
 
@@ -43,7 +44,7 @@ N = 100  # size of toy data
 p = 1  # number of features
 
 softplus = nn.Softplus()
-regression = Regression(p)
+regression_model = RegressionModel(p)
 
 
 def model(data):
@@ -54,7 +55,7 @@ def model(data):
     w_prior = DiagNormal(mu, sigma)
     b_prior = DiagNormal(bias_mu, bias_sigma)
     priors = {'linear.weight': w_prior, 'linear.bias': b_prior}
-    lifted_module = pyro.random_module("module", regression, priors)
+    lifted_module = pyro.random_module("module", regression_model, priors)
     # sample a nn
     lifted_nn = lifted_module()
 
@@ -80,18 +81,21 @@ def guide(data):
     b_prior = DiagNormal(mb_param, sb_param)
     priors = {'linear.weight': w_prior, 'linear.bias': b_prior}
     # overloading the parameters in the module with random samples from the prior
-    lifted_module = pyro.random_module("module", regression, priors)
+    lifted_module = pyro.random_module("module", regression_model, priors)
     # sample a nn
     lifted_nn = lifted_module()
 
 
+# instantiate optim and inference objects
 optim = Adam({"lr": 0.01})
 svi = SVI(model, guide, optim, loss="ELBO")
 
+# get array of batch indices
 def get_batch_indices(N, batch_size):
     all_batches = np.arange(0, N, batch_size)
     if all_batches[-1] != N:
         all_batches = list(all_batches) + [N]
+    return all_batches
 
 
 def main():
