@@ -27,18 +27,6 @@ def build_linear_dataset(N, p, noise_std=0.1):
     return torch.cat((X, y), 1)
 
 
-def build_logistic_dataset(N, p, noise_std=0.1):
-    X = np.linspace(-6, 6, num=N)
-    y = np.tanh(X) + np.random.normal(0, noise_std, size=N)
-    y[y < 0.5] = 0
-    y[y >= 0.5] = 1
-    X = (X - 4.0) / 4.0
-    X = X.reshape((N, p))
-    y = y.reshape((N, 1))
-    X, y = Variable(torch.Tensor(X)), Variable(torch.Tensor(y))
-    return torch.cat((X, y), 1)
-
-
 class Regression(nn.Module):
     def __init__(self):
         super(Regression, self).__init__()
@@ -53,7 +41,6 @@ regression = Regression()
 
 N = 100  # size of toy data
 p = 1  # number of features
-batch_size = 256  # batch size
 
 # type of regression
 
@@ -94,38 +81,30 @@ def guide(data):
     lifted_nn = lifted_module()
 
 
-def load_data(reg_type):
-    if reg_type == 'linear':
-        return build_linear_dataset(N, p)
-    elif reg_type == 'logistic':
-        return build_logistic_dataset(N, p)
-    raise ValueError('data set type should be "logistic" or "linear".')
-
-
 adam = Adam({"lr": 0.01})
 svi = SVI(model, guide, adam, loss="ELBO")
 
-# get batch indices
-all_batches = np.arange(0, N, batch_size)
-if all_batches[-1] != N:
-    all_batches = list(all_batches) + [N]
+def get_batch_indices(N, batch_size):
+    all_batches = np.arange(0, N, batch_size)
+    if all_batches[-1] != N:
+        all_batches = list(all_batches) + [N]
 
 
 def main():
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', default=1000, type=int)
-    parser.add_argument('-b', '--batch', default=False, type=bool)
-    parser.add_argument('-t', '--regression-type', default='linear', type=str)
+    parser.add_argument('-b', '--batch-size', default=N, type=int)
     args = parser.parse_args()
-    data = load_data(args.regression_type)
+    data = build_linear_dataset(N, p)
     for j in range(args.num_epochs):
-        if not args.batch:
+        if args.batch_size == N:
             epoch_loss = svi.step(data)
         else:
             # mini batch
             epoch_loss = 0.0
             # shuffle data
             data = data[torch.randperm(N)]
+            all_batches = get_batch_indices(N, args.batch_size)
             for ix, batch_start in enumerate(all_batches[:-1]):
                 batch_end = all_batches[ix + 1]
                 batch_data = data[batch_start: batch_end]
