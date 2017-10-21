@@ -3,12 +3,10 @@ import argparse
 import torch
 import torch.nn as nn
 from torch.nn.functional import normalize  # noqa: F401
-from pdb import set_trace as bb
 
 from torch.autograd import Variable
 
 import pyro
-from pyro import poutine
 from pyro.distributions import DiagNormal, Bernoulli  # noqa: F401
 from pyro.infer import SVI
 from pyro.optim import Adam
@@ -18,6 +16,7 @@ Bayesian Regression
 Learning a function of the form:
     y = wx + b
 """
+
 
 # generate toy dataset
 def build_linear_dataset(N, p, noise_std=0.1):
@@ -83,12 +82,13 @@ def guide(data):
     # overloading the parameters in the module with random samples from the prior
     lifted_module = pyro.random_module("module", regression_model, priors)
     # sample a nn
-    lifted_nn = lifted_module()
+    lifted_module()
 
 
 # instantiate optim and inference objects
 optim = Adam({"lr": 0.01})
 svi = SVI(model, guide, optim, loss="ELBO")
+
 
 # get array of batch indices
 def get_batch_indices(N, batch_size):
