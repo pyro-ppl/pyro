@@ -15,6 +15,8 @@ from pyro.optim import Adam
 
 """
 Bayesian Regression
+Learning a function of the form:
+    y = wx + b
 """
 
 # generate toy dataset
@@ -27,22 +29,21 @@ def build_linear_dataset(N, p, noise_std=0.1):
     return torch.cat((X, y), 1)
 
 
+# NN with one linear layer
 class Regression(nn.Module):
-    def __init__(self):
+    def __init__(self, p):
         super(Regression, self).__init__()
-        self.linear = nn.Linear(1, 1)
+        self.linear = nn.Linear(p, 1)
 
     def forward(self, x):
         return self.linear(x)
 
 
-softplus = nn.Softplus()
-regression = Regression()
-
 N = 100  # size of toy data
 p = 1  # number of features
 
-# type of regression
+softplus = nn.Softplus()
+regression = Regression(p)
 
 
 def model(data):
@@ -60,6 +61,7 @@ def model(data):
     with pyro.iarange("map", N, subsample=data):
         x_data = data[:, :-1]
         y_data = data[:, -1]
+        # run the nn with the data
         latent = lifted_nn(x_data).squeeze()
         pyro.observe("obs", DiagNormal(latent, Variable(torch.ones(data.size(0)))), y_data.squeeze())
 
@@ -69,6 +71,7 @@ def guide(data):
     w_log_sig = Variable(-3.0 * torch.ones(p, 1) + 0.05 * torch.randn(p, 1), requires_grad=True)
     b_mu = Variable(torch.randn(1), requires_grad=True)
     b_log_sig = Variable(-3.0 * torch.ones(1) + 0.05 * torch.randn(1), requires_grad=True)
+    # register learnable params in the param store
     mw_param = pyro.param("guide_mean_weight", w_mu)
     sw_param = softplus(pyro.param("guide_sigma_weight", w_log_sig))
     mb_param = pyro.param("guide_mean_bias", b_mu)
@@ -76,13 +79,14 @@ def guide(data):
     w_prior = DiagNormal(mw_param, sw_param)
     b_prior = DiagNormal(mb_param, sb_param)
     priors = {'linear.weight': w_prior, 'linear.bias': b_prior}
+    # overloading the parameters in the module with random samples from the prior
     lifted_module = pyro.random_module("module", regression, priors)
     # sample a nn
     lifted_nn = lifted_module()
 
 
-adam = Adam({"lr": 0.01})
-svi = SVI(model, guide, adam, loss="ELBO")
+optim = Adam({"lr": 0.01})
+svi = SVI(model, guide, optim, loss="ELBO")
 
 def get_batch_indices(N, batch_size):
     all_batches = np.arange(0, N, batch_size)
@@ -104,6 +108,7 @@ def main():
             epoch_loss = 0.0
             # shuffle data
             data = data[torch.randperm(N)]
+            # get indices of each batch
             all_batches = get_batch_indices(N, args.batch_size)
             for ix, batch_start in enumerate(all_batches[:-1]):
                 batch_end = all_batches[ix + 1]
