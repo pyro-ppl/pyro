@@ -47,6 +47,7 @@ regression_model = RegressionModel(p)
 
 
 def model(data):
+    # Create unit normal priors over the parameters
     mu = Variable(torch.zeros(p, 1))
     sigma = Variable(torch.ones(p, 1))
     bias_mu = Variable(torch.zeros(1))
@@ -54,6 +55,8 @@ def model(data):
     w_prior = DiagNormal(mu, sigma)
     b_prior = DiagNormal(bias_mu, bias_sigma)
     priors = {'linear.weight': w_prior, 'linear.bias': b_prior}
+    # wrap regression model that lifts module parameters to random variables
+    # sampled from the priors
     lifted_module = pyro.random_module("module", regression_model, priors)
     # sample a nn
     lifted_nn = lifted_module()
@@ -76,6 +79,7 @@ def guide(data):
     sw_param = softplus(pyro.param("guide_sigma_weight", w_log_sig))
     mb_param = pyro.param("guide_mean_bias", b_mu)
     sb_param = softplus(pyro.param("guide_sigma_bias", b_log_sig))
+    # gaussian priors for w and b
     w_prior = DiagNormal(mw_param, sw_param)
     b_prior = DiagNormal(mb_param, sb_param)
     priors = {'linear.weight': w_prior, 'linear.bias': b_prior}
@@ -106,6 +110,7 @@ def main():
     data = build_linear_dataset(N, p)
     for j in range(args.num_epochs):
         if args.batch_size == N:
+            # use the entire data set
             epoch_loss = svi.step(data)
         else:
             # mini batch
