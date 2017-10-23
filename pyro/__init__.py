@@ -131,13 +131,14 @@ class _Subsample(Distribution):
     Internal use only. This should only be used by `iarange`.
     """
 
-    def __init__(self, size, subsample_size):
+    def __init__(self, size, subsample_size, use_cuda=False):
         """
         :param int size: the size of the range to subsample from
         :param int subsample_size: the size of the returned subsample
         """
         self.size = size
         self.subsample_size = subsample_size
+        self.use_cuda = use_cuda
 
     def sample(self):
         """
@@ -145,16 +146,18 @@ class _Subsample(Distribution):
         :rtype: torch.autograd.Variable of torch.LongTensor
         """
         assert 0 <= self.subsample_size <= self.size
-        return Variable(torch.randperm(self.size)[:self.subsample_size])
+        result = Variable(torch.randperm(self.size)[:self.subsample_size])
+        return result.cuda() if self.use_cuda else result
 
     def batch_log_pdf(self, x):
         # This is zero so that iarange can provide an unbiased estimate of
         # the non-subsampled batch_log_pdf.
-        return Variable(torch.zeros(0))
+        result = Variable(torch.zeros(0))
+        return result.cuda() if self.use_cuda else result
 
 
 @contextlib.contextmanager
-def iarange(name, size, subsample_size=0, subsample=None):
+def iarange(name, size, subsample_size=0, subsample=None, use_cuda=False):
     """
     Context manager for ranges indexing iid variables, optionally subsampling.
 
@@ -171,6 +174,7 @@ def iarange(name, size, subsample_size=0, subsample=None):
     :param subsample: Optional custom subsample for user-defined subsampling schemes.
         If specified, then `subsample_size` will be set to `len(subsample)`.
     :type subsample: Anything supporting `len()`.
+    :param bool use_cuda: Whether to use cuda tensors for `subsample` and `log_pdf`.
     :return: A context manager yielding a single 1-dimensional `torch.Tensor` of indices.
 
     Examples::
@@ -201,7 +205,7 @@ def iarange(name, size, subsample_size=0, subsample=None):
         return
 
     if subsample is None:
-        subsample = sample(name, _Subsample(size, subsample_size))
+        subsample = sample(name, _Subsample(size, subsample_size, use_cuda))
     if len(_PYRO_STACK) == 0:
         yield subsample
     else:
@@ -211,7 +215,7 @@ def iarange(name, size, subsample_size=0, subsample=None):
             yield subsample
 
 
-def irange(name, size, subsample_size=0, subsample=None):
+def irange(name, size, subsample_size=0, subsample=None, use_cuda=False):
     """
     Non-vectorized version of `iarange`. See `iarange` for details.
 
@@ -221,6 +225,7 @@ def irange(name, size, subsample_size=0, subsample=None):
     :param subsample: Optional custom subsample for user-defined subsampling schemes.
         If specified, then `subsample_size` will be set to `len(subsample)`.
     :type subsample: Anything supporting `len()`.
+    :param bool use_cuda: Whether to use cuda tensors for `subsample` and `log_pdf`.
     :return: A context manager yielding a single 1-dimensional `torch.Tensor` of indices.
 
     Examples::
@@ -258,11 +263,11 @@ def map_data(name, data, fn, batch_size=0, batch_dim=0):
     """
     if isinstance(data, (torch.Tensor, Variable)):
         size = data.size(batch_dim)
-        with iarange(name, size, batch_size) as batch:
+        with iarange(name, size, batch_size, use_cuda=data.is_cuda) as batch:
             return fn(batch, data.index_select(batch_dim, batch))
     else:
         size = len(data)
-        return [fn(i, data[i]) for i in irange(name, size, batch_size)]
+        return [fn(i, data[i]) for i in irange(name, size, batch_size, use_cuda=data.is_cuda)]
 
 
 # XXX this should have the same call signature as torch.Tensor constructors
