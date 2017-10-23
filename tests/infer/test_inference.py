@@ -69,8 +69,7 @@ class NormalNormalTests(TestCase):
                                    self.analytic_log_sig_n.data - 0.14 * torch.ones(2),
                                    requires_grad=True))
             sig_q = torch.exp(log_sig_q)
-            pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q, reparameterized=reparameterized,
-                        use_decaying_avg_baseline=True)
+            pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q, reparameterized=reparameterized)
             pyro.map_data("aaa", self.data, lambda i, x: None,
                           batch_size=self.batch_size)
 
@@ -296,7 +295,7 @@ class BernoulliBetaTests(TestCase):
             beta_q_log = pyro.param("beta_q_log",
                                     Variable(self.log_beta_n.data - 0.143, requires_grad=True))
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
-            pyro.sample("p_latent", dist.beta, alpha_q, beta_q, use_avg_decaying_baseline=True)
+            pyro.sample("p_latent", dist.beta, alpha_q, beta_q)
             pyro.map_data("aaa", self.data, lambda i, x: None, batch_size=self.batch_size)
 
         adam = optim.Adam({"lr": .001, "betas": (0.97, 0.999)})
