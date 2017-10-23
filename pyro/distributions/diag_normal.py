@@ -59,10 +59,7 @@ class DiagNormal(Distribution):
         mu, sigma = self._sanitize_input(mu, sigma)
         eps = Variable(torch.randn(mu.size()).type_as(mu.data))
         z = mu + eps * sigma
-        if self.reparameterized:
-            return z
-        else:
-            return z.detach()
+        return z if self.reparameterized else z.detach()
 
     def batch_log_pdf(self, x, mu=None, sigma=None, log_pdf_mask=None):
         """
