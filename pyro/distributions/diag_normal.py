@@ -79,7 +79,9 @@ class DiagNormal(Distribution):
         # when the data is a ragged tensor. also useful for KL annealing. this entire logic
         # will likely be done in a better/cleaner way in the future
         if log_pdf_mask is not None:
-            log_pxs *= log_pdf_mask
+            # TODO fix this to broadcasting as below, e.g. by instead:
+            # log_pxs *= log_pdf_mask  # Then continue with broadcasting logic below.
+            return torch.sum(log_pdf_mask * log_pxs, -1)
         batch_log_pdf = torch.sum(log_pxs, -1)
         batch_log_pdf_shape = x.size()[:-1] + (1,)
         return batch_log_pdf.contiguous().view(batch_log_pdf_shape)

@@ -227,6 +227,7 @@ class TraceGraph_ELBO(object):
                 # for extracting baseline options from site["infer"]
                 # XXX default for baseline_beta currently set here
                 def get_baseline_kwargs(infer_dict):
+                    # TODO Validate the infer_dict.
                     return infer_dict.get('nn_baseline', None), \
                            infer_dict.get('nn_baseline_input', None), \
                            infer_dict.get('use_decaying_avg_baseline', False), \
