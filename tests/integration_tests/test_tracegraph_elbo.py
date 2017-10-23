@@ -271,13 +271,13 @@ class BernoulliBetaTests(TestCase):
                                     Variable(self.log_beta_n.data - 0.143, requires_grad=True))
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             p_latent = pyro.sample("p_latent", dist.beta, alpha_q, beta_q,
-                                   use_avg_decaying_baseline=True)
+                                   use_decaying_avg_baseline=True)
             return p_latent
 
         adam = optim.Adam({"lr": .0007, "betas": (0.96, 0.999)})
         svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
 
-        for k in range(12000):
+        for k in range(3000):
             svi.step()
 
             alpha_error = param_abs_error("alpha_q_log", self.log_alpha_n)
@@ -286,8 +286,8 @@ class BernoulliBetaTests(TestCase):
             if k % 500 == 0 and self.verbose:
                 print("alpha_error, beta_error: %.4f, %.4f" % (alpha_error, beta_error))
 
-        self.assertEqual(0.0, alpha_error, prec=0.04)
-        self.assertEqual(0.0, beta_error, prec=0.06)
+        self.assertEqual(0.0, alpha_error, prec=0.03)
+        self.assertEqual(0.0, beta_error, prec=0.04)
 
 
 class PoissonGammaTests(TestCase):
@@ -543,7 +543,7 @@ class RaoBlackwellizationTests(TestCase):
         self.verbose = True
 
     # this tests rao-blackwellization in elbo for nested list map_datas
-    def test_nested_list_map_data_in_elbo(self, n_steps=11000):
+    def test_nested_list_map_data_in_elbo(self, n_steps=4000):
         pyro.clear_param_store()
 
         def model():
@@ -568,11 +568,11 @@ class RaoBlackwellizationTests(TestCase):
             mu_q = pyro.param("mu_q", Variable(self.analytic_mu_n.data + 0.234 * torch.ones(2),
                                                requires_grad=True))
             log_sig_q = pyro.param("log_sig_q", Variable(
-                                   self.analytic_log_sig_n.data - 0.21 * torch.ones(2),
+                                   self.analytic_log_sig_n.data - 0.27 * torch.ones(2),
                                    requires_grad=True))
             sig_q = torch.exp(log_sig_q)
             mu_latent = pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q,
-                                    reparameterized=False, use_avg_decaying_baseline=True)
+                                    reparameterized=False, use_decaying_avg_baseline=True)
 
             def obs_outer(i, x):
                 pyro.map_data("map_obs_inner_%d" % i, x, lambda _i, _x:
