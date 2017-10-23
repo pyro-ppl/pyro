@@ -47,6 +47,7 @@ class NormalNormalTests(TestCase):
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 5000)
 
+    @pytest.mark.xfail(reason="test was never correct, see https://github.com/uber/pyro/pull/317")
     def test_elbo_nonreparameterized(self):
         self.do_elbo_test(False, 15000)
 
@@ -341,10 +342,10 @@ class LogNormalNormalTests(TestCase):
         self.log_mu_n = torch.log(self.mu_n)
         self.log_tau_n = torch.log(self.tau_n)
 
-    @pytest.mark.xfail(reason="test was never correct, see https://github.com/uber/pyro/pull/317")
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 12000)
 
+    @pytest.mark.xfail(reason="test was never correct, see https://github.com/uber/pyro/pull/317")
     def test_elbo_nonreparameterized(self):
         self.do_elbo_test(False, 15000)
 
