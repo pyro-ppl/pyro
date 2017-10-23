@@ -139,9 +139,9 @@ class GaussianChainTests(TestCase):
                                              difficulty * (0.1 * torch.randn(1) - 0.53),
                                              requires_grad=True))
                 mean_function = mu_q if k == self.N else kappa_q * previous_sample + mu_q
-                latent_dist = dist.DiagNormal(mean_function, sig_q, reparameterized=repa)
                 node_flagged = True if self.which_nodes_reparam[k - 1] == 1.0 else False
                 repa = True if reparameterized else node_flagged
+                latent_dist = dist.DiagNormal(mean_function, sig_q, reparameterized=repa)
                 mu_latent = pyro.sample("mu_latent_%d" % k, latent_dist,
                                         infer=dict(use_decaying_avg_baseline=True))
                 previous_sample = mu_latent
@@ -430,10 +430,10 @@ class GaussianPyramidTests(TestCase):
                                            Variable(torch.Tensor([0.5 + difficulty * i / n_nodes]),
                                                     requires_grad=True))
                     mean_function_node = mean_function_node + kappa_dep * latents_dict[dep]
-                latent_dist_node = dist.DiagNormal(mean_function_node, torch.exp(log_sig_node),
-                                                   reparameterized=repa)
                 node_flagged = True if self.which_nodes_reparam[i] == 1.0 else False
                 repa = True if reparameterized else node_flagged
+                latent_dist_node = dist.DiagNormal(mean_function_node, torch.exp(log_sig_node),
+                                                   reparameterized=repa)
                 latent_node = pyro.sample(node, latent_dist_node,
                                           infer=dict(use_decaying_avg_baseline=True,
                                                      baseline_beta=0.96))
