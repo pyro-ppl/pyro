@@ -84,7 +84,10 @@ class Trace(networkx.DiGraph):
                     site_log_p = site["fn"].batch_log_pdf(
                         site["value"], *args, **kwargs) * site["scale"]
                     site["batch_log_pdf"] = site_log_p
-                    site["log_pdf"] = site_log_p.sum()
+                    if isinstance(site_log_p, float):
+                        site["log_pdf"] = site_log_p
+                    else:
+                        site["log_pdf"] = site_log_p.sum()
                 # Here log_p may be broadcast to a larger tensor:
                 log_p = log_p + site_log_p
         return log_p
