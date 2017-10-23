@@ -142,7 +142,7 @@ class _Subsample(Distribution):
     def batch_log_pdf(self, x):
         # This is zero so that iarange can provide an unbiased estimate of
         # the non-subsampled batch_log_pdf.
-        return Variable(torch.zeros(0))
+        return 0.0  # Works with cpu and cuda tensors.
 
 
 @contextlib.contextmanager
@@ -251,6 +251,8 @@ def map_data(name, data, fn, batch_size=0, batch_dim=0):
     if isinstance(data, (torch.Tensor, Variable)):
         size = data.size(batch_dim)
         with iarange(name, size, batch_size) as batch:
+            if data.is_cuda:
+                batch = batch.cuda()
             return fn(batch, data.index_select(batch_dim, batch))
     else:
         size = len(data)
