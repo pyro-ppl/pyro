@@ -117,7 +117,7 @@ def observe(name, fn, obs, *args, **kwargs):
 
 
 @contextlib.contextmanager
-def iarange(name, size, subsample_size=0, use_cuda=False):
+def iarange(name, size, subsample_size=0):
     """
     Context manager for ranges indexing iid variables, optionally subsampling.
 
@@ -151,7 +151,7 @@ def iarange(name, size, subsample_size=0, use_cuda=False):
         yield Variable(torch.LongTensor(list(range(size))))
         return
 
-    subsample = sample(name, Subsample(size, subsample_size, use_cuda))
+    subsample = sample(name, Subsample(size, subsample_size))
     if len(_PYRO_STACK) == 0:
         yield subsample
     else:
@@ -161,7 +161,7 @@ def iarange(name, size, subsample_size=0, use_cuda=False):
             yield subsample
 
 
-def irange(name, size, subsample_size=0, use_cuda=False):
+def irange(name, size, subsample_size=0):
     """
     Non-vectorized version of iarange.
 
@@ -171,7 +171,7 @@ def irange(name, size, subsample_size=0, use_cuda=False):
                 if z[i]:  # Prevents vectorization.
                     observe('obs_{}'.format(i), normal, data[i], mu, sigma)
     """
-    with iarange(name, size, subsample_size, use_cuda) as batch:
+    with iarange(name, size, subsample_size) as batch:
         # Wrap computation in an independence context.
         indep_context = LambdaPoutine(None, name, 1.0, 'list', 0, subsample_size)
         for i in batch.data:
@@ -195,9 +195,7 @@ def map_data(name, data, fn, batch_size=0, batch_dim=0):
     """
     if isinstance(data, (torch.Tensor, Variable)):
         size = data.size(batch_dim)
-        with iarange(name, size, batch_size, use_cuda=data.is_cuda) as batch:
-            if data.is_cuda:
-                batch = batch.cuda()
+        with iarange(name, size, batch_size) as batch:
             return fn(batch, data.index_select(batch_dim, batch))
     else:
         size = len(data)
