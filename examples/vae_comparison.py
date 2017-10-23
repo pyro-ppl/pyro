@@ -114,11 +114,11 @@ class VAE(object):
     def train(self, epoch):
         self.set_train(is_train=True)
         train_loss = 0
-        for batch_idx, (data, _) in enumerate(self.train_loader):
-            data = Variable(data)
-            loss = self.compute_loss_and_gradient(data)
+        for batch_idx, (x, _) in enumerate(self.train_loader):
+            x = Variable(x)
+            loss = self.compute_loss_and_gradient(x)
             train_loss += loss
-        print('====> Epoch: {} Training loss: {:.4f}'.format(
+        print('====> Epoch: {} \nTraining loss: {:.4f}'.format(
             epoch, train_loss / len(self.train_loader.dataset)))
 
     def test(self, epoch):
@@ -137,7 +137,7 @@ class VAE(object):
                            nrow=n)
 
         test_loss /= len(self.test_loader.dataset)
-        print('====> Test set loss: {:.4f}'.format(test_loss))
+        print('Test set loss: {:.4f}'.format(test_loss))
 
 
 class PytorchVAEImpl(VAE):
@@ -196,8 +196,11 @@ class PyroVAEImpl(VAE):
 
     def compute_loss_and_gradient(self, x):
         if self.mode == TRAIN:
-            return self.optimizer.step(x)
-        return self.optimizer.evaluate_loss(x)
+            loss = self.optimizer.step(x)
+        else:
+            loss = self.optimizer.evaluate_loss(x)
+        loss /= self.args.batch_size * 784
+        return loss
 
     def initialize_optimizer(self, lr):
         optimizer = Adam({'lr': lr})
