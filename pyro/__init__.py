@@ -196,12 +196,14 @@ def iarange(name, size, subsample_size=0, subsample=None, use_cuda=False):
     """
     if subsample is not None:
         subsample_size = len(subsample)
+        use_cuda = use_cuda or getattr(subsample, 'is_cuda', False)
         assert subsample_size <= size, 'subsample is larger than size'
     elif subsample_size == 0 or subsample_size >= size:
         subsample_size = size
     if subsample_size == size:
         # If not subsampling, there is no need to scale and we can ignore the _PYRO_STACK.
-        yield Variable(torch.LongTensor(list(range(size))))
+        result = Variable(torch.LongTensor(list(range(size))))
+        yield result.cuda() if use_cuda else result
         return
 
     if subsample is None:
