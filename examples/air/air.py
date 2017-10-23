@@ -144,7 +144,7 @@ class AIR(nn.Module):
         # be added to its canvas. We can't straight-forwardly avoid
         # generating further objects, so instead we zero out the log_pdf
         # of future choices.
-        sample_mask = z_pres if self.use_masking else None
+        sample_mask = z_pres if self.use_masking else 1.0
 
         # Sample attention window position.
         # (This prior came from me looking at prior samples and picking
@@ -182,7 +182,7 @@ class AIR(nn.Module):
             # log(q/p) will be zero.)
 
             if not self.use_masking:
-                observe_mask = None
+                observe_mask = 1.0
             elif t == (self.num_steps - 1):
                 observe_mask = prev.z_pres
             else:
@@ -260,7 +260,7 @@ class AIR(nn.Module):
                              z_pres_dist,
                              baseline_value=bl_value)
 
-        log_pdf_mask = z_pres if self.use_masking else None
+        log_pdf_mask = z_pres if self.use_masking else 1.0
 
         z_where = pyro.sample('z_where_{}'.format(t),
                               DiagNormal(z_where_mu + self.z_where_mu_prior,
