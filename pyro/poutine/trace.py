@@ -1,4 +1,5 @@
 import collections
+import numbers
 
 import networkx
 
@@ -84,7 +85,7 @@ class Trace(networkx.DiGraph):
                     site_log_p = site["fn"].batch_log_pdf(
                         site["value"], *args, **kwargs) * site["scale"]
                     site["batch_log_pdf"] = site_log_p
-                    if isinstance(site_log_p, float):
+                    if isinstance(site_log_p, numbers.Number):
                         site["log_pdf"] = site_log_p
                     else:
                         site["log_pdf"] = site_log_p.sum()
