@@ -1,5 +1,4 @@
 import torch
-import pytest
 from torch import nn as nn
 from torch.autograd import Variable
 from torch.nn import Parameter
@@ -44,7 +43,6 @@ class NormalNormalTests(TestCase):
             self.mu0 * (self.lam0 / self.analytic_lam_n)
         self.batch_size = 4
 
-    @pytest.mark.xfail(reason="test was never correct, see https://github.com/uber/pyro/pull/317")
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 5000)
 
@@ -342,7 +340,6 @@ class LogNormalNormalTests(TestCase):
         self.log_mu_n = torch.log(self.mu_n)
         self.log_tau_n = torch.log(self.tau_n)
 
-    @pytest.mark.xfail(reason="test was never correct, see https://github.com/uber/pyro/pull/317")
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 12000)
 

@@ -86,7 +86,8 @@ class Distribution(object):
             instance should be considered reparameterized (by default, this
             is decided by the class).
         """
-        self.reparameterized = reparameterized
+        if reparameterized is not None:
+            self.reparameterized = reparameterized
 
     def batch_shape(self, *args, **kwargs):
         """
