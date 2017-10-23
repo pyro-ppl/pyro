@@ -9,7 +9,7 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 import pyro.optim as optim
 from pyro.infer import SVI
-from tests.common import assert_equal
+from tests.common import assert_equal, requires_cuda
 
 
 @pytest.mark.stage("integration", "integration_batch_1")
@@ -216,3 +216,46 @@ def test_custom_subsample(model):
     subsample = [1, 3, 5, 7]
     assert model(subsample) == subsample
     assert poutine.trace(model)(subsample) == subsample
+
+
+def iarange_cuda_model():
+    mu = Variable(torch.zeros(20).cuda())
+    sigma = Variable(torch.ones(20).cuda())
+    with pyro.iarange("data", 20, 5, use_cuda=True) as batch:
+        pyro.sample("x", dist.diagnormal, mu[batch], sigma[batch])
+
+
+def irange_cuda_model():
+    mu = Variable(torch.zeros(20).cuda())
+    sigma = Variable(torch.ones(20).cuda())
+    for i in pyro.irange("data", 20, 5, use_cuda=True):
+        pyro.sample("x_{}".format(i), dist.diagnormal, mu[i], sigma[i])
+
+
+def map_data_vector_cuda_model():
+    mu = Variable(torch.zeros(20).cuda())
+    sigma = Variable(torch.ones(20).cuda())
+    pyro.map_data("data", mu,
+                  lambda i, mu: pyro.sample("x", dist.diagnormal, mu, sigma[i]),
+                  use_cuda=True)
+
+
+def map_data_iter_cuda_model():
+    mu = Variable(torch.zeros(20).cuda())
+    sigma = Variable(torch.ones(20).cuda())
+    pyro.map_data("data", list(mu),
+                  lambda i, mu: pyro.sample("x_{}".format(i), dist.diagnormal, mu, sigma[i]),
+                  use_cuda=True)
+
+
+@requires_cuda
+@pytest.mark.parametrize('model', [
+    iarange_cuda_model,
+    irange_cuda_model,
+    map_data_vector_cuda_model,
+    map_data_iter_cuda_model,
+], ids=["iarange", "irange", "map_data_vector", "map_data_iter"])
+def test_cuda(model):
+    tr = poutine.trace(model).get_trace()
+    assert tr.log_pdf().is_cuda
+    assert tr.batch_log_pdf().is_cuda
