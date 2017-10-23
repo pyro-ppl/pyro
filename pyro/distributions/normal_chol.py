@@ -37,17 +37,17 @@ class NormalChol(Distribution):
         self.L = L
         super(NormalChol, self).__init__(*args, **kwargs)
 
-    def batch_shape(self, mu=None, L=None, *args, **kwargs):
+    def batch_shape(self, mu=None, L=None):
         mu, L = self._sanitize_input(mu, L)
         event_dim = 1
         return mu.size()[:-event_dim]
 
-    def event_shape(self, mu=None, L=None, *args, **kwargs):
+    def event_shape(self, mu=None, L=None):
         mu, L = self._sanitize_input(mu, L)
         event_dim = 1
         return mu.size()[-event_dim:]
 
-    def sample(self, mu=None, L=None, *args, **kwargs):
+    def sample(self, mu=None, L=None):
         """
         Reparameterized Normal cholesky sampler.
         """
@@ -72,7 +72,7 @@ class NormalChol(Distribution):
 
         return ll_1 + ll_2 + ll_3
 
-    def batch_log_pdf(self, x, mu=None, L=None, batch_size=1, *args, **kwargs):
+    def batch_log_pdf(self, x, mu=None, L=None, batch_size=1):
         raise NotImplementedError()
 
     def analytic_mean(self, mu=None, L=None):
