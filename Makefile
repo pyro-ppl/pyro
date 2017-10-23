@@ -18,6 +18,9 @@ format: FORCE
 test: lint FORCE
 	pytest -vx -n auto --stage unit
 
+test-examples: lint FORCE
+	pytest -vx -n auto --stage test_examples
+
 integration-test: lint FORCE
 	pytest -vx -n auto --stage integration
 

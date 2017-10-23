@@ -38,6 +38,10 @@ def suppress_warnings(fn):
     return wrapper
 
 
+requires_cuda = pytest.mark.skipif(not torch.cuda.is_available(),
+                                   reason="cuda is not available")
+
+
 def get_cpu_type(t):
     assert t.__module__ == 'torch.cuda'
     return getattr(torch, t.__class__.__name__)
@@ -65,6 +69,20 @@ def to_gpu(obj, type_map={}):
         return tuple(to_gpu(o, type_map) for o in obj)
     else:
         return deepcopy(obj)
+
+
+@contextlib.contextmanager
+def cuda_tensors():
+    """
+    Context manager to temporarily use Cuda tensors in Pytorch.
+    """
+    module = torch.Tensor.__module__
+    name = torch.Tensor.__name__
+    torch.set_default_tensor_type('torch.cuda.{}'.format(name))
+    try:
+        yield
+    finally:
+        torch.set_default_tensor_type('{}.{}'.format(module, name))
 
 
 @contextlib.contextmanager
