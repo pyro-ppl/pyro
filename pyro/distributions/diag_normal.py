@@ -71,12 +71,7 @@ class DiagNormal(Distribution):
                                  0.5 * torch.log(2.0 * np.pi *
                                  Variable(torch.ones(sigma.size()).type_as(mu.data)))),
                                  0.5 * torch.pow(((x - mu) / sigma), 2))
-        batch_probs = torch.sum(log_pxs, 1)
-        if 'log_pdf_mask' in kwargs:
-            mask = kwargs['log_pdf_mask']
-            if mask is not None:
-                batch_probs = batch_probs * mask.view(-1)
-        return batch_probs
+        return torch.sum(log_pxs, 1)
 
     def analytic_mean(self, mu=None, sigma=None):
         mu, sigma = self._sanitize_input(mu, sigma)
