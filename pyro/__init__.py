@@ -147,9 +147,12 @@ class _Subsample(Distribution):
         assert 0 <= self.subsample_size <= self.size
         return Variable(torch.randperm(self.size)[:self.subsample_size])
 
+    # This is zero so that iarange can provide an unbiased estimate of
+    # the non-subsampled batch_log_pdf.
+    def log_pdf(self, x):
+        return 0.0  # Works with cpu and cuda tensors.
+
     def batch_log_pdf(self, x):
-        # This is zero so that iarange can provide an unbiased estimate of
-        # the non-subsampled batch_log_pdf.
         return 0.0  # Works with cpu and cuda tensors.
 
 
