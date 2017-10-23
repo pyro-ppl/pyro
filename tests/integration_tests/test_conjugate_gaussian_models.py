@@ -143,7 +143,7 @@ class GaussianChainTests(TestCase):
                 node_flagged = True if self.which_nodes_reparam[k - 1] == 1.0 else False
                 repa = True if reparameterized else node_flagged
                 mu_latent = pyro.sample("mu_latent_%d" % k, latent_dist, reparameterized=repa,
-                                        use_decaying_avg_baseline=True)
+                                        infer=dict(use_decaying_avg_baseline=True))
                 previous_sample = mu_latent
             return previous_sample
 
@@ -434,7 +434,8 @@ class GaussianPyramidTests(TestCase):
                 node_flagged = True if self.which_nodes_reparam[i] == 1.0 else False
                 repa = True if reparameterized else node_flagged
                 latent_node = pyro.sample(node, latent_dist_node, reparameterized=repa,
-                                          use_decaying_avg_baseline=True, baseline_beta=0.96)
+                                          infer=dict(use_decaying_avg_baseline=True,
+                                                     baseline_beta=0.96))
                 latents_dict[node] = latent_node
 
             return latents_dict['mu_latent_1']
