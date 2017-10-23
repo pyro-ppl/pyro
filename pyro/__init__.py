@@ -152,7 +152,7 @@ class _Subsample(Distribution):
     def batch_log_pdf(self, x):
         # This is zero so that iarange can provide an unbiased estimate of
         # the non-subsampled batch_log_pdf.
-        result = Variable(torch.zeros(0))
+        result = Variable(torch.zeros(1))
         return result.cuda() if self.use_cuda else result
 
 
@@ -239,7 +239,7 @@ def irange(name, size, subsample_size=0, subsample=None, use_cuda=False):
     if subsample is not None:
         subsample_size = len(subsample)
 
-    with iarange(name, size, subsample_size, subsample) as batch:
+    with iarange(name, size, subsample_size, subsample, use_cuda) as batch:
         # Wrap computation in an independence context.
         indep_context = LambdaPoutine(None, name, 1.0, 'list', 0, subsample_size)
         if isinstance(batch, Variable):
