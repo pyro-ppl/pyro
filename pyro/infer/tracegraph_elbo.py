@@ -124,18 +124,16 @@ class TraceGraph_ELBO(object):
             non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
             for site in model_trace.nodes.keys():
                 model_trace_site = model_trace.nodes[site]
-                log_pdf_key = 'log_pdf' if site not in model_vec_batch_nodes_dict else 'batch_log_pdf'
                 if model_trace_site["type"] == "sample":
                     if model_trace_site["is_observed"]:
-                        cost_node = (model_trace_site[log_pdf_key], True)
+                        cost_node = (model_trace_site["log_pdf"], True)
                         cost_nodes.append(cost_node)
                     else:
                         # cost node from model sample
-                        cost_node1 = (model_trace_site[log_pdf_key], True)
+                        cost_node1 = (model_trace_site["log_pdf"], True)
                         # cost node from guide sample
                         zero_expectation = site in non_reparam_nodes
-                        cost_node2 = (-guide_trace.nodes[site][log_pdf_key],
-                                      not zero_expectation)
+                        cost_node2 = (-guide_trace.nodes[site]["log_pdf"], not zero_expectation)
                         cost_nodes.extend([cost_node1, cost_node2])
 
             elbo_particle = 0.0
@@ -146,16 +144,16 @@ class TraceGraph_ELBO(object):
 
             # compute the elbo; if all stochastic nodes are reparameterizable, we're done
             # this bit is never differentiated: it's here for getting an estimate of the elbo itself
-            for cost_node in cost_nodes:
-                elbo_particle += cost_node[0].sum()
+            for log_pdf, _ in cost_nodes:
+                elbo_particle += log_pdf
             elbo += weight * elbo_particle.data[0]
 
             # compute the elbo, removing terms whose gradient is zero
             # this is the bit that's actually differentiated
             # XXX should the user be able to control if these terms are included?
-            for cost_node in cost_nodes:
-                if cost_node[1]:
-                    elbo_no_zero_expectation_terms_particle += cost_node[0].sum()
+            for log_pdf, not_zero_expectation in cost_nodes:
+                if not_zero_expectation:
+                    elbo_no_zero_expectation_terms_particle += log_pdf
             surrogate_elbo_particle += weight * elbo_no_zero_expectation_terms_particle
 
             # the following computations are only necessary if we have non-reparameterizable nodes
@@ -193,8 +191,8 @@ class TraceGraph_ELBO(object):
                         mn_log_pdf_key = 'log_pdf' if missing_node not in \
                                             guide_vec_batch_nodes_dict else 'batch_log_pdf'
                         if node_log_pdf_key == 'log_pdf':
-                            downstream_costs[node] += (model_trace.nodes[missing_node][mn_log_pdf_key] -
-                                                       guide_trace.nodes[missing_node][mn_log_pdf_key]).sum()
+                            downstream_costs[node] += (model_trace.nodes[missing_node]["log_pdf"] -
+                                                       guide_trace.nodes[missing_node]["log_pdf"])
                         else:
                             downstream_costs[node] += model_trace.nodes[missing_node][mn_log_pdf_key] - \
                                                       guide_trace.nodes[missing_node][mn_log_pdf_key]
@@ -215,7 +213,7 @@ class TraceGraph_ELBO(object):
                             else 'batch_log_pdf'
                         assert (model_trace.nodes[child]["type"] == "sample")
                         if site_log_pdf_key == 'log_pdf':
-                            downstream_costs[site] += model_trace.nodes[child][child_log_pdf_key].sum()
+                            downstream_costs[site] += model_trace.nodes[child]["log_pdf"]
                         else:
                             downstream_costs[site] += model_trace.nodes[child][child_log_pdf_key]
 
