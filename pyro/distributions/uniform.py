@@ -57,10 +57,10 @@ class Uniform(Distribution):
         if x.size != a.size():
             a = a.expand_as(x)
             b = b.expand_as(x)
-        l = x.ge(a).type_as(a)
-        u = x.le(b).type_as(b)
+        lb = x.ge(a).type_as(a)
+        ub = x.le(b).type_as(b)
         batch_log_pdf_shape = self.batch_shape(a, b) + (1,)
-        return torch.sum(torch.log(l.mul(u)) - torch.log(b - a), -1).contiguous().view(batch_log_pdf_shape)
+        return torch.sum(torch.log(lb.mul(ub)) - torch.log(b - a), -1).contiguous().view(batch_log_pdf_shape)
 
     def analytic_mean(self, a=None, b=None):
         a, b = self._sanitize_input(a, b)
