@@ -129,7 +129,11 @@ class Categorical(Distribution):
             else:
                 boolean_mask = torch_zeros_like(ps.data).scatter_(-1, x.data.long(), 1)
         # apply log function to masked probability tensor
-        return torch.log(ps.masked_select(boolean_mask.byte()).contiguous().view(*batch_pdf_size))
+        batch_log_pdf = torch.log(ps.masked_select(boolean_mask.byte())).contiguous().view(*batch_pdf_size)
+        if 'log_pdf_mask' in kwargs:
+            scaling_mask = kwargs['log_pdf_mask'].contiguous().view(*batch_pdf_size)
+            batch_log_pdf = batch_log_pdf * scaling_mask
+        return batch_log_pdf
 
     def support(self, ps=None, vs=None, one_hot=True):
         """
