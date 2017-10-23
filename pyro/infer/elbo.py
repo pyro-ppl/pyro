@@ -14,6 +14,14 @@ class ELBO(object):
 
     ELBO is the top-level interface for stochastic variational inference via optimization of the
     evidence lower bound. ELBO dispatches to Trace_ELBO and TraceGraph_ELBO.
+
+    References
+
+    [1] `Automated Variational Inference in Probabilistic Programming`
+    David Wingate, Theo Weber
+
+    [2] `Black Box Variational Inference`,
+    Rajesh Ranganath, Sean Gerrish, David M. Blei
     """
     def __init__(self,
                  num_particles=1,

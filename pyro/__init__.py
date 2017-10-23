@@ -3,6 +3,7 @@ from __future__ import division
 import warnings
 import contextlib
 from inspect import isclass
+from collections import OrderedDict
 
 import torch
 from torch.autograd import Variable
@@ -14,7 +15,14 @@ from pyro.distributions.distribution import Distribution
 from pyro.params import param_with_module_name
 from pyro.params.param_store import ParamStoreDict
 from pyro.poutine import LambdaPoutine, condition, do  # noqa: F401
-from pyro.util import zeros, ones, set_rng_seed, apply_stack  # noqa: F401
+from pyro.util import (  # noqa: F401
+                       zeros,
+                       ones,
+                       set_rng_seed,
+                       apply_stack,
+                       get_tensor_data,
+                       deep_getattr
+                       )
 
 # global map of params for now
 _param_store = ParamStoreDict()
@@ -142,7 +150,7 @@ class _Subsample(Distribution):
     def batch_log_pdf(self, x):
         # This is zero so that iarange can provide an unbiased estimate of
         # the non-subsampled batch_log_pdf.
-        return Variable(torch.zeros(0))
+        return 0.0  # Works with cpu and cuda tensors.
 
 
 @contextlib.contextmanager
@@ -251,6 +259,8 @@ def map_data(name, data, fn, batch_size=0, batch_dim=0):
     if isinstance(data, (torch.Tensor, Variable)):
         size = data.size(batch_dim)
         with iarange(name, size, batch_size) as batch:
+            if data.is_cuda:
+                batch = batch.cuda()
             return fn(batch, data.index_select(batch_dim, batch))
     else:
         size = len(data)
@@ -286,7 +296,7 @@ def param(name, *args, **kwargs):
         return out_msg["value"]
 
 
-def module(pyro_name, nn_obj, tags="default", load_from_param_store=False):
+def module(pyro_name, nn_obj, tags="default", update_module_params=False):
     """
     :param pyro_name: name of module
     :type pyro_name: str
@@ -294,8 +304,9 @@ def module(pyro_name, nn_obj, tags="default", load_from_param_store=False):
     :type nn_obj: torch.nn.Module
     :param tags: optional; tags to associate with any parameters inside the module
     :type tags: string or iterable of strings
-    :param load_from_param_store: whether to overwrite parameters in the pytorch module with the values found
-        in the paramstore
+    :param update_module_params: flag to determine whether to overwrite parameters
+                                 in the pytorch module with the values found in the
+                                 paramstore. Defaults to `True`
     :type load_from_param_store: bool
     :returns: torch.nn.Module
 
@@ -311,29 +322,32 @@ def module(pyro_name, nn_obj, tags="default", load_from_param_store=False):
         raise NotImplementedError("pyro.module does not support class constructors for " +
                                   "the argument nn_obj")
 
-    # basically get a unique identifier for the data based on where it is in memory
-    def _cdata(t):
-        if isinstance(t, torch.autograd.Variable):
-            return t.data._cdata
-        else:
-            return t._cdata
-
-    # copy in place; supports both Variable and Tensor args
-    def _copy_in_place(source, target):
-        t = target.data if isinstance(target, torch.autograd.Variable) else target
-        s = source.data if isinstance(source, torch.autograd.Variable) else source
-        t.copy_(s)
+    target_state_dict = OrderedDict()
 
     for param_name, param in nn_obj.named_parameters():
         # register the parameter in the module with pyro
         # this only does something substantive if the parameter hasn't been seen before
         full_param_name = param_with_module_name(pyro_name, param_name)
         returned_param = pyro.param(full_param_name, param, tags=tags)
-        # optional: if the data behind the parameter in the actual module is stale w.r.t. the parameter
-        # registered with pyro then overwrite it with the paramstore copy
-        if load_from_param_store and _cdata(param) != _cdata(returned_param):
-            _copy_in_place(source=returned_param, target=param)
-            pyro.get_param_store().replace_param(full_param_name, new_param=param, old_param=returned_param)
+
+        if get_tensor_data(param)._cdata != get_tensor_data(returned_param)._cdata:
+            target_state_dict[param_name] = returned_param
+
+    if target_state_dict and update_module_params:
+        # WARNING: this is very dangerous. better method?
+        for name, param in nn_obj.named_parameters():
+            is_param = False
+            name_arr = name.rsplit('.', 1)
+            if len(name_arr) > 1:
+                mod_name, param_name = name_arr[0], name_arr[1]
+            else:
+                is_param = True
+                mod_name = name
+            if name in target_state_dict.keys():
+                if not is_param:
+                    deep_getattr(nn_obj, mod_name)._parameters[param_name] = target_state_dict[name]
+                else:
+                    nn_obj._parameters[mod_name] = target_state_dict[name]
 
     return nn_obj
 
@@ -349,5 +363,6 @@ def random_module(name, nn_module, prior, *args, **kwargs):
     """
     assert hasattr(nn_module, "parameters"), "Module is not a NN module."
     # register params in param store
-    lifted_fn = poutine.lift(pyro.module, prior, *args, **kwargs)
-    return lambda: lifted_fn(name, nn_module)
+    lifted_fn = poutine.lift(pyro.module, prior)
+    # update_module_params must be True or the lifted module will not update local params
+    return lambda: lifted_fn(name, nn_module, update_module_params=True, *args, **kwargs)

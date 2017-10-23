@@ -8,17 +8,20 @@ from pyro.util import ng_zeros, detach_iterable
 
 class TraceGraph_ELBO(object):
     """
-    A TraceGraph implementation of ELBO-based SVI
-    The gradient estimator is constructed along the lines of
+    A TraceGraph implementation of ELBO-based SVI. The gradient estimator
+    is constructed along the lines of reference [1] specialized to the case
+    of the ELBO. It supports arbitrary dependency structure for the model
+    and guide as well as baselines for non-reparameteriable random variables.
+    Where possible, dependency information as recorded in the TraceGraph is
+    used to reduce the variance of the gradient estimator.
 
-    'Gradient Estimation Using Stochastic Computation Graphs'
-    John Schulman, Nicolas Heess, Theophane Weber, Pieter Abbeel
+    References
 
-    specialized to the case of the ELBO. It supports arbitrary
-    dependency structure for the model and guide as well as baselines
-    for non-reparameteriable random variables. Where possible,
-    dependency information as recorded in the TraceGraph is used
-    to reduce the variance of the gradient estimator.
+    [1] `Gradient Estimation Using Stochastic Computation Graphs`,
+        John Schulman, Nicolas Heess, Theophane Weber, Pieter Abbeel
+
+    [2] `Neural Variational Inference and Learning in Belief Networks`
+        Andriy Mnih, Karol Gregor
     """
     def __init__(self, num_particles=1, enum_discrete=False):
         """
