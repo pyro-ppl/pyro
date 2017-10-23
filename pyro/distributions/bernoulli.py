@@ -67,9 +67,7 @@ class Bernoulli(Distribution):
         # when the data is a ragged tensor. also useful for KL annealing. this entire logic
         # will likely be done in a better/cleaner way in the future
         if log_pdf_mask is not None:
-            # TODO fix this to broadcasting as below, e.g. by instead:
-            # logsum *= log_pdf_mask  # Then continue with broadcasting logic below.
-            return torch.sum(log_pdf_mask * logsum, -1)
+            logsum = logsum * log_pdf_mask
         batch_log_pdf_shape = self.batch_shape(ps) + (1,)
         return torch.sum(logsum, -1).contiguous().view(batch_log_pdf_shape)
 
