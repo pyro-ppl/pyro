@@ -1,6 +1,7 @@
 import pyro
 import graphviz
 import numpy as np
+import functools
 import torch
 from torch.autograd import Variable
 from torch.nn import Parameter
@@ -24,6 +25,12 @@ def _dict_to_tuple(d):
         return tuple([(k, _dict_to_tuple(d[k])) for k in sorted(d.keys())])
     else:
         return d
+
+
+def get_tensor_data(t):
+    if isinstance(t, Variable):
+        return t.data
+    return t
 
 
 def memoize(fn):
@@ -55,19 +62,47 @@ def set_rng_seed(rng_seed):
 
 
 def ones(*args, **kwargs):
-    return Parameter(torch.ones(*args, **kwargs))
+    """
+    :param torch.Tensor type_as: optional argument for tensor type
+
+    A convenience function for Parameter(torch.ones(...))
+    """
+    retype = kwargs.pop('type_as', None)
+    p_tensor = torch.ones(*args, **kwargs)
+    return Parameter(p_tensor if retype is None else p_tensor.type_as(retype))
 
 
 def zeros(*args, **kwargs):
-    return Parameter(torch.zeros(*args, **kwargs))
+    """
+    :param torch.Tensor type_as: optional argument for tensor type
+
+    A convenience function for Parameter(torch.zeros(...))
+    """
+    retype = kwargs.pop('type_as', None)
+    p_tensor = torch.zeros(*args, **kwargs)
+    return Parameter(p_tensor if retype is None else p_tensor.type_as(retype))
 
 
 def ng_ones(*args, **kwargs):
-    return Variable(torch.ones(*args, **kwargs), requires_grad=False)
+    """
+    :param torch.Tensor type_as: optional argument for tensor type
+
+    A convenience function for Variable(torch.ones(...), requires_grad=False)
+    """
+    retype = kwargs.pop('type_as', None)
+    p_tensor = torch.ones(*args, **kwargs)
+    return Variable(p_tensor if retype is None else p_tensor.type_as(retype), requires_grad=False)
 
 
 def ng_zeros(*args, **kwargs):
-    return Variable(torch.zeros(*args, **kwargs), requires_grad=False)
+    """
+    :param torch.Tensor type_as: optional argument for tensor type
+
+    A convenience function for Variable(torch.ones(...), requires_grad=False)
+    """
+    retype = kwargs.pop('type_as', None)
+    p_tensor = torch.zeros(*args, **kwargs)
+    return Variable(p_tensor if retype is None else p_tensor.type_as(retype), requires_grad=False)
 
 
 def log_sum_exp(vecs):
@@ -93,64 +128,6 @@ def zero_grads(tensors):
             else:
                 data = p.grad.data
                 p.grad = Variable(data.new().resize_as_(data).zero_())
-
-
-def log_gamma(xx):
-    if isinstance(xx, Variable):
-        ttype = xx.data.type()
-    elif isinstance(xx, torch.Tensor):
-        ttype = xx.type()
-    gamma_coeff = [
-        76.18009172947146,
-        -86.50532032941677,
-        24.01409824083091,
-        -1.231739572450155,
-        0.1208650973866179e-2,
-        -0.5395239384953e-5
-    ]
-    magic1 = 1.000000000190015
-    magic2 = 2.5066282746310005
-    x = xx - 1.0
-    t = x + 5.5
-    t = t - (x + 0.5) * torch.log(t)
-    ser = Variable(torch.ones(x.size()).type(ttype)) * magic1
-    for c in gamma_coeff:
-        x = x + 1.0
-        ser = ser + torch.pow(x / c, -1)
-    return torch.log(ser * magic2) - t
-
-
-def log_beta(t):
-    """
-    Computes log Beta function.
-
-    :param t:
-    :type t: torch.autograd.Variable of dimension 1 or 2
-    :rtype: torch.autograd.Variable of float (if t.dim() == 1) or torch.Tensor (if t.dim() == 2)
-    """
-    assert t.dim() in (1, 2)
-    if t.dim() == 1:
-        numer = torch.sum(log_gamma(t))
-        denom = log_gamma(torch.sum(t))
-    else:
-        numer = torch.sum(log_gamma(t), 1)
-        denom = log_gamma(torch.sum(t, 1))
-    return numer - denom
-
-
-def to_one_hot(x, ps):
-    if isinstance(x, Variable):
-        ttype = x.data.type()
-    elif isinstance(x, torch.Tensor):
-        ttype = x.type()
-    batch_size = x.size(0)
-    classes = ps.size(1)
-    # create an empty array for one-hots
-    batch_one_hot = torch.zeros(batch_size, classes)
-    # this operation writes ones where needed
-    batch_one_hot.scatter_(1, x.data.view(-1, 1).long(), 1)
-
-    return Variable(batch_one_hot.type(ttype))
 
 
 def tensor_histogram(ps, vs):
@@ -458,3 +435,11 @@ def identify_dense_edges(trace):
                         trace.add_edge(past_name, name)
 
     return trace
+
+
+def deep_getattr(obj, name):
+    """
+    Python getattr() for arbitrarily deep attributes
+    Throws an AttirbuteError if bad attribute
+    """
+    return functools.reduce(getattr, name.split("."), obj)

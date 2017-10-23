@@ -1,10 +1,11 @@
+import numbers
+
 import scipy.stats as spr
 import torch
 from torch.autograd import Variable
 
-import pyro
 from pyro.distributions.distribution import Distribution
-from pyro.util import log_gamma
+from pyro.distributions.util import log_gamma
 
 
 class Gamma(Distribution):
@@ -25,7 +26,7 @@ class Gamma(Distribution):
         else:
             raise ValueError("Parameter(s) were None")
 
-    def __init__(self, alpha=None, beta=None, batch_size=1, *args, **kwargs):
+    def __init__(self, alpha=None, beta=None, batch_size=None, *args, **kwargs):
         """
         Params:
           `alpha` - alpha
@@ -34,11 +35,20 @@ class Gamma(Distribution):
         self.alpha = alpha
         self.beta = beta
         if alpha is not None:
-            if alpha.dim() == 1 and beta.dim() == 1:
+            if alpha.dim() == 1 and beta.dim() == 1 and batch_size is not None:
                 self.alpha = alpha.expand(batch_size, alpha.size(0))
                 self.beta = beta.expand(batch_size, beta.size(0))
-        self.reparameterized = False
         super(Gamma, self).__init__(*args, **kwargs)
+
+    def batch_shape(self, alpha=None, beta=None, *args, **kwargs):
+        alpha, beta = self._sanitize_input(alpha, beta)
+        event_dim = 1
+        return alpha.size()[:-event_dim]
+
+    def event_shape(self, alpha=None, beta=None, *args, **kwargs):
+        alpha, beta = self._sanitize_input(alpha, beta)
+        event_dim = 1
+        return alpha.size()[-event_dim:]
 
     def sample(self, alpha=None, beta=None, *args, **kwargs):
         """
@@ -47,24 +57,26 @@ class Gamma(Distribution):
 
         alpha, beta = self._sanitize_input(alpha, beta)
         theta = torch.pow(beta, -1.0)
-        x = Variable(torch.Tensor([spr.gamma.rvs(
-            alpha.data.numpy(), scale=theta.data.numpy())])
-            .type_as(alpha.data))
+        np_sample = spr.gamma.rvs(alpha.data.cpu().numpy(), scale=theta.data.cpu().numpy())
+        if isinstance(np_sample, numbers.Number):
+            np_sample = [np_sample]
+        x = Variable(torch.Tensor(np_sample).type_as(alpha.data))
+        x = x.expand(self.shape(alpha, beta))
         return x
 
     def batch_log_pdf(self, x, alpha=None, beta=None, batch_size=1, *args, **kwargs):
         alpha, beta = self._sanitize_input(alpha, beta)
         assert alpha.dim() == beta.dim()
-        if x.dim() == 1:
-            x = x.expand(batch_size, x.size(0))
         if alpha.size() != x.size():
             alpha = alpha.expand_as(x)
             beta = beta.expand_as(x)
         ll_1 = - beta * x
-        ll_2 = (alpha - pyro.ones(x.size())) * torch.log(x)
+        ll_2 = (alpha - 1.0) * torch.log(x)
         ll_3 = alpha * torch.log(beta)
         ll_4 = - log_gamma(alpha)
-        return ll_1 + ll_2 + ll_3 + ll_4
+        log_pdf = torch.sum(ll_1 + ll_2 + ll_3 + ll_4, -1)
+        batch_log_pdf_shape = self.batch_shape(alpha, beta) + (1,)
+        return log_pdf.contiguous().view(batch_log_pdf_shape)
 
     def analytic_mean(self, alpha=None, beta=None):
         alpha, beta = self._sanitize_input(alpha, beta)

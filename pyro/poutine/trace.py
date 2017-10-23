@@ -59,12 +59,13 @@ class Trace(networkx.DiGraph):
         for name, site in self.nodes.items():
             if site["type"] == "sample" and site_filter(name, site):
                 try:
-                    log_p += site["log_pdf"]
+                    site_log_p = site["log_pdf"]
                 except KeyError:
                     args, kwargs = site["args"], site["kwargs"]
-                    site["log_pdf"] = site["fn"].log_pdf(
+                    site_log_p = site["fn"].log_pdf(
                         site["value"], *args, **kwargs) * site["scale"]
-                    log_p += site["log_pdf"]
+                    site["log_pdf"] = site_log_p
+                log_p += site_log_p
         return log_p
 
     def batch_log_pdf(self, site_filter=lambda name, site: True):
@@ -74,17 +75,18 @@ class Trace(networkx.DiGraph):
         The local computation is memoized, and also stores the local `.log_pdf()`.
         """
         log_p = 0.0
-        # XXX will this iterate over nodes?
         for name, site in self.nodes.items():
             if site["type"] == "sample" and site_filter(name, site):
                 try:
-                    log_p += site["batch_log_pdf"]
+                    site_log_p = site["batch_log_pdf"]
                 except KeyError:
                     args, kwargs = site["args"], site["kwargs"]
-                    site["batch_log_pdf"] = site["fn"].batch_log_pdf(
+                    site_log_p = site["fn"].batch_log_pdf(
                         site["value"], *args, **kwargs) * site["scale"]
-                    site["log_pdf"] = site["batch_log_pdf"].sum()
-                    log_p += site["batch_log_pdf"]
+                    site["batch_log_pdf"] = site_log_p
+                    site["log_pdf"] = site_log_p.sum()
+                # Here log_p may be broadcast to a larger tensor:
+                log_p = log_p + site_log_p
         return log_p
 
     @property

@@ -3,23 +3,25 @@ import torch
 
 import pyro
 import pyro.poutine as poutine
-from pyro.infer.enum import iter_discrete_traces, scale_trace
 from pyro.util import ng_zeros, detach_iterable
 
 
 class TraceGraph_ELBO(object):
     """
-    A TraceGraph implementation of ELBO-based SVI
-    The gradient estimator is constructed along the lines of
+    A TraceGraph implementation of ELBO-based SVI. The gradient estimator
+    is constructed along the lines of reference [1] specialized to the case
+    of the ELBO. It supports arbitrary dependency structure for the model
+    and guide as well as baselines for non-reparameteriable random variables.
+    Where possible, dependency information as recorded in the TraceGraph is
+    used to reduce the variance of the gradient estimator.
 
-    'Gradient Estimation Using Stochastic Computation Graphs'
-    John Schulman, Nicolas Heess, Theophane Weber, Pieter Abbeel
+    References
 
-    specialized to the case of the ELBO. It supports arbitrary
-    dependency structure for the model and guide as well as baselines
-    for non-reparameteriable random variables. Where possible,
-    dependency information as recorded in the TraceGraph is used
-    to reduce the variance of the gradient estimator.
+    [1] `Gradient Estimation Using Stochastic Computation Graphs`,
+        John Schulman, Nicolas Heess, Theophane Weber, Pieter Abbeel
+
+    [2] `Neural Variational Inference and Learning in Belief Networks`
+        Andriy Mnih, Karol Gregor
     """
     def __init__(self, num_particles=1, enum_discrete=False):
         """
@@ -38,23 +40,16 @@ class TraceGraph_ELBO(object):
         XXX support for automatically settings args/kwargs to volatile?
         """
 
-        # import pdb; pdb.set_trace()
         for i in range(self.num_particles):
             if self.enum_discrete:
-                # This iterates over a bag of traces, for each particle.
-                for scale, guide_trace in iter_discrete_traces("dense", guide, *args, **kwargs):
-                    model_trace = poutine.trace(poutine.replay(model, guide_trace),
-                                                graph_type="dense").get_trace(*args, **kwargs)
-                    guide_trace = scale_trace(guide_trace, scale)
-                    model_trace = scale_trace(model_trace, scale)
-                    yield model_trace, guide_trace
-                continue
+                raise NotImplementedError("https://github.com/uber/pyro/issues/220")
 
             guide_trace = poutine.trace(guide,
                                         graph_type="dense").get_trace(*args, **kwargs)
             model_trace = poutine.trace(poutine.replay(model, guide_trace),
                                         graph_type="dense").get_trace(*args, **kwargs)
-            yield model_trace, guide_trace
+            weight = 1.0 / self.num_particles
+            yield weight, model_trace, guide_trace
 
     def loss(self, model, guide, *args, **kwargs):
         """
@@ -64,7 +59,7 @@ class TraceGraph_ELBO(object):
         Evaluates the ELBO with an estimator that uses num_particles many samples/particles.
         """
         elbo = 0.0
-        for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+        for weight, model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
             guide_trace.log_pdf(), model_trace.log_pdf()
 
             elbo_particle = 0.0
@@ -77,7 +72,7 @@ class TraceGraph_ELBO(object):
                         elbo_particle += model_trace.nodes[name]["log_pdf"]
                         elbo_particle -= guide_trace.nodes[name]["log_pdf"]
 
-            elbo += elbo_particle.data[0] / self.num_particles
+            elbo += weight * elbo_particle.data[0]
 
         loss = -elbo
         return loss
@@ -94,7 +89,7 @@ class TraceGraph_ELBO(object):
         elbo = 0.0
         trainable_params = set()
 
-        for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+        for weight, model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
 
             # get info regarding rao-blackwellization of vectorized map_data
             guide_vec_md_info = guide_trace.graph["vectorized_map_data_info"]
@@ -153,7 +148,7 @@ class TraceGraph_ELBO(object):
             # this bit is never differentiated: it's here for getting an estimate of the elbo itself
             for cost_node in cost_nodes:
                 elbo_particle += cost_node[0].sum()
-            elbo += elbo_particle.data[0] / self.num_particles
+            elbo += weight * elbo_particle.data[0]
 
             # compute the elbo, removing terms whose gradient is zero
             # this is the bit that's actually differentiated
@@ -161,7 +156,7 @@ class TraceGraph_ELBO(object):
             for cost_node in cost_nodes:
                 if cost_node[1]:
                     elbo_no_zero_expectation_terms_particle += cost_node[0].sum()
-            surrogate_elbo_particle += elbo_no_zero_expectation_terms_particle / self.num_particles
+            surrogate_elbo_particle += weight * elbo_no_zero_expectation_terms_particle
 
             # the following computations are only necessary if we have non-reparameterizable nodes
             if len(non_reparam_nodes) > 0:
@@ -265,7 +260,7 @@ class TraceGraph_ELBO(object):
                     if use_nn_baseline or use_baseline_value:
                         # construct baseline loss
                         baseline_loss = torch.pow(downstream_cost.detach() - baseline, 2.0).sum()
-                        baseline_loss_particle += baseline_loss / self.num_particles
+                        baseline_loss_particle += weight * baseline_loss
                     if use_nn_baseline or use_decaying_avg_baseline or use_baseline_value:
                         elbo_reinforce_terms_particle += (guide_trace.nodes[node][log_pdf_key] *
                                                           (downstream_cost - baseline).detach()).sum()
@@ -273,7 +268,7 @@ class TraceGraph_ELBO(object):
                         elbo_reinforce_terms_particle += (guide_trace.nodes[node][log_pdf_key] *
                                                           downstream_cost.detach()).sum()
 
-                surrogate_elbo_particle += elbo_reinforce_terms_particle / self.num_particles
+                surrogate_elbo_particle += weight * elbo_reinforce_terms_particle
                 if not isinstance(baseline_loss_particle, float):
                     baseline_loss_particle.backward()
 

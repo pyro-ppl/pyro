@@ -22,7 +22,7 @@ def eq(x, y, prec=1e-10):
 class NormalNormalNormalPoutineTestCase(TestCase):
 
     def setUp(self):
-        pyro.get_param_store().clear()
+        pyro.clear_param_store()
 
         def model():
             latent1 = pyro.sample("latent1",
@@ -262,7 +262,7 @@ class Model(nn.Module):
 class LiftPoutineTests(TestCase):
 
     def setUp(self):
-        pyro.get_param_store().clear()
+        pyro.clear_param_store()
 
         def mu1_prior(tensor, *args, **kwargs):
             flat_tensor = tensor.view(-1)
@@ -510,7 +510,7 @@ class ConditionPoutineTests(NormalNormalNormalPoutineTestCase):
         assert tr.nodes["latent2"]["value"] is data2["latent2"]
 
     def test_do_propagation(self):
-        pyro.get_param_store().clear()
+        pyro.clear_param_store()
 
         def model():
             z = pyro.sample("z", DiagNormal(10.0 * ng_ones(1), 0.0001 * ng_ones(1)))

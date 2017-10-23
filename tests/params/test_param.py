@@ -13,14 +13,14 @@ from tests.common import TestCase
 class ParamStoreDictTests(TestCase):
 
     def setUp(self):
-        pyro.get_param_store().clear()
+        pyro.clear_param_store()
         self.linear_module = nn.Linear(3, 2)
         self.linear_module2 = nn.Linear(3, 2)
         self.linear_module3 = nn.Linear(3, 2)
 
     def test_save_and_load(self):
         lin = pyro.module("mymodule", self.linear_module)
-        lin2 = pyro.module("mymodule2", self.linear_module2)  # noqa: F841
+        pyro.module("mymodule2", self.linear_module2)
         x = Variable(torch.randn(1, 3))
         myparam = pyro.param("myparam", Variable(1.234 * torch.ones(1), requires_grad=True))
 
@@ -39,7 +39,7 @@ class ParamStoreDictTests(TestCase):
         assert len(list(param_store_param_to_name.values())) == 5
 
         pyro.get_param_store().save('paramstore.unittest.out')
-        pyro.get_param_store().clear()
+        pyro.clear_param_store()
         assert len(list(pyro.get_param_store()._params)) == 0
         assert len(list(pyro.get_param_store()._param_to_name)) == 0
         pyro.get_param_store().load('paramstore.unittest.out')
@@ -52,7 +52,11 @@ class ParamStoreDictTests(TestCase):
             return (weights_equal and bias_equal)
 
         assert not modules_are_equal()
-        pyro.module("mymodule", self.linear_module3)
+        pyro.module("mymodule", self.linear_module3, update_module_params=False)
+        assert id(self.linear_module3.weight) != id(pyro.param('mymodule$$$weight'))
+        assert not modules_are_equal()
+        pyro.module("mymodule", self.linear_module3, update_module_params=True)
+        assert id(self.linear_module3.weight) == id(pyro.param('mymodule$$$weight'))
         assert modules_are_equal()
 
         myparam = pyro.param("myparam")

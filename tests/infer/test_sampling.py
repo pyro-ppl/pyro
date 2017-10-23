@@ -17,7 +17,7 @@ class HMMSamplingTestCase(TestCase):
             p_latent = pyro.param("p1", Variable(torch.Tensor([[0.7], [0.3]])))
             p_obs = pyro.param("p2", Variable(torch.Tensor([[0.9], [0.1]])))
 
-            latents = [Variable(torch.ones(1))]
+            latents = [Variable(torch.ones(1, 1))]
             observes = []
             for t in range(self.model_steps):
 
@@ -32,7 +32,7 @@ class HMMSamplingTestCase(TestCase):
             return torch.sum(torch.cat(latents))
 
         self.model_steps = 3
-        self.data = [pyro.ones(1) for i in range(self.model_steps)]
+        self.data = [pyro.ones(1, 1) for _ in range(self.model_steps)]
         self.model = model
 
 

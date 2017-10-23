@@ -16,6 +16,7 @@ class DiagNormal(Distribution):
     distribution is over tensors that have the same shape as the parameters ``mu``
     and ``sigma``, which in turn must have the same shape as each other.
     """
+    reparameterized = True
 
     def _sanitize_input(self, mu, sigma):
         if mu is not None:
@@ -27,7 +28,7 @@ class DiagNormal(Distribution):
         else:
             raise ValueError("Parameter(s) were None")
 
-    def __init__(self, mu=None, sigma=None, batch_size=1, *args, **kwargs):
+    def __init__(self, mu=None, sigma=None, batch_size=None, *args, **kwargs):
         """
         Params:
           `mu` - mean
@@ -36,11 +37,20 @@ class DiagNormal(Distribution):
         self.mu = mu
         self.sigma = sigma
         if mu is not None:
-            if mu.dim() == 1 and batch_size > 1:
+            if mu.dim() == 1 and batch_size is not None:
                 self.mu = mu.expand(batch_size, mu.size(0))
                 self.sigma = sigma.expand(batch_size, sigma.size(0))
         super(DiagNormal, self).__init__(*args, **kwargs)
-        self.reparameterized = True
+
+    def batch_shape(self, mu=None, sigma=None, *args, **kwargs):
+        mu, sigma = self._sanitize_input(mu, sigma)
+        event_dim = 1
+        return mu.size()[:-event_dim]
+
+    def event_shape(self, mu=None, sigma=None, *args, **kwargs):
+        mu, sigma = self._sanitize_input(mu, sigma)
+        event_dim = 1
+        return mu.size()[-event_dim:]
 
     def sample(self, mu=None, sigma=None, *args, **kwargs):
         """
@@ -55,15 +65,13 @@ class DiagNormal(Distribution):
             return Variable(z.data)
         return z
 
-    def batch_log_pdf(self, x, mu=None, sigma=None, batch_size=1, *args, **kwargs):
+    def batch_log_pdf(self, x, mu=None, sigma=None, *args, **kwargs):
         """
         Diagonal Normal log-likelihood
         """
         # expand to patch size of input
         mu, sigma = self._sanitize_input(mu, sigma)
         assert mu.dim() == sigma.dim()
-        if x.dim() == 1:
-            x = x.expand(batch_size, x.size(0))
         if mu.size() != x.size():
             mu = mu.expand_as(x)
             sigma = sigma.expand_as(x)
@@ -71,7 +79,14 @@ class DiagNormal(Distribution):
                                  0.5 * torch.log(2.0 * np.pi *
                                  Variable(torch.ones(sigma.size()).type_as(mu.data)))),
                                  0.5 * torch.pow(((x - mu) / sigma), 2))
-        return torch.sum(log_pxs, 1)
+        # XXX this allows for the user to mask out certain parts of the score, for example
+        # when the data is a ragged tensor. also useful for KL annealing. this entire logic
+        # will likely be done in a better/cleaner way in the future
+        if 'log_pdf_mask' in kwargs:
+            return torch.sum(kwargs['log_pdf_mask'] * log_pxs, -1)
+        batch_log_pdf = torch.sum(log_pxs, -1)
+        batch_log_pdf_shape = x.size()[:-1] + (1,)
+        return batch_log_pdf.contiguous().view(batch_log_pdf_shape)
 
     def analytic_mean(self, mu=None, sigma=None):
         mu, sigma = self._sanitize_input(mu, sigma)

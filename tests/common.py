@@ -1,5 +1,6 @@
 import contextlib
 import os
+import pytest
 import sys
 import unittest
 import numbers
@@ -37,6 +38,10 @@ def suppress_warnings(fn):
     return wrapper
 
 
+requires_cuda = pytest.mark.skipif(not torch.cuda.is_available(),
+                                   reason="cuda is not available")
+
+
 def get_cpu_type(t):
     assert t.__module__ == 'torch.cuda'
     return getattr(torch, t.__class__.__name__)
@@ -67,6 +72,20 @@ def to_gpu(obj, type_map={}):
 
 
 @contextlib.contextmanager
+def cuda_tensors():
+    """
+    Context manager to temporarily use Cuda tensors in Pytorch.
+    """
+    module = torch.Tensor.__module__
+    name = torch.Tensor.__name__
+    torch.set_default_tensor_type('torch.cuda.{}'.format(name))
+    try:
+        yield
+    finally:
+        torch.set_default_tensor_type('{}.{}'.format(module, name))
+
+
+@contextlib.contextmanager
 def freeze_rng_state():
     rng_state = torch.get_rng_state()
     if torch.cuda.is_available():
@@ -75,6 +94,14 @@ def freeze_rng_state():
     if torch.cuda.is_available():
         torch.cuda.set_rng_state(cuda_rng_state)
     torch.set_rng_state(rng_state)
+
+
+@contextlib.contextmanager
+def xfail_if_not_implemented():
+    try:
+        yield
+    except NotImplementedError as e:
+        pytest.xfail(reason=str(e))
 
 
 def iter_indices(tensor):
@@ -176,7 +203,7 @@ def assert_equal(x, y, prec=1e-5, msg=''):
     elif isinstance(x, dict):
         assert set(x.keys()) == set(y.keys())
         for key, x_val in x.items():
-            assert_equal(x_val, y[key], prec, msg)
+            assert_equal(x_val, y[key], prec, msg='{} {}'.format(key, msg))
     elif is_iterable(x) and is_iterable(y):
         if prec == 0:
             assert len(x) == len(y)

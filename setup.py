@@ -13,6 +13,7 @@ setup(
         'graphviz>=0.8',
         'networkx>=2.0.0',
         'torch',
+        'six>=1.11.0'
     ],
     extras_require={
         'notebooks': ['jupyter>=1.0.0'],
