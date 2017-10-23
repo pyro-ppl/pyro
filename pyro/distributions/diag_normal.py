@@ -42,25 +42,25 @@ class DiagNormal(Distribution):
                 self.sigma = sigma.expand(batch_size, sigma.size(0))
         super(DiagNormal, self).__init__(*args, **kwargs)
 
-    def batch_shape(self, mu=None, sigma=None, *args, **kwargs):
+    def batch_shape(self, mu=None, sigma=None, reparametrized=None):
         mu, sigma = self._sanitize_input(mu, sigma)
         event_dim = 1
         return mu.size()[:-event_dim]
 
-    def event_shape(self, mu=None, sigma=None, *args, **kwargs):
+    def event_shape(self, mu=None, sigma=None, reparametrized=None):
         mu, sigma = self._sanitize_input(mu, sigma)
         event_dim = 1
         return mu.size()[-event_dim:]
 
-    def sample(self, mu=None, sigma=None, *args, **kwargs):
+    def sample(self, mu=None, sigma=None, reparametrized=None):
         """
         Reparameterized diagonal Normal sampler.
         """
         mu, sigma = self._sanitize_input(mu, sigma)
         eps = Variable(torch.randn(mu.size()).type_as(mu.data))
         z = mu + eps * sigma
-        if 'reparameterized' in kwargs:
-            self.reparameterized = kwargs['reparameterized']
+        if reparametrized is not None:
+            self.reparameterized = reparameterized
         if not self.reparameterized:
             return Variable(z.data)
         return z

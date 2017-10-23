@@ -51,7 +51,7 @@ class Categorical(Distribution):
         # vs is None, Variable(Tensor), or numpy.array
         self.vs = self._process_vs(vs)
         self.one_hot = one_hot
-        super(Categorical, self).__init__(batch_size=1, *args, **kwargs)
+        super(Categorical, self).__init__(*args, **kwargs)
 
     def batch_shape(self, ps=None, vs=None, one_hot=True, *args, **kwargs):
         ps, vs, one_hot = self._sanitize_input(ps, vs, one_hot)

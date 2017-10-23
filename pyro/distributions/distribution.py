@@ -78,11 +78,11 @@ class Distribution(object):
     reparameterized = False
     enumerable = False
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self):
         """
         Constructor for base distribution class.
 
-        Currently takes no explicit arguments.
+        Currently takes no arguments.
         """
 
     def batch_shape(self, *args, **kwargs):
