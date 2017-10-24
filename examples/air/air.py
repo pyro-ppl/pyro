@@ -258,7 +258,7 @@ class AIR(nn.Module):
             z_pres_dist = Delta(z_pres_p * prev.z_pres)
         z_pres = pyro.sample('z_pres_{}'.format(t),
                              z_pres_dist,
-                             baseline_value=bl_value)
+                             infer=dict(baseline_value=bl_value))
 
         log_pdf_mask = z_pres if self.use_masking else 1.0
 
