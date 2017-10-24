@@ -161,57 +161,65 @@ class _Subsample(Distribution):
 
 
 @contextlib.contextmanager
-def iarange(name, size, subsample_size=0, subsample=None, use_cuda=False):
+def iarange(name, size=None, subsample_size=None, subsample=None, use_cuda=False):
     """
     Context manager for ranges indexing iid variables, optionally subsampling.
 
-    WARNING: Subsampling is only correct if all computation is iid within the context.
+    WARNING: This is only correct if all computation is iid within the context.
 
-    By default `subsample_size=False` and this simply yields a `torch.arange(0, size)`.
-    If `0<subsample_size<=size` this yields a single random batch of size
-    `subsample_size` and scales all log likelihood terms by `size/batch_size`, within
-    this context.
+    By default `subsample_size=False` and this simply yields a
+    `torch.arange(0, size)`. If `0 < subsample_size <= size` this yields a
+    single random batch of indices of size `subsample_size` and scales all log
+    likelihood terms by `size/batch_size`, within this context.
 
     :param str name: A name that will be used for this site in a Trace.
-    :param int size: The size of the collection being subsampled (like `stop` in builtin `range`).
-    :param int subsample_size: Size of minibatches used in subsampling. Defaults to `size` if set to 0.
-    :param subsample: Optional custom subsample for user-defined subsampling schemes.
-        If specified, then `subsample_size` will be set to `len(subsample)`.
+    :param int size: Optional size of the collection being subsampled
+        (like `stop` in builtin `range`).
+    :param int subsample_size: Size of minibatches used in subsampling.
+        Defaults to `size`.
+    :param subsample: Optional custom subsample for user-defined subsampling
+        schemes. If specified, then `subsample_size` will be set to
+        `len(subsample)`.
     :type subsample: Anything supporting `len()`.
-    :param bool use_cuda: Whether to use cuda tensors for `subsample` and `log_pdf`.
-    :return: A context manager yielding a single 1-dimensional `torch.Tensor` of indices.
+    :param bool use_cuda: Whether to use cuda tensors for `subsample` and
+        `log_pdf`.
+    :return: A context manager yielding a single 1-dimensional `torch.Tensor`
+        of indices.
 
     Examples::
 
-        # This version is vectorized:
-        >>> with iarange('data', 100, subsample_size=10) as batch:
-                observe('obs', normal, data.index_select(0, batch), mu, sigma)
+        # This version simply declares independence:
+        >>> with iarange('data'):
+                observe('obs', normal, data, mu, sigma)
 
-        # This version manually iterates through the batch to deal with control flow.
-        >>> with iarange('data', 100, subsample_size=10) as batch:
-                for i in batch:
-                    if z[i]:  # Prevents vectorization.
-                        observe('obs_{}'.format(i), normal, data[i], mu, sigma)
+        # This version subsamples data in vectorized way:
+        >>> with iarange('data', 100, subsample_size=10) as ind:
+                observe('obs', normal, data.index_select(0, ind), mu, sigma)
 
         # This wraps a user-defined subsampling method for use in pyro:
-        >>> with iarange('data', 100, subsample=my_custom_subsample) as batch:
-                assert batch is my_custom_subsample
-                observe('obs', normal, data.index_select(0, batch), mu, sigma)
+        >>> ind = my_custom_subsample
+        >>> with iarange('data', 100, subsample=ind):
+                observe('obs', normal, data.index_select(0, ind), mu, sigma)
     """
-    if subsample is not None:
+    if size is None:
+        # Case: with iarange("name"): ...
+        assert subsample_size is None
+        assert subsample is None
+        size = 1
+        subsample_size = 1
+    elif subsample is not None:
+        # Case: with iarange("name", size, subsample=...): ...
         subsample_size = len(subsample)
-        use_cuda = use_cuda or getattr(subsample, 'is_cuda', False)
         assert subsample_size <= size, 'subsample is larger than size'
-    elif subsample_size == 0 or subsample_size >= size:
+    elif subsample_size is None or subsample_size >= size:
+        # Case: with iarange("name", size) as ind: ...
         subsample_size = size
-
-    if subsample is None:
-        if subsample_size == size:
-            subsample = Variable(torch.LongTensor(list(range(size))))
-            if use_cuda:
-                subsample = subsample.cuda()
-        else:
-            subsample = sample(name, _Subsample(size, subsample_size, use_cuda))
+        subsample = Variable(torch.LongTensor(list(range(size))))
+        if use_cuda:
+            subsample = subsample.cuda()
+    else:
+        # Case: with iarange("name", size, subsample_size) as ind: ...
+        subsample = sample(name, _Subsample(size, subsample_size, use_cuda))
 
     if len(_PYRO_STACK) == 0:
         yield subsample
@@ -222,13 +230,13 @@ def iarange(name, size, subsample_size=0, subsample=None, use_cuda=False):
             yield subsample
 
 
-def irange(name, size, subsample_size=0, subsample=None, use_cuda=False):
+def irange(name, size, subsample_size=None, subsample=None, use_cuda=False):
     """
     Non-vectorized version of `iarange`. See `iarange` for details.
 
     :param str name: A name that will be used for this site in a Trace.
     :param int size: The size of the collection being subsampled (like `stop` in builtin `range`).
-    :param int subsample_size: Size of minibatches used in subsampling. Defaults to `size` if set to 0.
+    :param int subsample_size: Size of minibatches used in subsampling. Defaults to `size`.
     :param subsample: Optional custom subsample for user-defined subsampling schemes.
         If specified, then `subsample_size` will be set to `len(subsample)`.
     :type subsample: Anything supporting `len()`.
@@ -244,12 +252,12 @@ def irange(name, size, subsample_size=0, subsample=None, use_cuda=False):
     if subsample is not None:
         subsample_size = len(subsample)
 
-    with iarange(name, size, subsample_size, subsample, use_cuda) as batch:
+    with iarange(name, size, subsample_size, subsample, use_cuda) as ind:
         # Wrap computation in an independence context.
         indep_context = LambdaPoutine(None, name, 1.0, 'list', 0, subsample_size)
-        if isinstance(batch, Variable):
-            batch = batch.data
-        for i in batch:
+        if isinstance(ind, Variable):
+            ind = ind.data
+        for i in ind:
             with indep_context:
                 yield i
 
