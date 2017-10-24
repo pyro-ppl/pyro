@@ -90,7 +90,7 @@ class Categorical(Distribution):
             return Variable(sample_one_hot)
         return Variable(sample)
 
-    def batch_log_pdf(self, x, ps=None, vs=None, one_hot=True):
+    def batch_log_pdf(self, x, ps=None, vs=None, one_hot=True, log_pdf_mask=None):
         """
         Evaluates log probability densities for one or a batch of samples and parameters.
         The last dimension for ``ps`` encodes the event probabilities, and the remaining
@@ -130,8 +130,8 @@ class Categorical(Distribution):
                 boolean_mask = torch_zeros_like(ps.data).scatter_(-1, x.data.long(), 1)
         # apply log function to masked probability tensor
         batch_log_pdf = torch.log(ps.masked_select(boolean_mask.byte())).contiguous().view(*batch_pdf_size)
-        if 'log_pdf_mask' in kwargs:
-            scaling_mask = kwargs['log_pdf_mask'].contiguous().view(*batch_pdf_size)
+        if log_pdf_mask is not None:
+            scaling_mask = log_pdf_mask.contiguous().view(*batch_pdf_size)
             batch_log_pdf = batch_log_pdf * scaling_mask
         return batch_log_pdf
 
