@@ -53,18 +53,18 @@ class Categorical(Distribution):
         self.one_hot = one_hot
         super(Categorical, self).__init__(*args, **kwargs)
 
-    def batch_shape(self, ps=None, vs=None, one_hot=True):
+    def batch_shape(self, ps=None, vs=None, one_hot=True, log_pdf_mask=None):
         ps, vs, one_hot = self._sanitize_input(ps, vs, one_hot)
         return ps.size()[:-1]
 
-    def event_shape(self, ps=None, vs=None, one_hot=True):
+    def event_shape(self, ps=None, vs=None, one_hot=True, log_pdf_mask=None):
         ps, vs, one_hot = self._sanitize_input(ps, vs, one_hot)
         if one_hot:
             return ps.size()[-1:]
         else:
             return torch.Size((1,))
 
-    def sample(self, ps=None, vs=None, one_hot=True):
+    def sample(self, ps=None, vs=None, one_hot=True, log_pdf_mask=None):
         """
         Returns a sample which has the same shape as ``ps`` (or ``vs``), except
         that if ``one_hot=True`` (and no ``vs`` is specified), the last dimension
@@ -135,7 +135,7 @@ class Categorical(Distribution):
             batch_log_pdf = batch_log_pdf * scaling_mask
         return batch_log_pdf
 
-    def support(self, ps=None, vs=None, one_hot=True):
+    def support(self, ps=None, vs=None, one_hot=True, log_pdf_mask=None):
         """
         Returns the categorical distribution's support, as a tensor along the first dimension.
 
