@@ -278,11 +278,11 @@ class AIR(nn.Module):
                                prev.z_what.detach(),
                                prev.z_pres.detach()), 1)
         bl_h, bl_c = self.bl_rnn(rnn_input, (prev.bl_h, prev.bl_c))
-        bl_value = self.bl_predict(bl_h).view(-1)
+        bl_value = self.bl_predict(bl_h)
 
         # Zero out values for finished data points. This avoids adding
         # superfluous terms to the loss.
-        bl_value = bl_value * prev.z_pres.view(-1)
+        bl_value = bl_value * prev.z_pres
 
         # The value that the baseline net is estimating can be very
         # large. An option to scale the nets output is provided
