@@ -28,7 +28,7 @@ class Encoder_c(NNWithSizes):
         if USE_CUDA:
             self.fc21 = nn.DataParallel(self.fc21)
         self.relu = nn.ReLU()
-        self.softmax = nn.Softmax()
+        self.softmax = nn.Softmax(dim=1)
         #self.softplus = nn.Softplus()
 
     def forward(self, x):
