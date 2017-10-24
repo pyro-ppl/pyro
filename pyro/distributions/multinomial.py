@@ -67,7 +67,10 @@ class Multinomial(Distribution):
 
     def batch_log_pdf(self, x, ps=None, n=None, *args, **kwargs):
         ps, n = self._sanitize_input(ps, n)
-        return (x * torch.log(ps)).sum(-1) - log_gamma(x + 1).sum(-1) + log_gamma(x.sum(-1) + 1)
+        log_factorial_n = log_gamma(x.sum(-1) + 1)
+        log_factorial_xs = log_gamma(x + 1).sum(-1)
+        log_powers = (x * torch.log(ps)).sum(-1)
+        return log_factorial_n - log_factorial_xs + log_powers
 
     def analytic_mean(self, ps=None, n=None):
         ps, n = self._sanitize_input(ps, n)
