@@ -576,3 +576,101 @@ class EscapePoutineTests(TestCase):
                 assert False
             except NonlocalExit:
                 assert "x" not in tem.trace
+
+
+class BranchPoutineTests(TestCase):
+
+    def test_single_choice_model(self):
+
+        # Model with 1 discrete + 1 continuous variables.
+        def model():
+            ps = Variable(torch.Tensor([0.5, 0.5]))
+            mus = Variable(torch.Tensor([-1, 1]))
+            sigma = Variable(torch.ones(1))
+
+            w = pyro.sample("w", Bernoulli(ps))
+            x = pyro.sample("x", DiagNormal(mus[w], sigma))
+            return dict(w=w, x=x)
+
+        result = model()
+        assert result["w"].size() == (1,)
+        assert result["x"].size() == (1,)
+
+        iter_result = list(poutine.iter_discrete(model()))
+        assert len(iter_result) == 2
+        for i in range(len(iter_result)):
+            assert iter_result[i]["w"].size() == (1,)
+            assert iter_result[i]["x"].size() == (1,)
+
+        branch_result = poutine.branch_discrete(model)()
+        assert branch_result["w"].size() == (2, 1)
+        assert branch_result["x"].size() == (2, 1)
+
+    def test_two_dependent_discrete_vars(self):
+
+        def model():
+            ps = Variable(torch.Tensor([0.5, 0.5]))
+            qs = Variable(torch.Tensor([[0.8, 0.1, 0.1],
+                                        [0.1, 0.8, 0.1]]))
+            mus = Variable(torch.Tensor([-1, 1]))
+            sigma = Variable(torch.ones(1))
+
+            w = pyro.sample("w", Bernoulli(ps))
+            x = pyro.sample("x", DiagNormal(mus[w], sigma))
+            y = pyro.sample("y", Bernoulli(qs[w]))
+            z = pyro.sample("z", DiagNormal(mus[y], sigma))
+            return dict(w=w, x=x, y=y, z=z)
+
+        result = model()
+        assert result["w"].size() == (1,)
+        assert result["x"].size() == (1,)
+        assert result["y"].size() == (1,)
+        assert result["z"].size() == (1,)
+
+        iter_result = list(poutine.iter_discrete(model()))
+        assert len(iter_result) == 2 * 3
+        for i in range(len(iter_result)):
+            assert iter_result[i]["w"].size() == (1,)
+            assert iter_result[i]["x"].size() == (1,)
+            assert iter_result[i]["y"].size() == (1,)
+            assert iter_result[i]["z"].size() == (1,)
+
+        branch_result = poutine.branch_discrete(model)()
+        assert branch_result["w"].size() == (2, 1)
+        assert branch_result["x"].size() == (2, 1)
+        assert branch_result["y"].size() == (3, 2, 1)
+        assert branch_result["z"].size() == (3, 2, 1)
+
+    def test_two_independent_discrete_vars(self):
+
+        # Model with two independent discrete variables.
+        def model():
+            ps = Variable(torch.Tensor([0.5, 0.5]))
+            qs = Variable(torch.Tensor([0.8, 0.1, 0.1]))
+            mus = Variable(torch.Tensor([-1, 1]))
+            sigma = Variable(torch.ones(1))
+
+            w = pyro.sample("w", Bernoulli(ps))
+            x = pyro.sample("x", DiagNormal(mus[w], sigma))
+            y = pyro.sample("y", Bernoulli(qs))
+            mu = mus[y] + mus[w]  # Conflict here.
+            z = pyro.sample("z", DiagNormal(mu, sigma))
+            return dict(w=w, x=x, y=y, z=z)
+
+        result = model()
+        assert result["w"].size() == (1,)
+        assert result["x"].size() == (1,)
+        assert result["y"].size() == (1,)
+        assert result["z"].size() == (1,)
+
+        iter_result = list(poutine.iter_discrete(model()))
+        assert len(iter_result) == 2 * 3
+        for i in range(len(iter_result)):
+            assert iter_result[i]["w"].size() == (1,)
+            assert iter_result[i]["x"].size() == (1,)
+            assert iter_result[i]["y"].size() == (1,)
+            assert iter_result[i]["z"].size() == (1,)
+
+        # TODO Fix this.
+        with pytest.raises(RuntimeError):
+            poutine.branch_discrete(model)()
