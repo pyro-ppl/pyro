@@ -52,8 +52,7 @@ def model(data):
     sigma = Variable(torch.ones(p, 1)).type_as(data)
     bias_mu = Variable(torch.zeros(1)).type_as(data)
     bias_sigma = Variable(torch.ones(1)).type_as(data)
-    w_prior = DiagNormal(mu, sigma)
-    b_prior = DiagNormal(bias_mu, bias_sigma)
+    w_prior, b_prior = DiagNormal(mu, sigma), DiagNormal(bias_mu, bias_sigma)
     priors = {'linear.weight': w_prior, 'linear.bias': b_prior}
     # wrap regression model that lifts module parameters to random variables
     # sampled from the priors
@@ -110,6 +109,7 @@ def main():
     args = parser.parse_args()
     data = build_linear_dataset(N, p)
     if args.cuda:
+        # make tensors and modules CUDA
         data = data.cuda()
         softplus.cuda()
         regression_model.cuda()
@@ -120,10 +120,8 @@ def main():
         else:
             # mini batch
             epoch_loss = 0.0
+            perm = torch.randperm(N) if not args.cuda else torch.randperm(N).cuda()
             # shuffle data
-            perm = torch.randperm(N)
-            if args.cuda:
-                perm = perm.cuda()
             data = data[perm]
             # get indices of each batch
             all_batches = get_batch_indices(N, args.batch_size)
