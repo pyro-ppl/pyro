@@ -137,7 +137,7 @@ class AIR(nn.Module):
         if not self.fudge_z_pres:
             z_pres_dist = Bernoulli(z_pres_prior_p(t) * prev.z_pres)
         else:
-            z_pres_dist = Uniform(self.ng_zeros(n), self.ng_ones(n))
+            z_pres_dist = Uniform(self.ng_zeros(n, 1), self.ng_ones(n, 1))
         z_pres = pyro.sample('z_pres_{}'.format(t), z_pres_dist)
 
         # If zero is sampled for a data point, then no more objects will
