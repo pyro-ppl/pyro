@@ -23,41 +23,55 @@ class Bernoulli(Distribution):
         else:
             raise ValueError("Parameter(s) were None")
 
-    def __init__(self, ps=None, batch_size=1, *args, **kwargs):
+    def __init__(self, ps=None, batch_size=None, *args, **kwargs):
         """
         Params:
           ps = tensor of probabilities
         """
         self.ps = ps
         if ps is not None:
-            if ps.dim() == 1:
+            if ps.dim() == 1 and batch_size is not None:
                 self.ps = ps.expand(batch_size, ps.size(0))
         super(Bernoulli, self).__init__(*args, **kwargs)
 
-    def sample(self, ps=None, *args, **kwargs):
+    def batch_shape(self, ps=None, log_pdf_mask=None):
+        ps = self._sanitize_input(ps)
+        event_dim = 1
+        return ps.size()[:-event_dim]
+
+    def event_shape(self, ps=None, log_pdf_mask=None):
+        ps = self._sanitize_input(ps)
+        event_dim = 1
+        return ps.size()[-event_dim:]
+
+    def sample(self, ps=None, log_pdf_mask=None):
         """
         Bernoulli sampler.
         """
         ps = self._sanitize_input(ps)
-        return Variable(torch.bernoulli(ps.data).type_as(ps.data))
+        return Variable(torch.bernoulli(ps.data))
 
-    def batch_log_pdf(self, x, ps=None, batch_size=1, *args, **kwargs):
+    def batch_log_pdf(self, x, ps=None, log_pdf_mask=None):
         ps = self._sanitize_input(ps)
-        if x.dim() == 1:
-            x = x.expand(batch_size, x.size(0))
         if ps.size() != x.size():
             ps = ps.expand_as(x)
         x_1 = x - 1
         ps_1 = ps - 1
+        x = x.type_as(ps)
+        x_1 = x_1.type_as(x_1)
         xmul = torch.mul(x, ps)
         xmul_1 = torch.mul(x_1, ps_1)
         logsum = torch.log(torch.add(xmul, xmul_1))
+
         # XXX this allows for the user to mask out certain parts of the score, for example
         # when the data is a ragged tensor. also useful for KL annealing. this entire logic
         # will likely be done in a better/cleaner way in the future
-        if 'log_pdf_mask' in kwargs:
-            return torch.sum(kwargs['log_pdf_mask'] * logsum, 1)
-        return torch.sum(logsum, 1)
+        if log_pdf_mask is not None:
+            # TODO fix this to broadcasting as below, e.g. by instead:
+            # logsum *= log_pdf_mask  # Then continue with broadcasting logic below.
+            return torch.sum(log_pdf_mask * logsum, -1)
+        batch_log_pdf_shape = self.batch_shape(ps) + (1,)
+        return torch.sum(logsum, -1).contiguous().view(batch_log_pdf_shape)
 
     def support(self, ps=None, *args, **kwargs):
         """

@@ -44,7 +44,7 @@ def iter_discrete_traces(graph_type, fn, *args, **kwargs):
         # Scale trace by probability of discrete choices.
         log_pdf = full_trace.batch_log_pdf(site_filter=site_is_discrete)
         if isinstance(log_pdf, float):
-            log_pdf = torch.Tensor(log_pdf)
+            log_pdf = torch.Tensor([log_pdf])
         if isinstance(log_pdf, torch.Tensor):
             log_pdf = Variable(log_pdf)
         scale = torch.exp(log_pdf.detach())

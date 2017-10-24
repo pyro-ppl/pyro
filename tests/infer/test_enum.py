@@ -83,8 +83,8 @@ def gmm_model(data, verbose=False):
     mus = Variable(torch.Tensor([-1, 1]))
     for i in pyro.irange("data", len(data)):
         z = pyro.sample("z_{}".format(i), dist.Bernoulli(p))
-        assert z.size() == (1, 1)
-        z = z.long().data[0, 0]
+        assert z.size() == (1,)
+        z = z.long().data[0]
         if verbose:
             print("M{} z_{} = {}".format("  " * i, i, z))
         pyro.observe("x_{}".format(i), dist.DiagNormal(mus[z], sigma), data[i])
@@ -94,8 +94,8 @@ def gmm_guide(data, verbose=False):
     for i in pyro.irange("data", len(data)):
         p = pyro.param("p_{}".format(i), Variable(torch.Tensor([0.6]), requires_grad=True))
         z = pyro.sample("z_{}".format(i), dist.Bernoulli(p))
-        assert z.size() == (1, 1)
-        z = z.long().data[0, 0]
+        assert z.size() == (1,)
+        z = z.long().data[0]
         if verbose:
             print("G{} z_{} = {}".format("  " * i, i, z))
 
