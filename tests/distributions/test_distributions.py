@@ -35,7 +35,7 @@ def test_batch_log_pdf(dist):
 
 def test_shape(dist):
     if isinstance(dist.pyro_dist, RandomPrimitive):
-        pytest.skip('FIXME: #323')
+        pytest.skip('FIXME: https://github.com/uber/pyro/issues/323')
     d = dist.pyro_dist
     dist_params = dist.get_dist_params(SINGLE_TEST_DATUM_IDX)
     with xfail_if_not_implemented():
@@ -127,7 +127,7 @@ def test_support(discrete_dist):
 def get_batch_pdf_shape(dist, data, dist_params):
     d = dist.pyro_dist
     broadcasted_params = {}
-    # TODO remove once #323 is resolved
+    # TODO remove once https://github.com/uber/pyro/issues/323 is resolved
     if isinstance(dist.pyro_dist, RandomPrimitive):
         return d.batch_shape(data, **dist_params) + (1,)
     for p in dist_params:
