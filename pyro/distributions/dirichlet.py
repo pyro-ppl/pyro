@@ -54,15 +54,15 @@ class Dirichlet(Distribution):
             self.alpha = alpha
         super(Dirichlet, self).__init__(*args, **kwargs)
 
-    def batch_shape(self, alpha=None, *args, **kwargs):
+    def batch_shape(self, alpha=None):
         alpha = self._sanitize_input(alpha)
         return alpha.size()[:-1]
 
-    def event_shape(self, alpha=None, *args, **kwargs):
+    def event_shape(self, alpha=None):
         alpha = self._sanitize_input(alpha)
         return alpha.size()[-1:]
 
-    def sample(self, alpha=None, *args, **kwargs):
+    def sample(self, alpha=None):
         """
         Draws either a single sample (if alpha.dim() == 1), or one sample per param (if alpha.dim() == 2).
 
@@ -83,7 +83,7 @@ class Dirichlet(Distribution):
         x = Variable(type(alpha.data)(x_np))
         return x
 
-    def batch_log_pdf(self, x, alpha=None, *args, **kwargs):
+    def batch_log_pdf(self, x, alpha=None):
         """
         Evaluates log probabity density over one or a batch of samples.
 

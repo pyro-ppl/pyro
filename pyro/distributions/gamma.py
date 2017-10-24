@@ -40,17 +40,17 @@ class Gamma(Distribution):
                 self.beta = beta.expand(batch_size, beta.size(0))
         super(Gamma, self).__init__(*args, **kwargs)
 
-    def batch_shape(self, alpha=None, beta=None, *args, **kwargs):
+    def batch_shape(self, alpha=None, beta=None):
         alpha, beta = self._sanitize_input(alpha, beta)
         event_dim = 1
         return alpha.size()[:-event_dim]
 
-    def event_shape(self, alpha=None, beta=None, *args, **kwargs):
+    def event_shape(self, alpha=None, beta=None):
         alpha, beta = self._sanitize_input(alpha, beta)
         event_dim = 1
         return alpha.size()[-event_dim:]
 
-    def sample(self, alpha=None, beta=None, *args, **kwargs):
+    def sample(self, alpha=None, beta=None):
         """
         un-reparameterized sampler.
         """
@@ -64,7 +64,7 @@ class Gamma(Distribution):
         x = x.expand(self.shape(alpha, beta))
         return x
 
-    def batch_log_pdf(self, x, alpha=None, beta=None, batch_size=1, *args, **kwargs):
+    def batch_log_pdf(self, x, alpha=None, beta=None, batch_size=1):
         alpha, beta = self._sanitize_input(alpha, beta)
         assert alpha.dim() == beta.dim()
         if alpha.size() != x.size():

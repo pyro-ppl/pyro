@@ -41,17 +41,17 @@ class HalfCauchy(Distribution):
                 self.gamma = gamma.expand(batch_size, gamma.size(0))
         super(HalfCauchy, self).__init__(*args, **kwargs)
 
-    def batch_shape(self, mu=None, gamma=None, *args, **kwargs):
+    def batch_shape(self, mu=None, gamma=None):
         mu, gamma = self._sanitize_input(mu, gamma)
         event_dim = 1
         return mu.size()[:-event_dim]
 
-    def event_shape(self, mu=None, gamma=None, *args, **kwargs):
+    def event_shape(self, mu=None, gamma=None):
         mu, gamma = self._sanitize_input(mu, gamma)
         event_dim = 1
         return mu.size()[-event_dim:]
 
-    def sample(self, mu=None, gamma=None, *args, **kwargs):
+    def sample(self, mu=None, gamma=None):
         """
         Half Cauchy sampler.
         """
@@ -63,7 +63,7 @@ class HalfCauchy(Distribution):
         sample = Variable(torch.Tensor(np_sample).type_as(mu.data))
         return sample
 
-    def batch_log_pdf(self, x, mu=None, gamma=None, *args, **kwargs):
+    def batch_log_pdf(self, x, mu=None, gamma=None):
         """
         Half Cauchy log-likelihood
         """

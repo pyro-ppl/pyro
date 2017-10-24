@@ -33,17 +33,17 @@ class Poisson(Distribution):
                 self.lam = lam.expand(batch_size, lam.size(0))
         super(Poisson, self).__init__(*args, **kwargs)
 
-    def batch_shape(self, lam=None, *args, **kwargs):
+    def batch_shape(self, lam=None):
         lam = self._sanitize_input(lam)
         event_dim = 1
         return lam.size()[:-event_dim]
 
-    def event_shape(self, lam=None, *args, **kwargs):
+    def event_shape(self, lam=None):
         lam = self._sanitize_input(lam)
         event_dim = 1
         return lam.size()[-event_dim:]
 
-    def sample(self, lam=None, *args, **kwargs):
+    def sample(self, lam=None):
         """
         Poisson sampler.
         """
@@ -51,7 +51,7 @@ class Poisson(Distribution):
         x = npr.poisson(lam=lam.data.cpu().numpy()).astype("float")
         return Variable(torch.Tensor(x).type_as(lam.data))
 
-    def batch_log_pdf(self, x, lam=None, *args, **kwargs):
+    def batch_log_pdf(self, x, lam=None):
         """
         Poisson log-likelihood
         NOTE: Requires Pytorch implementation of log_gamma to be differentiable
