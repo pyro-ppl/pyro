@@ -1,5 +1,5 @@
 import pyro.poutine as poutine
-from pyro.infer import TracePosterior
+from .abstract_infer import TracePosterior
 
 
 class Importance(TracePosterior):
