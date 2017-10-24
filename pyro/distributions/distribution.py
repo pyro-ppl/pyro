@@ -89,7 +89,7 @@ class Distribution(object):
         if reparameterized is not None:
             self.reparameterized = reparameterized
 
-    def batch_shape(self):
+    def batch_shape(self, *args, **kwargs):
         """
         The left-hand tensor shape of samples, used for batching.
 
@@ -100,7 +100,7 @@ class Distribution(object):
         """
         raise NotImplementedError
 
-    def event_shape(self):
+    def event_shape(self, *args, **kwargs):
         """
         The right-hand tensor shape of samples, used for individual events.
 
@@ -142,7 +142,7 @@ class Distribution(object):
         return self.sample(*args, **kwargs)
 
     @abstractmethod
-    def sample(self):
+    def sample(self, *args, **kwargs):
         """
         Samples a random value.
 
@@ -166,7 +166,7 @@ class Distribution(object):
         return torch.sum(self.batch_log_pdf(x, *args, **kwargs))
 
     @abstractmethod
-    def batch_log_pdf(self, x):
+    def batch_log_pdf(self, x, *args, **kwargs):
         """
         Evaluates log probability densities for each of a batch of samples.
 
@@ -179,7 +179,7 @@ class Distribution(object):
         """
         raise NotImplementedError
 
-    def support(self):
+    def support(self, *args, **kwargs):
         """
         Returns a representation of the parametrized distribution's support.
 
