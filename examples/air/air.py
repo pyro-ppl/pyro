@@ -97,7 +97,7 @@ class AIR(nn.Module):
 
     def model(self, data, batch_size, **kwargs):
         pyro.module("decode", self.decode)
-        with pyro.iarange('data', data.size(0), subsample_size=batch_size) as ix:
+        with pyro.iarange('data', data.size(0), subsample_size=batch_size, use_cuda=self.use_cuda) as ix:
             return self.local_model(batch_size, data[ix], **kwargs)
 
     def local_model(self, n, batch=None, **kwargs):
@@ -191,8 +191,9 @@ class AIR(nn.Module):
         pyro.module('bl_predict', self.bl_predict, tags='baseline'),
         pyro.module('bl_embed', self.bl_embed, tags='baseline')
 
-        with pyro.iarange('data', data.size(0), subsample_size=batch_size) as ix:
-            return self.local_model(batch_size, data[ix])
+        with pyro.iarange('data', data.size(0), subsample_size=batch_size, use_cuda=self.use_cuda) as ix:
+            batch = data[ix]
+            return self.local_guide(batch.size(0), batch)
 
     def local_guide(self, n, batch):
 
