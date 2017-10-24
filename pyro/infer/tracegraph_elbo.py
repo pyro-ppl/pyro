@@ -224,7 +224,7 @@ class TraceGraph_ELBO(object):
                 # optionally include baselines to further reduce variance
                 # XXX should the average baseline be in the param store as below?
 
-                # for extracting baseline options from site["infer"]
+                # for extracting baseline options from site["baseline"]
                 # XXX default for baseline_beta currently set here
                 def get_baseline_options(site_baseline):
                     options_dict = site_baseline.copy()
