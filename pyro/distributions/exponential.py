@@ -33,17 +33,17 @@ class Exponential(Distribution):
                 self.lam = lam.expand(batch_size, lam.size(0))
         super(Exponential, self).__init__(*args, **kwargs)
 
-    def batch_shape(self, lam=None, *args, **kwargs):
+    def batch_shape(self, lam=None):
         lam = self._sanitize_input(lam)
         event_dim = 1
         return lam.size()[:-event_dim]
 
-    def event_shape(self, lam=None, *args, **kwargs):
+    def event_shape(self, lam=None):
         lam = self._sanitize_input(lam)
         event_dim = 1
         return lam.size()[-event_dim:]
 
-    def sample(self, lam=None, *args, **kwargs):
+    def sample(self, lam=None):
         """
         reparameterized sampler.
         """
@@ -52,7 +52,7 @@ class Exponential(Distribution):
         x = -torch.log(eps) / lam
         return x
 
-    def batch_log_pdf(self, x, lam=None, batch_size=1, *args, **kwargs):
+    def batch_log_pdf(self, x, lam=None, batch_size=1):
         """
         exponential log-likelihood
         """

@@ -37,15 +37,15 @@ class Multinomial(Distribution):
                 self.n = n.expand(batch_size, n.size(0))
         super(Multinomial, self).__init__(*args, **kwargs)
 
-    def batch_shape(self, ps=None, n=None, *args, **kwargs):
+    def batch_shape(self, ps=None, n=None):
         ps, n = self._sanitize_input(ps, n)
         return ps.size()[:-1]
 
-    def event_shape(self, ps=None, n=None, *args, **kwargs):
+    def event_shape(self, ps=None, n=None):
         ps, n = self._sanitize_input(ps, n)
         return ps.size()[-1:]
 
-    def sample(self, ps=None, n=None, *args, **kwargs):
+    def sample(self, ps=None, n=None):
         ps, n = self._sanitize_input(ps, n)
         counts = np.apply_along_axis(lambda x: np.bincount(x, minlength=ps.size()[-1]),
                                      axis=-1,
@@ -64,7 +64,7 @@ class Multinomial(Distribution):
             n = int(n.data.cpu()[0])
         return Variable(torch.multinomial(ps.data, n, replacement=True))
 
-    def batch_log_pdf(self, x, ps=None, n=None, *args, **kwargs):
+    def batch_log_pdf(self, x, ps=None, n=None):
         """
         hack replacement for batching multinomail score
         """

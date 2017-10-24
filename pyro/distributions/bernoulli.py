@@ -73,7 +73,7 @@ class Bernoulli(Distribution):
         batch_log_pdf_shape = self.batch_shape(ps) + (1,)
         return torch.sum(logsum, -1).contiguous().view(batch_log_pdf_shape)
 
-    def support(self, ps=None, *args, **kwargs):
+    def support(self, ps=None):
         """
         Returns the Bernoulli distribution's support, as a tensor along the first dimension.
 

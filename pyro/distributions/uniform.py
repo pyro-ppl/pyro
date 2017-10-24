@@ -33,17 +33,17 @@ class Uniform(Distribution):
         self.b = b
         super(Uniform, self).__init__(*args, **kwargs)
 
-    def batch_shape(self, a=None, b=None, *args, **kwargs):
+    def batch_shape(self, a=None, b=None):
         a, b = self._sanitize_input(a, b)
         event_dim = 1
         return a.size()[:-event_dim]
 
-    def event_shape(self, a=None, b=None, *args, **kwargs):
+    def event_shape(self, a=None, b=None):
         a, b = self._sanitize_input(a, b)
         event_dim = 1
         return a.size()[-event_dim:]
 
-    def sample(self, a=None, b=None, *args, **kwargs):
+    def sample(self, a=None, b=None):
         """
         Reparameterized Uniform sampler.
         """
@@ -51,7 +51,7 @@ class Uniform(Distribution):
         eps = Variable(torch.rand(a.size()).type_as(a.data))
         return a + torch.mul(eps, b - a)
 
-    def batch_log_pdf(self, x, a=None, b=None, *args, **kwargs):
+    def batch_log_pdf(self, x, a=None, b=None):
         a, b = self._sanitize_input(a, b)
         assert a.dim() == b.dim()
         if x.size != a.size():
