@@ -111,9 +111,11 @@ continuous_dists = [
             scipy_dist=sp.cauchy,
             examples=[
                 {'mu': [0.5], 'gamma': [1.2],
-                 'test_data': [0.2]},
+                 'test_data': [1.0]},
+                {'mu': [0.5, 0.5], 'gamma': [1.2, 1.2],
+                 'test_data': [[1.0, 1.0], [1.0, 1.0]]},
                 {'mu': [[0.5], [0.3]], 'gamma': [[1.2], [1.0]],
-                 'test_data': [[0.2], [0.35]]}
+                 'test_data': [[0.4], [0.35]]}
             ],
             scipy_arg_fn=lambda mu, gamma: ((), {"loc": np.array(mu), "scale": np.array(gamma)})),
     Fixture(pyro_dist=(dist.halfcauchy, HalfCauchy),
