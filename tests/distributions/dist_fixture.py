@@ -7,6 +7,10 @@ from torch.autograd import Variable
 from tests.common import assert_equal
 
 
+SINGLE_TEST_DATUM_IDX = [0]
+BATCH_TEST_DATA_IDX = [-1]
+
+
 class Fixture(object):
     def __init__(self,
                  pyro_dist=None,
@@ -37,6 +41,12 @@ class Fixture(object):
 
     def get_num_test_data(self):
         return len(self.test_data)
+
+    def batch_test_data_idx(self):
+        return BATCH_TEST_DATA_IDX
+
+    def test_data_idx(self):
+        return SINGLE_TEST_DATUM_IDX
 
     def get_samples(self, num_samples, **dist_params):
         return [self.pyro_dist(**dist_params).data.cpu().numpy() for _ in range(num_samples)]
@@ -127,9 +137,15 @@ class Fixture(object):
 def tensor_wrap(*args, **kwargs):
     tensor_list, tensor_map = [], {}
     for arg in args:
-        tensor_list.append(Variable(torch.Tensor(arg)))
+        if isinstance(arg, list):
+            tensor_list.append(Variable(torch.Tensor(arg)))
+        else:
+            tensor_list.append(arg)
     for k in kwargs:
-        tensor_map[k] = Variable(torch.Tensor(kwargs[k]))
+        if isinstance(kwargs[k], list):
+            tensor_map[k] = Variable(torch.Tensor(kwargs[k]))
+        else:
+            tensor_map[k] = kwargs[k]
     if args and not kwargs:
         return tensor_list
     if kwargs and not args:
