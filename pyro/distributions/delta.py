@@ -35,13 +35,13 @@ class Delta(Distribution):
                 self.v = v.expand(v, v.size(0))
         super(Delta, self).__init__(*args, **kwargs)
 
-    def sample(self, v=None, *args, **kwargs):
+    def sample(self, v=None):
         v = self._sanitize_input(v)
         if isinstance(v, Variable):
             return v
         return Variable(v)
 
-    def batch_log_pdf(self, x, v=None, batch_size=1, *args, **kwargs):
+    def batch_log_pdf(self, x, v=None, batch_size=1):
         v = self._sanitize_input(v)
         if x.dim == 1:
             x = x.expand(batch_size, x.size(0))
@@ -55,7 +55,7 @@ class Delta(Distribution):
             return Variable(torch.zeros(1).type_as(v.data))
         return Variable(torch.Tensor([-float("inf")]).type_as(v.data))
 
-    def support(self, v=None, *args, **kwargs):
+    def support(self, v=None):
         """
         Returns the delta distribution's support, as a tensor along the first dimension.
 

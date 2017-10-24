@@ -38,7 +38,7 @@ class Normal(Distribution):
                 self.mu = mu.expand(batch_size, mu.size(0))
         super(Normal, self).__init__(*args, **kwargs)
 
-    def sample(self, mu=None, sigma=None, *args, **kwargs):
+    def sample(self, mu=None, sigma=None):
         """
         Reparameterized Normal sampler.
         """

@@ -3,6 +3,7 @@ import torch
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
+from pyro.distributions.util import log_gamma
 
 
 class Multinomial(Distribution):
@@ -37,15 +38,15 @@ class Multinomial(Distribution):
                 self.n = n.expand(batch_size, n.size(0))
         super(Multinomial, self).__init__(*args, **kwargs)
 
-    def batch_shape(self, ps=None, n=None, *args, **kwargs):
+    def batch_shape(self, ps=None, n=None):
         ps, n = self._sanitize_input(ps, n)
         return ps.size()[:-1]
 
-    def event_shape(self, ps=None, n=None, *args, **kwargs):
+    def event_shape(self, ps=None, n=None):
         ps, n = self._sanitize_input(ps, n)
         return ps.size()[-1:]
 
-    def sample(self, ps=None, n=None, *args, **kwargs):
+    def sample(self, ps=None, n=None):
         ps, n = self._sanitize_input(ps, n)
         counts = np.apply_along_axis(lambda x: np.bincount(x, minlength=ps.size()[-1]),
                                      axis=-1,
@@ -55,7 +56,7 @@ class Multinomial(Distribution):
             counts = counts.cuda()
         return Variable(counts)
 
-    def expanded_sample(self, ps=None, n=None, *args, **kwargs):
+    def expanded_sample(self, ps=None, n=None):
         ps, n = self._sanitize_input(ps, n)
         # get the int from Variable or Tensor
         if n.data.dim() == 2:
@@ -64,57 +65,12 @@ class Multinomial(Distribution):
             n = int(n.data.cpu()[0])
         return Variable(torch.multinomial(ps.data, n, replacement=True))
 
-    def batch_log_pdf(self, x, ps=None, n=None, *args, **kwargs):
-        """
-        hack replacement for batching multinomail score
-        """
-        # FIXME: torch.split so tensor is differentiable
+    def batch_log_pdf(self, x, ps=None, n=None):
         ps, n = self._sanitize_input(ps, n)
-        out_arr = [[self._get_tensor(self.log_pdf([
-                    x.narrow(0, ix, ix + 1),
-                    ps.narrow(0, ix, ix + 1)
-                    ], ps, n))[0]]
-                   for ix in range(int(x.size(0)))]
-        return Variable(torch.Tensor(out_arr).type_as(ps.data))
-
-    def log_pdf(self, x, ps=None, n=None, *args, **kwargs):
-        """
-        Multinomial log-likelihood
-        """
-        # probably use gamma function when added
-        ps, n = self._sanitize_input(ps, n)
-        ttype = ps.data.type()
-        if isinstance(x, list):
-            x, ps = x[:2]
-        prob = torch.sum(torch.mul(x, torch.log(ps)))
-        logfactsum = self._log_factorial(torch.sum(x), ttype)
-        # this is disgusting because theres no clean way to do this ..yet
-        logfactct = torch.sum(Variable(torch.Tensor(
-            [self._log_factorial(xi, ttype) for xi in self._get_array(x)])
-            .type_as(ps.data)))
-        return prob + logfactsum - logfactct
-
-#     https://stackoverflow.com/questions/13903922/multinomial-pmf-in-python-scipy-numpy
-    def _log_factorial(self, var_s, tensor_type):
-        if isinstance(var_s, Variable):
-            var_s = int(var_s.data[0])
-        if isinstance(var_s, torch.Tensor):
-            var_s = int(var_s[0])
-        else:
-            var_s = int(var_s)
-        xs = Variable(torch.Tensor(range(1, var_s + 1)).type(tensor_type))
-        return torch.sum(torch.log(xs)).data[0]
-
-    def _get_tensor(self, var):
-        if isinstance(var, Variable):
-            return var.data
-        return var
-
-    def _get_array(self, var):
-        if var.data.dim() == 1:
-            return var.data
-        # nested tensor arrays because of batches"
-        return var.data.cpu().numpy()[0]
+        log_factorial_n = log_gamma(x.sum(-1) + 1)
+        log_factorial_xs = log_gamma(x + 1).sum(-1)
+        log_powers = (x * torch.log(ps)).sum(-1)
+        return log_factorial_n - log_factorial_xs + log_powers
 
     def analytic_mean(self, ps=None, n=None):
         ps, n = self._sanitize_input(ps, n)
