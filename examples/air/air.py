@@ -97,13 +97,8 @@ class AIR(nn.Module):
 
     def model(self, data, batch_size, **kwargs):
         pyro.module("decode", self.decode)
-
-        def fn(ixs, batch):
-            return self.local_model(batch.size(0), batch, **kwargs)
-
-        # TODO: It appears necessary to specify batch_size in both
-        # model and guide.
-        pyro.map_data('map_data', data, fn, batch_size=batch_size)
+        with pyro.iarange('data', data.size(0), subsample_size=batch_size) as ix:
+            return self.local_model(batch_size, data[ix], **kwargs)
 
     def local_model(self, n, batch=None, **kwargs):
 
@@ -196,10 +191,8 @@ class AIR(nn.Module):
         pyro.module('bl_predict', self.bl_predict, tags='baseline'),
         pyro.module('bl_embed', self.bl_embed, tags='baseline')
 
-        def fn(ixs, batch):
-            return self.local_guide(batch.size(0), batch)
-
-        pyro.map_data('map_data', data, fn, batch_size=batch_size)
+        with pyro.iarange('data', data.size(0), subsample_size=batch_size) as ix:
+            return self.local_model(batch_size, data[ix])
 
     def local_guide(self, n, batch):
 
