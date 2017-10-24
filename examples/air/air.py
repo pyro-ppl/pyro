@@ -157,7 +157,7 @@ class AIR(nn.Module):
         y_att = self.decode(z_what)
 
         # Position/scale attention window within larger image.
-        y = windows_to_images(z_where, self.window_size, self.x_size, y_att)
+        y = window_to_image(z_where, self.window_size, self.x_size, y_att)
 
         # Combine the image generated at this step with the image so far.
         # (Note that there's no notion of occlusion here. Overlapping
@@ -258,7 +258,7 @@ class AIR(nn.Module):
                                          z_where_sigma * self.z_where_sigma_prior),
                               log_pdf_mask=log_pdf_mask)
 
-        x_att = images_to_windows(z_where, self.window_size, self.x_size, inputs['raw'])
+        x_att = image_to_window(z_where, self.window_size, self.x_size, inputs['raw'])
 
         # Encode attention windows.
         z_what_mu, z_what_sigma = self.encode(x_att)
@@ -345,7 +345,7 @@ def z_where_inv(z_where):
     return out
 
 
-def windows_to_images(z_where, window_size, image_size, windows):
+def window_to_image(z_where, window_size, image_size, windows):
     n = windows.size(0)
     assert windows.size(1) == window_size ** 2, 'Size mismatch.'
     theta = expand_z_where(z_where)
@@ -354,7 +354,7 @@ def windows_to_images(z_where, window_size, image_size, windows):
     return out.view(n, image_size, image_size)
 
 
-def images_to_windows(z_where, window_size, image_size, images):
+def image_to_window(z_where, window_size, image_size, images):
     n = images.size(0)
     assert images.size(1) == images.size(2) == image_size, 'Size mismatch.'
     theta_inv = expand_z_where(z_where_inv(z_where))
