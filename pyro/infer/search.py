@@ -1,7 +1,7 @@
 from six.moves.queue import Queue
 
 import pyro.poutine as poutine
-from pyro.infer import TracePosterior
+from .abstract_infer import TracePosterior
 
 
 class Search(TracePosterior):
@@ -39,15 +39,3 @@ class Search(TracePosterior):
         while not self.queue.empty():
             tr = p.get_trace(*args, **kwargs)
             yield (tr, tr.log_pdf())
-
-    def log_z(self, *args, **kwargs):
-        """
-        Harmonic mean log-evidence estimator.
-        """
-        log_z = 0.0
-        n = 0
-        # TODO parallelize
-        for _, log_weight in self._traces(*args, **kwargs):
-            n += 1
-            log_z = log_z + log_weight
-        return log_z / n
