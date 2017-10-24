@@ -1,3 +1,8 @@
+.. automodule:: pyro.infer.svi
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 .. automodule:: pyro.infer.elbo
     :members:
     :undoc-members:

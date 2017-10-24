@@ -8,17 +8,20 @@ from pyro.util import ng_zeros, detach_iterable
 
 class TraceGraph_ELBO(object):
     """
-    A TraceGraph implementation of ELBO-based SVI
-    The gradient estimator is constructed along the lines of
+    A TraceGraph implementation of ELBO-based SVI. The gradient estimator
+    is constructed along the lines of reference [1] specialized to the case
+    of the ELBO. It supports arbitrary dependency structure for the model
+    and guide as well as baselines for non-reparameteriable random variables.
+    Where possible, dependency information as recorded in the TraceGraph is
+    used to reduce the variance of the gradient estimator.
 
-    'Gradient Estimation Using Stochastic Computation Graphs'
-    John Schulman, Nicolas Heess, Theophane Weber, Pieter Abbeel
+    References
 
-    specialized to the case of the ELBO. It supports arbitrary
-    dependency structure for the model and guide as well as baselines
-    for non-reparameteriable random variables. Where possible,
-    dependency information as recorded in the TraceGraph is used
-    to reduce the variance of the gradient estimator.
+    [1] `Gradient Estimation Using Stochastic Computation Graphs`,
+        John Schulman, Nicolas Heess, Theophane Weber, Pieter Abbeel
+
+    [2] `Neural Variational Inference and Learning in Belief Networks`
+        Andriy Mnih, Karol Gregor
     """
     def __init__(self, num_particles=1, enum_discrete=False):
         """
@@ -221,14 +224,15 @@ class TraceGraph_ELBO(object):
                 # optionally include baselines to further reduce variance
                 # XXX should the average baseline be in the param store as below?
 
-                # for extracting baseline options from kwargs
+                # for extracting baseline options from site["infer"]
                 # XXX default for baseline_beta currently set here
-                def get_baseline_kwargs(kwargs):
-                    return kwargs.get('nn_baseline', None), \
-                           kwargs.get('nn_baseline_input', None), \
-                           kwargs.get('use_decaying_avg_baseline', False), \
-                           kwargs.get('baseline_beta', 0.90), \
-                           kwargs.get('baseline_value', None)
+                def get_baseline_kwargs(infer_dict):
+                    # TODO Validate the infer_dict.
+                    return infer_dict.get('nn_baseline', None), \
+                           infer_dict.get('nn_baseline_input', None), \
+                           infer_dict.get('use_decaying_avg_baseline', False), \
+                           infer_dict.get('baseline_beta', 0.90), \
+                           infer_dict.get('baseline_value', None)
 
                 baseline_loss_particle = 0.0
                 for node in non_reparam_nodes:
@@ -236,7 +240,7 @@ class TraceGraph_ELBO(object):
                     downstream_cost = downstream_costs[node]
                     baseline = 0.0
                     nn_baseline, nn_baseline_input, use_decaying_avg_baseline, baseline_beta, \
-                        baseline_value = get_baseline_kwargs(guide_trace.nodes[node]['kwargs'])
+                        baseline_value = get_baseline_kwargs(guide_trace.nodes[node]['infer'])
                     use_nn_baseline = nn_baseline is not None
                     use_baseline_value = baseline_value is not None
                     assert(not (use_nn_baseline and use_baseline_value)), \

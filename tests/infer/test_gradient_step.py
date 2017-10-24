@@ -26,7 +26,7 @@ def test_kl_qp_gradient_step_golden(trace_graph, reparameterized):
     tolerance = 1.0e-7
 
     def model():
-        mu_latent = pyro.sample("mu_latent", dist.diagnormal, ng_zeros(1), ng_ones(1))
+        mu_latent = pyro.sample("mu_latent", dist.DiagNormal(ng_zeros(1), ng_ones(1), reparameterized=reparameterized))
         pyro.observe('obs', dist.diagnormal, Variable(torch.Tensor([0.23])), mu_latent, ng_ones(1))
         return mu_latent
 
@@ -34,7 +34,7 @@ def test_kl_qp_gradient_step_golden(trace_graph, reparameterized):
         mu_q = pyro.param("mu_q", Variable(torch.randn(1), requires_grad=True))
         log_sig_q = pyro.param("log_sig_q", Variable(torch.randn(1), requires_grad=True))
         sig_q = torch.exp(log_sig_q)
-        return pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q, reparameterized=reparameterized)
+        return pyro.sample("mu_latent", dist.DiagNormal(mu_q, sig_q, reparameterized=reparameterized))
 
     adam = optim.Adam({"lr": .10})
     svi = SVI(model, guide, adam, loss="ELBO", trace_graph=trace_graph)

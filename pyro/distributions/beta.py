@@ -42,17 +42,17 @@ class Beta(Distribution):
                 self.beta = beta.expand(batch_size, beta.size(0))
         super(Beta, self).__init__(*args, **kwargs)
 
-    def batch_shape(self, alpha=None, beta=None, *args, **kwargs):
+    def batch_shape(self, alpha=None, beta=None):
         alpha, beta = self._sanitize_input(alpha, beta)
         event_dim = 1
         return alpha.size()[:-event_dim]
 
-    def event_shape(self, alpha=None, beta=None, *args, **kwargs):
+    def event_shape(self, alpha=None, beta=None):
         alpha, beta = self._sanitize_input(alpha, beta)
         event_dim = 1
         return alpha.size()[-event_dim:]
 
-    def sample(self, alpha=None, beta=None, *args, **kwargs):
+    def sample(self, alpha=None, beta=None):
         """
         Un-reparameterizeable sampler.
         """
@@ -64,7 +64,7 @@ class Beta(Distribution):
         x = x.expand(self.shape(alpha, beta))
         return x
 
-    def batch_log_pdf(self, x, alpha=None, beta=None, *args, **kwargs):
+    def batch_log_pdf(self, x, alpha=None, beta=None):
         alpha, beta = self._sanitize_input(alpha, beta)
         assert alpha.dim() == beta.dim()
         if alpha.size() != x.size():

@@ -34,24 +34,24 @@ class Bernoulli(Distribution):
                 self.ps = ps.expand(batch_size, ps.size(0))
         super(Bernoulli, self).__init__(*args, **kwargs)
 
-    def batch_shape(self, ps=None, *args, **kwargs):
+    def batch_shape(self, ps=None, log_pdf_mask=None):
         ps = self._sanitize_input(ps)
         event_dim = 1
         return ps.size()[:-event_dim]
 
-    def event_shape(self, ps=None, *args, **kwargs):
+    def event_shape(self, ps=None, log_pdf_mask=None):
         ps = self._sanitize_input(ps)
         event_dim = 1
         return ps.size()[-event_dim:]
 
-    def sample(self, ps=None, *args, **kwargs):
+    def sample(self, ps=None, log_pdf_mask=None):
         """
         Bernoulli sampler.
         """
         ps = self._sanitize_input(ps)
         return Variable(torch.bernoulli(ps.data))
 
-    def batch_log_pdf(self, x, ps=None, *args, **kwargs):
+    def batch_log_pdf(self, x, ps=None, log_pdf_mask=None):
         ps = self._sanitize_input(ps)
         if ps.size() != x.size():
             ps = ps.expand_as(x)
@@ -66,12 +66,12 @@ class Bernoulli(Distribution):
         # XXX this allows for the user to mask out certain parts of the score, for example
         # when the data is a ragged tensor. also useful for KL annealing. this entire logic
         # will likely be done in a better/cleaner way in the future
-        if 'log_pdf_mask' in kwargs:
-            return torch.sum(kwargs['log_pdf_mask'] * logsum, -1)
+        if log_pdf_mask is not None:
+            logsum = logsum * log_pdf_mask
         batch_log_pdf_shape = self.batch_shape(ps) + (1,)
         return torch.sum(logsum, -1).contiguous().view(batch_log_pdf_shape)
 
-    def support(self, ps=None, *args, **kwargs):
+    def support(self, ps=None, log_pdf_mask=None):
         """
         Returns the Bernoulli distribution's support, as a tensor along the first dimension.
 

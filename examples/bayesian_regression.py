@@ -48,12 +48,11 @@ regression_model = RegressionModel(p)
 
 def model(data):
     # Create unit normal priors over the parameters
-    mu = Variable(torch.zeros(p, 1))
-    sigma = Variable(torch.ones(p, 1))
-    bias_mu = Variable(torch.zeros(1))
-    bias_sigma = Variable(torch.ones(1))
-    w_prior = DiagNormal(mu, sigma)
-    b_prior = DiagNormal(bias_mu, bias_sigma)
+    mu = Variable(torch.zeros(p, 1)).type_as(data)
+    sigma = Variable(torch.ones(p, 1)).type_as(data)
+    bias_mu = Variable(torch.zeros(1)).type_as(data)
+    bias_sigma = Variable(torch.ones(1)).type_as(data)
+    w_prior, b_prior = DiagNormal(mu, sigma), DiagNormal(bias_mu, bias_sigma)
     priors = {'linear.weight': w_prior, 'linear.bias': b_prior}
     # wrap regression model that lifts module parameters to random variables
     # sampled from the priors
@@ -66,19 +65,19 @@ def model(data):
         y_data = data[:, -1]
         # run the nn with the data
         latent = lifted_nn(x_data).squeeze()
-        pyro.observe("obs", DiagNormal(latent, Variable(torch.ones(data.size(0)))), y_data.squeeze())
+        pyro.observe("obs", DiagNormal(latent, Variable(torch.ones(data.size(0))).type_as(data)), y_data.squeeze())
 
 
 def guide(data):
-    w_mu = Variable(torch.randn(p, 1), requires_grad=True)
-    w_log_sig = Variable(-3.0 * torch.ones(p, 1) + 0.05 * torch.randn(p, 1), requires_grad=True)
-    b_mu = Variable(torch.randn(1), requires_grad=True)
-    b_log_sig = Variable(-3.0 * torch.ones(1) + 0.05 * torch.randn(1), requires_grad=True)
+    w_mu = Variable(torch.randn(p, 1).type_as(data.data), requires_grad=True)
+    w_log_sig = Variable((-3.0 * torch.ones(p, 1) + 0.05 * torch.randn(p, 1)).type_as(data.data), requires_grad=True)
+    b_mu = Variable(torch.randn(1).type_as(data.data), requires_grad=True)
+    b_log_sig = Variable((-3.0 * torch.ones(1) + 0.05 * torch.randn(1)).type_as(data.data), requires_grad=True)
     # register learnable params in the param store
     mw_param = pyro.param("guide_mean_weight", w_mu)
-    sw_param = softplus(pyro.param("guide_sigma_weight", w_log_sig))
+    sw_param = softplus(pyro.param("guide_log_sigma_weight", w_log_sig))
     mb_param = pyro.param("guide_mean_bias", b_mu)
-    sb_param = softplus(pyro.param("guide_sigma_bias", b_log_sig))
+    sb_param = softplus(pyro.param("guide_log_sigma_bias", b_log_sig))
     # gaussian priors for w and b
     w_prior = DiagNormal(mw_param, sw_param)
     b_prior = DiagNormal(mb_param, sb_param)
@@ -106,8 +105,14 @@ def main():
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', default=1000, type=int)
     parser.add_argument('-b', '--batch-size', default=N, type=int)
+    parser.add_argument('--cuda', action='store_true')
     args = parser.parse_args()
     data = build_linear_dataset(N, p)
+    if args.cuda:
+        # make tensors and modules CUDA
+        data = data.cuda()
+        softplus.cuda()
+        regression_model.cuda()
     for j in range(args.num_epochs):
         if args.batch_size == N:
             # use the entire data set
@@ -115,8 +120,9 @@ def main():
         else:
             # mini batch
             epoch_loss = 0.0
+            perm = torch.randperm(N) if not args.cuda else torch.randperm(N).cuda()
             # shuffle data
-            data = data[torch.randperm(N)]
+            data = data[perm]
             # get indices of each batch
             all_batches = get_batch_indices(N, args.batch_size)
             for ix, batch_start in enumerate(all_batches[:-1]):

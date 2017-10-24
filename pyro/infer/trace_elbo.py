@@ -95,7 +95,7 @@ class Trace_ELBO(object):
                     else:
                         lp_lq = model_trace.nodes[name][log_pdf] - guide_trace.nodes[name][log_pdf]
                         elbo_particle += lp_lq
-                        if model_trace.nodes[name]["fn"].reparameterized:
+                        if guide_trace.nodes[name]["fn"].reparameterized:
                             surrogate_elbo_particle += lp_lq
                         else:
                             # XXX should the user be able to control inclusion of the -logq term below?

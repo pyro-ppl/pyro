@@ -22,6 +22,7 @@ setup(
             'visdom>=0.1.4',
         ],
         'dev': [
+            'torchvision',
             'flake8',
             'isort',
             'pytest',
