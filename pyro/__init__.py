@@ -67,13 +67,16 @@ def sample(name, fn, *args, **kwargs):
     """
     :param name: name of sample
     :param fn: distribution class or function
-    :param obs: observed datum (optional; should only be used in context of inference)
-        optionally specified in kwargs
+    :param obs: observed datum (optional; should only be used in context of
+        inference) optionally specified in kwargs
+    :param dict infer: Optional dictionary of inference parameters specified
+        in kwargs. See inference documentation for details.
     :returns: sample
 
     Samples from the distribution and registers it in the trace data structure.
     """
     obs = kwargs.pop("obs", None)
+    infer = kwargs.pop("infer", {})
     # check if stack is empty
     # if stack empty, default behavior (defined here)
     if len(_PYRO_STACK) == 0:
@@ -93,6 +96,7 @@ def sample(name, fn, *args, **kwargs):
             "args": args,
             "kwargs": kwargs,
             "value": None,
+            "infer": infer,
             "scale": 1.0,
             "map_data_stack": [],
             "done": False,

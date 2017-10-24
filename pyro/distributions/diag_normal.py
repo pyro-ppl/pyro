@@ -42,30 +42,26 @@ class DiagNormal(Distribution):
                 self.sigma = sigma.expand(batch_size, sigma.size(0))
         super(DiagNormal, self).__init__(*args, **kwargs)
 
-    def batch_shape(self, mu=None, sigma=None, *args, **kwargs):
+    def batch_shape(self, mu=None, sigma=None, log_pdf_mask=None):
         mu, sigma = self._sanitize_input(mu, sigma)
         event_dim = 1
         return mu.size()[:-event_dim]
 
-    def event_shape(self, mu=None, sigma=None, *args, **kwargs):
+    def event_shape(self, mu=None, sigma=None, log_pdf_mask=None):
         mu, sigma = self._sanitize_input(mu, sigma)
         event_dim = 1
         return mu.size()[-event_dim:]
 
-    def sample(self, mu=None, sigma=None, *args, **kwargs):
+    def sample(self, mu=None, sigma=None, log_pdf_mask=None):
         """
         Reparameterized diagonal Normal sampler.
         """
         mu, sigma = self._sanitize_input(mu, sigma)
         eps = Variable(torch.randn(mu.size()).type_as(mu.data))
         z = mu + eps * sigma
-        if 'reparameterized' in kwargs:
-            self.reparameterized = kwargs['reparameterized']
-        if not self.reparameterized:
-            return Variable(z.data)
-        return z
+        return z if self.reparameterized else z.detach()
 
-    def batch_log_pdf(self, x, mu=None, sigma=None, *args, **kwargs):
+    def batch_log_pdf(self, x, mu=None, sigma=None, log_pdf_mask=None):
         """
         Diagonal Normal log-likelihood
         """
@@ -82,8 +78,10 @@ class DiagNormal(Distribution):
         # XXX this allows for the user to mask out certain parts of the score, for example
         # when the data is a ragged tensor. also useful for KL annealing. this entire logic
         # will likely be done in a better/cleaner way in the future
-        if 'log_pdf_mask' in kwargs:
-            return torch.sum(kwargs['log_pdf_mask'] * log_pxs, -1)
+        if log_pdf_mask is not None:
+            # TODO fix this to broadcasting as below, e.g. by instead:
+            # log_pxs *= log_pdf_mask  # Then continue with broadcasting logic below.
+            return torch.sum(log_pdf_mask * log_pxs, -1)
         batch_log_pdf = torch.sum(log_pxs, -1)
         batch_log_pdf_shape = x.size()[:-1] + (1,)
         return batch_log_pdf.contiguous().view(batch_log_pdf_shape)

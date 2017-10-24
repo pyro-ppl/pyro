@@ -53,12 +53,16 @@ class LiftPoutine(Poutine):
                 msg["fn"] = self.prior[param_name]
                 if isinstance(msg['fn'], Distribution):
                     msg["args"] = ()
+                    msg["kwargs"] = {}
+                    msg["infer"] = {}
             else:
                 return super(LiftPoutine, self)._pyro_param(msg)
         elif isinstance(self.prior, Distribution):
             # prior is a distribution
             msg["fn"] = self.prior
             msg["args"] = ()
+            msg["kwargs"] = {}
+            msg["infer"] = {}
         elif callable(self.prior):
             if not isinstance(self.prior, Distribution):
                 # prior is a stochastic fn. block sample
