@@ -1,3 +1,8 @@
+.. automodule:: pyro.optim
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 .. automodule:: pyro.optim.optim
     :members:
     :undoc-members:
