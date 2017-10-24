@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 import torch
 
+from pyro.distributions import RandomPrimitive
 from pyro.util import ng_ones, ng_zeros
 from tests.common import assert_equal, xfail_if_not_implemented
 
@@ -33,7 +34,7 @@ def test_batch_log_pdf(dist):
 
 
 def test_shape(dist):
-    if dist.get_test_distribution_name() == 'Bernoulli':
+    if isinstance(dist.pyro_dist, RandomPrimitive):
         pytest.skip('FIXME: #323')
     d = dist.pyro_dist
     dist_params = dist.get_dist_params(SINGLE_TEST_DATUM_IDX)
@@ -127,7 +128,7 @@ def get_batch_pdf_shape(dist, data, dist_params):
     d = dist.pyro_dist
     broadcasted_params = {}
     # TODO remove once #323 is resolved
-    if dist.get_test_distribution_name() == 'Bernoulli':
+    if isinstance(dist.pyro_dist, RandomPrimitive):
         return d.batch_shape(data, **dist_params) + (1,)
     for p in dist_params:
         if dist_params[p].dim() < data.dim():

@@ -3,9 +3,10 @@ from pyro.distributions import Distribution
 
 class RandomPrimitive(Distribution):
     """
-    For documentation on the wrapped distribution class `dist_class`,
-    use help(dist_class).
+    For help on a RandomPrimitive instance rp, use help(rp.dist_class).
     """
+    __slots__ = ['dist_class']
+
     def __init__(self, dist_class):
         self.dist_class = dist_class
         super(RandomPrimitive, self).__init__()
