@@ -15,7 +15,7 @@ class Bernoulli(Distribution):
 
     def __init__(self, ps=None, batch_size=None):
         """
-        :param ps: tensor of probabilities or log probabilities
+        :param ps: tensor of probabilities
         """
         self.ps = ps
         if ps.dim() == 1 and batch_size is not None:
