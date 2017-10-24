@@ -18,8 +18,6 @@ from pyro.distributions import DiagNormal, Bernoulli, Uniform, Delta
 
 from modules import Identity, Encoder, Decoder, MLP, Predict
 
-# TODO: viz depends on PIL. add to setup.py?
-
 
 # Default prior success probability for z_pres.
 def default_z_pres_prior_p(t):
