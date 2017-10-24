@@ -226,21 +226,24 @@ class TraceGraph_ELBO(object):
 
                 # for extracting baseline options from site["infer"]
                 # XXX default for baseline_beta currently set here
-                def get_baseline_kwargs(infer_dict):
-                    # TODO Validate the infer_dict.
-                    return infer_dict.get('nn_baseline', None), \
-                           infer_dict.get('nn_baseline_input', None), \
-                           infer_dict.get('use_decaying_avg_baseline', False), \
-                           infer_dict.get('baseline_beta', 0.90), \
-                           infer_dict.get('baseline_value', None)
+                def get_baseline_options(site_baseline):
+                    options_dict = site_baseline.copy()
+                    options_tuple = (options_dict.pop('nn_baseline', None),
+                                     options_dict.pop('nn_baseline_input', None),
+                                     options_dict.pop('use_decaying_avg_baseline', False),
+                                     options_dict.pop('baseline_beta', 0.90),
+                                     options_dict.pop('baseline_value', None))
+                    if options_dict:
+                        raise ValueError("Unrecognized baseline options: {}".format(options_dict.keys()))
+                    return options_tuple
 
                 baseline_loss_particle = 0.0
                 for node in non_reparam_nodes:
                     log_pdf_key = 'log_pdf' if node not in guide_vec_batch_nodes_dict else 'batch_log_pdf'
                     downstream_cost = downstream_costs[node]
                     baseline = 0.0
-                    nn_baseline, nn_baseline_input, use_decaying_avg_baseline, baseline_beta, \
-                        baseline_value = get_baseline_kwargs(guide_trace.nodes[node]['infer'])
+                    (nn_baseline, nn_baseline_input, use_decaying_avg_baseline, baseline_beta,
+                        baseline_value) = get_baseline_options(guide_trace.nodes[node]["baseline"])
                     use_nn_baseline = nn_baseline is not None
                     use_baseline_value = baseline_value is not None
                     assert(not (use_nn_baseline and use_baseline_value)), \

@@ -76,7 +76,7 @@ def sample(name, fn, *args, **kwargs):
     Samples from the distribution and registers it in the trace data structure.
     """
     obs = kwargs.pop("obs", None)
-    infer = kwargs.pop("infer", {})
+    baseline = kwargs.pop("baseline", {})
     # check if stack is empty
     # if stack empty, default behavior (defined here)
     if len(_PYRO_STACK) == 0:
@@ -96,7 +96,7 @@ def sample(name, fn, *args, **kwargs):
             "args": args,
             "kwargs": kwargs,
             "value": None,
-            "infer": infer,
+            "baseline": baseline,
             "scale": 1.0,
             "map_data_stack": [],
             "done": False,

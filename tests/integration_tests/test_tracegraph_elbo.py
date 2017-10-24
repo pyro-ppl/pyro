@@ -80,7 +80,7 @@ class NormalNormalTests(TestCase):
             sig_q = torch.exp(log_sig_q)
             mu_latent = pyro.sample("mu_latent",
                                     dist.DiagNormal(mu_q, sig_q, reparameterized=reparameterized),
-                                    infer=dict(use_decaying_avg_baseline=True))
+                                    baseline=dict(use_decaying_avg_baseline=True))
             return mu_latent
 
         adam = optim.Adam({"lr": .0015, "betas": (0.97, 0.999)})
@@ -189,15 +189,15 @@ class NormalNormalNormalTests(TestCase):
             sig_q, sig_q_prime = torch.exp(log_sig_q), torch.exp(log_sig_q_prime)
             mu_latent_dist = dist.DiagNormal(mu_q, sig_q, reparameterized=repa2)
             mu_latent = pyro.sample("mu_latent", mu_latent_dist,
-                                    infer=dict(use_decaying_avg_baseline=use_decaying_avg_baseline))
+                                    baseline=dict(use_decaying_avg_baseline=use_decaying_avg_baseline))
             mu_latent_prime_dist = dist.DiagNormal(kappa_q.expand_as(mu_latent) * mu_latent + mu_q_prime,
                                                    sig_q_prime,
                                                    reparameterized=repa1)
             pyro.sample("mu_latent_prime",
                         mu_latent_prime_dist,
-                        infer=dict(nn_baseline=mu_prime_baseline,
-                                   nn_baseline_input=mu_latent,
-                                   use_decaying_avg_baseline=use_decaying_avg_baseline))
+                        baseline=dict(nn_baseline=mu_prime_baseline,
+                                      nn_baseline_input=mu_latent,
+                                      use_decaying_avg_baseline=use_decaying_avg_baseline))
 
             return mu_latent
 
@@ -271,7 +271,7 @@ class BernoulliBetaTests(TestCase):
                                     Variable(self.log_beta_n.data - 0.143, requires_grad=True))
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             p_latent = pyro.sample("p_latent", dist.beta, alpha_q, beta_q,
-                                   infer=dict(use_decaying_avg_baseline=True))
+                                   baseline=dict(use_decaying_avg_baseline=True))
             return p_latent
 
         adam = optim.Adam({"lr": .0007, "betas": (0.96, 0.999)})
@@ -336,7 +336,7 @@ class PoissonGammaTests(TestCase):
                     requires_grad=True))
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             pyro.sample("lambda_latent", dist.gamma, alpha_q, beta_q,
-                        infer=dict(use_decaying_avg_baseline=True))
+                        baseline=dict(use_decaying_avg_baseline=True))
 
         adam = optim.Adam({"lr": .0007, "betas": (0.95, 0.999)})
         svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
@@ -388,7 +388,7 @@ class ExponentialGammaTests(TestCase):
                 Variable(self.log_beta_n.data - 0.143, requires_grad=True))
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             pyro.sample("lambda_latent", dist.gamma, alpha_q, beta_q,
-                        infer=dict(use_decaying_avg_baseline=True))
+                        baseline=dict(use_decaying_avg_baseline=True))
 
         adam = optim.Adam({"lr": .0007, "betas": (0.95, 0.999)})
         svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
@@ -461,7 +461,7 @@ class LogNormalNormalTests(TestCase):
             sigma = torch.pow(tau_q, -0.5)
             pyro.sample("mu_latent",
                         dist.DiagNormal(mu_q, sigma, reparameterized=reparameterized),
-                        infer=dict(use_decaying_avg_baseline=True))
+                        baseline=dict(use_decaying_avg_baseline=True))
 
         adam = optim.Adam({"lr": lr, "betas": (beta1, 0.999)})
         svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
@@ -577,7 +577,7 @@ class RaoBlackwellizationTests(TestCase):
             mu_latent = pyro.sample(
                     "mu_latent",
                     dist.DiagNormal(mu_q, sig_q, reparameterized=False),
-                    infer=dict(use_decaying_avg_baseline=True))
+                    baseline=dict(use_decaying_avg_baseline=True))
 
             def obs_outer(i, x):
                 pyro.map_data("map_obs_inner_%d" % i, x, lambda _i, _x:
@@ -663,7 +663,7 @@ class RaoBlackwellizationTests(TestCase):
             baseline_value = trivial_baseline(ng_ones(1))
             mu_latent = pyro.sample("mu_latent",
                                     dist.DiagNormal(mu_q, sig_q, reparameterized=False),
-                                    infer=dict(baseline_value=baseline_value))
+                                    baseline=dict(baseline_value=baseline_value))
 
             def obs_inner(i, _i, _x):
                 for k in range(n_superfluous_top + n_superfluous_bottom):
@@ -674,7 +674,7 @@ class RaoBlackwellizationTests(TestCase):
                                         Variable(0.5 * torch.ones(4 - i, 1), requires_grad=True))
                     pyro.sample("z_%d_%d" % (i, k),
                                 dist.DiagNormal(mean_i, ng_ones(4 - i, 1), reparameterized=False),
-                                infer=dict(baseline_value=baseline_value))
+                                baseline=dict(baseline_value=baseline_value))
 
             def obs_outer(i, x):
                 pyro.map_data("map_obs_inner_%d" % i, x, lambda _i, _x:

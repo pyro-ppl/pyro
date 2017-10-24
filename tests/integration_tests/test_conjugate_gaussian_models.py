@@ -143,7 +143,7 @@ class GaussianChainTests(TestCase):
                 repa = True if reparameterized else node_flagged
                 latent_dist = dist.DiagNormal(mean_function, sig_q, reparameterized=repa)
                 mu_latent = pyro.sample("mu_latent_%d" % k, latent_dist,
-                                        infer=dict(use_decaying_avg_baseline=True))
+                                        baseline=dict(use_decaying_avg_baseline=True))
                 previous_sample = mu_latent
             return previous_sample
 
@@ -435,8 +435,8 @@ class GaussianPyramidTests(TestCase):
                 latent_dist_node = dist.DiagNormal(mean_function_node, torch.exp(log_sig_node),
                                                    reparameterized=repa)
                 latent_node = pyro.sample(node, latent_dist_node,
-                                          infer=dict(use_decaying_avg_baseline=True,
-                                                     baseline_beta=0.96))
+                                          baseline=dict(use_decaying_avg_baseline=True,
+                                                        baseline_beta=0.96))
                 latents_dict[node] = latent_node
 
             return latents_dict['mu_latent_1']
