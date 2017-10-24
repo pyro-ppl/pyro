@@ -13,11 +13,13 @@ class Bernoulli(Distribution):
     """
     enumerable = True
 
-    def __init__(self, ps=None):
+    def __init__(self, ps=None, batch_size=None):
         """
         :param ps: tensor of probabilities or log probabilities
         """
         self.ps = ps
+        if ps.dim() == 1 and batch_size is not None:
+            self.ps = ps.expand(batch_size, ps.size(0))
         super(Bernoulli, self).__init__()
 
     def batch_shape(self, x=None):
