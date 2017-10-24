@@ -1,6 +1,100 @@
-from pyro import util
+from collections import defaultdict
+
 from .poutine import Poutine
 from .trace import Trace
+
+
+def get_vectorized_map_data_info(trace):
+    """
+    This determines whether the vectorized map_datas are rao-blackwellizable by
+    `TraceGraph_ELBO`. This also gathers information to be consumed by
+    downstream by `TraceGraph_ELBO`.
+    """
+    nodes = trace.nodes
+
+    vectorized_map_data_info = {'rao-blackwellization-condition': True}
+    vec_md_stacks = set()
+
+    for name, node in nodes.items():
+        if node["type"] in ("sample", "param"):
+            stack = tuple(reversed(node["map_data_stack"]))
+            vec_mds = list(filter(lambda x: x[2] == 'tensor', stack))
+            # check for nested vectorized map datas
+            if len(vec_mds) > 1:
+                vectorized_map_data_info['rao-blackwellization-condition'] = False
+            # check that vectorized map datas only found at innermost position
+            if len(vec_mds) > 0 and stack[-1][2] == 'list':
+                vectorized_map_data_info['rao-blackwellization-condition'] = False
+            # for now enforce batch_dim = 0 for vectorized map_data
+            # since needed batch_log_pdf infrastructure missing
+            if len(vec_mds) > 0 and vec_mds[0][3] != 0:
+                vectorized_map_data_info['rao-blackwellization-condition'] = False
+            # enforce that if there are multiple vectorized map_datas, they are all
+            # independent of one another because of enclosing list map_datas
+            # (step 1: collect the stacks)
+            if len(vec_mds) > 0:
+                vec_md_stacks.add(stack)
+            # bail, since condition false
+            if not vectorized_map_data_info['rao-blackwellization-condition']:
+                break
+
+    # enforce that if there are multiple vectorized map_datas, they are all
+    # independent of one another because of enclosing list map_datas
+    # (step 2: explicitly check this)
+    if vectorized_map_data_info['rao-blackwellization-condition']:
+        vec_md_stacks = list(vec_md_stacks)
+        for i, stack_i in enumerate(vec_md_stacks):
+            for j, stack_j in enumerate(vec_md_stacks):
+                # only check unique pairs
+                if i <= j:
+                    continue
+                ij_independent = False
+                for md_i, md_j in zip(stack_i, stack_j):
+                    if md_i[0] == md_j[0] and md_i[1] != md_j[1]:
+                        ij_independent = True
+                if not ij_independent:
+                    vectorized_map_data_info['rao-blackwellization-condition'] = False
+                    break
+
+    # construct data structure consumed by tracegraph_kl_qp
+    if vectorized_map_data_info['rao-blackwellization-condition']:
+        vectorized_map_data_info['nodes'] = defaultdict(list)
+        for name, node in nodes.items():
+            if node["type"] in ("sample", "param"):
+                stack = tuple(reversed(node["map_data_stack"]))
+                vec_mds = list(filter(lambda x: x[2] == 'tensor', stack))
+                if len(vec_mds) > 0:
+                    node_batch_dim_pair = (name, vec_mds[0][3])
+                    vectorized_map_data_info['nodes'][vec_mds[0][0]].append(node_batch_dim_pair)
+
+    return vectorized_map_data_info
+
+
+def identify_dense_edges(trace):
+    """
+    Method to add all edges based on the map_data_stack information
+    stored at each site.
+    """
+    for name, node in trace.nodes.items():
+        if node["type"] == "sample":
+            # XXX why tuple?
+            map_data_stack = tuple(reversed(node["map_data_stack"]))
+            for past_name, past_node in trace.nodes.items():
+                if past_node["type"] == "sample":
+                    if past_name == name:
+                        break
+                    past_node_independent = False
+                    past_node_map_data_stack = tuple(
+                        reversed(past_node["map_data_stack"]))
+                    for query, target in zip(map_data_stack,
+                                             past_node_map_data_stack):
+                        if query[0] == target[0] and query[1] != target[1]:
+                            past_node_independent = True
+                            break
+                    if not past_node_independent:
+                        trace.add_edge(past_name, name)
+
+    return trace
 
 
 class TracePoutine(Poutine):
@@ -35,9 +129,9 @@ class TracePoutine(Poutine):
         upon exiting the context.
         """
         if self.graph_type == "dense":
-            self.trace = util.identify_dense_edges(self.trace)
+            self.trace = identify_dense_edges(self.trace)
             self.trace.graph["vectorized_map_data_info"] = \
-                util.get_vectorized_map_data_info(self.trace)
+                get_vectorized_map_data_info(self.trace)
         return super(TracePoutine, self).__exit__(*args, **kwargs)
 
     def __call__(self, *args, **kwargs):
