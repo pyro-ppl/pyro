@@ -18,14 +18,7 @@ from pyro.distributions import DiagNormal, Bernoulli, Uniform, Delta
 
 from modules import Identity, Encoder, Decoder, MLP, Predict
 
-
-# TODO: cleaner cuda support.
-
 # TODO: viz depends on PIL. add to setup.py?
-
-# TODO: add continuous relaxation
-
-# TODO: try summing out discrete choices
 
 
 # Default prior success probability for z_pres.
@@ -140,15 +133,13 @@ class AIR(nn.Module):
             z_pres_dist = Uniform(self.ng_zeros(n, 1), self.ng_ones(n, 1))
         z_pres = pyro.sample('z_pres_{}'.format(t), z_pres_dist)
 
-        # If zero is sampled for a data point, then no more objects will
-        # be added to its canvas. We can't straight-forwardly avoid
-        # generating further objects, so instead we zero out the log_pdf
-        # of future choices.
+        # If zero is sampled for a data point, then no more objects
+        # will be added to its output image. We can't
+        # straight-forwardly avoid generating further objects, so
+        # instead we zero out the log_pdf of future choices.
         sample_mask = z_pres if self.use_masking else 1.0
 
         # Sample attention window position.
-        # (This prior came from me looking at prior samples and picking
-        # something that seemed sensible.)
         z_where = pyro.sample('z_where_{}'.format(t),
                               DiagNormal(self.z_where_mu_prior,
                                          self.z_where_sigma_prior,
@@ -178,8 +169,10 @@ class AIR(nn.Module):
 
             # Observations are made as soon as we are done generating
             # objects for a data point. This ensures that future
-            # discrete choices are not included in the ELBO. (Since
-            # log(q/p) will be zero.)
+            # discrete choices are not included in the ELBO. i.e. The
+            # corresponding log(q/p) in the objectives will be zero
+            # since we mask out all future choices and make no further
+            # observations for data points that are complete.
 
             if not self.use_masking:
                 observe_mask = 1.0
@@ -242,8 +235,6 @@ class AIR(nn.Module):
 
     def guide_step(self, t, n, prev, inputs):
 
-        # When masking there isn't much point passing z_pres here since if
-        # it's zero, all downstream log_pdf are masked out.
         rnn_input = torch.cat((inputs['embed'], prev.z_where, prev.z_what, prev.z_pres), 1)
         h, c = self.rnn(rnn_input, (prev.h, prev.c))
         z_pres_p, z_where_mu, z_where_sigma = self.predict(h)
@@ -269,7 +260,7 @@ class AIR(nn.Module):
 
         x_att = images_to_windows(z_where, self.window_size, self.x_size, inputs['raw'])
 
-        # encode attention windows
+        # Encode attention windows.
         z_what_mu, z_what_sigma = self.encode(x_att)
 
         z_what = pyro.sample('z_what_{}'.format(t),

@@ -2,7 +2,9 @@ import torch.nn as nn
 from torch.nn.functional import sigmoid, softplus
 
 
-# Attention window encoder/decoder.
+# Takes pixel intensities of the attention window to parameters (mean,
+# standard deviation) of the distribution over the latent code,
+# z_what.
 class Encoder(nn.Module):
     def __init__(self, x_size, h_sizes, z_size, non_linear_layer):
         super(Encoder, self).__init__()
@@ -15,6 +17,7 @@ class Encoder(nn.Module):
         return a[:, 0:self.z_size], softplus(a[:, self.z_size:])
 
 
+# Takes a latent code, z_what, to pixel intensities.
 class Decoder(nn.Module):
     def __init__(self, x_size, h_sizes, z_size, bias, non_linear_layer):
         super(Decoder, self).__init__()
@@ -28,12 +31,11 @@ class Decoder(nn.Module):
         return sigmoid(a)
 
 
-# Makes modules that look like:
+# A general purpose module to construct networks that look like:
 # [Linear (256 -> 1)]
 # [Linear (256 -> 256), ReLU (), Linear (256 -> 1)]
+# [Linear (256 -> 256), ReLU (), Linear (256 -> 1), ReLU ()]
 # etc.
-
-
 class MLP(nn.Module):
     def __init__(self, in_size, out_sizes, non_linear_layer, output_non_linearity=False):
         super(MLP, self).__init__()
@@ -52,10 +54,9 @@ class MLP(nn.Module):
     def forward(self, x):
         return self.seq(x)
 
-# Takes the output of the rnn to parameters for guide distributions
-# for z_where and z_pres.
 
-
+# Takes the guide RNN hidden state to parameters of the guide
+# distributions over z_where and z_pres.
 class Predict(nn.Module):
     def __init__(self, input_size, h_sizes, z_pres_size, z_where_size, non_linear_layer):
         super(Predict, self).__init__()
