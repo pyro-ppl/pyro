@@ -177,10 +177,12 @@ discrete_dists = [
     Fixture(pyro_dist=(dist.categorical, Categorical),
             scipy_dist=sp.multinomial,
             examples=[
-                {'ps': [0.1, 0.6, 0.3], 'test_data': [0, 0, 1]},
-                {'ps': [[0.1, 0.6, 0.3], [0.2, 0.4, 0.4]], 'test_data': [[0, 0, 1], [1, 0, 0]]}
+                {'ps': [0.1, 0.6, 0.3],
+                 'test_data': [0, 0, 1]},
+                {'ps': [[0.1, 0.6, 0.3], [0.2, 0.4, 0.4]],
+                 'test_data': [[0, 0, 1], [1, 0, 0]]}
             ],
-            scipy_arg_fn=lambda ps: ((1, np.array(ps)), {}),
+            scipy_arg_fn=lambda **kwargs: ((1, np.array(kwargs['ps'])), {}),
             prec=0.05,
             min_samples=10000,
             is_discrete=True),

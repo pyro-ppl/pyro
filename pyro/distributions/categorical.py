@@ -3,7 +3,7 @@ import torch
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
-from pyro.distributions.util import torch_zeros_like
+from pyro.distributions.util import torch_zeros_like, softmax
 
 
 class Categorical(Distribution):
@@ -19,13 +19,13 @@ class Categorical(Distribution):
     """
     enumerable = True
 
-    def _sanitize_input(self, ps, vs, one_hot):
+    def _sanitize_input(self, ps, vs, one_hot, is_log_prob):
         if ps is not None:
             # stateless distribution
-            return ps, vs, one_hot
+            return ps, vs, one_hot, is_log_prob
         elif self.ps is not None:
             # stateful distribution
-            return self.ps, self.vs, self.one_hot
+            return self.ps, self.vs, self.one_hot, self.is_log_prob
         else:
             raise ValueError("Parameter(s) were None")
 
@@ -38,7 +38,7 @@ class Categorical(Distribution):
                                  "but was of {}".format(str(type(vs)))))
         return vs
 
-    def __init__(self, ps=None, vs=None, one_hot=True, batch_size=None, *args, **kwargs):
+    def __init__(self, ps=None, vs=None, one_hot=True, is_log_prob=False, batch_size=None, *args, **kwargs):
         """
         Instantiates a discrete distribution.
         Params:
@@ -51,20 +51,21 @@ class Categorical(Distribution):
         # vs is None, Variable(Tensor), or numpy.array
         self.vs = self._process_vs(vs)
         self.one_hot = one_hot
+        self.is_log_prob = is_log_prob
         super(Categorical, self).__init__(*args, **kwargs)
 
-    def batch_shape(self, ps=None, vs=None, one_hot=True):
-        ps, vs, one_hot = self._sanitize_input(ps, vs, one_hot)
+    def batch_shape(self, ps=None, vs=None, one_hot=True, log_pdf_mask=None, is_log_prob=False):
+        ps, vs, one_hot, is_log_prob = self._sanitize_input(ps, vs, one_hot, is_log_prob)
         return ps.size()[:-1]
 
-    def event_shape(self, ps=None, vs=None, one_hot=True):
-        ps, vs, one_hot = self._sanitize_input(ps, vs, one_hot)
+    def event_shape(self, ps=None, vs=None, one_hot=True, log_pdf_mask=None, is_log_prob=False):
+        ps, vs, one_hot, is_log_prob = self._sanitize_input(ps, vs, one_hot, is_log_prob)
         if one_hot:
             return ps.size()[-1:]
         else:
             return torch.Size((1,))
 
-    def sample(self, ps=None, vs=None, one_hot=True):
+    def sample(self, ps=None, vs=None, one_hot=True, log_pdf_mask=None, is_log_prob=False):
         """
         Returns a sample which has the same shape as ``ps`` (or ``vs``), except
         that if ``one_hot=True`` (and no ``vs`` is specified), the last dimension
@@ -74,9 +75,11 @@ class Categorical(Distribution):
         :return: sample from the Categorical distribution
         :rtype: numpy.ndarray or torch.LongTensor
         """
-        ps, vs, one_hot = self._sanitize_input(ps, vs, one_hot)
+        ps, vs, one_hot, is_log_prob = self._sanitize_input(ps, vs, one_hot, is_log_prob)
         vs = self._process_vs(vs)
         sample_size = ps.size()[:-1] + (1,)
+        if is_log_prob:
+            ps = softmax(ps, dim=-1)
         sample = torch.multinomial(ps.data, 1, replacement=True).expand(*sample_size)
         sample_one_hot = torch_zeros_like(ps.data).scatter_(-1, sample, 1)
 
@@ -90,7 +93,7 @@ class Categorical(Distribution):
             return Variable(sample_one_hot)
         return Variable(sample)
 
-    def batch_log_pdf(self, x, ps=None, vs=None, one_hot=True, log_pdf_mask=None):
+    def batch_log_pdf(self, x, ps=None, vs=None, one_hot=True, log_pdf_mask=None, is_log_prob=False):
         """
         Evaluates log probability densities for one or a batch of samples and parameters.
         The last dimension for ``ps`` encodes the event probabilities, and the remaining
@@ -106,7 +109,7 @@ class Categorical(Distribution):
         :return: tensor with log probabilities for each of the batches.
         :rtype: torch.autograd.Variable
         """
-        ps, vs, one_hot = self._sanitize_input(ps, vs, one_hot)
+        ps, vs, one_hot, is_log_prob = self._sanitize_input(ps, vs, one_hot, is_log_prob)
         vs = self._process_vs(vs)
         if isinstance(x, list):
             x = np.array(x)
@@ -129,7 +132,9 @@ class Categorical(Distribution):
             else:
                 boolean_mask = torch_zeros_like(ps.data).scatter_(-1, x.data.long(), 1)
         # apply log function to masked probability tensor
-        batch_log_pdf = torch.log(ps.masked_select(boolean_mask.byte())).contiguous().view(*batch_pdf_size)
+        batch_log_pdf = ps.masked_select(boolean_mask.byte()).contiguous().view(*batch_pdf_size)
+        if not is_log_prob:
+            batch_log_pdf = batch_log_pdf.log()
         if log_pdf_mask is not None:
             scaling_mask = log_pdf_mask.contiguous().view(*batch_pdf_size)
             batch_log_pdf = batch_log_pdf * scaling_mask
@@ -157,7 +162,7 @@ class Categorical(Distribution):
             sample. If ``one_hot=True``, the last dimension is used for the one-hot encoding.
         :rtype: torch.autograd.Variable or numpy.ndarray.
         """
-        ps, vs, one_hot = self._sanitize_input(ps, vs, one_hot)
+        ps, vs, one_hot, _ = self._sanitize_input(ps, vs, one_hot, False)
         vs = self._process_vs(vs)
         event_size = ps.size()[-1]
         sample_size = ps.size()[:-1] + (1,)

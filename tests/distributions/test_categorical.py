@@ -58,6 +58,14 @@ class TestCategorical(TestCase):
         computed_mean = float(counts[0]) / self.n_samples
         self.assertEqual(computed_mean, self.analytic_mean.data.numpy()[0], prec=0.05)
 
+    def test_mean_and_var_log_prob(self):
+        ps = self.ps.log()
+        torch_samples = [dist.categorical(ps, one_hot=False, is_log_prob=True).data.numpy()
+                         for _ in range(self.n_samples)]
+        _, counts = np.unique(torch_samples, return_counts=True)
+        computed_mean = float(counts[0]) / self.n_samples
+        self.assertEqual(computed_mean, self.analytic_mean.data.numpy()[0], prec=0.05)
+
     def test_discrete_log_pdf(self):
         log_px_torch = dist.categorical.batch_log_pdf(self.d_test_data, self.d_ps, self.d_vs).data[0][0]
         log_px_np = float(sp.multinomial.logpmf(np.array([1, 0, 0]), 1, self.d_ps[0].data.numpy()))

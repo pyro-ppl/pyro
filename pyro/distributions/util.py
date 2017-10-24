@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as functional
 from torch.autograd import Variable
 
 
@@ -71,3 +72,25 @@ def torch_ones_like(x):
         return torch.ones_like(x)
     except AttributeError:
         return torch.ones(x.size()).type_as(x)
+
+
+def softmax(x, dim=-1):
+    """
+    TODO: change to use the default pyTorch implementation when available
+    Source: https://discuss.pytorch.org/t/why-softmax-function-cant-specify-the-dimension-to-operate/2637
+    :param x: tensor
+    :param dim: Dimension to apply the softmax function to. The elements of the tensor in this
+        dimension must sum to 1.
+    :return: tensor having the same dimension as `x` rescaled along dim
+    """
+    input_size = x.size()
+
+    trans_input = x.transpose(dim, len(input_size) - 1)
+    trans_size = trans_input.size()
+
+    input_2d = trans_input.contiguous().view(-1, trans_size[-1])
+
+    soft_max_2d = functional.softmax(input_2d)
+
+    soft_max_nd = soft_max_2d.view(*trans_size)
+    return soft_max_nd.transpose(dim, len(input_size) - 1)
