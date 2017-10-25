@@ -1,10 +1,10 @@
 import pyro
 import graphviz
 import numpy as np
+import functools
 import torch
 from torch.autograd import Variable
 from torch.nn import Parameter
-from collections import defaultdict
 
 
 def detach_iterable(iterable):
@@ -24,6 +24,12 @@ def _dict_to_tuple(d):
         return tuple([(k, _dict_to_tuple(d[k])) for k in sorted(d.keys())])
     else:
         return d
+
+
+def get_tensor_data(t):
+    if isinstance(t, Variable):
+        return t.data
+    return t
 
 
 def memoize(fn):
@@ -55,19 +61,47 @@ def set_rng_seed(rng_seed):
 
 
 def ones(*args, **kwargs):
-    return Parameter(torch.ones(*args, **kwargs))
+    """
+    :param torch.Tensor type_as: optional argument for tensor type
+
+    A convenience function for Parameter(torch.ones(...))
+    """
+    retype = kwargs.pop('type_as', None)
+    p_tensor = torch.ones(*args, **kwargs)
+    return Parameter(p_tensor if retype is None else p_tensor.type_as(retype))
 
 
 def zeros(*args, **kwargs):
-    return Parameter(torch.zeros(*args, **kwargs))
+    """
+    :param torch.Tensor type_as: optional argument for tensor type
+
+    A convenience function for Parameter(torch.zeros(...))
+    """
+    retype = kwargs.pop('type_as', None)
+    p_tensor = torch.zeros(*args, **kwargs)
+    return Parameter(p_tensor if retype is None else p_tensor.type_as(retype))
 
 
 def ng_ones(*args, **kwargs):
-    return Variable(torch.ones(*args, **kwargs), requires_grad=False)
+    """
+    :param torch.Tensor type_as: optional argument for tensor type
+
+    A convenience function for Variable(torch.ones(...), requires_grad=False)
+    """
+    retype = kwargs.pop('type_as', None)
+    p_tensor = torch.ones(*args, **kwargs)
+    return Variable(p_tensor if retype is None else p_tensor.type_as(retype), requires_grad=False)
 
 
 def ng_zeros(*args, **kwargs):
-    return Variable(torch.zeros(*args, **kwargs), requires_grad=False)
+    """
+    :param torch.Tensor type_as: optional argument for tensor type
+
+    A convenience function for Variable(torch.ones(...), requires_grad=False)
+    """
+    retype = kwargs.pop('type_as', None)
+    p_tensor = torch.zeros(*args, **kwargs)
+    return Variable(p_tensor if retype is None else p_tensor.type_as(retype), requires_grad=False)
 
 
 def log_sum_exp(vecs):
@@ -107,7 +141,7 @@ def tensor_histogram(ps, vs):
         if isinstance(_v, Variable):
             _v = _v.data
         if isinstance(_v, torch.Tensor):
-            _v = _v.numpy()
+            _v = _v.cpu().numpy()
         np_vs.append(_v)
     # now form the histogram
     hist = dict()
@@ -281,73 +315,6 @@ def all_escape(trace, msg):
         (msg["name"] not in trace)
 
 
-def get_vectorized_map_data_info(trace):
-    """
-    this determines whether the vectorized map_datas
-    are rao-blackwellizable by tracegraph_kl_qp
-    also gathers information to be consumed by downstream by tracegraph_kl_qp
-    XXX this logic should probably sit elsewhere
-    """
-    nodes = trace.nodes
-
-    vectorized_map_data_info = {'rao-blackwellization-condition': True}
-    vec_md_stacks = set()
-
-    for name, node in nodes.items():
-        if node["type"] in ("sample", "param"):
-            stack = tuple(reversed(node["map_data_stack"]))
-            vec_mds = list(filter(lambda x: x[2] == 'tensor', stack))
-            # check for nested vectorized map datas
-            if len(vec_mds) > 1:
-                vectorized_map_data_info['rao-blackwellization-condition'] = False
-            # check that vectorized map datas only found at innermost position
-            if len(vec_mds) > 0 and stack[-1][2] == 'list':
-                vectorized_map_data_info['rao-blackwellization-condition'] = False
-            # for now enforce batch_dim = 0 for vectorized map_data
-            # since needed batch_log_pdf infrastructure missing
-            if len(vec_mds) > 0 and vec_mds[0][3] != 0:
-                vectorized_map_data_info['rao-blackwellization-condition'] = False
-            # enforce that if there are multiple vectorized map_datas, they are all
-            # independent of one another because of enclosing list map_datas
-            # (step 1: collect the stacks)
-            if len(vec_mds) > 0:
-                vec_md_stacks.add(stack)
-            # bail, since condition false
-            if not vectorized_map_data_info['rao-blackwellization-condition']:
-                break
-
-    # enforce that if there are multiple vectorized map_datas, they are all
-    # independent of one another because of enclosing list map_datas
-    # (step 2: explicitly check this)
-    if vectorized_map_data_info['rao-blackwellization-condition']:
-        vec_md_stacks = list(vec_md_stacks)
-        for i, stack_i in enumerate(vec_md_stacks):
-            for j, stack_j in enumerate(vec_md_stacks):
-                # only check unique pairs
-                if i <= j:
-                    continue
-                ij_independent = False
-                for md_i, md_j in zip(stack_i, stack_j):
-                    if md_i[0] == md_j[0] and md_i[1] != md_j[1]:
-                        ij_independent = True
-                if not ij_independent:
-                    vectorized_map_data_info['rao-blackwellization-condition'] = False
-                    break
-
-    # construct data structure consumed by tracegraph_kl_qp
-    if vectorized_map_data_info['rao-blackwellization-condition']:
-        vectorized_map_data_info['nodes'] = defaultdict(list)
-        for name, node in nodes.items():
-            if node["type"] in ("sample", "param"):
-                stack = tuple(reversed(node["map_data_stack"]))
-                vec_mds = list(filter(lambda x: x[2] == 'tensor', stack))
-                if len(vec_mds) > 0:
-                    node_batch_dim_pair = (name, vec_mds[0][3])
-                    vectorized_map_data_info['nodes'][vec_mds[0][0]].append(node_batch_dim_pair)
-
-    return vectorized_map_data_info
-
-
 def save_visualization(trace, graph_output):
     """
     render graph and save to file
@@ -375,28 +342,9 @@ def save_visualization(trace, graph_output):
     g.render(graph_output, view=False, cleanup=True)
 
 
-def identify_dense_edges(trace):
+def deep_getattr(obj, name):
     """
-    Method to add all edges based on the map_data_stack information
-    stored at each site.
+    Python getattr() for arbitrarily deep attributes
+    Throws an AttirbuteError if bad attribute
     """
-    for name, node in trace.nodes.items():
-        if node["type"] == "sample":
-            # XXX why tuple?
-            map_data_stack = tuple(reversed(node["map_data_stack"]))
-            for past_name, past_node in trace.nodes.items():
-                if past_node["type"] == "sample":
-                    if past_name == name:
-                        break
-                    past_node_independent = False
-                    past_node_map_data_stack = tuple(
-                        reversed(past_node["map_data_stack"]))
-                    for query, target in zip(map_data_stack,
-                                             past_node_map_data_stack):
-                        if query[0] == target[0] and query[1] != target[1]:
-                            past_node_independent = True
-                            break
-                    if not past_node_independent:
-                        trace.add_edge(past_name, name)
-
-    return trace
+    return functools.reduce(getattr, name.split("."), obj)

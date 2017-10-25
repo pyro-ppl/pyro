@@ -2,7 +2,9 @@ run_outputs*
 .DS_Store
 data
 examples/processed
+examples/results
 examples/raw
+examples/dmm/*.pkl
 processed
 raw
 

@@ -43,3 +43,68 @@ def log_beta(t):
         numer = torch.sum(log_gamma(t), 1)
         denom = log_gamma(torch.sum(t, 1))
     return numer - denom
+
+
+def move_to_same_host_as(source, destin):
+    """
+    Returns source or a copy of `source` such that `source.is_cuda == `destin.is_cuda`.
+    """
+    return source.cuda() if destin.is_cuda else source.cpu()
+
+
+def torch_zeros_like(x):
+    """
+    Polyfill for `torch.zeros_like()`.
+    """
+    # Work around https://github.com/pytorch/pytorch/issues/2906
+    if isinstance(x, Variable):
+        return Variable(torch_zeros_like(x.data))
+    # Support Pytorch before https://github.com/pytorch/pytorch/pull/2489
+    try:
+        return torch.zeros_like(x)
+    except AttributeError:
+        return torch.zeros(x.size()).type_as(x)
+
+
+def torch_ones_like(x):
+    """
+    Polyfill for `torch.ones_like()`.
+    """
+    # Work around https://github.com/pytorch/pytorch/issues/2906
+    if isinstance(x, Variable):
+        return Variable(torch_ones_like(x.data))
+    # Support Pytorch before https://github.com/pytorch/pytorch/pull/2489
+    try:
+        return torch.ones_like(x)
+    except AttributeError:
+        return torch.ones(x.size()).type_as(x)
+
+
+def torch_eye(n, m=None, out=None):
+    """
+    Like `torch.eye()`, but works with cuda tensors.
+    """
+    if m is None:
+        m = n
+    try:
+        return torch.eye(n, m, out=out)
+    except TypeError:
+        # Only catch errors due to torch.eye() not being availble for cuda tensors.
+        module = torch.Tensor.__module__ if out is None else type(out).__module__
+        if module != 'torch.cuda':
+            raise
+    Tensor = getattr(torch, torch.Tensor.__name__)
+    cpu_out = Tensor(n, m)
+    cuda_out = torch.eye(m, n, out=cpu_out).cuda()
+    return cuda_out if out is None else out.copy_(cuda_out)
+
+
+def torch_multinomial(input, num_samples, replacement=False):
+    """
+    Like `torch.multinomial()` but works with cuda tensors.
+    Does not support keyword argument `out`.
+    """
+    if input.is_cuda:
+        return torch_multinomial(input.cpu(), num_samples, replacement).cuda()
+    else:
+        return torch.multinomial(input, num_samples, replacement)

@@ -22,18 +22,28 @@ class Exponential(Distribution):
         else:
             raise ValueError("Parameter(s) were None")
 
-    def __init__(self, lam=None, batch_size=1, *args, **kwargs):
+    def __init__(self, lam=None, batch_size=None, *args, **kwargs):
         """
         Params:
           `lam` - lambda
         """
         self.lam = lam
         if lam is not None:
-            if lam.dim() == 1 and batch_size > 1:
+            if lam.dim() == 1 and batch_size is not None:
                 self.lam = lam.expand(batch_size, lam.size(0))
         super(Exponential, self).__init__(*args, **kwargs)
 
-    def sample(self, lam=None, *args, **kwargs):
+    def batch_shape(self, lam=None):
+        lam = self._sanitize_input(lam)
+        event_dim = 1
+        return lam.size()[:-event_dim]
+
+    def event_shape(self, lam=None):
+        lam = self._sanitize_input(lam)
+        event_dim = 1
+        return lam.size()[-event_dim:]
+
+    def sample(self, lam=None):
         """
         reparameterized sampler.
         """
@@ -42,17 +52,16 @@ class Exponential(Distribution):
         x = -torch.log(eps) / lam
         return x
 
-    def batch_log_pdf(self, x, lam=None, batch_size=1, *args, **kwargs):
+    def batch_log_pdf(self, x, lam=None, batch_size=1):
         """
         exponential log-likelihood
         """
         lam = self._sanitize_input(lam)
-        if x.dim() == 1:
-            x = x.expand(batch_size, x.size(0))
         if lam.size() != x.size():
             lam = lam.expand_as(x)
         ll = - lam * x + torch.log(lam)
-        return torch.sum(ll, 1)
+        batch_log_pdf_shape = self.batch_shape(lam) + (1,)
+        return torch.sum(ll, -1).contiguous().view(batch_log_pdf_shape)
 
     def analytic_mean(self, lam=None):
         lam = self._sanitize_input(lam)

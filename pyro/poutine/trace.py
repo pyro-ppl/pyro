@@ -1,8 +1,6 @@
 import collections
 
 import networkx
-import torch
-from torch.autograd import Variable
 
 
 class Trace(networkx.DiGraph):
@@ -57,7 +55,7 @@ class Trace(networkx.DiGraph):
 
         The local computation is memoized.
         """
-        log_p = Variable(torch.zeros(1))
+        log_p = 0.0
         for name, site in self.nodes.items():
             if site["type"] == "sample" and site_filter(name, site):
                 try:
@@ -76,7 +74,7 @@ class Trace(networkx.DiGraph):
 
         The local computation is memoized, and also stores the local `.log_pdf()`.
         """
-        log_p = Variable(torch.zeros(1))
+        log_p = 0.0
         for name, site in self.nodes.items():
             if site["type"] == "sample" and site_filter(name, site):
                 try:
@@ -85,12 +83,6 @@ class Trace(networkx.DiGraph):
                     args, kwargs = site["args"], site["kwargs"]
                     site_log_p = site["fn"].batch_log_pdf(
                         site["value"], *args, **kwargs) * site["scale"]
-
-                    # The following line is a quick fix for size mismatch issues,
-                    # and should be reverted after this issue is fixed:
-                    # https://github.com/uber/pyro/issues/278
-                    site_log_p = site_log_p.squeeze()
-
                     site["batch_log_pdf"] = site_log_p
                     site["log_pdf"] = site_log_p.sum()
                 # Here log_p may be broadcast to a larger tensor:

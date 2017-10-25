@@ -1,6 +1,9 @@
+import numbers
+
 import pyro
 import pyro.poutine as poutine
 from pyro.infer.enum import iter_discrete_traces
+from pyro.distributions.util import torch_zeros_like
 
 
 class Trace_ELBO(object):
@@ -63,6 +66,13 @@ class Trace_ELBO(object):
                         elbo_particle += model_trace.nodes[name][log_pdf]
                         elbo_particle -= guide_trace.nodes[name][log_pdf]
 
+            # drop terms of weight zero to avoid nans
+            if isinstance(weight, numbers.Number):
+                if weight == 0.0:
+                    elbo_particle = torch_zeros_like(elbo_particle)
+            else:
+                elbo_particle[weight == 0] = 0.0
+
             elbo += (weight * elbo_particle).data.sum()
 
         loss = -elbo
@@ -95,12 +105,22 @@ class Trace_ELBO(object):
                     else:
                         lp_lq = model_trace.nodes[name][log_pdf] - guide_trace.nodes[name][log_pdf]
                         elbo_particle += lp_lq
-                        if model_trace.nodes[name]["fn"].reparameterized:
+                        if guide_trace.nodes[name]["fn"].reparameterized:
                             surrogate_elbo_particle += lp_lq
                         else:
                             # XXX should the user be able to control inclusion of the -logq term below?
                             surrogate_elbo_particle += model_trace.nodes[name][log_pdf] + \
                                 log_r.detach() * guide_trace.nodes[name][log_pdf]
+
+            # drop terms of weight zero to avoid nans
+            if isinstance(weight, numbers.Number):
+                if weight == 0.0:
+                    elbo_particle = torch_zeros_like(elbo_particle)
+                    surrogate_elbo_particle = torch_zeros_like(surrogate_elbo_particle)
+            else:
+                weight_eq_zero = (weight == 0)
+                elbo_particle[weight_eq_zero] = 0.0
+                surrogate_elbo_particle[weight_eq_zero] = 0.0
 
             elbo += (weight * elbo_particle).data.sum()
             surrogate_elbo += (weight * surrogate_elbo_particle).sum()

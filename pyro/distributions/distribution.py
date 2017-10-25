@@ -1,6 +1,10 @@
+from six import add_metaclass
+from abc import ABCMeta, abstractmethod
+
 import torch
 
 
+@add_metaclass(ABCMeta)
 class Distribution(object):
     """
     Base class for parametrized probability distributions.
@@ -74,12 +78,16 @@ class Distribution(object):
     reparameterized = False
     enumerable = False
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, reparameterized=None):
         """
         Constructor for base distribution class.
 
-        Currently takes no explicit arguments.
+        :param bool reparametrized: Optional argument to override whether
+            instance should be considered reparameterized (by default, this
+            is decided by the class).
         """
+        if reparameterized is not None:
+            self.reparameterized = reparameterized
 
     def batch_shape(self, *args, **kwargs):
         """
@@ -133,6 +141,7 @@ class Distribution(object):
         """
         return self.sample(*args, **kwargs)
 
+    @abstractmethod
     def sample(self, *args, **kwargs):
         """
         Samples a random value.
@@ -156,6 +165,7 @@ class Distribution(object):
         """
         return torch.sum(self.batch_log_pdf(x, *args, **kwargs))
 
+    @abstractmethod
     def batch_log_pdf(self, x, *args, **kwargs):
         """
         Evaluates log probability densities for each of a batch of samples.

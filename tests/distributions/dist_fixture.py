@@ -4,6 +4,8 @@ import numpy as np
 import torch
 from torch.autograd import Variable
 
+from tests.common import assert_equal
+
 
 class Fixture(object):
     def __init__(self,
@@ -16,7 +18,7 @@ class Fixture(object):
                  is_discrete=False,
                  expected_support_non_vec=None,
                  expected_support=None):
-        self.pyro_dist = pyro_dist
+        self.pyro_dist, self.pyro_dist_obj = pyro_dist
         self.scipy_dist = scipy_dist
         self.dist_params, self.test_data = self._extract_fixture_data(examples)
         self.scipy_arg_fn = scipy_arg_fn
@@ -32,6 +34,9 @@ class Fixture(object):
             test_data.append(ex.pop('test_data'))
             dist_params.append(ex)
         return dist_params, test_data
+
+    def get_num_test_data(self):
+        return len(self.test_data)
 
     def get_samples(self, num_samples, **dist_params):
         return [self.pyro_dist(**dist_params).data.cpu().numpy() for _ in range(num_samples)]
@@ -78,10 +83,16 @@ class Fixture(object):
         return batch_log_pdf
 
     def get_pyro_logpdf(self, idx):
-        return self.pyro_dist.log_pdf(self.get_test_data(idx), **self.get_dist_params(idx))
+        dist_function_return = self.pyro_dist.log_pdf(self.get_test_data(idx), **self.get_dist_params(idx))
+        dist_object_return = self.pyro_dist_obj(**self.get_dist_params(idx)).log_pdf(self.get_test_data(idx))
+        assert_equal(dist_function_return, dist_object_return)
+        return dist_function_return
 
     def get_pyro_batch_logpdf(self, idx):
-        return self.pyro_dist.batch_log_pdf(self.get_test_data(idx), **self.get_dist_params(idx))
+        dist_function_return = self.pyro_dist.batch_log_pdf(self.get_test_data(idx), **self.get_dist_params(idx))
+        dist_object_return = self.pyro_dist_obj(**self.get_dist_params(idx)).batch_log_pdf(self.get_test_data(idx))
+        assert_equal(dist_function_return, dist_object_return)
+        return dist_function_return
 
     def get_num_samples(self, idx):
         """
@@ -110,7 +121,8 @@ class Fixture(object):
         return max(min_samples, min_computed_samples)
 
     def get_test_distribution_name(self):
-        return self.pyro_dist.__class__.__name__
+        pyro_dist_class = getattr(self.pyro_dist, 'dist_class', self.pyro_dist.__class__)
+        return pyro_dist_class.__name__
 
 
 def tensor_wrap(*args, **kwargs):

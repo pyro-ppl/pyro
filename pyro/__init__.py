@@ -3,6 +3,7 @@ from __future__ import division
 import warnings
 import contextlib
 from inspect import isclass
+from collections import OrderedDict
 
 import torch
 from torch.autograd import Variable
@@ -14,7 +15,14 @@ from pyro.distributions.distribution import Distribution
 from pyro.params import param_with_module_name
 from pyro.params.param_store import ParamStoreDict
 from pyro.poutine import LambdaPoutine, condition, do  # noqa: F401
-from pyro.util import zeros, ones, set_rng_seed, apply_stack  # noqa: F401
+from pyro.util import (  # noqa: F401
+                       zeros,
+                       ones,
+                       set_rng_seed,
+                       apply_stack,
+                       get_tensor_data,
+                       deep_getattr
+                       )
 
 # global map of params for now
 _param_store = ParamStoreDict()
@@ -59,13 +67,16 @@ def sample(name, fn, *args, **kwargs):
     """
     :param name: name of sample
     :param fn: distribution class or function
-    :param obs: observed datum (optional; should only be used in context of inference)
-        optionally specified in kwargs
+    :param obs: observed datum (optional; should only be used in context of
+        inference) optionally specified in kwargs
+    :param dict infer: Optional dictionary of inference parameters specified
+        in kwargs. See inference documentation for details.
     :returns: sample
 
     Samples from the distribution and registers it in the trace data structure.
     """
     obs = kwargs.pop("obs", None)
+    baseline = kwargs.pop("baseline", {})
     # check if stack is empty
     # if stack empty, default behavior (defined here)
     if len(_PYRO_STACK) == 0:
@@ -85,6 +96,7 @@ def sample(name, fn, *args, **kwargs):
             "args": args,
             "kwargs": kwargs,
             "value": None,
+            "baseline": baseline,
             "scale": 1.0,
             "map_data_stack": [],
             "done": False,
@@ -123,13 +135,14 @@ class _Subsample(Distribution):
     Internal use only. This should only be used by `iarange`.
     """
 
-    def __init__(self, size, subsample_size):
+    def __init__(self, size, subsample_size, use_cuda=False):
         """
         :param int size: the size of the range to subsample from
         :param int subsample_size: the size of the returned subsample
         """
         self.size = size
         self.subsample_size = subsample_size
+        self.use_cuda = use_cuda
 
     def sample(self):
         """
@@ -137,50 +150,77 @@ class _Subsample(Distribution):
         :rtype: torch.autograd.Variable of torch.LongTensor
         """
         assert 0 <= self.subsample_size <= self.size
-        return Variable(torch.randperm(self.size)[:self.subsample_size])
+        result = Variable(torch.randperm(self.size)[:self.subsample_size])
+        return result.cuda() if self.use_cuda else result
 
     def batch_log_pdf(self, x):
         # This is zero so that iarange can provide an unbiased estimate of
         # the non-subsampled batch_log_pdf.
-        return Variable(torch.zeros(0))
+        result = Variable(torch.zeros(1))
+        return result.cuda() if self.use_cuda else result
 
 
 @contextlib.contextmanager
-def iarange(name, size, subsample_size=0):
+def iarange(name, size=None, subsample_size=None, subsample=None, use_cuda=False):
     """
     Context manager for ranges indexing iid variables, optionally subsampling.
 
-    WARNING: Subsampling is only correct if all computation is iid within the context.
+    WARNING: This is only correct if all computation is iid within the context.
 
-    By default `subsample_size=False` and this simply yields a `torch.arange(0, size)`.
-    If `0<subsample_size<=size` this yields a single random batch of size
-    `subsample_size` and scales all log likelihood terms by `size/batch_size`, within
-    this context.
+    By default `subsample_size=False` and this simply yields a
+    `torch.arange(0, size)`. If `0 < subsample_size <= size` this yields a
+    single random batch of indices of size `subsample_size` and scales all log
+    likelihood terms by `size/batch_size`, within this context.
 
     :param str name: A name that will be used for this site in a Trace.
-    :param int size: The size of the collection being subsampled (like `stop` in builtin `range`).
-    :param int subsample_size: Size of minibatches used in subsampling. Defaults to `size` if set to 0.
-    :return: A context manager yielding a single 1-dimensional `torch.Tensor` of indices.
+    :param int size: Optional size of the collection being subsampled
+        (like `stop` in builtin `range`).
+    :param int subsample_size: Size of minibatches used in subsampling.
+        Defaults to `size`.
+    :param subsample: Optional custom subsample for user-defined subsampling
+        schemes. If specified, then `subsample_size` will be set to
+        `len(subsample)`.
+    :type subsample: Anything supporting `len()`.
+    :param bool use_cuda: Whether to use cuda tensors for `subsample` and
+        `log_pdf`.
+    :return: A context manager yielding a single 1-dimensional `torch.Tensor`
+        of indices.
 
     Examples::
 
-        # This version is vectorized:
-        >>> with iarange('data', 100, subsample_size=10) as batch:
-                observe('obs', normal, data.index_select(0, batch), mu, sigma)
-        # This version manually iterates through the batch to deal with control flow.
-        >>> with iarange('data', 100, subsample_size=10) as batch:
-                for i in batch:
-                    if z[i]:  # Prevents vectorization.
-                        observe('obs_{}'.format(i), normal, data[i], mu, sigma)
-    """
-    if subsample_size == 0 or subsample_size >= size:
-        subsample_size = size
-    if subsample_size == size:
-        # If not subsampling, there is no need to scale and we can ignore the _PYRO_STACK.
-        yield Variable(torch.LongTensor(list(range(size))))
-        return
+        # This version simply declares independence:
+        >>> with iarange('data'):
+                observe('obs', normal, data, mu, sigma)
 
-    subsample = sample(name, _Subsample(size, subsample_size))
+        # This version subsamples data in vectorized way:
+        >>> with iarange('data', 100, subsample_size=10) as ind:
+                observe('obs', normal, data.index_select(0, ind), mu, sigma)
+
+        # This wraps a user-defined subsampling method for use in pyro:
+        >>> ind = my_custom_subsample
+        >>> with iarange('data', 100, subsample=ind):
+                observe('obs', normal, data.index_select(0, ind), mu, sigma)
+    """
+    if size is None:
+        # Case: with iarange("name"): ...
+        assert subsample_size is None
+        assert subsample is None
+        size = 1
+        subsample_size = 1
+    elif subsample is not None:
+        # Case: with iarange("name", size, subsample=...): ...
+        subsample_size = len(subsample)
+        assert subsample_size <= size, 'subsample is larger than size'
+    elif subsample_size is None or subsample_size >= size:
+        # Case: with iarange("name", size) as ind: ...
+        subsample_size = size
+        subsample = Variable(torch.LongTensor(list(range(size))))
+        if use_cuda:
+            subsample = subsample.cuda()
+    else:
+        # Case: with iarange("name", size, subsample_size) as ind: ...
+        subsample = sample(name, _Subsample(size, subsample_size, use_cuda))
+
     if len(_PYRO_STACK) == 0:
         yield subsample
     else:
@@ -190,9 +230,18 @@ def iarange(name, size, subsample_size=0):
             yield subsample
 
 
-def irange(name, size, subsample_size=0):
+def irange(name, size, subsample_size=None, subsample=None, use_cuda=False):
     """
-    Non-vectorized version of iarange.
+    Non-vectorized version of `iarange`. See `iarange` for details.
+
+    :param str name: A name that will be used for this site in a Trace.
+    :param int size: The size of the collection being subsampled (like `stop` in builtin `range`).
+    :param int subsample_size: Size of minibatches used in subsampling. Defaults to `size`.
+    :param subsample: Optional custom subsample for user-defined subsampling schemes.
+        If specified, then `subsample_size` will be set to `len(subsample)`.
+    :type subsample: Anything supporting `len()`.
+    :param bool use_cuda: Whether to use cuda tensors for `subsample` and `log_pdf`.
+    :return: A context manager yielding a single 1-dimensional `torch.Tensor` of indices.
 
     Examples::
 
@@ -200,15 +249,20 @@ def irange(name, size, subsample_size=0):
                 if z[i]:  # Prevents vectorization.
                     observe('obs_{}'.format(i), normal, data[i], mu, sigma)
     """
-    with iarange(name, size, subsample_size) as batch:
+    if subsample is not None:
+        subsample_size = len(subsample)
+
+    with iarange(name, size, subsample_size, subsample, use_cuda) as ind:
         # Wrap computation in an independence context.
         indep_context = LambdaPoutine(None, name, 1.0, 'list', 0, subsample_size)
-        for i in batch.data:
+        if isinstance(ind, Variable):
+            ind = ind.data
+        for i in ind:
             with indep_context:
                 yield i
 
 
-def map_data(name, data, fn, batch_size=0, batch_dim=0):
+def map_data(name, data, fn, batch_size=None, batch_dim=0, use_cuda=False):
     """
     Data subsampling with the important property that all the data are conditionally independent.
 
@@ -220,15 +274,17 @@ def map_data(name, data, fn, batch_size=0, batch_dim=0):
     :param callable fn: a function taking `(index, datum)` pairs, where `dataum = data[index]`
     :param int batch_size: number of samples per batch, or zero for the entire dataset
     :param int batch_dim: dimension to subsample for tensor inputs
+    :param bool use_cuda: Whether to use cuda tensors for `subsample` and `log_pdf`.
     :return: a list of values returned by `fn`
     """
+    use_cuda = use_cuda or getattr(data, 'is_cuda', False)
     if isinstance(data, (torch.Tensor, Variable)):
         size = data.size(batch_dim)
-        with iarange(name, size, batch_size) as batch:
+        with iarange(name, size, batch_size, use_cuda=use_cuda) as batch:
             return fn(batch, data.index_select(batch_dim, batch))
     else:
         size = len(data)
-        return [fn(i, data[i]) for i in irange(name, size, batch_size)]
+        return [fn(i, data[i]) for i in irange(name, size, batch_size, use_cuda=use_cuda)]
 
 
 # XXX this should have the same call signature as torch.Tensor constructors
@@ -260,7 +316,7 @@ def param(name, *args, **kwargs):
         return out_msg["value"]
 
 
-def module(pyro_name, nn_obj, tags="default", load_from_param_store=False):
+def module(pyro_name, nn_obj, tags="default", update_module_params=False):
     """
     :param pyro_name: name of module
     :type pyro_name: str
@@ -268,8 +324,9 @@ def module(pyro_name, nn_obj, tags="default", load_from_param_store=False):
     :type nn_obj: torch.nn.Module
     :param tags: optional; tags to associate with any parameters inside the module
     :type tags: string or iterable of strings
-    :param load_from_param_store: whether to overwrite parameters in the pytorch module with the values found
-        in the paramstore
+    :param update_module_params: flag to determine whether to overwrite parameters
+                                 in the pytorch module with the values found in the
+                                 paramstore. Defaults to `True`
     :type load_from_param_store: bool
     :returns: torch.nn.Module
 
@@ -285,29 +342,32 @@ def module(pyro_name, nn_obj, tags="default", load_from_param_store=False):
         raise NotImplementedError("pyro.module does not support class constructors for " +
                                   "the argument nn_obj")
 
-    # basically get a unique identifier for the data based on where it is in memory
-    def _cdata(t):
-        if isinstance(t, torch.autograd.Variable):
-            return t.data._cdata
-        else:
-            return t._cdata
-
-    # copy in place; supports both Variable and Tensor args
-    def _copy_in_place(source, target):
-        t = target.data if isinstance(target, torch.autograd.Variable) else target
-        s = source.data if isinstance(source, torch.autograd.Variable) else source
-        t.copy_(s)
+    target_state_dict = OrderedDict()
 
     for param_name, param in nn_obj.named_parameters():
         # register the parameter in the module with pyro
         # this only does something substantive if the parameter hasn't been seen before
         full_param_name = param_with_module_name(pyro_name, param_name)
         returned_param = pyro.param(full_param_name, param, tags=tags)
-        # optional: if the data behind the parameter in the actual module is stale w.r.t. the parameter
-        # registered with pyro then overwrite it with the paramstore copy
-        if load_from_param_store and _cdata(param) != _cdata(returned_param):
-            _copy_in_place(source=returned_param, target=param)
-            pyro.get_param_store().replace_param(full_param_name, new_param=param, old_param=returned_param)
+
+        if get_tensor_data(param)._cdata != get_tensor_data(returned_param)._cdata:
+            target_state_dict[param_name] = returned_param
+
+    if target_state_dict and update_module_params:
+        # WARNING: this is very dangerous. better method?
+        for name, param in nn_obj.named_parameters():
+            is_param = False
+            name_arr = name.rsplit('.', 1)
+            if len(name_arr) > 1:
+                mod_name, param_name = name_arr[0], name_arr[1]
+            else:
+                is_param = True
+                mod_name = name
+            if name in target_state_dict.keys():
+                if not is_param:
+                    deep_getattr(nn_obj, mod_name)._parameters[param_name] = target_state_dict[name]
+                else:
+                    nn_obj._parameters[mod_name] = target_state_dict[name]
 
     return nn_obj
 
@@ -323,5 +383,6 @@ def random_module(name, nn_module, prior, *args, **kwargs):
     """
     assert hasattr(nn_module, "parameters"), "Module is not a NN module."
     # register params in param store
-    lifted_fn = poutine.lift(pyro.module, prior, *args, **kwargs)
-    return lambda: lifted_fn(name, nn_module)
+    lifted_fn = poutine.lift(pyro.module, prior)
+    # update_module_params must be True or the lifted module will not update local params
+    return lambda: lifted_fn(name, nn_module, update_module_params=True, *args, **kwargs)

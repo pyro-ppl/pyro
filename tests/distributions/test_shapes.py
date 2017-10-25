@@ -37,7 +37,6 @@ def test_dirichlet_shape():
     assert d.sample().size() == d.shape()
 
 
-@pytest.mark.xfail(reason="https://github.com/uber/pyro/issues/278")
 def test_bernoulli_batch_log_pdf_shape():
     ps = ng_ones(3, 2)
     x = ng_ones(3, 2)
@@ -57,7 +56,6 @@ def test_categorical_batch_log_pdf_shape(one_hot):
     assert d.batch_log_pdf(x).size() == (3, 2, 1)
 
 
-@pytest.mark.xfail(reason="https://github.com/uber/pyro/issues/278")
 def test_diag_normal_batch_log_pdf_shape():
     mu = ng_zeros(3, 2)
     sigma = ng_ones(3, 2)

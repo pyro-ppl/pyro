@@ -69,8 +69,7 @@ class NormalNormalTests(TestCase):
                                    self.analytic_log_sig_n.data - 0.14 * torch.ones(2),
                                    requires_grad=True))
             sig_q = torch.exp(log_sig_q)
-            pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q, reparameterized=reparameterized,
-                        use_decaying_avg_baseline=True)
+            pyro.sample("mu_latent", dist.DiagNormal(mu_q, sig_q, reparameterized=reparameterized))
             pyro.map_data("aaa", self.data, lambda i, x: None,
                           batch_size=self.batch_size)
 
@@ -270,7 +269,7 @@ class BernoulliBetaTests(TestCase):
         self.data.append(Variable(torch.Tensor([1.0])))
         self.data.append(Variable(torch.Tensor([1.0])))
         self.n_data = len(self.data)
-        self.batch_size = 0
+        self.batch_size = None
         data_sum = self.data[0] + self.data[1] + self.data[2] + self.data[3]
         self.alpha_n = self.alpha0 + data_sum  # posterior alpha
         self.beta_n = self.beta0 - data_sum + \
@@ -296,7 +295,7 @@ class BernoulliBetaTests(TestCase):
             beta_q_log = pyro.param("beta_q_log",
                                     Variable(self.log_beta_n.data - 0.143, requires_grad=True))
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
-            pyro.sample("p_latent", dist.beta, alpha_q, beta_q, use_avg_decaying_baseline=True)
+            pyro.sample("p_latent", dist.beta, alpha_q, beta_q)
             pyro.map_data("aaa", self.data, lambda i, x: None, batch_size=self.batch_size)
 
         adam = optim.Adam({"lr": .001, "betas": (0.97, 0.999)})
@@ -362,7 +361,7 @@ class LogNormalNormalTests(TestCase):
             pyro.module("mymodule", pt_guide)
             mu_q, tau_q = torch.exp(pt_guide.mu_q_log), torch.exp(pt_guide.tau_q_log)
             sigma = torch.pow(tau_q, -0.5)
-            pyro.sample("mu_latent", dist.diagnormal, mu_q, sigma, reparameterized=reparameterized)
+            pyro.sample("mu_latent", dist.DiagNormal(mu_q, sigma, reparameterized=reparameterized))
 
         adam = optim.Adam({"lr": .0005, "betas": (0.96, 0.999)})
         svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
@@ -379,8 +378,8 @@ class LogNormalNormalTests(TestCase):
         pyro.clear_param_store()
 
         def model():
-            zero = Variable(torch.zeros(1, 1))
-            one = Variable(torch.ones(1, 1))
+            zero = Variable(torch.zeros(1))
+            one = Variable(torch.ones(1))
             mu_latent = pyro.sample("mu_latent", dist.diagnormal,
                                     self.mu0, torch.pow(self.tau0, -0.5))
             bijector = AffineExp(torch.pow(self.tau, -0.5), mu_latent)
