@@ -1,0 +1,71 @@
+BlockPoutine
+------------
+
+.. automodule:: pyro.poutine.block_poutine
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+ConditionPoutine
+----------------
+
+.. automodule:: pyro.poutine.condition_poutine
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+EscapePoutine
+-------------
+
+.. automodule:: pyro.poutine.escape_poutine
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+LambdaPoutine
+-------------
+
+.. automodule:: pyro.poutine.lambda_poutine
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+LiftPoutine
+-----------
+
+.. automodule:: pyro.poutine.lift_poutine
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+Poutine
+-------
+
+.. automodule:: pyro.poutine.poutine
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+ReplayPoutine
+-------------
+
+.. automodule:: pyro.poutine.replay_poutine
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+Trace
+-----
+
+.. automodule:: pyro.poutine.trace
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+TracePoutine
+------------
+
+.. automodule:: pyro.poutine.trace_poutine
+    :members:
+    :undoc-members:
+    :show-inheritance:
