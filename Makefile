@@ -27,6 +27,9 @@ integration-test: lint FORCE
 test-all: lint FORCE
 	pytest -vx -n auto
 
+test-cuda: lint FORCE
+	PYRO_TENSOR_TYPE=torch.cuda.DoubleTensor pytest -vx -n 8 --stage unit
+
 clean: FORCE
 	git clean -dfx -e pyro-egg.info
 

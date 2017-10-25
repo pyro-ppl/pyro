@@ -48,31 +48,31 @@ class TestCategorical(TestCase):
         log_px_torch = dist.categorical.batch_log_pdf(self.test_data_nhot,
                                                       self.ps,
                                                       one_hot=False).data[0]
-        log_px_np = float(sp.multinomial.logpmf(np.array([0, 0, 1]), 1, self.ps.data.numpy()))
+        log_px_np = float(sp.multinomial.logpmf(np.array([0, 0, 1]), 1, self.ps.data.cpu().numpy()))
         self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
 
     def test_mean_and_var(self):
-        torch_samples = [dist.categorical(self.ps, one_hot=False).data.numpy()
+        torch_samples = [dist.categorical(self.ps, one_hot=False).data.cpu().numpy()
                          for _ in range(self.n_samples)]
         _, counts = np.unique(torch_samples, return_counts=True)
         computed_mean = float(counts[0]) / self.n_samples
-        self.assertEqual(computed_mean, self.analytic_mean.data.numpy()[0], prec=0.05)
+        self.assertEqual(computed_mean, self.analytic_mean.data.cpu().numpy()[0], prec=0.05)
 
     def test_discrete_log_pdf(self):
         log_px_torch = dist.categorical.batch_log_pdf(self.d_test_data, self.d_ps, self.d_vs).data[0][0]
-        log_px_np = float(sp.multinomial.logpmf(np.array([1, 0, 0]), 1, self.d_ps[0].data.numpy()))
+        log_px_np = float(sp.multinomial.logpmf(np.array([1, 0, 0]), 1, self.d_ps[0].data.cpu().numpy()))
         log_px_torch2 = dist.categorical.batch_log_pdf(self.d_test_data, self.d_ps, self.d_vs).data[1][0]
-        log_px_np2 = float(sp.multinomial.logpmf(np.array([0, 0, 1]), 1, self.d_ps[1].data.numpy()))
+        log_px_np2 = float(sp.multinomial.logpmf(np.array([0, 0, 1]), 1, self.d_ps[1].data.cpu().numpy()))
         self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
         self.assertEqual(log_px_torch2, log_px_np2, prec=1e-4)
 
     def test_discrete_arr_logpdf(self):
         log_px_torch = dist.categorical.batch_log_pdf(self.d_v_test_data,
                                                       self.d_ps, self.d_vs_arr).data[0][0]
-        log_px_np = float(sp.multinomial.logpmf(np.array([1, 0, 0]), 1, self.d_ps[0].data.numpy()))
+        log_px_np = float(sp.multinomial.logpmf(np.array([1, 0, 0]), 1, self.d_ps[0].data.cpu().numpy()))
         log_px_torch2 = dist.categorical.batch_log_pdf(self.d_v_test_data,
                                                        self.d_ps, self.d_vs_arr).data[1][0]
-        log_px_np2 = float(sp.multinomial.logpmf(np.array([0, 0, 1]), 1, self.d_ps[1].data.numpy()))
+        log_px_np2 = float(sp.multinomial.logpmf(np.array([0, 0, 1]), 1, self.d_ps[1].data.cpu().numpy()))
         self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
         self.assertEqual(log_px_torch2, log_px_np2, prec=1e-4)
 

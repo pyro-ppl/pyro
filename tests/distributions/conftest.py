@@ -82,6 +82,7 @@ continuous_dists = [
                  'test_data': [[2.0, 2.0], [50.0, 50.0]]}
             ],
             scipy_arg_fn=lambda mu, sigma: ((), {"mean": np.array(mu), "cov": np.array(sigma) ** 2}),
+            prec=0.07,
             min_samples=50000),
     Fixture(pyro_dist=(dist.lognormal, LogNormal),
             scipy_dist=sp.lognorm,

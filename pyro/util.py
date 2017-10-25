@@ -141,7 +141,7 @@ def tensor_histogram(ps, vs):
         if isinstance(_v, Variable):
             _v = _v.data
         if isinstance(_v, torch.Tensor):
-            _v = _v.numpy()
+            _v = _v.cpu().numpy()
         np_vs.append(_v)
     # now form the histogram
     hist = dict()

@@ -59,7 +59,7 @@ class Cauchy(Distribution):
         """
         mu, gamma = self._sanitize_input(mu, gamma)
         assert mu.dim() == gamma.dim()
-        np_sample = spr.cauchy.rvs(mu.data.numpy(), gamma.data.numpy())
+        np_sample = spr.cauchy.rvs(mu.data.cpu().numpy(), gamma.data.cpu().numpy())
         if isinstance(np_sample, numbers.Number):
             np_sample = [np_sample]
         sample = Variable(torch.Tensor(np_sample).type_as(mu.data))
