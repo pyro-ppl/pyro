@@ -1,7 +1,8 @@
 <div align="center">
   <img width="150px" height="150px" src="docs/img/pyro_logo.png">
 </div>
------------------
+
+----------------------------------------------------------------
 
 [![Build Status](https://travis-ci.com/uber/pyro.svg?token=LrMxkQNuTGCmwphBqyVs&branch=dev)](https://travis-ci.com/uber/pyro)
 
