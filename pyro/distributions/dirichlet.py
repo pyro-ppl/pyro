@@ -16,53 +16,33 @@ class Dirichlet(Distribution):
     :param alpha:  *(real (0, Infinity))*
     """
 
-    def _sanitize_input(self, alpha):
-        if alpha is not None:
-            # stateless distribution
-            return alpha
-        if self.alpha is not None:
-            # stateful distribution
-            return self.alpha
-        raise ValueError("Parameter(s) were None")
-
-    def _expand_dims(self, x, alpha):
-        """
-        Expand to 2-dimensional tensors of the same shape.
-        """
-        if not isinstance(x, (torch.Tensor, Variable)):
-            raise TypeError('Expected x a Tensor or Variable, got a {}'.format(type(x)))
-        if not isinstance(alpha, Variable):
-            raise TypeError('Expected alpha a Variable, got a {}'.format(type(alpha)))
-        if x.dim() not in (1, 2):
-            raise ValueError('Expected x.dim() in (1,2), actual: {}'.format(x.dim()))
-        if alpha.dim() not in (1, 2):
-            raise ValueError('Expected alpha.dim() in (1,2), actual: {}'.format(alpha.dim()))
-        if x.size() != alpha.size():
-            alpha = alpha.expand_as(x)
-        return x, alpha
-
-    def __init__(self, alpha=None, batch_size=None, *args, **kwargs):
+    def __init__(self, alpha=None, batch_size=None):
         """
         :param alpha: A vector of concentration parameters.
         :type alpha: None or a torch.autograd.Variable of a torch.Tensor of dimension 1 or 2.
         :param int batch_size: DEPRECATED.
         """
-        if alpha is None:
-            self.alpha = None
-        else:
-            assert alpha.dim() in (1, 2)
-            self.alpha = alpha
-        super(Dirichlet, self).__init__(*args, **kwargs)
+        self.alpha = alpha
+        if alpha.dim() not in (1, 2):
+            raise ValueError("Parameter alpha must be either 1 or 2 dimensional.")
+        if alpha.dim() == 1 and batch_size is not None:
+            self.alpha = alpha.expand(batch_size, alpha.size(0))
+        super(Dirichlet, self).__init__()
 
-    def batch_shape(self, alpha=None):
-        alpha = self._sanitize_input(alpha)
-        return alpha.size()[:-1]
+    def batch_shape(self, x=None):
+        event_dim = 1
+        alpha = self.alpha
+        if x is not None and x.size() != alpha.size():
+            alpha = self.alpha.expand_as(x)
+        return alpha.size()[:-event_dim]
 
-    def event_shape(self, alpha=None):
-        alpha = self._sanitize_input(alpha)
-        return alpha.size()[-1:]
+    def event_shape(self):
+        return self.alpha.size()[-1:]
 
-    def sample(self, alpha=None):
+    def shape(self, x=None):
+        return self.batch_shape(x) + self.event_shape()
+
+    def sample(self):
         """
         Draws either a single sample (if alpha.dim() == 1), or one sample per param (if alpha.dim() == 2).
 
@@ -70,20 +50,17 @@ class Dirichlet(Distribution):
 
         :param torch.autograd.Variable alpha:
         """
-        alpha = self._sanitize_input(alpha)
-        if alpha.dim() not in (1, 2):
-            raise ValueError('Expected alpha.dim() in (1,2), actual: {}'.format(alpha.dim()))
-        alpha_np = alpha.data.cpu().numpy()
-        if alpha.dim() == 1:
+        alpha_np = self.alpha.data.cpu().numpy()
+        if self.alpha.dim() == 1:
             x_np = spr.dirichlet.rvs(alpha_np)[0]
         else:
             x_np = np.empty_like(alpha_np)
             for i in range(alpha_np.shape[0]):
                 x_np[i, :] = spr.dirichlet.rvs(alpha_np[i, :])[0]
-        x = Variable(type(alpha.data)(x_np))
+        x = Variable(type(self.alpha.data)(x_np))
         return x
 
-    def batch_log_pdf(self, x, alpha=None):
+    def batch_log_pdf(self, x):
         """
         Evaluates log probabity density over one or a batch of samples.
 
@@ -97,24 +74,20 @@ class Dirichlet(Distribution):
         :return: log probability densities of each element in the batch.
         :rtype: torch.autograd.Variable of torch.Tensor of dimension 1.
         """
-        alpha = self._sanitize_input(alpha)
-        x, alpha = self._expand_dims(x, alpha)
-        assert x.size() == alpha.size()
+        alpha = self.alpha.expand(self.shape(x))
         x_sum = torch.sum(torch.mul(alpha - 1, torch.log(x)), -1)
         beta = log_beta(alpha)
-        batch_log_pdf_shape = self.batch_shape(alpha) + (1,)
+        batch_log_pdf_shape = self.batch_shape(x) + (1,)
         return (x_sum - beta).contiguous().view(batch_log_pdf_shape)
 
-    def analytic_mean(self, alpha):
-        alpha = self._sanitize_input(alpha)
-        sum_alpha = torch.sum(alpha)
-        return alpha / sum_alpha
+    def analytic_mean(self):
+        sum_alpha = torch.sum(self.alpha)
+        return self.alpha / sum_alpha
 
-    def analytic_var(self, alpha):
+    def analytic_var(self):
         """
         :return: Analytic variance of the dirichlet distribution, with parameter alpha.
         :rtype: torch.autograd.Variable (Vector of the same size as alpha).
         """
-        alpha = self._sanitize_input(alpha)
-        sum_alpha = torch.sum(alpha)
-        return alpha * (sum_alpha - alpha) / (torch.pow(sum_alpha, 2) * (1 + sum_alpha))
+        sum_alpha = torch.sum(self.alpha)
+        return self.alpha * (sum_alpha - self.alpha) / (torch.pow(sum_alpha, 2) * (1 + sum_alpha))
