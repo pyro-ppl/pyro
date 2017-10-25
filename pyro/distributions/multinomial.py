@@ -3,7 +3,7 @@ import torch
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
-from pyro.distributions.util import log_gamma
+from pyro.distributions.util import log_gamma, torch_multinomial
 
 
 class Multinomial(Distribution):
@@ -63,7 +63,7 @@ class Multinomial(Distribution):
             n = int(n.data.cpu()[0][0])
         else:
             n = int(n.data.cpu()[0])
-        return Variable(torch.multinomial(ps.data, n, replacement=True))
+        return Variable(torch_multinomial(ps.data, n, replacement=True))
 
     def batch_log_pdf(self, x, ps=None, n=None):
         ps, n = self._sanitize_input(ps, n)

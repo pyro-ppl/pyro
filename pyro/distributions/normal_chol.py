@@ -64,6 +64,8 @@ class NormalChol(Distribution):
         mu, L = self._sanitize_input(mu, L)
         ll_1 = Variable(torch.Tensor([-0.5 * mu.size(0) * np.log(2.0 * np.pi)])
                         .type_as(mu.data))
+        if L.dim() > 2:
+            raise NotImplementedError("torch.diag() does not support tesors of dim > 2")
         ll_2 = -torch.sum(torch.log(torch.diag(L)))
         # torch.trtrs() does not support cuda tensors.
         x_chols = torch.trtrs((x - mu).unsqueeze(1).data.cpu(), L.data.cpu(), False)

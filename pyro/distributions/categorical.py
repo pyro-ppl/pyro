@@ -3,7 +3,7 @@ import torch
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
-from pyro.distributions.util import torch_zeros_like
+from pyro.distributions.util import torch_eye, torch_multinomial, torch_zeros_like
 
 
 class Categorical(Distribution):
@@ -77,7 +77,7 @@ class Categorical(Distribution):
         ps, vs, one_hot = self._sanitize_input(ps, vs, one_hot)
         vs = self._process_vs(vs)
         sample_size = ps.size()[:-1] + (1,)
-        sample = torch.multinomial(ps.data, 1, replacement=True).expand(*sample_size)
+        sample = torch_multinomial(ps.data, 1, replacement=True).expand(*sample_size)
         sample_one_hot = torch_zeros_like(ps.data).scatter_(-1, sample, 1)
 
         if vs is not None:
@@ -128,6 +128,8 @@ class Categorical(Distribution):
                 boolean_mask = x
             else:
                 boolean_mask = torch_zeros_like(ps.data).scatter_(-1, x.data.long(), 1)
+        if ps.is_cuda:
+            boolean_mask = boolean_mask.cuda()
         # apply log function to masked probability tensor
         batch_log_pdf = torch.log(ps.masked_select(boolean_mask.byte())).contiguous().view(*batch_pdf_size)
         if log_pdf_mask is not None:
@@ -169,7 +171,7 @@ class Categorical(Distribution):
             else:
                 return torch.transpose(vs, 0, -1).contiguous().view(*support_samples_size)
         if one_hot:
-            return Variable(torch.stack([t.expand_as(ps) for t in torch.eye(event_size)]))
+            return Variable(torch.stack([t.expand_as(ps) for t in torch_eye(event_size)]))
         else:
             return Variable(torch.stack([torch.LongTensor([t]).expand(*sample_size)
                                          for t in torch.arange(0, event_size).long()]))

@@ -15,7 +15,7 @@ import torch
 import torch.cuda
 from torch.autograd import Variable
 
-torch.set_default_tensor_type('torch.DoubleTensor')
+torch.set_default_tensor_type(os.environ.get('PYRO_TENSOR_TYPE', 'torch.DoubleTensor'))
 
 """
 Contains test utilities for assertions, approximate comparison (of tensors and other objects).
@@ -72,17 +72,21 @@ def to_gpu(obj, type_map={}):
 
 
 @contextlib.contextmanager
-def cuda_tensors():
+def tensors_default_to(host):
     """
-    Context manager to temporarily use Cuda tensors in Pytorch.
+    Context manager to temporarily use Cpu or Cuda tensors in Pytorch.
+
+    :param str host: Either "cuda" or "cpu".
     """
-    module = torch.Tensor.__module__
+    assert host in ('cpu', 'cuda'), host
+    old_module = torch.Tensor.__module__
     name = torch.Tensor.__name__
-    torch.set_default_tensor_type('torch.cuda.{}'.format(name))
+    new_module = 'torch.cuda' if host == 'cuda' else 'torch'
+    torch.set_default_tensor_type('{}.{}'.format(new_module, name))
     try:
         yield
     finally:
-        torch.set_default_tensor_type('{}.{}'.format(module, name))
+        torch.set_default_tensor_type('{}.{}'.format(old_module, name))
 
 
 @contextlib.contextmanager
