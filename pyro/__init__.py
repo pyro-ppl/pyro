@@ -217,8 +217,9 @@ def iarange(name, size=None, subsample_size=None, subsample=None, use_cuda=False
     if subsample_size is None:
         subsample_size = len(subsample)
     elif subsample_size != len(subsample):
-        raise ValueError("subsample_size does not match len(subsample), {} vs {}".format(
-            subsample_size, len(subsample)))
+        raise ValueError("subsample_size does not match len(subsample), {} vs {}.".format(
+            subsample_size, len(subsample)) +
+            " Did you accidentally use different subsample_size in the model and guide?")
 
     if len(_PYRO_STACK) == 0:
         yield subsample
