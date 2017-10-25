@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 import torch
 
+from pyro.distributions import RandomPrimitive
 from pyro.util import ng_ones, ng_zeros
 from tests.common import assert_equal, xfail_if_not_implemented
 
@@ -33,6 +34,8 @@ def test_batch_log_pdf(dist):
 
 
 def test_shape(dist):
+    if isinstance(dist.pyro_dist, RandomPrimitive):
+        pytest.skip('FIXME: https://github.com/uber/pyro/issues/323')
     d = dist.pyro_dist
     dist_params = dist.get_dist_params(SINGLE_TEST_DATUM_IDX)
     with xfail_if_not_implemented():
@@ -47,6 +50,10 @@ def test_sample_shape(dist):
         x_obj = dist.pyro_dist_obj(**dist_params).sample()
         assert_equal(x_obj.size(), x_func.size())
         with xfail_if_not_implemented():
+            # TODO remove once #323 is resolved
+            if dist.get_test_distribution_name() == 'Bernoulli':
+                assert(x_func.size() == d.shape(x_func, **dist_params))
+                return
             assert x_func.size() == d.shape(**dist_params)
 
 
@@ -59,7 +66,7 @@ def test_batch_log_pdf_shape(dist):
         x = dist.get_test_data(idx)
         with xfail_if_not_implemented():
             # Get batch pdf shape after broadcasting.
-            expected_shape = get_batch_pdf_shape(d, x, dist_params)
+            expected_shape = get_batch_pdf_shape(dist, x, dist_params)
             log_p_func = d.batch_log_pdf(x, **dist_params)
             log_p_obj = dist.pyro_dist_obj(**dist_params).batch_log_pdf(x)
             # assert that the functional and object forms return
@@ -76,7 +83,7 @@ def test_batch_log_pdf_mask(dist):
         dist_params = dist.get_dist_params(idx)
         x = dist.get_test_data(idx)
         with xfail_if_not_implemented():
-            batch_pdf_shape = get_batch_pdf_shape(d, x, dist_params)
+            batch_pdf_shape = get_batch_pdf_shape(dist, x, dist_params)
             zeros_mask = ng_zeros(batch_pdf_shape)
             ones_mask = ng_ones(batch_pdf_shape)
             half_mask = ng_ones(batch_pdf_shape) * 0.5
@@ -118,11 +125,15 @@ def test_support(discrete_dist):
 
 
 def get_batch_pdf_shape(dist, data, dist_params):
+    d = dist.pyro_dist
     broadcasted_params = {}
+    # TODO remove once https://github.com/uber/pyro/issues/323 is resolved
+    if isinstance(dist.pyro_dist, RandomPrimitive):
+        return d.batch_shape(data, **dist_params) + (1,)
     for p in dist_params:
         if dist_params[p].dim() < data.dim():
             broadcasted_params[p] = dist_params[p].expand_as(data)
         else:
             broadcasted_params[p] = dist_params[p]
     with xfail_if_not_implemented():
-        return dist.batch_shape(**broadcasted_params) + (1,)
+        return d.batch_shape(**broadcasted_params) + (1,)
