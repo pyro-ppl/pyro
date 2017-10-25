@@ -15,7 +15,7 @@ format: FORCE
 	yapf -i -p *.py pyro/*.py pyro/*/*.py
 	isort -i *.py pyro/*.py pyro/*/*.py
 
-test: lint FORCE
+test: lint docs FORCE
 	pytest -vx -n auto --stage unit
 
 test-examples: lint FORCE

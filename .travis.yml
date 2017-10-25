@@ -39,7 +39,7 @@ jobs:
               - pip install -r docs/requirements.txt
           script:
               - make lint
-            # - make docs
+              - make docs
         - stage: unit test
           python: 2.7
           env: STAGE=unit
