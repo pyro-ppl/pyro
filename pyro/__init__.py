@@ -262,7 +262,7 @@ def irange(name, size, subsample_size=None, subsample=None, use_cuda=False):
                 yield i
 
 
-def map_data(name, data, fn, batch_size=0, batch_dim=0, use_cuda=False):
+def map_data(name, data, fn, batch_size=None, batch_dim=0, use_cuda=False):
     """
     Data subsampling with the important property that all the data are conditionally independent.
 
