@@ -68,7 +68,7 @@ nosetests.xml
 coverage.xml
 *,cover
 .hypothesis/
-paramstore.unittest.out
+*.out
 adam.unittest.save
 
 # Translations
