@@ -1,4 +1,8 @@
-# Pyro
+<div align="center">
+  <img src="docs/img/pyro_logo.png"><br><br>
+</div>
+
+-----------------
 
 [![Build Status](https://travis-ci.com/uber/pyro.svg?token=LrMxkQNuTGCmwphBqyVs&branch=dev)](https://travis-ci.com/uber/pyro)
 
@@ -8,12 +12,14 @@ Bayesian Inference for Pytorch
 
 ## Installation
 
-First install [pytorch](http://pytorch.org/). For example, using [conda](https://conda.io/docs/install/quick.html):
+First install [Pytorch](http://pytorch.org/).
+
+Install via pip:
 ```sh
-conda install pytorch torchvision -c soumith
+pip install pyroppl
 ```
 
-Next install Pyro from source:
+Install from source:
 ```sh
 git clone git@github.com:uber/pyro.git
 cd pyro
