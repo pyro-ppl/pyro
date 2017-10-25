@@ -34,13 +34,13 @@ jobs:
     include:
         - stage: lint/docs
           python: 2.7
-          before_install:
-              - pip install flake8
           script:
-              - pip install -r docs/requirements.txt
+              - pip install flake8
               - make lint
         - python: 2.7
-          script: make docs
+          script: 
+              - pip install -r docs/requirements.txt
+              - make docs
         - stage: unit test
           python: 2.7
           env: STAGE=unit
