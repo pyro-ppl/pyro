@@ -22,7 +22,7 @@ class Bernoulli(Distribution):
         if ps.dim() == 1 and batch_size is not None:
             self.ps = ps.expand(batch_size, ps.size(0))
             if log_pdf_mask is not None and log_pdf_mask.dim() == 1:
-                self.log_pdf_mask = log_pdf_mask.expand(batch_size, ps.size(0))
+                self.log_pdf_mask = log_pdf_mask.expand(batch_size, log_pdf_mask.size(0))
         super(Bernoulli, self).__init__(*args, **kwargs)
 
     def batch_shape(self, x=None):
