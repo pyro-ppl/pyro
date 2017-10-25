@@ -73,6 +73,7 @@ class Decoder(nn.Module):
         # each is of length 784
         return likelihood_params[:, :, 0], torch.exp(likelihood_params[:, :, 1])
 
+
 # choose the latent dimension and number of hidden units to use
 z_dim = 20
 hidden_dim = 200
@@ -119,6 +120,7 @@ def model_sample():
     img_mu, img_sigma = decoder.forward(z)
     # return the mean vector img_mu
     return img_mu
+
 
 # setup the optimizer
 adam = Adam({"lr": 0.0001})
