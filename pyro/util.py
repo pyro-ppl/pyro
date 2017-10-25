@@ -324,7 +324,8 @@ def save_visualization(trace, graph_output):
     -- observation nodes are green
     """
     g = graphviz.Digraph()
-    for label, node in trace.nodes:
+
+    for label in trace.nodes:
         shape = 'ellipse'
         if label in trace.stochastic_nodes and label not in trace.reparameterized_nodes:
             fillcolor = 'salmon'
@@ -333,10 +334,11 @@ def save_visualization(trace, graph_output):
         elif label in trace.observation_nodes:
             fillcolor = 'darkolivegreen3'
         else:
-            fillcolor = 'grey'
+            # only visualize RVs
+            continue
         g.node(label, label=label, shape=shape, style='filled', fillcolor=fillcolor)
 
-    for label1, label2 in trace.G.edges():
+    for label1, label2 in trace.edges:
         g.edge(label1, label2)
 
     g.render(graph_output, view=False, cleanup=True)
