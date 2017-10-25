@@ -1,8 +1,7 @@
 import argparse
-import numpy as np
 import torch
-import torch.nn as nn
 from torch.autograd import Variable
+import torch.nn as nn
 import torchvision.datasets as dset
 import torchvision.transforms as transforms
 import visdom
@@ -74,91 +73,114 @@ class Decoder(nn.Module):
         return likelihood_params[:, :, 0], torch.exp(likelihood_params[:, :, 1])
 
 
-# choose the latent dimension and number of hidden units to use
-z_dim = 20
-hidden_dim = 200
+# define a PyTorch module for the VAE
+class VAE(nn.Module):
+    # by default our latent space is 20-dimensional and we use 200 hidden units
+    def __init__(self, z_dim=20, hidden_dim=200, use_cuda=False):
+        super(VAE, self).__init__()
+        # create the encoder and decoder networks
+        self.encoder = Encoder(z_dim, hidden_dim)
+        self.decoder = Decoder(z_dim, hidden_dim)
 
-# create the encoder and decoder networks
-encoder = Encoder(z_dim, hidden_dim)
-decoder = Decoder(z_dim, hidden_dim)
+        if use_cuda:
+            self.cuda()
+        self.use_cuda = use_cuda
+        self.z_dim = z_dim
 
+    # define the model p(x|z)p(z)
+    def model(self, data):
+        # register PyTorch module `decoder` with Pyro
+        pyro.module("decoder", self.decoder)
 
-def model(data):
-    # register PyTorch module with Pyro
-    pyro.module("decoder", decoder)
+        # setup hyperparameters for prior p(z)
+        z_mu = ng_zeros([data.size(0), self.z_dim], type_as=data.data)
+        z_sigma = ng_ones([data.size(0), self.z_dim], type_as=data.data)
+        # sample from prior (value will be sampled by guide when computing the ELBO)
+        z = pyro.sample("latent", DiagNormal(z_mu, z_sigma))
 
-    # setup hyperparameters for prior p(z)
-    z_mu, z_sigma = ng_zeros([data.size(0), z_dim]), ng_ones([data.size(0), z_dim])
-    # sample from prior (value will be sampled by guide in computing the ELBO)
-    z = pyro.sample("latent", DiagNormal(z_mu, z_sigma))
+        # decode z
+        img_mu, img_sigma = self.decoder(z)
+        # score against actual images
+        pyro.observe("obs", DiagNormal(img_mu, img_sigma), data.view(-1, 784))
 
-    # decode z
-    img_mu, img_sigma = decoder(z)
-    # score against actual images
-    pyro.observe("obs", DiagNormal(img_mu, img_sigma), data.view(-1, 784))
+    # define the guide (i.e. variational distribution) q(z|x)
+    def guide(self, data):
+        # register PyTorch module `encoder` with Pyro
+        pyro.module("encoder", self.encoder)
+        # use the encoder to get the parameters used to define q(z|x)
+        z_mu, z_sigma = self.encoder(data)
+        # sample the latent code z
+        pyro.sample("latent", DiagNormal(z_mu, z_sigma))
 
+    # define a helper to sample from generative model
+    def model_sample(self):
+        # register PyTorch module `decoder` with Pyro
+        pyro.module("decoder", self.decoder)
 
-def guide(data):
-    # register PyTorch module with Pyro
-    pyro.module("encoder", encoder)
-    # use the encoder to get the parameters used to define q(z|x)
-    z_mu, z_sigma = encoder(data)
-    # sample the latent code z
-    pyro.sample("latent", DiagNormal(z_mu, z_sigma))
+        # setup hyperparameters for prior p(z)
+        z_mu, z_sigma = ng_zeros([1, self.z_dim]), ng_ones([1, self.z_dim])
+        if self.use_cuda:
+            z_mu, z_sigma = z_mu.cuda(), z_sigma.cuda()
+        # sample from prior (value will be sampled by guide in computing the ELBO)
+        z = pyro.sample("latent", DiagNormal(z_mu, z_sigma))
 
-
-def model_sample():
-    # register PyTorch module with Pyro
-    pyro.module("decoder", decoder)
-
-    # setup hyperparameters for prior p(z)
-    z_mu, z_sigma = ng_zeros([1, z_dim]), ng_ones([1, z_dim])
-    # sample from prior (value will be sampled by guide in computing the ELBO)
-    z = pyro.sample("latent", DiagNormal(z_mu, z_sigma))
-
-    # decode z
-    img_mu, img_sigma = decoder.forward(z)
-    # return the mean vector img_mu
-    return img_mu
-
-
-# setup the optimizer
-adam = Adam({"lr": 0.0001})
-
-# setup the inference algorithm
-svi = SVI(model, guide, adam, loss="ELBO")
-
-# num_steps = 1
-mnist_data = Variable(train_loader.dataset.train_data.float() / 255.)
-mnist_size = mnist_data.size(0)
-batch_size = 256
-
-# TODO: batches not necessary
-all_batches = np.arange(0, mnist_size, batch_size)
-
-if all_batches[-1] != mnist_size:
-    all_batches = list(all_batches) + [mnist_size]
-
-vis = visdom.Visdom()
+        # decode z
+        img_mu, img_sigma = self.decoder(z)
+        # return the mean vector img_mu
+        return img_mu
 
 
 def main():
+    # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', nargs='?', default=1000, type=int)
+    parser.add_argument('-n', '--num-epochs', default=1000, type=int, help='number of training epochs')
+    parser.add_argument('-tf', '--test-frequency', default=3, type=int, help='how often we evaluate the test set')
+    parser.add_argument('--cuda', action='store_true', default=False, help='whether to use cuda')
     args = parser.parse_args()
-    for i in range(args.num_epochs):
+
+    # setup the VAE
+    vae = VAE(use_cuda=args.cuda)
+
+    # setup the optimizer
+    optimizer = Adam({"lr": 0.0001})
+
+    # setup the inference algorithm
+    svi = SVI(vae.model, vae.guide, optimizer, loss="ELBO")
+
+    # setup visdom for visualization
+    vis = visdom.Visdom()
+
+    # training loop
+    for epoch in range(args.num_epochs):
+        # initialize loss accumulator
         epoch_loss = 0.
-        for ix, batch_start in enumerate(all_batches[:-1]):
-            batch_end = all_batches[ix + 1]
+        # do a training epoch
+        for _, (x, _) in enumerate(train_loader):
+            if args.cuda:
+                x = x.cuda()
+            x = Variable(x.view(-1, 784))
+            # do ELBO gradient and accumulate loss
+            epoch_loss += svi.step(x)
 
-            # get batch
-            batch_data = mnist_data[batch_start:batch_end]
-            epoch_loss += svi.step(batch_data)
+        # report training diagnostics
+        print("[epoch %03d]  average training loss: %.4f" % (epoch, epoch_loss / len(train_loader.dataset)))
 
-            sample = model_sample()
-        vis.image(batch_data[0].contiguous().view(28, 28).data.numpy())
-        vis.image(sample[0].contiguous().view(28, 28).data.numpy())
-        print("epoch avg loss {}".format(epoch_loss / float(mnist_size)))
+        if epoch % args.test_frequency == 0:
+            # initialize loss accumulator
+            test_loss = 0.
+            # compute the loss over the entire test set
+            for _, (x, _) in enumerate(test_loader):
+                if args.cuda:
+                    x = x.cuda()
+                x = Variable(x.view(-1, 784))
+                # do ELBO gradient and accumulate loss
+                test_loss += svi.evaluate_loss(x)
+            # sample an image and visualize
+            sample = vae.model_sample()
+            vis.image(sample[0].contiguous().view(28, 28).data.cpu().numpy())
+
+            # report test diagnostics
+            print("[epoch %03d]  average test loss: %.4f" % (epoch, test_loss / len(test_loader.dataset)))
 
 
 if __name__ == '__main__':
