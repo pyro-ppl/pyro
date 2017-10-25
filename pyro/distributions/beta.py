@@ -16,7 +16,7 @@ class Beta(Distribution):
     Univariate beta distribution parameterized by alpha and beta
     """
 
-    def __init__(self, alpha=None, beta=None, batch_size=None):
+    def __init__(self, alpha=None, beta=None, batch_size=None, *args, **kwargs):
         """
         Params:
           `alpha` - alpha
@@ -25,11 +25,12 @@ class Beta(Distribution):
         self.alpha = alpha
         self.beta = beta
         if alpha.size() != beta.size():
-            raise ValueError("Alpha and beta need to have the same size.")
+            raise ValueError("Expected alpha.size() == beta.size(), but got {} vs {}"
+                             .format(alpha.size(), beta.size()))
         if alpha.dim() == 1 and beta.dim() == 1 and batch_size is not None:
             self.alpha = alpha.expand(batch_size, alpha.size(0))
             self.beta = beta.expand(batch_size, beta.size(0))
-        super(Beta, self).__init__()
+        super(Beta, self).__init__(*args, **kwargs)
 
     def batch_shape(self, x=None):
         event_dim = 1

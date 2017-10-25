@@ -13,7 +13,7 @@ class Bernoulli(Distribution):
     """
     enumerable = True
 
-    def __init__(self, ps=None, batch_size=None, log_pdf_mask=None):
+    def __init__(self, ps=None, batch_size=None, log_pdf_mask=None, *args, **kwargs):
         """
         :param ps: tensor of probabilities
         """
@@ -23,7 +23,7 @@ class Bernoulli(Distribution):
             self.ps = ps.expand(batch_size, ps.size(0))
             if log_pdf_mask is not None and log_pdf_mask.dim() == 1:
                 self.log_pdf_mask = log_pdf_mask.expand(batch_size, ps.size(0))
-        super(Bernoulli, self).__init__()
+        super(Bernoulli, self).__init__(*args, **kwargs)
 
     def batch_shape(self, x=None):
         event_dim = 1

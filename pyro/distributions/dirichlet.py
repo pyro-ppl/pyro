@@ -16,7 +16,7 @@ class Dirichlet(Distribution):
     :param alpha:  *(real (0, Infinity))*
     """
 
-    def __init__(self, alpha=None, batch_size=None):
+    def __init__(self, alpha=None, batch_size=None, *args, **kwargs):
         """
         :param alpha: A vector of concentration parameters.
         :type alpha: None or a torch.autograd.Variable of a torch.Tensor of dimension 1 or 2.
@@ -27,7 +27,7 @@ class Dirichlet(Distribution):
             raise ValueError("Parameter alpha must be either 1 or 2 dimensional.")
         if alpha.dim() == 1 and batch_size is not None:
             self.alpha = alpha.expand(batch_size, alpha.size(0))
-        super(Dirichlet, self).__init__()
+        super(Dirichlet, self).__init__(*args, **kwargs)
 
     def batch_shape(self, x=None):
         event_dim = 1

@@ -16,7 +16,7 @@ class HalfCauchy(Distribution):
     Continuous distribution with a positive domain (x > mu).
     """
 
-    def __init__(self, mu=None, gamma=None, batch_size=None):
+    def __init__(self, mu=None, gamma=None, batch_size=None, *args, **kwargs):
         """
         Params:
           `mu` - mean
@@ -25,11 +25,12 @@ class HalfCauchy(Distribution):
         self.mu = mu
         self.gamma = gamma
         if mu.size() != gamma.size():
-            raise ValueError("Alpha and beta need to have the same size.")
+            raise ValueError("Expected alpha.size() == beta.size(), but got {} vs {}"
+                             .format(mu.size(), gamma.size()))
         if mu.dim() == 1 and batch_size is not None:
             self.mu = mu.expand(batch_size, mu.size(0))
             self.gamma = gamma.expand(batch_size, gamma.size(0))
-        super(HalfCauchy, self).__init__()
+        super(HalfCauchy, self).__init__(*args, **kwargs)
 
     def batch_shape(self, x=None):
         event_dim = 1
