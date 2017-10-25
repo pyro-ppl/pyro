@@ -32,17 +32,16 @@ branches:
 jobs:
     fast_finish: true
     include:
-        - stage: lint/docs
+        - stage: lint
           python: 2.7
-          script:
-              - pip install flake8
-              - make lint
-        - python: 2.7
+          before_install: pip install flake8
+          script: make lint
+        - stage: unit test
+          python: 2.7
           script: 
               - pip install -r docs/requirements.txt
               - make docs
-        - stage: unit test
-          python: 2.7
+        - python: 2.7
           env: STAGE=unit
           script: pytest -vs --cov=pyro --stage unit
         - python: 2.7
