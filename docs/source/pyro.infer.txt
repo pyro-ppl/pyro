@@ -30,18 +30,3 @@ Search
     :undoc-members:
     :show-inheritance:
 
-Trace_ELBO
-----------
-
-.. automodule:: pyro.infer.trace_elbo
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-TraceGraph_ELBO
----------------
-
-.. automodule:: pyro.infer.tracegraph_elbo
-    :members:
-    :undoc-members:
-    :show-inheritance:

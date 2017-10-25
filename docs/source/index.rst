@@ -21,7 +21,7 @@ Pyro Documentation
    parameters
    nn
    optimization
-   poutine
+   advanced
 
 
 Indices and tables
