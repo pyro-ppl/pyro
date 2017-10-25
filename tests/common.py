@@ -235,35 +235,3 @@ class TestCase(unittest.TestCase):
 
     def assertNotEqual(self, x, y, prec=None, message=''):
         assert_not_equal(x, y, prec, message)
-
-    def assertObjectIn(self, obj, iterable):
-        for elem in iterable:
-            if id(obj) == id(elem):
-                return
-        raise AssertionError("object not found in iterable")
-
-    if sys.version_info < (3, 2):
-        # assertRaisesRegexp renamed assertRaisesRegex in 3.2
-        assertRaisesRegex = unittest.TestCase.assertRaisesRegexp
-
-
-def download_file(url, path, binary=True):
-    if sys.version_info < (3,):
-        import urllib2
-        request = urllib2
-        error = urllib2
-    else:
-        import urllib.request
-        import urllib.error
-        request = urllib.request
-        error = urllib.error
-
-    if os.path.exists(path):
-        return True
-    try:
-        data = request.urlopen(url, timeout=15).read()
-        with open(path, 'wb' if binary else 'w') as f:
-            f.write(data)
-        return True
-    except error.URLError:
-        return False
