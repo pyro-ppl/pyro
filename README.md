@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/img/pyro_logo.png" width: 50%; height: 50%"><br><br>
+  <img width="150px" height="150px" src="docs/img/pyro_logo.png"><br><br>
 </div>
 
 -----------------
