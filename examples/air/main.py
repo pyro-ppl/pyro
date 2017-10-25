@@ -8,9 +8,11 @@ Processing Systems. 2016.
 """
 
 import os
+import sys
 import time
 import argparse
 from functools import partial
+from subprocess import check_call
 import numpy as np
 
 import torch
@@ -96,9 +98,10 @@ if args.seed is not None:
 # Load data.
 infile = './data/multi_mnist_train_uint8.npz'
 if not os.path.exists(infile):
-    print('Could not find the dataset at {}'.format(infile))
-    print('Run "python multi_mnist.py" to generate it.')
-    exit()
+    print('Running multi_mnist.py to generate dataset at {}...'.format(infile))
+    multi_mnist_py = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'multi_mnist.py')
+    check_call([sys.executable, multi_mnist_py])
+    print('Finished running multi_mnist.py.')
 X_np = np.load(infile)['x'].astype(np.float32)
 X_np /= 255.0
 X = Variable(torch.from_numpy(X_np))
