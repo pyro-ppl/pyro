@@ -4,16 +4,19 @@ from .tracegraph_elbo import TraceGraph_ELBO
 
 class ELBO(object):
     """
-    :param num_particles: the number of particles (samples) used to form the estimator.
+    :param num_particles: the number of particles (samples) used to form the ELBO estimator.
     :param trace_graph: boolean. whether to keep track of dependency information when running the
         model and guide. this information can be used to form a gradient estimator with lower variance
         in the case that some of the random variables are non-reparameterized.
         note: for a model with many random variables, keeping track of the dependency information
-        can be expensive.
-    :param bool enum_discrete: whether to sum over discrete latent variables, rather than sample them
+        can be expensive. see the tutorial `SVI Part III <http://pyro.ai/examples/svi_part_iii.html>`_
+        for a discussion.
+    :param bool enum_discrete: whether to sum over discrete latent variables, rather than sample them.
 
-    ELBO is the top-level interface for stochastic variational inference via optimization of the
-    evidence lower bound. ELBO dispatches to Trace_ELBO and TraceGraph_ELBO.
+    `ELBO` is the top-level interface for stochastic variational inference via optimization of the
+    evidence lower bound. Most users will not interact with `ELBO` directly; instead they will interact
+    with `SVI`. `ELBO` dispatches to `Trace_ELBO` and `TraceGraph_ELBO`, where the internal
+    implementations live.
 
     References
 
@@ -37,7 +40,9 @@ class ELBO(object):
 
     def loss(self, model, guide, *args, **kwargs):
         """
-        Evaluates the ELBO with an estimator that uses num_particles many samples/particles.
+        Evaluates the ELBO with an estimator that uses `num_particles` many samples/particles,
+        where `num_particles` is specified in the constructor.
+
         :returns: returns an estimate of the ELBO
         :rtype: float
         """
@@ -46,7 +51,9 @@ class ELBO(object):
     def loss_and_grads(self, model, guide, *args, **kwargs):
         """
         Computes the ELBO as well as the surrogate ELBO that is used to form the gradient estimator.
-        Performs backward on the latter. Num_particle many samples are used to form the estimators.
+        Performs backward on the latter. Num_particle many samples are used to form the estimators,
+        where `num_particles` is specified in the constructor.
+
         :returns: returns an estimate of the ELBO
         :rtype: float
         """
