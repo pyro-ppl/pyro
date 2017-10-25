@@ -269,7 +269,7 @@ class BernoulliBetaTests(TestCase):
         self.data.append(Variable(torch.Tensor([1.0])))
         self.data.append(Variable(torch.Tensor([1.0])))
         self.n_data = len(self.data)
-        self.batch_size = 0
+        self.batch_size = None
         data_sum = self.data[0] + self.data[1] + self.data[2] + self.data[3]
         self.alpha_n = self.alpha0 + data_sum  # posterior alpha
         self.beta_n = self.beta0 - data_sum + \

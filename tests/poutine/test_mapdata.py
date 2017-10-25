@@ -14,7 +14,7 @@ from tests.common import assert_equal, requires_cuda
 
 @pytest.mark.stage("integration", "integration_batch_1")
 @pytest.mark.init(rng_seed=161)
-@pytest.mark.parametrize("batch_size", [3, 5, 7, 8, 0])
+@pytest.mark.parametrize("batch_size", [3, 5, 7, 8, None])
 @pytest.mark.parametrize("map_type", ["tensor", "list"])
 def test_elbo_mapdata(batch_size, map_type):
     # normal-normal: known covariance
