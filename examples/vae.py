@@ -11,21 +11,22 @@ from pyro.util import ng_zeros, ng_ones
 from pyro.infer import SVI
 from pyro.optim import Adam
 
-# load MNIST dataset
-root = './data'
-download = True
-trans = transforms.Compose([transforms.ToTensor(),
-                            transforms.Normalize((0.5,), (1.0,))])
-train_set = dset.MNIST(root=root, train=True, transform=trans, download=download)
-test_set = dset.MNIST(root=root, train=False, transform=trans)
 
-# specify the mini-batch size
-batch_size = 128
-kwargs = {'num_workers': 1, 'pin_memory': True}
-train_loader = torch.utils.data.DataLoader(dataset=train_set, batch_size=batch_size,
-                                           shuffle=True, **kwargs)
-test_loader = torch.utils.data.DataLoader(dataset=test_set, batch_size=batch_size,
-                                          shuffle=False, **kwargs)
+# for loading and batching MNIST dataset
+def setup_data_loaders(batch_size=128, use_cuda=False):
+    root = './data'
+    download = True
+    trans = transforms.Compose([transforms.ToTensor(),
+                                transforms.Normalize((0.5,), (1.0,))])
+    train_set = dset.MNIST(root=root, train=True, transform=trans, download=download)
+    test_set = dset.MNIST(root=root, train=False, transform=trans)
+
+    kwargs = {'num_workers': 1, 'pin_memory': use_cuda}
+    train_loader = torch.utils.data.DataLoader(dataset=train_set, batch_size=batch_size,
+                                               shuffle=True, **kwargs)
+    test_loader = torch.utils.data.DataLoader(dataset=test_set, batch_size=batch_size,
+                                              shuffle=False, **kwargs)
+    return train_loader, test_loader
 
 
 # define the PyTorch module that parameterizes the
@@ -138,6 +139,9 @@ def main():
     parser.add_argument('--cuda', action='store_true', default=False, help='whether to use cuda')
     args = parser.parse_args()
 
+    # setup MNIST data loaders
+    train_loader, test_loader = setup_data_loaders(use_cuda=args.cuda)
+
     # setup the VAE
     vae = VAE(use_cuda=args.cuda)
 
@@ -156,7 +160,7 @@ def main():
         epoch_loss = 0.
         # do a training epoch
         for _, (x, _) in enumerate(train_loader):
-            # if on GPU, get mini-batch into CUDA memory
+            # if on GPU put mini-batches in CUDA memory
             if args.cuda:
                 x = x.cuda()
             # wrap the mini-batch in a PyTorch Variable
