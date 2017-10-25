@@ -149,8 +149,13 @@ class _Subsample(Distribution):
         :returns: a random subsample of `range(size)`
         :rtype: torch.autograd.Variable of torch.LongTensor
         """
-        assert 0 <= self.subsample_size <= self.size
-        result = Variable(torch.randperm(self.size)[:self.subsample_size])
+        subsample_size = self.subsample_size
+        if subsample_size is None or subsample_size > self.size:
+            subsample_size = self.size
+        if subsample_size == self.size:
+            result = Variable(torch.LongTensor(list(range(self.size))))
+        else:
+            result = Variable(torch.randperm(self.size)[:self.subsample_size])
         return result.cuda() if self.use_cuda else result
 
     def batch_log_pdf(self, x):
@@ -202,24 +207,18 @@ def iarange(name, size=None, subsample_size=None, subsample=None, use_cuda=False
                 observe('obs', normal, data.index_select(0, ind), mu, sigma)
     """
     if size is None:
-        # Case: with iarange("name"): ...
         assert subsample_size is None
         assert subsample is None
         size = 1
         subsample_size = 1
-    elif subsample is not None:
-        # Case: with iarange("name", size, subsample=...): ...
-        subsample_size = len(subsample)
-        assert subsample_size <= size, 'subsample is larger than size'
-    elif subsample_size is None or subsample_size >= size:
-        # Case: with iarange("name", size) as ind: ...
-        subsample_size = size
-        subsample = Variable(torch.LongTensor(list(range(size))))
-        if use_cuda:
-            subsample = subsample.cuda()
-    else:
-        # Case: with iarange("name", size, subsample_size) as ind: ...
+    elif subsample is None:
         subsample = sample(name, _Subsample(size, subsample_size, use_cuda))
+
+    if subsample_size is None:
+        subsample_size = len(subsample)
+    elif subsample_size != len(subsample):
+        raise ValueError("subsample_size does not match len(subsample), {} vs {}".format(
+            subsample_size, len(subsample)))
 
     if len(_PYRO_STACK) == 0:
         yield subsample
@@ -249,12 +248,9 @@ def irange(name, size, subsample_size=None, subsample=None, use_cuda=False):
                 if z[i]:  # Prevents vectorization.
                     observe('obs_{}'.format(i), normal, data[i], mu, sigma)
     """
-    if subsample is not None:
-        subsample_size = len(subsample)
-
     with iarange(name, size, subsample_size, subsample, use_cuda) as ind:
         # Wrap computation in an independence context.
-        indep_context = LambdaPoutine(None, name, 1.0, 'list', 0, subsample_size)
+        indep_context = LambdaPoutine(None, name, 1.0, 'list', 0, len(ind))
         if isinstance(ind, Variable):
             ind = ind.data
         for i in ind:

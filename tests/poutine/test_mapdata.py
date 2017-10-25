@@ -305,36 +305,29 @@ def test_cuda(model, subsample_size):
     assert tr.batch_log_pdf().is_cuda
 
 
+@pytest.mark.parametrize('model', [
+    iarange_model,
+    irange_model,
+    map_data_vector_model,
+    map_data_iter_model,
+], ids=['iarange', 'irange', 'map_data_vector', 'map_data_iter'])
 @pytest.mark.parametrize("behavior,model_size,guide_size", [
     ("error", 20, 5),
-    ("error", 20, None),
     ("error", 5, 20),
     ("error", 5, None),
     ("ok", 20, 20),
+    ("ok", 20, None),
     ("ok", 5, 5),
     ("ok", None, 20),
     ("ok", None, 5),
     ("ok", None, None),
 ])
-def test_model_guide_mismatch(behavior, model_size, guide_size):
-    p = Variable(torch.Tensor([0.5]))
-
-    def model():
-        with pyro.iarange("data", size=20, subsample_size=model_size) as ind:
-            pyro.sample("x", dist.bernoulli, p)
-            return ind
-
-    def guide():
-        with pyro.iarange("data", size=20, subsample_size=guide_size) as ind:
-            pyro.sample("x", dist.bernoulli, p)
-            return ind
-
+def test_model_guide_mismatch(behavior, model_size, guide_size, model):
+    model = poutine.trace(model)
+    expected_ind = model(guide_size)
     if behavior == "ok":
-        traced_guide = poutine.trace(guide)
-        expected_ind = traced_guide()
-        actual_ind = poutine.replay(model, traced_guide.trace)()
-        assert_equal(actual_ind, expected_ind)
+        actual_ind = poutine.replay(model, model.trace)(model_size)
+        assert actual_ind == expected_ind
     else:
         with pytest.raises(ValueError):
-            tr = poutine.trace(guide).get_trace()
-            poutine.replay(model, tr)()
+            poutine.replay(model, model.trace)(model_size)
