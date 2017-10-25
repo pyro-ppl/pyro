@@ -35,6 +35,7 @@ jobs:
         - stage: lint
           python: 2.7
           before_install: pip install flake8
+          install:
           script: make lint
         - stage: unit test
           python: 2.7
