@@ -118,18 +118,18 @@ class Categorical(Distribution):
             boolean_mask = torch.from_numpy((vs == x).astype(int))
         # probability tensor mask when data is pytorch tensor
         else:
+            x = x.cuda() if ps.is_cuda else x.cpu()
             batch_pdf_size = x.size()[:-1] + (1,)
             batch_ps_size = x.size()[:-1] + (ps.size()[-1],)
             ps = ps.expand(*batch_ps_size)
             if vs is not None:
                 vs = vs.expand(*batch_ps_size)
-                boolean_mask = vs == x
+                boolean_mask = (vs == x)
             elif one_hot:
                 boolean_mask = x
             else:
                 boolean_mask = torch_zeros_like(ps.data).scatter_(-1, x.data.long(), 1)
-        if ps.is_cuda:
-            boolean_mask = boolean_mask.cuda()
+        boolean_mask = boolean_mask.cuda() if ps.is_cuda else boolean_mask.cpu()
         # apply log function to masked probability tensor
         batch_log_pdf = torch.log(ps.masked_select(boolean_mask.byte())).contiguous().view(*batch_pdf_size)
         if log_pdf_mask is not None:

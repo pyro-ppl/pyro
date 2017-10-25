@@ -101,15 +101,10 @@ def torch_eye(n, m=None, out=None):
 
 def torch_multinomial(input, num_samples, replacement=False):
     """
-    Like `torch.multinomial()` but with full support for cuda tensors.
+    Like `torch.multinomial()` but works with cuda tensors.
     Does not support keyword argument `out`.
     """
-    try:
+    if input.is_cuda:
+        return torch_multinomial(input.cpu(), num_samples, replacement).cuda()
+    else:
         return torch.multinomial(input, num_samples, replacement)
-    except RuntimeError:
-        # Only catch errors due to oversized inputs on cuda.
-        if input.dim() <= 2:
-            raise
-    flat_input = input.view(-1, input.size()[-1])
-    flat_out = torch.multinomial(flat_input, num_samples, replacement)
-    return flat_out.view(input.size())
