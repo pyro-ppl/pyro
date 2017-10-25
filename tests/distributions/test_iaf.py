@@ -28,7 +28,7 @@ class InverseAutoregressiveFlowTests(TestCase):
                 epsilon_vector[0, j] = self.epsilon
                 iaf_x_eps = iaf(x + Variable(epsilon_vector))
                 delta = (iaf_x_eps - iaf_x) / self.epsilon
-                jacobian[j, k] = float(delta[0, k].data.numpy()[0])
+                jacobian[j, k] = float(delta[0, k].data.cpu().numpy()[0])
 
         permutation = iaf.get_arn().get_permutation()
         permuted_jacobian = jacobian.clone()
@@ -36,7 +36,7 @@ class InverseAutoregressiveFlowTests(TestCase):
             for k in range(input_dim):
                 permuted_jacobian[j, k] = jacobian[permutation[j], permutation[k]]
 
-        analytic_ldt = iaf.log_det_jacobian(iaf_x).data.numpy()[0]
+        analytic_ldt = iaf.log_det_jacobian(iaf_x).data.cpu().numpy()[0]
         numeric_ldt = torch.sum(torch.log(torch.diag(permuted_jacobian)))
         ldt_discrepancy = np.fabs(analytic_ldt - numeric_ldt)
 
@@ -71,7 +71,7 @@ class AutoRegressiveNNTests(TestCase):
                     epsilon_vector = torch.zeros(1, input_dim)
                     epsilon_vector[0, j] = self.epsilon
                     delta = (arn(x + Variable(epsilon_vector)) - arn(x)) / self.epsilon
-                    jacobian[j, k] = float(delta[0, k + output_index * input_dim].data.numpy()[0])
+                    jacobian[j, k] = float(delta[0, k + output_index * input_dim].data.cpu().numpy()[0])
 
             permutation = arn.get_permutation()
             permuted_jacobian = jacobian.clone()

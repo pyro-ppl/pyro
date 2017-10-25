@@ -4,10 +4,10 @@ from .poutine import Poutine
 class LambdaPoutine(Poutine):
     """
     This poutine has two functions:
-    (i)  handle score-rescaling
-    (ii) keep track of stack of nested map_datas at each sample/observe site
-         for the benefit of TraceGraphPoutine;
-         necessary information passed via map_data_stack in msg
+        (i)  handle score-rescaling
+        (ii) keep track of stack of nested map_datas at each sample/observe site
+             for the benefit of TraceGraphPoutine;
+             necessary information passed via map_data_stack in msg
     """
     def __init__(self, fn, name, scale, map_data_type, batch_dim, batch_size):
         """

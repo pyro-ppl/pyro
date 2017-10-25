@@ -1,7 +1,6 @@
 import contextlib
 import os
 import pytest
-import sys
 import unittest
 import numbers
 import warnings
@@ -15,7 +14,7 @@ import torch
 import torch.cuda
 from torch.autograd import Variable
 
-torch.set_default_tensor_type('torch.DoubleTensor')
+torch.set_default_tensor_type(os.environ.get('PYRO_TENSOR_TYPE', 'torch.DoubleTensor'))
 
 """
 Contains test utilities for assertions, approximate comparison (of tensors and other objects).
@@ -72,17 +71,21 @@ def to_gpu(obj, type_map={}):
 
 
 @contextlib.contextmanager
-def cuda_tensors():
+def tensors_default_to(host):
     """
-    Context manager to temporarily use Cuda tensors in Pytorch.
+    Context manager to temporarily use Cpu or Cuda tensors in Pytorch.
+
+    :param str host: Either "cuda" or "cpu".
     """
-    module = torch.Tensor.__module__
+    assert host in ('cpu', 'cuda'), host
+    old_module = torch.Tensor.__module__
     name = torch.Tensor.__name__
-    torch.set_default_tensor_type('torch.cuda.{}'.format(name))
+    new_module = 'torch.cuda' if host == 'cuda' else 'torch'
+    torch.set_default_tensor_type('{}.{}'.format(new_module, name))
     try:
         yield
     finally:
-        torch.set_default_tensor_type('{}.{}'.format(module, name))
+        torch.set_default_tensor_type('{}.{}'.format(old_module, name))
 
 
 @contextlib.contextmanager
@@ -231,35 +234,3 @@ class TestCase(unittest.TestCase):
 
     def assertNotEqual(self, x, y, prec=None, message=''):
         assert_not_equal(x, y, prec, message)
-
-    def assertObjectIn(self, obj, iterable):
-        for elem in iterable:
-            if id(obj) == id(elem):
-                return
-        raise AssertionError("object not found in iterable")
-
-    if sys.version_info < (3, 2):
-        # assertRaisesRegexp renamed assertRaisesRegex in 3.2
-        assertRaisesRegex = unittest.TestCase.assertRaisesRegexp
-
-
-def download_file(url, path, binary=True):
-    if sys.version_info < (3,):
-        import urllib2
-        request = urllib2
-        error = urllib2
-    else:
-        import urllib.request
-        import urllib.error
-        request = urllib.request
-        error = urllib.error
-
-    if os.path.exists(path):
-        return True
-    try:
-        data = request.urlopen(url, timeout=15).read()
-        with open(path, 'wb' if binary else 'w') as f:
-            f.write(data)
-        return True
-    except error.URLError:
-        return False

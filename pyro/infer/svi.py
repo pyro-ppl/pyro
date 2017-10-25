@@ -18,11 +18,11 @@ class SVI(object):
         """
         :param model: the model (callable containing pyro primitives)
         :param guide: the guide (callable containing pyro primitives)
-        :param optim: a pyro optim factory that returns pyro.optim.PyroOptim objects
+        :param optim: a pyro optim factory that returns `pyro.optim.PyroOptim` objects
         :param loss: this is either a string that specifies the loss function to be used (currently
             the only supported built-in loss is 'ELBO') or a user-provided loss function;
-            in the case this is a built-in loss loss_and_grads will be filled in accordingly
-        :param loss_and_grads: if specified, this user-provided callable computes gradients for use in step()
+            in the case this is a built-in loss `loss_and_grads` will be filled in accordingly
+        :param loss_and_grads: if specified, this user-provided callable computes gradients for use in `step()`
             and marks which parameters in the param store are to be optimized
         """
         self.model = model
@@ -84,7 +84,7 @@ class SVI(object):
         :returns: estimate of the loss
         :rtype:  float
 
-        Take a gradient step on the loss function (and auxiliary loss function if present in loss_and_grads).
+        Take a gradient step on the loss function (and auxiliary loss function if present in `loss_and_grads`).
         """
         # get loss and compute gradients
         loss = self.loss_and_grads(self.model, self.guide, *args, **kwargs)

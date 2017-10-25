@@ -1,9 +1,10 @@
 import numpy as np
+import numbers
+import scipy.stats as spr
 import torch
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
-from pyro.distributions.util import torch_zeros_like
 
 
 class Cauchy(Distribution):
@@ -42,42 +43,42 @@ class Cauchy(Distribution):
                 self.gamma = gamma.expand(batch_size, gamma.size(0))
         super(Cauchy, self).__init__(*args, **kwargs)
 
-    def batch_shape(self, mu=None, gamma=None, *args, **kwargs):
+    def batch_shape(self, mu=None, gamma=None):
         mu, gamma = self._sanitize_input(mu, gamma)
         event_dim = 1
         return mu.size()[:-event_dim]
 
-    def event_shape(self, mu=None, gamma=None, *args, **kwargs):
+    def event_shape(self, mu=None, gamma=None):
         mu, gamma = self._sanitize_input(mu, gamma)
         event_dim = 1
         return mu.size()[-event_dim:]
 
-    def sample(self, mu=None, gamma=None, *args, **kwargs):
+    def sample(self, mu=None, gamma=None):
         """
         Cauchy sampler.
         """
         mu, gamma = self._sanitize_input(mu, gamma)
         assert mu.dim() == gamma.dim()
-        mu_val, gamma_val = mu, gamma
-        if mu.dim() > 1:
-            # mu and gamma must be size 1 Variables
-            mu_val = mu.squeeze()
-            gamma_val = gamma.squeeze()
-        sample = Variable(torch_zeros_like(mu.data))
-        # FIXME: This just fills the entire tensor with the first value
-        # Refer to (https://github.com/uber/pyro/issues/302)
-        sample.data.cauchy_(mu_val.data[0], gamma_val.data[0])
+        np_sample = spr.cauchy.rvs(mu.data.cpu().numpy(), gamma.data.cpu().numpy())
+        if isinstance(np_sample, numbers.Number):
+            np_sample = [np_sample]
+        sample = Variable(torch.Tensor(np_sample).type_as(mu.data))
         return sample
 
-    def batch_log_pdf(self, x, mu=None, gamma=None, *args, **kwargs):
+    def batch_log_pdf(self, x, mu=None, gamma=None):
         """
         Cauchy log-likelihood
         """
         # expand to patch size of input
         mu, gamma = self._sanitize_input(mu, gamma)
+        if x.size() != mu.size():
+            mu = mu.expand_as(x)
+            gamma = gamma.expand_as(x)
         x_0 = torch.pow((x - mu)/gamma, 2)
         px = np.pi * gamma * (1 + x_0)
-        return -1 * torch.log(px)
+        log_pdf = -1 * torch.sum(torch.log(px), -1)
+        batch_log_pdf_shape = self.batch_shape(mu, gamma) + (1,)
+        return log_pdf.contiguous().view(batch_log_pdf_shape)
 
     def analytic_mean(self, mu=None, gamma=None):
         raise ValueError("Cauchy has no defined mean")

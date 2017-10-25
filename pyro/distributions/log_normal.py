@@ -41,17 +41,17 @@ class LogNormal(Distribution):
                 self.sigma = sigma.expand(batch_size, sigma.size(0))
         super(LogNormal, self).__init__(*args, **kwargs)
 
-    def batch_shape(self, mu=None, sigma=None, *args, **kwargs):
+    def batch_shape(self, mu=None, sigma=None):
         mu, sigma = self._sanitize_input(mu, sigma)
         event_dim = 1
         return mu.size()[:-event_dim]
 
-    def event_shape(self, mu=None, sigma=None, *args, **kwargs):
+    def event_shape(self, mu=None, sigma=None):
         mu, sigma = self._sanitize_input(mu, sigma)
         event_dim = 1
         return mu.size()[-event_dim:]
 
-    def sample(self, mu=None, sigma=None, *args, **kwargs):
+    def sample(self, mu=None, sigma=None):
         """
         Reparameterized log-normal sampler.
         """
@@ -60,7 +60,7 @@ class LogNormal(Distribution):
         z = mu + sigma * eps
         return torch.exp(z)
 
-    def batch_log_pdf(self, x, mu=None, sigma=None, *args, **kwargs):
+    def batch_log_pdf(self, x, mu=None, sigma=None):
         """
         log-normal log-likelihood
         """

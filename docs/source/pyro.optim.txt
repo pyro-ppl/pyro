@@ -1,3 +1,14 @@
+ClippedAdam
+------------
+
+.. automodule:: pyro.optim.clipped_adam
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+PyroOptim
+---------
+
 .. automodule:: pyro.optim.optim
     :members:
     :undoc-members:

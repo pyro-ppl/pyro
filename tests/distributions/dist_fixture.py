@@ -121,7 +121,8 @@ class Fixture(object):
         return max(min_samples, min_computed_samples)
 
     def get_test_distribution_name(self):
-        return self.pyro_dist.__class__.__name__
+        pyro_dist_class = getattr(self.pyro_dist, 'dist_class', self.pyro_dist.__class__)
+        return pyro_dist_class.__name__
 
 
 def tensor_wrap(*args, **kwargs):

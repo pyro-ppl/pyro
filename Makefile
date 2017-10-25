@@ -8,6 +8,9 @@ install: FORCE
 docs: FORCE
 	$(MAKE) -C docs html
 
+apidoc: FORCE
+	$(MAKE) -C docs apidoc
+
 lint: FORCE
 	flake8
 
@@ -15,7 +18,7 @@ format: FORCE
 	yapf -i -p *.py pyro/*.py pyro/*/*.py
 	isort -i *.py pyro/*.py pyro/*/*.py
 
-test: lint FORCE
+test: lint docs FORCE
 	pytest -vx -n auto --stage unit
 
 test-examples: lint FORCE
@@ -26,6 +29,9 @@ integration-test: lint FORCE
 
 test-all: lint FORCE
 	pytest -vx -n auto
+
+test-cuda: lint FORCE
+	PYRO_TENSOR_TYPE=torch.cuda.DoubleTensor pytest -vx -n 8 --stage unit
 
 clean: FORCE
 	git clean -dfx -e pyro-egg.info

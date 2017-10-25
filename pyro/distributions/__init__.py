@@ -16,13 +16,14 @@ from pyro.distributions.multinomial import Multinomial
 from pyro.distributions.normal import Normal
 from pyro.distributions.normal_chol import NormalChol
 from pyro.distributions.poisson import Poisson
+from pyro.distributions.random_primitive import RandomPrimitive
 from pyro.distributions.uniform import Uniform
 
 # function aliases
 diagnormal = DiagNormal()
 lognormal = LogNormal()
 categorical = Categorical()
-bernoulli = Bernoulli()
+bernoulli = RandomPrimitive(Bernoulli)
 beta = Beta()
 delta = Delta()
 exponential = Exponential()

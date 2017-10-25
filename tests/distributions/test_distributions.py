@@ -1,8 +1,9 @@
-import functools
 import numpy as np
 import pytest
 import torch
 
+from pyro.distributions import RandomPrimitive
+from pyro.util import ng_ones, ng_zeros
 from tests.common import assert_equal, xfail_if_not_implemented
 
 SINGLE_TEST_DATUM_IDX = 0
@@ -33,6 +34,8 @@ def test_batch_log_pdf(dist):
 
 
 def test_shape(dist):
+    if isinstance(dist.pyro_dist, RandomPrimitive):
+        pytest.skip('FIXME: https://github.com/uber/pyro/issues/323')
     d = dist.pyro_dist
     dist_params = dist.get_dist_params(SINGLE_TEST_DATUM_IDX)
     with xfail_if_not_implemented():
@@ -47,6 +50,10 @@ def test_sample_shape(dist):
         x_obj = dist.pyro_dist_obj(**dist_params).sample()
         assert_equal(x_obj.size(), x_func.size())
         with xfail_if_not_implemented():
+            # TODO remove once #323 is resolved
+            if dist.get_test_distribution_name() == 'Bernoulli':
+                assert(x_func.size() == d.shape(x_func, **dist_params))
+                return
             assert x_func.size() == d.shape(**dist_params)
 
 
@@ -57,21 +64,36 @@ def test_batch_log_pdf_shape(dist):
     for idx in range(dist.get_num_test_data()):
         dist_params = dist.get_dist_params(idx)
         x = dist.get_test_data(idx)
-        # Addresses the case where the param values need to
-        # be broadcasted to data size
-        broadcasted_params = {}
-        for p in dist_params:
-            if dist_params[p].dim() < x.dim():
-                broadcasted_params[p] = dist_params[p].expand_as(x)
-            else:
-                broadcasted_params[p] = dist_params[p]
         with xfail_if_not_implemented():
-            expected_shape = d.batch_shape(**broadcasted_params) + (1,)
+            # Get batch pdf shape after broadcasting.
+            expected_shape = get_batch_pdf_shape(dist, x, dist_params)
             log_p_func = d.batch_log_pdf(x, **dist_params)
             log_p_obj = dist.pyro_dist_obj(**dist_params).batch_log_pdf(x)
-            # assert that the functional
+            # assert that the functional and object forms return
+            # the same batch pdf.
             assert_equal(log_p_func.size(), log_p_obj.size())
             assert log_p_func.size() == expected_shape
+
+
+def test_batch_log_pdf_mask(dist):
+    if dist.pyro_dist.__class__.__name__ not in ('DiagNormal', 'Bernoulli', 'Categorical'):
+        pytest.skip('Batch pdf masking not supported for the distribution.')
+    d = dist.pyro_dist
+    for idx in range(dist.get_num_test_data()):
+        dist_params = dist.get_dist_params(idx)
+        x = dist.get_test_data(idx)
+        with xfail_if_not_implemented():
+            batch_pdf_shape = get_batch_pdf_shape(dist, x, dist_params)
+            zeros_mask = ng_zeros(batch_pdf_shape)
+            ones_mask = ng_ones(batch_pdf_shape)
+            half_mask = ng_ones(batch_pdf_shape) * 0.5
+            batch_log_pdf = d.batch_log_pdf(x, **dist_params)
+            batch_log_pdf_zeros_mask = d.batch_log_pdf(x, log_pdf_mask=zeros_mask, **dist_params)
+            batch_log_pdf_ones_mask = d.batch_log_pdf(x, log_pdf_mask=ones_mask, **dist_params)
+            batch_log_pdf_half_mask = d.batch_log_pdf(x, log_pdf_mask=half_mask, **dist_params)
+            assert_equal(batch_log_pdf_ones_mask, batch_log_pdf)
+            assert_equal(batch_log_pdf_zeros_mask, ng_zeros(batch_pdf_shape))
+            assert_equal(batch_log_pdf_half_mask, 0.5 * batch_log_pdf)
 
 
 def test_mean_and_variance(dist):
@@ -102,15 +124,16 @@ def test_support(discrete_dist):
     assert_equal(actual_support_non_vec.data, torch.Tensor(expected_support_non_vec))
 
 
-def get_broadcasted_shape(*shapes):
-    """
-    Returns the shape of the broadcasted tensor resulting from adding
-    tensors having shape ``shapes``.
-
-    :param shapes:
-    :type shapes: torch.Size
-    :return: returns
-    :rtype: torch.Size
-    """
-    return functools.reduce(lambda a, b: (torch.Tensor(a) + torch.Tensor(b)).size(),
-                            shapes)
+def get_batch_pdf_shape(dist, data, dist_params):
+    d = dist.pyro_dist
+    broadcasted_params = {}
+    # TODO remove once https://github.com/uber/pyro/issues/323 is resolved
+    if isinstance(dist.pyro_dist, RandomPrimitive):
+        return d.batch_shape(data, **dist_params) + (1,)
+    for p in dist_params:
+        if dist_params[p].dim() < data.dim():
+            broadcasted_params[p] = dist_params[p].expand_as(data)
+        else:
+            broadcasted_params[p] = dist_params[p]
+    with xfail_if_not_implemented():
+        return d.batch_shape(**broadcasted_params) + (1,)

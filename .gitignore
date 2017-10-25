@@ -2,6 +2,7 @@ run_outputs*
 .DS_Store
 data
 examples/processed
+examples/results
 examples/raw
 examples/dmm/*.pkl
 processed
@@ -67,7 +68,7 @@ nosetests.xml
 coverage.xml
 *,cover
 .hypothesis/
-paramstore.unittest.out
+*.out
 adam.unittest.save
 
 # Translations

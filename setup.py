@@ -20,8 +20,10 @@ setup(
         'visualization': [
             'matplotlib>=1.3',
             'visdom>=0.1.4',
+            'pillow'
         ],
         'dev': [
+            'torchvision',
             'flake8',
             'isort',
             'pytest',

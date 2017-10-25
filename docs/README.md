@@ -1,5 +1,9 @@
-# Docuemtnation #
+# Documentation #
 Pyro Documentation is supported by [Sphinx](http://www.sphinx-doc.org/en/stable/). 
+To build the docs, run from the toplevel directory:
+```
+make docs
+```
 
 ## Installation ##
 ```
