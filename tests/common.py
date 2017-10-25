@@ -1,7 +1,6 @@
 import contextlib
 import os
 import pytest
-import sys
 import unittest
 import numbers
 import warnings
