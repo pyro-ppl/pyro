@@ -444,8 +444,8 @@ class GaussianPyramidTests(TestCase):
         # check graph structure is as expected
         guide_trace = pyro.poutine.trace(guide, graph_type="dense").get_trace()
         expected_nodes = set(['log_sig_1R', 'kappa_1_1L', '_INPUT', 'constant_term_mu_latent_1R', '_RETURN',
-                          'mu_latent_1R', 'mu_latent_1', 'constant_term_mu_latent_1', 'mu_latent_1L',
-                          'constant_term_mu_latent_1L', 'log_sig_1L', 'kappa_1_1R', 'kappa_1R_1L', 'log_sig_1'])
+                              'mu_latent_1R', 'mu_latent_1', 'constant_term_mu_latent_1', 'mu_latent_1L',
+                              'constant_term_mu_latent_1L', 'log_sig_1L', 'kappa_1_1R', 'kappa_1R_1L', 'log_sig_1'])
         expected_edges = set([('mu_latent_1R', 'mu_latent_1'), ('mu_latent_1L', 'mu_latent_1R'),
                               ('mu_latent_1L', 'mu_latent_1')])
         self.assertTrue(expected_nodes == set(guide_trace.nodes))
