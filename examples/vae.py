@@ -43,10 +43,11 @@ class Encoder(nn.Module):
     def forward(self, x):
         # define the forward computation
         x = x.view(-1, 784)
-        h1 = self.relu(self.fc1(x))
+        hidden = self.relu(self.fc1(x))
         # we return a mean vector and a (positive) square root covariance
-        # each of length z_dim
-        return self.fc21(h1), torch.exp(self.fc22(h1))
+        # each of size batch_size x z_dim
+        z_mu, z_sigma = self.fc21(hidden), torch.exp(self.fc22(hidden))
+        return z_mu, z_sigma
 
 
 # define the PyTorch module that parameterizes the
@@ -55,22 +56,21 @@ class Decoder(nn.Module):
     def __init__(self, z_dim, hidden_dim):
         super(Decoder, self).__init__()
         # setup the four linear transformations used
-        self.fc3 = nn.Linear(z_dim, hidden_dim)
-        self.fc4 = nn.Linear(hidden_dim, 2 * 784)
-        self.fc3 = nn.Linear(z_dim, hidden_dim)
-        self.fc4 = nn.Linear(hidden_dim, 2 * 784)
+        self.fc1 = nn.Linear(z_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, 2 * 784)
         # setup the two non-linearities used
         self.sigmoid = nn.Sigmoid()
         self.relu = nn.ReLU()
 
     def forward(self, z):
         # define the forward computation
-        output = self.fc4(self.relu(self.fc3(z)))
+        output = self.fc2(self.relu(self.fc1(z)))
         # reshape output to get mu, sigma params for every pixel
         likelihood_params = output.view(z.size(0), -1, 2)
         # send back the mean vector and square root covariance
-        # each is of length 784
-        return likelihood_params[:, :, 0], torch.exp(likelihood_params[:, :, 1])
+        # each is of size batch_size x 784
+        mu_img, sigma_img = likelihood_params[:, :, 0], torch.exp(likelihood_params[:, :, 1])
+        return mu_img, sigma_img
 
 
 # define a PyTorch module for the VAE
@@ -99,9 +99,9 @@ class VAE(nn.Module):
         z = pyro.sample("latent", DiagNormal(z_mu, z_sigma))
 
         # decode z
-        img_mu, img_sigma = self.decoder(z)
+        mu_img, sigma_img = self.decoder(z)
         # score against actual images
-        pyro.observe("obs", DiagNormal(img_mu, img_sigma), data.view(-1, 784))
+        pyro.observe("obs", DiagNormal(mu_img, sigma_img), data.view(-1, 784))
 
     # define the guide (i.e. variational distribution) q(z|x)
     def guide(self, data):
@@ -125,9 +125,9 @@ class VAE(nn.Module):
         z = pyro.sample("latent", DiagNormal(z_mu, z_sigma))
 
         # decode z
-        img_mu, img_sigma = self.decoder(z)
+        mu_img, sigma_img = self.decoder(z)
         # return the mean vector img_mu
-        return img_mu
+        return mu_img
 
 
 def main():
@@ -156,9 +156,11 @@ def main():
         epoch_loss = 0.
         # do a training epoch
         for _, (x, _) in enumerate(train_loader):
+            # if on GPU, get mini-batch into CUDA memory
             if args.cuda:
                 x = x.cuda()
-            x = Variable(x.view(-1, 784))
+            # wrap the mini-batch in a PyTorch Variable
+            x = Variable(x)
             # do ELBO gradient and accumulate loss
             epoch_loss += svi.step(x)
 
@@ -172,7 +174,8 @@ def main():
             for _, (x, _) in enumerate(test_loader):
                 if args.cuda:
                     x = x.cuda()
-                x = Variable(x.view(-1, 784))
+                # wrap the mini-batch in a PyTorch Variable
+                x = Variable(x)
                 # do ELBO gradient and accumulate loss
                 test_loss += svi.evaluate_loss(x)
             # sample an image and visualize
