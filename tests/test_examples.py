@@ -1,12 +1,16 @@
 import os
 import sys
+from collections import OrderedDict
 from subprocess import check_call
 
 from tests.common import EXAMPLES_DIR, requires_cuda
 import pytest
 
+CPU_EXAMPLES = OrderedDict()
+CUDA_EXAMPLES = OrderedDict()
 
-def find_examples_matching(*substrings):
+
+def discover_examples():
     for root, dirs, files in os.walk(EXAMPLES_DIR):
         for basename in files:
             if not basename.endswith('.py'):
@@ -14,20 +18,32 @@ def find_examples_matching(*substrings):
             path = os.path.join(root, basename)
             with open(path) as f:
                 text = f.read()
-            if all(s in text for s in substrings):
-                yield os.path.relpath(path, EXAMPLES_DIR)
+            if '--num-epochs' in text:
+                args = ['--num-epochs=1']
+            elif '--num-steps' in text:
+                args = ['--num-steps=1']
+            else:
+                # Either this is not a main file, or we don't know how to run it cheaply.
+                continue
+            example = os.path.relpath(path, EXAMPLES_DIR)
+            CPU_EXAMPLES[example] = args
+            if '--cuda' in text:
+                CUDA_EXAMPLES[example] = [args] + ['--cuda']
+
+
+discover_examples()
 
 
 @pytest.mark.stage("test_examples")
-@pytest.mark.parametrize('example', find_examples_matching('--num-epochs'))
-def test_cpu(example):
+@pytest.mark.parametrize('example,args', CPU_EXAMPLES.items(), ids=CPU_EXAMPLES.keys())
+def test_cpu(example, args):
     example = os.path.join(EXAMPLES_DIR, example)
-    check_call([sys.executable, example, '--num-epochs', '1'])
+    check_call([sys.executable, example] + args)
 
 
 @requires_cuda
 @pytest.mark.stage("test_examples")
-@pytest.mark.parametrize('example', find_examples_matching('--num-epochs', '--cuda'))
-def test_cuda(example):
+@pytest.mark.parametrize('example,args', CUDA_EXAMPLES.items(), ids=CUDA_EXAMPLES.keys())
+def test_cuda(example, args):
     example = os.path.join(EXAMPLES_DIR, example)
-    check_call([sys.executable, example, '--num-epochs', '1', '--cuda'])
+    check_call([sys.executable, example] + args)
