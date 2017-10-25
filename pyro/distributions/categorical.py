@@ -41,11 +41,10 @@ class Categorical(Distribution):
     def __init__(self, ps=None, vs=None, one_hot=True, batch_size=None, *args, **kwargs):
         """
         Instantiates a discrete distribution.
-        Params:
-          vs - tuple, list, numpy array, Variable, or torch tensor of values
-          ps - torch tensor of probabilities (must be same size as `vs`)
-          one_hot - return one-hot samples (when `vs` is None)
-          batch_size - expand ps and vs by a batch dimension
+        :param vs: tuple, list, numpy array, Variable, or torch tensor of values
+        :param ps: torch tensor of probabilities (must be same size as `vs`)
+        :param one_hot: return one-hot samples (when `vs` is None)
+        :param batch_size: expand ps and vs by a batch dimension
         """
         self.ps = ps
         # vs is None, Variable(Tensor), or numpy.array
