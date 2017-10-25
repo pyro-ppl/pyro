@@ -25,7 +25,7 @@ class HalfCauchy(Distribution):
         self.mu = mu
         self.gamma = gamma
         if mu.size() != gamma.size():
-            raise ValueError("Expected alpha.size() == beta.size(), but got {} vs {}"
+            raise ValueError("Expected mu.size() == gamma.size(), but got {} vs {}"
                              .format(mu.size(), gamma.size()))
         if mu.dim() == 1 and batch_size is not None:
             self.mu = mu.expand(batch_size, mu.size(0))
