@@ -35,7 +35,7 @@ discover_examples()
 
 
 @pytest.mark.stage("test_examples")
-@pytest.mark.parametrize('example,args', CPU_EXAMPLES.items(), ids=CPU_EXAMPLES.keys())
+@pytest.mark.parametrize('example,args', CPU_EXAMPLES.items(), ids=list(CPU_EXAMPLES))
 def test_cpu(example, args):
     example = os.path.join(EXAMPLES_DIR, example)
     check_call([sys.executable, example] + args)
@@ -43,7 +43,7 @@ def test_cpu(example, args):
 
 @requires_cuda
 @pytest.mark.stage("test_examples")
-@pytest.mark.parametrize('example,args', CUDA_EXAMPLES.items(), ids=CUDA_EXAMPLES.keys())
+@pytest.mark.parametrize('example,args', CUDA_EXAMPLES.items(), ids=list(CUDA_EXAMPLES))
 def test_cuda(example, args):
     example = os.path.join(EXAMPLES_DIR, example)
     check_call([sys.executable, example] + args)
