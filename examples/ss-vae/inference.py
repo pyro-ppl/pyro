@@ -15,8 +15,8 @@ from sys import stdout
 # for a util object
 # this is a print updater
 def print_update_percent(ix, total, base_message):
-  stdout.write("\r " + base_message + " {0:.0f}% ".format(100*(ix + 1.0)/total))
-  stdout.flush()
+   stdout.write("\r " + base_message + " {0:.0f}% ".format(100*(ix + 1.0)/total))
+   stdout.flush()
   
 # transformations for MNIST data
 def fn_x_MNIST(x):
@@ -92,7 +92,7 @@ class BaseInference(object):
     #Generalized to multiple KL_QPs
     def __init__(self, dataset, batch_size, inference_techniques, is_supervised_loss,
                  do_classification=True, transform=fn_x_MNIST, target_transform=fn_y_MNIST,
-                 sup_perc=5.0):
+                 sup_perc=5.0,checkpoint_fn=None, start_epoch=0):
         self.dataset = dataset
         self.periodic_interval_batches = int(100/sup_perc)
         assert 100 % int(sup_perc) == 0, "only some perc values allowed n | 100"
@@ -103,6 +103,9 @@ class BaseInference(object):
         self.num_losses = len(self.inference_techniques)
         assert self.num_losses >= 1, "need at least one loss"
         self.do_classification = do_classification
+        self.checkpoint_fn = checkpoint_fn
+        self.start_epoch = start_epoch
+        self.best_train_acc = 0.0
 
     def setup_data_loaders(self, batch_size, transform, target_transform, root='./data',
                            download=True, sup_perc=5.0, **kwargs):
@@ -155,22 +158,22 @@ class BaseInference(object):
             else:
                 (xs, ys) = next(unsup_iter)
             xs,ys = Variable(xs), Variable(ys)
-            print_update_percent(i,self.batches_per_epoch,"runnning this epoch")
+            #print_update_percent(i,self.batches_per_epoch,"runnning this epoch")
             for loss_id in range(self.num_losses):
                 if self.is_supervised_loss[loss_id] == is_supervised:
                     new_loss = self.inference_techniques[loss_id].step(is_supervised, xs, ys)
                     #assert not math.isnan(new_loss)
                     if math.isnan(new_loss):
-                        print("Encountered nan loss, stopping training")
+                        print("Encountered nan loss, using 0.0 loss value")
+                        bb()
                         new_loss = 0.0
-                        return None,None
                     epoch_losses[loss_id] += new_loss
                     batch_counts[loss_id] += 1
         return epoch_losses, batch_counts
 
     def run(self, num_epochs=1000, acc_cutoff = 0.99,  *args, **kwargs):
         self.loss_training = []
-        for i in range(num_epochs):
+        for i in range(self.start_epoch,num_epochs):
             epoch_losses, batch_counts = self.run_inference_batches()
             if epoch_losses is None:
                 break
@@ -183,7 +186,19 @@ class BaseInference(object):
             training_accuracy = self.get_accuracy(training=True)
             str_print = "{} epoch: avg losses {} training accuracy {}".\
                 format(i," ".join(map(str,avg_epoch_losses)), training_accuracy)
+            if self.best_train_acc < training_accuracy:
+                self.best_train_acc = training_accuracy
+
+            # This test accuracy is not used for picking the best NN configs
+            test_accuracy = self.get_accuracy(training=False)
+            str_print += " test accuracy {}".format(test_accuracy)
+
             print(str_print)
+
+            if self.checkpoint_fn is not None:
+                self.checkpoint_fn(i,training_accuracy,test_accuracy,"last")
+                if self.best_train_acc == training_accuracy:
+                    self.checkpoint_fn(i, training_accuracy, test_accuracy, "best")
             if self.do_classification and training_accuracy > acc_cutoff:
                 break
         print "testing accuracy {}".format(self.get_accuracy(training=False))
