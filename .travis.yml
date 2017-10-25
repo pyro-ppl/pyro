@@ -36,8 +36,9 @@ jobs:
           python: 2.7
           before_install:
               - pip install flake8
+          script:
               - pip install -r docs/requirements.txt
-          script: make lint
+              - make lint
         - python: 2.7
           script: make docs
         - stage: unit test
