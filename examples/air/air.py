@@ -181,7 +181,7 @@ class AIR(nn.Module):
                 pyro.observe("obs_{}".format(t),
                              dist.diagnormal,
                              x.view(n, -1),
-                             self.ng_ones([n, 1]) * 0.3,
+                             self.ng_ones([n, -1]) * 0.3,
                              batch.view(n, -1),
                              log_pdf_mask=observe_mask)
 
