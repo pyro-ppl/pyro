@@ -29,7 +29,6 @@ class TestDelta(TestCase):
         log_px_torch = dist.delta.batch_log_pdf(self.batch_test_data_2, self.vs).data
         self.assertEqual(torch.sum(log_px_torch), float('-inf'))
 
-
     def test_mean_and_var(self):
         torch_samples = [dist.delta(self.v).data.cpu().numpy()
                          for _ in range(self.n_samples)]
