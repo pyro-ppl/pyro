@@ -449,8 +449,8 @@ class GaussianPyramidTests(TestCase):
                                   'constant_term_mu_latent_1L', 'log_sig_1L', 'kappa_1_1R', 'kappa_1R_1L', 'log_sig_1'])
             expected_edges = set([('mu_latent_1R', 'mu_latent_1'), ('mu_latent_1L', 'mu_latent_1R'),
                                   ('mu_latent_1L', 'mu_latent_1')])
-            self.assertTrue(expected_nodes == set(guide_trace.nodes))
-            self.assertTrue(expected_edges == set(guide_trace.edges))
+            assert expected_nodes == set(guide_trace.nodes)
+            assert expected_edges == set(guide_trace.edges)
 
         adam = optim.Adam({"lr": lr, "betas": (beta1, 0.999)})
         svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
