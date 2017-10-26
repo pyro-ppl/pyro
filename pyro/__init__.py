@@ -212,7 +212,9 @@ def iarange(name, size=None, subsample_size=None, subsample=None, use_cuda=False
         size = 1
         subsample_size = 1
     elif subsample is None:
-        subsample = sample(name, _Subsample(size, subsample_size, use_cuda))
+        names = [name]
+        names += [str(f.counter) for f in _PYRO_STACK if isinstance(f, poutine.LambdaPoutine)]
+        subsample = sample("_".join(names), _Subsample(size, subsample_size, use_cuda))
 
     if subsample_size is None:
         subsample_size = len(subsample)
@@ -250,13 +252,17 @@ def irange(name, size, subsample_size=None, subsample=None, use_cuda=False):
                     observe('obs_{}'.format(i), normal, data[i], mu, sigma)
     """
     with iarange(name, size, subsample_size, subsample, use_cuda) as ind:
-        # Wrap computation in an independence context.
-        indep_context = LambdaPoutine(None, name, 1.0, 'list', 0, len(ind))
         if isinstance(ind, Variable):
             ind = ind.data
-        for i in ind:
-            with indep_context:
+        if len(_PYRO_STACK) == 0:
+            for i in ind:
                 yield i
+        else:
+            # Wrap computation in an independence context.
+            indep_context = LambdaPoutine(None, name, 1.0, 'list', 0, len(ind))
+            for i in ind:
+                with indep_context:
+                    yield i
 
 
 def map_data(name, data, fn, batch_size=None, batch_dim=0, use_cuda=False):

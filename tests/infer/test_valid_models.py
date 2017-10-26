@@ -54,7 +54,6 @@ def test_iarange_ok(trace_graph):
     assert_ok(model, guide, trace_graph=trace_graph)
 
 
-@pytest.mark.xfail(reason="nested replay appears to be broken")
 @pytest.mark.parametrize("trace_graph", [True, False])
 def test_irange_irange_ok(trace_graph):
 
@@ -91,7 +90,6 @@ def test_iarange_irange_error():
     assert_error(model, guide, trace_graph=True)
 
 
-@pytest.mark.xfail(reason="nested replay appears to be broken")
 @pytest.mark.parametrize("trace_graph", [True, False])
 def test_irange_iarange_ok(trace_graph):
 
