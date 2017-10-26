@@ -16,7 +16,7 @@ class Beta(Distribution):
     Univariate beta distribution parameterized by alpha and beta
     """
 
-    def __init__(self, alpha=None, beta=None, batch_size=None, *args, **kwargs):
+    def __init__(self, alpha, beta, batch_size=None, *args, **kwargs):
         """
         Params:
           `alpha` - alpha

@@ -13,7 +13,7 @@ class Bernoulli(Distribution):
     """
     enumerable = True
 
-    def __init__(self, ps=None, batch_size=None, log_pdf_mask=None, *args, **kwargs):
+    def __init__(self, ps, batch_size=None, log_pdf_mask=None, *args, **kwargs):
         """
         :param ps: tensor of probabilities
         """

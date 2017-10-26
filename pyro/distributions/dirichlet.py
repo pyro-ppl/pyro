@@ -16,7 +16,7 @@ class Dirichlet(Distribution):
     :param alpha:  *(real (0, Infinity))*
     """
 
-    def __init__(self, alpha=None, batch_size=None, *args, **kwargs):
+    def __init__(self, alpha, batch_size=None, *args, **kwargs):
         """
         :param alpha: A vector of concentration parameters.
         :type alpha: None or a torch.autograd.Variable of a torch.Tensor of dimension 1 or 2.

@@ -18,7 +18,7 @@ class Cauchy(Distribution):
     the same shape as each other.
     """
 
-    def __init__(self, mu=None, gamma=None, batch_size=None, *args, **kwargs):
+    def __init__(self, mu, gamma, batch_size=None, *args, **kwargs):
         """
         Params:
           `mu` - mean
