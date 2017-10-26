@@ -78,13 +78,6 @@ Multinomial
     :undoc-members:
     :show-inheritance:
 
-Normal
-------
-.. automodule:: pyro.distributions.normal
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 NormalChol
 ----------
 .. automodule:: pyro.distributions.normal_chol
