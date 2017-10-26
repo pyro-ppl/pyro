@@ -4,7 +4,7 @@ import pyro
 import pyro.poutine as poutine
 from pyro.infer.enum import iter_discrete_traces
 from pyro.distributions.util import torch_zeros_like
-from pyro.util import unique_namespace
+from pyro.util import check_unique_namespace
 
 
 class Trace_ELBO(object):
@@ -43,6 +43,7 @@ class Trace_ELBO(object):
 
             guide_trace = poutine.trace(guide).get_trace(*args, **kwargs)
             model_trace = poutine.trace(poutine.replay(model, guide_trace)).get_trace(*args, **kwargs)
+            check_unique_namespace(model_trace, guide_trace)
             log_r = model_trace.log_pdf() - guide_trace.log_pdf()
             weight = 1.0 / self.num_particles
             yield weight, model_trace, guide_trace, log_r
@@ -75,8 +76,6 @@ class Trace_ELBO(object):
                 elbo_particle[weight == 0] = 0.0
 
             elbo += (weight * elbo_particle).data.sum()
-
-        unique_namespace(model_trace, guide_trace)
 
         loss = -elbo
         return loss
@@ -135,8 +134,6 @@ class Trace_ELBO(object):
             for name in guide_trace.nodes.keys():
                 if guide_trace.nodes[name]["type"] == "param":
                     trainable_params.add(guide_trace.nodes[name]["value"])
-
-        unique_namespace(model_trace, guide_trace)
 
         surrogate_loss = -surrogate_elbo
         surrogate_loss.backward()

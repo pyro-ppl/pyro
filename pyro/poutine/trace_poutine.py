@@ -178,12 +178,13 @@ class TracePoutine(Poutine):
         then store the return value in self.trace
         and return the return value.
         """
-        if msg["name"] in self.trace:
+        name = msg["name"]
+        if name in self.trace:
             # Cannot repeat names between params and samples
-            if self.trace.nodes[msg['name']]['type'] == 'param':
-                raise RuntimeError("{} is already in the trace as a param".format(msg['name']))
+            if self.trace.nodes[name]['type'] == 'param':
+                raise RuntimeError("{} is already in the trace as a param".format(name))
             # observe has the same name as a sample
-            if msg['is_observed'] and not self.trace.nodes[msg['name']]['is_observed']:
+            if msg['is_observed'] and not self.trace.nodes[name]['is_observed']:
                 raise RuntimeError("observe cannot have the same name as a sample")
             # XXX temporary solution - otherwise, we reset self.trace to be empty
             tr = Trace(graph_type=self.graph_type)
@@ -196,7 +197,7 @@ class TracePoutine(Poutine):
         val = super(TracePoutine, self)._pyro_sample(msg)
         site = msg.copy()
         site.update(value=val)
-        self.trace.add_node(msg["name"], **site)
+        self.trace.add_node(name, **site)
         return val
 
     def _pyro_param(self, msg):

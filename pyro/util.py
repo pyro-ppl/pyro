@@ -343,7 +343,7 @@ def save_visualization(trace, graph_output):
     g.render(graph_output, view=False, cleanup=True)
 
 
-def unique_namespace(model_trace, guide_trace):
+def check_unique_namespace(model_trace, guide_trace):
     """
     :param model_trace: Trace object of the model
     :param guide_trace: Trace object of the guide
