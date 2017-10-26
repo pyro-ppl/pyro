@@ -18,7 +18,7 @@ def assert_ok(model, guide, **kwargs):
 
 def assert_error(model, guide, **kwargs):
     inference = SVI(model,  guide, Adam({"lr": 1e-3}), "ELBO", **kwargs)
-    with pytest.raises((RuntimeError, KeyError)):
+    with pytest.raises((UserWarning, KeyError)):
         inference.step()
 
 
@@ -92,10 +92,9 @@ def test_irange_irange_swap_error(trace_graph):
     assert_error(model, guide, trace_graph=trace_graph)
 
 
-@pytest.mark.xfail(reason="KeyError on replaying _Subsample site?")
 @pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
 @pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
-def test_irange_in_model_not_guide_ok(trace_graph, subsample_size):
+def test_irange_in_model_not_guide_error(trace_graph, subsample_size):
 
     def model():
         p = Variable(torch.Tensor([0.5]))
@@ -107,15 +106,12 @@ def test_irange_in_model_not_guide_ok(trace_graph, subsample_size):
         p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
         pyro.sample("x", dist.bernoulli, p)
 
-    assert_ok(model, guide, trace_graph=trace_graph)
+    assert_error(model, guide, trace_graph=trace_graph)
 
 
 @pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
-@pytest.mark.parametrize("trace_graph", [
-    False,
-    pytest.param(True, marks=pytest.mark.xfail(reason="KeyError on replaying _Subsample site?")),
-], ids=["trace", "tracegraph"])
-def test_irange_in_guide_not_model_ok(trace_graph, subsample_size):
+@pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
+def test_irange_in_guide_not_model_error(trace_graph, subsample_size):
 
     def model():
         p = Variable(torch.Tensor([0.5]))
@@ -127,7 +123,7 @@ def test_irange_in_guide_not_model_ok(trace_graph, subsample_size):
             pass
         pyro.sample("x", dist.bernoulli, p)
 
-    assert_ok(model, guide, trace_graph=trace_graph)
+    assert_error(model, guide, trace_graph=trace_graph)
 
 
 @pytest.mark.xfail(reason="error is not caught")
