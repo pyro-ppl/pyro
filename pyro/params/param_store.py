@@ -4,8 +4,27 @@ import cloudpickle
 
 class ParamStoreDict(object):
     """
-    Global store for parameters in pyro. The typical user interacts with the paramstore
-    primarily through the primitive pyro.param.
+    Global store for parameters in Pyro. This basically a key-value store.
+    The typical user interacts with the ParamStore primarily through the
+    primitive `pyro.param`. See the introductory tutorial
+    `Hello World <http://pyro.ai/examples/hello_world.html>`_ for a discussion.
+
+    Some things to bear in mind when using parameters in Pyro:
+
+    - parameters must be assigned unique names
+    - the `init_tensor` argument to `pyro.param` is only used the first time that a given (named)
+      parameter is registered with Pyro.
+    - for this reason, a user may need to use the `clear()` method if working in a REPL in order to
+      get the desired behavior. this method can also be inved with `pyro.clear_param_store()`.
+    - the internal name of a parameter within a PyTorch `nn.Module` that has been registered with
+      Pyro is prepended with the Pyro name of the module. so nothing prevents the user from having
+      two different modules each of which contains a parameter named `weight`. by contrast, a user
+      can only have one top-level parameter named `weight` (outside of any module).
+    - parameters can be 'tagged' with (string) tags. by default each parameter is tagged with the
+      'default' tag. this mechanism allows the user to group parameters together and e.g. customize
+      learning rates for different tags. for an example where this is useful see the tutorial
+      `SVI Part III <http://pyro.ai/examples/svi_part_iii.html>`_.
+    - parameters can be saved and loaded from disk using `save` and `load`.
     """
 
     def __init__(self):
@@ -30,7 +49,7 @@ class ParamStoreDict(object):
 
     def get_all_param_names(self):
         """
-        get all parameter names in param store
+        get all parameter names in the param store
         """
         return self._params.keys()
 
@@ -208,7 +227,6 @@ class ParamStoreDict(object):
 
     def param_name(self, p):
         """
-        XXX Is this used anywhere???
         :param p: parameter
         :returns: parameter name
 

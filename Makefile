@@ -8,6 +8,9 @@ install: FORCE
 docs: FORCE
 	$(MAKE) -C docs html
 
+apidoc: FORCE
+	$(MAKE) -C docs apidoc
+
 lint: FORCE
 	flake8
 

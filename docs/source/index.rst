@@ -10,7 +10,7 @@ Pyro Documentation
 
 .. toctree::
    :glob:
-   :maxdepth: 2
+   :maxdepth: 3
    :caption: Contents:
 
    installation
@@ -21,6 +21,7 @@ Pyro Documentation
    parameters
    nn
    optimization
+   advanced
 
 
 Indices and tables

@@ -438,10 +438,19 @@ class IndirectLambdaPoutineTests(TestCase):
             return mu_latent
 
         self.model = model
-        self.expected_nodes = set(['z_0_0', 'z_0_1', 'z_1_0', 'z_1_1', 'mu_latent',
+        self.expected_nodes = set(["z_0_0", "z_0_1", "z_1_0", "z_1_1", "mu_latent",
+                                   "map_outer", "map_inner_0", "map_inner_1",
                                    "_INPUT", "_RETURN"])
-        self.expected_edges = set([('mu_latent', 'z_0_0'), ('mu_latent', 'z_0_1'),
-                                   ('mu_latent', 'z_1_0'), ('mu_latent', 'z_1_1')])
+        self.expected_edges = set([
+            ("mu_latent", "z_0_0"), ("mu_latent", "z_0_1"),
+            ("mu_latent", "z_1_0"), ("mu_latent", "z_1_1"),
+            ("map_inner_0", "z_0_0"), ("map_inner_0", "z_0_1"),
+            ("map_inner_1", "z_1_0"), ("map_inner_1", "z_1_1"),
+            ("map_outer", "map_inner_0"), ("map_outer", "map_inner_1"),
+            ("map_outer", "z_0_0"), ("map_outer", "z_0_1"),
+            ("map_outer", "z_1_0"), ("map_outer", "z_1_1"),
+            ("mu_latent", "map_inner_0"), ("mu_latent", "map_inner_1"), ("mu_latent", "map_outer"),
+        ])
 
     def test_graph_structure(self):
         tracegraph = poutine.trace(self.model, graph_type="dense").get_trace()

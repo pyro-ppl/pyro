@@ -56,6 +56,14 @@ Gamma
     :undoc-members:
     :show-inheritance:
 
+HalfCauchy
+----------------------------------------
+
+.. automodule:: pyro.distributions.half_cauchy
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 LogNormal
 ---------
 .. automodule:: pyro.distributions.log_normal

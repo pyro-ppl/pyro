@@ -4,6 +4,4 @@ Inference
 
 Pyro supports multiple inference algorithms.
 
-Algorithms
-----------
 .. include:: pyro.infer.txt
