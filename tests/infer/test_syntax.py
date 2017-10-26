@@ -53,7 +53,7 @@ def test_iarange_ok():
 
 
 @pytest.mark.xfail(reason="nested replay appears to be broken")
-def test_nested_irange_ok():
+def test_irange_irange_ok():
 
     def model():
         p = Variable(torch.Tensor([0.5]))
@@ -71,7 +71,43 @@ def test_nested_irange_ok():
 
 
 @pytest.mark.xfail(reason="error is not caught")
-def test_nested_iarange_error():
+def test_iarange_irange_error():
+
+    def model():
+        p = Variable(torch.Tensor([0.5]))
+        with pyro.iarange("iarange", 10, 5) as ind:
+            for i in pyro.irange("irange", 10, 5):
+                pyro.sample("x_{}".format(i), dist.bernoulli, p, batch_size=len(ind))
+
+    def guide():
+        p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
+        with pyro.iarange("iarange", 10, 5) as ind:
+            for i in pyro.irange("irange", 10, 5):
+                pyro.sample("x_{}".format(i), dist.bernoulli, p, batch_size=len(ind))
+
+    assert_error(model, guide)
+
+
+@pytest.mark.xfail(reason="nested replay appears to be broken")
+def test_irange_iarange_ok():
+
+    def model():
+        p = Variable(torch.Tensor([0.5]))
+        for i in pyro.irange("irange", 10, 5):
+            with pyro.iarange("iarange", 10, 5) as ind:
+                pyro.sample("x_{}".format(i), dist.bernoulli, p, batch_size=len(ind))
+
+    def guide():
+        p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
+        for i in pyro.irange("irange", 10, 5):
+            with pyro.iarange("iarange", 10, 5) as ind:
+                pyro.sample("x_{}".format(i), dist.bernoulli, p, batch_size=len(ind))
+
+    assert_ok(model, guide)
+
+
+@pytest.mark.xfail(reason="error is not caught")
+def test_iarange_iarange_error():
 
     def model():
         p = Variable(torch.Tensor([0.5]))
@@ -84,5 +120,21 @@ def test_nested_iarange_error():
         with pyro.iarange("iarange_0", 10, 5) as ind1:
             with pyro.iarange("iarange_1", 10, 5) as ind2:
                 pyro.sample("x", dist.bernoulli, p, batch_size=len(ind1) * len(ind2))
+
+    assert_error(model, guide)
+
+
+@pytest.mark.xfail(reason="error is not caught")
+def test_iarange_wrong_size_error():
+
+    def model():
+        p = Variable(torch.Tensor([0.5]))
+        with pyro.iarange("iarange", 10, 5) as ind:
+            pyro.sample("x", dist.bernoulli, p, batch_size=1 + len(ind))
+
+    def guide():
+        p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
+        with pyro.iarange("iarange", 10, 5) as ind:
+            pyro.sample("x", dist.bernoulli, p, batch_size=1 + len(ind))
 
     assert_error(model, guide)
