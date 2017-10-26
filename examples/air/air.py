@@ -7,16 +7,17 @@ Processing Systems. 2016.
 """
 
 from collections import namedtuple
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 
 import pyro
-from pyro.util import ng_zeros, ng_ones
-from pyro.distributions import DiagNormal, Bernoulli, Uniform, Delta
-
+import pyro.distributions as dist
 from modules import Identity, Encoder, Decoder, MLP, Predict
+from pyro.distributions import Bernoulli, Uniform, Delta
+from pyro.util import ng_zeros, ng_ones
 
 
 # Default prior success probability for z_pres.
@@ -134,16 +135,18 @@ class AIR(nn.Module):
 
         # Sample attention window position.
         z_where = pyro.sample('z_where_{}'.format(t),
-                              DiagNormal(self.z_where_mu_prior,
-                                         self.z_where_sigma_prior,
-                                         batch_size=n),
+                              dist.diagnormal,
+                              self.z_where_mu_prior,
+                              self.z_where_sigma_prior,
+                              batch_size=n,
                               log_pdf_mask=sample_mask)
 
         # Sample latent code for contents of the attention window.
         z_what = pyro.sample('z_what_{}'.format(t),
-                             DiagNormal(self.ng_zeros([self.z_what_size]),
-                                        self.ng_ones([self.z_what_size]),
-                                        batch_size=n),
+                             dist.diagnormal,
+                             self.ng_zeros([self.z_what_size]),
+                             self.ng_ones([self.z_what_size]),
+                             batch_size=n,
                              log_pdf_mask=sample_mask)
 
         # Map latent code to pixel space.
@@ -176,7 +179,9 @@ class AIR(nn.Module):
 
             if self.use_masking or t == (self.num_steps - 1):
                 pyro.observe("obs_{}".format(t),
-                             DiagNormal(x.view(n, -1), self.ng_ones([1, 1]) * 0.3),
+                             dist.diagnormal,
+                             x.view(n, -1),
+                             self.ng_ones([n, 1]) * 0.3,
                              batch.view(n, -1),
                              log_pdf_mask=observe_mask)
 
@@ -246,8 +251,9 @@ class AIR(nn.Module):
         log_pdf_mask = z_pres if self.use_masking else 1.0
 
         z_where = pyro.sample('z_where_{}'.format(t),
-                              DiagNormal(z_where_mu + self.z_where_mu_prior,
-                                         z_where_sigma * self.z_where_sigma_prior),
+                              dist.diagnormal,
+                              z_where_mu + self.z_where_mu_prior,
+                              z_where_sigma * self.z_where_sigma_prior,
                               log_pdf_mask=log_pdf_mask)
 
         x_att = image_to_window(z_where, self.window_size, self.x_size, inputs['raw'])
@@ -256,7 +262,9 @@ class AIR(nn.Module):
         z_what_mu, z_what_sigma = self.encode(x_att)
 
         z_what = pyro.sample('z_what_{}'.format(t),
-                             DiagNormal(z_what_mu, z_what_sigma),
+                             dist.diagnormal,
+                             z_what_mu,
+                             z_what_sigma,
                              log_pdf_mask=log_pdf_mask)
 
         return GuideState(h=h, c=c, bl_h=bl_h, bl_c=bl_c, z_pres=z_pres, z_where=z_where, z_what=z_what)

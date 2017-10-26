@@ -192,7 +192,10 @@ class DMM(nn.Module):
             # first compute the parameters of the diagonal gaussian distribution p(z_t | z_{t-1})
             z_mu, z_sigma = self.trans(z_prev)
             # then sample z_t according to dist.DiagNormal(z_mu, z_sigma)
-            z_t = pyro.sample("z_%d" % t, dist.DiagNormal(z_mu, z_sigma),
+            z_t = pyro.sample("z_%d" % t,
+                              dist.diagnormal,
+                              z_mu,
+                              z_sigma,
                               log_pdf_mask=annealing_factor * mini_batch_mask[:, t - 1:t])
 
             # compute the probabilities that parameterize the bernoulli likelihood
@@ -231,7 +234,7 @@ class DMM(nn.Module):
         for t in range(1, T_max + 1):
             # the next two lines assemble the distribution q(z_t | z_{t-1}, x_{t:T})
             z_mu, z_sigma = self.combiner(z_prev, rnn_output[:, t - 1, :])
-            z_dist = dist.DiagNormal(z_mu, z_sigma)
+            z_dist = dist.diagnormal
 
             # if we are using normalizing flows, we apply the sequence of transformations
             # parameterized by self.iafs to the base distribution defined in the previous line
@@ -239,7 +242,10 @@ class DMM(nn.Module):
             if self.iafs.__len__() > 0:
                 z_dist = TransformedDistribution(z_dist, self.iafs)
             # sample z_t from the distribution z_dist
-            z_t = pyro.sample("z_%d" % t, z_dist,
+            z_t = pyro.sample("z_%d" % t,
+                              z_dist,
+                              z_mu,
+                              z_sigma,
                               log_pdf_mask=annealing_factor * mini_batch_mask[:, t - 1:t])
             # the latent sampled at this time step will be conditioned upon in the next time step
             # so keep track of it
