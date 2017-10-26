@@ -1,4 +1,4 @@
-# This file tests a variety of model,guide pairs with valid and invalid syntax.
+# This file tests a variety of model,guide pairs with valid and invalid structure.
 
 import pytest
 
