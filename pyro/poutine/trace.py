@@ -14,7 +14,7 @@ class Trace(networkx.DiGraph):
         """
         :param string graph_type: string specifying the kind of trace graph to construct
 
-        Constructor. Currently identical to networkx.DiGraph(*args, **kwargs),
+        Constructor. Currently identical to networkx.``DiGraph(\*args, \**kwargs)``,
         except for storing the graph_type attribute
         """
         graph_type = kwargs.pop("graph_type", "flat")
