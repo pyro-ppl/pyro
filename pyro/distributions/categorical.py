@@ -175,5 +175,5 @@ class Categorical(Distribution):
         if self.one_hot:
             return Variable(torch.stack([t.expand_as(self.ps) for t in torch_eye(*self.event_shape())]))
         else:
-            return Variable(torch.stack([torch.LongTensor([t]).expand(*sample_shape)
+            return Variable(torch.stack([torch.LongTensor([t]).expand(sample_shape)
                                          for t in torch.arange(0, *self.event_shape()).long()]))
