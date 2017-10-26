@@ -1,10 +1,10 @@
 import numbers
-import warnings
 
 import pyro
 import pyro.poutine as poutine
 from pyro.infer.enum import iter_discrete_traces
 from pyro.distributions.util import torch_zeros_like
+from pyro.util import unique_namespace
 
 
 class Trace_ELBO(object):
@@ -55,7 +55,6 @@ class Trace_ELBO(object):
         Evaluates the ELBO with an estimator that uses num_particles many samples/particles.
         """
         elbo = 0.0
-        samples_seen = set()
         for weight, model_trace, guide_trace, log_r in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = weight * 0
 
@@ -65,7 +64,6 @@ class Trace_ELBO(object):
                     if model_trace.nodes[name]["is_observed"]:
                         elbo_particle += model_trace.nodes[name][log_pdf]
                     else:
-                        samples_seen.add(name)
                         elbo_particle += model_trace.nodes[name][log_pdf]
                         elbo_particle -= guide_trace.nodes[name][log_pdf]
 
@@ -78,12 +76,7 @@ class Trace_ELBO(object):
 
             elbo += (weight * elbo_particle).data.sum()
 
-        all_samples = [name for name in guide_trace.nodes.keys()
-                       if guide_trace.nodes[name]["type"] == "sample"]
-
-        if samples_seen != set(all_samples):
-            extra_vars = set(all_samples).difference(samples_seen)
-            warnings.warn('Model and guide samples do not match up: {}'.format(extra_vars))
+        unique_namespace(model_trace, guide_trace)
 
         loss = -elbo
         return loss
@@ -99,7 +92,6 @@ class Trace_ELBO(object):
         elbo = 0.0
         surrogate_elbo = 0.0
         trainable_params = set()
-        samples_seen = set()
         # grab a trace from the generator
         for weight, model_trace, guide_trace, log_r in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = weight * 0
@@ -112,7 +104,6 @@ class Trace_ELBO(object):
                         elbo_particle += model_trace.nodes[name][log_pdf]
                         surrogate_elbo_particle += model_trace.nodes[name][log_pdf]
                     else:
-                        samples_seen.add(name)
                         lp_lq = model_trace.nodes[name][log_pdf] - guide_trace.nodes[name][log_pdf]
                         elbo_particle += lp_lq
                         if guide_trace.nodes[name]["fn"].reparameterized:
@@ -145,12 +136,7 @@ class Trace_ELBO(object):
                 if guide_trace.nodes[name]["type"] == "param":
                     trainable_params.add(guide_trace.nodes[name]["value"])
 
-        all_samples = [name for name in guide_trace.nodes.keys()
-                       if guide_trace.nodes[name]["type"] == "sample"]
-
-        if samples_seen != set(all_samples):
-            extra_vars = set(all_samples).difference(samples_seen)
-            warnings.warn('Model and guide samples do not match up: {}'.format(extra_vars))
+        unique_namespace(model_trace, guide_trace)
 
         surrogate_loss = -surrogate_elbo
         surrogate_loss.backward()

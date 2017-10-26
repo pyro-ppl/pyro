@@ -2,6 +2,7 @@ import pyro
 import graphviz
 import numpy as np
 import functools
+import warnings
 import torch
 from torch.autograd import Variable
 from torch.nn import Parameter
@@ -340,6 +341,17 @@ def save_visualization(trace, graph_output):
         g.edge(label1, label2)
 
     g.render(graph_output, view=False, cleanup=True)
+
+
+def unique_namespace(model_trace, guide_trace):
+    model_samples = [name for name in model_trace.nodes.keys()
+                     if model_trace.nodes[name]["type"] == "sample"
+                     and not model_trace.nodes[name]["is_observed"]]
+    guide_samples = [name for name in guide_trace.nodes.keys()
+                     if guide_trace.nodes[name]["type"] == "sample"]
+    if set(model_samples) != set(guide_samples):
+            extra_vars = set(guide_samples).difference(model_samples)
+            warnings.warn('Model and guide samples do not match up: {}'.format(extra_vars))
 
 
 def deep_getattr(obj, name):
