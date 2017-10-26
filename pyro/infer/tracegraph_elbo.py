@@ -4,6 +4,7 @@ import torch
 import pyro
 import pyro.poutine as poutine
 from pyro.util import ng_zeros, detach_iterable
+from pyro.poutine.util import prune_subsample_sites
 
 
 class TraceGraph_ELBO(object):
@@ -48,6 +49,8 @@ class TraceGraph_ELBO(object):
                                         graph_type="dense").get_trace(*args, **kwargs)
             model_trace = poutine.trace(poutine.replay(model, guide_trace),
                                         graph_type="dense").get_trace(*args, **kwargs)
+            guide_trace = prune_subsample_sites(guide_trace)
+            model_trace = prune_subsample_sites(model_trace)
             weight = 1.0 / self.num_particles
             yield weight, model_trace, guide_trace
 
