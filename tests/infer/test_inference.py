@@ -413,6 +413,7 @@ class LogNormalNormalTests(TestCase):
         self.assertEqual(0.0, mu_error, prec=0.05)
         self.assertEqual(0.0, tau_error, prec=0.05)
 
+
 class SafetyTests(TestCase):
 
     def setUp(self):
@@ -432,7 +433,6 @@ class SafetyTests(TestCase):
             p = pyro.param("p", Variable(torch.ones(1), requires_grad=True))
             pyro.sample("mu_q", dist.diagnormal, ng_zeros(1), p)
             pyro.sample("mu_q_2", dist.diagnormal, ng_zeros(1), p)
-
 
         self.duplicate_model = model_dup
         self.duplicate_obs = model_obs_dup

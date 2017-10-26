@@ -78,7 +78,7 @@ class Trace_ELBO(object):
 
             elbo += (weight * elbo_particle).data.sum()
 
-        all_samples = [name for name in guide_trace.nodes.keys() \
+        all_samples = [name for name in guide_trace.nodes.keys()
                        if guide_trace.nodes[name]["type"] == "sample"]
 
         if samples_seen != set(all_samples):
@@ -145,7 +145,7 @@ class Trace_ELBO(object):
                 if guide_trace.nodes[name]["type"] == "param":
                     trainable_params.add(guide_trace.nodes[name]["value"])
 
-        all_samples = [name for name in guide_trace.nodes.keys() \
+        all_samples = [name for name in guide_trace.nodes.keys()
                        if guide_trace.nodes[name]["type"] == "sample"]
 
         if samples_seen != set(all_samples):
