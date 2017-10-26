@@ -439,23 +439,20 @@ class IndirectLambdaPoutineTests(TestCase):
 
         self.model = model
         self.expected_nodes = set(["z_0_0", "z_0_1", "z_1_0", "z_1_1", "mu_latent",
-                                   "map_outer", "map_inner_0", "map_inner_1",
                                    "_INPUT", "_RETURN"])
         self.expected_edges = set([
             ("mu_latent", "z_0_0"), ("mu_latent", "z_0_1"),
             ("mu_latent", "z_1_0"), ("mu_latent", "z_1_1"),
-            ("map_inner_0", "z_0_0"), ("map_inner_0", "z_0_1"),
-            ("map_inner_1", "z_1_0"), ("map_inner_1", "z_1_1"),
-            ("map_outer", "map_inner_0"), ("map_outer", "map_inner_1"),
-            ("map_outer", "z_0_0"), ("map_outer", "z_0_1"),
-            ("map_outer", "z_1_0"), ("map_outer", "z_1_1"),
-            ("mu_latent", "map_inner_0"), ("mu_latent", "map_inner_1"), ("mu_latent", "map_outer"),
         ])
 
     def test_graph_structure(self):
         tracegraph = poutine.trace(self.model, graph_type="dense").get_trace()
-        assert set(tracegraph.nodes()) == self.expected_nodes
-        assert set(tracegraph.edges()) == self.expected_edges
+        # Ignore structure on map_* nodes.
+        actual_nodes = set(n for n in tracegraph.nodes() if not n.startswith("map_"))
+        actual_edges = set((n1, n2) for n1, n2 in tracegraph.edges
+                           if not n1.startswith("map_") if not n2.startswith("map_"))
+        assert actual_nodes == self.expected_nodes
+        assert actual_edges == self.expected_edges
 
     def test_scale_factors(self):
         def _test_scale_factor(batch_size_outer, batch_size_inner, expected):

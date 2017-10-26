@@ -179,6 +179,18 @@ def irange_model(subsample_size):
     return result
 
 
+def nested_irange_model(subsample_size):
+    mu = Variable(torch.zeros(20))
+    sigma = Variable(torch.ones(20))
+    result = []
+    for i in pyro.irange("outer", 20, subsample_size):
+        result.append([])
+        for j in pyro.irange("inner", 20, 5):
+            pyro.sample("x_{}_{}".format(i, j), dist.diagnormal, mu[i] + mu[j], sigma[i] + sigma[j])
+            result[-1].append(j)
+    return result
+
+
 def map_data_vector_model(subsample_size):
     mu = Variable(torch.zeros(20))
     sigma = Variable(torch.ones(20))
@@ -207,9 +219,10 @@ def map_data_iter_model(subsample_size):
 @pytest.mark.parametrize('model', [
     iarange_model,
     irange_model,
+    nested_irange_model,
     map_data_vector_model,
     map_data_iter_model,
-], ids=['iarange', 'irange', 'map_data_vector', 'map_data_iter'])
+], ids=['iarange', 'irange', 'nested_irange', 'map_data_vector', 'map_data_iter'])
 def test_map_data_stack(model, subsample_size):
     tr = poutine.trace(model).get_trace(subsample_size)
     for name, node in tr.nodes.items():
@@ -221,9 +234,10 @@ def test_map_data_stack(model, subsample_size):
 @pytest.mark.parametrize('model', [
     iarange_model,
     irange_model,
+    nested_irange_model,
     map_data_vector_model,
     map_data_iter_model,
-], ids=['iarange', 'irange', 'map_data_vector', 'map_data_iter'])
+], ids=['iarange', 'irange', 'nested_irange', 'map_data_vector', 'map_data_iter'])
 def test_replay(model, subsample_size):
     pyro.set_rng_seed(0)
 
