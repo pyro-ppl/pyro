@@ -11,18 +11,19 @@ from pyro.optim import Adam
 from pyro.infer import SVI
 
 
-def assert_ok(model, guide):
-    inference = SVI(model, guide, Adam({"lr": 1e-3}), "ELBO", trace_graph=True)
+def assert_ok(model, guide, **kwargs):
+    inference = SVI(model, guide, Adam({"lr": 1e-3}), "ELBO", **kwargs)
     inference.step()
 
 
-def assert_error(model, guide):
-    inference = SVI(model,  guide, Adam({"lr": 1e-3}), "ELBO", trace_graph=True)
+def assert_error(model, guide, **kwargs):
+    inference = SVI(model,  guide, Adam({"lr": 1e-3}), "ELBO", **kwargs)
     with pytest.raises(SyntaxError):
         inference.step()
 
 
-def test_irange_ok():
+@pytest.mark.parametrize("trace_graph", [True, False])
+def test_irange_ok(trace_graph):
 
     def model():
         p = Variable(torch.Tensor([0.5]))
@@ -32,12 +33,13 @@ def test_irange_ok():
     def guide():
         p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
         for i in pyro.irange("irange", 10, 5):
-                pyro.sample("x_{}".format(i), dist.bernoulli, p)
+            pyro.sample("x_{}".format(i), dist.bernoulli, p)
 
-    assert_ok(model, guide)
+    assert_ok(model, guide, trace_graph=trace_graph)
 
 
-def test_iarange_ok():
+@pytest.mark.parametrize("trace_graph", [True, False])
+def test_iarange_ok(trace_graph):
 
     def model():
         p = Variable(torch.Tensor([0.5]))
@@ -49,11 +51,12 @@ def test_iarange_ok():
         with pyro.iarange("irange", 10, 5) as ind:
             pyro.sample("x", dist.bernoulli, p, batch_size=len(ind))
 
-    assert_ok(model, guide)
+    assert_ok(model, guide, trace_graph=trace_graph)
 
 
 @pytest.mark.xfail(reason="nested replay appears to be broken")
-def test_irange_irange_ok():
+@pytest.mark.parametrize("trace_graph", [True, False])
+def test_irange_irange_ok(trace_graph):
 
     def model():
         p = Variable(torch.Tensor([0.5]))
@@ -67,7 +70,7 @@ def test_irange_irange_ok():
             for j in pyro.irange("irange_1", 10, 5):
                 pyro.sample("x_{}_{}".format(i, j), dist.bernoulli, p)
 
-    assert_ok(model, guide)
+    assert_ok(model, guide, trace_graph=trace_graph)
 
 
 @pytest.mark.xfail(reason="error is not caught")
@@ -85,11 +88,12 @@ def test_iarange_irange_error():
             for i in pyro.irange("irange", 10, 5):
                 pyro.sample("x_{}".format(i), dist.bernoulli, p, batch_size=len(ind))
 
-    assert_error(model, guide)
+    assert_error(model, guide, trace_graph=True)
 
 
 @pytest.mark.xfail(reason="nested replay appears to be broken")
-def test_irange_iarange_ok():
+@pytest.mark.parametrize("trace_graph", [True, False])
+def test_irange_iarange_ok(trace_graph):
 
     def model():
         p = Variable(torch.Tensor([0.5]))
@@ -103,7 +107,7 @@ def test_irange_iarange_ok():
             with pyro.iarange("iarange", 10, 5) as ind:
                 pyro.sample("x_{}".format(i), dist.bernoulli, p, batch_size=len(ind))
 
-    assert_ok(model, guide)
+    assert_ok(model, guide, trace_graph=trace_graph)
 
 
 @pytest.mark.xfail(reason="error is not caught")
@@ -121,7 +125,7 @@ def test_iarange_iarange_error():
             with pyro.iarange("iarange_1", 10, 5) as ind2:
                 pyro.sample("x", dist.bernoulli, p, batch_size=len(ind1) * len(ind2))
 
-    assert_error(model, guide)
+    assert_error(model, guide, trace_graph=True)
 
 
 @pytest.mark.xfail(reason="error is not caught")
@@ -137,4 +141,77 @@ def test_iarange_wrong_size_error():
         with pyro.iarange("iarange", 10, 5) as ind:
             pyro.sample("x", dist.bernoulli, p, batch_size=1 + len(ind))
 
-    assert_error(model, guide)
+    assert_error(model, guide, trace_graph=True)
+
+
+def test_enum_discrete_single_ok():
+
+    def model():
+        p = Variable(torch.Tensor([0.5]))
+        pyro.sample("x", dist.bernoulli, p)
+
+    def guide():
+        p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
+        pyro.sample("x", dist.bernoulli, p)
+
+    assert_ok(model, guide, enum_discrete=True)
+
+
+def test_enum_discrete_single_single_ok():
+
+    def model():
+        p = Variable(torch.Tensor([0.5]))
+        pyro.sample("x", dist.bernoulli, p)
+        pyro.sample("y", dist.bernoulli, p)
+
+    def guide():
+        p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
+        pyro.sample("x", dist.bernoulli, p)
+        pyro.sample("y", dist.bernoulli, p)
+
+    assert_ok(model, guide, enum_discrete=True)
+
+
+def test_enum_discrete_irange_single_ok():
+
+    def model():
+        p = Variable(torch.Tensor([0.5]))
+        for i in pyro.irange("irange", 10, 5):
+            pyro.sample("x_{}".format(i), dist.bernoulli, p)
+
+    def guide():
+        p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
+        for i in pyro.irange("irange", 10, 5):
+            pyro.sample("x_{}".format(i), dist.bernoulli, p)
+
+    assert_ok(model, guide, enum_discrete=True)
+
+
+@pytest.mark.xfail(reason="tensor shape mismatch in: elbo_particle += ...")
+def test_iarange_enum_discrete_batch_ok():
+
+    def model():
+        p = Variable(torch.Tensor([0.5]))
+        with pyro.iarange("iarange", 10, 5) as ind:
+            pyro.sample("x", dist.bernoulli, p, batch_size=len(ind))
+
+    def guide():
+        p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
+        with pyro.iarange("iarange", 10, 5) as ind:
+            pyro.sample("x", dist.bernoulli, p, batch_size=len(ind))
+
+    assert_ok(model, guide, enum_discrete=True)
+
+
+@pytest.mark.xfail(reason="error is not caught")
+def test_no_iarange_enum_discrete_batch_error():
+
+    def model():
+        p = Variable(torch.Tensor([0.5]))
+        pyro.sample("x", dist.bernoulli, p, batch_size=5)
+
+    def guide():
+        p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
+        pyro.sample("x", dist.bernoulli, p, batch_size=5)
+
+    assert_error(model, guide, enum_discrete=True)
