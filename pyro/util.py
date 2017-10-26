@@ -344,6 +344,12 @@ def save_visualization(trace, graph_output):
 
 
 def unique_namespace(model_trace, guide_trace):
+    """
+    :param model_trace: Trace object of the model
+    :param guide_trace: Trace object of the guide
+    Checks that there is a bijection between the samples in the guide
+    and the samples in the model. Throws a warning if not.
+    """
     model_samples = [name for name in model_trace.nodes.keys()
                      if model_trace.nodes[name]["type"] == "sample"
                      and not model_trace.nodes[name]["is_observed"]]
