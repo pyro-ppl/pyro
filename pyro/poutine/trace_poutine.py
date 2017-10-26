@@ -179,9 +179,10 @@ class TracePoutine(Poutine):
         and return the return value.
         """
         if msg["name"] in self.trace:
-            # XXX temporary solution - right now, if the name appears in the trace,
-            # we assume that this was intentional and that the poutine restarted,
-            # so we should reset self.trace to be empty
+            # Cannot repeat names between params and samples
+            if self.trace.nodes[msg['name']]['type'] == "param":
+                raise RuntimeError("{} is already in the trace as a param".format(msg['name']))
+            # XXX temporary solution - otherwise, we reset self.trace to be empty
             tr = Trace(graph_type=self.graph_type)
             tr.add_node("_INPUT",
                         name="_INPUT", type="input",
@@ -208,6 +209,10 @@ class TracePoutine(Poutine):
         If it does exist, grab it from the parameter store.
         Store the parameter in self.trace, and then return the parameter.
         """
+        if msg["name"] in self.trace:
+            if self.trace.nodes[msg['name']]['type'] == "sample":
+                raise RuntimeError("{} is already in the trace as a sample".format(msg['name']))
+
         val = super(TracePoutine, self)._pyro_param(msg)
         site = msg.copy()
         site.update(value=val)
