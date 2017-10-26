@@ -215,3 +215,29 @@ def test_no_iarange_enum_discrete_batch_error():
         pyro.sample("x", dist.bernoulli, p, batch_size=5)
 
     assert_error(model, guide, enum_discrete=True)
+
+
+@pytest.mark.xfail(reason="tensor shape mismatch in: elbo_particle += ...")
+def test_enum_discrete_global_local_ok():
+    # TODO Simplify this test when test_iarange_enum_discrete_batch_ok passes:
+    test_iarange_enum_discrete_batch_ok_passes = False
+
+    def model():
+        p = Variable(torch.Tensor([0.5]))
+        pyro.sample("x", dist.bernoulli, p)
+        if test_iarange_enum_discrete_batch_ok_passes:
+            with pyro.iarange("iarange", 10, 5) as ind:
+                pyro.sample("y", dist.bernoulli, p, batch_size=len(ind))
+        else:
+            pyro.sample("y", dist.bernoulli, p, batch_size=5)
+
+    def guide():
+        p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
+        pyro.sample("x", dist.bernoulli, p)
+        if test_iarange_enum_discrete_batch_ok_passes:
+            with pyro.iarange("iarange", 10, 5) as ind:
+                pyro.sample("y", dist.bernoulli, p, batch_size=len(ind))
+        else:
+            pyro.sample("y", dist.bernoulli, p, batch_size=5)
+
+    assert_ok(model, guide, enum_discrete=True)
