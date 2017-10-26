@@ -13,63 +13,51 @@ class Poisson(Distribution):
     Poisson distribution over integers parameterizeds by lambda.
     """
 
-    def _sanitize_input(self, lam):
-        if lam is not None:
-            # stateless distribution
-            return lam
-        elif self.lam is not None:
-            # stateful distribution
-            return self.lam
-        else:
-            raise ValueError("Parameter(s) were None")
-
-    def __init__(self, lam=None, batch_size=None, *args, **kwargs):
+    def __init__(self, lam, batch_size=None, *args, **kwargs):
         """
           `lam` - rate parameter
         """
         self.lam = lam
-        if lam is not None:
-            if lam.dim() == 1 and batch_size is not None:
-                self.lam = lam.expand(batch_size, lam.size(0))
+        if lam.dim() == 1 and batch_size is not None:
+            self.lam = lam.expand(batch_size, lam.size(0))
         super(Poisson, self).__init__(*args, **kwargs)
 
-    def batch_shape(self, lam=None):
-        lam = self._sanitize_input(lam)
+    def batch_shape(self, x=None):
         event_dim = 1
+        lam = self.lam
+        if x is not None and x.size() != lam.size():
+            lam = self.lam.expand_as(x)
         return lam.size()[:-event_dim]
 
-    def event_shape(self, lam=None):
-        lam = self._sanitize_input(lam)
+    def event_shape(self):
         event_dim = 1
-        return lam.size()[-event_dim:]
+        return self.lam.size()[-event_dim:]
 
-    def sample(self, lam=None):
+    def shape(self, x=None):
+        return self.batch_shape(x) + self.event_shape()
+
+    def sample(self):
         """
         Poisson sampler.
         """
-        lam = self._sanitize_input(lam)
-        x = npr.poisson(lam=lam.data.cpu().numpy()).astype("float")
-        return Variable(torch.Tensor(x).type_as(lam.data))
+        x = npr.poisson(lam=self.lam.data.cpu().numpy()).astype("float")
+        return Variable(torch.Tensor(x).type_as(self.lam.data))
 
-    def batch_log_pdf(self, x, lam=None):
+    def batch_log_pdf(self, x):
         """
         Poisson log-likelihood
         NOTE: Requires Pytorch implementation of log_gamma to be differentiable
         """
-        lam = self._sanitize_input(lam)
-        if lam.size() != x.size():
-            lam = lam.expand_as(x)
+        lam = self.lam.expand(self.shape(x))
         ll_1 = torch.sum(x * torch.log(lam), -1)
         ll_2 = -torch.sum(lam, -1)
         ll_3 = -torch.sum(log_gamma(x + 1.0), -1)
         batch_log_pdf = ll_1 + ll_2 + ll_3
-        batch_log_pdf_shape = self.batch_shape(lam) + (1,)
+        batch_log_pdf_shape = self.batch_shape(x) + (1,)
         return batch_log_pdf.contiguous().view(batch_log_pdf_shape)
 
-    def analytic_mean(self, lam=None):
-        lam = self._sanitize_input(lam)
-        return lam
+    def analytic_mean(self):
+        return self.lam
 
-    def analytic_var(self, lam=None):
-        lam = self._sanitize_input(lam)
-        return lam
+    def analytic_var(self):
+        return self.lam

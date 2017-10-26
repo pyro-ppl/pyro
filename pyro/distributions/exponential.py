@@ -12,61 +12,49 @@ class Exponential(Distribution):
     """
     reparameterized = True
 
-    def _sanitize_input(self, lam):
-        if lam is not None:
-            # stateless distribution
-            return lam
-        elif self.lam is not None:
-            # stateful distribution
-            return self.lam
-        else:
-            raise ValueError("Parameter(s) were None")
-
-    def __init__(self, lam=None, batch_size=None, *args, **kwargs):
+    def __init__(self, lam, batch_size=None, *args, **kwargs):
         """
         Params:
           `lam` - lambda
         """
         self.lam = lam
-        if lam is not None:
-            if lam.dim() == 1 and batch_size is not None:
-                self.lam = lam.expand(batch_size, lam.size(0))
+        if lam.dim() == 1 and batch_size is not None:
+            self.lam = lam.expand(batch_size, lam.size(0))
         super(Exponential, self).__init__(*args, **kwargs)
 
-    def batch_shape(self, lam=None):
-        lam = self._sanitize_input(lam)
+    def batch_shape(self, x=None):
         event_dim = 1
+        lam = self.lam
+        if x is not None and x.size() != lam.size():
+            lam = self.lam.expand_as(x)
         return lam.size()[:-event_dim]
 
-    def event_shape(self, lam=None):
-        lam = self._sanitize_input(lam)
+    def event_shape(self):
         event_dim = 1
-        return lam.size()[-event_dim:]
+        return self.lam.size()[-event_dim:]
 
-    def sample(self, lam=None):
+    def shape(self, x=None):
+        return self.batch_shape(x) + self.event_shape()
+
+    def sample(self):
         """
         reparameterized sampler.
         """
-        lam = self._sanitize_input(lam)
-        eps = Variable(torch.rand(lam.size()).type_as(lam.data))
-        x = -torch.log(eps) / lam
+        eps = Variable(torch.rand(self.lam.size()).type_as(self.lam.data))
+        x = -torch.log(eps) / self.lam
         return x
 
-    def batch_log_pdf(self, x, lam=None, batch_size=1):
+    def batch_log_pdf(self, x):
         """
         exponential log-likelihood
         """
-        lam = self._sanitize_input(lam)
-        if lam.size() != x.size():
-            lam = lam.expand_as(x)
+        lam = self.lam.expand_as(x)
         ll = - lam * x + torch.log(lam)
-        batch_log_pdf_shape = self.batch_shape(lam) + (1,)
+        batch_log_pdf_shape = self.batch_shape(x) + (1,)
         return torch.sum(ll, -1).contiguous().view(batch_log_pdf_shape)
 
-    def analytic_mean(self, lam=None):
-        lam = self._sanitize_input(lam)
-        return torch.pow(lam, -1.0)
+    def analytic_mean(self):
+        return torch.pow(self.lam, -1.0)
 
-    def analytic_var(self, lam=None):
-        lam = self._sanitize_input(lam)
-        return torch.pow(lam, -2.0)
+    def analytic_var(self):
+        return torch.pow(self.lam, -2.0)
