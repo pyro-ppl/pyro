@@ -5,13 +5,19 @@ class RandomPrimitive(Distribution):
     """
     For help on a RandomPrimitive instance rp, use help(rp.dist_class).
     """
-    __slots__ = ['dist_class', 'enumerable', 'reparameterized']
+    __slots__ = ['dist_class']
 
     def __init__(self, dist_class):
         self.dist_class = dist_class
-        self.enumerable = dist_class.enumerable
-        self.reparameterized = dist_class.reparameterized
         super(RandomPrimitive, self).__init__()
+
+    @property
+    def enumerable(self):
+        return self.dist_class.enumerable
+
+    @property
+    def reparameterized(self):
+        return self.dist_class.reparameterized
 
     def batch_shape(self, x, *args, **kwargs):
         return self.dist_class(*args, **kwargs).batch_shape(x)
