@@ -97,7 +97,7 @@ class AIR(nn.Module):
 
     def model(self, data, batch_size, **kwargs):
         pyro.module("decode", self.decode)
-        with pyro.iarange('data', data.size(0), subsample_size=batch_size, use_cuda=self.use_cuda) as ix:
+        with pyro.iarange('data', data.size(0), use_cuda=self.use_cuda) as ix:
             return self.local_model(batch_size, data[ix], **kwargs)
 
     def local_model(self, n, batch=None, **kwargs):

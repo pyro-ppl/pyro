@@ -51,7 +51,7 @@ def test_sample_shape(dist):
         assert_equal(x_obj.size(), x_func.size())
         with xfail_if_not_implemented():
             # TODO remove once #323 is resolved
-            if dist.get_test_distribution_name() == 'Bernoulli':
+            if isinstance(dist.pyro_dist, RandomPrimitive):
                 assert(x_func.size() == d.shape(x_func, **dist_params))
                 return
             assert x_func.size() == d.shape(**dist_params)
