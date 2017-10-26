@@ -68,10 +68,12 @@ class TestCategorical(TestCase):
 
     def test_discrete_arr_logpdf(self):
         log_px_torch = dist.categorical.batch_log_pdf(self.d_v_test_data,
-                                                      self.d_ps, self.d_vs_arr).data[0][0]
+                                                      self.d_ps,
+                                                      self.d_vs_arr).data[0][0]
         log_px_np = float(sp.multinomial.logpmf(np.array([1, 0, 0]), 1, self.d_ps[0].data.cpu().numpy()))
         log_px_torch2 = dist.categorical.batch_log_pdf(self.d_v_test_data,
-                                                       self.d_ps, self.d_vs_arr).data[1][0]
+                                                       self.d_ps,
+                                                       self.d_vs_arr).data[1][0]
         log_px_np2 = float(sp.multinomial.logpmf(np.array([0, 0, 1]), 1, self.d_ps[1].data.cpu().numpy()))
         self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
         self.assertEqual(log_px_torch2, log_px_np2, prec=1e-4)

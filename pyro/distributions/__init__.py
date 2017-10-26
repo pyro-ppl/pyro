@@ -18,9 +18,9 @@ from pyro.distributions.random_primitive import RandomPrimitive
 from pyro.distributions.uniform import Uniform
 
 # function aliases
-diagnormal = DiagNormal()
+diagnormal = RandomPrimitive(DiagNormal)
 lognormal = RandomPrimitive(LogNormal)
-categorical = Categorical()
+categorical = RandomPrimitive(Categorical)
 bernoulli = RandomPrimitive(Bernoulli)
 beta = RandomPrimitive(Beta)
 delta = RandomPrimitive(Delta)
