@@ -96,7 +96,7 @@ def test_irange_irange_swap_error(trace_graph, subsample_size):
 
 @pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
 @pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
-def test_irange_in_model_not_guide_error(trace_graph, subsample_size):
+def test_irange_in_model_not_guide_ok(trace_graph, subsample_size):
 
     def model():
         p = Variable(torch.Tensor([0.5]))
@@ -108,7 +108,7 @@ def test_irange_in_model_not_guide_error(trace_graph, subsample_size):
         p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
         pyro.sample("x", dist.bernoulli, p)
 
-    assert_error(model, guide, trace_graph=trace_graph)
+    assert_ok(model, guide, trace_graph=trace_graph)
 
 
 @pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])

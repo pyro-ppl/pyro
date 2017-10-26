@@ -355,21 +355,37 @@ def save_visualization(trace, graph_output):
     g.render(graph_output, view=False, cleanup=True)
 
 
-def check_unique_namespace(model_trace, guide_trace):
+def check_site_names(model_trace, guide_trace):
     """
-    :param model_trace: Trace object of the model
-    :param guide_trace: Trace object of the guide
-    Checks that there is a bijection between the samples in the guide
-    and the samples in the model. Throws a warning if not.
+    :param pyro.poutine.Trace model_trace: Trace object of the model
+    :param pyro.poutine.Trace guide_trace: Trace object of the guide
+    :raises: RuntimeWarning
+
+    Checks that (1) there is a bijection between the samples in the guide
+    and the samples in the model, and (2) each `iarange` statement in the
+    guide also appears in the model.
     """
-    model_samples = [name for name in model_trace.nodes.keys()
-                     if model_trace.nodes[name]["type"] == "sample"
-                     and not model_trace.nodes[name]["is_observed"]]
-    guide_samples = [name for name in guide_trace.nodes.keys()
-                     if guide_trace.nodes[name]["type"] == "sample"]
-    if set(model_samples) != set(guide_samples):
-            extra_vars = set(guide_samples).difference(model_samples)
-            warnings.warn('Model and guide samples do not match up: {}'.format(extra_vars))
+    # Check ordinary sample sites.
+    model_vars = set(name for name, site in model_trace.nodes.items()
+                     if site["type"] == "sample" and not site["is_observed"]
+                     if type(site["fn"]).__name__ != "_Subsample")
+    guide_vars = set(name for name, site in guide_trace.nodes.items()
+                     if site["type"] == "sample"
+                     if type(site["fn"]).__name__ != "_Subsample")
+    if not (guide_vars <= model_vars):
+        warnings.warn("Found vars in guide but not model: {}".format(guide_vars - model_vars))
+    if not (model_vars <= guide_vars):
+        warnings.warn("Found vars in model but not guide: {}".format(model_vars - guide_vars))
+
+    # Check subsample sites introduced by iarange.
+    model_vars = set(name for name, site in model_trace.nodes.items()
+                     if site["type"] == "sample" and not site["is_observed"]
+                     if type(site["fn"]).__name__ == "_Subsample")
+    guide_vars = set(name for name, site in guide_trace.nodes.items()
+                     if site["type"] == "sample"
+                     if type(site["fn"]).__name__ == "_Subsample")
+    if not (guide_vars <= model_vars):
+        warnings.warn("Found iarange statements in guide but not model: {}".format(guide_vars - model_vars))
 
 
 def deep_getattr(obj, name):
