@@ -37,8 +37,11 @@ class Trace_ELBO(object):
                 for scale, guide_trace in iter_discrete_traces("flat", guide, *args, **kwargs):
                     model_trace = poutine.trace(poutine.replay(model, guide_trace),
                                                 graph_type="flat").get_trace(*args, **kwargs)
+
+                    check_site_names(model_trace, guide_trace)
                     guide_trace = prune_subsample_sites(guide_trace)
                     model_trace = prune_subsample_sites(model_trace)
+
                     log_r = model_trace.batch_log_pdf() - guide_trace.batch_log_pdf()
                     weight = scale / self.num_particles
                     yield weight, model_trace, guide_trace, log_r
@@ -46,9 +49,11 @@ class Trace_ELBO(object):
 
             guide_trace = poutine.trace(guide).get_trace(*args, **kwargs)
             model_trace = poutine.trace(poutine.replay(model, guide_trace)).get_trace(*args, **kwargs)
+
+            check_site_names(model_trace, guide_trace)
             guide_trace = prune_subsample_sites(guide_trace)
             model_trace = prune_subsample_sites(model_trace)
-            check_site_names(model_trace, guide_trace)
+
             log_r = model_trace.log_pdf() - guide_trace.log_pdf()
             weight = 1.0 / self.num_particles
             yield weight, model_trace, guide_trace, log_r
