@@ -421,6 +421,10 @@ class SafetyTests(TestCase):
             pyro.param("mu_q", Variable(torch.ones(1), requires_grad=True))
             pyro.sample("mu_q", dist.diagnormal, ng_zeros(1), ng_ones(1))
 
+        def model_obs_dup():
+            pyro.sample("mu_q", dist.diagnormal, ng_zeros(1), ng_ones(1))
+            pyro.observe("mu_q", dist.diagnormal, ng_zeros(1), ng_ones(1), ng_zeros(1))
+
         def model():
             pyro.sample("mu_q", dist.diagnormal, ng_zeros(1), ng_ones(1))
 
@@ -431,6 +435,7 @@ class SafetyTests(TestCase):
 
 
         self.duplicate_model = model_dup
+        self.duplicate_obs = model_obs_dup
         self.model = model
         self.guide = guide
 
@@ -450,4 +455,13 @@ class SafetyTests(TestCase):
         svi = SVI(self.model, self.guide, adam, loss="ELBO", trace_graph=False)
 
         with pytest.warns(Warning):
+            svi.step()
+
+    def test_duplicate_obs_name(self):
+        pyro.clear_param_store()
+
+        adam = optim.Adam({"lr": .001})
+        svi = SVI(self.duplicate_obs, self.guide, adam, loss="ELBO", trace_graph=False)
+
+        with pytest.raises(RuntimeError):
             svi.step()

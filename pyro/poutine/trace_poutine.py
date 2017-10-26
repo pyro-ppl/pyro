@@ -180,8 +180,11 @@ class TracePoutine(Poutine):
         """
         if msg["name"] in self.trace:
             # Cannot repeat names between params and samples
-            if self.trace.nodes[msg['name']]['type'] == "param":
+            if self.trace.nodes[msg['name']]['type'] == 'param':
                 raise RuntimeError("{} is already in the trace as a param".format(msg['name']))
+            # observe has the same name as a sample
+            if msg['is_observed'] and not self.trace.nodes[msg['name']]['is_observed']:
+                raise RuntimeError("observe cannot have the same name as a sample")
             # XXX temporary solution - otherwise, we reset self.trace to be empty
             tr = Trace(graph_type=self.graph_type)
             tr.add_node("_INPUT",
