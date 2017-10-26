@@ -13,8 +13,6 @@ from pyro.distributions.exponential import Exponential
 from pyro.distributions.gamma import Gamma
 from pyro.distributions.log_normal import LogNormal
 from pyro.distributions.multinomial import Multinomial
-from pyro.distributions.normal import Normal
-from pyro.distributions.normal_chol import NormalChol
 from pyro.distributions.poisson import Poisson
 from pyro.distributions.random_primitive import RandomPrimitive
 from pyro.distributions.uniform import Uniform
@@ -29,8 +27,6 @@ delta = Delta()
 exponential = Exponential()
 gamma = Gamma()
 multinomial = Multinomial()
-normal = Normal()
-normalchol = NormalChol()
 poisson = Poisson()
 uniform = Uniform()
 dirichlet = Dirichlet()
