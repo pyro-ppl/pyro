@@ -317,8 +317,7 @@ def all_escape(trace, msg):
 
 def save_visualization(trace, graph_output):
     """
-    :param trace: a trace to be visualized
-    :type trace: pyro.poutine.Trace
+    :param pyro.poutine.Trace trace: a trace to be visualized
     :param graph_output: the graph will be saved to graph_output.pdf
     :type graph_output: str
 
