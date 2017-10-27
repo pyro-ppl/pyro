@@ -94,11 +94,11 @@ def test_mean_and_variance(dist):
     num_samples = dist.get_num_samples(SINGLE_TEST_DATUM_IDX)
     dist_params = dist.get_dist_params(SINGLE_TEST_DATUM_IDX)
     torch_samples = dist.get_samples(num_samples, **dist_params)
-    sample_mean = np.mean(torch_samples, 0)
-    sample_var = np.var(torch_samples, 0)
+    sample_mean = torch_samples.float().mean(0)
+    sample_var = torch_samples.float().var(0)
     try:
-        analytic_mean = unwrap_variable(dist.pyro_dist.analytic_mean(**dist_params))
-        analytic_var = unwrap_variable(dist.pyro_dist.analytic_var(**dist_params))
+        analytic_mean = dist.pyro_dist.analytic_mean(**dist_params)
+        analytic_var = dist.pyro_dist.analytic_var(**dist_params)
         assert_equal(sample_mean, analytic_mean, prec=dist.prec)
         assert_equal(sample_var, analytic_var, prec=dist.prec)
     except (NotImplementedError, ValueError):
