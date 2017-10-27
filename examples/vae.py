@@ -105,12 +105,12 @@ class VAE(nn.Module):
         z_mu = ng_zeros([x.size(0), self.z_dim], type_as=x.data)
         z_sigma = ng_ones([x.size(0), self.z_dim], type_as=x.data)
         # sample from prior (value will be sampled by guide when computing the ELBO)
-        z = pyro.sample("latent", DiagNormal(z_mu, z_sigma))
+        z = pyro.sample("latent", dist.normal, z_mu, z_sigma)
 
         # decode the latent code z
         mu_img, sigma_img = self.decoder(z)
         # score against actual images
-        pyro.observe("obs", DiagNormal(mu_img, sigma_img), x.view(-1, 784))
+        pyro.observe("obs", dist.normal, mu_img, sigma_img, x.view(-1, 784))
 
     # define the guide (i.e. variational distribution) q(z|x)
     def guide(self, x):
@@ -119,14 +119,14 @@ class VAE(nn.Module):
         # use the encoder to get the parameters used to define q(z|x)
         z_mu, z_sigma = self.encoder(x)
         # sample the latent code z
-        pyro.sample("latent", DiagNormal(z_mu, z_sigma))
+        pyro.sample("latent", dist.normal, z_mu, z_sigma)
 
     # define a helper function for reconstructing images
     def reconstruct_img(self, x):
         # encode image x
         z_mu, z_sigma = self.encoder(x)
         # sample in latent space
-        z = DiagNormal(z_mu, z_sigma).sample()
+        z = dist.normal(z_mu, z_sigma).sample()
         # decode the image (note we don't sample in image space)
         mu_img, sigma_img = self.decoder(z)
         return mu_img
