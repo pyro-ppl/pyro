@@ -24,7 +24,7 @@ First install [Pytorch](http://pytorch.org/).
 
 Install via pip:
 ```sh
-pip install pyroppl
+pip install pyro-ppl
 ```
 
 Install from source:
