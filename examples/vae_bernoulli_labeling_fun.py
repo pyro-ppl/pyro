@@ -257,15 +257,15 @@ def main():
         sample, sample_mu, sample_class = classify(mnist_data_test)
         acc = torch.sum(sample_class * mnist_labels_test) / \
             float(mnist_labels_test.size(0))  # .cpu().numpy()
-        acc_val = acc.data.cpu().numpy()[0]
+        acc_val = acc.data.numpy()[0]
         print('accuracy ' + str(acc_val))
         acc_test.append(acc_val)
-        # vis.image(batch_data[0].view(28, 28).data.cpu().numpy())
-        # vis.image(sample[0].view(28, 28).data.cpu().numpy())
-        vis.image(sample_mu[0].view(28, 28).data.cpu().numpy())  # ,opts=dict({'title': str(sample_class)}))
+        # vis.image(batch_data[0].view(28, 28).data.numpy())
+        # vis.image(sample[0].view(28, 28).data.numpy())
+        vis.image(sample_mu[0].view(28, 28).data.numpy())  # ,opts=dict({'title': str(sample_class)}))
         vis.line(np.array(acc_test), opts=dict(
             {'title': 'Test Classification Acc. given 100% Tr.-labels'}))
-        # vis.image(sample_class.view(1,10).data.cpu().numpy())
+        # vis.image(sample_class.view(1,10).data.numpy())
         print("epoch avg loss {}".format(epoch_loss / float(mnist_size)))
 
 
