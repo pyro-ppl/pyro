@@ -117,7 +117,7 @@ class InverseAutoregressiveFlow(Bijector):
 
     Example usage:
 
-    base_dist = DiagNormal(...)
+    base_dist = Normal(...)
     iaf = InverseAutoregressiveFlow(...)
     pyro.module("my_iaf", iaf)
     iaf_dist = TransformedDistribution(base_dist, iaf)

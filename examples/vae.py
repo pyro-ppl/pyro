@@ -6,7 +6,7 @@ import torchvision.datasets as dset
 import torchvision.transforms as transforms
 import visdom
 import pyro
-from pyro.distributions import DiagNormal
+from pyro.distributions import Normal
 from pyro.util import ng_zeros, ng_ones
 from pyro.infer import SVI
 from pyro.optim import Adam
@@ -97,12 +97,12 @@ class VAE(nn.Module):
         z_mu = ng_zeros([data.size(0), self.z_dim], type_as=data.data)
         z_sigma = ng_ones([data.size(0), self.z_dim], type_as=data.data)
         # sample from prior (value will be sampled by guide when computing the ELBO)
-        z = pyro.sample("latent", DiagNormal(z_mu, z_sigma))
+        z = pyro.sample("latent", Normal(z_mu, z_sigma))
 
         # decode z
         mu_img, sigma_img = self.decoder(z)
         # score against actual images
-        pyro.observe("obs", DiagNormal(mu_img, sigma_img), data.view(-1, 784))
+        pyro.observe("obs", Normal(mu_img, sigma_img), data.view(-1, 784))
 
     # define the guide (i.e. variational distribution) q(z|x)
     def guide(self, data):
@@ -111,7 +111,7 @@ class VAE(nn.Module):
         # use the encoder to get the parameters used to define q(z|x)
         z_mu, z_sigma = self.encoder(data)
         # sample the latent code z
-        pyro.sample("latent", DiagNormal(z_mu, z_sigma))
+        pyro.sample("latent", Normal(z_mu, z_sigma))
 
     # define a helper to sample from generative model
     def model_sample(self):
@@ -123,7 +123,7 @@ class VAE(nn.Module):
         if self.use_cuda:
             z_mu, z_sigma = z_mu.cuda(), z_sigma.cuda()
         # sample from prior (value will be sampled by guide in computing the ELBO)
-        z = pyro.sample("latent", DiagNormal(z_mu, z_sigma))
+        z = pyro.sample("latent", Normal(z_mu, z_sigma))
 
         # decode z
         mu_img, sigma_img = self.decoder(z)

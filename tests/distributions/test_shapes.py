@@ -13,15 +13,15 @@ def test_categorical_shape(one_hot):
         assert d.event_shape() == (2,)
         assert d.shape() == (3, 2)
     else:
-        assert d.event_shape() == (1,)
+        assert d.event_shape() == (2,)
         assert d.shape() == (3, 1)
     assert d.sample().size() == d.shape()
 
 
-def test_diag_normal_shape():
+def test_normal_shape():
     mu = ng_zeros(3, 2)
     sigma = ng_ones(3, 2)
-    d = dist.DiagNormal(mu, sigma)
+    d = dist.Normal(mu, sigma)
     assert d.batch_shape() == (3,)
     assert d.event_shape() == (2,)
     assert d.shape() == (3, 2)
@@ -56,9 +56,9 @@ def test_categorical_batch_log_pdf_shape(one_hot):
     assert d.batch_log_pdf(x).size() == (3, 2, 1)
 
 
-def test_diag_normal_batch_log_pdf_shape():
+def test_normal_batch_log_pdf_shape():
     mu = ng_zeros(3, 2)
     sigma = ng_ones(3, 2)
     x = ng_zeros(3, 2)
-    d = dist.DiagNormal(mu, sigma)
+    d = dist.Normal(mu, sigma)
     assert d.batch_log_pdf(x).size() == (3, 1)

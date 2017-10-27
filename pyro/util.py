@@ -1,11 +1,27 @@
-import pyro
+import functools
+import re
+import warnings
+
 import graphviz
 import numpy as np
-import functools
-import warnings
 import torch
 from torch.autograd import Variable
 from torch.nn import Parameter
+
+import pyro
+
+
+def parse_torch_version():
+    """
+    Parses `torch.__version__` into a semver-ish version tuple.
+    This is needed to handle subpatch `_n` parts outside of the semver spec.
+
+    :returns: a tuple `(major, minor, patch, extra_stuff)`
+    """
+    match = re.match(r"(\d\.\d\.\d)(.*)", torch.__version__)
+    major, minor, patch = map(int, match.group(1).split("."))
+    extra_stuff = match.group(2)
+    return major, minor, patch, extra_stuff
 
 
 def detach_iterable(iterable):
@@ -247,7 +263,7 @@ def enum_extend(trace, msg, num_samples=None):
         num_samples = -1
 
     extended_traces = []
-    for i, s in enumerate(msg["fn"].support(*msg["args"], **msg["kwargs"])):
+    for i, s in enumerate(msg["fn"].enumerate_support(*msg["args"], **msg["kwargs"])):
         if i > num_samples and num_samples >= 0:
             break
         msg_copy = msg.copy()

@@ -4,6 +4,7 @@ import warnings
 import contextlib
 from inspect import isclass
 from collections import OrderedDict
+import copy
 
 import torch
 from torch.autograd import Variable
@@ -387,5 +388,9 @@ def random_module(name, nn_module, prior, *args, **kwargs):
     assert hasattr(nn_module, "parameters"), "Module is not a NN module."
     # register params in param store
     lifted_fn = poutine.lift(pyro.module, prior)
-    # update_module_params must be True or the lifted module will not update local params
-    return lambda: lifted_fn(name, nn_module, update_module_params=True, *args, **kwargs)
+
+    def _fn():
+        nn_copy = copy.deepcopy(nn_module)
+        # update_module_params must be True or the lifted module will not update local params
+        return lifted_fn(name, nn_copy, update_module_params=True, *args, **kwargs)
+    return _fn

@@ -7,7 +7,7 @@ from torch.autograd import Variable
 
 import pyro
 import pyro.poutine as poutine
-from pyro.distributions import DiagNormal, Bernoulli
+from pyro.distributions import Normal, Bernoulli
 import pyro.distributions as dist
 from tests.common import TestCase, assert_equal
 from pyro.util import ng_ones, ng_zeros, \
@@ -26,23 +26,23 @@ class NormalNormalNormalPoutineTestCase(TestCase):
 
         def model():
             latent1 = pyro.sample("latent1",
-                                  DiagNormal(Variable(torch.zeros(2)),
-                                             Variable(torch.ones(2))))
+                                  Normal(Variable(torch.zeros(2)),
+                                         Variable(torch.ones(2))))
             latent2 = pyro.sample("latent2",
-                                  DiagNormal(latent1,
-                                             5 * Variable(torch.ones(2))))
-            x_dist = DiagNormal(latent2, Variable(torch.ones(2)))
+                                  Normal(latent1,
+                                         5 * Variable(torch.ones(2))))
+            x_dist = Normal(latent2, Variable(torch.ones(2)))
             pyro.observe("obs", x_dist, Variable(torch.ones(2)))
             return latent1
 
         def guide():
             mu1 = pyro.param("mu1", Variable(torch.randn(2), requires_grad=True))
             sigma1 = pyro.param("sigma1", Variable(torch.ones(2), requires_grad=True))
-            pyro.sample("latent1", DiagNormal(mu1, sigma1))
+            pyro.sample("latent1", Normal(mu1, sigma1))
 
             mu2 = pyro.param("mu2", Variable(torch.randn(2), requires_grad=True))
             sigma2 = pyro.param("sigma2", Variable(torch.ones(2), requires_grad=True))
-            latent2 = pyro.sample("latent2", DiagNormal(mu2, sigma2))
+            latent2 = pyro.sample("latent2", Normal(mu2, sigma2))
             return latent2
 
         self.model = model
@@ -191,7 +191,7 @@ class QueuePoutineDiscreteTest(TestCase):
         def model():
             ps = pyro.param("ps", Variable(torch.Tensor([[0.8], [0.3]])))
             mu = pyro.param("mu", Variable(torch.Tensor([[-0.1], [0.9]])))
-            sigma = Variable(torch.ones(1))
+            sigma = Variable(torch.ones(1, 1))
 
             latents = [Variable(torch.ones(1))]
             observes = []
@@ -203,7 +203,7 @@ class QueuePoutineDiscreteTest(TestCase):
 
                 observes.append(
                     pyro.observe("observe_{}".format(str(t)),
-                                 DiagNormal(mu[latents[-1][0].long().data], sigma),
+                                 Normal(mu[latents[-1][0].long().data], sigma),
                                  pyro.ones(1)))
             return latents
 
@@ -268,13 +268,13 @@ class LiftPoutineTests(TestCase):
             flat_tensor = tensor.view(-1)
             m = Variable(torch.zeros(flat_tensor.size(0)))
             s = Variable(torch.ones(flat_tensor.size(0)))
-            return DiagNormal(m, s).sample().view(tensor.size())
+            return Normal(m, s).sample().view(tensor.size())
 
         def sigma1_prior(tensor, *args, **kwargs):
             flat_tensor = tensor.view(-1)
             m = Variable(torch.zeros(flat_tensor.size(0)))
             s = Variable(torch.ones(flat_tensor.size(0)))
-            return DiagNormal(m, s).sample().view(tensor.size())
+            return Normal(m, s).sample().view(tensor.size())
 
         def mu2_prior(tensor, *args, **kwargs):
             flat_tensor = tensor.view(-1)
@@ -293,16 +293,16 @@ class LiftPoutineTests(TestCase):
         def stoch_fn(tensor, *args, **kwargs):
             mu = Variable(torch.zeros(tensor.size()))
             sigma = Variable(torch.ones(tensor.size()))
-            return pyro.sample("sample", DiagNormal(mu, sigma))
+            return pyro.sample("sample", Normal(mu, sigma))
 
         def guide():
             mu1 = pyro.param("mu1", Variable(torch.randn(2), requires_grad=True))
             sigma1 = pyro.param("sigma1", Variable(torch.ones(2), requires_grad=True))
-            pyro.sample("latent1", DiagNormal(mu1, sigma1))
+            pyro.sample("latent1", Normal(mu1, sigma1))
 
             mu2 = pyro.param("mu2", Variable(torch.randn(2), requires_grad=True))
             sigma2 = pyro.param("sigma2", Variable(torch.ones(2), requires_grad=True))
-            latent2 = pyro.sample("latent2", DiagNormal(mu2, sigma2))
+            latent2 = pyro.sample("latent2", Normal(mu2, sigma2))
             return latent2
 
         self.model = Model()
@@ -378,9 +378,9 @@ class QueuePoutineMixedTest(TestCase):
             mu = Variable(torch.zeros(1))
             sigma = Variable(torch.ones(1))
 
-            x = pyro.sample("x", DiagNormal(mu, sigma))  # Before the discrete variable.
+            x = pyro.sample("x", Normal(mu, sigma))  # Before the discrete variable.
             y = pyro.sample("y", Bernoulli(p))
-            z = pyro.sample("z", DiagNormal(mu, sigma))  # After the discrete variable.
+            z = pyro.sample("z", Normal(mu, sigma))  # After the discrete variable.
             return dict(x=x, y=y, z=z)
 
         self.sites = ["x", "y", "z", "_INPUT", "_RETURN"]
@@ -423,14 +423,14 @@ class IndirectLambdaPoutineTests(TestCase):
     def setUp(self):
 
         def model(batch_size_outer=2, batch_size_inner=2):
-            mu_latent = pyro.sample("mu_latent", dist.diagnormal, ng_zeros(1), ng_ones(1))
+            mu_latent = pyro.sample("mu_latent", dist.normal, ng_zeros(1), ng_ones(1))
 
             def outer(i, x):
                 pyro.map_data("map_inner_%d" % i, x, lambda _i, _x:
                               inner(i, _i, _x), batch_size=batch_size_inner)
 
             def inner(i, _i, _x):
-                pyro.sample("z_%d_%d" % (i, _i), dist.diagnormal, mu_latent + _x, ng_ones(1))
+                pyro.sample("z_%d_%d" % (i, _i), dist.normal, mu_latent + _x, ng_ones(1))
 
             pyro.map_data("map_outer", [[ng_ones(1)] * 2] * 2, lambda i, x:
                           outer(i, x), batch_size=batch_size_outer)
@@ -519,7 +519,7 @@ class ConditionPoutineTests(NormalNormalNormalPoutineTestCase):
         pyro.clear_param_store()
 
         def model():
-            z = pyro.sample("z", DiagNormal(10.0 * ng_ones(1), 0.0001 * ng_ones(1)))
+            z = pyro.sample("z", Normal(10.0 * ng_ones(1), 0.0001 * ng_ones(1)))
             latent_prob = torch.exp(z) / (torch.exp(z) + ng_ones(1))
             flip = pyro.sample("flip", Bernoulli(latent_prob))
             return flip
@@ -543,9 +543,9 @@ class EscapePoutineTests(TestCase):
             mu = Variable(torch.zeros(1))
             sigma = Variable(torch.ones(1))
 
-            x = pyro.sample("x", DiagNormal(mu, sigma))  # Before the discrete variable.
+            x = pyro.sample("x", Normal(mu, sigma))  # Before the discrete variable.
             y = pyro.sample("y", Bernoulli(p))
-            z = pyro.sample("z", DiagNormal(mu, sigma))  # After the discrete variable.
+            z = pyro.sample("z", Normal(mu, sigma))  # After the discrete variable.
             return dict(x=x, y=y, z=z)
 
         self.sites = ["x", "y", "z", "_INPUT", "_RETURN"]
