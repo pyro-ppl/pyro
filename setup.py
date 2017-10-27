@@ -29,6 +29,8 @@ setup(
             'pytest',
             'pytest-xdist',
             'yapf',
+            'sphinx',
+            'sphinx_rtd_theme',
         ],
     },
     tests_require=['flake8', 'pytest'],
