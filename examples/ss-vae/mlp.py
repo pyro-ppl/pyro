@@ -3,19 +3,39 @@ import torch.nn as nn
 import torch
 from inspect import isclass
 from os.path import splitext, exists, join
-
+from torch.autograd import Variable
 
 
 def is_variable(val):
     if hasattr(val, "data"):
-      return torch.is_tensor(val.data)
+        return torch.is_tensor(val.data)
     return False
+
+class EpsilonScaledSoftmax(nn.Softmax):
+    def __init__(self, epsilon, dim=1):
+        self.epsilon = epsilon
+        super(EpsilonScaledSoftmax, self).__init__(dim=dim)
+
+    def forward(self, val):
+        rval = super(EpsilonScaledSoftmax, self).forward(val)
+        return (rval*(1.0-2*self.epsilon)) + self.epsilon
+
+
+class EpsilonScaledSigmoid(nn.Sigmoid):
+    def __init__(self, epsilon):
+        self.epsilon = epsilon
+        super(EpsilonScaledSigmoid, self).__init__()
+
+    def forward(self, val):
+        rval = super(EpsilonScaledSigmoid, self).forward(val)
+        return (rval * (1.0 - 2 * self.epsilon)) + self.epsilon
+
 
 class Exp(nn.Module):
     def __init__(self):
         super(Exp, self).__init__()
     def forward(self, val):
-      return torch.exp(val)
+        return torch.exp(val)
 
 class ConcatModule(nn.Module):
     def __init__(self):
@@ -43,8 +63,12 @@ class ListOutModule(nn.ModuleList):
         # loop over modules in self, apply same args
         return [mm.forward(*args, **kwargs) for mm in self]
 
-def call_nn_op(op):
-    if op in [nn.Softmax,nn.LogSoftmax]:
+def call_nn_op(op,epsilon):
+    if op in [EpsilonScaledSoftmax]:
+        return op(epsilon, dim=1)
+    elif op in [EpsilonScaledSigmoid]:
+        return op(epsilon)
+    elif op in [nn.Softmax,nn.LogSoftmax]:
         return op(dim=1)
     else:
         return op()
@@ -53,7 +77,8 @@ class MLP(nn.Module):
 
     def __init__(self, mlp_sizes, activation=nn.ReLU, output_activation=None,
                     post_layer_fct=lambda layer_ix, total_layers, layer: None,
-                    post_act_fct=lambda layer_ix, total_layers, layer: None
+                    post_act_fct=lambda layer_ix, total_layers, layer: None,
+                    epsilon_scale=None
                     ):
         # init the module object
         super(MLP, self).__init__()
@@ -77,8 +102,14 @@ class MLP(nn.Module):
             assert type(layer_size) == int, "Hidden layer sizes must be ints"
 
             # get our nn layer module (in this case nn.Linear by default)
+            cur_linear_layer = nn.Linear(last_layer_size, layer_size)
+
+            # for numerical stability -- initialize the layer properly
+            cur_linear_layer.weight.data.normal_(0, 0.001)
+            cur_linear_layer.bias.data.normal_(0, 0.001)
+
             # add our linear layer
-            all_modules.append(nn.Linear(last_layer_size, layer_size))
+            all_modules.append(cur_linear_layer)
 
             # handle post_linear
             post_linear = post_layer_fct(layer_ix+1, len(hidden_sizes), all_modules[-1])
@@ -108,7 +139,8 @@ class MLP(nn.Module):
         if type(output_size) == int:
             all_modules.append(nn.Linear(last_layer_size, output_size))
             if output_activation is not None:
-                all_modules.append(call_nn_op(output_activation) if isclass(output_activation) else output_activation)
+                all_modules.append(call_nn_op(output_activation, epsilon_scale)
+                                   if isclass(output_activation) else output_activation)
         else:
 
             # we're going to have a bunch of separate layers we can spit out (a tuple of outputs)
@@ -129,7 +161,8 @@ class MLP(nn.Module):
                 if(act_out_fct):
                     # we check if it's a class. if so, instantiate the object
                     # otherwise, use the object directly (e.g. pre-instaniated)
-                    split_layer.append(call_nn_op(act_out_fct) if isclass(act_out_fct) else act_out_fct)
+                    split_layer.append(call_nn_op(act_out_fct, epsilon_scale)
+                                       if isclass(act_out_fct) else act_out_fct)
 
                 # our outputs is just a sequential of the two
                 out_layers.append(nn.Sequential(*split_layer))
@@ -143,3 +176,15 @@ class MLP(nn.Module):
     # pass through our sequential for the output!
     def forward(self, *args, **kwargs):
         return self.sequential_mlp.forward(*args, **kwargs)
+
+    def sum_params(self):
+        def sum_param_values(a,b):
+            if torch.is_tensor(a) or isinstance(a,Variable):
+                a = a.data[0]
+            if torch.is_tensor(b) or isinstance(b,Variable):
+                b = b.data[0]
+            assert isinstance(a,float) and isinstance(b,float)
+            return a + b
+        result = reduce(sum_param_values, map(torch.sum, self.parameters()), 0.0)
+        assert isinstance(result,float)
+        return result

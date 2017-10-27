@@ -3,56 +3,15 @@ import numpy as np
 import torch
 import pyro
 from torch.autograd import Variable
-from pyro.distributions import DiagNormal, Bernoulli
-from pyro.distributions import  Categorical as SimpleCategorical
-
-from inference import MNIST_cached as MNIST
-from inference import BaseInference
+from pyro.distributions import DiagNormal
+from pyro.distributions import Categorical # as SimpleCategorical
+from pyro.distributions import Bernoulli #as SimpleBernoulli
+from inference import MNISTCached as MNIST
+from inference import SSVAEInfer
 from pyro.infer import SVI
 from pyro.optim import Adam
-from mlp import MLP, Exp
+from mlp import MLP, Exp, EpsilonScaledSigmoid, EpsilonScaledSoftmax
 import torch.nn as nn
-
-class Categorical(SimpleCategorical):
-    def __init__(self,log_ps):
-        super(Categorical, self).__init__(log_ps)
-
-    def sample(self, ps=None, vs=None, one_hot=True, log_pdf_mask=None):
-        if ps is None:
-            ps = torch.exp(self.ps)
-        return super(Categorical, self).sample(ps, vs, one_hot=one_hot, log_pdf_mask=log_pdf_mask)
-
-    def batch_log_pdf(self, x, ps=None, vs=None, one_hot=True, log_pdf_mask=None):
-        assert ps is None and vs is None and one_hot
-        log_ps, vs, one_hot = self._sanitize_input(ps, vs, one_hot)
-        vs = self._process_vs(vs)
-
-        x = x.cuda() if log_ps.is_cuda else x.cpu()
-        batch_pdf_size = x.size()[:-1] + (1,)
-        batch_ps_size = x.size()[:-1] + (log_ps.size()[-1],)
-        log_ps = log_ps.expand(*batch_ps_size)
-        boolean_mask = x
-        boolean_mask = boolean_mask.cuda() if log_ps.is_cuda else boolean_mask.cpu()
-
-        batch_log_pdf = (log_ps.masked_select(boolean_mask.byte())).contiguous().view(*batch_pdf_size)
-        if log_pdf_mask is not None:
-            scaling_mask = log_pdf_mask.contiguous().view(*batch_pdf_size)
-            batch_log_pdf = batch_log_pdf * scaling_mask
-        return batch_log_pdf
-
-
-class SSVAEInfer(BaseInference):
-    def __init__(self, dataset, batch_size, techniques, is_supervised_loss, nn_alpha_y, **kwargs):
-        super(SSVAEInfer,self).__init__(dataset, batch_size, techniques, is_supervised_loss, **kwargs)
-        self.nn_alpha_y = nn_alpha_y
-
-    def classify(self,xs):
-        alpha = self.nn_alpha_y.forward(xs)
-        res, ind = torch.topk(alpha, 1)  # Do MLE
-        #ys = pyro.util.to_one_hot(ind,alpha) <-- type error FloatTensor vs LongTensor
-        ys = Variable(torch.zeros(alpha.size()))
-        ys = ys.scatter_(1, ind, 1.0)
-        return ys
 
 class SSVAE(nn.Module):
 
@@ -68,8 +27,19 @@ class SSVAE(nn.Module):
 
         if self.checkpoint_load_file is not None:
             self.load_checkpoint(self.checkpoint_load_file)
+        else:
+            self.checkpoint = None
+        self.latest_checkpoints = {}
+
         self.kingma_multiplier = Variable(torch.ones(self.batch_size,1)*self.kingma_multiplier)
 
+    def classify(self,xs):
+        alpha = self.nn_alpha_y.forward(xs)
+        res, ind = torch.topk(alpha, 1)  # Do MLE
+        #ys = pyro.util.to_one_hot(ind,alpha) <-- type error FloatTensor vs LongTensor
+        ys = Variable(torch.zeros(alpha.size()))
+        ys = ys.scatter_(1, ind, 1.0)
+        return ys
 
     def save_checkpoint(self, epoch, train_acc, test_acc, post="last"):
         import os.path
@@ -88,24 +58,25 @@ class SSVAE(nn.Module):
         }
         filename = os.path.join(dirname,"ss_vae_{}_{}".format(self.expt_name,post))
         torch.save(state, filename)
-        print("checkpoint saved: {}".format(filename))
+        self.latest_checkpoints[post] = filename
+
+        #print("checkpoint saved: {}".format(filename))
 
     def load_checkpoint_randomness(self):
-        if hasattr(self,"checkpoint"):
+        if self.checkpoint is not None:
             # delayed until data loads and gets cached!
             torch.set_rng_state(self.checkpoint['rand_state'])
             torch.cuda.set_rng_state(self.checkpoint['rand_cuda_state'])
 
     def load_checkpoint(self,filename):
-        checkpoint = torch.load(filename)
-        self.optimizer.set_state(checkpoint['optimizer'])
-        self.load_state_dict(checkpoint['ss_vae'])
-        #self.nn_alpha_y = self.nn_alpha_y.load_state_dict(checkpoint['nn_alpha_y'])
-        #self.nn_mu_x = self.nn_mu_x.load_state_dict(checkpoint['nn_mu_x'])
-        #self.nn_mu_sigma_z = self.nn_mu_sigma_z.load_state_dict(checkpoint['nn_mu_sigma_z'])
+        self.checkpoint = torch.load(filename)
+        self.optimizer.set_state(self.checkpoint ['optimizer'])
+        self.load_state_dict(self.checkpoint ['ss_vae'])
+        #self.nn_alpha_y = self.nn_alpha_y.load_state_dict(self.checkpoint ['nn_alpha_y'])
+        #self.nn_mu_x = self.nn_mu_x.load_state_dict(self.checkpoint ['nn_mu_x'])
+        #self.nn_mu_sigma_z = self.nn_mu_sigma_z.load_state_dict(self.checkpoint ['nn_mu_sigma_z'])
 
-
-        self.start_epoch = checkpoint['epoch']
+        self.start_epoch = self.checkpoint ['epoch']
 
     def setup_networks(self):
         self.output_size = 10  # 10 labels in MNIST
@@ -115,11 +86,13 @@ class SSVAE(nn.Module):
 
         # instantiating networks
         self.nn_alpha_y = MLP([self.input_size]+hidden_sizes+[self.output_size],
-                              activation=nn.ReLU,output_activation=getattr(nn,self.y_activation)) #nn.Softplus/Softmax?
+                              activation=nn.ReLU,output_activation=EpsilonScaledSoftmax,
+                              epsilon_scale=self.epsilon_scale)
         self.nn_mu_sigma_z = MLP([[self.input_size,self.output_size]]+hidden_sizes+ [[latent_size,latent_size]],
                               activation=nn.ReLU,output_activation=[None,Exp])
         self.nn_mu_x = MLP([[latent_size,self.output_size]]+hidden_sizes+ [self.input_size],
-                              activation=nn.ReLU,output_activation=nn.Sigmoid)
+                              activation=nn.ReLU,output_activation=EpsilonScaledSigmoid,
+                              epsilon_scale=self.epsilon_scale)
         if self.cuda:
             self.nn_alpha_y.cuda()
             self.nn_mu_sigma_z.cuda()
@@ -144,6 +117,11 @@ class SSVAE(nn.Module):
 
         return None
 
+    def check_nan_params_in_nns(self):
+        if self.check_nans:
+            assert np.isfinite(self.nn_alpha_y.sum_params())
+            assert np.isfinite(self.nn_mu_sigma_z.sum_params())
+            assert np.isfinite(self.nn_mu_x.sum_params())
 
     """
         The model corresponds to:
@@ -155,6 +133,7 @@ class SSVAE(nn.Module):
     def model(self, is_supervised, xs, ys):
         # register all pytorch (sub)modules with pyro
         pyro.module("ss_vae", self)
+        self.check_nan_params_in_nns()
 
         const_mu = Variable(torch.zeros([self.batch_size, self.latent_layer]))
         const_sigma = Variable(torch.ones([self.batch_size, self.latent_layer]))
@@ -162,15 +141,19 @@ class SSVAE(nn.Module):
 
         alpha_prior = Variable(torch.ones([self.batch_size, self.output_size])
                                / (1.0 * self.output_size))
+
         if not is_supervised:
             ys = pyro.sample("y", Categorical(alpha_prior))
 
         #nn_mu = pyro.module("nn_mu_x", self.nn_mu_x)
         mu = self.nn_mu_x.forward([zs, ys])
+        #assert torch.sum(mu ==0).data[0] == 0, "mu nn x produced a zero!"
+        #assert torch.sum(mu == 1.0).data[0] == 0, "mu nn x produced a one!"
+
         pyro.observe("x", Bernoulli(mu), xs)
         if is_supervised:
             pyro.observe("y", Categorical(alpha_prior), ys)
-            if self.kingma_loss_type == 1:
+            if self.kingma_loss and self.kingma_loss_type == 1:
                 #nn_alpha = pyro.module("nn_alpha_y", self.nn_alpha_y)
                 alpha = self.nn_alpha_y.forward(xs)
                 pyro.observe("y_hack", Categorical(alpha), ys, log_pdf_mask=self.kingma_multiplier)
@@ -187,6 +170,7 @@ class SSVAE(nn.Module):
     def guide(self,is_supervised,xs,ys):
         # register all pytorch (sub)modules with pyro
         pyro.module("ss_vae", self)
+        self.check_nan_params_in_nns()
 
         if (not is_supervised):
             #nn_alpha = pyro.module("nn_alpha_y", self.nn_alpha_y)
@@ -195,6 +179,9 @@ class SSVAE(nn.Module):
 
         #nn_mu_sigma = pyro.module("nn_mu_sigma_z", self.nn_mu_sigma_z)
         mu, sigma = self.nn_mu_sigma_z.forward([xs, ys])
+        assert not np.isnan(torch.sum(mu).data[0]), "mu nn z produced a nan"
+        assert not np.isnan(torch.sum(sigma).data[0]), "sigma nn z produced a nan"
+
         zs = pyro.sample("z", DiagNormal(mu, sigma))
 
     """
@@ -207,24 +194,35 @@ class SSVAE(nn.Module):
 
         losses = [loss_observed, loss_latent]
         is_supervised_loss = [True, False]
+        try:
+            if self.logfile:
+                logger= open(self.logfile,"w")
+            else:
+                logger = None
 
-        if self.kingma_loss_type == 2:
-            loss_aux = SVI(self.model_classify, self.guide_classify, self.optimizer, loss="ELBO")
-            losses.append(loss_aux)
-            is_supervised_loss.append(True)
+            if self.kingma_loss and self.kingma_loss_type == 2:
+                loss_aux = SVI(self.model_classify, self.guide_classify, self.optimizer, loss="ELBO")
+                losses.append(loss_aux)
+                is_supervised_loss.append(True)
 
-        inference = SSVAEInfer(MNIST, self.batch_size, losses, is_supervised_loss,
-                               sup_perc=self.sup_perc, nn_alpha_y=self.nn_alpha_y,
-                               checkpoint_fn=self.save_checkpoint,start_epoch=self.start_epoch)
+            check_nan_fn = self.check_nan_params_in_nns
 
-        assert (inference.train_size_sup+inference.train_size_unsup) % self.batch_size == 0, \
-            "assuming simplicity of batching math"
-        assert int((inference.train_size_sup+inference.train_size_unsup)/self.batch_size)\
-               % inference.periodic_interval_batches == 0 , "assuming simplicity of batching math"
-        
-        #load randomness from a checkpoint now that data has been loaded
-        self.load_checkpoint_randomness()
-        inference.run(num_epochs=self.num_epochs)
+            inference = SSVAEInfer(MNIST, self.batch_size, losses, is_supervised_loss, self.classify,
+                                   sup_perc=self.sup_perc, checkpoint_fn=self.save_checkpoint,
+                                   start_epoch=self.start_epoch, check_nans=check_nan_fn,
+                                   use_cuda = self.cuda, logger=logger)
+
+            assert (inference.train_size_sup+inference.train_size_unsup) % self.batch_size == 0, \
+                "assuming simplicity of batching math"
+            assert int((inference.train_size_sup+inference.train_size_unsup)/self.batch_size)\
+                   % inference.periodic_interval_batches == 0 , "assuming simplicity of batching math"
+
+            #load randomness from a checkpoint now that data has been loaded
+            self.load_checkpoint_randomness()
+            inference.run(num_epochs=self.num_epochs)
+        finally:
+            if self.logfile:
+                logger.close()
 
 
 def main(dargs):
@@ -236,10 +234,11 @@ def main(dargs):
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
     ss_vae = SSVAE(dargs)
     ss_vae.optimize()
+    return ss_vae
+
 """
 
-python -m pdb example.py --seed 0 -cuda -ne 100 -kingma-loss -km 250 -klt 2 -sup 5 -ll 20 -hl 400 -lr 0.005 -bs 1000 -enum -ya Softmax -cdir ./checkpoints -en "test1" -cload checkpoints/ss_vae_test1
-
+python example.py --seed 0 -cuda -ne 2 -sup 5 -ll 20 -hl 400 200 -lr 0.001 -bs 200 -enum -kingma-loss -klt 2 -km 300 -cdir ./checkpoints -en "kingma_test3" -log ./kingma_test3.log
 """
 if __name__ == "__main__":
     import argparse
@@ -254,21 +253,26 @@ if __name__ == "__main__":
     kingma_loss 2 -> explicit extra auxiliary loss 
     """
     parser.add_argument('-kingma-loss', action="store_true")
-    parser.add_argument('-klt','--kingma-loss-type',default=2, type=int)
+    parser.add_argument('-klt','--kingma-loss-type',default=0, type=int, choices = [0,1,2])
     parser.add_argument('-km', '--kingma-multiplier', default=0.1, type=float)
     parser.add_argument('-enum','--enum-discrete', action="store_true")
-    parser.add_argument('-ya', '--y-activation', default="LogSoftmax", type=str, choices=["Softmax","LogSoftmax"])
+    #parser.add_argument('-ya', '--y-activation', default="Softmax", type=str, choices=["Softmax"])
 
     parser.add_argument('-sup', '--sup-perc', default=5,
-                        type=int, choices=[1, 2, 5, 10, 20, 25, 50])
+                        type=float, choices=[0.2, 1, 2, 5, 10, 20, 25, 50])
     parser.add_argument('-ll', '--latent-layer', default=20, type=int)
-    parser.add_argument('-hl', '--hidden-layers', nargs= '+', default = [400], type=int)
+    parser.add_argument('-hl', '--hidden-layers', nargs= '+', default = [400,200], type=int)
     parser.add_argument('-lr', '--learning-rate', default=0.0001, type=float)
     parser.add_argument('-bs', '--batch-size', default=100, type=int)
+    parser.add_argument('-eps', '--epsilon-scale', default=1e-7, type=float)
 
     parser.add_argument('-cdir', '--checkpoint-dir', default="./checkpoints", type=str)
     parser.add_argument('-cload', '--checkpoint-load-file', default=None, type=str)
     parser.add_argument('-en', '--expt-name', required=True, type=str)
+    parser.add_argument('-log', '--logfile', default=None, type=str)
+
+    parser.add_argument('-check-nans', action="store_true")
+
     args = parser.parse_args()
 
     main(vars(args))

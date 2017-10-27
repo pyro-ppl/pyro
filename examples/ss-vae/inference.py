@@ -4,33 +4,26 @@ from torch.utils.data import DataLoader
 import torch
 from torchvision import transforms
 from pdb import set_trace as bb
-from networks import USE_CUDA
 from torch.autograd import Variable
 import numpy as np
+from functools import reduce
 
 from torchvision.datasets import MNIST
 
-from sys import stdout
 
-# for a util object
-# this is a print updater
-def print_update_percent(ix, total, base_message):
-   stdout.write("\r " + base_message + " {0:.0f}% ".format(100*(ix + 1.0)/total))
-   stdout.flush()
-  
 # transformations for MNIST data
-def fn_x_MNIST(x):
+def fn_x_MNIST(x, use_cuda):
     xp = x*(1./255.)
     # transform x to a linear tensor from bx * a1 * a2 * ... --> bs * A
     xp_1d_size = reduce(lambda a, b: a * b, xp.size()[1:])
     xp = xp.view(-1,xp_1d_size)
-    if USE_CUDA:
+    if use_cuda:
         xp = xp.cuda()
     return xp
 
-def fn_y_MNIST(y):
+def fn_y_MNIST(y, use_cuda):
     yp = torch.zeros(y.size(0),10)
-    if USE_CUDA:
+    if use_cuda:
         yp = yp.cuda()
         y = y.cuda()
     yp = yp.scatter_(1, y.view(-1, 1), 1.0)
@@ -45,11 +38,14 @@ def split_sup_unsup(X, y, sup_perc):
 
     return X[range(sup_n)], y[range(sup_n)], X[range(sup_n,n)], y[range(sup_n,n)],
 
-class MNIST_cached(MNIST):
-    def __init__(self,train="sup",transform=fn_x_MNIST, target_transform=fn_y_MNIST,
-                 sup_perc=5.0, *args,**kwargs):
-        #init with no transforms
-        super(MNIST_cached, self).__init__(train=train in ["sup","unsup"],*args,**kwargs)
+class MNISTCached(MNIST):
+    def __init__(self,train="sup", sup_perc=5.0, use_cuda=True, *args,**kwargs):
+        super(MNISTCached, self).__init__(train=train in ["sup","unsup"],*args,**kwargs)
+
+        #transformations on MNIST data (normalization and one-hot conversion for labels)
+        transform = lambda x: fn_x_MNIST(x,use_cuda)
+        target_transform = lambda y: fn_y_MNIST(y,use_cuda)
+
         assert train in ["sup","unsup","test"], "invalid train values"
 
         if train in ["sup","unsup"]:
@@ -64,7 +60,8 @@ class MNIST_cached(MNIST):
                 self.train_data, self.train_labels =  train_data_sup, train_labels_sup
             else:
                 self.train_data = train_data_unsup
-                self.train_labels = train_labels_unsup #TODO: make these Nones
+                self.train_labels = (torch.Tensor(train_labels_unsup.shape[0]).view(-1,1))*np.nan
+                #    train_labels_unsup
             #self.train_data,self.train_labels = None, None
         else:
             if transform is not None:
@@ -88,41 +85,48 @@ class MNIST_cached(MNIST):
         return img, target
 
 
-class BaseInference(object):
-    #Generalized to multiple KL_QPs
-    def __init__(self, dataset, batch_size, inference_techniques, is_supervised_loss,
-                 do_classification=True, transform=fn_x_MNIST, target_transform=fn_y_MNIST,
-                 sup_perc=5.0,checkpoint_fn=None, start_epoch=0):
+class SSVAEInfer(object):
+    #Generalized to handle multiple losses
+    def __init__(self, dataset, batch_size, losses, is_supervised_loss,
+                 classify, do_classification=True, sup_perc=5.0, checkpoint_fn=None,
+                 start_epoch=0, check_nans=None, use_cuda=True, logger=None):
         self.dataset = dataset
         self.periodic_interval_batches = int(100/sup_perc)
-        assert 100 % int(sup_perc) == 0, "only some perc values allowed n | 100"
+        assert sup_perc < 1 or 100 % int(sup_perc) == 0, "only some perc values allowed n | 100"
 
-        self.setup_data_loaders(batch_size, transform, target_transform, sup_perc=sup_perc)
-        self.inference_techniques = inference_techniques
+        self.classify=classify
+        self.use_cuda = use_cuda
+        self.logger = logger
+        self.setup_data_loaders(batch_size, sup_perc=sup_perc)
+        self.losses = losses
         self.is_supervised_loss = is_supervised_loss
-        self.num_losses = len(self.inference_techniques)
+        self.num_losses = len(self.losses)
         assert self.num_losses >= 1, "need at least one loss"
         self.do_classification = do_classification
         self.checkpoint_fn = checkpoint_fn
         self.start_epoch = start_epoch
-        self.best_train_acc = 0.0
+        self.best_train_test_acc = (0.0,None)
+        self.check_nans = check_nans if check_nans is not None else (lambda: None)
+        self.check_ctr = 0
 
-    def setup_data_loaders(self, batch_size, transform, target_transform, root='./data',
+    def print_and_log(self, msg):
+        print(msg)
+        if self.logger is not None:
+            self.logger.write("{}\n".format(msg))
+
+    def setup_data_loaders(self, batch_size, root='./data',
                            download=True, sup_perc=5.0, **kwargs):
         self.batch_size = batch_size
         train_set_sup = self.dataset(root=root, train="sup", download=download,
-                                 transform=transform, target_transform=target_transform,
-                                 sup_perc=sup_perc)
-        self.train_size_sup = len(train_set_sup)
+                                     sup_perc=sup_perc, use_cuda=self.use_cuda)
 
+        self.train_size_sup = len(train_set_sup)
         train_set_unsup = self.dataset(root=root, train="unsup", download=download,
-                                 transform=transform, target_transform=target_transform,
-                                 sup_perc=sup_perc)
+                                       sup_perc=sup_perc, use_cuda=self.use_cuda)
         self.train_size_unsup = len(train_set_unsup)
 
-        test_set = self.dataset(root=root, train="test",
-                                transform=transform, target_transform=target_transform,
-                                sup_perc=sup_perc)
+        test_set = self.dataset(root=root, train="test", sup_perc=sup_perc,
+                                use_cuda=self.use_cuda)
         self.test_size = len(test_set)
 
         if 'num_workers' not in kwargs:
@@ -141,9 +145,6 @@ class BaseInference(object):
 
         self.test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False, **kwargs)
 
-    def classify(self,xs):
-        raise NotImplementedError("classify needs to be implemented")
-
 
     def run_inference_batches(self):
         epoch_losses = [0.]*self.num_losses
@@ -161,10 +162,11 @@ class BaseInference(object):
             #print_update_percent(i,self.batches_per_epoch,"runnning this epoch")
             for loss_id in range(self.num_losses):
                 if self.is_supervised_loss[loss_id] == is_supervised:
-                    new_loss = self.inference_techniques[loss_id].step(is_supervised, xs, ys)
-                    #assert not math.isnan(new_loss)
+                    self.check_nans()
+                    new_loss = self.losses[loss_id].step(is_supervised, xs, ys)
+                    self.check_nans()
                     if math.isnan(new_loss):
-                        print("Encountered nan loss, using 0.0 loss value")
+                        self.print_and_log("Encountered nan loss, using 0.0 loss value")
                         bb()
                         new_loss = 0.0
                     epoch_losses[loss_id] += new_loss
@@ -183,25 +185,29 @@ class BaseInference(object):
                     epoch_losses[loss_id]/(1.0*batch_counts[loss_id]*self.batch_size)
 
             self.loss_training.append(avg_epoch_losses)
-            training_accuracy = self.get_accuracy(training=True)
-            str_print = "{} epoch: avg losses {} training accuracy {}".\
-                format(i," ".join(map(str,avg_epoch_losses)), training_accuracy)
-            if self.best_train_acc < training_accuracy:
-                self.best_train_acc = training_accuracy
+            str_print = "{} epoch: avg losses {}".format(i," ".join(map(str,avg_epoch_losses)))
+            if self.do_classification:
+                training_accuracy = self.get_accuracy(training=True)
+                str_print += " training accuracy {}".format(training_accuracy)
 
-            # This test accuracy is not used for picking the best NN configs
-            test_accuracy = self.get_accuracy(training=False)
-            str_print += " test accuracy {}".format(test_accuracy)
 
-            print(str_print)
+                # This test accuracy is not used for picking the best NN configs
+                test_accuracy = self.get_accuracy(training=False)
+                str_print += " test accuracy {}".format(test_accuracy)
+
+                if self.best_train_test_acc[0] < training_accuracy:
+                    self.best_train_test_acc = (training_accuracy,test_accuracy)
+
+            self.print_and_log(str_print)
 
             if self.checkpoint_fn is not None:
                 self.checkpoint_fn(i,training_accuracy,test_accuracy,"last")
-                if self.best_train_acc == training_accuracy:
+                if self.best_train_test_acc[0] == training_accuracy:
                     self.checkpoint_fn(i, training_accuracy, test_accuracy, "best")
             if self.do_classification and training_accuracy > acc_cutoff:
                 break
-        print "testing accuracy {}".format(self.get_accuracy(training=False))
+        self.print_and_log("best training accuracy {} corresponding testing accuracy {}".format(
+            self.best_train_test_acc[0], self.best_train_test_acc[1]))
 
     def get_accuracy(self,training=True):
         if not self.do_classification:
@@ -217,8 +223,8 @@ class BaseInference(object):
         if training:
             for (xs, ys) in self.train_loader_sup:
                 process(xs,ys)
-            for (xs, ys) in self.train_loader_unsup:
-                process(xs, ys)
+            #for (xs, ys) in self.train_loader_unsup:
+            #    process(xs, ys)
         else:
             for (xs,ys) in self.test_loader:
                 process(xs,ys)
