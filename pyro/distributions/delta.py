@@ -14,44 +14,40 @@ class Delta(Distribution):
     """
     enumerable = True
 
-    def _sanitize_input(self, v):
-        if v is not None:
-            # stateless distribution
-            return v
-        elif self.v is not None:
-            # stateful distribution
-            return self.v
-        else:
-            raise ValueError("Parameter(s) were None")
-
-    def __init__(self, v=None, batch_size=1, *args, **kwargs):
+    def __init__(self, v, batch_size=None, *args, **kwargs):
         """
         Params:
           `v` - value
         """
         self.v = v
-        if v is not None:
-            if v.dim() == 1 and batch_size > 1:
-                self.v = v.expand(v, v.size(0))
+        if not isinstance(self.v, Variable):
+            self.v = Variable(self.v)
+        if v.dim() == 1 and batch_size is not None:
+            self.v = v.expand(v, v.size(0))
         super(Delta, self).__init__(*args, **kwargs)
 
-    def sample(self, v=None):
-        v = self._sanitize_input(v)
-        if isinstance(v, Variable):
-            return v
-        return Variable(v)
+    def batch_shape(self, x=None):
+        event_dim = 1
+        v = self.v
+        if x is not None and x.size() != v.size():
+            v = self.v.expand_as(x)
+        return v.size()[:-event_dim]
 
-    def batch_log_pdf(self, x, v=None, batch_size=1):
-        v = self._sanitize_input(v)
-        if x.dim == 1:
-            x = x.expand(batch_size, x.size(0))
-        return (torch.eq(x, v.expand_as(x)) - 1).float() * 999999
+    def event_shape(self):
+        event_dim = 1
+        return self.v.size()[-event_dim:]
 
-    def log_pdf(self, x, v=None, *args, **kwargs):
-        v = self._sanitize_input(v)
-        if torch.equal(x.data, v.data.expand_as(x.data)):
-            return Variable(torch.zeros(1).type_as(v.data))
-        return Variable(torch.Tensor([-float("inf")]).type_as(v.data))
+    def shape(self, x=None):
+        return self.batch_shape(x) + self.event_shape()
+
+    def sample(self):
+        return self.v
+
+    def batch_log_pdf(self, x):
+        v = self.v
+        if x.size() != v.size():
+            v = v.expand_as(x)
+        return torch.sum(torch.eq(x, v).float().log(), -1)
 
     def support(self, v=None):
         """
@@ -62,6 +58,4 @@ class Delta(Distribution):
         :return: torch variable enumerating the support of the delta distribution.
         :rtype: torch.autograd.Variable.
         """
-        v = self._sanitize_input(v)
-        # univariate case
-        return Variable(v.data)
+        return Variable(self.v.data)
