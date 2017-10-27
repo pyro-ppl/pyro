@@ -129,7 +129,6 @@ def test_irange_in_guide_not_model_error(trace_graph, subsample_size):
     assert_error(model, guide, trace_graph=trace_graph)
 
 
-@pytest.mark.xfail(reason="NotImplementedError is not raised")
 def test_iarange_irange_error():
 
     def model():
@@ -165,8 +164,24 @@ def test_irange_iarange_ok(trace_graph):
     assert_ok(model, guide, trace_graph=trace_graph)
 
 
-@pytest.mark.xfail(reason="error is not caught")
-def test_iarange_iarange_error():
+def test_iarange_iarange_no_trace_graph_ok():
+
+    def model():
+        p = Variable(torch.Tensor([0.5]))
+        with pyro.iarange("iarange_0", 10, 5) as ind1:
+            with pyro.iarange("iarange_1", 10, 5) as ind2:
+                pyro.sample("x", dist.bernoulli, p, batch_size=len(ind1) * len(ind2))
+
+    def guide():
+        p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
+        with pyro.iarange("iarange_0", 10, 5) as ind1:
+            with pyro.iarange("iarange_1", 10, 5) as ind2:
+                pyro.sample("x", dist.bernoulli, p, batch_size=len(ind1) * len(ind2))
+
+    assert_ok(model, guide, trace_graph=False)
+
+
+def test_iarange_iarange_trace_graph_error():
 
     def model():
         p = Variable(torch.Tensor([0.5]))
