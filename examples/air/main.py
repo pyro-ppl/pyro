@@ -199,7 +199,7 @@ for i in range(args.num_steps):
             loss / X_size))
 
     if args.viz and (i + 1) % args.viz_every == 0:
-        trace = poutine.trace(air.guide).get_trace(examples_to_viz, 0)
+        trace = poutine.trace(air.guide).get_trace(examples_to_viz, None)
         z, recons = poutine.replay(air.prior, trace)(examples_to_viz.size(0))
         z_wheres = post_process_latents(z)
 

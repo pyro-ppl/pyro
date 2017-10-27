@@ -58,8 +58,6 @@ def test_sample_shape(dist):
 
 
 def test_batch_log_pdf_shape(dist):
-    if dist.pyro_dist.__class__.__name__ == 'Multinomial':
-        pytest.xfail('FIXME: https://github.com/uber/pyro/issues/301')
     d = dist.pyro_dist
     for idx in range(dist.get_num_test_data()):
         dist_params = dist.get_dist_params(idx)

@@ -11,6 +11,14 @@ class RandomPrimitive(Distribution):
         self.dist_class = dist_class
         super(RandomPrimitive, self).__init__()
 
+    @property
+    def enumerable(self):
+        return self.dist_class.enumerable
+
+    @property
+    def reparameterized(self):
+        return self.dist_class.reparameterized
+
     def batch_shape(self, x, *args, **kwargs):
         return self.dist_class(*args, **kwargs).batch_shape(x)
 

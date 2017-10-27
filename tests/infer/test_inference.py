@@ -3,9 +3,11 @@ from torch import nn as nn
 from torch.autograd import Variable
 from torch.nn import Parameter
 
+import pytest
 import pyro
 import pyro.distributions as dist
 from pyro.infer.svi import SVI
+from pyro.util import ng_ones, ng_zeros
 import pyro.optim as optim
 from pyro.distributions.transformed_distribution import TransformedDistribution
 from tests.distributions.test_transformed_distribution import AffineExp
@@ -410,3 +412,56 @@ class LogNormalNormalTests(TestCase):
         tau_error = param_abs_error("tau_q_log", self.log_tau_n)
         self.assertEqual(0.0, mu_error, prec=0.05)
         self.assertEqual(0.0, tau_error, prec=0.05)
+
+
+class SafetyTests(TestCase):
+
+    def setUp(self):
+        # normal-normal; known covariance
+        def model_dup():
+            pyro.param("mu_q", Variable(torch.ones(1), requires_grad=True))
+            pyro.sample("mu_q", dist.diagnormal, ng_zeros(1), ng_ones(1))
+
+        def model_obs_dup():
+            pyro.sample("mu_q", dist.diagnormal, ng_zeros(1), ng_ones(1))
+            pyro.observe("mu_q", dist.diagnormal, ng_zeros(1), ng_ones(1), ng_zeros(1))
+
+        def model():
+            pyro.sample("mu_q", dist.diagnormal, ng_zeros(1), ng_ones(1))
+
+        def guide():
+            p = pyro.param("p", Variable(torch.ones(1), requires_grad=True))
+            pyro.sample("mu_q", dist.diagnormal, ng_zeros(1), p)
+            pyro.sample("mu_q_2", dist.diagnormal, ng_zeros(1), p)
+
+        self.duplicate_model = model_dup
+        self.duplicate_obs = model_obs_dup
+        self.model = model
+        self.guide = guide
+
+    def test_duplicate_names(self):
+        pyro.clear_param_store()
+
+        adam = optim.Adam({"lr": .001})
+        svi = SVI(self.duplicate_model, self.guide, adam, loss="ELBO", trace_graph=False)
+
+        with pytest.raises(RuntimeError):
+            svi.step()
+
+    def test_extra_samples(self):
+        pyro.clear_param_store()
+
+        adam = optim.Adam({"lr": .001})
+        svi = SVI(self.model, self.guide, adam, loss="ELBO", trace_graph=False)
+
+        with pytest.warns(Warning):
+            svi.step()
+
+    def test_duplicate_obs_name(self):
+        pyro.clear_param_store()
+
+        adam = optim.Adam({"lr": .001})
+        svi = SVI(self.duplicate_obs, self.guide, adam, loss="ELBO", trace_graph=False)
+
+        with pytest.raises(RuntimeError):
+            svi.step()

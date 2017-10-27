@@ -13,7 +13,7 @@ def test_categorical_shape(one_hot):
         assert d.event_shape() == (2,)
         assert d.shape() == (3, 2)
     else:
-        assert d.event_shape() == (1,)
+        assert d.event_shape() == (2,)
         assert d.shape() == (3, 1)
     assert d.sample().size() == d.shape()
 

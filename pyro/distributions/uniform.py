@@ -13,59 +13,53 @@ class Uniform(Distribution):
     """
     reparameterized = False  # XXX Why is this marked non-differentiable?
 
-    def _sanitize_input(self, alpha, beta):
-        if alpha is not None:
-            # stateless distribution
-            return alpha, beta
-        elif self.a is not None:
-            # stateful distribution
-            return self.a, self.b
-        else:
-            raise ValueError("Parameter(s) were None")
-
-    def __init__(self, a=None, b=None, *args, **kwargs):
+    def __init__(self, a, b, batch_size=None, *args, **kwargs):
         """
         Params:
           `a` - low bound
           `b` -  high bound
         """
+        if a.size() != b.size():
+            raise ValueError("Expected a.size() == b.size(), but got {} vs {}"
+                             .format(a.size(), b.size()))
         self.a = a
         self.b = b
+        if a.dim() == 1 and batch_size is not None:
+            self.a = a.expand(batch_size, a.size(0))
+            self.b = b.expand(batch_size, b.size(0))
         super(Uniform, self).__init__(*args, **kwargs)
 
-    def batch_shape(self, a=None, b=None):
-        a, b = self._sanitize_input(a, b)
+    def batch_shape(self, x=None):
         event_dim = 1
+        a = self.a
+        if x is not None and x.size() != a.size():
+            a = self.a.expand_as(x)
         return a.size()[:-event_dim]
 
-    def event_shape(self, a=None, b=None):
-        a, b = self._sanitize_input(a, b)
+    def event_shape(self):
         event_dim = 1
-        return a.size()[-event_dim:]
+        return self.a.size()[-event_dim:]
 
-    def sample(self, a=None, b=None):
+    def shape(self, x=None):
+        return self.batch_shape(x) + self.event_shape()
+
+    def sample(self):
         """
         Reparameterized Uniform sampler.
         """
-        a, b = self._sanitize_input(a, b)
-        eps = Variable(torch.rand(a.size()).type_as(a.data))
-        return a + torch.mul(eps, b - a)
+        eps = Variable(torch.rand(self.a.size()).type_as(self.a.data))
+        return self.a + torch.mul(eps, self.b - self.a)
 
-    def batch_log_pdf(self, x, a=None, b=None):
-        a, b = self._sanitize_input(a, b)
-        assert a.dim() == b.dim()
-        if x.size != a.size():
-            a = a.expand_as(x)
-            b = b.expand_as(x)
+    def batch_log_pdf(self, x):
+        a = self.a.expand(self.shape(x))
+        b = self.b.expand(self.shape(x))
         lb = x.ge(a).type_as(a)
         ub = x.le(b).type_as(b)
-        batch_log_pdf_shape = self.batch_shape(a, b) + (1,)
+        batch_log_pdf_shape = self.batch_shape(x) + (1,)
         return torch.sum(torch.log(lb.mul(ub)) - torch.log(b - a), -1).contiguous().view(batch_log_pdf_shape)
 
-    def analytic_mean(self, a=None, b=None):
-        a, b = self._sanitize_input(a, b)
-        return 0.5 * (a + b)
+    def analytic_mean(self):
+        return 0.5 * (self.a + self.b)
 
-    def analytic_var(self, a=None, b=None):
-        a, b = self._sanitize_input(a, b)
-        return torch.pow(b - a, 2) / 12
+    def analytic_var(self):
+        return torch.pow(self.b - self.a, 2) / 12

@@ -18,17 +18,7 @@ class DiagNormal(Distribution):
     """
     reparameterized = True
 
-    def _sanitize_input(self, mu, sigma):
-        if mu is not None:
-            # stateless distribution
-            return mu, sigma
-        elif self.mu is not None:
-            # stateful distribution
-            return self.mu, self.sigma
-        else:
-            raise ValueError("Parameter(s) were None")
-
-    def __init__(self, mu=None, sigma=None, batch_size=None, *args, **kwargs):
+    def __init__(self, mu, sigma, batch_size=None, log_pdf_mask=None, *args, **kwargs):
         """
         Params:
           `mu` - mean
@@ -36,41 +26,46 @@ class DiagNormal(Distribution):
         """
         self.mu = mu
         self.sigma = sigma
-        if mu is not None:
-            if mu.dim() == 1 and batch_size is not None:
-                self.mu = mu.expand(batch_size, mu.size(0))
-                self.sigma = sigma.expand(batch_size, sigma.size(0))
+        self.log_pdf_mask = log_pdf_mask
+        if mu.size() != sigma.size():
+            raise ValueError("Expected mu.size() == sigma.size(), but got {} vs {}"
+                             .format(mu.size(), sigma.size()))
+        if mu.dim() == 1 and batch_size is not None:
+            self.mu = mu.expand(batch_size, mu.size(0))
+            self.sigma = sigma.expand(batch_size, sigma.size(0))
+            if log_pdf_mask is not None and log_pdf_mask.dim() == 1:
+                self.log_pdf_mask = log_pdf_mask.expand(batch_size, log_pdf_mask.size(0))
         super(DiagNormal, self).__init__(*args, **kwargs)
 
-    def batch_shape(self, mu=None, sigma=None, log_pdf_mask=None):
-        mu, sigma = self._sanitize_input(mu, sigma)
+    def batch_shape(self, x=None):
         event_dim = 1
+        mu = self.mu
+        if x is not None and x.size() != mu.size():
+            mu = self.mu.expand(x.size()[:-event_dim] + self.event_shape())
         return mu.size()[:-event_dim]
 
-    def event_shape(self, mu=None, sigma=None, log_pdf_mask=None):
-        mu, sigma = self._sanitize_input(mu, sigma)
+    def event_shape(self):
         event_dim = 1
-        return mu.size()[-event_dim:]
+        return self.mu.size()[-event_dim:]
 
-    def sample(self, mu=None, sigma=None, log_pdf_mask=None):
+    def shape(self, x=None):
+        return self.batch_shape(x) + self.event_shape()
+
+    def sample(self):
         """
         Reparameterized diagonal Normal sampler.
         """
-        mu, sigma = self._sanitize_input(mu, sigma)
-        eps = Variable(torch.randn(mu.size()).type_as(mu.data))
-        z = mu + eps * sigma
+        eps = Variable(torch.randn(self.mu.size()).type_as(self.mu.data))
+        z = self.mu + eps * self.sigma
         return z if self.reparameterized else z.detach()
 
-    def batch_log_pdf(self, x, mu=None, sigma=None, log_pdf_mask=None):
+    def batch_log_pdf(self, x):
         """
         Diagonal Normal log-likelihood
         """
         # expand to patch size of input
-        mu, sigma = self._sanitize_input(mu, sigma)
-        assert mu.dim() == sigma.dim()
-        if mu.size() != x.size():
-            mu = mu.expand_as(x)
-            sigma = sigma.expand_as(x)
+        mu = self.mu.expand(self.shape(x))
+        sigma = self.sigma.expand(self.shape(x))
         log_pxs = -1 * torch.add(torch.add(torch.log(sigma),
                                  0.5 * torch.log(2.0 * np.pi *
                                  Variable(torch.ones(sigma.size()).type_as(mu.data)))),
@@ -78,16 +73,14 @@ class DiagNormal(Distribution):
         # XXX this allows for the user to mask out certain parts of the score, for example
         # when the data is a ragged tensor. also useful for KL annealing. this entire logic
         # will likely be done in a better/cleaner way in the future
-        if log_pdf_mask is not None:
-            log_pxs = log_pxs * log_pdf_mask
+        if self.log_pdf_mask is not None:
+            log_pxs = log_pxs * self.log_pdf_mask
         batch_log_pdf = torch.sum(log_pxs, -1)
-        batch_log_pdf_shape = x.size()[:-1] + (1,)
+        batch_log_pdf_shape = self.batch_shape(x) + (1,)
         return batch_log_pdf.contiguous().view(batch_log_pdf_shape)
 
-    def analytic_mean(self, mu=None, sigma=None):
-        mu, sigma = self._sanitize_input(mu, sigma)
-        return mu
+    def analytic_mean(self):
+        return self.mu
 
-    def analytic_var(self,  mu=None, sigma=None):
-        mu, sigma = self._sanitize_input(mu, sigma)
-        return torch.pow(sigma, 2)
+    def analytic_var(self):
+        return torch.pow(self.sigma, 2)

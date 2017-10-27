@@ -12,13 +12,7 @@ from pyro.infer import SVI
 from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.trace_elbo import Trace_ELBO
 from pyro.infer.tracegraph_elbo import TraceGraph_ELBO
-from tests.common import assert_equal, xfail_if_not_implemented
-
-# XXX Remove this after Pytorch 0.2.1.
-pytorch_is_release = ('+' not in torch.__version__)
-segfaults_on_old_pytorch = pytest.mark.skipif(
-    pytorch_is_release,
-    reason="pytorch segfaults at 0.2.0_4, fixed by 0.2.0+f964105")
+from tests.common import assert_equal, xfail_if_not_implemented, segfaults_on_old_pytorch
 
 
 @pytest.mark.parametrize("graph_type", ["flat", "dense"])
