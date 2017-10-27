@@ -112,13 +112,13 @@ class GaussianChainTests(TestCase):
         def model(*args, **kwargs):
             next_mean = self.mu0
             for k in range(1, self.N + 1):
-                latent_dist = dist.DiagNormal(next_mean, torch.pow(self.lambdas[k - 1], -0.5))
+                latent_dist = dist.Normal(next_mean, torch.pow(self.lambdas[k - 1], -0.5))
                 mu_latent = pyro.sample("mu_latent_%d" % k, latent_dist)
                 next_mean = mu_latent
 
             mu_N = next_mean
             for i, x in enumerate(self.data):
-                pyro.observe("obs_%d" % i, dist.diagnormal, x, mu_N,
+                pyro.observe("obs_%d" % i, dist.normal, x, mu_N,
                              torch.pow(self.lambdas[self.N], -0.5))
             return mu_N
 
@@ -141,7 +141,7 @@ class GaussianChainTests(TestCase):
                 mean_function = mu_q if k == self.N else kappa_q * previous_sample + mu_q
                 node_flagged = True if self.which_nodes_reparam[k - 1] == 1.0 else False
                 repa = True if reparameterized else node_flagged
-                latent_dist = dist.DiagNormal(mean_function, sig_q, reparameterized=repa)
+                latent_dist = dist.Normal(mean_function, sig_q, reparameterized=repa)
                 mu_latent = pyro.sample("mu_latent_%d" % k, latent_dist,
                                         baseline=dict(use_decaying_avg_baseline=True))
                 previous_sample = mu_latent
@@ -370,7 +370,7 @@ class GaussianPyramidTests(TestCase):
         pyro.clear_param_store()
 
         def model(*args, **kwargs):
-            top_latent_dist = dist.DiagNormal(self.mu0, torch.pow(self.lambdas[0], -0.5))
+            top_latent_dist = dist.Normal(self.mu0, torch.pow(self.lambdas[0], -0.5))
             previous_names = ["mu_latent_1"]
             top_latent = pyro.sample(previous_names[0], top_latent_dist)
             previous_latents_and_names = list(zip([top_latent], previous_names))
@@ -389,7 +389,7 @@ class GaussianPyramidTests(TestCase):
             for n in range(2, self.N + 1):
                 new_latents_and_names = []
                 for prev_latent, prev_name in permute(previous_latents_and_names, n - 1):
-                    latent_dist = dist.DiagNormal(prev_latent, torch.pow(self.lambdas[n - 1], -0.5))
+                    latent_dist = dist.Normal(prev_latent, torch.pow(self.lambdas[n - 1], -0.5))
                     couple = []
                     for LR in ['L', 'R']:
                         new_name = prev_name + LR
@@ -405,7 +405,7 @@ class GaussianPyramidTests(TestCase):
             for i, data_i in enumerate(self.data):
                 for k, x in enumerate(data_i):
                     pyro.observe("obs_%s_%d" % (previous_latents_and_names[i][1], k),
-                                 dist.diagnormal, x, previous_latents_and_names[i][0],
+                                 dist.normal, x, previous_latents_and_names[i][0],
                                  torch.pow(self.lambdas[-1], -0.5))
             return top_latent
 
@@ -432,7 +432,7 @@ class GaussianPyramidTests(TestCase):
                     mean_function_node = mean_function_node + kappa_dep * latents_dict[dep]
                 node_flagged = True if self.which_nodes_reparam[i] == 1.0 else False
                 repa = True if reparameterized else node_flagged
-                latent_dist_node = dist.DiagNormal(mean_function_node, torch.exp(log_sig_node),
+                latent_dist_node = dist.Normal(mean_function_node, torch.exp(log_sig_node),
                                                    reparameterized=repa)
                 latent_node = pyro.sample(node, latent_dist_node,
                                           baseline=dict(use_decaying_avg_baseline=True,

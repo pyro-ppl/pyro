@@ -7,7 +7,7 @@ from pyro.distributions.beta import Beta
 from pyro.distributions.categorical import Categorical
 from pyro.distributions.cauchy import Cauchy
 from pyro.distributions.delta import Delta
-from pyro.distributions.diag_normal import DiagNormal
+from pyro.distributions.diag_normal import Normal
 from pyro.distributions.dirichlet import Dirichlet
 from pyro.distributions.exponential import Exponential
 from pyro.distributions.gamma import Gamma
@@ -23,7 +23,7 @@ beta = RandomPrimitive(Beta)
 categorical = RandomPrimitive(Categorical)
 cauchy = RandomPrimitive(Cauchy)
 delta = RandomPrimitive(Delta)
-diagnormal = RandomPrimitive(DiagNormal)
+normal = RandomPrimitive(Normal)
 dirichlet = RandomPrimitive(Dirichlet)
 exponential = RandomPrimitive(Exponential)
 gamma = RandomPrimitive(Gamma)

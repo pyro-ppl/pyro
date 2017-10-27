@@ -35,7 +35,7 @@ Delta
     :show-inheritance:
 
 
-DiagNormal
+Normal
 ----------
 .. automodule:: pyro.distributions.diag_normal
     :members:
