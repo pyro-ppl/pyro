@@ -5,6 +5,8 @@
 ----------------------------------------------------------------
 
 [![Build Status](https://travis-ci.com/uber/pyro.svg?token=LrMxkQNuTGCmwphBqyVs&branch=dev)](https://travis-ci.com/uber/pyro)
+[![Latest Version](https://badge.fury.io/py/pyro-ppl.svg)](https://pypi.python.org/pypi/pyro-ppl)
+
 
 [Installation](#Installation) | [Examples](examples) | [Getting Started](http://pyro.ai/tutorial) | [Contributing](CONTRIBUTING.md) | Discussion
 
@@ -22,7 +24,7 @@ First install [Pytorch](http://pytorch.org/).
 
 Install via pip:
 ```sh
-pip install pyroppl
+pip install pyro-ppl
 ```
 
 Install from source:
