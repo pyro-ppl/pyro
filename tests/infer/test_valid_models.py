@@ -9,6 +9,7 @@ import pyro
 import pyro.distributions as dist
 from pyro.optim import Adam
 from pyro.infer import SVI
+from tests.common import segfaults_on_old_pytorch
 
 
 def assert_ok(model, guide, **kwargs):
@@ -227,6 +228,7 @@ def test_enum_discrete_single_single_ok():
     assert_ok(model, guide, enum_discrete=True)
 
 
+@segfaults_on_old_pytorch
 def test_enum_discrete_irange_single_ok():
 
     def model():

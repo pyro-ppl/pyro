@@ -226,6 +226,13 @@ def assert_not_equal(x, y, prec=1e-5, msg=''):
     raise AssertionError("{} \nValues are equal: x={}, y={}, prec={}".format(msg, x, y, prec))
 
 
+# XXX Remove this after Pytorch 0.2.1.
+pytorch_is_release = ('+' not in torch.__version__)
+segfaults_on_old_pytorch = pytest.mark.skipif(
+    pytorch_is_release,
+    reason="pytorch segfaults at 0.2.0_4, fixed by 0.2.0+f964105")
+
+
 class TestCase(unittest.TestCase):
     precision = 1e-5
 
