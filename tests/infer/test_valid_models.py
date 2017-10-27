@@ -200,6 +200,7 @@ def test_iarange_wrong_size_error():
     assert_error(model, guide, trace_graph=True)
 
 
+@segfaults_on_pytorch_020
 def test_enum_discrete_single_ok():
 
     def model():
@@ -213,6 +214,7 @@ def test_enum_discrete_single_ok():
     assert_ok(model, guide, enum_discrete=True)
 
 
+@segfaults_on_pytorch_020
 def test_enum_discrete_single_single_ok():
 
     def model():
