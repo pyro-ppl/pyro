@@ -2,6 +2,7 @@ from collections import defaultdict
 
 from .poutine import Poutine
 from .trace import Trace
+from .util import site_is_subsample
 
 
 def get_vectorized_map_data_info(trace):
@@ -16,6 +17,8 @@ def get_vectorized_map_data_info(trace):
     vec_md_stacks = set()
 
     for name, node in nodes.items():
+        if site_is_subsample(node):
+            continue
         if node["type"] in ("sample", "param"):
             stack = tuple(reversed(node["map_data_stack"]))
             vec_mds = list(filter(lambda x: x[2] == 'tensor', stack))
@@ -60,6 +63,8 @@ def get_vectorized_map_data_info(trace):
     if vectorized_map_data_info['rao-blackwellization-condition']:
         vectorized_map_data_info['nodes'] = defaultdict(list)
         for name, node in nodes.items():
+            if site_is_subsample(node):
+                continue
             if node["type"] in ("sample", "param"):
                 stack = tuple(reversed(node["map_data_stack"]))
                 vec_mds = list(filter(lambda x: x[2] == 'tensor', stack))
@@ -72,14 +77,18 @@ def get_vectorized_map_data_info(trace):
 
 def identify_dense_edges(trace):
     """
-    Method to add all edges based on the map_data_stack information
-    stored at each site.
+    Modifies a trace in-place by adding all edges based on the
+    `map_data_stack` information stored at each site.
     """
     for name, node in trace.nodes.items():
+        if site_is_subsample(node):
+            continue
         if node["type"] == "sample":
             # XXX why tuple?
             map_data_stack = tuple(reversed(node["map_data_stack"]))
             for past_name, past_node in trace.nodes.items():
+                if site_is_subsample(node):
+                    continue
                 if past_node["type"] == "sample":
                     if past_name == name:
                         break
@@ -93,8 +102,6 @@ def identify_dense_edges(trace):
                             break
                     if not past_node_independent:
                         trace.add_edge(past_name, name)
-
-    return trace
 
 
 class TracePoutine(Poutine):
@@ -127,7 +134,7 @@ class TracePoutine(Poutine):
         upon exiting the context.
         """
         if self.graph_type == "dense":
-            self.trace = identify_dense_edges(self.trace)
+            identify_dense_edges(self.trace)
             self.trace.graph["vectorized_map_data_info"] = \
                 get_vectorized_map_data_info(self.trace)
         return super(TracePoutine, self).__exit__(*args, **kwargs)
