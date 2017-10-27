@@ -1,12 +1,12 @@
 <div align="center">
-  <img width="150px" height="150px" src="docs/img/pyro_logo.png">
+  <a href="http://pyro.ai"> <img width="150px" height="150px" src="docs/img/pyro_logo.png"></a>
 </div>
 
 ----------------------------------------------------------------
 
 [![Build Status](https://travis-ci.com/uber/pyro.svg?token=LrMxkQNuTGCmwphBqyVs&branch=dev)](https://travis-ci.com/uber/pyro)
 
-[Installation](#Installation) | [Examples](examples) | [Getting Started](pyro.ai/tutorial) | [Contributing](CONTRIBUTING.md) | Discussion
+[Installation](#Installation) | [Examples](examples) | [Getting Started](http://pyro.ai/tutorial) | [Contributing](CONTRIBUTING.md) | Discussion
 
 Pyro is a flexible, scalable deep probabilistic programming library built on PyTorch.  Notably, it was designed with these principles in mind:
 - **Universal**: Pyro is a universal PPL -- it can represent any computable probability distribution.
