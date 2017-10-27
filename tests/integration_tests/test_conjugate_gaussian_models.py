@@ -433,7 +433,7 @@ class GaussianPyramidTests(TestCase):
                 node_flagged = True if self.which_nodes_reparam[i] == 1.0 else False
                 repa = True if reparameterized else node_flagged
                 latent_dist_node = dist.Normal(mean_function_node, torch.exp(log_sig_node),
-                                                   reparameterized=repa)
+                                               reparameterized=repa)
                 latent_node = pyro.sample(node, latent_dist_node,
                                           baseline=dict(use_decaying_avg_baseline=True,
                                                         baseline_beta=0.96))

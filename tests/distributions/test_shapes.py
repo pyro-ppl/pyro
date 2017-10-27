@@ -18,7 +18,7 @@ def test_categorical_shape(one_hot):
     assert d.sample().size() == d.shape()
 
 
-def test_diag_normal_shape():
+def test_normal_shape():
     mu = ng_zeros(3, 2)
     sigma = ng_ones(3, 2)
     d = dist.Normal(mu, sigma)
@@ -56,7 +56,7 @@ def test_categorical_batch_log_pdf_shape(one_hot):
     assert d.batch_log_pdf(x).size() == (3, 2, 1)
 
 
-def test_diag_normal_batch_log_pdf_shape():
+def test_normal_batch_log_pdf_shape():
     mu = ng_zeros(3, 2)
     sigma = ng_ones(3, 2)
     x = ng_zeros(3, 2)

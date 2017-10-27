@@ -37,7 +37,7 @@ Delta
 
 Normal
 ----------
-.. automodule:: pyro.distributions.diag_normal
+.. automodule:: pyro.distributions.normal
     :members:
     :undoc-members:
     :show-inheritance:

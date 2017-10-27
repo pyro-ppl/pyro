@@ -27,10 +27,10 @@ class NormalNormalNormalPoutineTestCase(TestCase):
         def model():
             latent1 = pyro.sample("latent1",
                                   Normal(Variable(torch.zeros(2)),
-                                             Variable(torch.ones(2))))
+                                         Variable(torch.ones(2))))
             latent2 = pyro.sample("latent2",
                                   Normal(latent1,
-                                             5 * Variable(torch.ones(2))))
+                                         5 * Variable(torch.ones(2))))
             x_dist = Normal(latent2, Variable(torch.ones(2)))
             pyro.observe("obs", x_dist, Variable(torch.ones(2)))
             return latent1

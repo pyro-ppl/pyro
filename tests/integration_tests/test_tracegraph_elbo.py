@@ -191,8 +191,8 @@ class NormalNormalNormalTests(TestCase):
             mu_latent = pyro.sample("mu_latent", mu_latent_dist,
                                     baseline=dict(use_decaying_avg_baseline=use_decaying_avg_baseline))
             mu_latent_prime_dist = dist.Normal(kappa_q.expand_as(mu_latent) * mu_latent + mu_q_prime,
-                                                   sig_q_prime,
-                                                   reparameterized=repa1)
+                                               sig_q_prime,
+                                               reparameterized=repa1)
             pyro.sample("mu_latent_prime",
                         mu_latent_prime_dist,
                         baseline=dict(nn_baseline=mu_prime_baseline,
