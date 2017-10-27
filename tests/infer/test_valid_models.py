@@ -274,6 +274,7 @@ def test_no_iarange_enum_discrete_batch_error():
     assert_error(model, guide, enum_discrete=True)
 
 
+@segfaults_on_old_pytorch
 @pytest.mark.xfail(reason="tensor shape mismatch in: elbo_particle += ...")
 def test_enum_discrete_global_local_ok():
     # TODO Simplify this test when test_iarange_enum_discrete_batch_ok passes:
