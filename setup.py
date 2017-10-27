@@ -28,6 +28,7 @@ setup(
             'isort',
             'pytest',
             'pytest-xdist',
+            'nbval',
             'yapf',
         ],
     },
