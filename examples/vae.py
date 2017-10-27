@@ -70,7 +70,7 @@ class Decoder(nn.Module):
         # define the forward computation on the latent z
         # first compute the hidden units
         hidden = self.softplus(self.fc1(z))
-        # send back the mean vector and square root covariance
+        # return the mean vector and square root covariance
         # each is of size batch_size x 784
         mu_img = self.fc21(hidden)
         sigma_img = self.softplus(self.fc22(hidden))
@@ -126,7 +126,7 @@ class VAE(nn.Module):
         z_mu, z_sigma = self.encoder(x)
         # sample in latent space
         z = DiagNormal(z_mu, z_sigma).sample()
-        # decode the image (not we don't sample in image space)
+        # decode the image (note we don't sample in image space)
         mu_img, sigma_img = self.decoder(z)
         return mu_img
 
@@ -185,14 +185,13 @@ def main():
                 # compute ELBO estimate and accumulate loss
                 test_loss += svi.evaluate_loss(x)
 
-                # pick a random test image from the first mini-batch and
-                # visualize how well we're reconstructing it:1
-
+                # pick three random test images from the first mini-batch and
+                # visualize how well we're reconstructing them
                 if i == 0 :
-                    for _ in range(3):
-                        test_img = x[np.random.randint(x.size(0)), :, :, :]
+                    reco_indices = np.random.randint(0, x.size(0), 3)
+                    for index in reco_indices:
+                        test_img = x[index, :, :, :]
                         reco_img = vae.reconstruct_img(test_img)
-                        test_img = test_img
                         vis.image(test_img.contiguous().view(28, 28).data.cpu().numpy(),
                                   opts={'caption': 'test image'})
                         vis.image(reco_img.contiguous().view(28, 28).data.cpu().numpy(),
