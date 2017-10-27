@@ -18,7 +18,7 @@ def assert_ok(model, guide, **kwargs):
 
 def assert_error(model, guide, **kwargs):
     inference = SVI(model,  guide, Adam({"lr": 1e-3}), "ELBO", **kwargs)
-    with pytest.raises((UserWarning, KeyError)):
+    with pytest.raises((NotImplementedError, UserWarning, KeyError)):
         inference.step()
 
 
@@ -71,6 +71,23 @@ def test_irange_irange_ok(trace_graph, subsample_size):
         for i in pyro.irange("irange_0", 10, subsample_size):
             for j in pyro.irange("irange_1", 10, subsample_size):
                 pyro.sample("x_{}_{}".format(i, j), dist.bernoulli, p)
+
+    assert_error(model, guide, trace_graph=trace_graph)
+
+
+@pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
+@pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
+def test_irange_in_model_not_guide_ok(trace_graph, subsample_size):
+
+    def model():
+        p = Variable(torch.Tensor([0.5]))
+        for i in pyro.irange("irange", 10, subsample_size):
+            pass
+        pyro.sample("x", dist.bernoulli, p)
+
+    def guide():
+        p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
+        pyro.sample("x", dist.bernoulli, p)
 
     assert_ok(model, guide, trace_graph=trace_graph)
 
@@ -128,7 +145,7 @@ def test_irange_in_guide_not_model_error(trace_graph, subsample_size):
     assert_error(model, guide, trace_graph=trace_graph)
 
 
-@pytest.mark.xfail(reason="error is not caught")
+@pytest.mark.xfail(reason="NotImplementedError is not raised")
 def test_iarange_irange_error():
 
     def model():
