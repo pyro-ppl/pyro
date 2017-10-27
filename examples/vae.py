@@ -12,11 +12,12 @@ from pyro.util import ng_zeros, ng_ones
 from pyro.infer import SVI
 from pyro.optim import Adam
 
+
 # for loading and batching MNIST dataset
 def setup_data_loaders(batch_size=128, use_cuda=False):
     root = './data'
     download = True
-    trans= transforms.ToTensor()
+    trans = transforms.ToTensor()
     train_set = dset.MNIST(root=root, train=True, transform=trans, download=download)
     test_set = dset.MNIST(root=root, train=False, transform=trans)
 
@@ -130,11 +131,14 @@ class VAE(nn.Module):
         mu_img, sigma_img = self.decoder(z)
         return mu_img
 
+
 def main():
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', default=5000, type=int, help='number of training epochs')
     parser.add_argument('-tf', '--test-frequency', default=5, type=int, help='how often we evaluate the test set')
+    parser.add_argument('-lr', '--learning-rate', default=1.0e-4, type=float, help='learning rate')
+    parser.add_argument('-b1', '--beta1', default=0.90, type=float, help='beta1 adam hyperparameter')
     parser.add_argument('--cuda', action='store_true', default=False, help='whether to use cuda')
     args = parser.parse_args()
 
@@ -145,7 +149,8 @@ def main():
     vae = VAE(use_cuda=args.cuda)
 
     # setup the optimizer
-    optimizer = Adam({"lr": 2.0e-4})
+    adam_args = {"lr": args.learning_rate, "betas": (args.beta1, 0.999)}
+    optimizer = Adam(adam_args)
 
     # setup the inference algorithm
     svi = SVI(vae.model, vae.guide, optimizer, loss="ELBO")
@@ -187,7 +192,7 @@ def main():
 
                 # pick three random test images from the first mini-batch and
                 # visualize how well we're reconstructing them
-                if i == 0 :
+                if i == 0:
                     reco_indices = np.random.randint(0, x.size(0), 3)
                     for index in reco_indices:
                         test_img = x[index, :, :, :]
