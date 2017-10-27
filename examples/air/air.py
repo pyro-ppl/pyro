@@ -180,9 +180,9 @@ class AIR(nn.Module):
             if self.use_masking or t == (self.num_steps - 1):
                 pyro.observe("obs_{}".format(t),
                              dist.diagnormal,
-                             x.view(n, -1),
-                             self.ng_ones([n, -1]) * 0.3,
                              batch.view(n, -1),
+                             x.view(n, -1),
+                             self.ng_ones(x.view(n, -1).size()) * 0.3,
                              log_pdf_mask=observe_mask)
 
         return ModelState(x=x, z_pres=z_pres, z_where=z_where)
