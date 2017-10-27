@@ -42,8 +42,8 @@ class RandomPrimitive(Distribution):
     def batch_log_pdf(self, x, *args, **kwargs):
         return self.dist_class(*args, **kwargs).batch_log_pdf(x)
 
-    def support(self, *args, **kwargs):
-        return self.dist_class(*args, **kwargs).support()
+    def enumerate_support(self, *args, **kwargs):
+        return self.dist_class(*args, **kwargs).enumerate_support()
 
     def analytic_mean(self, *args, **kwargs):
         return self.dist_class(*args, **kwargs).analytic_mean()

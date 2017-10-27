@@ -141,7 +141,7 @@ class Categorical(Distribution):
             batch_log_pdf = batch_log_pdf * scaling_mask
         return batch_log_pdf
 
-    def support(self):
+    def enumerate_support(self):
         """
         Returns the categorical distribution's support, as a tensor along the first dimension.
 

@@ -49,8 +49,8 @@ class Histogram(pyro.distributions.Distribution):
     def batch_log_pdf(self, val, *args, **kwargs):
         return poutine.block(self._dist)(*args, **kwargs).batch_log_pdf([val])
 
-    def support(self, *args, **kwargs):
-        return poutine.block(self._dist)(*args, **kwargs).support()
+    def enumerate_support(self, *args, **kwargs):
+        return poutine.block(self._dist)(*args, **kwargs).enumerate_support()
 
 
 class Marginal(Histogram):

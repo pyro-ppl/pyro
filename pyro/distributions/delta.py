@@ -49,7 +49,7 @@ class Delta(Distribution):
             v = v.expand_as(x)
         return torch.sum(torch.eq(x, v).float().log(), -1)
 
-    def support(self, v=None):
+    def enumerate_support(self, v=None):
         """
         Returns the delta distribution's support, as a tensor along the first dimension.
 

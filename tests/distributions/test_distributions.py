@@ -107,13 +107,15 @@ def test_mean_and_variance(dist):
 
 # Distributions tests - discrete distributions
 
-def test_support(discrete_dist):
+def test_enumerate_support(discrete_dist):
     expected_support = discrete_dist.expected_support
     expected_support_non_vec = discrete_dist.expected_support_non_vec
     if not expected_support:
-        pytest.skip("Support not tested for distribution")
-    actual_support_non_vec = discrete_dist.pyro_dist.support(**discrete_dist.get_dist_params(SINGLE_TEST_DATUM_IDX))
-    actual_support = discrete_dist.pyro_dist.support(**discrete_dist.get_dist_params(BATCH_TEST_DATA_IDX))
+        pytest.skip("enumerate_support not tested for distribution")
+    actual_support_non_vec = discrete_dist.pyro_dist.enumerate_support(
+        **discrete_dist.get_dist_params(SINGLE_TEST_DATUM_IDX))
+    actual_support = discrete_dist.pyro_dist.enumerate_support(
+        **discrete_dist.get_dist_params(BATCH_TEST_DATA_IDX))
     assert_equal(actual_support.data, torch.Tensor(expected_support))
     assert_equal(actual_support_non_vec.data, torch.Tensor(expected_support_non_vec))
 

@@ -263,7 +263,7 @@ def enum_extend(trace, msg, num_samples=None):
         num_samples = -1
 
     extended_traces = []
-    for i, s in enumerate(msg["fn"].support(*msg["args"], **msg["kwargs"])):
+    for i, s in enumerate(msg["fn"].enumerate_support(*msg["args"], **msg["kwargs"])):
         if i > num_samples and num_samples >= 0:
             break
         msg_copy = msg.copy()
