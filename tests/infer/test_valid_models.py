@@ -9,7 +9,7 @@ import pyro
 import pyro.distributions as dist
 from pyro.optim import Adam
 from pyro.infer import SVI
-from tests.common import segfaults_on_old_pytorch
+from tests.common import segfaults_on_pytorch_020
 
 
 def assert_ok(model, guide, **kwargs):
@@ -228,7 +228,7 @@ def test_enum_discrete_single_single_ok():
     assert_ok(model, guide, enum_discrete=True)
 
 
-@segfaults_on_old_pytorch
+@segfaults_on_pytorch_020
 def test_enum_discrete_irange_single_ok():
 
     def model():
@@ -274,7 +274,7 @@ def test_no_iarange_enum_discrete_batch_error():
     assert_error(model, guide, enum_discrete=True)
 
 
-@segfaults_on_old_pytorch
+@segfaults_on_pytorch_020
 @pytest.mark.xfail(reason="tensor shape mismatch in: elbo_particle += ...")
 def test_enum_discrete_global_local_ok():
     # TODO Simplify this test when test_iarange_enum_discrete_batch_ok passes:
