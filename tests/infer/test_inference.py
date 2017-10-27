@@ -15,11 +15,11 @@ from tests.common import TestCase
 
 
 def param_mse(name, target):
-    return torch.sum(torch.pow(target - pyro.param(name), 2.0)).data.numpy()[0]
+    return torch.sum(torch.pow(target - pyro.param(name), 2.0)).data.cpu().numpy()[0]
 
 
 def param_abs_error(name, target):
-    return torch.sum(torch.abs(target - pyro.param(name))).data.numpy()[0]
+    return torch.sum(torch.abs(target - pyro.param(name))).data.cpu().numpy()[0]
 
 
 class NormalNormalTests(TestCase):

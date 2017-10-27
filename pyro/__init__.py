@@ -136,14 +136,15 @@ class _Subsample(Distribution):
     Internal use only. This should only be used by `iarange`.
     """
 
-    def __init__(self, size, subsample_size, use_cuda=False):
+    def __init__(self, size, subsample_size, use_cuda=None):
         """
         :param int size: the size of the range to subsample from
         :param int subsample_size: the size of the returned subsample
+        :param bool use_cuda: whether to use cuda tensors
         """
         self.size = size
         self.subsample_size = subsample_size
-        self.use_cuda = use_cuda
+        self.use_cuda = torch.Tensor.is_cuda if use_cuda is None else use_cuda
 
     def sample(self):
         """
@@ -167,7 +168,7 @@ class _Subsample(Distribution):
 
 
 @contextlib.contextmanager
-def iarange(name, size=None, subsample_size=None, subsample=None, use_cuda=False):
+def iarange(name, size=None, subsample_size=None, subsample=None, use_cuda=None):
     """
     Context manager for ranges indexing iid variables, optionally subsampling.
 
@@ -187,8 +188,8 @@ def iarange(name, size=None, subsample_size=None, subsample=None, use_cuda=False
         schemes. If specified, then `subsample_size` will be set to
         `len(subsample)`.
     :type subsample: Anything supporting `len()`.
-    :param bool use_cuda: Whether to use cuda tensors for `subsample` and
-        `log_pdf`.
+    :param bool use_cuda: Optional bool specifying whether to use cuda tensors
+        for `subsample` and `log_pdf`. Defaults to `torch.Tensor.is_cuda`.
     :return: A context manager yielding a single 1-dimensional `torch.Tensor`
         of indices.
 
@@ -233,7 +234,7 @@ def iarange(name, size=None, subsample_size=None, subsample=None, use_cuda=False
             yield subsample
 
 
-def irange(name, size, subsample_size=None, subsample=None, use_cuda=False):
+def irange(name, size, subsample_size=None, subsample=None, use_cuda=None):
     """
     Non-vectorized version of `iarange`. See `iarange` for details.
 
@@ -243,7 +244,8 @@ def irange(name, size, subsample_size=None, subsample=None, use_cuda=False):
     :param subsample: Optional custom subsample for user-defined subsampling schemes.
         If specified, then `subsample_size` will be set to `len(subsample)`.
     :type subsample: Anything supporting `len()`.
-    :param bool use_cuda: Whether to use cuda tensors for `subsample` and `log_pdf`.
+    :param bool use_cuda: Optional bool specifying whether to use cuda tensors
+        for `log_pdf`. Defaults to `torch.Tensor.is_cuda`.
     :return: A context manager yielding a single 1-dimensional `torch.Tensor` of indices.
 
     Examples::
@@ -266,7 +268,7 @@ def irange(name, size, subsample_size=None, subsample=None, use_cuda=False):
                     yield i
 
 
-def map_data(name, data, fn, batch_size=None, batch_dim=0, use_cuda=False):
+def map_data(name, data, fn, batch_size=None, batch_dim=0, use_cuda=None):
     """
     Data subsampling with the important property that all the data are conditionally independent.
 
@@ -278,10 +280,11 @@ def map_data(name, data, fn, batch_size=None, batch_dim=0, use_cuda=False):
     :param callable fn: a function taking `(index, datum)` pairs, where `dataum = data[index]`
     :param int batch_size: number of samples per batch, or zero for the entire dataset
     :param int batch_dim: dimension to subsample for tensor inputs
-    :param bool use_cuda: Whether to use cuda tensors for `subsample` and `log_pdf`.
+    :param bool use_cuda: Optional bool specifying whether to use cuda tensors
+        for `log_pdf`. Defaults to `torch.Tensor.is_cuda`.
     :return: a list of values returned by `fn`
     """
-    use_cuda = use_cuda or getattr(data, 'is_cuda', False)
+    use_cuda = use_cuda or getattr(data, 'is_cuda', None)
     if isinstance(data, (torch.Tensor, Variable)):
         size = data.size(batch_dim)
         with iarange(name, size, batch_size, use_cuda=use_cuda) as batch:

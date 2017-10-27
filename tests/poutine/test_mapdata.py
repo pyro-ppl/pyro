@@ -107,7 +107,7 @@ def test_elbo_mapdata(batch_size, map_type):
                 2.0))
 
         if verbose and k % 500 == 0:
-            print("errors", mu_error.data.numpy()[0], log_sig_error.data.numpy()[0])
+            print("errors", mu_error.data.cpu().numpy()[0], log_sig_error.data.cpu().numpy()[0])
 
     assert_equal(Variable(torch.zeros(1)), mu_error, prec=0.05)
     assert_equal(Variable(torch.zeros(1)), log_sig_error, prec=0.06)
@@ -199,7 +199,8 @@ def map_data_vector_model(subsample_size):
         pyro.sample("x", dist.normal, mu[batch], sigma[batch])
         return batch
 
-    ind = Variable(torch.LongTensor(range(20)))
+    LongTensor = torch.cuda.LongTensor if torch.Tensor.is_cuda else torch.LongTensor
+    ind = Variable(LongTensor(range(20)))
     batch = pyro.map_data('mapdata', ind, local_model, batch_size=subsample_size)
     return list(batch.data)
 

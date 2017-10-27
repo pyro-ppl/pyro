@@ -17,7 +17,7 @@ from tests.common import TestCase
 
 
 def param_mse(name, target):
-    return torch.sum(torch.pow(target - pyro.param(name), 2.0)).data.numpy()[0]
+    return torch.sum(torch.pow(target - pyro.param(name), 2.0)).data.cpu().numpy()[0]
 
 
 @pytest.mark.stage("integration", "integration_batch_1")
@@ -100,7 +100,7 @@ class GaussianChainTests(TestCase):
                   (self.N, reparameterized, n_repa_nodes, self.N))
             if self.N < 0:
                 def array_to_string(y):
-                    return str(map(lambda x: "%.3f" % x.data.numpy()[0], y))
+                    return str(map(lambda x: "%.3f" % x.data.cpu().numpy()[0], y))
 
                 print("lambdas: " + array_to_string(self.lambdas))
                 print("target_mus: " + array_to_string(self.target_mus[1:]))
