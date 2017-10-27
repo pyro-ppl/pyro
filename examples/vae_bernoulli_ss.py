@@ -266,11 +266,11 @@ def main():
         sample3, sample_mu3 = model_sample(cll=cll_clamp3)
         sample9, sample_mu9 = model_sample(cll=cll_clamp9)
         vis.line(np.array(loss_training), opts=dict({'title': 'my title'}))
-        vis.image(batch_data[0].view(28, 28).data.numpy())
-        # vis.image(sample[0].view(28, 28).data.numpy())
-        vis.image(sample_mu0[0].view(28, 28).data.numpy())
-        vis.image(sample_mu3[0].view(28, 28).data.numpy())
-        vis.image(sample_mu9[0].view(28, 28).data.numpy())
+        vis.image(batch_data[0].view(28, 28).data.cpu().numpy())
+        # vis.image(sample[0].view(28, 28).data.cpu().numpy())
+        vis.image(sample_mu0[0].view(28, 28).data.cpu().numpy())
+        vis.image(sample_mu3[0].view(28, 28).data.cpu().numpy())
+        vis.image(sample_mu9[0].view(28, 28).data.cpu().numpy())
         print("epoch avg loss {}".format(epoch_loss / float(mnist_size)))
 
 

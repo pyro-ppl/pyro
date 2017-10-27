@@ -200,9 +200,9 @@ def main():
             epoch_loss += inference.step(batch_data, batch_class)
 
         sample, sample_mu, sample_class = model_sample()
-        vis.image(batch_data[0].view(28, 28).data.numpy())
-        vis.image(sample[0].view(28, 28).data.numpy())
-        vis.image(sample_mu[0].view(28, 28).data.numpy())
+        vis.image(batch_data[0].view(28, 28).data.cpu().numpy())
+        vis.image(sample[0].view(28, 28).data.cpu().numpy())
+        vis.image(sample_mu[0].view(28, 28).data.cpu().numpy())
         print("epoch avg loss {}".format(epoch_loss / float(mnist_size)))
 
 

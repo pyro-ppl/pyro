@@ -20,11 +20,11 @@ pytestmark = pytest.mark.stage("integration", "integration_batch_2")
 
 
 def param_mse(name, target):
-    return torch.sum(torch.pow(target - pyro.param(name), 2.0)).data.numpy()[0]
+    return torch.sum(torch.pow(target - pyro.param(name), 2.0)).data.cpu().numpy()[0]
 
 
 def param_abs_error(name, target):
-    return torch.sum(torch.abs(target - pyro.param(name))).data.numpy()[0]
+    return torch.sum(torch.abs(target - pyro.param(name))).data.cpu().numpy()[0]
 
 
 class NormalNormalTests(TestCase):
@@ -708,7 +708,7 @@ class RaoBlackwellizationTests(TestCase):
                     mean_1_error = torch.sum(torch.pow(pyro.param("mean_1_%d" % k), 2.0))
                     mean_2_error = torch.sum(torch.pow(pyro.param("mean_2_%d" % k), 2.0))
                     superfluous_error = torch.max(torch.max(mean_0_error, mean_1_error), mean_2_error)
-                    superfluous_errors.append(superfluous_error.data.numpy()[0])
+                    superfluous_errors.append(superfluous_error.data.cpu().numpy()[0])
 
             if step % 500 == 0 and self.verbose:
                 print("mu error, log(sigma) error:  %.4f, %.4f" % (mu_error, log_sig_error))

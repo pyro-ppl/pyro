@@ -159,9 +159,9 @@ def main():
         loss_training.append(-epoch_loss / float(mnist_size))
         sample, sample_mu = model_sample()
         # vis.line(np.array(loss_training), opts=dict({'title': 'Training ELBO in nats'}))
-        # vis.image(batch_data[0].view(28, 28).data.numpy())
-        # vis.image(sample[0].view(28, 28).data.numpy())
-        # vis.image(sample_mu[0].view(28, 28).data.numpy())
+        # vis.image(batch_data[0].view(28, 28).data.cpu().numpy())
+        # vis.image(sample[0].view(28, 28).data.cpu().numpy())
+        # vis.image(sample_mu[0].view(28, 28).data.cpu().numpy())
         print("epoch avg loss {}".format(epoch_loss / float(mnist_size)))
         print("epoch eval loss {}".format(epoch_eval_loss / float(mnist_size)))
 
