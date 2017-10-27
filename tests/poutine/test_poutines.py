@@ -191,7 +191,7 @@ class QueuePoutineDiscreteTest(TestCase):
         def model():
             ps = pyro.param("ps", Variable(torch.Tensor([[0.8], [0.3]])))
             mu = pyro.param("mu", Variable(torch.Tensor([[-0.1], [0.9]])))
-            sigma = Variable(torch.ones(1))
+            sigma = Variable(torch.ones(1, 1))
 
             latents = [Variable(torch.ones(1))]
             observes = []
