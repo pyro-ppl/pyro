@@ -166,6 +166,22 @@ class _Subsample(Distribution):
         return result.cuda() if self.use_cuda else result
 
 
+def _check_for_notimplemented_iarange_behavior(name):
+    conflicts = {"tensor": set(), "list": set()}
+    for frame in _PYRO_STACK:
+        if isinstance(frame, poutine.LambdaPoutine):
+            conflicts[frame.map_data_type].add(frame.name)
+        elif isinstance(frame, poutine.TracePoutine):
+            if frame.graph_type != "dense":
+                return  # Only TraceGraph_ELBO has this issue; Trace_ELBO is fine.
+    conflicts["tensor"] -= conflicts["list"]  # irange is implemented via iarange.
+    if conflicts["tensor"]:
+        raise NotImplementedError(
+                "TraceGraph_ELBO does not support irange/iarange nested inside iarange. "
+                "Found {} inside {}. "
+                "See https://github.com/uber/pyro/issues/370".format(name, conflicts["tensor"]))
+
+
 @contextlib.contextmanager
 def iarange(name, size=None, subsample_size=None, subsample=None, use_cuda=False):
     """
@@ -227,6 +243,7 @@ def iarange(name, size=None, subsample_size=None, subsample=None, use_cuda=False
     if len(_PYRO_STACK) == 0:
         yield subsample
     else:
+        _check_for_notimplemented_iarange_behavior(name)
         # Wrap computation in a scaling context.
         scale = size / subsample_size
         with LambdaPoutine(None, name, scale, 'tensor', 0, subsample_size):
