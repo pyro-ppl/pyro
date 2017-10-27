@@ -3,7 +3,7 @@ import pytest
 import scipy.stats as sp
 
 import pyro.distributions as dist
-from pyro.distributions import Uniform, Bernoulli, Exponential, Gamma, Beta, DiagNormal, LogNormal, \
+from pyro.distributions import Uniform, Bernoulli, Exponential, Gamma, Beta, Normal, LogNormal, \
     Dirichlet, Cauchy, Poisson, Categorical, HalfCauchy, Multinomial
 from tests.distributions.dist_fixture import Fixture
 
@@ -56,7 +56,7 @@ continuous_dists = [
                  'test_data': [[0.4], [0.6]]}
             ],
             scipy_arg_fn=lambda alpha, beta: ((np.array(alpha), np.array(beta)), {})),
-    Fixture(pyro_dist=(dist.diagnormal, DiagNormal),
+    Fixture(pyro_dist=(dist.normal, Normal),
             scipy_dist=sp.multivariate_normal,
             examples=[
                 {'mu': [2.0], 'sigma': [4.0],

@@ -97,7 +97,7 @@ class GatedTransition(nn.Module):
         # compute the sigma used to sample z_t, using the proposed mean from above as input
         # the softplus ensures that sigma is positive
         sigma = self.softplus(self.lin_sig(self.relu(proposed_mean)))
-        # return mu, sigma which can be fed into DiagNormal
+        # return mu, sigma which can be fed into Normal
         return mu, sigma
 
 
@@ -129,7 +129,7 @@ class Combiner(nn.Module):
         mu = self.lin_hidden_to_mu(h_combined)
         # use the combined hidden state to compute the sigma used to sample z_t
         sigma = self.softplus(self.lin_hidden_to_sigma(h_combined))
-        # return mu, sigma which can be fed into DiagNormal
+        # return mu, sigma which can be fed into Normal
         return mu, sigma
 
 
@@ -191,9 +191,9 @@ class DMM(nn.Module):
 
             # first compute the parameters of the diagonal gaussian distribution p(z_t | z_{t-1})
             z_mu, z_sigma = self.trans(z_prev)
-            # then sample z_t according to dist.DiagNormal(z_mu, z_sigma)
+            # then sample z_t according to dist.Normal(z_mu, z_sigma)
             z_t = pyro.sample("z_%d" % t,
-                              dist.diagnormal,
+                              dist.normal,
                               z_mu,
                               z_sigma,
                               log_pdf_mask=annealing_factor * mini_batch_mask[:, t - 1:t])
@@ -234,7 +234,7 @@ class DMM(nn.Module):
         for t in range(1, T_max + 1):
             # the next two lines assemble the distribution q(z_t | z_{t-1}, x_{t:T})
             z_mu, z_sigma = self.combiner(z_prev, rnn_output[:, t - 1, :])
-            z_dist = dist.diagnormal
+            z_dist = dist.normal
 
             # if we are using normalizing flows, we apply the sequence of transformations
             # parameterized by self.iafs to the base distribution defined in the previous line

@@ -5,7 +5,7 @@ from torch.autograd import Variable
 from pyro.distributions.distribution import Distribution
 
 
-class DiagNormal(Distribution):
+class Normal(Distribution):
     """
     :param mu: mean *(tensor)*
     :param sigma: standard deviations *(tensor (0, Infinity))*
@@ -35,7 +35,7 @@ class DiagNormal(Distribution):
             self.sigma = sigma.expand(batch_size, sigma.size(0))
             if log_pdf_mask is not None and log_pdf_mask.dim() == 1:
                 self.log_pdf_mask = log_pdf_mask.expand(batch_size, log_pdf_mask.size(0))
-        super(DiagNormal, self).__init__(*args, **kwargs)
+        super(Normal, self).__init__(*args, **kwargs)
 
     def batch_shape(self, x=None):
         event_dim = 1
