@@ -13,7 +13,7 @@ from torchvision.utils import save_image
 import pyro
 from examples import util
 from examples.util import RESULTS_DIR
-from pyro.distributions import DiagNormal, Bernoulli
+from pyro.distributions import Normal, Bernoulli
 from pyro.infer import SVI
 from pyro.optim import Adam
 from pyro.util import ng_zeros, ng_ones
@@ -106,7 +106,7 @@ class VAE(object):
         """
         z_mean, z_var = self.vae_encoder(x)
         if self.mode == TRAIN:
-            z = DiagNormal(z_mean, z_var.sqrt()).sample()
+            z = Normal(z_mean, z_var.sqrt()).sample()
         else:
             z = z_mean
         return self.vae_decoder(z), z_mean, z_var
@@ -185,14 +185,14 @@ class PyroVAEImpl(VAE):
     def model(self, data):
         decoder = pyro.module('decoder', self.vae_decoder)
         z_mean, z_std = ng_zeros([data.size(0), 20]), ng_ones([data.size(0), 20])
-        z = pyro.sample('latent', DiagNormal(z_mean, z_std))
+        z = pyro.sample('latent', Normal(z_mean, z_std))
         img = decoder.forward(z)
         pyro.observe('obs', Bernoulli(img), data.view(-1, 784))
 
     def guide(self, data):
         encoder = pyro.module('encoder', self.vae_encoder)
         z_mean, z_var = encoder.forward(data)
-        pyro.sample('latent', DiagNormal(z_mean, z_var.sqrt()))
+        pyro.sample('latent', Normal(z_mean, z_var.sqrt()))
 
     def compute_loss_and_gradient(self, x):
         if self.mode == TRAIN:

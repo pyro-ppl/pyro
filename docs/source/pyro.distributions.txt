@@ -35,9 +35,9 @@ Delta
     :show-inheritance:
 
 
-DiagNormal
+Normal
 ----------
-.. automodule:: pyro.distributions.diag_normal
+.. automodule:: pyro.distributions.normal
     :members:
     :undoc-members:
     :show-inheritance:
@@ -74,20 +74,6 @@ LogNormal
 Multinomial
 -----------
 .. automodule:: pyro.distributions.multinomial
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-Normal
-------
-.. automodule:: pyro.distributions.normal
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-NormalChol
-----------
-.. automodule:: pyro.distributions.normal_chol
     :members:
     :undoc-members:
     :show-inheritance:

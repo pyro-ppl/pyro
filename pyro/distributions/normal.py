@@ -7,72 +7,80 @@ from pyro.distributions.distribution import Distribution
 
 class Normal(Distribution):
     """
-    :param mu: mean *(real)*
-    :param sigma: standard deviation *(real (0, Infinity))*
-    :param dims: dimension of tensor *(int (>=1) array)*
+    :param mu: mean *(tensor)*
+    :param sigma: standard deviations *(tensor (0, Infinity))*
 
-    Gaussian Distribution over a tensor of independent variables.
+    A distribution over tensors in which each element is independent and
+    Gaussian distributed, with its own mean and standard deviation. i.e. A
+    multivariate Gaussian distribution with diagonal covariance matrix. The
+    distribution is over tensors that have the same shape as the parameters ``mu``
+    and ``sigma``, which in turn must have the same shape as each other.
     """
-    reparameterized = False  # This is treated as non-reparameterized because chol does not support autograd.
+    reparameterized = True
 
-    def _sanitize_input(self, mu, sigma):
-        if mu is not None:
-            # stateless distribution
-            return mu, sigma
-        elif self.mu is not None:
-            # stateful distribution
-            return self.mu, self.sigma
-        else:
-            raise ValueError("Mu and/or sigma had invalid values")
-
-    def __init__(self, mu=None, sigma=None, batch_size=1, *args, **kwargs):
+    def __init__(self, mu, sigma, batch_size=None, log_pdf_mask=None, *args, **kwargs):
         """
         Params:
           `mu` - mean
           `sigma` - root variance
         """
-        if mu is not None:
-            if batch_size == 1 and mu.dim() == 1:
-                self.mu = torch.unsqueeze(mu, 1)
-            else:
-                self.mu = mu.expand(batch_size, mu.size(0))
+        self.mu = mu
+        self.sigma = sigma
+        self.log_pdf_mask = log_pdf_mask
+        if mu.size() != sigma.size():
+            raise ValueError("Expected mu.size() == sigma.size(), but got {} vs {}"
+                             .format(mu.size(), sigma.size()))
+        if mu.dim() == 1 and batch_size is not None:
+            self.mu = mu.expand(batch_size, mu.size(0))
+            self.sigma = sigma.expand(batch_size, sigma.size(0))
+            if log_pdf_mask is not None and log_pdf_mask.dim() == 1:
+                self.log_pdf_mask = log_pdf_mask.expand(batch_size, log_pdf_mask.size(0))
         super(Normal, self).__init__(*args, **kwargs)
 
-    def sample(self, mu=None, sigma=None):
-        """
-        Reparameterized Normal sampler.
-        """
-        mu, sigma = self._sanitize_input(mu, sigma)
-        l_chol = Variable(torch.potrf(sigma.data, False).type_as(mu.data))
-        eps = Variable(torch.randn(mu.size()).type_as(mu.data))
-        if eps.dim() == 1:
-            eps = eps.unsqueeze(1)
-        z = mu + torch.mm(l_chol, eps).squeeze()
-        return z
+    def batch_shape(self, x=None):
+        event_dim = 1
+        mu = self.mu
+        if x is not None and x.size() != mu.size():
+            mu = self.mu.expand(x.size()[:-event_dim] + self.event_shape())
+        return mu.size()[:-event_dim]
 
-    def log_pdf(self, x, mu=None, sigma=None, batch_size=1, *args, **kwargs):
-        """
-        Normal log-likelihood
-        """
-        mu, sigma = self._sanitize_input(mu, sigma)
-        assert mu.dim() == sigma.dim()
-        if x.dim() == 1:
-            x = x.expand(batch_size, x.size(0))
-        if mu.size() != x.size():
-            mu = mu.expand_as(x)
-            sigma = sigma.expand_as(x)
-        l_chol = Variable(torch.potrf(sigma.data, False).type_as(mu.data))
-        ll_1 = Variable(torch.Tensor([-0.5 * mu.size(0) * np.log(2.0 * np.pi)])
-                        .type_as(mu.data))
-        ll_2 = -torch.sum(torch.log(torch.diag(l_chol)))
-        x_chol = Variable(
-            torch.trtrs(
-                (x - mu).data,
-                l_chol.data,
-                False)[0])
-        ll_3 = -0.5 * torch.sum(torch.pow(x_chol, 2.0))
+    def event_shape(self):
+        event_dim = 1
+        return self.mu.size()[-event_dim:]
 
-        return ll_1 + ll_2 + ll_3
+    def shape(self, x=None):
+        return self.batch_shape(x) + self.event_shape()
 
-    def batch_log_pdf(self, x, batch_size=1):
-        raise NotImplementedError()
+    def sample(self):
+        """
+        Reparameterized diagonal Normal sampler.
+        """
+        eps = Variable(torch.randn(self.mu.size()).type_as(self.mu.data))
+        z = self.mu + eps * self.sigma
+        return z if self.reparameterized else z.detach()
+
+    def batch_log_pdf(self, x):
+        """
+        Diagonal Normal log-likelihood
+        """
+        # expand to patch size of input
+        mu = self.mu.expand(self.shape(x))
+        sigma = self.sigma.expand(self.shape(x))
+        log_pxs = -1 * torch.add(torch.add(torch.log(sigma),
+                                 0.5 * torch.log(2.0 * np.pi *
+                                 Variable(torch.ones(sigma.size()).type_as(mu.data)))),
+                                 0.5 * torch.pow(((x - mu) / sigma), 2))
+        # XXX this allows for the user to mask out certain parts of the score, for example
+        # when the data is a ragged tensor. also useful for KL annealing. this entire logic
+        # will likely be done in a better/cleaner way in the future
+        if self.log_pdf_mask is not None:
+            log_pxs = log_pxs * self.log_pdf_mask
+        batch_log_pdf = torch.sum(log_pxs, -1)
+        batch_log_pdf_shape = self.batch_shape(x) + (1,)
+        return batch_log_pdf.contiguous().view(batch_log_pdf_shape)
+
+    def analytic_mean(self):
+        return self.mu
+
+    def analytic_var(self):
+        return torch.pow(self.sigma, 2)

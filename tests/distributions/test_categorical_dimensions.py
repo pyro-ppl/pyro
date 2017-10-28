@@ -55,7 +55,7 @@ def modify_params_using_dims(ps, vs, dim):
 
 def test_support_dims(dim, vs, one_hot, ps):
     ps, vs = modify_params_using_dims(ps, vs, dim)
-    support = dist.categorical.support(ps, vs, one_hot=one_hot)
+    support = dist.categorical.enumerate_support(ps, vs, one_hot=one_hot)
     for s in support:
         assert_correct_dimensions(s, ps, vs, one_hot)
 
@@ -70,6 +70,6 @@ def test_batch_log_dims(dim, vs, one_hot, ps):
     batch_pdf_shape = (3,) + (1,) * dim
     expected_log_pdf = np.array(wrap_nested(list(np.log(ps)), dim-1)).reshape(*batch_pdf_shape)
     ps, vs = modify_params_using_dims(ps, vs, dim)
-    support = dist.categorical.support(ps, vs, one_hot=one_hot)
+    support = dist.categorical.enumerate_support(ps, vs, one_hot=one_hot)
     batch_log_pdf = dist.categorical.batch_log_pdf(support, ps, vs, one_hot=one_hot)
     assert_equal(batch_log_pdf.data.cpu().numpy(), expected_log_pdf)

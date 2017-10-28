@@ -24,11 +24,7 @@ def test_log_pdf(dist):
 
 
 def test_batch_log_pdf(dist):
-    # TODO (@npradhan) - remove once #144 is resolved
-    try:
-        logpdf_sum_pyro = unwrap_variable(torch.sum(dist.get_pyro_batch_logpdf(BATCH_TEST_DATA_IDX)))[0]
-    except NotImplementedError:
-        pytest.skip("Batch log pdf not tested for distribution")
+    logpdf_sum_pyro = unwrap_variable(torch.sum(dist.get_pyro_batch_logpdf(BATCH_TEST_DATA_IDX)))[0]
     logpdf_sum_np = np.sum(dist.get_scipy_batch_logpdf(-1))
     assert_equal(logpdf_sum_pyro, logpdf_sum_np)
 
@@ -58,8 +54,6 @@ def test_sample_shape(dist):
 
 
 def test_batch_log_pdf_shape(dist):
-    if dist.pyro_dist.__class__.__name__ == 'Multinomial':
-        pytest.xfail('FIXME: https://github.com/uber/pyro/issues/301')
     d = dist.pyro_dist
     for idx in range(dist.get_num_test_data()):
         dist_params = dist.get_dist_params(idx)
@@ -76,7 +70,7 @@ def test_batch_log_pdf_shape(dist):
 
 
 def test_batch_log_pdf_mask(dist):
-    if dist.pyro_dist.__class__.__name__ not in ('DiagNormal', 'Bernoulli', 'Categorical'):
+    if dist.pyro_dist.__class__.__name__ not in ('Normal', 'Bernoulli', 'Categorical'):
         pytest.skip('Batch pdf masking not supported for the distribution.')
     d = dist.pyro_dist
     for idx in range(dist.get_num_test_data()):
@@ -100,11 +94,11 @@ def test_mean_and_variance(dist):
     num_samples = dist.get_num_samples(SINGLE_TEST_DATUM_IDX)
     dist_params = dist.get_dist_params(SINGLE_TEST_DATUM_IDX)
     torch_samples = dist.get_samples(num_samples, **dist_params)
-    sample_mean = np.mean(torch_samples, 0)
-    sample_var = np.var(torch_samples, 0)
+    sample_mean = torch_samples.float().mean(0)
+    sample_var = torch_samples.float().var(0)
     try:
-        analytic_mean = unwrap_variable(dist.pyro_dist.analytic_mean(**dist_params))
-        analytic_var = unwrap_variable(dist.pyro_dist.analytic_var(**dist_params))
+        analytic_mean = dist.pyro_dist.analytic_mean(**dist_params)
+        analytic_var = dist.pyro_dist.analytic_var(**dist_params)
         assert_equal(sample_mean, analytic_mean, prec=dist.prec)
         assert_equal(sample_var, analytic_var, prec=dist.prec)
     except (NotImplementedError, ValueError):
@@ -113,13 +107,15 @@ def test_mean_and_variance(dist):
 
 # Distributions tests - discrete distributions
 
-def test_support(discrete_dist):
+def test_enumerate_support(discrete_dist):
     expected_support = discrete_dist.expected_support
     expected_support_non_vec = discrete_dist.expected_support_non_vec
     if not expected_support:
-        pytest.skip("Support not tested for distribution")
-    actual_support_non_vec = discrete_dist.pyro_dist.support(**discrete_dist.get_dist_params(SINGLE_TEST_DATUM_IDX))
-    actual_support = discrete_dist.pyro_dist.support(**discrete_dist.get_dist_params(BATCH_TEST_DATA_IDX))
+        pytest.skip("enumerate_support not tested for distribution")
+    actual_support_non_vec = discrete_dist.pyro_dist.enumerate_support(
+        **discrete_dist.get_dist_params(SINGLE_TEST_DATUM_IDX))
+    actual_support = discrete_dist.pyro_dist.enumerate_support(
+        **discrete_dist.get_dist_params(BATCH_TEST_DATA_IDX))
     assert_equal(actual_support.data, torch.Tensor(expected_support))
     assert_equal(actual_support_non_vec.data, torch.Tensor(expected_support_non_vec))
 

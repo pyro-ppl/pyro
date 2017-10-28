@@ -3,9 +3,11 @@ from torch import nn as nn
 from torch.autograd import Variable
 from torch.nn import Parameter
 
+import pytest
 import pyro
 import pyro.distributions as dist
 from pyro.infer.svi import SVI
+from pyro.util import ng_ones, ng_zeros
 import pyro.optim as optim
 from pyro.distributions.transformed_distribution import TransformedDistribution
 from tests.distributions.test_transformed_distribution import AffineExp
@@ -13,11 +15,11 @@ from tests.common import TestCase
 
 
 def param_mse(name, target):
-    return torch.sum(torch.pow(target - pyro.param(name), 2.0)).data.numpy()[0]
+    return torch.sum(torch.pow(target - pyro.param(name), 2.0)).data.cpu().numpy()[0]
 
 
 def param_abs_error(name, target):
-    return torch.sum(torch.abs(target - pyro.param(name))).data.numpy()[0]
+    return torch.sum(torch.abs(target - pyro.param(name))).data.cpu().numpy()[0]
 
 
 class NormalNormalTests(TestCase):
@@ -53,11 +55,11 @@ class NormalNormalTests(TestCase):
         pyro.clear_param_store()
 
         def model():
-            mu_latent = pyro.sample("mu_latent", dist.diagnormal,
+            mu_latent = pyro.sample("mu_latent", dist.normal,
                                     self.mu0, torch.pow(self.lam0, -0.5))
             pyro.map_data("aaa", self.data, lambda i,
                           x: pyro.observe(
-                              "obs_%d" % i, dist.diagnormal,
+                              "obs_%d" % i, dist.normal,
                               x, mu_latent, torch.pow(self.lam, -0.5)),
                           batch_size=self.batch_size)
             return mu_latent
@@ -69,7 +71,7 @@ class NormalNormalTests(TestCase):
                                    self.analytic_log_sig_n.data - 0.14 * torch.ones(2),
                                    requires_grad=True))
             sig_q = torch.exp(log_sig_q)
-            pyro.sample("mu_latent", dist.DiagNormal(mu_q, sig_q, reparameterized=reparameterized))
+            pyro.sample("mu_latent", dist.Normal(mu_q, sig_q, reparameterized=reparameterized))
             pyro.map_data("aaa", self.data, lambda i, x: None,
                           batch_size=self.batch_size)
 
@@ -350,7 +352,7 @@ class LogNormalNormalTests(TestCase):
                                         self.log_tau_n.data - 0.143)
 
         def model():
-            mu_latent = pyro.sample("mu_latent", dist.diagnormal,
+            mu_latent = pyro.sample("mu_latent", dist.normal,
                                     self.mu0, torch.pow(self.tau0, -0.5))
             sigma = torch.pow(self.tau, -0.5)
             pyro.observe("obs0", dist.lognormal, self.data[0], mu_latent, sigma)
@@ -361,7 +363,7 @@ class LogNormalNormalTests(TestCase):
             pyro.module("mymodule", pt_guide)
             mu_q, tau_q = torch.exp(pt_guide.mu_q_log), torch.exp(pt_guide.tau_q_log)
             sigma = torch.pow(tau_q, -0.5)
-            pyro.sample("mu_latent", dist.DiagNormal(mu_q, sigma, reparameterized=reparameterized))
+            pyro.sample("mu_latent", dist.Normal(mu_q, sigma, reparameterized=reparameterized))
 
         adam = optim.Adam({"lr": .0005, "betas": (0.96, 0.999)})
         svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
@@ -380,10 +382,10 @@ class LogNormalNormalTests(TestCase):
         def model():
             zero = Variable(torch.zeros(1))
             one = Variable(torch.ones(1))
-            mu_latent = pyro.sample("mu_latent", dist.diagnormal,
+            mu_latent = pyro.sample("mu_latent", dist.normal,
                                     self.mu0, torch.pow(self.tau0, -0.5))
             bijector = AffineExp(torch.pow(self.tau, -0.5), mu_latent)
-            x_dist = TransformedDistribution(dist.diagnormal, bijector)
+            x_dist = TransformedDistribution(dist.normal, bijector)
             pyro.observe("obs0", x_dist, self.data[0], zero, one)
             pyro.observe("obs1", x_dist, self.data[1], zero, one)
             return mu_latent
@@ -398,7 +400,7 @@ class LogNormalNormalTests(TestCase):
             tau_q_log = pyro.param("tau_q_log", Variable(self.log_tau_n.data - 0.143,
                                                          requires_grad=True))
             mu_q, tau_q = torch.exp(mu_q_log), torch.exp(tau_q_log)
-            pyro.sample("mu_latent", dist.diagnormal, mu_q, torch.pow(tau_q, -0.5))
+            pyro.sample("mu_latent", dist.normal, mu_q, torch.pow(tau_q, -0.5))
 
         adam = optim.Adam({"lr": .0005, "betas": (0.96, 0.999)})
         svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
@@ -410,3 +412,56 @@ class LogNormalNormalTests(TestCase):
         tau_error = param_abs_error("tau_q_log", self.log_tau_n)
         self.assertEqual(0.0, mu_error, prec=0.05)
         self.assertEqual(0.0, tau_error, prec=0.05)
+
+
+class SafetyTests(TestCase):
+
+    def setUp(self):
+        # normal-normal; known covariance
+        def model_dup():
+            pyro.param("mu_q", Variable(torch.ones(1), requires_grad=True))
+            pyro.sample("mu_q", dist.normal, ng_zeros(1), ng_ones(1))
+
+        def model_obs_dup():
+            pyro.sample("mu_q", dist.normal, ng_zeros(1), ng_ones(1))
+            pyro.observe("mu_q", dist.normal, ng_zeros(1), ng_ones(1), ng_zeros(1))
+
+        def model():
+            pyro.sample("mu_q", dist.normal, ng_zeros(1), ng_ones(1))
+
+        def guide():
+            p = pyro.param("p", Variable(torch.ones(1), requires_grad=True))
+            pyro.sample("mu_q", dist.normal, ng_zeros(1), p)
+            pyro.sample("mu_q_2", dist.normal, ng_zeros(1), p)
+
+        self.duplicate_model = model_dup
+        self.duplicate_obs = model_obs_dup
+        self.model = model
+        self.guide = guide
+
+    def test_duplicate_names(self):
+        pyro.clear_param_store()
+
+        adam = optim.Adam({"lr": .001})
+        svi = SVI(self.duplicate_model, self.guide, adam, loss="ELBO", trace_graph=False)
+
+        with pytest.raises(RuntimeError):
+            svi.step()
+
+    def test_extra_samples(self):
+        pyro.clear_param_store()
+
+        adam = optim.Adam({"lr": .001})
+        svi = SVI(self.model, self.guide, adam, loss="ELBO", trace_graph=False)
+
+        with pytest.warns(Warning):
+            svi.step()
+
+    def test_duplicate_obs_name(self):
+        pyro.clear_param_store()
+
+        adam = optim.Adam({"lr": .001})
+        svi = SVI(self.duplicate_obs, self.guide, adam, loss="ELBO", trace_graph=False)
+
+        with pytest.raises(RuntimeError):
+            svi.step()

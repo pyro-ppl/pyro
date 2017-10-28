@@ -7,7 +7,7 @@ import torchvision.datasets as dset
 import torchvision.transforms as transforms
 import visdom
 import pyro
-from pyro.distributions import DiagNormal
+from pyro.distributions import Normal
 from pyro.util import ng_zeros, ng_ones
 from pyro.infer import SVI
 from pyro.optim import Adam

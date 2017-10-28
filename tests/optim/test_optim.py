@@ -4,7 +4,7 @@ from torch.autograd import Variable
 import pyro
 import pyro.optim as optim
 from pyro.infer import SVI
-from pyro.distributions import DiagNormal
+from pyro.distributions import Normal
 from tests.common import TestCase
 
 
@@ -27,9 +27,9 @@ class OptimTests(TestCase):
         pyro.clear_param_store()
 
         def model():
-            prior_dist = DiagNormal(self.mu0, torch.pow(self.lam0, -0.5))
+            prior_dist = Normal(self.mu0, torch.pow(self.lam0, -0.5))
             mu_latent = pyro.sample("mu_latent", prior_dist)
-            x_dist = DiagNormal(mu_latent, torch.pow(self.lam, -0.5))
+            x_dist = Normal(mu_latent, torch.pow(self.lam, -0.5))
             pyro.observe("obs", x_dist, self.data)
             return mu_latent
 
@@ -43,7 +43,7 @@ class OptimTests(TestCase):
                 "log_sig_q", Variable(
                     torch.zeros(1), requires_grad=True))
             sig_q = torch.exp(log_sig_q)
-            pyro.sample("mu_latent", DiagNormal(mu_q, sig_q))
+            pyro.sample("mu_latent", Normal(mu_q, sig_q))
 
         def optim_params(module_name, param_name, tags):
             if param_name == fixed_param:

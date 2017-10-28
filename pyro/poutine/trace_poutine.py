@@ -2,6 +2,7 @@ from collections import defaultdict
 
 from .poutine import Poutine
 from .trace import Trace
+from .util import site_is_subsample
 
 
 def get_vectorized_map_data_info(trace):
@@ -16,6 +17,8 @@ def get_vectorized_map_data_info(trace):
     vec_md_stacks = set()
 
     for name, node in nodes.items():
+        if site_is_subsample(node):
+            continue
         if node["type"] in ("sample", "param"):
             stack = tuple(reversed(node["map_data_stack"]))
             vec_mds = list(filter(lambda x: x[2] == 'tensor', stack))
@@ -60,6 +63,8 @@ def get_vectorized_map_data_info(trace):
     if vectorized_map_data_info['rao-blackwellization-condition']:
         vectorized_map_data_info['nodes'] = defaultdict(list)
         for name, node in nodes.items():
+            if site_is_subsample(node):
+                continue
             if node["type"] in ("sample", "param"):
                 stack = tuple(reversed(node["map_data_stack"]))
                 vec_mds = list(filter(lambda x: x[2] == 'tensor', stack))
@@ -72,14 +77,18 @@ def get_vectorized_map_data_info(trace):
 
 def identify_dense_edges(trace):
     """
-    Method to add all edges based on the map_data_stack information
-    stored at each site.
+    Modifies a trace in-place by adding all edges based on the
+    `map_data_stack` information stored at each site.
     """
     for name, node in trace.nodes.items():
+        if site_is_subsample(node):
+            continue
         if node["type"] == "sample":
             # XXX why tuple?
             map_data_stack = tuple(reversed(node["map_data_stack"]))
             for past_name, past_node in trace.nodes.items():
+                if site_is_subsample(node):
+                    continue
                 if past_node["type"] == "sample":
                     if past_name == name:
                         break
@@ -93,8 +102,6 @@ def identify_dense_edges(trace):
                             break
                     if not past_node_independent:
                         trace.add_edge(past_name, name)
-
-    return trace
 
 
 class TracePoutine(Poutine):
@@ -127,7 +134,7 @@ class TracePoutine(Poutine):
         upon exiting the context.
         """
         if self.graph_type == "dense":
-            self.trace = identify_dense_edges(self.trace)
+            identify_dense_edges(self.trace)
             self.trace.graph["vectorized_map_data_info"] = \
                 get_vectorized_map_data_info(self.trace)
         return super(TracePoutine, self).__exit__(*args, **kwargs)
@@ -176,10 +183,15 @@ class TracePoutine(Poutine):
         then store the return value in self.trace
         and return the return value.
         """
-        if msg["name"] in self.trace:
-            # XXX temporary solution - right now, if the name appears in the trace,
-            # we assume that this was intentional and that the poutine restarted,
-            # so we should reset self.trace to be empty
+        name = msg["name"]
+        if name in self.trace:
+            # Cannot repeat names between params and samples
+            if self.trace.nodes[name]['type'] == 'param':
+                raise RuntimeError("{} is already in the trace as a param".format(name))
+            # observe has the same name as a sample
+            if msg['is_observed'] and not self.trace.nodes[name]['is_observed']:
+                raise RuntimeError("observe cannot have the same name as a sample")
+            # XXX temporary solution - otherwise, we reset self.trace to be empty
             tr = Trace(graph_type=self.graph_type)
             tr.add_node("_INPUT",
                         name="_INPUT", type="input",
@@ -190,7 +202,7 @@ class TracePoutine(Poutine):
         val = super(TracePoutine, self)._pyro_sample(msg)
         site = msg.copy()
         site.update(value=val)
-        self.trace.add_node(msg["name"], **site)
+        self.trace.add_node(name, **site)
         return val
 
     def _pyro_param(self, msg):
@@ -206,6 +218,10 @@ class TracePoutine(Poutine):
         If it does exist, grab it from the parameter store.
         Store the parameter in self.trace, and then return the parameter.
         """
+        if msg["name"] in self.trace:
+            if self.trace.nodes[msg['name']]['type'] == "sample":
+                raise RuntimeError("{} is already in the trace as a sample".format(msg['name']))
+
         val = super(TracePoutine, self)._pyro_param(msg)
         site = msg.copy()
         site.update(value=val)
