@@ -137,8 +137,7 @@ class Categorical(Distribution):
         batch_pdf_shape = self.batch_shape(x) + (1,)
         batch_log_pdf = torch.log(self.ps.masked_select(boolean_mask.byte())).contiguous().view(batch_pdf_shape)
         if self.log_pdf_mask is not None:
-            scaling_mask = self.log_pdf_mask.contiguous().view(batch_pdf_shape)
-            batch_log_pdf = batch_log_pdf * scaling_mask
+            batch_log_pdf = batch_log_pdf * self.log_pdf_mask
         return batch_log_pdf
 
     def enumerate_support(self):
