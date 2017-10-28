@@ -1,7 +1,8 @@
 # This file tests a variety of model,guide pairs with valid and invalid structure.
 
-import pytest
+import warnings
 
+import pytest
 import torch
 from torch.autograd import Variable
 
@@ -13,13 +14,33 @@ from tests.common import segfaults_on_pytorch_020
 
 
 def assert_ok(model, guide, **kwargs):
-    inference = SVI(model, guide, Adam({"lr": 1e-3}), "ELBO", **kwargs)
+    """
+    Assert that inference works without warnings or errors.
+    """
+    inference = SVI(model, guide, Adam({"lr": 1e-6}), "ELBO", **kwargs)
     inference.step()
 
 
 def assert_error(model, guide, **kwargs):
-    inference = SVI(model,  guide, Adam({"lr": 1e-3}), "ELBO", **kwargs)
+    """
+    Assert that inference fails with an error.
+    """
+    inference = SVI(model,  guide, Adam({"lr": 1e-6}), "ELBO", **kwargs)
     with pytest.raises((NotImplementedError, UserWarning, KeyError)):
+        inference.step()
+
+
+def assert_warning(model, guide, **kwargs):
+    """
+    Assert that inference works but with a warning.
+    """
+    inference = SVI(model,  guide, Adam({"lr": 1e-6}), "ELBO", **kwargs)
+    # Inference works...
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        inference.step()
+    # ...but with a warning.
+    with pytest.raises(UserWarning):
         inference.step()
 
 
@@ -129,8 +150,9 @@ def test_irange_in_guide_not_model_error(trace_graph, subsample_size):
     assert_error(model, guide, trace_graph=trace_graph)
 
 
-@pytest.mark.xfail(reason="NotImplementedError is not raised")
-def test_iarange_irange_error():
+# TODO(fritz,martin) Fix this test.
+@pytest.mark.xfail(reason="warning is not raised")
+def test_iarange_irange_warning():
 
     def model():
         p = Variable(torch.Tensor([0.5]))
@@ -144,7 +166,7 @@ def test_iarange_irange_error():
             for i in pyro.irange("irange", 10, 5):
                 pyro.sample("x_{}".format(i), dist.bernoulli, p, batch_size=len(ind))
 
-    assert_error(model, guide, trace_graph=True)
+    assert_warning(model, guide, trace_graph=True)
 
 
 @pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
@@ -165,8 +187,9 @@ def test_irange_iarange_ok(trace_graph):
     assert_ok(model, guide, trace_graph=trace_graph)
 
 
-@pytest.mark.xfail(reason="error is not caught")
-def test_iarange_iarange_error():
+# TODO(fritz,martin) Fix this test.
+@pytest.mark.xfail(reason="warning is not raised")
+def test_iarange_iarange_warning():
 
     def model():
         p = Variable(torch.Tensor([0.5]))
@@ -180,7 +203,7 @@ def test_iarange_iarange_error():
             with pyro.iarange("iarange_1", 10, 5) as ind2:
                 pyro.sample("x", dist.bernoulli, p, batch_size=len(ind1) * len(ind2))
 
-    assert_error(model, guide, trace_graph=True)
+    assert_warning(model, guide, trace_graph=True)
 
 
 @pytest.mark.xfail(reason="error is not caught")
@@ -246,7 +269,6 @@ def test_enum_discrete_irange_single_ok():
 
 
 @segfaults_on_pytorch_020
-@pytest.mark.xfail(reason="tensor shape mismatch in: elbo_particle += ...")
 def test_iarange_enum_discrete_batch_ok():
 
     def model():
@@ -278,27 +300,18 @@ def test_no_iarange_enum_discrete_batch_error():
 
 
 @segfaults_on_pytorch_020
-@pytest.mark.xfail(reason="tensor shape mismatch in: elbo_particle += ...")
 def test_enum_discrete_global_local_ok():
-    # TODO Simplify this test when test_iarange_enum_discrete_batch_ok passes:
-    test_iarange_enum_discrete_batch_ok_passes = False
 
     def model():
         p = Variable(torch.Tensor([0.5]))
         pyro.sample("x", dist.bernoulli, p)
-        if test_iarange_enum_discrete_batch_ok_passes:
-            with pyro.iarange("iarange", 10, 5) as ind:
-                pyro.sample("y", dist.bernoulli, p, batch_size=len(ind))
-        else:
-            pyro.sample("y", dist.bernoulli, p, batch_size=5)
+        with pyro.iarange("iarange", 10, 5) as ind:
+            pyro.sample("y", dist.bernoulli, p, batch_size=len(ind))
 
     def guide():
         p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
         pyro.sample("x", dist.bernoulli, p)
-        if test_iarange_enum_discrete_batch_ok_passes:
-            with pyro.iarange("iarange", 10, 5) as ind:
-                pyro.sample("y", dist.bernoulli, p, batch_size=len(ind))
-        else:
-            pyro.sample("y", dist.bernoulli, p, batch_size=5)
+        with pyro.iarange("iarange", 10, 5) as ind:
+            pyro.sample("y", dist.bernoulli, p, batch_size=len(ind))
 
     assert_ok(model, guide, enum_discrete=True)
