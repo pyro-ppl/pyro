@@ -230,7 +230,7 @@ def iarange(name, size=None, subsample_size=None, subsample=None, use_cuda=None)
     else:
         # Wrap computation in a scaling context.
         scale = size / subsample_size
-        with LambdaPoutine(None, name, scale, 'tensor', 0, subsample_size):
+        with LambdaPoutine(None, name, scale, 'tensor'):
             yield subsample
 
 
@@ -262,7 +262,7 @@ def irange(name, size, subsample_size=None, subsample=None, use_cuda=None):
                 yield i
         else:
             # Wrap computation in an independence context.
-            indep_context = LambdaPoutine(None, name, 1.0, 'list', 0, len(ind))
+            indep_context = LambdaPoutine(None, name, 1.0, 'list')
             for i in ind:
                 with indep_context:
                     yield i

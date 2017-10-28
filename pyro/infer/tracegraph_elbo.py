@@ -1,3 +1,5 @@
+import warnings
+
 import networkx
 import torch
 
@@ -104,26 +106,20 @@ class TraceGraph_ELBO(object):
             guide_vec_md_condition = guide_vec_md_info['rao-blackwellization-condition']
             model_vec_md_condition = model_vec_md_info['rao-blackwellization-condition']
             do_vec_rb = guide_vec_md_condition and model_vec_md_condition
-            guide_vec_md_nodes = guide_vec_md_info['nodes'] if do_vec_rb else None
-            model_vec_md_nodes = model_vec_md_info['nodes'] if do_vec_rb else None
-
-            def get_vec_batch_nodes_dict(vec_batch_nodes):
-                vec_batch_nodes = vec_batch_nodes.values() if vec_batch_nodes is not None else []
-                vec_batch_nodes = [item for sublist in vec_batch_nodes for item in sublist]
-                vec_batch_nodes_dict = {}
-                for pair in vec_batch_nodes:
-                    vec_batch_nodes_dict[pair[0]] = pair[1]
-                return vec_batch_nodes_dict
-
-            # these dictionaries encode which sites are batched
-            guide_vec_batch_nodes_dict = get_vec_batch_nodes_dict(guide_vec_md_nodes)
-            model_vec_batch_nodes_dict = get_vec_batch_nodes_dict(model_vec_md_nodes)
+            if not do_vec_rb:
+                warnings.warn(
+                    "Unable to do fully-vectorized Rao-Blackwellization in TraceGraph_ELBO. "
+                    "Falling back to higher-variance gradient estimator. "
+                    "Try to avoid these issues in your model and guide:\n".format("\n".join(
+                        guide_vec_md_info["warnings"] | model_vec_md_info["warnings"])))
+            guide_vec_md_nodes = guide_vec_md_info['nodes'] if do_vec_rb else set()
+            model_vec_md_nodes = model_vec_md_info['nodes'] if do_vec_rb else set()
 
             # have the trace compute all the individual (batch) log pdf terms
             # so that they are available below
-            guide_trace.batch_log_pdf(site_filter=lambda name, site: name in guide_vec_batch_nodes_dict)
+            guide_trace.compute_batch_log_pdf(site_filter=lambda name, site: name in guide_vec_md_nodes)
             guide_trace.log_pdf()
-            model_trace.batch_log_pdf(site_filter=lambda name, site: name in model_vec_batch_nodes_dict)
+            model_trace.compute_batch_log_pdf(site_filter=lambda name, site: name in model_vec_md_nodes)
             model_trace.log_pdf()
 
             # prepare a list of all the cost nodes, each of which is +- log_pdf
@@ -131,7 +127,7 @@ class TraceGraph_ELBO(object):
             non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
             for site in model_trace.nodes.keys():
                 model_trace_site = model_trace.nodes[site]
-                log_pdf_key = 'log_pdf' if site not in model_vec_batch_nodes_dict else 'batch_log_pdf'
+                log_pdf_key = 'batch_log_pdf' if site in model_vec_md_nodes else 'log_pdf'
                 if model_trace_site["type"] == "sample":
                     if model_trace_site["is_observed"]:
                         cost_node = (model_trace_site[log_pdf_key], True)
@@ -180,7 +176,7 @@ class TraceGraph_ELBO(object):
                 downstream_costs = {}
 
                 for node in topo_sort_guide_nodes:
-                    node_log_pdf_key = 'log_pdf' if node not in guide_vec_batch_nodes_dict else 'batch_log_pdf'
+                    node_log_pdf_key = 'batch_log_pdf' if node in guide_vec_md_nodes else 'log_pdf'
                     downstream_costs[node] = model_trace.nodes[node][node_log_pdf_key] - \
                         guide_trace.nodes[node][node_log_pdf_key]
                     nodes_included_in_sum = set([node])
@@ -197,8 +193,7 @@ class TraceGraph_ELBO(object):
                     missing_downstream_costs = downstream_guide_cost_nodes[node] - nodes_included_in_sum
                     # include terms we missed because we had to avoid duplicates
                     for missing_node in missing_downstream_costs:
-                        mn_log_pdf_key = 'log_pdf' if missing_node not in \
-                                            guide_vec_batch_nodes_dict else 'batch_log_pdf'
+                        mn_log_pdf_key = 'batch_log_pdf' if missing_node in guide_vec_md_nodes else 'log_pdf'
                         if node_log_pdf_key == 'log_pdf':
                             downstream_costs[node] += (model_trace.nodes[missing_node][mn_log_pdf_key] -
                                                        guide_trace.nodes[missing_node][mn_log_pdf_key]).sum()
@@ -216,10 +211,8 @@ class TraceGraph_ELBO(object):
                     # remove terms accounted for above
                     children_in_model.difference_update(downstream_guide_cost_nodes[site])
                     for child in children_in_model:
-                        child_log_pdf_key = 'log_pdf' if child not in model_vec_batch_nodes_dict \
-                            else 'batch_log_pdf'
-                        site_log_pdf_key = 'log_pdf' if site not in guide_vec_batch_nodes_dict \
-                            else 'batch_log_pdf'
+                        child_log_pdf_key = 'batch_log_pdf' if child in model_vec_md_nodes else 'log_pdf'
+                        site_log_pdf_key = 'batch_log_pdf' if site in guide_vec_md_nodes else 'log_pdf'
                         assert (model_trace.nodes[child]["type"] == "sample")
                         if site_log_pdf_key == 'log_pdf':
                             downstream_costs[site] += model_trace.nodes[child][child_log_pdf_key].sum()
@@ -246,7 +239,7 @@ class TraceGraph_ELBO(object):
 
                 baseline_loss_particle = 0.0
                 for node in non_reparam_nodes:
-                    log_pdf_key = 'log_pdf' if node not in guide_vec_batch_nodes_dict else 'batch_log_pdf'
+                    log_pdf_key = 'batch_log_pdf' if node in guide_vec_md_nodes else 'log_pdf'
                     downstream_cost = downstream_costs[node]
                     baseline = 0.0
                     (nn_baseline, nn_baseline_input, use_decaying_avg_baseline, baseline_beta,

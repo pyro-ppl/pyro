@@ -54,6 +54,9 @@ class Trace(networkx.DiGraph):
         Compute the local and overall log-probabilities of the trace.
 
         The local computation is memoized.
+
+        :returns: total log probability.
+        :rtype: torch.autograd.Variable
         """
         log_p = 0.0
         for name, site in self.nodes.items():
@@ -68,6 +71,7 @@ class Trace(networkx.DiGraph):
                 log_p += site_log_p
         return log_p
 
+    # XXX This only makes sense when all tensors have compatible shape.
     def batch_log_pdf(self, site_filter=lambda name, site: True):
         """
         Compute the batched local and overall log-probabilities of the trace.
@@ -88,6 +92,23 @@ class Trace(networkx.DiGraph):
                 # Here log_p may be broadcast to a larger tensor:
                 log_p = log_p + site_log_p
         return log_p
+
+    def compute_batch_log_pdf(self, site_filter=lambda name, site: True):
+        """
+        Compute the batched local log-probabilities at each site of the trace.
+
+        The local computation is memoized, and also stores the local `.log_pdf()`.
+        """
+        for name, site in self.nodes.items():
+            if site["type"] == "sample" and site_filter(name, site):
+                try:
+                    site["batch_log_pdf"]
+                except KeyError:
+                    args, kwargs = site["args"], site["kwargs"]
+                    site_log_p = site["fn"].batch_log_pdf(
+                        site["value"], *args, **kwargs) * site["scale"]
+                    site["batch_log_pdf"] = site_log_p
+                    site["log_pdf"] = site_log_p.sum()
 
     @property
     def observation_nodes(self):

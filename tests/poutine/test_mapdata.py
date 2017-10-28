@@ -317,7 +317,6 @@ def map_data_iter_cuda_model(subsample_size):
 def test_cuda(model, subsample_size):
     tr = poutine.trace(model).get_trace(subsample_size)
     assert tr.log_pdf().is_cuda
-    assert tr.batch_log_pdf().is_cuda
 
 
 @pytest.mark.parametrize('model', [
