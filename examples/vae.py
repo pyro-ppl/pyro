@@ -120,7 +120,7 @@ class VAE(nn.Module):
         # use the encoder to get the parameters used to define q(z|x)
         z_mu, z_sigma = self.encoder(x)
         # sample the latent code z
-        z=pyro.sample("latent", dist.normal, z_mu, z_sigma)
+        pyro.sample("latent", dist.normal, z_mu, z_sigma)
 
     # define a helper function for reconstructing images
     def reconstruct_img(self, x):
