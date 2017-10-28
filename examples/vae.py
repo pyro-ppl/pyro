@@ -1,16 +1,18 @@
 import argparse
+
 import numpy as np
 import torch
-from torch.autograd import Variable
 import torch.nn as nn
 import torchvision.datasets as dset
 import torchvision.transforms as transforms
 import visdom
+from torch.autograd import Variable
+
 import pyro
-from pyro.distributions import Normal
-from pyro.util import ng_zeros, ng_ones
+import pyro.distributions as dist
 from pyro.infer import SVI
 from pyro.optim import Adam
+from pyro.util import ng_zeros, ng_ones
 
 
 # for loading and batching MNIST dataset
@@ -126,7 +128,7 @@ class VAE(nn.Module):
         # encode image x
         z_mu, z_sigma = self.encoder(x)
         # sample in latent space
-        z = dist.normal(z_mu, z_sigma).sample()
+        z = dist.normal(z_mu, z_sigma)
         # decode the image (note we don't sample in image space)
         mu_img, sigma_img = self.decoder(z)
         return mu_img
