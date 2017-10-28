@@ -1,16 +1,18 @@
 import argparse
+
 import numpy as np
 import torch
-from torch.autograd import Variable
 import torch.nn as nn
 import torchvision.datasets as dset
 import torchvision.transforms as transforms
 import visdom
+from torch.autograd import Variable
+
 import pyro
-from pyro.distributions import DiagNormal
-from pyro.util import ng_zeros, ng_ones
+import pyro.distributions as dist
 from pyro.infer import SVI
 from pyro.optim import Adam
+from pyro.util import ng_zeros, ng_ones
 
 
 # for loading and batching MNIST dataset
@@ -106,11 +108,10 @@ class VAE(nn.Module):
         z_sigma = ng_ones([x.size(0), self.z_dim], type_as=x.data)
         # sample from prior (value will be sampled by guide when computing the ELBO)
         z = pyro.sample("latent", dist.normal, z_mu, z_sigma)
-
         # decode the latent code z
         mu_img, sigma_img = self.decoder(z)
         # score against actual images
-        pyro.observe("obs", dist.normal, mu_img, sigma_img, x.view(-1, 784))
+        pyro.observe("obs", dist.normal, x.view(-1, 784), mu_img, sigma_img)
 
     # define the guide (i.e. variational distribution) q(z|x)
     def guide(self, x):
@@ -119,14 +120,14 @@ class VAE(nn.Module):
         # use the encoder to get the parameters used to define q(z|x)
         z_mu, z_sigma = self.encoder(x)
         # sample the latent code z
-        pyro.sample("latent", dist.normal, z_mu, z_sigma)
+        z=pyro.sample("latent", dist.normal, z_mu, z_sigma)
 
     # define a helper function for reconstructing images
     def reconstruct_img(self, x):
         # encode image x
         z_mu, z_sigma = self.encoder(x)
         # sample in latent space
-        z = dist.normal(z_mu, z_sigma).sample()
+        z = dist.normal(z_mu, z_sigma)
         # decode the image (note we don't sample in image space)
         mu_img, sigma_img = self.decoder(z)
         return mu_img
@@ -138,7 +139,7 @@ def main():
     parser.add_argument('-n', '--num-epochs', default=5000, type=int, help='number of training epochs')
     parser.add_argument('-tf', '--test-frequency', default=5, type=int, help='how often we evaluate the test set')
     parser.add_argument('-lr', '--learning-rate', default=1.0e-4, type=float, help='learning rate')
-    parser.add_argument('-b1', '--beta1', default=0.90, type=float, help='beta1 adam hyperparameter')
+    parser.add_argument('-b1', '--beta1', default=0.95, type=float, help='beta1 adam hyperparameter')
     parser.add_argument('--cuda', action='store_true', default=False, help='whether to use cuda')
     args = parser.parse_args()
 
