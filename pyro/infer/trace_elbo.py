@@ -4,6 +4,8 @@ import pyro
 import pyro.poutine as poutine
 from pyro.infer.enum import iter_discrete_traces
 from pyro.distributions.util import torch_zeros_like
+from pyro.poutine.util import prune_subsample_sites
+from pyro.util import check_site_names
 
 
 class Trace_ELBO(object):
@@ -35,6 +37,11 @@ class Trace_ELBO(object):
                 for scale, guide_trace in iter_discrete_traces("flat", guide, *args, **kwargs):
                     model_trace = poutine.trace(poutine.replay(model, guide_trace),
                                                 graph_type="flat").get_trace(*args, **kwargs)
+
+                    check_site_names(model_trace, guide_trace)
+                    guide_trace = prune_subsample_sites(guide_trace)
+                    model_trace = prune_subsample_sites(model_trace)
+
                     log_r = model_trace.batch_log_pdf() - guide_trace.batch_log_pdf()
                     weight = scale / self.num_particles
                     yield weight, model_trace, guide_trace, log_r
@@ -42,6 +49,11 @@ class Trace_ELBO(object):
 
             guide_trace = poutine.trace(guide).get_trace(*args, **kwargs)
             model_trace = poutine.trace(poutine.replay(model, guide_trace)).get_trace(*args, **kwargs)
+
+            check_site_names(model_trace, guide_trace)
+            guide_trace = prune_subsample_sites(guide_trace)
+            model_trace = prune_subsample_sites(model_trace)
+
             log_r = model_trace.log_pdf() - guide_trace.log_pdf()
             weight = 1.0 / self.num_particles
             yield weight, model_trace, guide_trace, log_r
@@ -89,12 +101,10 @@ class Trace_ELBO(object):
         elbo = 0.0
         surrogate_elbo = 0.0
         trainable_params = set()
-
         # grab a trace from the generator
         for weight, model_trace, guide_trace, log_r in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = weight * 0
             surrogate_elbo_particle = weight * 0
-
             # compute elbo and surrogate elbo
             log_pdf = "batch_log_pdf" if self.enum_discrete else "log_pdf"
             for name in model_trace.nodes.keys():

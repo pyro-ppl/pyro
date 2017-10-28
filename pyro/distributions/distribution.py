@@ -68,7 +68,7 @@ class Distribution(object):
 
     Derived classes must implement the following methods: `.sample()`,
     `.batch_log_pdf()`, `.batch_shape()`, and `.event_shape()`, .
-    Discrete classes may also implement the `.support()` method to improve
+    Discrete classes may also implement the `.enumerate_support()` method to improve
     gradient estimates and set `.enumerable = True`.
 
     **Examples**:
@@ -179,7 +179,7 @@ class Distribution(object):
         """
         raise NotImplementedError
 
-    def support(self, *args, **kwargs):
+    def enumerate_support(self, *args, **kwargs):
         """
         Returns a representation of the parametrized distribution's support.
 

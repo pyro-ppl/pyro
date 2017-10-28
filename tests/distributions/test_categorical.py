@@ -68,42 +68,44 @@ class TestCategorical(TestCase):
 
     def test_discrete_arr_logpdf(self):
         log_px_torch = dist.categorical.batch_log_pdf(self.d_v_test_data,
-                                                      self.d_ps, self.d_vs_arr).data[0][0]
+                                                      self.d_ps,
+                                                      self.d_vs_arr).data[0][0]
         log_px_np = float(sp.multinomial.logpmf(np.array([1, 0, 0]), 1, self.d_ps[0].data.cpu().numpy()))
         log_px_torch2 = dist.categorical.batch_log_pdf(self.d_v_test_data,
-                                                       self.d_ps, self.d_vs_arr).data[1][0]
+                                                       self.d_ps,
+                                                       self.d_vs_arr).data[1][0]
         log_px_np2 = float(sp.multinomial.logpmf(np.array([0, 0, 1]), 1, self.d_ps[1].data.cpu().numpy()))
         self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
         self.assertEqual(log_px_torch2, log_px_np2, prec=1e-4)
 
     def test_one_hot_support_non_vectorized(self):
-        s = dist.categorical.support(self.d_ps[0].squeeze(0))
+        s = dist.categorical.enumerate_support(self.d_ps[0].squeeze(0))
         assert_equal(s.data, self.support_one_hot_non_vec)
 
     def test_one_hot_support(self):
-        s = dist.categorical.support(self.d_ps)
+        s = dist.categorical.enumerate_support(self.d_ps)
         assert_equal(s.data, self.support_one_hot)
 
     def test_discrete_support_non_vectorized(self):
-        s = dist.categorical.support(self.d_ps[0].squeeze(0), self.d_vs[0].squeeze(0))
+        s = dist.categorical.enumerate_support(self.d_ps[0].squeeze(0), self.d_vs[0].squeeze(0))
         assert_equal(s.data, self.discrete_support_non_vec)
 
     def test_discrete_support(self):
-        s = dist.categorical.support(self.d_ps, self.d_vs)
+        s = dist.categorical.enumerate_support(self.d_ps, self.d_vs)
         assert_equal(s.data, self.discrete_support)
 
     def test_discrete_arr_support_non_vectorized(self):
-        s = dist.categorical.support(self.d_ps[0].squeeze(0), self.d_vs_arr[0]).tolist()
+        s = dist.categorical.enumerate_support(self.d_ps[0].squeeze(0), self.d_vs_arr[0]).tolist()
         assert_equal(s, self.discrete_arr_support_non_vec)
 
     def test_discrete_arr_support(self):
-        s = dist.categorical.support(self.d_ps, self.d_vs_arr).tolist()
+        s = dist.categorical.enumerate_support(self.d_ps, self.d_vs_arr).tolist()
         assert_equal(s, self.discrete_arr_support)
 
     def test_support_non_vectorized(self):
-        s = dist.categorical.support(self.batch_ps[0].squeeze(0), one_hot=False)
+        s = dist.categorical.enumerate_support(self.batch_ps[0].squeeze(0), one_hot=False)
         assert_equal(s.data, self.support_non_vec)
 
     def test_support(self):
-        s = dist.categorical.support(self.batch_ps, one_hot=False)
+        s = dist.categorical.enumerate_support(self.batch_ps, one_hot=False)
         assert_equal(s.data, self.support)

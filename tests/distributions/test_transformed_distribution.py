@@ -81,7 +81,7 @@ def test_mean_and_var_on_transformed_distribution(lognormal):
     dist_params = lognormal.get_dist_params(0)
     mu_lognorm = dist_params['mu']
     sigma_lognorm = dist_params['sigma']
-    trans_dist = get_transformed_dist(dist.diagnormal, sigma_lognorm, mu_lognorm)
+    trans_dist = get_transformed_dist(dist.normal, sigma_lognorm, mu_lognorm)
     torch_samples = [trans_dist.sample(mu_z, sigma_z).data.cpu().numpy()
                      for _ in range(lognormal.get_num_samples(0))]
     torch_mean = np.mean(torch_samples)
@@ -98,7 +98,7 @@ def test_log_pdf_on_transformed_distribution(lognormal):
     dist_params = lognormal.get_dist_params(0)
     mu_lognorm = dist_params['mu']
     sigma_lognorm = dist_params['sigma']
-    trans_dist = get_transformed_dist(dist.diagnormal, sigma_lognorm, mu_lognorm)
+    trans_dist = get_transformed_dist(dist.normal, sigma_lognorm, mu_lognorm)
     test_data = lognormal.get_test_data(0)
     log_px_torch = trans_dist.log_pdf(test_data, mu_z, sigma_z).data[0]
     log_px_np = sp.lognorm.logpdf(
