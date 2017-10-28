@@ -35,13 +35,12 @@ def assert_warning(model, guide, **kwargs):
     Assert that inference works but with a warning.
     """
     inference = SVI(model,  guide, Adam({"lr": 1e-6}), "ELBO", **kwargs)
-    # Inference works...
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
         inference.step()
-    # ...but with a warning.
-    with pytest.raises(UserWarning):
-        inference.step()
+        assert len(w), 'No warnings were raised'
+        for warning in w:
+            print(warning)
 
 
 @pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
@@ -150,8 +149,6 @@ def test_irange_in_guide_not_model_error(trace_graph, subsample_size):
     assert_error(model, guide, trace_graph=trace_graph)
 
 
-# TODO(fritz,martin) Fix this test.
-@pytest.mark.xfail(reason="warning is not raised")
 def test_iarange_irange_warning():
 
     def model():
@@ -187,8 +184,6 @@ def test_irange_iarange_ok(trace_graph):
     assert_ok(model, guide, trace_graph=trace_graph)
 
 
-# TODO(fritz,martin) Fix this test.
-@pytest.mark.xfail(reason="warning is not raised")
 def test_iarange_iarange_warning():
 
     def model():
