@@ -184,7 +184,7 @@ def test_irange_iarange_ok(trace_graph):
     assert_ok(model, guide, trace_graph=trace_graph)
 
 
-def test_iarange_iarange_warning():
+def test_nested_iarange_iarange_warning():
 
     def model():
         p = Variable(torch.Tensor([0.5]))
@@ -199,6 +199,58 @@ def test_iarange_iarange_warning():
                 pyro.sample("x", dist.bernoulli, p, batch_size=len(ind1) * len(ind2))
 
     assert_warning(model, guide, trace_graph=True)
+
+
+def test_nonnested_iarange_iarange_warning():
+
+    def model():
+        p = Variable(torch.Tensor([0.5]))
+        with pyro.iarange("iarange_0", 10, 5) as ind1:
+            pyro.sample("x0", dist.bernoulli, p, batch_size=len(ind1))
+        with pyro.iarange("iarange_1", 10, 5) as ind2:
+            pyro.sample("x1", dist.bernoulli, p, batch_size=len(ind2))
+
+    def guide():
+        p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
+        with pyro.iarange("iarange_0", 10, 5) as ind1:
+            pyro.sample("x0", dist.bernoulli, p, batch_size=len(ind1))
+        with pyro.iarange("iarange_1", 10, 5) as ind2:
+            pyro.sample("x1", dist.bernoulli, p, batch_size=len(ind2))
+
+    assert_warning(model, guide, trace_graph=True)
+
+
+def test_three_indep_iarange_at_different_depths_ok():
+    """
+      /\
+     /\ ia
+    ia ia
+    """
+    def model():
+        p = Variable(torch.Tensor([0.5]))
+        for i in pyro.irange("irange0", 2):
+            pyro.sample("x_%d" % i, dist.bernoulli, p)
+            if i == 0:
+                for j in pyro.irange("irange1_%d" % i, 2):
+                    with pyro.iarange("iarange1_%d_%d" % (i, j), 10, 5) as ind:
+                        pyro.sample("y_%d" % j, dist.bernoulli, p, batch_size=len(ind))
+            elif i == 1:
+                with pyro.iarange("iarange1_%d_%d" % (i, j), 10, 5) as ind:
+                    pyro.sample("z", dist.bernoulli, p, batch_size=len(ind))
+
+    def guide():
+        p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
+        for i in pyro.irange("irange0", 2):
+            pyro.sample("x_%d" % i, dist.bernoulli, p)
+            if i == 0:
+                for j in pyro.irange("irange1_%d" % i, 2):
+                    with pyro.iarange("iarange1_%d_%d" % (i, j), 10, 5) as ind:
+                        pyro.sample("y_%d" % j, dist.bernoulli, p, batch_size=len(ind))
+            elif i == 1:
+                with pyro.iarange("iarange1_%d_%d" % (i, j), 10, 5) as ind:
+                    pyro.sample("z", dist.bernoulli, p, batch_size=len(ind))
+
+    assert_ok(model, guide, trace_graph=True)
 
 
 @pytest.mark.xfail(reason="error is not caught")

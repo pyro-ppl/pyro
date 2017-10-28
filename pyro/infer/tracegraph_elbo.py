@@ -266,6 +266,8 @@ class TraceGraph_ELBO(object):
                         baseline_loss = torch.pow(downstream_cost.detach() - baseline, 2.0).sum()
                         baseline_loss_particle += weight * baseline_loss
                     if use_nn_baseline or use_decaying_avg_baseline or use_baseline_value:
+                        assert downstream_cost.size() == baseline.size(), ("Expected baseline at site {} to be {} " +
+                            "instead got {}").format(node, downstream_cost.size(), baseline.size())
                         elbo_reinforce_terms_particle += (guide_trace.nodes[node][log_pdf_key] *
                                                           (downstream_cost - baseline).detach()).sum()
                     else:
