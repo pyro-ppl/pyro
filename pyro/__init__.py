@@ -321,8 +321,8 @@ def module(name, nn_module, tags="default", update_module_params=False):
     :param tags: optional; tags to associate with any parameters inside the module
     :type tags: string or iterable of strings
     :param update_module_params: determines whether Parameters
-                                 in the PyTorch module are overridden with the values found in the
-                                 ParamStore (if any). Defaults to `True`
+                                 in the PyTorch module get overridden with the values found in the
+                                 ParamStore (if any). Defaults to `False`
     :type load_from_param_store: bool
     :returns: torch.nn.Module
 
@@ -331,7 +331,7 @@ def module(name, nn_module, tags="default", update_module_params=False):
     allows the user to save and load modules.
     """
     assert hasattr(nn_module, "parameters"), "module has no parameters"
-    assert _MODULE_NAMESPACE_DIVIDER not in pyro_name, "improper module name, since contains %s" %\
+    assert _MODULE_NAMESPACE_DIVIDER not in name, "improper module name, since contains %s" %\
         _MODULE_NAMESPACE_DIVIDER
 
     if isclass(nn_module):
@@ -343,7 +343,7 @@ def module(name, nn_module, tags="default", update_module_params=False):
     for param_name, param in nn_module.named_parameters():
         # register the parameter in the module with pyro
         # this only does something substantive if the parameter hasn't been seen before
-        full_param_name = param_with_module_name(pyro_name, param_name)
+        full_param_name = param_with_module_name(name, param_name)
         returned_param = pyro.param(full_param_name, param, tags=tags)
 
         if get_tensor_data(param)._cdata != get_tensor_data(returned_param)._cdata:
@@ -351,19 +351,19 @@ def module(name, nn_module, tags="default", update_module_params=False):
 
     if target_state_dict and update_module_params:
         # WARNING: this is very dangerous. better method?
-        for name, param in nn_module.named_parameters():
+        for _name, _param in nn_module.named_parameters():
             is_param = False
-            name_arr = name.rsplit('.', 1)
+            name_arr = _name.rsplit('.', 1)
             if len(name_arr) > 1:
                 mod_name, param_name = name_arr[0], name_arr[1]
             else:
                 is_param = True
-                mod_name = name
-            if name in target_state_dict.keys():
+                mod_name = _name
+            if _name in target_state_dict.keys():
                 if not is_param:
-                    deep_getattr(nn_module, mod_name)._parameters[param_name] = target_state_dict[name]
+                    deep_getattr(nn_module, mod_name)._parameters[param_name] = target_state_dict[_name]
                 else:
-                    nn_module._parameters[mod_name] = target_state_dict[name]
+                    nn_module._parameters[mod_name] = target_state_dict[_name]
 
     return nn_module
 
@@ -377,7 +377,7 @@ def random_module(name, nn_module, prior, *args, **kwargs):
     :param prior: prior distribution or iterable over distributions
     :returns: a callable which returns a sampled module
 
-    Places a prior over the parameters of the `nn.Module` `nn_module`.
+    Places a prior over the parameters of the module `nn_module`.
     """
     assert hasattr(nn_module, "parameters"), "Module is not a NN module."
     # register params in param store

@@ -49,7 +49,7 @@ class ParamStoreDict(object):
 
     def get_all_param_names(self):
         """
-        get all parameter names in the ParamStore
+        Get all parameter names in the ParamStore
         """
         return self._params.keys()
 
