@@ -30,6 +30,7 @@ setup(
             'pytest-xdist',
             'nbval',
             'yapf',
+            'nbstripout',
             'sphinx',
             'sphinx_rtd_theme',
         ],

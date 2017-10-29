@@ -1,6 +1,20 @@
 # Development
 For consistency, please adhere to the established coding style including variable names, module imports, and function definitions.  The Pyro codebase uses the PEP8 style guide.
 
+# Setup
+
+Install all the dev dependencies for Pyro.
+
+```sh
+pip install -e .[dev]
+```
+
+Add the repository's git configuration to your local project `.gitconfig` file.
+
+```sh
+git config --local include.path ../.gitconfig
+```
+
 # Testing
 
 Before submitting a pull request, please ensure that linting and unit tests pass locally
