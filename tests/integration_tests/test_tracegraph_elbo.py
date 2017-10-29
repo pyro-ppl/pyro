@@ -669,7 +669,7 @@ class RaoBlackwellizationTests(TestCase):
                 for k in range(n_superfluous_top + n_superfluous_bottom):
                     z_baseline = pyro.module("z_baseline_%d_%d" % (i, k),
                                              pt_superfluous_baselines[3 * k + i], tags="baseline")
-                    baseline_value = z_baseline(mu_latent.detach())
+                    baseline_value = z_baseline(mu_latent.detach()).unsqueeze(-1)
                     mean_i = pyro.param("mean_%d_%d" % (i, k),
                                         Variable(0.5 * torch.ones(4 - i, 1), requires_grad=True))
                     pyro.sample("z_%d_%d" % (i, k),

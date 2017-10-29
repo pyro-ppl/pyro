@@ -9,6 +9,7 @@ from torch.autograd import Variable
 from torch.nn import Parameter
 
 import pyro
+from pyro.poutine.util import site_is_subsample
 
 
 def parse_torch_version():
@@ -352,7 +353,9 @@ def save_visualization(trace, graph_output):
     """
     g = graphviz.Digraph()
 
-    for label in trace.nodes:
+    for label, node in trace.nodes.items():
+        if site_is_subsample(node):
+            continue
         shape = 'ellipse'
         if label in trace.stochastic_nodes and label not in trace.reparameterized_nodes:
             fillcolor = 'salmon'
@@ -366,6 +369,10 @@ def save_visualization(trace, graph_output):
         g.node(label, label=label, shape=shape, style='filled', fillcolor=fillcolor)
 
     for label1, label2 in trace.edges:
+        if site_is_subsample(trace.nodes[label1]):
+            continue
+        if site_is_subsample(trace.nodes[label2]):
+            continue
         g.edge(label1, label2)
 
     g.render(graph_output, view=False, cleanup=True)
