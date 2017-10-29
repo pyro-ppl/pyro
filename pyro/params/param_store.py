@@ -4,7 +4,7 @@ import cloudpickle
 
 class ParamStoreDict(object):
     """
-    Global store for parameters in Pyro. This basically a key-value store.
+    Global store for parameters in Pyro. This is basically a key-value store.
     The typical user interacts with the ParamStore primarily through the
     primitive `pyro.param`. See the introductory tutorial
     `Hello World <http://pyro.ai/examples/hello_world.html>`_ for a discussion.
@@ -29,7 +29,7 @@ class ParamStoreDict(object):
 
     def __init__(self):
         """
-        initialize param store data structures
+        initialize ParamStore data structures
         """
         self._params = {}  # dictionary from param name to param
         self._param_to_name = {}  # dictionary from param to param name
@@ -39,7 +39,7 @@ class ParamStoreDict(object):
 
     def clear(self):
         """
-        clear the parameter store
+        Clear the ParamStore
         """
         self._params = {}
         self._param_to_name = {}
@@ -49,7 +49,7 @@ class ParamStoreDict(object):
 
     def get_all_param_names(self):
         """
-        get all parameter names in the param store
+        Get all parameter names in the ParamStore
         """
         return self._params.keys()
 
@@ -85,7 +85,7 @@ class ParamStoreDict(object):
             e.g. in the context of pyro.infer.SVI
         """
         assert(all([p in self._param_to_name for p in params])), \
-            "some of these parameters are not in the param store"
+            "some of these parameters are not in the ParamStore"
         self._active_params.update(set(params))
 
     def mark_params_inactive(self, params):
@@ -95,7 +95,7 @@ class ParamStoreDict(object):
             e.g. in the context of pyro.infer.SVI
         """
         assert(all([p in self._param_to_name for p in params])), \
-            "some of these parameters are not in the param store"
+            "some of these parameters are not in the ParamStore"
         self._active_params.difference_update(set(params))
 
     def delete_tag(self, tag):
@@ -132,7 +132,7 @@ class ParamStoreDict(object):
         Tags the parameter(s) specified by param_names with the tag(s) specified by tags.
         """
         def tag_single_param(name, tags):
-            assert name in self._params, "<%s> is not a parameter in the paramstore" % name
+            assert name in self._params, "<%s> is not a parameter in the ParamStore" % name
             if isinstance(tags, str):
                 self._param_tags[tags].add(self._params[name])
                 self._tag_params[name].add(tags)
@@ -157,7 +157,7 @@ class ParamStoreDict(object):
         Disassociates the parameter(s) specified by param_names with the tag(s) specified by tags.
         """
         def untag_single_param(name, tags):
-            assert name in self._params, "<%s> is not a parameter in the paramstore" % name
+            assert name in self._params, "<%s> is not a parameter in the ParamStore" % name
             if isinstance(tags, str):
                 self._param_tags[tags].discard(self._params[name])
                 self._tag_params[name].discard(tags)
@@ -178,9 +178,9 @@ class ParamStoreDict(object):
         """
         :param param_name: parameter name
         :type param_name: str
-        :param new_param: the paramater to be put into the paramstore
+        :param new_param: the paramater to be put into the ParamStore
         :type new_param: torch.autograd.Variable
-        :param old_param: the paramater to be removed from the paramstore
+        :param old_param: the paramater to be removed from the ParamStore
         :type new_param: torch.autograd.Variable
 
         Replace the param param_name with current value old_param with the new value new_param
@@ -202,7 +202,8 @@ class ParamStoreDict(object):
         :rtype: torch.autograd.Variable
 
         Get parameter from its name. If it does not yet exist in the
-        param store, it will be created and stored
+        ParamStore, it will be created and stored.
+        The Pyro primitive `pyro.param` dispatches to this method.
         """
         if name not in self._params:
             # if not create the init tensor through
@@ -239,7 +240,7 @@ class ParamStoreDict(object):
 
     def get_state(self):
         """
-        Get the paramstore state.
+        Get the ParamStore state.
         """
         param_tags = {k: list(tags) for k, tags in self._param_tags.items()}
         state = (self._params, param_tags)
@@ -247,9 +248,9 @@ class ParamStoreDict(object):
 
     def set_state(self, state):
         """
-        Set the paramstore state using state from a previous get_state() call
+        Set the ParamStore state using state from a previous get_state() call
         """
-        assert isinstance(state, tuple) and len(state) == 2, "malformed paramstore state"
+        assert isinstance(state, tuple) and len(state) == 2, "malformed ParamStore state"
         loaded_params, loaded_param_tags = state
 
         for param_name, param in loaded_params.items():

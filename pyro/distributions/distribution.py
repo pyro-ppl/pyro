@@ -7,15 +7,17 @@ import torch
 @add_metaclass(ABCMeta)
 class Distribution(object):
     """
-    Base class for parametrized probability distributions.
+    Base class for parameterized probability distributions.
 
     Distributions in Pyro are stochastic function objects with `.sample()` and `.log_pdf()` methods.
-    Pyro provides two versions of each stochastic function lowercase versions that take parameters::
+    Pyro provides two versions of each stochastic function:
+
+    `(i)` lowercase versions that take parameters::
 
       x = dist.binomial(param)              # Returns a sample of size size(param).
       p = dist.binomial.log_pdf(x, param)   # Evaluates log probability of x.
 
-    as well as UpperCase distribution classes that can construct stochastic functions with
+    and `(ii)` UpperCase distribution classes that can construct stochastic functions with
     fixed parameters::
 
       d = dist.Binomial(param)
@@ -82,7 +84,7 @@ class Distribution(object):
         """
         Constructor for base distribution class.
 
-        :param bool reparametrized: Optional argument to override whether
+        :param bool reparameterized: Optional argument to override whether
             instance should be considered reparameterized (by default, this
             is decided by the class).
         """
