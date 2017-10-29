@@ -43,6 +43,38 @@ def assert_warning(model, guide, **kwargs):
             print(warning)
 
 
+@pytest.mark.xfail(reason="Did not raise error despite x being sampled twice")
+@pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
+def test_variable_clash_in_model_error(trace_graph):
+
+    def model():
+        p = Variable(torch.Tensor([0.5]))
+        pyro.sample("x", dist.bernoulli, p)
+        pyro.sample("x", dist.bernoulli, p)  # Should error here.
+
+    def guide():
+        p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
+        pyro.sample("x", dist.bernoulli, p)
+
+    assert_error(model, guide, trace_graph=trace_graph)
+
+
+@pytest.mark.xfail(reason="Did not raise error despite x being sampled twice")
+@pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
+def test_variable_clash_in_guide_error(trace_graph):
+
+    def model():
+        p = Variable(torch.Tensor([0.5]))
+        pyro.sample("x", dist.bernoulli, p)
+
+    def guide():
+        p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
+        pyro.sample("x", dist.bernoulli, p)
+        pyro.sample("x", dist.bernoulli, p)  # Should error here.
+
+    assert_error(model, guide, trace_graph=trace_graph)
+
+
 @pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
 @pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
 def test_irange_ok(trace_graph, subsample_size):
@@ -58,6 +90,25 @@ def test_irange_ok(trace_graph, subsample_size):
             pyro.sample("x_{}".format(i), dist.bernoulli, p)
 
     assert_ok(model, guide, trace_graph=trace_graph)
+
+
+@pytest.mark.xfail(reason="Did not raise error despite x being sampled twice")
+@pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
+def test_irange_variable_clash_error(trace_graph):
+
+    def model():
+        p = Variable(torch.Tensor([0.5]))
+        for i in pyro.irange("irange", 2):
+            # Each loop iteration should give the sample site a different name.
+            pyro.sample("x", dist.bernoulli, p)
+
+    def guide():
+        p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
+        for i in pyro.irange("irange", 2):
+            # Each loop iteration should give the sample site a different name.
+            pyro.sample("x", dist.bernoulli, p)
+
+    assert_error(model, guide, trace_graph=trace_graph)
 
 
 @pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
@@ -231,11 +282,11 @@ def test_three_indep_iarange_at_different_depths_ok():
         for i in pyro.irange("irange0", 2):
             pyro.sample("x_%d" % i, dist.bernoulli, p)
             if i == 0:
-                for j in pyro.irange("irange1_%d" % i, 2):
-                    with pyro.iarange("iarange1_%d_%d" % (i, j), 10, 5) as ind:
+                for j in pyro.irange("irange1", 2):
+                    with pyro.iarange("iarange1", 10, 5) as ind:
                         pyro.sample("y_%d" % j, dist.bernoulli, p, batch_size=len(ind))
             elif i == 1:
-                with pyro.iarange("iarange1_%d_%d" % (i, j), 10, 5) as ind:
+                with pyro.iarange("iarange1", 10, 5) as ind:
                     pyro.sample("z", dist.bernoulli, p, batch_size=len(ind))
 
     def guide():
@@ -243,11 +294,11 @@ def test_three_indep_iarange_at_different_depths_ok():
         for i in pyro.irange("irange0", 2):
             pyro.sample("x_%d" % i, dist.bernoulli, p)
             if i == 0:
-                for j in pyro.irange("irange1_%d" % i, 2):
-                    with pyro.iarange("iarange1_%d_%d" % (i, j), 10, 5) as ind:
+                for j in pyro.irange("irange1", 2):
+                    with pyro.iarange("iarange1", 10, 5) as ind:
                         pyro.sample("y_%d" % j, dist.bernoulli, p, batch_size=len(ind))
             elif i == 1:
-                with pyro.iarange("iarange1_%d_%d" % (i, j), 10, 5) as ind:
+                with pyro.iarange("iarange1", 10, 5) as ind:
                     pyro.sample("z", dist.bernoulli, p, batch_size=len(ind))
 
     assert_ok(model, guide, trace_graph=True)
