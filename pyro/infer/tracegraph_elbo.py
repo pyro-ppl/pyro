@@ -110,7 +110,7 @@ class TraceGraph_ELBO(object):
                 warnings.warn(
                     "Unable to do fully-vectorized Rao-Blackwellization in TraceGraph_ELBO. "
                     "Falling back to higher-variance gradient estimator. "
-                    "Try to avoid these issues in your model and guide:\n".format("\n".join(
+                    "Try to avoid these issues in your model and guide:\n{}".format("\n".join(
                         guide_vec_md_info["warnings"] | model_vec_md_info["warnings"])))
             guide_vec_md_nodes = guide_vec_md_info['nodes'] if do_vec_rb else set()
             model_vec_md_nodes = model_vec_md_info['nodes'] if do_vec_rb else set()
