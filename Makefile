@@ -24,6 +24,9 @@ test: lint docs FORCE
 test-examples: lint FORCE
 	pytest -vx -n auto --stage test_examples
 
+test-tutorials: lint FORCE
+	pytest -v -n auto --nbval-lax tutorial/
+
 integration-test: lint FORCE
 	pytest -vx -n auto --stage integration
 
