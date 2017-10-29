@@ -165,6 +165,15 @@ class TracePoutine(Poutine):
         self(*args, **kwargs)
         return self.trace.copy()
 
+    def _reset(self):
+        tr = Trace(graph_type=self.graph_type)
+        tr.add_node("_INPUT",
+                    name="_INPUT", type="input",
+                    args=self.trace.nodes["_INPUT"]["args"],
+                    kwargs=self.trace.nodes["_INPUT"]["kwargs"])
+        self.trace = tr
+        super(TracePoutine, self)._reset()
+
     def _pyro_sample(self, msg):
         """
         :param msg: current message at a trace site.
@@ -180,19 +189,13 @@ class TracePoutine(Poutine):
         """
         name = msg["name"]
         if name in self.trace:
-            # Cannot repeat names between params and samples
-            if self.trace.nodes[name]['type'] == 'param':
+            site = self.trace.nodes[name]
+            if site['type'] == 'param':
+                # Cannot sample or observe after a param statement.
                 raise RuntimeError("{} is already in the trace as a param".format(name))
-            # observe has the same name as a sample
-            if msg['is_observed'] and not self.trace.nodes[name]['is_observed']:
-                raise RuntimeError("observe cannot have the same name as a sample")
-            # XXX temporary solution - otherwise, we reset self.trace to be empty
-            tr = Trace(graph_type=self.graph_type)
-            tr.add_node("_INPUT",
-                        name="_INPUT", type="input",
-                        args=self.trace.nodes["_INPUT"]["args"],
-                        kwargs=self.trace.nodes["_INPUT"]["kwargs"])
-            self.trace = tr
+            elif site['type'] == 'sample':
+                # Cannot sample after a previous sample statement.
+                raise RuntimeError("Multiple pyro.sample sites named '{}'".format(name))
 
         val = super(TracePoutine, self)._pyro_sample(msg)
         site = msg.copy()
