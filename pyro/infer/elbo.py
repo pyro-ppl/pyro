@@ -12,6 +12,8 @@ class ELBO(object):
         can be expensive. see the tutorial `SVI Part III <http://pyro.ai/examples/svi_part_iii.html>`_
         for a discussion.
     :param bool enum_discrete: whether to sum over discrete latent variables, rather than sample them.
+        this is a bleeding edge feature. see `SS-VAE <http://pyro.ai/examples/svi_part_iii.html>`_ for
+        a discussion.
 
     `ELBO` is the top-level interface for stochastic variational inference via optimization of the
     evidence lower bound. Most users will not interact with `ELBO` directly; instead they will interact

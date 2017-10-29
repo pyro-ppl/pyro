@@ -25,7 +25,10 @@ from pyro.util import (  # noqa: F401
                        deep_getattr
                        )
 
-# global map of params for now
+# the pyro stack
+_PYRO_STACK = []
+
+# the global ParamStore
 _param_store = ParamStoreDict()
 
 # used to create fully-formed param names, e.g. mymodule$$$mysubmodule.weight
@@ -34,34 +37,16 @@ _MODULE_NAMESPACE_DIVIDER = "$$$"
 
 def get_param_store():
     """
-    Returns the param store
+    Returns the ParamStore
     """
     return _param_store
 
 
 def clear_param_store():
     """
-    Clears the param store
+    Clears the ParamStore. This is especially useful if you're working in a REPL.
     """
     return _param_store.clear()
-
-
-def device(x):
-    """
-    :param x: Pytorch tensor or Variable
-    :type: Pytorch Tensor
-    :returns: Pytorch tensor or Variable
-
-    Returns CUDATensor is CUDA is enabled
-    """
-    if torch.cuda.is_available():
-        return x.cuda()
-    return x.cpu()
-
-
-# use pyro optim class to wrap nn optim
-
-_PYRO_STACK = []
 
 
 def sample(name, fn, *args, **kwargs):
@@ -70,11 +55,11 @@ def sample(name, fn, *args, **kwargs):
     :param fn: distribution class or function
     :param obs: observed datum (optional; should only be used in context of
         inference) optionally specified in kwargs
-    :param dict infer: Optional dictionary of inference parameters specified
+    :param dict baseline: Optional dictionary of baseline parameters specified
         in kwargs. See inference documentation for details.
     :returns: sample
 
-    Samples from the distribution and registers it in the trace data structure.
+    Samples from the distribution.
     """
     obs = kwargs.pop("obs", None)
     baseline = kwargs.pop("baseline", {})
@@ -207,6 +192,8 @@ def iarange(name, size=None, subsample_size=None, subsample=None, use_cuda=None)
         >>> ind = my_custom_subsample
         >>> with iarange('data', 100, subsample=ind):
                 observe('obs', normal, data.index_select(0, ind), mu, sigma)
+
+    See `SVI Part II <http://pyro.ai/examples/svi_part_ii.html>`_ for an extended discussion.
     """
     if size is None:
         assert subsample_size is None
@@ -253,6 +240,8 @@ def irange(name, size, subsample_size=None, subsample=None, use_cuda=None):
         >>> for i in irange('data', 100, subsample_size=10):
                 if z[i]:  # Prevents vectorization.
                     observe('obs_{}'.format(i), normal, data[i], mu, sigma)
+
+    See `SVI Part II <http://pyro.ai/examples/svi_part_ii.html>`_ for an extended discussion.
     """
     with iarange(name, size, subsample_size, subsample, use_cuda) as ind:
         if isinstance(ind, Variable):
@@ -323,35 +312,35 @@ def param(name, *args, **kwargs):
         return out_msg["value"]
 
 
-def module(pyro_name, nn_obj, tags="default", update_module_params=False):
+def module(name, nn_module, tags="default", update_module_params=False):
     """
-    :param pyro_name: name of module
-    :type pyro_name: str
-    :param nn_obj: the module to be registered with pyro
-    :type nn_obj: torch.nn.Module
+    :param name: name of module
+    :type name: str
+    :param nn_module: the module to be registered with Pyro
+    :type nn_module: torch.nn.Module
     :param tags: optional; tags to associate with any parameters inside the module
     :type tags: string or iterable of strings
-    :param update_module_params: flag to determine whether to overwrite parameters
-                                 in the pytorch module with the values found in the
-                                 paramstore. Defaults to `True`
+    :param update_module_params: determines whether Parameters
+                                 in the PyTorch module are overridden with the values found in the
+                                 ParamStore (if any). Defaults to `True`
     :type load_from_param_store: bool
     :returns: torch.nn.Module
 
-    Takes a torch.nn.Module and registers its parameters with the param store.
-    In conjunction with the param store save() and load() functionality, this
+    Takes a torch.nn.Module and registers its parameters with the ParamStore.
+    In conjunction with the ParamStore save() and load() functionality, this
     allows the user to save and load modules.
     """
-    assert hasattr(nn_obj, "parameters"), "module has no parameters"
+    assert hasattr(nn_module, "parameters"), "module has no parameters"
     assert _MODULE_NAMESPACE_DIVIDER not in pyro_name, "improper module name, since contains %s" %\
         _MODULE_NAMESPACE_DIVIDER
 
-    if isclass(nn_obj):
+    if isclass(nn_module):
         raise NotImplementedError("pyro.module does not support class constructors for " +
-                                  "the argument nn_obj")
+                                  "the argument nn_module")
 
     target_state_dict = OrderedDict()
 
-    for param_name, param in nn_obj.named_parameters():
+    for param_name, param in nn_module.named_parameters():
         # register the parameter in the module with pyro
         # this only does something substantive if the parameter hasn't been seen before
         full_param_name = param_with_module_name(pyro_name, param_name)
@@ -362,7 +351,7 @@ def module(pyro_name, nn_obj, tags="default", update_module_params=False):
 
     if target_state_dict and update_module_params:
         # WARNING: this is very dangerous. better method?
-        for name, param in nn_obj.named_parameters():
+        for name, param in nn_module.named_parameters():
             is_param = False
             name_arr = name.rsplit('.', 1)
             if len(name_arr) > 1:
@@ -372,21 +361,23 @@ def module(pyro_name, nn_obj, tags="default", update_module_params=False):
                 mod_name = name
             if name in target_state_dict.keys():
                 if not is_param:
-                    deep_getattr(nn_obj, mod_name)._parameters[param_name] = target_state_dict[name]
+                    deep_getattr(nn_module, mod_name)._parameters[param_name] = target_state_dict[name]
                 else:
-                    nn_obj._parameters[mod_name] = target_state_dict[name]
+                    nn_module._parameters[mod_name] = target_state_dict[name]
 
-    return nn_obj
+    return nn_module
 
 
 def random_module(name, nn_module, prior, *args, **kwargs):
     """
     :param name: name of pyro module
-    :param nn_module: pytorch nn module
+    :type name: str
+    :param nn_module: the module to be registered with pyro
+    :type nn_module: torch.nn.Module
     :param prior: prior distribution or iterable over distributions
     :returns: a callable which returns a sampled module
 
-    Places a prior over the parameters of the nn module
+    Places a prior over the parameters of the `nn.Module` `nn_module`.
     """
     assert hasattr(nn_module, "parameters"), "Module is not a NN module."
     # register params in param store

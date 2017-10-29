@@ -20,7 +20,7 @@ Pyro is developed and maintained by [Uber AI Labs](http://uber.ai).
 
 ## Installation
 
-First install [Pytorch](http://pytorch.org/).
+First install [PyTorch](http://pytorch.org/).
 
 Install via pip:
 ```sh

@@ -5,6 +5,16 @@ import copy
 
 class SVI(object):
     """
+    :param model: the model (callable containing Pyro primitives)
+    :param guide: the guide (callable containing Pyro primitives)
+    :param optim: a wrapper a for a PyTorch optimizer
+    :type optim: pyro.optim.PyroOptim
+    :param loss: this is either a string that specifies the loss function to be used (currently
+        the only supported built-in loss is 'ELBO') or a user-provided loss function;
+        in the case this is a built-in loss `loss_and_grads` will be filled in accordingly
+    :param loss_and_grads: if specified, this user-provided callable computes gradients for use in `step()`
+        and marks which parameters in the param store are to be optimized
+
     A unified interface for stochastic variational inference in Pyro. Most
     users will interact with `SVI` with the argument `loss="ELBO"`. See the
     tutorial `SVI Part I <http://pyro.ai/examples/svi_part_i.html>`_ for a discussion.
@@ -17,17 +27,6 @@ class SVI(object):
                  loss_and_grads=None,
                  *args,
                  **kwargs):
-        """
-        :param model: the model (callable containing Pyro primitives)
-        :param guide: the guide (callable containing Pyro primitives)
-        :param optim: a wrapper a for a PyTorch optimizer
-        :type optim: pyro.optim.PyroOptim
-        :param loss: this is either a string that specifies the loss function to be used (currently
-            the only supported built-in loss is 'ELBO') or a user-provided loss function;
-            in the case this is a built-in loss `loss_and_grads` will be filled in accordingly
-        :param loss_and_grads: if specified, this user-provided callable computes gradients for use in `step()`
-            and marks which parameters in the param store are to be optimized
-        """
         self.model = model
         self.guide = guide
         self.optim = optim
