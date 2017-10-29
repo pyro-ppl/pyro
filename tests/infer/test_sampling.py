@@ -4,7 +4,7 @@ from torch.autograd import Variable
 
 import pyro
 import pyro.infer
-from pyro.distributions import DiagNormal, Bernoulli
+from pyro.distributions import Normal, Bernoulli
 from tests.common import TestCase
 
 
@@ -43,15 +43,15 @@ class NormalNormalSamplingTestCase(TestCase):
         pyro._param_store.clear()
 
         def model():
-            mu = pyro.sample("mu", DiagNormal(Variable(torch.zeros(1)),
-                                              Variable(torch.ones(1))))
-            xd = DiagNormal(mu, Variable(torch.ones(1)), batch_size=50)
+            mu = pyro.sample("mu", Normal(Variable(torch.zeros(1)),
+                                          Variable(torch.ones(1))))
+            xd = Normal(mu, Variable(torch.ones(1)), batch_size=50)
             pyro.observe("xs", xd, self.data)
             return mu
 
         def guide():
-            return pyro.sample("mu", DiagNormal(Variable(torch.zeros(1)),
-                                                Variable(torch.ones(1))))
+            return pyro.sample("mu", Normal(Variable(torch.zeros(1)),
+                                            Variable(torch.ones(1))))
 
         # data
         self.data = Variable(torch.zeros(50, 1))

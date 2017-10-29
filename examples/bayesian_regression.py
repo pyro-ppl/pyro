@@ -7,7 +7,7 @@ from torch.nn.functional import normalize  # noqa: F401
 from torch.autograd import Variable
 
 import pyro
-from pyro.distributions import DiagNormal, Bernoulli  # noqa: F401
+from pyro.distributions import Normal, Bernoulli  # noqa: F401
 from pyro.infer import SVI
 from pyro.optim import Adam
 
@@ -52,7 +52,7 @@ def model(data):
     sigma = Variable(torch.ones(p, 1)).type_as(data)
     bias_mu = Variable(torch.zeros(1)).type_as(data)
     bias_sigma = Variable(torch.ones(1)).type_as(data)
-    w_prior, b_prior = DiagNormal(mu, sigma), DiagNormal(bias_mu, bias_sigma)
+    w_prior, b_prior = Normal(mu, sigma), Normal(bias_mu, bias_sigma)
     priors = {'linear.weight': w_prior, 'linear.bias': b_prior}
     # wrap regression model that lifts module parameters to random variables
     # sampled from the priors
@@ -65,7 +65,7 @@ def model(data):
         y_data = data[:, -1]
         # run the nn with the data
         latent = lifted_nn(x_data).squeeze()
-        pyro.observe("obs", DiagNormal(latent, Variable(torch.ones(data.size(0))).type_as(data)), y_data.squeeze())
+        pyro.observe("obs", Normal(latent, Variable(torch.ones(data.size(0))).type_as(data)), y_data.squeeze())
 
 
 def guide(data):
@@ -79,8 +79,8 @@ def guide(data):
     mb_param = pyro.param("guide_mean_bias", b_mu)
     sb_param = softplus(pyro.param("guide_log_sigma_bias", b_log_sig))
     # gaussian priors for w and b
-    w_prior = DiagNormal(mw_param, sw_param)
-    b_prior = DiagNormal(mb_param, sb_param)
+    w_prior = Normal(mw_param, sw_param)
+    b_prior = Normal(mb_param, sb_param)
     priors = {'linear.weight': w_prior, 'linear.bias': b_prior}
     # overloading the parameters in the module with random samples from the prior
     lifted_module = pyro.random_module("module", regression_model, priors)

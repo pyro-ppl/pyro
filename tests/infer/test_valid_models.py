@@ -9,6 +9,7 @@ import pyro
 import pyro.distributions as dist
 from pyro.optim import Adam
 from pyro.infer import SVI
+from tests.common import segfaults_on_pytorch_020
 
 
 def assert_ok(model, guide, **kwargs):
@@ -94,7 +95,6 @@ def test_irange_irange_swap_error(trace_graph, subsample_size):
     assert_error(model, guide, trace_graph=trace_graph)
 
 
-@pytest.mark.xfail(reason="raises UserWarning or KeyError")
 @pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
 @pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
 def test_irange_in_model_not_guide_ok(trace_graph, subsample_size):
@@ -199,6 +199,7 @@ def test_iarange_wrong_size_error():
     assert_error(model, guide, trace_graph=True)
 
 
+@segfaults_on_pytorch_020
 def test_enum_discrete_single_ok():
 
     def model():
@@ -212,6 +213,7 @@ def test_enum_discrete_single_ok():
     assert_ok(model, guide, enum_discrete=True)
 
 
+@segfaults_on_pytorch_020
 def test_enum_discrete_single_single_ok():
 
     def model():
@@ -227,6 +229,7 @@ def test_enum_discrete_single_single_ok():
     assert_ok(model, guide, enum_discrete=True)
 
 
+@segfaults_on_pytorch_020
 def test_enum_discrete_irange_single_ok():
 
     def model():
@@ -242,6 +245,7 @@ def test_enum_discrete_irange_single_ok():
     assert_ok(model, guide, enum_discrete=True)
 
 
+@segfaults_on_pytorch_020
 @pytest.mark.xfail(reason="tensor shape mismatch in: elbo_particle += ...")
 def test_iarange_enum_discrete_batch_ok():
 
@@ -258,6 +262,7 @@ def test_iarange_enum_discrete_batch_ok():
     assert_ok(model, guide, enum_discrete=True)
 
 
+@segfaults_on_pytorch_020
 @pytest.mark.xfail(reason="error is not caught")
 def test_no_iarange_enum_discrete_batch_error():
 
@@ -272,6 +277,7 @@ def test_no_iarange_enum_discrete_batch_error():
     assert_error(model, guide, enum_discrete=True)
 
 
+@segfaults_on_pytorch_020
 @pytest.mark.xfail(reason="tensor shape mismatch in: elbo_particle += ...")
 def test_enum_discrete_global_local_ok():
     # TODO Simplify this test when test_iarange_enum_discrete_batch_ok passes:

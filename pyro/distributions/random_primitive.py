@@ -11,7 +11,15 @@ class RandomPrimitive(Distribution):
         self.dist_class = dist_class
         super(RandomPrimitive, self).__init__()
 
-    def batch_shape(self, x, *args, **kwargs):
+    @property
+    def enumerable(self):
+        return self.dist_class.enumerable
+
+    @property
+    def reparameterized(self):
+        return self.dist_class.reparameterized
+
+    def batch_shape(self, x=None, *args, **kwargs):
         return self.dist_class(*args, **kwargs).batch_shape(x)
 
     def event_shape(self, *args, **kwargs):
@@ -20,7 +28,7 @@ class RandomPrimitive(Distribution):
     def event_dim(self, *args, **kwargs):
         return self.dist_class(*args, **kwargs).event_dim()
 
-    def shape(self, x, *args, **kwargs):
+    def shape(self, x=None, *args, **kwargs):
         return self.dist_class(*args, **kwargs).shape(x)
 
     def sample(self, *args, **kwargs):
@@ -34,8 +42,8 @@ class RandomPrimitive(Distribution):
     def batch_log_pdf(self, x, *args, **kwargs):
         return self.dist_class(*args, **kwargs).batch_log_pdf(x)
 
-    def support(self, *args, **kwargs):
-        return self.dist_class(*args, **kwargs).support()
+    def enumerate_support(self, *args, **kwargs):
+        return self.dist_class(*args, **kwargs).enumerate_support()
 
     def analytic_mean(self, *args, **kwargs):
         return self.dist_class(*args, **kwargs).analytic_mean()

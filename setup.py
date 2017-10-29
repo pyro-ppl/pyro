@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='pyro',
+    name='pyro-ppl',
     version='0.0.1',
     description='A Python library for probabilistic modeling and inference',
     packages=find_packages(exclude=('tests*',)),
@@ -30,6 +30,8 @@ setup(
             'pytest-xdist',
             'nbval',
             'yapf',
+            'sphinx',
+            'sphinx_rtd_theme',
         ],
     },
     tests_require=['flake8', 'pytest'],
