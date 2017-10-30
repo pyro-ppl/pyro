@@ -10,19 +10,16 @@ class TransformedDistribution(Distribution):
     """
     Transforms the base distribution by applying a sequence of `Bijector`s to it.
     This results in a scorable distribution (i.e. it has a `log_pdf()` method).
+
+    :param base_distribution: a (continuous) base distribution; samples from this distribution
+        are passed through the sequence of `Bijector`s to yield a sample from the
+        `TransformedDistribution`
+    :type base_distribution: pyro.distribution.Distribution
+    :param bijectors: either a single Bijector or a sequence of Bijectors wrapped in a nn.ModuleList
+    :returns: the transformed distribution
     """
 
     def __init__(self, base_distribution, bijectors, *args, **kwargs):
-        """
-        :param base_distribution: a (continuous) base distribution; samples from this distribution
-            are passed through the sequence of `Bijector`s to yield a sample from the
-            `TransformedDistribution`
-        :type base_distribution: pyro.distribution.Distribution
-        :param bijectors: either a single Bijector or a sequence of Bijectors wrapped in a nn.ModuleList
-        :returns: the transformed distribution
-
-        Constructor; takes base distribution and bijector(s) as arguments
-        """
         super(TransformedDistribution, self).__init__(*args, **kwargs)
         self.reparameterized = base_distribution.reparameterized
         self.base_dist = base_distribution
@@ -78,10 +75,11 @@ class TransformedDistribution(Distribution):
 
 
 class Bijector(nn.Module):
+    """
+    Abstract class `Bijector`. `Bijector` are bijective transformations with computable
+    log det jacobians. They are meant for use in `TransformedDistribution`.
+    """
     def __init__(self, *args, **kwargs):
-        """
-        Constructor for abstract class `Bijector`
-        """
         super(Bijector, self).__init__(*args, **kwargs)
         self.add_inverse_to_cache = False
 
@@ -113,14 +111,14 @@ class Bijector(nn.Module):
 class InverseAutoregressiveFlow(Bijector):
     """
     An implementation of an Inverse Autoregressive Flow. Together with the `TransformedDistribution` this
-    allows a way to create richer variational approximations.
+    provides a way to create richer variational approximations.
 
-    Example usage:
+    Example usage::
 
-    base_dist = Normal(...)
-    iaf = InverseAutoregressiveFlow(...)
-    pyro.module("my_iaf", iaf)
-    iaf_dist = TransformedDistribution(base_dist, iaf)
+    >>> base_dist = Normal(...)
+    >>> iaf = InverseAutoregressiveFlow(...)
+    >>> pyro.module("my_iaf", iaf)
+    >>> iaf_dist = TransformedDistribution(base_dist, iaf)
 
     Note that this implementation is only meant to be used in settings where the inverse of the Bijector
     is never explicitly computed (rather the result is cached from the forward call). In the context of
@@ -128,6 +126,16 @@ class InverseAutoregressiveFlow(Bijector):
     i.e. in the variational distribution. In other contexts the inverse could in principle be computed but
     this would be a (potentially) costly computation that scales with the dimension of the input (and in
     any case support for this is not included in this implementation).
+
+    :param input_dim: dimension of input
+    :type input_dim: int
+    :param hidden_dim: hidden dimension (number of hidden units)
+    :type hidden_dim: int
+    :param sigmoid_bias: bias on the hidden units fed into the sigmoid; default=`2.0`
+    :type sigmoid_bias: float
+    :param permutation: whether the order of the inputs should be permuted (by default the conditional
+        dependence structure of the autoregression follows the sequential order)
+    :type permutation: bool
 
     References:
 
@@ -141,19 +149,6 @@ class InverseAutoregressiveFlow(Bijector):
     Mathieu Germain, Karol Gregor, Iain Murray, Hugo Larochelle
     """
     def __init__(self, input_dim, hidden_dim, sigmoid_bias=2.0, permutation=None):
-        """
-        :param input_dim: dimension of input
-        :type input_dim: int
-        :param hidden_dim: hidden dimension (number of hidden units)
-        :type hidden_dim: int
-        :param sigmoid_bias: bias on the hidden units fed into the sigmoid; default=`2.0`
-        :type sigmoid_bias: float
-        :param permutation: whether the order of the inputs should be permuted (by default the conditional
-            dependence structure of the autoregression follows the sequential order)
-        :type permutation: bool
-
-        Constructor
-        """
         super(InverseAutoregressiveFlow, self).__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
@@ -178,7 +173,7 @@ class InverseAutoregressiveFlow(Bijector):
         :type x: torch.autograd.Variable
 
         Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
-        sample from the base distribution
+        sample from the base distribution (or the output of a previous flow)
         """
         hidden = self.arn(x)
         sigma = self.sigmoid(hidden[:, 0:self.input_dim] + self.sigmoid_bias.type_as(hidden))
