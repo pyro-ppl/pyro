@@ -4,7 +4,10 @@ For consistency, please adhere to the established coding style including variabl
 # Setup
 
 Install all the dev dependencies for Pyro.
-
+```sh
+make install
+```
+or explicitly
 ```sh
 pip install -e .[dev]
 ```
@@ -17,12 +20,12 @@ git config --local include.path ../.gitconfig
 
 # Testing
 
-Before submitting a pull request, please ensure that linting and unit tests pass locally
+Before submitting a pull request, please autoformat code and ensure that unit tests pass locally
 ```sh
-flake8
-make test
+make format            # runs isort
+make test              # linting and unit tests
+make integration-test  # longer-running tests (may take hours)
 ```
-Use the `--run_integration_tests` option to run integration tests, but be aware that these may take a long time (hours) to complete. 
 
 To run unit tests locally in parallel, use the `pytest-xdist` package
 ```sh
@@ -36,7 +39,9 @@ py.test -vs {path_to_test}::{test_name}
 ```
 
 # Submitting
-For larger changes, please open an issue for discussion before submitting a pull request.  In your PR, please include:
+
+For larger changes, please open an issue for discussion before submitting a pull request.
+In your PR, please include:
 - Changes made
 - Links to related issues/PRs
 - Tests

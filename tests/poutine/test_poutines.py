@@ -1,17 +1,17 @@
-import torch
-import pytest
 import functools
-from six.moves.queue import Queue
+
+import pytest
+import torch
 import torch.nn as nn
 from torch.autograd import Variable
 
 import pyro
-import pyro.poutine as poutine
-from pyro.distributions import Normal, Bernoulli
 import pyro.distributions as dist
+import pyro.poutine as poutine
+from pyro.distributions import Bernoulli, Normal
+from pyro.util import NonlocalExit, all_escape, discrete_escape, ng_ones, ng_zeros
+from six.moves.queue import Queue
 from tests.common import TestCase, assert_equal
-from pyro.util import ng_ones, ng_zeros, \
-    NonlocalExit, discrete_escape, all_escape
 
 
 def eq(x, y, prec=1e-10):

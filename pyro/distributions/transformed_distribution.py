@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
+from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
 from pyro.nn import AutoRegressiveNN
-from torch.autograd import Variable
 
 
 class TransformedDistribution(Distribution):

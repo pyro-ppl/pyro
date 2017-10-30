@@ -1,17 +1,17 @@
 import contextlib
-import os
-import pytest
-import unittest
 import numbers
+import os
+import unittest
 import warnings
 from copy import deepcopy
-from pytest import approx
 from itertools import product
-from numpy.testing import assert_allclose
 
 import numpy as np
+import pytest
 import torch
 import torch.cuda
+from numpy.testing import assert_allclose
+from pytest import approx
 from torch.autograd import Variable
 
 import pyro.util

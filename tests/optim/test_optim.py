@@ -3,8 +3,8 @@ from torch.autograd import Variable
 
 import pyro
 import pyro.optim as optim
-from pyro.infer import SVI
 from pyro.distributions import Normal
+from pyro.infer import SVI
 from tests.common import TestCase
 
 

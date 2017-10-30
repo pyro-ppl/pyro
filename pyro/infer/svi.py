@@ -1,6 +1,7 @@
+import copy
+
 import pyro
 from pyro.infer import ELBO
-import copy
 
 
 class SVI(object):

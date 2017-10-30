@@ -8,8 +8,8 @@ from torch.autograd import Variable
 
 import pyro
 import pyro.distributions as dist
-from pyro.optim import Adam
 from pyro.infer import SVI
+from pyro.optim import Adam
 from tests.common import segfaults_on_pytorch_020
 
 
