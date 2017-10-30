@@ -106,13 +106,40 @@ if args.seed is not None:
 
 # Load data.
 inpath = './data'
-(X_np, _), _ = multi_mnist(inpath, max_digits=2, canvas_size=50, seed=42)
+(X_np, Y), _ = multi_mnist(inpath, max_digits=2, canvas_size=50, seed=42)
 X_np = X_np.astype(np.float32)
 X_np /= 255.0
 X = Variable(torch.from_numpy(X_np))
 X_size = X.size(0)
 if args.cuda:
     X = X.cuda()
+
+# Using FloatTensor to allow comparison with values sampled from
+# Bernoulli.
+true_counts = torch.FloatTensor([len(objs) for objs in Y])
+
+
+def count_accuracy(X, true_counts, air, batch_size):
+    assert X.size(0) == true_counts.size(0), 'Size mismatch.'
+    assert X.size(0) % batch_size == 0, 'Input size must be multiple of batch_size.'
+    counts = torch.LongTensor(3, 4).zero_()
+
+    def count_vec_to_mat(vec, max_index):
+        out = torch.LongTensor(vec.size(0), max_index + 1).zero_()
+        out.scatter_(1, vec.type(torch.LongTensor).view(vec.size(0), 1), 1)
+        return out
+
+    for i in range(X.size(0) // batch_size):
+        X_batch = X[i * batch_size:(i + 1) * batch_size]
+        true_counts_batch = true_counts[i * batch_size:(i + 1) * batch_size]
+        _, z_pres = air.guide(X_batch, batch_size)
+        inferred_counts = sum(z.cpu() for z in z_pres).squeeze().data
+        true_counts_m = count_vec_to_mat(true_counts_batch, 2)
+        inferred_counts_m = count_vec_to_mat(inferred_counts, 3)
+        counts += torch.mm(true_counts_m.t(), inferred_counts_m)
+
+    acc = counts.diag().sum() / X.size(0)
+    return acc, counts
 
 
 # Yields the following distribution over the number of steps (when
@@ -246,6 +273,11 @@ for i in range(1, args.num_steps + 1):
         vis.images(draw_many(examples_to_viz, z_wheres))
         # Show reconstructions of data.
         vis.images(draw_many(recons, z_wheres))
+
+    if args.eval_every > 0 and (i + 1) % args.eval_every == 0:
+        # Measure accuracy on subset of training data.
+        acc, counts = count_accuracy(X[0:10000], true_counts[0:10000], air, 1000)
+        print('i={}, accuracy={}, counts={}'.format(i, acc, counts.numpy().tolist()))
 
     if 'save' in args and i % args.save_every == 0:
         print('Saving parameters...')
