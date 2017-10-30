@@ -10,18 +10,17 @@ from pyro.distributions.util import log_gamma
 
 class Gamma(Distribution):
     """
-    :param shape:  *(real (0, Infinity))*
-    :param scale:  *(real (0, Infinity))*
+    Gamma distribution parameterized by `alpha` and `beta`.
 
-    Gamma distribution parameterized by alpha and beta
+    This is often used in conjunction with `torch.nn.Softplus` to ensure
+    `alpha` and `beta` parameters are positive.
+
+    :param torch.autograd.Variable alpha: Shape parameter. Should be positive.
+    :param torch.autograd.Variable beta: Shape parameter. Should be positive.
+        Shouldb be the same shape as `alpha`.
     """
 
     def __init__(self, alpha, beta, batch_size=None, *args, **kwargs):
-        """
-        Params:
-          `alpha` - alpha
-          `beta` - beta
-        """
         if alpha.size() != beta.size():
             raise ValueError("Expected alpha.size() == beta.size(), but got {} vs {}"
                              .format(alpha.size(), beta.size()))

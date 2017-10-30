@@ -6,19 +6,17 @@ from pyro.distributions.distribution import Distribution
 
 class Delta(Distribution):
     """
-    :param v: support element *(any)*
+    Degenerate discrete distribution (a single point).
 
     Discrete distribution that assigns probability one to the single element in
     its support. Delta distribution parameterized by a random choice should not
     be used with MCMC based inference, as doing so produces incorrect results.
+
+    :param torch.autograd.Variable v: The single support element.
     """
     enumerable = True
 
     def __init__(self, v, batch_size=None, *args, **kwargs):
-        """
-        Params:
-          `v` - value
-        """
         self.v = v
         if not isinstance(self.v, Variable):
             self.v = Variable(self.v)

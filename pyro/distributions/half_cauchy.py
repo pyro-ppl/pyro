@@ -10,18 +10,20 @@ from pyro.distributions.distribution import Distribution
 
 class HalfCauchy(Distribution):
     """
+    Half-Cauchy distribution.
+
+    This is a continuous distribution with lower-bounded domain (`x > mu`).
+    See also the `Cauchy` distribution.
+
+    This is often used in conjunction with `torch.nn.Softplus` to ensure the
+    `gamma` parameter is positive.
+
     :param mu: mean *(tensor)*
     :param gamma: scale *(tensor (0, Infinity))*
 
-    Continuous distribution with a positive domain (x > mu).
     """
 
     def __init__(self, mu, gamma, batch_size=None, *args, **kwargs):
-        """
-        Params:
-          `mu` - mean
-          `gamma` - scale
-        """
         self.mu = mu
         self.gamma = gamma
         if mu.size() != gamma.size():
@@ -47,9 +49,6 @@ class HalfCauchy(Distribution):
         return self.batch_shape(x) + self.event_shape()
 
     def sample(self):
-        """
-        Half Cauchy sampler.
-        """
         np_sample = spr.halfcauchy.rvs(self.mu.data.cpu().numpy(),
                                        scale=self.gamma.data.cpu().numpy())
         if isinstance(np_sample, numbers.Number):
@@ -58,9 +57,6 @@ class HalfCauchy(Distribution):
         return sample
 
     def batch_log_pdf(self, x):
-        """
-        Half Cauchy log-likelihood
-        """
         # expand to patch size of input
         mu = self.mu.expand(self.shape(x))
         gamma = self.gamma.expand(self.shape(x))
