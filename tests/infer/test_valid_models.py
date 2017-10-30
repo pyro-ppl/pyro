@@ -26,7 +26,7 @@ def assert_error(model, guide, **kwargs):
     Assert that inference fails with an error.
     """
     inference = SVI(model,  guide, Adam({"lr": 1e-6}), "ELBO", **kwargs)
-    with pytest.raises((NotImplementedError, UserWarning, KeyError)):
+    with pytest.raises((NotImplementedError, UserWarning, KeyError, RuntimeError)):
         inference.step()
 
 
@@ -43,7 +43,6 @@ def assert_warning(model, guide, **kwargs):
             print(warning)
 
 
-@pytest.mark.xfail(reason="Did not raise error despite x being sampled twice")
 @pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
 def test_variable_clash_in_model_error(trace_graph):
 
@@ -59,7 +58,6 @@ def test_variable_clash_in_model_error(trace_graph):
     assert_error(model, guide, trace_graph=trace_graph)
 
 
-@pytest.mark.xfail(reason="Did not raise error despite x being sampled twice")
 @pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
 def test_variable_clash_in_guide_error(trace_graph):
 
@@ -92,7 +90,6 @@ def test_irange_ok(trace_graph, subsample_size):
     assert_ok(model, guide, trace_graph=trace_graph)
 
 
-@pytest.mark.xfail(reason="Did not raise error despite x being sampled twice")
 @pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
 def test_irange_variable_clash_error(trace_graph):
 
