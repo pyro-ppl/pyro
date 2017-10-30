@@ -127,7 +127,7 @@ class AIR(nn.Module):
         # will be added to its output image. We can't
         # straight-forwardly avoid generating further objects, so
         # instead we zero out the log_pdf of future choices.
-        sample_mask = z_pres if self.use_masking else 1.0
+        sample_mask = z_pres if self.use_masking else None
 
         # Sample attention window position.
         z_where = pyro.sample('z_where_{}'.format(t),
@@ -244,7 +244,7 @@ class AIR(nn.Module):
                              z_pres_dist,
                              baseline=dict(baseline_value=bl_value))
 
-        log_pdf_mask = z_pres if self.use_masking else 1.0
+        log_pdf_mask = z_pres if self.use_masking else None
 
         z_where = pyro.sample('z_where_{}'.format(t),
                               dist.normal,
