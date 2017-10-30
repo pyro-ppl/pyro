@@ -24,7 +24,9 @@ class Categorical(Distribution):
     :type vs: `list` or `numpy.array` or `torch.autograd.Variable`
     :param one_hot: Whether `sample()` returns a `one_hot` sample.  Defaults
         to `False` if `vs` is specified or `True` if `vs` is not specified.
-    :param int batch_size: Optional size by which to expand ps and vs.
+    :param int batch_size: Optional number of elements in the batch used to
+        generate a sample. The batch dimension will be the leftmost dimension
+        in the generated sample.
     """
     enumerable = True
 
