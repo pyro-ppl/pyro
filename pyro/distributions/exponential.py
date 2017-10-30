@@ -6,17 +6,17 @@ from pyro.distributions.distribution import Distribution
 
 class Exponential(Distribution):
     """
-    :param lam: rate *(real (0, Infinity))*
+    Exponential parameterized by scale `lambda`.
 
-    Exponential parameterized by lambda
+    This is often used in conjunction with `torch.nn.Softplus` to ensure the
+    `lam` parameter is positive.
+
+    :param torch.autograd.Variable lam: Scale parameter (a.k.a. `lambda`).
+        Should be positive.
     """
     reparameterized = True
 
     def __init__(self, lam, batch_size=None, *args, **kwargs):
-        """
-        Params:
-          `lam` - lambda
-        """
         self.lam = lam
         if lam.dim() == 1 and batch_size is not None:
             self.lam = lam.expand(batch_size, lam.size(0))
@@ -38,16 +38,13 @@ class Exponential(Distribution):
 
     def sample(self):
         """
-        reparameterized sampler.
+        Reparameterized sampler.
         """
         eps = Variable(torch.rand(self.lam.size()).type_as(self.lam.data))
         x = -torch.log(eps) / self.lam
         return x
 
     def batch_log_pdf(self, x):
-        """
-        exponential log-likelihood
-        """
         lam = self.lam.expand_as(x)
         ll = - lam * x + torch.log(lam)
         batch_log_pdf_shape = self.batch_shape(x) + (1,)
