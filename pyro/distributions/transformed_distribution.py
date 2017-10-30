@@ -75,10 +75,10 @@ class TransformedDistribution(Distribution):
 
 
 class Bijector(nn.Module):
-        """
-        Abstract class `Bijector`. `Bijector` are bijective transformations with computable
-        log det jacobians. They are menat for use in `TransformedDistribution`.
-        """
+    """
+    Abstract class `Bijector`. `Bijector` are bijective transformations with computable
+    log det jacobians. They are meant for use in `TransformedDistribution`.
+    """
     def __init__(self, *args, **kwargs):
         super(Bijector, self).__init__(*args, **kwargs)
         self.add_inverse_to_cache = False
