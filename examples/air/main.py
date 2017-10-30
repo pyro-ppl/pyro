@@ -7,6 +7,7 @@ understanding with generative models." Advances in Neural Information
 Processing Systems. 2016.
 """
 
+import math
 import os
 import sys
 import time
@@ -75,11 +76,13 @@ parser.add_argument('--window-size', type=int, default=28,
                     help='attention window size')
 parser.add_argument('--z-pres-prior', type=float, default=None,
                     help='prior success probability for z_pres')
-parser.add_argument('--anneal-prior', action='store_true', default=False,
+parser.add_argument('--anneal-prior', choices='none lin exp'.split(), default='none',
                     help='anneal z_pres prior during optimization')
-parser.add_argument('--anneal-prior-from', type=float, default=0.99,
-                    help='initial z_pres prior prob')
-parser.add_argument('--anneal-prior-over', type=int, default=100000,
+parser.add_argument('--anneal-prior-to', type=float, default=1e-7,
+                    help='target z_pres prior prob')
+parser.add_argument('--anneal-prior-begin', type=int, default=0,
+                    help='number of steps to wait before beginning to anneal the prior')
+parser.add_argument('--anneal-prior-duration', type=int, default=100000,
                     help='number of steps over which to anneal the prior')
 parser.add_argument('--no-masking', action='store_true', default=False,
                     help='do not mask out the costs of unused choices')
@@ -127,20 +130,46 @@ def default_z_pres_prior_p(t):
 
 # Implements "prior annealing" as described in this blog post:
 # http://akosiorek.github.io/ml/2017/09/03/implementing-air.html
-def annealed_z_pres_prior_p(opt_step, time_step):
-    p_0 = args.anneal_prior_from
-    p_final = args.z_pres_prior or default_z_pres_prior_p(time_step)
-    s = min(opt_step / args.anneal_prior_over, 1.0)
-    return p_final * s + p_0 * (1 - s)
+
+# That implementation does something very close to the following:
+# --z-pres-prior (1 - 1e-15)
+# --anneal-prior exp
+# --anneal-prior-to 1e-7
+# --anneal-prior-begin 1000
+# --anneal-prior-duration 1e6
+
+# e.g. After 200K steps z_pres_p will have decayed to ~0.04
+
+# These compute the value of a decaying value at time t.
+# initial: initial value
+# final: final value, reached after begin + duration steps
+# begin: number of steps before decay begins
+# duration: number of steps over which decay occurs
+# t: current time step
+
+def lin_decay(initial, final, begin, duration, t):
+    assert duration > 0
+    x = (final - initial) * (t - begin) / duration + initial
+    return max(min(x, initial), final)
+
+
+def exp_decay(initial, final, begin, duration, t):
+    assert final > 0
+    assert duration > 0
+    # half_life = math.log(2) / math.log(initial / final) * duration
+    decay_rate = math.log(initial / final) / duration
+    x = initial * math.exp(-decay_rate * (t - begin))
+    return max(min(x, initial), final)
 
 
 def z_pres_prior_p(opt_step, time_step):
-    if args.anneal_prior:
-        return annealed_z_pres_prior_p(opt_step, time_step)
-    elif args.z_pres_prior:
-        return args.z_pres_prior
+    p = args.z_pres_prior or default_z_pres_prior_p(time_step)
+    if args.anneal_prior == 'none':
+        return p
     else:
-        return default_z_pres_prior_p(time_step)
+        decay = dict(lin=lin_decay, exp=exp_decay)[args.anneal_prior]
+        return decay(p, args.anneal_prior_to, args.anneal_prior_begin,
+                     args.anneal_prior_duration, opt_step)
 
 
 model_arg_keys = ['window_size',
