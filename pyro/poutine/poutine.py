@@ -112,6 +112,14 @@ class Poutine(object):
                 for i in range(0, loc + 1):
                     pyro._PYRO_STACK.pop(0)
 
+    def _reset(self):
+        """
+        Resets the computation to the beginning, un-sampling all sample sites.
+
+        By default, does nothing, but overridden in derived classes.
+        """
+        pass
+
     def _prepare_site(self, msg):
         """
         :param msg: current message at a trace site

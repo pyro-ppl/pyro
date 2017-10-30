@@ -1,15 +1,19 @@
+from collections import namedtuple
+
 from .poutine import Poutine
+
+CondIndepStackFrame = namedtuple("CondIndepStackFrame", ["name", "counter", "vectorized"])
 
 
 class LambdaPoutine(Poutine):
     """
     This poutine has two functions:
-    (i)  handle score-rescaling
-    (ii) keep track of stack of nested map_datas at each sample/observe site
-         for the benefit of TraceGraphPoutine;
-         necessary information passed via map_data_stack in msg
+        (i)  handle score-rescaling
+        (ii) keep track of stack of nested map_datas at each sample/observe site
+             for the benefit of TraceGraphPoutine;
+             necessary information passed via map_data_stack in msg
     """
-    def __init__(self, fn, name, scale, map_data_type, batch_dim, batch_size):
+    def __init__(self, fn, name, scale, map_data_type):
         """
         Constructor: basically default, but store an extra scalar self.scale
         and a counter to keep track of which (list) map_data branch we're in
@@ -17,9 +21,7 @@ class LambdaPoutine(Poutine):
         self.name = name
         self.scale = scale
         self.counter = 0
-        self.map_data_type = map_data_type
-        self.batch_dim = batch_dim
-        self.batch_size = batch_size
+        self.vectorized = (map_data_type == "tensor")
         super(LambdaPoutine, self).__init__(fn)
 
     def __enter__(self):
@@ -37,7 +39,5 @@ class LambdaPoutine(Poutine):
         note: the map_data_stack ordering is innermost to outermost from left to right
         """
         msg["scale"] = self.scale * msg["scale"]
-        if len(msg['map_data_stack']) == 0 or msg['map_data_stack'][0] != self.name:
-            msg['map_data_stack'].insert(0, (self.name, self.counter,
-                                             self.map_data_type, self.batch_dim, self.batch_size))
+        msg["map_data_stack"].insert(0, CondIndepStackFrame(self.name, self.counter, self.vectorized))
         return msg

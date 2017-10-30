@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='pyro',
+    name='pyro-ppl',
     version='0.0.1',
     description='A Python library for probabilistic modeling and inference',
     packages=find_packages(exclude=('tests*',)),
@@ -20,6 +20,7 @@ setup(
         'visualization': [
             'matplotlib>=1.3',
             'visdom>=0.1.4',
+            'pillow'
         ],
         'dev': [
             'torchvision',
@@ -27,7 +28,11 @@ setup(
             'isort',
             'pytest',
             'pytest-xdist',
+            'nbval',
             'yapf',
+            'nbstripout',
+            'sphinx',
+            'sphinx_rtd_theme',
         ],
     },
     tests_require=['flake8', 'pytest'],

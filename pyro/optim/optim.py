@@ -6,13 +6,12 @@ import cloudpickle
 class PyroOptim(object):
     """
     A wrapper for torch.optim.Optimizer objects that helps managing with dynamically generated parameters
+
+    :param optim_constructor: a torch.optim.Optimizer
+    :param optim_args: a dictionary of learning arguments for the optimizer or a callable that returns
+        such dictionaries
     """
     def __init__(self, optim_constructor, optim_args):
-        """
-        :param optim_constructor: a torch.optim.Optimizer
-        :param optim_args: a dictionary of learning arguments for the optimizer or a callable that returns
-            such dictionaries
-        """
         self.pt_optim_constructor = optim_constructor
 
         # must be callable or dict
@@ -41,7 +40,7 @@ class PyroOptim(object):
             # if we have not seen this param before, we instantiate and optim object to deal with it
             if p not in self.optim_objs:
                 # get our constructor arguments
-                def_optim_dict = self.get_optim_args(p)
+                def_optim_dict = self._get_optim_args(p)
                 # create a single optim object for that param
                 self.optim_objs[p] = self.pt_optim_constructor([p], **def_optim_dict)
 
@@ -93,8 +92,8 @@ class PyroOptim(object):
             state = cloudpickle.loads(input_file.read())
         self.set_state(state)
 
-    # helper to fetch the optim args if callable
-    def get_optim_args(self, param):
+    # helper to fetch the optim args if callable (only used internally)
+    def _get_optim_args(self, param):
         # if we were passed a fct, we call fct with param info
         # arguments are (module name, param name, tags) e.g. ('mymodule', 'bias', 'baseline')
         if callable(self.pt_optim_args):

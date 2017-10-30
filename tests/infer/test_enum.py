@@ -1,4 +1,5 @@
 import itertools
+import math
 
 import pytest
 import torch
@@ -11,40 +12,21 @@ from pyro.infer import SVI
 from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.trace_elbo import Trace_ELBO
 from pyro.infer.tracegraph_elbo import TraceGraph_ELBO
-from tests.common import assert_equal, xfail_if_not_implemented
-
-# XXX Remove this after Pytorch 0.2.1.
-pytorch_is_release = ('+' not in torch.__version__)
-segfaults_on_old_pytorch = pytest.mark.skipif(
-    pytorch_is_release,
-    reason="pytorch segfaults at 0.2.0_4, fixed by 0.2.0+f964105")
-
-
-# A purely discrete model, no batching.
-def model0():
-    p = pyro.param("p", Variable(torch.Tensor([0.05])))
-    ps = pyro.param("ps", Variable(torch.Tensor([0.1, 0.2, 0.3, 0.4])))
-    x = pyro.sample("x", dist.Bernoulli(p))
-    y = pyro.sample("y", dist.Categorical(ps, one_hot=False))
-    return dict(x=x, y=y)
-
-
-# A discrete model with batching.
-def model1():
-    p = pyro.param("p", Variable(torch.Tensor([[0.05], [0.15]])))
-    ps = pyro.param("ps", Variable(torch.Tensor([[0.1, 0.2, 0.3, 0.4],
-                                                 [0.4, 0.3, 0.2, 0.1]])))
-    x = pyro.sample("x", dist.Bernoulli(p))
-    y = pyro.sample("y", dist.Categorical(ps, one_hot=False))
-    assert x.size() == (2, 1)
-    assert y.size() == (2, 1)
-    return dict(x=x, y=y)
+from tests.common import assert_equal, xfail_if_not_implemented, segfaults_on_pytorch_020
 
 
 @pytest.mark.parametrize("graph_type", ["flat", "dense"])
 def test_iter_discrete_traces_scalar(graph_type):
     pyro.clear_param_store()
-    traces = list(iter_discrete_traces(graph_type, model0))
+
+    def model():
+        p = pyro.param("p", Variable(torch.Tensor([0.05])))
+        ps = pyro.param("ps", Variable(torch.Tensor([0.1, 0.2, 0.3, 0.4])))
+        x = pyro.sample("x", dist.Bernoulli(p))
+        y = pyro.sample("y", dist.Categorical(ps, one_hot=False))
+        return dict(x=x, y=y)
+
+    traces = list(iter_discrete_traces(graph_type, model))
 
     p = pyro.param("p").data
     ps = pyro.param("ps").data
@@ -61,7 +43,18 @@ def test_iter_discrete_traces_scalar(graph_type):
 @pytest.mark.parametrize("graph_type", ["flat", "dense"])
 def test_iter_discrete_traces_vector(graph_type):
     pyro.clear_param_store()
-    traces = list(iter_discrete_traces(graph_type, model1))
+
+    def model():
+        p = pyro.param("p", Variable(torch.Tensor([[0.05], [0.15]])))
+        ps = pyro.param("ps", Variable(torch.Tensor([[0.1, 0.2, 0.3, 0.4],
+                                                     [0.4, 0.3, 0.2, 0.1]])))
+        x = pyro.sample("x", dist.Bernoulli(p))
+        y = pyro.sample("y", dist.Categorical(ps, one_hot=False))
+        assert x.size() == (2, 1)
+        assert y.size() == (2, 1)
+        return dict(x=x, y=y)
+
+    traces = list(iter_discrete_traces(graph_type, model))
 
     p = pyro.param("p").data
     ps = pyro.param("ps").data
@@ -76,6 +69,28 @@ def test_iter_discrete_traces_vector(graph_type):
         assert_equal(scale, expected_scale)
 
 
+@pytest.mark.parametrize("enum_discrete", [True, False], ids=["sum", "sample"])
+@pytest.mark.parametrize("trace_graph", [False, True], ids=["dense", "flat"])
+def test_iter_discrete_traces_nan(enum_discrete, trace_graph):
+    pyro.clear_param_store()
+
+    def model():
+        p = Variable(torch.Tensor([0.0, 0.5, 1.0]))
+        pyro.sample("z", dist.Bernoulli(p))
+
+    def guide():
+        p = pyro.param("p", Variable(torch.Tensor([0.0, 0.5, 1.0]), requires_grad=True))
+        pyro.sample("z", dist.Bernoulli(p))
+
+    Elbo = TraceGraph_ELBO if trace_graph else Trace_ELBO
+    elbo = Elbo(enum_discrete=enum_discrete)
+    with xfail_if_not_implemented():
+        loss = elbo.loss(model, guide)
+        assert isinstance(loss, float) and not math.isnan(loss), loss
+        loss = elbo.loss_and_grads(model, guide)
+        assert isinstance(loss, float) and not math.isnan(loss), loss
+
+
 # A simple Gaussian mixture model, with no vectorization.
 def gmm_model(data, verbose=False):
     p = pyro.param("p", Variable(torch.Tensor([0.3]), requires_grad=True))
@@ -87,7 +102,7 @@ def gmm_model(data, verbose=False):
         z = z.long().data[0]
         if verbose:
             print("M{} z_{} = {}".format("  " * i, i, z))
-        pyro.observe("x_{}".format(i), dist.DiagNormal(mus[z], sigma), data[i])
+        pyro.observe("x_{}".format(i), dist.Normal(mus[z], sigma), data[i])
 
 
 def gmm_guide(data, verbose=False):
@@ -122,7 +137,7 @@ def gmm_batch_model(data):
         z = pyro.sample("z", dist.Categorical(p.unsqueeze(0).expand(n, 2)))
         assert z.size() == (n, 2)
         mu = torch.mv(z, mus)
-        pyro.observe("x", dist.DiagNormal(mu, sigma.expand(n)), data[batch])
+        pyro.observe("x", dist.Normal(mu, sigma.expand(n)), data[batch])
 
 
 def gmm_batch_guide(data):
@@ -145,7 +160,7 @@ def test_gmm_batch_iter_discrete_traces(model, data_size, graph_type):
     assert len(traces) == 2
 
 
-@segfaults_on_old_pytorch
+@segfaults_on_pytorch_020
 @pytest.mark.parametrize("trace_graph", [False, True], ids=["dense", "flat"])
 @pytest.mark.parametrize("model,guide", [
     (gmm_model, gmm_guide),
@@ -183,7 +198,7 @@ def finite_difference(eval_loss, delta=0.1):
     return grads
 
 
-@segfaults_on_old_pytorch
+@segfaults_on_pytorch_020
 @pytest.mark.parametrize("enum_discrete", [True, False], ids=["sum", "sample"])
 @pytest.mark.parametrize("trace_graph", [False, True], ids=["dense", "flat"])
 def test_bern_elbo_gradient(enum_discrete, trace_graph):
@@ -218,7 +233,7 @@ def test_bern_elbo_gradient(enum_discrete, trace_graph):
     assert_equal(actual_grads, expected_grads, prec=0.1)
 
 
-@segfaults_on_old_pytorch
+@segfaults_on_pytorch_020
 @pytest.mark.parametrize("model,guide", [
     (gmm_model, gmm_guide),
     (gmm_batch_model, gmm_batch_guide),

@@ -39,7 +39,7 @@ class Fixture(object):
         return len(self.test_data)
 
     def get_samples(self, num_samples, **dist_params):
-        return [self.pyro_dist(**dist_params).data.cpu().numpy() for _ in range(num_samples)]
+        return self.pyro_dist(batch_size=num_samples, **dist_params)
 
     def get_test_data(self, idx, wrap_tensor=True):
         if not wrap_tensor:
@@ -121,7 +121,8 @@ class Fixture(object):
         return max(min_samples, min_computed_samples)
 
     def get_test_distribution_name(self):
-        return self.pyro_dist.__class__.__name__
+        pyro_dist_class = getattr(self.pyro_dist, 'dist_class', self.pyro_dist.__class__)
+        return pyro_dist_class.__name__
 
 
 def tensor_wrap(*args, **kwargs):

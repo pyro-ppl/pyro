@@ -69,14 +69,14 @@ class ReplayPoutine(Poutine):
         name = msg["name"]
         # case 1: dict, positive: sample from guide
         if name in self.sites:
-            assert not msg["is_observed"], \
-                "site {} is observed and should not be overwritten".format(name)
+            if msg["is_observed"]:
+                raise RuntimeError("site {} is observed and should not be overwritten".format(name))
             g_name = self.sites[name]
-            assert g_name in self.guide_trace, \
-                "{} in sites but {} not in trace".format(name, g_name)
-            assert self.guide_trace.nodes[g_name]["type"] == "sample" and \
-                not self.guide_trace.nodes[g_name]["is_observed"], \
-                "site {} must be sample in guide_trace".format(g_name)
+            if g_name not in self.guide_trace:
+                raise RuntimeError("{} in sites but {} not in trace".format(name, g_name))
+            if self.guide_trace.nodes[g_name]["type"] != "sample" or \
+                    self.guide_trace.nodes[g_name]["is_observed"]:
+                raise RuntimeError("site {} must be sample in guide_trace".format(g_name))
             msg["done"] = True
             return self.guide_trace.nodes[g_name]["value"]
         # case 2: dict, negative: sample from model

@@ -1,11 +1,28 @@
-import pyro
+import functools
+import re
+import warnings
+
 import graphviz
 import numpy as np
-import functools
 import torch
 from torch.autograd import Variable
 from torch.nn import Parameter
-from collections import defaultdict
+
+import pyro
+from pyro.poutine.util import site_is_subsample
+
+
+def parse_torch_version():
+    """
+    Parses `torch.__version__` into a semver-ish version tuple.
+    This is needed to handle subpatch `_n` parts outside of the semver spec.
+
+    :returns: a tuple `(major, minor, patch, extra_stuff)`
+    """
+    match = re.match(r"(\d\.\d\.\d)(.*)", torch.__version__)
+    major, minor, patch = map(int, match.group(1).split("."))
+    extra_stuff = match.group(2)
+    return major, minor, patch, extra_stuff
 
 
 def detach_iterable(iterable):
@@ -142,7 +159,7 @@ def tensor_histogram(ps, vs):
         if isinstance(_v, Variable):
             _v = _v.data
         if isinstance(_v, torch.Tensor):
-            _v = _v.numpy()
+            _v = _v.cpu().numpy()
         np_vs.append(_v)
     # now form the histogram
     hist = dict()
@@ -247,7 +264,7 @@ def enum_extend(trace, msg, num_samples=None):
         num_samples = -1
 
     extended_traces = []
-    for i, s in enumerate(msg["fn"].support(*msg["args"], **msg["kwargs"])):
+    for i, s in enumerate(msg["fn"].enumerate_support(*msg["args"], **msg["kwargs"])):
         if i > num_samples and num_samples >= 0:
             break
         msg_copy = msg.copy()
@@ -316,83 +333,29 @@ def all_escape(trace, msg):
         (msg["name"] not in trace)
 
 
-def get_vectorized_map_data_info(trace):
-    """
-    this determines whether the vectorized map_datas
-    are rao-blackwellizable by tracegraph_kl_qp
-    also gathers information to be consumed by downstream by tracegraph_kl_qp
-    XXX this logic should probably sit elsewhere
-    """
-    nodes = trace.nodes
-
-    vectorized_map_data_info = {'rao-blackwellization-condition': True}
-    vec_md_stacks = set()
-
-    for name, node in nodes.items():
-        if node["type"] in ("sample", "param"):
-            stack = tuple(reversed(node["map_data_stack"]))
-            vec_mds = list(filter(lambda x: x[2] == 'tensor', stack))
-            # check for nested vectorized map datas
-            if len(vec_mds) > 1:
-                vectorized_map_data_info['rao-blackwellization-condition'] = False
-            # check that vectorized map datas only found at innermost position
-            if len(vec_mds) > 0 and stack[-1][2] == 'list':
-                vectorized_map_data_info['rao-blackwellization-condition'] = False
-            # for now enforce batch_dim = 0 for vectorized map_data
-            # since needed batch_log_pdf infrastructure missing
-            if len(vec_mds) > 0 and vec_mds[0][3] != 0:
-                vectorized_map_data_info['rao-blackwellization-condition'] = False
-            # enforce that if there are multiple vectorized map_datas, they are all
-            # independent of one another because of enclosing list map_datas
-            # (step 1: collect the stacks)
-            if len(vec_mds) > 0:
-                vec_md_stacks.add(stack)
-            # bail, since condition false
-            if not vectorized_map_data_info['rao-blackwellization-condition']:
-                break
-
-    # enforce that if there are multiple vectorized map_datas, they are all
-    # independent of one another because of enclosing list map_datas
-    # (step 2: explicitly check this)
-    if vectorized_map_data_info['rao-blackwellization-condition']:
-        vec_md_stacks = list(vec_md_stacks)
-        for i, stack_i in enumerate(vec_md_stacks):
-            for j, stack_j in enumerate(vec_md_stacks):
-                # only check unique pairs
-                if i <= j:
-                    continue
-                ij_independent = False
-                for md_i, md_j in zip(stack_i, stack_j):
-                    if md_i[0] == md_j[0] and md_i[1] != md_j[1]:
-                        ij_independent = True
-                if not ij_independent:
-                    vectorized_map_data_info['rao-blackwellization-condition'] = False
-                    break
-
-    # construct data structure consumed by tracegraph_kl_qp
-    if vectorized_map_data_info['rao-blackwellization-condition']:
-        vectorized_map_data_info['nodes'] = defaultdict(list)
-        for name, node in nodes.items():
-            if node["type"] in ("sample", "param"):
-                stack = tuple(reversed(node["map_data_stack"]))
-                vec_mds = list(filter(lambda x: x[2] == 'tensor', stack))
-                if len(vec_mds) > 0:
-                    node_batch_dim_pair = (name, vec_mds[0][3])
-                    vectorized_map_data_info['nodes'][vec_mds[0][0]].append(node_batch_dim_pair)
-
-    return vectorized_map_data_info
-
-
 def save_visualization(trace, graph_output):
     """
-    render graph and save to file
+    :param pyro.poutine.Trace trace: a trace to be visualized
     :param graph_output: the graph will be saved to graph_output.pdf
-    -- non-reparameterized stochastic nodes are salmon
-    -- reparameterized stochastic nodes are half salmon, half grey
-    -- observation nodes are green
+    :type graph_output: str
+
+    Take a trace generated by poutine.trace with `graph_type='dense'` and render
+    the graph with the output saved to file.
+
+    - non-reparameterized stochastic nodes are salmon
+    - reparameterized stochastic nodes are half salmon, half grey
+    - observation nodes are green
+
+    Example:
+
+    trace = pyro.poutine.trace(model, graph_type="dense").get_trace()
+    save_visualization(trace, 'output')
     """
     g = graphviz.Digraph()
-    for label, node in trace.nodes:
+
+    for label, node in trace.nodes.items():
+        if site_is_subsample(node):
+            continue
         shape = 'ellipse'
         if label in trace.stochastic_nodes and label not in trace.reparameterized_nodes:
             fillcolor = 'salmon'
@@ -401,40 +364,51 @@ def save_visualization(trace, graph_output):
         elif label in trace.observation_nodes:
             fillcolor = 'darkolivegreen3'
         else:
-            fillcolor = 'grey'
+            # only visualize RVs
+            continue
         g.node(label, label=label, shape=shape, style='filled', fillcolor=fillcolor)
 
-    for label1, label2 in trace.G.edges():
+    for label1, label2 in trace.edges:
+        if site_is_subsample(trace.nodes[label1]):
+            continue
+        if site_is_subsample(trace.nodes[label2]):
+            continue
         g.edge(label1, label2)
 
     g.render(graph_output, view=False, cleanup=True)
 
 
-def identify_dense_edges(trace):
+def check_site_names(model_trace, guide_trace):
     """
-    Method to add all edges based on the map_data_stack information
-    stored at each site.
-    """
-    for name, node in trace.nodes.items():
-        if node["type"] == "sample":
-            # XXX why tuple?
-            map_data_stack = tuple(reversed(node["map_data_stack"]))
-            for past_name, past_node in trace.nodes.items():
-                if past_node["type"] == "sample":
-                    if past_name == name:
-                        break
-                    past_node_independent = False
-                    past_node_map_data_stack = tuple(
-                        reversed(past_node["map_data_stack"]))
-                    for query, target in zip(map_data_stack,
-                                             past_node_map_data_stack):
-                        if query[0] == target[0] and query[1] != target[1]:
-                            past_node_independent = True
-                            break
-                    if not past_node_independent:
-                        trace.add_edge(past_name, name)
+    :param pyro.poutine.Trace model_trace: Trace object of the model
+    :param pyro.poutine.Trace guide_trace: Trace object of the guide
+    :raises: RuntimeWarning
 
-    return trace
+    Checks that (1) there is a bijection between the samples in the guide
+    and the samples in the model, and (2) each `iarange` statement in the
+    guide also appears in the model.
+    """
+    # Check ordinary sample sites.
+    model_vars = set(name for name, site in model_trace.nodes.items()
+                     if site["type"] == "sample" and not site["is_observed"]
+                     if type(site["fn"]).__name__ != "_Subsample")
+    guide_vars = set(name for name, site in guide_trace.nodes.items()
+                     if site["type"] == "sample"
+                     if type(site["fn"]).__name__ != "_Subsample")
+    if not (guide_vars <= model_vars):
+        warnings.warn("Found vars in guide but not model: {}".format(guide_vars - model_vars))
+    if not (model_vars <= guide_vars):
+        warnings.warn("Found vars in model but not guide: {}".format(model_vars - guide_vars))
+
+    # Check subsample sites introduced by iarange.
+    model_vars = set(name for name, site in model_trace.nodes.items()
+                     if site["type"] == "sample" and not site["is_observed"]
+                     if type(site["fn"]).__name__ == "_Subsample")
+    guide_vars = set(name for name, site in guide_trace.nodes.items()
+                     if site["type"] == "sample"
+                     if type(site["fn"]).__name__ == "_Subsample")
+    if not (guide_vars <= model_vars):
+        warnings.warn("Found iarange statements in guide but not model: {}".format(guide_vars - model_vars))
 
 
 def deep_getattr(obj, name):
