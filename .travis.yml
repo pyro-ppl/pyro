@@ -57,7 +57,7 @@ jobs:
           script: pytest -vs --cov=pyro --stage test_examples
         - python: 2.7
           env: STAGE=tutorials
-          script: pytest -v --nbval tutorial/
+          script: pytest -v --nbval-lax tutorial/
         - stage: integration test
           python: 2.7
           env: STAGE=integration_batch_1
@@ -74,4 +74,4 @@ jobs:
     allow_failures:
         - python: 2.7
           env: STAGE=tutorials
-          script: pytest -v --nbval tutorial/
+          script: pytest -v --nbval-lax tutorial/
