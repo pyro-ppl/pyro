@@ -8,19 +8,19 @@ from pyro.distributions.util import log_gamma, torch_multinomial
 
 class Multinomial(Distribution):
     """
-    :param ps: probabilities *(real array with elements that sum to one)*
-    :param n: number of trials *(int (>=1))*
+    Multinomial distribution.
 
-    Distribution over counts for ``n`` independent ``Discrete({ps: ps})``
-    trials.
+    Distribution over counts for `n` independent `Categorical(ps)` trials.
+
+    This is often used in conjunction with `torch.nn.Softmax` to ensure
+    probabilites `ps` are normalized.
+
+    :param torch.autograd.Variable ps: Probabilities (real). Should be positive
+        and should normalized over the rightmost axis.
+    :param int n: Number of trials. Should be positive.
     """
 
     def __init__(self, ps, n, batch_size=None, *args, **kwargs):
-        """
-        Params:
-          ps - probabilities
-          n - num trials
-        """
         if ps.dim() not in (1, 2):
             raise ValueError("Parameter `ps` must be either 1 or 2 dimensional.")
         self.ps = ps

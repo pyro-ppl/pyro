@@ -7,20 +7,21 @@ from pyro.distributions.distribution import Distribution
 
 class LogNormal(Distribution):
     """
-    :param mu: mean *(vector)*
-    :param sigma: standard deviations *(vector (0, Infinity))*
+    Log-normal distribution.
 
     A distribution over probability vectors obtained by exp-transforming a random
     variable drawn from ``Normal({mu: mu, sigma: sigma})``.
+
+    This is often used in conjunction with `torch.nn.Softplus` to ensure the
+    `sigma` parameters are positive.
+
+    :param torch.autograd.Variable mu: log mean parameter.
+    :param torch.autograd.Variable sigma: log standard deviations.
+        Should be positive.
     """
     reparameterized = True
 
     def __init__(self, mu, sigma, batch_size=None, *args, **kwargs):
-        """
-        Params:
-          `mu` - mean
-          `sigma` - root variance
-        """
         self.mu = mu
         self.sigma = sigma
         if mu.size() != sigma.size():
@@ -54,9 +55,6 @@ class LogNormal(Distribution):
         return torch.exp(z)
 
     def batch_log_pdf(self, x):
-        """
-        log-normal log-likelihood
-        """
         mu = self.mu.expand(self.shape(x))
         sigma = self.sigma.expand(self.shape(x))
         ll_1 = Variable(torch.Tensor([-0.5 * np.log(2.0 * np.pi)])
