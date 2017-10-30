@@ -280,7 +280,8 @@ class AIR(nn.Module):
 
         # Zero out values for finished data points. This avoids adding
         # superfluous terms to the loss.
-        bl_value = bl_value * prev.z_pres
+        if self.use_masking:
+            bl_value = bl_value * prev.z_pres
 
         # The value that the baseline net is estimating can be very
         # large. An option to scale the nets output is provided
