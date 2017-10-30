@@ -47,8 +47,7 @@ class AIR(nn.Module):
                  use_baselines=True,
                  baseline_scalar=None,
                  fudge_z_pres=False,
-                 use_cuda=False,
-                 print_modules=False):
+                 use_cuda=False):
 
         super(AIR, self).__init__()
 
@@ -85,9 +84,6 @@ class AIR(nn.Module):
         self.bl_rnn = nn.LSTMCell(rnn_input_size, rnn_hidden_size)
         self.bl_predict = MLP(rnn_hidden_size, bl_predict_net + [1], nl)
         self.bl_embed = Identity() if embed_net is None else MLP(x_size ** 2, embed_net, nl, True)
-
-        if print_modules:
-            print(self)
 
         if use_cuda:
             self.cuda()

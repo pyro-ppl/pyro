@@ -89,7 +89,7 @@ parser.add_argument('--no-masking', action='store_true', default=False,
 parser.add_argument('--fudge-z-pres', action='store_true', default=False,
                     help='fudge z_pres to remove discreteness for testing')
 parser.add_argument('--seed', type=int, help='random seed', default=None)
-parser.add_argument('--print-modules', action='store_true',
+parser.add_argument('--print-modules', action='store_true', default=False,
                     help='write the network architecture to stdout')
 
 args = parser.parse_args()
@@ -182,8 +182,7 @@ model_arg_keys = ['window_size',
                   'embed_net',
                   'bl_predict_net',
                   'non_linearity',
-                  'fudge_z_pres',
-                  'print_modules']
+                  'fudge_z_pres']
 model_args = {key: getattr(args, key) for key in model_arg_keys if key in args}
 air = AIR(
     num_steps=args.model_steps,
@@ -194,6 +193,8 @@ air = AIR(
     use_cuda=args.cuda,
     **model_args
 )
+if args.print_modules:
+    print(air)
 
 vis = visdom.Visdom(env=args.visdom_env)
 # Viz sample from prior.
