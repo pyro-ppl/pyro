@@ -111,14 +111,16 @@ class Bijector(nn.Module):
 class InverseAutoregressiveFlow(Bijector):
     """
     An implementation of an Inverse Autoregressive Flow. Together with the `TransformedDistribution` this
-    allows a way to create richer variational approximations.
+    provides a way to create richer variational approximations.
 
     Example usage:
 
+    ```python
     base_dist = Normal(...)
     iaf = InverseAutoregressiveFlow(...)
     pyro.module("my_iaf", iaf)
     iaf_dist = TransformedDistribution(base_dist, iaf)
+    ```
 
     Note that this implementation is only meant to be used in settings where the inverse of the Bijector
     is never explicitly computed (rather the result is cached from the forward call). In the context of
