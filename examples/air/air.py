@@ -135,7 +135,7 @@ class AIR(nn.Module):
 
         # Sample attention window position.
         z_where = pyro.sample('z_where_{}'.format(t),
-                              dist.diagnormal,
+                              dist.normal,
                               self.z_where_mu_prior,
                               self.z_where_sigma_prior,
                               batch_size=n,
@@ -143,7 +143,7 @@ class AIR(nn.Module):
 
         # Sample latent code for contents of the attention window.
         z_what = pyro.sample('z_what_{}'.format(t),
-                             dist.diagnormal,
+                             dist.normal,
                              self.ng_zeros([self.z_what_size]),
                              self.ng_ones([self.z_what_size]),
                              batch_size=n,
@@ -179,7 +179,7 @@ class AIR(nn.Module):
 
             if self.use_masking or t == (self.num_steps - 1):
                 pyro.observe("obs_{}".format(t),
-                             dist.diagnormal,
+                             dist.normal,
                              batch.view(n, -1),
                              x.view(n, -1),
                              self.ng_ones(x.view(n, -1).size()) * 0.3,
@@ -251,7 +251,7 @@ class AIR(nn.Module):
         log_pdf_mask = z_pres if self.use_masking else 1.0
 
         z_where = pyro.sample('z_where_{}'.format(t),
-                              dist.diagnormal,
+                              dist.normal,
                               z_where_mu + self.z_where_mu_prior,
                               z_where_sigma * self.z_where_sigma_prior,
                               log_pdf_mask=log_pdf_mask)
@@ -262,7 +262,7 @@ class AIR(nn.Module):
         z_what_mu, z_what_sigma = self.encode(x_att)
 
         z_what = pyro.sample('z_what_{}'.format(t),
-                             dist.diagnormal,
+                             dist.normal,
                              z_what_mu,
                              z_what_sigma,
                              log_pdf_mask=log_pdf_mask)

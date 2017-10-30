@@ -62,7 +62,7 @@ def load_mnist():
             train=True,
             download=True))
     return {
-        'digits': loader.dataset.train_data.numpy(),
+        'digits': loader.dataset.train_data.cpu().numpy(),
         'labels': loader.dataset.train_labels
     }
 

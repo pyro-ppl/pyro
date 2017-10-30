@@ -49,7 +49,7 @@ class LogNormal(Distribution):
         """
         Reparameterized log-normal sampler.
         """
-        eps = Variable(torch.randn(1).type_as(self.mu.data))
+        eps = Variable(torch.randn(self.mu.size()).type_as(self.mu.data))
         z = self.mu + self.sigma * eps
         return torch.exp(z)
 

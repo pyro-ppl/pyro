@@ -10,7 +10,7 @@ from .condition_poutine import ConditionPoutine
 from .lambda_poutine import LambdaPoutine  # noqa: F401
 from .escape_poutine import EscapePoutine
 
-# trace data structures
+import pyro
 from .trace import Trace  # noqa: F401
 from pyro import util
 
@@ -186,6 +186,8 @@ def queue(fn, queue, max_tries=None,
                                    functools.partial(escape_fn, next_trace)))
                 return ftr(*args, **kwargs)
             except util.NonlocalExit as site_container:
+                for frame in pyro._PYRO_STACK:
+                    frame._reset()
                 for tr in extend_fn(ftr.trace.copy(), site_container.site,
                                     num_samples=num_samples):
                     queue.put(tr)

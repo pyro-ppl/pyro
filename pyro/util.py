@@ -1,11 +1,28 @@
-import pyro
+import functools
+import re
+import warnings
+
 import graphviz
 import numpy as np
-import functools
-import warnings
 import torch
 from torch.autograd import Variable
 from torch.nn import Parameter
+
+import pyro
+from pyro.poutine.util import site_is_subsample
+
+
+def parse_torch_version():
+    """
+    Parses `torch.__version__` into a semver-ish version tuple.
+    This is needed to handle subpatch `_n` parts outside of the semver spec.
+
+    :returns: a tuple `(major, minor, patch, extra_stuff)`
+    """
+    match = re.match(r"(\d\.\d\.\d)(.*)", torch.__version__)
+    major, minor, patch = map(int, match.group(1).split("."))
+    extra_stuff = match.group(2)
+    return major, minor, patch, extra_stuff
 
 
 def detach_iterable(iterable):
@@ -247,7 +264,7 @@ def enum_extend(trace, msg, num_samples=None):
         num_samples = -1
 
     extended_traces = []
-    for i, s in enumerate(msg["fn"].support(*msg["args"], **msg["kwargs"])):
+    for i, s in enumerate(msg["fn"].enumerate_support(*msg["args"], **msg["kwargs"])):
         if i > num_samples and num_samples >= 0:
             break
         msg_copy = msg.copy()
@@ -336,7 +353,9 @@ def save_visualization(trace, graph_output):
     """
     g = graphviz.Digraph()
 
-    for label in trace.nodes:
+    for label, node in trace.nodes.items():
+        if site_is_subsample(node):
+            continue
         shape = 'ellipse'
         if label in trace.stochastic_nodes and label not in trace.reparameterized_nodes:
             fillcolor = 'salmon'
@@ -350,26 +369,46 @@ def save_visualization(trace, graph_output):
         g.node(label, label=label, shape=shape, style='filled', fillcolor=fillcolor)
 
     for label1, label2 in trace.edges:
+        if site_is_subsample(trace.nodes[label1]):
+            continue
+        if site_is_subsample(trace.nodes[label2]):
+            continue
         g.edge(label1, label2)
 
     g.render(graph_output, view=False, cleanup=True)
 
 
-def check_unique_namespace(model_trace, guide_trace):
+def check_site_names(model_trace, guide_trace):
     """
-    :param model_trace: Trace object of the model
-    :param guide_trace: Trace object of the guide
-    Checks that there is a bijection between the samples in the guide
-    and the samples in the model. Throws a warning if not.
+    :param pyro.poutine.Trace model_trace: Trace object of the model
+    :param pyro.poutine.Trace guide_trace: Trace object of the guide
+    :raises: RuntimeWarning
+
+    Checks that (1) there is a bijection between the samples in the guide
+    and the samples in the model, and (2) each `iarange` statement in the
+    guide also appears in the model.
     """
-    model_samples = [name for name in model_trace.nodes.keys()
-                     if model_trace.nodes[name]["type"] == "sample"
-                     and not model_trace.nodes[name]["is_observed"]]
-    guide_samples = [name for name in guide_trace.nodes.keys()
-                     if guide_trace.nodes[name]["type"] == "sample"]
-    if set(model_samples) != set(guide_samples):
-            extra_vars = set(guide_samples).difference(model_samples)
-            warnings.warn('Model and guide samples do not match up: {}'.format(extra_vars))
+    # Check ordinary sample sites.
+    model_vars = set(name for name, site in model_trace.nodes.items()
+                     if site["type"] == "sample" and not site["is_observed"]
+                     if type(site["fn"]).__name__ != "_Subsample")
+    guide_vars = set(name for name, site in guide_trace.nodes.items()
+                     if site["type"] == "sample"
+                     if type(site["fn"]).__name__ != "_Subsample")
+    if not (guide_vars <= model_vars):
+        warnings.warn("Found vars in guide but not model: {}".format(guide_vars - model_vars))
+    if not (model_vars <= guide_vars):
+        warnings.warn("Found vars in model but not guide: {}".format(model_vars - guide_vars))
+
+    # Check subsample sites introduced by iarange.
+    model_vars = set(name for name, site in model_trace.nodes.items()
+                     if site["type"] == "sample" and not site["is_observed"]
+                     if type(site["fn"]).__name__ == "_Subsample")
+    guide_vars = set(name for name, site in guide_trace.nodes.items()
+                     if site["type"] == "sample"
+                     if type(site["fn"]).__name__ == "_Subsample")
+    if not (guide_vars <= model_vars):
+        warnings.warn("Found iarange statements in guide but not model: {}".format(guide_vars - model_vars))
 
 
 def deep_getattr(obj, name):

@@ -90,6 +90,9 @@ add_module_names = False
 
 # -- Options for HTML output ----------------------------------------------
 
+# logo
+html_logo = '../img/pyro_logo_small.png'
+
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
@@ -172,6 +175,7 @@ intersphinx_mapping = {'https://docs.python.org/': None}
 
 
 # document class constructors (__init__ methods):
+""" comment out this functionality for now;
 def skip(app, what, name, obj, skip, options):
     if name == "__init__":
         return False
@@ -180,3 +184,4 @@ def skip(app, what, name, obj, skip, options):
 
 def setup(app):
     app.connect("autodoc-skip-member", skip)
+"""
