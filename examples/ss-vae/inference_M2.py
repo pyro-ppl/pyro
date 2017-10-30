@@ -1,7 +1,7 @@
-
 import torch
 from torch.autograd import Variable
 from data_cached import setup_data_loaders
+
 
 class SSVAEInfer(object):
     """
@@ -23,11 +23,11 @@ class SSVAEInfer(object):
 
         # how often would a supervised batch occur
         # e.g. if sup_perc is 5.0, we would have every 20th (=100/5) batch supervised
-        self.periodic_interval_batches = int(100/sup_perc)
+        self.periodic_interval_batches = int(100 / sup_perc)
         assert sup_perc < 1 or 100 % int(sup_perc) == 0, "only some percentage values " \
                                                          "allowed for simple batching"
 
-        self.classify=classify
+        self.classify = classify
         self.use_cuda = use_cuda
         self.logger = logger
         self.batch_size = batch_size
@@ -55,7 +55,6 @@ class SSVAEInfer(object):
         if self.logger is not None:
             self.logger.write("{}\n".format(msg))
 
-
     def run_inference_for_epoch(self):
         """
              runs the inference algorithm for an epoch
@@ -68,8 +67,8 @@ class SSVAEInfer(object):
         batches_per_epoch = len(self.train_loader_sup) + len(self.train_loader_unsup)
 
         # initialize variables to store loss values and batch counts
-        epoch_losses = [0.]*self.num_losses
-        batch_counts = [0] *self.num_losses
+        epoch_losses = [0.] * self.num_losses
+        batch_counts = [0] * self.num_losses
 
         # setup the iterators for training data loaders
         sup_iter = iter(self.train_loader_sup)
@@ -84,7 +83,7 @@ class SSVAEInfer(object):
                 (xs, ys) = next(sup_iter)
             else:
                 (xs, ys) = next(unsup_iter)
-            xs,ys = Variable(xs), Variable(ys)
+            xs, ys = Variable(xs), Variable(ys)
 
             # run the inference for each loss with supervised or un-supervised
             # data as arguments
@@ -109,25 +108,24 @@ class SSVAEInfer(object):
         # maintain training loss(es) across epochs
         self.loss_training = []
 
-        for i in range(0,num_epochs):
+        for i in range(0, num_epochs):
 
             # get the losses and batch counts for current epoch
             epoch_losses, batch_counts = self.run_inference_for_epoch()
 
             # compute average epoch loss based on number of batches
             # each loss was used for over the full data
-            avg_epoch_losses = [0.]*self.num_losses
+            avg_epoch_losses = [0.] * self.num_losses
             for loss_id in range(self.num_losses):
                 avg_epoch_losses[loss_id] = \
-                    epoch_losses[loss_id]/(1.0*batch_counts[loss_id]*self.batch_size)
+                    epoch_losses[loss_id] / (1.0 * batch_counts[loss_id] * self.batch_size)
 
             self.loss_training.append(avg_epoch_losses)
 
             # log the loss and training/testing accuracies
-            str_print = "{} epoch: avg losses {}".format(i," ".join(map(str,avg_epoch_losses)))
+            str_print = "{} epoch: avg losses {}".format(i, " ".join(map(str, avg_epoch_losses)))
             training_accuracy = self.get_accuracy(training=True)
             str_print += " training accuracy {}".format(training_accuracy)
-
 
             # This test accuracy is only for logging, this is not used
             # to make any decisions during training
@@ -142,12 +140,11 @@ class SSVAEInfer(object):
 
         self.print_and_log("best training accuracy {} corresponding testing accuracy {} "
                            "last testing accuracy {}".format(self.best_train_acc,
-                                                        self.corresponding_test_acc,
-                                                        self.get_accuracy(training=False)
-                                                        )
+                                                             self.corresponding_test_acc,
+                                                             self.get_accuracy(training=False))
                            )
 
-    def get_accuracy(self,training=True):
+    def get_accuracy(self, training=True):
         """
             compute the accuracy over the supervised training set or the testing set
         """
@@ -155,7 +152,7 @@ class SSVAEInfer(object):
         actuals = []
 
         # use classify function to compute all predictions for each batch
-        def process(xs,ys):
+        def process(xs, ys):
             xs, ys = Variable(xs), Variable(ys)
             predictions.append(self.classify(xs))
             actuals.append(ys)
@@ -163,10 +160,10 @@ class SSVAEInfer(object):
         # use the appropriate data loader
         if training:
             for (xs, ys) in self.train_loader_sup:
-                process(xs,ys)
+                process(xs, ys)
         else:
-            for (xs,ys) in self.test_loader:
-                process(xs,ys)
+            for (xs, ys) in self.test_loader:
+                process(xs, ys)
 
         # compute the number of accurate predictions
         accurate_preds = 0
@@ -176,7 +173,5 @@ class SSVAEInfer(object):
                 accurate_preds += (v.data[0] == 10)
 
         # calculate the accuracy between 0 and 1
-        accuracy =  accurate_preds * 1.0 / (len(predictions) * self.batch_size)
+        accuracy = (accurate_preds * 1.0) / (len(predictions) * self.batch_size)
         return accuracy
-
-

@@ -10,6 +10,7 @@ from pyro.optim import Adam
 from mlp import MLP, Exp, EpsilonScaledSigmoid, EpsilonScaledSoftmax
 import torch.nn as nn
 
+
 class SSVAE(nn.Module):
     """
         This class encapsulates the parameters and functions needed to train a
@@ -37,7 +38,7 @@ class SSVAE(nn.Module):
         :param logfile: filename for logging the outputs
     """
     def __init__(self, sup_perc=5.0, output_size=10, input_size=784,
-                 latent_layer=20, hidden_layers=(400,200), adam_params=None,
+                 latent_layer=20, hidden_layers=(400, 200), adam_params=None,
                  batch_size=100, epsilon_scale=1e-7, num_epochs=100,
                  use_cuda=False, enum_discrete=False, aux_loss=False,
                  aux_loss_multiplier=None, logfile=None):
@@ -70,7 +71,6 @@ class SSVAE(nn.Module):
         # setup the losses to be optimized during inference
         self.setup_losses()
 
-
     def model(self, xs, ys=None):
         """
         The model corresponds to the following generative process:
@@ -95,8 +95,7 @@ class SSVAE(nn.Module):
 
         # if the label y (which digit to write) is supervised, sample from the
         # constant prior, otherwise, observe the value (i.e. score it against the constant prior)
-        alpha_prior = Variable(torch.ones([self.batch_size, self.output_size])
-                               / (1.0 * self.output_size))
+        alpha_prior = Variable(torch.ones([self.batch_size, self.output_size]) / (1.0 * self.output_size))
         if ys is None:
             ys = pyro.sample("y", dist.categorical, alpha_prior)
         else:
@@ -108,9 +107,6 @@ class SSVAE(nn.Module):
         # where nn_mu_x is a neural network
         mu = self.nn_mu_x.forward([zs, ys])
         pyro.observe("x", dist.bernoulli, xs, mu)
-
-
-
 
     def guide(self, xs, ys=None):
         """
@@ -140,7 +136,7 @@ class SSVAE(nn.Module):
         mu, sigma = self.nn_mu_sigma_z.forward([xs, ys])
         zs = pyro.sample("z", dist.normal, mu, sigma)
 
-    def classify(self,xs):
+    def classify(self, xs):
         """
         this function is used to classify an image (or a batch of images)
 
@@ -159,7 +155,6 @@ class SSVAE(nn.Module):
         ys = Variable(torch.zeros(alpha.size()))
         ys = ys.scatter_(1, ind, 1.0)
         return ys
-
 
     def setup_networks(self):
 
@@ -185,9 +180,9 @@ class SSVAE(nn.Module):
         # to produce mu and sigma, and apply different activations [None,Exp] on them
         self.nn_mu_sigma_z = MLP([self.input_size + self.output_size] +
                                  hidden_sizes +
-                                 [[latent_size,latent_size]],
+                                 [[latent_size, latent_size]],
                                  activation=nn.ReLU,
-                                 output_activation=[None,Exp])
+                                 output_activation=[None, Exp])
 
         self.nn_mu_x = MLP([latent_size + self.output_size] +
                            hidden_sizes +
@@ -199,8 +194,6 @@ class SSVAE(nn.Module):
         # using GPUs for faster training of the networks
         if self.use_cuda:
             self.cuda()
-
-
 
     def model_classify(self, xs, ys):
         """
@@ -244,20 +237,19 @@ class SSVAE(nn.Module):
             self.losses.append(loss_aux)
             self.is_supervised_loss.append(True)
 
-
     def optimize(self):
         """
             this function runs the inference
         """
         try:
             # setup the logger if a filename is provided
-            logger= None if self.logfile is None else open(self.logfile,"w")
+            logger = None if self.logfile is None else open(self.logfile, "w")
 
             # setup the inference with appropriate data and losses
             inference = SSVAEInfer(MNIST, self.batch_size, self.losses, self.is_supervised_loss,
-                                   self.classify, sup_perc=self.sup_perc, use_cuda = self.use_cuda,
+                                   self.classify, sup_perc=self.sup_perc, use_cuda=self.use_cuda,
                                    logger=logger)
-            #run the inference
+            # run the inference
             inference.run(num_epochs=self.num_epochs)
         finally:
             # close the logger file object if opened
@@ -268,7 +260,7 @@ class SSVAE(nn.Module):
 def main(args):
     if args.use_cuda:
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
-    adam_params = {"lr": args.learning_rate, "betas": (args.beta_1,0.999)}
+    adam_params = {"lr": args.learning_rate, "betas": (args.beta_1, 0.999)}
     ss_vae = SSVAE(sup_perc=args.sup_perc, latent_layer=args.latent_layer,
                    hidden_layers=args.hidden_layers, adam_params=adam_params,
                    batch_size=args.batch_size, epsilon_scale=args.epsilon_scale,
@@ -285,15 +277,15 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="SS-VAE model inference\n{}".format(EXAMPLE_RUN))
 
-    parser.add_argument('-cuda','--use-cuda',action='store_true',
+    parser.add_argument('-cuda', '--use-cuda', action='store_true',
                         help="use GPU(s) to speed up training")
     parser.add_argument('-ne', '--num-epochs', default=100, type=int,
                         help="number of epochs to run")
     parser.add_argument('--aux-loss', action="store_true",
-                        help = "whether to use the auxiliary loss from NIPS 14 paper (Kingma et al)")
+                        help="whether to use the auxiliary loss from NIPS 14 paper (Kingma et al)")
     parser.add_argument('-alm', '--aux-loss-multiplier', default=0.1, type=float,
                         help="the multiplier to use with the auxiliary loss")
-    parser.add_argument('-enum','--enum-discrete', action="store_true",
+    parser.add_argument('-enum', '--enum-discrete', action="store_true",
                         help="whether to enumerate the discrete support of the categorical distribution"
                              "while computing the ELBO loss")
     parser.add_argument('-sup', '--sup-perc', default=5,
@@ -303,7 +295,7 @@ if __name__ == "__main__":
     parser.add_argument('-ll', '--latent-layer', default=20, type=int,
                         help="size of the tensor representing the latent random "
                              "variable (handwriting style for our MNIST dataset)")
-    parser.add_argument('-hl', '--hidden-layers', nargs= '+', default = [400,200], type=int,
+    parser.add_argument('-hl', '--hidden-layers', nargs='+', default=[400, 200], type=int,
                         help="a tuple (or list) of MLP layers to be used in the neural networks "
                              "representing the parameters of the distributions in our model")
     parser.add_argument('-lr', '--learning-rate', default=0.0001, type=float,

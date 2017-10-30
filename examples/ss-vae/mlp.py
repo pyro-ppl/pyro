@@ -2,6 +2,7 @@ import torch.nn as nn
 import torch
 from inspect import isclass
 
+
 def is_variable(val):
     """
         helper function to test if a tensor is an autograd.Variable
@@ -22,7 +23,7 @@ class EpsilonScaledSoftmax(nn.Softmax):
 
     def forward(self, val):
         rval = super(EpsilonScaledSoftmax, self).forward(val)
-        return (rval*(1.0-2*self.epsilon)) + self.epsilon
+        return (rval * (1.0 - 2 * self.epsilon)) + self.epsilon
 
 
 class EpsilonScaledSigmoid(nn.Sigmoid):
@@ -45,8 +46,10 @@ class Exp(nn.Module):
     """
     def __init__(self):
         super(Exp, self).__init__()
+
     def forward(self, val):
         return torch.exp(val)
+
 
 class ConcatModule(nn.Module):
     """
@@ -69,6 +72,7 @@ class ConcatModule(nn.Module):
         else:
             return torch.cat(input_args, dim=-1)
 
+
 class ListOutModule(nn.ModuleList):
     """
         a custom module for outputting a list of tensors from a list of nn modules
@@ -80,7 +84,8 @@ class ListOutModule(nn.ModuleList):
         # loop over modules in self, apply same args
         return [mm.forward(*args, **kwargs) for mm in self]
 
-def call_nn_op(op,epsilon):
+
+def call_nn_op(op, epsilon):
     """
         a helper function that adds appropriate parameters when calling
         an nn module representing an operation like Softmax
@@ -92,17 +97,18 @@ def call_nn_op(op,epsilon):
         return op(epsilon, dim=1)
     elif op in [EpsilonScaledSigmoid]:
         return op(epsilon)
-    elif op in [nn.Softmax,nn.LogSoftmax]:
+    elif op in [nn.Softmax, nn.LogSoftmax]:
         return op(dim=1)
     else:
         return op()
 
+
 class MLP(nn.Module):
 
     def __init__(self, mlp_sizes, activation=nn.ReLU, output_activation=None,
-                    post_layer_fct=lambda layer_ix, total_layers, layer: None,
-                    post_act_fct=lambda layer_ix, total_layers, layer: None,
-                    epsilon_scale=None):
+                 post_layer_fct=lambda layer_ix, total_layers, layer: None,
+                 post_act_fct=lambda layer_ix, total_layers, layer: None,
+                 epsilon_scale=None):
         # init the module object
         super(MLP, self).__init__()
 
@@ -112,7 +118,7 @@ class MLP(nn.Module):
         input_size, hidden_sizes, output_size = mlp_sizes[0], mlp_sizes[1:-1], mlp_sizes[-1]
 
         # assume int or list
-        assert isinstance(input_size, (int,list,tuple)), "input_size must be int, list, tuple"
+        assert isinstance(input_size, (int, list, tuple)), "input_size must be int, list, tuple"
 
         # everything in MLP will be concatted if it's multiple arguments
         last_layer_size = input_size if type(input_size) == int else sum(input_size)
@@ -135,22 +141,22 @@ class MLP(nn.Module):
             all_modules.append(cur_linear_layer)
 
             # handle post_linear
-            post_linear = post_layer_fct(layer_ix+1, len(hidden_sizes), all_modules[-1])
+            post_linear = post_layer_fct(layer_ix + 1, len(hidden_sizes), all_modules[-1])
 
             # if we send something back, add it to sequential
             # here we could return a batch norm for example
-            if not post_linear is None:
+            if post_linear is not None:
                 all_modules.append(post_linear)
 
             # handle activation (assumed no params -- deal with that later)
             all_modules.append(activation())
 
             # now handle after activation
-            post_activation = post_act_fct(layer_ix+1, len(hidden_sizes), all_modules[-1])
+            post_activation = post_act_fct(layer_ix + 1, len(hidden_sizes), all_modules[-1])
 
             # handle post_activation if not null
             # could add batch norm for example
-            if not post_activation is None:
+            if post_activation is not None:
                 all_modules.append(post_activation)
 
             # save the layer size we just created
@@ -158,7 +164,7 @@ class MLP(nn.Module):
 
         # now we have all of our hidden layers
         # we handle outputs
-        assert isinstance(output_size, (int,list,tuple)), "output_size must be int, list, tuple"
+        assert isinstance(output_size, (int, list, tuple)), "output_size must be int, list, tuple"
 
         if type(output_size) == int:
             all_modules.append(nn.Linear(last_layer_size, output_size))
@@ -180,7 +186,8 @@ class MLP(nn.Module):
                 split_layer.append(nn.Linear(last_layer_size, out_size))
 
                 # then we get our output activation (either we repeat all or we index into a same sized array)
-                act_out_fct = output_activation if not isinstance(output_activation, (list, tuple)) else output_activation[out_ix]
+                act_out_fct = output_activation if not isinstance(output_activation, (list, tuple)) \
+                    else output_activation[out_ix]
 
                 if(act_out_fct):
                     # we check if it's a class. if so, instantiate the object

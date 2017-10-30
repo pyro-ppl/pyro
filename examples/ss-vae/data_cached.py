@@ -1,6 +1,3 @@
-
-
-
 import torch
 from torchvision.datasets import MNIST
 import numpy as np
@@ -9,13 +6,13 @@ from torch.utils.data import DataLoader
 
 
 # transformations for MNIST data
-def fn_x_MNIST(x, use_cuda):
+def fn_x_mnist(x, use_cuda):
     # normalize pixel values of the image to be in [0,1] instead of [0,255]
-    xp = x*(1./255.)
+    xp = x * (1. / 255)
 
     # transform x to a linear tensor from bx * a1 * a2 * ... --> bs * A
     xp_1d_size = reduce(lambda a, b: a * b, xp.size()[1:])
-    xp = xp.view(-1,xp_1d_size)
+    xp = xp.view(-1, xp_1d_size)
 
     # send the data to GPU(s)
     if use_cuda:
@@ -23,8 +20,9 @@ def fn_x_MNIST(x, use_cuda):
 
     return xp
 
-def fn_y_MNIST(y, use_cuda):
-    yp = torch.zeros(y.size(0),10)
+
+def fn_y_mnist(y, use_cuda):
+    yp = torch.zeros(y.size(0), 10)
 
     # send the data to GPU(s)
     if use_cuda:
@@ -34,6 +32,7 @@ def fn_y_MNIST(y, use_cuda):
     # transform the label y (integer between 0 and 9) to a one-hot
     yp = yp.scatter_(1, y.view(-1, 1), 1.0)
     return yp
+
 
 def split_sup_unsup(X, y, sup_perc):
     """
@@ -47,25 +46,29 @@ def split_sup_unsup(X, y, sup_perc):
     n = X.size()[0]
 
     # number of supervised examples
-    sup_n = int(n*sup_perc/100.0)
+    sup_n = int(n * sup_perc / 100.0)
 
     return X[0:sup_n], y[0:sup_n], X[sup_n:n], y[sup_n:n],
+
 
 class MNISTCached(MNIST):
     """
         a wrapper around MNIST to load and cache the transformed data
         once at the beginning of the inference
     """
-    def __init__(self,train="sup", sup_perc=5.0, use_cuda=True, *args,**kwargs):
-        super(MNISTCached, self).__init__(train=train in ["sup","unsup"],*args,**kwargs)
+    def __init__(self, train="sup", sup_perc=5.0, use_cuda=True, *args, **kwargs):
+        super(MNISTCached, self).__init__(train=train in ["sup", "unsup"], *args, **kwargs)
 
-        #transformations on MNIST data (normalization and one-hot conversion for labels)
-        transform = lambda x: fn_x_MNIST(x,use_cuda)
-        target_transform = lambda y: fn_y_MNIST(y,use_cuda)
+        # transformations on MNIST data (normalization and one-hot conversion for labels)
+        def transform(x):
+            return fn_x_mnist(x, use_cuda)
 
-        assert train in ["sup","unsup","test"], "invalid train/test option values"
+        def target_transform(y):
+            return fn_y_mnist(y, use_cuda)
 
-        if train in ["sup","unsup"]:
+        assert train in ["sup", "unsup", "test"], "invalid train/test option values"
+
+        if train in ["sup", "unsup"]:
 
             # transform the training data if transformations are provided
             if transform is not None:
@@ -74,14 +77,14 @@ class MNISTCached(MNIST):
                 self.train_labels = (target_transform(self.train_labels))
 
             train_data_sup, train_labels_sup, train_data_unsup, train_labels_unsup = \
-                split_sup_unsup(self.train_data,self.train_labels,sup_perc)
+                split_sup_unsup(self.train_data, self.train_labels, sup_perc)
             if train == "sup":
-                self.train_data, self.train_labels =  train_data_sup, train_labels_sup
+                self.train_data, self.train_labels = train_data_sup, train_labels_sup
             else:
                 self.train_data = train_data_unsup
 
                 # making sure that the unsupervised labels are not available to inference
-                self.train_labels = (torch.Tensor(train_labels_unsup.shape[0]).view(-1,1))*np.nan
+                self.train_labels = (torch.Tensor(train_labels_unsup.shape[0]).view(-1, 1)) * np.nan
 
         else:
             # transform the testing data if transformations are provided
@@ -104,7 +107,6 @@ class MNISTCached(MNIST):
             img, target = self.test_data[index], self.test_labels[index]
 
         return img, target
-
 
 
 def setup_data_loaders(dataset, use_cuda, batch_size, sup_perc, root='./data', download=True, **kwargs):
@@ -134,7 +136,7 @@ def setup_data_loaders(dataset, use_cuda, batch_size, sup_perc, root='./data', d
         kwargs = {'num_workers': 0, 'pin_memory': False}
 
     # setup the data loaders
-    train_loader_sup = DataLoader(train_set_sup,batch_size=batch_size, shuffle=True, **kwargs)
+    train_loader_sup = DataLoader(train_set_sup, batch_size=batch_size, shuffle=True, **kwargs)
     train_loader_unsup = DataLoader(train_set_unsup, batch_size=batch_size, shuffle=True, **kwargs)
 
     test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False, **kwargs)
