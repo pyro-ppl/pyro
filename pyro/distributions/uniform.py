@@ -6,19 +6,15 @@ from pyro.distributions.distribution import Distribution
 
 class Uniform(Distribution):
     """
-    :param a: lower bound *(real)*
-    :param b: upper bound (>a) *(real)*
+    Uniform distribution over continuous interval `[a, b]`.
 
-    Continuous uniform distribution over ``[a, b]``
+    :param torch.autograd.Variable a: lower bound (real).
+    :param torch.autograd.Variable b: upper bound (real).
+        Should be greater than `a`.
     """
     reparameterized = False  # XXX Why is this marked non-differentiable?
 
     def __init__(self, a, b, batch_size=None, *args, **kwargs):
-        """
-        Params:
-          `a` - low bound
-          `b` -  high bound
-        """
         if a.size() != b.size():
             raise ValueError("Expected a.size() == b.size(), but got {} vs {}"
                              .format(a.size(), b.size()))
@@ -44,9 +40,6 @@ class Uniform(Distribution):
         return self.batch_shape(x) + self.event_shape()
 
     def sample(self):
-        """
-        Reparameterized Uniform sampler.
-        """
         eps = Variable(torch.rand(self.a.size()).type_as(self.a.data))
         return self.a + torch.mul(eps, self.b - self.a)
 
