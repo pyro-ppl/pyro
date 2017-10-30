@@ -1,20 +1,24 @@
-from pdb import set_trace as bb
 import torch.nn as nn
 import torch
 from inspect import isclass
-from os.path import splitext, exists, join
-from torch.autograd import Variable
-
 
 def is_variable(val):
+    """
+        helper function to test if a tensor is an autograd.Variable
+    """
     if hasattr(val, "data"):
         return torch.is_tensor(val.data)
     return False
 
+
 class EpsilonScaledSoftmax(nn.Softmax):
-    def __init__(self, epsilon, dim=1):
+    """
+        a wrapper around nn.Softmax that scales its output
+        from [0,1] to [epsilon,1-epsilon]
+    """
+    def __init__(self, epsilon, *args, **kwargs):
         self.epsilon = epsilon
-        super(EpsilonScaledSoftmax, self).__init__(dim=dim)
+        super(EpsilonScaledSoftmax, self).__init__(*args, **kwargs)
 
     def forward(self, val):
         rval = super(EpsilonScaledSoftmax, self).forward(val)
@@ -22,9 +26,13 @@ class EpsilonScaledSoftmax(nn.Softmax):
 
 
 class EpsilonScaledSigmoid(nn.Sigmoid):
-    def __init__(self, epsilon):
+    """
+        a wrapper around nn.Sigmoid that scales its output
+        from [0,1] to [epsilon,1-epsilon]
+    """
+    def __init__(self, epsilon, *args, **kwargs):
         self.epsilon = epsilon
-        super(EpsilonScaledSigmoid, self).__init__()
+        super(EpsilonScaledSigmoid, self).__init__(*args, **kwargs)
 
     def forward(self, val):
         rval = super(EpsilonScaledSigmoid, self).forward(val)
@@ -32,12 +40,18 @@ class EpsilonScaledSigmoid(nn.Sigmoid):
 
 
 class Exp(nn.Module):
+    """
+        a custom module for exponentiation of tensors
+    """
     def __init__(self):
         super(Exp, self).__init__()
     def forward(self, val):
         return torch.exp(val)
 
 class ConcatModule(nn.Module):
+    """
+        a custom module for concatenation of tensors
+    """
     def __init__(self):
         super(ConcatModule, self).__init__()
 
@@ -56,6 +70,9 @@ class ConcatModule(nn.Module):
             return torch.cat(input_args, dim=-1)
 
 class ListOutModule(nn.ModuleList):
+    """
+        a custom module for outputting a list of tensors from a list of nn modules
+    """
     def __init__(self, modules):
         super(ListOutModule, self).__init__(modules)
 
@@ -64,6 +81,13 @@ class ListOutModule(nn.ModuleList):
         return [mm.forward(*args, **kwargs) for mm in self]
 
 def call_nn_op(op,epsilon):
+    """
+        a helper function that adds appropriate parameters when calling
+        an nn module representing an operation like Softmax
+    :param op: the nn.Module operation to instantiate
+    :param epsilon: a scaling parameter for certain custom modules
+    :return: instantiation of the op module with appropriate parameters
+    """
     if op in [EpsilonScaledSoftmax]:
         return op(epsilon, dim=1)
     elif op in [EpsilonScaledSigmoid]:
@@ -78,8 +102,7 @@ class MLP(nn.Module):
     def __init__(self, mlp_sizes, activation=nn.ReLU, output_activation=None,
                     post_layer_fct=lambda layer_ix, total_layers, layer: None,
                     post_act_fct=lambda layer_ix, total_layers, layer: None,
-                    epsilon_scale=None
-                    ):
+                    epsilon_scale=None):
         # init the module object
         super(MLP, self).__init__()
 
@@ -136,6 +159,7 @@ class MLP(nn.Module):
         # now we have all of our hidden layers
         # we handle outputs
         assert isinstance(output_size, (int,list,tuple)), "output_size must be int, list, tuple"
+
         if type(output_size) == int:
             all_modules.append(nn.Linear(last_layer_size, output_size))
             if output_activation is not None:
@@ -176,15 +200,3 @@ class MLP(nn.Module):
     # pass through our sequential for the output!
     def forward(self, *args, **kwargs):
         return self.sequential_mlp.forward(*args, **kwargs)
-
-    def sum_params(self):
-        def sum_param_values(a,b):
-            if torch.is_tensor(a) or isinstance(a,Variable):
-                a = a.data[0]
-            if torch.is_tensor(b) or isinstance(b,Variable):
-                b = b.data[0]
-            assert isinstance(a,float) and isinstance(b,float)
-            return a + b
-        result = reduce(sum_param_values, map(torch.sum, self.parameters()), 0.0)
-        assert isinstance(result,float)
-        return result
