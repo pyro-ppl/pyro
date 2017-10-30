@@ -3,8 +3,8 @@ import pytest
 import scipy.stats as sp
 
 import pyro.distributions as dist
-from pyro.distributions import Uniform, Bernoulli, Exponential, Gamma, Beta, Normal, LogNormal, \
-    Dirichlet, Cauchy, Poisson, Categorical, HalfCauchy, Multinomial
+from pyro.distributions import (Bernoulli, Beta, Categorical, Cauchy, Dirichlet, Exponential, Gamma, HalfCauchy,
+                                LogNormal, Multinomial, Normal, Poisson, Uniform)
 from tests.distributions.dist_fixture import Fixture
 
 continuous_dists = [

@@ -1,6 +1,6 @@
 import pytest
 
-from tests.common import assert_equal, tensors_default_to, requires_cuda, xfail_if_not_implemented
+from tests.common import assert_equal, requires_cuda, tensors_default_to, xfail_if_not_implemented
 
 
 @requires_cuda

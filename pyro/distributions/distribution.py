@@ -1,7 +1,7 @@
-from six import add_metaclass
 from abc import ABCMeta, abstractmethod
 
 import torch
+from six import add_metaclass
 
 
 @add_metaclass(ABCMeta)

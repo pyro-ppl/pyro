@@ -5,9 +5,8 @@ import torch
 
 import pyro
 import pyro.poutine as poutine
-from pyro.util import ng_zeros, detach_iterable
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_site_names
+from pyro.util import check_site_names, detach_iterable, ng_zeros
 
 
 class TraceGraph_ELBO(object):

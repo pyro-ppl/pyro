@@ -1,13 +1,13 @@
 from __future__ import print_function
 
+import pytest
 import torch
 from torch.autograd import Variable
-import pytest
 
 import pyro
 import pyro.distributions as dist
-import pyro.poutine as poutine
 import pyro.optim as optim
+import pyro.poutine as poutine
 from pyro.infer import SVI
 from tests.common import assert_equal, requires_cuda
 

@@ -12,7 +12,7 @@ from pyro.infer import SVI
 from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.trace_elbo import Trace_ELBO
 from pyro.infer.tracegraph_elbo import TraceGraph_ELBO
-from tests.common import assert_equal, xfail_if_not_implemented, segfaults_on_pytorch_020
+from tests.common import assert_equal, segfaults_on_pytorch_020, xfail_if_not_implemented
 
 
 @pytest.mark.parametrize("graph_type", ["flat", "dense"])

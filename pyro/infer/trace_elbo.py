@@ -2,8 +2,8 @@ import numbers
 
 import pyro
 import pyro.poutine as poutine
-from pyro.infer.enum import iter_discrete_traces
 from pyro.distributions.util import torch_zeros_like
+from pyro.infer.enum import iter_discrete_traces
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_site_names
 
