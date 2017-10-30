@@ -6,17 +6,20 @@ from pyro.distributions.distribution import Distribution
 
 class Bernoulli(Distribution):
     """
-    :param ps: probabilities *(vector [0, 1])*
+    Bernoulli distribution.
 
     Distribution over a vector of independent Bernoulli variables. Each element
-    of the vector takes on a value in ``{0, 1}``.
+    of the vector takes on a value in `{0, 1}`.
+
+    This is often used in conjunction with `torch.nn.Sigmoid` to ensure the
+    `ps` parameters are in the interval `[0, 1]`.
+
+    :param torch.autograd.Variable ps: Probabilities. Should lie in the
+        interval `[0,1]`.
     """
     enumerable = True
 
     def __init__(self, ps, batch_size=None, log_pdf_mask=None, *args, **kwargs):
-        """
-        :param ps: tensor of probabilities
-        """
         self.ps = ps
         self.log_pdf_mask = log_pdf_mask
         if ps.dim() == 1 and batch_size is not None:
