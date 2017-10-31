@@ -13,6 +13,7 @@ class TestDelta(TestCase):
         self.test_data = Variable(torch.Tensor([3, 3, 3]))
         self.batch_test_data_1 = Variable(torch.arange(0, 4).unsqueeze(1).expand(4, 3))
         self.batch_test_data_2 = Variable(torch.arange(4, 8).unsqueeze(1).expand(4, 3))
+        self.batch_test_data_3 = Variable(torch.Tensor([[3], [3], [3], [3]]))
         self.expected_support = [[0], [1], [2], [3]]
         self.expected_support_non_vec = [3]
         self.analytic_mean = 3
@@ -28,6 +29,10 @@ class TestDelta(TestCase):
         self.assertEqual(torch.sum(log_px_torch), 0)
         log_px_torch = dist.delta.batch_log_pdf(self.batch_test_data_2, self.vs).data
         self.assertEqual(torch.sum(log_px_torch), float('-inf'))
+
+    def test_batch_log_pdf_shape(self):
+        assert dist.delta.batch_log_pdf(self.batch_test_data_3, self.vs).size() == (4, 1)
+        assert dist.delta.batch_log_pdf(self.batch_test_data_3, self.v).size() == (4, 1)
 
     def test_mean_and_var(self):
         torch_samples = [dist.delta(self.v).data.cpu().numpy()

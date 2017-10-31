@@ -28,8 +28,16 @@ class Uniform(Distribution):
     def batch_shape(self, x=None):
         event_dim = 1
         a = self.a
-        if x is not None and x.size() != a.size():
-            a = self.a.expand_as(x)
+        if x is not None:
+            if x.size()[-event_dim] != a.size()[-event_dim]:
+                raise ValueError("The event size for the data and distribution parameters must match.\n"
+                                 "Expected x.size()[-1] == self.a.size()[-1], but got {} vs {}"
+                                 .format(x.size(-1), a.size(-1)))
+            try:
+                a = self.a.expand_as(x)
+            except RuntimeError as e:
+                raise ValueError("Parameter `a` with shape {} is not broadcastable to "
+                                 "the data shape {}. \nError: {}".format(a.size(), x.size(), str(e)))
         return a.size()[:-event_dim]
 
     def event_shape(self):
