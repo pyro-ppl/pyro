@@ -359,7 +359,7 @@ if __name__ == "__main__":
 
     parser.add_argument('-cuda', '--use-cuda', action='store_true',
                         help="use GPU(s) to speed up training")
-    parser.add_argument('-ne', '--num-epochs', default=100, type=int,
+    parser.add_argument('-ne', '--num-epochs', default=1, type=int,
                         help="number of epochs to run")
     parser.add_argument('--aux-loss', action="store_true",
                         help="whether to use the auxiliary loss from NIPS 14 paper (Kingma et al)")
@@ -368,7 +368,7 @@ if __name__ == "__main__":
     parser.add_argument('-enum', '--enum-discrete', action="store_true",
                         help="whether to enumerate the discrete support of the categorical distribution"
                              "while computing the ELBO loss")
-    parser.add_argument('-sup', '--sup-num', required=True,
+    parser.add_argument('-sup', '--sup-num', default=3000,
                         type=float, choices=[100, 600, 1000, 3000],
                         help="supervised amount of the data i.e. "
                              "how many of the images have supervised labels")
