@@ -1,129 +1,148 @@
-import pyro
+import collections
+
+import networkx
 
 
-def get_parents(node, trace):
-    """
-    Get the parents of a node in a trace
-    TODO docs
-    """
-    raise NotImplementedError("not implemented yet")
-
-
-class Trace(dict):
+class Trace(networkx.DiGraph):
     """
     Execution trace data structure
     """
-    def add_sample(self, name, scale, val, fn, *args, **kwargs):
-        """
-        Sample site
-        """
-        assert name not in self, "sample {} already in trace".format(name)
-        site = {}
-        site["type"] = "sample"
-        site["value"] = val
-        site["fn"] = fn
-        site["args"] = (args, kwargs)
-        site["scale"] = scale
-        self[name] = site
-        return self
 
-    def add_observe(self, name, scale, val, fn, obs, *args, **kwargs):
-        """
-        Observe site
-        """
-        assert name not in self, "observe {} already in trace".format(name)
-        site = {}
-        site["type"] = "observe"
-        site["value"] = val
-        site["fn"] = fn
-        site["obs"] = obs
-        site["args"] = (args, kwargs)
-        site["scale"] = scale
-        self[name] = site
-        return self
+    node_dict_factory = collections.OrderedDict
 
-    def add_map_data(self, name, fn, batch_size, scale, ind):
+    def __init__(self, *args, **kwargs):
         """
-        map_data site
-        """
-        assert name not in self, "map_data {} already in trace".format(name)
-        site = {}
-        site["type"] = "map_data"
-        site["indices"] = ind
-        site["batch_size"] = batch_size
-        site["scale"] = scale
-        site["fn"] = fn
-        self[name] = site
-        return self
+        :param string graph_type: string specifying the kind of trace graph to construct
 
-    def add_param(self, name, val, *args, **kwargs):
+        Constructor. Currently identical to networkx.``DiGraph(\*args, \**kwargs)``,
+        except for storing the graph_type attribute
         """
-        param site
-        """
-        site = {}
-        site["type"] = "param"
-        site["value"] = val
-        site["args"] = (args, kwargs)
-        self[name] = site
-        return self
+        graph_type = kwargs.pop("graph_type", "flat")
+        assert graph_type in ("flat", "dense"), \
+            "{} not a valid graph type".format(graph_type)
+        self.graph_type = graph_type
+        super(Trace, self).__init__(*args, **kwargs)
 
-    def add_args(self, args_and_kwargs):
+    def add_node(self, site_name, *args, **kwargs):
         """
-        input arguments site
-        """
-        name = "_INPUT"
-        assert name not in self, "_INPUT already in trace"
-        site = {}
-        site["type"] = "args"
-        site["args"] = args_and_kwargs
-        self[name] = site
-        return self
+        :param string site_name: the name of the site to be added
 
-    def add_return(self, val, *args, **kwargs):
+        Adds a site to the trace.
+
+        Identical to super(Trace, self).add_node,
+        but raises an error when attempting to add a duplicate node
+        instead of silently overwriting.
         """
-        return value site
-        """
-        name = "_RETURN"
-        assert name not in self, "_RETURN already in trace"
-        site = {}
-        site["type"] = "return"
-        site["value"] = val
-        self[name] = site
-        return self
+        # XXX should do more validation than this
+        if kwargs["type"] != "param":
+            assert site_name not in self, \
+                "site {} already in trace".format(site_name)
+
+        # XXX should copy in case site gets mutated, or dont bother?
+        super(Trace, self).add_node(site_name, *args, **kwargs.copy())
 
     def copy(self):
         """
-        Make a copy (for dynamic programming)
+        Makes a shallow copy of self with nodes and edges preserved.
+        Identical to super(Trace, self).copy(), but preserves the type
+        and the self.graph_type attribute
         """
-        return Trace(self)
+        return Trace(super(Trace, self).copy(), graph_type=self.graph_type)
 
-    def log_pdf(self):
+    def log_pdf(self, site_filter=lambda name, site: True):
         """
-        Compute the local and overall log-probabilities of the trace
+        Compute the local and overall log-probabilities of the trace.
+
+        The local computation is memoized.
+
+        :returns: total log probability.
+        :rtype: torch.autograd.Variable
         """
         log_p = 0.0
-        for name in self.keys():
-            if self[name]["type"] in ("observe", "sample"):
-                self[name]["log_pdf"] = self[name]["fn"].log_pdf(
-                    self[name]["value"],
-                    *self[name]["args"][0],
-                    **self[name]["args"][1]) * self[name]["scale"]
-                log_p += self[name]["log_pdf"]
-                # if self[name]["scale"] == 1.0:
-                #     print(name, self[name]["scale"])
-                #     pdb.set_trace()
+        for name, site in self.nodes.items():
+            if site["type"] == "sample" and site_filter(name, site):
+                try:
+                    site_log_p = site["log_pdf"]
+                except KeyError:
+                    args, kwargs = site["args"], site["kwargs"]
+                    site_log_p = site["fn"].log_pdf(
+                        site["value"], *args, **kwargs) * site["scale"]
+                    site["log_pdf"] = site_log_p
+                log_p += site_log_p
         return log_p
 
-    def batch_log_pdf(self):
+    # XXX This only makes sense when all tensors have compatible shape.
+    def batch_log_pdf(self, site_filter=lambda name, site: True):
         """
-        Compute the local and overall log-probabilities of the trace
+        Compute the batched local and overall log-probabilities of the trace.
+
+        The local computation is memoized, and also stores the local `.log_pdf()`.
         """
         log_p = 0.0
-        for name in self.keys():
-            if self[name]["type"] in ("observe", "sample"):
-                self[name]["batch_log_pdf"] = self[name]["fn"].batch_log_pdf(
-                    self[name]["value"],
-                    *self[name]["args"][0],
-                    **self[name]["args"][1]) * self[name]["scale"]
-                log_p += self[name]["batch_log_pdf"]
+        for name, site in self.nodes.items():
+            if site["type"] == "sample" and site_filter(name, site):
+                try:
+                    site_log_p = site["batch_log_pdf"]
+                except KeyError:
+                    args, kwargs = site["args"], site["kwargs"]
+                    site_log_p = site["fn"].batch_log_pdf(
+                        site["value"], *args, **kwargs) * site["scale"]
+                    site["batch_log_pdf"] = site_log_p
+                    site["log_pdf"] = site_log_p.sum()
+                # Here log_p may be broadcast to a larger tensor:
+                log_p = log_p + site_log_p
         return log_p
+
+    def compute_batch_log_pdf(self, site_filter=lambda name, site: True):
+        """
+        Compute the batched local log-probabilities at each site of the trace.
+
+        The local computation is memoized, and also stores the local `.log_pdf()`.
+        """
+        for name, site in self.nodes.items():
+            if site["type"] == "sample" and site_filter(name, site):
+                try:
+                    site["batch_log_pdf"]
+                except KeyError:
+                    args, kwargs = site["args"], site["kwargs"]
+                    site_log_p = site["fn"].batch_log_pdf(
+                        site["value"], *args, **kwargs) * site["scale"]
+                    site["batch_log_pdf"] = site_log_p
+                    site["log_pdf"] = site_log_p.sum()
+
+    @property
+    def observation_nodes(self):
+        """
+        Gets a list of names of observe sites
+        """
+        return [name for name, node in self.nodes.items()
+                if node["type"] == "sample" and
+                node["is_observed"]]
+
+    @property
+    def stochastic_nodes(self):
+        """
+        Gets a list of names of sample sites
+        """
+        return [name for name, node in self.nodes.items()
+                if node["type"] == "sample" and
+                not node["is_observed"]]
+
+    @property
+    def reparameterized_nodes(self):
+        """
+        Gets a list of names of sample sites whose stochastic functions
+        are reparameterizable primitive distributions
+        """
+        return [name for name, node in self.nodes.items()
+                if node["type"] == "sample" and
+                not node["is_observed"] and
+                getattr(node["fn"], "reparameterized", False)]
+
+    @property
+    def nonreparam_stochastic_nodes(self):
+        """
+        Gets a list of names of sample sites whose stochastic functions
+        are not reparameterizable primitive distributions
+        """
+        return list(set(self.stochastic_nodes) - set(self.reparameterized_nodes))

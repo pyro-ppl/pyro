@@ -1,35 +1,50 @@
-from __future__ import print_function
-
-import torch
 import os
 import sys
-import subprocess
-from os.path import isfile, join
-import signal
-from subprocess import Popen, PIPE, STDOUT
+from collections import OrderedDict
+from subprocess import check_call
 
-from tests.common import TestCase
+import pytest
+
+from tests.common import EXAMPLES_DIR, requires_cuda
+
+CPU_EXAMPLES = OrderedDict()
+CUDA_EXAMPLES = OrderedDict()
 
 
-class runExample(TestCase):
-    def setUp(self):
-        self.PATH = 'examples/'
-        self.examples = [f for f in os.listdir(self.PATH) if isfile(join(self.PATH, f))]
-        # remove __init___.py
-        self.examples.pop(0)
-        self.num_epochs = 1
-
-    def test(self):
-        print('')
-        for example in self.examples:
-            print('running example ' + example + ' ... ', end='')
-            sys.stdout.flush()  # need to manually do this in Python 2.7
-            cmd = 'python ' + self.PATH + example + ' -n ' + str(self.num_epochs)
-            p = Popen(cmd, shell=True, stdin=PIPE,
-                      stdout=PIPE, stderr=STDOUT, close_fds=True)
-            output = p.stdout.read()
-            if p.wait() == 0:
-                print('ok')
+def discover_examples():
+    for root, dirs, files in os.walk(EXAMPLES_DIR):
+        for basename in files:
+            if not basename.endswith('.py'):
+                continue
+            path = os.path.join(root, basename)
+            with open(path) as f:
+                text = f.read()
+            if '--num-epochs' in text:
+                args = ['--num-epochs=1']
+            elif '--num-steps' in text:
+                args = ['--num-steps=1']
             else:
-                self.fail(example + ' threw an Error. Stack trace below:\n' + str(output))
-        self.assertTrue(True)
+                # Either this is not a main file, or we don't know how to run it cheaply.
+                continue
+            example = os.path.relpath(path, EXAMPLES_DIR)
+            CPU_EXAMPLES[example] = args
+            if '--cuda' in text:
+                CUDA_EXAMPLES[example] = [args] + ['--cuda']
+
+
+discover_examples()
+
+
+@pytest.mark.stage("test_examples")
+@pytest.mark.parametrize('example,args', CPU_EXAMPLES.items(), ids=list(CPU_EXAMPLES))
+def test_cpu(example, args):
+    example = os.path.join(EXAMPLES_DIR, example)
+    check_call([sys.executable, example] + args)
+
+
+@requires_cuda
+@pytest.mark.stage("test_examples")
+@pytest.mark.parametrize('example,args', CUDA_EXAMPLES.items(), ids=list(CUDA_EXAMPLES))
+def test_cuda(example, args):
+    example = os.path.join(EXAMPLES_DIR, example)
+    check_call([sys.executable, example] + args)

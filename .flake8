@@ -1,4 +1,0 @@
-[flake8]
-max-line-length = 120
-ignore = E305,E402,F401,F403,F405,F841,F999,W292
-exclude = docs/src, examples/

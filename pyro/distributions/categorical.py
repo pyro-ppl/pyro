@@ -1,150 +1,186 @@
+import numpy as np
 import torch
 from torch.autograd import Variable
+
 from pyro.distributions.distribution import Distribution
-import itertools
-import numpy as np
-from pyro.util import to_one_hot
+from pyro.distributions.util import torch_eye, torch_multinomial, torch_zeros_like
 
 
 class Categorical(Distribution):
     """
-    :param ps: probabilities (can be unnormalized) *(vector or real array [0,
-               Infinity))*
-    :param vs: support *(any numpy array, Variable, or list)*
-    :param one_hot: if ``True``, ``sample()`` returns a one_hot sample. ``True`` by default.
+    Categorical (discrete) distribution.
 
-    Discrete distribution over elements of ``vs`` with ``P(vs[i])`` proportional to
-    ``ps[i]``.  If ``one_hot=True``, ``sample`` returns a one-hot vector.
-    Else, ``sample`` returns the category selected.
+    Discrete distribution over elements of `vs` with `P(vs[i])` proportional to
+    `ps[i]`.  If `one_hot=True`, `.sample()` returns a one-hot vector;
+    otherwise `.sample()` returns the category index.
+
+    This is often used in conjunction with `torch.nn.Softmax` to ensure
+    probabilites `ps` are normalized.
+
+    :param ps: Probabilities. These should be nonnegative and normalized
+        along the rightmost axis.
+    :type ps: `torch.autograd.Variable` of `torch.Tensor` of reals.
+    :param vs: Optional list of values in the support.
+    :type vs: `list` or `numpy.array` or `torch.autograd.Variable`
+    :param one_hot: Whether `sample()` returns a `one_hot` sample.  Defaults
+        to `False` if `vs` is specified or `True` if `vs` is not specified.
+    :param int batch_size: Optional number of elements in the batch used to
+        generate a sample. The batch dimension will be the leftmost dimension
+        in the generated sample.
     """
+    enumerable = True
 
-    def _sanitize_input(self, ps, vs, one_hot):
-        if ps is not None:
-            # stateless distribution
-            return ps, vs, one_hot
-        elif self.ps is not None:
-            # stateful distribution
-            return self.ps, self.vs, self.one_hot
-        else:
-            raise ValueError("Parameter(s) were None")
+    def _process_data(self, x):
+        if x is not None:
+            if isinstance(x, list):
+                x = np.array(x)
+            elif not isinstance(x, (Variable, torch.Tensor, np.ndarray)):
+                raise TypeError(("Data should be of type: list, Variable, Tensor, or numpy array"
+                                 "but was of {}".format(str(type(x)))))
+        return x
 
-    def _process_v(self, vs):
-        if vs is not None:
-            if isinstance(vs, tuple):
-                # recursively turn tuples into lists
-                vs = [list(x) for x in vs]
-            if isinstance(vs, list):
-                vs = np.array(vs)
-            elif not isinstance(vs, (Variable, torch.Tensor, np.ndarray)):
-                raise TypeError(("vs should be of type: list, Variable, Tensor, tuple, or numpy array"
-                                 "but was of {}".format(str(type(vs)))))
-        return vs
-
-    def _process_p(self, ps, vs, batch_size=1):
-        if ps is not None:
-            if ps.dim() == 1:
-                ps = ps.unsqueeze(0)
-                if isinstance(vs, Variable):
-                    vs = vs.unsqueeze(0)
-            elif batch_size > 1:
-                ps = ps.expand(batch_size, ps.size(0))
-                if isinstance(vs, Variable):
-                    vs = vs.expand(batch_size, vs.size(0))
-        return ps, vs
-
-    def __init__(self, ps=None, vs=None, one_hot=True, batch_size=1, *args, **kwargs):
-        """
-        Instantiates a discrete distribution.
-        Params:
-          vs - tuple, list, numpy array, Variable, or torch tensor of values
-          ps - torch tensor of probabilities (must be same size as `vs`)
-          one_hot - return one-hot samples (when `vs` is None)
-          batch_size - expand ps and vs by a batch dimension
-        """
+    def __init__(self, ps, vs=None, one_hot=True, batch_size=None, log_pdf_mask=None, *args, **kwargs):
         self.ps = ps
         # vs is None, Variable(Tensor), or numpy.array
-        vs = self._process_v(vs)
-        self.ps, self.vs = self._process_p(ps, vs, batch_size)
+        self.vs = self._process_data(vs)
         self.one_hot = one_hot
-        super(Categorical, self).__init__(batch_size=1, *args, **kwargs)
+        self.log_pdf_mask = log_pdf_mask
+        if vs is not None:
+            vs_shape = self.vs.shape if isinstance(self.vs, np.ndarray) else self.vs.size()
+            if vs_shape != ps.size():
+                raise ValueError("Expected vs.size() or vs.shape == ps.size(), but got {} vs {}"
+                                 .format(vs_shape, ps.size()))
+            if self.one_hot:
+                self.one_hot = False
+        if ps.dim() == 1 and batch_size is not None:
+            self.ps = ps.expand(batch_size, ps.size(0))
+            if log_pdf_mask is not None and log_pdf_mask.dim() == 1:
+                self.log_pdf_mask = log_pdf_mask.expand(batch_size, log_pdf_mask.size(0))
+        super(Categorical, self).__init__(*args, **kwargs)
 
-    def sample(self, ps=None, vs=None, one_hot=True, *args, **kwargs):
-        _ps, _vs, _one_hot = self._sanitize_input(ps, vs, one_hot)
-        _vs = self._process_v(_vs)
-        _ps, _vs = self._process_p(_ps, _vs)
-        sample = Variable(torch.multinomial(_ps.data, 1, replacement=True).type_as(_ps.data))
-        if _vs is not None:
-            if isinstance(_vs, np.ndarray):
-                # always returns a 2-d (unsqueezed 1-d) list
-                r = np.arange(_vs.shape[0])
-                return [[x] for x in _vs[r, sample.squeeze().data.numpy()].tolist()]
-            # _vs is a torch.Tensor
-            return torch.gather(_vs, 1, sample.long())
-        if _one_hot:
-            # convert to onehot vector
-            return to_one_hot(sample, _ps)
-        return sample
+    def batch_shape(self, x=None):
+        event_dim = 1
+        ps = self.ps
+        if x is not None:
+            x = self._process_data(x)
+            x_shape = x.shape if isinstance(x, np.ndarray) else x.size()
+            if x_shape != ps.size():
+                ps = self.ps.expand(x_shape[:-event_dim] + self.event_shape())
+        return ps.size()[:-event_dim]
 
-    def batch_log_pdf(self, x, ps=None, vs=None, one_hot=True, batch_size=1, *args, **kwargs):
-        _ps, _vs, _one_hot = self._sanitize_input(ps, vs, one_hot)
-        _vs = self._process_v(_vs)
-        _ps, _vs = self._process_p(_ps, _vs, batch_size)
-        if not isinstance(x, list):
-            if x.dim() == 1 and batch_size == 1:
-                x = x.unsqueeze(0)
-            if _ps.size(0) != x.size(0):
-                # convert to int to one-hot
-                _ps = _ps.expand_as(x)
+    def event_shape(self):
+        event_dim = 1
+        return self.ps.size()[-event_dim:]
+
+    def shape(self, x=None):
+        if self.one_hot:
+            return self.batch_shape(x) + self.event_shape()
+        return self.batch_shape(x) + (1,)
+
+    def sample(self):
+        """
+        Returns a sample which has the same shape as ``ps`` (or ``vs``), except
+        that if ``one_hot=True`` (and no ``vs`` is specified), the last dimension
+        will have the same size as the number of events. The type of the sample
+        is `numpy.ndarray` if `vs` is a list or a numpy array, else a tensor
+        is returned.
+
+        :return: sample from the Categorical distribution
+        :rtype: numpy.ndarray or torch.LongTensor
+        """
+        sample = torch_multinomial(self.ps.data, 1, replacement=True).expand(*self.shape())
+        sample_one_hot = torch_zeros_like(self.ps.data).scatter_(-1, sample, 1)
+
+        if self.vs is not None:
+            if isinstance(self.vs, np.ndarray):
+                sample_bool_index = sample_one_hot.cpu().numpy().astype(bool)
+                return self.vs[sample_bool_index].reshape(*self.shape())
             else:
-                _ps = _ps
-        if _vs is not None:
-            # get index of tensor
-            if isinstance(_vs, np.ndarray):
-                # x is a list if _vs was a list or np.array
-                bm = torch.Tensor((_vs == np.array(x)).tolist())
-                ix = len(_vs.shape) - 1
-                _x = torch.nonzero(bm).select(ix, ix)
+                return self.vs.masked_select(sample_one_hot.byte())
+        if self.one_hot:
+            return Variable(sample_one_hot)
+        return Variable(sample)
+
+    def batch_log_pdf(self, x):
+        """
+        Evaluates log probability densities for one or a batch of samples and parameters.
+        The last dimension for ``ps`` encodes the event probabilities, and the remaining
+        dimensions are considered batch dimensions.
+
+        ``ps`` and ``vs`` are first broadcasted to the size of the data ``x``. The
+        data tensor is used to to create a mask over ``vs`` where a 1 in the mask
+        indicates that the corresponding value in ``vs`` was selected. Since, ``ps``
+        and ``vs`` have the same size, this mask when applied over ``ps`` gives
+        the probabilities of the selected events. The method returns the logarithm
+        of these probabilities.
+
+        :return: tensor with log probabilities for each of the batches.
+        :rtype: torch.autograd.Variable
+        """
+        ps = self.ps
+        vs = self.vs
+        x = self._process_data(x)
+        # probability tensor mask when data is numpy
+        if isinstance(x, np.ndarray):
+            batch_vs_size = x.shape[:-1] + (vs.shape[-1],)
+            vs = np.broadcast_to(vs, batch_vs_size)
+            boolean_mask = torch.from_numpy((vs == x).astype(int))
+        # probability tensor mask when data is pytorch tensor
+        else:
+            x = x.cuda() if ps.is_cuda else x.cpu()
+            batch_ps_shape = self.batch_shape(x) + self.event_shape()
+            ps = ps.expand(batch_ps_shape)
+            if vs is not None:
+                vs = vs.expand(batch_ps_shape)
+                boolean_mask = (vs == x)
+            elif self.one_hot:
+                boolean_mask = x
             else:
-                # x is a Variable(Tensor) as are ps and vs
-                ix = _vs.dim() - 1
-                _x = torch.nonzero(_vs.eq(x.expand_as(_vs)).data).select(ix, ix)
-            x = Variable(_x).unsqueeze(1)
-        elif _one_hot:
-            return torch.sum(x * torch.log(_ps), 1)
-        return torch.log(torch.gather(_ps, 1, x.long()))
+                boolean_mask = torch_zeros_like(ps.data).scatter_(-1, x.data.long(), 1)
+        boolean_mask = boolean_mask.cuda() if ps.is_cuda else boolean_mask.cpu()
+        if not isinstance(boolean_mask, Variable):
+            boolean_mask = Variable(boolean_mask)
+        # apply log function to masked probability tensor
+        batch_pdf_shape = self.batch_shape(x) + (1,)
+        batch_log_pdf = torch.log(self.ps.masked_select(boolean_mask.byte())).contiguous().view(batch_pdf_shape)
+        if self.log_pdf_mask is not None:
+            batch_log_pdf = batch_log_pdf * self.log_pdf_mask
+        return batch_log_pdf
 
-    def log_pdf(self, x, ps=None, vs=None, one_hot=True, batch_size=1, *args, **kwargs):
-        return torch.sum(self.batch_log_pdf(x, ps, vs, one_hot, batch_size, *args, **kwargs))
+    def enumerate_support(self):
+        """
+        Returns the categorical distribution's support, as a tensor along the first dimension.
 
-    def support(self, ps=None, vs=None, one_hot=True, *args, **kwargs):
-        _ps, _vs, _one_hot = self._sanitize_input(ps, vs, one_hot)
-        r = _ps.size(0)
-        c = _ps.size(1)
-        _vs = self._process_v(_vs)
-        _ps, _vs = self._process_p(_ps, _vs)
+        Note that this returns support values of all the batched RVs in lock-step, rather
+        than the full cartesian product. To iterate over the cartesian product, you must
+        construct univariate Categoricals and use itertools.product() over all univariate
+        variables (but this is very expensive).
 
-        if _vs is not None:
-            if isinstance(_vs, np.ndarray):
-                # vs is an array, so the support must be of type array
-                r_np = _vs.shape[0]
-                c_np = _vs.shape[1]
-                ix = np.expand_dims(np.arange(r_np), axis=1)
-                b = torch.ones(r_np, 1)
-                return (_vs[np.arange(r_np), torch.Tensor(list(x)).numpy().astype(int)]
-                        .reshape(r_np, 1).tolist()
-                        for x in itertools.product(torch.arange(0, c_np), repeat=r_np))
-            # vs is a tensor so support is of type tensor
-            return (torch.sum(_vs * Variable(torch.Tensor(list(x)).type_as(_ps.data)), 1)
-                    for x in itertools.product(torch.eye(c).numpy().tolist(),
-                    repeat=r))
+        :param ps: numpy.ndarray where the last dimension denotes the event probabilities, *p_k*,
+            which must sum to 1. The remaining dimensions are considered batch dimensions.
+        :param vs: Optional parameter, enumerating the items in the support. This could either
+            have a numeric or string type. This should have the same dimension as ``ps``.
+        :param one_hot: Denotes whether one hot encoding is enabled. This is True by default.
+            When set to false, and no explicit ``vs`` is provided, the last dimension gives
+            the one-hot encoded value from the support.
+        :return: torch variable or numpy array enumerating the support of the categorical distribution.
+            Each item in the return value, when enumerated along the first dimensions, yields a
+            value from the distribution's support which has the same dimension as would be returned by
+            sample. If ``one_hot=True``, the last dimension is used for the one-hot encoding.
+        :rtype: torch.autograd.Variable or numpy.ndarray.
+        """
+        sample_shape = self.batch_shape() + (1,)
+        support_samples_size = (self.event_shape()) + sample_shape
+        vs = self.vs
 
-        if _one_hot:
-            return (Variable(torch.Tensor(list(x)).type_as(_ps.data))
-                    for x in itertools.product(torch.eye(c).numpy().tolist(),
-                    repeat=r))
-
-        if r == 1:
-            return (Variable(torch.Tensor([[i]]).type_as(_ps.data)) for i in range(c))
-        return (Variable(torch.Tensor(list(x)).unsqueeze(1).type_as(_ps.data))
-                for x in itertools.product(torch.arange(0, c),
-                repeat=r))
+        if vs is not None:
+            if isinstance(vs, np.ndarray):
+                return vs.transpose().reshape(*support_samples_size)
+            else:
+                return torch.transpose(vs, 0, -1).contiguous().view(support_samples_size)
+        if self.one_hot:
+            return Variable(torch.stack([t.expand_as(self.ps) for t in torch_eye(*self.event_shape())]))
+        else:
+            LongTensor = torch.cuda.LongTensor if self.ps.is_cuda else torch.LongTensor
+            return Variable(torch.stack([LongTensor([t]).expand(sample_shape)
+                                         for t in torch.arange(0, *self.event_shape()).long()]))

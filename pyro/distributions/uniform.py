@@ -1,64 +1,66 @@
 import torch
 from torch.autograd import Variable
-import numpy as np
 
 from pyro.distributions.distribution import Distribution
 
 
 class Uniform(Distribution):
     """
-    :param a: lower bound *(real)*
-    :param b: upper bound (>a) *(real)*
+    Uniform distribution over continuous interval `[a, b]`.
 
-    Continuous uniform distribution over ``[a, b]``
+    :param torch.autograd.Variable a: lower bound (real).
+    :param torch.autograd.Variable b: upper bound (real).
+        Should be greater than `a`.
     """
+    reparameterized = False  # XXX Why is this marked non-differentiable?
 
-    def _sanitize_input(self, alpha, beta):
-        if alpha is not None:
-            # stateless distribution
-            return alpha, beta
-        elif self.a is not None:
-            # stateful distribution
-            return self.a, self.b
-        else:
-            raise ValueError("Parameter(s) were None")
-
-    def __init__(self, a=None, b=None, *args, **kwargs):
-        """
-        Params:
-          `a` - low bound
-          `b` -  high bound
-        """
+    def __init__(self, a, b, batch_size=None, *args, **kwargs):
+        if a.size() != b.size():
+            raise ValueError("Expected a.size() == b.size(), but got {} vs {}"
+                             .format(a.size(), b.size()))
         self.a = a
         self.b = b
+        if a.dim() == 1 and batch_size is not None:
+            self.a = a.expand(batch_size, a.size(0))
+            self.b = b.expand(batch_size, b.size(0))
         super(Uniform, self).__init__(*args, **kwargs)
 
-    def sample(self, a=None, b=None, *args, **kwargs):
-        """
-        Reparameterized Uniform sampler.
-        """
-        _a, _b = self._sanitize_input(a, b)
-        eps = Variable(torch.rand(_a.size()).type_as(_a.data))
-        return _a + torch.mul(eps, _b - _a)
+    def batch_shape(self, x=None):
+        event_dim = 1
+        a = self.a
+        if x is not None:
+            if x.size()[-event_dim] != a.size()[-event_dim]:
+                raise ValueError("The event size for the data and distribution parameters must match.\n"
+                                 "Expected x.size()[-1] == self.a.size()[-1], but got {} vs {}"
+                                 .format(x.size(-1), a.size(-1)))
+            try:
+                a = self.a.expand_as(x)
+            except RuntimeError as e:
+                raise ValueError("Parameter `a` with shape {} is not broadcastable to "
+                                 "the data shape {}. \nError: {}".format(a.size(), x.size(), str(e)))
+        return a.size()[:-event_dim]
 
-    def log_pdf(self, x, a=None, b=None, *args, **kwargs):
-        """
-        Uniform log-likelihood
-        """
-        _a, _b = self._sanitize_input(a, b)
-        if x.dim() == 1:
-            if x.le(_a).data[0] or x.ge(_b).data[0]:
-                return Variable(torch.Tensor([-float("inf")]).type_as(_a.data))
-        else:
-            # x is 2-d
-            if x.le(_a).data[0, 0] or x.ge(_b).data[0, 0]:
-                return Variable(torch.Tensor([[-np.inf]]).type_as(_a.data))
-        return torch.sum(-torch.log(_b - _a))
+    def event_shape(self):
+        event_dim = 1
+        return self.a.size()[-event_dim:]
 
-    def batch_log_pdf(self, x, a=None, b=None, batch_size=1, *args, **kwargs):
-        _a, _b = self._sanitize_input(a, b)
-        if x.dim() == 1 and _a.dim() == 1 and batch_size == 1:
-            return self.log_pdf(x, _a, _b)
-        _l = x.ge(_a).type_as(_a)
-        _u = x.le(_b).type_as(_b)
-        return torch.sum(torch.log(_l.mul(_u)) - torch.log(_b - _a), 1)
+    def shape(self, x=None):
+        return self.batch_shape(x) + self.event_shape()
+
+    def sample(self):
+        eps = Variable(torch.rand(self.a.size()).type_as(self.a.data))
+        return self.a + torch.mul(eps, self.b - self.a)
+
+    def batch_log_pdf(self, x):
+        a = self.a.expand(self.shape(x))
+        b = self.b.expand(self.shape(x))
+        lb = x.ge(a).type_as(a)
+        ub = x.le(b).type_as(b)
+        batch_log_pdf_shape = self.batch_shape(x) + (1,)
+        return torch.sum(torch.log(lb.mul(ub)) - torch.log(b - a), -1).contiguous().view(batch_log_pdf_shape)
+
+    def analytic_mean(self):
+        return 0.5 * (self.a + self.b)
+
+    def analytic_var(self):
+        return torch.pow(self.b - self.a, 2) / 12

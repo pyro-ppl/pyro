@@ -1,77 +1,88 @@
 import torch
-import itertools
-import functools
 from torch.autograd import Variable
+
 from pyro.distributions.distribution import Distribution
 
 
 class Bernoulli(Distribution):
     """
-    :param ps: probabilities *(vector [0, 1])*
+    Bernoulli distribution.
 
     Distribution over a vector of independent Bernoulli variables. Each element
-    of the vector takes on a value in ``{0, 1}``.
+    of the vector takes on a value in `{0, 1}`.
+
+    This is often used in conjunction with `torch.nn.Sigmoid` to ensure the
+    `ps` parameters are in the interval `[0, 1]`.
+
+    :param torch.autograd.Variable ps: Probabilities. Should lie in the
+        interval `[0,1]`.
     """
+    enumerable = True
 
-    def _sanitize_input(self, ps):
-        if ps is not None:
-            # stateless distribution
-            return ps
-        elif self.ps is not None:
-            # stateful distribution
-            return self.ps
-        else:
-            raise ValueError("Parameter(s) were None")
-
-    def __init__(self, ps=None, batch_size=1, *args, **kwargs):
-        """
-        Params:
-          ps = tensor of probabilities
-        """
+    def __init__(self, ps, batch_size=None, log_pdf_mask=None, *args, **kwargs):
         self.ps = ps
-        if ps is not None:
-            if ps.dim() == 1:
-                self.ps = ps.expand(batch_size, ps.size(0))
+        self.log_pdf_mask = log_pdf_mask
+        if ps.dim() == 1 and batch_size is not None:
+            self.ps = ps.expand(batch_size, ps.size(0))
+            if log_pdf_mask is not None and log_pdf_mask.dim() == 1:
+                self.log_pdf_mask = log_pdf_mask.expand(batch_size, log_pdf_mask.size(0))
         super(Bernoulli, self).__init__(*args, **kwargs)
 
-    def sample(self, ps=None, *args, **kwargs):
-        """
-        Bernoulli sampler.
-        """
-        _ps = self._sanitize_input(ps)
-        return Variable(torch.bernoulli(_ps.data).type_as(_ps.data))
+    def batch_shape(self, x=None):
+        event_dim = 1
+        ps = self.ps
+        if x is not None and x.size() != self.ps.size():
+            ps = self.ps.expand_as(x)
+        return ps.size()[:-event_dim]
 
-    def log_pdf(self, x, ps=None, batch_size=1, *args, **kwargs):
-        """
-        Bernoulli log-likelihood
-        """
-        _ps = self._sanitize_input(ps)
+    def event_shape(self):
+        event_dim = 1
+        return self.ps.size()[-event_dim:]
+
+    def shape(self, x=None):
+        return self.batch_shape(x) + self.event_shape()
+
+    def sample(self):
+        return Variable(torch.bernoulli(self.ps.data))
+
+    def batch_log_pdf(self, x):
+        ps = self.ps
+        ps = ps.expand(self.shape(x))
         x_1 = x - 1
-        ps_1 = _ps - 1
-        xmul = torch.mul(x, _ps)
+        ps_1 = ps - 1
+        x = x.type_as(ps)
+        x_1 = x_1.type_as(x_1)
+        xmul = torch.mul(x, ps)
         xmul_1 = torch.mul(x_1, ps_1)
         logsum = torch.log(torch.add(xmul, xmul_1))
-        return torch.sum(logsum)
 
-    def batch_log_pdf(self, x, ps=None, batch_size=1, *args, **kwargs):
-        _ps = self._sanitize_input(ps)
-        if x.dim() == 1 and _ps.dim() == 1 and batch_size == 1:
-            return self.log_pdf(x, _ps)
-        elif x.dim() == 1:
-            x = x.expand(batch_size, x.size(0))
-        if _ps.size() != x.size():
-            _ps = _ps.expand_as(x)
-        x_1 = x - 1
-        ps_1 = _ps - 1
-        xmul = torch.mul(x, _ps)
-        xmul_1 = torch.mul(x_1, ps_1)
-        logsum = torch.log(torch.add(xmul, xmul_1))
-        return torch.sum(logsum, 1)
+        # XXX this allows for the user to mask out certain parts of the score, for example
+        # when the data is a ragged tensor. also useful for KL annealing. this entire logic
+        # will likely be done in a better/cleaner way in the future
+        if self.log_pdf_mask is not None:
+            logsum = logsum * self.log_pdf_mask
+        batch_log_pdf_shape = self.batch_shape(x) + (1,)
+        return torch.sum(logsum, -1).contiguous().view(batch_log_pdf_shape)
 
-    def support(self, ps=None, *args, **kwargs):
-        _ps = self._sanitize_input(ps)
-        if _ps.dim() == 1:
-            return iter([Variable(torch.ones(1).type_as(_ps.data)), Variable(torch.zeros(1).type_as(_ps))])
-        size = functools.reduce(lambda x, y: x * y, _ps.size())
-        return (Variable(torch.Tensor(list(x)).view_as(_ps))
-                for x in itertools.product(torch.Tensor([0, 1]).type_as(_ps.data), repeat=size))
+    def enumerate_support(self):
+        """
+        Returns the Bernoulli distribution's support, as a tensor along the first dimension.
+
+        Note that this returns support values of all the batched RVs in lock-step, rather
+        than the full cartesian product. To iterate over the cartesian product, you must
+        construct univariate Bernoullis and use itertools.product() over all univariate
+        variables (may be expensive).
+
+        :return: torch variable enumerating the support of the Bernoulli distribution.
+            Each item in the return value, when enumerated along the first dimensions, yields a
+            value from the distribution's support which has the same dimension as would be returned by
+            sample.
+        :rtype: torch.autograd.Variable.
+        """
+        return Variable(torch.stack([torch.Tensor([t]).expand_as(self.ps) for t in [0, 1]]))
+
+    def analytic_mean(self):
+        return self.ps
+
+    def analytic_var(self):
+        return self.ps * (1 - self.ps)

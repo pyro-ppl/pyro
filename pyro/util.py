@@ -1,7 +1,35 @@
+import functools
+import re
+import warnings
+
+import graphviz
 import numpy as np
 import torch
 from torch.autograd import Variable
 from torch.nn import Parameter
+
+import pyro
+from pyro.poutine.util import site_is_subsample
+
+
+def parse_torch_version():
+    """
+    Parses `torch.__version__` into a semver-ish version tuple.
+    This is needed to handle subpatch `_n` parts outside of the semver spec.
+
+    :returns: a tuple `(major, minor, patch, extra_stuff)`
+    """
+    match = re.match(r"(\d\.\d\.\d)(.*)", torch.__version__)
+    major, minor, patch = map(int, match.group(1).split("."))
+    extra_stuff = match.group(2)
+    return major, minor, patch, extra_stuff
+
+
+def detach_iterable(iterable):
+    if isinstance(iterable, Variable):
+        return iterable.detach()
+    else:
+        return [var.detach() for var in iterable]
 
 
 def _dict_to_tuple(d):
@@ -16,6 +44,12 @@ def _dict_to_tuple(d):
         return d
 
 
+def get_tensor_data(t):
+    if isinstance(t, Variable):
+        return t.data
+    return t
+
+
 def memoize(fn):
     """
     https://stackoverflow.com/questions/1988804/what-is-memoization-and-how-can-i-use-it-in-python
@@ -23,30 +57,69 @@ def memoize(fn):
     alternate in py3: https://docs.python.org/3/library/functools.html
     lru_cache
     """
-    _mem = {}
+    mem = {}
 
     def _fn(*args, **kwargs):
         kwargs_tuple = _dict_to_tuple(kwargs)
-        if (args, kwargs_tuple) not in _mem:
-            _mem[(args, kwargs_tuple)] = fn(*args, **kwargs)
-        return _mem[(args, kwargs_tuple)]
+        if (args, kwargs_tuple) not in mem:
+            mem[(args, kwargs_tuple)] = fn(*args, **kwargs)
+        return mem[(args, kwargs_tuple)]
     return _fn
 
 
+def set_rng_seed(rng_seed):
+    """
+    Sets seeds of torch, numpy, and torch.cuda (if available).
+    :param int rng_seed: The seed value.
+    """
+    torch.manual_seed(rng_seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(rng_seed)
+    np.random.seed(rng_seed)
+
+
 def ones(*args, **kwargs):
-    return Parameter(torch.ones(*args, **kwargs))
+    """
+    :param torch.Tensor type_as: optional argument for tensor type
+
+    A convenience function for Parameter(torch.ones(...))
+    """
+    retype = kwargs.pop('type_as', None)
+    p_tensor = torch.ones(*args, **kwargs)
+    return Parameter(p_tensor if retype is None else p_tensor.type_as(retype))
 
 
 def zeros(*args, **kwargs):
-    return Parameter(torch.zeros(*args, **kwargs))
+    """
+    :param torch.Tensor type_as: optional argument for tensor type
+
+    A convenience function for Parameter(torch.zeros(...))
+    """
+    retype = kwargs.pop('type_as', None)
+    p_tensor = torch.zeros(*args, **kwargs)
+    return Parameter(p_tensor if retype is None else p_tensor.type_as(retype))
 
 
 def ng_ones(*args, **kwargs):
-    return Variable(torch.ones(*args, **kwargs), requires_grad=False)
+    """
+    :param torch.Tensor type_as: optional argument for tensor type
+
+    A convenience function for Variable(torch.ones(...), requires_grad=False)
+    """
+    retype = kwargs.pop('type_as', None)
+    p_tensor = torch.ones(*args, **kwargs)
+    return Variable(p_tensor if retype is None else p_tensor.type_as(retype), requires_grad=False)
 
 
 def ng_zeros(*args, **kwargs):
-    return Variable(torch.zeros(*args, **kwargs), requires_grad=False)
+    """
+    :param torch.Tensor type_as: optional argument for tensor type
+
+    A convenience function for Variable(torch.ones(...), requires_grad=False)
+    """
+    retype = kwargs.pop('type_as', None)
+    p_tensor = torch.zeros(*args, **kwargs)
+    return Variable(p_tensor if retype is None else p_tensor.type_as(retype), requires_grad=False)
 
 
 def log_sum_exp(vecs):
@@ -74,56 +147,6 @@ def zero_grads(tensors):
                 p.grad = Variable(data.new().resize_as_(data).zero_())
 
 
-def log_gamma(xx):
-    if isinstance(xx, Variable):
-        ttype = xx.data.type()
-    elif isinstance(xx, torch.Tensor):
-        ttype = xx.type()
-    gamma_coeff = [
-        76.18009172947146,
-        -86.50532032941677,
-        24.01409824083091,
-        -1.231739572450155,
-        0.1208650973866179e-2,
-        -0.5395239384953e-5
-    ]
-    magic1 = 1.000000000190015
-    magic2 = 2.5066282746310005
-    x = xx - 1.0
-    t = x + 5.5
-    t = t - (x + 0.5) * torch.log(t)
-    ser = Variable(torch.ones(x.size()).type(ttype)) * magic1
-    for c in gamma_coeff:
-        x = x + 1.0
-        ser = ser + torch.pow(x / c, -1)
-    return torch.log(ser * magic2) - t
-
-
-def log_beta(t):
-    if t.dim() == 1:
-        numer = torch.sum(log_gamma(t))
-        denom = log_gamma(torch.sum(t))
-    else:
-        numer = torch.sum(log_gamma(t), 1)
-        denom = log_gamma(torch.sum(t, 1))
-    return numer - denom
-
-
-def to_one_hot(x, ps):
-    if isinstance(x, Variable):
-        ttype = x.data.type()
-    elif isinstance(x, torch.Tensor):
-        ttype = x.type()
-    batch_size = x.size(0)
-    classes = ps.size(1)
-    # create an empty array for one-hots
-    batch_one_hot = torch.zeros(batch_size, classes)
-    # this operation writes ones where needed
-    batch_one_hot.scatter_(1, x.data.view(-1, 1).long(), 1)
-
-    return Variable(batch_one_hot.type(ttype))
-
-
 def tensor_histogram(ps, vs):
     """
     make a histogram from weighted Variable/Tensor/ndarray samples
@@ -136,7 +159,7 @@ def tensor_histogram(ps, vs):
         if isinstance(_v, Variable):
             _v = _v.data
         if isinstance(_v, torch.Tensor):
-            _v = _v.numpy()
+            _v = _v.cpu().numpy()
         np_vs.append(_v)
     # now form the histogram
     hist = dict()
@@ -156,30 +179,253 @@ def tensor_histogram(ps, vs):
     return {"ps": torch.cat(ps2), "vs": np.array(vs2).flatten()}
 
 
-def get_scale(data, batch_size):
+def basic_histogram(ps, vs):
     """
-    Compute scale and batch indices used for subsampling in map_data
-    Weirdly complicated because of type ambiguity
+    make a histogram from weighted things that aren't tensors
+    Horribly slow...
     """
-    if isinstance(data, (torch.Tensor, Variable)):  # XXX and np.ndarray?
-        assert batch_size <= data.size(0), \
-            "batch must be smaller than dataset size"
-        if batch_size > 0:
-            scale = float(data.size(0)) / float(batch_size)
-            ind = Variable(torch.randperm(data.size(0))[0:batch_size])
-        else:
-            # if batch_size == 0, don't index (saves time/space)
-            scale = 1.0
-            ind = Variable(torch.arange(0, data.size(0)))
-    else:
-        assert batch_size <= len(data), \
-            "batch must be smaller than dataset size"
-        # if batch_size > 0, select a random set of indices and store it
-        if batch_size > 0:
-            ind = torch.randperm(len(data))[0:batch_size].numpy().tolist()
-            scale = float(len(data)) / float(batch_size)
-        else:
-            ind = list(range(len(data)))
-            scale = 1.0
+    assert isinstance(vs, (list, tuple)), \
+        "vs must be a primitive type that preserves ordering at construction"
+    hist = {}
+    for i, v in enumerate(vs):
+        if v not in hist:
+            hist[v] = 0.0
+        hist[v] = hist[v] + ps[i]
+    return {"ps": torch.cat([hist[v] for v in hist.keys()]),
+            "vs": [v for v in hist.keys()]}
 
-    return scale, ind
+
+def apply_stack(initial_msg):
+    """
+    :param dict initial_msg: the starting version of the trace site
+    :returns: an updated message that is the final version of the trace site
+
+    Execute the poutine stack at a single site according to the following scheme:
+    1. Walk down the stack from top to bottom, collecting into the message
+        all information necessary to execute the stack at that site
+    2. For each poutine in the stack from bottom to top:
+           Execute the poutine with the message;
+           If the message field "stop" is True, stop;
+           Otherwise, continue
+    3. Return the updated message
+    """
+    stack = pyro._PYRO_STACK
+    # TODO check at runtime if stack is valid
+
+    # msg is used to pass information up and down the stack
+    msg = initial_msg
+
+    # first, gather all information necessary to apply the stack to this site
+    for frame in reversed(stack):
+        msg = frame._prepare_site(msg)
+
+    # go until time to stop?
+    for frame in stack:
+        assert msg["type"] in ("sample", "param"), \
+            "{} is an invalid site type, how did that get there?".format(msg["type"])
+
+        msg["value"] = getattr(frame, "_pyro_{}".format(msg["type"]))(msg)
+
+        if msg["stop"]:
+            break
+
+    return msg
+
+
+class NonlocalExit(Exception):
+    """
+    Exception for exiting nonlocally from poutine execution.
+
+    Used by poutine.EscapePoutine to return site information.
+    """
+    def __init__(self, site, *args, **kwargs):
+        """
+        :param site: message at a pyro site
+
+        constructor.  Just stores the input site.
+        """
+        super(NonlocalExit, self).__init__(*args, **kwargs)
+        self.site = site
+
+
+def enum_extend(trace, msg, num_samples=None):
+    """
+    :param trace: a partial trace
+    :param msg: the message at a pyro primitive site
+    :param num_samples: maximum number of extended traces to return.
+    :returns: a list of traces, copies of input trace with one extra site
+
+    Utility function to copy and extend a trace with sites based on the input site
+    whose values are enumerated from the support of the input site's distribution.
+
+    Used for exact inference and integrating out discrete variables.
+    """
+    if num_samples is None:
+        num_samples = -1
+
+    extended_traces = []
+    for i, s in enumerate(msg["fn"].enumerate_support(*msg["args"], **msg["kwargs"])):
+        if i > num_samples and num_samples >= 0:
+            break
+        msg_copy = msg.copy()
+        msg_copy.update(value=s)
+        tr_cp = trace.copy()
+        tr_cp.add_node(msg["name"], **msg_copy)
+        extended_traces.append(tr_cp)
+    return extended_traces
+
+
+def mc_extend(trace, msg, num_samples=None):
+    """
+    :param trace: a partial trace
+    :param msg: the message at a pyro primitive site
+    :param num_samples: maximum number of extended traces to return.
+    :returns: a list of traces, copies of input trace with one extra site
+
+    Utility function to copy and extend a trace with sites based on the input site
+    whose values are sampled from the input site's function.
+
+    Used for Monte Carlo marginalization of individual sample sites.
+    """
+    if num_samples is None:
+        num_samples = 1
+
+    extended_traces = []
+    for i in range(num_samples):
+        msg_copy = msg.copy()
+        msg_copy["value"] = msg_copy["fn"](*msg_copy["args"], **msg_copy["kwargs"])
+        tr_cp = trace.copy()
+        tr_cp.add_node(msg_copy["name"], **msg_copy)
+        extended_traces.append(tr_cp)
+    return extended_traces
+
+
+def discrete_escape(trace, msg):
+    """
+    :param trace: a partial trace
+    :param msg: the message at a pyro primitive site
+    :returns: boolean decision value
+
+    Utility function that checks if a sample site is discrete and not already in a trace.
+
+    Used by EscapePoutine to decide whether to do a nonlocal exit at a site.
+    Subroutine for integrating out discrete variables for variance reduction.
+    """
+    return (msg["type"] == "sample") and \
+        (not msg["is_observed"]) and \
+        (msg["name"] not in trace) and \
+        (getattr(msg["fn"], "enumerable", False))
+
+
+def all_escape(trace, msg):
+    """
+    :param trace: a partial trace
+    :param msg: the message at a pyro primitive site
+    :returns: boolean decision value
+
+    Utility function that checks if a site is not already in a trace.
+
+    Used by EscapePoutine to decide whether to do a nonlocal exit at a site.
+    Subroutine for approximately integrating out variables for variance reduction.
+    """
+    return (msg["type"] == "sample") and \
+        (not msg["is_observed"]) and \
+        (msg["name"] not in trace)
+
+
+def save_visualization(trace, graph_output):
+    """
+    :param pyro.poutine.Trace trace: a trace to be visualized
+    :param graph_output: the graph will be saved to graph_output.pdf
+    :type graph_output: str
+
+    Take a trace generated by poutine.trace with `graph_type='dense'` and render
+    the graph with the output saved to file.
+
+    - non-reparameterized stochastic nodes are salmon
+    - reparameterized stochastic nodes are half salmon, half grey
+    - observation nodes are green
+
+    Example:
+
+    trace = pyro.poutine.trace(model, graph_type="dense").get_trace()
+    save_visualization(trace, 'output')
+    """
+    g = graphviz.Digraph()
+
+    for label, node in trace.nodes.items():
+        if site_is_subsample(node):
+            continue
+        shape = 'ellipse'
+        if label in trace.stochastic_nodes and label not in trace.reparameterized_nodes:
+            fillcolor = 'salmon'
+        elif label in trace.reparameterized_nodes:
+            fillcolor = 'lightgrey;.5:salmon'
+        elif label in trace.observation_nodes:
+            fillcolor = 'darkolivegreen3'
+        else:
+            # only visualize RVs
+            continue
+        g.node(label, label=label, shape=shape, style='filled', fillcolor=fillcolor)
+
+    for label1, label2 in trace.edges:
+        if site_is_subsample(trace.nodes[label1]):
+            continue
+        if site_is_subsample(trace.nodes[label2]):
+            continue
+        g.edge(label1, label2)
+
+    g.render(graph_output, view=False, cleanup=True)
+
+
+def check_model_guide_match(model_trace, guide_trace):
+    """
+    :param pyro.poutine.Trace model_trace: Trace object of the model
+    :param pyro.poutine.Trace guide_trace: Trace object of the guide
+    :raises: RuntimeWarning, ValueError
+
+    Checks that (1) there is a bijection between the samples in the guide
+    and the samples in the model, (2) each `iarange` statement in the guide
+    also appears in the model, (3) at each sample site that appears in both
+    the model and guide, the model and guide agree on sample shape.
+    """
+    # Check ordinary sample sites.
+    model_vars = set(name for name, site in model_trace.nodes.items()
+                     if site["type"] == "sample" and not site["is_observed"]
+                     if type(site["fn"]).__name__ != "_Subsample")
+    guide_vars = set(name for name, site in guide_trace.nodes.items()
+                     if site["type"] == "sample"
+                     if type(site["fn"]).__name__ != "_Subsample")
+    if not (guide_vars <= model_vars):
+        warnings.warn("Found vars in guide but not model: {}".format(guide_vars - model_vars))
+    if not (model_vars <= guide_vars):
+        warnings.warn("Found vars in model but not guide: {}".format(model_vars - guide_vars))
+
+    # Check shapes agree.
+    for name in model_vars & guide_vars:
+        model_site = model_trace.nodes[name]
+        guide_site = guide_trace.nodes[name]
+        if hasattr(model_site["fn"], "shape") and hasattr(guide_site["fn"], "shape"):
+            model_shape = model_site["fn"].shape(None, *model_site["args"], **model_site["kwargs"])
+            guide_shape = guide_site["fn"].shape(None, *guide_site["args"], **guide_site["kwargs"])
+            if model_shape != guide_shape:
+                raise ValueError("Model and guide dims disagree at site '{}': {} vs {}".format(
+                    name, model_shape, guide_shape))
+
+    # Check subsample sites introduced by iarange.
+    model_vars = set(name for name, site in model_trace.nodes.items()
+                     if site["type"] == "sample" and not site["is_observed"]
+                     if type(site["fn"]).__name__ == "_Subsample")
+    guide_vars = set(name for name, site in guide_trace.nodes.items()
+                     if site["type"] == "sample"
+                     if type(site["fn"]).__name__ == "_Subsample")
+    if not (guide_vars <= model_vars):
+        warnings.warn("Found iarange statements in guide but not model: {}".format(guide_vars - model_vars))
+
+
+def deep_getattr(obj, name):
+    """
+    Python getattr() for arbitrarily deep attributes
+    Throws an AttirbuteError if bad attribute
+    """
+    return functools.reduce(getattr, name.split("."), obj)

@@ -1,69 +1,101 @@
+
+Bernoulli
+---------
 .. automodule:: pyro.distributions.bernoulli
     :members:
     :undoc-members:
     :show-inheritance:
 
+Beta
+----
 .. automodule:: pyro.distributions.beta
     :members:
     :undoc-members:
     :show-inheritance:
 
+Categorical
+-----------
 .. automodule:: pyro.distributions.categorical
     :members:
     :undoc-members:
     :show-inheritance:
 
+Cauchy
+------
+.. automodule:: pyro.distributions.cauchy
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+Delta
+-----
 .. automodule:: pyro.distributions.delta
     :members:
     :undoc-members:
     :show-inheritance:
 
-.. automodule:: pyro.distributions.diag_normal
-    :members:
-    :undoc-members:
-    :show-inheritance:
 
-.. automodule:: pyro.distributions.exponential
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-.. automodule:: pyro.distributions.gamma
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-.. automodule:: pyro.distributions.log_normal
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-.. automodule:: pyro.distributions.multinomial
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
+Normal
+----------
 .. automodule:: pyro.distributions.normal
     :members:
     :undoc-members:
     :show-inheritance:
 
-.. automodule:: pyro.distributions.normal_chol
+Exponential
+-----------
+.. automodule:: pyro.distributions.exponential
     :members:
     :undoc-members:
     :show-inheritance:
 
+Gamma
+-----
+.. automodule:: pyro.distributions.gamma
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+HalfCauchy
+----------------------------------------
+
+.. automodule:: pyro.distributions.half_cauchy
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+LogNormal
+---------
+.. automodule:: pyro.distributions.log_normal
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+Multinomial
+-----------
+.. automodule:: pyro.distributions.multinomial
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+Poisson
+-------
 .. automodule:: pyro.distributions.poisson
     :members:
     :undoc-members:
     :show-inheritance:
 
+TransformedDistribution
+-----------------------
 .. automodule:: pyro.distributions.transformed_distribution
     :members:
     :undoc-members:
     :show-inheritance:
 
+Uniform
+-------
 .. automodule:: pyro.distributions.uniform
     :members:
     :undoc-members:
     :show-inheritance:
+
