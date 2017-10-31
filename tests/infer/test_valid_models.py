@@ -26,7 +26,7 @@ def assert_error(model, guide, **kwargs):
     Assert that inference fails with an error.
     """
     inference = SVI(model,  guide, Adam({"lr": 1e-6}), "ELBO", **kwargs)
-    with pytest.raises((NotImplementedError, UserWarning, KeyError, RuntimeError)):
+    with pytest.raises((NotImplementedError, UserWarning, KeyError, ValueError, RuntimeError)):
         inference.step()
 
 
@@ -54,6 +54,38 @@ def test_variable_clash_in_model_error(trace_graph):
     def guide():
         p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
         pyro.sample("x", dist.bernoulli, p)
+
+    assert_error(model, guide, trace_graph=trace_graph)
+
+
+@pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
+def test_model_guide_dim_mismatch_error(trace_graph):
+
+    def model():
+        mu = Variable(torch.zeros(2))
+        sigma = Variable(torch.zeros(2))
+        pyro.sample("x", dist.normal, mu, sigma)
+
+    def guide():
+        mu = pyro.param("mu", Variable(torch.zeros(2, 1), requires_grad=True))
+        sigma = pyro.param("sigma", Variable(torch.zeros(2, 1), requires_grad=True))
+        pyro.sample("x", dist.normal, mu, sigma)
+
+    assert_error(model, guide, trace_graph=trace_graph)
+
+
+@pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
+def test_model_guide_shape_mismatch_error(trace_graph):
+
+    def model():
+        mu = Variable(torch.zeros(1, 2))
+        sigma = Variable(torch.zeros(1, 2))
+        pyro.sample("x", dist.normal, mu, sigma)
+
+    def guide():
+        mu = pyro.param("mu", Variable(torch.zeros(2, 1), requires_grad=True))
+        sigma = pyro.param("sigma", Variable(torch.zeros(2, 1), requires_grad=True))
+        pyro.sample("x", dist.normal, mu, sigma)
 
     assert_error(model, guide, trace_graph=trace_graph)
 
