@@ -74,10 +74,7 @@ class Normal(Distribution):
         # expand to patch size of input
         mu = self.mu.expand(self.shape(x))
         sigma = self.sigma.expand(self.shape(x))
-        log_pxs = -1 * torch.add(torch.add(torch.log(sigma),
-                                 0.5 * torch.log(2.0 * np.pi *
-                                 Variable(torch.ones(sigma.size()).type_as(mu.data)))),
-                                 0.5 * torch.pow(((x - mu) / sigma), 2))
+        log_pxs = -1 * (torch.log(sigma) + 0.5 * np.log(2.0 * np.pi) + 0.5 * torch.pow((x - mu) / sigma, 2))
         # XXX this allows for the user to mask out certain parts of the score, for example
         # when the data is a ragged tensor. also useful for KL annealing. this entire logic
         # will likely be done in a better/cleaner way in the future
