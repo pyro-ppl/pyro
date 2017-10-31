@@ -17,7 +17,7 @@ import pyro
 import pyro.distributions as dist
 from modules import Identity, Encoder, Decoder, MLP, Predict
 from pyro.distributions import Bernoulli, Uniform, Delta
-from pyro.util import ng_zeros, ng_ones
+from pyro.util import ng_zeros, ng_ones, zeros
 
 
 # Default prior success probability for z_pres.
@@ -84,6 +84,14 @@ class AIR(nn.Module):
         self.bl_rnn = nn.LSTMCell(rnn_input_size, rnn_hidden_size)
         self.bl_predict = MLP(rnn_hidden_size, bl_predict_net + [1], nl)
         self.bl_embed = Identity() if embed_net is None else MLP(x_size ** 2, embed_net, nl, True)
+
+        # Create parameters.
+        self.h_init = zeros(1, rnn_hidden_size)
+        self.c_init = zeros(1, rnn_hidden_size)
+        self.bl_h_init = zeros(1, rnn_hidden_size)
+        self.bl_c_init = zeros(1, rnn_hidden_size)
+        self.z_where_init = zeros(1, self.z_where_size)
+        self.z_what_init = zeros(1, self.z_what_size)
 
         if use_cuda:
             self.cuda()
@@ -192,6 +200,13 @@ class AIR(nn.Module):
         pyro.module('bl_predict', self.bl_predict, tags='baseline'),
         pyro.module('bl_embed', self.bl_embed, tags='baseline')
 
+        pyro.param('h_init', self.h_init)
+        pyro.param('c_init', self.c_init)
+        pyro.param('z_where_init', self.z_where_init)
+        pyro.param('z_what_init', self.z_what_init)
+        pyro.param('bl_h_init', self.bl_h_init, tags='baseline')
+        pyro.param('bl_c_init', self.bl_c_init, tags='baseline')
+
         with pyro.iarange('data', data.size(0), subsample_size=batch_size, use_cuda=self.use_cuda) as ix:
             batch = data[ix]
             return self.local_guide(batch.size(0), batch)
@@ -208,13 +223,13 @@ class AIR(nn.Module):
 
         # Initial state.
         state = GuideState(
-            h=self.ng_zeros(n, self.rnn_hidden_size),
-            c=self.ng_zeros(n, self.rnn_hidden_size),
-            bl_h=self.ng_zeros(n, self.rnn_hidden_size),
-            bl_c=self.ng_zeros(n, self.rnn_hidden_size),
+            h=batch_expand(self.h_init, n),
+            c=batch_expand(self.c_init, n),
+            bl_h=batch_expand(self.bl_h_init, n),
+            bl_c=batch_expand(self.bl_c_init, n),
             z_pres=self.ng_ones(n, self.z_pres_size),
-            z_where=self.ng_zeros(n, self.z_where_size),
-            z_what=self.ng_zeros(n, self.z_what_size))
+            z_where=batch_expand(self.z_where_init, n),
+            z_what=batch_expand(self.z_what_init, n))
 
         z_pres = []
         z_where = []
@@ -358,3 +373,10 @@ def image_to_window(z_where, window_size, image_size, images):
     grid = F.affine_grid(theta_inv, torch.Size((n, 1, window_size, window_size)))
     out = F.grid_sample(images.view(n, 1, image_size, image_size), grid)
     return out.view(n, -1)
+
+
+# Helper to expand parameters to the size of the mini-batch. I would
+# like to remove this and just write `t.expand(n, -1)` inline, but the
+# `-1` argument of `expand` doesn't seem to work with PyTorch 0.2.0.
+def batch_expand(t, n):
+    return t.expand(n, t.size(1))
