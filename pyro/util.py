@@ -408,7 +408,7 @@ def check_site_names(model_trace, guide_trace):
             model_shape = model_site["fn"].shape(None, *model_site["args"], **model_site["kwargs"])
             guide_shape = guide_site["fn"].shape(None, *guide_site["args"], **guide_site["kwargs"])
             if len(model_shape) != len(guide_shape):
-                raise ValueError("Model and guide shapes agree at site '{}': {} vs {}".format(
+                raise ValueError("Model and guide dims disagree at site '{}': {} vs {}".format(
                     name, model_shape, guide_shape))
 
     # Check subsample sites introduced by iarange.
