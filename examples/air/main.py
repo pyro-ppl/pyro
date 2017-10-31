@@ -58,10 +58,12 @@ parser.add_argument('--viz-every', type=int, default=100,
                     help='number of steps between vizualizations')
 parser.add_argument('--visdom-env', default='main',
                     help='visdom enviroment name')
-# parser.add_argument('--checkpoint', action='store_true',
-#                     help='periodically persist parameters')
-# parser.add_argument('--checkpoint-every', type=int, default=1000,
-#                     help='number of steps between checkpoints')
+parser.add_argument('--load', type=str,
+                    help='load previously saved parameters')
+parser.add_argument('--save', type=str,
+                    help='save parameters to specified file')
+parser.add_argument('--save-every', type=int, default=1e4,
+                    help='number of steps between parameter saves')
 parser.add_argument('--cuda', action='store_true', default=False,
                     help='use cuda')
 parser.add_argument('-t', '--model-steps', type=int, default=3,
@@ -94,6 +96,10 @@ parser.add_argument('--print-modules', action='store_true', default=False,
 
 args = parser.parse_args()
 # print(args)
+
+if 'save' in args:
+    if os.path.exists(args.save):
+        raise RuntimeError('Output file "{}" already exists.'.format(args.save))
 
 if args.seed is not None:
     pyro.set_rng_seed(args.seed)
@@ -196,6 +202,10 @@ air = AIR(
 if args.print_modules:
     print(air)
 
+if 'load' in args:
+    print('Loading parameters...')
+    air.load_state_dict(torch.load(args.load))
+
 vis = visdom.Visdom(env=args.visdom_env)
 # Viz sample from prior.
 if args.viz:
@@ -238,4 +248,8 @@ for i in range(args.num_steps):
         # Show reconstructions of data.
         vis.images(draw_many(recons, z_wheres))
 
-        # TODO: Report accuracy on predictions of object counts.
+    # TODO: Report accuracy on predictions of object counts.
+
+    if 'save' in args and (i + 1) % args.save_every == 0:
+        print('Saving parameters...')
+        torch.save(air.state_dict(), args.save)
