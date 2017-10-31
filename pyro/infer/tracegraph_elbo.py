@@ -6,7 +6,7 @@ import torch
 import pyro
 import pyro.poutine as poutine
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_agreement, detach_iterable, ng_zeros
+from pyro.util import check_model_guide_match, detach_iterable, ng_zeros
 
 
 class TraceGraph_ELBO(object):
@@ -52,7 +52,7 @@ class TraceGraph_ELBO(object):
             model_trace = poutine.trace(poutine.replay(model, guide_trace),
                                         graph_type="dense").get_trace(*args, **kwargs)
 
-            check_model_guide_agreement(model_trace, guide_trace)
+            check_model_guide_match(model_trace, guide_trace)
             guide_trace = prune_subsample_sites(guide_trace)
             model_trace = prune_subsample_sites(model_trace)
 

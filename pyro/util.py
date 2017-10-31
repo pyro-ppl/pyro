@@ -378,7 +378,7 @@ def save_visualization(trace, graph_output):
     g.render(graph_output, view=False, cleanup=True)
 
 
-def check_model_guide_agreement(model_trace, guide_trace):
+def check_model_guide_match(model_trace, guide_trace):
     """
     :param pyro.poutine.Trace model_trace: Trace object of the model
     :param pyro.poutine.Trace guide_trace: Trace object of the guide
@@ -387,7 +387,7 @@ def check_model_guide_agreement(model_trace, guide_trace):
     Checks that (1) there is a bijection between the samples in the guide
     and the samples in the model, (2) each `iarange` statement in the guide
     also appears in the model, (3) at each sample site that appears in both
-    the model and guide, the model and guide agree on sample dimension.
+    the model and guide, the model and guide agree on sample shape.
     """
     # Check ordinary sample sites.
     model_vars = set(name for name, site in model_trace.nodes.items()
@@ -408,7 +408,7 @@ def check_model_guide_agreement(model_trace, guide_trace):
         if hasattr(model_site["fn"], "shape") and hasattr(guide_site["fn"], "shape"):
             model_shape = model_site["fn"].shape(None, *model_site["args"], **model_site["kwargs"])
             guide_shape = guide_site["fn"].shape(None, *guide_site["args"], **guide_site["kwargs"])
-            if len(model_shape) != len(guide_shape):
+            if model_shape != guide_shape:
                 raise ValueError("Model and guide dims disagree at site '{}': {} vs {}".format(
                     name, model_shape, guide_shape))
 
