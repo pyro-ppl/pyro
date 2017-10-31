@@ -1,6 +1,7 @@
 
 import torch
 import pyro
+import sys
 from torch.autograd import Variable
 import pyro.distributions as dist
 from data_cached import MNISTCached as MNIST
@@ -14,7 +15,7 @@ import torch.nn as nn
 class SSVAE(nn.Module):
     """
         This class encapsulates the parameters and functions needed to train a
-        semi-supervised variational auto-encoder model on MNIST image data
+        semi-supervised variational auto-encoder model on the MNIST image dataset
 
         :param sup_num: supervised number of examples
                          i.e. how many of the images have supervised labels
@@ -161,12 +162,12 @@ class SSVAE(nn.Module):
         latent_size = self.latent_layer
         hidden_sizes = self.hidden_layers
 
-        # define the neural networks used later in the model(s) and the guide(s)
-        # using MLPs (multi-layered perceptrons or simple feed-forward networks)
+        # define the neural networks used later in the model and the guide.
+        # these networks are MLPs (multi-layered perceptrons or simple feed-forward networks)
         # where the provided activation parameter is used on every linear layer except
         # for the output layer where we use the provided output_activation parameter
-        # NOTE: we use the epsilon-scaled versions of Softmax and Sigmoid operations from
-        # pytorch for numerical stability
+        # NOTE: we use a customized epsilon-scaled versions of Softmax and
+        # Sigmoid operations for numerical stability
         self.nn_alpha_y = MLP([self.input_size] +
                               hidden_sizes +
                               [self.output_size],
@@ -237,6 +238,32 @@ class SSVAE(nn.Module):
             self.losses.append(loss_aux)
             self.is_supervised_loss.append(True)
 
+    def logging_hook(self, epoch):
+        """
+            this function is passed to the inference algorithm and used for logging
+            and any other computations that need to be done after every epoch
+        :return: None
+        """
+        # log the loss and validation/testing accuracies
+        str_print = "{} epoch: avg losses {}".format(epoch, " ".join(map(str, self.inference.loss_training[epoch])))
+        validation_accuracy = self.inference.get_accuracy(mode="valid")
+        str_print += " validation accuracy {}".format(validation_accuracy)
+
+        # This test accuracy is only for logging, this is not used
+        # to make any decisions during training
+        test_accuracy = self.inference.get_accuracy(mode="test")
+        str_print += " test accuracy {}".format(test_accuracy)
+
+        # update the best validation accuracy and the corresponding
+        # testing accuracy and the state of the module (including the networks)
+        if self.inference.best_valid_acc < validation_accuracy:
+            self.inference.best_valid_acc = validation_accuracy
+            self.inference.corresponding_test_acc = test_accuracy
+            self.inference.corresponding_state = self.state_dict()
+
+        self.inference.print_and_log(str_print)
+        sys.stdout.flush()
+
     def optimize(self):
         """
             this function runs the inference
@@ -246,11 +273,11 @@ class SSVAE(nn.Module):
             logger = None if self.logfile is None else open(self.logfile, "w")
 
             # setup the inference with appropriate data and losses
-            inference = SSVAEInfer(MNIST, self.batch_size, self.losses, self.is_supervised_loss,
-                                   self.classify, sup_num=self.sup_num, use_cuda=self.use_cuda,
-                                   logger=logger)
+            self.inference = SSVAEInfer(MNIST, self.batch_size, self.losses, self.is_supervised_loss,
+                                        self.classify, sup_num=self.sup_num, use_cuda=self.use_cuda,
+                                        logger=logger)
             # run the inference
-            inference.run(num_epochs=self.num_epochs)
+            self.inference.run(num_epochs=self.num_epochs, hook=self.logging_hook)
         finally:
             # close the logger file object if opened
             if self.logfile is not None:
