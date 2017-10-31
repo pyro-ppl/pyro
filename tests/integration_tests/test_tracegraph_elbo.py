@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+import numpy as np
 import pytest
 import torch
 from torch import nn as nn
@@ -8,13 +9,12 @@ from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
-from pyro.distributions.transformed_distribution import TransformedDistribution
-from tests.distributions.test_transformed_distribution import AffineExp
 import pyro.optim as optim
+from pyro.distributions.transformed_distribution import TransformedDistribution
 from pyro.infer import SVI
 from pyro.util import ng_ones, ng_zeros
 from tests.common import TestCase
-import numpy as np
+from tests.distributions.test_transformed_distribution import AffineExp
 
 pytestmark = pytest.mark.stage("integration", "integration_batch_2")
 
@@ -669,7 +669,7 @@ class RaoBlackwellizationTests(TestCase):
                 for k in range(n_superfluous_top + n_superfluous_bottom):
                     z_baseline = pyro.module("z_baseline_%d_%d" % (i, k),
                                              pt_superfluous_baselines[3 * k + i], tags="baseline")
-                    baseline_value = z_baseline(mu_latent.detach())
+                    baseline_value = z_baseline(mu_latent.detach()).unsqueeze(-1)
                     mean_i = pyro.param("mean_%d_%d" % (i, k),
                                         Variable(0.5 * torch.ones(4 - i, 1), requires_grad=True))
                     pyro.sample("z_%d_%d" % (i, k),

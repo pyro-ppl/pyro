@@ -7,23 +7,23 @@ from pyro.distributions.distribution import Distribution
 
 class Normal(Distribution):
     """
-    :param mu: mean *(tensor)*
-    :param sigma: standard deviations *(tensor (0, Infinity))*
+    Univariate normal (Gaussian) distribution.
 
     A distribution over tensors in which each element is independent and
-    Gaussian distributed, with its own mean and standard deviation. i.e. A
-    multivariate Gaussian distribution with diagonal covariance matrix. The
-    distribution is over tensors that have the same shape as the parameters ``mu``
-    and ``sigma``, which in turn must have the same shape as each other.
+    Gaussian distributed, with its own mean and standard deviation. The
+    distribution is over tensors that have the same shape as the parameters `mu`
+    and `sigma`, which in turn must have the same shape as each other.
+
+    This is often used in conjunction with `torch.nn.Softplus` to ensure the
+    `sigma` parameters are positive.
+
+    :param torch.autograd.Variable mu: Means.
+    :param torch.autograd.Variable sigma: Standard deviations.
+        Should be positive and the same shape as `mu`.
     """
     reparameterized = True
 
     def __init__(self, mu, sigma, batch_size=None, log_pdf_mask=None, *args, **kwargs):
-        """
-        Params:
-          `mu` - mean
-          `sigma` - root variance
-        """
         self.mu = mu
         self.sigma = sigma
         self.log_pdf_mask = log_pdf_mask
@@ -53,7 +53,7 @@ class Normal(Distribution):
 
     def sample(self):
         """
-        Reparameterized diagonal Normal sampler.
+        Reparameterized Normal sampler.
         """
         eps = Variable(torch.randn(self.mu.size()).type_as(self.mu.data))
         z = self.mu + eps * self.sigma

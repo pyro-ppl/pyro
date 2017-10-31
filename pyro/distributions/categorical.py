@@ -8,14 +8,25 @@ from pyro.distributions.util import torch_eye, torch_multinomial, torch_zeros_li
 
 class Categorical(Distribution):
     """
-    :param ps: probabilities (can be unnormalized) *(vector or real array [0,
-               Infinity))*
-    :param vs: support *(any numpy array, Variable, or python list)*
-    :param one_hot: if ``True``, ``sample()`` returns a one_hot sample. ``True`` by default.
+    Categorical (discrete) distribution.
 
-    Discrete distribution over elements of ``vs`` with ``P(vs[i])`` proportional to
-    ``ps[i]``.  If ``one_hot=True``, ``sample`` returns a one-hot vector.
-    Else, ``sample`` returns the category selected.
+    Discrete distribution over elements of `vs` with `P(vs[i])` proportional to
+    `ps[i]`.  If `one_hot=True`, `.sample()` returns a one-hot vector;
+    otherwise `.sample()` returns the category index.
+
+    This is often used in conjunction with `torch.nn.Softmax` to ensure
+    probabilites `ps` are normalized.
+
+    :param ps: Probabilities. These should be nonnegative and normalized
+        along the rightmost axis.
+    :type ps: `torch.autograd.Variable` of `torch.Tensor` of reals.
+    :param vs: Optional list of values in the support.
+    :type vs: `list` or `numpy.array` or `torch.autograd.Variable`
+    :param one_hot: Whether `sample()` returns a `one_hot` sample.  Defaults
+        to `False` if `vs` is specified or `True` if `vs` is not specified.
+    :param int batch_size: Optional number of elements in the batch used to
+        generate a sample. The batch dimension will be the leftmost dimension
+        in the generated sample.
     """
     enumerable = True
 
@@ -29,13 +40,6 @@ class Categorical(Distribution):
         return x
 
     def __init__(self, ps, vs=None, one_hot=True, batch_size=None, log_pdf_mask=None, *args, **kwargs):
-        """
-        Instantiates a discrete distribution.
-        :param vs: tuple, list, numpy array, Variable, or torch tensor of values
-        :param ps: torch tensor of probabilities (must be same size as `vs`)
-        :param one_hot: return one-hot samples (when `vs` is None)
-        :param batch_size: expand ps and vs by a batch dimension
-        """
         self.ps = ps
         # vs is None, Variable(Tensor), or numpy.array
         self.vs = self._process_data(vs)
@@ -78,7 +82,8 @@ class Categorical(Distribution):
         Returns a sample which has the same shape as ``ps`` (or ``vs``), except
         that if ``one_hot=True`` (and no ``vs`` is specified), the last dimension
         will have the same size as the number of events. The type of the sample
-        is numpy.ndarray if vs is a list or a numpy array, else a tensor is returned.
+        is `numpy.ndarray` if `vs` is a list or a numpy array, else a tensor
+        is returned.
 
         :return: sample from the Categorical distribution
         :rtype: numpy.ndarray or torch.LongTensor
@@ -137,8 +142,7 @@ class Categorical(Distribution):
         batch_pdf_shape = self.batch_shape(x) + (1,)
         batch_log_pdf = torch.log(self.ps.masked_select(boolean_mask.byte())).contiguous().view(batch_pdf_shape)
         if self.log_pdf_mask is not None:
-            scaling_mask = self.log_pdf_mask.contiguous().view(batch_pdf_shape)
-            batch_log_pdf = batch_log_pdf * scaling_mask
+            batch_log_pdf = batch_log_pdf * self.log_pdf_mask
         return batch_log_pdf
 
     def enumerate_support(self):

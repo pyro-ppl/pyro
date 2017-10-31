@@ -4,7 +4,7 @@ from torch.autograd import Variable
 
 import pyro
 import pyro.infer
-from pyro.distributions import Normal, Bernoulli
+from pyro.distributions import Bernoulli, Normal
 from tests.common import TestCase
 
 

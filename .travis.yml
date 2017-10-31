@@ -14,7 +14,7 @@ install:
     # this will be in setup.py
     - pip install numpy scipy cloudpickle funcy graphviz networkx visdom
     # install test dependencies
-    - pip install pytest pytest-cov flake8
+    - pip install pytest pytest-cov flake8 nbval
     # install pytorch and its dependencies
     - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
           pip install http://download.pytorch.org/whl/cu75/torch-0.2.0.post2-cp27-cp27mu-manylinux1_x86_64.whl;
@@ -55,6 +55,9 @@ jobs:
         - python: 3.5
           env: STAGE=examples
           script: pytest -vs --cov=pyro --stage test_examples
+        - python: 2.7
+          env: STAGE=tutorials
+          script: pytest -v --nbval-lax tutorial/
         - stage: integration test
           python: 2.7
           env: STAGE=integration_batch_1
@@ -68,3 +71,7 @@ jobs:
         - python: 3.5
           env: STAGE=integration_batch_2
           script: pytest -vs --cov=pyro --stage integration_batch_2
+    allow_failures:
+        - python: 2.7
+          env: STAGE=tutorials
+          script: pytest -v --nbval-lax tutorial/

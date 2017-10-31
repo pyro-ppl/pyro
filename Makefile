@@ -15,14 +15,17 @@ lint: FORCE
 	flake8
 
 format: FORCE
-	yapf -i -p *.py pyro/*.py pyro/*/*.py
-	isort -i *.py pyro/*.py pyro/*/*.py
+	# yapf -i -p *.py pyro/*.py pyro/*/*.py
+	isort -rc *.py pyro/ tests/
 
 test: lint docs FORCE
 	pytest -vx -n auto --stage unit
 
 test-examples: lint FORCE
 	pytest -vx -n auto --stage test_examples
+
+test-tutorials: lint FORCE
+	pytest -v -n auto --nbval-lax tutorial/
 
 integration-test: lint FORCE
 	pytest -vx -n auto --stage integration

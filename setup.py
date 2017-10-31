@@ -1,4 +1,4 @@
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
 setup(
     name='pyro-ppl',
@@ -28,7 +28,9 @@ setup(
             'isort',
             'pytest',
             'pytest-xdist',
+            'nbval',
             'yapf',
+            'nbstripout',
             'sphinx',
             'sphinx_rtd_theme',
         ],

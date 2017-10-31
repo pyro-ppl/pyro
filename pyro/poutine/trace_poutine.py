@@ -1,5 +1,3 @@
-from collections import defaultdict
-
 from .poutine import Poutine
 from .trace import Trace
 from .util import site_is_subsample
@@ -13,7 +11,7 @@ def get_vectorized_map_data_info(trace):
     """
     nodes = trace.nodes
 
-    vectorized_map_data_info = {'rao-blackwellization-condition': True}
+    vectorized_map_data_info = {'rao-blackwellization-condition': True, 'warnings': set()}
     vec_md_stacks = set()
 
     for name, node in nodes.items():
@@ -21,17 +19,17 @@ def get_vectorized_map_data_info(trace):
             continue
         if node["type"] in ("sample", "param"):
             stack = tuple(reversed(node["map_data_stack"]))
-            vec_mds = list(filter(lambda x: x[2] == 'tensor', stack))
+            # remove nonvec_names, since irange is implemented in terms of iarange
+            nonvec_names = set(x.name for x in stack if not x.vectorized)
+            vec_mds = [x for x in stack if x.vectorized and x.name not in nonvec_names]
             # check for nested vectorized map datas
             if len(vec_mds) > 1:
                 vectorized_map_data_info['rao-blackwellization-condition'] = False
+                vectorized_map_data_info['warnings'].add('nested iarange')
             # check that vectorized map datas only found at innermost position
-            if len(vec_mds) > 0 and stack[-1][2] == 'list':
+            if len(vec_mds) > 0 and not stack[-1].vectorized:
                 vectorized_map_data_info['rao-blackwellization-condition'] = False
-            # for now enforce batch_dim = 0 for vectorized map_data
-            # since needed batch_log_pdf infrastructure missing
-            if len(vec_mds) > 0 and vec_mds[0][3] != 0:
-                vectorized_map_data_info['rao-blackwellization-condition'] = False
+                vectorized_map_data_info['warnings'].add('non-leaf iarange')
             # enforce that if there are multiple vectorized map_datas, they are all
             # independent of one another because of enclosing list map_datas
             # (step 1: collect the stacks)
@@ -53,24 +51,24 @@ def get_vectorized_map_data_info(trace):
                     continue
                 ij_independent = False
                 for md_i, md_j in zip(stack_i, stack_j):
-                    if md_i[0] == md_j[0] and md_i[1] != md_j[1]:
+                    if md_i.name == md_j.name and md_i.counter != md_j.counter:
                         ij_independent = True
                 if not ij_independent:
                     vectorized_map_data_info['rao-blackwellization-condition'] = False
+                    vectorized_map_data_info['warnings'].add('there exist dependent iaranges')
                     break
 
     # construct data structure consumed by tracegraph_kl_qp
     if vectorized_map_data_info['rao-blackwellization-condition']:
-        vectorized_map_data_info['nodes'] = defaultdict(list)
+        vectorized_map_data_info['nodes'] = set()
         for name, node in nodes.items():
             if site_is_subsample(node):
                 continue
             if node["type"] in ("sample", "param"):
-                stack = tuple(reversed(node["map_data_stack"]))
-                vec_mds = list(filter(lambda x: x[2] == 'tensor', stack))
-                if len(vec_mds) > 0:
-                    node_batch_dim_pair = (name, vec_mds[0][3])
-                    vectorized_map_data_info['nodes'][vec_mds[0][0]].append(node_batch_dim_pair)
+                # remove nonvec_names, since irange is implemented in terms of iarange
+                nonvec_names = set(x.name for x in stack if not x.vectorized)
+                if any(x.vectorized and x.name not in nonvec_names for x in node["map_data_stack"]):
+                    vectorized_map_data_info['nodes'].add(name)
 
     return vectorized_map_data_info
 
@@ -84,7 +82,6 @@ def identify_dense_edges(trace):
         if site_is_subsample(node):
             continue
         if node["type"] == "sample":
-            # XXX why tuple?
             map_data_stack = tuple(reversed(node["map_data_stack"]))
             for past_name, past_node in trace.nodes.items():
                 if site_is_subsample(node):
@@ -93,11 +90,9 @@ def identify_dense_edges(trace):
                     if past_name == name:
                         break
                     past_node_independent = False
-                    past_node_map_data_stack = tuple(
-                        reversed(past_node["map_data_stack"]))
                     for query, target in zip(map_data_stack,
-                                             past_node_map_data_stack):
-                        if query[0] == target[0] and query[1] != target[1]:
+                                             reversed(past_node["map_data_stack"])):
+                        if query.name == target.name and query.counter != target.counter:
                             past_node_independent = True
                             break
                     if not past_node_independent:
@@ -170,6 +165,15 @@ class TracePoutine(Poutine):
         self(*args, **kwargs)
         return self.trace.copy()
 
+    def _reset(self):
+        tr = Trace(graph_type=self.graph_type)
+        tr.add_node("_INPUT",
+                    name="_INPUT", type="input",
+                    args=self.trace.nodes["_INPUT"]["args"],
+                    kwargs=self.trace.nodes["_INPUT"]["kwargs"])
+        self.trace = tr
+        super(TracePoutine, self)._reset()
+
     def _pyro_sample(self, msg):
         """
         :param msg: current message at a trace site.
@@ -185,19 +189,13 @@ class TracePoutine(Poutine):
         """
         name = msg["name"]
         if name in self.trace:
-            # Cannot repeat names between params and samples
-            if self.trace.nodes[name]['type'] == 'param':
+            site = self.trace.nodes[name]
+            if site['type'] == 'param':
+                # Cannot sample or observe after a param statement.
                 raise RuntimeError("{} is already in the trace as a param".format(name))
-            # observe has the same name as a sample
-            if msg['is_observed'] and not self.trace.nodes[name]['is_observed']:
-                raise RuntimeError("observe cannot have the same name as a sample")
-            # XXX temporary solution - otherwise, we reset self.trace to be empty
-            tr = Trace(graph_type=self.graph_type)
-            tr.add_node("_INPUT",
-                        name="_INPUT", type="input",
-                        args=self.trace.nodes["_INPUT"]["args"],
-                        kwargs=self.trace.nodes["_INPUT"]["kwargs"])
-            self.trace = tr
+            elif site['type'] == 'sample':
+                # Cannot sample after a previous sample statement.
+                raise RuntimeError("Multiple pyro.sample sites named '{}'".format(name))
 
         val = super(TracePoutine, self)._pyro_sample(msg)
         site = msg.copy()

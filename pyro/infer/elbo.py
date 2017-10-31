@@ -18,6 +18,9 @@ class ELBO(object):
     with `SVI`. `ELBO` dispatches to `Trace_ELBO` and `TraceGraph_ELBO`, where the internal
     implementations live.
 
+    .. warning:: `enum_discrete` is a bleeding edge feature.
+        see `SS-VAE <http://pyro.ai/examples/svi_part_iii.html>`_ for a discussion.
+
     References
 
     [1] `Automated Variational Inference in Probabilistic Programming`

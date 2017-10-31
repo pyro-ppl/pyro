@@ -1,31 +1,33 @@
-from six import add_metaclass
 from abc import ABCMeta, abstractmethod
 
 import torch
+from six import add_metaclass
 
 
 @add_metaclass(ABCMeta)
 class Distribution(object):
     """
-    Base class for parametrized probability distributions.
+    Base class for parameterized probability distributions.
 
     Distributions in Pyro are stochastic function objects with `.sample()` and `.log_pdf()` methods.
-    Pyro provides two versions of each stochastic function lowercase versions that take parameters::
+    Pyro provides two versions of each stochastic function:
 
-      x = dist.binomial(param)              # Returns a sample of size size(param).
-      p = dist.binomial.log_pdf(x, param)   # Evaluates log probability of x.
+    `(i)` lowercase versions that take parameters::
 
-    as well as UpperCase distribution classes that can construct stochastic functions with
+      x = dist.bernoulli(param)             # Returns a sample of size size(param).
+      p = dist.bernoulli.log_pdf(x, param)  # Evaluates log probability of x.
+
+    and `(ii)` UpperCase distribution classes that can construct stochastic functions with
     fixed parameters::
 
-      d = dist.Binomial(param)
+      d = dist.Bernoulli(param)
       x = d()                               # Samples a sample of size size(param).
       p = d.log_pdf(x)                      # Evaluates log probability of x.
 
-    **Parameters**:
+    .. note::
 
-    Parameters should be of type `torch.autograd.Variable` and all methods return type
-    `torch.autograd.Variable` unless otherwise noted.
+        Parameters and data should be of type `torch.autograd.Variable` and all
+        methods return type `torch.autograd.Variable` unless otherwise noted.
 
     **Tensor Shapes**:
 
@@ -82,7 +84,7 @@ class Distribution(object):
         """
         Constructor for base distribution class.
 
-        :param bool reparametrized: Optional argument to override whether
+        :param bool reparameterized: Optional argument to override whether
             instance should be considered reparameterized (by default, this
             is decided by the class).
         """
