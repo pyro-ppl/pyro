@@ -179,7 +179,7 @@ class DMM(nn.Module):
         pyro.module("dmm", self)
 
         # set z_prev = z_0 to setup the recursive conditioning in p(z_t | z_{t-1})
-        z_prev = self.z_0
+        z_prev = self.z_0.expand(mini_batch.size(0), self.z_0.size(0))
 
         # sample the latents z and observed x's one time step at a time
         for t in range(1, T_max + 1):
