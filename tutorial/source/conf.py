@@ -45,7 +45,7 @@ templates_path = ['_templates']
 # You can specify multiple suffix as a list of string:
 #
 # source_suffix = ['.rst', '.md']
-source_suffix = '.rst, .ipynb'
+source_suffix = ['.rst', '.ipynb']
 
 # allow errors because not all tutorials build
 nbsphinx_allow_errors = True

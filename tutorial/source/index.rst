@@ -9,13 +9,12 @@ Welcome to Pyro Tutorials's documentation!
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
-   :caption: Contents:
 
-   svi_part_i.ipynb
-   svi_part_ii.ipynb
-   svi_part_iii.ipynb
-   vae.ipynb
-   bayesian_regression.ipynb
+   svi_part_i
+   svi_part_ii
+   svi_part_iii
+   vae
+   bayesian_regression
 
 
 
