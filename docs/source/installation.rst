@@ -15,6 +15,6 @@ or install from source::
 
 .. warning::
 
-    Some features of Pyro require bleeding-edge features of PyTorch (e.g. `enum_discrete`).
+    Some bleeding-edge features of Pyro (e.g. `enum_discrete`) require a very recent version of PyTorch.
     We recommend installing PyTorch from source using the `master` branch.
     See `PyTorch install instructions <https://github.com/pytorch/pytorch#from-source>`_ for details.
