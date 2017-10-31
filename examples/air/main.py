@@ -1,6 +1,5 @@
 """
-This attempts (currently unsuccessfully) to reproduce some of the
-results on the multi-mnist data set described in [1].
+AIR applied to the multi-mnist data set [1].
 
 [1] Eslami, SM Ali, et al. "Attend, infer, repeat: Fast scene
 understanding with generative models." Advances in Neural Information
@@ -252,8 +251,6 @@ for i in range(1, args.num_steps + 1):
         vis.images(draw_many(examples_to_viz, z_wheres))
         # Show reconstructions of data.
         vis.images(draw_many(recons, z_wheres))
-
-    # TODO: Report accuracy on predictions of object counts.
 
     if 'save' in args and i % args.save_every == 0:
         print('Saving parameters...')

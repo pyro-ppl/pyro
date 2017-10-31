@@ -269,6 +269,9 @@ class AIR(nn.Module):
                               z_where_sigma * self.z_where_sigma_prior,
                               log_pdf_mask=log_pdf_mask)
 
+        # Figure 2 of [1] shows x_att depending on z_where and h,
+        # rather than z_where and x as here, but I think this is
+        # correct.
         x_att = image_to_window(z_where, self.window_size, self.x_size, inputs['raw'])
 
         # Encode attention windows.
@@ -309,8 +312,7 @@ class AIR(nn.Module):
 
         return bl_value, bl_h, bl_c
 
-    # HACK: Helpers to create zeros/ones on cpu/gpu as appropriate.
-    # What's the correct way to do this?
+    # Helpers to create zeros/ones on cpu/gpu as appropriate.
     def ng_zeros(self, *args, **kwargs):
         t = ng_zeros(*args, **kwargs)
         if self.use_cuda:
@@ -330,7 +332,7 @@ expansion_indices = torch.LongTensor([1, 0, 2, 0, 1, 3])
 
 
 def expand_z_where(z_where):
-    # Take a batch of three vectors, and massages them into a batch of
+    # Take a batch of three-vectors, and massages them into a batch of
     # 2x3 matrices with elements like so:
     # [s,x,y] -> [[s,0,x],
     #             [0,s,y]]
