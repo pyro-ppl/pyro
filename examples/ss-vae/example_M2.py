@@ -16,7 +16,7 @@ class SSVAE(nn.Module):
         This class encapsulates the parameters and functions needed to train a
         semi-supervised variational auto-encoder model on MNIST image data
 
-        :param sup_perc: supervised percentage of the data
+        :param sup_num: supervised number of examples
                          i.e. how many of the images have supervised labels
         :param output_size: size of the tensor representing the class label (10 for MNIST since
                             we represent the class labels as a one-hot vector with 10 components)
@@ -37,7 +37,7 @@ class SSVAE(nn.Module):
         :param aux_loss_multiplier: the multiplier to use with the auxiliary loss
         :param logfile: filename for logging the outputs
     """
-    def __init__(self, sup_perc=5.0, output_size=10, input_size=784,
+    def __init__(self, sup_num=3000, output_size=10, input_size=784,
                  latent_layer=20, hidden_layers=(400, 200), adam_params=None,
                  batch_size=100, epsilon_scale=1e-7, num_epochs=100,
                  use_cuda=False, enum_discrete=False, aux_loss=False,
@@ -46,7 +46,7 @@ class SSVAE(nn.Module):
         super(SSVAE, self).__init__()
 
         # initialize the class with all arguments provided to the constructor
-        self.sup_perc = sup_perc
+        self.sup_num = sup_num
         self.output_size = output_size
         self.input_size = input_size
         self.latent_layer = latent_layer
@@ -110,7 +110,7 @@ class SSVAE(nn.Module):
 
     def guide(self, xs, ys=None):
         """
-        The guide corresponds to the following posterior distributions:
+        The guide corresponds to the following:
             q(y|x) = categorical(alpha(x))              # infer digit from an image
             q(z|x,y) = normal(mu(x,y),sigma(x,y))       # infer handwriting style from
                                                           an image and the digit
@@ -125,30 +125,30 @@ class SSVAE(nn.Module):
         pyro.module("ss_vae", self)
 
         # if the class label (the digit) is not supervised, sample
-        # (and score) the digit with the posterior distribution
+        # (and score) the digit with the variational distribution
         # q(y|x) = categorical(alpha(x))
         if ys is None:
             alpha = self.nn_alpha_y.forward(xs)
             ys = pyro.sample("y", dist.categorical, alpha)
 
-        # sample (and score) the latent handwriting-style with the posterior
+        # sample (and score) the latent handwriting-style with the variational
         # distribution q(z|x,y) = normal(mu(x,y),sigma(x,y))
         mu, sigma = self.nn_mu_sigma_z.forward([xs, ys])
         zs = pyro.sample("z", dist.normal, mu, sigma)
 
     def classify(self, xs):
         """
-        this function is used to classify an image (or a batch of images)
+        classify an image (or a batch of images)
 
         :param xs: a batch of scaled vectors of pixels from an image
         :return: a batch of the corresponding class labels (as one-hots)
         """
-        # use the trained posterior model q(y|x) = categorical(alpha(x))
+        # use the trained model q(y|x) = categorical(alpha(x))
         # compute all class probabilities for the image(s)
         alpha = self.nn_alpha_y.forward(xs)
 
-        # get the index (digit) that corresponds to the maximum posterior
-        # class probability
+        # get the index (digit) that corresponds to
+        # the maximum predicted class probability
         res, ind = torch.topk(alpha, 1)
 
         # convert the digit(s) to one-hot tensor(s)
@@ -161,7 +161,7 @@ class SSVAE(nn.Module):
         latent_size = self.latent_layer
         hidden_sizes = self.hidden_layers
 
-        # instantiating the networks that are used as parameters in our distributions
+        # define the neural networks used later in the model(s) and the guide(s)
         # using MLPs (multi-layered perceptrons or simple feed-forward networks)
         # where the provided activation parameter is used on every linear layer except
         # for the output layer where we use the provided output_activation parameter
@@ -208,7 +208,7 @@ class SSVAE(nn.Module):
         # this here is the extra Term to yield an auxiliary loss that we do gradient descend on
         # similar to the NIPS 14 paper (Kingma et al).
         alpha = self.nn_alpha_y.forward(xs)
-        pyro.observe("y_hack", dist.categorical, ys, alpha, log_pdf_mask=self.aux_loss_multiplier)
+        pyro.observe("y_aux", dist.categorical, ys, alpha, log_pdf_mask=self.aux_loss_multiplier)
 
     def guide_classify(self, xs, ys):
         """
@@ -247,7 +247,7 @@ class SSVAE(nn.Module):
 
             # setup the inference with appropriate data and losses
             inference = SSVAEInfer(MNIST, self.batch_size, self.losses, self.is_supervised_loss,
-                                   self.classify, sup_perc=self.sup_perc, use_cuda=self.use_cuda,
+                                   self.classify, sup_num=self.sup_num, use_cuda=self.use_cuda,
                                    logger=logger)
             # run the inference
             inference.run(num_epochs=self.num_epochs)
@@ -261,7 +261,7 @@ def main(args):
     if args.use_cuda:
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
     adam_params = {"lr": args.learning_rate, "betas": (args.beta_1, 0.999)}
-    ss_vae = SSVAE(sup_perc=args.sup_perc, latent_layer=args.latent_layer,
+    ss_vae = SSVAE(sup_num=args.sup_num, latent_layer=args.latent_layer,
                    hidden_layers=args.hidden_layers, adam_params=adam_params,
                    batch_size=args.batch_size, epsilon_scale=args.epsilon_scale,
                    num_epochs=args.num_epochs, use_cuda=args.use_cuda,
@@ -270,8 +270,9 @@ def main(args):
     ss_vae.optimize()
 
 
-EXAMPLE_RUN = "example run: python example_M2.py -cuda -ne 2 --aux-loss -alm 300 -enum " \
-              "-sup 5.0 -ll 20 -hl 400 200 -lr 0.001 -b1 0.9 -bs 200 -eps 1e-7 -log ./tmp.log"
+EXAMPLE_RUN = "example run: python example_M2.py -cuda -ne 2 --aux-loss -alm 300 -enum -sup 3000 -ll 20" \
+              " -hl 400 200 -lr 0.001 -b1 0.95 -bs 500 -eps 1e-7 -log ./tmp.log"
+
 if __name__ == "__main__":
     import argparse
 
@@ -288,9 +289,9 @@ if __name__ == "__main__":
     parser.add_argument('-enum', '--enum-discrete', action="store_true",
                         help="whether to enumerate the discrete support of the categorical distribution"
                              "while computing the ELBO loss")
-    parser.add_argument('-sup', '--sup-perc', default=5,
-                        type=float, choices=[0.2, 1, 2, 5, 10, 20, 25, 50],
-                        help="supervised percentage of the data i.e. "
+    parser.add_argument('-sup', '--sup-num', required=True,
+                        type=float, choices=[100, 600, 1000, 3000],
+                        help="supervised amount of the data i.e. "
                              "how many of the images have supervised labels")
     parser.add_argument('-ll', '--latent-layer', default=20, type=int,
                         help="size of the tensor representing the latent random "

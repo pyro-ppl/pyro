@@ -137,6 +137,9 @@ class MLP(nn.Module):
             cur_linear_layer.weight.data.normal_(0, 0.001)
             cur_linear_layer.bias.data.normal_(0, 0.001)
 
+            # use GPUs to share data during training (if available)
+            cur_linear_layer = nn.DataParallel(cur_linear_layer)
+
             # add our linear layer
             all_modules.append(cur_linear_layer)
 

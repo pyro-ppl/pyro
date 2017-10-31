@@ -34,21 +34,75 @@ def fn_y_mnist(y, use_cuda):
     return yp
 
 
-def split_sup_unsup(X, y, sup_perc):
+def get_ss_indices_per_class(y, sup_per_class):
+    # number of indices to consider
+    n_idxs = y.size()[0]
+
+    # calculate the indices per class
+    idxs_per_class = {j: [] for j in range(10)}
+
+    # for each index identify the class and add the index to the right class
+    for i in range(n_idxs):
+        curr_y = y[i]
+        for j in range(10):
+            if curr_y[j] == 1:
+                idxs_per_class[j].append(i)
+                break
+
+    idxs_sup = []
+    idxs_unsup = []
+    for j in range(10):
+        np.random.shuffle(idxs_per_class[j])
+        idxs_sup.extend(idxs_per_class[j][:sup_per_class])
+        idxs_unsup.extend(idxs_per_class[j][sup_per_class:len(idxs_per_class[j])])
+
+    return idxs_sup, idxs_unsup
+
+
+def split_sup_unsup_valid(X, y, sup_num, validation_num=10000):
     """
-        helper function for splitting the data into supervised and un-supervised part
+        helper function for splitting the data into supervised, un-supervised and validation parts
     :param X: images
     :param y: labels (digits)
-    :param sup_perc: what percentage of data is supervised
-    :return: splits of data by sup_perc percentage
+    :param sup_num: what number of examples is supervised
+    :param validation_num: what number of last examples to use for validation
+    :return: splits of data by sup_num number of supervised examples
     """
-    # number of examples
-    n = X.size()[0]
 
-    # number of supervised examples
-    sup_n = int(n * sup_perc / 100.0)
+    # validation set is the last 10,000 examples
+    X_valid = X[-validation_num:]
+    y_valid = y[-validation_num:]
 
-    return X[0:sup_n], y[0:sup_n], X[sup_n:n], y[sup_n:n],
+    X = X[0:-validation_num]
+    y = y[0:-validation_num]
+
+    assert sup_num % 10 == 0, "unable to have equal number of images per class"
+
+    # number of supervised examples per class
+    sup_per_class = int(sup_num / 10)
+
+    idxs_sup, idxs_unsup = get_ss_indices_per_class(y, sup_per_class)
+    X_sup = X[idxs_sup]
+    y_sup = y[idxs_sup]
+    X_unsup = X[idxs_unsup]
+    y_unsup = y[idxs_unsup]
+
+    return X_sup, y_sup, X_unsup, y_unsup, X_valid, y_valid
+
+
+def print_distribution_labels(y):
+    """
+        helper function for printing the distribution of class labels in a dataset
+    :param y: tensor of class labels given as one-hots
+    :return: a dictionary of counts for each label from y
+    """
+    counts = {j: 0 for j in range(10)}
+    for i in range(y.size()[0]):
+        for j in range(10):
+            if y[i][j] == 1:
+                counts[j] += 1
+                break
+    print (counts)
 
 
 class MNISTCached(MNIST):
@@ -56,8 +110,17 @@ class MNISTCached(MNIST):
         a wrapper around MNIST to load and cache the transformed data
         once at the beginning of the inference
     """
-    def __init__(self, train="sup", sup_perc=5.0, use_cuda=True, *args, **kwargs):
-        super(MNISTCached, self).__init__(train=train in ["sup", "unsup"], *args, **kwargs)
+
+    # static class variables for caching training data
+    train_data_size = 50000
+    train_data_sup, train_labels_sup = None, None
+    train_data_unsup, train_labels_unsup = None, None
+    validation_size = 10000
+    data_valid, labels_valid = None, None
+    test_size = 10000
+
+    def __init__(self, mode, sup_num, use_cuda=True, *args, **kwargs):
+        super(MNISTCached, self).__init__(train=mode in ["sup", "unsup", "valid"], *args, **kwargs)
 
         # transformations on MNIST data (normalization and one-hot conversion for labels)
         def transform(x):
@@ -66,9 +129,9 @@ class MNISTCached(MNIST):
         def target_transform(y):
             return fn_y_mnist(y, use_cuda)
 
-        assert train in ["sup", "unsup", "test"], "invalid train/test option values"
+        assert mode in ["sup", "unsup", "test", "valid"], "invalid train/test option values"
 
-        if train in ["sup", "unsup"]:
+        if mode in ["sup", "unsup", "valid"]:
 
             # transform the training data if transformations are provided
             if transform is not None:
@@ -76,15 +139,22 @@ class MNISTCached(MNIST):
             if target_transform is not None:
                 self.train_labels = (target_transform(self.train_labels))
 
-            train_data_sup, train_labels_sup, train_data_unsup, train_labels_unsup = \
-                split_sup_unsup(self.train_data, self.train_labels, sup_perc)
-            if train == "sup":
-                self.train_data, self.train_labels = train_data_sup, train_labels_sup
-            else:
-                self.train_data = train_data_unsup
+            if MNISTCached.train_data_sup is None:
+                MNISTCached.train_data_sup, MNISTCached.train_labels_sup, \
+                    MNISTCached.train_data_unsup, MNISTCached.train_labels_unsup, \
+                    MNISTCached.data_valid, MNISTCached.labels_valid = \
+                    split_sup_unsup_valid(self.train_data, self.train_labels, sup_num)
+
+            if mode == "sup":
+                self.train_data, self.train_labels = MNISTCached.train_data_sup, MNISTCached.train_labels_sup
+            elif mode == "unsup":
+                self.train_data = MNISTCached.train_data_unsup
 
                 # making sure that the unsupervised labels are not available to inference
-                self.train_labels = (torch.Tensor(train_labels_unsup.shape[0]).view(-1, 1)) * np.nan
+                self.train_labels = (torch.Tensor(
+                    MNISTCached.train_labels_unsup.shape[0]).view(-1, 1)) * np.nan
+            else:
+                self.train_data, self.train_labels = MNISTCached.data_valid, MNISTCached.labels_valid
 
         else:
             # transform the testing data if transformations are provided
@@ -109,13 +179,13 @@ class MNISTCached(MNIST):
         return img, target
 
 
-def setup_data_loaders(dataset, use_cuda, batch_size, sup_perc, root='./data', download=True, **kwargs):
+def setup_data_loaders(dataset, use_cuda, batch_size, sup_num, root='./data', download=True, **kwargs):
     """
         helper function for setting up pytorch data loaders for a semi-supervised dataset
     :param dataset: the data to use
     :param use_cuda: use GPU(s) for training
     :param batch_size: size of a batch of data to output when iterating over the data loaders
-    :param sup_perc: percentage of supervised data
+    :param sup_num: number of supervised data examples
     :param root: where on the filesystem should the dataset be
     :param download: download the dataset (if it doesn't exist already)
     :param kwargs: other params for the pytorch data loader
@@ -123,14 +193,13 @@ def setup_data_loaders(dataset, use_cuda, batch_size, sup_perc, root='./data', d
                                   supervised data for testing)
     """
     # instantiate the dataset as training/testing sets
-    train_set_sup = dataset(root=root, train="sup", download=download,
-                            sup_perc=sup_perc, use_cuda=use_cuda)
+    train_set_sup = dataset(root=root, mode="sup", download=download, sup_num=sup_num, use_cuda=use_cuda)
 
-    train_set_unsup = dataset(root=root, train="unsup", download=download,
-                              sup_perc=sup_perc, use_cuda=use_cuda)
+    train_set_unsup = dataset(root=root, mode="unsup", download=download, sup_num=sup_num, use_cuda=use_cuda)
 
-    test_set = dataset(root=root, train="test", sup_perc=sup_perc,
-                       use_cuda=use_cuda)
+    validation_set = dataset(root=root, mode="valid", download=download, sup_num=sup_num, use_cuda=use_cuda)
+
+    test_set = dataset(root=root, mode="test", sup_num=sup_num, use_cuda=use_cuda)
 
     if 'num_workers' not in kwargs:
         kwargs = {'num_workers': 0, 'pin_memory': False}
@@ -139,5 +208,7 @@ def setup_data_loaders(dataset, use_cuda, batch_size, sup_perc, root='./data', d
     train_loader_sup = DataLoader(train_set_sup, batch_size=batch_size, shuffle=True, **kwargs)
     train_loader_unsup = DataLoader(train_set_unsup, batch_size=batch_size, shuffle=True, **kwargs)
 
+    validation_loader = DataLoader(validation_set, batch_size=batch_size, shuffle=False, **kwargs)
     test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False, **kwargs)
-    return train_loader_sup, train_loader_unsup, test_loader
+
+    return train_loader_sup, train_loader_unsup, test_loader, validation_loader
