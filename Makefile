@@ -15,7 +15,7 @@ lint: FORCE
 	flake8
 
 format: FORCE
-	# yapf -i -p *.py pyro/*.py pyro/*/*.py
+	yapf -i *.py pyro/distributions/*.py
 	isort -rc *.py pyro/ tests/
 
 test: lint docs FORCE
