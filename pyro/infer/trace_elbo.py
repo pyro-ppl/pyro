@@ -5,7 +5,7 @@ import pyro.poutine as poutine
 from pyro.distributions.util import torch_zeros_like
 from pyro.infer.enum import iter_discrete_traces
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_site_names
+from pyro.util import check_model_guide_agreement
 
 
 class Trace_ELBO(object):
@@ -38,7 +38,7 @@ class Trace_ELBO(object):
                     model_trace = poutine.trace(poutine.replay(model, guide_trace),
                                                 graph_type="flat").get_trace(*args, **kwargs)
 
-                    check_site_names(model_trace, guide_trace)
+                    check_model_guide_agreement(model_trace, guide_trace)
                     guide_trace = prune_subsample_sites(guide_trace)
                     model_trace = prune_subsample_sites(model_trace)
 
@@ -50,7 +50,7 @@ class Trace_ELBO(object):
             guide_trace = poutine.trace(guide).get_trace(*args, **kwargs)
             model_trace = poutine.trace(poutine.replay(model, guide_trace)).get_trace(*args, **kwargs)
 
-            check_site_names(model_trace, guide_trace)
+            check_model_guide_agreement(model_trace, guide_trace)
             guide_trace = prune_subsample_sites(guide_trace)
             model_trace = prune_subsample_sites(model_trace)
 

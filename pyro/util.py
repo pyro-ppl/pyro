@@ -378,15 +378,16 @@ def save_visualization(trace, graph_output):
     g.render(graph_output, view=False, cleanup=True)
 
 
-def check_site_names(model_trace, guide_trace):
+def check_model_guide_agreement(model_trace, guide_trace):
     """
     :param pyro.poutine.Trace model_trace: Trace object of the model
     :param pyro.poutine.Trace guide_trace: Trace object of the guide
-    :raises: RuntimeWarning
+    :raises: RuntimeWarning, ValueError
 
     Checks that (1) there is a bijection between the samples in the guide
-    and the samples in the model, and (2) each `iarange` statement in the
-    guide also appears in the model.
+    and the samples in the model, (2) each `iarange` statement in the guide
+    also appears in the model, (3) at each sample site that appears in both
+    the model and guide, the model and guide agree on sample dimension.
     """
     # Check ordinary sample sites.
     model_vars = set(name for name, site in model_trace.nodes.items()
