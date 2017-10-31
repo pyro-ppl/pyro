@@ -65,12 +65,16 @@ class Fixture(object):
         if not self.scipy_arg_fn:
             return
         dist_params = self.get_dist_params(idx, wrap_tensor=False)
+        dist_params_wrapped = self.get_dist_params(idx)
         test_data = self.get_test_data(idx, wrap_tensor=False)
+        test_data_wrapped = self.get_test_data(idx)
+        shape = self.pyro_dist.shape(test_data_wrapped, **dist_params_wrapped)
         batch_log_pdf = []
         for i in range(len(test_data)):
             batch_params = {}
             for k in dist_params:
-                batch_params[k] = dist_params[k][i]
+                param = np.broadcast_to(dist_params[k], shape)
+                batch_params[k] = param[i]
             args, kwargs = self.scipy_arg_fn(**batch_params)
             if self.is_discrete:
                 batch_log_pdf.append(self.scipy_dist.logpmf(test_data[i],
