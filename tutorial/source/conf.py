@@ -163,6 +163,3 @@ texinfo_documents = [
      author, 'PyroTutorials', 'One line description of project.',
      'Miscellaneous'),
 ]
-
-
-
