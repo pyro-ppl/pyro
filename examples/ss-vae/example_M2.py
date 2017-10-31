@@ -1,7 +1,6 @@
 
 import torch
 import pyro
-import sys
 from torch.autograd import Variable
 import pyro.distributions as dist
 from data_cached import MNISTCached as MNIST
@@ -10,6 +9,8 @@ from pyro.infer import SVI
 from pyro.optim import Adam
 from mlp import MLP, Exp, EpsilonScaledSigmoid, EpsilonScaledSoftmax
 import torch.nn as nn
+import numpy as np
+import os.path
 
 
 class SSVAE(nn.Module):
@@ -171,7 +172,7 @@ class SSVAE(nn.Module):
         self.nn_alpha_y = MLP([self.input_size] +
                               hidden_sizes +
                               [self.output_size],
-                              activation=nn.ReLU,
+                              activation=nn.Softplus,
                               output_activation=EpsilonScaledSoftmax,
                               epsilon_scale=self.epsilon_scale)
 
@@ -182,13 +183,13 @@ class SSVAE(nn.Module):
         self.nn_mu_sigma_z = MLP([self.input_size + self.output_size] +
                                  hidden_sizes +
                                  [[latent_size, latent_size]],
-                                 activation=nn.ReLU,
+                                 activation=nn.Softplus,
                                  output_activation=[None, Exp])
 
         self.nn_mu_x = MLP([latent_size + self.output_size] +
                            hidden_sizes +
                            [self.input_size],
-                           activation=nn.ReLU,
+                           activation=nn.Softplus,
                            output_activation=EpsilonScaledSigmoid,
                            epsilon_scale=self.epsilon_scale)
 
@@ -238,31 +239,67 @@ class SSVAE(nn.Module):
             self.losses.append(loss_aux)
             self.is_supervised_loss.append(True)
 
-    def logging_hook(self, epoch):
+    def save_checkpoint(self, epoch, valid_acc, test_acc, post="last"):
         """
-            this function is passed to the inference algorithm and used for logging
-            and any other computations that need to be done after every epoch
+            helper function for saving the state of the SS-VAE module as checkpoints
+            this is called by inference after every epoch
+        :param epoch: current epoch (int)
+        :param valid_acc: current validation accuracy
+        :param test_acc: current testing accuracy
+        :param post: "best" or "last" to signify if the checkpoint is saving the
+                     current best w.r.t validation accuracy or just the state from the
+                     last epoch
         :return: None
         """
-        # log the loss and validation/testing accuracies
-        str_print = "{} epoch: avg losses {}".format(epoch, " ".join(map(str, self.inference.loss_training[epoch])))
-        validation_accuracy = self.inference.get_accuracy(mode="valid")
-        str_print += " validation accuracy {}".format(validation_accuracy)
+        assert post in ["last", "best"], "invalid 'post' parameter to save_checkpoint"
 
-        # This test accuracy is only for logging, this is not used
-        # to make any decisions during training
-        test_accuracy = self.inference.get_accuracy(mode="test")
-        str_print += " test accuracy {}".format(test_accuracy)
+        # hard-coded local directory for checkpoints
+        dirname = './checkpoints'
 
-        # update the best validation accuracy and the corresponding
-        # testing accuracy and the state of the module (including the networks)
-        if self.inference.best_valid_acc < validation_accuracy:
-            self.inference.best_valid_acc = validation_accuracy
-            self.inference.corresponding_test_acc = test_accuracy
-            self.inference.corresponding_state = self.state_dict()
+        # make the directory if it doesn't exist
+        if not os.path.exists(dirname):
+            os.makedirs(dirname)
 
-        self.inference.print_and_log(str_print)
-        sys.stdout.flush()
+        # build the state to be logged - book-keeping the epoch, accuracies,
+        # random states in numpy, torch and torch.cuda,
+        # the state of this module and the optimizer
+        state = {
+            'epoch': epoch + 1,
+            'ss_vae': self.state_dict(),
+            'optimizer': self.optimizer.get_state(),
+            'rand_state': torch.get_rng_state(),
+            'rand_cuda_state': torch.cuda.get_rng_state(),
+            'numpy_rand_state': np.random.get_state(),
+            'valid_acc': valid_acc,
+            'test_acc': test_acc
+        }
+
+        # derive the filename from the logfile
+        filename = "ss_vae_{}_{}".format(os.path.basename(self.logfile), post)
+        filename = os.path.join(dirname, filename)
+
+        # save the checkpoint file
+        torch.save(state, filename)
+
+    def load_checkpoint_randomness(self):
+        """
+            load the randomness from a checkpoint
+            this should be delayed until data loads and gets cached
+            using a pre-determined seed
+        :return: None
+        """
+        if self.checkpoint is not None:
+            np.random.set_state(self.checkpoint['numpy_rand_state'])
+            torch.set_rng_state(self.checkpoint['rand_state'])
+            torch.cuda.set_rng_state(self.checkpoint['rand_cuda_state'])
+
+    def load_checkpoint(self, filename):
+        self.checkpoint = torch.load(filename)
+        self.optimizer.set_state(self.checkpoint['optimizer'])
+        self.load_state_dict(self.checkpoint['ss_vae'])
+        start_epoch = self.checkpoint['epoch']
+        # do less num epochs
+        self.num_epochs -= start_epoch
 
     def optimize(self):
         """
@@ -277,16 +314,31 @@ class SSVAE(nn.Module):
                                         self.classify, sup_num=self.sup_num, use_cuda=self.use_cuda,
                                         logger=logger)
             # run the inference
-            self.inference.run(num_epochs=self.num_epochs, hook=self.logging_hook)
+            self.inference.run(num_epochs=self.num_epochs, ss_vae_module=self)
         finally:
             # close the logger file object if opened
             if self.logfile is not None:
                 logger.close()
 
 
+def set_seed(seed, use_cuda):
+    """
+        setting the seed for controlling randomness in this example
+    :param seed: seed value (int)
+    :param use_cuda: set the random seed for torch.cuda or not
+    :return: None
+    """
+    if seed is not None:
+        torch.manual_seed(seed)
+        np.random.seed(seed)
+        if use_cuda:
+            torch.cuda.manual_seed(seed)
+
+
 def main(args):
     if args.use_cuda:
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
+    set_seed(args.seed, args.use_cuda)
     adam_params = {"lr": args.learning_rate, "betas": (args.beta_1, 0.999)}
     ss_vae = SSVAE(sup_num=args.sup_num, latent_layer=args.latent_layer,
                    hidden_layers=args.hidden_layers, adam_params=adam_params,
@@ -297,8 +349,8 @@ def main(args):
     ss_vae.optimize()
 
 
-EXAMPLE_RUN = "example run: python example_M2.py -cuda -ne 2 --aux-loss -alm 300 -enum -sup 3000 -ll 20" \
-              " -hl 400 200 -lr 0.001 -b1 0.95 -bs 500 -eps 1e-7 -log ./tmp.log"
+EXAMPLE_RUN = "example run: python example_M2.py --seed 0 -cuda -ne 2 --aux-loss -alm 300 -enum -sup 3000 " \
+              "-ll 20 -hl 400 200 -lr 0.001 -b1 0.95 -bs 500 -eps 1e-7 -log ./tmp.log"
 
 if __name__ == "__main__":
     import argparse
@@ -337,6 +389,8 @@ if __name__ == "__main__":
                              "and Sigmoid opertations in pytorch for numerical stability")
     parser.add_argument('-log', '--logfile', default=None, type=str,
                         help="filename for logging the outputs")
+    parser.add_argument('--seed', default=None, type=int,
+                        help="seed for controlling randomness in this example")
 
     args = parser.parse_args()
 

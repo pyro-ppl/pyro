@@ -1,4 +1,5 @@
 import torch
+import sys
 from torch.autograd import Variable
 from data_cached import setup_data_loaders
 
@@ -60,8 +61,10 @@ class SSVAEInfer(object):
     def print_and_log(self, msg):
         # print and log a message (if a logger is present)
         print(msg)
+        sys.stdout.flush()
         if self.logger is not None:
             self.logger.write("{}\n".format(msg))
+            self.logger.flush()
 
     def run_inference_for_epoch(self):
         """
@@ -109,7 +112,7 @@ class SSVAEInfer(object):
         # return the values of all losses
         return epoch_losses
 
-    def run(self, num_epochs=100, hook=None):
+    def run(self, num_epochs=100, ss_vae_module=None):
         """
             run the inference for a given number of epochs
         :param num_epochs: number of epochs to run the inference for
@@ -137,13 +140,33 @@ class SSVAEInfer(object):
 
             self.loss_training.append(avg_epoch_losses)
 
-            if hook is not None:
-                hook(i)
+            # log the loss and validation/testing accuracies
+            str_print = "{} epoch: avg losses {}".format(i, " ".join(map(str, avg_epoch_losses)))
+            validation_accuracy = self.get_accuracy(mode="valid")
+            str_print += " validation accuracy {}".format(validation_accuracy)
 
+            # this test accuracy is only for logging, this is not used
+            # to make any decisions during training
+            test_accuracy = self.get_accuracy(mode="test")
+            str_print += " test accuracy {}".format(test_accuracy)
+
+            # update the best validation accuracy and the corresponding
+            # testing accuracy and the state of the parent module (including the networks)
+            if self.best_valid_acc < validation_accuracy:
+                self.best_valid_acc = validation_accuracy
+                self.corresponding_test_acc = test_accuracy
+                ss_vae_module.save_checkpoint(i, self.best_valid_acc, test_accuracy, post="best")
+
+            # save the state for the last epoch
+            ss_vae_module.save_checkpoint(i, self.best_valid_acc, test_accuracy, post="last")
+
+            self.print_and_log(str_print)
+
+        final_test_accuracy = self.get_accuracy(mode="test")
         self.print_and_log("best validation accuracy {} corresponding testing accuracy {} "
                            "last testing accuracy {}".format(self.best_valid_acc,
                                                              self.corresponding_test_acc,
-                                                             self.get_accuracy(mode="test"))
+                                                             final_test_accuracy)
                            )
 
     def get_accuracy(self, mode="train"):
