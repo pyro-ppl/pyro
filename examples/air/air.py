@@ -43,6 +43,7 @@ class AIR(nn.Module):
                  bl_predict_net=[],
                  non_linearity='ReLU',
                  decoder_output_bias=None,
+                 decoder_output_use_sigmoid=False,
                  use_masking=True,
                  use_baselines=True,
                  baseline_scalar=None,
@@ -77,7 +78,8 @@ class AIR(nn.Module):
 
         self.rnn = nn.LSTMCell(rnn_input_size, rnn_hidden_size)
         self.encode = Encoder(window_size ** 2, encoder_net, z_what_size, nl)
-        self.decode = Decoder(window_size ** 2, decoder_net, z_what_size, decoder_output_bias, nl)
+        self.decode = Decoder(window_size ** 2, decoder_net, z_what_size,
+                              decoder_output_bias, decoder_output_use_sigmoid, nl)
         self.predict = Predict(rnn_hidden_size, predict_net, self.z_pres_size, self.z_where_size, nl)
         self.embed = Identity() if embed_net is None else MLP(x_size ** 2, embed_net, nl, True)
 

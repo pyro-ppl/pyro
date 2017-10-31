@@ -76,6 +76,8 @@ parser.add_argument('--encoder-latent-size', type=int, default=50,
                     help='attention window encoder/decoder latent space size')
 parser.add_argument('--decoder-output-bias', type=float,
                     help='bias added to decoder output (prior to applying non-linearity)')
+parser.add_argument('--decoder-output-use-sigmoid', action='store_true',
+                    help='apply sigmoid function to output of decoder network')
 parser.add_argument('--window-size', type=int, default=28,
                     help='attention window size')
 parser.add_argument('--z-pres-prior', type=float, default=None,
@@ -183,6 +185,7 @@ def z_pres_prior_p(opt_step, time_step):
 model_arg_keys = ['window_size',
                   'rnn_hidden_size',
                   'decoder_output_bias',
+                  'decoder_output_use_sigmoid',
                   'baseline_scalar',
                   'encoder_net',
                   'decoder_net',
