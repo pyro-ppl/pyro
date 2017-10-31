@@ -10,18 +10,18 @@ from pyro.distributions.util import log_gamma
 
 class Beta(Distribution):
     """
-    :param a: shape *(real (0, Infinity))*
-    :param b: shape *(real (0, Infinity))*
+    Univariate beta distribution parameterized by `alpha` and `beta`.
 
-    Univariate beta distribution parameterized by alpha and beta
+    This is often used in conjunction with `torch.nn.Softplus` to ensure
+    `alpha` and `beta` parameters are positive.
+
+    :param torch.autograd.Variable alpha: Lower shape parameter.
+        Should be positive.
+    :param torch.autograd.Variable beta: Upper shape parameter.
+        Should be positive.
     """
 
     def __init__(self, alpha, beta, batch_size=None, *args, **kwargs):
-        """
-        Params:
-          `alpha` - alpha
-          `beta` - beta
-        """
         self.alpha = alpha
         self.beta = beta
         if alpha.size() != beta.size():
