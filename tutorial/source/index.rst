@@ -15,7 +15,8 @@ Welcome to Pyro Tutorials's documentation!
    svi_part_iii
    vae
    bayesian_regression
-
+   dmm
+   air
 
 
 Indices and tables
