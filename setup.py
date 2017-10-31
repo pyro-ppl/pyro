@@ -13,14 +13,14 @@ setup(
         'graphviz>=0.8',
         'networkx>=2.0.0',
         'torch',
-        'six>=1.11.0'
+        'six>=1.11.0',
     ],
     extras_require={
         'notebooks': ['jupyter>=1.0.0'],
         'visualization': [
             'matplotlib>=1.3',
             'visdom>=0.1.4',
-            'pillow'
+            'pillow',
         ],
         'dev': [
             'torchvision',
