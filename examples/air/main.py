@@ -36,6 +36,8 @@ parser.add_argument('-b', '--batch-size', type=int, default=64,
                     help='batch size')
 parser.add_argument('--progress-every', type=int, default=1,
                     help='number of steps between writing progress to stdout')
+parser.add_argument('--eval-every', type=int, default=0,
+                    help='number of steps between evaluations')
 parser.add_argument('--baseline-scalar', type=float,
                     help='scale the output of the baseline nets by this value')
 parser.add_argument('--no-baselines', action='store_true', default=False,
@@ -227,18 +229,18 @@ svi = SVI(air.model, air.guide,
           loss='ELBO',
           trace_graph=True)
 
-for i in range(args.num_steps):
+for i in range(1, args.num_steps + 1):
 
     loss = svi.step(X, args.batch_size, z_pres_prior_p=partial(z_pres_prior_p, i))
 
-    if i % args.progress_every == 0:
+    if args.progress_every > 0 and i % args.progress_every == 0:
         print('i={}, epochs={:.2f}, elapsed={:.2f}, elbo={:.2f}'.format(
             i,
             (i * args.batch_size) / X_size,
             (time.time() - t0) / 3600,
             loss / X_size))
 
-    if args.viz and (i + 1) % args.viz_every == 0:
+    if args.viz and i % args.viz_every == 0:
         trace = poutine.trace(air.guide).get_trace(examples_to_viz, None)
         z, recons = poutine.replay(air.prior, trace)(examples_to_viz.size(0))
         z_wheres = post_process_latents(z)
@@ -250,6 +252,6 @@ for i in range(args.num_steps):
 
     # TODO: Report accuracy on predictions of object counts.
 
-    if 'save' in args and (i + 1) % args.save_every == 0:
+    if 'save' in args and i % args.save_every == 0:
         print('Saving parameters...')
         torch.save(air.state_dict(), args.save)
