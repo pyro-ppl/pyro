@@ -106,6 +106,28 @@ def test_mean_and_variance(dist):
         pytest.skip('analytic mean and variance are not available')
 
 
+def test_score_errors_event_dim_mismatch(dist):
+    if dist.get_test_distribution_name() in ('Bernoulli', 'Categorical'):
+        pytest.skip('TODO: after https://github.com/uber/pyro/issues/415')
+    d = dist.pyro_dist
+    dist_params = dist.get_dist_params(BATCH_TEST_DATA_IDX)
+    test_data_wrong_dims = torch.ones(d.shape(**dist_params) + (1,))
+    with pytest.raises(ValueError):
+        d.batch_log_pdf(test_data_wrong_dims, **dist_params)
+
+
+def test_score_errors_non_broadcastable_data_shape(dist):
+    if dist.get_test_distribution_name() in ('Bernoulli', 'Categorical'):
+        pytest.skip('TODO: after https://github.com/uber/pyro/issues/415')
+    d = dist.pyro_dist
+    dist_params = dist.get_dist_params(BATCH_TEST_DATA_IDX)
+    shape = d.shape(**dist_params)
+    non_broadcastable_shape = (shape[0] + 1,) + shape[1:]
+    test_data_non_broadcastable = torch.ones(non_broadcastable_shape)
+    with pytest.raises(ValueError):
+        d.batch_log_pdf(test_data_non_broadcastable, **dist_params)
+
+
 # Distributions tests - discrete distributions
 
 def test_enumerate_support(discrete_dist):
