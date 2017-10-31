@@ -400,6 +400,17 @@ def check_site_names(model_trace, guide_trace):
     if not (model_vars <= guide_vars):
         warnings.warn("Found vars in model but not guide: {}".format(model_vars - guide_vars))
 
+    # Check shapes agree.
+    for name in model_vars & guide_vars:
+        model_site = model_trace.nodes[name]
+        guide_site = guide_trace.nodes[name]
+        if hasattr(model_site["fn"], "shape") and hasattr(guide_site["fn"], "shape"):
+            model_shape = model_site["fn"].shape(None, *model_site["args"], **model_site["kwargs"])
+            guide_shape = guide_site["fn"].shape(None, *guide_site["args"], **guide_site["kwargs"])
+            if len(model_shape) != len(guide_shape):
+                raise ValueError("Model and guide shapes agree at site '{}': {} vs {}".format(
+                    name, model_shape, guide_shape))
+
     # Check subsample sites introduced by iarange.
     model_vars = set(name for name, site in model_trace.nodes.items()
                      if site["type"] == "sample" and not site["is_observed"]
