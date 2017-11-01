@@ -146,12 +146,12 @@ def test_iarange_ok(trace_graph, subsample_size):
 
     def model():
         p = Variable(torch.Tensor([0.5]))
-        with pyro.iarange("irange", 10, subsample_size) as ind:
+        with pyro.iarange("iarange", 10, subsample_size) as ind:
             pyro.sample("x", dist.bernoulli, p, batch_size=len(ind))
 
     def guide():
         p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
-        with pyro.iarange("irange", 10, subsample_size) as ind:
+        with pyro.iarange("iarange", 10, subsample_size) as ind:
             pyro.sample("x", dist.bernoulli, p, batch_size=len(ind))
 
     assert_ok(model, guide, trace_graph=trace_graph)
@@ -162,12 +162,12 @@ def test_iarange_no_size_ok(trace_graph):
 
     def model():
         p = Variable(torch.Tensor([0.5]))
-        with pyro.iarange("irange"):
+        with pyro.iarange("iarange"):
             pyro.sample("x", dist.bernoulli, p, batch_size=10)
 
     def guide():
         p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
-        with pyro.iarange("irange"):
+        with pyro.iarange("iarange"):
             pyro.sample("x", dist.bernoulli, p, batch_size=10)
 
     assert_ok(model, guide, trace_graph=trace_graph)
