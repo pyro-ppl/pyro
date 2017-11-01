@@ -87,6 +87,8 @@ pygments_style = 'sphinx'
 # If true, `todo` and `todoList` produce output, else they produce nothing.
 todo_include_todos = False
 
+# extend timeout
+nbsphinx_timeout = 120
 
 # -- Options for HTML output ----------------------------------------------
 
@@ -109,7 +111,7 @@ html_theme_options = {
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ['_static']
+html_static_path = ['static']
 
 
 # -- Options for HTMLHelp output ------------------------------------------
