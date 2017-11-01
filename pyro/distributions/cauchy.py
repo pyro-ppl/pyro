@@ -28,8 +28,7 @@ class Cauchy(Distribution):
         self.mu = mu
         self.gamma = gamma
         if mu.size() != gamma.size():
-            raise ValueError("Expected mu.size() == gamma.size(), but got {} vs {}"
-                             .format(mu.size(), gamma.size()))
+            raise ValueError("Expected mu.size() == gamma.size(), but got {} vs {}".format(mu.size(), gamma.size()))
         if mu.dim() == 1 and batch_size is not None:
             self.mu = mu.expand(batch_size, mu.size(0))
             self.gamma = gamma.expand(batch_size, gamma.size(0))
@@ -41,8 +40,8 @@ class Cauchy(Distribution):
         if x is not None:
             if x.size()[-event_dim] != mu.size()[-event_dim]:
                 raise ValueError("The event size for the data and distribution parameters must match.\n"
-                                 "Expected x.size()[-1] == self.mu.size()[-1], but got {} vs {}"
-                                 .format(x.size(-1), mu.size(-1)))
+                                 "Expected x.size()[-1] == self.mu.size()[-1], but got {} vs {}".format(
+                                     x.size(-1), mu.size(-1)))
             try:
                 mu = self.mu.expand_as(x)
             except RuntimeError as e:
@@ -58,8 +57,7 @@ class Cauchy(Distribution):
         return self.batch_shape(x) + self.event_shape()
 
     def sample(self):
-        np_sample = spr.cauchy.rvs(self.mu.data.cpu().numpy(),
-                                   self.gamma.data.cpu().numpy())
+        np_sample = spr.cauchy.rvs(self.mu.data.cpu().numpy(), self.gamma.data.cpu().numpy())
         if isinstance(np_sample, numbers.Number):
             np_sample = [np_sample]
         sample = Variable(torch.Tensor(np_sample).type_as(self.mu.data))
@@ -69,7 +67,7 @@ class Cauchy(Distribution):
         # expand to patch size of input
         mu = self.mu.expand(self.shape(x))
         gamma = self.gamma.expand(self.shape(x))
-        x_0 = torch.pow((x - mu)/gamma, 2)
+        x_0 = torch.pow((x - mu) / gamma, 2)
         px = np.pi * gamma * (1 + x_0)
         log_pdf = -1 * torch.sum(torch.log(px), -1)
         batch_log_pdf_shape = self.batch_shape(x) + (1,)

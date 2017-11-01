@@ -35,8 +35,8 @@ class Dirichlet(Distribution):
         if x is not None:
             if x.size()[-event_dim] != alpha.size()[-event_dim]:
                 raise ValueError("The event size for the data and distribution parameters must match.\n"
-                                 "Expected x.size()[-1] == self.alpha.size()[-1], but got {} vs {}"
-                                 .format(x.size(-1), alpha.size(-1)))
+                                 "Expected x.size()[-1] == self.alpha.size()[-1], but got {} vs {}".format(
+                                     x.size(-1), alpha.size(-1)))
             try:
                 alpha = self.alpha.expand_as(x)
             except RuntimeError as e:

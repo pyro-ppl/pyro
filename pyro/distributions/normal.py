@@ -28,8 +28,7 @@ class Normal(Distribution):
         self.sigma = sigma
         self.log_pdf_mask = log_pdf_mask
         if mu.size() != sigma.size():
-            raise ValueError("Expected mu.size() == sigma.size(), but got {} vs {}"
-                             .format(mu.size(), sigma.size()))
+            raise ValueError("Expected mu.size() == sigma.size(), but got {} vs {}".format(mu.size(), sigma.size()))
         if mu.dim() == 1 and batch_size is not None:
             self.mu = mu.expand(batch_size, mu.size(0))
             self.sigma = sigma.expand(batch_size, sigma.size(0))
@@ -43,8 +42,8 @@ class Normal(Distribution):
         if x is not None:
             if x.size()[-event_dim] != mu.size()[-event_dim]:
                 raise ValueError("The event size for the data and distribution parameters must match.\n"
-                                 "Expected x.size()[-1] == self.mu.size()[-1], but got {} vs {}"
-                                 .format(x.size(-1), mu.size(-1)))
+                                 "Expected x.size()[-1] == self.mu.size()[-1], but got {} vs {}".format(
+                                     x.size(-1), mu.size(-1)))
             try:
                 mu = self.mu.expand_as(x)
             except RuntimeError as e:

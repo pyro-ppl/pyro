@@ -29,8 +29,8 @@ class Poisson(Distribution):
         if x is not None:
             if x.size()[-event_dim] != lam.size()[-event_dim]:
                 raise ValueError("The event size for the data and distribution parameters must match.\n"
-                                 "Expected x.size()[-1] == self.lam.size()[-1], but got {} vs {}"
-                                 .format(x.size(-1), lam.size(-1)))
+                                 "Expected x.size()[-1] == self.lam.size()[-1], but got {} vs {}".format(
+                                     x.size(-1), lam.size(-1)))
             try:
                 lam = self.lam.expand_as(x)
             except RuntimeError as e:
