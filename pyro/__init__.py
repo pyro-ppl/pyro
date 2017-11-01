@@ -152,6 +152,31 @@ class _Subsample(Distribution):
         return result.cuda() if self.use_cuda else result
 
 
+def _subsample(name, size=None, subsample_size=None, subsample=None, use_cuda=None):
+    """
+    Helper function for iarange and irange. See their docstrings for details.
+    """
+    if size is None:
+        assert subsample_size is None
+        assert subsample is None
+        size = 1
+        subsample_size = 1
+    elif subsample is None:
+        names = [name]
+        names += [str(f.counter) for f in _PYRO_STACK if isinstance(f, poutine.LambdaPoutine)]
+        subsample = sample("_".join(names), _Subsample(size, subsample_size, use_cuda))
+
+    if subsample_size is None:
+        subsample_size = len(subsample)
+    elif subsample_size != len(subsample):
+        raise ValueError("subsample_size does not match len(subsample), {} vs {}.".format(
+            subsample_size, len(subsample)) +
+            " Did you accidentally use different subsample_size in the model and guide?")
+
+    scale = size / subsample_size
+    return subsample, scale
+
+
 @contextlib.contextmanager
 def iarange(name, size=None, subsample_size=None, subsample=None, use_cuda=None):
     """
@@ -195,29 +220,11 @@ def iarange(name, size=None, subsample_size=None, subsample=None, use_cuda=None)
 
     See `SVI Part II <http://pyro.ai/examples/svi_part_ii.html>`_ for an extended discussion.
     """
-    if size is None:
-        assert subsample_size is None
-        assert subsample is None
-        size = 1
-        subsample_size = 1
-    elif subsample is None:
-        names = [name]
-        names += [str(f.counter) for f in _PYRO_STACK if isinstance(f, poutine.LambdaPoutine)]
-        subsample = sample("_".join(names), _Subsample(size, subsample_size, use_cuda))
-
-    if subsample_size is None:
-        subsample_size = len(subsample)
-    elif subsample_size != len(subsample):
-        raise ValueError("subsample_size does not match len(subsample), {} vs {}.".format(
-            subsample_size, len(subsample)) +
-            " Did you accidentally use different subsample_size in the model and guide?")
-
+    subsample, scale = _subsample(name, size, subsample_size, subsample, use_cuda)
     if len(_PYRO_STACK) == 0:
         yield subsample
     else:
-        # Wrap computation in a scaling context.
-        scale = size / subsample_size
-        with LambdaPoutine(None, name, scale, 'tensor'):
+        with LambdaPoutine(None, name, scale, vectorized=True):
             yield subsample
 
 
@@ -243,18 +250,17 @@ def irange(name, size, subsample_size=None, subsample=None, use_cuda=None):
 
     See `SVI Part II <http://pyro.ai/examples/svi_part_ii.html>`_ for an extended discussion.
     """
-    with iarange(name, size, subsample_size, subsample, use_cuda) as ind:
-        if isinstance(ind, Variable):
-            ind = ind.data
-        if len(_PYRO_STACK) == 0:
-            for i in ind:
+    subsample, scale = _subsample(name, size, subsample_size, subsample, use_cuda)
+    if isinstance(subsample, Variable):
+        subsample = subsample.data
+    if len(_PYRO_STACK) == 0:
+        for i in subsample:
+            yield i
+    else:
+        indep_context = LambdaPoutine(None, name, scale, vectorized=False)
+        for i in subsample:
+            with indep_context:
                 yield i
-        else:
-            # Wrap computation in an independence context.
-            indep_context = LambdaPoutine(None, name, 1.0, 'list')
-            for i in ind:
-                with indep_context:
-                    yield i
 
 
 def map_data(name, data, fn, batch_size=None, batch_dim=0, use_cuda=None):
