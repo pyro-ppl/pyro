@@ -19,9 +19,7 @@ def get_vectorized_map_data_info(trace):
             continue
         if node["type"] in ("sample", "param"):
             stack = tuple(reversed(node["map_data_stack"]))
-            # remove nonvec_names, since irange is implemented in terms of iarange
-            nonvec_names = set(x.name for x in stack if not x.vectorized)
-            vec_mds = [x for x in stack if x.vectorized and x.name not in nonvec_names]
+            vec_mds = [x for x in stack if x.vectorized]
             # check for nested vectorized map datas
             if len(vec_mds) > 1:
                 vectorized_map_data_info['rao-blackwellization-condition'] = False
@@ -65,9 +63,7 @@ def get_vectorized_map_data_info(trace):
             if site_is_subsample(node):
                 continue
             if node["type"] in ("sample", "param"):
-                # remove nonvec_names, since irange is implemented in terms of iarange
-                nonvec_names = set(x.name for x in stack if not x.vectorized)
-                if any(x.vectorized and x.name not in nonvec_names for x in node["map_data_stack"]):
+                if any(x.vectorized for x in node["map_data_stack"]):
                     vectorized_map_data_info['nodes'].add(name)
 
     return vectorized_map_data_info
@@ -165,6 +161,15 @@ class TracePoutine(Poutine):
         self(*args, **kwargs)
         return self.trace.copy()
 
+    def _reset(self):
+        tr = Trace(graph_type=self.graph_type)
+        tr.add_node("_INPUT",
+                    name="_INPUT", type="input",
+                    args=self.trace.nodes["_INPUT"]["args"],
+                    kwargs=self.trace.nodes["_INPUT"]["kwargs"])
+        self.trace = tr
+        super(TracePoutine, self)._reset()
+
     def _pyro_sample(self, msg):
         """
         :param msg: current message at a trace site.
@@ -180,19 +185,13 @@ class TracePoutine(Poutine):
         """
         name = msg["name"]
         if name in self.trace:
-            # Cannot repeat names between params and samples
-            if self.trace.nodes[name]['type'] == 'param':
+            site = self.trace.nodes[name]
+            if site['type'] == 'param':
+                # Cannot sample or observe after a param statement.
                 raise RuntimeError("{} is already in the trace as a param".format(name))
-            # observe has the same name as a sample
-            if msg['is_observed'] and not self.trace.nodes[name]['is_observed']:
-                raise RuntimeError("observe cannot have the same name as a sample")
-            # XXX temporary solution - otherwise, we reset self.trace to be empty
-            tr = Trace(graph_type=self.graph_type)
-            tr.add_node("_INPUT",
-                        name="_INPUT", type="input",
-                        args=self.trace.nodes["_INPUT"]["args"],
-                        kwargs=self.trace.nodes["_INPUT"]["kwargs"])
-            self.trace = tr
+            elif site['type'] == 'sample':
+                # Cannot sample after a previous sample statement.
+                raise RuntimeError("Multiple pyro.sample sites named '{}'".format(name))
 
         val = super(TracePoutine, self)._pyro_sample(msg)
         site = msg.copy()

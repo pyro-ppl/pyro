@@ -1,1 +1,1 @@
-from .auto_reg_nn import MaskedLinear, AutoRegressiveNN  # noqa: F401
+from .auto_reg_nn import AutoRegressiveNN, MaskedLinear  # noqa: F401

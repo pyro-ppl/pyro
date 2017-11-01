@@ -1,17 +1,17 @@
+import pytest
 import torch
 from torch import nn as nn
 from torch.autograd import Variable
 from torch.nn import Parameter
 
-import pytest
 import pyro
 import pyro.distributions as dist
-from pyro.infer.svi import SVI
-from pyro.util import ng_ones, ng_zeros
 import pyro.optim as optim
 from pyro.distributions.transformed_distribution import TransformedDistribution
-from tests.distributions.test_transformed_distribution import AffineExp
+from pyro.infer.svi import SVI
+from pyro.util import ng_ones, ng_zeros
 from tests.common import TestCase
+from tests.distributions.test_transformed_distribution import AffineExp
 
 
 def param_mse(name, target):

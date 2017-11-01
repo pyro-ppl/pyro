@@ -8,8 +8,8 @@ from torch.autograd import Variable
 
 import pyro
 import pyro.distributions as dist
-from pyro.optim import Adam
 from pyro.infer import SVI
+from pyro.optim import Adam
 from tests.common import segfaults_on_pytorch_020
 
 
@@ -26,7 +26,7 @@ def assert_error(model, guide, **kwargs):
     Assert that inference fails with an error.
     """
     inference = SVI(model,  guide, Adam({"lr": 1e-6}), "ELBO", **kwargs)
-    with pytest.raises((NotImplementedError, UserWarning, KeyError)):
+    with pytest.raises((NotImplementedError, UserWarning, KeyError, ValueError, RuntimeError)):
         inference.step()
 
 
@@ -43,7 +43,6 @@ def assert_warning(model, guide, **kwargs):
             print(warning)
 
 
-@pytest.mark.xfail(reason="Did not raise error despite x being sampled twice")
 @pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
 def test_variable_clash_in_model_error(trace_graph):
 
@@ -59,7 +58,38 @@ def test_variable_clash_in_model_error(trace_graph):
     assert_error(model, guide, trace_graph=trace_graph)
 
 
-@pytest.mark.xfail(reason="Did not raise error despite x being sampled twice")
+@pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
+def test_model_guide_dim_mismatch_error(trace_graph):
+
+    def model():
+        mu = Variable(torch.zeros(2))
+        sigma = Variable(torch.zeros(2))
+        pyro.sample("x", dist.normal, mu, sigma)
+
+    def guide():
+        mu = pyro.param("mu", Variable(torch.zeros(2, 1), requires_grad=True))
+        sigma = pyro.param("sigma", Variable(torch.zeros(2, 1), requires_grad=True))
+        pyro.sample("x", dist.normal, mu, sigma)
+
+    assert_error(model, guide, trace_graph=trace_graph)
+
+
+@pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
+def test_model_guide_shape_mismatch_error(trace_graph):
+
+    def model():
+        mu = Variable(torch.zeros(1, 2))
+        sigma = Variable(torch.zeros(1, 2))
+        pyro.sample("x", dist.normal, mu, sigma)
+
+    def guide():
+        mu = pyro.param("mu", Variable(torch.zeros(2, 1), requires_grad=True))
+        sigma = pyro.param("sigma", Variable(torch.zeros(2, 1), requires_grad=True))
+        pyro.sample("x", dist.normal, mu, sigma)
+
+    assert_error(model, guide, trace_graph=trace_graph)
+
+
 @pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
 def test_variable_clash_in_guide_error(trace_graph):
 
@@ -92,7 +122,6 @@ def test_irange_ok(trace_graph, subsample_size):
     assert_ok(model, guide, trace_graph=trace_graph)
 
 
-@pytest.mark.xfail(reason="Did not raise error despite x being sampled twice")
 @pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
 def test_irange_variable_clash_error(trace_graph):
 
@@ -117,13 +146,29 @@ def test_iarange_ok(trace_graph, subsample_size):
 
     def model():
         p = Variable(torch.Tensor([0.5]))
-        with pyro.iarange("irange", 10, subsample_size) as ind:
+        with pyro.iarange("iarange", 10, subsample_size) as ind:
             pyro.sample("x", dist.bernoulli, p, batch_size=len(ind))
 
     def guide():
         p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
-        with pyro.iarange("irange", 10, subsample_size) as ind:
+        with pyro.iarange("iarange", 10, subsample_size) as ind:
             pyro.sample("x", dist.bernoulli, p, batch_size=len(ind))
+
+    assert_ok(model, guide, trace_graph=trace_graph)
+
+
+@pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
+def test_iarange_no_size_ok(trace_graph):
+
+    def model():
+        p = Variable(torch.Tensor([0.5]))
+        with pyro.iarange("iarange"):
+            pyro.sample("x", dist.bernoulli, p, batch_size=10)
+
+    def guide():
+        p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
+        with pyro.iarange("iarange"):
+            pyro.sample("x", dist.bernoulli, p, batch_size=10)
 
     assert_ok(model, guide, trace_graph=trace_graph)
 
@@ -383,7 +428,6 @@ def test_iarange_enum_discrete_batch_ok():
 
 
 @segfaults_on_pytorch_020
-@pytest.mark.xfail(reason="error is not caught")
 def test_no_iarange_enum_discrete_batch_error():
 
     def model():
@@ -398,7 +442,7 @@ def test_no_iarange_enum_discrete_batch_error():
 
 
 @segfaults_on_pytorch_020
-def test_enum_discrete_global_local_ok():
+def test_enum_discrete_global_local_error():
 
     def model():
         p = Variable(torch.Tensor([0.5]))
@@ -412,4 +456,4 @@ def test_enum_discrete_global_local_ok():
         with pyro.iarange("iarange", 10, 5) as ind:
             pyro.sample("y", dist.bernoulli, p, batch_size=len(ind))
 
-    assert_ok(model, guide, enum_discrete=True)
+    assert_error(model, guide, enum_discrete=True)

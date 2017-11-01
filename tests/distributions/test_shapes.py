@@ -1,7 +1,7 @@
 import pytest
 
 import pyro.distributions as dist
-from pyro.util import ng_zeros, ng_ones
+from pyro.util import ng_ones, ng_zeros
 
 
 @pytest.mark.parametrize('one_hot', [True, False])

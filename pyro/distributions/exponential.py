@@ -6,17 +6,17 @@ from pyro.distributions.distribution import Distribution
 
 class Exponential(Distribution):
     """
-    :param lam: rate *(real (0, Infinity))*
+    Exponential parameterized by scale `lambda`.
 
-    Exponential parameterized by lambda
+    This is often used in conjunction with `torch.nn.Softplus` to ensure the
+    `lam` parameter is positive.
+
+    :param torch.autograd.Variable lam: Scale parameter (a.k.a. `lambda`).
+        Should be positive.
     """
     reparameterized = True
 
     def __init__(self, lam, batch_size=None, *args, **kwargs):
-        """
-        Params:
-          `lam` - lambda
-        """
         self.lam = lam
         if lam.dim() == 1 and batch_size is not None:
             self.lam = lam.expand(batch_size, lam.size(0))
@@ -25,8 +25,16 @@ class Exponential(Distribution):
     def batch_shape(self, x=None):
         event_dim = 1
         lam = self.lam
-        if x is not None and x.size() != lam.size():
-            lam = self.lam.expand_as(x)
+        if x is not None:
+            if x.size()[-event_dim] != lam.size()[-event_dim]:
+                raise ValueError("The event size for the data and distribution parameters must match.\n"
+                                 "Expected x.size()[-1] == self.lam.size()[-1], but got {} vs {}".format(
+                                     x.size(-1), lam.size(-1)))
+            try:
+                lam = self.lam.expand_as(x)
+            except RuntimeError as e:
+                raise ValueError("Parameter `lam` with shape {} is not broadcastable to "
+                                 "the data shape {}. \nError: {}".format(lam.size(), x.size(), str(e)))
         return lam.size()[:-event_dim]
 
     def event_shape(self):
@@ -38,18 +46,15 @@ class Exponential(Distribution):
 
     def sample(self):
         """
-        reparameterized sampler.
+        Reparameterized sampler.
         """
         eps = Variable(torch.rand(self.lam.size()).type_as(self.lam.data))
         x = -torch.log(eps) / self.lam
         return x
 
     def batch_log_pdf(self, x):
-        """
-        exponential log-likelihood
-        """
-        lam = self.lam.expand_as(x)
-        ll = - lam * x + torch.log(lam)
+        lam = self.lam.expand(self.shape(x))
+        ll = -lam * x + torch.log(lam)
         batch_log_pdf_shape = self.batch_shape(x) + (1,)
         return torch.sum(ll, -1).contiguous().view(batch_log_pdf_shape)
 

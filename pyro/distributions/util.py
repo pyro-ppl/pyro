@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 from torch.autograd import Variable
 
 
@@ -13,7 +14,7 @@ def log_gamma(xx):
         24.01409824083091,
         -1.231739572450155,
         0.1208650973866179e-2,
-        -0.5395239384953e-5
+        -0.5395239384953e-5,
     ]
     magic1 = 1.000000000190015
     magic2 = 2.5066282746310005
@@ -108,3 +109,54 @@ def torch_multinomial(input, num_samples, replacement=False):
         return torch_multinomial(input.cpu(), num_samples, replacement).cuda()
     else:
         return torch.multinomial(input, num_samples, replacement)
+
+
+def softmax(x, dim=-1):
+    """
+    TODO: change to use the default pyTorch implementation when available
+    Source: https://discuss.pytorch.org/t/why-softmax-function-cant-specify-the-dimension-to-operate/2637
+    :param x: tensor
+    :param dim: Dimension to apply the softmax function to. The elements of the tensor in this
+        dimension must sum to 1.
+    :return: tensor having the same dimension as `x` rescaled along dim
+    """
+    input_size = x.size()
+
+    trans_input = x.transpose(dim, len(input_size) - 1)
+    trans_size = trans_input.size()
+
+    input_2d = trans_input.contiguous().view(-1, trans_size[-1])
+
+    soft_max_2d = F.softmax(input_2d)
+
+    soft_max_nd = soft_max_2d.view(*trans_size)
+    return soft_max_nd.transpose(dim, len(input_size) - 1)
+
+
+def get_probs_and_logits(ps=None, logits=None, is_multidimensional=True):
+    """
+    Convert probability values to logits, or vice-versa. Either `ps` or
+    `logits` should be specified, but not both.
+
+    :param ps: tensor of probabilities. Should be in the interval *[0, 1]*.
+        If, `is_multidimensional = True`, then must be normalized along
+        axis -1.
+    :param logits: tensor of logit values.
+    :param is_multidimensional: determines the computation of ps from logits,
+        and vice-versa. For the multi-dimensional case, logit values are
+        assumed to be non-normalized log probabilities, whereas for the uni-
+        dimensional case, it specifically refers to log odds.
+    :return: tuple containing raw probabilities and logits as tensors
+    """
+    assert (ps is None) != (logits is None)
+    if is_multidimensional:
+        if ps is None:
+            ps = softmax(logits, -1)
+        else:
+            logits = torch.log(ps)
+    else:
+        if ps is None:
+            ps = F.sigmoid(logits)
+        else:
+            logits = torch.log(ps) - torch.log1p(-ps)
+    return ps, logits

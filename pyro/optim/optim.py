@@ -1,6 +1,7 @@
+import cloudpickle
+
 import pyro
 from pyro.params import module_from_param_with_module_name, user_param_name
-import cloudpickle
 
 
 class PyroOptim(object):

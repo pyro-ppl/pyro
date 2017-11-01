@@ -1,7 +1,6 @@
-from six.moves.queue import Queue
-
 import pyro.poutine as poutine
 from pyro.infer import TracePosterior
+from six.moves.queue import Queue
 
 
 class Search(TracePosterior):

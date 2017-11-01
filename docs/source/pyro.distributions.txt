@@ -85,13 +85,6 @@ Poisson
     :undoc-members:
     :show-inheritance:
 
-TransformedDistribution
------------------------
-.. automodule:: pyro.distributions.transformed_distribution
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 Uniform
 -------
 .. automodule:: pyro.distributions.uniform

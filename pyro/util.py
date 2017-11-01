@@ -263,6 +263,15 @@ def enum_extend(trace, msg, num_samples=None):
     if num_samples is None:
         num_samples = -1
 
+    # Batched .enumerate_support() assumes batched values are independent.
+    batch_shape = msg["fn"].batch_shape(msg["value"], *msg["args"], **msg["kwargs"])
+    is_batched = any(size > 1 for size in batch_shape)
+    inside_iarange = any(frame.vectorized for frame in msg["map_data_stack"])
+    if is_batched and not inside_iarange:
+        raise ValueError(
+                "Tried to enumerate a batched pyro.sample site '{}' outiside of a pyro.iarange. "
+                "To fix, either enclose in a pyro.iarange, or avoid batching.".format(msg["name"]))
+
     extended_traces = []
     for i, s in enumerate(msg["fn"].enumerate_support(*msg["args"], **msg["kwargs"])):
         if i > num_samples and num_samples >= 0:
@@ -378,15 +387,16 @@ def save_visualization(trace, graph_output):
     g.render(graph_output, view=False, cleanup=True)
 
 
-def check_site_names(model_trace, guide_trace):
+def check_model_guide_match(model_trace, guide_trace):
     """
     :param pyro.poutine.Trace model_trace: Trace object of the model
     :param pyro.poutine.Trace guide_trace: Trace object of the guide
-    :raises: RuntimeWarning
+    :raises: RuntimeWarning, ValueError
 
     Checks that (1) there is a bijection between the samples in the guide
-    and the samples in the model, and (2) each `iarange` statement in the
-    guide also appears in the model.
+    and the samples in the model, (2) each `iarange` statement in the guide
+    also appears in the model, (3) at each sample site that appears in both
+    the model and guide, the model and guide agree on sample shape.
     """
     # Check ordinary sample sites.
     model_vars = set(name for name, site in model_trace.nodes.items()
@@ -399,6 +409,17 @@ def check_site_names(model_trace, guide_trace):
         warnings.warn("Found vars in guide but not model: {}".format(guide_vars - model_vars))
     if not (model_vars <= guide_vars):
         warnings.warn("Found vars in model but not guide: {}".format(model_vars - guide_vars))
+
+    # Check shapes agree.
+    for name in model_vars & guide_vars:
+        model_site = model_trace.nodes[name]
+        guide_site = guide_trace.nodes[name]
+        if hasattr(model_site["fn"], "shape") and hasattr(guide_site["fn"], "shape"):
+            model_shape = model_site["fn"].shape(None, *model_site["args"], **model_site["kwargs"])
+            guide_shape = guide_site["fn"].shape(None, *guide_site["args"], **guide_site["kwargs"])
+            if model_shape != guide_shape:
+                raise ValueError("Model and guide dims disagree at site '{}': {} vs {}".format(
+                    name, model_shape, guide_shape))
 
     # Check subsample sites introduced by iarange.
     model_vars = set(name for name, site in model_trace.nodes.items()

@@ -11,8 +11,8 @@ from torch.autograd import Variable
 
 import pyro
 import pyro.distributions as dist
-from pyro.infer import SVI
 import pyro.optim as optim
+from pyro.infer import SVI
 from tests.common import TestCase
 
 

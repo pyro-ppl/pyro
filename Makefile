@@ -14,9 +14,12 @@ apidoc: FORCE
 lint: FORCE
 	flake8
 
+scrub: FORCE
+	find tutorial -name "*.ipynb" | xargs python -m nbstripout
+
 format: FORCE
-	yapf -i -p *.py pyro/*.py pyro/*/*.py
-	isort -i *.py pyro/*.py pyro/*/*.py
+	yapf -i *.py pyro/distributions/*.py
+	isort --recursive *.py pyro/ tests/
 
 test: lint docs FORCE
 	pytest -vx -n auto --stage unit

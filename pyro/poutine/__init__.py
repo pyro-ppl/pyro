@@ -1,23 +1,23 @@
 import functools
 
-# poutines
-from .block_poutine import BlockPoutine
-from .poutine import Poutine  # noqa: F401
-from .replay_poutine import ReplayPoutine
-from .trace_poutine import TracePoutine
-from .lift_poutine import LiftPoutine
-from .condition_poutine import ConditionPoutine
-from .lambda_poutine import LambdaPoutine  # noqa: F401
-from .escape_poutine import EscapePoutine
-
-# trace data structures
-from .trace import Trace  # noqa: F401
+import pyro
 from pyro import util
 
+# poutines
+from .block_poutine import BlockPoutine
+from .condition_poutine import ConditionPoutine
+from .escape_poutine import EscapePoutine
+from .lambda_poutine import LambdaPoutine  # noqa: F401
+from .lift_poutine import LiftPoutine
+from .poutine import Poutine  # noqa: F401
+from .replay_poutine import ReplayPoutine
+from .trace import Trace  # noqa: F401
+from .trace_poutine import TracePoutine
 
 ############################################
 # Begin primitive operations
 ############################################
+
 
 def trace(fn, graph_type=None):
     """
@@ -186,6 +186,8 @@ def queue(fn, queue, max_tries=None,
                                    functools.partial(escape_fn, next_trace)))
                 return ftr(*args, **kwargs)
             except util.NonlocalExit as site_container:
+                for frame in pyro._PYRO_STACK:
+                    frame._reset()
                 for tr in extend_fn(ftr.trace.copy(), site_container.site,
                                     num_samples=num_samples):
                     queue.put(tr)

@@ -8,15 +8,16 @@ from pyro.distributions.util import log_gamma
 
 class Poisson(Distribution):
     """
-    :param lam: mean *(real (0, Infinity))*
+    Poisson distribution over integers parameterizeds by scale `lambda`.
 
-    Poisson distribution over integers parameterizeds by lambda.
+    This is often used in conjunction with `torch.nn.Softplus` to ensure the
+    `lam` parameter is positive.
+
+    :param torch.autograd.Variable lam: Mean parameter (a.k.a. `lambda`).
+        Should be positive.
     """
 
     def __init__(self, lam, batch_size=None, *args, **kwargs):
-        """
-          `lam` - rate parameter
-        """
         self.lam = lam
         if lam.dim() == 1 and batch_size is not None:
             self.lam = lam.expand(batch_size, lam.size(0))
@@ -25,8 +26,16 @@ class Poisson(Distribution):
     def batch_shape(self, x=None):
         event_dim = 1
         lam = self.lam
-        if x is not None and x.size() != lam.size():
-            lam = self.lam.expand_as(x)
+        if x is not None:
+            if x.size()[-event_dim] != lam.size()[-event_dim]:
+                raise ValueError("The event size for the data and distribution parameters must match.\n"
+                                 "Expected x.size()[-1] == self.lam.size()[-1], but got {} vs {}".format(
+                                     x.size(-1), lam.size(-1)))
+            try:
+                lam = self.lam.expand_as(x)
+            except RuntimeError as e:
+                raise ValueError("Parameter `lam` with shape {} is not broadcastable to "
+                                 "the data shape {}. \nError: {}".format(lam.size(), x.size(), str(e)))
         return lam.size()[:-event_dim]
 
     def event_shape(self):
@@ -37,17 +46,10 @@ class Poisson(Distribution):
         return self.batch_shape(x) + self.event_shape()
 
     def sample(self):
-        """
-        Poisson sampler.
-        """
         x = npr.poisson(lam=self.lam.data.cpu().numpy()).astype("float")
         return Variable(torch.Tensor(x).type_as(self.lam.data))
 
     def batch_log_pdf(self, x):
-        """
-        Poisson log-likelihood
-        NOTE: Requires Pytorch implementation of log_gamma to be differentiable
-        """
         lam = self.lam.expand(self.shape(x))
         ll_1 = torch.sum(x * torch.log(lam), -1)
         ll_2 = -torch.sum(lam, -1)

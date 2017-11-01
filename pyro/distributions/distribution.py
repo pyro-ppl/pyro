@@ -1,7 +1,7 @@
-from six import add_metaclass
 from abc import ABCMeta, abstractmethod
 
 import torch
+from six import add_metaclass
 
 
 @add_metaclass(ABCMeta)
@@ -14,20 +14,20 @@ class Distribution(object):
 
     `(i)` lowercase versions that take parameters::
 
-      x = dist.binomial(param)              # Returns a sample of size size(param).
-      p = dist.binomial.log_pdf(x, param)   # Evaluates log probability of x.
+      x = dist.bernoulli(param)             # Returns a sample of size size(param).
+      p = dist.bernoulli.log_pdf(x, param)  # Evaluates log probability of x.
 
     and `(ii)` UpperCase distribution classes that can construct stochastic functions with
     fixed parameters::
 
-      d = dist.Binomial(param)
+      d = dist.Bernoulli(param)
       x = d()                               # Samples a sample of size size(param).
       p = d.log_pdf(x)                      # Evaluates log probability of x.
 
-    **Parameters**:
+    .. note::
 
-    Parameters should be of type `torch.autograd.Variable` and all methods return type
-    `torch.autograd.Variable` unless otherwise noted.
+        Parameters and data should be of type `torch.autograd.Variable` and all
+        methods return type `torch.autograd.Variable` unless otherwise noted.
 
     **Tensor Shapes**:
 
