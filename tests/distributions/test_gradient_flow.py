@@ -1,9 +1,9 @@
 import pytest
 import torch
 from torch.autograd import Variable
-from pyro.distributions import Bernoulli, Categorical
 from torch.nn.functional import sigmoid
 
+from pyro.distributions import Bernoulli, Categorical
 from tests.common import assert_equal
 
 

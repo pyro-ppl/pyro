@@ -2,7 +2,6 @@ import torch
 import torch.nn.functional as F
 from torch.autograd import Variable
 
-
 CLAMP_EPS = 1e-10
 
 
@@ -161,7 +160,7 @@ def get_probs_and_logits(ps=None, logits=None, is_multidimensional=True):
     assert (ps is None) != (logits is None)
     if ps is not None:
         eps = _get_clamping_buffer(ps)
-        ps = ps.clamp(min=eps, max=1-eps)
+        ps = ps.clamp(min=eps, max=1 - eps)
     if is_multidimensional:
         if ps is None:
             ps = softmax(logits, -1)
