@@ -10,7 +10,7 @@ Pyro Documentation
 
 .. toctree::
    :glob:
-   :maxdepth: 3
+   :maxdepth: 2
    :caption: Contents:
 
    installation
