@@ -1,9 +1,7 @@
 import torch
 from torch.autograd import Variable
 
-import pyro
 from pyro import poutine, util
-from pyro.poutine import LambdaPoutine
 from pyro.poutine.trace import Trace
 from six.moves.queue import LifoQueue
 
