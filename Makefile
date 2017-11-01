@@ -19,7 +19,7 @@ scrub: FORCE
 
 format: FORCE
 	yapf -i *.py pyro/distributions/*.py
-	isort -rc *.py pyro/ tests/
+	isort --recursive *.py pyro/ tests/
 
 test: lint docs FORCE
 	pytest -vx -n auto --stage unit
