@@ -157,6 +157,22 @@ def test_iarange_ok(trace_graph, subsample_size):
     assert_ok(model, guide, trace_graph=trace_graph)
 
 
+@pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
+def test_iarange_no_size_ok(trace_graph):
+
+    def model():
+        p = Variable(torch.Tensor([0.5]))
+        with pyro.iarange("irange"):
+            pyro.sample("x", dist.bernoulli, p, batch_size=10)
+
+    def guide():
+        p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
+        with pyro.iarange("irange"):
+            pyro.sample("x", dist.bernoulli, p, batch_size=10)
+
+    assert_ok(model, guide, trace_graph=trace_graph)
+
+
 @pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
 @pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
 def test_irange_irange_ok(trace_graph, subsample_size):
