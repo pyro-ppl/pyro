@@ -34,9 +34,12 @@ jobs:
     include:
         - stage: lint
           python: 2.7
-          before_install: pip install flake8
+          before_install: pip install flake8 nbstripout nbformat
           install:
-          script: make lint
+          script:
+              - make lint
+              - make scrub;
+                git diff-index --quiet HEAD
         - stage: unit test
           python: 2.7
           env: STAGE=docs
