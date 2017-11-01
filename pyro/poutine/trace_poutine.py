@@ -19,9 +19,7 @@ def get_vectorized_map_data_info(trace):
             continue
         if node["type"] in ("sample", "param"):
             stack = tuple(reversed(node["map_data_stack"]))
-            # remove nonvec_names, since irange is implemented in terms of iarange
-            nonvec_names = set(x.name for x in stack if not x.vectorized)
-            vec_mds = [x for x in stack if x.vectorized and x.name not in nonvec_names]
+            vec_mds = [x for x in stack if x.vectorized]
             # check for nested vectorized map datas
             if len(vec_mds) > 1:
                 vectorized_map_data_info['rao-blackwellization-condition'] = False
@@ -65,9 +63,7 @@ def get_vectorized_map_data_info(trace):
             if site_is_subsample(node):
                 continue
             if node["type"] in ("sample", "param"):
-                # remove nonvec_names, since irange is implemented in terms of iarange
-                nonvec_names = set(x.name for x in stack if not x.vectorized)
-                if any(x.vectorized and x.name not in nonvec_names for x in node["map_data_stack"]):
+                if any(x.vectorized for x in node["map_data_stack"]):
                     vectorized_map_data_info['nodes'].add(name)
 
     return vectorized_map_data_info
