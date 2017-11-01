@@ -48,9 +48,9 @@ class ParamStoreDict(object):
         self._param_tags = defaultdict(lambda: set())
         self._tag_params = defaultdict(lambda: set())
 
-    def get_named_parameters(self):
+    def named_parameters(self):
         """
-        Returns a list of tuples of the form (name, parameter) for each parameter in the ParamStore
+        Returns an iterator over tuples of the form (name, parameter) for each parameter in the ParamStore
         """
         return self._params.items()
 
