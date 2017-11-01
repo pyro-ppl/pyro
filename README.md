@@ -23,17 +23,18 @@ Pyro is in an alpha release.  It is developed and used by [Uber AI Labs](http://
 First install [PyTorch](http://pytorch.org/).
 
 Install via pip:
-** Python 2.7.\* **
+
+**Python 2.7.\*:**
 ```sh
 pip install pyro-ppl
 ```
 
-** Python 3.5**
+**Python 3.5:**
 ```
 pip3 install pyro-ppl
 ```
 
-** Install from source **
+**Install from source:**
 ```sh
 git clone git@github.com:uber/pyro.git
 cd pyro
