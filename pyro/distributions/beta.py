@@ -25,8 +25,7 @@ class Beta(Distribution):
         self.alpha = alpha
         self.beta = beta
         if alpha.size() != beta.size():
-            raise ValueError("Expected alpha.size() == beta.size(), but got {} vs {}"
-                             .format(alpha.size(), beta.size()))
+            raise ValueError("Expected alpha.size() == beta.size(), but got {} vs {}".format(alpha.size(), beta.size()))
         if alpha.dim() == 1 and beta.dim() == 1 and batch_size is not None:
             self.alpha = alpha.expand(batch_size, alpha.size(0))
             self.beta = beta.expand(batch_size, beta.size(0))
@@ -38,8 +37,8 @@ class Beta(Distribution):
         if x is not None:
             if x.size()[-event_dim] != alpha.size()[-event_dim]:
                 raise ValueError("The event size for the data and distribution parameters must match.\n"
-                                 "Expected x.size()[-1] == self.alpha.size()[-1], but got {} vs {}"
-                                 .format(x.size(-1), alpha.size(-1)))
+                                 "Expected x.size()[-1] == self.alpha.size()[-1], but got {} vs {}".format(
+                                     x.size(-1), alpha.size(-1)))
             try:
                 alpha = self.alpha.expand_as(x)
             except RuntimeError as e:
@@ -58,8 +57,7 @@ class Beta(Distribution):
         """
         Un-reparameterizeable sampler.
         """
-        np_sample = spr.beta.rvs(self.alpha.data.cpu().numpy(),
-                                 self.beta.data.cpu().numpy())
+        np_sample = spr.beta.rvs(self.alpha.data.cpu().numpy(), self.beta.data.cpu().numpy())
         if isinstance(np_sample, numbers.Number):
             np_sample = [np_sample]
         x = Variable(torch.Tensor(np_sample).type_as(self.alpha.data))

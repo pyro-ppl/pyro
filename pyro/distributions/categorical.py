@@ -30,14 +30,7 @@ class Categorical(Distribution):
     """
     enumerable = True
 
-    def __init__(self,
-                 ps=None,
-                 vs=None,
-                 logits=None,
-                 one_hot=True,
-                 batch_size=None,
-                 log_pdf_mask=None,
-                 *args,
+    def __init__(self, ps=None, vs=None, logits=None, one_hot=True, batch_size=None, log_pdf_mask=None, *args,
                  **kwargs):
         if (ps is None) == (logits is None):
             raise ValueError("Got ps={}, logits={}. Either `ps` or `logits` must be specified, "
@@ -198,5 +191,6 @@ class Categorical(Distribution):
             return Variable(torch.stack([t.expand_as(self.ps) for t in torch_eye(*self.event_shape())]))
         else:
             LongTensor = torch.cuda.LongTensor if self.ps.is_cuda else torch.LongTensor
-            return Variable(torch.stack([LongTensor([t]).expand(sample_shape)
-                                         for t in torch.arange(0, *self.event_shape()).long()]))
+            return Variable(
+                torch.stack([LongTensor([t]).expand(sample_shape)
+                             for t in torch.arange(0, *self.event_shape()).long()]))
