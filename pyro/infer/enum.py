@@ -21,12 +21,8 @@ def make_escape_fn(trace):
             return False
         batch_shape = msg["fn"].batch_shape(msg["value"], *msg["args"], **msg["kwargs"])
         is_batched = any(size > 1 for size in batch_shape)
-        if not is_batched:
-            return True
-        iranges = set(f.name for f in pyro._PYRO_STACK if isinstance(f, LambdaPoutine) and not f.vectorized)
-        iaranges = set(f.name for f in pyro._PYRO_STACK if isinstance(f, LambdaPoutine) and f.vectorized)
-        iaranges -= iranges  # Needed because irange is implemented in terms of iarange.
-        if not iaranges:
+        inside_iarange = any(frame.vectorized for frame in msg["map_data_stack"])
+        if is_batched and not inside_iarange:
             raise ValueError(
                     "poutine.queue encountered a batched pyro.sample site '{}' outiside of a pyro.iarange. "
                     "To fix, either enclose in a pyro.iarange, or avoid batching.".format(msg["name"]))
