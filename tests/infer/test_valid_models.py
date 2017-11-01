@@ -412,7 +412,6 @@ def test_iarange_enum_discrete_batch_ok():
 
 
 @segfaults_on_pytorch_020
-@pytest.mark.xfail(reason="error is not caught")
 def test_no_iarange_enum_discrete_batch_error():
 
     def model():
@@ -427,7 +426,7 @@ def test_no_iarange_enum_discrete_batch_error():
 
 
 @segfaults_on_pytorch_020
-def test_enum_discrete_global_local_ok():
+def test_enum_discrete_global_local_error():
 
     def model():
         p = Variable(torch.Tensor([0.5]))
@@ -441,4 +440,4 @@ def test_enum_discrete_global_local_ok():
         with pyro.iarange("iarange", 10, 5) as ind:
             pyro.sample("y", dist.bernoulli, p, batch_size=len(ind))
 
-    assert_ok(model, guide, enum_discrete=True)
+    assert_error(model, guide, enum_discrete=True)
