@@ -1,7 +1,7 @@
 import pytest
 import torch
-from torch.autograd import Variable
 import torch.nn as nn
+from torch.autograd import Variable
 
 import pyro
 import pyro.distributions as dist

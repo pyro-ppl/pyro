@@ -10,18 +10,18 @@ from pyro.distributions.util import log_gamma
 
 class Beta(Distribution):
     """
-    :param a: shape *(real (0, Infinity))*
-    :param b: shape *(real (0, Infinity))*
+    Univariate beta distribution parameterized by `alpha` and `beta`.
 
-    Univariate beta distribution parameterized by alpha and beta
+    This is often used in conjunction with `torch.nn.Softplus` to ensure
+    `alpha` and `beta` parameters are positive.
+
+    :param torch.autograd.Variable alpha: Lower shape parameter.
+        Should be positive.
+    :param torch.autograd.Variable beta: Upper shape parameter.
+        Should be positive.
     """
 
     def __init__(self, alpha, beta, batch_size=None, *args, **kwargs):
-        """
-        Params:
-          `alpha` - alpha
-          `beta` - beta
-        """
         self.alpha = alpha
         self.beta = beta
         if alpha.size() != beta.size():
@@ -35,8 +35,16 @@ class Beta(Distribution):
     def batch_shape(self, x=None):
         event_dim = 1
         alpha = self.alpha
-        if x is not None and x.size() != alpha.size():
-            alpha = self.alpha.expand_as(x)
+        if x is not None:
+            if x.size()[-event_dim] != alpha.size()[-event_dim]:
+                raise ValueError("The event size for the data and distribution parameters must match.\n"
+                                 "Expected x.size()[-1] == self.alpha.size()[-1], but got {} vs {}"
+                                 .format(x.size(-1), alpha.size(-1)))
+            try:
+                alpha = self.alpha.expand_as(x)
+            except RuntimeError as e:
+                raise ValueError("Parameter `alpha` with shape {} is not broadcastable to "
+                                 "the data shape {}. \nError: {}".format(alpha.size(), x.size(), str(e)))
         return alpha.size()[:-event_dim]
 
     def event_shape(self):

@@ -3,8 +3,9 @@ import sys
 from collections import OrderedDict
 from subprocess import check_call
 
-from tests.common import EXAMPLES_DIR, requires_cuda
 import pytest
+
+from tests.common import EXAMPLES_DIR, requires_cuda
 
 CPU_EXAMPLES = OrderedDict()
 CUDA_EXAMPLES = OrderedDict()

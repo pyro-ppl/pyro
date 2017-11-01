@@ -1,12 +1,11 @@
 import functools
-from six.moves.queue import LifoQueue
 
 import torch
 from torch.autograd import Variable
 
-from pyro import util
-from pyro import poutine
+from pyro import poutine, util
 from pyro.poutine.trace import Trace
+from six.moves.queue import LifoQueue
 
 
 def site_is_discrete(name, site):

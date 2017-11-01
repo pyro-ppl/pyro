@@ -3,8 +3,8 @@ import pytest
 import scipy.stats as sp
 
 import pyro.distributions as dist
-from pyro.distributions import Uniform, Bernoulli, Exponential, Gamma, Beta, Normal, LogNormal, \
-    Dirichlet, Cauchy, Poisson, Categorical, HalfCauchy, Multinomial
+from pyro.distributions import (Bernoulli, Beta, Categorical, Cauchy, Dirichlet, Exponential, Gamma, HalfCauchy,
+                                LogNormal, Multinomial, Normal, Poisson, Uniform)
 from tests.distributions.dist_fixture import Fixture
 
 continuous_dists = [
@@ -57,7 +57,7 @@ continuous_dists = [
             ],
             scipy_arg_fn=lambda alpha, beta: ((np.array(alpha), np.array(beta)), {})),
     Fixture(pyro_dist=(dist.normal, Normal),
-            scipy_dist=sp.multivariate_normal,
+            scipy_dist=sp.norm,
             examples=[
                 {'mu': [2.0], 'sigma': [4.0],
                  'test_data': [2.0]},
@@ -67,10 +67,8 @@ continuous_dists = [
                  'test_data': [[[2.0]]]},
                 {'mu': [2.0, 50.0], 'sigma': [4.0, 100.0],
                  'test_data': [[2.0, 50.0], [2.0, 50.0]]},
-                {'mu': [[2.0], [50.0]], 'sigma': [[4.0], [100.0]],
-                 'test_data': [[2.0, 2.0], [50.0, 50.0]]}
             ],
-            scipy_arg_fn=lambda mu, sigma: ((), {"mean": np.array(mu), "cov": np.array(sigma) ** 2}),
+            scipy_arg_fn=lambda mu, sigma: ((), {"loc": np.array(mu), "scale": np.array(sigma)}),
             prec=0.07,
             min_samples=50000),
     Fixture(pyro_dist=(dist.lognormal, LogNormal),
@@ -125,11 +123,14 @@ discrete_dists = [
     Fixture(pyro_dist=(dist.multinomial, Multinomial),
             scipy_dist=sp.multinomial,
             examples=[
-                {'ps': [0.1, 0.6, 0.3], 'n': [8], 'test_data': [2, 4, 2]},
-                {'ps': [0.1, 0.6, 0.3], 'n': [8], 'test_data': [[2, 4, 2], [2, 4, 2]]},
-                {'ps': [[0.1, 0.6, 0.3], [0.2, 0.4, 0.4]], 'n': [[8], [8]], 'test_data': [[2, 4, 2], [1, 4, 3]]}
+                {'ps': [0.1, 0.6, 0.3], 'n': [8],
+                 'test_data': [2, 4, 2]},
+                {'ps': [0.1, 0.6, 0.3], 'n': [8],
+                 'test_data': [[2, 4, 2], [2, 4, 2]]},
+                {'ps': [[0.1, 0.6, 0.3], [0.2, 0.4, 0.4]], 'n': [[8], [8]],
+                 'test_data': [[2, 4, 2], [1, 4, 3]]}
             ],
-            scipy_arg_fn=lambda ps, n: ((n, np.array(ps)), {}),
+            scipy_arg_fn=lambda ps, n: ((n[0], np.array(ps)), {}),
             prec=0.05,
             min_samples=10000,
             is_discrete=True),

@@ -1,14 +1,14 @@
+import numpy as np
+import pytest
 import torch
 import torch.optim
 from torch.autograd import Variable
-import pytest
 
-import numpy as np
 import pyro
 import pyro.distributions as dist
-from pyro.util import ng_ones, ng_zeros
 import pyro.optim as optim
 from pyro.infer import SVI
+from pyro.util import ng_ones, ng_zeros
 
 # The golden values below (mu_q_expected/log_sig_q_expected/) need to be updated each time
 # ELBO changes its random algorithm.

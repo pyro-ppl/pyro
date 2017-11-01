@@ -1,5 +1,5 @@
-import pytest
 import numpy as np
+import pytest
 import torch
 from torch.autograd import Variable
 

@@ -1,7 +1,8 @@
+import numpy as np
 import pytest
 import torch
 from torch.autograd import Variable
-import numpy as np
+
 from pyro.distributions.transformed_distribution import InverseAutoregressiveFlow
 from pyro.nn import AutoRegressiveNN
 from tests.common import TestCase

@@ -3,7 +3,7 @@ import pytest
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.util import ng_zeros, ng_ones, set_rng_seed
+from pyro.util import ng_ones, ng_zeros, set_rng_seed
 from tests.common import assert_equal
 
 EXAMPLE_MODELS = []

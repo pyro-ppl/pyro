@@ -8,19 +8,19 @@ from pyro.distributions.util import log_gamma, torch_multinomial
 
 class Multinomial(Distribution):
     """
-    :param ps: probabilities *(real array with elements that sum to one)*
-    :param n: number of trials *(int (>=1))*
+    Multinomial distribution.
 
-    Distribution over counts for ``n`` independent ``Discrete({ps: ps})``
-    trials.
+    Distribution over counts for `n` independent `Categorical(ps)` trials.
+
+    This is often used in conjunction with `torch.nn.Softmax` to ensure
+    probabilites `ps` are normalized.
+
+    :param torch.autograd.Variable ps: Probabilities (real). Should be positive
+        and should normalized over the rightmost axis.
+    :param int n: Number of trials. Should be positive.
     """
 
     def __init__(self, ps, n, batch_size=None, *args, **kwargs):
-        """
-        Params:
-          ps - probabilities
-          n - num trials
-        """
         if ps.dim() not in (1, 2):
             raise ValueError("Parameter `ps` must be either 1 or 2 dimensional.")
         self.ps = ps
@@ -33,8 +33,16 @@ class Multinomial(Distribution):
     def batch_shape(self, x=None):
         event_dim = 1
         ps = self.ps
-        if x is not None and x.size() != ps.size():
-            ps = self.ps.expand(x.size()[:-event_dim] + self.event_shape())
+        if x is not None:
+            if x.size()[-event_dim] != ps.size()[-event_dim]:
+                raise ValueError("The event size for the data and distribution parameters must match.\n"
+                                 "Expected x.size()[-1] == self.ps.size()[-1], but got {} vs {}"
+                                 .format(x.size(-1), ps.size(-1)))
+            try:
+                ps = self.ps.expand_as(x)
+            except RuntimeError as e:
+                raise ValueError("Parameter `ps` with shape {} is not broadcastable to "
+                                 "the data shape {}. \nError: {}".format(ps.size(), x.size(), str(e)))
         return ps.size()[:-event_dim]
 
     def event_shape(self):
@@ -62,10 +70,10 @@ class Multinomial(Distribution):
         return Variable(torch_multinomial(self.ps.data, n, replacement=True))
 
     def batch_log_pdf(self, x):
+        batch_log_pdf_shape = self.batch_shape(x) + (1,)
         log_factorial_n = log_gamma(x.sum(-1) + 1)
         log_factorial_xs = log_gamma(x + 1).sum(-1)
         log_powers = (x * torch.log(self.ps)).sum(-1)
-        batch_log_pdf_shape = self.batch_shape(x) + (1,)
         batch_log_pdf = log_factorial_n - log_factorial_xs + log_powers
         return batch_log_pdf.contiguous().view(batch_log_pdf_shape)
 

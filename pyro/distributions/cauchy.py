@@ -1,5 +1,6 @@
-import numpy as np
 import numbers
+
+import numpy as np
 import scipy.stats as spr
 import torch
 from torch.autograd import Variable
@@ -9,21 +10,21 @@ from pyro.distributions.distribution import Distribution
 
 class Cauchy(Distribution):
     """
-    :param mu: mean *(tensor)*
-    :param gamma: scale *(tensor (0, Infinity))*
+    Cauchy (a.k.a. Lorentz) distribution.
 
-    AKA Lorentz distribution. A continuous distribution which is roughly the ratio of two
-    Gaussians if the second Gaussian is zero mean. The distribution is over tensors that
-    have the same shape as the parameters ``mu``and ``gamma``, which in turn must have
-    the same shape as each other.
+    This is a continuous distribution which is roughly the ratio of two
+    Gaussians if the second Gaussian is zero mean. The distribution is over
+    tensors that have the same shape as the parameters `mu`and `gamma`, which
+    in turn must have the same shape as each other.
+
+    This is often used in conjunction with `torch.nn.Softplus` to ensure the
+    `gamma` parameter is positive.
+
+    :param torch.autograd.Variable mu: Location parameter.
+    :param torch.autograd.Variable gamma: Scale parameter. Should be positive.
     """
 
     def __init__(self, mu, gamma, batch_size=None, *args, **kwargs):
-        """
-        Params:
-          `mu` - mean
-          `gamma` - scale
-        """
         self.mu = mu
         self.gamma = gamma
         if mu.size() != gamma.size():
@@ -37,8 +38,16 @@ class Cauchy(Distribution):
     def batch_shape(self, x=None):
         event_dim = 1
         mu = self.mu
-        if x is not None and x.size() != mu.size():
-            mu = self.mu.expand_as(x)
+        if x is not None:
+            if x.size()[-event_dim] != mu.size()[-event_dim]:
+                raise ValueError("The event size for the data and distribution parameters must match.\n"
+                                 "Expected x.size()[-1] == self.mu.size()[-1], but got {} vs {}"
+                                 .format(x.size(-1), mu.size(-1)))
+            try:
+                mu = self.mu.expand_as(x)
+            except RuntimeError as e:
+                raise ValueError("Parameter `mu` with shape {} is not broadcastable to "
+                                 "the data shape {}. \nError: {}".format(mu.size(), x.size(), str(e)))
         return mu.size()[:-event_dim]
 
     def event_shape(self):
@@ -49,9 +58,6 @@ class Cauchy(Distribution):
         return self.batch_shape(x) + self.event_shape()
 
     def sample(self):
-        """
-        Cauchy sampler.
-        """
         np_sample = spr.cauchy.rvs(self.mu.data.cpu().numpy(),
                                    self.gamma.data.cpu().numpy())
         if isinstance(np_sample, numbers.Number):
@@ -60,9 +66,6 @@ class Cauchy(Distribution):
         return sample
 
     def batch_log_pdf(self, x):
-        """
-        Cauchy log-likelihood
-        """
         # expand to patch size of input
         mu = self.mu.expand(self.shape(x))
         gamma = self.gamma.expand(self.shape(x))
