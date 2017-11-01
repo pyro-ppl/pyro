@@ -158,15 +158,15 @@ def get_probs_and_logits(ps=None, logits=None, is_multidimensional=True):
     assert (ps is None) != (logits is None)
     if ps is not None:
         eps = _get_clamping_buffer(ps)
-        ps = ps.clamp(min=eps, max=1 - eps)
+        ps_clamped = ps.clamp(min=eps, max=1 - eps)
     if is_multidimensional:
         if ps is None:
             ps = softmax(logits, -1)
         else:
-            logits = torch.log(ps)
+            logits = torch.log(ps_clamped)
     else:
         if ps is None:
             ps = F.sigmoid(logits)
         else:
-            logits = torch.log(ps) - torch.log1p(-ps)
+            logits = torch.log(ps_clamped) - torch.log1p(-ps_clamped)
     return ps, logits
