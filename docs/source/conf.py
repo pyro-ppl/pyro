@@ -1,4 +1,6 @@
 import sphinx_rtd_theme
+import pyro
+import pkg_resources
 
 # -*- coding: utf-8 -*-
 #
@@ -63,7 +65,7 @@ author = u'Uber AI Labs'
 # built documents.
 #
 # The short X.Y version.
-version = u'0.0.1'
+version = pkg_resources.require('pyro-ppl')[0].version
 # The full version, including alpha/beta/rc tags.
 release = u'0.0.1'
 
@@ -91,7 +93,7 @@ add_module_names = False
 # -- Options for HTML output ----------------------------------------------
 
 # logo
-html_logo = '../img/pyro_logo_small.png'
+html_logo = '_static/img/pyro_logo_wide.png'
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
@@ -111,8 +113,8 @@ html_theme_options = {
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = []
-
+html_static_path = ['_static']
+html_style = 'css/pyro.css'
 
 # -- Options for HTMLHelp output ------------------------------------------
 
