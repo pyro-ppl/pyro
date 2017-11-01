@@ -1,29 +1,21 @@
 from __future__ import division
 
-import warnings
 import contextlib
-from inspect import isclass
-from collections import OrderedDict
 import copy
+import warnings
+from collections import OrderedDict
+from inspect import isclass
 
 import torch
 from torch.autograd import Variable
 
 import pyro
 import pyro.poutine as poutine
-
 from pyro.distributions.distribution import Distribution
 from pyro.params import param_with_module_name
 from pyro.params.param_store import ParamStoreDict
 from pyro.poutine import LambdaPoutine, condition, do  # noqa: F401
-from pyro.util import (  # noqa: F401
-                       zeros,
-                       ones,
-                       set_rng_seed,
-                       apply_stack,
-                       get_tensor_data,
-                       deep_getattr
-                       )
+from pyro.util import apply_stack, deep_getattr, get_tensor_data, ones, set_rng_seed, zeros  # noqa: F401
 
 # the pyro stack
 _PYRO_STACK = []

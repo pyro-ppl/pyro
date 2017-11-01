@@ -1,5 +1,6 @@
-from .clipped_adam import ClippedAdam as pt_ClippedAdam
 import torch
+
+from .clipped_adam import ClippedAdam as pt_ClippedAdam
 from .optim import PyroOptim
 
 
