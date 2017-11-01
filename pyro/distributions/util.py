@@ -135,7 +135,9 @@ def softmax(x, dim=-1):
 
 def _get_clamping_buffer(tensor):
     clamp_eps = 1e-6
-    if type(tensor).__name__.endswith('DoubleTensor'):
+    if isinstance(tensor, Variable):
+        tensor = tensor.data
+    if isinstance(tensor, (torch.DoubleTensor, torch.cuda.DoubleTensor)):
         clamp_eps = 1e-15
     return clamp_eps
 
