@@ -127,7 +127,11 @@ def softmax(x, dim=-1):
 
     input_2d = trans_input.contiguous().view(-1, trans_size[-1])
 
-    soft_max_2d = F.softmax(input_2d, 1)
+    try:
+        soft_max_2d = F.softmax(input_2d, 1)
+    except TypeError:
+        # Support older pytorch 0.2 release.
+        soft_max_2d = F.softmax(input_2d)
 
     soft_max_nd = soft_max_2d.view(*trans_size)
     return soft_max_nd.transpose(dim, len(input_size) - 1)
