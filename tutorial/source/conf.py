@@ -95,12 +95,16 @@ todo_include_todos = False
 #
 html_theme = "sphinx_rtd_theme"
 html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
+# logo
+html_logo = '../../docs/img/pyro_logo_small.png'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
 # documentation.
 #
-# html_theme_options = {}
+html_theme_options = {
+    'logo_only': True
+}
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
@@ -138,7 +142,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'PyroTutorials.tex', u'Pyro Tutorials Documentation',
+    (master_doc, 'PyroTutorials.tex', u'Pyro Examples and Tutorials',
      u'Uber AI Labs', 'manual'),
 ]
 
@@ -148,7 +152,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'pyrotutorials', u'Pyro Tutorials Documentation',
+    (master_doc, 'pyrotutorials', u'Pyro Examples and Tutorials',
      [author], 1)
 ]
 
@@ -159,7 +163,7 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'PyroTutorials', u'Pyro Tutorials Documentation',
+    (master_doc, 'PyroTutorials', u'Pyro Examples and Tutorials',
      author, 'PyroTutorials', 'One line description of project.',
      'Miscellaneous'),
 ]
