@@ -1,3 +1,5 @@
+from __future__ import absolute_import, division, print_function
+
 # distribution classes
 from pyro.distributions.bernoulli import Bernoulli
 from pyro.distributions.beta import Beta
