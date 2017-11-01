@@ -36,8 +36,8 @@ class Multinomial(Distribution):
         if x is not None:
             if x.size()[-event_dim] != ps.size()[-event_dim]:
                 raise ValueError("The event size for the data and distribution parameters must match.\n"
-                                 "Expected x.size()[-1] == self.ps.size()[-1], but got {} vs {}"
-                                 .format(x.size(-1), ps.size(-1)))
+                                 "Expected x.size()[-1] == self.ps.size()[-1], but got {} vs {}".format(
+                                     x.size(-1), ps.size(-1)))
             try:
                 ps = self.ps.expand_as(x)
             except RuntimeError as e:
@@ -53,9 +53,10 @@ class Multinomial(Distribution):
         return self.batch_shape(x) + self.event_shape()
 
     def sample(self):
-        counts = np.apply_along_axis(lambda x: np.bincount(x, minlength=self.ps.size()[-1]),
-                                     axis=-1,
-                                     arr=self.expanded_sample().data.cpu().numpy())
+        counts = np.apply_along_axis(
+            lambda x: np.bincount(x, minlength=self.ps.size()[-1]),
+            axis=-1,
+            arr=self.expanded_sample().data.cpu().numpy())
         counts = torch.from_numpy(counts)
         if self.ps.is_cuda:
             counts = counts.cuda()
