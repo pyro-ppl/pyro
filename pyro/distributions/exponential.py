@@ -25,8 +25,16 @@ class Exponential(Distribution):
     def batch_shape(self, x=None):
         event_dim = 1
         lam = self.lam
-        if x is not None and x.size() != lam.size():
-            lam = self.lam.expand_as(x)
+        if x is not None:
+            if x.size()[-event_dim] != lam.size()[-event_dim]:
+                raise ValueError("The event size for the data and distribution parameters must match.\n"
+                                 "Expected x.size()[-1] == self.lam.size()[-1], but got {} vs {}".format(
+                                     x.size(-1), lam.size(-1)))
+            try:
+                lam = self.lam.expand_as(x)
+            except RuntimeError as e:
+                raise ValueError("Parameter `lam` with shape {} is not broadcastable to "
+                                 "the data shape {}. \nError: {}".format(lam.size(), x.size(), str(e)))
         return lam.size()[:-event_dim]
 
     def event_shape(self):
@@ -45,8 +53,8 @@ class Exponential(Distribution):
         return x
 
     def batch_log_pdf(self, x):
-        lam = self.lam.expand_as(x)
-        ll = - lam * x + torch.log(lam)
+        lam = self.lam.expand(self.shape(x))
+        ll = -lam * x + torch.log(lam)
         batch_log_pdf_shape = self.batch_shape(x) + (1,)
         return torch.sum(ll, -1).contiguous().view(batch_log_pdf_shape)
 

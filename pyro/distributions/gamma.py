@@ -22,8 +22,7 @@ class Gamma(Distribution):
 
     def __init__(self, alpha, beta, batch_size=None, *args, **kwargs):
         if alpha.size() != beta.size():
-            raise ValueError("Expected alpha.size() == beta.size(), but got {} vs {}"
-                             .format(alpha.size(), beta.size()))
+            raise ValueError("Expected alpha.size() == beta.size(), but got {} vs {}".format(alpha.size(), beta.size()))
         self.alpha = alpha
         self.beta = beta
         if alpha.dim() == 1 and beta.dim() == 1 and batch_size is not None:
@@ -34,8 +33,16 @@ class Gamma(Distribution):
     def batch_shape(self, x=None):
         event_dim = 1
         alpha = self.alpha
-        if x is not None and x.size() != alpha.size():
-            alpha = self.alpha.expand_as(x)
+        if x is not None:
+            if x.size()[-event_dim] != alpha.size()[-event_dim]:
+                raise ValueError("The event size for the data and distribution parameters must match.\n"
+                                 "Expected x.size()[-1] == self.alpha.size()[-1], but got {} vs {}".format(
+                                     x.size(-1), alpha.size(-1)))
+            try:
+                alpha = self.alpha.expand_as(x)
+            except RuntimeError as e:
+                raise ValueError("Parameter `alpha` with shape {} is not broadcastable to "
+                                 "the data shape {}. \nError: {}".format(alpha.size(), x.size(), str(e)))
         return alpha.size()[:-event_dim]
 
     def event_shape(self):
@@ -50,8 +57,7 @@ class Gamma(Distribution):
         un-reparameterized sampler.
         """
         theta = torch.pow(self.beta, -1.0)
-        np_sample = spr.gamma.rvs(self.alpha.data.cpu().numpy(),
-                                  scale=theta.data.cpu().numpy())
+        np_sample = spr.gamma.rvs(self.alpha.data.cpu().numpy(), scale=theta.data.cpu().numpy())
         if isinstance(np_sample, numbers.Number):
             np_sample = [np_sample]
         x = Variable(torch.Tensor(np_sample).type_as(self.alpha.data))
@@ -61,10 +67,10 @@ class Gamma(Distribution):
     def batch_log_pdf(self, x):
         alpha = self.alpha.expand(self.shape(x))
         beta = self.beta.expand(self.shape(x))
-        ll_1 = - beta * x
+        ll_1 = -beta * x
         ll_2 = (alpha - 1.0) * torch.log(x)
         ll_3 = alpha * torch.log(beta)
-        ll_4 = - log_gamma(alpha)
+        ll_4 = -log_gamma(alpha)
         log_pdf = torch.sum(ll_1 + ll_2 + ll_3 + ll_4, -1)
         batch_log_pdf_shape = self.batch_shape(x) + (1,)
         return log_pdf.contiguous().view(batch_log_pdf_shape)

@@ -1,7 +1,9 @@
 import torch
+import torch.nn.functional as F
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
+from pyro.distributions.util import get_probs_and_logits
 
 
 class Bernoulli(Distribution):
@@ -16,14 +18,26 @@ class Bernoulli(Distribution):
 
     :param torch.autograd.Variable ps: Probabilities. Should lie in the
         interval `[0,1]`.
+    :param logits: Log odds, i.e. log (p / (1 - p)). Either `ps` or `logits`
+        should be specified, but not both.
+    :param batch_size: The number of elements in the batch used to generate
+        a sample. The batch dimension will be the leftmost dimension in the
+        generated sample.
+    :param log_pdf_mask: Tensor that is applied to the batch log pdf values
+        as a multiplier. The most common use case is supplying a boolean
+        tensor mask to mask out certain batch sites in the log pdf computation.
     """
     enumerable = True
 
-    def __init__(self, ps, batch_size=None, log_pdf_mask=None, *args, **kwargs):
-        self.ps = ps
+    def __init__(self, ps=None, logits=None, batch_size=None, log_pdf_mask=None, *args, **kwargs):
+        if (ps is None) == (logits is None):
+            raise ValueError("Got ps={}, logits={}. Either `ps` or `logits` must be specified, "
+                             "but not both.".format(ps, logits))
+        self.ps, self.logits = get_probs_and_logits(ps=ps, logits=logits, is_multidimensional=False)
         self.log_pdf_mask = log_pdf_mask
-        if ps.dim() == 1 and batch_size is not None:
-            self.ps = ps.expand(batch_size, ps.size(0))
+        if self.ps.dim() == 1 and batch_size is not None:
+            self.ps = self.ps.expand(batch_size, self.ps.size(0))
+            self.logits = self.logits.expand(batch_size, self.logits.size(0))
             if log_pdf_mask is not None and log_pdf_mask.dim() == 1:
                 self.log_pdf_mask = log_pdf_mask.expand(batch_size, log_pdf_mask.size(0))
         super(Bernoulli, self).__init__(*args, **kwargs)
@@ -31,8 +45,17 @@ class Bernoulli(Distribution):
     def batch_shape(self, x=None):
         event_dim = 1
         ps = self.ps
-        if x is not None and x.size() != self.ps.size():
-            ps = self.ps.expand_as(x)
+        if x is not None:
+            if x is not None:
+                if x.size()[-event_dim] != ps.size()[-event_dim]:
+                    raise ValueError("The event size for the data and distribution parameters must match.\n"
+                                     "Expected x.size()[-1] == self.ps.size()[-1], but got {} vs {}".format(
+                                         x.size(-1), ps.size(-1)))
+                try:
+                    ps = self.ps.expand_as(x)
+                except RuntimeError as e:
+                    raise ValueError("Parameter `ps` with shape {} is not broadcastable to "
+                                     "the data shape {}. \nError: {}".format(ps.size(), x.size(), str(e)))
         return ps.size()[:-event_dim]
 
     def event_shape(self):
@@ -46,23 +69,16 @@ class Bernoulli(Distribution):
         return Variable(torch.bernoulli(self.ps.data))
 
     def batch_log_pdf(self, x):
-        ps = self.ps
-        ps = ps.expand(self.shape(x))
-        x_1 = x - 1
-        ps_1 = ps - 1
-        x = x.type_as(ps)
-        x_1 = x_1.type_as(x_1)
-        xmul = torch.mul(x, ps)
-        xmul_1 = torch.mul(x_1, ps_1)
-        logsum = torch.log(torch.add(xmul, xmul_1))
-
+        batch_log_pdf_shape = self.batch_shape(x) + (1,)
+        log_prob_1 = F.sigmoid(self.logits)
+        log_prob_0 = F.sigmoid(-self.logits)
+        log_prob = torch.log(x * log_prob_1 + (1 - x) * log_prob_0)
         # XXX this allows for the user to mask out certain parts of the score, for example
         # when the data is a ragged tensor. also useful for KL annealing. this entire logic
         # will likely be done in a better/cleaner way in the future
         if self.log_pdf_mask is not None:
-            logsum = logsum * self.log_pdf_mask
-        batch_log_pdf_shape = self.batch_shape(x) + (1,)
-        return torch.sum(logsum, -1).contiguous().view(batch_log_pdf_shape)
+            log_prob = log_prob * self.log_pdf_mask
+        return torch.sum(log_prob, -1).contiguous().view(batch_log_pdf_shape)
 
     def enumerate_support(self):
         """

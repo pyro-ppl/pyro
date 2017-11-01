@@ -27,8 +27,16 @@ class Delta(Distribution):
     def batch_shape(self, x=None):
         event_dim = 1
         v = self.v
-        if x is not None and x.size() != v.size():
-            v = self.v.expand_as(x)
+        if x is not None:
+            if x.size()[-event_dim] != v.size()[-event_dim]:
+                raise ValueError("The event size for the data and distribution parameters must match.\n"
+                                 "Expected x.size()[-1] == self.v.size()[-1], but got {} vs {}".format(
+                                     x.size(-1), v.size(-1)))
+            try:
+                v = self.v.expand_as(x)
+            except RuntimeError as e:
+                raise ValueError("Parameter `v` with shape {} is not broadcastable to "
+                                 "the data shape {}. \nError: {}".format(v.size(), x.size(), str(e)))
         return v.size()[:-event_dim]
 
     def event_shape(self):
@@ -43,9 +51,9 @@ class Delta(Distribution):
 
     def batch_log_pdf(self, x):
         v = self.v
-        if x.size() != v.size():
-            v = v.expand_as(x)
-        return torch.sum(torch.eq(x, v).float().log(), -1)
+        v = v.expand(self.shape(x))
+        batch_shape = self.batch_shape(x) + (1,)
+        return torch.sum(torch.eq(x, v).float().log(), -1).contiguous().view(batch_shape)
 
     def enumerate_support(self, v=None):
         """
