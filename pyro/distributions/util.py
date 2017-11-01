@@ -136,6 +136,13 @@ def softmax(x, dim=-1):
     return soft_max_nd.transpose(dim, len(input_size) - 1)
 
 
+def _get_clamping_buffer(tensor):
+    clamp_eps = 1e-6
+    if isinstance(tensor, torch.DoubleTensor):
+        clamp_eps = 1e-15
+    return clamp_eps
+
+
 def get_probs_and_logits(ps=None, logits=None, is_multidimensional=True):
     """
     Convert probability values to logits, or vice-versa. Either `ps` or
@@ -153,7 +160,8 @@ def get_probs_and_logits(ps=None, logits=None, is_multidimensional=True):
     """
     assert (ps is None) != (logits is None)
     if ps is not None:
-        ps = ps.clamp(min=CLAMP_EPS, max=1-CLAMP_EPS)
+        eps = _get_clamping_buffer(ps)
+        ps = ps.clamp(min=eps, max=1-eps)
     if is_multidimensional:
         if ps is None:
             ps = softmax(logits, -1)
