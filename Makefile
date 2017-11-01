@@ -18,7 +18,7 @@ scrub: FORCE
 	find tutorial -name "*.ipynb" | xargs python -m nbstripout
 
 format: FORCE
-	# yapf -i *.py pyro/distributions/*.py
+	yapf -i *.py pyro/distributions/*.py
 	isort --recursive *.py pyro/ tests/
 
 test: lint docs FORCE
