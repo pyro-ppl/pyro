@@ -2,8 +2,6 @@ import torch
 import torch.nn.functional as F
 from torch.autograd import Variable
 
-CLAMP_EPS = 1e-10
-
 
 def log_gamma(xx):
     if isinstance(xx, Variable):
