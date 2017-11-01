@@ -3,6 +3,9 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 
 
+CLAMP_EPS = 1e-10
+
+
 def log_gamma(xx):
     if isinstance(xx, Variable):
         ttype = xx.data.type()
@@ -149,6 +152,8 @@ def get_probs_and_logits(ps=None, logits=None, is_multidimensional=True):
     :return: tuple containing raw probabilities and logits as tensors
     """
     assert (ps is None) != (logits is None)
+    if ps is not None:
+        ps = ps.clamp(min=CLAMP_EPS, max=1-CLAMP_EPS)
     if is_multidimensional:
         if ps is None:
             ps = softmax(logits, -1)
