@@ -1,3 +1,5 @@
+from __future__ import absolute_import, division, print_function
+
 from .trace_elbo import Trace_ELBO
 from .tracegraph_elbo import TraceGraph_ELBO
 

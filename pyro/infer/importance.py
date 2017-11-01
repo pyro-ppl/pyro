@@ -1,3 +1,5 @@
+from __future__ import absolute_import, division, print_function
+
 import pyro.poutine as poutine
 from pyro.infer import TracePosterior
 
