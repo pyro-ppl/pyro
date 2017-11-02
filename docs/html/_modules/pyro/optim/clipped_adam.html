@@ -1,0 +1,315 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>pyro.optim.clipped_adam &mdash; Pyro 0.0.1 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="../../../genindex.html"/>
+        <link rel="search" title="Search" href="../../../search.html"/>
+    <link rel="top" title="Pyro 0.0.1 documentation" href="../../../index.html"/>
+        <link rel="up" title="Module code" href="../../index.html"/> 
+
+  
+  <script src="../../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../../index.html">
+          
+
+          
+            
+            <img src="../../../_static/pyro_logo_small.png" class="logo" />
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.0.1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../getting_started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../primitives.html">Primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../inference.html">Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../distributions.html">Distributions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../parameters.html">Parameters</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../nn.html">Neural Network</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../optimization.html">Optimization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../advanced.html">Advanced Features</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">Pyro</a>
+        
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="../../index.html">Module code</a> &raquo;</li>
+        
+      <li>pyro.optim.clipped_adam</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for pyro.optim.clipped_adam</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">math</span>
+
+<span class="kn">from</span> <span class="nn">torch.optim.optimizer</span> <span class="k">import</span> <span class="n">Optimizer</span>
+
+
+<div class="viewcode-block" id="ClippedAdam"><a class="viewcode-back" href="../../../optimization.html#pyro.optim.clipped_adam.ClippedAdam">[docs]</a><span class="k">class</span> <span class="nc">ClippedAdam</span><span class="p">(</span><span class="n">Optimizer</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    :param params: iterable of parameters to optimize or dicts defining parameter groups</span>
+<span class="sd">    :param lr: learning rate (default: 1e-3)</span>
+<span class="sd">    :param Tuple betas: coefficients used for computing</span>
+<span class="sd">        running averages of gradient and its square (default: (0.9, 0.999))</span>
+<span class="sd">    :param eps: term added to the denominator to improve</span>
+<span class="sd">        numerical stability (default: 1e-8)</span>
+<span class="sd">    :param weight_decay: weight decay (L2 penalty) (default: 0)</span>
+<span class="sd">    :param clip_norm: magnitude of norm to which gradients are clipped (default: 10.0)</span>
+<span class="sd">    :param lrd: rate at which learning rate decays (default: 1.0)</span>
+
+<span class="sd">    Small modification to the Adam algorithm implemented in torch.optim.Adam</span>
+<span class="sd">    to include gradient clipping and learning rate decay.</span>
+
+<span class="sd">    Reference</span>
+
+<span class="sd">    `A Method for Stochastic Optimization`, Diederik P. Kingma, Jimmy Ba</span>
+<span class="sd">    https://arxiv.org/abs/1412.6980</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">lr</span><span class="o">=</span><span class="mf">1e-3</span><span class="p">,</span> <span class="n">betas</span><span class="o">=</span><span class="p">(</span><span class="mf">0.9</span><span class="p">,</span> <span class="mf">0.999</span><span class="p">),</span> <span class="n">eps</span><span class="o">=</span><span class="mf">1e-8</span><span class="p">,</span>
+                 <span class="n">weight_decay</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">clip_norm</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">lrd</span><span class="o">=</span><span class="mf">1.0</span><span class="p">):</span>
+        <span class="n">defaults</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">lr</span><span class="o">=</span><span class="n">lr</span><span class="p">,</span> <span class="n">betas</span><span class="o">=</span><span class="n">betas</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="n">eps</span><span class="p">,</span>
+                        <span class="n">weight_decay</span><span class="o">=</span><span class="n">weight_decay</span><span class="p">,</span>
+                        <span class="n">clip_norm</span><span class="o">=</span><span class="n">clip_norm</span><span class="p">,</span> <span class="n">lrd</span><span class="o">=</span><span class="n">lrd</span><span class="p">)</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">ClippedAdam</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">defaults</span><span class="p">)</span>
+
+<div class="viewcode-block" id="ClippedAdam.step"><a class="viewcode-back" href="../../../optimization.html#pyro.optim.clipped_adam.ClippedAdam.step">[docs]</a>    <span class="k">def</span> <span class="nf">step</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">closure</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param closure:: An optional closure that reevaluates the model and returns the loss.</span>
+
+<span class="sd">        Performs a single optimization step.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">loss</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="n">closure</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">loss</span> <span class="o">=</span> <span class="n">closure</span><span class="p">()</span>
+
+        <span class="k">for</span> <span class="n">group</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">param_groups</span><span class="p">:</span>
+            <span class="n">group</span><span class="p">[</span><span class="s1">&#39;lr&#39;</span><span class="p">]</span> <span class="o">*=</span> <span class="n">group</span><span class="p">[</span><span class="s1">&#39;lrd&#39;</span><span class="p">]</span>
+
+            <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">group</span><span class="p">[</span><span class="s1">&#39;params&#39;</span><span class="p">]:</span>
+                <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">grad</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">grad</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">grad</span><span class="o">.</span><span class="n">data</span>
+                <span class="n">grad</span><span class="o">.</span><span class="n">clamp_</span><span class="p">(</span><span class="o">-</span><span class="n">group</span><span class="p">[</span><span class="s1">&#39;clip_norm&#39;</span><span class="p">],</span> <span class="n">group</span><span class="p">[</span><span class="s1">&#39;clip_norm&#39;</span><span class="p">])</span>
+                <span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span><span class="p">[</span><span class="n">p</span><span class="p">]</span>
+
+                <span class="c1"># State initialization</span>
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">state</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="n">state</span><span class="p">[</span><span class="s1">&#39;step&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+                    <span class="c1"># Exponential moving average of gradient values</span>
+                    <span class="n">state</span><span class="p">[</span><span class="s1">&#39;exp_avg&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">grad</span><span class="o">.</span><span class="n">new</span><span class="p">()</span><span class="o">.</span><span class="n">resize_as_</span><span class="p">(</span><span class="n">grad</span><span class="p">)</span><span class="o">.</span><span class="n">zero_</span><span class="p">()</span>
+                    <span class="c1"># Exponential moving average of squared gradient values</span>
+                    <span class="n">state</span><span class="p">[</span><span class="s1">&#39;exp_avg_sq&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">grad</span><span class="o">.</span><span class="n">new</span><span class="p">()</span><span class="o">.</span><span class="n">resize_as_</span><span class="p">(</span><span class="n">grad</span><span class="p">)</span><span class="o">.</span><span class="n">zero_</span><span class="p">()</span>
+
+                <span class="n">exp_avg</span><span class="p">,</span> <span class="n">exp_avg_sq</span> <span class="o">=</span> <span class="n">state</span><span class="p">[</span><span class="s1">&#39;exp_avg&#39;</span><span class="p">],</span> <span class="n">state</span><span class="p">[</span><span class="s1">&#39;exp_avg_sq&#39;</span><span class="p">]</span>
+                <span class="n">beta1</span><span class="p">,</span> <span class="n">beta2</span> <span class="o">=</span> <span class="n">group</span><span class="p">[</span><span class="s1">&#39;betas&#39;</span><span class="p">]</span>
+
+                <span class="n">state</span><span class="p">[</span><span class="s1">&#39;step&#39;</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+
+                <span class="k">if</span> <span class="n">group</span><span class="p">[</span><span class="s1">&#39;weight_decay&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="n">grad</span> <span class="o">=</span> <span class="n">grad</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">group</span><span class="p">[</span><span class="s1">&#39;weight_decay&#39;</span><span class="p">],</span> <span class="n">p</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+
+                <span class="c1"># Decay the first and second moment running average coefficient</span>
+                <span class="n">exp_avg</span><span class="o">.</span><span class="n">mul_</span><span class="p">(</span><span class="n">beta1</span><span class="p">)</span><span class="o">.</span><span class="n">add_</span><span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">beta1</span><span class="p">,</span> <span class="n">grad</span><span class="p">)</span>
+                <span class="n">exp_avg_sq</span><span class="o">.</span><span class="n">mul_</span><span class="p">(</span><span class="n">beta2</span><span class="p">)</span><span class="o">.</span><span class="n">addcmul_</span><span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">beta2</span><span class="p">,</span> <span class="n">grad</span><span class="p">,</span> <span class="n">grad</span><span class="p">)</span>
+
+                <span class="n">denom</span> <span class="o">=</span> <span class="n">exp_avg_sq</span><span class="o">.</span><span class="n">sqrt</span><span class="p">()</span><span class="o">.</span><span class="n">add_</span><span class="p">(</span><span class="n">group</span><span class="p">[</span><span class="s1">&#39;eps&#39;</span><span class="p">])</span>
+
+                <span class="n">bias_correction1</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">beta1</span> <span class="o">**</span> <span class="n">state</span><span class="p">[</span><span class="s1">&#39;step&#39;</span><span class="p">]</span>
+                <span class="n">bias_correction2</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">beta2</span> <span class="o">**</span> <span class="n">state</span><span class="p">[</span><span class="s1">&#39;step&#39;</span><span class="p">]</span>
+                <span class="n">step_size</span> <span class="o">=</span> <span class="n">group</span><span class="p">[</span><span class="s1">&#39;lr&#39;</span><span class="p">]</span> <span class="o">*</span> <span class="n">math</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">bias_correction2</span><span class="p">)</span> <span class="o">/</span> <span class="n">bias_correction1</span>
+
+                <span class="n">p</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">addcdiv_</span><span class="p">(</span><span class="o">-</span><span class="n">step_size</span><span class="p">,</span> <span class="n">exp_avg</span><span class="p">,</span> <span class="n">denom</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">loss</span></div></div>
+</pre></div>
+
+           </div>
+           <div class="articleComments">
+            
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2017, Uber Technologies Inc.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../../',
+            VERSION:'0.0.1',
+            LANGUAGE:'None',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true,
+            SOURCELINK_SUFFIX: '.txt'
+        };
+    </script>
+      <script type="text/javascript" src="../../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

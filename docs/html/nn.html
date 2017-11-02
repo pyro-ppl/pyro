@@ -1,0 +1,333 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Neural Network &mdash; Pyro 0.0.1 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="genindex.html"/>
+        <link rel="search" title="Search" href="search.html"/>
+    <link rel="top" title="Pyro 0.0.1 documentation" href="index.html"/>
+        <link rel="next" title="Optimization" href="optimization.html"/>
+        <link rel="prev" title="Parameters" href="parameters.html"/> 
+
+  
+  <script src="_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="index.html">
+          
+
+          
+            
+            <img src="_static/pyro_logo_small.png" class="logo" />
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.0.1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="primitives.html">Primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="inference.html">Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="distributions.html">Distributions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="parameters.html">Parameters</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Neural Network</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#module-pyro.nn.auto_reg_nn">AutoRegressiveNN</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="optimization.html">Optimization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="advanced.html">Advanced Features</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">Pyro</a>
+        
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="index.html">Docs</a> &raquo;</li>
+        
+      <li>Neural Network</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="_sources/nn.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="neural-network">
+<h1>Neural Network<a class="headerlink" href="#neural-network" title="Permalink to this headline">¶</a></h1>
+<p>The module <cite>pyro.nn</cite> provides implementations of neural network modules
+that are useful in the context of deep probabilistic programming. None
+of these modules is really part of the core language.</p>
+<div class="section" id="module-pyro.nn.auto_reg_nn">
+<span id="autoregressivenn"></span><h2>AutoRegressiveNN<a class="headerlink" href="#module-pyro.nn.auto_reg_nn" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="pyro.nn.auto_reg_nn.AutoRegressiveNN">
+<em class="property">class </em><code class="descname">AutoRegressiveNN</code><span class="sig-paren">(</span><em>input_dim</em>, <em>hidden_dim</em>, <em>output_dim_multiplier=1</em>, <em>mask_encoding=None</em>, <em>permutation=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/nn/auto_reg_nn.html#AutoRegressiveNN"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.nn.auto_reg_nn.AutoRegressiveNN" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal"><span class="pre">torch.nn.modules.module.Module</span></code></p>
+<p>A simple implementation of a MADE-like auto-regressive neural network.</p>
+<p>Reference:
+MADE: Masked Autoencoder for Distribution Estimation [arXiv:1502.03509]
+Mathieu Germain, Karol Gregor, Iain Murray, Hugo Larochelle</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>input_dim</strong> (<a class="reference external" href="https://docs.python.org/2/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) – the dimensionality of the input</li>
+<li><strong>hidden_dim</strong> (<a class="reference external" href="https://docs.python.org/2/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) – the dimensionality of the hidden units</li>
+<li><strong>output_dim_multiplier</strong> (<a class="reference external" href="https://docs.python.org/2/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) – the dimensionality of the output is given by input_dim x output_dim_multiplier.
+specifically the shape of the output for a single vector input is [output_dim_multiplier, input_dim].
+for any i, j in range(0, output_dim_multiplier) the subset of outputs [i, :] has identifical
+autoregressive structure to [j, :]. defaults to <cite>1</cite></li>
+<li><strong>mask_encoding</strong> (<em>torch.LongTensor</em>) – a torch Tensor that controls the autoregressive structure (see reference). by default
+this is chosen at random.</li>
+<li><strong>permutation</strong> (<em>torch.LongTensor</em>) – an optional permutation that is applied to the inputs and controls the order of the
+autoregressive factorization. in particular for the identity permutation the autoregressive structure
+is such that the jacobian is upper triangular. by default this is chosen at random.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<dl class="method">
+<dt id="pyro.nn.auto_reg_nn.AutoRegressiveNN.forward">
+<code class="descname">forward</code><span class="sig-paren">(</span><em>z</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/nn/auto_reg_nn.html#AutoRegressiveNN.forward"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.nn.auto_reg_nn.AutoRegressiveNN.forward" title="Permalink to this definition">¶</a></dt>
+<dd><p>the forward method</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyro.nn.auto_reg_nn.AutoRegressiveNN.get_mask_encoding">
+<code class="descname">get_mask_encoding</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/nn/auto_reg_nn.html#AutoRegressiveNN.get_mask_encoding"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.nn.auto_reg_nn.AutoRegressiveNN.get_mask_encoding" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the mask encoding associated with the neural network: basically the quantity m(k) in the MADE paper.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyro.nn.auto_reg_nn.AutoRegressiveNN.get_permutation">
+<code class="descname">get_permutation</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/nn/auto_reg_nn.html#AutoRegressiveNN.get_permutation"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.nn.auto_reg_nn.AutoRegressiveNN.get_permutation" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the permutation applied to the inputs (by default this is chosen at random)</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pyro.nn.auto_reg_nn.MaskedLinear">
+<em class="property">class </em><code class="descname">MaskedLinear</code><span class="sig-paren">(</span><em>in_features</em>, <em>out_features</em>, <em>mask</em>, <em>bias=True</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/nn/auto_reg_nn.html#MaskedLinear"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.nn.auto_reg_nn.MaskedLinear" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal"><span class="pre">torch.nn.modules.linear.Linear</span></code></p>
+<p>A linear mapping with a given mask on the weights (arbitrary bias)</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>in_features</strong> (<a class="reference external" href="https://docs.python.org/2/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) – the number of input features</li>
+<li><strong>out_features</strong> (<a class="reference external" href="https://docs.python.org/2/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) – the number of output features</li>
+<li><strong>mask</strong> (<em>torch.autograd.Variable</em>) – the mask to apply to the in_features x out_features weight matrix</li>
+<li><strong>bias</strong> – whether or not <cite>MaskedLinear</cite> should include a bias term. defaults to <cite>True</cite></li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<dl class="method">
+<dt id="pyro.nn.auto_reg_nn.MaskedLinear.forward">
+<code class="descname">forward</code><span class="sig-paren">(</span><em>_input</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/nn/auto_reg_nn.html#MaskedLinear.forward"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.nn.auto_reg_nn.MaskedLinear.forward" title="Permalink to this definition">¶</a></dt>
+<dd><p>the forward method that does the masked linear computation and returns the result</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+</div>
+
+
+           </div>
+           <div class="articleComments">
+            
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="optimization.html" class="btn btn-neutral float-right" title="Optimization" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="parameters.html" class="btn btn-neutral" title="Parameters" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2017, Uber Technologies Inc.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'./',
+            VERSION:'0.0.1',
+            LANGUAGE:'None',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true,
+            SOURCELINK_SUFFIX: '.txt'
+        };
+    </script>
+      <script type="text/javascript" src="_static/jquery.js"></script>
+      <script type="text/javascript" src="_static/underscore.js"></script>
+      <script type="text/javascript" src="_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

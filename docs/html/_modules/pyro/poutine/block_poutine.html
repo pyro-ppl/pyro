@@ -1,0 +1,369 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>pyro.poutine.block_poutine &mdash; Pyro 0.0.1 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="../../../genindex.html"/>
+        <link rel="search" title="Search" href="../../../search.html"/>
+    <link rel="top" title="Pyro 0.0.1 documentation" href="../../../index.html"/>
+        <link rel="up" title="Module code" href="../../index.html"/> 
+
+  
+  <script src="../../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../../index.html">
+          
+
+          
+            
+            <img src="../../../_static/pyro_logo_small.png" class="logo" />
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.0.1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../getting_started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../primitives.html">Primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../inference.html">Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../distributions.html">Distributions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../parameters.html">Parameters</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../nn.html">Neural Network</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../optimization.html">Optimization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../advanced.html">Advanced Features</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">Pyro</a>
+        
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="../../index.html">Module code</a> &raquo;</li>
+        
+      <li>pyro.poutine.block_poutine</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for pyro.poutine.block_poutine</h1><div class="highlight"><pre>
+<span></span><span class="kn">from</span> <span class="nn">.poutine</span> <span class="k">import</span> <span class="n">Poutine</span>
+
+
+<div class="viewcode-block" id="BlockPoutine"><a class="viewcode-back" href="../../../poutine.html#pyro.poutine.block_poutine.BlockPoutine">[docs]</a><span class="k">class</span> <span class="nc">BlockPoutine</span><span class="p">(</span><span class="n">Poutine</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This Poutine selectively hides pyro primitive sites from the outside world.</span>
+
+<span class="sd">    For example, suppose the stochastic function fn has two sample sites &quot;a&quot; and &quot;b&quot;.</span>
+<span class="sd">    Then any poutine outside of BlockPoutine(fn, hide=[&quot;a&quot;])</span>
+<span class="sd">    will not be applied to site &quot;a&quot; and will only see site &quot;b&quot;:</span>
+
+<span class="sd">    &gt;&gt;&gt; fn_inner = TracePoutine(fn)</span>
+<span class="sd">    &gt;&gt;&gt; fn_outer = TracePoutine(BlockPoutine(TracePoutine(fn), hide=[&quot;a&quot;]))</span>
+<span class="sd">    &gt;&gt;&gt; trace_inner = fn_inner.get_trace()</span>
+<span class="sd">    &gt;&gt;&gt; trace_outer  = fn_outer.get_trace()</span>
+<span class="sd">    &gt;&gt;&gt; &quot;a&quot; in trace_inner</span>
+<span class="sd">    True</span>
+<span class="sd">    &gt;&gt;&gt; &quot;a&quot; in trace_outer</span>
+<span class="sd">    False</span>
+<span class="sd">    &gt;&gt;&gt; &quot;b&quot; in trace_inner</span>
+<span class="sd">    True</span>
+<span class="sd">    &gt;&gt;&gt; &quot;b&quot; in trace_outer</span>
+<span class="sd">    True</span>
+
+<span class="sd">    BlockPoutine has a flexible interface that allows users</span>
+<span class="sd">    to specify in several different ways</span>
+<span class="sd">    which sites should be hidden or exposed.</span>
+<span class="sd">    See the constructor for details.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fn</span><span class="p">,</span>
+                 <span class="n">hide_all</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">expose_all</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                 <span class="n">hide</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">expose</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                 <span class="n">hide_types</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">expose_types</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param bool hide_all: hide all sites</span>
+<span class="sd">        :param bool expose_all: expose all sites normally</span>
+<span class="sd">        :param list hide: list of site names to hide, rest will be exposed normally</span>
+<span class="sd">        :param list expose: list of site names to expose, rest will be hidden</span>
+<span class="sd">        :param list hide_types: list of site types to hide, rest will be exposed normally</span>
+<span class="sd">        :param list expose_types: list of site types to expose normally, rest will be hidden</span>
+
+<span class="sd">        Constructor for blocking poutine</span>
+<span class="sd">        Default behavior: block everything (hide_all == True)</span>
+
+<span class="sd">        A site is hidden if at least one of the following holds:</span>
+<span class="sd">        1. msg[&quot;name&quot;] in hide</span>
+<span class="sd">        2. msg[&quot;type&quot;] in hide_types</span>
+<span class="sd">        3. msg[&quot;name&quot;] not in expose and msg[&quot;type&quot;] not in expose_types</span>
+<span class="sd">        4. hide_all == True</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">BlockPoutine</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">fn</span><span class="p">)</span>
+        <span class="c1"># first, some sanity checks:</span>
+        <span class="c1"># hide_all and expose_all intersect?</span>
+        <span class="k">assert</span> <span class="p">(</span><span class="n">hide_all</span> <span class="ow">is</span> <span class="kc">False</span> <span class="ow">and</span> <span class="n">expose_all</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">)</span> <span class="ow">or</span> \
+               <span class="p">(</span><span class="n">hide_all</span> <span class="o">!=</span> <span class="n">expose_all</span><span class="p">),</span> <span class="s2">&quot;cannot hide and expose a site&quot;</span>
+
+        <span class="c1"># hide and expose intersect?</span>
+        <span class="k">if</span> <span class="n">hide</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">hide</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">hide_all</span> <span class="o">=</span> <span class="kc">False</span>
+
+        <span class="k">if</span> <span class="n">expose</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">expose</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">assert</span> <span class="nb">set</span><span class="p">(</span><span class="n">hide</span><span class="p">)</span><span class="o">.</span><span class="n">isdisjoint</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">expose</span><span class="p">)),</span> \
+            <span class="s2">&quot;cannot hide and expose a site&quot;</span>
+
+        <span class="c1"># hide_types and expose_types intersect?</span>
+        <span class="k">if</span> <span class="n">hide_types</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">hide_types</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="n">expose_types</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">expose_types</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">assert</span> <span class="nb">set</span><span class="p">(</span><span class="n">hide_types</span><span class="p">)</span><span class="o">.</span><span class="n">isdisjoint</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">expose_types</span><span class="p">)),</span> \
+            <span class="s2">&quot;cannot hide and expose a site type&quot;</span>
+
+        <span class="c1"># now set stuff</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">hide_all</span> <span class="o">=</span> <span class="n">hide_all</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">expose_all</span> <span class="o">=</span> <span class="n">expose_all</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">hide</span> <span class="o">=</span> <span class="n">hide</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">expose</span> <span class="o">=</span> <span class="n">expose</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">hide_types</span> <span class="o">=</span> <span class="n">hide_types</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">expose_types</span> <span class="o">=</span> <span class="n">expose_types</span>
+
+    <span class="k">def</span> <span class="nf">_block_up</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">msg</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param msg: current message at a trace site, after all execution finished.</span>
+<span class="sd">        :returns: boolean decision to hide or expose site.</span>
+
+<span class="sd">        A site is hidden if at least one of the following holds:</span>
+<span class="sd">        1. msg[&quot;name&quot;] in self.hide</span>
+<span class="sd">        2. msg[&quot;type&quot;] in self.hide_types</span>
+<span class="sd">        3. msg[&quot;name&quot;] not in self.expose and msg[&quot;type&quot;] not in self.expose_types</span>
+<span class="sd">        4. self.hide_all == True</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># handle observes</span>
+        <span class="k">if</span> <span class="n">msg</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;sample&quot;</span> <span class="ow">and</span> <span class="n">msg</span><span class="p">[</span><span class="s2">&quot;is_observed&quot;</span><span class="p">]:</span>
+            <span class="n">msg_type</span> <span class="o">=</span> <span class="s2">&quot;observe&quot;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">msg_type</span> <span class="o">=</span> <span class="n">msg</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">]</span>
+
+        <span class="c1"># decision rule for hiding:</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">msg</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">hide</span><span class="p">)</span> <span class="ow">or</span> \
+           <span class="p">(</span><span class="n">msg_type</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">hide_types</span><span class="p">)</span> <span class="ow">or</span> \
+           <span class="p">((</span><span class="n">msg</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">expose</span><span class="p">)</span> <span class="ow">and</span>
+            <span class="p">(</span><span class="n">msg_type</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">expose_types</span><span class="p">)</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">hide_all</span><span class="p">):</span>  <span class="c1"># noqa: E129</span>
+
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="c1"># otherwise expose</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+
+    <span class="k">def</span> <span class="nf">_pyro_sample</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">msg</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param msg:  current message at a trace site</span>
+<span class="sd">        :returns: a sample from the stochastic function at the site.</span>
+
+<span class="sd">        Default sample behavior with a side effect.</span>
+<span class="sd">        Applies self._block_up to decide whether to hide the site.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">ret</span> <span class="o">=</span> <span class="nb">super</span><span class="p">(</span><span class="n">BlockPoutine</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">_pyro_sample</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+        <span class="n">msg</span><span class="p">[</span><span class="s2">&quot;stop&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_block_up</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">ret</span>
+
+    <span class="k">def</span> <span class="nf">_pyro_param</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">msg</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param msg:  current message at a trace site</span>
+<span class="sd">        :returns: the result of querying the parameter store.</span>
+
+<span class="sd">        Default param behavior with a side effect.</span>
+<span class="sd">        Applies self._block_up to decide whether to hide the site.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">ret</span> <span class="o">=</span> <span class="nb">super</span><span class="p">(</span><span class="n">BlockPoutine</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">_pyro_param</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+        <span class="n">msg</span><span class="p">[</span><span class="s2">&quot;stop&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_block_up</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">ret</span></div>
+</pre></div>
+
+           </div>
+           <div class="articleComments">
+            
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2017, Uber Technologies Inc.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../../',
+            VERSION:'0.0.1',
+            LANGUAGE:'None',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true,
+            SOURCELINK_SUFFIX: '.txt'
+        };
+    </script>
+      <script type="text/javascript" src="../../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

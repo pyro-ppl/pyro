@@ -1,0 +1,521 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Parameters &mdash; Pyro 0.0.1 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="genindex.html"/>
+        <link rel="search" title="Search" href="search.html"/>
+    <link rel="top" title="Pyro 0.0.1 documentation" href="index.html"/>
+        <link rel="next" title="Neural Network" href="nn.html"/>
+        <link rel="prev" title="Transformed Distribution" href="transformed_dist.html"/> 
+
+  
+  <script src="_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="index.html">
+          
+
+          
+            
+            <img src="_static/pyro_logo_small.png" class="logo" />
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.0.1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="primitives.html">Primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="inference.html">Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="distributions.html">Distributions</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Parameters</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#module-pyro.params.param_store">ParamStore</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="nn.html">Neural Network</a></li>
+<li class="toctree-l1"><a class="reference internal" href="optimization.html">Optimization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="advanced.html">Advanced Features</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">Pyro</a>
+        
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="index.html">Docs</a> &raquo;</li>
+        
+      <li>Parameters</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="_sources/parameters.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="parameters">
+<h1>Parameters<a class="headerlink" href="#parameters" title="Permalink to this headline">¶</a></h1>
+<p>Parameters in Pyro are basically thin wrappers around PyTorch Variables that carry unique names.
+As such Parameters are the primary stateful objects in Pyro. Users typically interact with parameters
+via the Pyro primitive <cite>pyro.param</cite>. Parameters play a central role in stochastic variational inference,
+where they are used to represent point estimates for the parameters in parameterized families of
+models and guides.</p>
+<div class="section" id="module-pyro.params.param_store">
+<span id="paramstore"></span><h2>ParamStore<a class="headerlink" href="#module-pyro.params.param_store" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="pyro.params.param_store.ParamStoreDict">
+<em class="property">class </em><code class="descname">ParamStoreDict</code><a class="reference internal" href="_modules/pyro/params/param_store.html#ParamStoreDict"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.params.param_store.ParamStoreDict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/2/library/functions.html#object" title="(in Python v2.7)"><code class="xref py py-class docutils literal"><span class="pre">object</span></code></a></p>
+<p>Global store for parameters in Pyro. This is basically a key-value store.
+The typical user interacts with the ParamStore primarily through the
+primitive <cite>pyro.param</cite>. See the introductory tutorial
+<a class="reference external" href="http://pyro.ai/examples/hello_world.html">Hello World</a> for a discussion.</p>
+<p>Some things to bear in mind when using parameters in Pyro:</p>
+<ul class="simple">
+<li>parameters must be assigned unique names</li>
+<li>the <cite>init_tensor</cite> argument to <cite>pyro.param</cite> is only used the first time that a given (named)
+parameter is registered with Pyro.</li>
+<li>for this reason, a user may need to use the <cite>clear()</cite> method if working in a REPL in order to
+get the desired behavior. this method can also be inved with <cite>pyro.clear_param_store()</cite>.</li>
+<li>the internal name of a parameter within a PyTorch <cite>nn.Module</cite> that has been registered with
+Pyro is prepended with the Pyro name of the module. so nothing prevents the user from having
+two different modules each of which contains a parameter named <cite>weight</cite>. by contrast, a user
+can only have one top-level parameter named <cite>weight</cite> (outside of any module).</li>
+<li>parameters can be ‘tagged’ with (string) tags. by default each parameter is tagged with the
+‘default’ tag. this mechanism allows the user to group parameters together and e.g. customize
+learning rates for different tags. for an example where this is useful see the tutorial
+<a class="reference external" href="http://pyro.ai/examples/svi_part_iii.html">SVI Part III</a>.</li>
+<li>parameters can be saved and loaded from disk using <cite>save</cite> and <cite>load</cite>.</li>
+</ul>
+<dl class="method">
+<dt id="pyro.params.param_store.ParamStoreDict.clear">
+<code class="descname">clear</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/params/param_store.html#ParamStoreDict.clear"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.params.param_store.ParamStoreDict.clear" title="Permalink to this definition">¶</a></dt>
+<dd><p>Clear the ParamStore</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyro.params.param_store.ParamStoreDict.delete_tag">
+<code class="descname">delete_tag</code><span class="sig-paren">(</span><em>tag</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/params/param_store.html#ParamStoreDict.delete_tag"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.params.param_store.ParamStoreDict.delete_tag" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>tag</strong> (<a class="reference external" href="https://docs.python.org/2/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) – tag to remove</td>
+</tr>
+</tbody>
+</table>
+<p>Removes the tag; any parameters with that tag are unaffected but are no longer
+associated with that tag.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyro.params.param_store.ParamStoreDict.get_active_params">
+<code class="descname">get_active_params</code><span class="sig-paren">(</span><em>tags=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/params/param_store.html#ParamStoreDict.get_active_params"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.params.param_store.ParamStoreDict.get_active_params" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>tag</strong> – optional argument specifying that only active params carrying a particular
+tag or any of several tags should be returned</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">all active params in the ParamStore, possibly filtered to a particular tag or tags</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference external" href="https://docs.python.org/2/library/stdtypes.html#set" title="(in Python v2.7)">set</a></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyro.params.param_store.ParamStoreDict.get_all_param_names">
+<code class="descname">get_all_param_names</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/params/param_store.html#ParamStoreDict.get_all_param_names"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.params.param_store.ParamStoreDict.get_all_param_names" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get all parameter names in the ParamStore</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyro.params.param_store.ParamStoreDict.get_param">
+<code class="descname">get_param</code><span class="sig-paren">(</span><em>name</em>, <em>init_tensor=None</em>, <em>tags=’default’</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/params/param_store.html#ParamStoreDict.get_param"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.params.param_store.ParamStoreDict.get_param" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>name</strong> (<a class="reference external" href="https://docs.python.org/2/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) – parameter name</li>
+<li><strong>init_tensor</strong> (<em>torch.autograd.Variable</em>) – initial tensor</li>
+<li><strong>tags</strong> (<em>a string</em><em> or </em><em>iterable of strings</em>) – the tag(s) to assign to the parameter</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">parameter</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last">torch.autograd.Variable</p>
+</td>
+</tr>
+</tbody>
+</table>
+<p>Get parameter from its name. If it does not yet exist in the
+ParamStore, it will be created and stored.
+The Pyro primitive <cite>pyro.param</cite> dispatches to this method.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyro.params.param_store.ParamStoreDict.get_param_tags">
+<code class="descname">get_param_tags</code><span class="sig-paren">(</span><em>param_name</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/params/param_store.html#ParamStoreDict.get_param_tags"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.params.param_store.ParamStoreDict.get_param_tags" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>param_name</strong> (<a class="reference external" href="https://docs.python.org/2/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) – a (single) parameter name</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference external" href="https://docs.python.org/2/library/stdtypes.html#set" title="(in Python v2.7)">set</a></td>
+</tr>
+</tbody>
+</table>
+<p>Return the tags associated with the parameter</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyro.params.param_store.ParamStoreDict.get_state">
+<code class="descname">get_state</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/params/param_store.html#ParamStoreDict.get_state"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.params.param_store.ParamStoreDict.get_state" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the ParamStore state.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyro.params.param_store.ParamStoreDict.load">
+<code class="descname">load</code><span class="sig-paren">(</span><em>filename</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/params/param_store.html#ParamStoreDict.load"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.params.param_store.ParamStoreDict.load" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>filename</strong> – file name to load from</td>
+</tr>
+</tbody>
+</table>
+<p>Loads parameters from disk</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyro.params.param_store.ParamStoreDict.mark_params_active">
+<code class="descname">mark_params_active</code><span class="sig-paren">(</span><em>params</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/params/param_store.html#ParamStoreDict.mark_params_active"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.params.param_store.ParamStoreDict.mark_params_active" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>params</strong> – iterable of params the user wishes to mark as active in the ParamStore.
+this information is used to determine which parameters are being optimized,
+e.g. in the context of pyro.infer.SVI</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyro.params.param_store.ParamStoreDict.mark_params_inactive">
+<code class="descname">mark_params_inactive</code><span class="sig-paren">(</span><em>params</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/params/param_store.html#ParamStoreDict.mark_params_inactive"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.params.param_store.ParamStoreDict.mark_params_inactive" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>params</strong> – iterable of params the user wishes to mark as inactive in the ParamStore.
+this information is used to determine which parameters are being optimized,
+e.g. in the context of pyro.infer.SVI</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyro.params.param_store.ParamStoreDict.named_parameters">
+<code class="descname">named_parameters</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/params/param_store.html#ParamStoreDict.named_parameters"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.params.param_store.ParamStoreDict.named_parameters" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns an iterator over tuples of the form (name, parameter) for each parameter in the ParamStore</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyro.params.param_store.ParamStoreDict.param_name">
+<code class="descname">param_name</code><span class="sig-paren">(</span><em>p</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/params/param_store.html#ParamStoreDict.param_name"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.params.param_store.ParamStoreDict.param_name" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>p</strong> – parameter</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">parameter name</td>
+</tr>
+</tbody>
+</table>
+<p>Get parameter name from parameter</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyro.params.param_store.ParamStoreDict.replace_param">
+<code class="descname">replace_param</code><span class="sig-paren">(</span><em>param_name</em>, <em>new_param</em>, <em>old_param</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/params/param_store.html#ParamStoreDict.replace_param"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.params.param_store.ParamStoreDict.replace_param" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>param_name</strong> (<a class="reference external" href="https://docs.python.org/2/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) – parameter name</li>
+<li><strong>new_param</strong> (<em>torch.autograd.Variable</em>) – the paramater to be put into the ParamStore</li>
+<li><strong>old_param</strong> – the paramater to be removed from the ParamStore</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<p>Replace the param param_name with current value old_param with the new value new_param</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyro.params.param_store.ParamStoreDict.save">
+<code class="descname">save</code><span class="sig-paren">(</span><em>filename</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/params/param_store.html#ParamStoreDict.save"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.params.param_store.ParamStoreDict.save" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>filename</strong> – file name to save to</td>
+</tr>
+</tbody>
+</table>
+<p>Save parameters to disk</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyro.params.param_store.ParamStoreDict.set_state">
+<code class="descname">set_state</code><span class="sig-paren">(</span><em>state</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/params/param_store.html#ParamStoreDict.set_state"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.params.param_store.ParamStoreDict.set_state" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the ParamStore state using state from a previous get_state() call</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyro.params.param_store.ParamStoreDict.tag_params">
+<code class="descname">tag_params</code><span class="sig-paren">(</span><em>param_names</em>, <em>tags</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/params/param_store.html#ParamStoreDict.tag_params"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.params.param_store.ParamStoreDict.tag_params" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>param_name</strong> – either a single parameter name or an iterable of parameter names</li>
+<li><strong>tags</strong> – either a single string or an iterable of strings</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<p>Tags the parameter(s) specified by param_names with the tag(s) specified by tags.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyro.params.param_store.ParamStoreDict.untag_params">
+<code class="descname">untag_params</code><span class="sig-paren">(</span><em>param_names</em>, <em>tags</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/params/param_store.html#ParamStoreDict.untag_params"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.params.param_store.ParamStoreDict.untag_params" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>param_name</strong> – either a single parameter name or an iterable of parameter names</li>
+<li><strong>tags</strong> – either a single string or an iterable of strings</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<p>Disassociates the parameter(s) specified by param_names with the tag(s) specified by tags.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+</div>
+
+
+           </div>
+           <div class="articleComments">
+            
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="nn.html" class="btn btn-neutral float-right" title="Neural Network" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="transformed_dist.html" class="btn btn-neutral" title="Transformed Distribution" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2017, Uber Technologies Inc.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'./',
+            VERSION:'0.0.1',
+            LANGUAGE:'None',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true,
+            SOURCELINK_SUFFIX: '.txt'
+        };
+    </script>
+      <script type="text/javascript" src="_static/jquery.js"></script>
+      <script type="text/javascript" src="_static/underscore.js"></script>
+      <script type="text/javascript" src="_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

@@ -1,0 +1,455 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>pyro.distributions.transformed_distribution &mdash; Pyro 0.0.1 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="../../../genindex.html"/>
+        <link rel="search" title="Search" href="../../../search.html"/>
+    <link rel="top" title="Pyro 0.0.1 documentation" href="../../../index.html"/>
+        <link rel="up" title="Module code" href="../../index.html"/> 
+
+  
+  <script src="../../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../../index.html">
+          
+
+          
+            
+            <img src="../../../_static/pyro_logo_small.png" class="logo" />
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.0.1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../getting_started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../primitives.html">Primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../inference.html">Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../distributions.html">Distributions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../parameters.html">Parameters</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../nn.html">Neural Network</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../optimization.html">Optimization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../advanced.html">Advanced Features</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">Pyro</a>
+        
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="../../index.html">Module code</a> &raquo;</li>
+        
+      <li>pyro.distributions.transformed_distribution</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for pyro.distributions.transformed_distribution</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">import</span> <span class="nn">torch.nn</span> <span class="k">as</span> <span class="nn">nn</span>
+<span class="kn">from</span> <span class="nn">torch.autograd</span> <span class="k">import</span> <span class="n">Variable</span>
+
+<span class="kn">from</span> <span class="nn">pyro.distributions.distribution</span> <span class="k">import</span> <span class="n">Distribution</span>
+<span class="kn">from</span> <span class="nn">pyro.nn</span> <span class="k">import</span> <span class="n">AutoRegressiveNN</span>
+
+
+<div class="viewcode-block" id="TransformedDistribution"><a class="viewcode-back" href="../../../transformed_dist.html#pyro.distributions.transformed_distribution.TransformedDistribution">[docs]</a><span class="k">class</span> <span class="nc">TransformedDistribution</span><span class="p">(</span><span class="n">Distribution</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Transforms the base distribution by applying a sequence of `Bijector`s to it.</span>
+<span class="sd">    This results in a scorable distribution (i.e. it has a `log_pdf()` method).</span>
+
+<span class="sd">    :param base_distribution: a (continuous) base distribution; samples from this distribution</span>
+<span class="sd">        are passed through the sequence of `Bijector`s to yield a sample from the</span>
+<span class="sd">        `TransformedDistribution`</span>
+<span class="sd">    :type base_distribution: pyro.distribution.Distribution</span>
+<span class="sd">    :param bijectors: either a single Bijector or a sequence of Bijectors wrapped in a nn.ModuleList</span>
+<span class="sd">    :returns: the transformed distribution</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">base_distribution</span><span class="p">,</span> <span class="n">bijectors</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">TransformedDistribution</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reparameterized</span> <span class="o">=</span> <span class="n">base_distribution</span><span class="o">.</span><span class="n">reparameterized</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">base_dist</span> <span class="o">=</span> <span class="n">base_distribution</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">bijectors</span><span class="p">,</span> <span class="n">Bijector</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">bijectors</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">ModuleList</span><span class="p">([</span><span class="n">bijectors</span><span class="p">])</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">bijectors</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">ModuleList</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">bijector</span> <span class="ow">in</span> <span class="n">bijectors</span><span class="p">:</span>
+                <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">bijector</span><span class="p">,</span> <span class="n">Bijector</span><span class="p">),</span> \
+                    <span class="s2">&quot;bijectors must be a Bijector or a nn.ModuleList of Bijectors&quot;</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">bijectors</span> <span class="o">=</span> <span class="n">bijectors</span>
+
+<div class="viewcode-block" id="TransformedDistribution.sample"><a class="viewcode-back" href="../../../transformed_dist.html#pyro.distributions.transformed_distribution.TransformedDistribution.sample">[docs]</a>    <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :returns: a sample y</span>
+<span class="sd">        :rtype: torch.autograd.Variable</span>
+
+<span class="sd">        Sample from base distribution and pass through bijector(s)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">base_dist</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">next_input</span> <span class="o">=</span> <span class="n">x</span>
+        <span class="k">for</span> <span class="n">bijector</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">bijectors</span><span class="p">:</span>
+            <span class="n">y</span> <span class="o">=</span> <span class="n">bijector</span><span class="p">(</span><span class="n">next_input</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">bijector</span><span class="o">.</span><span class="n">add_inverse_to_cache</span><span class="p">:</span>
+                <span class="n">bijector</span><span class="o">.</span><span class="n">_add_intermediate_to_cache</span><span class="p">(</span><span class="n">next_input</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="s1">&#39;x&#39;</span><span class="p">)</span>
+            <span class="n">next_input</span> <span class="o">=</span> <span class="n">y</span>
+        <span class="k">return</span> <span class="n">next_input</span></div>
+
+<div class="viewcode-block" id="TransformedDistribution.log_pdf"><a class="viewcode-back" href="../../../transformed_dist.html#pyro.distributions.transformed_distribution.TransformedDistribution.log_pdf">[docs]</a>    <span class="k">def</span> <span class="nf">log_pdf</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param y: a value sampled from the transformed distribution</span>
+<span class="sd">        :type y: torch.autograd.Variable</span>
+
+<span class="sd">        :returns: the score (the log pdf) of y</span>
+<span class="sd">        :rtype: torch.autograd.Variable</span>
+
+<span class="sd">        Scores the sample by inverting the bijector(s) and computing the score using the score</span>
+<span class="sd">        of the base distribution and the log det jacobian</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">inverses</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">next_to_invert</span> <span class="o">=</span> <span class="n">y</span>
+        <span class="k">for</span> <span class="n">bijector</span> <span class="ow">in</span> <span class="nb">reversed</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bijectors</span><span class="p">):</span>
+            <span class="n">inverse</span> <span class="o">=</span> <span class="n">bijector</span><span class="o">.</span><span class="n">inverse</span><span class="p">(</span><span class="n">next_to_invert</span><span class="p">)</span>
+            <span class="n">inverses</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">inverse</span><span class="p">)</span>
+            <span class="n">next_to_invert</span> <span class="o">=</span> <span class="n">inverse</span>
+        <span class="n">log_pdf_base</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">base_dist</span><span class="o">.</span><span class="n">log_pdf</span><span class="p">(</span><span class="n">inverses</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">log_det_jacobian</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bijectors</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">log_det_jacobian</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">bijector</span><span class="p">,</span> <span class="n">inverse</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="nb">reversed</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bijectors</span><span class="p">))[</span><span class="mi">1</span><span class="p">:],</span> <span class="n">inverses</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]):</span>
+            <span class="n">log_det_jacobian</span> <span class="o">+=</span> <span class="n">bijector</span><span class="o">.</span><span class="n">log_det_jacobian</span><span class="p">(</span><span class="n">inverse</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">log_pdf_base</span> <span class="o">-</span> <span class="n">log_det_jacobian</span></div>
+
+<div class="viewcode-block" id="TransformedDistribution.batch_log_pdf"><a class="viewcode-back" href="../../../transformed_dist.html#pyro.distributions.transformed_distribution.TransformedDistribution.batch_log_pdf">[docs]</a>    <span class="k">def</span> <span class="nf">batch_log_pdf</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;https://github.com/uber/pyro/issues/293&quot;</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="Bijector"><a class="viewcode-back" href="../../../transformed_dist.html#pyro.distributions.transformed_distribution.Bijector">[docs]</a><span class="k">class</span> <span class="nc">Bijector</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Abstract class `Bijector`. `Bijector` are bijective transformations with computable</span>
+<span class="sd">    log det jacobians. They are meant for use in `TransformedDistribution`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Bijector</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">add_inverse_to_cache</span> <span class="o">=</span> <span class="kc">False</span>
+
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Virtual forward method</span>
+
+<span class="sd">        Invokes the bijection x=&gt;y</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+
+<div class="viewcode-block" id="Bijector.inverse"><a class="viewcode-back" href="../../../transformed_dist.html#pyro.distributions.transformed_distribution.Bijector.inverse">[docs]</a>    <span class="k">def</span> <span class="nf">inverse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Virtual inverse method</span>
+
+<span class="sd">        Inverts the bijection y =&gt; x.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="Bijector.log_det_jacobian"><a class="viewcode-back" href="../../../transformed_dist.html#pyro.distributions.transformed_distribution.Bijector.log_det_jacobian">[docs]</a>    <span class="k">def</span> <span class="nf">log_det_jacobian</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Virtual logdet jacobian method.</span>
+
+<span class="sd">        Computes the log det jacobian `|dy/dx|`</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span></div></div>
+
+
+<div class="viewcode-block" id="InverseAutoregressiveFlow"><a class="viewcode-back" href="../../../transformed_dist.html#pyro.distributions.transformed_distribution.InverseAutoregressiveFlow">[docs]</a><span class="k">class</span> <span class="nc">InverseAutoregressiveFlow</span><span class="p">(</span><span class="n">Bijector</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    An implementation of an Inverse Autoregressive Flow. Together with the `TransformedDistribution` this</span>
+<span class="sd">    provides a way to create richer variational approximations.</span>
+
+<span class="sd">    Example usage::</span>
+
+<span class="sd">    &gt;&gt;&gt; base_dist = Normal(...)</span>
+<span class="sd">    &gt;&gt;&gt; iaf = InverseAutoregressiveFlow(...)</span>
+<span class="sd">    &gt;&gt;&gt; pyro.module(&quot;my_iaf&quot;, iaf)</span>
+<span class="sd">    &gt;&gt;&gt; iaf_dist = TransformedDistribution(base_dist, iaf)</span>
+
+<span class="sd">    Note that this implementation is only meant to be used in settings where the inverse of the Bijector</span>
+<span class="sd">    is never explicitly computed (rather the result is cached from the forward call). In the context of</span>
+<span class="sd">    variational inference, this means that the InverseAutoregressiveFlow should only be used in the guide,</span>
+<span class="sd">    i.e. in the variational distribution. In other contexts the inverse could in principle be computed but</span>
+<span class="sd">    this would be a (potentially) costly computation that scales with the dimension of the input (and in</span>
+<span class="sd">    any case support for this is not included in this implementation).</span>
+
+<span class="sd">    :param input_dim: dimension of input</span>
+<span class="sd">    :type input_dim: int</span>
+<span class="sd">    :param hidden_dim: hidden dimension (number of hidden units)</span>
+<span class="sd">    :type hidden_dim: int</span>
+<span class="sd">    :param sigmoid_bias: bias on the hidden units fed into the sigmoid; default=`2.0`</span>
+<span class="sd">    :type sigmoid_bias: float</span>
+<span class="sd">    :param permutation: whether the order of the inputs should be permuted (by default the conditional</span>
+<span class="sd">        dependence structure of the autoregression follows the sequential order)</span>
+<span class="sd">    :type permutation: bool</span>
+
+<span class="sd">    References:</span>
+
+<span class="sd">    1. Improving Variational Inference with Inverse Autoregressive Flow [arXiv:1606.04934]</span>
+<span class="sd">    Diederik P. Kingma, Tim Salimans, Rafal Jozefowicz, Xi Chen, Ilya Sutskever, Max Welling</span>
+
+<span class="sd">    2. Variational Inference with Normalizing Flows [arXiv:1505.05770]</span>
+<span class="sd">    Danilo Jimenez Rezende, Shakir Mohamed</span>
+
+<span class="sd">    3. MADE: Masked Autoencoder for Distribution Estimation [arXiv:1502.03509]</span>
+<span class="sd">    Mathieu Germain, Karol Gregor, Iain Murray, Hugo Larochelle</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">input_dim</span><span class="p">,</span> <span class="n">hidden_dim</span><span class="p">,</span> <span class="n">sigmoid_bias</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span> <span class="n">permutation</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">InverseAutoregressiveFlow</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">input_dim</span> <span class="o">=</span> <span class="n">input_dim</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">hidden_dim</span> <span class="o">=</span> <span class="n">hidden_dim</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">arn</span> <span class="o">=</span> <span class="n">AutoRegressiveNN</span><span class="p">(</span><span class="n">input_dim</span><span class="p">,</span> <span class="n">hidden_dim</span><span class="p">,</span> <span class="n">output_dim_multiplier</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">permutation</span><span class="o">=</span><span class="n">permutation</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sigmoid</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sigmoid</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sigmoid_bias</span> <span class="o">=</span> <span class="n">Variable</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">([</span><span class="n">sigmoid_bias</span><span class="p">]))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_intermediates_cache</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">add_inverse_to_cache</span> <span class="o">=</span> <span class="kc">True</span>
+
+<div class="viewcode-block" id="InverseAutoregressiveFlow.get_arn"><a class="viewcode-back" href="../../../transformed_dist.html#pyro.distributions.transformed_distribution.InverseAutoregressiveFlow.get_arn">[docs]</a>    <span class="k">def</span> <span class="nf">get_arn</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :rtype: pyro.nn.AutoRegressiveNN</span>
+
+<span class="sd">        Return the AutoRegressiveNN associated with the InverseAutoregressiveFlow</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">arn</span></div>
+
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param x: the input into the bijection</span>
+<span class="sd">        :type x: torch.autograd.Variable</span>
+
+<span class="sd">        Invokes the bijection x=&gt;y; in the prototypical context of a TransformedDistribution `x` is a</span>
+<span class="sd">        sample from the base distribution (or the output of a previous flow)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">hidden</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">arn</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">sigma</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sigmoid</span><span class="p">(</span><span class="n">hidden</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">:</span><span class="bp">self</span><span class="o">.</span><span class="n">input_dim</span><span class="p">]</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">sigmoid_bias</span><span class="o">.</span><span class="n">type_as</span><span class="p">(</span><span class="n">hidden</span><span class="p">))</span>
+        <span class="n">mean</span> <span class="o">=</span> <span class="n">hidden</span><span class="p">[:,</span> <span class="bp">self</span><span class="o">.</span><span class="n">input_dim</span><span class="p">:]</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="n">sigma</span> <span class="o">*</span> <span class="n">x</span> <span class="o">+</span> <span class="p">(</span><span class="n">Variable</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">sigma</span><span class="o">.</span><span class="n">size</span><span class="p">()))</span><span class="o">.</span><span class="n">type_as</span><span class="p">(</span><span class="n">sigma</span><span class="p">)</span> <span class="o">-</span> <span class="n">sigma</span><span class="p">)</span> <span class="o">*</span> <span class="n">mean</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_add_intermediate_to_cache</span><span class="p">(</span><span class="n">sigma</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="s1">&#39;sigma&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">y</span>
+
+<div class="viewcode-block" id="InverseAutoregressiveFlow.inverse"><a class="viewcode-back" href="../../../transformed_dist.html#pyro.distributions.transformed_distribution.InverseAutoregressiveFlow.inverse">[docs]</a>    <span class="k">def</span> <span class="nf">inverse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param y: the output of the bijection</span>
+<span class="sd">        :type y: torch.autograd.Variable</span>
+
+<span class="sd">        Inverts y =&gt; x. As noted above, this implementation is incapable of inverting arbitrary values</span>
+<span class="sd">        `y`; rather it assumes `y` is the result of a previously computed application of the bijector</span>
+<span class="sd">        to some `x` (which was cached on the forward call)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="s1">&#39;x&#39;</span><span class="p">)</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_intermediates_cache</span><span class="p">:</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_intermediates_cache</span><span class="o">.</span><span class="n">pop</span><span class="p">((</span><span class="n">y</span><span class="p">,</span> <span class="s1">&#39;x&#39;</span><span class="p">))</span>
+            <span class="k">return</span> <span class="n">x</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="s2">&quot;Bijector InverseAutoregressiveFlow expected to find&quot;</span> <span class="o">+</span>
+                           <span class="s2">&quot;key in intermediates cache but didn&#39;t&quot;</span><span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="nf">_add_intermediate_to_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">intermediate</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Internal function used to cache intermediate results computed during the forward call</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">assert</span><span class="p">((</span><span class="n">y</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_intermediates_cache</span><span class="p">),</span>\
+            <span class="s2">&quot;key collision in _add_intermediate_to_cache&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_intermediates_cache</span><span class="p">[(</span><span class="n">y</span><span class="p">,</span> <span class="n">name</span><span class="p">)]</span> <span class="o">=</span> <span class="n">intermediate</span>
+
+<div class="viewcode-block" id="InverseAutoregressiveFlow.log_det_jacobian"><a class="viewcode-back" href="../../../transformed_dist.html#pyro.distributions.transformed_distribution.InverseAutoregressiveFlow.log_det_jacobian">[docs]</a>    <span class="k">def</span> <span class="nf">log_det_jacobian</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Calculates the determinant of the log jacobian</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="s1">&#39;sigma&#39;</span><span class="p">)</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_intermediates_cache</span><span class="p">:</span>
+            <span class="n">sigma</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_intermediates_cache</span><span class="o">.</span><span class="n">pop</span><span class="p">((</span><span class="n">y</span><span class="p">,</span> <span class="s1">&#39;sigma&#39;</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="s2">&quot;Bijector InverseAutoregressiveFlow expected to find&quot;</span> <span class="o">+</span>
+                           <span class="s2">&quot;key in intermediates cache but didn&#39;t&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="s1">&#39;log_pdf_mask&#39;</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;log_pdf_mask&#39;</span><span class="p">]</span> <span class="o">*</span> <span class="n">torch</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">sigma</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">sigma</span><span class="p">))</span></div></div>
+</pre></div>
+
+           </div>
+           <div class="articleComments">
+            
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2017, Uber Technologies Inc.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../../',
+            VERSION:'0.0.1',
+            LANGUAGE:'None',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true,
+            SOURCELINK_SUFFIX: '.txt'
+        };
+    </script>
+      <script type="text/javascript" src="../../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

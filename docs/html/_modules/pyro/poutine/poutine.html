@@ -1,0 +1,433 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>pyro.poutine.poutine &mdash; Pyro 0.0.1 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="../../../genindex.html"/>
+        <link rel="search" title="Search" href="../../../search.html"/>
+    <link rel="top" title="Pyro 0.0.1 documentation" href="../../../index.html"/>
+        <link rel="up" title="Module code" href="../../index.html"/> 
+
+  
+  <script src="../../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../../index.html">
+          
+
+          
+            
+            <img src="../../../_static/pyro_logo_small.png" class="logo" />
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.0.1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../getting_started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../primitives.html">Primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../inference.html">Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../distributions.html">Distributions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../parameters.html">Parameters</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../nn.html">Neural Network</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../optimization.html">Optimization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../advanced.html">Advanced Features</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">Pyro</a>
+        
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="../../index.html">Module code</a> &raquo;</li>
+        
+      <li>pyro.poutine.poutine</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for pyro.poutine.poutine</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">pyro</span>
+
+
+<div class="viewcode-block" id="Poutine"><a class="viewcode-back" href="../../../poutine.html#pyro.poutine.poutine.Poutine">[docs]</a><span class="k">class</span> <span class="nc">Poutine</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Context manager class that modifies behavior</span>
+<span class="sd">    and adds side effects to stochastic functions</span>
+<span class="sd">    i.e. callables containing pyro primitive statements.</span>
+
+<span class="sd">    See the Poutine execution model writeup in the documentation</span>
+<span class="sd">    for a description of the entire Poutine system.</span>
+
+<span class="sd">    This is the base Poutine class.</span>
+<span class="sd">    It implements the default behavior for all pyro primitives,</span>
+<span class="sd">    so that the joint distribution induced by a stochastic function fn</span>
+<span class="sd">    is identical to the joint distribution induced by Poutine(fn).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fn</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param fn: a stochastic function (callable containing pyro primitive calls)</span>
+
+<span class="sd">        Constructor. Doesn&#39;t do much, just stores the stochastic function.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fn</span> <span class="o">=</span> <span class="n">fn</span>
+
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Installs self onto the global effect stack,</span>
+<span class="sd">        then calls the stored stochastic function with the given varargs,</span>
+<span class="sd">        then uninstalls itself from the stack and returns the above value.</span>
+
+<span class="sd">        Guaranteed to have the same call signature (input/output type)</span>
+<span class="sd">        as the stored function.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">fn</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__enter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :returns: self</span>
+<span class="sd">        :rtype: pyro.poutine.Poutine</span>
+
+<span class="sd">        Installs this poutine at the bottom of the Pyro stack.</span>
+<span class="sd">        Called before every execution of self.fn via self.__call__().</span>
+
+<span class="sd">        Can be overloaded to add any additional per-call setup functionality,</span>
+<span class="sd">        but the derived class must always push itself onto the stack, usually</span>
+<span class="sd">        by calling super(Derived, self).__enter__().</span>
+
+<span class="sd">        Derived versions cannot be overridden to take arguments</span>
+<span class="sd">        and must always return self.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="bp">self</span> <span class="ow">in</span> <span class="n">pyro</span><span class="o">.</span><span class="n">_PYRO_STACK</span><span class="p">):</span>
+            <span class="c1"># if this poutine is not already installed,</span>
+            <span class="c1"># put it on the bottom of the stack.</span>
+            <span class="n">pyro</span><span class="o">.</span><span class="n">_PYRO_STACK</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span>
+
+            <span class="c1"># necessary to return self because the return value of __enter__</span>
+            <span class="c1"># is bound to VAR in with EXPR as VAR.</span>
+            <span class="k">return</span> <span class="bp">self</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># note: currently we raise an error if trying to install a poutine twice.</span>
+            <span class="c1"># However, this isn&#39;t strictly necessary,</span>
+            <span class="c1"># and blocks recursive poutine execution patterns like</span>
+            <span class="c1"># like calling self.__call__ inside of self.__call__</span>
+            <span class="c1"># or with Poutine(...) as p: with p: &lt;BLOCK&gt;</span>
+            <span class="c1"># It&#39;s hard to imagine use cases for this pattern,</span>
+            <span class="c1"># but it could in principle be enabled...</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;cannot install a Poutine instance twice&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__exit__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">exc_type</span><span class="p">,</span> <span class="n">exc_value</span><span class="p">,</span> <span class="n">traceback</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param exc_type: exception type, e.g. ValueError</span>
+<span class="sd">        :param exc_value: exception instance?</span>
+<span class="sd">        :param traceback: traceback for exception handling</span>
+<span class="sd">        :returns: None</span>
+<span class="sd">        :rtype: None</span>
+
+<span class="sd">        Removes this poutine from the bottom of the Pyro stack.</span>
+<span class="sd">        If an exception is raised, removes this poutine and everything below it.</span>
+<span class="sd">        Always called after every execution of self.fn via self.__call__.</span>
+
+<span class="sd">        Can be overloaded by derived classes to add any other per-call teardown functionality,</span>
+<span class="sd">        but the stack must always be popped by the derived class,</span>
+<span class="sd">        usually by calling super(Derived, self).__exit__(*args).</span>
+
+<span class="sd">        Derived versions cannot be overridden to take other arguments,</span>
+<span class="sd">        and must always return None or False.</span>
+
+<span class="sd">        The arguments are the mandatory arguments used by a with statement.</span>
+<span class="sd">        Users should never be specifying these.</span>
+<span class="sd">        They are all None unless the body of the with statement raised an exception.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">exc_type</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>  <span class="c1"># callee or enclosed block returned successfully</span>
+            <span class="c1"># if the callee or enclosed block returned successfuly,</span>
+            <span class="c1"># this poutine should be on the bottom of the stack.</span>
+            <span class="c1"># If so, remove it from the stack.</span>
+            <span class="c1"># if not, raise a ValueError because something really weird happened.</span>
+            <span class="k">if</span> <span class="n">pyro</span><span class="o">.</span><span class="n">_PYRO_STACK</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="bp">self</span><span class="p">:</span>
+                <span class="n">pyro</span><span class="o">.</span><span class="n">_PYRO_STACK</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># should never get here, but just in case...</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;This Poutine is not on the bottom of the stack&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>  <span class="c1"># the wrapped function or block raised an exception</span>
+            <span class="c1"># poutine exception handling:</span>
+            <span class="c1"># when the callee or enclosed block raises an exception,</span>
+            <span class="c1"># find this poutine&#39;s position in the stack,</span>
+            <span class="c1"># then remove it and everything below it in the stack.</span>
+            <span class="k">if</span> <span class="bp">self</span> <span class="ow">in</span> <span class="n">pyro</span><span class="o">.</span><span class="n">_PYRO_STACK</span><span class="p">:</span>
+                <span class="n">loc</span> <span class="o">=</span> <span class="n">pyro</span><span class="o">.</span><span class="n">_PYRO_STACK</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">loc</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+                    <span class="n">pyro</span><span class="o">.</span><span class="n">_PYRO_STACK</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_reset</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Resets the computation to the beginning, un-sampling all sample sites.</span>
+
+<span class="sd">        By default, does nothing, but overridden in derived classes.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">_prepare_site</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">msg</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param msg: current message at a trace site</span>
+<span class="sd">        :returns: the updated message at the same trace site</span>
+
+<span class="sd">        Adds any information to the message that poutines below it on the stack</span>
+<span class="sd">        may need to execute properly.</span>
+
+<span class="sd">        By default, does nothing, but overridden in derived classes.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">msg</span>
+
+    <span class="k">def</span> <span class="nf">_pyro_sample</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">msg</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param msg: current message at a trace site.</span>
+<span class="sd">        :returns: a sample from the stochastic function at the site.</span>
+
+<span class="sd">        Implements default pyro.sample Poutine behavior:</span>
+<span class="sd">        if the observation at the site is not None, return the observation;</span>
+<span class="sd">        else call the function and return the result.</span>
+
+<span class="sd">        Derived classes often compute a side effect,</span>
+<span class="sd">        then call super(Derived, self)._pyro_sample(msg).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">fn</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span> <span class="o">=</span> \
+            <span class="n">msg</span><span class="p">[</span><span class="s2">&quot;fn&quot;</span><span class="p">],</span> <span class="n">msg</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">],</span> <span class="n">msg</span><span class="p">[</span><span class="s2">&quot;kwargs&quot;</span><span class="p">]</span>
+
+        <span class="c1"># msg[&quot;done&quot;] enforces the guarantee in the poutine execution model</span>
+        <span class="c1"># that a site&#39;s non-effectful primary computation should only be executed once:</span>
+        <span class="c1"># if the site already has a stored return value,</span>
+        <span class="c1"># don&#39;t reexecute the function at the site,</span>
+        <span class="c1"># and do any side effects using the stored return value.</span>
+        <span class="k">if</span> <span class="n">msg</span><span class="p">[</span><span class="s2">&quot;done&quot;</span><span class="p">]:</span>
+            <span class="k">return</span> <span class="n">msg</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="n">msg</span><span class="p">[</span><span class="s2">&quot;is_observed&quot;</span><span class="p">]:</span>
+            <span class="k">assert</span> <span class="n">msg</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+            <span class="n">val</span> <span class="o">=</span> <span class="n">msg</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">val</span> <span class="o">=</span> <span class="n">fn</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="c1"># after fn has been called, update msg to prevent it from being called again.</span>
+        <span class="n">msg</span><span class="p">[</span><span class="s2">&quot;done&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="n">val</span>
+
+    <span class="k">def</span> <span class="nf">_pyro_param</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">msg</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param msg: current message at a trace site.</span>
+<span class="sd">        :returns: the result of querying the parameter store</span>
+
+<span class="sd">        Implements default pyro.param Poutine behavior:</span>
+<span class="sd">        queries the parameter store with the site name and varargs</span>
+<span class="sd">        and returns the result of the query.</span>
+
+<span class="sd">        If the parameter doesn&#39;t exist, create it using the site varargs.</span>
+<span class="sd">        If it does exist, grab it from the parameter store.</span>
+
+<span class="sd">        Derived classes often compute a side effect,</span>
+<span class="sd">        then call super(Derived, self)._pyro_param(msg).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">name</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span> <span class="o">=</span> \
+            <span class="n">msg</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span> <span class="n">msg</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">],</span> <span class="n">msg</span><span class="p">[</span><span class="s2">&quot;kwargs&quot;</span><span class="p">]</span>
+
+        <span class="c1"># msg[&quot;done&quot;] enforces the guarantee in the poutine execution model</span>
+        <span class="c1"># that a site&#39;s non-effectful primary computation should only be executed once:</span>
+        <span class="c1"># if the site already has a stored return value,</span>
+        <span class="c1"># don&#39;t reexecute the function at the site,</span>
+        <span class="c1"># and do any side effects using the stored return value.</span>
+        <span class="k">if</span> <span class="n">msg</span><span class="p">[</span><span class="s2">&quot;done&quot;</span><span class="p">]:</span>
+            <span class="k">return</span> <span class="n">msg</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">]</span>
+
+        <span class="n">ret</span> <span class="o">=</span> <span class="n">pyro</span><span class="o">.</span><span class="n">_param_store</span><span class="o">.</span><span class="n">get_param</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="c1"># after the param store has been queried, update msg[&quot;done&quot;]</span>
+        <span class="c1"># to prevent it from being queried again.</span>
+        <span class="n">msg</span><span class="p">[</span><span class="s2">&quot;done&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="n">ret</span></div>
+</pre></div>
+
+           </div>
+           <div class="articleComments">
+            
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2017, Uber Technologies Inc.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../../',
+            VERSION:'0.0.1',
+            LANGUAGE:'None',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true,
+            SOURCELINK_SUFFIX: '.txt'
+        };
+    </script>
+      <script type="text/javascript" src="../../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

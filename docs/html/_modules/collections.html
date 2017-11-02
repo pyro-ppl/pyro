@@ -1,0 +1,976 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>collections &mdash; Pyro 0.0.1 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="../genindex.html"/>
+        <link rel="search" title="Search" href="../search.html"/>
+    <link rel="top" title="Pyro 0.0.1 documentation" href="../index.html"/>
+        <link rel="up" title="Module code" href="index.html"/> 
+
+  
+  <script src="../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../index.html">
+          
+
+          
+            
+            <img src="../_static/pyro_logo_small.png" class="logo" />
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.0.1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../primitives.html">Primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../inference.html">Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../distributions.html">Distributions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../parameters.html">Parameters</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../nn.html">Neural Network</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../optimization.html">Optimization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../advanced.html">Advanced Features</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">Pyro</a>
+        
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="index.html">Module code</a> &raquo;</li>
+        
+      <li>collections</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for collections</h1><div class="highlight"><pre>
+<span></span><span class="sd">&#39;&#39;&#39;This module implements specialized container datatypes providing</span>
+<span class="sd">alternatives to Python&#39;s general purpose built-in containers, dict,</span>
+<span class="sd">list, set, and tuple.</span>
+
+<span class="sd">* namedtuple   factory function for creating tuple subclasses with named fields</span>
+<span class="sd">* deque        list-like container with fast appends and pops on either end</span>
+<span class="sd">* Counter      dict subclass for counting hashable objects</span>
+<span class="sd">* OrderedDict  dict subclass that remembers the order entries were added</span>
+<span class="sd">* defaultdict  dict subclass that calls a factory function to supply missing values</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;Counter&#39;</span><span class="p">,</span> <span class="s1">&#39;deque&#39;</span><span class="p">,</span> <span class="s1">&#39;defaultdict&#39;</span><span class="p">,</span> <span class="s1">&#39;namedtuple&#39;</span><span class="p">,</span> <span class="s1">&#39;OrderedDict&#39;</span><span class="p">]</span>
+<span class="c1"># For bootstrapping reasons, the collection ABCs are defined in _abcoll.py.</span>
+<span class="c1"># They should however be considered an integral part of collections.py.</span>
+<span class="kn">from</span> <span class="nn">_abcoll</span> <span class="k">import</span> <span class="o">*</span>
+<span class="kn">import</span> <span class="nn">_abcoll</span>
+<span class="n">__all__</span> <span class="o">+=</span> <span class="n">_abcoll</span><span class="o">.</span><span class="n">__all__</span>
+
+<span class="kn">from</span> <span class="nn">_collections</span> <span class="k">import</span> <span class="n">deque</span><span class="p">,</span> <span class="n">defaultdict</span>
+<span class="kn">from</span> <span class="nn">operator</span> <span class="k">import</span> <span class="n">itemgetter</span> <span class="k">as</span> <span class="n">_itemgetter</span><span class="p">,</span> <span class="n">eq</span> <span class="k">as</span> <span class="n">_eq</span>
+<span class="kn">from</span> <span class="nn">keyword</span> <span class="k">import</span> <span class="n">iskeyword</span> <span class="k">as</span> <span class="n">_iskeyword</span>
+<span class="kn">import</span> <span class="nn">sys</span> <span class="k">as</span> <span class="nn">_sys</span>
+<span class="kn">import</span> <span class="nn">heapq</span> <span class="k">as</span> <span class="nn">_heapq</span>
+<span class="kn">from</span> <span class="nn">itertools</span> <span class="k">import</span> <span class="n">repeat</span> <span class="k">as</span> <span class="n">_repeat</span><span class="p">,</span> <span class="n">chain</span> <span class="k">as</span> <span class="n">_chain</span><span class="p">,</span> <span class="n">starmap</span> <span class="k">as</span> <span class="n">_starmap</span>
+<span class="kn">from</span> <span class="nn">itertools</span> <span class="k">import</span> <span class="n">imap</span> <span class="k">as</span> <span class="n">_imap</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">from</span> <span class="nn">thread</span> <span class="k">import</span> <span class="n">get_ident</span> <span class="k">as</span> <span class="n">_get_ident</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="kn">from</span> <span class="nn">dummy_thread</span> <span class="k">import</span> <span class="n">get_ident</span> <span class="k">as</span> <span class="n">_get_ident</span>
+
+
+<span class="c1">################################################################################</span>
+<span class="c1">### OrderedDict</span>
+<span class="c1">################################################################################</span>
+
+<span class="k">class</span> <span class="nc">OrderedDict</span><span class="p">(</span><span class="nb">dict</span><span class="p">):</span>
+    <span class="s1">&#39;Dictionary that remembers insertion order&#39;</span>
+    <span class="c1"># An inherited dict maps keys to values.</span>
+    <span class="c1"># The inherited dict provides __getitem__, __len__, __contains__, and get.</span>
+    <span class="c1"># The remaining methods are order-aware.</span>
+    <span class="c1"># Big-O running times for all methods are the same as regular dictionaries.</span>
+
+    <span class="c1"># The internal self.__map dict maps keys to links in a doubly linked list.</span>
+    <span class="c1"># The circular doubly linked list starts and ends with a sentinel element.</span>
+    <span class="c1"># The sentinel element never gets deleted (this simplifies the algorithm).</span>
+    <span class="c1"># Each link is stored as a list of length three:  [PREV, NEXT, KEY].</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwds</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;Initialize an ordered dictionary.  The signature is the same as</span>
+<span class="sd">        regular dictionaries, but keyword arguments are not recommended because</span>
+<span class="sd">        their insertion order is arbitrary.</span>
+
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">args</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;descriptor &#39;__init__&#39; of &#39;OrderedDict&#39; object &quot;</span>
+                            <span class="s2">&quot;needs an argument&quot;</span><span class="p">)</span>
+        <span class="bp">self</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">args</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s1">&#39;expected at most 1 arguments, got </span><span class="si">%d</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">))</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">__root</span>
+        <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">__root</span> <span class="o">=</span> <span class="n">root</span> <span class="o">=</span> <span class="p">[]</span>                     <span class="c1"># sentinel node</span>
+            <span class="n">root</span><span class="p">[:]</span> <span class="o">=</span> <span class="p">[</span><span class="n">root</span><span class="p">,</span> <span class="n">root</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">__map</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__update</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwds</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__setitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">dict_setitem</span><span class="o">=</span><span class="nb">dict</span><span class="o">.</span><span class="fm">__setitem__</span><span class="p">):</span>
+        <span class="s1">&#39;od.__setitem__(i, y) &lt;==&gt; od[i]=y&#39;</span>
+        <span class="c1"># Setting a new item creates a new link at the end of the linked list,</span>
+        <span class="c1"># and the inherited dictionary is updated with the new key/value pair.</span>
+        <span class="k">if</span> <span class="n">key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="p">:</span>
+            <span class="n">root</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__root</span>
+            <span class="n">last</span> <span class="o">=</span> <span class="n">root</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">last</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">root</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__map</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">last</span><span class="p">,</span> <span class="n">root</span><span class="p">,</span> <span class="n">key</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">dict_setitem</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__delitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">dict_delitem</span><span class="o">=</span><span class="nb">dict</span><span class="o">.</span><span class="fm">__delitem__</span><span class="p">):</span>
+        <span class="s1">&#39;od.__delitem__(y) &lt;==&gt; del od[y]&#39;</span>
+        <span class="c1"># Deleting an existing item uses self.__map to find the link which gets</span>
+        <span class="c1"># removed by updating the links in the predecessor and successor nodes.</span>
+        <span class="n">dict_delitem</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
+        <span class="n">link_prev</span><span class="p">,</span> <span class="n">link_next</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__map</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+        <span class="n">link_prev</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">link_next</span>                        <span class="c1"># update link_prev[NEXT]</span>
+        <span class="n">link_next</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">link_prev</span>                        <span class="c1"># update link_next[PREV]</span>
+
+    <span class="k">def</span> <span class="nf">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="s1">&#39;od.__iter__() &lt;==&gt; iter(od)&#39;</span>
+        <span class="c1"># Traverse the linked list in order.</span>
+        <span class="n">root</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__root</span>
+        <span class="n">curr</span> <span class="o">=</span> <span class="n">root</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>                                  <span class="c1"># start at the first node</span>
+        <span class="k">while</span> <span class="n">curr</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">root</span><span class="p">:</span>
+            <span class="k">yield</span> <span class="n">curr</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>                               <span class="c1"># yield the curr[KEY]</span>
+            <span class="n">curr</span> <span class="o">=</span> <span class="n">curr</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>                              <span class="c1"># move to next node</span>
+
+    <span class="k">def</span> <span class="nf">__reversed__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="s1">&#39;od.__reversed__() &lt;==&gt; reversed(od)&#39;</span>
+        <span class="c1"># Traverse the linked list in reverse order.</span>
+        <span class="n">root</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__root</span>
+        <span class="n">curr</span> <span class="o">=</span> <span class="n">root</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>                                  <span class="c1"># start at the last node</span>
+        <span class="k">while</span> <span class="n">curr</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">root</span><span class="p">:</span>
+            <span class="k">yield</span> <span class="n">curr</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>                               <span class="c1"># yield the curr[KEY]</span>
+            <span class="n">curr</span> <span class="o">=</span> <span class="n">curr</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>                              <span class="c1"># move to previous node</span>
+
+    <span class="k">def</span> <span class="nf">clear</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="s1">&#39;od.clear() -&gt; None.  Remove all items from od.&#39;</span>
+        <span class="n">root</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__root</span>
+        <span class="n">root</span><span class="p">[:]</span> <span class="o">=</span> <span class="p">[</span><span class="n">root</span><span class="p">,</span> <span class="n">root</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__map</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+        <span class="nb">dict</span><span class="o">.</span><span class="n">clear</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+
+    <span class="c1"># -- the following methods do not depend on the internal structure --</span>
+
+    <span class="k">def</span> <span class="nf">keys</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="s1">&#39;od.keys() -&gt; list of keys in od&#39;</span>
+        <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">values</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="s1">&#39;od.values() -&gt; list of values in od&#39;</span>
+        <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">items</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="s1">&#39;od.items() -&gt; list of (key, value) pairs in od&#39;</span>
+        <span class="k">return</span> <span class="p">[(</span><span class="n">key</span><span class="p">,</span> <span class="bp">self</span><span class="p">[</span><span class="n">key</span><span class="p">])</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">iterkeys</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="s1">&#39;od.iterkeys() -&gt; an iterator over the keys in od&#39;</span>
+        <span class="k">return</span> <span class="nb">iter</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">itervalues</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="s1">&#39;od.itervalues -&gt; an iterator over the values in od&#39;</span>
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="bp">self</span><span class="p">:</span>
+            <span class="k">yield</span> <span class="bp">self</span><span class="p">[</span><span class="n">k</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">iteritems</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="s1">&#39;od.iteritems -&gt; an iterator over the (key, value) pairs in od&#39;</span>
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="bp">self</span><span class="p">:</span>
+            <span class="k">yield</span> <span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="bp">self</span><span class="p">[</span><span class="n">k</span><span class="p">])</span>
+
+    <span class="n">update</span> <span class="o">=</span> <span class="n">MutableMapping</span><span class="o">.</span><span class="n">update</span>
+
+    <span class="n">__update</span> <span class="o">=</span> <span class="n">update</span> <span class="c1"># let subclasses override update without breaking __init__</span>
+
+    <span class="n">__marker</span> <span class="o">=</span> <span class="nb">object</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">pop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="n">__marker</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;od.pop(k[,d]) -&gt; v, remove specified key and return the corresponding</span>
+<span class="sd">        value.  If key is not found, d is returned if given, otherwise KeyError</span>
+<span class="sd">        is raised.</span>
+
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+            <span class="k">del</span> <span class="bp">self</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+            <span class="k">return</span> <span class="n">result</span>
+        <span class="k">if</span> <span class="n">default</span> <span class="ow">is</span> <span class="bp">self</span><span class="o">.</span><span class="n">__marker</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">default</span>
+
+    <span class="k">def</span> <span class="nf">setdefault</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="s1">&#39;od.setdefault(k[,d]) -&gt; od.get(k,d), also set od[k]=d if k not in od&#39;</span>
+        <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+        <span class="bp">self</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">default</span>
+        <span class="k">return</span> <span class="n">default</span>
+
+    <span class="k">def</span> <span class="nf">popitem</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">last</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;od.popitem() -&gt; (k, v), return and remove a (key, value) pair.</span>
+<span class="sd">        Pairs are returned in LIFO order if last is true or FIFO order if false.</span>
+
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="s1">&#39;dictionary is empty&#39;</span><span class="p">)</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="nb">reversed</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="k">if</span> <span class="n">last</span> <span class="k">else</span> <span class="nb">iter</span><span class="p">(</span><span class="bp">self</span><span class="p">))</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span>
+
+    <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">_repr_running</span><span class="o">=</span><span class="p">{}):</span>
+        <span class="s1">&#39;od.__repr__() &lt;==&gt; repr(od)&#39;</span>
+        <span class="n">call_key</span> <span class="o">=</span> <span class="nb">id</span><span class="p">(</span><span class="bp">self</span><span class="p">),</span> <span class="n">_get_ident</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">call_key</span> <span class="ow">in</span> <span class="n">_repr_running</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s1">&#39;...&#39;</span>
+        <span class="n">_repr_running</span><span class="p">[</span><span class="n">call_key</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="p">:</span>
+                <span class="k">return</span> <span class="s1">&#39;</span><span class="si">%s</span><span class="s1">()&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,)</span>
+            <span class="k">return</span> <span class="s1">&#39;</span><span class="si">%s</span><span class="s1">(</span><span class="si">%r</span><span class="s1">)&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">items</span><span class="p">())</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="k">del</span> <span class="n">_repr_running</span><span class="p">[</span><span class="n">call_key</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">__reduce__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="s1">&#39;Return state information for pickling&#39;</span>
+        <span class="n">items</span> <span class="o">=</span> <span class="p">[[</span><span class="n">k</span><span class="p">,</span> <span class="bp">self</span><span class="p">[</span><span class="n">k</span><span class="p">]]</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="bp">self</span><span class="p">]</span>
+        <span class="n">inst_dict</span> <span class="o">=</span> <span class="nb">vars</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">vars</span><span class="p">(</span><span class="n">OrderedDict</span><span class="p">()):</span>
+            <span class="n">inst_dict</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">inst_dict</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="p">,</span> <span class="p">(</span><span class="n">items</span><span class="p">,),</span> <span class="n">inst_dict</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="p">,</span> <span class="p">(</span><span class="n">items</span><span class="p">,)</span>
+
+    <span class="k">def</span> <span class="nf">copy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="s1">&#39;od.copy() -&gt; a shallow copy of od&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">fromkeys</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">iterable</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;OD.fromkeys(S[, v]) -&gt; New ordered dictionary with keys from S.</span>
+<span class="sd">        If not specified, the value defaults to None.</span>
+
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="bp">self</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">iterable</span><span class="p">:</span>
+            <span class="bp">self</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+        <span class="k">return</span> <span class="bp">self</span>
+
+    <span class="k">def</span> <span class="nf">__eq__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;od.__eq__(y) &lt;==&gt; od==y.  Comparison to another OD is order-sensitive</span>
+<span class="sd">        while comparison to a regular mapping is order-insensitive.</span>
+
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">OrderedDict</span><span class="p">):</span>
+            <span class="k">return</span> <span class="nb">dict</span><span class="o">.</span><span class="fm">__eq__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">all</span><span class="p">(</span><span class="n">_imap</span><span class="p">(</span><span class="n">_eq</span><span class="p">,</span> <span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">))</span>
+        <span class="k">return</span> <span class="nb">dict</span><span class="o">.</span><span class="fm">__eq__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__ne__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="s1">&#39;od.__ne__(y) &lt;==&gt; od!=y&#39;</span>
+        <span class="k">return</span> <span class="ow">not</span> <span class="bp">self</span> <span class="o">==</span> <span class="n">other</span>
+
+    <span class="c1"># -- the following methods support python 3.x style dictionary views --</span>
+
+    <span class="k">def</span> <span class="nf">viewkeys</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="s2">&quot;od.viewkeys() -&gt; a set-like object providing a view on od&#39;s keys&quot;</span>
+        <span class="k">return</span> <span class="n">KeysView</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">viewvalues</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="s2">&quot;od.viewvalues() -&gt; an object providing a view on od&#39;s values&quot;</span>
+        <span class="k">return</span> <span class="n">ValuesView</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">viewitems</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="s2">&quot;od.viewitems() -&gt; a set-like object providing a view on od&#39;s items&quot;</span>
+        <span class="k">return</span> <span class="n">ItemsView</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+
+
+<span class="c1">################################################################################</span>
+<span class="c1">### namedtuple</span>
+<span class="c1">################################################################################</span>
+
+<span class="n">_class_template</span> <span class="o">=</span> <span class="s1">&#39;&#39;&#39;</span><span class="se">\</span>
+<span class="s1">class </span><span class="si">{typename}</span><span class="s1">(tuple):</span>
+<span class="s1">    &#39;</span><span class="si">{typename}</span><span class="s1">(</span><span class="si">{arg_list}</span><span class="s1">)&#39;</span>
+
+<span class="s1">    __slots__ = ()</span>
+
+<span class="s1">    _fields = </span><span class="si">{field_names!r}</span><span class="s1"></span>
+
+<span class="s1">    def __new__(_cls, </span><span class="si">{arg_list}</span><span class="s1">):</span>
+<span class="s1">        &#39;Create new instance of </span><span class="si">{typename}</span><span class="s1">(</span><span class="si">{arg_list}</span><span class="s1">)&#39;</span>
+<span class="s1">        return _tuple.__new__(_cls, (</span><span class="si">{arg_list}</span><span class="s1">))</span>
+
+<span class="s1">    @classmethod</span>
+<span class="s1">    def _make(cls, iterable, new=tuple.__new__, len=len):</span>
+<span class="s1">        &#39;Make a new </span><span class="si">{typename}</span><span class="s1"> object from a sequence or iterable&#39;</span>
+<span class="s1">        result = new(cls, iterable)</span>
+<span class="s1">        if len(result) != </span><span class="si">{num_fields:d}</span><span class="s1">:</span>
+<span class="s1">            raise TypeError(&#39;Expected </span><span class="si">{num_fields:d}</span><span class="s1"> arguments, got </span><span class="si">%d</span><span class="s1">&#39; </span><span class="si">% le</span><span class="s1">n(result))</span>
+<span class="s1">        return result</span>
+
+<span class="s1">    def __repr__(self):</span>
+<span class="s1">        &#39;Return a nicely formatted representation string&#39;</span>
+<span class="s1">        return &#39;</span><span class="si">{typename}</span><span class="s1">(</span><span class="si">{repr_fmt}</span><span class="s1">)&#39; </span><span class="si">% s</span><span class="s1">elf</span>
+
+<span class="s1">    def _asdict(self):</span>
+<span class="s1">        &#39;Return a new OrderedDict which maps field names to their values&#39;</span>
+<span class="s1">        return OrderedDict(zip(self._fields, self))</span>
+
+<span class="s1">    def _replace(_self, **kwds):</span>
+<span class="s1">        &#39;Return a new </span><span class="si">{typename}</span><span class="s1"> object replacing specified fields with new values&#39;</span>
+<span class="s1">        result = _self._make(map(kwds.pop, </span><span class="si">{field_names!r}</span><span class="s1">, _self))</span>
+<span class="s1">        if kwds:</span>
+<span class="s1">            raise ValueError(&#39;Got unexpected field names: </span><span class="si">%r</span><span class="s1">&#39; % kwds.keys())</span>
+<span class="s1">        return result</span>
+
+<span class="s1">    def __getnewargs__(self):</span>
+<span class="s1">        &#39;Return self as a plain tuple.  Used by copy and pickle.&#39;</span>
+<span class="s1">        return tuple(self)</span>
+
+<span class="s1">    __dict__ = _property(_asdict)</span>
+
+<span class="s1">    def __getstate__(self):</span>
+<span class="s1">        &#39;Exclude the OrderedDict from pickling&#39;</span>
+<span class="s1">        pass</span>
+
+<span class="si">{field_defs}</span><span class="s1"></span>
+<span class="s1">&#39;&#39;&#39;</span>
+
+<span class="n">_repr_template</span> <span class="o">=</span> <span class="s1">&#39;</span><span class="si">{name}</span><span class="s1">=</span><span class="si">%r</span><span class="s1">&#39;</span>
+
+<span class="n">_field_template</span> <span class="o">=</span> <span class="s1">&#39;&#39;&#39;</span><span class="se">\</span>
+<span class="s1">    </span><span class="si">{name}</span><span class="s1"> = _property(_itemgetter(</span><span class="si">{index:d}</span><span class="s1">), doc=&#39;Alias for field number </span><span class="si">{index:d}</span><span class="s1">&#39;)</span>
+<span class="s1">&#39;&#39;&#39;</span>
+
+<span class="k">def</span> <span class="nf">namedtuple</span><span class="p">(</span><span class="n">typename</span><span class="p">,</span> <span class="n">field_names</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">rename</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Returns a new subclass of tuple with named fields.</span>
+
+<span class="sd">    &gt;&gt;&gt; Point = namedtuple(&#39;Point&#39;, [&#39;x&#39;, &#39;y&#39;])</span>
+<span class="sd">    &gt;&gt;&gt; Point.__doc__                   # docstring for the new class</span>
+<span class="sd">    &#39;Point(x, y)&#39;</span>
+<span class="sd">    &gt;&gt;&gt; p = Point(11, y=22)             # instantiate with positional args or keywords</span>
+<span class="sd">    &gt;&gt;&gt; p[0] + p[1]                     # indexable like a plain tuple</span>
+<span class="sd">    33</span>
+<span class="sd">    &gt;&gt;&gt; x, y = p                        # unpack like a regular tuple</span>
+<span class="sd">    &gt;&gt;&gt; x, y</span>
+<span class="sd">    (11, 22)</span>
+<span class="sd">    &gt;&gt;&gt; p.x + p.y                       # fields also accessible by name</span>
+<span class="sd">    33</span>
+<span class="sd">    &gt;&gt;&gt; d = p._asdict()                 # convert to a dictionary</span>
+<span class="sd">    &gt;&gt;&gt; d[&#39;x&#39;]</span>
+<span class="sd">    11</span>
+<span class="sd">    &gt;&gt;&gt; Point(**d)                      # convert from a dictionary</span>
+<span class="sd">    Point(x=11, y=22)</span>
+<span class="sd">    &gt;&gt;&gt; p._replace(x=100)               # _replace() is like str.replace() but targets named fields</span>
+<span class="sd">    Point(x=100, y=22)</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># Validate the field names.  At the user&#39;s option, either generate an error</span>
+    <span class="c1"># message or automatically replace the field name with a valid name.</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">field_names</span><span class="p">,</span> <span class="n">basestring</span><span class="p">):</span>
+        <span class="n">field_names</span> <span class="o">=</span> <span class="n">field_names</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;,&#39;</span><span class="p">,</span> <span class="s1">&#39; &#39;</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+    <span class="n">field_names</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">field_names</span><span class="p">)</span>
+    <span class="n">typename</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">typename</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">rename</span><span class="p">:</span>
+        <span class="n">seen</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">field_names</span><span class="p">):</span>
+            <span class="k">if</span> <span class="p">(</span><span class="ow">not</span> <span class="nb">all</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">isalnum</span><span class="p">()</span> <span class="ow">or</span> <span class="n">c</span><span class="o">==</span><span class="s1">&#39;_&#39;</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">name</span><span class="p">)</span>
+                <span class="ow">or</span> <span class="n">_iskeyword</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+                <span class="ow">or</span> <span class="ow">not</span> <span class="n">name</span>
+                <span class="ow">or</span> <span class="n">name</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">isdigit</span><span class="p">()</span>
+                <span class="ow">or</span> <span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;_&#39;</span><span class="p">)</span>
+                <span class="ow">or</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">seen</span><span class="p">):</span>
+                <span class="n">field_names</span><span class="p">[</span><span class="n">index</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;_</span><span class="si">%d</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">index</span>
+            <span class="n">seen</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="p">[</span><span class="n">typename</span><span class="p">]</span> <span class="o">+</span> <span class="n">field_names</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">name</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">str</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s1">&#39;Type names and field names must be strings&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">all</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">isalnum</span><span class="p">()</span> <span class="ow">or</span> <span class="n">c</span><span class="o">==</span><span class="s1">&#39;_&#39;</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">name</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Type names and field names can only contain &#39;</span>
+                             <span class="s1">&#39;alphanumeric characters and underscores: </span><span class="si">%r</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">_iskeyword</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Type names and field names cannot be a &#39;</span>
+                             <span class="s1">&#39;keyword: </span><span class="si">%r</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">name</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">isdigit</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Type names and field names cannot start with &#39;</span>
+                             <span class="s1">&#39;a number: </span><span class="si">%r</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">name</span><span class="p">)</span>
+    <span class="n">seen</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">field_names</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;_&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">rename</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Field names cannot start with an underscore: &#39;</span>
+                             <span class="s1">&#39;</span><span class="si">%r</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">seen</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Encountered duplicate field name: </span><span class="si">%r</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">name</span><span class="p">)</span>
+        <span class="n">seen</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+
+    <span class="c1"># Fill-in the class template</span>
+    <span class="n">class_definition</span> <span class="o">=</span> <span class="n">_class_template</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+        <span class="n">typename</span> <span class="o">=</span> <span class="n">typename</span><span class="p">,</span>
+        <span class="n">field_names</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">field_names</span><span class="p">),</span>
+        <span class="n">num_fields</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">field_names</span><span class="p">),</span>
+        <span class="n">arg_list</span> <span class="o">=</span> <span class="nb">repr</span><span class="p">(</span><span class="nb">tuple</span><span class="p">(</span><span class="n">field_names</span><span class="p">))</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span>
+        <span class="n">repr_fmt</span> <span class="o">=</span> <span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">_repr_template</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">)</span>
+                             <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">field_names</span><span class="p">),</span>
+        <span class="n">field_defs</span> <span class="o">=</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">_field_template</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="n">index</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">)</span>
+                               <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">field_names</span><span class="p">))</span>
+    <span class="p">)</span>
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="nb">print</span> <span class="n">class_definition</span>
+
+    <span class="c1"># Execute the template string in a temporary namespace and support</span>
+    <span class="c1"># tracing utilities by setting a value for frame.f_globals[&#39;__name__&#39;]</span>
+    <span class="n">namespace</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">_itemgetter</span><span class="o">=</span><span class="n">_itemgetter</span><span class="p">,</span> <span class="vm">__name__</span><span class="o">=</span><span class="s1">&#39;namedtuple_</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">typename</span><span class="p">,</span>
+                     <span class="n">OrderedDict</span><span class="o">=</span><span class="n">OrderedDict</span><span class="p">,</span> <span class="n">_property</span><span class="o">=</span><span class="nb">property</span><span class="p">,</span> <span class="n">_tuple</span><span class="o">=</span><span class="nb">tuple</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">exec</span> <span class="n">class_definition</span> <span class="ow">in</span> <span class="n">namespace</span>
+    <span class="k">except</span> <span class="ne">SyntaxError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">SyntaxError</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">message</span> <span class="o">+</span> <span class="s1">&#39;:</span><span class="se">\n</span><span class="s1">&#39;</span> <span class="o">+</span> <span class="n">class_definition</span><span class="p">)</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">namespace</span><span class="p">[</span><span class="n">typename</span><span class="p">]</span>
+
+    <span class="c1"># For pickling to work, the __module__ variable needs to be set to the frame</span>
+    <span class="c1"># where the named tuple is created.  Bypass this step in environments where</span>
+    <span class="c1"># sys._getframe is not defined (Jython for example) or sys._getframe is not</span>
+    <span class="c1"># defined for arguments greater than 0 (IronPython).</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">result</span><span class="o">.</span><span class="vm">__module__</span> <span class="o">=</span> <span class="n">_sys</span><span class="o">.</span><span class="n">_getframe</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">f_globals</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;__name__&#39;</span><span class="p">,</span> <span class="s1">&#39;__main__&#39;</span><span class="p">)</span>
+    <span class="k">except</span> <span class="p">(</span><span class="ne">AttributeError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="k">return</span> <span class="n">result</span>
+
+
+<span class="c1">########################################################################</span>
+<span class="c1">###  Counter</span>
+<span class="c1">########################################################################</span>
+
+<span class="k">class</span> <span class="nc">Counter</span><span class="p">(</span><span class="nb">dict</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Dict subclass for counting hashable items.  Sometimes called a bag</span>
+<span class="sd">    or multiset.  Elements are stored as dictionary keys and their counts</span>
+<span class="sd">    are stored as dictionary values.</span>
+
+<span class="sd">    &gt;&gt;&gt; c = Counter(&#39;abcdeabcdabcaba&#39;)  # count elements from a string</span>
+
+<span class="sd">    &gt;&gt;&gt; c.most_common(3)                # three most common elements</span>
+<span class="sd">    [(&#39;a&#39;, 5), (&#39;b&#39;, 4), (&#39;c&#39;, 3)]</span>
+<span class="sd">    &gt;&gt;&gt; sorted(c)                       # list all unique elements</span>
+<span class="sd">    [&#39;a&#39;, &#39;b&#39;, &#39;c&#39;, &#39;d&#39;, &#39;e&#39;]</span>
+<span class="sd">    &gt;&gt;&gt; &#39;&#39;.join(sorted(c.elements()))   # list elements with repetitions</span>
+<span class="sd">    &#39;aaaaabbbbcccdde&#39;</span>
+<span class="sd">    &gt;&gt;&gt; sum(c.values())                 # total of all counts</span>
+<span class="sd">    15</span>
+
+<span class="sd">    &gt;&gt;&gt; c[&#39;a&#39;]                          # count of letter &#39;a&#39;</span>
+<span class="sd">    5</span>
+<span class="sd">    &gt;&gt;&gt; for elem in &#39;shazam&#39;:           # update counts from an iterable</span>
+<span class="sd">    ...     c[elem] += 1                # by adding 1 to each element&#39;s count</span>
+<span class="sd">    &gt;&gt;&gt; c[&#39;a&#39;]                          # now there are seven &#39;a&#39;</span>
+<span class="sd">    7</span>
+<span class="sd">    &gt;&gt;&gt; del c[&#39;b&#39;]                      # remove all &#39;b&#39;</span>
+<span class="sd">    &gt;&gt;&gt; c[&#39;b&#39;]                          # now there are zero &#39;b&#39;</span>
+<span class="sd">    0</span>
+
+<span class="sd">    &gt;&gt;&gt; d = Counter(&#39;simsalabim&#39;)       # make another counter</span>
+<span class="sd">    &gt;&gt;&gt; c.update(d)                     # add in the second counter</span>
+<span class="sd">    &gt;&gt;&gt; c[&#39;a&#39;]                          # now there are nine &#39;a&#39;</span>
+<span class="sd">    9</span>
+
+<span class="sd">    &gt;&gt;&gt; c.clear()                       # empty the counter</span>
+<span class="sd">    &gt;&gt;&gt; c</span>
+<span class="sd">    Counter()</span>
+
+<span class="sd">    Note:  If a count is set to zero or reduced to zero, it will remain</span>
+<span class="sd">    in the counter until the entry is deleted or the counter is cleared:</span>
+
+<span class="sd">    &gt;&gt;&gt; c = Counter(&#39;aaabbc&#39;)</span>
+<span class="sd">    &gt;&gt;&gt; c[&#39;b&#39;] -= 2                     # reduce the count of &#39;b&#39; by two</span>
+<span class="sd">    &gt;&gt;&gt; c.most_common()                 # &#39;b&#39; is still in, but its count is zero</span>
+<span class="sd">    [(&#39;a&#39;, 3), (&#39;c&#39;, 1), (&#39;b&#39;, 0)]</span>
+
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="c1"># References:</span>
+    <span class="c1">#   http://en.wikipedia.org/wiki/Multiset</span>
+    <span class="c1">#   http://www.gnu.org/software/smalltalk/manual-base/html_node/Bag.html</span>
+    <span class="c1">#   http://www.demo2s.com/Tutorial/Cpp/0380__set-multiset/Catalog0380__set-multiset.htm</span>
+    <span class="c1">#   http://code.activestate.com/recipes/259174/</span>
+    <span class="c1">#   Knuth, TAOCP Vol. II section 4.6.3</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwds</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;Create a new, empty Counter object.  And if given, count elements</span>
+<span class="sd">        from an input iterable.  Or, initialize the count from another mapping</span>
+<span class="sd">        of elements to their counts.</span>
+
+<span class="sd">        &gt;&gt;&gt; c = Counter()                           # a new, empty counter</span>
+<span class="sd">        &gt;&gt;&gt; c = Counter(&#39;gallahad&#39;)                 # a new counter from an iterable</span>
+<span class="sd">        &gt;&gt;&gt; c = Counter({&#39;a&#39;: 4, &#39;b&#39;: 2})           # a new counter from a mapping</span>
+<span class="sd">        &gt;&gt;&gt; c = Counter(a=4, b=2)                   # a new counter from keyword args</span>
+
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">args</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;descriptor &#39;__init__&#39; of &#39;Counter&#39; object &quot;</span>
+                            <span class="s2">&quot;needs an argument&quot;</span><span class="p">)</span>
+        <span class="bp">self</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">args</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s1">&#39;expected at most 1 arguments, got </span><span class="si">%d</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">))</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Counter</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwds</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__missing__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+        <span class="s1">&#39;The count of elements not in the Counter is zero.&#39;</span>
+        <span class="c1"># Needed so that self[missing_item] does not raise KeyError</span>
+        <span class="k">return</span> <span class="mi">0</span>
+
+    <span class="k">def</span> <span class="nf">most_common</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;List the n most common elements and their counts from the most</span>
+<span class="sd">        common to the least.  If n is None, then list all element counts.</span>
+
+<span class="sd">        &gt;&gt;&gt; Counter(&#39;abcdeabcdabcaba&#39;).most_common(3)</span>
+<span class="sd">        [(&#39;a&#39;, 5), (&#39;b&#39;, 4), (&#39;c&#39;, 3)]</span>
+
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="c1"># Emulate Bag.sortedByCount from Smalltalk</span>
+        <span class="k">if</span> <span class="n">n</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">sorted</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">iteritems</span><span class="p">(),</span> <span class="n">key</span><span class="o">=</span><span class="n">_itemgetter</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span> <span class="n">reverse</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">_heapq</span><span class="o">.</span><span class="n">nlargest</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">iteritems</span><span class="p">(),</span> <span class="n">key</span><span class="o">=</span><span class="n">_itemgetter</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">elements</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;Iterator over elements repeating each as many times as its count.</span>
+
+<span class="sd">        &gt;&gt;&gt; c = Counter(&#39;ABCABC&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; sorted(c.elements())</span>
+<span class="sd">        [&#39;A&#39;, &#39;A&#39;, &#39;B&#39;, &#39;B&#39;, &#39;C&#39;, &#39;C&#39;]</span>
+
+<span class="sd">        # Knuth&#39;s example for prime factors of 1836:  2**2 * 3**3 * 17**1</span>
+<span class="sd">        &gt;&gt;&gt; prime_factors = Counter({2: 2, 3: 3, 17: 1})</span>
+<span class="sd">        &gt;&gt;&gt; product = 1</span>
+<span class="sd">        &gt;&gt;&gt; for factor in prime_factors.elements():     # loop over factors</span>
+<span class="sd">        ...     product *= factor                       # and multiply them</span>
+<span class="sd">        &gt;&gt;&gt; product</span>
+<span class="sd">        1836</span>
+
+<span class="sd">        Note, if an element&#39;s count has been set to zero or is a negative</span>
+<span class="sd">        number, elements() will ignore it.</span>
+
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="c1"># Emulate Bag.do from Smalltalk and Multiset.begin from C++.</span>
+        <span class="k">return</span> <span class="n">_chain</span><span class="o">.</span><span class="n">from_iterable</span><span class="p">(</span><span class="n">_starmap</span><span class="p">(</span><span class="n">_repeat</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">iteritems</span><span class="p">()))</span>
+
+    <span class="c1"># Override dict methods where necessary</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">fromkeys</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">iterable</span><span class="p">,</span> <span class="n">v</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="c1"># There is no equivalent method for counters because setting v=1</span>
+        <span class="c1"># means that no element can have a count greater than one.</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
+            <span class="s1">&#39;Counter.fromkeys() is undefined.  Use Counter(iterable) instead.&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwds</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;Like dict.update() but add counts instead of replacing them.</span>
+
+<span class="sd">        Source can be an iterable, a dictionary, or another Counter instance.</span>
+
+<span class="sd">        &gt;&gt;&gt; c = Counter(&#39;which&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; c.update(&#39;witch&#39;)           # add elements from another iterable</span>
+<span class="sd">        &gt;&gt;&gt; d = Counter(&#39;watch&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; c.update(d)                 # add elements from another counter</span>
+<span class="sd">        &gt;&gt;&gt; c[&#39;h&#39;]                      # four &#39;h&#39; in which, witch, and watch</span>
+<span class="sd">        4</span>
+
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="c1"># The regular dict.update() operation makes no sense here because the</span>
+        <span class="c1"># replace behavior results in the some of original untouched counts</span>
+        <span class="c1"># being mixed-in with all of the other counts for a mismash that</span>
+        <span class="c1"># doesn&#39;t have a straight-forward interpretation in most counting</span>
+        <span class="c1"># contexts.  Instead, we implement straight-addition.  Both the inputs</span>
+        <span class="c1"># and outputs are allowed to contain zero and negative counts.</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">args</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;descriptor &#39;update&#39; of &#39;Counter&#39; object &quot;</span>
+                            <span class="s2">&quot;needs an argument&quot;</span><span class="p">)</span>
+        <span class="bp">self</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">args</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s1">&#39;expected at most 1 arguments, got </span><span class="si">%d</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">))</span>
+        <span class="n">iterable</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="n">args</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="n">iterable</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">iterable</span><span class="p">,</span> <span class="n">Mapping</span><span class="p">):</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="p">:</span>
+                    <span class="n">self_get</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get</span>
+                    <span class="k">for</span> <span class="n">elem</span><span class="p">,</span> <span class="n">count</span> <span class="ow">in</span> <span class="n">iterable</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+                        <span class="bp">self</span><span class="p">[</span><span class="n">elem</span><span class="p">]</span> <span class="o">=</span> <span class="n">self_get</span><span class="p">(</span><span class="n">elem</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">+</span> <span class="n">count</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="nb">super</span><span class="p">(</span><span class="n">Counter</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">iterable</span><span class="p">)</span> <span class="c1"># fast path when counter is empty</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">self_get</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get</span>
+                <span class="k">for</span> <span class="n">elem</span> <span class="ow">in</span> <span class="n">iterable</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="p">[</span><span class="n">elem</span><span class="p">]</span> <span class="o">=</span> <span class="n">self_get</span><span class="p">(</span><span class="n">elem</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="k">if</span> <span class="n">kwds</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">kwds</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">subtract</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwds</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;Like dict.update() but subtracts counts instead of replacing them.</span>
+<span class="sd">        Counts can be reduced below zero.  Both the inputs and outputs are</span>
+<span class="sd">        allowed to contain zero and negative counts.</span>
+
+<span class="sd">        Source can be an iterable, a dictionary, or another Counter instance.</span>
+
+<span class="sd">        &gt;&gt;&gt; c = Counter(&#39;which&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; c.subtract(&#39;witch&#39;)             # subtract elements from another iterable</span>
+<span class="sd">        &gt;&gt;&gt; c.subtract(Counter(&#39;watch&#39;))    # subtract elements from another counter</span>
+<span class="sd">        &gt;&gt;&gt; c[&#39;h&#39;]                          # 2 in which, minus 1 in witch, minus 1 in watch</span>
+<span class="sd">        0</span>
+<span class="sd">        &gt;&gt;&gt; c[&#39;w&#39;]                          # 1 in which, minus 1 in witch, minus 1 in watch</span>
+<span class="sd">        -1</span>
+
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">args</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;descriptor &#39;subtract&#39; of &#39;Counter&#39; object &quot;</span>
+                            <span class="s2">&quot;needs an argument&quot;</span><span class="p">)</span>
+        <span class="bp">self</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">args</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s1">&#39;expected at most 1 arguments, got </span><span class="si">%d</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">))</span>
+        <span class="n">iterable</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="n">args</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="n">iterable</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">self_get</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">iterable</span><span class="p">,</span> <span class="n">Mapping</span><span class="p">):</span>
+                <span class="k">for</span> <span class="n">elem</span><span class="p">,</span> <span class="n">count</span> <span class="ow">in</span> <span class="n">iterable</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                    <span class="bp">self</span><span class="p">[</span><span class="n">elem</span><span class="p">]</span> <span class="o">=</span> <span class="n">self_get</span><span class="p">(</span><span class="n">elem</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">-</span> <span class="n">count</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">elem</span> <span class="ow">in</span> <span class="n">iterable</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="p">[</span><span class="n">elem</span><span class="p">]</span> <span class="o">=</span> <span class="n">self_get</span><span class="p">(</span><span class="n">elem</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
+        <span class="k">if</span> <span class="n">kwds</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">subtract</span><span class="p">(</span><span class="n">kwds</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">copy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="s1">&#39;Return a shallow copy.&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__reduce__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="p">,</span> <span class="p">(</span><span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="p">),)</span>
+
+    <span class="k">def</span> <span class="nf">__delitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">elem</span><span class="p">):</span>
+        <span class="s1">&#39;Like dict.__delitem__() but does not raise KeyError for missing values.&#39;</span>
+        <span class="k">if</span> <span class="n">elem</span> <span class="ow">in</span> <span class="bp">self</span><span class="p">:</span>
+            <span class="nb">super</span><span class="p">(</span><span class="n">Counter</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__delitem__</span><span class="p">(</span><span class="n">elem</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s1">&#39;</span><span class="si">%s</span><span class="s1">()&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span>
+        <span class="n">items</span> <span class="o">=</span> <span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">%r</span><span class="s1">: </span><span class="si">%r</span><span class="s1">&#39;</span><span class="o">.</span><span class="fm">__mod__</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">most_common</span><span class="p">()))</span>
+        <span class="k">return</span> <span class="s1">&#39;</span><span class="si">%s</span><span class="s1">({</span><span class="si">%s</span><span class="s1">})&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span> <span class="n">items</span><span class="p">)</span>
+
+    <span class="c1"># Multiset-style mathematical operations discussed in:</span>
+    <span class="c1">#       Knuth TAOCP Volume II section 4.6.3 exercise 19</span>
+    <span class="c1">#       and at http://en.wikipedia.org/wiki/Multiset</span>
+    <span class="c1">#</span>
+    <span class="c1"># Outputs guaranteed to only include positive counts.</span>
+    <span class="c1">#</span>
+    <span class="c1"># To strip negative and zero counts, add-in an empty counter:</span>
+    <span class="c1">#       c += Counter()</span>
+
+    <span class="k">def</span> <span class="nf">__add__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;Add counts from two counters.</span>
+
+<span class="sd">        &gt;&gt;&gt; Counter(&#39;abbb&#39;) + Counter(&#39;bcc&#39;)</span>
+<span class="sd">        Counter({&#39;b&#39;: 4, &#39;c&#39;: 2, &#39;a&#39;: 1})</span>
+
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">Counter</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">NotImplemented</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">Counter</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">elem</span><span class="p">,</span> <span class="n">count</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">newcount</span> <span class="o">=</span> <span class="n">count</span> <span class="o">+</span> <span class="n">other</span><span class="p">[</span><span class="n">elem</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">newcount</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">result</span><span class="p">[</span><span class="n">elem</span><span class="p">]</span> <span class="o">=</span> <span class="n">newcount</span>
+        <span class="k">for</span> <span class="n">elem</span><span class="p">,</span> <span class="n">count</span> <span class="ow">in</span> <span class="n">other</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">elem</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span> <span class="ow">and</span> <span class="n">count</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">result</span><span class="p">[</span><span class="n">elem</span><span class="p">]</span> <span class="o">=</span> <span class="n">count</span>
+        <span class="k">return</span> <span class="n">result</span>
+
+    <span class="k">def</span> <span class="nf">__sub__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39; Subtract count, but keep only results with positive counts.</span>
+
+<span class="sd">        &gt;&gt;&gt; Counter(&#39;abbbc&#39;) - Counter(&#39;bccd&#39;)</span>
+<span class="sd">        Counter({&#39;b&#39;: 2, &#39;a&#39;: 1})</span>
+
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">Counter</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">NotImplemented</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">Counter</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">elem</span><span class="p">,</span> <span class="n">count</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">newcount</span> <span class="o">=</span> <span class="n">count</span> <span class="o">-</span> <span class="n">other</span><span class="p">[</span><span class="n">elem</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">newcount</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">result</span><span class="p">[</span><span class="n">elem</span><span class="p">]</span> <span class="o">=</span> <span class="n">newcount</span>
+        <span class="k">for</span> <span class="n">elem</span><span class="p">,</span> <span class="n">count</span> <span class="ow">in</span> <span class="n">other</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">elem</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span> <span class="ow">and</span> <span class="n">count</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">result</span><span class="p">[</span><span class="n">elem</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span> <span class="o">-</span> <span class="n">count</span>
+        <span class="k">return</span> <span class="n">result</span>
+
+    <span class="k">def</span> <span class="nf">__or__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;Union is the maximum of value in either of the input counters.</span>
+
+<span class="sd">        &gt;&gt;&gt; Counter(&#39;abbb&#39;) | Counter(&#39;bcc&#39;)</span>
+<span class="sd">        Counter({&#39;b&#39;: 3, &#39;c&#39;: 2, &#39;a&#39;: 1})</span>
+
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">Counter</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">NotImplemented</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">Counter</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">elem</span><span class="p">,</span> <span class="n">count</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">other_count</span> <span class="o">=</span> <span class="n">other</span><span class="p">[</span><span class="n">elem</span><span class="p">]</span>
+            <span class="n">newcount</span> <span class="o">=</span> <span class="n">other_count</span> <span class="k">if</span> <span class="n">count</span> <span class="o">&lt;</span> <span class="n">other_count</span> <span class="k">else</span> <span class="n">count</span>
+            <span class="k">if</span> <span class="n">newcount</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">result</span><span class="p">[</span><span class="n">elem</span><span class="p">]</span> <span class="o">=</span> <span class="n">newcount</span>
+        <span class="k">for</span> <span class="n">elem</span><span class="p">,</span> <span class="n">count</span> <span class="ow">in</span> <span class="n">other</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">elem</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span> <span class="ow">and</span> <span class="n">count</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">result</span><span class="p">[</span><span class="n">elem</span><span class="p">]</span> <span class="o">=</span> <span class="n">count</span>
+        <span class="k">return</span> <span class="n">result</span>
+
+    <span class="k">def</span> <span class="nf">__and__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39; Intersection is the minimum of corresponding counts.</span>
+
+<span class="sd">        &gt;&gt;&gt; Counter(&#39;abbb&#39;) &amp; Counter(&#39;bcc&#39;)</span>
+<span class="sd">        Counter({&#39;b&#39;: 1})</span>
+
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">Counter</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">NotImplemented</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">Counter</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">elem</span><span class="p">,</span> <span class="n">count</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">other_count</span> <span class="o">=</span> <span class="n">other</span><span class="p">[</span><span class="n">elem</span><span class="p">]</span>
+            <span class="n">newcount</span> <span class="o">=</span> <span class="n">count</span> <span class="k">if</span> <span class="n">count</span> <span class="o">&lt;</span> <span class="n">other_count</span> <span class="k">else</span> <span class="n">other_count</span>
+            <span class="k">if</span> <span class="n">newcount</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">result</span><span class="p">[</span><span class="n">elem</span><span class="p">]</span> <span class="o">=</span> <span class="n">newcount</span>
+        <span class="k">return</span> <span class="n">result</span>
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s1">&#39;__main__&#39;</span><span class="p">:</span>
+    <span class="c1"># verify that instances can be pickled</span>
+    <span class="kn">from</span> <span class="nn">cPickle</span> <span class="k">import</span> <span class="n">loads</span><span class="p">,</span> <span class="n">dumps</span>
+    <span class="n">Point</span> <span class="o">=</span> <span class="n">namedtuple</span><span class="p">(</span><span class="s1">&#39;Point&#39;</span><span class="p">,</span> <span class="s1">&#39;x, y&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+    <span class="n">p</span> <span class="o">=</span> <span class="n">Point</span><span class="p">(</span><span class="n">x</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="mi">20</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">p</span> <span class="o">==</span> <span class="n">loads</span><span class="p">(</span><span class="n">dumps</span><span class="p">(</span><span class="n">p</span><span class="p">))</span>
+
+    <span class="c1"># test and demonstrate ability to override methods</span>
+    <span class="k">class</span> <span class="nc">Point</span><span class="p">(</span><span class="n">namedtuple</span><span class="p">(</span><span class="s1">&#39;Point&#39;</span><span class="p">,</span> <span class="s1">&#39;x y&#39;</span><span class="p">)):</span>
+        <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">()</span>
+        <span class="nd">@property</span>
+        <span class="k">def</span> <span class="nf">hypot</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+            <span class="k">return</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span> <span class="o">**</span> <span class="mf">0.5</span>
+        <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+            <span class="k">return</span> <span class="s1">&#39;Point: x=</span><span class="si">%6.3f</span><span class="s1">  y=</span><span class="si">%6.3f</span><span class="s1">  hypot=</span><span class="si">%6.3f</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hypot</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">Point</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span> <span class="n">Point</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mi">5</span><span class="o">/</span><span class="mf">7.</span><span class="p">):</span>
+        <span class="nb">print</span> <span class="n">p</span>
+
+    <span class="k">class</span> <span class="nc">Point</span><span class="p">(</span><span class="n">namedtuple</span><span class="p">(</span><span class="s1">&#39;Point&#39;</span><span class="p">,</span> <span class="s1">&#39;x y&#39;</span><span class="p">)):</span>
+        <span class="s1">&#39;Point class with optimized _make() and _replace() without error-checking&#39;</span>
+        <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">()</span>
+        <span class="n">_make</span> <span class="o">=</span> <span class="nb">classmethod</span><span class="p">(</span><span class="nb">tuple</span><span class="o">.</span><span class="fm">__new__</span><span class="p">)</span>
+        <span class="k">def</span> <span class="nf">_replace</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">_map</span><span class="o">=</span><span class="nb">map</span><span class="p">,</span> <span class="o">**</span><span class="n">kwds</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_make</span><span class="p">(</span><span class="n">_map</span><span class="p">(</span><span class="n">kwds</span><span class="o">.</span><span class="n">get</span><span class="p">,</span> <span class="p">(</span><span class="s1">&#39;x&#39;</span><span class="p">,</span> <span class="s1">&#39;y&#39;</span><span class="p">),</span> <span class="bp">self</span><span class="p">))</span>
+
+    <span class="nb">print</span> <span class="n">Point</span><span class="p">(</span><span class="mi">11</span><span class="p">,</span> <span class="mi">22</span><span class="p">)</span><span class="o">.</span><span class="n">_replace</span><span class="p">(</span><span class="n">x</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+
+    <span class="n">Point3D</span> <span class="o">=</span> <span class="n">namedtuple</span><span class="p">(</span><span class="s1">&#39;Point3D&#39;</span><span class="p">,</span> <span class="n">Point</span><span class="o">.</span><span class="n">_fields</span> <span class="o">+</span> <span class="p">(</span><span class="s1">&#39;z&#39;</span><span class="p">,))</span>
+    <span class="nb">print</span> <span class="n">Point3D</span><span class="o">.</span><span class="vm">__doc__</span>
+
+    <span class="kn">import</span> <span class="nn">doctest</span>
+    <span class="n">TestResults</span> <span class="o">=</span> <span class="n">namedtuple</span><span class="p">(</span><span class="s1">&#39;TestResults&#39;</span><span class="p">,</span> <span class="s1">&#39;failed attempted&#39;</span><span class="p">)</span>
+    <span class="nb">print</span> <span class="n">TestResults</span><span class="p">(</span><span class="o">*</span><span class="n">doctest</span><span class="o">.</span><span class="n">testmod</span><span class="p">())</span>
+</pre></div>
+
+           </div>
+           <div class="articleComments">
+            
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2017, Uber Technologies Inc.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../',
+            VERSION:'0.0.1',
+            LANGUAGE:'None',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true,
+            SOURCELINK_SUFFIX: '.txt'
+        };
+    </script>
+      <script type="text/javascript" src="../_static/jquery.js"></script>
+      <script type="text/javascript" src="../_static/underscore.js"></script>
+      <script type="text/javascript" src="../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

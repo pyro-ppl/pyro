@@ -1,0 +1,351 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>pyro.optim.optim &mdash; Pyro 0.0.1 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="../../../genindex.html"/>
+        <link rel="search" title="Search" href="../../../search.html"/>
+    <link rel="top" title="Pyro 0.0.1 documentation" href="../../../index.html"/>
+        <link rel="up" title="Module code" href="../../index.html"/> 
+
+  
+  <script src="../../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../../index.html">
+          
+
+          
+            
+            <img src="../../../_static/pyro_logo_small.png" class="logo" />
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.0.1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../getting_started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../primitives.html">Primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../inference.html">Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../distributions.html">Distributions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../parameters.html">Parameters</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../nn.html">Neural Network</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../optimization.html">Optimization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../advanced.html">Advanced Features</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">Pyro</a>
+        
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="../../index.html">Module code</a> &raquo;</li>
+        
+      <li>pyro.optim.optim</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for pyro.optim.optim</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">cloudpickle</span>
+
+<span class="kn">import</span> <span class="nn">pyro</span>
+<span class="kn">from</span> <span class="nn">pyro.params</span> <span class="k">import</span> <span class="n">module_from_param_with_module_name</span><span class="p">,</span> <span class="n">user_param_name</span>
+
+
+<div class="viewcode-block" id="PyroOptim"><a class="viewcode-back" href="../../../optimization.html#pyro.optim.optim.PyroOptim">[docs]</a><span class="k">class</span> <span class="nc">PyroOptim</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    A wrapper for torch.optim.Optimizer objects that helps managing with dynamically generated parameters</span>
+
+<span class="sd">    :param optim_constructor: a torch.optim.Optimizer</span>
+<span class="sd">    :param optim_args: a dictionary of learning arguments for the optimizer or a callable that returns</span>
+<span class="sd">        such dictionaries</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">optim_constructor</span><span class="p">,</span> <span class="n">optim_args</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pt_optim_constructor</span> <span class="o">=</span> <span class="n">optim_constructor</span>
+
+        <span class="c1"># must be callable or dict</span>
+        <span class="k">assert</span> <span class="n">callable</span><span class="p">(</span><span class="n">optim_args</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span>
+            <span class="n">optim_args</span><span class="p">,</span> <span class="nb">dict</span><span class="p">),</span> <span class="s2">&quot;optim_args must be function that returns defaults or a defaults dictionary&quot;</span>
+
+        <span class="c1"># hold our args to be called/used</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pt_optim_args</span> <span class="o">=</span> <span class="n">optim_args</span>
+
+        <span class="c1"># holds the torch optimizer objects</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">optim_objs</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="c1"># any optimizer state that&#39;s waiting to be consumed (because that parameter hasn&#39;t been seen before)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_state_waiting_to_be_consumed</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span>  <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param params: a list of parameters</span>
+<span class="sd">        :type params: an iterable of strings</span>
+
+<span class="sd">        Do an optimization step for each param in params. If a given param has never been seen before,</span>
+<span class="sd">        initialize an optimizer for it.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">params</span><span class="p">:</span>
+            <span class="c1"># if we have not seen this param before, we instantiate and optim object to deal with it</span>
+            <span class="k">if</span> <span class="n">p</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">optim_objs</span><span class="p">:</span>
+                <span class="c1"># get our constructor arguments</span>
+                <span class="n">def_optim_dict</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_optim_args</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+                <span class="c1"># create a single optim object for that param</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">optim_objs</span><span class="p">[</span><span class="n">p</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pt_optim_constructor</span><span class="p">([</span><span class="n">p</span><span class="p">],</span> <span class="o">**</span><span class="n">def_optim_dict</span><span class="p">)</span>
+
+                <span class="c1"># set state from _state_waiting_to_be_consumed if present</span>
+                <span class="n">param_name</span> <span class="o">=</span> <span class="n">pyro</span><span class="o">.</span><span class="n">get_param_store</span><span class="p">()</span><span class="o">.</span><span class="n">param_name</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">param_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_state_waiting_to_be_consumed</span><span class="p">:</span>
+                    <span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_state_waiting_to_be_consumed</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">param_name</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">optim_objs</span><span class="p">[</span><span class="n">p</span><span class="p">]</span><span class="o">.</span><span class="n">load_state_dict</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+
+            <span class="c1"># actually perform the step for the optim object</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">optim_objs</span><span class="p">[</span><span class="n">p</span><span class="p">]</span><span class="o">.</span><span class="n">step</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+<div class="viewcode-block" id="PyroOptim.get_state"><a class="viewcode-back" href="../../../optimization.html#pyro.optim.optim.PyroOptim.get_state">[docs]</a>    <span class="k">def</span> <span class="nf">get_state</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Get state associated with all the optimizers in the form of a dictionary with</span>
+<span class="sd">        key-value pairs (parameter name, optim state dicts)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">state_dict</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">optim_objs</span><span class="p">:</span>
+            <span class="n">param_name</span> <span class="o">=</span> <span class="n">pyro</span><span class="o">.</span><span class="n">get_param_store</span><span class="p">()</span><span class="o">.</span><span class="n">param_name</span><span class="p">(</span><span class="n">param</span><span class="p">)</span>
+            <span class="n">state_dict</span><span class="p">[</span><span class="n">param_name</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">optim_objs</span><span class="p">[</span><span class="n">param</span><span class="p">]</span><span class="o">.</span><span class="n">state_dict</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">state_dict</span></div>
+
+<div class="viewcode-block" id="PyroOptim.set_state"><a class="viewcode-back" href="../../../optimization.html#pyro.optim.optim.PyroOptim.set_state">[docs]</a>    <span class="k">def</span> <span class="nf">set_state</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state_dict</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Set the state associated with all the optimizers using the state obtained</span>
+<span class="sd">        from a previous call to get_state()</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_state_waiting_to_be_consumed</span> <span class="o">=</span> <span class="n">state_dict</span></div>
+
+<div class="viewcode-block" id="PyroOptim.save"><a class="viewcode-back" href="../../../optimization.html#pyro.optim.optim.PyroOptim.save">[docs]</a>    <span class="k">def</span> <span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param filename: file name to save to</span>
+<span class="sd">        :type name: str</span>
+
+<span class="sd">        Save optimizer state to disk</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s2">&quot;wb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">output_file</span><span class="p">:</span>
+            <span class="n">output_file</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">cloudpickle</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_state</span><span class="p">()))</span></div>
+
+<div class="viewcode-block" id="PyroOptim.load"><a class="viewcode-back" href="../../../optimization.html#pyro.optim.optim.PyroOptim.load">[docs]</a>    <span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param filename: file name to load from</span>
+<span class="sd">        :type name: str</span>
+
+<span class="sd">        Load optimizer state from disk</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s2">&quot;rb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">input_file</span><span class="p">:</span>
+            <span class="n">state</span> <span class="o">=</span> <span class="n">cloudpickle</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">input_file</span><span class="o">.</span><span class="n">read</span><span class="p">())</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">set_state</span><span class="p">(</span><span class="n">state</span><span class="p">)</span></div>
+
+    <span class="c1"># helper to fetch the optim args if callable (only used internally)</span>
+    <span class="k">def</span> <span class="nf">_get_optim_args</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">param</span><span class="p">):</span>
+        <span class="c1"># if we were passed a fct, we call fct with param info</span>
+        <span class="c1"># arguments are (module name, param name, tags) e.g. (&#39;mymodule&#39;, &#39;bias&#39;, &#39;baseline&#39;)</span>
+        <span class="k">if</span> <span class="n">callable</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pt_optim_args</span><span class="p">):</span>
+
+            <span class="c1"># get param name</span>
+            <span class="n">param_name</span> <span class="o">=</span> <span class="n">pyro</span><span class="o">.</span><span class="n">_param_store</span><span class="o">.</span><span class="n">param_name</span><span class="p">(</span><span class="n">param</span><span class="p">)</span>
+            <span class="n">module_name</span> <span class="o">=</span> <span class="n">module_from_param_with_module_name</span><span class="p">(</span><span class="n">param_name</span><span class="p">)</span>
+            <span class="n">stripped_param_name</span> <span class="o">=</span> <span class="n">user_param_name</span><span class="p">(</span><span class="n">param_name</span><span class="p">)</span>
+
+            <span class="c1"># get tags</span>
+            <span class="n">tags</span> <span class="o">=</span> <span class="n">pyro</span><span class="o">.</span><span class="n">get_param_store</span><span class="p">()</span><span class="o">.</span><span class="n">get_param_tags</span><span class="p">(</span><span class="n">param_name</span><span class="p">)</span>
+
+            <span class="c1"># invoke the user-provided callable</span>
+            <span class="n">opt_dict</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pt_optim_args</span><span class="p">(</span><span class="n">module_name</span><span class="p">,</span> <span class="n">stripped_param_name</span><span class="p">,</span> <span class="n">tags</span><span class="p">)</span>
+
+            <span class="c1"># must be dictionary</span>
+            <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">opt_dict</span><span class="p">,</span> <span class="nb">dict</span><span class="p">),</span> <span class="s2">&quot;per-param optim arg must return defaults dictionary&quot;</span>
+            <span class="k">return</span> <span class="n">opt_dict</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">pt_optim_args</span></div>
+</pre></div>
+
+           </div>
+           <div class="articleComments">
+            
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2017, Uber Technologies Inc.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../../',
+            VERSION:'0.0.1',
+            LANGUAGE:'None',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true,
+            SOURCELINK_SUFFIX: '.txt'
+        };
+    </script>
+      <script type="text/javascript" src="../../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

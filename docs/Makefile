@@ -8,7 +8,7 @@ APIDOC        = sphinx-apidoc
 SPHINXPROJ    = Pyro
 SOURCEDIR     = source
 PROJECTDIR    = ../pyro
-BUILDDIR      = build
+BUILDDIR      = .
 
 # Put it first so that "make" without argument is like "make help".
 help:
