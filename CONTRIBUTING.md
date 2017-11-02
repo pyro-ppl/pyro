@@ -7,7 +7,9 @@ The Pyro codebase follows the [PEP8 style guide](https://www.python.org/dev/peps
 
 # Setup
 
-Install all the dev dependencies for Pyro.
+First install [PyTorch](http://pytorch.org/).
+
+Then, install all the dev dependencies for Pyro.
 ```sh
 make install
 ```
