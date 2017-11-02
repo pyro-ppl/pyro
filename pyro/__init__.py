@@ -374,6 +374,9 @@ def random_module(name, nn_module, prior, *args, **kwargs):
     :returns: a callable which returns a sampled module
 
     Places a prior over the parameters of the module `nn_module`.
+
+    See the `Bayesian Regression <http://pyro.ai/examples/bayesian_regression.html>`_
+    tutorial for an example.
     """
     assert hasattr(nn_module, "parameters"), "Module is not a NN module."
     # register params in param store
