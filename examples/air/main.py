@@ -1,12 +1,12 @@
 """
-This attempts (currently unsuccessfully) to reproduce some of the
-results on the multi-mnist data set described in [1].
+AIR applied to the multi-mnist data set [1].
 
 [1] Eslami, SM Ali, et al. "Attend, infer, repeat: Fast scene
 understanding with generative models." Advances in Neural Information
 Processing Systems. 2016.
 """
 
+import math
 import os
 import sys
 import time
@@ -35,6 +35,8 @@ parser.add_argument('-b', '--batch-size', type=int, default=64,
                     help='batch size')
 parser.add_argument('--progress-every', type=int, default=1,
                     help='number of steps between writing progress to stdout')
+parser.add_argument('--eval-every', type=int, default=0,
+                    help='number of steps between evaluations')
 parser.add_argument('--baseline-scalar', type=float,
                     help='scale the output of the baseline nets by this value')
 parser.add_argument('--no-baselines', action='store_true', default=False,
@@ -57,10 +59,12 @@ parser.add_argument('--viz-every', type=int, default=100,
                     help='number of steps between vizualizations')
 parser.add_argument('--visdom-env', default='main',
                     help='visdom enviroment name')
-# parser.add_argument('--checkpoint', action='store_true',
-#                     help='periodically persist parameters')
-# parser.add_argument('--checkpoint-every', type=int, default=1000,
-#                     help='number of steps between checkpoints')
+parser.add_argument('--load', type=str,
+                    help='load previously saved parameters')
+parser.add_argument('--save', type=str,
+                    help='save parameters to specified file')
+parser.add_argument('--save-every', type=int, default=1e4,
+                    help='number of steps between parameter saves')
 parser.add_argument('--cuda', action='store_true', default=False,
                     help='use cuda')
 parser.add_argument('-t', '--model-steps', type=int, default=3,
@@ -71,26 +75,32 @@ parser.add_argument('--encoder-latent-size', type=int, default=50,
                     help='attention window encoder/decoder latent space size')
 parser.add_argument('--decoder-output-bias', type=float,
                     help='bias added to decoder output (prior to applying non-linearity)')
+parser.add_argument('--decoder-output-use-sigmoid', action='store_true',
+                    help='apply sigmoid function to output of decoder network')
 parser.add_argument('--window-size', type=int, default=28,
                     help='attention window size')
 parser.add_argument('--z-pres-prior', type=float, default=None,
                     help='prior success probability for z_pres')
-parser.add_argument('--anneal-prior', action='store_true', default=False,
+parser.add_argument('--anneal-prior', choices='none lin exp'.split(), default='none',
                     help='anneal z_pres prior during optimization')
-parser.add_argument('--anneal-prior-from', type=float, default=0.99,
-                    help='initial z_pres prior prob')
-parser.add_argument('--anneal-prior-over', type=int, default=100000,
+parser.add_argument('--anneal-prior-to', type=float, default=1e-7,
+                    help='target z_pres prior prob')
+parser.add_argument('--anneal-prior-begin', type=int, default=0,
+                    help='number of steps to wait before beginning to anneal the prior')
+parser.add_argument('--anneal-prior-duration', type=int, default=100000,
                     help='number of steps over which to anneal the prior')
 parser.add_argument('--no-masking', action='store_true', default=False,
                     help='do not mask out the costs of unused choices')
 parser.add_argument('--fudge-z-pres', action='store_true', default=False,
                     help='fudge z_pres to remove discreteness for testing')
 parser.add_argument('--seed', type=int, help='random seed', default=None)
-parser.add_argument('--print-modules', action='store_true',
-                    help='write the network architecture to stdout')
-
+parser.add_argument('-v', '--verbose', action='store_true', default=False,
+                    help='write hyper parameters and network architecture to stdout')
 args = parser.parse_args()
-# print(args)
+
+if 'save' in args:
+    if os.path.exists(args.save):
+        raise RuntimeError('Output file "{}" already exists.'.format(args.save))
 
 if args.seed is not None:
     pyro.set_rng_seed(args.seed)
@@ -127,25 +137,52 @@ def default_z_pres_prior_p(t):
 
 # Implements "prior annealing" as described in this blog post:
 # http://akosiorek.github.io/ml/2017/09/03/implementing-air.html
-def annealed_z_pres_prior_p(opt_step, time_step):
-    p_0 = args.anneal_prior_from
-    p_final = args.z_pres_prior or default_z_pres_prior_p(time_step)
-    s = min(opt_step / args.anneal_prior_over, 1.0)
-    return p_final * s + p_0 * (1 - s)
+
+# That implementation does something very close to the following:
+# --z-pres-prior (1 - 1e-15)
+# --anneal-prior exp
+# --anneal-prior-to 1e-7
+# --anneal-prior-begin 1000
+# --anneal-prior-duration 1e6
+
+# e.g. After 200K steps z_pres_p will have decayed to ~0.04
+
+# These compute the value of a decaying value at time t.
+# initial: initial value
+# final: final value, reached after begin + duration steps
+# begin: number of steps before decay begins
+# duration: number of steps over which decay occurs
+# t: current time step
+
+def lin_decay(initial, final, begin, duration, t):
+    assert duration > 0
+    x = (final - initial) * (t - begin) / duration + initial
+    return max(min(x, initial), final)
+
+
+def exp_decay(initial, final, begin, duration, t):
+    assert final > 0
+    assert duration > 0
+    # half_life = math.log(2) / math.log(initial / final) * duration
+    decay_rate = math.log(initial / final) / duration
+    x = initial * math.exp(-decay_rate * (t - begin))
+    return max(min(x, initial), final)
 
 
 def z_pres_prior_p(opt_step, time_step):
-    if args.anneal_prior:
-        return annealed_z_pres_prior_p(opt_step, time_step)
-    elif args.z_pres_prior:
-        return args.z_pres_prior
+    p = args.z_pres_prior or default_z_pres_prior_p(time_step)
+    if args.anneal_prior == 'none':
+        return p
     else:
-        return default_z_pres_prior_p(time_step)
+        decay = dict(lin=lin_decay, exp=exp_decay)[args.anneal_prior]
+        return decay(p, args.anneal_prior_to, args.anneal_prior_begin,
+                     args.anneal_prior_duration, opt_step)
 
 
 model_arg_keys = ['window_size',
                   'rnn_hidden_size',
                   'decoder_output_bias',
+                  'decoder_output_use_sigmoid',
                   'baseline_scalar',
                   'encoder_net',
                   'decoder_net',
@@ -153,8 +190,7 @@ model_arg_keys = ['window_size',
                   'embed_net',
                   'bl_predict_net',
                   'non_linearity',
-                  'fudge_z_pres',
-                  'print_modules']
+                  'fudge_z_pres']
 model_args = {key: getattr(args, key) for key in model_arg_keys if key in args}
 air = AIR(
     num_steps=args.model_steps,
@@ -165,6 +201,14 @@ air = AIR(
     use_cuda=args.cuda,
     **model_args
 )
+
+if args.verbose:
+    print(air)
+    print(args)
+
+if 'load' in args:
+    print('Loading parameters...')
+    air.load_state_dict(torch.load(args.load))
 
 vis = visdom.Visdom(env=args.visdom_env)
 # Viz sample from prior.
@@ -187,18 +231,18 @@ svi = SVI(air.model, air.guide,
           loss='ELBO',
           trace_graph=True)
 
-for i in range(args.num_steps):
+for i in range(1, args.num_steps + 1):
 
     loss = svi.step(X, args.batch_size, z_pres_prior_p=partial(z_pres_prior_p, i))
 
-    if i % args.progress_every == 0:
+    if args.progress_every > 0 and i % args.progress_every == 0:
         print('i={}, epochs={:.2f}, elapsed={:.2f}, elbo={:.2f}'.format(
             i,
             (i * args.batch_size) / X_size,
             (time.time() - t0) / 3600,
             loss / X_size))
 
-    if args.viz and (i + 1) % args.viz_every == 0:
+    if args.viz and i % args.viz_every == 0:
         trace = poutine.trace(air.guide).get_trace(examples_to_viz, None)
         z, recons = poutine.replay(air.prior, trace)(examples_to_viz.size(0))
         z_wheres = post_process_latents(z)
@@ -208,4 +252,6 @@ for i in range(args.num_steps):
         # Show reconstructions of data.
         vis.images(draw_many(recons, z_wheres))
 
-        # TODO: Report accuracy on predictions of object counts.
+    if 'save' in args and i % args.save_every == 0:
+        print('Saving parameters...')
+        torch.save(air.state_dict(), args.save)

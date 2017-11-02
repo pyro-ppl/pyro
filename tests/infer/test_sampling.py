@@ -1,3 +1,5 @@
+from __future__ import absolute_import, division, print_function
+
 import pytest
 import torch
 from torch.autograd import Variable
@@ -86,10 +88,10 @@ class SearchTest(HMMSamplingTestCase):
     def test_marginal(self):
         posterior = pyro.infer.Search(self.model)
         marginal = pyro.infer.Marginal(posterior)
-        dd = marginal._dist()
+        d, values = marginal._dist_and_values()
 
         tr_rets = []
-        for v in dd.vs:
+        for v in values:
             tr_rets.append(v.view(-1).data[0])
 
         assert len(tr_rets) == 4

@@ -1,5 +1,8 @@
+from __future__ import absolute_import, division, print_function
+
 import pyro.poutine as poutine
-from pyro.infer import TracePosterior
+
+from .abstract_infer import TracePosterior
 
 
 class Importance(TracePosterior):
@@ -37,17 +40,3 @@ class Importance(TracePosterior):
                 poutine.replay(self.model, guide_trace)).get_trace(*args, **kwargs)
             log_weight = model_trace.log_pdf() - guide_trace.log_pdf()
             yield (model_trace, log_weight)
-
-    def log_z(self, *args, **kwargs):
-        """
-        Estimate the marginal likelihood of observations using importance weights.
-        Takes the same inputs as self.model and self.guide and returns a 1-element tensor
-        containing the estimate.
-        """
-        log_z = 0.0
-        n = 0
-        # TODO parallelize
-        for _, log_weight in self._traces(*args, **kwargs):
-            n += 1
-            log_z = log_z + log_weight
-        return log_z / n

@@ -1,3 +1,5 @@
+from __future__ import absolute_import, division, print_function
+
 import torch
 import torch.nn.functional as F
 from torch.autograd import Variable
@@ -127,36 +129,54 @@ def softmax(x, dim=-1):
 
     input_2d = trans_input.contiguous().view(-1, trans_size[-1])
 
-    soft_max_2d = F.softmax(input_2d)
+    try:
+        soft_max_2d = F.softmax(input_2d, 1)
+    except TypeError:
+        # Support older pytorch 0.2 release.
+        soft_max_2d = F.softmax(input_2d)
 
     soft_max_nd = soft_max_2d.view(*trans_size)
     return soft_max_nd.transpose(dim, len(input_size) - 1)
 
 
+def _get_clamping_buffer(tensor):
+    clamp_eps = 1e-6
+    if isinstance(tensor, Variable):
+        tensor = tensor.data
+    if isinstance(tensor, (torch.DoubleTensor, torch.cuda.DoubleTensor)):
+        clamp_eps = 1e-15
+    return clamp_eps
+
+
 def get_probs_and_logits(ps=None, logits=None, is_multidimensional=True):
     """
-    Convert probability values to logits, or vice-versa. Either `ps` or
-    `logits` should be specified, but not both.
+    Convert probability values to logits, or vice-versa. Either ``ps`` or
+    ``logits`` should be specified, but not both.
 
     :param ps: tensor of probabilities. Should be in the interval *[0, 1]*.
-        If, `is_multidimensional = True`, then must be normalized along
+        If, ``is_multidimensional = True``, then must be normalized along
         axis -1.
-    :param logits: tensor of logit values.
+    :param logits: tensor of logit values.  For the multidimensional case,
+        the values, when exponentiated along the last dimension, must sum
+        to 1.
     :param is_multidimensional: determines the computation of ps from logits,
         and vice-versa. For the multi-dimensional case, logit values are
-        assumed to be non-normalized log probabilities, whereas for the uni-
-        dimensional case, it specifically refers to log odds.
-    :return: tuple containing raw probabilities and logits as tensors
+        assumed to be log probabilities, whereas for the uni-dimensional case,
+        it specifically refers to log odds.
+    :return: tuple containing raw probabilities and logits as tensors.
     """
     assert (ps is None) != (logits is None)
+    if ps is not None:
+        eps = _get_clamping_buffer(ps)
+        ps_clamped = ps.clamp(min=eps, max=1 - eps)
     if is_multidimensional:
         if ps is None:
             ps = softmax(logits, -1)
         else:
-            logits = torch.log(ps)
+            logits = torch.log(ps_clamped)
     else:
         if ps is None:
             ps = F.sigmoid(logits)
         else:
-            logits = torch.log(ps) - torch.log1p(-ps)
+            logits = torch.log(ps_clamped) - torch.log1p(-ps_clamped)
     return ps, logits

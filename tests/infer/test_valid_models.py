@@ -1,4 +1,4 @@
-# This file tests a variety of model,guide pairs with valid and invalid structure.
+from __future__ import absolute_import, division, print_function
 
 import warnings
 
@@ -11,6 +11,8 @@ import pyro.distributions as dist
 from pyro.infer import SVI
 from pyro.optim import Adam
 from tests.common import segfaults_on_pytorch_020
+
+# This file tests a variety of model,guide pairs with valid and invalid structure.
 
 
 def assert_ok(model, guide, **kwargs):

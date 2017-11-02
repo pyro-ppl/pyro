@@ -1,3 +1,5 @@
+from __future__ import absolute_import, division, print_function
+
 import numpy as np
 import torch
 from torch.autograd import Variable
@@ -17,8 +19,9 @@ class Categorical(Distribution):
     :param ps: Probabilities. These should be non-negative and normalized
         along the rightmost axis.
     :type ps: `torch.autograd.Variable`.
-    :param logits: Non-normalized log probability values. Either `ps` or `logits`
-        should be specified but not both.
+    :param logits: Log probability values. When exonentiated, these should
+        sum to 1 along the last axis. Either `ps` or `logits` should be
+        specified but not both.
     :type logits: `torch.autograd.Variable`.
     :param vs: Optional list of values in the support.
     :type vs: `list` or `numpy.array` or `torch.autograd.Variable`
