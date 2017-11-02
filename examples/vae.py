@@ -42,11 +42,11 @@ class Encoder(nn.Module):
         super(Encoder, self).__init__()
         # setup the three linear transformations used
         self.fc1 = nn.Linear(784, hidden_dim)
-        init.normal(self.fc1.weight , mean=0, std=0.02)
+        #init.normal(self.fc1.weight , mean=0, std=0.02)
         self.fc21 = nn.Linear(hidden_dim, z_dim)
-        init.normal(self.fc21.weight , mean=0, std=0.02)
+        #init.normal(self.fc21.weight , mean=0, std=0.02)
         self.fc22 = nn.Linear(hidden_dim, z_dim)
-        init.normal(self.fc22.weight , mean=0, std=0.02)
+        #init.normal(self.fc22.weight , mean=0, std=0.02)
         # setup the non-linearity
         self.softplus = nn.Softplus()
 
@@ -70,9 +70,9 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
         # setup the three linear transformations used
         self.fc1 = nn.Linear(z_dim, hidden_dim)
-        init.normal(self.fc1.weight , mean=0, std=0.02)
+        #init.normal(self.fc1.weight , mean=0, std=0.02)
         self.fc21 = nn.Linear(hidden_dim, 784)
-        init.normal(self.fc21.weight , mean=0, std=0.02)
+        #init.normal(self.fc21.weight , mean=0, std=0.02)
         # setup the non-linearity
         self.softplus = nn.Softplus()
         self.sigmoid = nn.Sigmoid()
@@ -144,9 +144,9 @@ class VAE(nn.Module):
 def main():
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', default=21, type=int, help='number of training epochs')
-    parser.add_argument('-tf', '--test-frequency', default=5, type=int, help='how often we evaluate the test set')
-    parser.add_argument('-lr', '--learning-rate', default=1.0e-3, type=float, help='learning rate')
+    parser.add_argument('-n', '--num-epochs', default=500, type=int, help='number of training epochs')
+    parser.add_argument('-tf', '--test-frequency', default=10, type=int, help='how often we evaluate the test set')
+    parser.add_argument('-lr', '--learning-rate', default=1.0e-4, type=float, help='learning rate')
     parser.add_argument('-b1', '--beta1', default=0.95, type=float, help='beta1 adam hyperparameter')
     parser.add_argument('--cuda', action='store_true', default=False, help='whether to use cuda')
     parser.add_argument('-visdom', default=False, help='Whether plotting in visdom is desired')
@@ -223,10 +223,12 @@ def main():
             total_epoch_loss_test = test_loss / normalizer_test
             test_elbo.append(total_epoch_loss_test)
             print("[epoch %03d]  average test loss: %.4f" % (epoch, total_epoch_loss_test))
-            if epoch>15:
+            if 0:#epoch>25:
                 mnist_test_tsne(vae=vae, test_loader=test_loader)
                 plot_llk(np.array(train_elbo), np.array(test_elbo))
-            #if epoch == args.num_epochs-1:
+            if epoch == args.num_epochs-1:
+                mnist_test_tsne(vae=vae, test_loader=test_loader)
+                plot_llk(np.array(train_elbo), np.array(test_elbo))
 
 
     return vae
