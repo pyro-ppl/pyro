@@ -1,3 +1,7 @@
+from __future__ import absolute_import, division, print_function
+
+import math
+
 import numpy as np
 import pytest
 import scipy.stats as sp
@@ -139,12 +143,21 @@ discrete_dists = [
             examples=[
                 {'ps': [0.25],
                  'test_data': [1]},
-                {'ps': [0.25],
+                {'ps': [0.25, 0.25],
                  'test_data': [[[0, 1]], [[1, 0]], [[0, 0]]]},
+                {'logits': [math.log(p / (1 - p)) for p in (0.25, 0.25)],
+                 'test_data': [[[0, 1]], [[1, 0]], [[0, 0]]]},
+                {'logits': [-float('inf'), 0],
+                 'test_data': [[0, 1], [0, 1], [0, 1]]},
+                {'logits': [[math.log(p / (1 - p)) for p in (0.25, 0.25)],
+                            [math.log(p / (1 - p)) for p in (0.3, 0.3)]],
+                 'test_data': [[1, 1], [0, 0]]},
                 {'ps': [[0.25, 0.25], [0.3, 0.3]],
                  'test_data': [[1, 1], [0, 0]]}
             ],
-            scipy_arg_fn=lambda ps: ((), {'p': ps}),
+            test_data_indices=[0, 1, 2, 3],
+            batch_data_indices=[-1, -2],
+            scipy_arg_fn=lambda **kwargs: ((), {'p': kwargs['ps']}),
             prec=0.01,
             min_samples=10000,
             is_discrete=True,
@@ -170,9 +183,19 @@ discrete_dists = [
     Fixture(pyro_dist=(dist.categorical, Categorical),
             scipy_dist=sp.multinomial,
             examples=[
-                {'ps': [0.1, 0.6, 0.3], 'test_data': [0, 0, 1]},
-                {'ps': [[0.1, 0.6, 0.3], [0.2, 0.4, 0.4]], 'test_data': [[0, 0, 1], [1, 0, 0]]}
+                {'ps': [0.1, 0.6, 0.3],
+                 'test_data': [0, 0, 1]},
+                {'logits': list(map(math.log, [0.1, 0.6, 0.3])),
+                 'test_data': [0, 0, 1]},
+                {'logits': [list(map(math.log, [0.1, 0.6, 0.3])),
+                            list(map(math.log, [0.2, 0.4, 0.4]))],
+                 'test_data': [[0, 0, 1], [1, 0, 0]]},
+                {'ps': [[0.1, 0.6, 0.3],
+                        [0.2, 0.4, 0.4]],
+                 'test_data': [[0, 0, 1], [1, 0, 0]]}
             ],
+            test_data_indices=[0, 1, 2],
+            batch_data_indices=[-1, -2],
             scipy_arg_fn=lambda ps: ((1, np.array(ps)), {}),
             prec=0.05,
             min_samples=10000,

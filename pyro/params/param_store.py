@@ -1,3 +1,5 @@
+from __future__ import absolute_import, division, print_function
+
 from collections import defaultdict
 
 import cloudpickle
@@ -47,6 +49,12 @@ class ParamStoreDict(object):
         self._active_params = set()
         self._param_tags = defaultdict(lambda: set())
         self._tag_params = defaultdict(lambda: set())
+
+    def named_parameters(self):
+        """
+        Returns an iterator over tuples of the form (name, parameter) for each parameter in the ParamStore
+        """
+        return self._params.items()
 
     def get_all_param_names(self):
         """

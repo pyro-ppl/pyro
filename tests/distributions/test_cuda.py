@@ -1,3 +1,5 @@
+from __future__ import absolute_import, division, print_function
+
 import pytest
 
 from tests.common import assert_equal, requires_cuda, tensors_default_to, xfail_if_not_implemented

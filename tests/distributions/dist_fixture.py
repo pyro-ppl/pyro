@@ -1,10 +1,15 @@
+from __future__ import absolute_import, division, print_function
+
 import math
 
 import numpy as np
 import torch
 from torch.autograd import Variable
 
-from tests.common import assert_equal
+from pyro.distributions.util import get_probs_and_logits
+
+SINGLE_TEST_DATUM_IDX = [0]
+BATCH_TEST_DATA_IDX = [-1]
 
 
 class Fixture(object):
@@ -17,7 +22,9 @@ class Fixture(object):
                  min_samples=None,
                  is_discrete=False,
                  expected_support_non_vec=None,
-                 expected_support=None):
+                 expected_support=None,
+                 test_data_indices=None,
+                 batch_data_indices=None):
         self.pyro_dist, self.pyro_dist_obj = pyro_dist
         self.scipy_dist = scipy_dist
         self.dist_params, self.test_data = self._extract_fixture_data(examples)
@@ -27,6 +34,18 @@ class Fixture(object):
         self.is_discrete = is_discrete
         self.expected_support_non_vec = expected_support_non_vec
         self.expected_support = expected_support
+        self.test_data_indices = test_data_indices
+        self.batch_data_indices = batch_data_indices
+
+    def get_batch_data_indices(self):
+        if not self.batch_data_indices:
+            return BATCH_TEST_DATA_IDX
+        return self.batch_data_indices
+
+    def get_test_data_indices(self):
+        if not self.test_data_indices:
+            return SINGLE_TEST_DATUM_IDX
+        return self.test_data_indices
 
     def _extract_fixture_data(self, examples):
         dist_params, test_data = [], []
@@ -51,10 +70,20 @@ class Fixture(object):
             return self.dist_params[idx]
         return tensor_wrap(**self.dist_params[idx])
 
+    def _convert_logits_to_ps(self, dist_params):
+        if 'logits' in dist_params:
+            logits = torch.Tensor(dist_params.pop('logits'))
+            is_multidimensional = self.get_test_distribution_name() != 'Bernoulli'
+            ps, _ = get_probs_and_logits(logits=logits, is_multidimensional=is_multidimensional)
+            dist_params['ps'] = list(ps.data.cpu().numpy())
+        return dist_params
+
     def get_scipy_logpdf(self, idx):
         if not self.scipy_arg_fn:
             return
-        args, kwargs = self.scipy_arg_fn(**self.get_dist_params(idx, wrap_tensor=False))
+        dist_params = self.get_dist_params(idx, wrap_tensor=False)
+        dist_params = self._convert_logits_to_ps(dist_params)
+        args, kwargs = self.scipy_arg_fn(**dist_params)
         if self.is_discrete:
             log_pdf = self.scipy_dist.logpmf(self.get_test_data(idx, wrap_tensor=False), *args, **kwargs)
         else:
@@ -66,6 +95,7 @@ class Fixture(object):
             return
         dist_params = self.get_dist_params(idx, wrap_tensor=False)
         dist_params_wrapped = self.get_dist_params(idx)
+        dist_params = self._convert_logits_to_ps(dist_params)
         test_data = self.get_test_data(idx, wrap_tensor=False)
         test_data_wrapped = self.get_test_data(idx)
         shape = self.pyro_dist.shape(test_data_wrapped, **dist_params_wrapped)
@@ -85,18 +115,6 @@ class Fixture(object):
                                                             *args,
                                                             **kwargs))
         return batch_log_pdf
-
-    def get_pyro_logpdf(self, idx):
-        dist_function_return = self.pyro_dist.log_pdf(self.get_test_data(idx), **self.get_dist_params(idx))
-        dist_object_return = self.pyro_dist_obj(**self.get_dist_params(idx)).log_pdf(self.get_test_data(idx))
-        assert_equal(dist_function_return, dist_object_return)
-        return dist_function_return
-
-    def get_pyro_batch_logpdf(self, idx):
-        dist_function_return = self.pyro_dist.batch_log_pdf(self.get_test_data(idx), **self.get_dist_params(idx))
-        dist_object_return = self.pyro_dist_obj(**self.get_dist_params(idx)).batch_log_pdf(self.get_test_data(idx))
-        assert_equal(dist_function_return, dist_object_return)
-        return dist_function_return
 
     def get_num_samples(self, idx):
         """
@@ -132,9 +150,12 @@ class Fixture(object):
 def tensor_wrap(*args, **kwargs):
     tensor_list, tensor_map = [], {}
     for arg in args:
-        tensor_list.append(Variable(torch.Tensor(arg)))
+        wrapped_arg = Variable(torch.Tensor(arg)) if isinstance(arg, list) else arg
+        tensor_list.append(wrapped_arg)
     for k in kwargs:
-        tensor_map[k] = Variable(torch.Tensor(kwargs[k]))
+        kwarg = kwargs[k]
+        wrapped_kwarg = Variable(torch.Tensor(kwarg)) if isinstance(kwarg, list) else kwarg
+        tensor_map[k] = wrapped_kwarg
     if args and not kwargs:
         return tensor_list
     if kwargs and not args:

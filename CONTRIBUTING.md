@@ -16,12 +16,6 @@ or explicitly
 pip install -e .[dev]
 ```
 
-Add the repository's git configuration to your local project `.gitconfig` file.
-
-```sh
-git config --local include.path ../.gitconfig
-```
-
 # Testing
 
 Before submitting a pull request, please autoformat code and ensure that unit tests pass locally

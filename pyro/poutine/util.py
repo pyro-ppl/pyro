@@ -1,3 +1,6 @@
+from __future__ import absolute_import, division, print_function
+
+
 def site_is_subsample(site):
     """
     Determines whether a trace site originated from a subsample statement inside an `iarange`.

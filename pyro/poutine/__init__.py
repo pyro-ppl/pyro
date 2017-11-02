@@ -1,23 +1,25 @@
+from __future__ import absolute_import, division, print_function
+
 import functools
+
+import pyro
+from pyro import util
 
 # poutines
 from .block_poutine import BlockPoutine
+from .condition_poutine import ConditionPoutine
+from .escape_poutine import EscapePoutine
+from .lambda_poutine import LambdaPoutine  # noqa: F401
+from .lift_poutine import LiftPoutine
 from .poutine import Poutine  # noqa: F401
 from .replay_poutine import ReplayPoutine
-from .trace_poutine import TracePoutine
-from .lift_poutine import LiftPoutine
-from .condition_poutine import ConditionPoutine
-from .lambda_poutine import LambdaPoutine  # noqa: F401
-from .escape_poutine import EscapePoutine
-
-import pyro
 from .trace import Trace  # noqa: F401
-from pyro import util
-
+from .trace_poutine import TracePoutine
 
 ############################################
 # Begin primitive operations
 ############################################
+
 
 def trace(fn, graph_type=None):
     """

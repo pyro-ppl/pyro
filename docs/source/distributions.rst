@@ -1,9 +1,10 @@
 Distributions
 =============
 
-.. automodule:: pyro.distributions.distribution
-    :members:
-    :undoc-members:
-    :show-inheritance:
+.. toctree::
+   :glob:
+   :maxdepth: 2
+   :caption: Contents:
 
-.. include:: pyro.distributions.txt
+   primitive_dist
+   transformed_dist

@@ -1,3 +1,5 @@
+from __future__ import absolute_import, division, print_function
+
 import torch
 from torch.autograd import Variable
 
@@ -30,8 +32,8 @@ class Delta(Distribution):
         if x is not None:
             if x.size()[-event_dim] != v.size()[-event_dim]:
                 raise ValueError("The event size for the data and distribution parameters must match.\n"
-                                 "Expected x.size()[-1] == self.v.size()[-1], but got {} vs {}"
-                                 .format(x.size(-1), v.size(-1)))
+                                 "Expected x.size()[-1] == self.v.size()[-1], but got {} vs {}".format(
+                                     x.size(-1), v.size(-1)))
             try:
                 v = self.v.expand_as(x)
             except RuntimeError as e:

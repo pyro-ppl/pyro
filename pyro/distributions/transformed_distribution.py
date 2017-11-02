@@ -1,3 +1,5 @@
+from __future__ import absolute_import, division, print_function
+
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
@@ -79,6 +81,7 @@ class Bijector(nn.Module):
     Abstract class `Bijector`. `Bijector` are bijective transformations with computable
     log det jacobians. They are meant for use in `TransformedDistribution`.
     """
+
     def __init__(self, *args, **kwargs):
         super(Bijector, self).__init__(*args, **kwargs)
         self.add_inverse_to_cache = False
@@ -148,12 +151,12 @@ class InverseAutoregressiveFlow(Bijector):
     3. MADE: Masked Autoencoder for Distribution Estimation [arXiv:1502.03509]
     Mathieu Germain, Karol Gregor, Iain Murray, Hugo Larochelle
     """
+
     def __init__(self, input_dim, hidden_dim, sigmoid_bias=2.0, permutation=None):
         super(InverseAutoregressiveFlow, self).__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
-        self.arn = AutoRegressiveNN(input_dim, hidden_dim, output_dim_multiplier=2,
-                                    permutation=permutation)
+        self.arn = AutoRegressiveNN(input_dim, hidden_dim, output_dim_multiplier=2, permutation=permutation)
         self.sigmoid = nn.Sigmoid()
         self.sigmoid_bias = Variable(torch.Tensor([sigmoid_bias]))
         self._intermediates_cache = {}
