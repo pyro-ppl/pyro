@@ -167,7 +167,7 @@ def main():
     vae = VAE(use_cuda=args.cuda)
 
     # setup the optimizer
-    adam_args = {"lr": args.learning_rate, "betas": (args.beta1, 0.999)}
+    adam_args = {"lr": args.learning_rate}# "betas": (args.beta1}#, 0.999)}
     optimizer = Adam(adam_args)
 
     # setup the inference algorithm

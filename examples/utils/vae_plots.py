@@ -42,7 +42,6 @@ def plot_llk(train_elbo, test_elbo):
     import scipy as sp
     import seaborn as sns
     import pandas as pd
-    # fig01 =
     plt.figure(figsize=(30, 10))
     sns.set_style("whitegrid")
     data = np.concatenate([np.arange(len(test_elbo))[:, sp.newaxis], test_elbo[:, sp.newaxis]], axis=1)
@@ -60,17 +59,10 @@ def mnist_test_tsne(vae=None, test_loader=None):
     This is used to generate a t-sne embedding of the vae
     """
     name = 'VAE'
-    # data = Variable(test_loader.dataset.test_data.float()/255.)
-    # mnist_labels_raw = Variable(test_loader.dataset.test_labels)
-    # mnist_labels = torch.zeros(mnist_labels_raw.size(0), 10)
-    # mnist_labels.scatter_(1, mnist_labels_raw.data.view(-1, 1), 1)
-    # mnist_labels = Variable(mnist_labels)
-    #import pdb; pdb.set_trace()
     data = Variable(test_loader.dataset.test_data.float())
     mnist_labels = Variable(test_loader.dataset.test_labels)
     z_mu, z_sigma = vae.encoder(data)
     plot_tsne(z_mu, mnist_labels, name)
-    #import pdb; pdb.set_trace()
     pass
 
 def mnist_test_tsne_ssvae(name=None, ssvae=None, test_loader=None):
@@ -90,8 +82,6 @@ def plot_tsne(z_mu, classes, name):
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
-    # import sklearn
-    # from  sklearn import manifold
     from sklearn.manifold import TSNE
     model_tsne = TSNE(n_components=2, random_state=0)
     z_states = z_mu.data.cpu().numpy()
