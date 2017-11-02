@@ -1,6 +1,5 @@
-
-import torch
 import torch.nn as nn
+
 
 class ClippedSoftmax(nn.Softmax):
     """
@@ -13,7 +12,8 @@ class ClippedSoftmax(nn.Softmax):
 
     def forward(self, val):
         rval = super(ClippedSoftmax, self).forward(val)
-        return (rval * (1.0 - 2 * self.epsilon)) + self.epsilon
+        n = rval.shape(self.dim)
+        return (rval * (1.0 - n * self.epsilon)) + self.epsilon
 
 
 class ClippedSigmoid(nn.Sigmoid):
