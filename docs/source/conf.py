@@ -1,5 +1,7 @@
 import sphinx_rtd_theme
 
+import pkg_resources
+
 # -*- coding: utf-8 -*-
 #
 # Pyro documentation build configuration file, created by
@@ -22,7 +24,6 @@ import sphinx_rtd_theme
 # import sys
 # sys.path.insert(0, os.path.abspath('.'))
 
-
 # -- General configuration ------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
@@ -32,14 +33,15 @@ import sphinx_rtd_theme
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['sphinx.ext.intersphinx',
-              'sphinx.ext.todo',
-              'sphinx.ext.mathjax',
-              'sphinx.ext.ifconfig',
-              'sphinx.ext.viewcode',
-              'sphinx.ext.githubpages',
-              'sphinx.ext.autodoc'
-              ]
+extensions = [
+    'sphinx.ext.intersphinx',  #
+    'sphinx.ext.todo',  #
+    'sphinx.ext.mathjax',  #
+    'sphinx.ext.ifconfig',  #
+    'sphinx.ext.viewcode',  #
+    'sphinx.ext.githubpages',  #
+    'sphinx.ext.autodoc',
+]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -63,7 +65,7 @@ author = u'Uber AI Labs'
 # built documents.
 #
 # The short X.Y version.
-version = u'0.0.1'
+version = pkg_resources.require('pyro-ppl')[0].version
 # The full version, including alpha/beta/rc tags.
 release = u'0.0.1'
 
@@ -91,7 +93,7 @@ add_module_names = False
 # -- Options for HTML output ----------------------------------------------
 
 # logo
-html_logo = '../img/pyro_logo_small.png'
+html_logo = '_static/img/pyro_logo_wide.png'
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
@@ -111,14 +113,13 @@ html_theme_options = {
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = []
-
+html_static_path = ['_static']
+html_style = 'css/pyro.css'
 
 # -- Options for HTMLHelp output ------------------------------------------
 
 # Output file base name for HTML help builder.
 htmlhelp_basename = 'Pyrodoc'
-
 
 # -- Options for LaTeX output ---------------------------------------------
 
@@ -144,20 +145,14 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'Pyro.tex', u'Pyro Documentation',
-     u'Uber AI Labs', 'manual'),
+    (master_doc, 'Pyro.tex', u'Pyro Documentation', u'Uber AI Labs', 'manual'),
 ]
-
 
 # -- Options for manual page output ---------------------------------------
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
-man_pages = [
-    (master_doc, 'pyro', u'Pyro Documentation',
-     [author], 1)
-]
-
+man_pages = [(master_doc, 'pyro', u'Pyro Documentation', [author], 1)]
 
 # -- Options for Texinfo output -------------------------------------------
 
@@ -165,15 +160,11 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'Pyro', u'Pyro Documentation',
-     author, 'Pyro', 'One line description of project.',
-     'Miscellaneous'),
+    (master_doc, 'Pyro', u'Pyro Documentation', author, 'Pyro', 'One line description of project.', 'Miscellaneous'),
 ]
-
 
 # Example configuration for intersphinx: refer to the Python standard library.
 intersphinx_mapping = {'https://docs.python.org/': None}
-
 
 # document class constructors (__init__ methods):
 """ comment out this functionality for now;
