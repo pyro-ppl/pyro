@@ -7,6 +7,7 @@ import torch
 
 import pyro
 import pyro.poutine as poutine
+from pyro.infer.util import torch_backward, torch_data_sum
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, detach_iterable, ng_zeros
 
@@ -152,7 +153,7 @@ class TraceGraph_ELBO(object):
             # this bit is never differentiated: it's here for getting an estimate of the elbo itself
             for cost_node in cost_nodes:
                 elbo_particle += cost_node[0].sum()
-            elbo += weight * elbo_particle.data[0]
+            elbo += weight * torch_data_sum(elbo_particle)
 
             # compute the elbo, removing terms whose gradient is zero
             # this is the bit that's actually differentiated
@@ -277,8 +278,7 @@ class TraceGraph_ELBO(object):
                                                           downstream_cost.detach()).sum()
 
                 surrogate_elbo_particle += weight * elbo_reinforce_terms_particle
-                if not isinstance(baseline_loss_particle, float):
-                    baseline_loss_particle.backward()
+                torch_backward(baseline_loss_particle)
 
             # grab model parameters to train
             for name in model_trace.nodes.keys():
@@ -294,7 +294,8 @@ class TraceGraph_ELBO(object):
             pyro.get_param_store().mark_params_active(trainable_params)
 
             surrogate_loss_particle = -surrogate_elbo_particle
-            surrogate_loss_particle.backward()
+            if trainable_params:
+                torch_backward(surrogate_loss_particle)
 
         loss = -elbo
 

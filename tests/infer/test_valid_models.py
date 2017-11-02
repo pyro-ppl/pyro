@@ -46,6 +46,32 @@ def assert_warning(model, guide, **kwargs):
 
 
 @pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
+def test_nonempty_model_empty_guide_ok(trace_graph):
+
+    def model():
+        mu = Variable(torch.zeros(2))
+        sigma = Variable(torch.zeros(2))
+        pyro.sample("x", dist.normal, mu, sigma, obs=mu)
+
+    def guide():
+        pass
+
+    assert_ok(model, guide, trace_graph=trace_graph)
+
+
+@pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
+def test_empty_model_empty_guide_ok(trace_graph):
+
+    def model():
+        pass
+
+    def guide():
+        pass
+
+    assert_ok(model, guide, trace_graph=trace_graph)
+
+
+@pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
 def test_variable_clash_in_model_error(trace_graph):
 
     def model():
