@@ -3,6 +3,7 @@ import argparse
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.init as init
 import torchvision.datasets as dset
 import torchvision.transforms as transforms
 import visdom
@@ -13,7 +14,9 @@ import pyro.distributions as dist
 from pyro.infer import SVI
 from pyro.optim import Adam
 from pyro.util import ng_zeros, ng_ones
+from utils.vae_plots import plot_llk, mnist_test_tsne
 
+fudge = 1e-6
 
 # for loading and batching MNIST dataset
 def setup_data_loaders(batch_size=128, use_cuda=False):
@@ -39,8 +42,11 @@ class Encoder(nn.Module):
         super(Encoder, self).__init__()
         # setup the three linear transformations used
         self.fc1 = nn.Linear(784, hidden_dim)
+        init.normal(self.fc1.weight , mean=0, std=0.02)
         self.fc21 = nn.Linear(hidden_dim, z_dim)
+        init.normal(self.fc21.weight , mean=0, std=0.02)
         self.fc22 = nn.Linear(hidden_dim, z_dim)
+        init.normal(self.fc22.weight , mean=0, std=0.02)
         # setup the non-linearity
         self.softplus = nn.Softplus()
 
@@ -53,7 +59,7 @@ class Encoder(nn.Module):
         # then return a mean vector and a (positive) square root covariance
         # each of size batch_size x z_dim
         z_mu = self.fc21(hidden)
-        z_sigma = self.softplus(self.fc22(hidden))
+        z_sigma = torch.exp(self.fc22(hidden))
         return z_mu, z_sigma
 
 
@@ -64,20 +70,22 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
         # setup the three linear transformations used
         self.fc1 = nn.Linear(z_dim, hidden_dim)
+        init.normal(self.fc1.weight , mean=0, std=0.02)
         self.fc21 = nn.Linear(hidden_dim, 784)
-        self.fc22 = nn.Linear(hidden_dim, 784)
+        init.normal(self.fc21.weight , mean=0, std=0.02)
         # setup the non-linearity
         self.softplus = nn.Softplus()
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, z):
         # define the forward computation on the latent z
         # first compute the hidden units
         hidden = self.softplus(self.fc1(z))
-        # return the mean vector and square root covariance
+        # return the parameter for the output Bernoulli
         # each is of size batch_size x 784
-        mu_img = self.fc21(hidden)
-        sigma_img = self.softplus(self.fc22(hidden))
-        return mu_img, sigma_img
+        #fixing numerical instabilities of sigmoid with a fudge
+        mu_img = (self.sigmoid(self.fc21(hidden))+fudge) * (1-2*fudge)
+        return mu_img
 
 
 # define a PyTorch module for the VAE
@@ -109,9 +117,9 @@ class VAE(nn.Module):
         # sample from prior (value will be sampled by guide when computing the ELBO)
         z = pyro.sample("latent", dist.normal, z_mu, z_sigma)
         # decode the latent code z
-        mu_img, sigma_img = self.decoder(z)
+        mu_img = self.decoder(z)
         # score against actual images
-        pyro.observe("obs", dist.normal, x.view(-1, 784), mu_img, sigma_img)
+        pyro.observe("obs", dist.bernoulli, x.view(-1, 784), mu_img)
 
     # define the guide (i.e. variational distribution) q(z|x)
     def guide(self, x):
@@ -129,18 +137,19 @@ class VAE(nn.Module):
         # sample in latent space
         z = dist.normal(z_mu, z_sigma)
         # decode the image (note we don't sample in image space)
-        mu_img, sigma_img = self.decoder(z)
+        mu_img = self.decoder(z)
         return mu_img
 
 
 def main():
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', default=5000, type=int, help='number of training epochs')
+    parser.add_argument('-n', '--num-epochs', default=21, type=int, help='number of training epochs')
     parser.add_argument('-tf', '--test-frequency', default=5, type=int, help='how often we evaluate the test set')
-    parser.add_argument('-lr', '--learning-rate', default=1.0e-4, type=float, help='learning rate')
+    parser.add_argument('-lr', '--learning-rate', default=1.0e-3, type=float, help='learning rate')
     parser.add_argument('-b1', '--beta1', default=0.95, type=float, help='beta1 adam hyperparameter')
     parser.add_argument('--cuda', action='store_true', default=False, help='whether to use cuda')
+    parser.add_argument('-visdom', default=False, help='Whether plotting in visdom is desired')
     args = parser.parse_args()
 
     # setup MNIST data loaders
@@ -157,8 +166,11 @@ def main():
     svi = SVI(vae.model, vae.guide, optimizer, loss="ELBO")
 
     # setup visdom for visualization
-    vis = visdom.Visdom()
+    if args.visdom:
+        vis = visdom.Visdom()
 
+    train_elbo = []
+    test_elbo = []
     # training loop
     for epoch in range(args.num_epochs):
         # initialize loss accumulator
@@ -175,8 +187,10 @@ def main():
             epoch_loss += svi.step(x)
 
         # report training diagnostics
-        normalizer = 28 * 28 * len(train_loader.dataset)
-        print("[epoch %03d]  average training loss: %.4f" % (epoch, epoch_loss / normalizer))
+        normalizer_train = len(train_loader.dataset)
+        total_epoch_loss_train = epoch_loss / normalizer_train
+        train_elbo.append(total_epoch_loss_train)
+        print("[epoch %03d]  average training loss: %.4f" % (epoch, total_epoch_loss_train))
 
         if epoch % args.test_frequency == 0:
             # initialize loss accumulator
@@ -194,19 +208,28 @@ def main():
                 # pick three random test images from the first mini-batch and
                 # visualize how well we're reconstructing them
                 if i == 0:
-                    reco_indices = np.random.randint(0, x.size(0), 3)
-                    for index in reco_indices:
-                        test_img = x[index, :, :, :]
-                        reco_img = vae.reconstruct_img(test_img)
-                        vis.image(test_img.contiguous().view(28, 28).data.cpu().numpy(),
-                                  opts={'caption': 'test image'})
-                        vis.image(reco_img.contiguous().view(28, 28).data.cpu().numpy(),
-                                  opts={'caption': 'reconstructed image'})
+                    if args.visdom:
+                        reco_indices = np.random.randint(0, x.size(0), 3)
+                        for index in reco_indices:
+                            test_img = x[index, :, :, :]
+                            reco_img = vae.reconstruct_img(test_img)
+                            vis.image(test_img.contiguous().view(28, 28).data.cpu().numpy(),
+                                    opts={'caption': 'test image'})
+                            vis.image(reco_img.contiguous().view(28, 28).data.cpu().numpy(),
+                                    opts={'caption': 'reconstructed image'})
 
             # report test diagnostics
-            normalizer = 28 * 28 * len(test_loader.dataset)
-            print("[epoch %03d]  average test loss: %.4f" % (epoch, test_loss / normalizer))
+            normalizer_test = len(test_loader.dataset)
+            total_epoch_loss_test = test_loss / normalizer_test
+            test_elbo.append(total_epoch_loss_test)
+            print("[epoch %03d]  average test loss: %.4f" % (epoch, total_epoch_loss_test))
+            if epoch>15:
+                mnist_test_tsne(vae=vae, train_loader=train_loader)
+                plot_llk(np.array(train_elbo), np.array(test_elbo))
+            #if epoch == args.num_epochs-1:
 
+
+    return vae
 
 if __name__ == '__main__':
-    main()
+    model = main()
