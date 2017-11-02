@@ -430,6 +430,24 @@ def test_iarange_enum_discrete_batch_ok():
 
 
 @segfaults_on_pytorch_020
+def test_iarange_enum_discrete_no_discrete_vars_ok():
+
+    def model():
+        mu = Variable(torch.zeros(2, 1))
+        sigma = Variable(torch.zeros(2, 1))
+        with pyro.iarange("iarange", 10, 5) as ind:
+            pyro.sample("x", dist.normal, mu, sigma, batch_size=len(ind))
+
+    def guide():
+        mu = pyro.param("mu", Variable(torch.zeros(2, 1), requires_grad=True))
+        sigma = pyro.param("sigma", Variable(torch.zeros(2, 1), requires_grad=True))
+        with pyro.iarange("iarange", 10, 5) as ind:
+            pyro.sample("x", dist.normal, mu, sigma, batch_size=len(ind))
+
+    assert_ok(model, guide, enum_discrete=True)
+
+
+@segfaults_on_pytorch_020
 def test_no_iarange_enum_discrete_batch_error():
 
     def model():
