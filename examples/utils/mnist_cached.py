@@ -142,10 +142,15 @@ class MNISTCached(MNIST):
                 self.train_labels = (target_transform(self.train_labels))
 
             if MNISTCached.train_data_sup is None:
-                MNISTCached.train_data_sup, MNISTCached.train_labels_sup, \
-                    MNISTCached.train_data_unsup, MNISTCached.train_labels_unsup, \
-                    MNISTCached.data_valid, MNISTCached.labels_valid = \
-                    split_sup_unsup_valid(self.train_data, self.train_labels, sup_num)
+                if sup_num is None:
+                    assert mode == "unsup"
+                    MNISTCached.train_data_unsup, MNISTCached.train_labels_unsup = \
+                        self.train_data, self.train_labels
+                else:
+                    MNISTCached.train_data_sup, MNISTCached.train_labels_sup, \
+                        MNISTCached.train_data_unsup, MNISTCached.train_labels_unsup, \
+                        MNISTCached.data_valid, MNISTCached.labels_valid = \
+                        split_sup_unsup_valid(self.train_data, self.train_labels, sup_num)
 
             if mode == "sup":
                 self.train_data, self.train_labels = MNISTCached.train_data_sup, MNISTCached.train_labels_sup
@@ -199,12 +204,8 @@ def setup_data_loaders(dataset, use_cuda, batch_size, sup_num=None, root='./data
     if 'num_workers' not in kwargs:
         kwargs = {'num_workers': 0, 'pin_memory': False}
 
-    if sup_num is None:
-        train_set_unsup = dataset(root=root, mode="unsup", download=download,
-                                  sup_num=MNISTCached.train_data_size, use_cuda=use_cuda)
-    else:
-        train_set_unsup = dataset(root=root, mode="unsup", download=download,
-                                  sup_num=sup_num, use_cuda=use_cuda)
+    train_set_unsup = dataset(root=root, mode="unsup", download=download, sup_num=sup_num, use_cuda=use_cuda)
+
     train_loader_unsup = DataLoader(train_set_unsup, batch_size=batch_size, shuffle=True, **kwargs)
 
     test_set = dataset(root=root, mode="test", sup_num=sup_num, use_cuda=use_cuda)
