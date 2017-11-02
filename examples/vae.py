@@ -224,7 +224,7 @@ def main():
             test_elbo.append(total_epoch_loss_test)
             print("[epoch %03d]  average test loss: %.4f" % (epoch, total_epoch_loss_test))
             if epoch>15:
-                mnist_test_tsne(vae=vae, train_loader=train_loader)
+                mnist_test_tsne(vae=vae, test_loader=test_loader)
                 plot_llk(np.array(train_elbo), np.array(test_elbo))
             #if epoch == args.num_epochs-1:
 

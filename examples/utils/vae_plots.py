@@ -48,13 +48,13 @@ def plot_llk(train_elbo, test_elbo):
     plt.close('all')
     pass
 
-def mnist_test_tsne(vae=None, train_loader=None):
+def mnist_test_tsne(vae=None, test_loader=None):
     """
     This is used to generate a t-sne embedding of the vae
     """
     name = 'VAE'
-    data = Variable(train_loader.dataset.train_data.float())
-    mnist_labels_raw = Variable(train_loader.dataset.train_labels)
+    data = Variable(test_loader.dataset.test_data.float()/255.)
+    mnist_labels_raw = Variable(test_loader.dataset.test_labels)
     mnist_labels = torch.zeros(mnist_labels_raw.size(0), 10)
     mnist_labels.scatter_(1, mnist_labels_raw.data.view(-1, 1), 1)
     mnist_labels = Variable(mnist_labels)
@@ -62,13 +62,13 @@ def mnist_test_tsne(vae=None, train_loader=None):
     plot_tsne(z_mu, mnist_labels, name)
     pass
 
-def mnist_test_tsne_ssvae(ssvae=None, train_loader=None):
+def mnist_test_tsne_ssvae(ssvae=None, test_loader=None):
     """
     This is used to generate a t-sne embedding of the ss-vae
     """
     name = 'SS-VAE'
-    data = Variable(train_loader.dataset.train_data.float())
-    mnist_labels_raw = Variable(train_loader.dataset.train_labels)
+    data = Variable(test_loader.dataset.test_data.float()/255.)
+    mnist_labels_raw = Variable(test_loader.dataset.test_labels)
     mnist_labels = torch.zeros(mnist_labels_raw.size(0), 10)
     mnist_labels.scatter_(1, mnist_labels_raw.data.view(-1, 1), 1)
     mnist_labels = Variable(mnist_labels)
