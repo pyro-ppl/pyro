@@ -1,5 +1,8 @@
-from .clipped_adam import ClippedAdam as pt_ClippedAdam
+from __future__ import absolute_import, division, print_function
+
 import torch
+
+from .clipped_adam import ClippedAdam as pt_ClippedAdam
 from .optim import PyroOptim
 
 

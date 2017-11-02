@@ -1,3 +1,5 @@
+from __future__ import absolute_import, division, print_function
+
 import torch
 from torch.autograd import Variable
 
@@ -16,8 +18,7 @@ class Uniform(Distribution):
 
     def __init__(self, a, b, batch_size=None, *args, **kwargs):
         if a.size() != b.size():
-            raise ValueError("Expected a.size() == b.size(), but got {} vs {}"
-                             .format(a.size(), b.size()))
+            raise ValueError("Expected a.size() == b.size(), but got {} vs {}".format(a.size(), b.size()))
         self.a = a
         self.b = b
         if a.dim() == 1 and batch_size is not None:
@@ -31,8 +32,8 @@ class Uniform(Distribution):
         if x is not None:
             if x.size()[-event_dim] != a.size()[-event_dim]:
                 raise ValueError("The event size for the data and distribution parameters must match.\n"
-                                 "Expected x.size()[-1] == self.a.size()[-1], but got {} vs {}"
-                                 .format(x.size(-1), a.size(-1)))
+                                 "Expected x.size()[-1] == self.a.size()[-1], but got {} vs {}".format(
+                                     x.size(-1), a.size(-1)))
             try:
                 a = self.a.expand_as(x)
             except RuntimeError as e:

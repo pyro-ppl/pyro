@@ -1,3 +1,5 @@
+from __future__ import absolute_import, division, print_function
+
 import numbers
 
 import pyro
@@ -6,6 +8,32 @@ from pyro.distributions.util import torch_zeros_like
 from pyro.infer.enum import iter_discrete_traces
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match
+
+
+def check_enum_discrete_can_run(model_trace, guide_trace):
+    """
+    Checks whether `enum_discrete` is supported for the given (model, guide) pair.
+
+    :param Trace model: A model trace.
+    :param Trace guide: A guide trace.
+    :raises: NotImplementedError
+    """
+    # Check that all batch_log_pdf shapes are the same,
+    # since we currently do not correctly handle broadcasting.
+    model_trace.compute_batch_log_pdf()
+    guide_trace.compute_batch_log_pdf()
+    shapes = {}
+    for source, trace in [("model", model_trace), ("guide", guide_trace)]:
+        for name, site in trace.nodes.items():
+            if site["type"] == "sample":
+                shapes[site["batch_log_pdf"].size()] = (source, name)
+    if len(shapes) > 1:
+        raise NotImplementedError(
+                "enum_discrete does not support mixture of batched and un-batched variables. "
+                "Try rewriting your model to avoid batching or running with enum_discrete=False. "
+                "Found the following variables of different batch shapes:\n{}".format(
+                    "\n".join(["{} {}: shape = {}".format(source, name, tuple(shape))
+                               for shape, (source, name) in sorted(shapes.items())])))
 
 
 class Trace_ELBO(object):
@@ -41,6 +69,7 @@ class Trace_ELBO(object):
                     check_model_guide_match(model_trace, guide_trace)
                     guide_trace = prune_subsample_sites(guide_trace)
                     model_trace = prune_subsample_sites(model_trace)
+                    check_enum_discrete_can_run(model_trace, guide_trace)
 
                     log_r = model_trace.batch_log_pdf() - guide_trace.batch_log_pdf()
                     weight = scale / self.num_particles

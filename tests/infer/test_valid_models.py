@@ -1,4 +1,4 @@
-# This file tests a variety of model,guide pairs with valid and invalid structure.
+from __future__ import absolute_import, division, print_function
 
 import warnings
 
@@ -11,6 +11,8 @@ import pyro.distributions as dist
 from pyro.infer import SVI
 from pyro.optim import Adam
 from tests.common import segfaults_on_pytorch_020
+
+# This file tests a variety of model,guide pairs with valid and invalid structure.
 
 
 def assert_ok(model, guide, **kwargs):
@@ -146,13 +148,29 @@ def test_iarange_ok(trace_graph, subsample_size):
 
     def model():
         p = Variable(torch.Tensor([0.5]))
-        with pyro.iarange("irange", 10, subsample_size) as ind:
+        with pyro.iarange("iarange", 10, subsample_size) as ind:
             pyro.sample("x", dist.bernoulli, p, batch_size=len(ind))
 
     def guide():
         p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
-        with pyro.iarange("irange", 10, subsample_size) as ind:
+        with pyro.iarange("iarange", 10, subsample_size) as ind:
             pyro.sample("x", dist.bernoulli, p, batch_size=len(ind))
+
+    assert_ok(model, guide, trace_graph=trace_graph)
+
+
+@pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
+def test_iarange_no_size_ok(trace_graph):
+
+    def model():
+        p = Variable(torch.Tensor([0.5]))
+        with pyro.iarange("iarange"):
+            pyro.sample("x", dist.bernoulli, p, batch_size=10)
+
+    def guide():
+        p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
+        with pyro.iarange("iarange"):
+            pyro.sample("x", dist.bernoulli, p, batch_size=10)
 
     assert_ok(model, guide, trace_graph=trace_graph)
 
@@ -412,7 +430,6 @@ def test_iarange_enum_discrete_batch_ok():
 
 
 @segfaults_on_pytorch_020
-@pytest.mark.xfail(reason="error is not caught")
 def test_no_iarange_enum_discrete_batch_error():
 
     def model():
@@ -427,7 +444,7 @@ def test_no_iarange_enum_discrete_batch_error():
 
 
 @segfaults_on_pytorch_020
-def test_enum_discrete_global_local_ok():
+def test_enum_discrete_global_local_error():
 
     def model():
         p = Variable(torch.Tensor([0.5]))
@@ -441,4 +458,4 @@ def test_enum_discrete_global_local_ok():
         with pyro.iarange("iarange", 10, 5) as ind:
             pyro.sample("y", dist.bernoulli, p, batch_size=len(ind))
 
-    assert_ok(model, guide, enum_discrete=True)
+    assert_error(model, guide, enum_discrete=True)

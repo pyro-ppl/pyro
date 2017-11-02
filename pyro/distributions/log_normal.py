@@ -1,3 +1,5 @@
+from __future__ import absolute_import, division, print_function
+
 import numpy as np
 import torch
 from torch.autograd import Variable
@@ -25,8 +27,7 @@ class LogNormal(Distribution):
         self.mu = mu
         self.sigma = sigma
         if mu.size() != sigma.size():
-            raise ValueError("Expected mu.size() == sigma.size(), but got {} vs {}"
-                             .format(mu.size(), sigma.size()))
+            raise ValueError("Expected mu.size() == sigma.size(), but got {} vs {}".format(mu.size(), sigma.size()))
         if mu.dim() == 1 and batch_size is not None:
             self.mu = mu.expand(batch_size, mu.size(0))
             self.sigma = sigma.expand(batch_size, sigma.size(0))
@@ -38,8 +39,8 @@ class LogNormal(Distribution):
         if x is not None:
             if x.size()[-event_dim] != mu.size()[-event_dim]:
                 raise ValueError("The event size for the data and distribution parameters must match.\n"
-                                 "Expected x.size()[-1] == self.mu.size()[-1], but got {} vs {}"
-                                 .format(x.size(-1), mu.size(-1)))
+                                 "Expected x.size()[-1] == self.mu.size()[-1], but got {} vs {}".format(
+                                     x.size(-1), mu.size(-1)))
             try:
                 mu = self.mu.expand_as(x)
             except RuntimeError as e:
@@ -65,8 +66,7 @@ class LogNormal(Distribution):
     def batch_log_pdf(self, x):
         mu = self.mu.expand(self.shape(x))
         sigma = self.sigma.expand(self.shape(x))
-        ll_1 = Variable(torch.Tensor([-0.5 * np.log(2.0 * np.pi)])
-                        .type_as(mu.data).expand_as(x))
+        ll_1 = Variable(torch.Tensor([-0.5 * np.log(2.0 * np.pi)]).type_as(mu.data).expand_as(x))
         ll_2 = -torch.log(sigma * x)
         ll_3 = -0.5 * torch.pow((torch.log(x) - mu) / sigma, 2.0)
         batch_log_pdf = torch.sum(ll_1 + ll_2 + ll_3, -1)

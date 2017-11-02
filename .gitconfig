@@ -1,6 +1,0 @@
-[filter "nbstripout"]
-    clean = "python -m nbstripout"
-    smudge = cat
-    required = true
-[diff "ipynb"]
-    textconv = nbstripout -t
