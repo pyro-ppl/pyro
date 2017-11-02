@@ -8,12 +8,10 @@ Processing Systems. 2016.
 
 import math
 import os
-import sys
 import time
 import argparse
 from functools import partial
 from observations import multi_mnist
-from subprocess import check_call
 import numpy as np
 
 import torch

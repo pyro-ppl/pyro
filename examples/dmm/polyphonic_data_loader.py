@@ -18,7 +18,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 import numpy as np
 from observations import jsb_chorales
-from os.path import join, dirname, exists, abspath
+from os.path import join, exists
 import six.moves.cPickle as pickle
 from pyro.util import ng_zeros
 
