@@ -108,7 +108,7 @@ if args.seed is not None:
 
 # Load data.
 inpath = './data'
-(X_np, _), _ = multi_mnist(inpath)
+(X_np, _), _ = multi_mnist(inpath, max_digits=2, canvas_size=50, seed=42)
 X_np = X_np.astype(np.float32)
 X_np /= 255.0
 X = Variable(torch.from_numpy(X_np))

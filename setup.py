@@ -13,6 +13,7 @@ setup(
         'cloudpickle>=0.3.1',
         'graphviz>=0.8',
         'networkx>=2.0.0',
+        'observations>=0.1.4',
         'torch',
         'six>=1.10.0',
     ],
