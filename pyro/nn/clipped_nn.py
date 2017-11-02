@@ -13,7 +13,7 @@ class ClippedSoftmax(nn.Softmax):
 
     def forward(self, val):
         rval = super(ClippedSoftmax, self).forward(val)
-        n = rval.shape(getattr(self, "dim", -1))
+        n = rval.shape[getattr(self, "dim", -1)]
         return (rval * (1.0 - n * self.epsilon)) + self.epsilon
 
 
