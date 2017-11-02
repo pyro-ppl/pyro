@@ -15,10 +15,12 @@ from pyro.infer import SVI
 from pyro.optim import Adam
 from pyro.util import ng_zeros, ng_ones
 from utils.vae_plots import plot_llk, mnist_test_tsne
+from utils.mnist_cached import MNISTCached as MNIST
+from utils.mnist_cached import setup_data_loaders
 
 fudge = 1e-6
 
-
+"""
 def setup_data_loaders(batch_size=128, use_cuda=False):
     # for loading and batching MNIST dataset
     root = './data'
@@ -34,7 +36,7 @@ def setup_data_loaders(batch_size=128, use_cuda=False):
                                               shuffle=False, **kwargs)
 
     return train_loader, test_loader
-
+"""
 
 # define the PyTorch module that parameterizes the
 # diagonal gaussian distribution q(z|x)
@@ -42,11 +44,11 @@ class Encoder(nn.Module):
     def __init__(self, z_dim, hidden_dim):
         super(Encoder, self).__init__()
         # setup the three linear transformations used
-        self.fc1 = nn.Linear(784, hidden_dim)
+        self.fc1ec = nn.Linear(784, hidden_dim)
         # init.normal(self.fc1.weight , mean=0, std=0.02)
-        self.fc21 = nn.Linear(hidden_dim, z_dim)
+        self.fc21ec = nn.Linear(hidden_dim, z_dim)
         # init.normal(self.fc21.weight , mean=0, std=0.02)
-        self.fc22 = nn.Linear(hidden_dim, z_dim)
+        self.fc22ec = nn.Linear(hidden_dim, z_dim)
         # init.normal(self.fc22.weight , mean=0, std=0.02)
         # setup the non-linearity
         self.softplus = nn.Softplus()
@@ -57,11 +59,11 @@ class Encoder(nn.Module):
         # first shape the mini-batch to have pixels in the rightmost dimension
         x = x.view(-1, 784)
         # then compute the hidden units
-        hidden = self.relu(self.fc1(x))
+        hidden = self.softplus(self.fc1ec(x))
         # then return a mean vector and a (positive) square root covariance
         # each of size batch_size x z_dim
-        z_mu = self.fc21(hidden)
-        z_sigma = torch.exp(self.fc22(hidden))
+        z_mu = self.fc21ec(hidden)
+        z_sigma = torch.exp(self.fc22ec(hidden))
         return z_mu, z_sigma
 
 
@@ -83,7 +85,7 @@ class Decoder(nn.Module):
     def forward(self, z):
         # define the forward computation on the latent z
         # first compute the hidden units
-        hidden = self.relu(self.fc1(z))
+        hidden = self.softplus(self.fc1(z))
         # return the parameter for the output Bernoulli
         # each is of size batch_size x 784
         # fixing numerical instabilities of sigmoid with a fudge
@@ -94,8 +96,8 @@ class Decoder(nn.Module):
 # define a PyTorch module for the VAE
 class VAE(nn.Module):
     # by default our latent space is 50-dimensional
-    # and we use 200 hidden units
-    def __init__(self, z_dim=50, hidden_dim=200, use_cuda=False):
+    # and we use 400 hidden units
+    def __init__(self, z_dim=50, hidden_dim=400, use_cuda=False):
         super(VAE, self).__init__()
         # create the encoder and decoder networks
         self.encoder = Encoder(z_dim, hidden_dim)
@@ -149,15 +151,17 @@ def main():
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', default=501, type=int, help='number of training epochs')
     parser.add_argument('-tf', '--test-frequency', default=10, type=int, help='how often we evaluate the test set')
-    parser.add_argument('-lr', '--learning-rate', default=1.0e-4, type=float, help='learning rate')
+    parser.add_argument('-lr', '--learning-rate', default=1.0e-3, type=float, help='learning rate')
     parser.add_argument('-b1', '--beta1', default=0.95, type=float, help='beta1 adam hyperparameter')
     parser.add_argument('--cuda', action='store_true', default=False, help='whether to use cuda')
     parser.add_argument('-visdom', '--visdom_flag', default=False, help='Whether plotting in visdom is desired')
-    parser.add_argument('-i-tsne', '--tsne_iter', default=500, type=int, help='epoch when tsne visualization runs')
+    parser.add_argument('-i-tsne', '--tsne_iter', default=20, type=int, help='epoch when tsne visualization runs')
     args = parser.parse_args()
 
+
     # setup MNIST data loaders
-    train_loader, test_loader = setup_data_loaders(use_cuda=args.cuda)
+    # train_loader, test_loader
+    train_loader, test_loader = setup_data_loaders(MNIST,use_cuda=args.cuda,batch_size=200)
 
     # setup the VAE
     vae = VAE(use_cuda=args.cuda)

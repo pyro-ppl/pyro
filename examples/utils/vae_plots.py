@@ -60,13 +60,17 @@ def mnist_test_tsne(vae=None, test_loader=None):
     This is used to generate a t-sne embedding of the vae
     """
     name = 'VAE'
-    data = Variable(test_loader.dataset.test_data.float()/255.)
-    mnist_labels_raw = Variable(test_loader.dataset.test_labels)
-    mnist_labels = torch.zeros(mnist_labels_raw.size(0), 10)
-    mnist_labels.scatter_(1, mnist_labels_raw.data.view(-1, 1), 1)
-    mnist_labels = Variable(mnist_labels)
+    # data = Variable(test_loader.dataset.test_data.float()/255.)
+    # mnist_labels_raw = Variable(test_loader.dataset.test_labels)
+    # mnist_labels = torch.zeros(mnist_labels_raw.size(0), 10)
+    # mnist_labels.scatter_(1, mnist_labels_raw.data.view(-1, 1), 1)
+    # mnist_labels = Variable(mnist_labels)
+    #import pdb; pdb.set_trace()
+    data = Variable(test_loader.dataset.test_data.float())
+    mnist_labels = Variable(test_loader.dataset.test_labels)
     z_mu, z_sigma = vae.encoder(data)
     plot_tsne(z_mu, mnist_labels, name)
+    #import pdb; pdb.set_trace()
     pass
 
 def mnist_test_tsne_ssvae(name=None, ssvae=None, test_loader=None):
@@ -92,10 +96,9 @@ def plot_tsne(z_mu, classes, name):
     model_tsne = TSNE(n_components=2, random_state=0)
     z_states = z_mu.data.cpu().numpy()
     z_embed = model_tsne.fit_transform(z_states)
-
+    import pdb; pdb.set_trace()
     classes = classes.data.cpu().numpy()
     fig666 = plt.figure()
-
     for ic in range(10):
         ind_vec = np.zeros_like(classes)
         ind_vec[:, ic] = 1
