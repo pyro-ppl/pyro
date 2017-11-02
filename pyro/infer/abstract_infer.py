@@ -27,8 +27,8 @@ class Histogram(pyro.distributions.Distribution):
             vs.append(v)
             log_weights.append(log_weight)
 
-        log_weights = torch.cat(log_weights)
-        if not isinstance(log_weights, torch.autograd.Variable):
+        log_weights = torch.stack(log_weights).squeeze()  # Work around bug in torch.cat().
+        if not isinstance(log_weights, Variable):
             log_weights = Variable(log_weights)
         log_z = pyro.util.log_sum_exp(log_weights)
         ps = torch.exp(log_weights - log_z.expand_as(log_weights))
