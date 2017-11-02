@@ -1,4 +1,5 @@
 import pyro.poutine as poutine
+
 from .abstract_infer import TracePosterior
 
 
