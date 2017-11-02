@@ -76,8 +76,16 @@ class Histogram(dist.Distribution):
 
     def log_pdf(self, val, *args, **kwargs):
         d, values = self._dist_and_values(*args, **kwargs)
-        ix = _index(values, val)
-        return d.log_pdf([ix])
+        log_probs = []
+        for ix, val2 in enumerate(values):
+            if _eq(val, val2):
+                log_probs.append(d.log_pdf([ix]))
+
+        if len(log_probs) == 0:
+            return torch.log(Variable(torch.zeros(1)))  # -inf
+        else:
+            log_prob = util.log_sum_exp(torch.cat(log_probs, 1))
+            return log_prob
 
     def batch_log_pdf(self, val, *args, **kwargs):
         d, values = self._dist_and_values(*args, **kwargs)
@@ -123,6 +131,9 @@ class Marginal(Histogram):
                 val = {name: tr.nodes[name]["value"]
                        for name in self.sites}
             yield (val, log_w)
+
+    def batch_log_pdf(self, val, *args, **kwargs):
+        raise NotImplementedError("batch_log_pdf not well defined for Marginal")
 
 
 class TracePosterior(object):
