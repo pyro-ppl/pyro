@@ -9,49 +9,82 @@ import pyro.poutine as poutine
 import pyro.util as util
 
 
+def _eq(x, y):
+    """
+    Equality comparison for nested data structures with tensors.
+    """
+    if type(x) is not type(y):
+        return False
+    elif isinstance(x, dict):
+        if set(x.keys()) != set(y.keys()):
+            return False
+        return all(_eq(x_val, y[key]) for key, x_val in x.items())
+    elif isinstance(x, (np.ndarray, torch.Tensor, torch.autograd.Variable)):
+        return (x == y).all()
+    else:
+        return x == y
+
+
+def _index(seq, value):
+    """
+    Like `list.index()`, but uses `_eq`.
+    """
+    for i, x in enumerate(seq):
+        if _eq(x, value):
+            return i
+    raise ValueError("{} is not in sequence".format(value))
+
+
 class Histogram(dist.Distribution):
     """
-    Abstract Histogram distribution.  For now, should not be using outside Marginal.
+    Abstract Histogram distribution of equality-comparable values.
+    Should only be used inside Marginal.
     """
     enumerable = True
 
     @util.memoize
-    def _dist(self, *args, **kwargs):
-        """
-        This is an abstract method
-        """
+    def _dist_and_values(self, *args, **kwargs):
         # XXX currently this whole object is very inefficient
-        vs, log_weights = [], []
-        for v, log_weight in self._gen_weighted_samples(*args, **kwargs):
-            vs.append(v)
-            log_weights.append(log_weight)
+        values, logits = [], []
+        for value, logit in self._gen_weighted_samples(*args, **kwargs):
+            try:
+                ix = _index(values, value)
+            except ValueError:
+                # Value is new.
+                values.append(value)
+                logits.append(logit)
+            else:
+                # Value has already been seen.
+                logits[ix] = util.log_sum_exp(torch.cat([logits[ix], logit]))
 
-        log_weights = torch.cat(log_weights)
-        if not isinstance(log_weights, torch.autograd.Variable):
-            log_weights = Variable(log_weights)
-        log_z = util.log_sum_exp(log_weights)
-        ps = torch.exp(log_weights - log_z.expand_as(log_weights))
+        logits = torch.cat(logits)
+        if not isinstance(logits, torch.autograd.Variable):
+            logits = Variable(logits)
 
-        if isinstance(vs[0], (Variable, torch.Tensor, np.ndarray)):
-            hist = util.tensor_histogram(ps, vs)
-        else:
-            hist = util.basic_histogram(ps, vs)
-        return dist.Categorical(ps=hist["ps"], vs=hist["vs"])
+        d = dist.Categorical(logits=logits, one_hot=False)
+        return d, values
 
     def _gen_weighted_samples(self, *args, **kwargs):
         raise NotImplementedError("_gen_weighted_samples is abstract method")
 
     def sample(self, *args, **kwargs):
-        return poutine.block(self._dist)(*args, **kwargs).sample()[0]
+        d, values = self._dist_and_values(*args, **kwargs)
+        ix = d.sample().data[0]
+        return values[ix]
 
     def log_pdf(self, val, *args, **kwargs):
-        return poutine.block(self._dist)(*args, **kwargs).log_pdf([val])
+        d, values = self._dist_and_values(*args, **kwargs)
+        ix = _index(values, val)
+        return d.log_pdf([ix])
 
     def batch_log_pdf(self, val, *args, **kwargs):
-        return poutine.block(self._dist)(*args, **kwargs).batch_log_pdf([val])
+        d, values = self._dist_and_values(*args, **kwargs)
+        ix = _index(values, val)
+        return d.batch_log_pdf([ix])
 
     def enumerate_support(self, *args, **kwargs):
-        return poutine.block(self._dist)(*args, **kwargs).enumerate_support()
+        d, values = self._dist_and_values(*args, **kwargs)
+        return values[:]
 
 
 class Marginal(Histogram):
@@ -107,15 +140,12 @@ class TracePosterior(object):
         raise NotImplementedError("inference algorithm must implement _traces")
 
     def __call__(self, *args, **kwargs):
-        traces = []
-        log_weights = []
-        for tr, log_w in poutine.block(self._traces)(*args, **kwargs):
+        traces, logits = [], []
+        for tr, logit in poutine.block(self._traces)(*args, **kwargs):
             traces.append(tr)
-            log_weights.append(log_w)
-        log_weights = torch.cat(log_weights)
-        if not isinstance(log_weights, torch.autograd.Variable):
-            log_weights = Variable(log_weights)
-        log_z = util.log_sum_exp(log_weights)
-        ps = torch.exp(log_weights - log_z.expand_as(log_weights))
-        ix = dist.categorical(ps=ps, one_hot=False)
+            logits.append(logit)
+        logits = torch.cat(logits)
+        if not isinstance(logits, torch.autograd.Variable):
+            logits = Variable(logits)
+        ix = dist.categorical(logits=logits, one_hot=False)
         return traces[ix.data[0]]
