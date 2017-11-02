@@ -114,7 +114,10 @@ class Trace_ELBO(object):
             else:
                 elbo_particle[weight == 0] = 0.0
 
-            elbo += (weight * elbo_particle).data.sum()
+            if isinstance(weight, numbers.Number) and isinstance(elbo_particle, numbers.Number):
+                elbo += (weight * elbo_particle)
+            else:
+                elbo += (weight * elbo_particle).data.sum()
 
         loss = -elbo
         return loss
@@ -161,8 +164,15 @@ class Trace_ELBO(object):
                 elbo_particle[weight_eq_zero] = 0.0
                 surrogate_elbo_particle[weight_eq_zero] = 0.0
 
-            elbo += (weight * elbo_particle).data.sum()
-            surrogate_elbo += (weight * surrogate_elbo_particle).sum()
+            if isinstance(weight, numbers.Number) and isinstance(elbo_particle, numbers.Number):
+                elbo += (weight * elbo_particle)
+            else:
+                elbo += (weight * elbo_particle).data.sum()
+
+            if isinstance(weight, numbers.Number) and isinstance(surrogate_elbo, numbers.Number):
+                surrogate_elbo += (weight * surrogate_elbo_particle)
+            else:
+                surrogate_elbo += (weight * surrogate_elbo_particle).sum()
 
             # grab model parameters to train
             for name in model_trace.nodes.keys():
@@ -175,7 +185,8 @@ class Trace_ELBO(object):
                     trainable_params.add(guide_trace.nodes[name]["value"])
 
         surrogate_loss = -surrogate_elbo
-        surrogate_loss.backward()
+        if not isinstance(surrogate_loss,numbers.Number):
+            surrogate_loss.backward()
         loss = -elbo
 
         pyro.get_param_store().mark_params_active(trainable_params)
