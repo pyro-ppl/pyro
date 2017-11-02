@@ -150,18 +150,20 @@ def _get_clamping_buffer(tensor):
 
 def get_probs_and_logits(ps=None, logits=None, is_multidimensional=True):
     """
-    Convert probability values to logits, or vice-versa. Either `ps` or
-    `logits` should be specified, but not both.
+    Convert probability values to logits, or vice-versa. Either ``ps`` or
+    ``logits`` should be specified, but not both.
 
     :param ps: tensor of probabilities. Should be in the interval *[0, 1]*.
-        If, `is_multidimensional = True`, then must be normalized along
+        If, ``is_multidimensional = True``, then must be normalized along
         axis -1.
-    :param logits: tensor of logit values.
+    :param logits: tensor of logit values.  For the multidimensional case,
+        the values, when exponentiated along the last dimension, must sum
+        to 1.
     :param is_multidimensional: determines the computation of ps from logits,
         and vice-versa. For the multi-dimensional case, logit values are
-        assumed to be non-normalized log probabilities, whereas for the uni-
-        dimensional case, it specifically refers to log odds.
-    :return: tuple containing raw probabilities and logits as tensors
+        assumed to be log probabilities, whereas for the uni-dimensional case,
+        it specifically refers to log odds.
+    :return: tuple containing raw probabilities and logits as tensors.
     """
     assert (ps is None) != (logits is None)
     if ps is not None:
