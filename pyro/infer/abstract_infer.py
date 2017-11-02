@@ -62,6 +62,7 @@ class Histogram(dist.Distribution):
         logits = torch.cat(logits)
         if not isinstance(logits, torch.autograd.Variable):
             logits = Variable(logits)
+        logits = logits - util.log_sum_exp(logits)
 
         d = dist.Categorical(logits=logits, one_hot=False)
         return d, values
@@ -76,21 +77,13 @@ class Histogram(dist.Distribution):
 
     def log_pdf(self, val, *args, **kwargs):
         d, values = self._dist_and_values(*args, **kwargs)
-        log_probs = []
-        for ix, val2 in enumerate(values):
-            if _eq(val, val2):
-                log_probs.append(d.log_pdf([ix]))
-
-        if len(log_probs) == 0:
-            return torch.log(Variable(torch.zeros(1)))  # -inf
-        else:
-            log_prob = util.log_sum_exp(torch.cat(log_probs, 1))
-            return log_prob
+        ix = _index(values, val)
+        return d.log_pdf(Variable(torch.Tensor([ix])))
 
     def batch_log_pdf(self, val, *args, **kwargs):
         d, values = self._dist_and_values(*args, **kwargs)
         ix = _index(values, val)
-        return d.batch_log_pdf([ix])
+        return d.batch_log_pdf(Variable(torch.Tensor([ix])))
 
     def enumerate_support(self, *args, **kwargs):
         d, values = self._dist_and_values(*args, **kwargs)
