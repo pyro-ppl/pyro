@@ -49,13 +49,14 @@ class Encoder(nn.Module):
         #init.normal(self.fc22.weight , mean=0, std=0.02)
         # setup the non-linearity
         self.softplus = nn.Softplus()
+        self.relu = nn.ReLU()
 
     def forward(self, x):
         # define the forward computation on the image x
         # first shape the mini-batch to have pixels in the rightmost dimension
         x = x.view(-1, 784)
         # then compute the hidden units
-        hidden = self.softplus(self.fc1(x))
+        hidden = self.relu(self.fc1(x))
         # then return a mean vector and a (positive) square root covariance
         # each of size batch_size x z_dim
         z_mu = self.fc21(hidden)
@@ -76,11 +77,12 @@ class Decoder(nn.Module):
         # setup the non-linearity
         self.softplus = nn.Softplus()
         self.sigmoid = nn.Sigmoid()
+        self.relu = nn.ReLU()
 
     def forward(self, z):
         # define the forward computation on the latent z
         # first compute the hidden units
-        hidden = self.softplus(self.fc1(z))
+        hidden = self.relu(self.fc1(z))
         # return the parameter for the output Bernoulli
         # each is of size batch_size x 784
         #fixing numerical instabilities of sigmoid with a fudge
@@ -90,9 +92,9 @@ class Decoder(nn.Module):
 
 # define a PyTorch module for the VAE
 class VAE(nn.Module):
-    # by default our latent space is 20-dimensional
+    # by default our latent space is 50-dimensional
     # and we use 200 hidden units
-    def __init__(self, z_dim=20, hidden_dim=200, use_cuda=False):
+    def __init__(self, z_dim=50, hidden_dim=200, use_cuda=False):
         super(VAE, self).__init__()
         # create the encoder and decoder networks
         self.encoder = Encoder(z_dim, hidden_dim)
@@ -144,12 +146,13 @@ class VAE(nn.Module):
 def main():
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', default=500, type=int, help='number of training epochs')
+    parser.add_argument('-n', '--num-epochs', default=501, type=int, help='number of training epochs')
     parser.add_argument('-tf', '--test-frequency', default=10, type=int, help='how often we evaluate the test set')
     parser.add_argument('-lr', '--learning-rate', default=1.0e-4, type=float, help='learning rate')
     parser.add_argument('-b1', '--beta1', default=0.95, type=float, help='beta1 adam hyperparameter')
     parser.add_argument('--cuda', action='store_true', default=False, help='whether to use cuda')
-    parser.add_argument('-visdom', default=False, help='Whether plotting in visdom is desired')
+    parser.add_argument('-visdom', '--visdom_flag', default=False, help='Whether plotting in visdom is desired')
+    parser.add_argument('-i-tsne', '--tsne_iter', default =500, type=int, help='Iteration at which gthe tsne visualization routine is called' )
     args = parser.parse_args()
 
     # setup MNIST data loaders
@@ -166,7 +169,7 @@ def main():
     svi = SVI(vae.model, vae.guide, optimizer, loss="ELBO")
 
     # setup visdom for visualization
-    if args.visdom:
+    if args.visdom_flag:
         vis = visdom.Visdom()
 
     train_elbo = []
@@ -208,7 +211,7 @@ def main():
                 # pick three random test images from the first mini-batch and
                 # visualize how well we're reconstructing them
                 if i == 0:
-                    if args.visdom:
+                    if args.visdom_flag:
                         reco_indices = np.random.randint(0, x.size(0), 3)
                         for index in reco_indices:
                             test_img = x[index, :, :, :]
@@ -223,12 +226,10 @@ def main():
             total_epoch_loss_test = test_loss / normalizer_test
             test_elbo.append(total_epoch_loss_test)
             print("[epoch %03d]  average test loss: %.4f" % (epoch, total_epoch_loss_test))
-            if 0:#epoch>25:
-                mnist_test_tsne(vae=vae, test_loader=test_loader)
-                plot_llk(np.array(train_elbo), np.array(test_elbo))
-            if epoch == args.num_epochs-1:
-                mnist_test_tsne(vae=vae, test_loader=test_loader)
-                plot_llk(np.array(train_elbo), np.array(test_elbo))
+
+        if epoch == args.tsne_iter:
+            mnist_test_tsne(vae=vae, test_loader=test_loader)
+            plot_llk(np.array(train_elbo), np.array(test_elbo))
 
 
     return vae

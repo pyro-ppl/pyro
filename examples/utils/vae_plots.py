@@ -5,10 +5,10 @@ import torchvision.datasets as dset
 from torch.autograd import Variable
 
 def plot_conditional_samples_ssvae(ssvae=None, visdom_session=None):
-    vs = visdom_session
     """
     This is a method to do conditional sampling in visdom
     """
+    vs = visdom_session
     cll_clamp0 = Variable(torch.zeros(1, 10))
     cll_clamp3 = Variable(torch.zeros(1, 10))
     cll_clamp9 = Variable(torch.zeros(1, 10))
@@ -27,7 +27,6 @@ def plot_conditional_samples_ssvae(ssvae=None, visdom_session=None):
             vis.image(sample_mu0[0].view(28, 28).data.numpy())
             vis.image(sample_mu3[0].view(28, 28).data.numpy())
             vis.image(sample_mu9[0].view(28, 28).data.numpy())
-    pass
 
 
 def plot_llk(train_elbo, test_elbo):
