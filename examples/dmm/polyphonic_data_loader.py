@@ -17,7 +17,7 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import numpy as np
-from observations import jsb_cholares
+from observations import jsb_chorales
 from os.path import join, dirname, exists, abspath
 import six.moves.cPickle as pickle
 from pyro.util import ng_zeros
@@ -30,7 +30,7 @@ def process_data(base_path, filename, T_max=160, min_note=21, note_range=88):
         return
 
     print("processing raw polyphonic music data...")
-    data = jsb_cholares(base_path)
+    data = jsb_chorales(base_path)
     processed_dataset = {}
     for split in ['train', 'valid', 'test']:
         processed_dataset[split] = {}
