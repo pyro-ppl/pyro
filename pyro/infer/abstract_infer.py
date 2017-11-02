@@ -29,12 +29,13 @@ def _eq(x, y):
 
 def _index(seq, value):
     """
-    Like `list.index()`, but uses `_eq`.
+    Find position of ``value`` in ``seq`` using ``_eq`` to test equality.
+    Returns ``-1`` if ``value`` is not in ``seq``.
     """
     for i, x in enumerate(seq):
         if _eq(x, value):
             return i
-    raise ValueError("{} is not in sequence".format(value))
+    return -1
 
 
 class Histogram(dist.Distribution):
@@ -49,17 +50,17 @@ class Histogram(dist.Distribution):
         # XXX currently this whole object is very inefficient
         values, logits = [], []
         for value, logit in self._gen_weighted_samples(*args, **kwargs):
-            try:
-                ix = _index(values, value)
-            except ValueError:
+            ix = _index(values, value)
+            if ix == -1:
                 # Value is new.
                 values.append(value)
                 logits.append(logit)
             else:
                 # Value has already been seen.
-                logits[ix] = util.log_sum_exp(torch.cat([logits[ix], logit]))
+                logits[ix] = util.log_sum_exp(torch.stack([logits[ix], logit]).squeeze())
 
-        logits = torch.cat(logits)
+        logits = torch.stack(logits).squeeze()
+        logits -= util.log_sum_exp(logits)
         if not isinstance(logits, torch.autograd.Variable):
             logits = Variable(logits)
         logits = logits - util.log_sum_exp(logits)
@@ -150,7 +151,8 @@ class TracePosterior(object):
         for tr, logit in poutine.block(self._traces)(*args, **kwargs):
             traces.append(tr)
             logits.append(logit)
-        logits = torch.cat(logits)
+        logits = torch.stack(logits).squeeze()
+        logits -= util.log_sum_exp(logits)
         if not isinstance(logits, torch.autograd.Variable):
             logits = Variable(logits)
         ix = dist.categorical(logits=logits, one_hot=False)

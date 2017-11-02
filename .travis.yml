@@ -11,17 +11,13 @@ before_install:
     - sudo apt-get install libblas-dev liblapack-dev libatlas-base-dev gfortran
 
 install:
-    # this will be in setup.py
-    - pip install numpy scipy cloudpickle funcy graphviz networkx visdom
-    # install test dependencies
-    - pip install pytest pytest-cov flake8 nbval
     # install pytorch and its dependencies
     - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
           pip install http://download.pytorch.org/whl/cu75/torch-0.2.0.post2-cp27-cp27mu-manylinux1_x86_64.whl;
       else
           pip install http://download.pytorch.org/whl/cu75/torch-0.2.0.post2-cp35-cp35m-manylinux1_x86_64.whl;
       fi
-    - pip install torchvision
+    - pip install -e .[test]
     - pip freeze
 
 branches:
