@@ -61,7 +61,7 @@ def get_ss_indices_per_class(y, sup_per_class):
 
 def split_sup_unsup_valid(X, y, sup_num, validation_num=10000):
     """
-        helper function for splitting the data into supervised, un-supervised and validation parts
+    helper function for splitting the data into supervised, un-supervised and validation parts
     :param X: images
     :param y: labels (digits)
     :param sup_num: what number of examples is supervised
@@ -92,7 +92,7 @@ def split_sup_unsup_valid(X, y, sup_num, validation_num=10000):
 
 def print_distribution_labels(y):
     """
-        helper function for printing the distribution of class labels in a dataset
+    helper function for printing the distribution of class labels in a dataset
     :param y: tensor of class labels given as one-hots
     :return: a dictionary of counts for each label from y
     """
@@ -102,7 +102,7 @@ def print_distribution_labels(y):
             if y[i][j] == 1:
                 counts[j] += 1
                 break
-    print (counts)
+    print(counts)
 
 
 class MNISTCached(MNIST):
@@ -128,6 +128,8 @@ class MNISTCached(MNIST):
 
         def target_transform(y):
             return fn_y_mnist(y, use_cuda)
+
+        self.mode = mode
 
         assert mode in ["sup", "unsup", "test", "valid"], "invalid train/test option values"
 
@@ -171,11 +173,12 @@ class MNISTCached(MNIST):
         Returns:
             tuple: (image, target) where target is index of the target class.
         """
-        if self.train:
+        if self.mode in ["sup", "unsup", "valid"]:
             img, target = self.train_data[index], self.train_labels[index]
-        else:
+        elif self.mode == "test":
             img, target = self.test_data[index], self.test_labels[index]
-
+        else:
+            assert False, "invalid mode: {}".format(self.mode)
         return img, target
 
 

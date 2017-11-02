@@ -4,7 +4,7 @@ from torch.autograd import Variable
 from data_cached import setup_data_loaders
 
 
-class SSVAEInfer(object):
+class SSInfer(object):
     """
         a wrapper around the inference algorithm that is generalized to handle
         multiple losses for semi-supervised data
@@ -18,7 +18,7 @@ class SSVAEInfer(object):
         :param use_cuda: use GPU(s) to speed up training
         :param logger: a file object to write/log outputs to
     """
-    def __init__(self, dataset, batch_size, losses, is_supervised_loss,
+    def __init__(self, dataset, batch_size, losses,
                  classify, sup_num, use_cuda=True, logger=None):
         self.dataset = dataset
         self.sup_num = sup_num
@@ -44,9 +44,8 @@ class SSVAEInfer(object):
         self.train_loader_sup, self.train_loader_unsup, self.test_loader, self.validation_loader \
             = setup_data_loaders(dataset, use_cuda, batch_size, sup_num)
 
-        # which losses to use and when
+        # which losses to use for inference
         self.losses = losses
-        self.is_supervised_loss = is_supervised_loss
 
         self.num_losses = len(self.losses)
         assert self.num_losses >= 1, "inference needs at least one loss"
@@ -78,7 +77,8 @@ class SSVAEInfer(object):
         batches_per_epoch = sup_batches + unsup_batches
 
         # initialize variables to store loss values
-        epoch_losses = [0.] * self.num_losses
+        epoch_losses_sup = [0.] * self.num_losses
+        epoch_losses_unsup = [0.] * self.num_losses
 
         # setup the iterators for training data loaders
         sup_iter = iter(self.train_loader_sup)
@@ -89,7 +89,7 @@ class SSVAEInfer(object):
         for i in range(batches_per_epoch):
 
             # whether this batch is supervised or not
-            is_supervised = (i % self.periodic_interval_batches == 0) and ctr_sup < sup_batches
+            is_supervised = (i % self.periodic_interval_batches == 1) and ctr_sup < sup_batches
 
             # extract the corresponding batch
             if is_supervised:
@@ -102,17 +102,17 @@ class SSVAEInfer(object):
             # run the inference for each loss with supervised or un-supervised
             # data as arguments
             for loss_id in range(self.num_losses):
-                if self.is_supervised_loss[loss_id] == is_supervised:
-                    if is_supervised:
-                        new_loss = self.losses[loss_id].step(xs, ys)
-                    else:
-                        new_loss = self.losses[loss_id].step(xs)
-                    epoch_losses[loss_id] += new_loss
+                if is_supervised:
+                    new_loss = self.losses[loss_id].step(xs, ys)
+                    epoch_losses_sup[loss_id] += new_loss
+                else:
+                    new_loss = self.losses[loss_id].step(xs)
+                    epoch_losses_unsup[loss_id] += new_loss
 
         # return the values of all losses
-        return epoch_losses
+        return epoch_losses_sup, epoch_losses_unsup
 
-    def run(self, num_epochs=100, ss_vae_module=None):
+    def run(self, num_epochs=100):
         """
             run the inference for a given number of epochs
         :param num_epochs: number of epochs to run the inference for
@@ -124,24 +124,20 @@ class SSVAEInfer(object):
         for i in range(0, num_epochs):
 
             # get the losses
-            epoch_losses = self.run_inference_for_epoch()
+            epoch_losses_sup, epoch_losses_unsup = self.run_inference_for_epoch()
 
             # compute average epoch losses
-            avg_epoch_losses = [0.] * self.num_losses
-            for loss_id in range(self.num_losses):
+            unsup_num = self.dataset.train_data_size - self.sup_num
+            avg_epoch_losses_sup = map(lambda v: v / self.sup_num, epoch_losses_sup)
+            avg_epoch_losses_unsup = map(lambda v: v / unsup_num, epoch_losses_unsup)
 
-                # get the number of examples this loss was scored for (supervised or unsupervised set)
-                num_loss_examples = self.sup_num
-                if not self.is_supervised_loss[loss_id]:
-                    num_loss_examples = self.dataset.train_data_size - self.sup_num
+            self.loss_training.append((avg_epoch_losses_sup, avg_epoch_losses_unsup))
 
-                # divide the value of this loss by the number of examples it was scored for
-                avg_epoch_losses[loss_id] = epoch_losses[loss_id] / (1.0 * num_loss_examples)
+            # store the loss and validation/testing accuracies in the logfile
+            str_loss_sup = " ".join(map(str, avg_epoch_losses_sup))
+            str_loss_unsup = " ".join(map(str, avg_epoch_losses_unsup))
 
-            self.loss_training.append(avg_epoch_losses)
-
-            # log the loss and validation/testing accuracies
-            str_print = "{} epoch: avg losses {}".format(i, " ".join(map(str, avg_epoch_losses)))
+            str_print = "{} epoch: avg losses {}".format(i, "{} {}".format(str_loss_sup, str_loss_unsup))
             validation_accuracy = self.get_accuracy(mode="valid")
             str_print += " validation accuracy {}".format(validation_accuracy)
 
@@ -155,10 +151,6 @@ class SSVAEInfer(object):
             if self.best_valid_acc < validation_accuracy:
                 self.best_valid_acc = validation_accuracy
                 self.corresponding_test_acc = test_accuracy
-                ss_vae_module.save_checkpoint(i, self.best_valid_acc, test_accuracy, post="best")
-
-            # save the state for the last epoch
-            ss_vae_module.save_checkpoint(i, self.best_valid_acc, test_accuracy, post="last")
 
             self.print_and_log(str_print)
 

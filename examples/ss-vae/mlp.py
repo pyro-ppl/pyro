@@ -1,6 +1,7 @@
 import torch.nn as nn
 import torch
 from inspect import isclass
+from pyro.nn import ClippedSoftmax, ClippedSigmoid
 
 
 def is_variable(val):
@@ -10,34 +11,6 @@ def is_variable(val):
     if hasattr(val, "data"):
         return torch.is_tensor(val.data)
     return False
-
-
-class EpsilonScaledSoftmax(nn.Softmax):
-    """
-        a wrapper around nn.Softmax that scales its output
-        from [0,1] to [epsilon,1-epsilon]
-    """
-    def __init__(self, epsilon, *args, **kwargs):
-        self.epsilon = epsilon
-        super(EpsilonScaledSoftmax, self).__init__(*args, **kwargs)
-
-    def forward(self, val):
-        rval = super(EpsilonScaledSoftmax, self).forward(val)
-        return (rval * (1.0 - 2 * self.epsilon)) + self.epsilon
-
-
-class EpsilonScaledSigmoid(nn.Sigmoid):
-    """
-        a wrapper around nn.Sigmoid that scales its output
-        from [0,1] to [epsilon,1-epsilon]
-    """
-    def __init__(self, epsilon, *args, **kwargs):
-        self.epsilon = epsilon
-        super(EpsilonScaledSigmoid, self).__init__(*args, **kwargs)
-
-    def forward(self, val):
-        rval = super(EpsilonScaledSigmoid, self).forward(val)
-        return (rval * (1.0 - 2 * self.epsilon)) + self.epsilon
 
 
 class Exp(nn.Module):
@@ -93,9 +66,9 @@ def call_nn_op(op, epsilon):
     :param epsilon: a scaling parameter for certain custom modules
     :return: instantiation of the op module with appropriate parameters
     """
-    if op in [EpsilonScaledSoftmax]:
+    if op in [ClippedSoftmax]:
         return op(epsilon, dim=1)
-    elif op in [EpsilonScaledSigmoid]:
+    elif op in [ClippedSigmoid]:
         return op(epsilon)
     elif op in [nn.Softmax, nn.LogSoftmax]:
         return op(dim=1)
@@ -108,7 +81,7 @@ class MLP(nn.Module):
     def __init__(self, mlp_sizes, activation=nn.ReLU, output_activation=None,
                  post_layer_fct=lambda layer_ix, total_layers, layer: None,
                  post_act_fct=lambda layer_ix, total_layers, layer: None,
-                 epsilon_scale=None):
+                 epsilon_scale=None, use_cuda=False):
         # init the module object
         super(MLP, self).__init__()
 
@@ -138,7 +111,8 @@ class MLP(nn.Module):
             cur_linear_layer.bias.data.normal_(0, 0.001)
 
             # use GPUs to share data during training (if available)
-            cur_linear_layer = nn.DataParallel(cur_linear_layer)
+            if use_cuda:
+                cur_linear_layer = nn.DataParallel(cur_linear_layer)
 
             # add our linear layer
             all_modules.append(cur_linear_layer)
