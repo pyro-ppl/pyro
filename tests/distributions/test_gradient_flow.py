@@ -30,8 +30,28 @@ def test_bernoulli_overflow_gradient(init_tensor_type):
 @pytest.mark.parametrize('init_tensor_type', [torch.DoubleTensor, torch.FloatTensor])
 def test_categorical_gradient(init_tensor_type):
     p = Variable(init_tensor_type([0, 1]), requires_grad=True)
-    bernoulli = Categorical(p)
-    log_pdf = bernoulli.batch_log_pdf(Variable(init_tensor_type([0, 1])))
+    categorical = Categorical(p)
+    log_pdf = categorical.batch_log_pdf(Variable(init_tensor_type([0, 1])))
+    log_pdf.sum().backward()
+    assert_equal(log_pdf.data[0], 0)
+    assert_equal(p.grad.data[0], 0)
+
+
+@pytest.mark.parametrize('init_tensor_type', [torch.FloatTensor])
+def test_bernoulli_with_logits_underflow_gradient(init_tensor_type):
+    p = Variable(init_tensor_type([-1e40]), requires_grad=True)
+    bernoulli = Bernoulli(logits=p)
+    log_pdf = bernoulli.batch_log_pdf(Variable(init_tensor_type([0])))
+    log_pdf.sum().backward()
+    assert_equal(log_pdf.data[0], 0)
+    assert_equal(p.grad.data[0], 0)
+
+
+@pytest.mark.parametrize('init_tensor_type', [torch.DoubleTensor, torch.FloatTensor])
+def test_bernoulli_with_logits_overflow_gradient(init_tensor_type):
+    p = Variable(init_tensor_type([1e40]), requires_grad=True)
+    bernoulli = Bernoulli(logits=p)
+    log_pdf = bernoulli.batch_log_pdf(Variable(init_tensor_type([1])))
     log_pdf.sum().backward()
     assert_equal(log_pdf.data[0], 0)
     assert_equal(p.grad.data[0], 0)
