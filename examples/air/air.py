@@ -17,7 +17,7 @@ import pyro
 import pyro.distributions as dist
 from modules import Identity, Encoder, Decoder, MLP, Predict
 from pyro.distributions import Bernoulli, Uniform, Delta
-from pyro.util import ng_zeros, ng_ones
+from pyro.util import ng_zeros, ng_ones, zeros
 
 
 # Default prior success probability for z_pres.
@@ -43,12 +43,12 @@ class AIR(nn.Module):
                  bl_predict_net=[],
                  non_linearity='ReLU',
                  decoder_output_bias=None,
+                 decoder_output_use_sigmoid=False,
                  use_masking=True,
                  use_baselines=True,
                  baseline_scalar=None,
                  fudge_z_pres=False,
-                 use_cuda=False,
-                 print_modules=False):
+                 use_cuda=False):
 
         super(AIR, self).__init__()
 
@@ -78,7 +78,8 @@ class AIR(nn.Module):
 
         self.rnn = nn.LSTMCell(rnn_input_size, rnn_hidden_size)
         self.encode = Encoder(window_size ** 2, encoder_net, z_what_size, nl)
-        self.decode = Decoder(window_size ** 2, decoder_net, z_what_size, decoder_output_bias, nl)
+        self.decode = Decoder(window_size ** 2, decoder_net, z_what_size,
+                              decoder_output_bias, decoder_output_use_sigmoid, nl)
         self.predict = Predict(rnn_hidden_size, predict_net, self.z_pres_size, self.z_where_size, nl)
         self.embed = Identity() if embed_net is None else MLP(x_size ** 2, embed_net, nl, True)
 
@@ -86,8 +87,13 @@ class AIR(nn.Module):
         self.bl_predict = MLP(rnn_hidden_size, bl_predict_net + [1], nl)
         self.bl_embed = Identity() if embed_net is None else MLP(x_size ** 2, embed_net, nl, True)
 
-        if print_modules:
-            print(self)
+        # Create parameters.
+        self.h_init = zeros(1, rnn_hidden_size)
+        self.c_init = zeros(1, rnn_hidden_size)
+        self.bl_h_init = zeros(1, rnn_hidden_size)
+        self.bl_c_init = zeros(1, rnn_hidden_size)
+        self.z_where_init = zeros(1, self.z_where_size)
+        self.z_what_init = zeros(1, self.z_what_size)
 
         if use_cuda:
             self.cuda()
@@ -131,7 +137,7 @@ class AIR(nn.Module):
         # will be added to its output image. We can't
         # straight-forwardly avoid generating further objects, so
         # instead we zero out the log_pdf of future choices.
-        sample_mask = z_pres if self.use_masking else 1.0
+        sample_mask = z_pres if self.use_masking else None
 
         # Sample attention window position.
         z_where = pyro.sample('z_where_{}'.format(t),
@@ -196,6 +202,13 @@ class AIR(nn.Module):
         pyro.module('bl_predict', self.bl_predict, tags='baseline'),
         pyro.module('bl_embed', self.bl_embed, tags='baseline')
 
+        pyro.param('h_init', self.h_init)
+        pyro.param('c_init', self.c_init)
+        pyro.param('z_where_init', self.z_where_init)
+        pyro.param('z_what_init', self.z_what_init)
+        pyro.param('bl_h_init', self.bl_h_init, tags='baseline')
+        pyro.param('bl_c_init', self.bl_c_init, tags='baseline')
+
         with pyro.iarange('data', data.size(0), subsample_size=batch_size, use_cuda=self.use_cuda) as ix:
             batch = data[ix]
             return self.local_guide(batch.size(0), batch)
@@ -212,13 +225,13 @@ class AIR(nn.Module):
 
         # Initial state.
         state = GuideState(
-            h=self.ng_zeros(n, self.rnn_hidden_size),
-            c=self.ng_zeros(n, self.rnn_hidden_size),
-            bl_h=self.ng_zeros(n, self.rnn_hidden_size),
-            bl_c=self.ng_zeros(n, self.rnn_hidden_size),
+            h=batch_expand(self.h_init, n),
+            c=batch_expand(self.c_init, n),
+            bl_h=batch_expand(self.bl_h_init, n),
+            bl_c=batch_expand(self.bl_c_init, n),
             z_pres=self.ng_ones(n, self.z_pres_size),
-            z_where=self.ng_zeros(n, self.z_where_size),
-            z_what=self.ng_zeros(n, self.z_what_size))
+            z_where=batch_expand(self.z_where_init, n),
+            z_what=batch_expand(self.z_what_init, n))
 
         z_pres = []
         z_where = []
@@ -248,7 +261,7 @@ class AIR(nn.Module):
                              z_pres_dist,
                              baseline=dict(baseline_value=bl_value))
 
-        log_pdf_mask = z_pres if self.use_masking else 1.0
+        log_pdf_mask = z_pres if self.use_masking else None
 
         z_where = pyro.sample('z_where_{}'.format(t),
                               dist.normal,
@@ -256,6 +269,9 @@ class AIR(nn.Module):
                               z_where_sigma * self.z_where_sigma_prior,
                               log_pdf_mask=log_pdf_mask)
 
+        # Figure 2 of [1] shows x_att depending on z_where and h,
+        # rather than z_where and x as here, but I think this is
+        # correct.
         x_att = image_to_window(z_where, self.window_size, self.x_size, inputs['raw'])
 
         # Encode attention windows.
@@ -284,7 +300,8 @@ class AIR(nn.Module):
 
         # Zero out values for finished data points. This avoids adding
         # superfluous terms to the loss.
-        bl_value = bl_value * prev.z_pres
+        if self.use_masking:
+            bl_value = bl_value * prev.z_pres
 
         # The value that the baseline net is estimating can be very
         # large. An option to scale the nets output is provided
@@ -295,8 +312,7 @@ class AIR(nn.Module):
 
         return bl_value, bl_h, bl_c
 
-    # HACK: Helpers to create zeros/ones on cpu/gpu as appropriate.
-    # What's the correct way to do this?
+    # Helpers to create zeros/ones on cpu/gpu as appropriate.
     def ng_zeros(self, *args, **kwargs):
         t = ng_zeros(*args, **kwargs)
         if self.use_cuda:
@@ -316,7 +332,7 @@ expansion_indices = torch.LongTensor([1, 0, 2, 0, 1, 3])
 
 
 def expand_z_where(z_where):
-    # Take a batch of three vectors, and massages them into a batch of
+    # Take a batch of three-vectors, and massages them into a batch of
     # 2x3 matrices with elements like so:
     # [s,x,y] -> [[s,0,x],
     #             [0,s,y]]
@@ -361,3 +377,10 @@ def image_to_window(z_where, window_size, image_size, images):
     grid = F.affine_grid(theta_inv, torch.Size((n, 1, window_size, window_size)))
     out = F.grid_sample(images.view(n, 1, image_size, image_size), grid)
     return out.view(n, -1)
+
+
+# Helper to expand parameters to the size of the mini-batch. I would
+# like to remove this and just write `t.expand(n, -1)` inline, but the
+# `-1` argument of `expand` doesn't seem to work with PyTorch 0.2.0.
+def batch_expand(t, n):
+    return t.expand(n, t.size(1))
