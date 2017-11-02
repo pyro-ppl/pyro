@@ -18,8 +18,9 @@ from utils.vae_plots import plot_llk, mnist_test_tsne
 
 fudge = 1e-6
 
-# for loading and batching MNIST dataset
+
 def setup_data_loaders(batch_size=128, use_cuda=False):
+    # for loading and batching MNIST dataset
     root = './data'
     download = True
     trans = transforms.ToTensor()
@@ -42,11 +43,11 @@ class Encoder(nn.Module):
         super(Encoder, self).__init__()
         # setup the three linear transformations used
         self.fc1 = nn.Linear(784, hidden_dim)
-        #init.normal(self.fc1.weight , mean=0, std=0.02)
+        # init.normal(self.fc1.weight , mean=0, std=0.02)
         self.fc21 = nn.Linear(hidden_dim, z_dim)
-        #init.normal(self.fc21.weight , mean=0, std=0.02)
+        # init.normal(self.fc21.weight , mean=0, std=0.02)
         self.fc22 = nn.Linear(hidden_dim, z_dim)
-        #init.normal(self.fc22.weight , mean=0, std=0.02)
+        # init.normal(self.fc22.weight , mean=0, std=0.02)
         # setup the non-linearity
         self.softplus = nn.Softplus()
         self.relu = nn.ReLU()
@@ -71,9 +72,9 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
         # setup the three linear transformations used
         self.fc1 = nn.Linear(z_dim, hidden_dim)
-        #init.normal(self.fc1.weight , mean=0, std=0.02)
+        # init.normal(self.fc1.weight , mean=0, std=0.02)
         self.fc21 = nn.Linear(hidden_dim, 784)
-        #init.normal(self.fc21.weight , mean=0, std=0.02)
+        # init.normal(self.fc21.weight , mean=0, std=0.02)
         # setup the non-linearity
         self.softplus = nn.Softplus()
         self.sigmoid = nn.Sigmoid()
@@ -85,7 +86,7 @@ class Decoder(nn.Module):
         hidden = self.relu(self.fc1(z))
         # return the parameter for the output Bernoulli
         # each is of size batch_size x 784
-        #fixing numerical instabilities of sigmoid with a fudge
+        # fixing numerical instabilities of sigmoid with a fudge
         mu_img = (self.sigmoid(self.fc21(hidden))+fudge) * (1-2*fudge)
         return mu_img
 
@@ -152,7 +153,7 @@ def main():
     parser.add_argument('-b1', '--beta1', default=0.95, type=float, help='beta1 adam hyperparameter')
     parser.add_argument('--cuda', action='store_true', default=False, help='whether to use cuda')
     parser.add_argument('-visdom', '--visdom_flag', default=False, help='Whether plotting in visdom is desired')
-    parser.add_argument('-i-tsne', '--tsne_iter', default =500, type=int, help='Iteration at which gthe tsne visualization routine is called' )
+    parser.add_argument('-i-tsne', '--tsne_iter', default=500, type=int, help='epoch when tsne visualization runs')
     args = parser.parse_args()
 
     # setup MNIST data loaders
@@ -217,9 +218,9 @@ def main():
                             test_img = x[index, :, :, :]
                             reco_img = vae.reconstruct_img(test_img)
                             vis.image(test_img.contiguous().view(28, 28).data.cpu().numpy(),
-                                    opts={'caption': 'test image'})
+                                      opts={'caption': 'test image'})
                             vis.image(reco_img.contiguous().view(28, 28).data.cpu().numpy(),
-                                    opts={'caption': 'reconstructed image'})
+                                      opts={'caption': 'reconstructed image'})
 
             # report test diagnostics
             normalizer_test = len(test_loader.dataset)
@@ -231,8 +232,8 @@ def main():
             mnist_test_tsne(vae=vae, test_loader=test_loader)
             plot_llk(np.array(train_elbo), np.array(test_elbo))
 
-
     return vae
+
 
 if __name__ == '__main__':
     model = main()
