@@ -135,6 +135,15 @@ def softmax(x, dim=-1):
     return soft_max_nd.transpose(dim, len(input_size) - 1)
 
 
+def _get_clamping_buffer(tensor):
+    clamp_eps = 1e-6
+    if isinstance(tensor, Variable):
+        tensor = tensor.data
+    if isinstance(tensor, (torch.DoubleTensor, torch.cuda.DoubleTensor)):
+        clamp_eps = 1e-15
+    return clamp_eps
+
+
 def get_probs_and_logits(ps=None, logits=None, is_multidimensional=True):
     """
     Convert probability values to logits, or vice-versa. Either `ps` or
@@ -151,14 +160,17 @@ def get_probs_and_logits(ps=None, logits=None, is_multidimensional=True):
     :return: tuple containing raw probabilities and logits as tensors
     """
     assert (ps is None) != (logits is None)
+    if ps is not None:
+        eps = _get_clamping_buffer(ps)
+        ps_clamped = ps.clamp(min=eps, max=1 - eps)
     if is_multidimensional:
         if ps is None:
             ps = softmax(logits, -1)
         else:
-            logits = torch.log(ps)
+            logits = torch.log(ps_clamped)
     else:
         if ps is None:
             ps = F.sigmoid(logits)
         else:
-            logits = torch.log(ps) - torch.log1p(-ps)
+            logits = torch.log(ps_clamped) - torch.log1p(-ps_clamped)
     return ps, logits
