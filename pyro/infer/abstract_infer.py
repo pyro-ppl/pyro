@@ -19,8 +19,10 @@ def _eq(x, y):
         if set(x.keys()) != set(y.keys()):
             return False
         return all(_eq(x_val, y[key]) for key, x_val in x.items())
-    elif isinstance(x, (np.ndarray, torch.Tensor, torch.autograd.Variable)):
+    elif isinstance(x, (np.ndarray, torch.Tensor)):
         return (x == y).all()
+    elif isinstance(x, torch.autograd.Variable):
+        return (x.data == y.data).all()
     else:
         return x == y
 
