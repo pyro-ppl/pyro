@@ -8,18 +8,6 @@ import pyro.poutine as poutine
 import pyro.util
 
 
-def torch_cat(seq):
-    """
-    Replacement for torch.cat() to work around bugs in pytorch 0.3 prerelease.
-    """
-    tensor = seq[0].data if isinstance(seq[0], Variable) else seq[0]
-    Tensor = type(tensor)
-    result = Variable(Tensor(len(seq)))
-    for i, value in enumerate(seq):
-        result[i] = value
-    return result
-
-
 class Histogram(pyro.distributions.Distribution):
     """
     Abstract Histogram distribution.  For now, should not be using outside Marginal.
@@ -37,7 +25,9 @@ class Histogram(pyro.distributions.Distribution):
             vs.append(v)
             log_weights.append(log_weight)
 
-        log_weights = torch_cat(log_weights)
+        log_weights = torch.stack(log_weights).squeeze()  # Work around bug in torch.cat().
+        if not isinstance(log_weights, Variable):
+            log_weights = Variable(log_weights)
         log_z = pyro.util.log_sum_exp(log_weights)
         ps = torch.exp(log_weights - log_z.expand_as(log_weights))
 
