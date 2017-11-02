@@ -1,0 +1,622 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>pyro.__init__ &mdash; Pyro 0.0.1 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="../../genindex.html"/>
+        <link rel="search" title="Search" href="../../search.html"/>
+    <link rel="top" title="Pyro 0.0.1 documentation" href="../../index.html"/>
+        <link rel="up" title="Module code" href="../index.html"/> 
+
+  
+  <script src="../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../index.html">
+          
+
+          
+            
+            <img src="../../_static/pyro_logo_small.png" class="logo" />
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.0.1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../primitives.html">Primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../inference.html">Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../distributions.html">Distributions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../parameters.html">Parameters</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../nn.html">Neural Network</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../optimization.html">Optimization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../advanced.html">Advanced Features</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">Pyro</a>
+        
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="../index.html">Module code</a> &raquo;</li>
+        
+      <li>pyro.__init__</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for pyro.__init__</h1><div class="highlight"><pre>
+<span></span><span class="kn">from</span> <span class="nn">__future__</span> <span class="k">import</span> <span class="n">division</span>
+
+<span class="kn">import</span> <span class="nn">contextlib</span>
+<span class="kn">import</span> <span class="nn">copy</span>
+<span class="kn">import</span> <span class="nn">warnings</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="k">import</span> <span class="n">OrderedDict</span>
+<span class="kn">from</span> <span class="nn">inspect</span> <span class="k">import</span> <span class="n">isclass</span>
+
+<span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">from</span> <span class="nn">torch.autograd</span> <span class="k">import</span> <span class="n">Variable</span>
+
+<span class="kn">import</span> <span class="nn">pyro</span>
+<span class="kn">import</span> <span class="nn">pyro.poutine</span> <span class="k">as</span> <span class="nn">poutine</span>
+<span class="kn">from</span> <span class="nn">pyro.distributions.distribution</span> <span class="k">import</span> <span class="n">Distribution</span>
+<span class="kn">from</span> <span class="nn">pyro.params</span> <span class="k">import</span> <span class="n">param_with_module_name</span>
+<span class="kn">from</span> <span class="nn">pyro.params.param_store</span> <span class="k">import</span> <span class="n">ParamStoreDict</span>
+<span class="kn">from</span> <span class="nn">pyro.poutine</span> <span class="k">import</span> <span class="n">LambdaPoutine</span><span class="p">,</span> <span class="n">condition</span><span class="p">,</span> <span class="n">do</span>  <span class="c1"># noqa: F401</span>
+<span class="kn">from</span> <span class="nn">pyro.util</span> <span class="k">import</span> <span class="n">apply_stack</span><span class="p">,</span> <span class="n">deep_getattr</span><span class="p">,</span> <span class="n">get_tensor_data</span><span class="p">,</span> <span class="n">ones</span><span class="p">,</span> <span class="n">set_rng_seed</span><span class="p">,</span> <span class="n">zeros</span>  <span class="c1"># noqa: F401</span>
+
+<span class="c1"># the pyro stack</span>
+<span class="n">_PYRO_STACK</span> <span class="o">=</span> <span class="p">[]</span>
+
+<span class="c1"># the global ParamStore</span>
+<span class="n">_param_store</span> <span class="o">=</span> <span class="n">ParamStoreDict</span><span class="p">()</span>
+
+<span class="c1"># used to create fully-formed param names, e.g. mymodule$$$mysubmodule.weight</span>
+<span class="n">_MODULE_NAMESPACE_DIVIDER</span> <span class="o">=</span> <span class="s2">&quot;$$$&quot;</span>
+
+
+<div class="viewcode-block" id="get_param_store"><a class="viewcode-back" href="../../primitives.html#pyro.__init__.get_param_store">[docs]</a><span class="k">def</span> <span class="nf">get_param_store</span><span class="p">():</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Returns the ParamStore</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_param_store</span></div>
+
+
+<div class="viewcode-block" id="clear_param_store"><a class="viewcode-back" href="../../primitives.html#pyro.__init__.clear_param_store">[docs]</a><span class="k">def</span> <span class="nf">clear_param_store</span><span class="p">():</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Clears the ParamStore. This is especially useful if you&#39;re working in a REPL.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_param_store</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="sample"><a class="viewcode-back" href="../../primitives.html#pyro.__init__.sample">[docs]</a><span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">fn</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    :param name: name of sample</span>
+<span class="sd">    :param fn: distribution class or function</span>
+<span class="sd">    :param obs: observed datum (optional; should only be used in context of</span>
+<span class="sd">        inference) optionally specified in kwargs</span>
+<span class="sd">    :param dict baseline: Optional dictionary of baseline parameters specified</span>
+<span class="sd">        in kwargs. See inference documentation for details.</span>
+<span class="sd">    :returns: sample</span>
+
+<span class="sd">    Samples from the distribution.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">obs</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;obs&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="n">baseline</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;baseline&quot;</span><span class="p">,</span> <span class="p">{})</span>
+    <span class="c1"># check if stack is empty</span>
+    <span class="c1"># if stack empty, default behavior (defined here)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">_PYRO_STACK</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">obs</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s2">&quot;trying to observe a value outside of inference at &quot;</span> <span class="o">+</span> <span class="n">name</span><span class="p">,</span>
+                          <span class="ne">RuntimeWarning</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">obs</span>
+        <span class="k">return</span> <span class="n">fn</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="c1"># if stack not empty, apply everything in the stack?</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="c1"># initialize data structure to pass up/down the stack</span>
+        <span class="n">msg</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;sample&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span>
+            <span class="s2">&quot;fn&quot;</span><span class="p">:</span> <span class="n">fn</span><span class="p">,</span>
+            <span class="s2">&quot;is_observed&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+            <span class="s2">&quot;args&quot;</span><span class="p">:</span> <span class="n">args</span><span class="p">,</span>
+            <span class="s2">&quot;kwargs&quot;</span><span class="p">:</span> <span class="n">kwargs</span><span class="p">,</span>
+            <span class="s2">&quot;value&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="s2">&quot;baseline&quot;</span><span class="p">:</span> <span class="n">baseline</span><span class="p">,</span>
+            <span class="s2">&quot;scale&quot;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span>
+            <span class="s2">&quot;map_data_stack&quot;</span><span class="p">:</span> <span class="p">[],</span>
+            <span class="s2">&quot;done&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+            <span class="s2">&quot;stop&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="p">}</span>
+        <span class="c1"># handle observation</span>
+        <span class="k">if</span> <span class="n">obs</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">msg</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">obs</span>
+            <span class="n">msg</span><span class="p">[</span><span class="s2">&quot;is_observed&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="c1"># apply the stack and return its return value</span>
+        <span class="n">out_msg</span> <span class="o">=</span> <span class="n">apply_stack</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">out_msg</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="observe"><a class="viewcode-back" href="../../primitives.html#pyro.__init__.observe">[docs]</a><span class="k">def</span> <span class="nf">observe</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">fn</span><span class="p">,</span> <span class="n">obs</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    :param name: name of observation</span>
+<span class="sd">    :param fn: distribution class or function</span>
+<span class="sd">    :param obs: observed datum</span>
+<span class="sd">    :returns: sample</span>
+
+<span class="sd">    Alias of pyro.sample.</span>
+
+<span class="sd">    Only should be used in the context of inference.</span>
+<span class="sd">    Calculates the score of the sample and registers</span>
+<span class="sd">    it in the trace data structure.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">kwargs</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="s2">&quot;obs&quot;</span><span class="p">:</span> <span class="n">obs</span><span class="p">})</span>
+    <span class="k">return</span> <span class="n">sample</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">fn</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+
+<span class="k">class</span> <span class="nc">_Subsample</span><span class="p">(</span><span class="n">Distribution</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Randomly select a subsample of a range of indices.</span>
+
+<span class="sd">    Internal use only. This should only be used by `iarange`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">size</span><span class="p">,</span> <span class="n">subsample_size</span><span class="p">,</span> <span class="n">use_cuda</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param int size: the size of the range to subsample from</span>
+<span class="sd">        :param int subsample_size: the size of the returned subsample</span>
+<span class="sd">        :param bool use_cuda: whether to use cuda tensors</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">size</span> <span class="o">=</span> <span class="n">size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">subsample_size</span> <span class="o">=</span> <span class="n">subsample_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">use_cuda</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="o">.</span><span class="n">is_cuda</span> <span class="k">if</span> <span class="n">use_cuda</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">use_cuda</span>
+
+    <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :returns: a random subsample of `range(size)`</span>
+<span class="sd">        :rtype: torch.autograd.Variable of torch.LongTensor</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">subsample_size</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">subsample_size</span>
+        <span class="k">if</span> <span class="n">subsample_size</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">subsample_size</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">size</span><span class="p">:</span>
+            <span class="n">subsample_size</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">size</span>
+        <span class="k">if</span> <span class="n">subsample_size</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">size</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">Variable</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">LongTensor</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">size</span><span class="p">))))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">Variable</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">randperm</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">size</span><span class="p">)[:</span><span class="bp">self</span><span class="o">.</span><span class="n">subsample_size</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">result</span><span class="o">.</span><span class="n">cuda</span><span class="p">()</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_cuda</span> <span class="k">else</span> <span class="n">result</span>
+
+    <span class="k">def</span> <span class="nf">batch_log_pdf</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="c1"># This is zero so that iarange can provide an unbiased estimate of</span>
+        <span class="c1"># the non-subsampled batch_log_pdf.</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">Variable</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">result</span><span class="o">.</span><span class="n">cuda</span><span class="p">()</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_cuda</span> <span class="k">else</span> <span class="n">result</span>
+
+
+<span class="k">def</span> <span class="nf">_subsample</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">subsample_size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">subsample</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">use_cuda</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Helper function for iarange and irange. See their docstrings for details.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">size</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="n">subsample_size</span> <span class="ow">is</span> <span class="kc">None</span>
+        <span class="k">assert</span> <span class="n">subsample</span> <span class="ow">is</span> <span class="kc">None</span>
+        <span class="n">size</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="n">subsample_size</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="k">elif</span> <span class="n">subsample</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">names</span> <span class="o">=</span> <span class="p">[</span><span class="n">name</span><span class="p">]</span>
+        <span class="n">names</span> <span class="o">+=</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">counter</span><span class="p">)</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">_PYRO_STACK</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">poutine</span><span class="o">.</span><span class="n">LambdaPoutine</span><span class="p">)]</span>
+        <span class="n">subsample</span> <span class="o">=</span> <span class="n">sample</span><span class="p">(</span><span class="s2">&quot;_&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">names</span><span class="p">),</span> <span class="n">_Subsample</span><span class="p">(</span><span class="n">size</span><span class="p">,</span> <span class="n">subsample_size</span><span class="p">,</span> <span class="n">use_cuda</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="n">subsample_size</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">subsample_size</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">subsample</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">subsample</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">subsample_size</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">subsample</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;subsample_size does not match len(subsample), </span><span class="si">{}</span><span class="s2"> vs </span><span class="si">{}</span><span class="s2">.&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+            <span class="n">subsample_size</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">subsample</span><span class="p">))</span> <span class="o">+</span>
+            <span class="s2">&quot; Did you accidentally use different subsample_size in the model and guide?&quot;</span><span class="p">)</span>
+
+    <span class="n">scale</span> <span class="o">=</span> <span class="n">size</span> <span class="o">/</span> <span class="n">subsample_size</span>
+    <span class="k">return</span> <span class="n">subsample</span><span class="p">,</span> <span class="n">scale</span>
+
+
+<div class="viewcode-block" id="iarange"><a class="viewcode-back" href="../../primitives.html#pyro.__init__.iarange">[docs]</a><span class="nd">@contextlib</span><span class="o">.</span><span class="n">contextmanager</span>
+<span class="k">def</span> <span class="nf">iarange</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">subsample_size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">subsample</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">use_cuda</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Context manager for ranges indexing iid variables, optionally subsampling.</span>
+
+<span class="sd">    WARNING: This is only correct if all computation is iid within the context.</span>
+
+<span class="sd">    By default `subsample_size=False` and this simply yields a</span>
+<span class="sd">    `torch.arange(0, size)`. If `0 &lt; subsample_size &lt;= size` this yields a</span>
+<span class="sd">    single random batch of indices of size `subsample_size` and scales all log</span>
+<span class="sd">    likelihood terms by `size/batch_size`, within this context.</span>
+
+<span class="sd">    :param str name: A name that will be used for this site in a Trace.</span>
+<span class="sd">    :param int size: Optional size of the collection being subsampled</span>
+<span class="sd">        (like `stop` in builtin `range`).</span>
+<span class="sd">    :param int subsample_size: Size of minibatches used in subsampling.</span>
+<span class="sd">        Defaults to `size`.</span>
+<span class="sd">    :param subsample: Optional custom subsample for user-defined subsampling</span>
+<span class="sd">        schemes. If specified, then `subsample_size` will be set to</span>
+<span class="sd">        `len(subsample)`.</span>
+<span class="sd">    :type subsample: Anything supporting `len()`.</span>
+<span class="sd">    :param bool use_cuda: Optional bool specifying whether to use cuda tensors</span>
+<span class="sd">        for `subsample` and `log_pdf`. Defaults to `torch.Tensor.is_cuda`.</span>
+<span class="sd">    :return: A context manager yielding a single 1-dimensional `torch.Tensor`</span>
+<span class="sd">        of indices.</span>
+
+<span class="sd">    Examples::</span>
+
+<span class="sd">        # This version simply declares independence:</span>
+<span class="sd">        &gt;&gt;&gt; with iarange(&#39;data&#39;):</span>
+<span class="sd">                observe(&#39;obs&#39;, normal, data, mu, sigma)</span>
+
+<span class="sd">        # This version subsamples data in vectorized way:</span>
+<span class="sd">        &gt;&gt;&gt; with iarange(&#39;data&#39;, 100, subsample_size=10) as ind:</span>
+<span class="sd">                observe(&#39;obs&#39;, normal, data.index_select(0, ind), mu, sigma)</span>
+
+<span class="sd">        # This wraps a user-defined subsampling method for use in pyro:</span>
+<span class="sd">        &gt;&gt;&gt; ind = my_custom_subsample</span>
+<span class="sd">        &gt;&gt;&gt; with iarange(&#39;data&#39;, 100, subsample=ind):</span>
+<span class="sd">                observe(&#39;obs&#39;, normal, data.index_select(0, ind), mu, sigma)</span>
+
+<span class="sd">    See `SVI Part II &lt;http://pyro.ai/examples/svi_part_ii.html&gt;`_ for an extended discussion.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">subsample</span><span class="p">,</span> <span class="n">scale</span> <span class="o">=</span> <span class="n">_subsample</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">size</span><span class="p">,</span> <span class="n">subsample_size</span><span class="p">,</span> <span class="n">subsample</span><span class="p">,</span> <span class="n">use_cuda</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">_PYRO_STACK</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">yield</span> <span class="n">subsample</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">with</span> <span class="n">LambdaPoutine</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">scale</span><span class="p">,</span> <span class="n">vectorized</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+            <span class="k">yield</span> <span class="n">subsample</span></div>
+
+
+<div class="viewcode-block" id="irange"><a class="viewcode-back" href="../../primitives.html#pyro.__init__.irange">[docs]</a><span class="k">def</span> <span class="nf">irange</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">size</span><span class="p">,</span> <span class="n">subsample_size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">subsample</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">use_cuda</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Non-vectorized version of `iarange`. See `iarange` for details.</span>
+
+<span class="sd">    :param str name: A name that will be used for this site in a Trace.</span>
+<span class="sd">    :param int size: The size of the collection being subsampled (like `stop` in builtin `range`).</span>
+<span class="sd">    :param int subsample_size: Size of minibatches used in subsampling. Defaults to `size`.</span>
+<span class="sd">    :param subsample: Optional custom subsample for user-defined subsampling schemes.</span>
+<span class="sd">        If specified, then `subsample_size` will be set to `len(subsample)`.</span>
+<span class="sd">    :type subsample: Anything supporting `len()`.</span>
+<span class="sd">    :param bool use_cuda: Optional bool specifying whether to use cuda tensors</span>
+<span class="sd">        for `log_pdf`. Defaults to `torch.Tensor.is_cuda`.</span>
+<span class="sd">    :return: A context manager yielding a single 1-dimensional `torch.Tensor` of indices.</span>
+
+<span class="sd">    Examples::</span>
+
+<span class="sd">        &gt;&gt;&gt; for i in irange(&#39;data&#39;, 100, subsample_size=10):</span>
+<span class="sd">                if z[i]:  # Prevents vectorization.</span>
+<span class="sd">                    observe(&#39;obs_{}&#39;.format(i), normal, data[i], mu, sigma)</span>
+
+<span class="sd">    See `SVI Part II &lt;http://pyro.ai/examples/svi_part_ii.html&gt;`_ for an extended discussion.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">subsample</span><span class="p">,</span> <span class="n">scale</span> <span class="o">=</span> <span class="n">_subsample</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">size</span><span class="p">,</span> <span class="n">subsample_size</span><span class="p">,</span> <span class="n">subsample</span><span class="p">,</span> <span class="n">use_cuda</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">subsample</span><span class="p">,</span> <span class="n">Variable</span><span class="p">):</span>
+        <span class="n">subsample</span> <span class="o">=</span> <span class="n">subsample</span><span class="o">.</span><span class="n">data</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">_PYRO_STACK</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">subsample</span><span class="p">:</span>
+            <span class="k">yield</span> <span class="n">i</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">indep_context</span> <span class="o">=</span> <span class="n">LambdaPoutine</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">scale</span><span class="p">,</span> <span class="n">vectorized</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">subsample</span><span class="p">:</span>
+            <span class="k">with</span> <span class="n">indep_context</span><span class="p">:</span>
+                <span class="k">yield</span> <span class="n">i</span></div>
+
+
+<div class="viewcode-block" id="map_data"><a class="viewcode-back" href="../../primitives.html#pyro.__init__.map_data">[docs]</a><span class="k">def</span> <span class="nf">map_data</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">fn</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">batch_dim</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">use_cuda</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Data subsampling with the important property that all the data are conditionally independent.</span>
+
+<span class="sd">    With default values of `batch_size` and `batch_dim`, `map_data` behaves like `map`.</span>
+<span class="sd">    More precisely, `map_data(&#39;foo&#39;, data, fn)` is equivalent to `[fn(i, x) for i, x in enumerate(data)]`.</span>
+
+<span class="sd">    :param str name: named argument</span>
+<span class="sd">    :param data: data to subsample</span>
+<span class="sd">    :param callable fn: a function taking `(index, datum)` pairs, where `dataum = data[index]`</span>
+<span class="sd">    :param int batch_size: number of samples per batch, or zero for the entire dataset</span>
+<span class="sd">    :param int batch_dim: dimension to subsample for tensor inputs</span>
+<span class="sd">    :param bool use_cuda: Optional bool specifying whether to use cuda tensors</span>
+<span class="sd">        for `log_pdf`. Defaults to `torch.Tensor.is_cuda`.</span>
+<span class="sd">    :return: a list of values returned by `fn`</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">use_cuda</span> <span class="o">=</span> <span class="n">use_cuda</span> <span class="ow">or</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s1">&#39;is_cuda&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">Variable</span><span class="p">)):</span>
+        <span class="n">size</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="n">batch_dim</span><span class="p">)</span>
+        <span class="k">with</span> <span class="n">iarange</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">size</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">use_cuda</span><span class="o">=</span><span class="n">use_cuda</span><span class="p">)</span> <span class="k">as</span> <span class="n">batch</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">fn</span><span class="p">(</span><span class="n">batch</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">index_select</span><span class="p">(</span><span class="n">batch_dim</span><span class="p">,</span> <span class="n">batch</span><span class="p">))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">size</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">fn</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">data</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">irange</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">size</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">use_cuda</span><span class="o">=</span><span class="n">use_cuda</span><span class="p">)]</span></div>
+
+
+<span class="c1"># XXX this should have the same call signature as torch.Tensor constructors</span>
+<div class="viewcode-block" id="param"><a class="viewcode-back" href="../../primitives.html#pyro.__init__.param">[docs]</a><span class="k">def</span> <span class="nf">param</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    :param name: name of parameter</span>
+<span class="sd">    :returns: parameter</span>
+
+<span class="sd">    Saves the variable as a parameter in the param store.</span>
+<span class="sd">    To interact with the param store or write to disk,</span>
+<span class="sd">    see `Parameters &lt;parameters.html&gt;`_.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">_PYRO_STACK</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">_param_store</span><span class="o">.</span><span class="n">get_param</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">msg</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;param&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span>
+            <span class="s2">&quot;args&quot;</span><span class="p">:</span> <span class="n">args</span><span class="p">,</span>
+            <span class="s2">&quot;kwargs&quot;</span><span class="p">:</span> <span class="n">kwargs</span><span class="p">,</span>
+            <span class="s2">&quot;scale&quot;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span>
+            <span class="s2">&quot;map_data_stack&quot;</span><span class="p">:</span> <span class="p">[],</span>
+            <span class="s2">&quot;value&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="s2">&quot;done&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+            <span class="s2">&quot;stop&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="p">}</span>
+        <span class="c1"># apply the stack and return its return value</span>
+        <span class="n">out_msg</span> <span class="o">=</span> <span class="n">apply_stack</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">out_msg</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="module"><a class="viewcode-back" href="../../primitives.html#pyro.__init__.module">[docs]</a><span class="k">def</span> <span class="nf">module</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">nn_module</span><span class="p">,</span> <span class="n">tags</span><span class="o">=</span><span class="s2">&quot;default&quot;</span><span class="p">,</span> <span class="n">update_module_params</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    :param name: name of module</span>
+<span class="sd">    :type name: str</span>
+<span class="sd">    :param nn_module: the module to be registered with Pyro</span>
+<span class="sd">    :type nn_module: torch.nn.Module</span>
+<span class="sd">    :param tags: optional; tags to associate with any parameters inside the module</span>
+<span class="sd">    :type tags: string or iterable of strings</span>
+<span class="sd">    :param update_module_params: determines whether Parameters</span>
+<span class="sd">                                 in the PyTorch module get overridden with the values found in the</span>
+<span class="sd">                                 ParamStore (if any). Defaults to `False`</span>
+<span class="sd">    :type load_from_param_store: bool</span>
+<span class="sd">    :returns: torch.nn.Module</span>
+
+<span class="sd">    Takes a torch.nn.Module and registers its parameters with the ParamStore.</span>
+<span class="sd">    In conjunction with the ParamStore save() and load() functionality, this</span>
+<span class="sd">    allows the user to save and load modules.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">assert</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">nn_module</span><span class="p">,</span> <span class="s2">&quot;parameters&quot;</span><span class="p">),</span> <span class="s2">&quot;module has no parameters&quot;</span>
+    <span class="k">assert</span> <span class="n">_MODULE_NAMESPACE_DIVIDER</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">name</span><span class="p">,</span> <span class="s2">&quot;improper module name, since contains </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span>\
+        <span class="n">_MODULE_NAMESPACE_DIVIDER</span>
+
+    <span class="k">if</span> <span class="n">isclass</span><span class="p">(</span><span class="n">nn_module</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;pyro.module does not support class constructors for &quot;</span> <span class="o">+</span>
+                                  <span class="s2">&quot;the argument nn_module&quot;</span><span class="p">)</span>
+
+    <span class="n">target_state_dict</span> <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">()</span>
+
+    <span class="k">for</span> <span class="n">param_name</span><span class="p">,</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">nn_module</span><span class="o">.</span><span class="n">named_parameters</span><span class="p">():</span>
+        <span class="c1"># register the parameter in the module with pyro</span>
+        <span class="c1"># this only does something substantive if the parameter hasn&#39;t been seen before</span>
+        <span class="n">full_param_name</span> <span class="o">=</span> <span class="n">param_with_module_name</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">param_name</span><span class="p">)</span>
+        <span class="n">returned_param</span> <span class="o">=</span> <span class="n">pyro</span><span class="o">.</span><span class="n">param</span><span class="p">(</span><span class="n">full_param_name</span><span class="p">,</span> <span class="n">param</span><span class="p">,</span> <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">get_tensor_data</span><span class="p">(</span><span class="n">param</span><span class="p">)</span><span class="o">.</span><span class="n">_cdata</span> <span class="o">!=</span> <span class="n">get_tensor_data</span><span class="p">(</span><span class="n">returned_param</span><span class="p">)</span><span class="o">.</span><span class="n">_cdata</span><span class="p">:</span>
+            <span class="n">target_state_dict</span><span class="p">[</span><span class="n">param_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">returned_param</span>
+
+    <span class="k">if</span> <span class="n">target_state_dict</span> <span class="ow">and</span> <span class="n">update_module_params</span><span class="p">:</span>
+        <span class="c1"># WARNING: this is very dangerous. better method?</span>
+        <span class="k">for</span> <span class="n">_name</span><span class="p">,</span> <span class="n">_param</span> <span class="ow">in</span> <span class="n">nn_module</span><span class="o">.</span><span class="n">named_parameters</span><span class="p">():</span>
+            <span class="n">is_param</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="n">name_arr</span> <span class="o">=</span> <span class="n">_name</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">name_arr</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">mod_name</span><span class="p">,</span> <span class="n">param_name</span> <span class="o">=</span> <span class="n">name_arr</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">name_arr</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">is_param</span> <span class="o">=</span> <span class="kc">True</span>
+                <span class="n">mod_name</span> <span class="o">=</span> <span class="n">_name</span>
+            <span class="k">if</span> <span class="n">_name</span> <span class="ow">in</span> <span class="n">target_state_dict</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">is_param</span><span class="p">:</span>
+                    <span class="n">deep_getattr</span><span class="p">(</span><span class="n">nn_module</span><span class="p">,</span> <span class="n">mod_name</span><span class="p">)</span><span class="o">.</span><span class="n">_parameters</span><span class="p">[</span><span class="n">param_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">target_state_dict</span><span class="p">[</span><span class="n">_name</span><span class="p">]</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">nn_module</span><span class="o">.</span><span class="n">_parameters</span><span class="p">[</span><span class="n">mod_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">target_state_dict</span><span class="p">[</span><span class="n">_name</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">nn_module</span></div>
+
+
+<div class="viewcode-block" id="random_module"><a class="viewcode-back" href="../../primitives.html#pyro.__init__.random_module">[docs]</a><span class="k">def</span> <span class="nf">random_module</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">nn_module</span><span class="p">,</span> <span class="n">prior</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    :param name: name of pyro module</span>
+<span class="sd">    :type name: str</span>
+<span class="sd">    :param nn_module: the module to be registered with pyro</span>
+<span class="sd">    :type nn_module: torch.nn.Module</span>
+<span class="sd">    :param prior: prior distribution or iterable over distributions</span>
+<span class="sd">    :returns: a callable which returns a sampled module</span>
+
+<span class="sd">    Places a prior over the parameters of the module `nn_module`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">assert</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">nn_module</span><span class="p">,</span> <span class="s2">&quot;parameters&quot;</span><span class="p">),</span> <span class="s2">&quot;Module is not a NN module.&quot;</span>
+    <span class="c1"># register params in param store</span>
+    <span class="n">lifted_fn</span> <span class="o">=</span> <span class="n">poutine</span><span class="o">.</span><span class="n">lift</span><span class="p">(</span><span class="n">pyro</span><span class="o">.</span><span class="n">module</span><span class="p">,</span> <span class="n">prior</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_fn</span><span class="p">():</span>
+        <span class="n">nn_copy</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">nn_module</span><span class="p">)</span>
+        <span class="c1"># update_module_params must be True or the lifted module will not update local params</span>
+        <span class="k">return</span> <span class="n">lifted_fn</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">nn_copy</span><span class="p">,</span> <span class="n">update_module_params</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">_fn</span></div>
+</pre></div>
+
+           </div>
+           <div class="articleComments">
+            
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2017, Uber Technologies Inc.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../',
+            VERSION:'0.0.1',
+            LANGUAGE:'None',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true,
+            SOURCELINK_SUFFIX: '.txt'
+        };
+    </script>
+      <script type="text/javascript" src="../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

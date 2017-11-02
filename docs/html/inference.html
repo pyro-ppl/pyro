@@ -1,0 +1,461 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Inference &mdash; Pyro 0.0.1 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="genindex.html"/>
+        <link rel="search" title="Search" href="search.html"/>
+    <link rel="top" title="Pyro 0.0.1 documentation" href="index.html"/>
+        <link rel="next" title="Distributions" href="distributions.html"/>
+        <link rel="prev" title="Primitives" href="primitives.html"/> 
+
+  
+  <script src="_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="index.html">
+          
+
+          
+            
+            <img src="_static/pyro_logo_small.png" class="logo" />
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.0.1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="primitives.html">Primitives</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Inference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#module-pyro.infer.svi">SVI</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-pyro.infer.elbo">ELBO</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-pyro.infer.importance">Importance</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-pyro.infer.search">Search</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="distributions.html">Distributions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="parameters.html">Parameters</a></li>
+<li class="toctree-l1"><a class="reference internal" href="nn.html">Neural Network</a></li>
+<li class="toctree-l1"><a class="reference internal" href="optimization.html">Optimization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="advanced.html">Advanced Features</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">Pyro</a>
+        
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="index.html">Docs</a> &raquo;</li>
+        
+      <li>Inference</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="_sources/inference.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="inference">
+<h1>Inference<a class="headerlink" href="#inference" title="Permalink to this headline">¶</a></h1>
+<p>In the context of probabilistic modeling, learning is usually called inference.
+In the case where the model has latent random variables, this involves computing
+(approximate) posterior distributions. In the case of parameterized models, this
+usually involves some sort of optimization. Pyro supports multiple inference algorithms,
+with support for stochastic variational inference (SVI) being the most extensive.
+Look here for more inference algorithms in future versions of Pyro.</p>
+<div class="section" id="module-pyro.infer.svi">
+<span id="svi"></span><h2>SVI<a class="headerlink" href="#module-pyro.infer.svi" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="pyro.infer.svi.SVI">
+<em class="property">class </em><code class="descname">SVI</code><span class="sig-paren">(</span><em>model</em>, <em>guide</em>, <em>optim</em>, <em>loss</em>, <em>loss_and_grads=None</em>, <em>*args</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/infer/svi.html#SVI"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.infer.svi.SVI" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/2/library/functions.html#object" title="(in Python v2.7)"><code class="xref py py-class docutils literal"><span class="pre">object</span></code></a></p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>model</strong> – the model (callable containing Pyro primitives)</li>
+<li><strong>guide</strong> – the guide (callable containing Pyro primitives)</li>
+<li><strong>optim</strong> (<em>pyro.optim.PyroOptim</em>) – a wrapper a for a PyTorch optimizer</li>
+<li><strong>loss</strong> – this is either a string that specifies the loss function to be used (currently
+the only supported built-in loss is ‘ELBO’) or a user-provided loss function;
+in the case this is a built-in loss <cite>loss_and_grads</cite> will be filled in accordingly</li>
+<li><strong>loss_and_grads</strong> – if specified, this user-provided callable computes gradients for use in <cite>step()</cite>
+and marks which parameters in the param store are to be optimized</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<p>A unified interface for stochastic variational inference in Pyro. Most
+users will interact with <cite>SVI</cite> with the argument <cite>loss=”ELBO”</cite>. See the
+tutorial <a class="reference external" href="http://pyro.ai/examples/svi_part_i.html">SVI Part I</a> for a discussion.</p>
+<dl class="method">
+<dt id="pyro.infer.svi.SVI.evaluate_loss">
+<code class="descname">evaluate_loss</code><span class="sig-paren">(</span><em>*args</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/infer/svi.html#SVI.evaluate_loss"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.infer.svi.SVI.evaluate_loss" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">estimate of the loss</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference external" href="https://docs.python.org/2/library/functions.html#float" title="(in Python v2.7)">float</a></td>
+</tr>
+</tbody>
+</table>
+<p>Evaluate the loss function. Any args or kwargs are passed to the model and guide.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyro.infer.svi.SVI.step">
+<code class="descname">step</code><span class="sig-paren">(</span><em>*args</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/infer/svi.html#SVI.step"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.infer.svi.SVI.step" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">estimate of the loss</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference external" href="https://docs.python.org/2/library/functions.html#float" title="(in Python v2.7)">float</a></td>
+</tr>
+</tbody>
+</table>
+<p>Take a gradient step on the loss function (and any auxiliary loss functions
+generated under the hood by <cite>loss_and_grads</cite>).
+Any args or kwargs are passed to the model and guide</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-pyro.infer.elbo">
+<span id="elbo"></span><h2>ELBO<a class="headerlink" href="#module-pyro.infer.elbo" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="pyro.infer.elbo.ELBO">
+<em class="property">class </em><code class="descname">ELBO</code><span class="sig-paren">(</span><em>num_particles=1</em>, <em>trace_graph=False</em>, <em>enum_discrete=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/infer/elbo.html#ELBO"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.infer.elbo.ELBO" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/2/library/functions.html#object" title="(in Python v2.7)"><code class="xref py py-class docutils literal"><span class="pre">object</span></code></a></p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>num_particles</strong> – the number of particles (samples) used to form the ELBO estimator.</li>
+<li><strong>trace_graph</strong> – boolean. whether to keep track of dependency information when running the
+model and guide. this information can be used to form a gradient estimator with lower variance
+in the case that some of the random variables are non-reparameterized.
+note: for a model with many random variables, keeping track of the dependency information
+can be expensive. see the tutorial <a class="reference external" href="http://pyro.ai/examples/svi_part_iii.html">SVI Part III</a>
+for a discussion.</li>
+<li><strong>enum_discrete</strong> (<a class="reference external" href="https://docs.python.org/2/library/functions.html#bool" title="(in Python v2.7)"><em>bool</em></a>) – whether to sum over discrete latent variables, rather than sample them.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<p><cite>ELBO</cite> is the top-level interface for stochastic variational inference via optimization of the
+evidence lower bound. Most users will not interact with <cite>ELBO</cite> directly; instead they will interact
+with <cite>SVI</cite>. <cite>ELBO</cite> dispatches to <cite>Trace_ELBO</cite> and <cite>TraceGraph_ELBO</cite>, where the internal
+implementations live.</p>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last"><cite>enum_discrete</cite> is a bleeding edge feature.
+see <a class="reference external" href="http://pyro.ai/examples/svi_part_iii.html">SS-VAE</a> for a discussion.</p>
+</div>
+<p>References</p>
+<p>[1] <cite>Automated Variational Inference in Probabilistic Programming</cite>
+David Wingate, Theo Weber</p>
+<p>[2] <cite>Black Box Variational Inference</cite>,
+Rajesh Ranganath, Sean Gerrish, David M. Blei</p>
+<dl class="method">
+<dt id="pyro.infer.elbo.ELBO.loss">
+<code class="descname">loss</code><span class="sig-paren">(</span><em>model</em>, <em>guide</em>, <em>*args</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/infer/elbo.html#ELBO.loss"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.infer.elbo.ELBO.loss" title="Permalink to this definition">¶</a></dt>
+<dd><p>Evaluates the ELBO with an estimator that uses <cite>num_particles</cite> many samples/particles,
+where <cite>num_particles</cite> is specified in the constructor.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">returns an estimate of the ELBO</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference external" href="https://docs.python.org/2/library/functions.html#float" title="(in Python v2.7)">float</a></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyro.infer.elbo.ELBO.loss_and_grads">
+<code class="descname">loss_and_grads</code><span class="sig-paren">(</span><em>model</em>, <em>guide</em>, <em>*args</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/infer/elbo.html#ELBO.loss_and_grads"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.infer.elbo.ELBO.loss_and_grads" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes the ELBO as well as the surrogate ELBO that is used to form the gradient estimator.
+Performs backward on the latter. Num_particle many samples are used to form the estimators,
+where <cite>num_particles</cite> is specified in the constructor.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">returns an estimate of the ELBO</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference external" href="https://docs.python.org/2/library/functions.html#float" title="(in Python v2.7)">float</a></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-pyro.infer.importance">
+<span id="importance"></span><h2>Importance<a class="headerlink" href="#module-pyro.infer.importance" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="pyro.infer.importance.Importance">
+<em class="property">class </em><code class="descname">Importance</code><span class="sig-paren">(</span><em>model</em>, <em>guide=None</em>, <em>num_samples=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/infer/importance.html#Importance"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.infer.importance.Importance" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal"><span class="pre">pyro.infer.abstract_infer.TracePosterior</span></code></p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>model</strong> – probabilistic model defined as a function</li>
+<li><strong>guide</strong> – guide used for sampling defined as a function</li>
+<li><strong>num_samples</strong> – number of samples to draw from the guide (default 10)</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<p>This method performs posterior inference by importance sampling
+using the guide as the proposal distribution.
+If no guide is provided, it defaults to proposing from the model’s prior.</p>
+<dl class="method">
+<dt id="pyro.infer.importance.Importance.log_z">
+<code class="descname">log_z</code><span class="sig-paren">(</span><em>*args</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/infer/importance.html#Importance.log_z"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.infer.importance.Importance.log_z" title="Permalink to this definition">¶</a></dt>
+<dd><p>Estimate the marginal likelihood of observations using importance weights.
+Takes the same inputs as self.model and self.guide and returns a 1-element tensor
+containing the estimate.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-pyro.infer.search">
+<span id="search"></span><h2>Search<a class="headerlink" href="#module-pyro.infer.search" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="pyro.infer.search.Search">
+<em class="property">class </em><code class="descname">Search</code><span class="sig-paren">(</span><em>model</em>, <em>max_tries=1000000.0</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/infer/search.html#Search"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.infer.search.Search" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal"><span class="pre">pyro.infer.abstract_infer.TracePosterior</span></code></p>
+<p>Trace and Poutine-based implementation of systematic search.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>model</strong> (<a class="reference external" href="https://docs.python.org/2/library/functions.html#callable" title="(in Python v2.7)"><em>callable</em></a>) – Probabilistic model defined as a function.</li>
+<li><strong>max_tries</strong> (<a class="reference external" href="https://docs.python.org/2/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) – The maximum number of times to try completing a trace from the queue.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<dl class="method">
+<dt id="pyro.infer.search.Search.log_z">
+<code class="descname">log_z</code><span class="sig-paren">(</span><em>*args</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/infer/search.html#Search.log_z"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.infer.search.Search.log_z" title="Permalink to this definition">¶</a></dt>
+<dd><p>Harmonic mean log-evidence estimator.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+</div>
+
+
+           </div>
+           <div class="articleComments">
+            
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="distributions.html" class="btn btn-neutral float-right" title="Distributions" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="primitives.html" class="btn btn-neutral" title="Primitives" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2017, Uber Technologies Inc.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'./',
+            VERSION:'0.0.1',
+            LANGUAGE:'None',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true,
+            SOURCELINK_SUFFIX: '.txt'
+        };
+    </script>
+      <script type="text/javascript" src="_static/jquery.js"></script>
+      <script type="text/javascript" src="_static/underscore.js"></script>
+      <script type="text/javascript" src="_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

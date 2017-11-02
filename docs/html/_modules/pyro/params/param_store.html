@@ -1,0 +1,524 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>pyro.params.param_store &mdash; Pyro 0.0.1 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="../../../genindex.html"/>
+        <link rel="search" title="Search" href="../../../search.html"/>
+    <link rel="top" title="Pyro 0.0.1 documentation" href="../../../index.html"/>
+        <link rel="up" title="Module code" href="../../index.html"/> 
+
+  
+  <script src="../../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../../index.html">
+          
+
+          
+            
+            <img src="../../../_static/pyro_logo_small.png" class="logo" />
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.0.1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../getting_started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../primitives.html">Primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../inference.html">Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../distributions.html">Distributions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../parameters.html">Parameters</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../nn.html">Neural Network</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../optimization.html">Optimization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../advanced.html">Advanced Features</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">Pyro</a>
+        
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="../../index.html">Module code</a> &raquo;</li>
+        
+      <li>pyro.params.param_store</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for pyro.params.param_store</h1><div class="highlight"><pre>
+<span></span><span class="kn">from</span> <span class="nn">collections</span> <span class="k">import</span> <span class="n">defaultdict</span>
+
+<span class="kn">import</span> <span class="nn">cloudpickle</span>
+
+
+<div class="viewcode-block" id="ParamStoreDict"><a class="viewcode-back" href="../../../parameters.html#pyro.params.param_store.ParamStoreDict">[docs]</a><span class="k">class</span> <span class="nc">ParamStoreDict</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Global store for parameters in Pyro. This is basically a key-value store.</span>
+<span class="sd">    The typical user interacts with the ParamStore primarily through the</span>
+<span class="sd">    primitive `pyro.param`. See the introductory tutorial</span>
+<span class="sd">    `Hello World &lt;http://pyro.ai/examples/hello_world.html&gt;`_ for a discussion.</span>
+
+<span class="sd">    Some things to bear in mind when using parameters in Pyro:</span>
+
+<span class="sd">    - parameters must be assigned unique names</span>
+<span class="sd">    - the `init_tensor` argument to `pyro.param` is only used the first time that a given (named)</span>
+<span class="sd">      parameter is registered with Pyro.</span>
+<span class="sd">    - for this reason, a user may need to use the `clear()` method if working in a REPL in order to</span>
+<span class="sd">      get the desired behavior. this method can also be inved with `pyro.clear_param_store()`.</span>
+<span class="sd">    - the internal name of a parameter within a PyTorch `nn.Module` that has been registered with</span>
+<span class="sd">      Pyro is prepended with the Pyro name of the module. so nothing prevents the user from having</span>
+<span class="sd">      two different modules each of which contains a parameter named `weight`. by contrast, a user</span>
+<span class="sd">      can only have one top-level parameter named `weight` (outside of any module).</span>
+<span class="sd">    - parameters can be &#39;tagged&#39; with (string) tags. by default each parameter is tagged with the</span>
+<span class="sd">      &#39;default&#39; tag. this mechanism allows the user to group parameters together and e.g. customize</span>
+<span class="sd">      learning rates for different tags. for an example where this is useful see the tutorial</span>
+<span class="sd">      `SVI Part III &lt;http://pyro.ai/examples/svi_part_iii.html&gt;`_.</span>
+<span class="sd">    - parameters can be saved and loaded from disk using `save` and `load`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        initialize ParamStore data structures</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_params</span> <span class="o">=</span> <span class="p">{}</span>  <span class="c1"># dictionary from param name to param</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_param_to_name</span> <span class="o">=</span> <span class="p">{}</span>  <span class="c1"># dictionary from param to param name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_active_params</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>  <span class="c1"># set of all currently active params</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_param_tags</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="k">lambda</span><span class="p">:</span> <span class="nb">set</span><span class="p">())</span>  <span class="c1"># dictionary from tag to param names</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_tag_params</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="k">lambda</span><span class="p">:</span> <span class="nb">set</span><span class="p">())</span>  <span class="c1"># dictionary from param name to tags</span>
+
+<div class="viewcode-block" id="ParamStoreDict.clear"><a class="viewcode-back" href="../../../parameters.html#pyro.params.param_store.ParamStoreDict.clear">[docs]</a>    <span class="k">def</span> <span class="nf">clear</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Clear the ParamStore</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_params</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_param_to_name</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_active_params</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_param_tags</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="k">lambda</span><span class="p">:</span> <span class="nb">set</span><span class="p">())</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_tag_params</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="k">lambda</span><span class="p">:</span> <span class="nb">set</span><span class="p">())</span></div>
+
+<div class="viewcode-block" id="ParamStoreDict.named_parameters"><a class="viewcode-back" href="../../../parameters.html#pyro.params.param_store.ParamStoreDict.named_parameters">[docs]</a>    <span class="k">def</span> <span class="nf">named_parameters</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns an iterator over tuples of the form (name, parameter) for each parameter in the ParamStore</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_params</span><span class="o">.</span><span class="n">items</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="ParamStoreDict.get_all_param_names"><a class="viewcode-back" href="../../../parameters.html#pyro.params.param_store.ParamStoreDict.get_all_param_names">[docs]</a>    <span class="k">def</span> <span class="nf">get_all_param_names</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Get all parameter names in the ParamStore</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_params</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="ParamStoreDict.get_active_params"><a class="viewcode-back" href="../../../parameters.html#pyro.params.param_store.ParamStoreDict.get_active_params">[docs]</a>    <span class="k">def</span> <span class="nf">get_active_params</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tags</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param tag: optional argument specifying that only active params carrying a particular</span>
+<span class="sd">            tag or any of several tags should be returned</span>
+<span class="sd">        :type tags: string or iterable over strings</span>
+<span class="sd">        :returns: all active params in the ParamStore, possibly filtered to a particular tag or tags</span>
+<span class="sd">        :rtype: set</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">tags</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>  <span class="c1"># return all active params</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_active_params</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tags</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="n">tags</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_param_tags</span><span class="p">:</span>
+            <span class="c1"># return empty set, since tag doesn&#39;t exist; XXX raise warning?</span>
+            <span class="k">return</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tags</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>  <span class="c1"># only return active params in the tag</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_active_params</span><span class="o">.</span><span class="n">intersection</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_param_tags</span><span class="p">[</span><span class="n">tags</span><span class="p">])</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tags</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tags</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
+            <span class="n">params_to_return</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+            <span class="k">for</span> <span class="n">tag</span> <span class="ow">in</span> <span class="n">tags</span><span class="p">:</span>
+                <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tag</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">tag</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_param_tags</span><span class="p">:</span>
+                    <span class="n">params_to_return</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_param_tags</span><span class="p">[</span><span class="n">tag</span><span class="p">])</span>
+            <span class="k">return</span> <span class="n">params_to_return</span><span class="o">.</span><span class="n">intersection</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_active_params</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span></div>
+
+<div class="viewcode-block" id="ParamStoreDict.mark_params_active"><a class="viewcode-back" href="../../../parameters.html#pyro.params.param_store.ParamStoreDict.mark_params_active">[docs]</a>    <span class="k">def</span> <span class="nf">mark_params_active</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">params</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param params: iterable of params the user wishes to mark as active in the ParamStore.</span>
+<span class="sd">            this information is used to determine which parameters are being optimized,</span>
+<span class="sd">            e.g. in the context of pyro.infer.SVI</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">assert</span><span class="p">(</span><span class="nb">all</span><span class="p">([</span><span class="n">p</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_param_to_name</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">params</span><span class="p">])),</span> \
+            <span class="s2">&quot;some of these parameters are not in the ParamStore&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_active_params</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">params</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="ParamStoreDict.mark_params_inactive"><a class="viewcode-back" href="../../../parameters.html#pyro.params.param_store.ParamStoreDict.mark_params_inactive">[docs]</a>    <span class="k">def</span> <span class="nf">mark_params_inactive</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">params</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param params: iterable of params the user wishes to mark as inactive in the ParamStore.</span>
+<span class="sd">            this information is used to determine which parameters are being optimized,</span>
+<span class="sd">            e.g. in the context of pyro.infer.SVI</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">assert</span><span class="p">(</span><span class="nb">all</span><span class="p">([</span><span class="n">p</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_param_to_name</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">params</span><span class="p">])),</span> \
+            <span class="s2">&quot;some of these parameters are not in the ParamStore&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_active_params</span><span class="o">.</span><span class="n">difference_update</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">params</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="ParamStoreDict.delete_tag"><a class="viewcode-back" href="../../../parameters.html#pyro.params.param_store.ParamStoreDict.delete_tag">[docs]</a>    <span class="k">def</span> <span class="nf">delete_tag</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tag</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param tag: tag to remove</span>
+<span class="sd">        :type tag: str</span>
+
+<span class="sd">        Removes the tag; any parameters with that tag are unaffected but are no longer</span>
+<span class="sd">        associated with that tag.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">assert</span><span class="p">(</span><span class="n">tag</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_param_tags</span><span class="p">),</span> <span class="s2">&quot;this tag does not exist&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_param_tags</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">tag</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">p</span><span class="p">,</span> <span class="n">tags</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_tag_params</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">tag</span> <span class="ow">in</span> <span class="n">tags</span><span class="p">:</span>
+                <span class="n">tags</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">tag</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="ParamStoreDict.get_param_tags"><a class="viewcode-back" href="../../../parameters.html#pyro.params.param_store.ParamStoreDict.get_param_tags">[docs]</a>    <span class="k">def</span> <span class="nf">get_param_tags</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">param_name</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param param_name: a (single) parameter name</span>
+<span class="sd">        :type param_name: str</span>
+<span class="sd">        :rtype: set</span>
+
+<span class="sd">        Return the tags associated with the parameter</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">param_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_tag_params</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_tag_params</span><span class="p">[</span><span class="n">param_name</span><span class="p">]</span>
+        <span class="k">return</span> <span class="nb">set</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="ParamStoreDict.tag_params"><a class="viewcode-back" href="../../../parameters.html#pyro.params.param_store.ParamStoreDict.tag_params">[docs]</a>    <span class="k">def</span> <span class="nf">tag_params</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">param_names</span><span class="p">,</span> <span class="n">tags</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param param_name: either a single parameter name or an iterable of parameter names</span>
+<span class="sd">        :param tags: either a single string or an iterable of strings</span>
+
+<span class="sd">        Tags the parameter(s) specified by param_names with the tag(s) specified by tags.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">def</span> <span class="nf">tag_single_param</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">tags</span><span class="p">):</span>
+            <span class="k">assert</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_params</span><span class="p">,</span> <span class="s2">&quot;&lt;</span><span class="si">%s</span><span class="s2">&gt; is not a parameter in the ParamStore&quot;</span> <span class="o">%</span> <span class="n">name</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tags</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_param_tags</span><span class="p">[</span><span class="n">tags</span><span class="p">]</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_params</span><span class="p">[</span><span class="n">name</span><span class="p">])</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_tag_params</span><span class="p">[</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">tag</span> <span class="ow">in</span> <span class="n">tags</span><span class="p">:</span>
+                    <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tag</span><span class="p">,</span> <span class="nb">str</span><span class="p">),</span> <span class="s2">&quot;tags must be a string or an iterable of strings&quot;</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_param_tags</span><span class="p">[</span><span class="n">tag</span><span class="p">]</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_params</span><span class="p">[</span><span class="n">name</span><span class="p">])</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_tag_params</span><span class="p">[</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">tag</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">param_names</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="n">tag_single_param</span><span class="p">(</span><span class="n">param_names</span><span class="p">,</span> <span class="n">tags</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">param_names</span><span class="p">:</span>
+                <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="nb">str</span><span class="p">),</span> <span class="s2">&quot;param_names must be a string or an iterable of strings&quot;</span>
+                <span class="n">tag_single_param</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">tags</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="ParamStoreDict.untag_params"><a class="viewcode-back" href="../../../parameters.html#pyro.params.param_store.ParamStoreDict.untag_params">[docs]</a>    <span class="k">def</span> <span class="nf">untag_params</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">param_names</span><span class="p">,</span> <span class="n">tags</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param param_name: either a single parameter name or an iterable of parameter names</span>
+<span class="sd">        :param tags: either a single string or an iterable of strings</span>
+
+<span class="sd">        Disassociates the parameter(s) specified by param_names with the tag(s) specified by tags.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">def</span> <span class="nf">untag_single_param</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">tags</span><span class="p">):</span>
+            <span class="k">assert</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_params</span><span class="p">,</span> <span class="s2">&quot;&lt;</span><span class="si">%s</span><span class="s2">&gt; is not a parameter in the ParamStore&quot;</span> <span class="o">%</span> <span class="n">name</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tags</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_param_tags</span><span class="p">[</span><span class="n">tags</span><span class="p">]</span><span class="o">.</span><span class="n">discard</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_params</span><span class="p">[</span><span class="n">name</span><span class="p">])</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_tag_params</span><span class="p">[</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">discard</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">tag</span> <span class="ow">in</span> <span class="n">tags</span><span class="p">:</span>
+                    <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tag</span><span class="p">,</span> <span class="nb">str</span><span class="p">),</span> <span class="s2">&quot;tags must be a string or an iterable of strings&quot;</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_param_tags</span><span class="p">[</span><span class="n">tag</span><span class="p">]</span><span class="o">.</span><span class="n">discard</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_params</span><span class="p">[</span><span class="n">name</span><span class="p">])</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_tag_params</span><span class="p">[</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">discard</span><span class="p">(</span><span class="n">tag</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">param_names</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="n">untag_single_param</span><span class="p">(</span><span class="n">param_names</span><span class="p">,</span> <span class="n">tags</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">param_names</span><span class="p">:</span>
+                <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="nb">str</span><span class="p">),</span> <span class="s2">&quot;param_names must be a string or an iterable of strings&quot;</span>
+                <span class="n">untag_single_param</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">tags</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="ParamStoreDict.replace_param"><a class="viewcode-back" href="../../../parameters.html#pyro.params.param_store.ParamStoreDict.replace_param">[docs]</a>    <span class="k">def</span> <span class="nf">replace_param</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">param_name</span><span class="p">,</span> <span class="n">new_param</span><span class="p">,</span> <span class="n">old_param</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param param_name: parameter name</span>
+<span class="sd">        :type param_name: str</span>
+<span class="sd">        :param new_param: the paramater to be put into the ParamStore</span>
+<span class="sd">        :type new_param: torch.autograd.Variable</span>
+<span class="sd">        :param old_param: the paramater to be removed from the ParamStore</span>
+<span class="sd">        :type new_param: torch.autograd.Variable</span>
+
+<span class="sd">        Replace the param param_name with current value old_param with the new value new_param</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">assert</span> <span class="nb">id</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_params</span><span class="p">[</span><span class="n">param_name</span><span class="p">])</span> <span class="o">==</span> <span class="nb">id</span><span class="p">(</span><span class="n">old_param</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_params</span><span class="p">[</span><span class="n">param_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">new_param</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_param_to_name</span><span class="p">[</span><span class="n">new_param</span><span class="p">]</span> <span class="o">=</span> <span class="n">param_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_param_to_name</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">old_param</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="ParamStoreDict.get_param"><a class="viewcode-back" href="../../../parameters.html#pyro.params.param_store.ParamStoreDict.get_param">[docs]</a>    <span class="k">def</span> <span class="nf">get_param</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">init_tensor</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">tags</span><span class="o">=</span><span class="s2">&quot;default&quot;</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param name: parameter name</span>
+<span class="sd">        :type name: str</span>
+<span class="sd">        :param init_tensor: initial tensor</span>
+<span class="sd">        :type init_tensor: torch.autograd.Variable</span>
+<span class="sd">        :param tags: the tag(s) to assign to the parameter</span>
+<span class="sd">        :type tags: a string or iterable of strings</span>
+<span class="sd">        :returns: parameter</span>
+<span class="sd">        :rtype: torch.autograd.Variable</span>
+
+<span class="sd">        Get parameter from its name. If it does not yet exist in the</span>
+<span class="sd">        ParamStore, it will be created and stored.</span>
+<span class="sd">        The Pyro primitive `pyro.param` dispatches to this method.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_params</span><span class="p">:</span>
+            <span class="c1"># if not create the init tensor through</span>
+            <span class="k">assert</span> <span class="n">init_tensor</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span>\
+                <span class="s2">&quot;cannot initialize a parameter with None. Did you get the param name right?&quot;</span>
+
+            <span class="c1"># a function</span>
+            <span class="k">if</span> <span class="n">callable</span><span class="p">(</span><span class="n">init_tensor</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_params</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">init_tensor</span><span class="p">()</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># from the memory passed in</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_params</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">init_tensor</span>
+
+            <span class="c1"># keep track of each tensor and it&#39;s name</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_param_to_name</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_params</span><span class="p">[</span><span class="n">name</span><span class="p">]]</span> <span class="o">=</span> <span class="n">name</span>
+
+            <span class="c1"># keep track of param tags</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">tag_params</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">tags</span><span class="p">)</span>
+
+        <span class="c1"># send back the guaranteed to exist param</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_params</span><span class="p">[</span><span class="n">name</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="ParamStoreDict.param_name"><a class="viewcode-back" href="../../../parameters.html#pyro.params.param_store.ParamStoreDict.param_name">[docs]</a>    <span class="k">def</span> <span class="nf">param_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">p</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param p: parameter</span>
+<span class="sd">        :returns: parameter name</span>
+
+<span class="sd">        Get parameter name from parameter</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">p</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_param_to_name</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_param_to_name</span><span class="p">[</span><span class="n">p</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="ParamStoreDict.get_state"><a class="viewcode-back" href="../../../parameters.html#pyro.params.param_store.ParamStoreDict.get_state">[docs]</a>    <span class="k">def</span> <span class="nf">get_state</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Get the ParamStore state.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">param_tags</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">tags</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_param_tags</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+        <span class="n">state</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_params</span><span class="p">,</span> <span class="n">param_tags</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">state</span></div>
+
+<div class="viewcode-block" id="ParamStoreDict.set_state"><a class="viewcode-back" href="../../../parameters.html#pyro.params.param_store.ParamStoreDict.set_state">[docs]</a>    <span class="k">def</span> <span class="nf">set_state</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Set the ParamStore state using state from a previous get_state() call</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">state</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;malformed ParamStore state&quot;</span>
+        <span class="n">loaded_params</span><span class="p">,</span> <span class="n">loaded_param_tags</span> <span class="o">=</span> <span class="n">state</span>
+
+        <span class="k">for</span> <span class="n">param_name</span><span class="p">,</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">loaded_params</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_params</span><span class="p">[</span><span class="n">param_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">param</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_param_to_name</span><span class="p">[</span><span class="n">param</span><span class="p">]</span> <span class="o">=</span> <span class="n">param_name</span>
+
+        <span class="k">for</span> <span class="n">param_name</span><span class="p">,</span> <span class="n">tags</span> <span class="ow">in</span> <span class="n">loaded_param_tags</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">for</span> <span class="n">tag</span> <span class="ow">in</span> <span class="n">tags</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_param_tags</span><span class="p">[</span><span class="n">param_name</span><span class="p">]</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">tag</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="ParamStoreDict.save"><a class="viewcode-back" href="../../../parameters.html#pyro.params.param_store.ParamStoreDict.save">[docs]</a>    <span class="k">def</span> <span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param filename: file name to save to</span>
+<span class="sd">        :type name: str</span>
+
+<span class="sd">        Save parameters to disk</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s2">&quot;wb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">output_file</span><span class="p">:</span>
+            <span class="n">output_file</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">cloudpickle</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_state</span><span class="p">()))</span></div>
+
+<div class="viewcode-block" id="ParamStoreDict.load"><a class="viewcode-back" href="../../../parameters.html#pyro.params.param_store.ParamStoreDict.load">[docs]</a>    <span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param filename: file name to load from</span>
+<span class="sd">        :type name: str</span>
+
+<span class="sd">        Loads parameters from disk</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s2">&quot;rb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">input_file</span><span class="p">:</span>
+            <span class="n">state</span> <span class="o">=</span> <span class="n">cloudpickle</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">input_file</span><span class="o">.</span><span class="n">read</span><span class="p">())</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">set_state</span><span class="p">(</span><span class="n">state</span><span class="p">)</span></div></div>
+</pre></div>
+
+           </div>
+           <div class="articleComments">
+            
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2017, Uber Technologies Inc.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../../',
+            VERSION:'0.0.1',
+            LANGUAGE:'None',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true,
+            SOURCELINK_SUFFIX: '.txt'
+        };
+    </script>
+      <script type="text/javascript" src="../../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

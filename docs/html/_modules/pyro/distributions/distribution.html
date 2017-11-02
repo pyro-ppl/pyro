@@ -1,0 +1,451 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>pyro.distributions.distribution &mdash; Pyro 0.0.1 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="../../../genindex.html"/>
+        <link rel="search" title="Search" href="../../../search.html"/>
+    <link rel="top" title="Pyro 0.0.1 documentation" href="../../../index.html"/>
+        <link rel="up" title="Module code" href="../../index.html"/> 
+
+  
+  <script src="../../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../../index.html">
+          
+
+          
+            
+            <img src="../../../_static/pyro_logo_small.png" class="logo" />
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.0.1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../getting_started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../primitives.html">Primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../inference.html">Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../distributions.html">Distributions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../parameters.html">Parameters</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../nn.html">Neural Network</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../optimization.html">Optimization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../advanced.html">Advanced Features</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">Pyro</a>
+        
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="../../index.html">Module code</a> &raquo;</li>
+        
+      <li>pyro.distributions.distribution</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for pyro.distributions.distribution</h1><div class="highlight"><pre>
+<span></span><span class="kn">from</span> <span class="nn">abc</span> <span class="k">import</span> <span class="n">ABCMeta</span><span class="p">,</span> <span class="n">abstractmethod</span>
+
+<span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">from</span> <span class="nn">six</span> <span class="k">import</span> <span class="n">add_metaclass</span>
+
+
+<div class="viewcode-block" id="Distribution"><a class="viewcode-back" href="../../../primitive_dist.html#pyro.distributions.distribution.Distribution">[docs]</a><span class="nd">@add_metaclass</span><span class="p">(</span><span class="n">ABCMeta</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">Distribution</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Base class for parameterized probability distributions.</span>
+
+<span class="sd">    Distributions in Pyro are stochastic function objects with `.sample()` and `.log_pdf()` methods.</span>
+<span class="sd">    Pyro provides two versions of each stochastic function:</span>
+
+<span class="sd">    `(i)` lowercase versions that take parameters::</span>
+
+<span class="sd">      x = dist.bernoulli(param)             # Returns a sample of size size(param).</span>
+<span class="sd">      p = dist.bernoulli.log_pdf(x, param)  # Evaluates log probability of x.</span>
+
+<span class="sd">    and `(ii)` UpperCase distribution classes that can construct stochastic functions with</span>
+<span class="sd">    fixed parameters::</span>
+
+<span class="sd">      d = dist.Bernoulli(param)</span>
+<span class="sd">      x = d()                               # Samples a sample of size size(param).</span>
+<span class="sd">      p = d.log_pdf(x)                      # Evaluates log probability of x.</span>
+
+<span class="sd">    .. note::</span>
+
+<span class="sd">        Parameters and data should be of type `torch.autograd.Variable` and all</span>
+<span class="sd">        methods return type `torch.autograd.Variable` unless otherwise noted.</span>
+
+<span class="sd">    **Tensor Shapes**:</span>
+
+<span class="sd">    Distributions provide a method `.shape()` for the tensor shape of samples::</span>
+
+<span class="sd">      x = d.sample(*args, **kwargs)</span>
+<span class="sd">      assert x.shape == d.shape(*args, **kwargs)</span>
+
+<span class="sd">    Pyro distinguishes two different roles for tensor shapes of samples:</span>
+
+<span class="sd">    - The leftmost dimension corresponds to iid *batching*, which can be</span>
+<span class="sd">      treated specially during inference via the `.batch_log_pdf()` method.</span>
+<span class="sd">    - The rightmost dimensions correspond to *event shape*.</span>
+
+<span class="sd">    These shapes are related by the equation::</span>
+
+<span class="sd">      assert d.shape(*args, **kwargs) == (d.batch_shape(*args, **kwargs) +</span>
+<span class="sd">                                          d.event_shape(*args, **kwargs))</span>
+
+<span class="sd">    Distributions provide a vectorized `.batch_log_pdf()` method that evaluates</span>
+<span class="sd">    the log probability density of each event in a batch independently,</span>
+<span class="sd">    returning a tensor of shape `d.batch_shape() + (1,)`::</span>
+
+<span class="sd">      x = d.sample(*args, **kwargs)</span>
+<span class="sd">      assert x.shape == d.shape(*args, **kwargs)</span>
+<span class="sd">      log_p = d.batch_log_pdf(x, *args, **kwargs)</span>
+<span class="sd">      assert log_p.shape == d.batch_shape(*args, **kwargs) + (1,)</span>
+
+<span class="sd">    Distributions may also support broadcasting of the `.log_pdf()` and</span>
+<span class="sd">    `.batch_log_pdf()` methods, which may each be evaluated with a sample</span>
+<span class="sd">    tensor `x` that is larger than (but broadcastable from) the parameters.</span>
+<span class="sd">    In this case, `d.batch_shape()` will return a shape that is broadcastable to</span>
+<span class="sd">    `d.batch_log_pdf().shape`. For example::</span>
+
+<span class="sd">      x = d.sample()</span>
+<span class="sd">      xx = torch.stack([x, x])</span>
+<span class="sd">      d.batch_log_pdf(xx) + torch.zeros(d.batch_shape() + (1,))  # Broadcast.</span>
+
+<span class="sd">    **Implementing New Distributions**:</span>
+
+<span class="sd">    Derived classes must implement the following methods: `.sample()`,</span>
+<span class="sd">    `.batch_log_pdf()`, `.batch_shape()`, and `.event_shape()`, .</span>
+<span class="sd">    Discrete classes may also implement the `.enumerate_support()` method to improve</span>
+<span class="sd">    gradient estimates and set `.enumerable = True`.</span>
+
+<span class="sd">    **Examples**:</span>
+
+<span class="sd">    Take a look at the examples[link] to see how they interact with inference algorithms.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">reparameterized</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">enumerable</span> <span class="o">=</span> <span class="kc">False</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">reparameterized</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Constructor for base distribution class.</span>
+
+<span class="sd">        :param bool reparameterized: Optional argument to override whether</span>
+<span class="sd">            instance should be considered reparameterized (by default, this</span>
+<span class="sd">            is decided by the class).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">reparameterized</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">reparameterized</span> <span class="o">=</span> <span class="n">reparameterized</span>
+
+<div class="viewcode-block" id="Distribution.batch_shape"><a class="viewcode-back" href="../../../primitive_dist.html#pyro.distributions.distribution.Distribution.batch_shape">[docs]</a>    <span class="k">def</span> <span class="nf">batch_shape</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        The left-hand tensor shape of samples, used for batching.</span>
+
+<span class="sd">        Samples are of shape `d().shape == d.batch_shape() + d.event_shape()`.</span>
+
+<span class="sd">        :return: Tensor shape used for batching.</span>
+<span class="sd">        :rtype: torch.Size</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span></div>
+
+<div class="viewcode-block" id="Distribution.event_shape"><a class="viewcode-back" href="../../../primitive_dist.html#pyro.distributions.distribution.Distribution.event_shape">[docs]</a>    <span class="k">def</span> <span class="nf">event_shape</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        The right-hand tensor shape of samples, used for individual events.</span>
+
+<span class="sd">        Samples are of shape `d().shape == d.batch_shape() + d.event_shape()`.</span>
+
+<span class="sd">        :return: Tensor shape used for individual events.</span>
+<span class="sd">        :rtype: torch.Size</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span></div>
+
+<div class="viewcode-block" id="Distribution.event_dim"><a class="viewcode-back" href="../../../primitive_dist.html#pyro.distributions.distribution.Distribution.event_dim">[docs]</a>    <span class="k">def</span> <span class="nf">event_dim</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :return: Number of dimensions of individual events.</span>
+<span class="sd">        :rtype: int</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">event_shape</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="Distribution.shape"><a class="viewcode-back" href="../../../primitive_dist.html#pyro.distributions.distribution.Distribution.shape">[docs]</a>    <span class="k">def</span> <span class="nf">shape</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        The tensor shape of samples from this distribution.</span>
+
+<span class="sd">        Samples are of shape `d().shape == d.batch_shape() + d.event_shape()`.</span>
+
+<span class="sd">        :return: Tensor shape of samples.</span>
+<span class="sd">        :rtype: torch.Size</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">batch_shape</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">event_shape</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Samples a random value (just an alias for `.sample(*args, **kwargs)`).</span>
+
+<span class="sd">        For tensor distributions, the returned Variable should have the same `.size()` as the</span>
+<span class="sd">        parameters.</span>
+
+<span class="sd">        :return: A random value.</span>
+<span class="sd">        :rtype: torch.autograd.Variable</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Distribution.sample"><a class="viewcode-back" href="../../../primitive_dist.html#pyro.distributions.distribution.Distribution.sample">[docs]</a>    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Samples a random value.</span>
+
+<span class="sd">        For tensor distributions, the returned Variable should have the same `.size()` as the</span>
+<span class="sd">        parameters.</span>
+
+<span class="sd">        :return: A random value or batch of random values (if parameters are</span>
+<span class="sd">            batched). The shape of the result should be `self.size()`.</span>
+<span class="sd">        :rtype: torch.autograd.Variable</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span></div>
+
+<div class="viewcode-block" id="Distribution.log_pdf"><a class="viewcode-back" href="../../../primitive_dist.html#pyro.distributions.distribution.Distribution.log_pdf">[docs]</a>    <span class="k">def</span> <span class="nf">log_pdf</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Evaluates total log probability density of a batch of samples.</span>
+
+<span class="sd">        :param torch.autograd.Variable x: A value.</span>
+<span class="sd">        :return: total log probability density as a one-dimensional torch.autograd.Variable of size 1.</span>
+<span class="sd">        :rtype: torch.autograd.Variable</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">batch_log_pdf</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="Distribution.batch_log_pdf"><a class="viewcode-back" href="../../../primitive_dist.html#pyro.distributions.distribution.Distribution.batch_log_pdf">[docs]</a>    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="nf">batch_log_pdf</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Evaluates log probability densities for each of a batch of samples.</span>
+
+<span class="sd">        :param torch.autograd.Variable x: A single value or a batch of values</span>
+<span class="sd">            batched along axis 0.</span>
+<span class="sd">        :return: log probability densities as a one-dimensional</span>
+<span class="sd">            `torch.autograd.Variable` with same batch size as value and params.</span>
+<span class="sd">            The shape of the result should be `self.batch_size()`.</span>
+<span class="sd">        :rtype: torch.autograd.Variable</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span></div>
+
+<div class="viewcode-block" id="Distribution.enumerate_support"><a class="viewcode-back" href="../../../primitive_dist.html#pyro.distributions.distribution.Distribution.enumerate_support">[docs]</a>    <span class="k">def</span> <span class="nf">enumerate_support</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns a representation of the parametrized distribution&#39;s support.</span>
+
+<span class="sd">        This is implemented only by discrete distributions.</span>
+
+<span class="sd">        :return: An iterator over the distribution&#39;s discrete support.</span>
+<span class="sd">        :rtype: iterator</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;Support not implemented for </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)))</span></div>
+
+<div class="viewcode-block" id="Distribution.analytic_mean"><a class="viewcode-back" href="../../../primitive_dist.html#pyro.distributions.distribution.Distribution.analytic_mean">[docs]</a>    <span class="k">def</span> <span class="nf">analytic_mean</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Analytic mean of the distribution, to be implemented by derived classes.</span>
+
+<span class="sd">        Note that this is optional, and currently only used for testing distributions.</span>
+
+<span class="sd">        :return: Analytic mean.</span>
+<span class="sd">        :rtype: torch.autograd.Variable.</span>
+<span class="sd">        :raises: NotImplementedError if mean cannot be analytically computed.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;Method not implemented by the subclass </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)))</span></div>
+
+<div class="viewcode-block" id="Distribution.analytic_var"><a class="viewcode-back" href="../../../primitive_dist.html#pyro.distributions.distribution.Distribution.analytic_var">[docs]</a>    <span class="k">def</span> <span class="nf">analytic_var</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Analytic variance of the distribution, to be implemented by derived classes.</span>
+
+<span class="sd">        Note that this is optional, and currently only used for testing distributions.</span>
+
+<span class="sd">        :return: Analytic variance.</span>
+<span class="sd">        :rtype: torch.autograd.Variable.</span>
+<span class="sd">        :raises: NotImplementedError if variance cannot be analytically computed.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;Method not implemented by the subclass </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)))</span></div></div>
+</pre></div>
+
+           </div>
+           <div class="articleComments">
+            
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2017, Uber Technologies Inc.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../../',
+            VERSION:'0.0.1',
+            LANGUAGE:'None',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true,
+            SOURCELINK_SUFFIX: '.txt'
+        };
+    </script>
+      <script type="text/javascript" src="../../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

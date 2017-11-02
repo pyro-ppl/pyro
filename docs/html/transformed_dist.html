@@ -1,0 +1,435 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Transformed Distribution &mdash; Pyro 0.0.1 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="genindex.html"/>
+        <link rel="search" title="Search" href="search.html"/>
+    <link rel="top" title="Pyro 0.0.1 documentation" href="index.html"/>
+        <link rel="up" title="Distributions" href="distributions.html"/>
+        <link rel="next" title="Parameters" href="parameters.html"/>
+        <link rel="prev" title="Primitive Distributions" href="primitive_dist.html"/> 
+
+  
+  <script src="_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="index.html">
+          
+
+          
+            
+            <img src="_static/pyro_logo_small.png" class="logo" />
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.0.1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="primitives.html">Primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="inference.html">Inference</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="distributions.html">Distributions</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="primitive_dist.html">Primitive Distributions</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Transformed Distribution</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#transformeddistribution">TransformedDistribution</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#bijector">Bijector</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#inverseautoregressiveflow">InverseAutoRegressiveFlow</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="parameters.html">Parameters</a></li>
+<li class="toctree-l1"><a class="reference internal" href="nn.html">Neural Network</a></li>
+<li class="toctree-l1"><a class="reference internal" href="optimization.html">Optimization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="advanced.html">Advanced Features</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">Pyro</a>
+        
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="distributions.html">Distributions</a> &raquo;</li>
+        
+      <li>Transformed Distribution</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="_sources/transformed_dist.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="transformed-distribution">
+<h1>Transformed Distribution<a class="headerlink" href="#transformed-distribution" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="transformeddistribution">
+<h2>TransformedDistribution<a class="headerlink" href="#transformeddistribution" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="pyro.distributions.transformed_distribution.TransformedDistribution">
+<em class="property">class </em><code class="descname">TransformedDistribution</code><span class="sig-paren">(</span><em>base_distribution</em>, <em>bijectors</em>, <em>*args</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/distributions/transformed_distribution.html#TransformedDistribution"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.distributions.transformed_distribution.TransformedDistribution" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="primitive_dist.html#pyro.distributions.distribution.Distribution" title="pyro.distributions.distribution.Distribution"><code class="xref py py-class docutils literal"><span class="pre">pyro.distributions.distribution.Distribution</span></code></a></p>
+<p>Transforms the base distribution by applying a sequence of <cite>Bijector`s to it.
+This results in a scorable distribution (i.e. it has a `log_pdf()</cite> method).</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>base_distribution</strong> (<em>pyro.distribution.Distribution</em>) – a (continuous) base distribution; samples from this distribution
+are passed through the sequence of <cite>Bijector`s to yield a sample from the
+`TransformedDistribution</cite></li>
+<li><strong>bijectors</strong> – either a single Bijector or a sequence of Bijectors wrapped in a nn.ModuleList</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">the transformed distribution</p>
+</td>
+</tr>
+</tbody>
+</table>
+<dl class="method">
+<dt id="pyro.distributions.transformed_distribution.TransformedDistribution.batch_log_pdf">
+<code class="descname">batch_log_pdf</code><span class="sig-paren">(</span><em>y</em>, <em>*args</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/distributions/transformed_distribution.html#TransformedDistribution.batch_log_pdf"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.distributions.transformed_distribution.TransformedDistribution.batch_log_pdf" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="pyro.distributions.transformed_distribution.TransformedDistribution.log_pdf">
+<code class="descname">log_pdf</code><span class="sig-paren">(</span><em>y</em>, <em>*args</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/distributions/transformed_distribution.html#TransformedDistribution.log_pdf"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.distributions.transformed_distribution.TransformedDistribution.log_pdf" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>y</strong> (<em>torch.autograd.Variable</em>) – a value sampled from the transformed distribution</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">the score (the log pdf) of y</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body">torch.autograd.Variable</td>
+</tr>
+</tbody>
+</table>
+<p>Scores the sample by inverting the bijector(s) and computing the score using the score
+of the base distribution and the log det jacobian</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyro.distributions.transformed_distribution.TransformedDistribution.sample">
+<code class="descname">sample</code><span class="sig-paren">(</span><em>*args</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/distributions/transformed_distribution.html#TransformedDistribution.sample"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.distributions.transformed_distribution.TransformedDistribution.sample" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">a sample y</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body">torch.autograd.Variable</td>
+</tr>
+</tbody>
+</table>
+<p>Sample from base distribution and pass through bijector(s)</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="bijector">
+<h2>Bijector<a class="headerlink" href="#bijector" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="pyro.distributions.transformed_distribution.Bijector">
+<em class="property">class </em><code class="descname">Bijector</code><span class="sig-paren">(</span><em>*args</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/distributions/transformed_distribution.html#Bijector"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.distributions.transformed_distribution.Bijector" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal"><span class="pre">torch.nn.modules.module.Module</span></code></p>
+<p>Abstract class <cite>Bijector</cite>. <cite>Bijector</cite> are bijective transformations with computable
+log det jacobians. They are meant for use in <cite>TransformedDistribution</cite>.</p>
+<dl class="method">
+<dt id="pyro.distributions.transformed_distribution.Bijector.inverse">
+<code class="descname">inverse</code><span class="sig-paren">(</span><em>*args</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/distributions/transformed_distribution.html#Bijector.inverse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.distributions.transformed_distribution.Bijector.inverse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Virtual inverse method</p>
+<p>Inverts the bijection y =&gt; x.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyro.distributions.transformed_distribution.Bijector.log_det_jacobian">
+<code class="descname">log_det_jacobian</code><span class="sig-paren">(</span><em>*args</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/distributions/transformed_distribution.html#Bijector.log_det_jacobian"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.distributions.transformed_distribution.Bijector.log_det_jacobian" title="Permalink to this definition">¶</a></dt>
+<dd><p>Virtual logdet jacobian method.</p>
+<p>Computes the log det jacobian <cite>|dy/dx|</cite></p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="inverseautoregressiveflow">
+<h2>InverseAutoRegressiveFlow<a class="headerlink" href="#inverseautoregressiveflow" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="pyro.distributions.transformed_distribution.InverseAutoregressiveFlow">
+<em class="property">class </em><code class="descname">InverseAutoregressiveFlow</code><span class="sig-paren">(</span><em>input_dim</em>, <em>hidden_dim</em>, <em>sigmoid_bias=2.0</em>, <em>permutation=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/distributions/transformed_distribution.html#InverseAutoregressiveFlow"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.distributions.transformed_distribution.InverseAutoregressiveFlow" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyro.distributions.transformed_distribution.Bijector" title="pyro.distributions.transformed_distribution.Bijector"><code class="xref py py-class docutils literal"><span class="pre">pyro.distributions.transformed_distribution.Bijector</span></code></a></p>
+<p>An implementation of an Inverse Autoregressive Flow. Together with the <cite>TransformedDistribution</cite> this
+provides a way to create richer variational approximations.</p>
+<p>Example usage:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">base_dist</span> <span class="o">=</span> <span class="n">Normal</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">iaf</span> <span class="o">=</span> <span class="n">InverseAutoregressiveFlow</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">pyro</span><span class="o">.</span><span class="n">module</span><span class="p">(</span><span class="s2">&quot;my_iaf&quot;</span><span class="p">,</span> <span class="n">iaf</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">iaf_dist</span> <span class="o">=</span> <span class="n">TransformedDistribution</span><span class="p">(</span><span class="n">base_dist</span><span class="p">,</span> <span class="n">iaf</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Note that this implementation is only meant to be used in settings where the inverse of the Bijector
+is never explicitly computed (rather the result is cached from the forward call). In the context of
+variational inference, this means that the InverseAutoregressiveFlow should only be used in the guide,
+i.e. in the variational distribution. In other contexts the inverse could in principle be computed but
+this would be a (potentially) costly computation that scales with the dimension of the input (and in
+any case support for this is not included in this implementation).</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>input_dim</strong> (<a class="reference external" href="https://docs.python.org/2/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) – dimension of input</li>
+<li><strong>hidden_dim</strong> (<a class="reference external" href="https://docs.python.org/2/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) – hidden dimension (number of hidden units)</li>
+<li><strong>sigmoid_bias</strong> (<a class="reference external" href="https://docs.python.org/2/library/functions.html#float" title="(in Python v2.7)"><em>float</em></a>) – bias on the hidden units fed into the sigmoid; default=`2.0`</li>
+<li><strong>permutation</strong> (<a class="reference external" href="https://docs.python.org/2/library/functions.html#bool" title="(in Python v2.7)"><em>bool</em></a>) – whether the order of the inputs should be permuted (by default the conditional
+dependence structure of the autoregression follows the sequential order)</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<p>References:</p>
+<p>1. Improving Variational Inference with Inverse Autoregressive Flow [arXiv:1606.04934]
+Diederik P. Kingma, Tim Salimans, Rafal Jozefowicz, Xi Chen, Ilya Sutskever, Max Welling</p>
+<p>2. Variational Inference with Normalizing Flows [arXiv:1505.05770]
+Danilo Jimenez Rezende, Shakir Mohamed</p>
+<p>3. MADE: Masked Autoencoder for Distribution Estimation [arXiv:1502.03509]
+Mathieu Germain, Karol Gregor, Iain Murray, Hugo Larochelle</p>
+<dl class="method">
+<dt id="pyro.distributions.transformed_distribution.InverseAutoregressiveFlow.get_arn">
+<code class="descname">get_arn</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/distributions/transformed_distribution.html#InverseAutoregressiveFlow.get_arn"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.distributions.transformed_distribution.InverseAutoregressiveFlow.get_arn" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body">pyro.nn.AutoRegressiveNN</td>
+</tr>
+</tbody>
+</table>
+<p>Return the AutoRegressiveNN associated with the InverseAutoregressiveFlow</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyro.distributions.transformed_distribution.InverseAutoregressiveFlow.inverse">
+<code class="descname">inverse</code><span class="sig-paren">(</span><em>y</em>, <em>*args</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/distributions/transformed_distribution.html#InverseAutoregressiveFlow.inverse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.distributions.transformed_distribution.InverseAutoregressiveFlow.inverse" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>y</strong> (<em>torch.autograd.Variable</em>) – the output of the bijection</td>
+</tr>
+</tbody>
+</table>
+<p>Inverts y =&gt; x. As noted above, this implementation is incapable of inverting arbitrary values
+<cite>y</cite>; rather it assumes <cite>y</cite> is the result of a previously computed application of the bijector
+to some <cite>x</cite> (which was cached on the forward call)</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyro.distributions.transformed_distribution.InverseAutoregressiveFlow.log_det_jacobian">
+<code class="descname">log_det_jacobian</code><span class="sig-paren">(</span><em>y</em>, <em>*args</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyro/distributions/transformed_distribution.html#InverseAutoregressiveFlow.log_det_jacobian"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyro.distributions.transformed_distribution.InverseAutoregressiveFlow.log_det_jacobian" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculates the determinant of the log jacobian</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+</div>
+
+
+           </div>
+           <div class="articleComments">
+            
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="parameters.html" class="btn btn-neutral float-right" title="Parameters" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="primitive_dist.html" class="btn btn-neutral" title="Primitive Distributions" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2017, Uber Technologies Inc.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'./',
+            VERSION:'0.0.1',
+            LANGUAGE:'None',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true,
+            SOURCELINK_SUFFIX: '.txt'
+        };
+    </script>
+      <script type="text/javascript" src="_static/jquery.js"></script>
+      <script type="text/javascript" src="_static/underscore.js"></script>
+      <script type="text/javascript" src="_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

@@ -1,0 +1,430 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>pyro.distributions.categorical &mdash; Pyro 0.0.1 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="../../../genindex.html"/>
+        <link rel="search" title="Search" href="../../../search.html"/>
+    <link rel="top" title="Pyro 0.0.1 documentation" href="../../../index.html"/>
+        <link rel="up" title="Module code" href="../../index.html"/> 
+
+  
+  <script src="../../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../../index.html">
+          
+
+          
+            
+            <img src="../../../_static/pyro_logo_small.png" class="logo" />
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.0.1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../getting_started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../primitives.html">Primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../inference.html">Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../distributions.html">Distributions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../parameters.html">Parameters</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../nn.html">Neural Network</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../optimization.html">Optimization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../advanced.html">Advanced Features</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">Pyro</a>
+        
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="../../index.html">Module code</a> &raquo;</li>
+        
+      <li>pyro.distributions.categorical</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for pyro.distributions.categorical</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">from</span> <span class="nn">torch.autograd</span> <span class="k">import</span> <span class="n">Variable</span>
+
+<span class="kn">from</span> <span class="nn">pyro.distributions.distribution</span> <span class="k">import</span> <span class="n">Distribution</span>
+<span class="kn">from</span> <span class="nn">pyro.distributions.util</span> <span class="k">import</span> <span class="n">get_probs_and_logits</span><span class="p">,</span> <span class="n">torch_eye</span><span class="p">,</span> <span class="n">torch_multinomial</span><span class="p">,</span> <span class="n">torch_zeros_like</span>
+
+
+<div class="viewcode-block" id="Categorical"><a class="viewcode-back" href="../../../primitive_dist.html#pyro.distributions.categorical.Categorical">[docs]</a><span class="k">class</span> <span class="nc">Categorical</span><span class="p">(</span><span class="n">Distribution</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Categorical (discrete) distribution.</span>
+
+<span class="sd">    Discrete distribution over elements of `vs` with `P(vs[i])` proportional to</span>
+<span class="sd">    `ps[i]`.  If `one_hot=True`, `.sample()` returns a one-hot vector;</span>
+<span class="sd">    otherwise `.sample()` returns the category index.</span>
+
+<span class="sd">    :param ps: Probabilities. These should be non-negative and normalized</span>
+<span class="sd">        along the rightmost axis.</span>
+<span class="sd">    :type ps: `torch.autograd.Variable`.</span>
+<span class="sd">    :param logits: Non-normalized log probability values. Either `ps` or `logits`</span>
+<span class="sd">        should be specified but not both.</span>
+<span class="sd">    :type logits: `torch.autograd.Variable`.</span>
+<span class="sd">    :param vs: Optional list of values in the support.</span>
+<span class="sd">    :type vs: `list` or `numpy.array` or `torch.autograd.Variable`</span>
+<span class="sd">    :param one_hot: Whether `sample()` returns a `one_hot` sample.  Defaults</span>
+<span class="sd">        to `False` if `vs` is specified or `True` if `vs` is not specified.</span>
+<span class="sd">    :param int batch_size: Optional number of elements in the batch used to</span>
+<span class="sd">        generate a sample. The batch dimension will be the leftmost dimension</span>
+<span class="sd">        in the generated sample.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">enumerable</span> <span class="o">=</span> <span class="kc">True</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ps</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">vs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">logits</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">one_hot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">log_pdf_mask</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span>
+                 <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">ps</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">)</span> <span class="o">==</span> <span class="p">(</span><span class="n">logits</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Got ps=</span><span class="si">{}</span><span class="s2">, logits=</span><span class="si">{}</span><span class="s2">. Either `ps` or `logits` must be specified, &quot;</span>
+                             <span class="s2">&quot;but not both.&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">ps</span><span class="p">,</span> <span class="n">logits</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ps</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">logits</span> <span class="o">=</span> <span class="n">get_probs_and_logits</span><span class="p">(</span><span class="n">ps</span><span class="o">=</span><span class="n">ps</span><span class="p">,</span> <span class="n">logits</span><span class="o">=</span><span class="n">logits</span><span class="p">,</span> <span class="n">is_multidimensional</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="c1"># vs is None, Variable(Tensor), or numpy.array</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">vs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_process_data</span><span class="p">(</span><span class="n">vs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">one_hot</span> <span class="o">=</span> <span class="n">one_hot</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log_pdf_mask</span> <span class="o">=</span> <span class="n">log_pdf_mask</span>
+        <span class="k">if</span> <span class="n">vs</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">vs_shape</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">vs</span><span class="o">.</span><span class="n">shape</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">vs</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">vs</span><span class="o">.</span><span class="n">size</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">vs_shape</span> <span class="o">!=</span> <span class="n">ps</span><span class="o">.</span><span class="n">size</span><span class="p">():</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Expected vs.size() or vs.shape == ps.size(), but got </span><span class="si">{}</span><span class="s2"> vs </span><span class="si">{}</span><span class="s2">&quot;</span>
+                                 <span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">vs_shape</span><span class="p">,</span> <span class="n">ps</span><span class="o">.</span><span class="n">size</span><span class="p">()))</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">one_hot</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">one_hot</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">ps</span><span class="o">.</span><span class="n">dim</span><span class="p">()</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="n">batch_size</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ps</span><span class="o">.</span><span class="n">expand</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ps</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logits</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">logits</span><span class="o">.</span><span class="n">expand</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">logits</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">log_pdf_mask</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">log_pdf_mask</span><span class="o">.</span><span class="n">dim</span><span class="p">()</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log_pdf_mask</span> <span class="o">=</span> <span class="n">log_pdf_mask</span><span class="o">.</span><span class="n">expand</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">log_pdf_mask</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Categorical</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_process_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">x</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+                <span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="p">(</span><span class="n">Variable</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)):</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">((</span><span class="s2">&quot;Data should be of type: list, Variable, Tensor, or numpy array&quot;</span>
+                                 <span class="s2">&quot;but was of </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">x</span><span class="p">)))))</span>
+        <span class="k">return</span> <span class="n">x</span>
+
+<div class="viewcode-block" id="Categorical.batch_shape"><a class="viewcode-back" href="../../../primitive_dist.html#pyro.distributions.categorical.Categorical.batch_shape">[docs]</a>    <span class="k">def</span> <span class="nf">batch_shape</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">event_dim</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="n">ps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ps</span>
+        <span class="k">if</span> <span class="n">x</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_process_data</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+            <span class="n">x_shape</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="k">else</span> <span class="n">x</span><span class="o">.</span><span class="n">size</span><span class="p">()</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">ps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ps</span><span class="o">.</span><span class="n">expand</span><span class="p">(</span><span class="n">x_shape</span><span class="p">[:</span><span class="o">-</span><span class="n">event_dim</span><span class="p">]</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">event_shape</span><span class="p">())</span>
+            <span class="k">except</span> <span class="ne">RuntimeError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Parameter `ps` with shape </span><span class="si">{}</span><span class="s2"> is not broadcastable to &quot;</span>
+                                 <span class="s2">&quot;the data shape </span><span class="si">{}</span><span class="s2">. </span><span class="se">\n</span><span class="s2">Error: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">ps</span><span class="o">.</span><span class="n">size</span><span class="p">(),</span> <span class="n">x</span><span class="o">.</span><span class="n">size</span><span class="p">(),</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)))</span>
+        <span class="k">return</span> <span class="n">ps</span><span class="o">.</span><span class="n">size</span><span class="p">()[:</span><span class="o">-</span><span class="n">event_dim</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="Categorical.event_shape"><a class="viewcode-back" href="../../../primitive_dist.html#pyro.distributions.categorical.Categorical.event_shape">[docs]</a>    <span class="k">def</span> <span class="nf">event_shape</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">event_dim</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">ps</span><span class="o">.</span><span class="n">size</span><span class="p">()[</span><span class="o">-</span><span class="n">event_dim</span><span class="p">:]</span></div>
+
+<div class="viewcode-block" id="Categorical.shape"><a class="viewcode-back" href="../../../primitive_dist.html#pyro.distributions.categorical.Categorical.shape">[docs]</a>    <span class="k">def</span> <span class="nf">shape</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">one_hot</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">batch_shape</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">event_shape</span><span class="p">()</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">batch_shape</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">+</span> <span class="p">(</span><span class="mi">1</span><span class="p">,)</span></div>
+
+<div class="viewcode-block" id="Categorical.sample"><a class="viewcode-back" href="../../../primitive_dist.html#pyro.distributions.categorical.Categorical.sample">[docs]</a>    <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns a sample which has the same shape as ``ps`` (or ``vs``), except</span>
+<span class="sd">        that if ``one_hot=True`` (and no ``vs`` is specified), the last dimension</span>
+<span class="sd">        will have the same size as the number of events. The type of the sample</span>
+<span class="sd">        is `numpy.ndarray` if `vs` is a list or a numpy array, else a tensor</span>
+<span class="sd">        is returned.</span>
+
+<span class="sd">        :return: sample from the Categorical distribution</span>
+<span class="sd">        :rtype: numpy.ndarray or torch.LongTensor</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">sample</span> <span class="o">=</span> <span class="n">torch_multinomial</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ps</span><span class="o">.</span><span class="n">data</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">replacement</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">expand</span><span class="p">(</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">())</span>
+        <span class="n">sample_one_hot</span> <span class="o">=</span> <span class="n">torch_zeros_like</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ps</span><span class="o">.</span><span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="n">scatter_</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">sample</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">vs</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">vs</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">):</span>
+                <span class="n">sample_bool_index</span> <span class="o">=</span> <span class="n">sample_one_hot</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">bool</span><span class="p">)</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">vs</span><span class="p">[</span><span class="n">sample_bool_index</span><span class="p">]</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">())</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">vs</span><span class="o">.</span><span class="n">masked_select</span><span class="p">(</span><span class="n">sample_one_hot</span><span class="o">.</span><span class="n">byte</span><span class="p">())</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">one_hot</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">Variable</span><span class="p">(</span><span class="n">sample_one_hot</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">Variable</span><span class="p">(</span><span class="n">sample</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Categorical.batch_log_pdf"><a class="viewcode-back" href="../../../primitive_dist.html#pyro.distributions.categorical.Categorical.batch_log_pdf">[docs]</a>    <span class="k">def</span> <span class="nf">batch_log_pdf</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Evaluates log probability densities for one or a batch of samples and parameters.</span>
+<span class="sd">        The last dimension for ``ps`` encodes the event probabilities, and the remaining</span>
+<span class="sd">        dimensions are considered batch dimensions.</span>
+
+<span class="sd">        ``ps`` and ``vs`` are first broadcasted to the size of the data ``x``. The</span>
+<span class="sd">        data tensor is used to to create a mask over ``vs`` where a 1 in the mask</span>
+<span class="sd">        indicates that the corresponding value in ``vs`` was selected. Since, ``ps``</span>
+<span class="sd">        and ``vs`` have the same size, this mask when applied over ``ps`` gives</span>
+<span class="sd">        the probabilities of the selected events. The method returns the logarithm</span>
+<span class="sd">        of these probabilities.</span>
+
+<span class="sd">        :return: tensor with log probabilities for each of the batches.</span>
+<span class="sd">        :rtype: torch.autograd.Variable</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">logits</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">logits</span>
+        <span class="n">vs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">vs</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_process_data</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">batch_pdf_shape</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">batch_shape</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">+</span> <span class="p">(</span><span class="mi">1</span><span class="p">,)</span>
+        <span class="c1"># probability tensor mask when data is numpy</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">):</span>
+            <span class="n">batch_vs_size</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="p">(</span><span class="n">vs</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],)</span>
+            <span class="n">vs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">broadcast_to</span><span class="p">(</span><span class="n">vs</span><span class="p">,</span> <span class="n">batch_vs_size</span><span class="p">)</span>
+            <span class="n">boolean_mask</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">((</span><span class="n">vs</span> <span class="o">==</span> <span class="n">x</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">int</span><span class="p">))</span>
+        <span class="c1"># probability tensor mask when data is pytorch tensor</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">cuda</span><span class="p">()</span> <span class="k">if</span> <span class="n">logits</span><span class="o">.</span><span class="n">is_cuda</span> <span class="k">else</span> <span class="n">x</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span>
+            <span class="n">batch_ps_shape</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">batch_shape</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">event_shape</span><span class="p">()</span>
+            <span class="n">logits</span> <span class="o">=</span> <span class="n">logits</span><span class="o">.</span><span class="n">expand</span><span class="p">(</span><span class="n">batch_ps_shape</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">vs</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">vs</span> <span class="o">=</span> <span class="n">vs</span><span class="o">.</span><span class="n">expand</span><span class="p">(</span><span class="n">batch_ps_shape</span><span class="p">)</span>
+                <span class="n">boolean_mask</span> <span class="o">=</span> <span class="p">(</span><span class="n">vs</span> <span class="o">==</span> <span class="n">x</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">one_hot</span><span class="p">:</span>
+                <span class="n">boolean_mask</span> <span class="o">=</span> <span class="n">x</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">boolean_mask</span> <span class="o">=</span> <span class="n">torch_zeros_like</span><span class="p">(</span><span class="n">logits</span><span class="o">.</span><span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="n">scatter_</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">long</span><span class="p">(),</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="n">boolean_mask</span> <span class="o">=</span> <span class="n">boolean_mask</span><span class="o">.</span><span class="n">cuda</span><span class="p">()</span> <span class="k">if</span> <span class="n">logits</span><span class="o">.</span><span class="n">is_cuda</span> <span class="k">else</span> <span class="n">boolean_mask</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">boolean_mask</span><span class="p">,</span> <span class="n">Variable</span><span class="p">):</span>
+            <span class="n">boolean_mask</span> <span class="o">=</span> <span class="n">Variable</span><span class="p">(</span><span class="n">boolean_mask</span><span class="p">)</span>
+        <span class="c1"># apply log function to masked probability tensor</span>
+        <span class="n">batch_log_pdf</span> <span class="o">=</span> <span class="n">logits</span><span class="o">.</span><span class="n">masked_select</span><span class="p">(</span><span class="n">boolean_mask</span><span class="o">.</span><span class="n">byte</span><span class="p">())</span><span class="o">.</span><span class="n">contiguous</span><span class="p">()</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="n">batch_pdf_shape</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">log_pdf_mask</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">batch_log_pdf</span> <span class="o">=</span> <span class="n">batch_log_pdf</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">log_pdf_mask</span>
+        <span class="k">return</span> <span class="n">batch_log_pdf</span></div>
+
+<div class="viewcode-block" id="Categorical.enumerate_support"><a class="viewcode-back" href="../../../primitive_dist.html#pyro.distributions.categorical.Categorical.enumerate_support">[docs]</a>    <span class="k">def</span> <span class="nf">enumerate_support</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns the categorical distribution&#39;s support, as a tensor along the first dimension.</span>
+
+<span class="sd">        Note that this returns support values of all the batched RVs in lock-step, rather</span>
+<span class="sd">        than the full cartesian product. To iterate over the cartesian product, you must</span>
+<span class="sd">        construct univariate Categoricals and use itertools.product() over all univariate</span>
+<span class="sd">        variables (but this is very expensive).</span>
+
+<span class="sd">        :param ps: numpy.ndarray where the last dimension denotes the event probabilities, *p_k*,</span>
+<span class="sd">            which must sum to 1. The remaining dimensions are considered batch dimensions.</span>
+<span class="sd">        :param vs: Optional parameter, enumerating the items in the support. This could either</span>
+<span class="sd">            have a numeric or string type. This should have the same dimension as ``ps``.</span>
+<span class="sd">        :param one_hot: Denotes whether one hot encoding is enabled. This is True by default.</span>
+<span class="sd">            When set to false, and no explicit ``vs`` is provided, the last dimension gives</span>
+<span class="sd">            the one-hot encoded value from the support.</span>
+<span class="sd">        :return: torch variable or numpy array enumerating the support of the categorical distribution.</span>
+<span class="sd">            Each item in the return value, when enumerated along the first dimensions, yields a</span>
+<span class="sd">            value from the distribution&#39;s support which has the same dimension as would be returned by</span>
+<span class="sd">            sample. If ``one_hot=True``, the last dimension is used for the one-hot encoding.</span>
+<span class="sd">        :rtype: torch.autograd.Variable or numpy.ndarray.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">sample_shape</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">batch_shape</span><span class="p">()</span> <span class="o">+</span> <span class="p">(</span><span class="mi">1</span><span class="p">,)</span>
+        <span class="n">support_samples_size</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">event_shape</span><span class="p">())</span> <span class="o">+</span> <span class="n">sample_shape</span>
+        <span class="n">vs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">vs</span>
+
+        <span class="k">if</span> <span class="n">vs</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">vs</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">):</span>
+                <span class="k">return</span> <span class="n">vs</span><span class="o">.</span><span class="n">transpose</span><span class="p">()</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">*</span><span class="n">support_samples_size</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">vs</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">contiguous</span><span class="p">()</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="n">support_samples_size</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">one_hot</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">Variable</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">t</span><span class="o">.</span><span class="n">expand_as</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ps</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">torch_eye</span><span class="p">(</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">event_shape</span><span class="p">())]))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">LongTensor</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">LongTensor</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">ps</span><span class="o">.</span><span class="n">is_cuda</span> <span class="k">else</span> <span class="n">torch</span><span class="o">.</span><span class="n">LongTensor</span>
+            <span class="k">return</span> <span class="n">Variable</span><span class="p">(</span>
+                <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">LongTensor</span><span class="p">([</span><span class="n">t</span><span class="p">])</span><span class="o">.</span><span class="n">expand</span><span class="p">(</span><span class="n">sample_shape</span><span class="p">)</span>
+                             <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">event_shape</span><span class="p">())</span><span class="o">.</span><span class="n">long</span><span class="p">()]))</span></div></div>
+</pre></div>
+
+           </div>
+           <div class="articleComments">
+            
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2017, Uber Technologies Inc.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../../',
+            VERSION:'0.0.1',
+            LANGUAGE:'None',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true,
+            SOURCELINK_SUFFIX: '.txt'
+        };
+    </script>
+      <script type="text/javascript" src="../../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

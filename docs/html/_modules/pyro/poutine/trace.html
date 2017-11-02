@@ -1,0 +1,382 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>pyro.poutine.trace &mdash; Pyro 0.0.1 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="../../../genindex.html"/>
+        <link rel="search" title="Search" href="../../../search.html"/>
+    <link rel="top" title="Pyro 0.0.1 documentation" href="../../../index.html"/>
+        <link rel="up" title="Module code" href="../../index.html"/> 
+
+  
+  <script src="../../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../../index.html">
+          
+
+          
+            
+            <img src="../../../_static/pyro_logo_small.png" class="logo" />
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.0.1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../getting_started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../primitives.html">Primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../inference.html">Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../distributions.html">Distributions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../parameters.html">Parameters</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../nn.html">Neural Network</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../optimization.html">Optimization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../advanced.html">Advanced Features</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">Pyro</a>
+        
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="../../index.html">Module code</a> &raquo;</li>
+        
+      <li>pyro.poutine.trace</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for pyro.poutine.trace</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">collections</span>
+
+<span class="kn">import</span> <span class="nn">networkx</span>
+
+
+<div class="viewcode-block" id="Trace"><a class="viewcode-back" href="../../../poutine.html#pyro.poutine.trace.Trace">[docs]</a><span class="k">class</span> <span class="nc">Trace</span><span class="p">(</span><span class="n">networkx</span><span class="o">.</span><span class="n">DiGraph</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Execution trace data structure</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">node_dict_factory</span> <span class="o">=</span> <span class="n">collections</span><span class="o">.</span><span class="n">OrderedDict</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param string graph_type: string specifying the kind of trace graph to construct</span>
+
+<span class="sd">        Constructor. Currently identical to networkx.``DiGraph(\*args, \**kwargs)``,</span>
+<span class="sd">        except for storing the graph_type attribute</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">graph_type</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;graph_type&quot;</span><span class="p">,</span> <span class="s2">&quot;flat&quot;</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="n">graph_type</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;flat&quot;</span><span class="p">,</span> <span class="s2">&quot;dense&quot;</span><span class="p">),</span> \
+            <span class="s2">&quot;</span><span class="si">{}</span><span class="s2"> not a valid graph type&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">graph_type</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">graph_type</span> <span class="o">=</span> <span class="n">graph_type</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Trace</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Trace.add_node"><a class="viewcode-back" href="../../../poutine.html#pyro.poutine.trace.Trace.add_node">[docs]</a>    <span class="k">def</span> <span class="nf">add_node</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">site_name</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param string site_name: the name of the site to be added</span>
+
+<span class="sd">        Adds a site to the trace.</span>
+
+<span class="sd">        Identical to super(Trace, self).add_node,</span>
+<span class="sd">        but raises an error when attempting to add a duplicate node</span>
+<span class="sd">        instead of silently overwriting.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># XXX should do more validation than this</span>
+        <span class="k">if</span> <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">]</span> <span class="o">!=</span> <span class="s2">&quot;param&quot;</span><span class="p">:</span>
+            <span class="k">assert</span> <span class="n">site_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="p">,</span> \
+                <span class="s2">&quot;site </span><span class="si">{}</span><span class="s2"> already in trace&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">site_name</span><span class="p">)</span>
+
+        <span class="c1"># XXX should copy in case site gets mutated, or dont bother?</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Trace</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">add_node</span><span class="p">(</span><span class="n">site_name</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="o">.</span><span class="n">copy</span><span class="p">())</span></div>
+
+<div class="viewcode-block" id="Trace.copy"><a class="viewcode-back" href="../../../poutine.html#pyro.poutine.trace.Trace.copy">[docs]</a>    <span class="k">def</span> <span class="nf">copy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Makes a shallow copy of self with nodes and edges preserved.</span>
+<span class="sd">        Identical to super(Trace, self).copy(), but preserves the type</span>
+<span class="sd">        and the self.graph_type attribute</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">Trace</span><span class="p">(</span><span class="nb">super</span><span class="p">(</span><span class="n">Trace</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span> <span class="n">graph_type</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">graph_type</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Trace.log_pdf"><a class="viewcode-back" href="../../../poutine.html#pyro.poutine.trace.Trace.log_pdf">[docs]</a>    <span class="k">def</span> <span class="nf">log_pdf</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">site_filter</span><span class="o">=</span><span class="k">lambda</span> <span class="n">name</span><span class="p">,</span> <span class="n">site</span><span class="p">:</span> <span class="kc">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Compute the local and overall log-probabilities of the trace.</span>
+
+<span class="sd">        The local computation is memoized.</span>
+
+<span class="sd">        :returns: total log probability.</span>
+<span class="sd">        :rtype: torch.autograd.Variable</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">log_p</span> <span class="o">=</span> <span class="mf">0.0</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">site</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodes</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">site</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;sample&quot;</span> <span class="ow">and</span> <span class="n">site_filter</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">site</span><span class="p">):</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">site_log_p</span> <span class="o">=</span> <span class="n">site</span><span class="p">[</span><span class="s2">&quot;log_pdf&quot;</span><span class="p">]</span>
+                <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+                    <span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span> <span class="o">=</span> <span class="n">site</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">],</span> <span class="n">site</span><span class="p">[</span><span class="s2">&quot;kwargs&quot;</span><span class="p">]</span>
+                    <span class="n">site_log_p</span> <span class="o">=</span> <span class="n">site</span><span class="p">[</span><span class="s2">&quot;fn&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">log_pdf</span><span class="p">(</span>
+                        <span class="n">site</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">],</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">*</span> <span class="n">site</span><span class="p">[</span><span class="s2">&quot;scale&quot;</span><span class="p">]</span>
+                    <span class="n">site</span><span class="p">[</span><span class="s2">&quot;log_pdf&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">site_log_p</span>
+                <span class="n">log_p</span> <span class="o">+=</span> <span class="n">site_log_p</span>
+        <span class="k">return</span> <span class="n">log_p</span></div>
+
+    <span class="c1"># XXX This only makes sense when all tensors have compatible shape.</span>
+<div class="viewcode-block" id="Trace.batch_log_pdf"><a class="viewcode-back" href="../../../poutine.html#pyro.poutine.trace.Trace.batch_log_pdf">[docs]</a>    <span class="k">def</span> <span class="nf">batch_log_pdf</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">site_filter</span><span class="o">=</span><span class="k">lambda</span> <span class="n">name</span><span class="p">,</span> <span class="n">site</span><span class="p">:</span> <span class="kc">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Compute the batched local and overall log-probabilities of the trace.</span>
+
+<span class="sd">        The local computation is memoized, and also stores the local `.log_pdf()`.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">log_p</span> <span class="o">=</span> <span class="mf">0.0</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">site</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodes</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">site</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;sample&quot;</span> <span class="ow">and</span> <span class="n">site_filter</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">site</span><span class="p">):</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">site_log_p</span> <span class="o">=</span> <span class="n">site</span><span class="p">[</span><span class="s2">&quot;batch_log_pdf&quot;</span><span class="p">]</span>
+                <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+                    <span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span> <span class="o">=</span> <span class="n">site</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">],</span> <span class="n">site</span><span class="p">[</span><span class="s2">&quot;kwargs&quot;</span><span class="p">]</span>
+                    <span class="n">site_log_p</span> <span class="o">=</span> <span class="n">site</span><span class="p">[</span><span class="s2">&quot;fn&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">batch_log_pdf</span><span class="p">(</span>
+                        <span class="n">site</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">],</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">*</span> <span class="n">site</span><span class="p">[</span><span class="s2">&quot;scale&quot;</span><span class="p">]</span>
+                    <span class="n">site</span><span class="p">[</span><span class="s2">&quot;batch_log_pdf&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">site_log_p</span>
+                    <span class="n">site</span><span class="p">[</span><span class="s2">&quot;log_pdf&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">site_log_p</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+                <span class="c1"># Here log_p may be broadcast to a larger tensor:</span>
+                <span class="n">log_p</span> <span class="o">=</span> <span class="n">log_p</span> <span class="o">+</span> <span class="n">site_log_p</span>
+        <span class="k">return</span> <span class="n">log_p</span></div>
+
+<div class="viewcode-block" id="Trace.compute_batch_log_pdf"><a class="viewcode-back" href="../../../poutine.html#pyro.poutine.trace.Trace.compute_batch_log_pdf">[docs]</a>    <span class="k">def</span> <span class="nf">compute_batch_log_pdf</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">site_filter</span><span class="o">=</span><span class="k">lambda</span> <span class="n">name</span><span class="p">,</span> <span class="n">site</span><span class="p">:</span> <span class="kc">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Compute the batched local log-probabilities at each site of the trace.</span>
+
+<span class="sd">        The local computation is memoized, and also stores the local `.log_pdf()`.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">site</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodes</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">site</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;sample&quot;</span> <span class="ow">and</span> <span class="n">site_filter</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">site</span><span class="p">):</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">site</span><span class="p">[</span><span class="s2">&quot;batch_log_pdf&quot;</span><span class="p">]</span>
+                <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+                    <span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span> <span class="o">=</span> <span class="n">site</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">],</span> <span class="n">site</span><span class="p">[</span><span class="s2">&quot;kwargs&quot;</span><span class="p">]</span>
+                    <span class="n">site_log_p</span> <span class="o">=</span> <span class="n">site</span><span class="p">[</span><span class="s2">&quot;fn&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">batch_log_pdf</span><span class="p">(</span>
+                        <span class="n">site</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">],</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">*</span> <span class="n">site</span><span class="p">[</span><span class="s2">&quot;scale&quot;</span><span class="p">]</span>
+                    <span class="n">site</span><span class="p">[</span><span class="s2">&quot;batch_log_pdf&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">site_log_p</span>
+                    <span class="n">site</span><span class="p">[</span><span class="s2">&quot;log_pdf&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">site_log_p</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">observation_nodes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Gets a list of names of observe sites</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">name</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">node</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodes</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">node</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;sample&quot;</span> <span class="ow">and</span>
+                <span class="n">node</span><span class="p">[</span><span class="s2">&quot;is_observed&quot;</span><span class="p">]]</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">stochastic_nodes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Gets a list of names of sample sites</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">name</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">node</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodes</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">node</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;sample&quot;</span> <span class="ow">and</span>
+                <span class="ow">not</span> <span class="n">node</span><span class="p">[</span><span class="s2">&quot;is_observed&quot;</span><span class="p">]]</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">reparameterized_nodes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Gets a list of names of sample sites whose stochastic functions</span>
+<span class="sd">        are reparameterizable primitive distributions</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">name</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">node</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodes</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">node</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;sample&quot;</span> <span class="ow">and</span>
+                <span class="ow">not</span> <span class="n">node</span><span class="p">[</span><span class="s2">&quot;is_observed&quot;</span><span class="p">]</span> <span class="ow">and</span>
+                <span class="nb">getattr</span><span class="p">(</span><span class="n">node</span><span class="p">[</span><span class="s2">&quot;fn&quot;</span><span class="p">],</span> <span class="s2">&quot;reparameterized&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)]</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">nonreparam_stochastic_nodes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Gets a list of names of sample sites whose stochastic functions</span>
+<span class="sd">        are not reparameterizable primitive distributions</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">stochastic_nodes</span><span class="p">)</span> <span class="o">-</span> <span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">reparameterized_nodes</span><span class="p">))</span></div>
+</pre></div>
+
+           </div>
+           <div class="articleComments">
+            
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2017, Uber Technologies Inc.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../../',
+            VERSION:'0.0.1',
+            LANGUAGE:'None',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true,
+            SOURCELINK_SUFFIX: '.txt'
+        };
+    </script>
+      <script type="text/javascript" src="../../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>
