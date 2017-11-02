@@ -182,7 +182,7 @@ class MNISTCached(MNIST):
         return img, target
 
 
-def setup_data_loaders(dataset, use_cuda, batch_size, sup_num, root='./data', download=True, **kwargs):
+def setup_data_loaders(dataset, use_cuda, batch_size, sup_num=None, root='./data', download=True, **kwargs):
     """
         helper function for setting up pytorch data loaders for a semi-supervised dataset
     :param dataset: the data to use
@@ -196,22 +196,32 @@ def setup_data_loaders(dataset, use_cuda, batch_size, sup_num, root='./data', do
                                   supervised data for testing)
     """
     # instantiate the dataset as training/testing sets
-    train_set_sup = dataset(root=root, mode="sup", download=download, sup_num=sup_num, use_cuda=use_cuda)
-
-    train_set_unsup = dataset(root=root, mode="unsup", download=download, sup_num=sup_num, use_cuda=use_cuda)
-
-    validation_set = dataset(root=root, mode="valid", download=download, sup_num=sup_num, use_cuda=use_cuda)
-
-    test_set = dataset(root=root, mode="test", sup_num=sup_num, use_cuda=use_cuda)
-
     if 'num_workers' not in kwargs:
         kwargs = {'num_workers': 0, 'pin_memory': False}
 
-    # setup the data loaders
-    train_loader_sup = DataLoader(train_set_sup, batch_size=batch_size, shuffle=True, **kwargs)
+    if sup_num is None:
+        train_set_unsup = dataset(root=root, mode="unsup", download=download,
+                                  sup_num=MNISTCached.train_data_size, use_cuda=use_cuda)
+    else:
+        train_set_unsup = dataset(root=root, mode="unsup", download=download,
+                                  sup_num=sup_num, use_cuda=use_cuda)
     train_loader_unsup = DataLoader(train_set_unsup, batch_size=batch_size, shuffle=True, **kwargs)
 
-    validation_loader = DataLoader(validation_set, batch_size=batch_size, shuffle=False, **kwargs)
+    test_set = dataset(root=root, mode="test", sup_num=sup_num, use_cuda=use_cuda)
+
     test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False, **kwargs)
+
+    if sup_num is None:
+        return train_loader_unsup, test_loader
+
+    train_set_sup = dataset(root=root, mode="sup", download=download, sup_num=sup_num, use_cuda=use_cuda)
+
+    validation_set = dataset(root=root, mode="valid", download=download, sup_num=sup_num, use_cuda=use_cuda)
+
+
+
+    train_loader_sup = DataLoader(train_set_sup, batch_size=batch_size, shuffle=True, **kwargs)
+
+    validation_loader = DataLoader(validation_set, batch_size=batch_size, shuffle=False, **kwargs)
 
     return train_loader_sup, train_loader_unsup, test_loader, validation_loader
