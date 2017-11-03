@@ -114,6 +114,8 @@ html_theme_options = {
 html_static_path = ['_static']
 html_style = 'css/pyro.css'
 
+html_favicon = '../img/favicon/favicon.ico'
+
 
 # -- Options for HTMLHelp output ------------------------------------------
 

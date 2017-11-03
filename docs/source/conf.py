@@ -95,6 +95,9 @@ add_module_names = False
 # logo
 html_logo = '_static/img/pyro_logo_wide.png'
 
+# logo
+html_favicon = '_static/img/favicon/favicon.ico'
+
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
