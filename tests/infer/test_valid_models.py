@@ -49,8 +49,8 @@ def assert_warning(model, guide, **kwargs):
 def test_nonempty_model_empty_guide_ok(trace_graph):
 
     def model():
-        mu = Variable(torch.zeros(2))
-        sigma = Variable(torch.zeros(2))
+        mu = Variable(torch.Tensor([0, 0]))
+        sigma = Variable(torch.Tensor([1, 1]))
         pyro.sample("x", dist.normal, mu, sigma, obs=mu)
 
     def guide():
@@ -460,13 +460,13 @@ def test_iarange_enum_discrete_no_discrete_vars_ok():
 
     def model():
         mu = Variable(torch.zeros(2, 1))
-        sigma = Variable(torch.zeros(2, 1))
+        sigma = Variable(torch.ones(2, 1))
         with pyro.iarange("iarange", 10, 5) as ind:
             pyro.sample("x", dist.normal, mu, sigma, batch_size=len(ind))
 
     def guide():
         mu = pyro.param("mu", Variable(torch.zeros(2, 1), requires_grad=True))
-        sigma = pyro.param("sigma", Variable(torch.zeros(2, 1), requires_grad=True))
+        sigma = pyro.param("sigma", Variable(torch.ones(2, 1), requires_grad=True))
         with pyro.iarange("iarange", 10, 5) as ind:
             pyro.sample("x", dist.normal, mu, sigma, batch_size=len(ind))
 
