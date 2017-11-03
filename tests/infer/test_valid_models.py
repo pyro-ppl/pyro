@@ -19,6 +19,7 @@ def assert_ok(model, guide, **kwargs):
     """
     Assert that inference works without warnings or errors.
     """
+    pyro.clear_param_store()
     inference = SVI(model, guide, Adam({"lr": 1e-6}), "ELBO", **kwargs)
     inference.step()
 
@@ -27,6 +28,7 @@ def assert_error(model, guide, **kwargs):
     """
     Assert that inference fails with an error.
     """
+    pyro.clear_param_store()
     inference = SVI(model,  guide, Adam({"lr": 1e-6}), "ELBO", **kwargs)
     with pytest.raises((NotImplementedError, UserWarning, KeyError, ValueError, RuntimeError)):
         inference.step()
@@ -36,6 +38,7 @@ def assert_warning(model, guide, **kwargs):
     """
     Assert that inference works but with a warning.
     """
+    pyro.clear_param_store()
     inference = SVI(model,  guide, Adam({"lr": 1e-6}), "ELBO", **kwargs)
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
