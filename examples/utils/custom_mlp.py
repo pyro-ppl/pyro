@@ -58,7 +58,11 @@ def call_nn_op(op, epsilon):
     :return: instantiation of the op module with appropriate parameters
     """
     if op in [ClippedSoftmax]:
-        return op(epsilon, dim=1)
+        try:
+            return op(epsilon, dim=1)
+        except TypeError:
+            # Support older pytorch 0.2 release.
+            return op(epsilon)
     elif op in [ClippedSigmoid]:
         return op(epsilon)
     elif op in [nn.Softmax, nn.LogSoftmax]:
