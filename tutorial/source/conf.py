@@ -49,6 +49,9 @@ templates_path = ['_templates']
 # source_suffix = ['.rst', '.md']
 source_suffix = ['.rst', '.ipynb']
 
+# do not execute cells
+nbsphinx_execute = 'never'
+
 # allow errors because not all tutorials build
 nbsphinx_allow_errors = True
 
