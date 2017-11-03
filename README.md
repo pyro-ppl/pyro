@@ -2,6 +2,7 @@
   <a href="http://pyro.ai"> <img width="150px" height="150px" src="docs/source/_static/img/pyro_logo.png"></a>
 </div>
 
+
 ----------------------------------------------------------------
 
 [![Build Status](https://travis-ci.com/uber/pyro.svg?token=LrMxkQNuTGCmwphBqyVs&branch=dev)](https://travis-ci.com/uber/pyro)
@@ -10,6 +11,8 @@
 
 [Getting Started](http://pyro.ai/examples) | [Documentation](http://docs.pyro.ai/) | [Contributing](CONTRIBUTING.md)
 
+Please also refer to the [Pyro homepage](http://pyro.ai/).
+
 Pyro is a flexible, scalable deep probabilistic programming library built on PyTorch.  Notably, it was designed with these principles in mind:
 - **Universal**: Pyro is a universal PPL -- it can represent any computable probability distribution.
 - **Scalable**: Pyro scales to large data sets with little overhead compare to hand-written code.
@@ -17,6 +20,7 @@ Pyro is a flexible, scalable deep probabilistic programming library built on PyT
 - **Flexible**: Pyro aims for automation when you want it, control when you need it. This is accomplished through high-level abstractions to express generative and inference models, while allowing experts easy-access to customize inference.
 
 Pyro is in an alpha release.  It is developed and used by [Uber AI Labs](http://uber.ai).
+More information is available in the [launch blog post](http://eng.uber.com/pyro).
 
 ## Installation
 
