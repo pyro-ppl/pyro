@@ -1,7 +1,4 @@
 import torch
-import torch.nn as nn
-# import torch.nn.init as init
-# import torchvision.datasets as dset
 from torch.autograd import Variable
 # import numpy as np
 
@@ -14,7 +11,7 @@ def plot_conditional_samples_ssvae(ssvae, visdom_session):
     ys = {}
     for i in range(10):
         ys[i] = Variable(torch.zeros(1, 10))
-        ys[i][0,i] = 1
+        ys[i][0, i] = 1
 
     for i in range(10):
         images = []
@@ -96,4 +93,3 @@ def plot_tsne(z_mu, classes, name):
         plt.title("Latent Variable T-SNE per Class")
         fig666.savefig('./vae_results/'+str(name)+'_embedding_'+str(ic)+'.png')
     fig666.savefig('./vae_results/'+str(name)+'_embedding.png')
-

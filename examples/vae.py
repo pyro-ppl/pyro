@@ -125,6 +125,7 @@ class VAE(nn.Module):
         xs = pyro.sample("sample", dist.bernoulli, mu)
         return xs, mu
 
+
 def main():
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
