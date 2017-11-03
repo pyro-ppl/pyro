@@ -26,6 +26,8 @@ class Distribution(object):
       x = d()                               # Samples a sample of size size(param).
       p = d.log_pdf(x)                      # Evaluates log probability of x.
 
+    Under the hood the lowercase versions are aliases for the UpperCase versions.
+
     .. note::
 
         Parameters and data should be of type `torch.autograd.Variable` and all
