@@ -10,7 +10,7 @@ import torch
 from torch.autograd import Variable
 from torch.nn import Parameter
 
-import pyro
+from pyro.poutine.poutine import _PYRO_STACK
 from pyro.poutine.util import site_is_subsample
 
 
@@ -163,7 +163,7 @@ def apply_stack(initial_msg):
            Otherwise, continue
     3. Return the updated message
     """
-    stack = pyro._PYRO_STACK
+    stack = _PYRO_STACK
     # TODO check at runtime if stack is valid
 
     # msg is used to pass information up and down the stack

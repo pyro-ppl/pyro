@@ -18,7 +18,7 @@ class ParamStoreDict(object):
     - the `init_tensor` argument to `pyro.param` is only used the first time that a given (named)
       parameter is registered with Pyro.
     - for this reason, a user may need to use the `clear()` method if working in a REPL in order to
-      get the desired behavior. this method can also be inved with `pyro.clear_param_store()`.
+      get the desired behavior. this method can also be invoked with `pyro.clear_param_store()`.
     - the internal name of a parameter within a PyTorch `nn.Module` that has been registered with
       Pyro is prepended with the Pyro name of the module. so nothing prevents the user from having
       two different modules each of which contains a parameter named `weight`. by contrast, a user
