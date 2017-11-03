@@ -212,6 +212,7 @@ class SSVAE(nn.Module):
         xs = pyro.sample("sample", dist.bernoulli, mu)
         return xs, mu
 
+
 def run_inference_for_epoch(data_loaders, losses, periodic_interval_batches):
     """
     runs the inference algorithm for an epoch
@@ -304,7 +305,7 @@ def run_inference_ss_vae(args):
     if args.seed is not None:
         set_seed(args.seed, args.use_cuda)
 
-    viz=None
+    viz = None
     if args.visualize:
         from visdom import Visdom
         viz = Visdom()

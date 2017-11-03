@@ -4,7 +4,6 @@ from inspect import isclass
 from pyro.nn import ClippedSoftmax, ClippedSigmoid
 
 
-
 class Exp(nn.Module):
     """
         a custom module for exponentiation of tensors

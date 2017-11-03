@@ -6,7 +6,6 @@ import torchvision.datasets as datasets
 import torch
 import numpy as np
 import errno
-import os
 
 
 def mkdir_p(path):
@@ -17,6 +16,7 @@ def mkdir_p(path):
             pass
         else:
             raise
+
 
 EXAMPLES_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(EXAMPLES_DIR, 'data')
