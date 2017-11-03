@@ -4,7 +4,7 @@ from setuptools import find_packages, setup
 
 setup(
     name='pyro-ppl',
-    version='0.0.1',
+    version='0.1.0',
     description='A Python library for probabilistic modeling and inference',
     packages=find_packages(exclude=('tests*',)),
     url='http://pyro.ai',
