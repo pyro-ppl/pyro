@@ -46,7 +46,7 @@ def setup_data_loaders(batch_size=128, use_cuda=False):
 class VAE(nn.Module):
     # by default our latent space is 50-dimensional
     # and we use 400 hidden units
-    def __init__(self, z_dim=50, hidden_layers=[400], use_cuda=False):
+    def __init__(self, z_dim=64, hidden_layers=[512], use_cuda=False):
         super(VAE, self).__init__()
         # create the encoder and decoder networks
         if use_cuda:
@@ -72,25 +72,29 @@ class VAE(nn.Module):
     # define the model p(x|z)p(z)
     def model(self, x):
         # register PyTorch module `decoder` with Pyro
-        pyro.module("decoder", self.decoder)
-
+        #pyro.module("decoder", self.decoder)
+        pyro.module("vae", self)
         # setup hyperparameters for prior p(z)
         # the type_as ensures we get cuda Tensors if x is on gpu
-        z_mu = ng_zeros([x.size(0), self.z_dim], type_as=x.data)
-        z_sigma = ng_ones([x.size(0), self.z_dim], type_as=x.data)
+        z_mu = Variable(torch.zeros([x.size(0), self.z_dim])).type_as(x)
+        #ng_zeros([, self.z_dim], type_as=x.data)
+
+        z_sigma = Variable(torch.ones([x.size(0), self.z_dim])).type_as(x)
+        #ng_ones([x.size(0), self.z_dim], type_as=x.data)
         # sample from prior (value will be sampled by guide when computing the ELBO)
         z = pyro.sample("latent", dist.normal, z_mu, z_sigma)
         # decode the latent code z
-        mu_img = self.decoder(z)
+        mu_img = self.decoder.forward(z)
         # score against actual images
         pyro.observe("obs", dist.bernoulli, x.view(-1, 784), mu_img)
 
     # define the guide (i.e. variational distribution) q(z|x)
     def guide(self, x):
         # register PyTorch module `encoder` with Pyro
-        pyro.module("encoder", self.encoder)
+        #pyro.module("encoder", self.encoder)
+        pyro.module("vae", self)
         # use the encoder to get the parameters used to define q(z|x)
-        z_mu, z_sigma = self.encoder(x)
+        z_mu, z_sigma = self.encoder.forward(x)
         # sample the latent code z
         pyro.sample("latent", dist.normal, z_mu, z_sigma)
 
@@ -110,17 +114,17 @@ def main():
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', default=501, type=int, help='number of training epochs')
     parser.add_argument('-tf', '--test-frequency', default=10, type=int, help='how often we evaluate the test set')
-    parser.add_argument('-lr', '--learning-rate', default=1.0e-3, type=float, help='learning rate')
+    parser.add_argument('-lr', '--learning-rate', default=3.0e-4, type=float, help='learning rate')
     parser.add_argument('-b1', '--beta1', default=0.95, type=float, help='beta1 adam hyperparameter')
     parser.add_argument('--cuda', action='store_true', default=False, help='whether to use cuda')
     parser.add_argument('-visdom', '--visdom_flag', default=False, help='Whether plotting in visdom is desired')
-    parser.add_argument('-i-tsne', '--tsne_iter', default=20, type=int, help='epoch when tsne visualization runs')
+    parser.add_argument('-i-tsne', '--tsne_iter', default=30, type=int, help='epoch when tsne visualization runs')
     args = parser.parse_args()
 
 
     # setup MNIST data loaders
     # train_loader, test_loader
-    train_loader, test_loader = setup_data_loaders(MNIST,use_cuda=args.cuda,batch_size=200)
+    train_loader, test_loader = setup_data_loaders(MNIST,use_cuda=args.cuda,batch_size=256)
 
     # setup the VAE
     vae = VAE(use_cuda=args.cuda)

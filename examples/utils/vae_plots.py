@@ -86,7 +86,6 @@ def plot_tsne(z_mu, classes, name):
     model_tsne = TSNE(n_components=2, random_state=0)
     z_states = z_mu.data.cpu().numpy()
     z_embed = model_tsne.fit_transform(z_states)
-    import pdb; pdb.set_trace()
     classes = classes.data.cpu().numpy()
     fig666 = plt.figure()
     for ic in range(10):
