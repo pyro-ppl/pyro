@@ -8,11 +8,10 @@ Processing Systems. 2016.
 
 import math
 import os
-import sys
 import time
 import argparse
 from functools import partial
-from subprocess import check_call
+from observations import multi_mnist
 import numpy as np
 
 import torch
@@ -106,13 +105,9 @@ if args.seed is not None:
     pyro.set_rng_seed(args.seed)
 
 # Load data.
-infile = './data/multi_mnist_train_uint8.npz'
-if not os.path.exists(infile):
-    print('Running multi_mnist.py to generate dataset at {}...'.format(infile))
-    multi_mnist_py = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'multi_mnist.py')
-    check_call([sys.executable, multi_mnist_py])
-    print('Finished running multi_mnist.py.')
-X_np = np.load(infile)['x'].astype(np.float32)
+inpath = './data'
+(X_np, _), _ = multi_mnist(inpath, max_digits=2, canvas_size=50, seed=42)
+X_np = X_np.astype(np.float32)
 X_np /= 255.0
 X = Variable(torch.from_numpy(X_np))
 X_size = X.size(0)
