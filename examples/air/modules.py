@@ -19,16 +19,17 @@ class Encoder(nn.Module):
 
 # Takes a latent code, z_what, to pixel intensities.
 class Decoder(nn.Module):
-    def __init__(self, x_size, h_sizes, z_size, bias, non_linear_layer):
+    def __init__(self, x_size, h_sizes, z_size, bias, use_sigmoid, non_linear_layer):
         super(Decoder, self).__init__()
         self.bias = bias
+        self.use_sigmoid = use_sigmoid
         self.mlp = MLP(z_size, h_sizes + [x_size], non_linear_layer)
 
     def forward(self, z):
         a = self.mlp(z)
         if self.bias is not None:
             a = a + self.bias
-        return sigmoid(a)
+        return sigmoid(a) if self.use_sigmoid else a
 
 
 # A general purpose module to construct networks that look like:

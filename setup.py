@@ -1,3 +1,5 @@
+from __future__ import absolute_import, division, print_function
+
 from setuptools import find_packages, setup
 
 setup(
@@ -8,12 +10,11 @@ setup(
     install_requires=[
         'numpy>=1.7',
         'scipy>=0.19.0',
-        'funcy>=1.7.5',
         'cloudpickle>=0.3.1',
         'graphviz>=0.8',
         'networkx>=2.0.0',
         'torch',
-        'six>=1.11.0',
+        'six>=1.10.0',
     ],
     extras_require={
         'notebooks': ['jupyter>=1.0.0'],
@@ -22,14 +23,22 @@ setup(
             'visdom>=0.1.4',
             'pillow',
         ],
-        'dev': [
+        'test': [
+            'pytest',
+            'pytest-cov',
+            'nbval',
+            # examples/tutorials
+            'visdom',
             'torchvision',
+        ],
+        'dev': [
+            'torchvision'
             'flake8',
+            'yapf',
             'isort',
             'pytest',
             'pytest-xdist',
             'nbval',
-            'yapf',
             'nbstripout',
             'sphinx',
             'sphinx_rtd_theme',
@@ -46,4 +55,6 @@ setup(
         'Operating System :: MacOS :: MacOS X',
         'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3.4',
-    ],)
+    ],
+    # yapf
+)

@@ -1,9 +1,12 @@
+from __future__ import absolute_import, division, print_function
+
 import numbers
 
 import pyro
 import pyro.poutine as poutine
 from pyro.distributions.util import torch_zeros_like
 from pyro.infer.enum import iter_discrete_traces
+from pyro.infer.util import torch_backward, torch_data_sum, torch_sum
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match
 
@@ -96,7 +99,7 @@ class Trace_ELBO(object):
         for weight, model_trace, guide_trace, log_r in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = weight * 0
 
-            log_pdf = "batch_log_pdf" if self.enum_discrete else "log_pdf"
+            log_pdf = "batch_log_pdf" if (self.enum_discrete and weight.size(0) > 1) else "log_pdf"
             for name in model_trace.nodes.keys():
                 if model_trace.nodes[name]["type"] == "sample":
                     if model_trace.nodes[name]["is_observed"]:
@@ -112,7 +115,7 @@ class Trace_ELBO(object):
             else:
                 elbo_particle[weight == 0] = 0.0
 
-            elbo += (weight * elbo_particle).data.sum()
+            elbo += torch_data_sum(weight * elbo_particle)
 
         loss = -elbo
         return loss
@@ -133,7 +136,7 @@ class Trace_ELBO(object):
             elbo_particle = weight * 0
             surrogate_elbo_particle = weight * 0
             # compute elbo and surrogate elbo
-            log_pdf = "batch_log_pdf" if self.enum_discrete else "log_pdf"
+            log_pdf = "batch_log_pdf" if (self.enum_discrete and weight.size(0) > 1) else "log_pdf"
             for name in model_trace.nodes.keys():
                 if model_trace.nodes[name]["type"] == "sample":
                     if model_trace.nodes[name]["is_observed"]:
@@ -159,8 +162,8 @@ class Trace_ELBO(object):
                 elbo_particle[weight_eq_zero] = 0.0
                 surrogate_elbo_particle[weight_eq_zero] = 0.0
 
-            elbo += (weight * elbo_particle).data.sum()
-            surrogate_elbo += (weight * surrogate_elbo_particle).sum()
+            elbo += torch_data_sum(weight * elbo_particle)
+            surrogate_elbo += torch_sum(weight * surrogate_elbo_particle)
 
             # grab model parameters to train
             for name in model_trace.nodes.keys():
@@ -172,9 +175,10 @@ class Trace_ELBO(object):
                 if guide_trace.nodes[name]["type"] == "param":
                     trainable_params.add(guide_trace.nodes[name]["value"])
 
-        surrogate_loss = -surrogate_elbo
-        surrogate_loss.backward()
         loss = -elbo
+        surrogate_loss = -surrogate_elbo
+        if trainable_params:
+            torch_backward(surrogate_loss)
 
         pyro.get_param_store().mark_params_active(trainable_params)
 

@@ -1,0 +1,17 @@
+@import url("theme.css");
+
+.wy-side-nav-search {
+    background-color: #dddddd;
+}
+
+.wy-side-nav-search a {
+    margin: 0
+}
+
+.wy-side-nav-search > div.version {
+    color: #000000;
+}
+
+.wy-nav-top {
+    background: #404040;
+}

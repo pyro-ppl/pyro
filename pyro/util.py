@@ -1,3 +1,5 @@
+from __future__ import absolute_import, division, print_function
+
 import functools
 import re
 import warnings
@@ -145,54 +147,6 @@ def zero_grads(tensors):
             else:
                 data = p.grad.data
                 p.grad = Variable(data.new().resize_as_(data).zero_())
-
-
-def tensor_histogram(ps, vs):
-    """
-    make a histogram from weighted Variable/Tensor/ndarray samples
-    Horribly slow...
-    """
-    # first, get everything into the same form: numpy arrays
-    np_vs = []
-    for v in vs:
-        _v = v
-        if isinstance(_v, Variable):
-            _v = _v.data
-        if isinstance(_v, torch.Tensor):
-            _v = _v.cpu().numpy()
-        np_vs.append(_v)
-    # now form the histogram
-    hist = dict()
-    for p, v, np_v in zip(ps, vs, np_vs):
-        k = tuple(np_v.flatten().tolist())
-        if k not in hist:
-            # XXX should clone?
-            hist[k] = [0.0, v]
-        hist[k][0] = hist[k][0] + p
-    # now split into keys and original values
-    ps2 = []
-    vs2 = []
-    for k in hist.keys():
-        ps2.append(hist[k][0])
-        vs2.append(hist[k][1])
-    # return dict suitable for passing into Categorical
-    return {"ps": torch.cat(ps2), "vs": np.array(vs2).flatten()}
-
-
-def basic_histogram(ps, vs):
-    """
-    make a histogram from weighted things that aren't tensors
-    Horribly slow...
-    """
-    assert isinstance(vs, (list, tuple)), \
-        "vs must be a primitive type that preserves ordering at construction"
-    hist = {}
-    for i, v in enumerate(vs):
-        if v not in hist:
-            hist[v] = 0.0
-        hist[v] = hist[v] + ps[i]
-    return {"ps": torch.cat([hist[v] for v in hist.keys()]),
-            "vs": [v for v in hist.keys()]}
 
 
 def apply_stack(initial_msg):
