@@ -16,8 +16,6 @@ from numpy.testing import assert_allclose
 from pytest import approx
 from torch.autograd import Variable
 
-import pyro.util
-
 torch.set_default_tensor_type(os.environ.get('PYRO_TENSOR_TYPE', 'torch.DoubleTensor'))
 
 """
@@ -228,14 +226,6 @@ def assert_not_equal(x, y, prec=1e-5, msg=''):
     except AssertionError:
         pass
     raise AssertionError("{} \nValues are equal: x={}, y={}, prec={}".format(msg, x, y, prec))
-
-
-# Avoid tests that fail due to https://github.com/uber/pyro/issues/377
-torch_version = pyro.util.parse_torch_version()
-segfaults_on_pytorch_020 = pytest.mark.skipif(
-    torch_version < (0, 2, 1) and not torch_version[-1].startswith("+"),
-    reason=("pytorch segfaults at 0.2.0_4, fixed by 0.2.0+f964105. "
-            "See https://github.com/uber/pyro/issues/377"))
 
 
 class TestCase(unittest.TestCase):

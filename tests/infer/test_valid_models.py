@@ -10,7 +10,6 @@ import pyro
 import pyro.distributions as dist
 from pyro.infer import SVI
 from pyro.optim import Adam
-from tests.common import segfaults_on_pytorch_020
 
 # This file tests a variety of model,guide pairs with valid and invalid structure.
 
@@ -396,7 +395,6 @@ def test_iarange_wrong_size_error():
     assert_error(model, guide, trace_graph=True)
 
 
-@segfaults_on_pytorch_020
 def test_enum_discrete_single_ok():
 
     def model():
@@ -410,7 +408,6 @@ def test_enum_discrete_single_ok():
     assert_ok(model, guide, enum_discrete=True)
 
 
-@segfaults_on_pytorch_020
 def test_enum_discrete_single_single_ok():
 
     def model():
@@ -426,7 +423,6 @@ def test_enum_discrete_single_single_ok():
     assert_ok(model, guide, enum_discrete=True)
 
 
-@segfaults_on_pytorch_020
 def test_enum_discrete_irange_single_ok():
 
     def model():
@@ -442,7 +438,6 @@ def test_enum_discrete_irange_single_ok():
     assert_ok(model, guide, enum_discrete=True)
 
 
-@segfaults_on_pytorch_020
 def test_iarange_enum_discrete_batch_ok():
 
     def model():
@@ -458,7 +453,6 @@ def test_iarange_enum_discrete_batch_ok():
     assert_ok(model, guide, enum_discrete=True)
 
 
-@segfaults_on_pytorch_020
 def test_iarange_enum_discrete_no_discrete_vars_ok():
 
     def model():
@@ -476,7 +470,6 @@ def test_iarange_enum_discrete_no_discrete_vars_ok():
     assert_ok(model, guide, enum_discrete=True)
 
 
-@segfaults_on_pytorch_020
 def test_no_iarange_enum_discrete_batch_error():
 
     def model():
@@ -490,7 +483,6 @@ def test_no_iarange_enum_discrete_batch_error():
     assert_error(model, guide, enum_discrete=True)
 
 
-@segfaults_on_pytorch_020
 def test_enum_discrete_global_local_error():
 
     def model():

@@ -1,7 +1,6 @@
 
 import torch
 import pyro
-import sys
 from torch.autograd import Variable
 import pyro.distributions as dist
 from utils.mnist_cached import MNISTCached, setup_data_loaders
@@ -12,16 +11,6 @@ from utils.custom_mlp import MLP, Exp
 from utils.vae_plots import plot_conditional_samples_ssvae, mnist_test_tsne_ssvae
 from util import set_seed, print_and_log, mkdir_p
 import torch.nn as nn
-
-version_warning = '''
-11/02/2017: This example does not work with the release version 0.2 of pytorch
-Please install Pytorch from the latest master branch of pytorch or wait a week for the new release
-This example may fail due to https://github.com/uber/pyro/issues/377
-'''
-torch_version = pyro.util.parse_torch_version()
-if (torch_version < (0, 2, 1) and not torch_version[-1].startswith("+")):
-    print(version_warning)
-    sys.exit(0)
 
 
 class SSVAE(nn.Module):

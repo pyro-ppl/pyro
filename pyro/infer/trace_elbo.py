@@ -164,18 +164,14 @@ class Trace_ELBO(object):
             elbo += torch_data_sum(weight * elbo_particle)
             surrogate_elbo_particle = torch_sum(weight * surrogate_elbo_particle)
 
-            # grab model parameters to train
-            for name in model_trace.nodes.keys():
-                if model_trace.nodes[name]["type"] == "param":
-                    trainable_params.add(model_trace.nodes[name]["value"])
+            # collect parameters to train from model and guide
+            for trace in (model_trace, guide_trace):
+                for site in trace.nodes.values():
+                    if site["type"] == "param":
+                        trainable_params.add(site["value"])
 
-            # grab guide parameters to train
-            for name in guide_trace.nodes.keys():
-                if guide_trace.nodes[name]["type"] == "param":
-                    trainable_params.add(guide_trace.nodes[name]["value"])
-
-            surrogate_loss_particle = -surrogate_elbo_particle
             if trainable_params:
+                surrogate_loss_particle = -surrogate_elbo_particle
                 torch_backward(surrogate_loss_particle)
 
         loss = -elbo

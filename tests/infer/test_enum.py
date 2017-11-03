@@ -14,7 +14,7 @@ from pyro.infer import SVI
 from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.trace_elbo import Trace_ELBO
 from pyro.infer.tracegraph_elbo import TraceGraph_ELBO
-from tests.common import assert_equal, segfaults_on_pytorch_020, xfail_if_not_implemented
+from tests.common import assert_equal, xfail_if_not_implemented
 
 
 @pytest.mark.parametrize("graph_type", ["flat", "dense"])
@@ -162,7 +162,6 @@ def test_gmm_batch_iter_discrete_traces(model, data_size, graph_type):
     assert len(traces) == 2
 
 
-@segfaults_on_pytorch_020
 @pytest.mark.parametrize("trace_graph", [False, True], ids=["dense", "flat"])
 @pytest.mark.parametrize("model,guide", [
     (gmm_model, gmm_guide),
@@ -200,7 +199,6 @@ def finite_difference(eval_loss, delta=0.1):
     return grads
 
 
-@segfaults_on_pytorch_020
 @pytest.mark.parametrize("enum_discrete", [True, False], ids=["sum", "sample"])
 @pytest.mark.parametrize("trace_graph", [False, True], ids=["dense", "flat"])
 def test_bern_elbo_gradient(enum_discrete, trace_graph):
@@ -235,7 +233,6 @@ def test_bern_elbo_gradient(enum_discrete, trace_graph):
     assert_equal(actual_grads, expected_grads, prec=0.1)
 
 
-@segfaults_on_pytorch_020
 @pytest.mark.parametrize("model,guide", [
     (gmm_model, gmm_guide),
     (gmm_batch_model, gmm_batch_guide),
