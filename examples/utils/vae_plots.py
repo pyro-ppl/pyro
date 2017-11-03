@@ -3,7 +3,8 @@ import torch
 # import torch.nn.init as init
 # import torchvision.datasets as dset
 from torch.autograd import Variable
-import numpy as np
+# import numpy as np
+
 
 def ssvae_model_sample(ss_vae, ys, batch_size=1, z_dim=50):
     # sample the handwriting style from the constant prior distribution

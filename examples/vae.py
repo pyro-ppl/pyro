@@ -1,11 +1,7 @@
 import argparse
-
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.init as init
-import torchvision.datasets as dset
-import torchvision.transforms as transforms
 import visdom
 from torch.autograd import Variable
 
@@ -18,25 +14,9 @@ from utils.vae_plots import plot_llk, mnist_test_tsne, vae_model_sample
 from utils.mnist_cached import MNISTCached as MNIST
 from utils.mnist_cached import setup_data_loaders
 
+
 fudge = 1e-7
 
-"""
-def setup_data_loaders(batch_size=128, use_cuda=False):
-    # for loading and batching MNIST dataset
-    root = './data'
-    download = True
-    trans = transforms.ToTensor()
-    train_set = dset.MNIST(root=root, train=True, transform=trans, download=download)
-    test_set = dset.MNIST(root=root, train=False, transform=trans)
-
-    kwargs = {'num_workers': 1, 'pin_memory': use_cuda}
-    train_loader = torch.utils.data.DataLoader(dataset=train_set, batch_size=batch_size,
-                                               shuffle=True, **kwargs)
-    test_loader = torch.utils.data.DataLoader(dataset=test_set, batch_size=batch_size,
-                                              shuffle=False, **kwargs)
-
-    return train_loader, test_loader
-"""
 
 # define the PyTorch module that parameterizes the
 # diagonal gaussian distribution q(z|x)
@@ -59,7 +39,7 @@ class Encoder(nn.Module):
         # then return a mean vector and a (positive) square root covariance
         # each of size batch_size x z_dim
         z_mu = self.fc21(hidden)
-        z_sigma = self.softplus(self.fc22(hidden))
+        z_sigma = torch.exp(self.fc22(hidden))
         return z_mu, z_sigma
 
 
@@ -86,12 +66,11 @@ class Decoder(nn.Module):
         return mu_img
 
 
-
 # define a PyTorch module for the VAE
 class VAE(nn.Module):
     # by default our latent space is 50-dimensional
     # and we use 400 hidden units
-    def __init__(self, z_dim=50, hidden_dim = 400, use_cuda=False):
+    def __init__(self, z_dim=50, hidden_dim=400, use_cuda=False):
         super(VAE, self).__init__()
         # create the encoder and decoder networks
         if use_cuda:
@@ -147,13 +126,12 @@ def main():
     parser.add_argument('-b1', '--beta1', default=0.95, type=float, help='beta1 adam hyperparameter')
     parser.add_argument('--cuda', action='store_true', default=False, help='whether to use cuda')
     parser.add_argument('-visdom', '--visdom_flag', default=False, help='Whether plotting in visdom is desired')
-    parser.add_argument('-i-tsne', '--tsne_iter', default=100, type=int, help='epoch when tsne visualization runs')
+    parser.add_argument('-i-tsne', '--tsne_iter', default=10, type=int, help='epoch when tsne visualization runs')
     args = parser.parse_args()
-
 
     # setup MNIST data loaders
     # train_loader, test_loader
-    train_loader, test_loader = setup_data_loaders(MNIST,use_cuda=args.cuda,batch_size=256)
+    train_loader, test_loader = setup_data_loaders(MNIST, use_cuda=args.cuda, batch_size=256)
 
     # setup the VAE
     vae = VAE(use_cuda=args.cuda)
