@@ -51,7 +51,10 @@ def sample(name, fn, *args, **kwargs):
         in kwargs. See inference documentation for details.
     :returns: sample
 
-    Samples from the distribution.
+    Calls the stochastic function `fn` with additional side-effects depending on `name` and the
+    enclosing context (e.g. an inference algorithm).
+    See `Intro I <http://pyro.ai/examples/intro_part_i.html>`_ and
+    `Intro II <http://pyro.ai/examples/intro_part_ii.html>`_ for a discussion.
     """
     obs = kwargs.pop("obs", None)
     baseline = kwargs.pop("baseline", {})
@@ -96,11 +99,7 @@ def observe(name, fn, obs, *args, **kwargs):
     :param obs: observed datum
     :returns: sample
 
-    Alias of pyro.sample.
-
-    Only should be used in the context of inference.
-    Calculates the score of the sample and registers
-    it in the trace data structure.
+    Alias of `pyro.sample(name, fn, *args, obs=obs, **kwargs)`.
     """
     kwargs.update({"obs": obs})
     return sample(name, fn, *args, **kwargs)
@@ -256,21 +255,20 @@ def irange(name, size, subsample_size=None, subsample=None, use_cuda=None):
 
 
 def map_data(name, data, fn, batch_size=None, batch_dim=0, use_cuda=None):
-    """
-    Data subsampling with the important property that all the data are conditionally independent.
+    # Data subsampling with the important property that all the data are conditionally independent.
+    #
+    # With default values of `batch_size` and `batch_dim`, `map_data` behaves like `map`.
+    # More precisely, `map_data('foo', data, fn)` is equivalent to `[fn(i, x) for i, x in enumerate(data)]`.
+    #
+    # :param str name: named argument
+    # :param data: data to subsample
+    # :param callable fn: a function taking `(index, datum)` pairs, where `dataum = data[index]`
+    # :param int batch_size: number of samples per batch, or zero for the entire dataset
+    # :param int batch_dim: dimension to subsample for tensor inputs
+    # :param bool use_cuda: Optional bool specifying whether to use cuda tensors
+    #     for `log_pdf`. Defaults to `torch.Tensor.is_cuda`.
+    # :return: a list of values returned by `fn`
 
-    With default values of `batch_size` and `batch_dim`, `map_data` behaves like `map`.
-    More precisely, `map_data('foo', data, fn)` is equivalent to `[fn(i, x) for i, x in enumerate(data)]`.
-
-    :param str name: named argument
-    :param data: data to subsample
-    :param callable fn: a function taking `(index, datum)` pairs, where `dataum = data[index]`
-    :param int batch_size: number of samples per batch, or zero for the entire dataset
-    :param int batch_dim: dimension to subsample for tensor inputs
-    :param bool use_cuda: Optional bool specifying whether to use cuda tensors
-        for `log_pdf`. Defaults to `torch.Tensor.is_cuda`.
-    :return: a list of values returned by `fn`
-    """
     use_cuda = use_cuda or getattr(data, 'is_cuda', None)
     if isinstance(data, (torch.Tensor, Variable)):
         size = data.size(batch_dim)
@@ -376,6 +374,9 @@ def random_module(name, nn_module, prior, *args, **kwargs):
     :returns: a callable which returns a sampled module
 
     Places a prior over the parameters of the module `nn_module`.
+
+    See the `Bayesian Regression <http://pyro.ai/examples/bayesian_regression.html>`_
+    tutorial for an example.
     """
     assert hasattr(nn_module, "parameters"), "Module is not a NN module."
     # register params in param store
