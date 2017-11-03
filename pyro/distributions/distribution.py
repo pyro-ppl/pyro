@@ -82,7 +82,7 @@ class Distribution(object):
 
     **Examples**:
 
-    Take a look at the `examples <https://pyro.ai/examples>`_ to see how they interact
+    Take a look at the `examples <http://pyro.ai/examples>`_ to see how they interact
     with inference algorithms.
     """
     reparameterized = False
