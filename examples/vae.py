@@ -14,11 +14,9 @@ import pyro.distributions as dist
 from pyro.infer import SVI
 from pyro.optim import Adam
 from pyro.util import ng_zeros, ng_ones
-from pyro.nn import ClippedSoftmax, ClippedSigmoid
 from utils.vae_plots import plot_llk, mnist_test_tsne
 from utils.mnist_cached import MNISTCached as MNIST
 from utils.mnist_cached import setup_data_loaders
-from utils.custom_mlp import MLP, Exp
 
 fudge = 1e-7
 
@@ -40,13 +38,60 @@ def setup_data_loaders(batch_size=128, use_cuda=False):
     return train_loader, test_loader
 """
 
+# define the PyTorch module that parameterizes the
+# diagonal gaussian distribution q(z|x)
+class Encoder(nn.Module):
+    def __init__(self, z_dim, hidden_dim):
+        super(Encoder, self).__init__()
+        # setup the three linear transformations used
+        self.fc1 = nn.Linear(784, hidden_dim)
+        self.fc21 = nn.Linear(hidden_dim, z_dim)
+        self.fc22 = nn.Linear(hidden_dim, z_dim)
+        # setup the non-linearity
+        self.softplus = nn.Softplus()
+
+    def forward(self, x):
+        # define the forward computation on the image x
+        # first shape the mini-batch to have pixels in the rightmost dimension
+        x = x.view(-1, 784)
+        # then compute the hidden units
+        hidden = self.softplus(self.fc1(x))
+        # then return a mean vector and a (positive) square root covariance
+        # each of size batch_size x z_dim
+        z_mu = self.fc21(hidden)
+        z_sigma = self.softplus(self.fc22(hidden))
+        return z_mu, z_sigma
+
+
+# define the PyTorch module that parameterizes the
+# observation likelihood p(x|z)
+class Decoder(nn.Module):
+    def __init__(self, z_dim, hidden_dim):
+        super(Decoder, self).__init__()
+        # setup the three linear transformations used
+        self.fc1 = nn.Linear(z_dim, hidden_dim)
+        self.fc21 = nn.Linear(hidden_dim, 784)
+        # setup the non-linearity
+        self.softplus = nn.Softplus()
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, z):
+        # define the forward computation on the latent z
+        # first compute the hidden units
+        hidden = self.softplus(self.fc1(z))
+        # return the parameter for the output Bernoulli
+        # each is of size batch_size x 784
+        # fixing numerical instabilities of sigmoid with a fudge
+        mu_img = (self.sigmoid(self.fc21(hidden))+fudge) * (1-2*fudge)
+        return mu_img
+
 
 
 # define a PyTorch module for the VAE
 class VAE(nn.Module):
     # by default our latent space is 50-dimensional
     # and we use 400 hidden units
-    def __init__(self, z_dim=64, hidden_layers=[512], use_cuda=False):
+    def __init__(self, z_dim=50, hidden_dim = 400, use_cuda=False):
         super(VAE, self).__init__()
         # create the encoder and decoder networks
         if use_cuda:
@@ -55,32 +100,17 @@ class VAE(nn.Module):
             self.cuda()
         self.use_cuda = use_cuda
         self.z_dim = z_dim
-        self.hidden_layers = hidden_layers
-        self.setup_networks()
-
-    def setup_networks(self):
-        z_dim = self.z_dim
-        hidden_sizes = self.hidden_layers
-
-        self.encoder = MLP([784] + hidden_sizes + [[z_dim, z_dim]],
-                                 activation=nn.Softplus, output_activation=[None, Exp], use_cuda=self.use_cuda)
-
-        self.decoder = MLP([z_dim] + hidden_sizes + [784],
-                           activation=nn.Softplus, output_activation=ClippedSigmoid,
-                           epsilon_scale=fudge, use_cuda=self.use_cuda)
+        self.encoder = Encoder(z_dim, hidden_dim)
+        self.decoder = Decoder(z_dim, hidden_dim)
 
     # define the model p(x|z)p(z)
     def model(self, x):
         # register PyTorch module `decoder` with Pyro
-        #pyro.module("decoder", self.decoder)
-        pyro.module("vae", self)
+        pyro.module("decoder", self.decoder)
         # setup hyperparameters for prior p(z)
         # the type_as ensures we get cuda Tensors if x is on gpu
-        z_mu = Variable(torch.zeros([x.size(0), self.z_dim])).type_as(x)
-        #ng_zeros([, self.z_dim], type_as=x.data)
-
-        z_sigma = Variable(torch.ones([x.size(0), self.z_dim])).type_as(x)
-        #ng_ones([x.size(0), self.z_dim], type_as=x.data)
+        z_mu = ng_zeros([x.size(0), self.z_dim], type_as=x.data)
+        z_sigma = ng_ones([x.size(0), self.z_dim], type_as=x.data)
         # sample from prior (value will be sampled by guide when computing the ELBO)
         z = pyro.sample("latent", dist.normal, z_mu, z_sigma)
         # decode the latent code z
@@ -91,8 +121,7 @@ class VAE(nn.Module):
     # define the guide (i.e. variational distribution) q(z|x)
     def guide(self, x):
         # register PyTorch module `encoder` with Pyro
-        #pyro.module("encoder", self.encoder)
-        pyro.module("vae", self)
+        pyro.module("encoder", self.encoder)
         # use the encoder to get the parameters used to define q(z|x)
         z_mu, z_sigma = self.encoder.forward(x)
         # sample the latent code z
@@ -112,13 +141,13 @@ class VAE(nn.Module):
 def main():
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', default=501, type=int, help='number of training epochs')
-    parser.add_argument('-tf', '--test-frequency', default=10, type=int, help='how often we evaluate the test set')
-    parser.add_argument('-lr', '--learning-rate', default=3.0e-4, type=float, help='learning rate')
+    parser.add_argument('-n', '--num-epochs', default=101, type=int, help='number of training epochs')
+    parser.add_argument('-tf', '--test-frequency', default=5, type=int, help='how often we evaluate the test set')
+    parser.add_argument('-lr', '--learning-rate', default=1.0e-3, type=float, help='learning rate')
     parser.add_argument('-b1', '--beta1', default=0.95, type=float, help='beta1 adam hyperparameter')
     parser.add_argument('--cuda', action='store_true', default=False, help='whether to use cuda')
     parser.add_argument('-visdom', '--visdom_flag', default=False, help='Whether plotting in visdom is desired')
-    parser.add_argument('-i-tsne', '--tsne_iter', default=30, type=int, help='epoch when tsne visualization runs')
+    parser.add_argument('-i-tsne', '--tsne_iter', default=10, type=int, help='epoch when tsne visualization runs')
     args = parser.parse_args()
 
 
@@ -130,7 +159,7 @@ def main():
     vae = VAE(use_cuda=args.cuda)
 
     # setup the optimizer
-    adam_args = {"lr": args.learning_rate}# "betas": (args.beta1}#, 0.999)}
+    adam_args = {"lr": args.learning_rate}
     optimizer = Adam(adam_args)
 
     # setup the inference algorithm
@@ -198,6 +227,7 @@ def main():
         if epoch == args.tsne_iter:
             mnist_test_tsne(vae=vae, test_loader=test_loader)
             plot_llk(np.array(train_elbo), np.array(test_elbo))
+            vae_model_sample(vae)
 
     return vae
 

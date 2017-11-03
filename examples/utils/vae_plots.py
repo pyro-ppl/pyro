@@ -14,8 +14,17 @@ def ssvae_model_sample(ss_vae, ys, batch_size=1, z_dim=50):
     xs = pyro.sample("sample", dist.bernoulli, mu)
     return xs, mu
 
-from visdom import Visdom
-viz = Visdom()
+def vae_model_sample(vae, batch_size=1, z_dim=50):
+    # sample the handwriting style from the constant prior distribution
+    prior_mu = Variable(torch.zeros([batch_size, z_dim]))
+    prior_sigma = Variable(torch.ones([batch_size, z_dim]))
+    zs = pyro.sample("z", dist.normal, prior_mu, prior_sigma)
+    mu = vae.decoder.forward(zs)
+    xs = pyro.sample("sample", dist.bernoulli, mu)
+    return xs, mu
+
+# from visdom import Visdom
+# viz = Visdom()
 
 def plot_conditional_samples_ssvae(ssvae, visdom_session):
     """
@@ -51,7 +60,17 @@ def plot_llk(train_elbo, test_elbo):
     g.map(plt.plot, "Training Epoch", "Test NLL")
     plt.savefig('./vae_results/test_nll_vae.png')
     plt.close('all')
-    pass
+
+
+def plot_vae_samples(vae, visom_session):
+    vis = visdom_session
+    for i in range(10):
+        images = []
+        for rr in range(100):
+            sample_i, sample_mu_i = vae_model_sample(ssvae)
+            img = sample_mu_i[0].view(1, 28, 28).cpu().data.numpy()
+            images.append(img)
+        vis.images(images, 10, 2)
 
 
 def mnist_test_tsne(vae=None, test_loader=None):
@@ -63,7 +82,7 @@ def mnist_test_tsne(vae=None, test_loader=None):
     mnist_labels = Variable(test_loader.dataset.test_labels)
     z_mu, z_sigma = vae.encoder(data)
     plot_tsne(z_mu, mnist_labels, name)
-    pass
+
 
 def mnist_test_tsne_ssvae(name=None, ssvae=None, test_loader=None):
     """
@@ -75,7 +94,7 @@ def mnist_test_tsne_ssvae(name=None, ssvae=None, test_loader=None):
     mnist_labels = Variable(test_loader.dataset.test_labels)
     z_mu, z_sigma = ssvae.nn_mu_sigma_z([data, mnist_labels])
     plot_tsne(z_mu, mnist_labels, name)
-    pass
+
 
 def plot_tsne(z_mu, classes, name):
     import numpy as np
@@ -94,7 +113,7 @@ def plot_tsne(z_mu, classes, name):
         ind_class = classes[:, ic] == 1
         color = plt.cm.Set1(ic)
         plt.scatter(z_embed[ind_class, 0], z_embed[ind_class, 1], s=10, color=color)
-        plt.title("Latent Variable Embeddings colour coded by class for "+str(name))
+        plt.title("Latent Variable T-SNE per Class")
         fig666.savefig('./vae_results/'+str(name)+'_embedding_'+str(ic)+'.png')
     fig666.savefig('./vae_results/'+str(name)+'_embedding.png')
-    pass
+
