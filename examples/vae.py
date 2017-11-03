@@ -133,7 +133,7 @@ def main():
     parser.add_argument('-lr', '--learning-rate', default=1.0e-3, type=float, help='learning rate')
     parser.add_argument('-b1', '--beta1', default=0.95, type=float, help='beta1 adam hyperparameter')
     parser.add_argument('--cuda', action='store_true', default=False, help='whether to use cuda')
-    parser.add_argument('-visdom', '--visdom_flag', default=False, help='Whether plotting in visdom is desired')
+    parser.add_argument('-visdom', '--visdom_flag', default=True, help='Whether plotting in visdom is desired')
     parser.add_argument('-i-tsne', '--tsne_iter', default=10, type=int, help='epoch when tsne visualization runs')
     args = parser.parse_args()
 

@@ -52,7 +52,7 @@ def plot_llk(train_elbo, test_elbo):
     plt.close('all')
 
 
-def plot_vae_samples(vae, visom_session):
+def plot_vae_samples(vae, visdom_session):
     vis = visdom_session
     for i in range(10):
         images = []
