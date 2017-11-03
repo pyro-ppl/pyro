@@ -19,6 +19,7 @@ Welcome to Pyro Examples and Tutorials!
    bayesian_regression
    dmm
    air
+   ss-vae
 
 
 Indices and tables
