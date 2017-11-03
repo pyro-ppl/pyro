@@ -14,7 +14,7 @@ import pyro.distributions as dist
 from pyro.infer import SVI
 from pyro.optim import Adam
 from pyro.util import ng_zeros, ng_ones
-from utils.vae_plots import plot_llk, mnist_test_tsne
+from utils.vae_plots import plot_llk, mnist_test_tsne, vae_model_sample
 from utils.mnist_cached import MNISTCached as MNIST
 from utils.mnist_cached import setup_data_loaders
 
