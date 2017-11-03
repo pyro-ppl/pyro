@@ -8,7 +8,8 @@ from pyro.infer import SVI
 from pyro.optim import Adam
 from pyro.nn import ClippedSoftmax, ClippedSigmoid
 from utils.custom_mlp import MLP, Exp
-from util import set_seed, print_and_log
+from utils.vae_plots import plot_conditional_samples_ssvae, mnist_test_tsne_ssvae
+from util import set_seed, print_and_log, mkdir_p
 import torch.nn as nn
 # 11/02/2017: This example does not work with the release version 0.2 of pytorch
 # Please install Pytorch from the latest master branch of pytorch or wait a week for the new release
@@ -200,6 +201,16 @@ class SSVAE(nn.Module):
             # register all pytorch (sub)modules with pyro
             pyro.module("ss_vae", self)
 
+    def model_sample(self, ys, batch_size=1):
+        # sample the handwriting style from the constant prior distribution
+        prior_mu = Variable(torch.zeros([batch_size, self.z_dim]))
+        prior_sigma = Variable(torch.ones([batch_size, self.z_dim]))
+        zs = pyro.sample("z", dist.normal, prior_mu, prior_sigma)
+
+        # sample an image using the decoder
+        mu = self.decoder.forward([zs, ys])
+        xs = pyro.sample("sample", dist.bernoulli, mu)
+        return xs, mu
 
 def run_inference_for_epoch(data_loaders, losses, periodic_interval_batches):
     """
@@ -275,6 +286,12 @@ def get_accuracy(data_loader, classifier_fn, batch_size):
     return accuracy
 
 
+def visualize(ss_vae, viz, test_loader):
+    if viz is not None:
+        plot_conditional_samples_ssvae(ss_vae, viz)
+        mnist_test_tsne_ssvae(ssvae=ss_vae, test_loader=test_loader)
+
+
 def run_inference_ss_vae(args):
     """
     run inference for SS-VAE
@@ -286,6 +303,12 @@ def run_inference_ss_vae(args):
 
     if args.seed is not None:
         set_seed(args.seed, args.use_cuda)
+
+    viz=None
+    if args.visualize:
+        from visdom import Visdom
+        viz = Visdom()
+        mkdir_p("./vae_results")
 
     # batch_size: number of images (and labels) to be considered in a batch
     ss_vae = SSVAE(z_dim=args.z_dim,
@@ -336,7 +359,7 @@ def run_inference_ss_vae(args):
             epoch_losses_sup, epoch_losses_unsup = \
                 run_inference_for_epoch(data_loaders, losses, periodic_interval_batches)
 
-            # compute average epoch losses
+            # compute average epoch losses i.e. losses per example
             avg_epoch_losses_sup = map(lambda v: v / args.sup_num, epoch_losses_sup)
             avg_epoch_losses_unsup = map(lambda v: v / unsup_num, epoch_losses_unsup)
 
@@ -345,6 +368,7 @@ def run_inference_ss_vae(args):
             str_loss_unsup = " ".join(map(str, avg_epoch_losses_unsup))
 
             str_print = "{} epoch: avg losses {}".format(i, "{} {}".format(str_loss_sup, str_loss_unsup))
+
             validation_accuracy = get_accuracy(data_loaders["valid"], ss_vae.classifier, args.batch_size)
             str_print += " validation accuracy {}".format(validation_accuracy)
 
@@ -365,6 +389,8 @@ def run_inference_ss_vae(args):
         print_and_log(logger, "best validation accuracy {} corresponding testing accuracy {} "
                       "last testing accuracy {}".format(best_valid_acc, corresponding_test_acc, final_test_accuracy))
 
+        # visualize the conditional samples
+        visualize(ss_vae, viz, data_loaders["test"])
     finally:
         # close the logger file object if we opened it earlier
         if args.logfile is not None:
@@ -412,6 +438,8 @@ if __name__ == "__main__":
                         help="filename for logging the outputs")
     parser.add_argument('--seed', default=None, type=int,
                         help="seed for controlling randomness in this example")
+    parser.add_argument('--visualize', action="store_true",
+                        help="use a visdom server to visualize the embeddings")
     args = parser.parse_args()
 
     # some assertions to make sure that batching math assumptions are met

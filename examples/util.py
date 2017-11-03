@@ -5,6 +5,18 @@ from torchvision import transforms
 import torchvision.datasets as datasets
 import torch
 import numpy as np
+import errno
+import os
+
+
+def mkdir_p(path):
+    try:
+        os.makedirs(path)
+    except OSError as exc:  # Python >2.5
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else:
+            raise
 
 EXAMPLES_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(EXAMPLES_DIR, 'data')

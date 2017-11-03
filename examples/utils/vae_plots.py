@@ -72,7 +72,7 @@ def mnist_test_tsne_ssvae(name=None, ssvae=None, test_loader=None):
         name = 'SS-VAE'
     data = Variable(test_loader.dataset.test_data.float())
     mnist_labels = Variable(test_loader.dataset.test_labels)
-    z_mu, z_sigma = ssvae.nn_mu_sigma_z([data, mnist_labels])
+    z_mu, z_sigma = ssvae.encoder_z([data, mnist_labels])
     plot_tsne(z_mu, mnist_labels, name)
 
 
