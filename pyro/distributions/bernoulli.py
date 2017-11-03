@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import torch
-import torch.nn.functional as F
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
@@ -81,9 +80,10 @@ class Bernoulli(Distribution):
         Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_log_pdf`
         """
         batch_log_pdf_shape = self.batch_shape(x) + (1,)
-        log_prob_1 = F.sigmoid(self.logits)
-        log_prob_0 = F.sigmoid(-self.logits)
-        log_prob = torch.log(x * log_prob_1 + (1 - x) * log_prob_0)
+        max_val = (-self.logits).clamp(min=0)
+        binary_cross_entropy = self.logits - self.logits * x + max_val + \
+            ((-max_val).exp() + (-self.logits - max_val).exp()).log()
+        log_prob = -binary_cross_entropy
         # XXX this allows for the user to mask out certain parts of the score, for example
         # when the data is a ragged tensor. also useful for KL annealing. this entire logic
         # will likely be done in a better/cleaner way in the future
