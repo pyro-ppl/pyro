@@ -11,7 +11,11 @@ from tests.common import assert_equal
 @pytest.mark.parametrize('Tensor', [torch.FloatTensor, torch.DoubleTensor])
 def test_clipped_softmax(Tensor):
     epsilon = 1e-5
-    clipped_softmax = ClippedSoftmax(epsilon)
+    try:
+        clipped_softmax = ClippedSoftmax(epsilon, dim=1)
+    except TypeError:
+        # Support older pytorch 0.2 release.
+        clipped_softmax = ClippedSoftmax(epsilon)
     ps = Variable(Tensor([[0, 1]]))
     softmax_ps = clipped_softmax(ps)
     print("epsilon = {}".format(epsilon))
@@ -24,10 +28,14 @@ def test_clipped_softmax(Tensor):
 @pytest.mark.parametrize('Tensor', [torch.FloatTensor, torch.DoubleTensor])
 def test_clipped_sigmoid(Tensor):
     epsilon = 1e-5
-    clipped_softmax = ClippedSigmoid(epsilon)
+    try:
+        clipped_sigmoid = ClippedSigmoid(epsilon, dim=1)
+    except TypeError:
+        # Support older pytorch 0.2 release.
+        clipped_sigmoid = ClippedSigmoid(epsilon)
     ps = Variable(Tensor([0, 1]))
-    softmax_ps = clipped_softmax(ps)
+    sigmoid_ps = clipped_sigmoid(ps)
     print("epsilon = {}".format(epsilon))
-    print("softmax_ps = {}".format(softmax_ps))
-    assert (softmax_ps.data >= epsilon).all()
-    assert (softmax_ps.data <= 1 - epsilon).all()
+    print("sigmoid_ps = {}".format(sigmoid_ps))
+    assert (sigmoid_ps.data >= epsilon).all()
+    assert (sigmoid_ps.data <= 1 - epsilon).all()
