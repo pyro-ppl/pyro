@@ -22,13 +22,6 @@ Pyro is in an alpha release.  It is developed and used by [Uber AI Labs](http://
 
 First install [PyTorch](http://pytorch.org/).
 
-> Most features of Pyro work on PyTorch's 0.2 release, but some features are
-> only available on PyTorch's master branch (e.g. `pyro.SVI(... enum_discrete=True` and
-> `pyro.SVI(..., num_particles=100)` require PyTorch more recent than 0.2). To use
-> these features, we recommend [installing PyTorch from source](). We have verified that
-> commit `f964105` supports all of Pyro. To get this version, run
-> `git clone https://github.com/pytorch/pytorch.git && git checkout f964105`.
-
 Install via pip:
 
 **Python 2.7.\*:**
