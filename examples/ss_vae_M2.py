@@ -11,8 +11,14 @@ from utils.custom_mlp import MLP, Exp
 from utils.vae_plots import plot_conditional_samples_ssvae, mnist_test_tsne_ssvae
 from util import set_seed, print_and_log, mkdir_p
 import torch.nn as nn
-# 11/02/2017: This example does not work with the release version 0.2 of pytorch
-# Please install Pytorch from the latest master branch of pytorch or wait a week for the new release
+
+version_warning = '''
+11/02/2017: This example does not work with the release version 0.2 of pytorch
+Please install Pytorch from the latest master branch of pytorch or wait a week for the new release
+This example may fail due to https://github.com/uber/pyro/issues/377
+'''
+torch_version = pyro.util.parse_torch_version()
+assert not (torch_version < (0, 2, 1) and not torch_version[-1].startswith("+")), version_warning
 
 
 class SSVAE(nn.Module):
@@ -33,7 +39,7 @@ class SSVAE(nn.Module):
     :param use_cuda: use GPUs for faster training
     :param aux_loss_multiplier: the multiplier to use with the auxiliary loss
     """
-    def __init__(self, output_size=10, input_size=784, z_dim=50, hidden_layers=(500),
+    def __init__(self, output_size=10, input_size=784, z_dim=50, hidden_layers=(500,),
                  epsilon_scale=1e-7, use_cuda=False, aux_loss_multiplier=None):
 
         super(SSVAE, self).__init__()
@@ -102,10 +108,11 @@ class SSVAE(nn.Module):
                    the digit corresponding to the image(s)
         :return: None
         """
+        # register this pytorch module and all of its sub-modules with pyro
+        pyro.module("ss_vae", self)
+
         batch_size = xs.size(0)
         with pyro.iarange("independent"):
-            # register this pytorch module and all of its sub-modules with pyro
-            pyro.module("ss_vae", self)
 
             # sample the handwriting style from the constant prior distribution
             prior_mu = Variable(torch.zeros([batch_size, self.z_dim]))
@@ -141,8 +148,6 @@ class SSVAE(nn.Module):
         """
         # inform Pyro that the variables in the batch of xs, ys are conditionally independent
         with pyro.iarange("independent"):
-            # register all pytorch (sub)modules with pyro
-            pyro.module("ss_vae", self)
 
             # if the class label (the digit) is not supervised, sample
             # (and score) the digit with the variational distribution
@@ -182,11 +187,11 @@ class SSVAE(nn.Module):
         NIPS 2014 paper by Kingma et al titled
         "Semi-Supervised Learning with Deep Generative Models"
         """
+        # register all pytorch (sub)modules with pyro
+        pyro.module("ss_vae", self)
+
         # inform Pyro that the variables in the batch of xs, ys are conditionally independent
         with pyro.iarange("independent"):
-            # register all pytorch (sub)modules with pyro
-            pyro.module("ss_vae", self)
-
             # this here is the extra Term to yield an auxiliary loss that we do gradient descend on
             # similar to the NIPS 14 paper (Kingma et al).
             if ys is not None:
@@ -197,9 +202,7 @@ class SSVAE(nn.Module):
         """
         dummy guide function to accompany model_classify in inference
         """
-        with pyro.iarange("independent"):
-            # register all pytorch (sub)modules with pyro
-            pyro.module("ss_vae", self)
+        pass
 
     def model_sample(self, ys, batch_size=1):
         # sample the handwriting style from the constant prior distribution
@@ -264,7 +267,7 @@ def run_inference_for_epoch(data_loaders, losses, periodic_interval_batches):
 
 def get_accuracy(data_loader, classifier_fn, batch_size):
     """
-        compute the accuracy over the supervised training set or the testing set
+    compute the accuracy over the supervised training set or the testing set
     """
     predictions, actuals = [], []
 

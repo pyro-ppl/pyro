@@ -6,7 +6,7 @@ from pyro.nn import ClippedSoftmax, ClippedSigmoid
 
 class Exp(nn.Module):
     """
-        a custom module for exponentiation of tensors
+    a custom module for exponentiation of tensors
     """
     def __init__(self):
         super(Exp, self).__init__()
@@ -17,7 +17,7 @@ class Exp(nn.Module):
 
 class ConcatModule(nn.Module):
     """
-        a custom module for concatenation of tensors
+    a custom module for concatenation of tensors
     """
     def __init__(self):
         super(ConcatModule, self).__init__()
@@ -39,7 +39,7 @@ class ConcatModule(nn.Module):
 
 class ListOutModule(nn.ModuleList):
     """
-        a custom module for outputting a list of tensors from a list of nn modules
+    a custom module for outputting a list of tensors from a list of nn modules
     """
     def __init__(self, modules):
         super(ListOutModule, self).__init__(modules)
@@ -51,8 +51,8 @@ class ListOutModule(nn.ModuleList):
 
 def call_nn_op(op, epsilon):
     """
-        a helper function that adds appropriate parameters when calling
-        an nn module representing an operation like Softmax
+    a helper function that adds appropriate parameters when calling
+    an nn module representing an operation like Softmax
     :param op: the nn.Module operation to instantiate
     :param epsilon: a scaling parameter for certain custom modules
     :return: instantiation of the op module with appropriate parameters
