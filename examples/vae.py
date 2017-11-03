@@ -10,7 +10,7 @@ import pyro.distributions as dist
 from pyro.infer import SVI
 from pyro.optim import Adam
 from pyro.util import ng_zeros, ng_ones
-from utils.vae_plots import plot_llk, mnist_test_tsne, vae_model_sample
+from utils.vae_plots import plot_llk, mnist_test_tsne, plot_vae_samples
 from utils.mnist_cached import MNISTCached as MNIST
 from utils.mnist_cached import setup_data_loaders
 
@@ -116,6 +116,14 @@ class VAE(nn.Module):
         mu_img = self.decoder(z)
         return mu_img
 
+    def model_sample(self, batch_size=1):
+        # sample the handwriting style from the constant prior distribution
+        prior_mu = Variable(torch.zeros([batch_size, self.z_dim]))
+        prior_sigma = Variable(torch.ones([batch_size, self.z_dim]))
+        zs = pyro.sample("z", dist.normal, prior_mu, prior_sigma)
+        mu = vae.decoder.forward(zs)
+        xs = pyro.sample("sample", dist.bernoulli, mu)
+        return xs, mu
 
 def main():
     # parse command line arguments
@@ -187,6 +195,7 @@ def main():
                 # visualize how well we're reconstructing them
                 if i == 0:
                     if args.visdom_flag:
+                        plot_vae_samples(vae, vis)
                         reco_indices = np.random.randint(0, x.size(0), 3)
                         for index in reco_indices:
                             test_img = x[index, :, :, :]
@@ -205,7 +214,6 @@ def main():
         if epoch == args.tsne_iter:
             mnist_test_tsne(vae=vae, test_loader=test_loader)
             plot_llk(np.array(train_elbo), np.array(test_elbo))
-            vae_model_sample(vae)
 
     return vae
 

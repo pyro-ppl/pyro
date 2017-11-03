@@ -15,17 +15,6 @@ def ssvae_model_sample(ss_vae, ys, batch_size=1, z_dim=50):
     xs = pyro.sample("sample", dist.bernoulli, mu)
     return xs, mu
 
-def vae_model_sample(vae, batch_size=1, z_dim=50):
-    # sample the handwriting style from the constant prior distribution
-    prior_mu = Variable(torch.zeros([batch_size, z_dim]))
-    prior_sigma = Variable(torch.ones([batch_size, z_dim]))
-    zs = pyro.sample("z", dist.normal, prior_mu, prior_sigma)
-    mu = vae.decoder.forward(zs)
-    xs = pyro.sample("sample", dist.bernoulli, mu)
-    return xs, mu
-
-# from visdom import Visdom
-# viz = Visdom()
 
 def plot_conditional_samples_ssvae(ssvae, visdom_session):
     """
@@ -55,7 +44,7 @@ def plot_llk(train_elbo, test_elbo):
     plt.figure(figsize=(30, 10))
     sns.set_style("whitegrid")
     data = np.concatenate([np.arange(len(test_elbo))[:, sp.newaxis], -test_elbo[:, sp.newaxis]], axis=1)
-    df = pd.DataFrame(data=data, columns=['Training Epoch', 'Test NLL'])
+    df = pd.DataFrame(data=data, columns=['Training Epoch', 'Test ELBO'])
     g = sns.FacetGrid(df, size=10, aspect=1.5)
     g.map(plt.scatter, "Training Epoch", "Test ELBO")
     g.map(plt.plot, "Training Epoch", "Test ELBO")
@@ -68,7 +57,7 @@ def plot_vae_samples(vae, visom_session):
     for i in range(10):
         images = []
         for rr in range(100):
-            sample_i, sample_mu_i = vae_model_sample(ssvae)
+            sample_i, sample_mu_i = vae.model_sample()
             img = sample_mu_i[0].view(1, 28, 28).cpu().data.numpy()
             images.append(img)
         vis.images(images, 10, 2)
