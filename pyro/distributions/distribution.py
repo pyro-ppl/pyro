@@ -74,7 +74,7 @@ class Distribution(object):
     **Implementing New Distributions**:
 
     Derived classes must implement the following methods: ``.sample()``,
-    :code:`.batch_log_pdf()`, ``.batch_shape()``, and ``.event_shape()``, .
+    :code:`.batch_log_pdf()`, ``.batch_shape()``, and ``.event_shape()``.
     Discrete classes may also implement the ``.enumerate_support()`` method to improve
     gradient estimates and set ``.enumerable = True``.
 
