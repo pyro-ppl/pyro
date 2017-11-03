@@ -53,12 +53,12 @@ def plot_llk(train_elbo, test_elbo):
     import pandas as pd
     plt.figure(figsize=(30, 10))
     sns.set_style("whitegrid")
-    data = np.concatenate([np.arange(len(test_elbo))[:, sp.newaxis], test_elbo[:, sp.newaxis]], axis=1)
+    data = np.concatenate([np.arange(len(test_elbo))[:, sp.newaxis], -test_elbo[:, sp.newaxis]], axis=1)
     df = pd.DataFrame(data=data, columns=['Training Epoch', 'Test NLL'])
     g = sns.FacetGrid(df, size=10, aspect=1.5)
-    g.map(plt.scatter, "Training Epoch", "Test NLL")
-    g.map(plt.plot, "Training Epoch", "Test NLL")
-    plt.savefig('./vae_results/test_nll_vae.png')
+    g.map(plt.scatter, "Training Epoch", "Test ELBO")
+    g.map(plt.plot, "Training Epoch", "Test ELBO")
+    plt.savefig('./vae_results/test_elbo_vae.png')
     plt.close('all')
 
 
