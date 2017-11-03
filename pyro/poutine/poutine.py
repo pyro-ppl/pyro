@@ -1,6 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
-import pyro
+from pyro.params import _PYRO_PARAM_STORE
+
+# the global pyro stack
+_PYRO_STACK = []
 
 
 class Poutine(object):
@@ -53,10 +56,10 @@ class Poutine(object):
         Derived versions cannot be overridden to take arguments
         and must always return self.
         """
-        if not (self in pyro._PYRO_STACK):
+        if not (self in _PYRO_STACK):
             # if this poutine is not already installed,
             # put it on the bottom of the stack.
-            pyro._PYRO_STACK.insert(0, self)
+            _PYRO_STACK.insert(0, self)
 
             # necessary to return self because the return value of __enter__
             # is bound to VAR in with EXPR as VAR.
@@ -99,8 +102,8 @@ class Poutine(object):
             # this poutine should be on the bottom of the stack.
             # If so, remove it from the stack.
             # if not, raise a ValueError because something really weird happened.
-            if pyro._PYRO_STACK[0] == self:
-                pyro._PYRO_STACK.pop(0)
+            if _PYRO_STACK[0] == self:
+                _PYRO_STACK.pop(0)
             else:
                 # should never get here, but just in case...
                 raise ValueError("This Poutine is not on the bottom of the stack")
@@ -109,10 +112,10 @@ class Poutine(object):
             # when the callee or enclosed block raises an exception,
             # find this poutine's position in the stack,
             # then remove it and everything below it in the stack.
-            if self in pyro._PYRO_STACK:
-                loc = pyro._PYRO_STACK.index(self)
+            if self in _PYRO_STACK:
+                loc = _PYRO_STACK.index(self)
                 for i in range(0, loc + 1):
-                    pyro._PYRO_STACK.pop(0)
+                    _PYRO_STACK.pop(0)
 
     def _reset(self):
         """
@@ -193,7 +196,7 @@ class Poutine(object):
         if msg["done"]:
             return msg["value"]
 
-        ret = pyro._param_store.get_param(name, *args, **kwargs)
+        ret = _PYRO_PARAM_STORE.get_param(name, *args, **kwargs)
 
         # after the param store has been queried, update msg["done"]
         # to prevent it from being queried again.

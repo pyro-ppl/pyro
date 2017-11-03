@@ -102,7 +102,7 @@ class PyroOptim(object):
         if callable(self.pt_optim_args):
 
             # get param name
-            param_name = pyro._param_store.param_name(param)
+            param_name = pyro.get_param_store().param_name(param)
             module_name = module_from_param_with_module_name(param_name)
             stripped_param_name = user_param_name(param_name)
 

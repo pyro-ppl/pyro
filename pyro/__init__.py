@@ -9,36 +9,25 @@ from inspect import isclass
 import torch
 from torch.autograd import Variable
 
-import pyro
 import pyro.poutine as poutine
 from pyro.distributions.distribution import Distribution
-from pyro.params import param_with_module_name
-from pyro.params.param_store import ParamStoreDict
-from pyro.poutine import LambdaPoutine, condition, do  # noqa: F401
+from pyro.params import _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, param_with_module_name
+from pyro.poutine import _PYRO_STACK, LambdaPoutine, condition, do  # noqa: F401
 from pyro.util import apply_stack, deep_getattr, get_tensor_data, ones, set_rng_seed, zeros  # noqa: F401
-
-# the pyro stack
-_PYRO_STACK = []
-
-# the global ParamStore
-_param_store = ParamStoreDict()
-
-# used to create fully-formed param names, e.g. mymodule$$$mysubmodule.weight
-_MODULE_NAMESPACE_DIVIDER = "$$$"
 
 
 def get_param_store():
     """
     Returns the ParamStore
     """
-    return _param_store
+    return _PYRO_PARAM_STORE
 
 
 def clear_param_store():
     """
     Clears the ParamStore. This is especially useful if you're working in a REPL.
     """
-    return _param_store.clear()
+    return _PYRO_PARAM_STORE.clear()
 
 
 def sample(name, fn, *args, **kwargs):
@@ -290,7 +279,7 @@ def param(name, *args, **kwargs):
     see `Parameters <parameters.html>`_.
     """
     if len(_PYRO_STACK) == 0:
-        return _param_store.get_param(name, *args, **kwargs)
+        return _PYRO_PARAM_STORE.get_param(name, *args, **kwargs)
     else:
         msg = {
             "type": "param",
@@ -336,13 +325,13 @@ def module(name, nn_module, tags="default", update_module_params=False):
 
     target_state_dict = OrderedDict()
 
-    for param_name, param in nn_module.named_parameters():
+    for param_name, param_value in nn_module.named_parameters():
         # register the parameter in the module with pyro
         # this only does something substantive if the parameter hasn't been seen before
         full_param_name = param_with_module_name(name, param_name)
-        returned_param = pyro.param(full_param_name, param, tags=tags)
+        returned_param = param(full_param_name, param_value, tags=tags)
 
-        if get_tensor_data(param)._cdata != get_tensor_data(returned_param)._cdata:
+        if get_tensor_data(param_value)._cdata != get_tensor_data(returned_param)._cdata:
             target_state_dict[param_name] = returned_param
 
     if target_state_dict and update_module_params:
@@ -380,7 +369,7 @@ def random_module(name, nn_module, prior, *args, **kwargs):
     """
     assert hasattr(nn_module, "parameters"), "Module is not a NN module."
     # register params in param store
-    lifted_fn = poutine.lift(pyro.module, prior)
+    lifted_fn = poutine.lift(module, prior)
 
     def _fn():
         nn_copy = copy.deepcopy(nn_module)
