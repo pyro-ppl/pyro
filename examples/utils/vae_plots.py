@@ -1,19 +1,9 @@
 import torch
-# import torch.nn as nn
+import torch.nn as nn
 # import torch.nn.init as init
 # import torchvision.datasets as dset
 from torch.autograd import Variable
 # import numpy as np
-
-
-def ssvae_model_sample(ss_vae, ys, batch_size=1, z_dim=50):
-    # sample the handwriting style from the constant prior distribution
-    prior_mu = Variable(torch.zeros([batch_size, z_dim]))
-    prior_sigma = Variable(torch.ones([batch_size, z_dim]))
-    zs = pyro.sample("z", dist.normal, prior_mu, prior_sigma)
-    mu = ss_vae.nn_mu_x.forward([zs, ys])
-    xs = pyro.sample("sample", dist.bernoulli, mu)
-    return xs, mu
 
 
 def plot_conditional_samples_ssvae(ssvae, visdom_session):
@@ -29,7 +19,7 @@ def plot_conditional_samples_ssvae(ssvae, visdom_session):
     for i in range(10):
         images = []
         for rr in range(100):
-            sample_i, sample_mu_i = ssvae_model_sample(ssvae, ys[i])
+            sample_i, sample_mu_i = ssvae.model_sample(ys[i])
             img = sample_mu_i[0].view(1, 28, 28).cpu().data.numpy()
             images.append(img)
         vis.images(images, 10, 2)
