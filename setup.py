@@ -7,6 +7,9 @@ setup(
     version='0.0.1',
     description='A Python library for probabilistic modeling and inference',
     packages=find_packages(exclude=('tests*',)),
+    url='http://pyro.ai',
+    author='Uber AI Labs',
+    author_email='pyro@uber.com',
     install_requires=[
         'numpy>=1.7',
         'scipy>=0.19.0',
