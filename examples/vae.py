@@ -121,7 +121,7 @@ class VAE(nn.Module):
         prior_mu = Variable(torch.zeros([batch_size, self.z_dim]))
         prior_sigma = Variable(torch.ones([batch_size, self.z_dim]))
         zs = pyro.sample("z", dist.normal, prior_mu, prior_sigma)
-        mu = vae.decoder.forward(zs)
+        mu = self.decoder.forward(zs)
         xs = pyro.sample("sample", dist.bernoulli, mu)
         return xs, mu
 
@@ -198,7 +198,7 @@ def main():
                         plot_vae_samples(vae, vis)
                         reco_indices = np.random.randint(0, x.size(0), 3)
                         for index in reco_indices:
-                            test_img = x[index, :, :, :]
+                            test_img = x[index, :]
                             reco_img = vae.reconstruct_img(test_img)
                             vis.image(test_img.contiguous().view(28, 28).data.cpu().numpy(),
                                       opts={'caption': 'test image'})
