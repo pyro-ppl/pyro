@@ -129,7 +129,6 @@ class Trace_ELBO(object):
         Performs backward on the latter. Num_particle many samples are used to form the estimators.
         """
         elbo = 0.0
-        surrogate_elbo = 0.0
         trainable_params = set()
         # grab a trace from the generator
         for weight, model_trace, guide_trace, log_r in self._get_traces(model, guide, *args, **kwargs):
@@ -163,7 +162,7 @@ class Trace_ELBO(object):
                 surrogate_elbo_particle[weight_eq_zero] = 0.0
 
             elbo += torch_data_sum(weight * elbo_particle)
-            surrogate_elbo += torch_sum(weight * surrogate_elbo_particle)
+            surrogate_elbo_particle = torch_sum(weight * surrogate_elbo_particle)
 
             # grab model parameters to train
             for name in model_trace.nodes.keys():
@@ -175,10 +174,11 @@ class Trace_ELBO(object):
                 if guide_trace.nodes[name]["type"] == "param":
                     trainable_params.add(guide_trace.nodes[name]["value"])
 
+            surrogate_loss_particle = -surrogate_elbo_particle
+            if trainable_params:
+                torch_backward(surrogate_loss_particle)
+
         loss = -elbo
-        surrogate_loss = -surrogate_elbo
-        if trainable_params:
-            torch_backward(surrogate_loss)
 
         pyro.get_param_store().mark_params_active(trainable_params)
 
