@@ -8,7 +8,7 @@
 [![Latest Version](https://badge.fury.io/py/pyro-ppl.svg)](https://pypi.python.org/pypi/pyro-ppl)
 
 
-[Installation](#Installation) | [Examples](examples) | [Getting Started](http://pyro.ai/examples) | [Contributing](CONTRIBUTING.md) | Discussion
+[Getting Started](http://pyro.ai/examples) | [Documentation](http://docs.pyro.ai/) | [Contributing](CONTRIBUTING.md)
 
 Pyro is a flexible, scalable deep probabilistic programming library built on PyTorch.  Notably, it was designed with these principles in mind:
 - **Universal**: Pyro is a universal PPL -- it can represent any computable probability distribution.
