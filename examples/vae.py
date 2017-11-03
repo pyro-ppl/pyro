@@ -14,6 +14,7 @@ import pyro.distributions as dist
 from pyro.infer import SVI
 from pyro.optim import Adam
 from pyro.util import ng_zeros, ng_ones
+from pyro.nn import ClippedSoftmax, ClippedSigmoid
 from utils.vae_plots import plot_llk, mnist_test_tsne
 from utils.mnist_cached import MNISTCached as MNIST
 from utils.mnist_cached import setup_data_loaders
@@ -55,15 +56,16 @@ class VAE(nn.Module):
         self.use_cuda = use_cuda
         self.z_dim = z_dim
         self.hidden_layers = hidden_layers
+        self.setup_networks()
 
     def setup_networks(self):
         z_dim = self.z_dim
         hidden_sizes = self.hidden_layers
 
-        self.nn_mu_sigma_z = MLP([self.input_size + self.output_size] + hidden_sizes + [[z_dim, z_dim]],
+        self.encoder = MLP([784] + hidden_sizes + [[z_dim, z_dim]],
                                  activation=nn.Softplus, output_activation=[None, Exp], use_cuda=self.use_cuda)
 
-        self.nn_mu_x = MLP([z_dim + self.output_size] + hidden_sizes + [self.input_size],
+        self.decoder = MLP([z_dim] + hidden_sizes + [784],
                            activation=nn.Softplus, output_activation=ClippedSigmoid,
                            epsilon_scale=fudge, use_cuda=self.use_cuda)
 
