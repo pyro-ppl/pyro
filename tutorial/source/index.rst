@@ -10,6 +10,8 @@ Welcome to Pyro Examples and Tutorials!
    :maxdepth: 2
    :caption: Contents:
 
+   intro_part_i
+   intro_part_ii
    svi_part_i
    svi_part_ii
    svi_part_iii
