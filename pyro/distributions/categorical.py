@@ -12,24 +12,25 @@ class Categorical(Distribution):
     """
     Categorical (discrete) distribution.
 
-    Discrete distribution over elements of `vs` with `P(vs[i])` proportional to
-    `ps[i]`.  If `one_hot=True`, `.sample()` returns a one-hot vector;
-    otherwise `.sample()` returns the category index.
+    Discrete distribution over elements of `vs` with :math:`P(vs[i]) \\propto ps[i]`.
+    If ``one_hot=True``, ``.sample()`` returns a one-hot vector;
+    otherwise ``.sample()`` returns the category index.
 
     :param ps: Probabilities. These should be non-negative and normalized
         along the rightmost axis.
-    :type ps: `torch.autograd.Variable`.
-    :param logits: Log probability values. When exonentiated, these should
+    :type ps: torch.autograd.Variable
+    :param logits: Log probability values. When exponentiated, these should
         sum to 1 along the last axis. Either `ps` or `logits` should be
         specified but not both.
-    :type logits: `torch.autograd.Variable`.
+    :type logits: torch.autograd.Variable
     :param vs: Optional list of values in the support.
-    :type vs: `list` or `numpy.array` or `torch.autograd.Variable`
-    :param one_hot: Whether `sample()` returns a `one_hot` sample.  Defaults
-        to `False` if `vs` is specified or `True` if `vs` is not specified.
-    :param int batch_size: Optional number of elements in the batch used to
+    :type vs: list or numpy.ndarray or torch.autograd.Variable
+    :param one_hot: Whether ``sample()`` returns a `one_hot` sample.  Defaults
+        to `False` if `vs` is specified, or `True` if `vs` is not specified.
+    :param batch_size: Optional number of elements in the batch used to
         generate a sample. The batch dimension will be the leftmost dimension
         in the generated sample.
+    :type batch_size: int
     """
     enumerable = True
 
@@ -67,6 +68,9 @@ class Categorical(Distribution):
         return x
 
     def batch_shape(self, x=None):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_shape`
+        """
         event_dim = 1
         ps = self.ps
         if x is not None:
@@ -80,18 +84,24 @@ class Categorical(Distribution):
         return ps.size()[:-event_dim]
 
     def event_shape(self):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.event_shape`
+        """
         event_dim = 1
         return self.ps.size()[-event_dim:]
 
     def shape(self, x=None):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.shape`
+        """
         if self.one_hot:
             return self.batch_shape(x) + self.event_shape()
         return self.batch_shape(x) + (1,)
 
     def sample(self):
         """
-        Returns a sample which has the same shape as ``ps`` (or ``vs``), except
-        that if ``one_hot=True`` (and no ``vs`` is specified), the last dimension
+        Returns a sample which has the same shape as `ps` (or `vs`), except
+        that if ``one_hot=True`` (and no `vs` is specified), the last dimension
         will have the same size as the number of events. The type of the sample
         is `numpy.ndarray` if `vs` is a list or a numpy array, else a tensor
         is returned.
@@ -115,13 +125,13 @@ class Categorical(Distribution):
     def batch_log_pdf(self, x):
         """
         Evaluates log probability densities for one or a batch of samples and parameters.
-        The last dimension for ``ps`` encodes the event probabilities, and the remaining
+        The last dimension for `ps` encodes the event probabilities, and the remaining
         dimensions are considered batch dimensions.
 
-        ``ps`` and ``vs`` are first broadcasted to the size of the data ``x``. The
-        data tensor is used to to create a mask over ``vs`` where a 1 in the mask
-        indicates that the corresponding value in ``vs`` was selected. Since, ``ps``
-        and ``vs`` have the same size, this mask when applied over ``ps`` gives
+        `ps` and `vs` are first broadcasted to the size of the data `x`. The
+        data tensor is used to to create a mask over `vs` where a 1 in the mask
+        indicates that the corresponding value in `vs` was selected. Since, `ps`
+        and `vs` have the same size, this mask when applied over `ps` gives
         the probabilities of the selected events. The method returns the logarithm
         of these probabilities.
 
@@ -168,14 +178,17 @@ class Categorical(Distribution):
         construct univariate Categoricals and use itertools.product() over all univariate
         variables (but this is very expensive).
 
-        :param ps: numpy.ndarray where the last dimension denotes the event probabilities, *p_k*,
+        :param ps: Tensor where the last dimension denotes the event probabilities, *p_k*,
             which must sum to 1. The remaining dimensions are considered batch dimensions.
+        :type ps: torch.autograd.Variable
         :param vs: Optional parameter, enumerating the items in the support. This could either
             have a numeric or string type. This should have the same dimension as ``ps``.
+        :type vs: list or numpy.ndarray or torch.autograd.Variable
         :param one_hot: Denotes whether one hot encoding is enabled. This is True by default.
-            When set to false, and no explicit ``vs`` is provided, the last dimension gives
+            When set to false, and no explicit `vs` is provided, the last dimension gives
             the one-hot encoded value from the support.
-        :return: torch variable or numpy array enumerating the support of the categorical distribution.
+        :type one_hot: boolean
+        :return: Torch variable or numpy array enumerating the support of the categorical distribution.
             Each item in the return value, when enumerated along the first dimensions, yields a
             value from the distribution's support which has the same dimension as would be returned by
             sample. If ``one_hot=True``, the last dimension is used for the one-hot encoding.

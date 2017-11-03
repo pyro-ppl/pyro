@@ -30,20 +30,24 @@ class Cauchy(Distribution):
         self.mu = mu
         self.gamma = gamma
         if mu.size() != gamma.size():
-            raise ValueError("Expected mu.size() == gamma.size(), but got {} vs {}".format(mu.size(), gamma.size()))
+            raise ValueError("Expected mu.size() == gamma.size(), but got {} vs {}"  #
+                             .format(mu.size(), gamma.size()))
         if mu.dim() == 1 and batch_size is not None:
             self.mu = mu.expand(batch_size, mu.size(0))
             self.gamma = gamma.expand(batch_size, gamma.size(0))
         super(Cauchy, self).__init__(*args, **kwargs)
 
     def batch_shape(self, x=None):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_shape`
+        """
         event_dim = 1
         mu = self.mu
         if x is not None:
             if x.size()[-event_dim] != mu.size()[-event_dim]:
                 raise ValueError("The event size for the data and distribution parameters must match.\n"
-                                 "Expected x.size()[-1] == self.mu.size()[-1], but got {} vs {}".format(
-                                     x.size(-1), mu.size(-1)))
+                                 "Expected x.size()[-1] == self.mu.size()[-1], but got {} vs {}"  #
+                                 .format(x.size(-1), mu.size(-1)))
             try:
                 mu = self.mu.expand_as(x)
             except RuntimeError as e:
@@ -52,13 +56,16 @@ class Cauchy(Distribution):
         return mu.size()[:-event_dim]
 
     def event_shape(self):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.event_shape`
+        """
         event_dim = 1
         return self.mu.size()[-event_dim:]
 
-    def shape(self, x=None):
-        return self.batch_shape(x) + self.event_shape()
-
     def sample(self):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.sample`
+        """
         np_sample = spr.cauchy.rvs(self.mu.data.cpu().numpy(), self.gamma.data.cpu().numpy())
         if isinstance(np_sample, numbers.Number):
             np_sample = [np_sample]
@@ -66,6 +73,9 @@ class Cauchy(Distribution):
         return sample
 
     def batch_log_pdf(self, x):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_log_pdf`
+        """
         # expand to patch size of input
         mu = self.mu.expand(self.shape(x))
         gamma = self.gamma.expand(self.shape(x))
@@ -76,7 +86,13 @@ class Cauchy(Distribution):
         return log_pdf.contiguous().view(batch_log_pdf_shape)
 
     def analytic_mean(self):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_mean`
+        """
         raise ValueError("Cauchy has no defined mean")
 
     def analytic_var(self):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_var`
+        """
         raise ValueError("Cauchy has no defined variance")

@@ -20,8 +20,8 @@ class Bernoulli(Distribution):
 
     :param torch.autograd.Variable ps: Probabilities. Should lie in the
         interval `[0,1]`.
-    :param logits: Log odds, i.e. log (p / (1 - p)). Either `ps` or `logits`
-        should be specified, but not both.
+    :param logits: Log odds, i.e. :math:`\\log(\\frac{p}{1 - p})`. Either `ps` or
+        `logits` should be specified, but not both.
     :param batch_size: The number of elements in the batch used to generate
         a sample. The batch dimension will be the leftmost dimension in the
         generated sample.
@@ -45,6 +45,9 @@ class Bernoulli(Distribution):
         super(Bernoulli, self).__init__(*args, **kwargs)
 
     def batch_shape(self, x=None):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_shape`.
+        """
         event_dim = 1
         ps = self.ps
         if x is not None:
@@ -61,16 +64,22 @@ class Bernoulli(Distribution):
         return ps.size()[:-event_dim]
 
     def event_shape(self):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.event_shape`.
+        """
         event_dim = 1
         return self.ps.size()[-event_dim:]
 
-    def shape(self, x=None):
-        return self.batch_shape(x) + self.event_shape()
-
     def sample(self):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.sample`.
+        """
         return Variable(torch.bernoulli(self.ps.data))
 
     def batch_log_pdf(self, x):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_log_pdf`
+        """
         batch_log_pdf_shape = self.batch_shape(x) + (1,)
         log_prob_1 = F.sigmoid(self.logits)
         log_prob_0 = F.sigmoid(-self.logits)
@@ -100,7 +109,13 @@ class Bernoulli(Distribution):
         return Variable(torch.stack([torch.Tensor([t]).expand_as(self.ps) for t in [0, 1]]))
 
     def analytic_mean(self):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_mean`.
+        """
         return self.ps
 
     def analytic_var(self):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_var`.
+        """
         return self.ps * (1 - self.ps)

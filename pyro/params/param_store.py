@@ -9,8 +9,10 @@ class ParamStoreDict(object):
     """
     Global store for parameters in Pyro. This is basically a key-value store.
     The typical user interacts with the ParamStore primarily through the
-    primitive `pyro.param`. See the introductory tutorial
-    `Hello World <http://pyro.ai/examples/hello_world.html>`_ for a discussion.
+    primitive `pyro.param`.
+
+    See `Intro Part II <http://pyro.ai/examples/intro_part_ii.html>`_ for further discussion
+    and `SVI Part I <http://pyro.ai/examples/svi_part_i.html>`_ for some examples.
 
     Some things to bear in mind when using parameters in Pyro:
 
@@ -109,11 +111,11 @@ class ParamStoreDict(object):
 
     def delete_tag(self, tag):
         """
-        :param tag: tag to remove
-        :type tag: str
-
         Removes the tag; any parameters with that tag are unaffected but are no longer
         associated with that tag.
+
+        :param tag: tag to remove
+        :type tag: str
         """
         assert(tag in self._param_tags), "this tag does not exist"
         self._param_tags.pop(tag)
@@ -123,11 +125,11 @@ class ParamStoreDict(object):
 
     def get_param_tags(self, param_name):
         """
+        Return the tags associated with the parameter
+
         :param param_name: a (single) parameter name
         :type param_name: str
         :rtype: set
-
-        Return the tags associated with the parameter
         """
         if param_name in self._tag_params:
             return self._tag_params[param_name]
@@ -135,10 +137,10 @@ class ParamStoreDict(object):
 
     def tag_params(self, param_names, tags):
         """
+        Tags the parameter(s) specified by param_names with the tag(s) specified by tags.
+
         :param param_name: either a single parameter name or an iterable of parameter names
         :param tags: either a single string or an iterable of strings
-
-        Tags the parameter(s) specified by param_names with the tag(s) specified by tags.
         """
         def tag_single_param(name, tags):
             assert name in self._params, "<%s> is not a parameter in the ParamStore" % name
@@ -160,10 +162,10 @@ class ParamStoreDict(object):
 
     def untag_params(self, param_names, tags):
         """
+        Disassociates the parameter(s) specified by param_names with the tag(s) specified by tags.
+
         :param param_name: either a single parameter name or an iterable of parameter names
         :param tags: either a single string or an iterable of strings
-
-        Disassociates the parameter(s) specified by param_names with the tag(s) specified by tags.
         """
         def untag_single_param(name, tags):
             assert name in self._params, "<%s> is not a parameter in the ParamStore" % name
@@ -185,14 +187,14 @@ class ParamStoreDict(object):
 
     def replace_param(self, param_name, new_param, old_param):
         """
+        Replace the param param_name with current value old_param with the new value new_param
+
         :param param_name: parameter name
         :type param_name: str
         :param new_param: the paramater to be put into the ParamStore
         :type new_param: torch.autograd.Variable
         :param old_param: the paramater to be removed from the ParamStore
         :type new_param: torch.autograd.Variable
-
-        Replace the param param_name with current value old_param with the new value new_param
         """
         assert id(self._params[param_name]) == id(old_param)
         self._params[param_name] = new_param
@@ -201,6 +203,10 @@ class ParamStoreDict(object):
 
     def get_param(self, name, init_tensor=None, tags="default"):
         """
+        Get parameter from its name. If it does not yet exist in the
+        ParamStore, it will be created and stored.
+        The Pyro primitive `pyro.param` dispatches to this method.
+
         :param name: parameter name
         :type name: str
         :param init_tensor: initial tensor
@@ -209,10 +215,6 @@ class ParamStoreDict(object):
         :type tags: a string or iterable of strings
         :returns: parameter
         :rtype: torch.autograd.Variable
-
-        Get parameter from its name. If it does not yet exist in the
-        ParamStore, it will be created and stored.
-        The Pyro primitive `pyro.param` dispatches to this method.
         """
         if name not in self._params:
             # if not create the init tensor through
@@ -237,10 +239,10 @@ class ParamStoreDict(object):
 
     def param_name(self, p):
         """
+        Get parameter name from parameter
+
         :param p: parameter
         :returns: parameter name
-
-        Get parameter name from parameter
         """
         if p not in self._param_to_name:
             return None
@@ -272,20 +274,20 @@ class ParamStoreDict(object):
 
     def save(self, filename):
         """
+        Save parameters to disk
+
         :param filename: file name to save to
         :type name: str
-
-        Save parameters to disk
         """
         with open(filename, "wb") as output_file:
             output_file.write(cloudpickle.dumps(self.get_state()))
 
     def load(self, filename):
         """
+        Loads parameters from disk
+
         :param filename: file name to load from
         :type name: str
-
-        Loads parameters from disk
         """
         with open(filename, "rb") as input_file:
             state = cloudpickle.loads(input_file.read())

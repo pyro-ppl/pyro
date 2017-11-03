@@ -27,6 +27,9 @@ class Delta(Distribution):
         super(Delta, self).__init__(*args, **kwargs)
 
     def batch_shape(self, x=None):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_shape`
+        """
         event_dim = 1
         v = self.v
         if x is not None:
@@ -42,16 +45,22 @@ class Delta(Distribution):
         return v.size()[:-event_dim]
 
     def event_shape(self):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.event_shape`
+        """
         event_dim = 1
         return self.v.size()[-event_dim:]
 
-    def shape(self, x=None):
-        return self.batch_shape(x) + self.event_shape()
-
     def sample(self):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.sample`
+        """
         return self.v
 
     def batch_log_pdf(self, x):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_log_pdf`
+        """
         v = self.v
         v = v.expand(self.shape(x))
         batch_shape = self.batch_shape(x) + (1,)

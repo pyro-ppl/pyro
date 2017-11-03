@@ -49,6 +49,18 @@ class TransformedDistribution(Distribution):
             next_input = y
         return next_input
 
+    def batch_shape(self, x=None, *args, **kwargs):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_shape`
+        """
+        return self.base_dist.batch_shape(x, *args, **kwargs)
+
+    def event_shape(self, *args, **kwargs):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.event_shape`
+        """
+        return self.base_dist.batch_shape(*args, **kwargs)
+
     def log_pdf(self, y, *args, **kwargs):
         """
         :param y: a value sampled from the transformed distribution

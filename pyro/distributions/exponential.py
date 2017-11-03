@@ -25,6 +25,9 @@ class Exponential(Distribution):
         super(Exponential, self).__init__(*args, **kwargs)
 
     def batch_shape(self, x=None):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_shape`
+        """
         event_dim = 1
         lam = self.lam
         if x is not None:
@@ -40,28 +43,39 @@ class Exponential(Distribution):
         return lam.size()[:-event_dim]
 
     def event_shape(self):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.event_shape`
+        """
         event_dim = 1
         return self.lam.size()[-event_dim:]
-
-    def shape(self, x=None):
-        return self.batch_shape(x) + self.event_shape()
 
     def sample(self):
         """
         Reparameterized sampler.
+
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.sample`
         """
         eps = Variable(torch.rand(self.lam.size()).type_as(self.lam.data))
         x = -torch.log(eps) / self.lam
         return x
 
     def batch_log_pdf(self, x):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_log_pdf`
+        """
         lam = self.lam.expand(self.shape(x))
         ll = -lam * x + torch.log(lam)
         batch_log_pdf_shape = self.batch_shape(x) + (1,)
         return torch.sum(ll, -1).contiguous().view(batch_log_pdf_shape)
 
     def analytic_mean(self):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_mean`
+        """
         return torch.pow(self.lam, -1.0)
 
     def analytic_var(self):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_var`
+        """
         return torch.pow(self.lam, -2.0)
