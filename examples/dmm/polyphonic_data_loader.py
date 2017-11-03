@@ -32,9 +32,8 @@ def process_data(base_path, filename, T_max=160, min_note=21, note_range=88):
     print("processing raw polyphonic music data...")
     data = jsb_chorales(base_path)
     processed_dataset = {}
-    for split in ['train', 'valid', 'test']:
+    for split, data_split in zip(['train', 'test', 'valid'], data):
         processed_dataset[split] = {}
-        data_split = data[split]
         n_seqs = len(data_split)
         processed_dataset[split]['sequence_lengths'] = np.zeros((n_seqs), dtype=np.int32)
         processed_dataset[split]['sequences'] = np.zeros((n_seqs, T_max, note_range))
