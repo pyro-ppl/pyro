@@ -3,6 +3,9 @@ from torchvision.datasets import MNIST
 import numpy as np
 from functools import reduce
 from torch.utils.data import DataLoader
+# This file contains utilities for caching, transforming and splitting MNIST data
+# efficiently. By default, a Pytorch DataLoader will apply the transform every epoch
+# we avoid this by caching the data early on in MNISTCached class
 
 
 # transformations for MNIST data
@@ -204,25 +207,14 @@ def setup_data_loaders(dataset, use_cuda, batch_size, sup_num=None, root='./data
     if 'num_workers' not in kwargs:
         kwargs = {'num_workers': 0, 'pin_memory': False}
 
-    train_set_unsup = dataset(root=root, mode="unsup", download=download, sup_num=sup_num, use_cuda=use_cuda)
+    cached_data = {}
+    loaders = {}
+    for mode in ["unsup", "test", "sup", "valid"]:
+        if sup_num is None and mode == "sup":
+            # in this special case, we do not want "sup" and "valid" data loaders
+            return loaders["unsup"], loaders["test"]
+        cached_data[mode] = dataset(root=root, mode=mode, download=download,
+                                    sup_num=sup_num, use_cuda=use_cuda)
+        loaders[mode] = DataLoader(cached_data[mode], batch_size=batch_size, shuffle=True, **kwargs)
 
-    train_loader_unsup = DataLoader(train_set_unsup, batch_size=batch_size, shuffle=True, **kwargs)
-
-    test_set = dataset(root=root, mode="test", sup_num=sup_num, use_cuda=use_cuda)
-
-    test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False, **kwargs)
-
-    if sup_num is None:
-        return train_loader_unsup, test_loader
-
-    train_set_sup = dataset(root=root, mode="sup", download=download, sup_num=sup_num, use_cuda=use_cuda)
-
-    validation_set = dataset(root=root, mode="valid", download=download, sup_num=sup_num, use_cuda=use_cuda)
-
-
-
-    train_loader_sup = DataLoader(train_set_sup, batch_size=batch_size, shuffle=True, **kwargs)
-
-    validation_loader = DataLoader(validation_set, batch_size=batch_size, shuffle=False, **kwargs)
-
-    return train_loader_sup, train_loader_unsup, test_loader, validation_loader
+    return loaders
