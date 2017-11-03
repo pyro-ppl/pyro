@@ -32,7 +32,7 @@ setup(
             'torchvision',
         ],
         'dev': [
-            'torchvision'
+            'torchvision',
             'flake8',
             'yapf',
             'isort',
