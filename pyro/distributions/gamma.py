@@ -33,6 +33,9 @@ class Gamma(Distribution):
         super(Gamma, self).__init__(*args, **kwargs)
 
     def batch_shape(self, x=None):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_shape`
+        """
         event_dim = 1
         alpha = self.alpha
         if x is not None:
@@ -48,15 +51,15 @@ class Gamma(Distribution):
         return alpha.size()[:-event_dim]
 
     def event_shape(self):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.event_shape`
+        """
         event_dim = 1
         return self.alpha.size()[-event_dim:]
 
-    def shape(self, x=None):
-        return self.batch_shape(x) + self.event_shape()
-
     def sample(self):
         """
-        un-reparameterized sampler.
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.sample`
         """
         theta = torch.pow(self.beta, -1.0)
         np_sample = spr.gamma.rvs(self.alpha.data.cpu().numpy(), scale=theta.data.cpu().numpy())
@@ -67,6 +70,9 @@ class Gamma(Distribution):
         return x
 
     def batch_log_pdf(self, x):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_log_pdf`
+        """
         alpha = self.alpha.expand(self.shape(x))
         beta = self.beta.expand(self.shape(x))
         ll_1 = -beta * x
@@ -78,7 +84,13 @@ class Gamma(Distribution):
         return log_pdf.contiguous().view(batch_log_pdf_shape)
 
     def analytic_mean(self):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_mean`
+        """
         return self.alpha / self.beta
 
     def analytic_var(self):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_var`
+        """
         return self.alpha / torch.pow(self.beta, 2.0)

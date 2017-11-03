@@ -43,6 +43,11 @@ def clear_param_store():
 
 def sample(name, fn, *args, **kwargs):
     """
+    Calls the stochastic function `fn` with additional side-effects depending on `name` and the
+    enclosing context (e.g. an inference algorithm).
+    See `Intro I <http://pyro.ai/examples/intro_part_i.html>`_ and
+    `Intro II <http://pyro.ai/examples/intro_part_ii.html>`_ for a discussion.
+
     :param name: name of sample
     :param fn: distribution class or function
     :param obs: observed datum (optional; should only be used in context of
@@ -50,11 +55,6 @@ def sample(name, fn, *args, **kwargs):
     :param dict baseline: Optional dictionary of baseline parameters specified
         in kwargs. See inference documentation for details.
     :returns: sample
-
-    Calls the stochastic function `fn` with additional side-effects depending on `name` and the
-    enclosing context (e.g. an inference algorithm).
-    See `Intro I <http://pyro.ai/examples/intro_part_i.html>`_ and
-    `Intro II <http://pyro.ai/examples/intro_part_ii.html>`_ for a discussion.
     """
     obs = kwargs.pop("obs", None)
     baseline = kwargs.pop("baseline", {})
@@ -94,12 +94,12 @@ def sample(name, fn, *args, **kwargs):
 
 def observe(name, fn, obs, *args, **kwargs):
     """
+    Alias of `pyro.sample(name, fn, *args, obs=obs, **kwargs)`.
+
     :param name: name of observation
     :param fn: distribution class or function
     :param obs: observed datum
     :returns: sample
-
-    Alias of `pyro.sample(name, fn, *args, obs=obs, **kwargs)`.
     """
     kwargs.update({"obs": obs})
     return sample(name, fn, *args, **kwargs)
@@ -282,12 +282,12 @@ def map_data(name, data, fn, batch_size=None, batch_dim=0, use_cuda=None):
 # XXX this should have the same call signature as torch.Tensor constructors
 def param(name, *args, **kwargs):
     """
-    :param name: name of parameter
-    :returns: parameter
-
     Saves the variable as a parameter in the param store.
     To interact with the param store or write to disk,
     see `Parameters <parameters.html>`_.
+
+    :param name: name of parameter
+    :returns: parameter
     """
     if len(_PYRO_STACK) == 0:
         return _param_store.get_param(name, *args, **kwargs)
@@ -310,6 +310,10 @@ def param(name, *args, **kwargs):
 
 def module(name, nn_module, tags="default", update_module_params=False):
     """
+    Takes a torch.nn.Module and registers its parameters with the ParamStore.
+    In conjunction with the ParamStore save() and load() functionality, this
+    allows the user to save and load modules.
+
     :param name: name of module
     :type name: str
     :param nn_module: the module to be registered with Pyro
@@ -321,10 +325,6 @@ def module(name, nn_module, tags="default", update_module_params=False):
                                  ParamStore (if any). Defaults to `False`
     :type load_from_param_store: bool
     :returns: torch.nn.Module
-
-    Takes a torch.nn.Module and registers its parameters with the ParamStore.
-    In conjunction with the ParamStore save() and load() functionality, this
-    allows the user to save and load modules.
     """
     assert hasattr(nn_module, "parameters"), "module has no parameters"
     assert _MODULE_NAMESPACE_DIVIDER not in name, "improper module name, since contains %s" %\
@@ -366,17 +366,17 @@ def module(name, nn_module, tags="default", update_module_params=False):
 
 def random_module(name, nn_module, prior, *args, **kwargs):
     """
+    Places a prior over the parameters of the module `nn_module`.
+
+    See the `Bayesian Regression <http://pyro.ai/examples/bayesian_regression.html>`_
+    tutorial for an example.
+
     :param name: name of pyro module
     :type name: str
     :param nn_module: the module to be registered with pyro
     :type nn_module: torch.nn.Module
     :param prior: prior distribution or iterable over distributions
     :returns: a callable which returns a sampled module
-
-    Places a prior over the parameters of the module `nn_module`.
-
-    See the `Bayesian Regression <http://pyro.ai/examples/bayesian_regression.html>`_
-    tutorial for an example.
     """
     assert hasattr(nn_module, "parameters"), "Module is not a NN module."
     # register params in param store

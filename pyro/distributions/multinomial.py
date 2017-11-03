@@ -33,6 +33,9 @@ class Multinomial(Distribution):
         super(Multinomial, self).__init__(*args, **kwargs)
 
     def batch_shape(self, x=None):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_shape`
+        """
         event_dim = 1
         ps = self.ps
         if x is not None:
@@ -48,13 +51,16 @@ class Multinomial(Distribution):
         return ps.size()[:-event_dim]
 
     def event_shape(self):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.event_shape`
+        """
         event_dim = 1
         return self.ps.size()[-event_dim:]
 
-    def shape(self, x=None):
-        return self.batch_shape(x) + self.event_shape()
-
     def sample(self):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.sample`
+        """
         counts = np.apply_along_axis(
             lambda x: np.bincount(x, minlength=self.ps.size()[-1]),
             axis=-1,
@@ -73,6 +79,9 @@ class Multinomial(Distribution):
         return Variable(torch_multinomial(self.ps.data, n, replacement=True))
 
     def batch_log_pdf(self, x):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_log_pdf`
+        """
         batch_log_pdf_shape = self.batch_shape(x) + (1,)
         log_factorial_n = log_gamma(x.sum(-1) + 1)
         log_factorial_xs = log_gamma(x + 1).sum(-1)
@@ -81,7 +90,13 @@ class Multinomial(Distribution):
         return batch_log_pdf.contiguous().view(batch_log_pdf_shape)
 
     def analytic_mean(self):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_mean`
+        """
         return self.n * self.ps
 
     def analytic_var(self):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_var`
+        """
         return self.n * self.ps * (1 - self.ps)

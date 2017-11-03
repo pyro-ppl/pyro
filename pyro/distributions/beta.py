@@ -34,6 +34,9 @@ class Beta(Distribution):
         super(Beta, self).__init__(*args, **kwargs)
 
     def batch_shape(self, x=None):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_shape`
+        """
         event_dim = 1
         alpha = self.alpha
         if x is not None:
@@ -49,15 +52,15 @@ class Beta(Distribution):
         return alpha.size()[:-event_dim]
 
     def event_shape(self):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.event_shape`.
+        """
         event_dim = 1
         return self.alpha.size()[-event_dim:]
 
-    def shape(self, x=None):
-        return self.batch_shape(x) + self.event_shape()
-
     def sample(self):
         """
-        Un-reparameterizeable sampler.
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.sample.`
         """
         np_sample = spr.beta.rvs(self.alpha.data.cpu().numpy(), self.beta.data.cpu().numpy())
         if isinstance(np_sample, numbers.Number):
@@ -67,6 +70,9 @@ class Beta(Distribution):
         return x
 
     def batch_log_pdf(self, x):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_log_pdf`
+        """
         alpha = self.alpha.expand(self.shape(x))
         beta = self.beta.expand(self.shape(x))
         one = Variable(torch.ones(x.size()).type_as(alpha.data))
@@ -80,8 +86,14 @@ class Beta(Distribution):
         return batch_log_pdf.contiguous().view(batch_log_pdf_shape)
 
     def analytic_mean(self):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_mean`
+        """
         return self.alpha / (self.alpha + self.beta)
 
     def analytic_var(self):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_var`
+        """
         return torch.pow(self.analytic_mean(), 2.0) * self.beta / \
             (self.alpha * (self.alpha + self.beta + Variable(torch.ones([1]))))

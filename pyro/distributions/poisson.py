@@ -26,6 +26,9 @@ class Poisson(Distribution):
         super(Poisson, self).__init__(*args, **kwargs)
 
     def batch_shape(self, x=None):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_shape`
+        """
         event_dim = 1
         lam = self.lam
         if x is not None:
@@ -41,17 +44,23 @@ class Poisson(Distribution):
         return lam.size()[:-event_dim]
 
     def event_shape(self):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.event_shape`
+        """
         event_dim = 1
         return self.lam.size()[-event_dim:]
 
-    def shape(self, x=None):
-        return self.batch_shape(x) + self.event_shape()
-
     def sample(self):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.sample`
+        """
         x = npr.poisson(lam=self.lam.data.cpu().numpy()).astype("float")
         return Variable(torch.Tensor(x).type_as(self.lam.data))
 
     def batch_log_pdf(self, x):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_log_pdf`
+        """
         lam = self.lam.expand(self.shape(x))
         ll_1 = torch.sum(x * torch.log(lam), -1)
         ll_2 = -torch.sum(lam, -1)
@@ -61,7 +70,13 @@ class Poisson(Distribution):
         return batch_log_pdf.contiguous().view(batch_log_pdf_shape)
 
     def analytic_mean(self):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_mean`
+        """
         return self.lam
 
     def analytic_var(self):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_var`
+        """
         return self.lam

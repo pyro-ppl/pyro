@@ -34,6 +34,9 @@ class LogNormal(Distribution):
         super(LogNormal, self).__init__(*args, **kwargs)
 
     def batch_shape(self, x=None):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_shape`
+        """
         event_dim = 1
         mu = self.mu
         if x is not None:
@@ -49,21 +52,25 @@ class LogNormal(Distribution):
         return mu.size()[:-event_dim]
 
     def event_shape(self):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.event_shape`
+        """
         event_dim = 1
         return self.mu.size()[-event_dim:]
-
-    def shape(self, x=None):
-        return self.batch_shape(x) + self.event_shape()
 
     def sample(self):
         """
         Reparameterized log-normal sampler.
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.sample`
         """
         eps = Variable(torch.randn(self.mu.size()).type_as(self.mu.data))
         z = self.mu + self.sigma * eps
         return torch.exp(z)
 
     def batch_log_pdf(self, x):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_log_pdf`
+        """
         mu = self.mu.expand(self.shape(x))
         sigma = self.sigma.expand(self.shape(x))
         ll_1 = Variable(torch.Tensor([-0.5 * np.log(2.0 * np.pi)]).type_as(mu.data).expand_as(x))
@@ -74,8 +81,14 @@ class LogNormal(Distribution):
         return batch_log_pdf.contiguous().view(batch_log_pdf_shape)
 
     def analytic_mean(self):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_mean`
+        """
         return torch.exp(self.mu + 0.5 * torch.pow(self.sigma, 2.0))
 
     def analytic_var(self):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_var`
+        """
         return (torch.exp(torch.pow(self.sigma, 2.0)) - Variable(torch.ones(1))) * \
             torch.pow(self.analytic_mean(), 2)

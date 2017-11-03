@@ -11,8 +11,8 @@ class Distribution(object):
     """
     Base class for parameterized probability distributions.
 
-    Distributions in Pyro are stochastic function objects with `.sample()` and `.log_pdf()` methods.
-    Pyro provides two versions of each stochastic function:
+    Distributions in Pyro are stochastic function objects with ``.sample()`` and
+    ``.log_pdf()`` methods. Pyro provides two versions of each stochastic function:
 
     `(i)` lowercase versions that take parameters::
 
@@ -33,7 +33,7 @@ class Distribution(object):
 
     **Tensor Shapes**:
 
-    Distributions provide a method `.shape()` for the tensor shape of samples::
+    Distributions provide a method ``.shape()`` for the tensor shape of samples::
 
       x = d.sample(*args, **kwargs)
       assert x.shape == d.shape(*args, **kwargs)
@@ -41,7 +41,7 @@ class Distribution(object):
     Pyro distinguishes two different roles for tensor shapes of samples:
 
     - The leftmost dimension corresponds to iid *batching*, which can be
-      treated specially during inference via the `.batch_log_pdf()` method.
+      treated specially during inference via the ``.batch_log_pdf()`` method.
     - The rightmost dimensions correspond to *event shape*.
 
     These shapes are related by the equation::
@@ -49,35 +49,39 @@ class Distribution(object):
       assert d.shape(*args, **kwargs) == (d.batch_shape(*args, **kwargs) +
                                           d.event_shape(*args, **kwargs))
 
-    Distributions provide a vectorized `.batch_log_pdf()` method that evaluates
+    There are exceptions, for instance, in the case of the Categorical distribution,
+    without one hot encoding.
+
+    Distributions provide a vectorized ``.batch_log_pdf()`` method that evaluates
     the log probability density of each event in a batch independently,
-    returning a tensor of shape `d.batch_shape() + (1,)`::
+    returning a tensor of shape ``d.batch_shape(x) + (1,)``::
 
       x = d.sample(*args, **kwargs)
       assert x.shape == d.shape(*args, **kwargs)
       log_p = d.batch_log_pdf(x, *args, **kwargs)
       assert log_p.shape == d.batch_shape(*args, **kwargs) + (1,)
 
-    Distributions may also support broadcasting of the `.log_pdf()` and
-    `.batch_log_pdf()` methods, which may each be evaluated with a sample
+    Distributions may also support broadcasting of the ``.log_pdf()`` and
+    ``.batch_log_pdf()`` methods, which may each be evaluated with a sample
     tensor `x` that is larger than (but broadcastable from) the parameters.
-    In this case, `d.batch_shape()` will return a shape that is broadcastable to
-    `d.batch_log_pdf().shape`. For example::
+    In this case, ``d.batch_shape(x)`` will return the shape of the broadcasted
+    batch shape using the data tensor `x`::
 
       x = d.sample()
       xx = torch.stack([x, x])
-      d.batch_log_pdf(xx) + torch.zeros(d.batch_shape() + (1,))  # Broadcast.
+      d.batch_log_pdf(xx).size() == d.batch_shape(xx) + (1,))  # returns True
 
     **Implementing New Distributions**:
 
-    Derived classes must implement the following methods: `.sample()`,
-    `.batch_log_pdf()`, `.batch_shape()`, and `.event_shape()`, .
-    Discrete classes may also implement the `.enumerate_support()` method to improve
-    gradient estimates and set `.enumerable = True`.
+    Derived classes must implement the following methods: ``.sample()``,
+    :code:`.batch_log_pdf()`, ``.batch_shape()``, and ``.event_shape()``, .
+    Discrete classes may also implement the ``.enumerate_support()`` method to improve
+    gradient estimates and set ``.enumerable = True``.
 
     **Examples**:
 
-    Take a look at the examples[link] to see how they interact with inference algorithms.
+    Take a look at the `examples <https://pyro.ai/examples>`_ to see how they interact
+    with inference algorithms.
     """
     reparameterized = False
     enumerable = False
@@ -93,22 +97,31 @@ class Distribution(object):
         if reparameterized is not None:
             self.reparameterized = reparameterized
 
-    def batch_shape(self, *args, **kwargs):
+    def batch_shape(self, x=None, *args, **kwargs):
         """
         The left-hand tensor shape of samples, used for batching.
 
-        Samples are of shape `d().shape == d.batch_shape() + d.event_shape()`.
+        Samples are of shape :code:`d.shape(x) == d.batch_shape(x) + d.event_shape()`.
 
+        :param x: Data that is used to determine the batch shape. This is optional. If
+            not specified, the distribution parameters are used to determine the shape
+            of the batch that is returned from :code:`sample()`.
         :return: Tensor shape used for batching.
         :rtype: torch.Size
+        :raises: ValueError if the parameters are not broadcastable to the data shape
         """
         raise NotImplementedError
 
-    def event_shape(self, *args, **kwargs):
+    def event_shape(self, x=None, *args, **kwargs):
         """
-        The right-hand tensor shape of samples, used for individual events.
+        The right-hand tensor shape of samples, used for individual events. The
+        event dimension(/s) is used to designate random variables that could
+        potentially depend on each other, for instance in the case of dirichlet
+        or the categorical distribution, but could also simply be used for logical
+        grouping, for example in the case of a normal distribution with a
+        diagonal covariance matrix.
 
-        Samples are of shape `d().shape == d.batch_shape() + d.event_shape()`.
+        Samples are of shape `d.shape(x) == d.batch_shape(x) + d.event_shape()`.
 
         :return: Tensor shape used for individual events.
         :rtype: torch.Size
@@ -122,16 +135,16 @@ class Distribution(object):
         """
         return len(self.event_shape(*args, **kwargs))
 
-    def shape(self, *args, **kwargs):
+    def shape(self, x=None, *args, **kwargs):
         """
         The tensor shape of samples from this distribution.
 
-        Samples are of shape `d().shape == d.batch_shape() + d.event_shape()`.
+        Samples are of shape `d.shape(x) == d.batch_shape(x) + d.event_shape()`.
 
         :return: Tensor shape of samples.
         :rtype: torch.Size
         """
-        return self.batch_shape(*args, **kwargs) + self.event_shape(*args, **kwargs)
+        return self.batch_shape(x, *args, **kwargs) + self.event_shape(*args, **kwargs)
 
     def __call__(self, *args, **kwargs):
         """
@@ -151,7 +164,7 @@ class Distribution(object):
         Samples a random value.
 
         For tensor distributions, the returned Variable should have the same `.size()` as the
-        parameters.
+        parameters, unless otherwise noted.
 
         :return: A random value or batch of random values (if parameters are
             batched). The shape of the result should be `self.size()`.
