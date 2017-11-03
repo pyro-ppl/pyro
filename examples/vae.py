@@ -17,8 +17,9 @@ from pyro.util import ng_zeros, ng_ones
 from utils.vae_plots import plot_llk, mnist_test_tsne
 from utils.mnist_cached import MNISTCached as MNIST
 from utils.mnist_cached import setup_data_loaders
+from utils.custom_mlp import MLP, Exp
 
-fudge = 1e-6
+fudge = 1e-7
 
 """
 def setup_data_loaders(batch_size=128, use_cuda=False):
@@ -38,77 +39,33 @@ def setup_data_loaders(batch_size=128, use_cuda=False):
     return train_loader, test_loader
 """
 
-# define the PyTorch module that parameterizes the
-# diagonal gaussian distribution q(z|x)
-class Encoder(nn.Module):
-    def __init__(self, z_dim, hidden_dim):
-        super(Encoder, self).__init__()
-        # setup the three linear transformations used
-        self.fc1ec = nn.Linear(784, hidden_dim)
-        # init.normal(self.fc1.weight , mean=0, std=0.02)
-        self.fc21ec = nn.Linear(hidden_dim, z_dim)
-        # init.normal(self.fc21.weight , mean=0, std=0.02)
-        self.fc22ec = nn.Linear(hidden_dim, z_dim)
-        # init.normal(self.fc22.weight , mean=0, std=0.02)
-        # setup the non-linearity
-        self.softplus = nn.Softplus()
-        self.relu = nn.ReLU()
-
-    def forward(self, x):
-        # define the forward computation on the image x
-        # first shape the mini-batch to have pixels in the rightmost dimension
-        x = x.view(-1, 784)
-        # then compute the hidden units
-        hidden = self.softplus(self.fc1ec(x))
-        # then return a mean vector and a (positive) square root covariance
-        # each of size batch_size x z_dim
-        z_mu = self.fc21ec(hidden)
-        z_sigma = torch.exp(self.fc22ec(hidden))
-        return z_mu, z_sigma
-
-
-# define the PyTorch module that parameterizes the
-# observation likelihood p(x|z)
-class Decoder(nn.Module):
-    def __init__(self, z_dim, hidden_dim):
-        super(Decoder, self).__init__()
-        # setup the three linear transformations used
-        self.fc1 = nn.Linear(z_dim, hidden_dim)
-        # init.normal(self.fc1.weight , mean=0, std=0.02)
-        self.fc21 = nn.Linear(hidden_dim, 784)
-        # init.normal(self.fc21.weight , mean=0, std=0.02)
-        # setup the non-linearity
-        self.softplus = nn.Softplus()
-        self.sigmoid = nn.Sigmoid()
-        self.relu = nn.ReLU()
-
-    def forward(self, z):
-        # define the forward computation on the latent z
-        # first compute the hidden units
-        hidden = self.softplus(self.fc1(z))
-        # return the parameter for the output Bernoulli
-        # each is of size batch_size x 784
-        # fixing numerical instabilities of sigmoid with a fudge
-        mu_img = (self.sigmoid(self.fc21(hidden))+fudge) * (1-2*fudge)
-        return mu_img
 
 
 # define a PyTorch module for the VAE
 class VAE(nn.Module):
     # by default our latent space is 50-dimensional
     # and we use 400 hidden units
-    def __init__(self, z_dim=50, hidden_dim=400, use_cuda=False):
+    def __init__(self, z_dim=50, hidden_layers=[400], use_cuda=False):
         super(VAE, self).__init__()
         # create the encoder and decoder networks
-        self.encoder = Encoder(z_dim, hidden_dim)
-        self.decoder = Decoder(z_dim, hidden_dim)
-
         if use_cuda:
             # calling cuda() here will put all the parameters of
             # the encoder and decoder networks into gpu memory
             self.cuda()
         self.use_cuda = use_cuda
         self.z_dim = z_dim
+        self.hidden_layers = hidden_layers
+
+    def setup_networks(self):
+        z_dim = self.z_dim
+        hidden_sizes = self.hidden_layers
+
+        self.nn_mu_sigma_z = MLP([self.input_size + self.output_size] + hidden_sizes + [[z_dim, z_dim]],
+                                 activation=nn.Softplus, output_activation=[None, Exp], use_cuda=self.use_cuda)
+
+        self.nn_mu_x = MLP([z_dim + self.output_size] + hidden_sizes + [self.input_size],
+                           activation=nn.Softplus, output_activation=ClippedSigmoid,
+                           epsilon_scale=fudge, use_cuda=self.use_cuda)
 
     # define the model p(x|z)p(z)
     def model(self, x):
