@@ -21,7 +21,7 @@ class ELBO(object):
     implementations live.
 
     .. warning:: `enum_discrete` is a bleeding edge feature.
-        see `SS-VAE <http://pyro.ai/examples/svi_part_iii.html>`_ for a discussion.
+        see `SS-VAE <http://pyro.ai/examples/ss_vae.html>`_ for a discussion.
 
     References
 
