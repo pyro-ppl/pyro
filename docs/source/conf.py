@@ -1,5 +1,6 @@
-import pkg_resources
 import sphinx_rtd_theme
+
+import pkg_resources
 
 # -*- coding: utf-8 -*-
 #
