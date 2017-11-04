@@ -17,6 +17,7 @@ Learning a function of the form:
     y = wx + b
 """
 
+
 # generate toy dataset
 def build_linear_dataset(N, p, noise_std=0.1):
     X = np.linspace(-6, 6, num=N)
