@@ -98,7 +98,6 @@ class TraceGraph_ELBO(object):
         If baselines are present, a baseline loss is also constructed and differentiated.
         """
         elbo = 0.0
-        trainable_params = set()
 
         for weight, model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
 
@@ -280,22 +279,18 @@ class TraceGraph_ELBO(object):
                 surrogate_elbo_particle += weight * elbo_reinforce_terms_particle
                 torch_backward(baseline_loss_particle)
 
-            # grab model parameters to train
-            for name in model_trace.nodes.keys():
-                if model_trace.nodes[name]["type"] == "param":
-                    trainable_params.add(model_trace.nodes[name]["value"])
-
-            # grab guide parameters to train
-            for name in guide_trace.nodes.keys():
-                if guide_trace.nodes[name]["type"] == "param":
-                    trainable_params.add(guide_trace.nodes[name]["value"])
-
-            # mark all params seen in trace as active so that gradient steps are taken downstream
-            pyro.get_param_store().mark_params_active(trainable_params)
+            # collect parameters to train from model and guide
+            trainable_params = set(site["value"]
+                                   for trace in (model_trace, guide_trace)
+                                   for site in trace.nodes.values()
+                                   if site["type"] == "param")
 
             surrogate_loss_particle = -surrogate_elbo_particle
             if trainable_params:
                 torch_backward(surrogate_loss_particle)
+
+                # mark all params seen in trace as active so that gradient steps are taken downstream
+                pyro.get_param_store().mark_params_active(trainable_params)
 
         loss = -elbo
 

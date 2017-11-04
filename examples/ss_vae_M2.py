@@ -14,9 +14,9 @@ from util import set_seed, print_and_log, mkdir_p
 import torch.nn as nn
 
 version_warning = '''
-11/02/2017: This example does not work with the release version 0.2 of pytorch
-Please install Pytorch from the latest master branch of pytorch or wait a week for the new release
-This example may fail due to https://github.com/uber/pyro/issues/377
+11/02/2017: This example does not work with the release version 0.2 of pytorch.
+Please install Pytorch from the latest master branch of pytorch or wait a week for the new release.
+This example uses a data loader that requires very recent PyTorch features.
 '''
 torch_version = pyro.util.parse_torch_version()
 if (torch_version < (0, 2, 1) and not torch_version[-1].startswith("+")):
