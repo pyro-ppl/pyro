@@ -17,34 +17,23 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import numpy as np
-from os.path import join, dirname, exists, abspath
-from six.moves.urllib.request import urlretrieve
+from observations import jsb_chorales
+from os.path import join, exists
 import six.moves.cPickle as pickle
 from pyro.util import ng_zeros
 
 
-# this function downloads the raw data if it hasn't been already
-def download_if_absent(saveas, url):
-
-    if not exists(saveas):
-        print("Couldn't find polyphonic music data at {}".format(saveas))
-        print("downloading polyphonic music data from %s..." % url)
-        urlretrieve(url, saveas)
-
-
 # this function processes the raw data; in particular it unsparsifies it
-def process_data(output="jsb_processed.pkl", rawdata="jsb_raw.pkl",
-                 T_max=160, min_note=21, note_range=88):
-
+def process_data(base_path, filename, T_max=160, min_note=21, note_range=88):
+    output = join(base_path, filename)
     if exists(output):
         return
 
     print("processing raw polyphonic music data...")
-    data = pickle.load(open(rawdata, "rb"))
+    data = jsb_chorales(base_path)
     processed_dataset = {}
-    for split in ['train', 'valid', 'test']:
+    for split, data_split in zip(['train', 'test', 'valid'], data):
         processed_dataset[split] = {}
-        data_split = data[split]
         n_seqs = len(data_split)
         processed_dataset[split]['sequence_lengths'] = np.zeros((n_seqs), dtype=np.int32)
         processed_dataset[split]['sequences'] = np.zeros((n_seqs, T_max, note_range))
@@ -61,11 +50,8 @@ def process_data(output="jsb_processed.pkl", rawdata="jsb_raw.pkl",
 
 
 # this logic will be initiated upon import
-base_loc = dirname(abspath(__file__))
-raw_file = join(base_loc, "jsb_raw.pkl")
-out_file = join(base_loc, "jsb_processed.pkl")
-download_if_absent(raw_file, "http://www-etud.iro.umontreal.ca/~boulanni/JSB%20Chorales.pickle")
-process_data(output=out_file, rawdata=raw_file)
+base_path = './data'
+process_data(base_path, "jsb_processed.pkl")
 
 
 # this function takes a numpy mini-batch and reverses each sequence

@@ -24,7 +24,7 @@ from pyro.distributions.transformed_distribution import InverseAutoregressiveFlo
 from pyro.distributions.transformed_distribution import TransformedDistribution
 import six.moves.cPickle as pickle
 import polyphonic_data_loader as poly
-from os.path import join, dirname, exists
+from os.path import exists
 import argparse
 import time
 from util import get_logger
@@ -258,7 +258,7 @@ def main(args):
     log = get_logger(args.log)
     log(args)
 
-    jsb_file_loc = join(dirname(__file__), "jsb_processed.pkl")
+    jsb_file_loc = "./data/jsb_processed.pkl"
     # ingest training/validation/test data from disk
     data = pickle.load(open(jsb_file_loc, "rb"))
     training_seq_lengths = data['train']['sequence_lengths']
