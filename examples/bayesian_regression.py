@@ -17,7 +17,6 @@ Learning a function of the form:
     y = wx + b
 """
 
-
 # generate toy dataset
 def build_linear_dataset(N, p, noise_std=0.1):
     X = np.linspace(-6, 6, num=N)
@@ -54,18 +53,17 @@ def model(data):
     bias_sigma = Variable(torch.ones(1)).type_as(data)
     w_prior, b_prior = Normal(mu, sigma), Normal(bias_mu, bias_sigma)
     priors = {'linear.weight': w_prior, 'linear.bias': b_prior}
-    # wrap regression model that lifts module parameters to random variables
-    # sampled from the priors
+    # lift module parameters to random variables sampled from the priors
     lifted_module = pyro.random_module("module", regression_model, priors)
-    # sample a nn
-    lifted_nn = lifted_module()
+    # sample a regressor (which also samples w and b)
+    lifted_rm = lifted_module()
 
     with pyro.iarange("map", N, subsample=data):
         x_data = data[:, :-1]
         y_data = data[:, -1]
-        # run the nn with the data
-        latent = lifted_nn(x_data).squeeze()
-        pyro.observe("obs", Normal(latent, Variable(torch.ones(data.size(0))).type_as(data)), y_data.squeeze())
+        # run the regressor forward conditioned on data
+        prediction_mean = lifted_rm(x_data).squeeze()
+        pyro.observe("obs", Normal(prediction_mean, Variable(torch.ones(data.size(0))).type_as(data)), y_data.squeeze())
 
 
 def guide(data):
@@ -84,8 +82,8 @@ def guide(data):
     priors = {'linear.weight': w_prior, 'linear.bias': b_prior}
     # overloading the parameters in the module with random samples from the prior
     lifted_module = pyro.random_module("module", regression_model, priors)
-    # sample a nn
-    lifted_module()
+    # sample a regressor
+    return lifted_module()
 
 
 # instantiate optim and inference objects
