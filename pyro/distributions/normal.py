@@ -88,7 +88,7 @@ class Normal(Distribution):
         # will likely be done in a better/cleaner way in the future
         if self.log_pdf_mask is not None:
             log_pxs = log_pxs * self.log_pdf_mask
-        batch_log_pdf = torch.sum(log_pxs, -1)
+        batch_log_pdf = torch.sum(log_pxs, log_pxs.dim() - 1)
         batch_log_pdf_shape = self.batch_shape(x) + (1,)
         return batch_log_pdf.contiguous().view(batch_log_pdf_shape)
 
