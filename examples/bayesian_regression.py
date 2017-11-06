@@ -62,7 +62,7 @@ def model(data):
     with pyro.iarange("map", N, subsample=data):
         x_data = data[:, :-1]
         y_data = data[:, -1]
-        # run the regressor forward conditioned on data
+        # run the regressor forward conditioned on inputs
         prediction_mean = lifted_reg_model(x_data).squeeze()
         pyro.observe("obs", Normal(prediction_mean, Variable(torch.ones(data.size(0))).type_as(data)), y_data.squeeze())
 
@@ -77,12 +77,12 @@ def guide(data):
     sw_param = softplus(pyro.param("guide_log_sigma_weight", w_log_sig))
     mb_param = pyro.param("guide_mean_bias", b_mu)
     sb_param = softplus(pyro.param("guide_log_sigma_bias", b_log_sig))
-    # gaussian priors for w and b
-    w_prior = Normal(mw_param, sw_param)
-    b_prior = Normal(mb_param, sb_param)
-    priors = {'linear.weight': w_prior, 'linear.bias': b_prior}
-    # overloading the parameters in the module with random samples from the prior
-    lifted_module = pyro.random_module("module", regression_model, priors)
+    # gaussian guide distributions for w and b
+    w_dist = Normal(mw_param, sw_param)
+    b_dist = Normal(mb_param, sb_param)
+    dists = {'linear.weight': w_dist, 'linear.bias': b_dist}
+    # overloading the parameters in the module with random samples from the guide distributions
+    lifted_module = pyro.random_module("module", regression_model, dists)
     # sample a regressor
     return lifted_module()
 
