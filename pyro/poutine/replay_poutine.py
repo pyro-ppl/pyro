@@ -22,8 +22,8 @@ class ReplayPoutine(Poutine):
         # case 1: no sites
         if sites is None:
             self.sites = {site: site for site in guide_trace.nodes.keys()
-                          if guide_trace.nodes[site]["type"] == "sample"
-                          and not guide_trace.nodes[site]["is_observed"]}
+                          if guide_trace.nodes[site]["type"] == "sample" and
+                          not guide_trace.nodes[site]["is_observed"]}
         # case 2: sites is a list/tuple/set
         elif isinstance(sites, (list, tuple, set)):
             self.sites = {site: site for site in sites}
