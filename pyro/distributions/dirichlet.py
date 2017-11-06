@@ -75,7 +75,7 @@ class Dirichlet(Distribution):
 
     def batch_log_pdf(self, x):
         """
-        Evaluates log probabity density over one or a batch of samples.
+        Evaluates log probability density over one or a batch of samples.
 
         Each of alpha and x can be either a single value or a batch of values batched along dimension 0.
         If they are both batches, their batch sizes must agree.

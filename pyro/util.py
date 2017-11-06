@@ -223,7 +223,7 @@ def enum_extend(trace, msg, num_samples=None):
     inside_iarange = any(frame.vectorized for frame in msg["map_data_stack"])
     if is_batched and not inside_iarange:
         raise ValueError(
-                "Tried to enumerate a batched pyro.sample site '{}' outiside of a pyro.iarange. "
+                "Tried to enumerate a batched pyro.sample site '{}' outside of a pyro.iarange. "
                 "To fix, either enclose in a pyro.iarange, or avoid batching.".format(msg["name"]))
 
     extended_traces = []
@@ -389,6 +389,6 @@ def check_model_guide_match(model_trace, guide_trace):
 def deep_getattr(obj, name):
     """
     Python getattr() for arbitrarily deep attributes
-    Throws an AttirbuteError if bad attribute
+    Throws an AttributeError if bad attribute
     """
     return functools.reduce(getattr, name.split("."), obj)

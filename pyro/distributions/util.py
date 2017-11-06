@@ -91,7 +91,7 @@ def torch_eye(n, m=None, out=None):
     try:
         return torch.eye(n, m, out=out)
     except TypeError:
-        # Only catch errors due to torch.eye() not being availble for cuda tensors.
+        # Only catch errors due to torch.eye() not being available for cuda tensors.
         module = torch.Tensor.__module__ if out is None else type(out).__module__
         if module != 'torch.cuda':
             raise

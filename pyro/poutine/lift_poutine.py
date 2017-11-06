@@ -29,7 +29,7 @@ class LiftPoutine(Poutine):
 
     def _prepare_site(self, msg):
         """
-        Sets flags of params that will be overriden so they are not
+        Sets flags of params that will be overridden so they are not
         reexecuted in the stack and not added to the param store.
         """
         name = msg["name"]

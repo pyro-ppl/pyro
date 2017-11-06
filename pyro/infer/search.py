@@ -29,7 +29,7 @@ class Search(TracePosterior):
         is performing exact inference
 
         :returns: Iterator of traces from the posterior.
-        :rtype: Geneator[:class:`pyro.Trace`]
+        :rtype: Generator[:class:`pyro.Trace`]
         """
         # currently only using the standard library queue
         self.queue = Queue()
