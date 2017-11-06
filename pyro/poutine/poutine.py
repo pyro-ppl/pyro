@@ -98,7 +98,7 @@ class Poutine(object):
         They are all None unless the body of the with statement raised an exception.
         """
         if exc_type is None:  # callee or enclosed block returned successfully
-            # if the callee or enclosed block returned successfuly,
+            # if the callee or enclosed block returned successfully,
             # this poutine should be on the bottom of the stack.
             # If so, remove it from the stack.
             # if not, raise a ValueError because something really weird happened.

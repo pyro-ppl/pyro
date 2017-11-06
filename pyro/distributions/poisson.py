@@ -10,7 +10,7 @@ from pyro.distributions.util import log_gamma
 
 class Poisson(Distribution):
     """
-    Poisson distribution over integers parameterizeds by scale `lambda`.
+    Poisson distribution over integers parameterized by scale `lambda`.
 
     This is often used in conjunction with `torch.nn.Softplus` to ensure the
     `lam` parameter is positive.

@@ -47,7 +47,7 @@ class AutoRegressiveNN(nn.Module):
     :type hidden_dim: int
     :param output_dim_multiplier: the dimensionality of the output is given by input_dim x output_dim_multiplier.
         specifically the shape of the output for a single vector input is [output_dim_multiplier, input_dim].
-        for any i, j in range(0, output_dim_multiplier) the subset of outputs [i, :] has identifical
+        for any i, j in range(0, output_dim_multiplier) the subset of outputs [i, :] has identical
         autoregressive structure to [j, :]. defaults to `1`
     :type output_dim_multiplier: int
     :param mask_encoding: a torch Tensor that controls the autoregressive structure (see reference). by default
@@ -55,7 +55,7 @@ class AutoRegressiveNN(nn.Module):
     :type mask_encoding: torch.LongTensor
     :param permutation: an optional permutation that is applied to the inputs and controls the order of the
         autoregressive factorization. in particular for the identity permutation the autoregressive structure
-        is such that the jacobian is upper triangular. by default this is chosen at random.
+        is such that the Jacobian is upper triangular. by default this is chosen at random.
     :type permutation: torch.LongTensor
     """
 
