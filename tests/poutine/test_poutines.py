@@ -238,8 +238,8 @@ class QueuePoutineDiscreteTest(TestCase):
         tr_latents = []
         for tr in trs:
             tr_latents.append(tuple([int(tr.nodes[name]["value"].view(-1).data[0]) for name in tr
-                                     if tr.nodes[name]["type"] == "sample"
-                                     and not tr.nodes[name]["is_observed"]]))
+                                     if tr.nodes[name]["type"] == "sample" and
+                                     not tr.nodes[name]["is_observed"]]))
 
         assert true_latents == set(tr_latents)
 
@@ -333,8 +333,8 @@ class LiftPoutineTests(TestCase):
             if name in {'sigma1', 'mu1', 'sigma2', 'mu2'}:
                 self.assertTrue(name + "_prior" == lifted_tr.nodes[name]['fn'].__name__)
             if tr.nodes[name]["type"] == "param":
-                self.assertTrue(lifted_tr.nodes[name]["type"] == "sample"
-                                and not lifted_tr.nodes[name]["is_observed"])
+                self.assertTrue(lifted_tr.nodes[name]["type"] == "sample" and
+                                not lifted_tr.nodes[name]["is_observed"])
 
     def test_unlifted_param(self):
         tr = poutine.trace(self.guide).get_trace()
@@ -343,8 +343,8 @@ class LiftPoutineTests(TestCase):
             self.assertTrue(name in lifted_tr)
             if name in ('sigma1', 'mu1'):
                 self.assertTrue(name + "_prior" == lifted_tr.nodes[name]['fn'].__name__)
-                self.assertTrue(lifted_tr.nodes[name]["type"] == "sample"
-                                and not lifted_tr.nodes[name]["is_observed"])
+                self.assertTrue(lifted_tr.nodes[name]["type"] == "sample" and
+                                not lifted_tr.nodes[name]["is_observed"])
             if name in ('sigma2', 'mu2'):
                 self.assertTrue(lifted_tr.nodes[name]["type"] == "param")
 
@@ -353,8 +353,8 @@ class LiftPoutineTests(TestCase):
         lifted_tr = poutine.trace(pyro.random_module("name", self.model, prior=self.prior)).get_trace()
         for name in lifted_tr.nodes.keys():
             if lifted_tr.nodes[name]["type"] == "param":
-                self.assertTrue(lifted_tr.nodes[name]["type"] == "sample"
-                                and not lifted_tr.nodes[name]["is_observed"])
+                self.assertTrue(lifted_tr.nodes[name]["type"] == "sample" and
+                                not lifted_tr.nodes[name]["is_observed"])
 
     def test_random_module_prior_dict(self):
         pyro.clear_param_store()
@@ -366,8 +366,8 @@ class LiftPoutineTests(TestCase):
                 dist_name = name[3:]
                 self.assertTrue(
                     dist_name + "_prior" == lifted_tr.nodes[key_name]['fn'].__name__)
-                self.assertTrue(lifted_tr.nodes[key_name]["type"] == "sample"
-                                and not lifted_tr.nodes[key_name]["is_observed"])
+                self.assertTrue(lifted_tr.nodes[key_name]["type"] == "sample" and
+                                not lifted_tr.nodes[key_name]["is_observed"])
 
 
 class QueuePoutineMixedTest(TestCase):
