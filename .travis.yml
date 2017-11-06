@@ -1,14 +1,10 @@
 language: python
 
-sudo: required
+sudo: false
 
 env:
     global:
         - PYTHONPATH=$PWD:$PYTHONPATH
-
-before_install:
-    - sudo apt-get update -qq
-    - sudo apt-get install libblas-dev liblapack-dev libatlas-base-dev gfortran
 
 install:
     # install pytorch and its dependencies
@@ -44,13 +40,13 @@ jobs:
               - make docs
         - python: 2.7
           env: STAGE=unit
-          script: pytest -vs --cov=pyro --stage unit
+          script: pytest -vs -n auto --cov=pyro --stage unit
         - python: 2.7
           env: STAGE=examples
           script: pytest -vs --cov=pyro --stage test_examples
         - python: 3.5
           env: STAGE=unit
-          script: pytest -vs --cov=pyro --stage unit
+          script: pytest -vs -n auto --cov=pyro --stage unit
         - python: 3.5
           env: STAGE=examples
           script: pytest -vs --cov=pyro --stage test_examples
