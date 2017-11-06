@@ -50,16 +50,16 @@ class Bernoulli(Distribution):
         event_dim = 1
         ps = self.ps
         if x is not None:
-            if x is not None:
-                if x.size()[-event_dim] != ps.size()[-event_dim]:
-                    raise ValueError("The event size for the data and distribution parameters must match.\n"
-                                     "Expected x.size()[-1] == self.ps.size()[-1], but got {} vs {}".format(
-                                         x.size(-1), ps.size(-1)))
-                try:
-                    ps = self.ps.expand_as(x)
-                except RuntimeError as e:
-                    raise ValueError("Parameter `ps` with shape {} is not broadcastable to "
-                                     "the data shape {}. \nError: {}".format(ps.size(), x.size(), str(e)))
+            if x.size()[-event_dim] != ps.size()[-event_dim]:
+                raise ValueError("The event size for the data and distribution parameters must match.\n"
+                                 "Expected x.size()[-1] == self.ps.size()[-1], but got {} vs {}".format(
+                                     x.size(-1), ps.size(-1)))
+            try:
+                ps = self.ps.expand_as(x)
+            except RuntimeError as e:
+                raise ValueError("Parameter `ps` with shape {} is not broadcastable to "
+                                 "the data shape {}. \nError: {}".format(ps.size(), x.size(), str(e)))
+
         return ps.size()[:-event_dim]
 
     def event_shape(self):
