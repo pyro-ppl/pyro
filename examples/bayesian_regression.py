@@ -57,13 +57,13 @@ def model(data):
     # lift module parameters to random variables sampled from the priors
     lifted_module = pyro.random_module("module", regression_model, priors)
     # sample a regressor (which also samples w and b)
-    lifted_rm = lifted_module()
+    lifted_reg_model = lifted_module()
 
     with pyro.iarange("map", N, subsample=data):
         x_data = data[:, :-1]
         y_data = data[:, -1]
         # run the regressor forward conditioned on data
-        prediction_mean = lifted_rm(x_data).squeeze()
+        prediction_mean = lifted_reg_model(x_data).squeeze()
         pyro.observe("obs", Normal(prediction_mean, Variable(torch.ones(data.size(0))).type_as(data)), y_data.squeeze())
 
 
