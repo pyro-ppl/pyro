@@ -19,7 +19,7 @@ class MaskedLinear(nn.Linear):
     :param mask: the mask to apply to the in_features x out_features weight matrix
     :type mask: torch.autograd.Variable
     :param bias: whether or not `MaskedLinear` should include a bias term. defaults to `True`
-    :type bias bool:
+    :type bias: bool
     """
     def __init__(self, in_features, out_features, mask, bias=True):
         super(MaskedLinear, self).__init__(in_features, out_features, bias)
