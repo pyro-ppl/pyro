@@ -186,7 +186,7 @@ def finite_difference(eval_loss, delta=0.1):
     params = pyro.get_param_store().get_all_param_names()
     assert params, "no params found"
     grads = {name: Variable(torch.zeros(pyro.param(name).size())) for name in params}
-    for name in params:
+    for name in sorted(params):
         value = pyro.param(name).data
         for index in itertools.product(*map(range, value.size())):
             center = value[index]
