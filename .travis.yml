@@ -1,14 +1,10 @@
 language: python
 
-sudo: required
+sudo: false
 
 env:
     global:
         - PYTHONPATH=$PWD:$PYTHONPATH
-
-before_install:
-    - sudo apt-get update -qq
-    - sudo apt-get install libblas-dev liblapack-dev libatlas-base-dev gfortran
 
 install:
     # install pytorch and its dependencies
@@ -44,33 +40,26 @@ jobs:
               - make docs
         - python: 2.7
           env: STAGE=unit
-          script: pytest -vs --cov=pyro --stage unit
+          script: pytest -vs -n 2 --cov=pyro --stage unit
         - python: 2.7
           env: STAGE=examples
           script: pytest -vs --cov=pyro --stage test_examples
         - python: 3.5
           env: STAGE=unit
-          script: pytest -vs --cov=pyro --stage unit
+          script: pytest -vs -n 2 --cov=pyro --stage unit
         - python: 3.5
           env: STAGE=examples
           script: pytest -vs --cov=pyro --stage test_examples
-        - python: 2.7
-          env: STAGE=tutorials
-          script: pytest -v --nbval-lax tutorial/
         - stage: integration test
           python: 2.7
           env: STAGE=integration_batch_1
-          script: pytest -vs --cov=pyro --stage integration_batch_1
+          script: pytest -vs -n 2 --cov=pyro --stage integration_batch_1
         - python: 2.7
           env: STAGE=integration_batch_2
-          script: pytest -vs --cov=pyro --stage integration_batch_2
+          script: pytest -vs -n 2 --cov=pyro --stage integration_batch_2
         - python: 3.5
           env: STAGE=integration_batch_1
-          script: pytest -vs --cov=pyro --stage integration_batch_1
+          script: pytest -vs -n 2 --cov=pyro --stage integration_batch_1
         - python: 3.5
           env: STAGE=integration_batch_2
-          script: pytest -vs --cov=pyro --stage integration_batch_2
-    allow_failures:
-        - python: 2.7
-          env: STAGE=tutorials
-          script: pytest -v --nbval-lax tutorial/
+          script: pytest -vs -n 2 --cov=pyro --stage integration_batch_2
