@@ -135,20 +135,21 @@ class Trace_ELBO(object):
             surrogate_elbo_particle = weight * 0
             # compute elbo and surrogate elbo
             log_pdf = "batch_log_pdf" if (self.enum_discrete and weight.size(0) > 1) else "log_pdf"
-            for name in model_trace.nodes.keys():
-                if model_trace.nodes[name]["type"] == "sample":
-                    if model_trace.nodes[name]["is_observed"]:
-                        elbo_particle += model_trace.nodes[name][log_pdf]
-                        surrogate_elbo_particle += model_trace.nodes[name][log_pdf]
+            for name, model_site in model_trace.nodes.items():
+                if model_site["type"] == "sample":
+                    if model_site["is_observed"]:
+                        elbo_particle += model_site[log_pdf]
+                        surrogate_elbo_particle += model_site[log_pdf]
                     else:
-                        lp_lq = model_trace.nodes[name][log_pdf] - guide_trace.nodes[name][log_pdf]
+                        guide_site = guide_trace.nodes[name]
+                        lp_lq = model_site[log_pdf] - guide_site[log_pdf]
                         elbo_particle += lp_lq
-                        if guide_trace.nodes[name]["fn"].reparameterized:
+                        if guide_site["fn"].reparameterized:
                             surrogate_elbo_particle += lp_lq
                         else:
                             # XXX should the user be able to control inclusion of the -logq term below?
-                            surrogate_elbo_particle += model_trace.nodes[name][log_pdf] + \
-                                log_r.detach() * guide_trace.nodes[name][log_pdf]
+                            guide_log_pdf = guide_site[log_pdf] / guide_site["scale"]  # not scaled by subsampling
+                            surrogate_elbo_particle += model_site[log_pdf] + log_r.detach() * guide_log_pdf
 
             # drop terms of weight zero to avoid nans
             if isinstance(weight, numbers.Number):

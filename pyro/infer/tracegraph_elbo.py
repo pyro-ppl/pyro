@@ -266,15 +266,16 @@ class TraceGraph_ELBO(object):
                         # construct baseline loss
                         baseline_loss = torch.pow(downstream_cost.detach() - baseline, 2.0).sum()
                         baseline_loss_particle += weight * baseline_loss
+
+                    guide_site = guide_trace.nodes[node]
+                    guide_log_pdf = guide_site[log_pdf_key] / guide_site["scale"]  # not scaled by subsampling
                     if use_nn_baseline or use_decaying_avg_baseline or use_baseline_value:
                         if downstream_cost.size() != baseline.size():
                             raise ValueError("Expected baseline at site {} to be {} instead got {}".format(
                                 node, downstream_cost.size(), baseline.size()))
-                        elbo_reinforce_terms_particle += (guide_trace.nodes[node][log_pdf_key] *
-                                                          (downstream_cost - baseline).detach()).sum()
+                        elbo_reinforce_terms_particle += (guide_log_pdf * (downstream_cost - baseline).detach()).sum()
                     else:
-                        elbo_reinforce_terms_particle += (guide_trace.nodes[node][log_pdf_key] *
-                                                          downstream_cost.detach()).sum()
+                        elbo_reinforce_terms_particle += (guide_log_pdf * downstream_cost.detach()).sum()
 
                 surrogate_elbo_particle += weight * elbo_reinforce_terms_particle
                 torch_backward(baseline_loss_particle)
