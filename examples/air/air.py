@@ -390,5 +390,5 @@ def batch_expand(t, n):
 # [batch_size, num_steps, z_where_size + z_pres_size]
 def latents_to_tensor(z):
     return torch.stack([
-        torch.cat((z_where.cpu(), z_pres.cpu()), 1)
+        torch.cat((z_where.cpu().data, z_pres.cpu().data), 1)
         for z_where, z_pres in zip(*z)]).transpose(0, 1)

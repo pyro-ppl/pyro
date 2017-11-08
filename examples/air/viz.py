@@ -65,4 +65,4 @@ z_obj = namedtuple('z', 's,x,y,pres')
 # Map a tensor of latents (as produced by latents_to_tensor) to a list
 # of z_obj named tuples.
 def tensor_to_objs(latents):
-    return [[z_obj._make(step.data) for step in z] for z in latents]
+    return [[z_obj._make(step) for step in z] for z in latents]
