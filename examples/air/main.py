@@ -148,14 +148,29 @@ def count_accuracy(X, true_counts, air, batch_size):
 # p(1) = 0.3
 # p(2) = 0.2
 # p(3) = 0.1
-def default_z_pres_prior_p(t):
-    if t == 0:
-        return 0.6
-    elif t == 1:
-        return 0.5
-    else:
-        return 0.33
+# def default_z_pres_prior_p(t):
+#     if t == 0:
+#         return 0.6
+#     elif t == 1:
+#         return 0.5
+#     else:
+#         return 0.33
 
+# Defines something like a truncated geometric. Like the geometric,
+# this has the property that there's a constant difference in log prob
+# between p(steps=n) and p(steps=n+1).
+def make_prior(k):
+    assert 0 < k <= 1
+    u = 1 / (1 + k + k**2 + k**3)
+    p0 = 1 - u
+    p1 = 1 - (k * u) / p0
+    p2 = 1 - (k**2 * u) / (p0 * p1)
+    trial_probs=[p0, p1, p2]
+    #dist = [1 - p0, p0 * (1 - p1), p0 * p1 * (1 - p2), p0 * p1 * p2]
+    #print(dist)
+    return lambda t: trial_probs[t]
+
+default_z_pres_prior_p = make_prior(0.5)
 
 # Implements "prior annealing" as described in this blog post:
 # http://akosiorek.github.io/ml/2017/09/03/implementing-air.html
