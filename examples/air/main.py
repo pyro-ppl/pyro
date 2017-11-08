@@ -302,7 +302,7 @@ for i in range(1, args.num_steps + 1):
 
     if args.eval_every > 0 and (i + 1) % args.eval_every == 0:
         # Measure accuracy on subset of training data.
-        acc, counts, error_z, error_ix = count_accuracy(X[0:10000], true_counts[0:10000], air, 1000)
+        acc, counts, error_z, error_ix = count_accuracy(X, true_counts, air, 1000)
         print('i={}, accuracy={}, counts={}'.format(i, acc, counts.numpy().tolist()))
         if args.viz and error_ix.size(0) > 0:
             vis.images(draw_many(X[error_ix[0:5]], tensor_to_objs(error_z[0:5])),
