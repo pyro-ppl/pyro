@@ -384,3 +384,11 @@ def image_to_window(z_where, window_size, image_size, images):
 # `-1` argument of `expand` doesn't seem to work with PyTorch 0.2.0.
 def batch_expand(t, n):
     return t.expand(n, t.size(1))
+
+# Combine z_pres and z_where (as returned by the model and guide) into
+# a single tensor, with size:
+# [batch_size, num_steps, z_where_size + z_pres_size]
+def latents_to_tensor(z):
+    return torch.stack([
+        torch.cat((z_where.cpu(), z_pres.cpu()), 1)
+        for z_where, z_pres in zip(*z)]).transpose(0, 1)

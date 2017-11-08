@@ -24,8 +24,8 @@ from pyro.infer import SVI
 
 import visdom
 
-from air import AIR
-from viz import draw_many, post_process_latents
+from air import AIR, latents_to_tensor
+from viz import draw_many, tensor_to_objs
 
 parser = argparse.ArgumentParser(description="Pyro AIR example", argument_default=argparse.SUPPRESS)
 parser.add_argument('-n', '--num-steps', type=int, default=int(1e8),
@@ -247,11 +247,13 @@ if 'load' in args:
     print('Loading parameters...')
     air.load_state_dict(torch.load(args.load))
 
+
+
 vis = visdom.Visdom(env=args.visdom_env)
 # Viz sample from prior.
 if args.viz:
     z, x = air.prior(5, z_pres_prior_p=partial(z_pres_prior_p, 0))
-    vis.images(draw_many(x, post_process_latents(z)))
+    vis.images(draw_many(x, tensor_to_objs(latents_to_tensor(z))))
 
 t0 = time.time()
 examples_to_viz = X[5:10]
@@ -282,7 +284,7 @@ for i in range(1, args.num_steps + 1):
     if args.viz and i % args.viz_every == 0:
         trace = poutine.trace(air.guide).get_trace(examples_to_viz, None)
         z, recons = poutine.replay(air.prior, trace)(examples_to_viz.size(0))
-        z_wheres = post_process_latents(z)
+        z_wheres = tensor_to_objs(latents_to_tensor(z))
 
         # Show data with inferred objection positions.
         vis.images(draw_many(examples_to_viz, z_wheres))
