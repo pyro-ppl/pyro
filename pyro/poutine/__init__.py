@@ -123,6 +123,21 @@ def condition(fn, data):
     return ConditionPoutine(fn, data=data)
 
 
+def indep(fn, name, vectorized):
+    """
+    :param fn: a stochastic function (callable containing pyro primitive calls)
+    :param str name: a name for subsample sites
+    :param bool vectorized: True for ``iarange``, False for ``irange``
+    :returns: stochastic function wrapped in an IndepPoutine
+    :rtype: pyro.poutine.IndepPoutine
+
+    Alias for IndepPoutine constructor.
+
+    Used internally by ``iarange`` and ``irange``.
+    """
+    return IndepPoutine(fn, name=name, vectorized=vectorized)
+
+
 def scale(fn, scale):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)

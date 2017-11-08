@@ -205,7 +205,7 @@ def iarange(name, size=None, subsample_size=None, subsample=None, use_cuda=None)
         yield subsample
     else:
         with poutine.scale(None, scale):
-            with poutine.IndepPoutine(None, name, vectorized=True):
+            with poutine.indep(None, name, vectorized=True):
                 yield subsample
 
 
@@ -238,7 +238,7 @@ def irange(name, size, subsample_size=None, subsample=None, use_cuda=None):
         for i in subsample:
             yield i
     else:
-        indep_context = poutine.IndepPoutine(None, name, vectorized=False)
+        indep_context = poutine.indep(None, name, vectorized=False)
         with poutine.scale(None, scale):
             for i in subsample:
                 with indep_context:
