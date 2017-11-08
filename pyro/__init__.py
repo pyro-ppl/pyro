@@ -12,7 +12,7 @@ from torch.autograd import Variable
 import pyro.poutine as poutine
 from pyro.distributions.distribution import Distribution
 from pyro.params import _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, param_with_module_name
-from pyro.poutine import _PYRO_STACK, LambdaPoutine, condition, do  # noqa: F401
+from pyro.poutine import _PYRO_STACK, condition, do  # noqa: F401
 from pyro.util import apply_stack, deep_getattr, get_tensor_data, ones, set_rng_seed, zeros  # noqa: F401
 
 
@@ -143,7 +143,7 @@ def _subsample(name, size=None, subsample_size=None, subsample=None, use_cuda=No
         subsample_size = 1
     elif subsample is None:
         names = [name]
-        names += [str(f.counter) for f in _PYRO_STACK if isinstance(f, poutine.LambdaPoutine)]
+        names += [str(f.counter) for f in _PYRO_STACK if isinstance(f, poutine.IndepPoutine)]
         subsample = sample("_".join(names), _Subsample(size, subsample_size, use_cuda))
 
     if subsample_size is None:
@@ -204,8 +204,9 @@ def iarange(name, size=None, subsample_size=None, subsample=None, use_cuda=None)
     if len(_PYRO_STACK) == 0:
         yield subsample
     else:
-        with LambdaPoutine(None, name, scale, vectorized=True):
-            yield subsample
+        with poutine.scale(None, scale):
+            with poutine.indep(None, name, vectorized=True):
+                yield subsample
 
 
 def irange(name, size, subsample_size=None, subsample=None, use_cuda=None):
@@ -237,10 +238,11 @@ def irange(name, size, subsample_size=None, subsample=None, use_cuda=None):
         for i in subsample:
             yield i
     else:
-        indep_context = LambdaPoutine(None, name, scale, vectorized=False)
-        for i in subsample:
-            with indep_context:
-                yield i
+        indep_context = poutine.indep(None, name, vectorized=False)
+        with poutine.scale(None, scale):
+            for i in subsample:
+                with indep_context:
+                    yield i
 
 
 def map_data(name, data, fn, batch_size=None, batch_dim=0, use_cuda=None):

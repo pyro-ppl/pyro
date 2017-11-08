@@ -8,10 +8,11 @@ from pyro import util
 from .block_poutine import BlockPoutine
 from .condition_poutine import ConditionPoutine
 from .escape_poutine import EscapePoutine
-from .lambda_poutine import LambdaPoutine  # noqa: F401
+from .indep_poutine import IndepPoutine  # noqa: F401
 from .lift_poutine import LiftPoutine
 from .poutine import _PYRO_STACK, Poutine  # noqa: F401
 from .replay_poutine import ReplayPoutine
+from .scale_poutine import ScalePoutine
 from .trace import Trace  # noqa: F401
 from .trace_poutine import TracePoutine
 
@@ -120,6 +121,37 @@ def condition(fn, data):
     with those values
     """
     return ConditionPoutine(fn, data=data)
+
+
+def indep(fn, name, vectorized):
+    """
+    :param fn: a stochastic function (callable containing pyro primitive calls)
+    :param str name: a name for subsample sites
+    :param bool vectorized: True for ``iarange``, False for ``irange``
+    :returns: stochastic function wrapped in an IndepPoutine
+    :rtype: pyro.poutine.IndepPoutine
+
+    Alias for IndepPoutine constructor.
+
+    Used internally by ``iarange`` and ``irange``.
+    """
+    return IndepPoutine(fn, name=name, vectorized=vectorized)
+
+
+def scale(fn, scale):
+    """
+    :param fn: a stochastic function (callable containing pyro primitive calls)
+    :param scale: a positive scaling factor
+    :returns: stochastic function wrapped in a ScalePoutine
+    :rtype: pyro.poutine.ScalePoutine
+
+    Alias for ScalePoutine constructor.
+
+    Given a stochastic function with some sample statements and a positive
+    scale factor, scale the score of all sample and observe sites in the
+    function.
+    """
+    return ScalePoutine(fn, scale=scale)
 
 
 #########################################
