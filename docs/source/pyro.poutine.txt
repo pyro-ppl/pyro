@@ -1,3 +1,11 @@
+Poutine
+-------
+
+.. automodule:: pyro.poutine.poutine
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 BlockPoutine
 ------------
 
@@ -22,10 +30,10 @@ EscapePoutine
     :undoc-members:
     :show-inheritance:
 
-LambdaPoutine
--------------
+IndepPoutine
+------------
 
-.. automodule:: pyro.poutine.lambda_poutine
+.. automodule:: pyro.poutine.indep_poutine
     :members:
     :undoc-members:
     :show-inheritance:
@@ -38,18 +46,18 @@ LiftPoutine
     :undoc-members:
     :show-inheritance:
 
-Poutine
--------
-
-.. automodule:: pyro.poutine.poutine
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 ReplayPoutine
 -------------
 
 .. automodule:: pyro.poutine.replay_poutine
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+ScalePoutine
+------------
+
+.. automodule:: pyro.poutine.scale_poutine
     :members:
     :undoc-members:
     :show-inheritance:
