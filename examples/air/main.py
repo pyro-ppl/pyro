@@ -254,7 +254,7 @@ if args.viz:
     vis.images(draw_many(x, post_process_latents(z)))
 
 t0 = time.time()
-examples_to_viz = X[9:14]
+examples_to_viz = X[5:10]
 
 
 # Do inference.
