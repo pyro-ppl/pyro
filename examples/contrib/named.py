@@ -9,7 +9,7 @@ import pyro
 import pyro.distributions as dist
 from pyro.infer import SVI
 from pyro.optim import Adam
-from pyro.sugar import named
+from pyro.contrib import named
 from pyro.util import ng_ones, ng_zeros
 
 # This is a linear mixed-effects model over arbitrary json-like data.
