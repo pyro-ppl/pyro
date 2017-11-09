@@ -13,6 +13,14 @@ from pyro.optim import Adam
 from pyro.sugar import Latent, LatentList, LatentDict
 from pyro.util import ng_ones, ng_zeros
 
+# This is a linear mixed-effects model over arbitrary json-like data.
+# Data can be a number, a list of data, or a dict with data values.
+#
+# The goal is to learn a mean field approximation to the posterior
+# values z, parameterized by parameters post_mu and post_sigma.
+#
+# Notice that the Latent objects allow for modularity that fits well
+# with the recursive model and guide functions.
 
 def model(data):
     latent = Latent("latent")

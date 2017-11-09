@@ -21,11 +21,14 @@ class Latent(object):
     def __init__(self, address):
         super(Latent, self).__setattr__('_address', address)
 
+    def __str__(self):
+        return super(Latent, self).__getattribute__('_address')
+
     def __getattribute__(self, name):
         try:
             return super(Latent, self).__getattribute__(name)
         except AttributeError:
-            address = '{}.{}'.format(self._address, name)
+            address = '{}.{}'.format(self, name)
             value = Latent(address)
             value._set = lambda value: super(Latent, self).__setattr__(name, value)
             super(Latent, self).__setattr__(name, value)
@@ -33,11 +36,8 @@ class Latent(object):
 
     def __setattr__(self, name, value):
         if isinstance(value, (LatentList, LatentDict)):
-            value._bind('{}.{}'.format(self._address, name))
+            value._bind('{}.{}'.format(self, name))
         super(Latent, self).__setattr__(name, value)
-
-    def __str__(self):
-        return 'Latent({!r})'.format(self._address)
 
 
 class LatentList(list):
@@ -100,7 +100,7 @@ class LatentDict(dict):
 def sample(latent, fn, *args, **kwargs):
     if not isinstance(latent, Latent):
         raise TypeError("sugar.sample expected a Latent but got {}".format(repr(latent)))
-    value = pyro.sample(latent._address, fn, *args, **kwargs)
+    value = pyro.sample(str(latent), fn, *args, **kwargs)
     latent._set(value)
     return value
 
@@ -109,7 +109,7 @@ def sample(latent, fn, *args, **kwargs):
 def observe(latent, fn, obs, *args, **kwargs):
     if not isinstance(latent, Latent):
         raise TypeError("sugar.observe expected a Latent but got {}".format(repr(latent)))
-    value = pyro.observe(latent._address, fn, obs, *args, **kwargs)
+    value = pyro.observe(str(latent), fn, obs, *args, **kwargs)
     latent._set(value)
     return value
 
@@ -118,6 +118,6 @@ def observe(latent, fn, obs, *args, **kwargs):
 def param(latent, *args, **kwargs):
     if not isinstance(latent, Latent):
         return latent  # value was already set
-    value = pyro.param(latent._address, *args, **kwargs)
+    value = pyro.param(str(latent), *args, **kwargs)
     latent._set(value)
     return value
