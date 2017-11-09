@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import warnings
+from collections import namedtuple
 
 import networkx
 import torch
@@ -10,6 +11,24 @@ import pyro.poutine as poutine
 from pyro.infer.util import torch_backward, torch_data_sum
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, detach_iterable, ng_zeros
+
+CostNode = namedtuple("CostNode", ["cost", "nonzero_expectation"])
+
+
+def _get_baseline_options(site):
+    """
+    Extracts baseline options from ``site["baseline"]``.
+    """
+    # XXX default for baseline_beta currently set here
+    options_dict = site["baseline"].copy()
+    options_tuple = (options_dict.pop('nn_baseline', None),
+                     options_dict.pop('nn_baseline_input', None),
+                     options_dict.pop('use_decaying_avg_baseline', False),
+                     options_dict.pop('baseline_beta', 0.90),
+                     options_dict.pop('baseline_value', None))
+    if options_dict:
+        raise ValueError("Unrecognized baseline options: {}".format(options_dict.keys()))
+    return options_tuple
 
 
 class TraceGraph_ELBO(object):
@@ -128,38 +147,26 @@ class TraceGraph_ELBO(object):
         # prepare a list of all the cost nodes, each of which is +- log_pdf
         cost_nodes = []
         non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
-        for site in model_trace.nodes.keys():
-            model_trace_site = model_trace.nodes[site]
-            log_pdf_key = 'batch_log_pdf' if site in model_vec_md_nodes else 'log_pdf'
-            if model_trace_site["type"] == "sample":
-                if model_trace_site["is_observed"]:
-                    cost_node = (model_trace_site[log_pdf_key], True)
-                    cost_nodes.append(cost_node)
+        for name, model_site in model_trace.nodes.items():
+            if model_site["type"] == "sample":
+                if model_site["is_observed"]:
+                    cost_nodes.append(CostNode(model_site["log_pdf"], True))
                 else:
                     # cost node from model sample
-                    cost_node1 = (model_trace_site[log_pdf_key], True)
+                    cost_nodes.append(CostNode(model_site["log_pdf"], True))
                     # cost node from guide sample
-                    zero_expectation = site in non_reparam_nodes
-                    cost_node2 = (-guide_trace.nodes[site][log_pdf_key],
-                                  not zero_expectation)
-                    cost_nodes.extend([cost_node1, cost_node2])
+                    guide_site = guide_trace.nodes[name]
+                    zero_expectation = name in non_reparam_nodes
+                    cost_nodes.append(CostNode(-guide_site["log_pdf"], not zero_expectation))
 
         # compute the elbo; if all stochastic nodes are reparameterizable, we're done
         # this bit is never differentiated: it's here for getting an estimate of the elbo itself
-        elbo = 0.0
-        for cost_node in cost_nodes:
-            elbo += cost_node[0].sum()
-        elbo = torch_data_sum(elbo)
+        elbo = torch_data_sum(sum(c.cost for c in cost_nodes))
 
         # compute the surrogate elbo, removing terms whose gradient is zero
         # this is the bit that's actually differentiated
         # XXX should the user be able to control if these terms are included?
-        surrogate_elbo = 0.0
-        elbo_no_zero_expectation_terms = 0.0
-        for cost_node in cost_nodes:
-            if cost_node[1]:
-                elbo_no_zero_expectation_terms += cost_node[0].sum()
-        surrogate_elbo += elbo_no_zero_expectation_terms
+        surrogate_elbo = sum(c.cost for c in cost_nodes if c.nonzero_expectation)
 
         # the following computations are only necessary if we have non-reparameterizable nodes
         baseline_loss = 0.0
@@ -224,27 +231,14 @@ class TraceGraph_ELBO(object):
             # we include only downstream costs to reduce variance
             # optionally include baselines to further reduce variance
             # XXX should the average baseline be in the param store as below?
-
-            # for extracting baseline options from site["baseline"]
-            # XXX default for baseline_beta currently set here
-            def get_baseline_options(site_baseline):
-                options_dict = site_baseline.copy()
-                options_tuple = (options_dict.pop('nn_baseline', None),
-                                 options_dict.pop('nn_baseline_input', None),
-                                 options_dict.pop('use_decaying_avg_baseline', False),
-                                 options_dict.pop('baseline_beta', 0.90),
-                                 options_dict.pop('baseline_value', None))
-                if options_dict:
-                    raise ValueError("Unrecognized baseline options: {}".format(options_dict.keys()))
-                return options_tuple
-
             elbo_reinforce_terms = 0.0
             for node in non_reparam_nodes:
+                guide_site = guide_trace.nodes[node]
                 log_pdf_key = 'batch_log_pdf' if node in guide_vec_md_nodes else 'log_pdf'
                 downstream_cost = downstream_costs[node]
                 baseline = 0.0
                 (nn_baseline, nn_baseline_input, use_decaying_avg_baseline, baseline_beta,
-                    baseline_value) = get_baseline_options(guide_trace.nodes[node]["baseline"])
+                    baseline_value) = _get_baseline_options(guide_site)
                 use_nn_baseline = nn_baseline is not None
                 use_baseline_value = baseline_value is not None
                 assert(not (use_nn_baseline and use_baseline_value)), \
@@ -266,15 +260,13 @@ class TraceGraph_ELBO(object):
                     # accumulate baseline loss
                     baseline_loss += torch.pow(downstream_cost.detach() - baseline, 2.0).sum()
 
-                guide_site = guide_trace.nodes[node]
                 guide_log_pdf = guide_site[log_pdf_key] / guide_site["scale"]  # not scaled by subsampling
                 if use_nn_baseline or use_decaying_avg_baseline or use_baseline_value:
                     if downstream_cost.size() != baseline.size():
                         raise ValueError("Expected baseline at site {} to be {} instead got {}".format(
                             node, downstream_cost.size(), baseline.size()))
-                    elbo_reinforce_terms += (guide_log_pdf * (downstream_cost - baseline).detach()).sum()
-                else:
-                    elbo_reinforce_terms += (guide_log_pdf * downstream_cost.detach()).sum()
+                    downstream_cost = downstream_cost - baseline
+                elbo_reinforce_terms += (guide_log_pdf * downstream_cost.detach()).sum()
 
             surrogate_elbo += elbo_reinforce_terms
 
@@ -286,8 +278,7 @@ class TraceGraph_ELBO(object):
 
         if trainable_params:
             surrogate_loss = -surrogate_elbo
-            loss = surrogate_loss + baseline_loss
-            torch_backward(weight * loss)
+            torch_backward(weight * (surrogate_loss + baseline_loss))
             pyro.get_param_store().mark_params_active(trainable_params)
 
         loss = -elbo
