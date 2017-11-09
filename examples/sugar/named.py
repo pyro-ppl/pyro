@@ -7,10 +7,10 @@ from torch.autograd import Variable
 
 import pyro
 import pyro.distributions as dist
-from pyro import sugar
 from pyro.infer import SVI
 from pyro.optim import Adam
-from pyro.sugar import Latent, LatentList, LatentDict
+from pyro.sugar import named
+from pyro.sugar.named import Latent, LatentDict, LatentList
 from pyro.util import ng_ones, ng_zeros
 
 # This is a linear mixed-effects model over arbitrary json-like data.
@@ -25,24 +25,24 @@ from pyro.util import ng_ones, ng_zeros
 
 def model(data):
     latent = Latent("latent")
-    sugar.sample(latent.z, dist.normal, ng_zeros(1), ng_ones(1))
+    named.sample(latent.z, dist.normal, ng_zeros(1), ng_ones(1))
     model_recurse(data, latent)
 
 
 def model_recurse(data, latent):
     if isinstance(data, Variable):
-        sugar.observe(latent.x, dist.normal, data, latent.z, ng_ones(1))
+        named.observe(latent.x, dist.normal, data, latent.z, ng_ones(1))
     elif isinstance(data, list):
-        sugar.param(latent.prior_sigma, Variable(torch.ones(1), requires_grad=True))
+        named.param(latent.prior_sigma, Variable(torch.ones(1), requires_grad=True))
         latent.list = LatentList(len(data))
         for data_i, latent_i in zip(data, latent.list):
-            sugar.sample(latent_i.z, dist.normal, latent.z, latent.prior_sigma)
+            named.sample(latent_i.z, dist.normal, latent.z, latent.prior_sigma)
             model_recurse(data_i, latent_i)
     elif isinstance(data, dict):
-        sugar.param(latent.prior_sigma, Variable(torch.ones(1), requires_grad=True))
+        named.param(latent.prior_sigma, Variable(torch.ones(1), requires_grad=True))
         latent.dict = LatentDict()
         for key, value in data.items():
-            sugar.sample(latent.dict[key].z, dist.normal, latent.z, latent.prior_sigma)
+            named.sample(latent.dict[key].z, dist.normal, latent.z, latent.prior_sigma)
             model_recurse(value, latent.dict[key])
     else:
         raise TypeError("Unsupported type {}".format(type(data)))
@@ -53,9 +53,9 @@ def guide(data):
 
 
 def guide_recurse(data, latent):
-    sugar.param(latent.post_mu, Variable(torch.zeros(1), requires_grad=True))
-    sugar.param(latent.post_sigma, Variable(torch.ones(1), requires_grad=True))
-    sugar.sample(latent.z, dist.normal, latent.post_mu, latent.post_sigma)
+    named.param(latent.post_mu, Variable(torch.zeros(1), requires_grad=True))
+    named.param(latent.post_sigma, Variable(torch.ones(1), requires_grad=True))
+    named.sample(latent.z, dist.normal, latent.post_mu, latent.post_sigma)
     if isinstance(data, Variable):
         pass
     elif isinstance(data, list):
