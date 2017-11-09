@@ -56,6 +56,30 @@ class Object(object):
                 raise RuntimeError("Cannot overwrite {}.{}".format(self, key))
         super(Object, self).__setattr__(key, value)
 
+    @functools.wraps(pyro.sample)
+    def sample(self, fn, *args, **kwargs):
+        if not self._is_placeholder:
+            raise RuntimeError("Cannot .sample an initialized named.Object {}".format(self))
+        value = pyro.sample(str(self), fn, *args, **kwargs)
+        self._set_value(value)
+        return value
+
+    @functools.wraps(pyro.observe)
+    def observe(self, fn, obs, *args, **kwargs):
+        if not self._is_placeholder:
+            raise RuntimeError("Cannot .observe an initialized named.Object {}".format(self))
+        value = pyro.observe(str(self), fn, obs, *args, **kwargs)
+        self._set_value(value)
+        return value
+
+    @functools.wraps(pyro.param)
+    def param(self, *args, **kwargs):
+        if not self._is_placeholder:
+            raise RuntimeError("Cannot named.param an initialized named.Object")
+        value = pyro.param(str(self), *args, **kwargs)
+        self._set_value(value)
+        return value
+
 
 class List(list):
     """
@@ -168,30 +192,18 @@ class Dict(dict):
 def sample(placeholder, fn, *args, **kwargs):
     if not isinstance(placeholder, Object):
         raise TypeError("named.sample expected a named.Object but got {}".format(repr(placeholder)))
-    if not placeholder._is_placeholder:
-        raise RuntimeError("Cannot named.sample an initialized named.Object")
-    value = pyro.sample(str(placeholder), fn, *args, **kwargs)
-    placeholder._set_value(value)
-    return value
+    return placeholder.sample(fn, *args, **kwargs)
 
 
 @functools.wraps(pyro.observe)
 def observe(placeholder, fn, obs, *args, **kwargs):
     if not isinstance(placeholder, Object):
         raise TypeError("named.observe expected a named.Object but got {}".format(repr(placeholder)))
-    if not placeholder._is_placeholder:
-        raise RuntimeError("Cannot named.observe an initialized named.Object")
-    value = pyro.observe(str(placeholder), fn, obs, *args, **kwargs)
-    placeholder._set_value(value)
-    return value
+    return placeholder.observe(fn, obs, *args, **kwargs)
 
 
 @functools.wraps(pyro.param)
 def param(placeholder, *args, **kwargs):
     if not isinstance(placeholder, Object):
         return placeholder  # value was already set
-    if not placeholder._is_placeholder:
-        raise RuntimeError("Cannot named.param an initialized named.Object")
-    value = pyro.param(str(placeholder), *args, **kwargs)
-    placeholder._set_value(value)
-    return value
+    return placeholder.param(*args, **kwargs)
