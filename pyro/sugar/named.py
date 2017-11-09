@@ -81,7 +81,7 @@ class List(list):
         if self:
             raise RuntimeError("Cannot name a named.List after data has been added")
         if self._name is not None:
-            raise RuntimeError("Tried to rename named.List: {}".format(self._name))
+            raise RuntimeError("Cannot rename named.List: {}".format(self._name))
         self._name = name
 
     def add(self):
@@ -92,7 +92,7 @@ class List(list):
         :rtype: named.Object
         """
         if self._name is None:
-            raise RuntimeError("Cannot .add() to a named.List before binding it to a Object")
+            raise RuntimeError("Cannot .add() to a named.List before storing it in a named.Object")
         i = len(self)
         value = Object("{}[{}]".format(self._name, i))
         super(Object, value).__setattr__(
@@ -103,7 +103,7 @@ class List(list):
     def __setitem__(self, pos, value):
         name = "{}[{}]".format(self._name, pos)
         if isinstance(value, Object):
-            raise RuntimeError("Cannot bind Object {} to LatentDict {}".format(value, self._name))
+            raise RuntimeError("Cannot store named.Object {} in named.Dict {}".format(value, self._name))
         elif isinstance(value, (List, Dict)):
             value._set_name(name)
         old = self[pos]
@@ -134,9 +134,9 @@ class Dict(dict):
 
     def _set_name(self, name):
         if self:
-            raise RuntimeError("Cannot bind a Dict in a Object after data has been added")
+            raise RuntimeError("Cannot name a named.Dict after data has been added")
         if self._name is not None:
-            raise RuntimeError("Tried to rename a named.Dict: {}".format(self._name))
+            raise RuntimeError("Cannot rename named.Dict: {}".format(self._name))
         self._name = name
 
     def __getitem__(self, key):
@@ -158,34 +158,40 @@ class Dict(dict):
             if not isinstance(old, Object) or not old._is_placeholder:
                 raise RuntimeError("Cannot overwrite {}".format(name))
         if isinstance(value, Object):
-            raise RuntimeError("Cannot bind named.Object {} to named.Dict {}".format(value, self._name))
+            raise RuntimeError("Cannot store named.Object {} in named.Dict {}".format(value, self._name))
         elif isinstance(value, (List, Dict)):
             value._set_name(name)
         super(Dict, self).__setitem__(key, value)
 
 
 @functools.wraps(pyro.sample)
-def sample(latent, fn, *args, **kwargs):
-    if not isinstance(latent, Object):
-        raise TypeError("named.sample expected a named.Object but got {}".format(repr(latent)))
-    value = pyro.sample(str(latent), fn, *args, **kwargs)
-    latent._set_value(value)
+def sample(placeholder, fn, *args, **kwargs):
+    if not isinstance(placeholder, Object):
+        raise TypeError("named.sample expected a named.Object but got {}".format(repr(placeholder)))
+    if not placeholder._is_placeholder:
+        raise RuntimeError("Cannot named.sample an initialized named.Object")
+    value = pyro.sample(str(placeholder), fn, *args, **kwargs)
+    placeholder._set_value(value)
     return value
 
 
 @functools.wraps(pyro.observe)
-def observe(latent, fn, obs, *args, **kwargs):
-    if not isinstance(latent, Object):
-        raise TypeError("named.observe expected a named.Object but got {}".format(repr(latent)))
-    value = pyro.observe(str(latent), fn, obs, *args, **kwargs)
-    latent._set_value(value)
+def observe(placeholder, fn, obs, *args, **kwargs):
+    if not isinstance(placeholder, Object):
+        raise TypeError("named.observe expected a named.Object but got {}".format(repr(placeholder)))
+    if not placeholder._is_placeholder:
+        raise RuntimeError("Cannot named.observe an initialized named.Object")
+    value = pyro.observe(str(placeholder), fn, obs, *args, **kwargs)
+    placeholder._set_value(value)
     return value
 
 
 @functools.wraps(pyro.param)
-def param(latent, *args, **kwargs):
-    if not isinstance(latent, Object):
-        return latent  # value was already set
-    value = pyro.param(str(latent), *args, **kwargs)
-    latent._set_value(value)
+def param(placeholder, *args, **kwargs):
+    if not isinstance(placeholder, Object):
+        return placeholder  # value was already set
+    if not placeholder._is_placeholder:
+        raise RuntimeError("Cannot named.param an initialized named.Object")
+    value = pyro.param(str(placeholder), *args, **kwargs)
+    placeholder._set_value(value)
     return value
