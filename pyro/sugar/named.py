@@ -20,7 +20,7 @@ class Object(object):
 
         state = named.Object("state")
         state.x = 0
-        state.ys = named.List(5)
+        state.ys = named.List()
         state.zs = named.Dict()
         state.a.b.c.d.e.f.g = 0  # Creates a chain of named.Objects.
 
@@ -61,11 +61,11 @@ class List(list):
     """
     List-like object to hold immutable latent state.
 
-    This must either given a name when constructed::
+    This must either be given a name when constructed::
 
         latent = named.List("root")
 
-    or must be immediately bound to a ``named.Object``::
+    or must be immediately stored in a ``named.Object``::
 
         latent = named.Object("root")
         latent.xs = named.List()  # Must be bound to a Object before use.
@@ -114,13 +114,13 @@ class List(list):
 
 class Dict(dict):
     """
-    Temporary dict-like object to hold immutable latent state.
+    Dict-like object to hold immutable latent state.
 
-    This must either given a name when constructed::
+    This must either be given a name when constructed::
 
         latent = named.Dict("root")
 
-    or must be immediately bound to a ``named.Object``::
+    or must be immediately stored in a ``named.Object``::
 
         latent = named.Object("root")
         latent.xs = named.Dict()  # Must be bound to a Object before use.
@@ -144,7 +144,7 @@ class Dict(dict):
             return super(Dict, self).__getitem__(key)
         except KeyError:
             if self._name is None:
-                raise RuntimeError("Cannot access an unbound Dict")
+                raise RuntimeError("Cannot access an unnamed named.Dict")
             value = Object("{}[{!r}]".format(self._name, key))
             super(Object, value).__setattr__(
                 "_set_value", lambda value: self.__setitem__(key, value))
@@ -158,7 +158,7 @@ class Dict(dict):
             if not isinstance(old, Object) or not old._is_placeholder:
                 raise RuntimeError("Cannot overwrite {}".format(name))
         if isinstance(value, Object):
-            raise RuntimeError("Cannot bind Object {} to Dict {}".format(value, self._name))
+            raise RuntimeError("Cannot bind named.Object {} to named.Dict {}".format(value, self._name))
         elif isinstance(value, (List, Dict)):
             value._set_name(name)
         super(Dict, self).__setitem__(key, value)
@@ -167,7 +167,7 @@ class Dict(dict):
 @functools.wraps(pyro.sample)
 def sample(latent, fn, *args, **kwargs):
     if not isinstance(latent, Object):
-        raise TypeError("named.sample expected a Object but got {}".format(repr(latent)))
+        raise TypeError("named.sample expected a named.Object but got {}".format(repr(latent)))
     value = pyro.sample(str(latent), fn, *args, **kwargs)
     latent._set_value(value)
     return value
@@ -176,7 +176,7 @@ def sample(latent, fn, *args, **kwargs):
 @functools.wraps(pyro.observe)
 def observe(latent, fn, obs, *args, **kwargs):
     if not isinstance(latent, Object):
-        raise TypeError("named.observe expected a Object but got {}".format(repr(latent)))
+        raise TypeError("named.observe expected a named.Object but got {}".format(repr(latent)))
     value = pyro.observe(str(latent), fn, obs, *args, **kwargs)
     latent._set_value(value)
     return value
