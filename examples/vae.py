@@ -75,7 +75,7 @@ class VAE(nn.Module):
         # create the encoder and decoder networks
         self.encoder = Encoder(z_dim, hidden_dim)
         self.decoder = Decoder(z_dim, hidden_dim)
-        
+
         if use_cuda:
             # calling cuda() here will put all the parameters of
             # the encoder and decoder networks into gpu memory
