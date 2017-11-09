@@ -11,7 +11,7 @@ class IndepPoutine(Poutine):
     """
     This poutine keeps track of stack of independence information declared by
     nested ``irange`` and ``iarange`` contexts. This information is stored in
-    a ``map_data_stack`` at each sample/observe site for consumption by
+    a ``cond_indep_stack`` at each sample/observe site for consumption by
     ``TracePoutine``.
     """
     def __init__(self, fn, name, vectorized):
@@ -34,8 +34,8 @@ class IndepPoutine(Poutine):
     def _prepare_site(self, msg):
         """
         Construct the message that is consumed by ``TracePoutine``;
-        ``map_data_stack`` encodes the nested sequence of ``irange`` branches
+        ``cond_indep_stack`` encodes the nested sequence of ``irange`` branches
         that the site at name is within.
         """
-        msg["map_data_stack"].insert(0, CondIndepStackFrame(self.name, self.counter, self.vectorized))
+        msg["cond_indep_stack"].append(CondIndepStackFrame(self.name, self.counter, self.vectorized))
         return msg
