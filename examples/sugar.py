@@ -22,6 +22,7 @@ from pyro.util import ng_ones, ng_zeros
 # Notice that the Latent objects allow for modularity that fits well
 # with the recursive model and guide functions.
 
+
 def model(data):
     latent = Latent("latent")
     sugar.sample(latent.z, dist.normal, ng_zeros(1), ng_ones(1))
@@ -95,7 +96,7 @@ def main(args):
 
     print('Parameters:')
     for name in sorted(pyro.get_param_store().get_all_param_names()):
-        print('{} = {}'.format(name, pyro.param(name).data.numpy()))
+        print('{} = {}'.format(name, pyro.param(name).data.cpu().numpy()))
 
 
 if __name__ == '__main__':

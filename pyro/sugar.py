@@ -9,6 +9,11 @@ class Latent(object):
     """
     Object to hold latent state.
 
+    This object can serve either as a container for nested latent state
+    or as a placeholder to be replaced by a Variable via a sugar.sample,
+    sugar.observe, or sugar.param statement. When used as a placeholder,
+    Latent objects take the place of strings in normal pyro.sample statements.
+
     :param str address: The name of the object.
 
     Example::
@@ -17,6 +22,7 @@ class Latent(object):
         state.x = 0
         state.ys = LatentList(5)
         state.zs = LatentDict()
+        state.a.b.c.d.e.f.g = 0  # Creates a chain of Latents.
     """
     def __init__(self, address):
         super(Latent, self).__setattr__('_address', address)
@@ -48,6 +54,13 @@ class LatentList(list):
 
         latent = Latent()
         latent.xs = LatentList(5)  # Must be bound to a Latent before use.
+
+    :param int size: The initial size of the list. After the list is created
+        and bound to a Latent object, it will be filled with ``size``
+        ``Latent`` objects that can be used as placeholders or containers.
+
+    .. warning:: Advanced mutation is not supported and may fail silently.
+        For example do not sort, reverse, or delete items from the list.
     """
     def __init__(self, size):
         self._size = size
@@ -92,8 +105,13 @@ class LatentDict(dict):
                 raise RuntimeError("Cannot access a LatentDict until it is bound to a Latent")
             value = Latent('{}[{!r}]'.format(self._address, key))
             value._set = lambda value: self.__setitem__(key, value)
-            self[key] = value
+            super(LatentDict, self).__setitem__(key, value)
             return value
+
+    def __setitem__(self, key, value):
+        if isinstance(value, Latent):
+            raise RuntimeError("Cannot bind Latent {} to LatentDict {}".format(value, self._address))
+        super(LatentDict, self).__setitem__(key, value)
 
 
 @functools.wraps(pyro.sample)
