@@ -5,152 +5,187 @@ import functools
 import pyro
 
 
-class Latent(object):
+class Object(object):
     """
-    Object to hold latent state.
+    Object to hold immutable latent state.
 
     This object can serve either as a container for nested latent state
-    or as a placeholder to be replaced by a Variable via a sugar.sample,
-    sugar.observe, or sugar.param statement. When used as a placeholder,
-    Latent objects take the place of strings in normal pyro.sample statements.
+    or as a placeholder to be replaced by a Variable via a named.sample,
+    named.observe, or named.param statement. When used as a placeholder,
+    Object objects take the place of strings in normal pyro.sample statements.
 
-    :param str address: The name of the object.
+    :param str name: The name of the object.
 
     Example::
 
-        state = Latent("state")
+        state = named.Object("state")
         state.x = 0
-        state.ys = LatentList(5)
-        state.zs = LatentDict()
-        state.a.b.c.d.e.f.g = 0  # Creates a chain of Latents.
+        state.ys = named.List(5)
+        state.zs = named.Dict()
+        state.a.b.c.d.e.f.g = 0  # Creates a chain of named.Objects.
+
+    .. warning:: This data structure is write-once: data may be added but may
+        not be mutated or removed. Trying to mutate this data structure may
+        result in silent errors.
     """
-    def __init__(self, address):
-        super(Latent, self).__setattr__('_address', address)
+    def __init__(self, name):
+        super(Object, self).__setattr__("_name", name)
+        super(Object, self).__setattr__("_is_placeholder", True)
 
     def __str__(self):
-        return super(Latent, self).__getattribute__('_address')
+        return super(Object, self).__getattribute__("_name")
 
-    def __getattribute__(self, name):
+    def __getattribute__(self, key):
         try:
-            return super(Latent, self).__getattribute__(name)
+            return super(Object, self).__getattribute__(key)
         except AttributeError:
-            address = '{}.{}'.format(self, name)
-            value = Latent(address)
-            value._set = lambda value: super(Latent, self).__setattr__(name, value)
-            super(Latent, self).__setattr__(name, value)
+            name = "{}.{}".format(self, key)
+            value = Object(name)
+            super(Object, value).__setattr__(
+                "_set_value", lambda value: super(Object, self).__setattr__(key, value))
+            super(Object, self).__setattr__(key, value)
+            super(Object, self).__setattr__("_is_placeholder", False)
             return value
 
-    def __setattr__(self, name, value):
-        if isinstance(value, (LatentList, LatentDict)):
-            value._bind('{}.{}'.format(self, name))
-        super(Latent, self).__setattr__(name, value)
+    def __setattr__(self, key, value):
+        if isinstance(value, (List, Dict)):
+            value._set_name("{}.{}".format(self, key))
+        if hasattr(self, key):
+            old = super(Object, self).__getattribute__(key)
+            if not isinstance(old, Object) or not old._is_placeholder:
+                raise RuntimeError("Cannot overwrite {}.{}".format(self, key))
+        super(Object, self).__setattr__(key, value)
 
 
-class LatentList(list):
+class List(list):
     """
-    List-like object to hold latent state.
+    List-like object to hold immutable latent state.
 
-    This must be created in expressions like::
+    This must either given a name when constructed::
 
-        latent = Latent()
-        latent.xs = LatentList(5)  # Must be bound to a Latent before use.
+        latent = named.List("root")
 
-    :param int size: The initial size of the list. After the list is created
-        and bound to a Latent object, it will be filled with ``size``
-        ``Latent`` objects that can be used as placeholders or containers.
+    or must be immediately bound to a ``named.Object``::
 
-    .. warning:: Advanced mutation is not supported and may fail silently.
-        For example do not sort, reverse, or delete items from the list.
+        latent = named.Object("root")
+        latent.xs = named.List()  # Must be bound to a Object before use.
+
+    .. warning:: This data structure is write-once: data may be added but may
+        not be mutated or removed. Trying to mutate this data structure may
+        result in silent errors.
     """
-    def __init__(self, size=0):
-        self._size = size
-        self._address = None
+    def __init__(self, name=None):
+        self._name = name
 
-    def _bind(self, address):
+    def _set_name(self, name):
         if self:
-            raise RuntimeError("Cannot bind a LatentList in a Latent after data has been added")
-        if self._address is not None:
-            raise RuntimeError("Tried to bind an already-bound LatentList: {}".format(self._address))
-        self._address = address
-        for i in range(self._size):
-            value = Latent('{}[{}]'.format(address, i))
-            value._set = lambda value, i=i: self.__setitem__(i, value)
-            self.append(value)
+            raise RuntimeError("Cannot name a named.List after data has been added")
+        if self._name is not None:
+            raise RuntimeError("Tried to rename named.List: {}".format(self._name))
+        self._name = name
 
     def add(self):
         """
-        Append one new Latent object.
+        Append one new named.Object.
 
         :returns: a new latent object at the end
-        :rtype: Latent
+        :rtype: named.Object
         """
-        if self._address is None:
-            raise RuntimeError("Cannot .add() to a LatentList before binding it to a Latent")
+        if self._name is None:
+            raise RuntimeError("Cannot .add() to a named.List before binding it to a Object")
         i = len(self)
-        value = Latent('{}[{}]'.format(self._address, i))
-        value._set = lambda value, i=i: self.__setitem__(i, value)
+        value = Object("{}[{}]".format(self._name, i))
+        super(Object, value).__setattr__(
+            "_set_value", lambda value, i=i: self.__setitem__(i, value))
         self.append(value)
         return value
 
+    def __setitem__(self, pos, value):
+        name = "{}[{}]".format(self._name, pos)
+        if isinstance(value, Object):
+            raise RuntimeError("Cannot bind Object {} to LatentDict {}".format(value, self._name))
+        elif isinstance(value, (List, Dict)):
+            value._set_name(name)
+        old = self[pos]
+        if not isinstance(old, Object) or not old._is_placeholder:
+            raise RuntimeError("Cannot overwrite {}".format(name))
+        super(List, self).__setitem__(pos, value)
 
-class LatentDict(dict):
+
+class Dict(dict):
     """
-    Temporary dict-like object to hold latent state.
+    Temporary dict-like object to hold immutable latent state.
 
-    This must be created in expressions like::
+    This must either given a name when constructed::
 
-        latent = Latent()
-        latent.xs = LatentDict()  # Must be bound to a Latent before use.
+        latent = named.Dict("root")
+
+    or must be immediately bound to a ``named.Object``::
+
+        latent = named.Object("root")
+        latent.xs = named.Dict()  # Must be bound to a Object before use.
+
+    .. warning:: This data structure is write-once: data may be added but may
+        not be mutated or removed. Trying to mutate this data structure may
+        result in silent errors.
     """
-    def __init__(self):
-        self._address = None
+    def __init__(self, name=None):
+        self._name = name
 
-    def _bind(self, address):
+    def _set_name(self, name):
         if self:
-            raise RuntimeError("Cannot bind a LatentDict in a Latent after data has been added")
-        if self._address is not None:
-            raise RuntimeError("Tried to bind an already-bound LatentDict: {}".format(self._address))
-        self._address = address
+            raise RuntimeError("Cannot bind a Dict in a Object after data has been added")
+        if self._name is not None:
+            raise RuntimeError("Tried to rename a named.Dict: {}".format(self._name))
+        self._name = name
 
     def __getitem__(self, key):
         try:
-            return super(LatentDict, self).__getitem__(key)
+            return super(Dict, self).__getitem__(key)
         except KeyError:
-            if self._address is None:
-                raise RuntimeError("Cannot access a LatentDict until it is bound to a Latent")
-            value = Latent('{}[{!r}]'.format(self._address, key))
-            value._set = lambda value: self.__setitem__(key, value)
-            super(LatentDict, self).__setitem__(key, value)
+            if self._name is None:
+                raise RuntimeError("Cannot access an unbound Dict")
+            value = Object("{}[{!r}]".format(self._name, key))
+            super(Object, value).__setattr__(
+                "_set_value", lambda value: self.__setitem__(key, value))
+            super(Dict, self).__setitem__(key, value)
             return value
 
     def __setitem__(self, key, value):
-        if isinstance(value, Latent):
-            raise RuntimeError("Cannot bind Latent {} to LatentDict {}".format(value, self._address))
-        super(LatentDict, self).__setitem__(key, value)
+        name = "{}[{!r}]".format(self._name, key)
+        if key in self:
+            old = super(Dict, self).__getitem__(key)
+            if not isinstance(old, Object) or not old._is_placeholder:
+                raise RuntimeError("Cannot overwrite {}".format(name))
+        if isinstance(value, Object):
+            raise RuntimeError("Cannot bind Object {} to Dict {}".format(value, self._name))
+        elif isinstance(value, (List, Dict)):
+            value._set_name(name)
+        super(Dict, self).__setitem__(key, value)
 
 
 @functools.wraps(pyro.sample)
 def sample(latent, fn, *args, **kwargs):
-    if not isinstance(latent, Latent):
-        raise TypeError("sugar.sample expected a Latent but got {}".format(repr(latent)))
+    if not isinstance(latent, Object):
+        raise TypeError("named.sample expected a Object but got {}".format(repr(latent)))
     value = pyro.sample(str(latent), fn, *args, **kwargs)
-    latent._set(value)
+    latent._set_value(value)
     return value
 
 
 @functools.wraps(pyro.observe)
 def observe(latent, fn, obs, *args, **kwargs):
-    if not isinstance(latent, Latent):
-        raise TypeError("sugar.observe expected a Latent but got {}".format(repr(latent)))
+    if not isinstance(latent, Object):
+        raise TypeError("named.observe expected a Object but got {}".format(repr(latent)))
     value = pyro.observe(str(latent), fn, obs, *args, **kwargs)
-    latent._set(value)
+    latent._set_value(value)
     return value
 
 
 @functools.wraps(pyro.param)
 def param(latent, *args, **kwargs):
-    if not isinstance(latent, Latent):
+    if not isinstance(latent, Object):
         return latent  # value was already set
     value = pyro.param(str(latent), *args, **kwargs)
-    latent._set(value)
+    latent._set_value(value)
     return value

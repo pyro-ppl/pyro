@@ -10,7 +10,6 @@ import pyro.distributions as dist
 from pyro.infer import SVI
 from pyro.optim import Adam
 from pyro.sugar import named
-from pyro.sugar.named import Latent, LatentDict, LatentList
 from pyro.util import ng_ones, ng_zeros
 
 # This is a linear mixed-effects model over arbitrary json-like data.
@@ -19,12 +18,12 @@ from pyro.util import ng_ones, ng_zeros
 # The goal is to learn a mean field approximation to the posterior
 # values z, parameterized by parameters post_mu and post_sigma.
 #
-# Notice that the Latent objects allow for modularity that fits well
+# Notice that the named.Objects allow for modularity that fits well
 # with the recursive model and guide functions.
 
 
 def model(data):
-    latent = Latent("latent")
+    latent = named.Object("latent")
     named.sample(latent.z, dist.normal, ng_zeros(1), ng_ones(1))
     model_recurse(data, latent)
 
@@ -34,13 +33,14 @@ def model_recurse(data, latent):
         named.observe(latent.x, dist.normal, data, latent.z, ng_ones(1))
     elif isinstance(data, list):
         named.param(latent.prior_sigma, Variable(torch.ones(1), requires_grad=True))
-        latent.list = LatentList(len(data))
-        for data_i, latent_i in zip(data, latent.list):
+        latent.list = named.List()
+        for data_i in data:
+            latent_i = latent.list.add()
             named.sample(latent_i.z, dist.normal, latent.z, latent.prior_sigma)
             model_recurse(data_i, latent_i)
     elif isinstance(data, dict):
         named.param(latent.prior_sigma, Variable(torch.ones(1), requires_grad=True))
-        latent.dict = LatentDict()
+        latent.dict = named.Dict()
         for key, value in data.items():
             named.sample(latent.dict[key].z, dist.normal, latent.z, latent.prior_sigma)
             model_recurse(value, latent.dict[key])
@@ -49,7 +49,7 @@ def model_recurse(data, latent):
 
 
 def guide(data):
-    guide_recurse(data, Latent("latent"))
+    guide_recurse(data, named.Object("latent"))
 
 
 def guide_recurse(data, latent):
@@ -59,11 +59,11 @@ def guide_recurse(data, latent):
     if isinstance(data, Variable):
         pass
     elif isinstance(data, list):
-        latent.list = LatentList()
+        latent.list = named.List()
         for datum in data:
             guide_recurse(datum, latent.list.add())
     elif isinstance(data, dict):
-        latent.dict = LatentDict()
+        latent.dict = named.Dict()
         for key, value in data.items():
             guide_recurse(value, latent.dict[key])
     else:
