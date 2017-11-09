@@ -73,14 +73,15 @@ class VAE(nn.Module):
     def __init__(self, z_dim=50, hidden_dim=400, use_cuda=False):
         super(VAE, self).__init__()
         # create the encoder and decoder networks
+        self.encoder = Encoder(z_dim, hidden_dim)
+        self.decoder = Decoder(z_dim, hidden_dim)
+
         if use_cuda:
             # calling cuda() here will put all the parameters of
             # the encoder and decoder networks into gpu memory
             self.cuda()
         self.use_cuda = use_cuda
         self.z_dim = z_dim
-        self.encoder = Encoder(z_dim, hidden_dim)
-        self.decoder = Decoder(z_dim, hidden_dim)
 
     # define the model p(x|z)p(z)
     def model(self, x):
