@@ -59,9 +59,9 @@ def guide_recurse(data, latent):
     if isinstance(data, Variable):
         pass
     elif isinstance(data, list):
-        latent.list = LatentList(len(data))
-        for data_i, latent_i in zip(data, latent.list):
-            guide_recurse(data_i, latent_i)
+        latent.list = LatentList()
+        for datum in data:
+            guide_recurse(datum, latent.list.add())
     elif isinstance(data, dict):
         latent.dict = LatentDict()
         for key, value in data.items():

@@ -62,7 +62,7 @@ class LatentList(list):
     .. warning:: Advanced mutation is not supported and may fail silently.
         For example do not sort, reverse, or delete items from the list.
     """
-    def __init__(self, size):
+    def __init__(self, size=0):
         self._size = size
         self._address = None
 
@@ -76,6 +76,21 @@ class LatentList(list):
             value = Latent('{}[{}]'.format(address, i))
             value._set = lambda value, i=i: self.__setitem__(i, value)
             self.append(value)
+
+    def add(self):
+        """
+        Append one new Latent object.
+
+        :returns: a new latent object at the end
+        :rtype: Latent
+        """
+        if self._address is None:
+            raise RuntimeError("Cannot .add() to a LatentList before binding it to a Latent")
+        i = len(self)
+        value = Latent('{}[{}]'.format(self._address, i))
+        value._set = lambda value, i=i: self.__setitem__(i, value)
+        self.append(value)
+        return value
 
 
 class LatentDict(dict):
