@@ -20,20 +20,20 @@ def get_vectorized_map_data_info(trace):
         if site_is_subsample(node):
             continue
         if node["type"] in ("sample", "param"):
-            stack = tuple(reversed(node["map_data_stack"]))
+            stack = tuple(node["cond_indep_stack"])
             vec_mds = [x for x in stack if x.vectorized]
             # check for nested vectorized map datas
             if len(vec_mds) > 1:
                 vectorized_map_data_info['rao-blackwellization-condition'] = False
                 vectorized_map_data_info['warnings'].add('nested iarange')
             # check that vectorized map datas only found at innermost position
-            if len(vec_mds) > 0 and not stack[-1].vectorized:
+            if vec_mds and not stack[-1].vectorized:
                 vectorized_map_data_info['rao-blackwellization-condition'] = False
                 vectorized_map_data_info['warnings'].add('non-leaf iarange')
             # enforce that if there are multiple vectorized map_datas, they are all
             # independent of one another because of enclosing list map_datas
             # (step 1: collect the stacks)
-            if len(vec_mds) > 0:
+            if vec_mds:
                 vec_md_stacks.add(stack)
             # bail, since condition false
             if not vectorized_map_data_info['rao-blackwellization-condition']:
@@ -65,7 +65,7 @@ def get_vectorized_map_data_info(trace):
             if site_is_subsample(node):
                 continue
             if node["type"] in ("sample", "param"):
-                if any(x.vectorized for x in node["map_data_stack"]):
+                if any(x.vectorized for x in node["cond_indep_stack"]):
                     vectorized_map_data_info['nodes'].add(name)
 
     return vectorized_map_data_info
@@ -74,13 +74,12 @@ def get_vectorized_map_data_info(trace):
 def identify_dense_edges(trace):
     """
     Modifies a trace in-place by adding all edges based on the
-    `map_data_stack` information stored at each site.
+    `cond_indep_stack` information stored at each site.
     """
     for name, node in trace.nodes.items():
         if site_is_subsample(node):
             continue
         if node["type"] == "sample":
-            map_data_stack = tuple(reversed(node["map_data_stack"]))
             for past_name, past_node in trace.nodes.items():
                 if site_is_subsample(node):
                     continue
@@ -88,8 +87,7 @@ def identify_dense_edges(trace):
                     if past_name == name:
                         break
                     past_node_independent = False
-                    for query, target in zip(map_data_stack,
-                                             reversed(past_node["map_data_stack"])):
+                    for query, target in zip(node["cond_indep_stack"], past_node["cond_indep_stack"]):
                         if query.name == target.name and query.counter != target.counter:
                             past_node_independent = True
                             break
@@ -123,7 +121,7 @@ class TracePoutine(Poutine):
 
     def __exit__(self, *args, **kwargs):
         """
-        Adds appropriate edges based on map_data_stack information
+        Adds appropriate edges based on cond_indep_stack information
         upon exiting the context.
         """
         if self.graph_type == "dense":

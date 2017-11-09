@@ -68,7 +68,7 @@ def sample(name, fn, *args, **kwargs):
             "value": None,
             "baseline": baseline,
             "scale": 1.0,
-            "map_data_stack": [],
+            "cond_indep_stack": [],
             "done": False,
             "stop": False,
         }
@@ -291,7 +291,7 @@ def param(name, *args, **kwargs):
             "args": args,
             "kwargs": kwargs,
             "scale": 1.0,
-            "map_data_stack": [],
+            "cond_indep_stack": [],
             "value": None,
             "done": False,
             "stop": False,

@@ -220,7 +220,7 @@ def enum_extend(trace, msg, num_samples=None):
     # Batched .enumerate_support() assumes batched values are independent.
     batch_shape = msg["fn"].batch_shape(msg["value"], *msg["args"], **msg["kwargs"])
     is_batched = any(size > 1 for size in batch_shape)
-    inside_iarange = any(frame.vectorized for frame in msg["map_data_stack"])
+    inside_iarange = any(frame.vectorized for frame in msg["cond_indep_stack"])
     if is_batched and not inside_iarange:
         raise ValueError(
                 "Tried to enumerate a batched pyro.sample site '{}' outside of a pyro.iarange. "
