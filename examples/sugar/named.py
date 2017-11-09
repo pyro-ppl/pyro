@@ -24,25 +24,25 @@ from pyro.util import ng_ones, ng_zeros
 
 def model(data):
     latent = named.Object("latent")
-    named.sample(latent.z, dist.normal, ng_zeros(1), ng_ones(1))
+    latent.z.sample_(dist.normal, ng_zeros(1), ng_ones(1))
     model_recurse(data, latent)
 
 
 def model_recurse(data, latent):
     if isinstance(data, Variable):
-        named.observe(latent.x, dist.normal, data, latent.z, ng_ones(1))
+        latent.x.observe_(dist.normal, data, latent.z, ng_ones(1))
     elif isinstance(data, list):
-        named.param(latent.prior_sigma, Variable(torch.ones(1), requires_grad=True))
+        latent.prior_sigma.param_(Variable(torch.ones(1), requires_grad=True))
         latent.list = named.List()
         for data_i in data:
             latent_i = latent.list.add()
-            named.sample(latent_i.z, dist.normal, latent.z, latent.prior_sigma)
+            latent_i.z.sample_(dist.normal, latent.z, latent.prior_sigma)
             model_recurse(data_i, latent_i)
     elif isinstance(data, dict):
-        named.param(latent.prior_sigma, Variable(torch.ones(1), requires_grad=True))
+        latent.prior_sigma.param_(Variable(torch.ones(1), requires_grad=True))
         latent.dict = named.Dict()
         for key, value in data.items():
-            named.sample(latent.dict[key].z, dist.normal, latent.z, latent.prior_sigma)
+            latent.dict[key].z.sample_(dist.normal, latent.z, latent.prior_sigma)
             model_recurse(value, latent.dict[key])
     else:
         raise TypeError("Unsupported type {}".format(type(data)))
@@ -53,9 +53,9 @@ def guide(data):
 
 
 def guide_recurse(data, latent):
-    named.param(latent.post_mu, Variable(torch.zeros(1), requires_grad=True))
-    named.param(latent.post_sigma, Variable(torch.ones(1), requires_grad=True))
-    named.sample(latent.z, dist.normal, latent.post_mu, latent.post_sigma)
+    latent.post_mu.param_(Variable(torch.zeros(1), requires_grad=True))
+    latent.post_sigma.param_(Variable(torch.ones(1), requires_grad=True))
+    latent.z.sample_(dist.normal, latent.post_mu, latent.post_sigma)
     if isinstance(data, Variable):
         pass
     elif isinstance(data, list):

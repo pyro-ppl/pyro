@@ -57,25 +57,25 @@ class Object(object):
         super(Object, self).__setattr__(key, value)
 
     @functools.wraps(pyro.sample)
-    def sample(self, fn, *args, **kwargs):
+    def sample_(self, fn, *args, **kwargs):
         if not self._is_placeholder:
-            raise RuntimeError("Cannot .sample an initialized named.Object {}".format(self))
+            raise RuntimeError("Cannot .sample_ an initialized named.Object {}".format(self))
         value = pyro.sample(str(self), fn, *args, **kwargs)
         self._set_value(value)
         return value
 
     @functools.wraps(pyro.observe)
-    def observe(self, fn, obs, *args, **kwargs):
+    def observe_(self, fn, obs, *args, **kwargs):
         if not self._is_placeholder:
-            raise RuntimeError("Cannot .observe an initialized named.Object {}".format(self))
+            raise RuntimeError("Cannot .observe_ an initialized named.Object {}".format(self))
         value = pyro.observe(str(self), fn, obs, *args, **kwargs)
         self._set_value(value)
         return value
 
     @functools.wraps(pyro.param)
-    def param(self, *args, **kwargs):
+    def param_(self, *args, **kwargs):
         if not self._is_placeholder:
-            raise RuntimeError("Cannot named.param an initialized named.Object")
+            raise RuntimeError("Cannot .param_ an initialized named.Object")
         value = pyro.param(str(self), *args, **kwargs)
         self._set_value(value)
         return value
