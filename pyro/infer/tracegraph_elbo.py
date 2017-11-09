@@ -144,28 +144,26 @@ class TraceGraph_ELBO(object):
                                   not zero_expectation)
                     cost_nodes.extend([cost_node1, cost_node2])
 
-        elbo_particle = 0.0
-        surrogate_elbo_particle = 0.0
-        baseline_loss_particle = 0.0
-        elbo_reinforce_terms_particle = 0.0
-        elbo_no_zero_expectation_terms_particle = 0.0
-
         # compute the elbo; if all stochastic nodes are reparameterizable, we're done
         # this bit is never differentiated: it's here for getting an estimate of the elbo itself
+        elbo = 0.0
         for cost_node in cost_nodes:
-            elbo_particle += cost_node[0].sum()
-        elbo = weight * torch_data_sum(elbo_particle)
+            elbo += cost_node[0].sum()
+        elbo = torch_data_sum(elbo)
 
-        # compute the elbo, removing terms whose gradient is zero
+        # compute the surrogate elbo, removing terms whose gradient is zero
         # this is the bit that's actually differentiated
         # XXX should the user be able to control if these terms are included?
+        surrogate_elbo = 0.0
+        elbo_no_zero_expectation_terms = 0.0
         for cost_node in cost_nodes:
             if cost_node[1]:
-                elbo_no_zero_expectation_terms_particle += cost_node[0].sum()
-        surrogate_elbo_particle += weight * elbo_no_zero_expectation_terms_particle
+                elbo_no_zero_expectation_terms += cost_node[0].sum()
+        surrogate_elbo += elbo_no_zero_expectation_terms
 
         # the following computations are only necessary if we have non-reparameterizable nodes
-        if len(non_reparam_nodes) > 0:
+        baseline_loss = 0.0
+        if non_reparam_nodes:
 
             # recursively compute downstream cost nodes for all sample sites in model and guide
             # (even though ultimately just need for non-reparameterizable sample sites)
@@ -240,7 +238,7 @@ class TraceGraph_ELBO(object):
                     raise ValueError("Unrecognized baseline options: {}".format(options_dict.keys()))
                 return options_tuple
 
-            baseline_loss_particle = 0.0
+            elbo_reinforce_terms = 0.0
             for node in non_reparam_nodes:
                 log_pdf_key = 'batch_log_pdf' if node in guide_vec_md_nodes else 'log_pdf'
                 downstream_cost = downstream_costs[node]
@@ -265,9 +263,8 @@ class TraceGraph_ELBO(object):
                     # it's on the user to make sure baseline_value tape only points to baseline params
                     baseline += baseline_value
                 if use_nn_baseline or use_baseline_value:
-                    # construct baseline loss
-                    baseline_loss = torch.pow(downstream_cost.detach() - baseline, 2.0).sum()
-                    baseline_loss_particle += weight * baseline_loss
+                    # accumulate baseline loss
+                    baseline_loss += torch.pow(downstream_cost.detach() - baseline, 2.0).sum()
 
                 guide_site = guide_trace.nodes[node]
                 guide_log_pdf = guide_site[log_pdf_key] / guide_site["scale"]  # not scaled by subsampling
@@ -275,12 +272,11 @@ class TraceGraph_ELBO(object):
                     if downstream_cost.size() != baseline.size():
                         raise ValueError("Expected baseline at site {} to be {} instead got {}".format(
                             node, downstream_cost.size(), baseline.size()))
-                    elbo_reinforce_terms_particle += (guide_log_pdf * (downstream_cost - baseline).detach()).sum()
+                    elbo_reinforce_terms += (guide_log_pdf * (downstream_cost - baseline).detach()).sum()
                 else:
-                    elbo_reinforce_terms_particle += (guide_log_pdf * downstream_cost.detach()).sum()
+                    elbo_reinforce_terms += (guide_log_pdf * downstream_cost.detach()).sum()
 
-            surrogate_elbo_particle += weight * elbo_reinforce_terms_particle
-            torch_backward(baseline_loss_particle)
+            surrogate_elbo += elbo_reinforce_terms
 
         # collect parameters to train from model and guide
         trainable_params = set(site["value"]
@@ -288,12 +284,11 @@ class TraceGraph_ELBO(object):
                                for site in trace.nodes.values()
                                if site["type"] == "param")
 
-        surrogate_loss_particle = -surrogate_elbo_particle
         if trainable_params:
-            torch_backward(surrogate_loss_particle)
-
-            # mark all params seen in trace as active so that gradient steps are taken downstream
+            surrogate_loss = -surrogate_elbo
+            loss = surrogate_loss + baseline_loss
+            torch_backward(weight * loss)
             pyro.get_param_store().mark_params_active(trainable_params)
 
         loss = -elbo
-        return loss
+        return weight * loss
