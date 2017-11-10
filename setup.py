@@ -1,11 +1,28 @@
 from __future__ import absolute_import, division, print_function
 
+import sys
+
 from setuptools import find_packages, setup
+
+# Find pyro version.
+for line in open('pyro/__init__.py'):
+    if line.startswith('__version__ = '):
+        version = line.strip().split()[2][1:-1]
+
+# Convert README.md to rst for display at https://pypi.python.org/pypi/pyro-ppl
+try:
+    import pypandoc
+    long_description = pypandoc.convert('README.md', 'rst')
+except (IOError, ImportError, OSError) as e:
+    sys.stderr.write('Failed to convert README.md to rst:\n  {}\n'.format(e))
+    sys.stderr.flush()
+    long_description = open('README.md').read()
 
 setup(
     name='pyro-ppl',
-    version='0.1.1',
+    version=version,
     description='A Python library for probabilistic modeling and inference',
+    long_description=long_description,
     packages=find_packages(exclude=('tests*',)),
     url='http://pyro.ai',
     author='Uber AI Labs',
@@ -44,6 +61,7 @@ setup(
             'pytest-xdist',
             'nbval',
             'nbstripout',
+            'pypandoc',
             'sphinx',
             'sphinx_rtd_theme',
         ],

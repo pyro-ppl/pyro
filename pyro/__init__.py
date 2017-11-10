@@ -15,6 +15,8 @@ from pyro.params import _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, param_with
 from pyro.poutine import _PYRO_STACK, condition, do  # noqa: F401
 from pyro.util import apply_stack, deep_getattr, get_tensor_data, ones, set_rng_seed, zeros  # noqa: F401
 
+__version__ = '0.1.1'
+
 
 def get_param_store():
     """
