@@ -47,15 +47,16 @@ from tests.common import assert_equal
 #     assert var_dict["name.c[0]"] == 20
 
     
-# def test_module():
-#     m = torch.nn.Sequential()
-#     m.add_module("first", torch.nn.Linear(10, 10))
-#     m.add_module("second", torch.nn.Linear(20, 20))
-#     obj = named.Object("modulewrap")
-#     obj.module_(m)
-#     assert_equal(obj.first.weight, m.first.weight)
-#     assert_equal(obj.second.bias, m.second.bias)
-#     assert_equal(pyro.param("modulewrap.first.weight"),  m.first.weight)
+def test_module():
+    m = torch.nn.Sequential()
+    m.add_module("first", torch.nn.Linear(10, 10))
+    m.add_module("second", torch.nn.Linear(20, 20))
+    obj = named.Object("modulewrap")
+    obj.module_(m)
+    assert_equal(obj.first.weight, m.first.weight)
+    assert_equal(obj.second.bias, m.second.bias)
+    assert_equal(pyro.param("modulewrap.first.weight"),  m.first.weight)
+
 
 
 # def test_irange():
@@ -68,36 +69,38 @@ from tests.common import assert_equal
 #     assert pyro.param("name.data[0]") == 0
 #     assert pyro.param("name.data[9]") == 9
 
-    
-# def test_iarange():
-#     obj = named.Object("range")
-    
-#     with obj.data.iarange_(10, subsample_size=5) as (ind, latent):
-#         latent.x.param_(ind + 10)
 
+def test_iarange():
+    obj = named.Object("range")
+
+    with obj.data.iarange_(10, subsample_size=5) as (ind, latent):
+        latent.x.param_(ind + 10)
 #     assert_equal(obj.data.x, ind + 10)
 #     assert pyro.param("range.data.x").size(0) == 5
 
     
-# def model():
-#     obj = named.Object("name")
-#     mu = obj.a.sample_(dist.normal,  Variable(torch.Tensor([10])),
-#                        Variable(torch.Tensor([10])))
+
+def model():
+    obj = named.Object("name")
+    mu = obj.a.sample_(dist.normal,  Variable(torch.Tensor([10])),
+                       Variable(torch.Tensor([10])))
+
 
 #     obj.b.observe_(dist.normal, Variable(torch.Tensor([1])), mu,
 #                    Variable(torch.Tensor([10])))
 
+
     
-# def guide():
-#     obj = named.Object("name")
-#     obj.a.sample_(dist.normal,  Variable(torch.Tensor([10])),
-#                   Variable(torch.Tensor([10])))
+def guide():
+    obj = named.Object("name")
+    obj.a.sample_(dist.normal,  Variable(torch.Tensor([10])),
+                  Variable(torch.Tensor([10])))
 
 
-# def test_infer():
-#     # For now just check if the names are matching.
-#     imp = pyro.infer.Importance(model, guide, num_samples=10)
-#     pyro.infer.Marginal(imp)()
+def test_infer():
+    # For now just check if the names are matching.
+    imp = pyro.infer.Importance(model, guide, num_samples=10)
+    pyro.infer.Marginal(imp)()
 
 
 def get_sample_names(tr):
