@@ -3,7 +3,7 @@
 all: docs test
 
 install: FORCE
-	pip install -e .[notebooks,visualization,dev]
+	pip install -e .[notebooks,visualization,dev,profile]
 
 docs: FORCE
 	$(MAKE) -C docs html

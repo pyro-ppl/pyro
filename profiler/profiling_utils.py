@@ -25,9 +25,9 @@ class ProfilePrinter(object):
         self._field_format = field_format
         self._header = None
         if template == 'column':
-            self.table = PrettyTable(header=True, max_width=50, hrules=ALL)
+            self.table = PrettyTable(header=False, hrules=ALL)
         else:
-            self.table = PrettyTable(header=False, max_width=50, hrules=ALL)
+            self.table = PrettyTable(header=False, hrules=ALL)
 
     def _formatted_values(self, values):
         if self._field_format is not None:
@@ -45,16 +45,17 @@ class ProfilePrinter(object):
         formatted_vals = self._formatted_values(values)
         self.table.add_row(formatted_vals)
 
-    def push(self, *values):
+    def push(self, values):
         if self._template == 'column':
             self._add_using_column_format(values)
         else:
             self._add_using_row_format(values)
 
-    def header(self, *values):
+    def header(self, values):
         self._header = values
         if self._template == 'column':
             field_names = values
+            self.table.add_row(values)
         else:
             field_names = ['KEY', 'VALUE']
         self.table.field_names = field_names
@@ -78,7 +79,7 @@ def profile_print(column_widths=None, field_format=None, template='column'):
 
 def profile_timeit(fn_callable, repeat=1):
     ret = fn_callable()
-    return min(timeit.repeat(fn_callable, repeat=repeat, number=1)), ret
+    return ret, min(timeit.repeat(fn_callable, repeat=repeat, number=1))
 
 
 def profile_cprofile(fn_callable, prof_file):
@@ -88,7 +89,7 @@ def profile_cprofile(fn_callable, prof_file):
     prof_stats = StringIO()
     p = pstats.Stats(prof_file, stream=prof_stats)
     p.strip_dirs().sort_stats('cumulative').print_stats(0.5)
-    return prof_stats.getvalue(), ret
+    return ret, prof_stats.getvalue()
 
 
 class Profile(object):
