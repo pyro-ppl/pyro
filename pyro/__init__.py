@@ -387,15 +387,18 @@ def module(name, nn_module, tags="default", update_module_params=False):
 def random_module(name, nn_module, prior, *args, **kwargs):
     """
     Places a prior over the parameters of the module `nn_module`.
+    Returns a distribution (callable) over `nn.Module`s, which
+    upon calling returns a sampled `nn.Module`.
 
-    See the `Bayesian Regression <http://pyro.ai/examples/bayesian_regression.html>`_
-    tutorial for an example.
+    See the `Bayesian Regression tutorial <http://pyro.ai/examples/bayesian_regression.html>`_
+    for an example.
 
     :param name: name of pyro module
     :type name: str
     :param nn_module: the module to be registered with pyro
     :type nn_module: torch.nn.Module
-    :param prior: prior distribution or iterable over distributions
+    :param prior: pyro distribution, stochastic function, or python dict with parameter names
+                  as keys and respective distributions/stochastic functions as values.
     :returns: a callable which returns a sampled module
     """
     assert hasattr(nn_module, "parameters"), "Module is not a NN module."
