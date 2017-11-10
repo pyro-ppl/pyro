@@ -30,7 +30,6 @@ setup(
         'test': [
             'pytest',
             'pytest-cov',
-            'pytest-xdist',
             'nbval',
             # examples/tutorials
             'visdom',
