@@ -31,7 +31,7 @@ def discover_examples():
             example = os.path.relpath(path, EXAMPLES_DIR)
             CPU_EXAMPLES[example] = args
             if '--cuda' in text:
-                CUDA_EXAMPLES[example] = [args] + ['--cuda']
+                CUDA_EXAMPLES[example] = args + ['--cuda']
 
 
 discover_examples()
