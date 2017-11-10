@@ -3,7 +3,7 @@
 all: docs test
 
 install: FORCE
-	pip install -e .[notebooks,visualization,dev]
+	pip install -e .[notebooks,visualization,dev,profile]
 
 docs: FORCE
 	$(MAKE) -C docs html
@@ -18,8 +18,8 @@ scrub: FORCE
 	find tutorial -name "*.ipynb" | xargs python -m nbstripout --keep-output
 
 format: FORCE
-	yapf -i *.py pyro/distributions/*.py docs/source/conf.py
-	isort --recursive *.py pyro/ tests/ docs/source/conf.py
+	yapf -i *.py pyro/distributions/*.py profiler/*.py docs/source/conf.py
+	isort --recursive *.py pyro/ tests/ profiler/*.py docs/source/conf.py
 
 test: lint docs FORCE
 	pytest -vx -n auto --stage unit

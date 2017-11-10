@@ -62,6 +62,9 @@ setup(
             'visdom',
             'torchvision',
         ],
+        'profile': [
+            'prettytable'
+        ],
         'dev': [
             'torchvision',
             'flake8',
