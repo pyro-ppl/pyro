@@ -1,13 +1,103 @@
 from __future__ import absolute_import, division, print_function
 
 import torch
+import torch.nn
 from torch.autograd import Variable
 
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
 from pyro.contrib import named
+import pyro.infer
 from pyro.util import ng_ones
+
+from tests.common import assert_equal
+
+
+# def test_object():
+#     obj = named.Object("name")
+#     obj.a.b.param_(10)
+
+#     assert pyro.param("name.a.b") == 10
+#     assert pyro.param("name.a.b") == obj.a.b
+
+#     obj.c = named.List()
+#     obj.c.add().param_(20)
+
+#     assert pyro.param("name.c[0]") == 20
+#     assert pyro.param("name.c[0]") == obj.c[0]
+
+#     obj.d.sample_(dist.normal, Variable(torch.Tensor([10])),
+#                   Variable(torch.Tensor([0])))
+#     assert obj.d.data[0] == 10
+
+#     obj.e = named.Dict()
+#     obj.e["hello"].param_(50)
+#     assert obj.e['hello'] == 50
+#     assert pyro.param("name.e['hello']") == 50
+
+
+#     var_set = obj.visit(lambda name, val, acc: acc.add(name),
+#                         set())
+#     assert set(["name.a.b", "name.c[0]", "name.e['hello']", "name.d"]) == var_set
+
+#     var_dict = obj.visit(lambda name, val, acc: acc.setdefault(name, val),
+#                          dict())
+#     assert var_dict["name.a.b"] == 10
+#     assert var_dict["name.c[0]"] == 20
+
+    
+# def test_module():
+#     m = torch.nn.Sequential()
+#     m.add_module("first", torch.nn.Linear(10, 10))
+#     m.add_module("second", torch.nn.Linear(20, 20))
+#     obj = named.Object("modulewrap")
+#     obj.module_(m)
+#     assert_equal(obj.first.weight, m.first.weight)
+#     assert_equal(obj.second.bias, m.second.bias)
+#     assert_equal(pyro.param("modulewrap.first.weight"),  m.first.weight)
+
+
+# def test_irange():
+#     obj = named.Object("name")
+
+#     obj.data = named.List()
+#     for i, latent in obj.data.irange_(10):
+#         latent.param_(i)
+
+#     assert pyro.param("name.data[0]") == 0
+#     assert pyro.param("name.data[9]") == 9
+
+    
+# def test_iarange():
+#     obj = named.Object("range")
+    
+#     with obj.data.iarange_(10, subsample_size=5) as (ind, latent):
+#         latent.x.param_(ind + 10)
+
+#     assert_equal(obj.data.x, ind + 10)
+#     assert pyro.param("range.data.x").size(0) == 5
+
+    
+# def model():
+#     obj = named.Object("name")
+#     mu = obj.a.sample_(dist.normal,  Variable(torch.Tensor([10])),
+#                        Variable(torch.Tensor([10])))
+
+#     obj.b.observe_(dist.normal, Variable(torch.Tensor([1])), mu,
+#                    Variable(torch.Tensor([10])))
+
+    
+# def guide():
+#     obj = named.Object("name")
+#     obj.a.sample_(dist.normal,  Variable(torch.Tensor([10])),
+#                   Variable(torch.Tensor([10])))
+
+
+# def test_infer():
+#     # For now just check if the names are matching.
+#     imp = pyro.infer.Importance(model, guide, num_samples=10)
+#     pyro.infer.Marginal(imp)()
 
 
 def get_sample_names(tr):

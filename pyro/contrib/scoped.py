@@ -17,12 +17,18 @@ def _lift(fn, _namespace=None, _latent=None):
 
 
 @functools.wraps(pyro.condition)
-def condition(fn, data):
-    lifted_data = {}
-
+def condition(fn, data=None, data_fn=None):
     def partial_condition(latent, *args, **kwargs):
-        for key, value in data.items():
-            lifted_data["{}.{}".format(latent, key)] = value
+        if data is not None:
+            lifted_data = {}
+            for key, value in data.items():
+                lifted_data["{}.{}".format(latent._name, key)] = value
+        else:
+            site_collector = named.Object(latent._name)
+            data_fn(site_collector)
+            lifted_data = site_collector.visit(lambda name, val, acc: acc.setdefault(name, val),
+                                               {})
+                        
         pyro.condition(_lift(fn, _latent=latent),
                        data=lifted_data)(*args, **kwargs)
     return partial_condition
@@ -57,7 +63,7 @@ def Search(model, *args, **kwargs):
 
 
 @functools.wraps(pyro.infer.Marginal)
-def Marginal(trace_dist, sites=None, *args, **kwargs):
+def Marginal(trace_dist, sites=None, sites_fn=None, *args, **kwargs):
     assert trace_dist._namespace is not None, \
         "To call scoped marginal, trace_dist must be scoped."
 
@@ -67,17 +73,21 @@ def Marginal(trace_dist, sites=None, *args, **kwargs):
         sites = ["{}.{}".format(namespace, site)
                  for site in sites]
 
+    if sites_fn is not None:
+        site_collector = named.Object(namespace)
+        sites_fn(site_collector)
+        sites = list(site_collector.visit(lambda name, val, acc: acc.add(name),
+                                          set()))
     marginal = pyro.infer.Marginal(trace_dist, sites, *args, **kwargs)
 
     # Intercept the call function for marginal.
     def call(*args, **kwargs):
         marginal_out = marginal(*args, **kwargs)
-
         # Rewrite returned marginals to be an object.
         if isinstance(marginal_out, dict):
-            ret = named.Object(namespace)
+            ret = {}
             for key, value in marginal_out.items():
-                ret.__setattr__(key[len(namespace + '.'):], value)
+                ret[key[len(namespace + '.'):]] = value
             return ret
         else:
             return marginal_out
