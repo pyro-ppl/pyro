@@ -4,12 +4,14 @@ import functools
 import uuid
 
 import pyro
+import pyro.infer
+import pyro.contrib.named as named
 
 
 def _lift(fn, _namespace=None, _latent=None):
     @functools.wraps(fn)
     def decorated(*args, **kwargs):
-        latent = Object(_namespace) if _latent is None else _latent
+        latent = named.Object(_namespace) if _latent is None else _latent
         return fn(latent, *args, **kwargs)
     return decorated
 
@@ -17,6 +19,7 @@ def _lift(fn, _namespace=None, _latent=None):
 @functools.wraps(pyro.condition)
 def condition(fn, data):
     lifted_data = {}
+
     def partial_condition(latent, *args, **kwargs):
         for key, value in data.items():
             lifted_data["{}.{}".format(latent, key)] = value
@@ -64,7 +67,7 @@ def Marginal(trace_dist, sites=None, *args, **kwargs):
         sites = ["{}.{}".format(namespace, site)
                  for site in sites]
 
-    marginal = pyro.infer.Marginal(obj, sites, *args, **kwargs)
+    marginal = pyro.infer.Marginal(trace_dist, sites, *args, **kwargs)
 
     # Intercept the call function for marginal.
     def call(*args, **kwargs):
@@ -72,7 +75,7 @@ def Marginal(trace_dist, sites=None, *args, **kwargs):
 
         # Rewrite returned marginals to be an object.
         if isinstance(marginal_out, dict):
-            ret = Object(namespace)
+            ret = named.Object(namespace)
             for key, value in marginal_out.items():
                 ret.__setattr__(key[len(namespace + '.'):], value)
             return ret
