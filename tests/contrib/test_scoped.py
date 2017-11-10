@@ -5,20 +5,17 @@ import torch.nn
 from torch.autograd import Variable
 import pyro.contrib.named as named
 import pyro.contrib.scoped as scoped
-import pyro
-import pyro.infer
+
 import pyro.distributions as dist
 from pyro.optim import Adam
 
 adam_params = {"lr": 0.005, "betas": (0.95, 0.999)}
 optimizer = Adam(adam_params)
 
-from tests.common import assert_equal
-
 
 def model(latent, n):
     a = latent.a.sample_(dist.normal, Variable(torch.Tensor([10])),
-                     Variable(torch.Tensor([1])))
+                         Variable(torch.Tensor([1])))
     latent.b = named.List()
     for i, x in latent.b.irange_(10):
         x.sample_(dist.normal, a,
@@ -60,10 +57,10 @@ def test_scoped_infer():
 
 def test_condition():
     conditioned = scoped.condition(model,
-        data={"a" : Variable(torch.Tensor([10]))})
+                                   data={"a": Variable(torch.Tensor([10]))})
 
     trace = scoped.Importance(conditioned, guide2, num_samples=10)
-    out = scoped.Marginal(trace, sites=["b[0]"])(10)
+    scoped.Marginal(trace, sites=["b[0]"])(10)
 
     obj = named.Object()
     conditioned(obj, 10)

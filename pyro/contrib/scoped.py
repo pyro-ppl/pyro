@@ -28,7 +28,6 @@ def condition(fn, data=None, data_fn=None):
             data_fn(site_collector)
             lifted_data = site_collector.visit(lambda name, val, acc: acc.setdefault(name, val),
                                                {})
-                        
         pyro.condition(_lift(fn, _latent=latent),
                        data=lifted_data)(*args, **kwargs)
     return partial_condition

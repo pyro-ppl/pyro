@@ -31,10 +31,9 @@ from tests.common import assert_equal
 #                   Variable(torch.Tensor([0])))
 #     assert obj.d.data[0] == 10
 
-#     obj.e = named.Dict()
-#     obj.e["hello"].param_(50)
-#     assert obj.e['hello'] == 50
-#     assert pyro.param("name.e['hello']") == 50
+    var_set = obj.visit(lambda name, val, acc: acc.add(name),
+                        set())
+    assert set(["name.a.b", "name.c[0]", "name.e['hello']", "name.d"]) == var_set
 
 
 #     var_set = obj.visit(lambda name, val, acc: acc.add(name),

@@ -103,7 +103,7 @@ class Object(object):
                     name = "{}.{}".format(self._name, key)
                     fn(name, val, acc)
         return acc
-            
+
     def _expand(self):
         dictform = {}
         for key, val in self.__dict__.items():
@@ -134,7 +134,7 @@ class Object(object):
             if not isinstance(old, Object) or not old._is_placeholder:
                 raise RuntimeError("Cannot overwrite {}.{}".format(self._name, key))
         super(Object, self).__setattr__(key, value)
-        
+
     @functools.wraps(pyro.sample)
     def sample_(self, fn, *args, **kwargs):
         if not self._is_placeholder:
@@ -164,7 +164,7 @@ class Object(object):
             raise RuntimeError("Cannot .set_ an initialized named.Object")
         self._set_value(value)
         return value
-    
+
     @contextlib.contextmanager
     def iarange_(self, *args, **kwargs):
         if not self._is_placeholder:
@@ -173,7 +173,7 @@ class Object(object):
         # Yields both a subsampled data and an indexed latent object.
         with pyro.iarange(self._name + "range", *args, **kwargs) as ind:
             yield ind, self
-            
+
     @functools.wraps(pyro.module)
     def module_(self, nn_module, tags="default"):
         if not self._is_placeholder:
@@ -223,7 +223,7 @@ class List(list):
         if self._name is not None:
             raise RuntimeError("Cannot rename named.List: {}".format(self._name))
         self._name = name
-        
+
     def _expand(self):
         ls = []
         for i in range(len(self)):
@@ -277,6 +277,7 @@ class List(list):
         for d in pyro.irange(self._name + "range", data, *args, **kwargs):
             yield d, self.add()
 
+
 class Dict(dict):
     """
     Dict-like object to hold immutable latent state.
@@ -329,7 +330,7 @@ class Dict(dict):
                     name = "{}[{!r}]".format(self._name, key)
                     fn(name, val, acc)
         return acc
-    
+
     def __getitem__(self, key):
         try:
             return super(Dict, self).__getitem__(key)
