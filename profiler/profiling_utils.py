@@ -76,13 +76,6 @@ def profile_print(column_widths=None, field_format=None, template='column'):
         out_buffer.print()
 
 
-def get_fn_id(fn, *args, **params):
-    fn_id = fn.__name__
-    args_str = '_'.join([str(arg) for arg in args])
-    kwargs_str = '_'.join([k + '=' + str(params[k]) for k in params])
-    return fn_id + '_' + args_str + '_' + kwargs_str
-
-
 def profile_timeit(fn_callable, repeat=1):
     ret = fn_callable()
     return min(timeit.repeat(fn_callable, repeat=repeat, number=1)), ret
