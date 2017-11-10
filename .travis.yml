@@ -1,6 +1,6 @@
 language: python
 
-sudo: false
+sudo: true
 
 env:
     global:
