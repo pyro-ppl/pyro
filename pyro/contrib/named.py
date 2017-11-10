@@ -79,7 +79,7 @@ class Object(object):
         not be mutated or removed. Trying to mutate this data structure may
         result in silent errors.
     """
-    def __init__(self, name):
+    def __init__(self, name="latent"):
         super(Object, self).__setattr__("_name", name)
         super(Object, self).__setattr__("_is_placeholder", True)
 
