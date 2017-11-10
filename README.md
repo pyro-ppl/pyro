@@ -9,7 +9,9 @@
 [![Latest Version](https://badge.fury.io/py/pyro-ppl.svg)](https://pypi.python.org/pypi/pyro-ppl)
 
 
-[Getting Started](http://pyro.ai/examples) | [Documentation](http://docs.pyro.ai/) | [Contributing](CONTRIBUTING.md)
+[Getting Started](http://pyro.ai/examples) |
+[Documentation](http://docs.pyro.ai/) |
+[Contributing](https://github.com/uber/pyro/blob/master/CONTRIBUTING.md)
 
 Please also refer to the [Pyro homepage](http://pyro.ai/).
 
