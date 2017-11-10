@@ -131,6 +131,37 @@ class Object(object):
         self._set_value(value)
         return value
 
+    @functools.wraps(pyro.irange)
+    def irange_(self, *args, **kwargs):
+        if not self._is_placeholder:
+            raise RuntimeError("Cannot .irange_ an initialized named.Object")
+
+        # Yields both a subsampled data and an indexed latent object.
+        self.plate = List()
+        for d in pyro.irange(str(self), *args, **kwargs):
+            yield d, self.plate.add()
+
+    @contextlib.contextmanager
+    def iarange_(self, *args, **kwargs):
+        if not self._is_placeholder:
+            raise RuntimeError("Cannot .iarange_ an initialized named.Object")
+
+        # Yields both a subsampled data and an indexed latent object.
+        with pyro.iarange(str(self), *args, **kwargs) as ind:
+            self.plate = Object()
+            yield d, self.plate
+
+    @functools.wraps(pyro.module)
+    def module_(self, nn_module, *args, **kwargs):
+        if not self._is_placeholder:
+            raise RuntimeError("Cannot .module_ an initialized named.Object")
+
+        for param_name, param_value in nn_module.named_parameters():
+            full_param_name = param_with_module_name(name, param_name)
+            super(Object, self).__setattr__(full_param_name,
+                                            param(full_param_name))
+        return pyro.module(str(self), nn_module, *args, **kwargs)
+
 
 class List(list):
     """
