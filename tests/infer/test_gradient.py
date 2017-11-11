@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import numpy as np
 import pytest
 import torch
 import torch.optim
@@ -9,28 +10,28 @@ import pyro
 import pyro.distributions as dist
 from pyro.infer import SVI
 from pyro.optim import Adam
-from pyro.util import ng_ones, ng_zeros, zero_grads
+from pyro.util import ng_ones, ng_zeros
 from tests.common import assert_equal
 
 
 @pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
+@pytest.mark.parametrize("subsample", [False, True], ids=["full", "subsample"])
 @pytest.mark.parametrize("trace_graph", [False, True], ids=["Trace", "TraceGraph"])
-def test_subsample_gradient(trace_graph, reparameterized):
+def test_subsample_gradient(trace_graph, reparameterized, subsample):
     pyro.clear_param_store()
-    data_size = 2
-    subsample_size = 1
-    num_particles = 1000
+    data = Variable(torch.Tensor([-0.5, 2.0]))
+    subsample_size = 1 if subsample else len(data)
+    num_particles = 5000
     precision = 0.333
-    data = dist.normal(ng_zeros(data_size), ng_ones(data_size))
 
-    def model(subsample_size):
+    def model():
         with pyro.iarange("data", len(data), subsample_size) as ind:
             x = data[ind]
             z = pyro.sample("z", dist.Normal(ng_zeros(len(x)), ng_ones(len(x)),
                                              reparameterized=reparameterized))
             pyro.observe("x", dist.Normal(z, ng_ones(len(x)), reparameterized=reparameterized), x)
 
-    def guide(subsample_size):
+    def guide():
         mu = pyro.param("mu", lambda: Variable(torch.zeros(len(data)), requires_grad=True))
         sigma = pyro.param("sigma", lambda: Variable(torch.ones(1), requires_grad=True))
         with pyro.iarange("data", len(data), subsample_size) as ind:
@@ -41,18 +42,12 @@ def test_subsample_gradient(trace_graph, reparameterized):
     optim = Adam({"lr": 0.1})
     inference = SVI(model, guide, optim, loss="ELBO",
                     trace_graph=trace_graph, num_particles=num_particles)
-
-    # Compute gradients without subsampling.
-    inference.loss_and_grads(model, guide, subsample_size=data_size)
+    inference.loss_and_grads(model, guide)
     params = dict(pyro.get_param_store().named_parameters())
-    expected_grads = {name: param.grad.data.clone() for name, param in params.items()}
-    zero_grads(params.values())
+    actual_grads = {name: param.grad.data.cpu().numpy() for name, param in params.items()}
 
-    # Compute gradients with subsampling.
-    inference.loss_and_grads(model, guide, subsample_size=subsample_size)
-    actual_grads = {name: param.grad.data.clone() for name, param in params.items()}
-
+    expected_grads = {'mu': np.array([0.5, -2.0]), 'sigma': np.array([2.0])}
     for name in sorted(params):
-        print('\nexpected {} = {}'.format(name, expected_grads[name].cpu().numpy()))
-        print('actual   {} = {}'.format(name, actual_grads[name].cpu().numpy()))
+        print('\nexpected {} = {}'.format(name, expected_grads[name]))
+        print('actual   {} = {}'.format(name, actual_grads[name]))
     assert_equal(actual_grads, expected_grads, prec=precision)
