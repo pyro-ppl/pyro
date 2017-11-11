@@ -23,12 +23,17 @@ M_vs = np.arange(M)
 def model(latent, data):
     # Parameters.
     p = latent.parameters
-    p.pi.sample_(dist.dirichlet, Variable(torch.Tensor([0.1] * K)))
+    p.pi.sample_(dist.dirichlet, Variable(torch.Tensor([10, 1, 1, 1, 1, 1])))
     p.tau = named.List()
     p.omega = named.List()
     for k in range(K):
-        p.tau.add().sample_(dist.dirichlet, Variable(torch.Tensor([0.1] * K)))
-        p.omega.add().sample_(dist.dirichlet, Variable(torch.Tensor([0.1] * M)))
+        # Make parameters loopy (learn in future).
+        trans = [1] * K
+        trans[(k + 1) % K] += 100
+        m = [1] * M
+        m[k % 3] += 100
+        p.tau.add().sample_(dist.dirichlet, Variable(torch.Tensor(trans)))
+        p.omega.add().sample_(dist.dirichlet, Variable(torch.Tensor(m)))
 
     # Model
     latent.step = named.List()
@@ -84,9 +89,9 @@ def guide(latent, data):
 
 
 def main(args):
-    optim = Adam({"lr": 0.01})
-    inference = SVI(model, guide, optim, loss="ELBO")
-    data = [[0], [1], [2]] * 10
+    optim = Adam({"lr": 0.001})
+    inference = SVI(model, guide, optim, loss="ELBO", num_samples=2)
+    data = [[0], [1], [2]] * 20
 
     print('Step\tLoss')
     for step in range(args.num_epochs):
