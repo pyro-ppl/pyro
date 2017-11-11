@@ -28,11 +28,11 @@ def model(latent, data):
     p.omega = named.List()
     for k in range(K):
         # Make parameters loopy (learn in future).
-        trans = [1] * K
-        trans[(k + 1) % K] += 100
-        m = [1] * M
-        m[k % 3] += 100
+        trans = [0.1] * K
+        trans[(k + 1) % K] += 10
         p.tau.add().sample_(dist.dirichlet, Variable(torch.Tensor(trans)))
+        m = [0.1] * M
+        m[k % 3] += 10
         p.omega.add().sample_(dist.dirichlet, Variable(torch.Tensor(m)))
 
     # Model
@@ -90,14 +90,17 @@ def guide(latent, data):
 
 def main(args):
     optim = Adam({"lr": 0.001})
-    inference = SVI(model, guide, optim, loss="ELBO", num_samples=2)
+    inference = SVI(model, guide, optim, loss="ELBO")
     data = [[0], [1], [2]] * 20
 
     print('Step\tLoss')
+    total = 0
     for step in range(args.num_epochs):
         loss = inference.step(data)
+        total += loss
         if step % 100 == 0:
-            print('{}\t{:0.5g}'.format(step, loss))
+            print('{}\t{:0.5g}'.format(step, total / 100.0))
+            total = 0
 
     print('Parameters:')
     for name in sorted(pyro.get_param_store().get_all_param_names()):
