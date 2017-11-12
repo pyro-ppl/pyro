@@ -15,6 +15,8 @@ from pyro.params import _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, param_with
 from pyro.poutine import _PYRO_STACK, condition, do  # noqa: F401
 from pyro.util import apply_stack, deep_getattr, get_tensor_data, ones, set_rng_seed, zeros  # noqa: F401
 
+__version__ = '0.1.2'
+
 
 def get_param_store():
     """
@@ -32,8 +34,8 @@ def clear_param_store():
 
 def sample(name, fn, *args, **kwargs):
     """
-    Calls the stochastic function `fn` with additional side-effects depending on `name` and the
-    enclosing context (e.g. an inference algorithm).
+    Calls the stochastic function `fn` with additional side-effects depending
+    on `name` and the enclosing context (e.g. an inference algorithm).
     See `Intro I <http://pyro.ai/examples/intro_part_i.html>`_ and
     `Intro II <http://pyro.ai/examples/intro_part_ii.html>`_ for a discussion.
 
@@ -68,7 +70,7 @@ def sample(name, fn, *args, **kwargs):
             "value": None,
             "baseline": baseline,
             "scale": 1.0,
-            "map_data_stack": [],
+            "cond_indep_stack": [],
             "done": False,
             "stop": False,
         }
@@ -160,16 +162,38 @@ def _subsample(name, size=None, subsample_size=None, subsample=None, use_cuda=No
 @contextlib.contextmanager
 def iarange(name, size=None, subsample_size=None, subsample=None, use_cuda=None):
     """
-    Context manager for ranges indexing iid variables, optionally subsampling.
+    Context manager for conditionally independent ranges of variables.
 
-    WARNING: This is only correct if all computation is iid within the context.
+    ``iarange`` is similar to ``torch.arange`` in that it yields an array
+    of indices by which other tensors can be indexed. ``iarange`` differs from
+    ``torch.arange`` in that it also informs inference algorithms that the
+    variables being indexed are conditionally independent. To do this,
+    ``iarange`` is a provided as context manager rather than a function, and
+    users must guarantee that all computation within an ``iarange`` context
+    is conditionally independent::
 
-    By default `subsample_size=False` and this simply yields a
-    `torch.arange(0, size)`. If `0 < subsample_size <= size` this yields a
-    single random batch of indices of size `subsample_size` and scales all log
-    likelihood terms by `size/batch_size`, within this context.
+        with iarange("name", size) as ind:
+            # ...do conditionally independent stuff with ind...
 
-    :param str name: A name that will be used for this site in a Trace.
+    Additionally, ``iarange`` can take advantage of the conditional
+    independence assumptions by subsampling the indices and informing inference
+    algorithms to scale various computed values. This is typically used to
+    subsample minibatches of data::
+
+        with iarange("data", len(data), subsample_size=100) as ind:
+            batch = data[ind]
+            assert len(batch) == 100
+
+    By default ``subsample_size=False`` and this simply yields a
+    ``torch.arange(0, size)``. If ``0 < subsample_size <= size`` this yields a
+    single random batch of indices of size ``subsample_size`` and scales all
+    log likelihood terms by ``size/batch_size``, within this context.
+
+    .. warning::  This is only correct if all computation is conditionally
+        independent within the context.
+
+    :param str name: A unique name to help inference algorithms match
+        ``iarange`` sites between models and guides.
     :param int size: Optional size of the collection being subsampled
         (like `stop` in builtin `range`).
     :param int subsample_size: Size of minibatches used in subsampling.
@@ -198,7 +222,8 @@ def iarange(name, size=None, subsample_size=None, subsample=None, use_cuda=None)
         >>> with iarange('data', 100, subsample=ind):
                 observe('obs', normal, data.index_select(0, ind), mu, sigma)
 
-    See `SVI Part II <http://pyro.ai/examples/svi_part_ii.html>`_ for an extended discussion.
+    See `SVI Part II <http://pyro.ai/examples/svi_part_ii.html>`_ for an
+    extended discussion.
     """
     subsample, scale = _subsample(name, size, subsample_size, subsample, use_cuda)
     if len(_PYRO_STACK) == 0:
@@ -211,17 +236,21 @@ def iarange(name, size=None, subsample_size=None, subsample=None, use_cuda=None)
 
 def irange(name, size, subsample_size=None, subsample=None, use_cuda=None):
     """
-    Non-vectorized version of `iarange`. See `iarange` for details.
+    Non-vectorized version of ``iarange``. See ``iarange`` for details.
 
     :param str name: A name that will be used for this site in a Trace.
-    :param int size: The size of the collection being subsampled (like `stop` in builtin `range`).
-    :param int subsample_size: Size of minibatches used in subsampling. Defaults to `size`.
-    :param subsample: Optional custom subsample for user-defined subsampling schemes.
-        If specified, then `subsample_size` will be set to `len(subsample)`.
-    :type subsample: Anything supporting `len()`.
+    :param int size: The size of the collection being subsampled (like ``stop``
+        in builtin ``range``).
+    :param int subsample_size: Size of minibatches used in subsampling.
+        Defaults to ``size``.
+    :param subsample: Optional custom subsample for user-defined subsampling
+        schemes. If specified, then ``subsample_size`` will be set to
+        ``len(subsample)``.
+    :type subsample: Anything supporting ``len()``.
     :param bool use_cuda: Optional bool specifying whether to use cuda tensors
-        for `log_pdf`. Defaults to `torch.Tensor.is_cuda`.
-    :return: A context manager yielding a single 1-dimensional `torch.Tensor` of indices.
+        for internal ``log_pdf`` computations. Defaults to
+        ``torch.Tensor.is_cuda``.
+    :return: A generator yielding a sequence of integers.
 
     Examples::
 
@@ -291,7 +320,7 @@ def param(name, *args, **kwargs):
             "args": args,
             "kwargs": kwargs,
             "scale": 1.0,
-            "map_data_stack": [],
+            "cond_indep_stack": [],
             "value": None,
             "done": False,
             "stop": False,
@@ -360,15 +389,18 @@ def module(name, nn_module, tags="default", update_module_params=False):
 def random_module(name, nn_module, prior, *args, **kwargs):
     """
     Places a prior over the parameters of the module `nn_module`.
+    Returns a distribution (callable) over `nn.Module`s, which
+    upon calling returns a sampled `nn.Module`.
 
-    See the `Bayesian Regression <http://pyro.ai/examples/bayesian_regression.html>`_
-    tutorial for an example.
+    See the `Bayesian Regression tutorial <http://pyro.ai/examples/bayesian_regression.html>`_
+    for an example.
 
     :param name: name of pyro module
     :type name: str
     :param nn_module: the module to be registered with pyro
     :type nn_module: torch.nn.Module
-    :param prior: prior distribution or iterable over distributions
+    :param prior: pyro distribution, stochastic function, or python dict with parameter names
+                  as keys and respective distributions/stochastic functions as values.
     :returns: a callable which returns a sampled module
     """
     assert hasattr(nn_module, "parameters"), "Module is not a NN module."

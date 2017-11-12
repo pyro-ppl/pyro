@@ -44,6 +44,46 @@ To run a single test from the command line
 pytest -vs {path_to_test}::{test_name}
 ```
 
+# Profiling
+
+The profiler module contains scripts to support profiling different 
+Pyro modules, as well as test for performance regression.
+
+To run the profiling utilities, ensure that all dependencies for profiling are satisfied, 
+by running `make install`, or more specifically, `pip install -e .[profile]`.
+
+There are some generic test cases available in the `profiler` module. Currently, this supports 
+only the `distributions` library, but we will be adding test cases for inference methods
+soon.
+
+#### Some useful invocations
+
+To get help on the parameters that the profiling script takes, run: 
+
+```sh
+python -m profiler.distributions --help
+```
+
+To run the profiler on all the distributions, simply run:
+
+```sh
+python -m profiler.distributions
+```
+
+To run the profiler on a few distributions by varying the batch size, run:
+
+```sh
+python -m profiler.distributions --dist bernoulli normal --batch_sizes 1000 100000 
+```
+
+To get more details on the potential sources of slowdown, use the `cProfile` tool
+ as follows:
+
+```sh
+python -m profiler.distributions --dist bernoulli --tool cprofile
+
+```
+
 # Submitting
 
 For larger changes, please open an issue for discussion before submitting a pull request.

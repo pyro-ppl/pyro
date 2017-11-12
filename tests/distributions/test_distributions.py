@@ -103,7 +103,7 @@ def test_mean_and_variance(dist):
             analytic_mean = dist.pyro_dist.analytic_mean(**dist_params)
             analytic_var = dist.pyro_dist.analytic_var(**dist_params)
             assert_equal(sample_mean, analytic_mean, prec=dist.prec)
-            assert_equal(sample_var, analytic_var, prec=dist.prec)
+            assert_equal(sample_var ** 0.5, analytic_var ** 0.5, prec=dist.prec)
         except (NotImplementedError, ValueError):
             pytest.skip('analytic mean and variance are not available')
 

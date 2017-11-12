@@ -225,11 +225,14 @@ def test_bern_elbo_gradient(enum_discrete, trace_graph):
 
     print("Computing gradients using finite difference")
     elbo = Trace_ELBO(num_particles=num_particles)
-    expected_grads = finite_difference(lambda: elbo.loss(model, guide))
+    expected_grads = finite_difference(lambda: elbo.loss(model, guide), delta=0.2)
 
     for name in params:
-        print("{} {}{}{}".format(name, "-" * 30, actual_grads[name].data,
-                                 expected_grads[name].data))
+        print("\n".join([
+            "{} {}".format(name, "-" * 30),
+            "expected = {}".format(expected_grads[name].data.cpu().numpy()),
+            "  actual = {}".format(actual_grads[name].data.cpu().numpy()),
+        ]))
     assert_equal(actual_grads, expected_grads, prec=0.1)
 
 
@@ -263,6 +266,9 @@ def test_gmm_elbo_gradient(model, guide, enum_discrete, trace_graph):
     expected_grads = finite_difference(lambda: elbo.loss(model, guide, data))
 
     for name in params:
-        print("{} {}{}{}".format(name, "-" * 30, actual_grads[name].data,
-                                 expected_grads[name].data))
+        print("\n".join([
+            "{} {}".format(name, "-" * 30),
+            "expected = {}".format(expected_grads[name].data.cpu().numpy()),
+            "  actual = {}".format(actual_grads[name].data.cpu().numpy()),
+        ]))
     assert_equal(actual_grads, expected_grads, prec=0.5)

@@ -224,11 +224,11 @@ def map_data_iter_model(subsample_size):
     map_data_vector_model,
     map_data_iter_model,
 ], ids=['iarange', 'irange', 'nested_irange', 'map_data_vector', 'map_data_iter'])
-def test_map_data_stack(model, subsample_size):
+def test_cond_indep_stack(model, subsample_size):
     tr = poutine.trace(model).get_trace(subsample_size)
     for name, node in tr.nodes.items():
         if name.startswith("x"):
-            assert node["map_data_stack"], "missing map_data_stack at node {}".format(name)
+            assert node["cond_indep_stack"], "missing cond_indep_stack at node {}".format(name)
 
 
 @pytest.mark.parametrize('subsample_size', [5, 20])
