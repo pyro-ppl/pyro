@@ -150,6 +150,9 @@ class List(list):
     def __init__(self, name=None):
         self._name = name
 
+    def __str__(self):
+        return self._name
+
     def _set_name(self, name):
         if self:
             raise RuntimeError("Cannot name a named.List after data has been added")
@@ -204,6 +207,9 @@ class Dict(dict):
     """
     def __init__(self, name=None):
         self._name = name
+
+    def __str__(self):
+        return self._name
 
     def _set_name(self, name):
         if self:

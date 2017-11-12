@@ -87,3 +87,21 @@ def test_nested():
     assert get_sample_names(tr) == set(["latent.dict['foo'].foo"])
     assert get_observe_names(tr) == set(["latent.object.bar"])
     assert get_param_names(tr) == set(["latent.list[0].mu"])
+
+
+def test_eval_str():
+    state = named.Object("state")
+    state.x = 0
+    state.ys = named.List()
+    state.ys.add().foo = 1
+    state.zs = named.Dict()
+    state.zs[42].bar = 2
+
+    assert state is eval(str(state))
+    assert state.x is eval(str(state.x))
+    assert state.ys is eval(str(state.ys))
+    assert state.ys[0] is eval(str(state.ys[0]))
+    assert state.ys[0].foo is eval(str(state.ys[0].foo))
+    assert state.zs is eval(str(state.zs))
+    assert state.zs[42] is eval(str(state.zs[42]))
+    assert state.zs[42].bar is eval(str(state.zs[42].bar))
