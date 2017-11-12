@@ -1,3 +1,52 @@
+"""
+Named Data Structures
+---------------------
+
+The ``pyro.contrib.named`` module is a thin syntactic layer on top of Pyro. It
+allows Pyro models to be written to look like programs operating on Python data
+structures, rather than programs with string-labeled
+``pyro.sample("name", ...)`` statements.
+
+This module provides three container data structures ``named.Object``,
+``named.List``, and ``named.Dict``. These data structures are intended to be
+nested in each other. Together they track the address of each piece of data
+in each data structure, so that this address can be used as a Pyro site. For
+example::
+
+    >>> state = named.Object("state")
+    >>> print(str(state))
+    state
+
+    >>> z = state.x.y.z  # z is just a placeholder.
+    >>> print(str(z))
+    state.x.y.z
+
+    >>> state.xs = named.List()  # Create a contained list.
+    >>> x0 = state.xs.add()
+    >>> print(str(x0))
+    state.xs[0]
+
+    >>> state.ys = named.Dict()
+    >>> foo = state.ys['foo']
+    >>> print(str(foo))
+    state.ys['foo']
+
+These addresses can now be used inside ``sample``, ``observe`` and ``param``
+statements. These named data structures even provide in-place methods that
+alias Pyro statements. For example::
+
+    >>> state = named.Object("state")
+    >>> mu = state.mu.param_(Variable(torch.zeros(1), requires_grad=True))
+    >>> sigma = state.sigma.param_(Variable(torch.ones(1), requires_grad=True))
+    >>> z = state.z.sample_(dist.normal, mu, sigma)
+    >>> state.x.observe_(dist.normal, z, mu, sigma)
+
+For deeper examples of how these can be used in model code, see the
+`Tree Data <https://github.com/uber/pyro/blob/dev/examples/contrib/named/tree_data.py>`_
+and
+`Mixture <https://github.com/uber/pyro/blob/dev/examples/contrib/named/mixture.py>`_
+examples.
+"""
 from __future__ import absolute_import, division, print_function
 
 import functools
@@ -186,24 +235,3 @@ class Dict(dict):
         elif isinstance(value, (List, Dict)):
             value._set_name(name)
         super(Dict, self).__setitem__(key, value)
-
-
-@functools.wraps(pyro.sample)
-def sample(placeholder, fn, *args, **kwargs):
-    if not isinstance(placeholder, Object):
-        raise TypeError("named.sample expected a named.Object but got {}".format(repr(placeholder)))
-    return placeholder.sample(fn, *args, **kwargs)
-
-
-@functools.wraps(pyro.observe)
-def observe(placeholder, fn, obs, *args, **kwargs):
-    if not isinstance(placeholder, Object):
-        raise TypeError("named.observe expected a named.Object but got {}".format(repr(placeholder)))
-    return placeholder.observe(fn, obs, *args, **kwargs)
-
-
-@functools.wraps(pyro.param)
-def param(placeholder, *args, **kwargs):
-    if not isinstance(placeholder, Object):
-        return placeholder  # value was already set
-    return placeholder.param(*args, **kwargs)
