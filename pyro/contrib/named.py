@@ -2,10 +2,10 @@
 Named Data Structures
 ---------------------
 
-The ``pyro.contrib.named`` module is a thin syntactic layer on top of Pyro. It
-allows Pyro models to be written to look like programs operating on Python data
-structures, rather than programs with string-labeled
-``pyro.sample("name", ...)`` statements.
+The ``pyro.contrib.named`` module is a thin syntactic layer on top of Pyro.  It
+allows Pyro models to be written to look like programs with operating on Python
+data structures like ``latent.x.sample_(...)``, rather than programs with
+string-labeled statements like ``x = pyro.sample("x", ...)``.
 
 This module provides three container data structures ``named.Object``,
 ``named.List``, and ``named.Dict``. These data structures are intended to be
@@ -46,6 +46,8 @@ For deeper examples of how these can be used in model code, see the
 and
 `Mixture <https://github.com/uber/pyro/blob/dev/examples/contrib/named/mixture.py>`_
 examples.
+
+Authors: Fritz Obermeyer, Alexander Rush
 """
 from __future__ import absolute_import, division, print_function
 
