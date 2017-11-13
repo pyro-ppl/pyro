@@ -17,7 +17,7 @@ def model(latent, n):
     a = latent.a.sample_(dist.normal, Variable(torch.Tensor([10])),
                          Variable(torch.Tensor([1])))
 
-    for i, x in latent.b.ienumerate_(10):
+    for i, _, x in latent.b.ienumerate_(range(10)):
         x.sample_(dist.normal, a,
                   Variable(torch.Tensor([1])))
 
@@ -26,7 +26,7 @@ def guide(latent, n):
     latent.a.sample_(dist.normal, Variable(torch.Tensor([10])),
                      Variable(torch.Tensor([1])))
 
-    for i, x in latent.b.ienumerate_(n):
+    for i, _, x in latent.b.ienumerate_(range(n)):
         x.sample_(dist.normal, Variable(torch.Tensor([1])),
                   Variable(torch.Tensor([1])))
 
@@ -44,7 +44,7 @@ def test_scoped_infer():
     assert isinstance(out.a.data, torch.Tensor)
 
     def sites(latent):
-        for i, var in latent.b.ienumerate_(5):
+        for i, _, var in latent.b.ienumerate_(range(5)):
             var.set_(1)
 
     out = scoped.Marginal(trace, sites_fn=sites)(10)
@@ -63,7 +63,7 @@ def test_condition():
     assert obj.a.data[0] == 10
 
     def given(latent):
-        for i, var in latent.b.ienumerate_(5):
+        for i, _, var in latent.b.ienumerate_(range(5)):
             var.set_(Variable(torch.Tensor([10])))
 
     conditioned = scoped.condition(model, data_fn=given)

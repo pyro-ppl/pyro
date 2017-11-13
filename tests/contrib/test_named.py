@@ -139,6 +139,16 @@ def test_object():
     assert var_dict["name.c[0]"] == 20
 
 
+def test_sized_list():
+    obj = named.Object("name")
+    obj.a = named.List()
+    obj.a.add().param_(10)
+
+    obj = named.Object("name")
+    obj.a = named.List(size=10)
+    obj.a[1].param_(10)
+
+
 def test_module():
     m = torch.nn.Sequential()
     m.add_module("first", torch.nn.Linear(10, 10))
@@ -153,7 +163,7 @@ def test_module():
 def test_ienumerate():
     obj = named.Object("name")
 
-    for i, latent in obj.ienumerate_(10):
+    for i, _, latent in obj.ienumerate_(range(10)):
         latent.param_(i)
 
     assert pyro.param("name.plate[0]") == 0

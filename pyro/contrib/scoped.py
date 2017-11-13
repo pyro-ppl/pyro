@@ -1,53 +1,30 @@
-"""
-Named Data Structures
+"""Scoped Data Structures
 ---------------------
 
-The ``pyro.contrib.named`` module is a thin syntactic layer on top of Pyro.  It
-allows Pyro models to be written to look like programs with operating on Python
-data structures like ``latent.x.sample_(...)``, rather than programs with
-string-labeled statements like ``x = pyro.sample("x", ...)``.
+The ``pyro.contrib.scoped`` module is a thin syntactic layer on top of
+Pyro.  It heavily uses ``pyro.contrib.named`` to re-write Pyro models to use
+locally scoped variables.  Instead of writing models like ``def
+model(...)`` and creating using global sampling, scoped code is always
+of the form ``def model(latent, ...)`` where latent is a uniquely
+namespaced object that manages the underlying variables and the
+inference state.
 
-This module provides three container data structures ``named.Object``,
-``named.List``, and ``named.Dict``. These data structures are intended to be
-nested in each other. Together they track the address of each piece of data
-in each data structure, so that this address can be used as a Pyro site. For
-example::
-
-    >>> state = named.Object("state")
-    >>> print(str(state))
-    state
-
-    >>> z = state.x.y.z  # z is just a placeholder.
-    >>> print(str(z))
-    state.x.y.z
-
-    >>> state.xs = named.List()  # Create a contained list.
-    >>> x0 = state.xs.add()
-    >>> print(str(x0))
-    state.xs[0]
-
-    >>> state.ys = named.Dict()
-    >>> foo = state.ys['foo']
-    >>> print(str(foo))
-    state.ys['foo']
-
-These addresses can now be used inside ``sample``, ``observe`` and ``param``
-statements. These named data structures even provide in-place methods that
-alias Pyro statements. For example::
-
-    >>> state = named.Object("state")
-    >>> mu = state.mu.param_(Variable(torch.zeros(1), requires_grad=True))
-    >>> sigma = state.sigma.param_(Variable(torch.ones(1), requires_grad=True))
-    >>> z = state.z.sample_(dist.normal, mu, sigma)
-    >>> state.x.observe_(dist.normal, z, mu, sigma)
+This module provides functions that wrapped the standard Pyro
+inference and conditional functions to support scoped models as
+defined above. These functions work exactly the same as standard Pyro
+functions but always pass in a scoped ``named.Object`` to models.
+Models are expected to use these named objects for sampling,
+observations, and parameters. In addition, wherever possible they
+offer additional options to define conditioning, inference sites, and
+return values in the form of ``named`` objects.
 
 For deeper examples of how these can be used in model code, see the
-`Tree Data <https://github.com/uber/pyro/blob/dev/examples/contrib/named/tree_data.py>`_
+`HMM <https://github.com/uber/pyro/blob/dev/examples/contrib/scoped/hmm.py>`_
 and
 `Mixture <https://github.com/uber/pyro/blob/dev/examples/contrib/named/mixture.py>`_
 examples.
 
-Authors: Fritz Obermeyer, Alexander Rush
+Authors: Alexander Rush, Fritz Obermeyer
 """
 
 from __future__ import absolute_import, division, print_function
@@ -90,8 +67,8 @@ def condition(fn, data=None, data_fn=None):
 @functools.wraps(pyro.infer.SVI)
 def SVI(model, guide, *args, **kwargs):
     namespace = str(uuid.uuid4())
-    model_latent = []
-    guide_latent = []
+    model_latent = [None]
+    guide_latent = [None]
     obj = pyro.infer.SVI(_lift(model, namespace, _store=model_latent),
                          _lift(guide, namespace, _store=guide_latent),
                          *args, **kwargs)
@@ -104,8 +81,8 @@ def SVI(model, guide, *args, **kwargs):
 @functools.wraps(pyro.infer.Importance)
 def Importance(model, guide=None, *args, **kwargs):
     namespace = str(uuid.uuid4())
-    model_latent = []
-    guide_latent = []
+    model_latent = [None]
+    guide_latent = [None]
     obj = pyro.infer.Importance(_lift(model, namespace, _store=model_latent),
                                 _lift(guide, namespace, _store=guide_latent)
                                 if guide is not None else None,
@@ -119,7 +96,7 @@ def Importance(model, guide=None, *args, **kwargs):
 @functools.wraps(pyro.infer.Search)
 def Search(model, *args, **kwargs):
     namespace = str(uuid.uuid4())
-    model_latent = []
+    model_latent = [None]
     obj = pyro.infer.Search(_lift(model, namespace, _store=model_latent),
                             *args, **kwargs)
     obj._model_latent = model_latent

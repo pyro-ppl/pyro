@@ -49,6 +49,7 @@ examples.
 
 Authors: Fritz Obermeyer, Alexander Rush
 """
+
 from __future__ import absolute_import, division, print_function
 
 import contextlib
@@ -178,10 +179,10 @@ class Object(object):
     def irange_(self, *args, **kwargs):
         return pyro.irange(self._name, *args, **kwargs)  # Returns an iterator.
 
-    def ienumerate_(self, *args, **kwargs):
+    def ienumerate_(self, ls, *args, **kwargs):
         self.plate = List()
-        for i in self.irange.irange_(*args, **kwargs):
-            yield i, self.plate.add()
+        for i in self.irange.irange_(len(ls), *args, **kwargs):
+            yield i, ls[i], self.plate.add()
 
     @functools.wraps(pyro.module)
     def module_(self, nn_module, tags="default"):
@@ -217,8 +218,9 @@ class List(list):
         not be mutated or removed. Trying to mutate this data structure may
         result in silent errors.
     """
-    def __init__(self, name=None):
+    def __init__(self, name=None, size=None):
         self._name = name
+        self._size = size
 
     def _set_name(self, name):
         if self:
@@ -226,6 +228,9 @@ class List(list):
         if self._name is not None:
             raise RuntimeError("Cannot rename named.List: {}".format(self._name))
         self._name = name
+        if self._size is not None:
+            for i in range(self._size):
+                self.add()
 
     def _items(self):
         for i, obj in enumerate(self):
