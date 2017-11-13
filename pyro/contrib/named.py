@@ -56,6 +56,11 @@ import functools
 from inspect import isclass
 
 import pyro
+import pyro.util
+
+
+def _is_named(obj):
+    return isinstance(obj, (Object, List, Dict))
 
 
 class Object(object):
@@ -85,34 +90,28 @@ class Object(object):
         super(Object, self).__setattr__("_name", name)
         super(Object, self).__setattr__("_is_placeholder", True)
 
+    def _local_items(self):
+        return ((k, v) for k, v in self.__dict__.items()
+                if k[0] != "_")
+
+    def _items(self):
+        for key, val in self._local_items():
+            if _is_named(val):
+                for k, v in val._items():
+                    yield k, v
+            else:
+                name = "{}.{}".format(self._name, key)
+                yield name, val
+
+    def __str__(self):
+        return self._name
+
     def __repr__(self):
-        d = self._expand()
         out = "Object (\n"
-        for k, v in d.items():
-            out += "{} : {}\n".format(k, v)
+        for k, v in self._local_items():
+            out += "{} : {}\n".format(k, repr(v))
         out += ")"
         return out
-
-    def visit(self, fn, acc):
-
-        for key, val in self.__dict__.items():
-            if key[0] != "_":
-                if isinstance(val, (Object, List, Dict)):
-                    val.visit(fn, acc)
-                else:
-                    name = "{}.{}".format(self._name, key)
-                    fn(name, val, acc)
-        return acc
-
-    def _expand(self):
-        dictform = {}
-        for key, val in self.__dict__.items():
-            if key[0] != "_":
-                if isinstance(val, (Object, List, Dict)):
-                    dictform[key] = val._expand()
-                else:
-                    dictform[key] = val
-        return dictform
 
     def __getattribute__(self, key):
         try:
@@ -166,13 +165,23 @@ class Object(object):
         return value
 
     @contextlib.contextmanager
+    @functools.wraps(pyro.iarange)
     def iarange_(self, *args, **kwargs):
         if not self._is_placeholder:
             raise RuntimeError("Cannot .iarange_ an initialized named.Object")
 
         # Yields both a subsampled data and an indexed latent object.
-        with pyro.iarange(self._name + "range", *args, **kwargs) as ind:
-            yield ind, self
+        with pyro.iarange(self._name, *args, **kwargs) as ind:
+            yield ind
+
+    @functools.wraps(pyro.irange)
+    def irange_(self, *args, **kwargs):
+        return pyro.irange(self._name, *args, **kwargs)  # Returns an iterator.
+
+    def ienumerate_(self, *args, **kwargs):
+        self.plate = List()
+        for i in self.irange.irange_(*args, **kwargs):
+            yield i, self.plate.add()
 
     @functools.wraps(pyro.module)
     def module_(self, nn_module, tags="default"):
@@ -187,10 +196,7 @@ class Object(object):
         for param_name, param_value in nn_module.named_parameters():
             # register the parameter in the module with pyro
             # this only does something substantive if the parameter hasn't been seen before
-            c = self
-            for path in param_name.split("."):
-                c = c.__getattribute__(path)
-            c.param_(param_value, tags=tags)
+            pyro.util.deep_getattr(self, param_name).param_(param_value, tags=tags)
         return nn_module
 
 
@@ -214,9 +220,6 @@ class List(list):
     def __init__(self, name=None):
         self._name = name
 
-    def __repr__(self):
-        return "List ( {} )".format(self._expand())
-
     def _set_name(self, name):
         if self:
             raise RuntimeError("Cannot name a named.List after data has been added")
@@ -224,25 +227,14 @@ class List(list):
             raise RuntimeError("Cannot rename named.List: {}".format(self._name))
         self._name = name
 
-    def _expand(self):
-        ls = []
-        for i in range(len(self)):
-            val = self[i]
-            if isinstance(val, (Object, List, Dict)):
-                ls.append(val._expand())
-            else:
-                ls.append(val)
-        return ls
-
-    def visit(self, fn, acc):
-        for i in range(len(self)):
-            val = self[i]
-            if isinstance(val, (Object, List, Dict)):
-                val.visit(fn, acc)
+    def _items(self):
+        for i, obj in enumerate(self):
+            if _is_named(obj):
+                for k, v in obj._items():
+                    yield k, v
             else:
                 name = "{}[{}]".format(self._name, i)
-                fn(name, val, acc)
-        return acc
+                yield name, obj
 
     def add(self):
         """
@@ -260,6 +252,12 @@ class List(list):
         self.append(value)
         return value
 
+    def __repr__(self):
+        return "List ( {} )".format(", ".join(map(repr, self)))
+
+    def __str__(self):
+        return self._name
+
     def __setitem__(self, pos, value):
         name = "{}[{}]".format(self._name, pos)
         if isinstance(value, Object):
@@ -270,12 +268,6 @@ class List(list):
         if not isinstance(old, Object) or not old._is_placeholder:
             raise RuntimeError("Cannot overwrite {}".format(name))
         super(List, self).__setitem__(pos, value)
-
-    @functools.wraps(pyro.irange)
-    def irange_(self, data, *args, **kwargs):
-        # Yields both a subsampled data and an indexed latent object.
-        for d in pyro.irange(self._name + "range", data, *args, **kwargs):
-            yield d, self.add()
 
 
 class Dict(dict):
@@ -298,9 +290,6 @@ class Dict(dict):
     def __init__(self, name=None):
         self._name = name
 
-    def __str__(self):
-        return self._name
-
     def _set_name(self, name):
         if self:
             raise RuntimeError("Cannot name a named.Dict after data has been added")
@@ -308,28 +297,21 @@ class Dict(dict):
             raise RuntimeError("Cannot rename named.Dict: {}".format(self._name))
         self._name = name
 
+    def _items(self):
+        for key, val in self.items():
+            if _is_named(val):
+                for k, v in val._items():
+                    yield k, v
+            else:
+                name = "{}[{!r}]".format(self._name, key)
+                yield name, val
+
     def __repr__(self):
-        return "Dict (\n {} \n)".format(self._expand())
+        return "Dict (\n {} \n)".format(",".join(("{}: {}".format(k, repr(v))
+                                                  for k, v in self.items())))
 
-    def _expand(self):
-        dictform = {}
-        for key, val in self.items():
-            if key[0] != "_":
-                if isinstance(val, (Object, List, Dict)):
-                    dictform[key] = val._expand()
-                else:
-                    dictform[key] = val
-        return dictform
-
-    def visit(self, fn, acc):
-        for key, val in self.items():
-            if key[0] != "_":
-                if isinstance(val, (Object, List, Dict)):
-                    val.visit(fn, acc)
-                else:
-                    name = "{}[{!r}]".format(self._name, key)
-                    fn(name, val, acc)
-        return acc
+    def __str__(self):
+        return self._name
 
     def __getitem__(self, key):
         try:
