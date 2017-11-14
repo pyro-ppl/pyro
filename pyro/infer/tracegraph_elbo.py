@@ -238,7 +238,7 @@ class TraceGraph_ELBO(object):
                         elbo_particle += model_trace.nodes[name]["log_pdf"]
                         elbo_particle -= guide_trace.nodes[name]["log_pdf"]
 
-            elbo += weight * elbo_particle.data[0]
+            elbo += torch_data_sum(weight * elbo_particle)
 
         loss = -elbo
         if np.isnan(loss):
