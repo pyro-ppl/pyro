@@ -8,8 +8,12 @@ import numpy as np
 
 
 def _warn_if_nan(name, variable):
-    if np.isnan(variable.data[0]):
+    value = variable.data[0]
+    if np.isnan(value):
         warnings.warn("Encountered NAN log_pdf at site '{}'".format(name))
+    if np.isinf(value) and value > 0:
+        warnings.warn("Encountered +inf log_pdf at site '{}'".format(name))
+    # Note that -inf log_pdf is fine: it is merely a zero-probability event.
 
 
 class Trace(networkx.DiGraph):
