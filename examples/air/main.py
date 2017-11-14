@@ -60,20 +60,6 @@ def count_accuracy(X, true_counts, air, batch_size):
     return acc, counts, torch.cat(error_latents), error_indices
 
 
-# Yields the following distribution over the number of steps (when
-# taking a maximum of 3 steps):
-# p(0) = 0.4
-# p(1) = 0.3
-# p(2) = 0.2
-# p(3) = 0.1
-# def default_z_pres_prior_p(t):
-#     if t == 0:
-#         return 0.6
-#     elif t == 1:
-#         return 0.5
-#     else:
-#         return 0.33
-
 # Defines something like a truncated geometric. Like the geometric,
 # this has the property that there's a constant difference in log prob
 # between p(steps=n) and p(steps=n+1).
@@ -89,13 +75,12 @@ def make_prior(k):
     return lambda t: trial_probs[t]
 
 
-default_z_pres_prior_p = make_prior(0.5)
-
 # Implements "prior annealing" as described in this blog post:
 # http://akosiorek.github.io/ml/2017/09/03/implementing-air.html
 
 # That implementation does something very close to the following:
 # --z-pres-prior (1 - 1e-15)
+# --z-pres-prior-raw
 # --anneal-prior exp
 # --anneal-prior-to 1e-7
 # --anneal-prior-begin 1000
@@ -154,8 +139,16 @@ def main(**kwargs):
     if args.cuda:
         X = X.cuda()
 
+    # Build a function to compute z_pres prior probabilities.
+    if args.z_pres_prior_raw:
+        def base_z_pres_prior_p(t):
+            return args.z_pres_prior
+    else:
+        base_z_pres_prior_p = make_prior(args.z_pres_prior)
+
+    # Wrap with logic to apply any annealing.
     def z_pres_prior_p(opt_step, time_step):
-        p = args.z_pres_prior or default_z_pres_prior_p(time_step)
+        p = base_z_pres_prior_p(time_step)
         if args.anneal_prior == 'none':
             return p
         else:
@@ -303,8 +296,10 @@ if __name__ == '__main__':
                         help='apply sigmoid function to output of decoder network')
     parser.add_argument('--window-size', type=int, default=28,
                         help='attention window size')
-    parser.add_argument('--z-pres-prior', type=float, default=None,
+    parser.add_argument('--z-pres-prior', type=float, default=0.5,
                         help='prior success probability for z_pres')
+    parser.add_argument('--z-pres-prior-raw', action='store_true', default=False,
+                        help='use --z-pres-prior directly as success prob instead of a geometric like prior')
     parser.add_argument('--anneal-prior', choices='none lin exp'.split(), default='none',
                         help='anneal z_pres prior during optimization')
     parser.add_argument('--anneal-prior-to', type=float, default=1e-7,
