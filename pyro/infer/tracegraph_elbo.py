@@ -4,6 +4,7 @@ import warnings
 from collections import namedtuple
 
 import networkx
+import numpy as np
 import torch
 
 import pyro
@@ -240,6 +241,8 @@ class TraceGraph_ELBO(object):
             elbo += weight * elbo_particle.data[0]
 
         loss = -elbo
+        if np.isnan(loss):
+            warnings.warn('Encountered NAN loss')
         return loss
 
     def loss_and_grads(self, model, guide, *args, **kwargs):
@@ -304,4 +307,6 @@ class TraceGraph_ELBO(object):
             pyro.get_param_store().mark_params_active(trainable_params)
 
         loss = -elbo
+        if np.isnan(loss):
+            warnings.warn('Encountered NAN loss')
         return weight * loss
