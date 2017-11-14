@@ -12,8 +12,7 @@ from tests.common import assert_equal
 def test_map():
 
     def model(data):
-        mu = pyro.param("mu", Variable(torch.zeros(1), requires_grad=True))
-        pyro.observe("mu_prior", dist.normal, mu, ng_zeros(1), ng_ones(1))
+        mu = pyro.sample("mu", dist.normal, ng_zeros(1), ng_ones(1))
         for i, x in enumerate(data):
             pyro.observe("x_{}".format(i), dist.normal, x, mu, ng_ones(1))
 
