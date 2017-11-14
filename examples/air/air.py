@@ -48,6 +48,10 @@ class AIR(nn.Module):
                  use_baselines=True,
                  baseline_scalar=None,
                  fudge_z_pres=False,
+                 scale_prior_mean=3.0,
+                 scale_prior_sd=0.1,
+                 pos_prior_mean=0.0,
+                 pos_prior_sd=1.0,
                  use_cuda=False):
 
         super(AIR, self).__init__()
@@ -68,8 +72,12 @@ class AIR(nn.Module):
         # By making these parameters they will be moved to the gpu
         # when necessary. (They are not registered with pyro for
         # optimization.)
-        self.z_where_mu_prior = nn.Parameter(torch.FloatTensor([3.0, 0, 0]), requires_grad=False)
-        self.z_where_sigma_prior = nn.Parameter(torch.FloatTensor([0.1, 1, 1]), requires_grad=False)
+        self.z_where_mu_prior = nn.Parameter(
+            torch.FloatTensor([scale_prior_mean, pos_prior_mean, pos_prior_mean]),
+            requires_grad=False)
+        self.z_where_sigma_prior = nn.Parameter(
+            torch.FloatTensor([scale_prior_sd, pos_prior_sd, pos_prior_sd]),
+            requires_grad=False)
 
         # Create nn modules.
         rnn_input_size = x_size ** 2 if embed_net is None else embed_net[-1]

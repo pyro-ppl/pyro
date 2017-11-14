@@ -174,6 +174,10 @@ def main(**kwargs):
                       'embed_net',
                       'bl_predict_net',
                       'non_linearity',
+                      'pos_prior_mean',
+                      'pos_prior_sd',
+                      'scale_prior_mean',
+                      'scale_prior_sd',
                       'fudge_z_pres']
     model_args = {key: getattr(args, key) for key in model_arg_keys if key in args}
     air = AIR(
@@ -309,6 +313,14 @@ if __name__ == '__main__':
                         help='number of steps to wait before beginning to anneal the prior')
     parser.add_argument('--anneal-prior-duration', type=int, default=100000,
                         help='number of steps over which to anneal the prior')
+    parser.add_argument('--pos-prior-mean', type=float,
+                        help='mean of the window position prior')
+    parser.add_argument('--pos-prior-sd', type=float,
+                        help='std. dev. of the window position prior')
+    parser.add_argument('--scale-prior-mean', type=float,
+                        help='mean of the window scale prior')
+    parser.add_argument('--scale-prior-sd', type=float,
+                        help='std. dev. of the window scale prior')
     parser.add_argument('--no-masking', action='store_true', default=False,
                         help='do not mask out the costs of unused choices')
     parser.add_argument('--fudge-z-pres', action='store_true', default=False,
