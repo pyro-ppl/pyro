@@ -385,6 +385,7 @@ def image_to_window(z_where, window_size, image_size, images):
 def batch_expand(t, n):
     return t.expand(n, t.size(1))
 
+
 # Combine z_pres and z_where (as returned by the model and guide) into
 # a single tensor, with size:
 # [batch_size, num_steps, z_where_size + z_pres_size]

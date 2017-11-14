@@ -1,5 +1,4 @@
 from collections import namedtuple
-import torch
 import numpy as np
 from PIL import Image, ImageDraw
 import math
@@ -61,6 +60,7 @@ def draw_many(imgarrs, z_arr):
 
 
 z_obj = namedtuple('z', 's,x,y,pres')
+
 
 # Map a tensor of latents (as produced by latents_to_tensor) to a list
 # of z_obj named tuples.
