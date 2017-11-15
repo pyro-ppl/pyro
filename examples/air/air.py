@@ -174,30 +174,13 @@ class AIR(nn.Module):
         # objects can create pixel intensities > 1.)
         x = prev.x + (y * z_pres.view(-1, 1, 1))
 
-        if batch is not None:
-            # Add observations.
-
-            # Observations are made as soon as we are done generating
-            # objects for a data point. This ensures that future
-            # discrete choices are not included in the ELBO. i.e. The
-            # corresponding log(q/p) in the objectives will be zero
-            # since we mask out all future choices and make no further
-            # observations for data points that are complete.
-
-            if not self.use_masking:
-                observe_mask = 1.0
-            elif t == (self.num_steps - 1):
-                observe_mask = prev.z_pres
-            else:
-                observe_mask = prev.z_pres - z_pres
-
-            if self.use_masking or t == (self.num_steps - 1):
-                pyro.observe("obs_{}".format(t),
-                             dist.normal,
-                             batch.view(n, -1),
-                             x.view(n, -1),
-                             self.ng_ones(x.view(n, -1).size()) * 0.3,
-                             log_pdf_mask=observe_mask)
+        # Add observations.
+        if batch is not None and t == (self.num_steps - 1):
+            pyro.observe("obs_{}".format(t),
+                         dist.normal,
+                         batch.view(n, -1),
+                         x.view(n, -1),
+                         self.ng_ones(x.view(n, -1).size()) * 0.3)
 
         return ModelState(x=x, z_pres=z_pres, z_where=z_where)
 
