@@ -8,7 +8,7 @@ from torch import Tensor as T
 import pyro.distributions as dist
 import pyro
 from collections import defaultdict
-
+from render import Vector2, BBOX2, load_target
 
 # ----------------------------------------------------------------------------
 # Globals / constants
@@ -17,51 +17,6 @@ from collections import defaultdict
 def VT(x):
     # create torch variable around tesnor with input X
     return V(T(x))
-
-
-class Vector2():
-    def __init__(self, x, y):
-        self.x = x
-        self.y = y
-
-    def add(self, other):
-        self.x += other.x
-        self.y += other.y
-        return self
-
-    def clone(self):
-        return Vector2(self.x, self.y)
-
-    # linear interpolate between two points us and them
-    def lerp(self, other, zero_one):
-        self.x = zero_one * self.x + (1 - zero_one) * other.x
-        self.y = zero_one * self.y + (1 - zero_one) * other.y
-        return self
-
-    # obs multiply x,y by scalar
-    def scalar_mult(self, mult):
-        self.x = self.x * mult
-        self.y = self.y * mult
-        return self
-
-
-class BBOX2():
-    def __init__(self, v2_min, v2_max):
-        self.min = v2_min
-        self.max = v2_max
-
-    def clone(self):
-        return BBOX2(self.min.clone(), self.max.clone())
-
-    # overwrites bbox with combined union -- clone to avoid issues
-    def union(self, other):
-        print("warning, bbox union not verified. \
-                This print statement should annoy you.")
-        self.min = Vector2(min(self.min.x, other.min.x),
-                           min(self.min.y, other.min.y))
-        self.max = Vector2(max(self.max.x, other.max.x),
-                           max(self.max.y, other.max.y))
-        return self
 
 
 def norm2world(p, viewport):
@@ -107,11 +62,6 @@ def bbox_for_type(type_name, type_obj):
 def normalizedSimilarity(img, target):
     raise NotImplementedError("Yet to measure img similarity")
 
-
-# pull from:
-# https://github.com/probmods/webppl/blob/gh-pages-vinesDemoFreeSketch/demos/vines/js/index.js
-def load_target(target_file):
-    raise NotImplementedError("Yet to load img from file")
 
 # // Render update
 
@@ -302,7 +252,7 @@ def main(simTightness=0.02, boundsTightness=0.001,
         starting_world_pos = norm2world(target["startPos"], start_viewport)
         starting_dir = target["startDir"]
 
-        starting_ang = torch.atan2(starting_dir["y"], starting_dir["x"])
+        starting_ang = torch.atan2(starting_dir.y, starting_dir.x)
 
         # // These are separated like this so that we can have an initial local
         # //    state to feed to the _gaussian for the initial angle.
@@ -329,8 +279,7 @@ def main(simTightness=0.02, boundsTightness=0.001,
         leaf_opts = ['none', 'left', 'right']
         leaf_probs = norm_prob(VT([1, 1, 1]))
 
-
-        # clusre around the procedural vines object
+        # cluster around the procedural vines object
         def create_branch(cur_state):
 
             # calculate the width
