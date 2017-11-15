@@ -107,15 +107,6 @@ class AIR(nn.Module):
             self.cuda()
 
     def prior(self, n, **kwargs):
-        pyro.module("decode", self.decode)
-        return self.local_model(n, **kwargs)
-
-    def model(self, data, batch_size, **kwargs):
-        pyro.module("decode", self.decode)
-        with pyro.iarange('data', data.size(0), use_cuda=self.use_cuda) as ix:
-            return self.local_model(batch_size, data[ix], **kwargs)
-
-    def local_model(self, n, batch=None, **kwargs):
 
         state = ModelState(
             x=self.ng_zeros([n, self.x_size, self.x_size]),
@@ -126,13 +117,25 @@ class AIR(nn.Module):
         z_where = []
 
         for t in range(self.num_steps):
-            state = self.model_step(t, n, state, batch, **kwargs)
+            state = self.model_step(t, n, state, **kwargs)
             z_where.append(state.z_where)
             z_pres.append(state.z_pres)
 
         return (z_where, z_pres), state.x
 
-    def model_step(self, t, n, prev, batch, z_pres_prior_p=default_z_pres_prior_p):
+    def model(self, data, _, **kwargs):
+        pyro.module("decode", self.decode)
+        with pyro.iarange('data', data.size(0), use_cuda=self.use_cuda) as ix:
+            batch = data[ix]
+            n = batch.size(0)
+            (z_where, z_pres), x = self.prior(n, **kwargs)
+            pyro.observe('obs',
+                         dist.normal,
+                         batch.view(n, -1),
+                         x.view(n, -1),
+                         (0.3 * self.ng_ones(1)).expand(n, self.x_size ** 2))
+
+    def model_step(self, t, n, prev, z_pres_prior_p=default_z_pres_prior_p):
 
         # Sample presence indicators.
         if not self.fudge_z_pres:
@@ -174,14 +177,6 @@ class AIR(nn.Module):
         # objects can create pixel intensities > 1.)
         x = prev.x + (y * z_pres.view(-1, 1, 1))
 
-        # Add observations.
-        if batch is not None and t == (self.num_steps - 1):
-            pyro.observe("obs_{}".format(t),
-                         dist.normal,
-                         batch.view(n, -1),
-                         x.view(n, -1),
-                         self.ng_ones(x.view(n, -1).size()) * 0.3)
-
         return ModelState(x=x, z_pres=z_pres, z_where=z_where)
 
     def guide(self, data, batch_size, **kwargs):
@@ -202,37 +197,35 @@ class AIR(nn.Module):
 
         with pyro.iarange('data', data.size(0), subsample_size=batch_size, use_cuda=self.use_cuda) as ix:
             batch = data[ix]
-            return self.local_guide(batch.size(0), batch)
+            n = batch.size(0)
 
-    def local_guide(self, n, batch):
+            # Embed inputs.
+            flattened_batch = batch.view(n, -1)
+            inputs = {
+                'raw': batch,
+                'embed': self.embed(flattened_batch),
+                'bl_embed': self.bl_embed(flattened_batch)
+            }
 
-        # Embed inputs.
-        flattened_batch = batch.view(n, -1)
-        inputs = {
-            'raw': batch,
-            'embed': self.embed(flattened_batch),
-            'bl_embed': self.bl_embed(flattened_batch)
-        }
+            # Initial state.
+            state = GuideState(
+                h=batch_expand(self.h_init, n),
+                c=batch_expand(self.c_init, n),
+                bl_h=batch_expand(self.bl_h_init, n),
+                bl_c=batch_expand(self.bl_c_init, n),
+                z_pres=self.ng_ones(n, self.z_pres_size),
+                z_where=batch_expand(self.z_where_init, n),
+                z_what=batch_expand(self.z_what_init, n))
 
-        # Initial state.
-        state = GuideState(
-            h=batch_expand(self.h_init, n),
-            c=batch_expand(self.c_init, n),
-            bl_h=batch_expand(self.bl_h_init, n),
-            bl_c=batch_expand(self.bl_c_init, n),
-            z_pres=self.ng_ones(n, self.z_pres_size),
-            z_where=batch_expand(self.z_where_init, n),
-            z_what=batch_expand(self.z_what_init, n))
+            z_pres = []
+            z_where = []
 
-        z_pres = []
-        z_where = []
+            for t in range(self.num_steps):
+                state = self.guide_step(t, n, state, inputs)
+                z_where.append(state.z_where)
+                z_pres.append(state.z_pres)
 
-        for t in range(self.num_steps):
-            state = self.guide_step(t, n, state, inputs)
-            z_where.append(state.z_where)
-            z_pres.append(state.z_pres)
-
-        return z_where, z_pres
+            return z_where, z_pres
 
     def guide_step(self, t, n, prev, inputs):
 
