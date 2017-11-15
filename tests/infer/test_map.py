@@ -1,3 +1,4 @@
+import pytest
 import torch
 from torch.autograd import Variable
 
@@ -59,3 +60,16 @@ def test_map_chain_rule():
     y = pyro.param("y")
     assert_equal(x.data[0], 1.0, prec=0.1)
     assert_equal(y.data[0], 2.0, prec=0.1)
+
+
+def test_map_discrete_error():
+
+    def model():
+        p = pyro.param("p", Variable(torch.ones(1) / 0.5))
+        x = pyro.sample("x", dist.categorical, p.expand(3), one_hot=False)
+        pyro.observe("obs", dist.categorical, x, p.expand(3))
+
+    optim = Adam({"lr": 1e-1})
+    infer = MAP(model, optim)
+    with pytest.raises(NotImplementedError):
+        infer.step()

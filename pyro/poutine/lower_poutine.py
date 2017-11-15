@@ -20,6 +20,8 @@ class LowerPoutine(Poutine):
     def _pyro_sample(self, msg):
         if msg["is_observed"]:
             return super(LowerPoutine, self)._pyro_sample(msg)
+        if getattr(msg["fn"], "enumerable", False):
+            raise NotImplementedError("Cannot MAP infer discrete variable {}".format(msg["name"]))
         param_name = msg["name"]
         msg["name"] = "prior.{}".format(param_name)
         if param_name in _PYRO_PARAM_STORE:
