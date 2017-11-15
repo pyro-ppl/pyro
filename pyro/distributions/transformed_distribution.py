@@ -59,7 +59,7 @@ class TransformedDistribution(Distribution):
         """
         Ref: :py:meth:`pyro.distributions.distribution.Distribution.event_shape`
         """
-        return self.base_dist.batch_shape(*args, **kwargs)
+        return self.base_dist.event_shape(*args, **kwargs)
 
     def log_pdf(self, y, *args, **kwargs):
         """
