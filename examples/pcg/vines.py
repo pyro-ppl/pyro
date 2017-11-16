@@ -8,7 +8,8 @@ from torch import Tensor as T
 import pyro.distributions as dist
 import pyro
 from collections import defaultdict
-from render import Vector2, BBOX2, load_target
+from render import Vector2, BBOX2, PtImg2D
+from render import normalized_similarity, baseline_similarity, load_target
 
 # ----------------------------------------------------------------------------
 # Globals / constants
@@ -249,8 +250,8 @@ def main(simTightness=0.02, boundsTightness=0.001,
         oc = ObjectCounter()
 
         # Determine starting state by inverting viewport transform
-        starting_world_pos = norm2world(target["startPos"], start_viewport)
-        starting_dir = target["startDir"]
+        starting_world_pos = norm2world(target.start_pos, start_viewport)
+        starting_dir = target.start_dir
 
         starting_ang = torch.atan2(starting_dir.y, starting_dir.x)
 
