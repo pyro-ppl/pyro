@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import numpy as np
 import torch
 from torch.autograd import Variable
 
@@ -114,6 +115,12 @@ class HMC(TracePosterior):
         # set the trace prototype to inter-convert between trace object
         # and dict object used by the integrator
         self._prototype_trace = poutine.trace(self.model).get_trace(*args, **kwargs)
+        for name, node in self._prototype_trace.iter_stochastic_nodes():
+            if not node['fn'].reparameterized:
+                raise ValueError('Found non-reparameterized node in the model at site: {}'.format(name))
+        prototype_trace_log_pdf = self._prototype_trace.log_pdf().data[0]
+        if np.isnan(prototype_trace_log_pdf) or np.isinf(prototype_trace_log_pdf):
+            raise ValueError('Model specification incorrect - trace log pdf is NaN, Inf or 0.')
         # store the current value of param gradients so that they
         # can be reset at the end
         for name, node in self._prototype_trace.iter_param_nodes():
