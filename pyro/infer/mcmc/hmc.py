@@ -23,8 +23,8 @@ def verlet_integrator(z, r, grad_potential, step_size, num_steps):
     :return: (z_next, r_next) having same types as (z, r)
     """
     # deep copy the current state - (z, r)
-    z_next = {key: val.clone() for key, val in z.items()}
-    r_next = {key: val.clone() for key, val in r.items()}
+    z_next = {key: val.clone().detach() for key, val in z.items()}
+    r_next = {key: val.clone().detach() for key, val in r.items()}
     retain_grads(z_next)
     retain_grads(r_next)
     grads = grad_potential(z_next)
@@ -50,6 +50,9 @@ def verlet_integrator(z, r, grad_potential, step_size, num_steps):
 
 def retain_grads(z):
     for key in z:
+        # XXX: can be removed with PyTorch 0.3
+        if z[key].is_leaf and not z[key].requires_grad:
+            z[key].requires_grad = True
         z[key].retain_grad()
 
 
@@ -189,8 +192,8 @@ def test_verlet_integrator():
     def grad(q):
         return {'x': q['x']}
 
-    q = {'x': Variable(torch.Tensor([0.0]))}
-    p = {'x': Variable(torch.Tensor([1.0]))}
+    q = {'x': Variable(torch.Tensor([0.0]), requires_grad=True)}
+    p = {'x': Variable(torch.Tensor([1.0]), requires_grad=True)}
     energy_cur = energy(q, p)
     print("Energy - current: {}".format(energy_cur.data[0]))
     q_new, p_new = verlet_integrator(q, p, grad, 0.01, 100)
