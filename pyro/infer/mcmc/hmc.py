@@ -75,26 +75,26 @@ class HMC(TracePosterior):
         self.warmup_steps = warmup_steps
         # simulation run attributes - will be set in self._setup
         # at start of run
-        self.cached_param_grads = {}
-        self.args = None
-        self.kwargs = None
-        self.accept_cnt = None
-        self.prototype_trace = None
+        self._cached_param_grads = {}
+        self._args = None
+        self._kwargs = None
+        self._accept_cnt = None
+        self._prototype_trace = None
         super(HMC, self).__init__()
 
-    def log_prob(self, z):
+    def _log_prob(self, z):
         """
         Return log pdf of the model with sample sites replayed from z_trace
         """
-        z_trace = self.prototype_trace.copy()
+        z_trace = self._prototype_trace.copy()
         for name, value in z.items():
             z_trace.nodes[name]['value'] = value
         model_trace = poutine.trace(poutine.replay(self.model, trace=z_trace)) \
-            .get_trace(*self.args, **self.kwargs)
+            .get_trace(*self._args, **self._kwargs)
         return model_trace.log_pdf()
 
-    def grad_potential(self, z):
-        log_joint_prob = self.log_prob(z)
+    def _grad_potential(self, z):
+        log_joint_prob = self._log_prob(z)
         log_joint_prob.backward()
         grad_potential = {}
         for name, value in z.items():
@@ -102,34 +102,34 @@ class HMC(TracePosterior):
             grad_potential[name].volatile = False
         return grad_potential
 
+    def _energy(self, z, r):
+        kinetic_energy = 0.5 * torch.sum(torch.stack([r[name] ** 2 for name in r]))
+        potential_energy = - self._log_prob(z)
+        return kinetic_energy + potential_energy
+
     def _setup(self, *args, **kwargs):
-        self.accept_cnt = 0
-        self.args = args
-        self.kwargs = kwargs
+        self._accept_cnt = 0
+        self._args = args
+        self._kwargs = kwargs
         # set the trace prototype to inter-convert between trace object
         # and dict object used by the integrator
-        self.prototype_trace = poutine.trace(self.model).get_trace(*args, **kwargs)
+        self._prototype_trace = poutine.trace(self.model).get_trace(*args, **kwargs)
         # store the current value of param gradients so that they
         # can be reset at the end
-        for name, node in self.prototype_trace.iter_param_nodes():
-            self.cached_param_grads[name] = node['value'].grad
+        for name, node in self._prototype_trace.iter_param_nodes():
+            self._cached_param_grads[name] = node['value'].grad
 
     def _cleanup(self):
         # reset the param values to those stored before the hmc run
-        for name, grad in self.cached_param_grads.items():
+        for name, grad in self._cached_param_grads.items():
             param = pyro.get_param_store().get_param(name)
             param.grad = grad
-
-    def energy(self, z, r):
-        kinetic_energy = 0.5 * torch.sum(torch.stack([r[name] ** 2 for name in r]))
-        potential_energy = - self.log_prob(z)
-        return kinetic_energy + potential_energy
 
     def _traces(self, *args, **kwargs):
         self._setup(*args, **kwargs)
         # sample p's from the distribution given by p_dist
         r_dist = {}
-        z = {name: node['value'] for name, node in self.prototype_trace.iter_stochastic_nodes()}
+        z = {name: node['value'] for name, node in self._prototype_trace.iter_stochastic_nodes()}
         for name, value in z.items():
             r_mu = torch_zeros_like(value)
             r_sigma = torch_ones_like(value)
@@ -145,26 +145,29 @@ class HMC(TracePosterior):
             r = {name: pyro.sample('r_{}_t={}'.format(name, t), r_dist[name]) for name in z}
             z_new, r_new = verlet_integrator(z,
                                              r,
-                                             self.grad_potential,
+                                             self._grad_potential,
                                              self.step_size,
                                              self.num_steps)
-            energy_proposal = self.energy(z_new, r_new)
-            energy_current = self.energy(z, r)
+            energy_proposal = self._energy(z_new, r_new)
+            energy_current = self._energy(z, r)
             # print("Energy - current: {}".format(energy_current))
             # print("Energy - proposal: {}".format(energy_proposal))
             delta_energy = energy_proposal - energy_current
             t += 1
             rand = pyro.sample('rand_t='.format(t), dist.uniform, a=ng_zeros(1), b=ng_ones(1))
             if rand.log().data[0] < -delta_energy.data[0]:
-                self.accept_cnt += 1
+                self._accept_cnt += 1
                 z = z_new
             if t < self.warmup_steps:
                 continue
-            yield (z, self.log_prob(z))
+            yield (z, self._log_prob(z))
         self._cleanup()
 
-    def get_acceptance_ratio(self):
-        return self.accept_cnt / (self.warmup_steps + self.num_samples)
+    @property
+    def acceptance_ratio(self):
+        if self._accept_cnt is None:
+            raise AttributeError("The attribute _accept_cnt is not updated until the first simulation run.")
+        return self._accept_cnt / (self.warmup_steps + self.num_samples)
 
 
 def test_normal_normal():
@@ -178,7 +181,7 @@ def test_normal_normal():
     traces = []
     for t, _ in hmc._traces(data):
         traces.append(t['x'])
-    print('Acceptance ratio: {}'.format(hmc.get_acceptance_ratio()))
+    print('Acceptance ratio: {}'.format(hmc.acceptance_ratio))
     print('Posterior mean:')
     print(torch.mean(torch.stack(traces), 0).data)
     # gradients should not have been back-propagated.
