@@ -52,6 +52,7 @@ class AIR(nn.Module):
                  scale_prior_sd=0.1,
                  pos_prior_mean=0.0,
                  pos_prior_sd=1.0,
+                 likelihood_sd=0.3,
                  use_cuda=False):
 
         super(AIR, self).__init__()
@@ -65,6 +66,7 @@ class AIR(nn.Module):
         self.use_baselines = use_baselines and not fudge_z_pres
         self.baseline_scalar = baseline_scalar
         self.fudge_z_pres = fudge_z_pres
+        self.likelihood_sd = likelihood_sd
         self.use_cuda = use_cuda
 
         self.z_pres_size = 1
@@ -133,7 +135,7 @@ class AIR(nn.Module):
                          dist.normal,
                          batch.view(n, -1),
                          x.view(n, -1),
-                         (0.3 * self.ng_ones(1)).expand(n, self.x_size ** 2))
+                         (self.likelihood_sd * self.ng_ones(1)).expand(n, self.x_size ** 2))
 
     def model_step(self, t, n, prev, z_pres_prior_p=default_z_pres_prior_p):
 
