@@ -142,7 +142,7 @@ class HMC(TracePosterior):
             if t % 100 == 0:
                 print('Iteration: {}'.format(t))
             # sample momentum
-            r = {name: pyro.sample('r_{}'.format(name), r_dist[name]) for name in z}
+            r = {name: pyro.sample('r_{}_t={}'.format(name, t), r_dist[name]) for name in z}
             z_new, r_new = verlet_integrator(z,
                                              r,
                                              self.grad_potential,
@@ -154,7 +154,7 @@ class HMC(TracePosterior):
             # print("Energy - proposal: {}".format(energy_proposal))
             delta_energy = energy_proposal - energy_current
             t += 1
-            rand = pyro.sample('rand', dist.uniform, a=ng_zeros(1), b=ng_ones(1))
+            rand = pyro.sample('rand_t='.format(t), dist.uniform, a=ng_zeros(1), b=ng_ones(1))
             if rand.log().data[0] < -delta_energy.data[0]:
                 self.accept_cnt += 1
                 z = z_new
