@@ -27,7 +27,6 @@ def verlet_integrator(z, r, grad_potential, step_size, num_steps):
     z_next = {key: val.clone().detach() for key, val in z.items()}
     r_next = {key: val.clone().detach() for key, val in r.items()}
     retain_grads(z_next)
-    retain_grads(r_next)
     grads = grad_potential(z_next)
 
     for _ in range(num_steps):
@@ -41,7 +40,6 @@ def verlet_integrator(z, r, grad_potential, step_size, num_steps):
             z_next[site_name] = z_next[site_name] + step_size * r_next[site_name]
         # retain gradients for intermediate nodes in backward step
         retain_grads(z_next)
-        retain_grads(r_next)
         grads = grad_potential(z_next)
         for site_name in r_next:
             # r(n+1)
@@ -50,16 +48,16 @@ def verlet_integrator(z, r, grad_potential, step_size, num_steps):
 
 
 def retain_grads(z):
-    for key in z:
+    for value in z.values():
         # XXX: can be removed with PyTorch 0.3
-        if z[key].is_leaf and not z[key].requires_grad:
-            z[key].requires_grad = True
-        z[key].retain_grad()
+        if value.is_leaf and not value.requires_grad:
+            value.requires_grad = True
+        value.retain_grad()
 
 
 def detach_nodes(z):
-    for key in z:
-        z[key] = Variable(z[key].data, requires_grad=True)
+    for key, value in z.items():
+        z[key] = Variable(value.data, requires_grad=True)
 
 
 class HMC(TracePosterior):
