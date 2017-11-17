@@ -8,24 +8,12 @@ from torch import Tensor as T
 import pyro.distributions as dist
 import pyro
 from collections import defaultdict
+from utils import VT, VTA
 from render import Vector2, BBOX2, Viewport
 from render import normalized_similarity, load_target
 
 # ----------------------------------------------------------------------------
 # Globals / constants
-
-
-# create torch variable around tesnor with input X
-def A(x): return [x]
-
-
-def TA(x): return T(A(x))
-
-
-def VT(x): return V(T(x))
-
-
-def VTA(x): return V(TA(x))
 
 
 def norm2world(p, viewport):
@@ -34,11 +22,7 @@ def norm2world(p, viewport):
 
 
 def polar2rect(r, theta):
-    return Vector2(r * np.cos(theta), r * np.sin(theta))
-
-
-def union_bbox(*bboxes):
-    raise NotImplementedError("Yet to combine bboxes")
+    return Vector2(r * torch.cos(theta), r * torch.sin(theta))
 
 # ----------------------------------------------------------------------------
 # Factor encouraging similarity to target image
