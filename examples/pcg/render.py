@@ -1,4 +1,4 @@
-# from pdb import set_trace as bb
+from pdb import set_trace as bb
 import cairocffi
 from numpy import genfromtxt
 from os.path import splitext
@@ -9,88 +9,12 @@ from torch import ones as OT
 from torch.autograd import Variable as V
 import torch.nn.functional as F
 import numpy as np
-from sys import float_info
-from utils import VT
+from visdom import Visdom
+from utils import Vector2  # ,BBOX2, Viewport
+from functools import partial
 
-
-# basic vector additions and lerping
-class Vector2():
-    def __init__(self, x=0, y=0):
-        if torch.is_tensor(x) or isinstance(x, V):
-            x, y = x.data[0], y.data[0]
-
-        self.pt_val = VT([x, y])
-
-    @property
-    def x(self):
-        return self.pt_val.data[0]
-
-    @property
-    def y(self):
-        return self.pt_val.data[1]
-
-    def __repr__(self):
-        return "{:0.5},{:0.5}".format(self.x, self.y)
-
-    def add(self, other):
-        self.pt_val += other.pt_val
-        return self
-
-    def clone(self):
-        return Vector2(*self.pt_val.data)
-
-    # linear interpolate between two points us and them
-    def lerp(self, other, zero_one):
-        self.pt_val = zero_one*self.pt_val + (1 - zero_one)*other.pt_val
-        return self
-
-    # obs multiply x,y by scalar
-    def scalar_mult(self, mult):
-        self.pt_val *= mult
-        return self
-
-    def concat_vals(self, other):
-        return torch.cat([self.pt_val.unsqueeze(0), other.pt_val.unsqueeze(0)], 0)
-
-    def min(self, other):
-        mv, _ = self.concat_vals(other).min(1)
-        self.pt_val = mv
-        return self
-
-    def max(self, other):
-        mv, _ = self.concat_vals(other).max(1)
-        self.pt_val = mv
-        return self
-
-
-class BBOX2():
-    def __init__(self, v2_min=None, v2_max=None):
-        self.min = v2_min if v2_min is not None else Vector2(float_info.max, float_info.max)
-        self.max = v2_max if v2_max is not None else Vector2(-float_info.max, -float_info.max)
-
-    def clone(self):
-        return BBOX2(self.min.clone(), self.max.clone())
-
-    def expand_by_point(self, point):
-        self.min.min(point)
-        self.max.max(point)
-
-    # overwrites bbox with combined union -- clone to avoid issues
-    def union(self, other):
-        print("warning, bbox union not verified. \
-                This print statement should annoy you.")
-        self.min.min(other.min)
-        self.max.max(other.max)
-        return self
-
-
-class Viewport():
-
-    def __init__(self, xmin, xmax, ymin, ymax):
-        self.xmin = xmin
-        self.xmax = xmax
-        self.ymin = ymin
-        self.ymax = ymax
+getbuffer = np.getbuffer if hasattr(np, "getbuffer") else memoryview
+two_pi = 2*np.pi
 
 
 # pytorch object holding image data
@@ -169,11 +93,24 @@ def img_to_surface(file_name):
     return cairocffi.ImageSurface.create_from_png(file_name)
 
 
+def all_white(width, height, channels=4):
+    return np.ones([channels, width, height], dtype="uint8")*255
+
+
+def empty_surface(width, height, is_white=False):
+    data = None if not is_white else getbuffer(all_white(width, height).reshape(-1))
+    return cairocffi.ImageSurface(cairocffi.FORMAT_ARGB32,
+                                  width,
+                                  height,
+                                  data=data)
+
+
 def np_to_surface(np_img):
+    np_uint_data = (255*np_img).astype("uint8")
     return cairocffi.ImageSurface(cairocffi.FORMAT_ARGB32,
                                   np_img.shape[2],
                                   np_img.shape[1],
-                                  data=np.getbuffer(np_img.reshape(-1)))
+                                  data=getbuffer(np_uint_data.reshape(-1)))
 
 
 # convert surface into [0,1] floats
@@ -312,6 +249,98 @@ def normalized_similarity(img, target_img, similarity_fct):
     # remove baseline from comparison, and baseline from perfect sim score (1)
     # then divide to get normalized score
     return (sim_comparison - target_img.baseline) / (1. - target_img.baseline)
+
+
+# https://github.com/probmods/webppl/blob/gh-pages-vinesDemoFreeSketch/demos/vines/js/render.js#L296
+def render_branch(context, branch):
+    # brown branch
+    context.set_source_rgb(89/255., 58/255., 26/255.)
+    context.new_path()
+    context.set_line_width(branch["width"].data[0])
+    context.set_line_cap(cairocffi.LINE_CAP_ROUND)
+    context.move_to(branch["start"].x, branch["start"].y)
+    context.line_to(branch["end"].x, branch["end"].y)
+    context.stroke()
+    context.close_path()
+
+
+# https://github.com/probmods/webppl/blob/gh-pages-vinesDemoFreeSketch/demos/vines/js/render.js#L304
+def render_leaf(context, leaf):
+    context.save()
+    context.set_source_rgb(68/255., 106/255., 57/255.)
+    context.translate(leaf["center"].x, leaf["center"].y)
+    context.rotate(leaf["angle"].data[0])
+    context.scale(leaf["length"].data[0], leaf["width"].data[0])
+    context.new_path()
+    context.arc(0, 0, 0.5, 0, two_pi)
+    context.fill()
+    context.close_path()
+    context.restore()
+
+
+# https://github.com/probmods/webppl/blob/gh-pages-vinesDemoFreeSketch/demos/vines/js/render.js#L315
+def render_flower(context, flower):
+    context.set_source_rgb(194/255., 75/255., 119/255.)
+    context.new_path()
+    context.arc(flower["center"].x, flower["center"].y, flower["radius"].data[0], 0, two_pi)
+    context.fill()
+    context.close_path()
+
+
+def render_type(context, render_obj):
+    print("render: {}".format(render_obj))
+    geo_type = render_obj["type"].lower()
+    rfct = globals()['render_{}'.format(geo_type)]
+    rfct(context, render_obj[geo_type])
+
+
+def subset_type(geo_states, geo_type):
+    return [geo for geo in geo_states if geo["type"] == geo_type]
+
+
+# // Render update
+# most logic matches this function:
+# https://github.com/probmods/webppl/blob/gh-pages-vinesDemoFreeSketch/demos/vines/js/render.js#L334
+def render_update(full_geo, viewport, print_render=False):
+
+    # get our init state with some info
+    init_state, geo_states = full_geo[0], full_geo[1:]
+    img_size = init_state["img_size"]
+    start_viewport = init_state["viewport"]
+
+    # create our empty canvas
+    img_surface = empty_surface(*img_size, is_white=True)
+
+    # draw context
+    context = cairocffi.Context(img_surface)
+
+    # set context with initial viewport and scaling
+    vwidth, vheight = start_viewport.xmax - start_viewport.xmin, start_viewport.ymax - start_viewport.ymin
+    context.scale(img_size[0]/vwidth, img_size[1]/vheight)
+    context.translate(-start_viewport.xmin, -start_viewport.ymin)
+
+    # all states in ascending order
+    # we'll subset out specific types and render accordingly
+    all_states = sorted(geo_states, key=lambda x: x["n"])
+
+    # context render fct
+    render_type_fct = partial(render_type, context)
+    subset_fct = partial(subset_type, all_states)
+
+    # render branches first
+    list(map(render_type_fct, subset_fct('branch')))
+    list(map(render_type_fct, subset_fct('leaf')))
+    list(map(render_type_fct, subset_fct('flower')))
+
+    # return to our tensor
+    pt_img = surface_to_pt(img_surface)
+
+    if print_render:
+        vis = Visdom(env='paint')
+        vis.image(pt_img.data.numpy())
+
+    # adjust viewport? not currently
+    return PtImg2D(pt_img=pt_img), viewport
 
 
 if __name__ == "__main__":

@@ -3,15 +3,13 @@
 from pdb import set_trace as bb
 import numpy as np
 import torch
-from torch.autograd import Variable as V
-from torch import Tensor as T
 import pyro.distributions as dist
 import pyro
 from collections import defaultdict
-from utils import VT, VTA
-from render import Vector2, BBOX2, Viewport
-from render import normalized_similarity, load_target
-
+from utils import VT, VTA, BBOX2, Vector2, Viewport
+from render import normalized_similarity, load_target, render_update
+from render import make_gradient_weight_similarity_fct
+from visdom import Visdom
 # ----------------------------------------------------------------------------
 # Globals / constants
 
@@ -51,15 +49,16 @@ def bbox_leaf(new_leaf):
     p1 = Vector2(w2, -l2)
     p2 = Vector2(-w2, l2)
     p3 = Vector2(w2, l2)
-    sin = np.sin(new_leaf["angle"])
-    cos = np.cos(new_leaf["angle"])
+    # just grab float value not tensor val
+    f_sin = torch.sin(new_leaf["angle"]).data[0]
+    f_cos = torch.cos(new_leaf["angle"]).data[0]
     center = new_leaf["center"]
     # is this pivot stuff a bug, it says p0, p0, p0, p0?
     # https://github.com/probmods/webppl/blob/gh-pages-vinesDemoFreeSketch/demos/vines/js/utils.js#L364
-    p0 = pivot(p0, sin, cos, center)
-    p1 = pivot(p1, sin, cos, center)
-    p2 = pivot(p2, sin, cos, center)
-    p3 = pivot(p3, sin, cos, center)
+    p0 = pivot(p0, f_sin, f_cos, center)
+    p1 = pivot(p1, f_sin, f_cos, center)
+    p2 = pivot(p2, f_sin, f_cos, center)
+    p3 = pivot(p3, f_sin, f_cos, center)
     # expand our bounding box world
     box = BBOX2()
     box.expand_by_point(p0)
@@ -72,7 +71,7 @@ def bbox_leaf(new_leaf):
 # https://github.com/probmods/webppl/blob/gh-pages-vinesDemoFreeSketch/demos/vines/js/utils.js#L376
 def bbox_flower(new_flower):
     f_center = new_flower["center"]
-    radius = new_flower["radius"]
+    radius = new_flower["radius"].data[0]
     # get flower min/max, and use those as the bounding box
     flower_min = Vector2(f_center.x - radius, f_center.y - radius)
     flower_max = Vector2(f_center.x + radius, f_center.y + radius)
@@ -91,17 +90,6 @@ def bbox_for_type(type_name, type_obj):
     else:
         raise NotImplementedError(
             "Unknown bbox for type: {}".format(type_name))
-
-
-# // Render update
-def render_update(geo, viewport):
-    # TODO: Render to 2D canvas via python TODO^2: Render to Unity
-    raise NotImplementedError("Yet to render to canvas")
-    # return img, viewport
-
-    # utils.rendering.drawImgToRenderContext(globalStore.genImg);
-    # utils.rendering.renderIncr(geo, viewport); globalStore.genImg =
-    # utils.rendering.copyImgFromRenderContext();
 
 
 # Basically Gaussian log-likelihood, without the constant factor
@@ -134,12 +122,13 @@ class ProceduralVine():
         # set the state as an array
         self.geo_state = [initial_state]
         self.last_geo = None
+        self.last_f = None
 
     def _flip(self, name, p):
-        return pyro.sample(name, dist.bernoulli, p)
+        return pyro.sample(name, dist.bernoulli, p).data[0]
 
-    def _discrete3(self, name, ps):
-        return pyro.sample(name, dist.categorical, ps)
+    def _discrete3(self, name, ps, vs=None):
+        return pyro.sample(name, dist.categorical, ps, vs=vs, one_hot=False)
 
     def _gaussian(self, name, mu, sigma):
         return pyro.sample(name, dist.normal, mu, sigma)
@@ -189,12 +178,15 @@ class ProceduralVine():
         self.last_geo = geo
 
     def add_branch(self, site_name, cur_state, new_branch):
+        print("Branch added")
         return self.add_type(site_name, 'branch', cur_state, new_branch)
 
     def add_leaf(self, site_name, cur_state, new_leaf):
+        print("Leaf added")
         return self.add_type(site_name, 'leaf', cur_state, new_leaf)
 
     def add_flower(self, site_name, cur_state, new_flower):
+        print("Flower added")
         return self.add_type(site_name, 'flower', cur_state, new_flower)
 
 
@@ -229,9 +221,9 @@ class ObjectCounter(object):
 #  ----------------------------------------------------------------------------
 #  The program itself
 def main(simTightness=0.02, boundsTightness=0.001,
-         initialWidth=0.75,
+         initial_width=0.35,
          widthDecay=0.975,
-         minWidthPercent=0.15,
+         min_width_percent=0.15,
          leafAspect=2.09859154929577,
          leafWidthMul=1.3,
          flowerRadMul=1,
@@ -239,16 +231,24 @@ def main(simTightness=0.02, boundsTightness=0.001,
 
     # for now, target is a global. Later, this can be sent in batches
     target = load_target(target_file)
-    minWidth = minWidthPercent * initialWidth,
+    min_width = min_width_percent * initial_width
     start_viewport = Viewport(**{"xmin": -12, "xmax": 12, "ymin": -22, "ymax": 2})
+
+    vis = Visdom(env='paint')
+    vis.image(target.pt_img.data.numpy())
+
+    # basic sim function, send in edge weight for closure
+    similarity_fct = make_gradient_weight_similarity_fct(1.5)
 
     def target_factor(full_state, bbox, viewport, target):
 
         # render
-        partial_render, viewport = render_update(full_state, viewport)
+        partial_render, viewport = render_update(full_state,
+                                                 viewport,
+                                                 print_render=True)
 
         # Similarity factor
-        sim = normalized_similarity(partial_render, target)
+        sim = normalized_similarity(partial_render, target, similarity_fct)
 
         # factor to add to observe log_pdf
         simf = makescore(sim, 1, simTightness)
@@ -287,8 +287,8 @@ def main(simTightness=0.02, boundsTightness=0.001,
         init_state = get_state({
             "depth": 0,
             "pos": starting_world_pos,
-            "angle": 0,
-            "width": initialWidth,
+            "angle": VTA(0),
+            "width": VTA(initial_width),
             "prev_branch": None
         })
 
@@ -299,6 +299,8 @@ def main(simTightness=0.02, boundsTightness=0.001,
             "width": init_state["width"],
             "prev_branch": init_state["prev_branch"]
         })
+        start_state["img_size"] = target.pt_img.data.shape[1:]
+        start_state["viewport"] = start_viewport.clone()
 
         # hold our current procedural vine object
         proc_vines = ProceduralVine(start_state, BBOX2(), start_viewport,
@@ -311,7 +313,7 @@ def main(simTightness=0.02, boundsTightness=0.001,
         def create_branch(cur_state):
 
             # calculate the width
-            width = VTA(widthDecay * cur_state["width"])
+            width = widthDecay * cur_state["width"]
             length = VTA(2)
 
             new_ang = cur_state["angle"] + proc_vines._gaussian(oc.angle,
@@ -335,14 +337,14 @@ def main(simTightness=0.02, boundsTightness=0.001,
             })
 
             # generate leaf (no futures yet) TODO: Add futures/pyro promises
-            leaf_sopt = leaf_opts[proc_vines._discrete3(oc.leaf, leaf_probs)]
+            leaf_sopt = proc_vines._discrete3(oc.leaf, leaf_probs, vs=leaf_opts)
 
             if leaf_sopt != 'none':
-                lwidth = VT([leafWidthMul * initialWidth])
+                lwidth = VT([leafWidthMul * initial_width])
                 llength = lwidth * leafAspect
                 angmean = np.pi / 4 if leaf_sopt == 'left' else -np.pi / 4
                 langle = new_branch["angle"] \
-                    + proc_vines._gaussian(oc.leaf_angle, VTA(angmean), VTA(np.pi / 12))
+                    + proc_vines._gaussian(oc.leaf_angle, VTA(angmean), VTA(np.pi / 12)).data[0]
 
                 lstart = new_branch["start"].clone().lerp(
                     new_branch["end"], 0.5)
@@ -365,12 +367,12 @@ def main(simTightness=0.02, boundsTightness=0.001,
             if proc_vines._flip(oc.flower, VTA(0.5)):
                 proc_vines.add_flower(oc.flower_obs, new_state, {
                     "center": new_branch["end"],
-                    "radius": flowerRadMul * initialWidth,
+                    "radius": VTA(flowerRadMul * initial_width),
                     "angle": new_branch["angle"]
                 })
 
             # Terminate? TODO: Add futures/pyro terminate
-            terminate_prob = 0.5
+            terminate_prob = 0.25
             # do we terminate here and now?
             if proc_vines._flip(oc.terminate,
                                 VTA(terminate_prob)):
@@ -383,14 +385,14 @@ def main(simTightness=0.02, boundsTightness=0.001,
                 # TODO: Add as future
                 # pyro.future(lambda x: )
                 if not proc_vines.terminated \
-                        and new_state["width"] > minWidth \
+                        and new_state["width"].data[0] > min_width \
                         and proc_vines._flip(oc.reup_branch_one, VTA(0.66)):
                     # create another branch!
                     create_branch(new_state)
 
                     # TODO: Add as future pyro.future(lambda x: )
                     if not proc_vines.terminated and \
-                            new_state["width"] > minWidth and \
+                            new_state["width"].data[0] > min_width and \
                             proc_vines._flip(oc.reup_branch_two, VTA(0.5)):
 
                         # if we fliipped yes, keep the good times going
@@ -406,7 +408,7 @@ def main(simTightness=0.02, boundsTightness=0.001,
     # call our model plz
     model()
 
-    bb()
+    # bb()
 
 
 if __name__ == "__main__":
@@ -417,6 +419,9 @@ if __name__ == "__main__":
     # help='master configuration file for running the training experiments')
     parser.add_argument('-tgt', "--target_file", type=str, required=True,
                         help='target to match')
+
+    parser.add_argument('-iw', "--initial_width", type=float,
+                        help='width of lines to draw')
 
     args = parser.parse_args()
 
