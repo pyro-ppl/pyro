@@ -2,7 +2,7 @@ from pyro import poutine
 from pyro.infer.svi import SVI
 
 
-def MAP(model, optim, *args, **kwargs):
+class MAP(SVI):
     """
     :param model: the model (callable containing Pyro primitives)
     :param optim: a wrapper for a PyTorch optimizer
@@ -17,9 +17,10 @@ def MAP(model, optim, *args, **kwargs):
     Likelihood inference for a variable, create that variable using a
     ``pyro.param`` statement rather than a ``pyro.sample`` statement.
     """
-    model = poutine.lower(model)
+    def __init__(self, model, optim, *args, **kwargs):
+        model = poutine.lower(model)
 
-    def guide(*args, **kwargs):
-        pass
+        def guide(*args, **kwargs):
+            pass
 
-    return SVI(model, guide, optim, loss="ELBO", *args, **kwargs)
+        super(MAP, self).__init__(model, guide, optim, loss="ELBO", *args, **kwargs)
