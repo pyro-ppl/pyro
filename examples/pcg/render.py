@@ -9,11 +9,11 @@ from torch import ones as OT
 from torch.autograd import Variable as V
 import torch.nn.functional as F
 import numpy as np
-
+from sys import float_info
 
 # basic vector additions and lerping
 class Vector2():
-    def __init__(self, x, y):
+    def __init__(self, x=0, y=0):
         self.x = x
         self.y = y
 
@@ -40,24 +40,45 @@ class Vector2():
         self.y = self.y * mult
         return self
 
+    def min(self, other):
+        self.x = min(self.x, other.x)
+        self.y = min(self.y, other.y)
+        return self
+
+    def max(self, other):
+        self.x = max(self.x, other.x)
+        self.y = max(self.y, other.y)
+        return self
+
 
 class BBOX2():
-    def __init__(self, v2_min, v2_max):
-        self.min = v2_min
-        self.max = v2_max
+    def __init__(self, v2_min=None, v2_max=None):
+        self.min = v2_min if v2_min is not None else Vector2(float_info.max, float_info.max)
+        self.max = v2_max if v2_max is not None else Vector2(-float_info.max, -float_info.max)
 
     def clone(self):
         return BBOX2(self.min.clone(), self.max.clone())
+
+    def expand_by_point(self, point):
+        self.min.min(point)
+        self.max.max(point)
 
     # overwrites bbox with combined union -- clone to avoid issues
     def union(self, other):
         print("warning, bbox union not verified. \
                 This print statement should annoy you.")
-        self.min = Vector2(min(self.min.x, other.min.x),
-                           min(self.min.y, other.min.y))
-        self.max = Vector2(max(self.max.x, other.max.x),
-                           max(self.max.y, other.max.y))
+        self.min.min(other.min)
+        self.max.max(other.max)
         return self
+
+
+class Viewport():
+
+    def __init__(self, xmin, xmax, ymin, ymax):
+        self.xmin = xmin
+        self.xmax = xmax
+        self.ymin = ymin
+        self.ymax = ymax
 
 
 # pytorch object holding image data
