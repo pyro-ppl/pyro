@@ -8,7 +8,7 @@ from multiprocessing import Process, Manager, Semaphore, Lock, Queue, Array
 # from arrow import get as aget
 from arrow import now as anow
 from uuid import uuid4
-from numpy.random import normal
+from numpy.random import normal, seed
 
 
 def get_uuid():
@@ -45,33 +45,59 @@ def store_fork_continue(*args, **kwargs):
         trace_dict[fct_key]['value'] = sample(*mu_sigma)
 
 
-def foo(local_uuid, shared_dict, manager, main_exit=False):
-    shared_semaphore = manager.Semaphore(0)
+def foo(local_uuid, lock, shared_dict, manager, main_exit=False):
     print("Fork for your life {}".format(os.getpid()))
+    if local_uuid not in shared_dict:
+        shared_dict[local_uuid] = {'value': 0, 'thread': None}
+        # : manager.list()}
+
     pid = os.fork()
+    seed()
     print("Post forking {}".format(pid))
     # master
     if pid:
 
         print("Main so hot post pid right now")
-        shared_dict[local_uuid] = {'value': sample(0, 1), 'thread': shared_semaphore}
-        print("Main coming through: {}".format(shared_dict[local_uuid]))
+        with lock:
+            try:
+                print("in lock")
+                # old_val = shared_dict.pop(local_uuid, None)
+                # print("old val eradticated")
+                shared_dict.update({local_uuid: {'value': sample(0, 1)}})
+                print("val changed")
+                # shared_dict[local_uuid]['thread'] = shared_semaphore
+                # shared_dict.update({local_uuid: {'value': sample(0, 1), 'thread': shared_semaphore}})
+                print("shared dict updated")
+            except Exception as e:
+                print("Issue with update {}".format(e))
+        # print("Main coming through: {}".format(shared_dict[local_uuid]))
 
-        print("Waiting on child")
-        os.waitpid(pid, 0)
+        # print("Waiting on child")
         print("Finished waitin, killing main")
+        # os.waitpid(pid, 0)
+        # print("Finished waitin, doing sumtin")
         os._exit(0)
         # if main_exit:
-        #     print("killing main {}".format(pid))
+        #     print("waiting then killing main {}".format(pid))
         #     os._exit(0)
 
     else:
+        print("semaphore purgatory")
+        shared_semaphore = manager.Semaphore(0)
+
+        shared_dict.update({local_uuid + "_thread": {'thread': shared_semaphore}})
+
+        # time.sleep(0)
         shared_semaphore.acquire()
-        print("Child fork, dying after release")
-        os._exit(0)
-        # print("Child fork, forking after release")
+        # print("Child fork, dying after release")
+        # os._exit(0)
+        print("Child fork, forking after release")
         # # call in again plz -- why stop the fun?
-        # foo(local_uuid, shared_dict, manager, main_exit=True)
+        foo(local_uuid, lock, shared_dict, manager, main_exit=True)
+
+        print("Post foo existance")
+        os._exit(0)
+
 
 
 def main(*args, **kwargs):
@@ -79,11 +105,14 @@ def main(*args, **kwargs):
     manager = Manager()
     shared_obj = manager.dict()
     all_processes = []
+    lock = Lock()
+
 
     def run_and_kill():
-        p = mp.Process(target=foo, args=(get_uuid(), shared_obj, manager,))
+        p = mp.Process(target=foo, args=(get_uuid(), lock, shared_obj, manager,))
         p.start()
         all_processes.append(p)
+        # p.join()
 
 
     reply = 'c'
@@ -99,6 +128,20 @@ def main(*args, **kwargs):
 
         reply = input("f for function call / e for exit\n")
 
+
+    # for i in range(10):
+    #     print("rnc {}".format(i))
+    #     run_and_kill()
+
+    # time.sleep(3)
+    for i in range(10):
+        obj_threads = [key for key in shared_obj.keys() if '_thread' in key]
+        o1 = obj_threads[0]
+        print('sh : {}'.format(shared_obj[o1.replace('_thread', '')]))
+        time.sleep(1)
+        shared_obj[o1]['thread'].release()
+
+    time.sleep(1)
     print("wait all")
     for mz in all_processes:
         mz.join()
