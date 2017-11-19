@@ -44,20 +44,46 @@ def store_fork_continue(*args, **kwargs):
         trace_dict[fct_key]['thread'] = shared_semaphore
         trace_dict[fct_key]['value'] = sample(*mu_sigma)
 
-def foo(shared_dict):
-    local_uuid = get_uuid()
-    shared_dict[local_uuid] = sample(0,1)
+
+def foo(local_uuid, shared_dict, manager, main_exit=False):
+    shared_semaphore = manager.Semaphore(0)
+    print("Fork for your life {}".format(os.getpid()))
+    pid = os.fork()
+    print("Post forking {}".format(pid))
+    # master
+    if pid:
+
+        print("Main so hot post pid right now")
+        shared_dict[local_uuid] = {'value': sample(0, 1), 'thread': shared_semaphore}
+        print("Main coming through: {}".format(shared_dict[local_uuid]))
+
+        print("Waiting on child")
+        os.waitpid(pid, 0)
+        print("Finished waitin, killing main")
+        os._exit(0)
+        # if main_exit:
+        #     print("killing main {}".format(pid))
+        #     os._exit(0)
+
+    else:
+        shared_semaphore.acquire()
+        print("Child fork, dying after release")
+        os._exit(0)
+        # print("Child fork, forking after release")
+        # # call in again plz -- why stop the fun?
+        # foo(local_uuid, shared_dict, manager, main_exit=True)
 
 
 def main(*args, **kwargs):
     mp.set_start_method('fork')
     manager = Manager()
     shared_obj = manager.dict()
+    all_processes = []
 
     def run_and_kill():
-        p = mp.Process(target=foo, args=(shared_obj,))
+        p = mp.Process(target=foo, args=(get_uuid(), shared_obj, manager,))
         p.start()
-        p.join()
+        all_processes.append(p)
 
 
     reply = 'c'
@@ -73,7 +99,9 @@ def main(*args, **kwargs):
 
         reply = input("f for function call / e for exit\n")
 
-
+    print("wait all")
+    for mz in all_processes:
+        mz.join()
 
 if __name__ == "__main__":
     import argparse
