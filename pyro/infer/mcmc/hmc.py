@@ -263,10 +263,10 @@ def test_quartic_oscillator():
 
 
 def main():
-    #test_verlet_integrator()
-    #test_circular_planetary_motion()
+    test_verlet_integrator()
+    test_circular_planetary_motion()
     test_quartic_oscillator()
-    #test_normal_normal()
+    test_normal_normal()
 
 
 if __name__ == '__main__':
