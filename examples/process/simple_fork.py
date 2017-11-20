@@ -6,7 +6,7 @@ import os
 import multiprocessing as mp
 from multiprocessing import Process, Manager, Semaphore, Lock, Queue, Array
 from multiprocessing.managers import BaseManager, SyncManager, ListProxy
-
+import numpy as np
 # from arrow import get as aget
 from arrow import now as anow
 from uuid import uuid4
@@ -185,25 +185,38 @@ def multi_try(retries=1):
     return _wrapper
 
 
-@multi_try(5)
+@multi_try(20)
 def connect_add_message(msg):
     dm = DM()
+    print("Connect")
     dm.connect()
+    print("Access")
+    print("update {}".format(msg))
+    # dm.get_shared_queue().put({get_uuid(): msg})
+    # dm.get_shared_globals().update({get_uuid(): msg})
     shared_list = dm.get_shared_globals().get('shared_list')
+    # print("update {}".format(msg))
+    # time.sleep(.1 + np.random.uniform(3))
     shared_list.append(msg)
+    print("finish {}".format(msg))
 
 def access_shared_queue(i):
     # pre-fork we add registers, they'll be there post fork
     add_registers()
     pid = os.fork()
+    seed()
     if pid:
         # attempt to get a connection up to ten times
         connect_add_message("hello master doofus {}".format(i))
+        # time.sleep(1)
+        print("closing master {}".format(i))
         os._exit(0)
 
     else:
 
         connect_add_message("hello child doofus {}".format(i))
+        # time.sleep(1)
+        print("closing child {}".format(i))
         os._exit(0)
 
 
@@ -242,6 +255,11 @@ def mt():
     raise Exception("trying this thing out")
 
 
+def random_delay_target(fct, *args, **kwargs):
+    # time.sleep(.1 + np.random.uniform(0, 3))
+    fct(*args, **kwargs)
+
+
 def main(*args, **kwargs):
     mp.set_start_method('fork')
 
@@ -257,17 +275,20 @@ def main(*args, **kwargs):
     m.get_shared_globals().update({'shared_list': gl})
     # glist = m.create_list()
     # gg = )
-    bb()
     # .update({'shared_list': glist})
 
-    call_count = 50
-    all_processes = [Process(target=access_shared_queue, args=[i])
+    call_count = 25
+    all_processes = [Process(target=random_delay_target, args=[access_shared_queue, i])
                      for i in range(call_count)]
+
     list(map(lambda x: x.start(), all_processes))
-    list(map(lambda x: x.join(), all_processes))
-    mlist = m.get_shared_globals().get('shared_list')
     bb()
+    # print("Sleep waiting")
+    time.sleep(1)
+    mlist = m.get_shared_globals().get('shared_list')
     messages = [mlist[i] for i in range(len(mlist))]
+    bb()
+    list(map(lambda x: x.join(), all_processes))
     # messages = [m.get_shared_queue().get() for i in range(2*call_count)]
     bb()
 
