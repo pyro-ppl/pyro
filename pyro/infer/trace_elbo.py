@@ -125,7 +125,7 @@ class Trace_ELBO(object):
             warnings.warn('Encountered NAN loss')
         return loss
 
-    def loss_and_grads(self, model, guide, *args, **kwargs):
+    def loss_and_grads(self, model, guide, callback=None, *args, **kwargs):
         """
         :returns: returns an estimate of the ELBO
         :rtype: float
@@ -134,6 +134,7 @@ class Trace_ELBO(object):
         Performs backward on the latter. Num_particle many samples are used to form the estimators.
         """
         elbo = 0.0
+        cb_returns = []
         # grab a trace from the generator
         for weight, model_trace, guide_trace, log_r in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = weight * 0
