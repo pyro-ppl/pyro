@@ -187,7 +187,9 @@ class PyroVAEImpl(VAE):
         z_mean, z_std = ng_zeros([data.size(0), 20]), ng_ones([data.size(0), 20])
         z = pyro.sample('latent', Normal(z_mean, z_std))
         img = decoder.forward(z)
-        pyro.observe('obs', Bernoulli(img), data.view(-1, 784))
+        pyro.sample('obs',
+                    Bernoulli(img),
+                    obs=data.view(-1, 784))
 
     def guide(self, data):
         encoder = pyro.module('encoder', self.vae_encoder)
