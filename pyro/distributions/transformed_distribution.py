@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import numbers
 from abc import ABCMeta, abstractmethod
 
 import torch
@@ -88,12 +89,16 @@ class TransformedDistribution(Distribution):
         Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_log_pdf`
         """
         value = y
-        log_pdf = 0.0
+        log_det_jacobian = 0.0
         for bijector in reversed(self.bijectors):
-            log_pdf -= bijector.batch_log_det_jacobian(value, *args, **kwargs)
+            log_det_jacobian += bijector.batch_log_det_jacobian(value, *args, **kwargs)
             value = bijector.inverse(value)
-        log_pdf += self.base_dist.batch_log_pdf(value, *args, **kwargs)
-        return log_pdf
+        base_log_pdf = self.base_dist.batch_log_pdf(value, *args, **kwargs)
+        if not isinstance(log_det_jacobian, numbers.Number):
+            assert log_det_jacobian.size() == base_log_pdf.size(), \
+                'Invalid batch_log_det_jacobian().size():\nexpected {}\nactual {}'.format(
+                        base_log_pdf.size(), log_det_jacobian.size())
+        return base_log_pdf - log_det_jacobian
 
 
 @add_metaclass(ABCMeta)
@@ -240,15 +245,16 @@ class InverseAutoregressiveFlow(Bijector):
             "key collision in _add_intermediate_to_cache"
         self._intermediates_cache[(y, name)] = intermediate
 
-    def log_det_jacobian(self, y, *args, **kwargs):
+    def batch_log_det_jacobian(self, y, *args, **kwargs):
         """
-        Calculates the determinant of the log jacobian
+        Calculates the elementwise determinant of the log jacobian
         """
         if (y, 'sigma') in self._intermediates_cache:
             sigma = self._intermediates_cache.pop((y, 'sigma'))
         else:
             raise KeyError("Bijector InverseAutoregressiveFlow expected to find" +
                            "key in intermediates cache but didn't")
+        log_sigma = torch.log(sigma)
         if 'log_pdf_mask' in kwargs:
-            return torch.sum(kwargs['log_pdf_mask'] * torch.log(sigma))
-        return torch.sum(torch.log(sigma))
+            log_sigma = log_sigma * kwargs['log_pdf_mask']
+        return log_sigma.sum(-1)
