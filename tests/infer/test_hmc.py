@@ -12,6 +12,7 @@ from pyro.infer.mcmc.mcmc import MCMC
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+
 class GaussianChain(object):
     def __init__(self, dim, n, mu_0, lambda_prec):
         self.dim = dim
