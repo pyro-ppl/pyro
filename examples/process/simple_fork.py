@@ -12,7 +12,8 @@ from arrow import now as anow
 from uuid import uuid4
 from numpy.random import normal, seed, choice
 from collections import defaultdict
-
+import contextlib
+import functools
 
 # Forking multiprocessing:
 # https://github.com/python/cpython/blob/3972628de3d569c88451a2a176a1c94d8822b8a6/Lib/multiprocessing/popen_fork.py
@@ -145,31 +146,75 @@ def register_shared_objects(cls, keys_and_callables):
         print("registering {} - {}".format(key, kw))
         cls.register(key, **kw)
 
-def access_shared_queue():
+def connect_retry(max_tries):
+    while max_tries > 0:
+        try:
+            dm = DM()
+            dm.connect()
+            return dm
+        except Exception:
+            print("Failed connect")  # .format(e))
+            max_tries -= 1
+
+    return None
+
+
+def try_get(max_tries, fct, *args, **kwargs):
+    # try everythign
+    dm = connect_retry(max_tries)
+
+    while max_tries > 0:
+        try:
+            return dm, getattr(dm, fct)(*args, **kwargs)
+        except Exception:
+            print("Failed try {}".format(fct))
+            max_tries -= 1
+
+
+# https://stackoverflow.com/questions/36295766/using-yield-twice-in-contextmanager
+def multi_try(retries=1):
+    def _wrapper(func):
+        @functools.wraps(func)
+        def wrapped(*args, **kwargs):
+            for _ in range(retries + 1):  # Loop retries + first attempt
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    print("fct call failed {}".format(e.args))
+        return wrapped
+    return _wrapper
+
+
+@multi_try(5)
+def connect_add_message(msg):
+    dm = DM()
+    dm.connect()
+    shared_list = dm.get_shared_globals().get('shared_list')
+    shared_list.append(msg)
+
+def access_shared_queue(i):
     # pre-fork we add registers, they'll be there post fork
     add_registers()
     pid = os.fork()
     if pid:
-        dm = DM()
-        dm.connect()
-        print("parent connected to dm")
-        queue = dm.get_shared_queue()
-        queue.put("hello master doofus")
+        # attempt to get a connection up to ten times
+        connect_add_message("hello master doofus {}".format(i))
         os._exit(0)
+
     else:
-        dm = DM()
-        dm.connect()
-        print("child connected to dm")
-        queue = dm.get_shared_queue()
-        queue.put("hello child doofus")
+
+        connect_add_message("hello child doofus {}".format(i))
         os._exit(0)
+
 
 class DM(SyncManager):
     def __init__(self):
-        super(DM, self).__init__(address=('127.0.0.1', 50000), authkey=b'abracadabra')
+        super(DM, self).__init__(address=('127.0.0.1', 50000))  # , authkey=b'abracadabra')
 
 def add_registers():
     DM.register("get_shared_queue")
+    DM.register("get_shared_globals")
+    DM.register("create_list")
     DM.register("get_shared_traces")
     DM.register("get_shared_threads")
 
@@ -177,11 +222,25 @@ def start_dm():
     shared_queue = Queue()
     traces = {}
     threads = {}
+    shared_globals = {}
+    # token_list = []
+    # list_proxy = ListProxy(token_list)
+    # shared_lists = defaultdict(list)
+
     # DM.register('get_list', list, proxytype=ListProxy)
     DM.register('get_shared_queue', callable=lambda: shared_queue)
+    DM.register('get_shared_globals', callable=lambda: shared_globals)
+    DM.register('create_list', list, proxytype=ListProxy)
     DM.register('get_shared_traces', callable=lambda: traces)
     DM.register('get_shared_threads', callable=lambda: threads)
     DM().get_server().serve_forever()
+
+
+@multi_try(5)
+def mt():
+    print("Attempting")
+    raise Exception("trying this thing out")
+
 
 def main(*args, **kwargs):
     mp.set_start_method('fork')
@@ -193,12 +252,23 @@ def main(*args, **kwargs):
     add_registers()
     m = DM()
     m.connect()
+
+    gl = m.list()
+    m.get_shared_globals().update({'shared_list': gl})
+    # glist = m.create_list()
+    # gg = )
     bb()
+    # .update({'shared_list': glist})
 
-    p = Process(target=access_shared_queue, args=())
-    p.start()
-    p.join()
-
+    call_count = 50
+    all_processes = [Process(target=access_shared_queue, args=[i])
+                     for i in range(call_count)]
+    list(map(lambda x: x.start(), all_processes))
+    list(map(lambda x: x.join(), all_processes))
+    mlist = m.get_shared_globals().get('shared_list')
+    bb()
+    messages = [mlist[i] for i in range(len(mlist))]
+    # messages = [m.get_shared_queue().get() for i in range(2*call_count)]
     bb()
 
     # proc_address = ('127.0.0.1', 2000)
