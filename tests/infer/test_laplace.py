@@ -23,5 +23,5 @@ def test_laplace_sample():
     for _ in range(100):
         infer.step(data)
 
-    hess = infer.get_hessians("mu")
-    assert_equal(hess.data[0], 4, prec=0.1)
+    mu_hess = infer.get_hessians(["mu"], data)["mu"]
+    assert_equal(mu_hess[0, 0], 4, prec=0.1)

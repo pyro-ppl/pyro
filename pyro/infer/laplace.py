@@ -1,3 +1,4 @@
+import pyro
 from pyro import poutine
 from pyro.infer.map import MAP
 from pyro.util import hessians
@@ -20,13 +21,11 @@ class Laplace(MAP):
         super(MAP, self).__init__(model, guide, optim, loss="ELBO", *args, **kwargs)
         
         
-    def get_hessians(params, *args, **kwargs):
+    def get_hessians(self, params, data):
         """
         :param xs: Parameters' name
-        :returns: Hessians of posteriors of each `x` in `xs`
+        :returns: A dict of the form `param: Hessian`
         """
         xs = [pyro.param(p) for p in params]
-        # callback is a tuple with first element is a function, and remaining elements is some of its arguments
-        loss, hs = self.loss_and_grads(self.model, self.guide, callback=(hessians, xs), *args, **kwargs)
-        hs = accumulate(hs)
+        hs = self.loss_and_grads(self.model, self.guide, data, callback=(hessians, xs))
         return dict(zip(params, hs))
