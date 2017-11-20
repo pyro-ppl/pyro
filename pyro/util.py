@@ -399,7 +399,7 @@ def hessians(ys, xs):
     :param ys: A sequence of Variables whose sum is used as output
     :param xs: A sequence of Variables to be obtained Hessians
     :returns: A tuple of Hessian matrices (2D Tensors)
-    
+
     Get Hessians of sum of `ys` (output) with respect to each `x` in `xs`. Note that
     each `x` should be a 1D tensor.
     """

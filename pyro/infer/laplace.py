@@ -19,8 +19,7 @@ class Laplace(MAP):
             pass
 
         super(MAP, self).__init__(model, guide, optim, loss="ELBO", *args, **kwargs)
-        
-        
+
     def get_hessians(self, params, data):
         """
         :param xs: Parameters' name

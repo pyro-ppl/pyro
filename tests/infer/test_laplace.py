@@ -1,4 +1,3 @@
-import pytest
 import torch
 from torch.autograd import Variable
 
@@ -11,7 +10,7 @@ from tests.common import assert_equal
 
 
 def test_laplace_sample():
-    
+
     def model(data):
         mu = pyro.sample("mu", dist.normal, ng_zeros(1), ng_ones(1))
         for i, x in enumerate(data):
