@@ -5,7 +5,7 @@ import torch
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
-from pyro.distributions.util import get_probs_and_logits, torch_eye, torch_multinomial, torch_zeros_like
+from pyro.distributions.util import get_probs_and_logits, torch_multinomial, torch_zeros_like
 
 
 class Categorical(Distribution):
@@ -13,8 +13,7 @@ class Categorical(Distribution):
     Categorical (discrete) distribution.
 
     Discrete distribution over elements of `vs` with :math:`P(vs[i]) \\propto ps[i]`.
-    If ``one_hot=True``, ``.sample()`` returns a one-hot vector;
-    otherwise ``.sample()`` returns the category index.
+    ``.sample()`` returns an element of ``vs`` category index.
 
     :param ps: Probabilities. These should be non-negative and normalized
         along the rightmost axis.
@@ -25,8 +24,6 @@ class Categorical(Distribution):
     :type logits: torch.autograd.Variable
     :param vs: Optional list of values in the support.
     :type vs: list or numpy.ndarray or torch.autograd.Variable
-    :param one_hot: Whether ``sample()`` returns a `one_hot` sample.  Defaults
-        to `False` if `vs` is specified, or `True` if `vs` is not specified.
     :param batch_size: Optional number of elements in the batch used to
         generate a sample. The batch dimension will be the leftmost dimension
         in the generated sample.
@@ -34,23 +31,19 @@ class Categorical(Distribution):
     """
     enumerable = True
 
-    def __init__(self, ps=None, vs=None, logits=None, one_hot=True, batch_size=None, log_pdf_mask=None, *args,
-                 **kwargs):
+    def __init__(self, ps=None, vs=None, logits=None, batch_size=None, log_pdf_mask=None, *args, **kwargs):
         if (ps is None) == (logits is None):
             raise ValueError("Got ps={}, logits={}. Either `ps` or `logits` must be specified, "
                              "but not both.".format(ps, logits))
         self.ps, self.logits = get_probs_and_logits(ps=ps, logits=logits, is_multidimensional=True)
         # vs is None, Variable(Tensor), or numpy.array
         self.vs = self._process_data(vs)
-        self.one_hot = one_hot
         self.log_pdf_mask = log_pdf_mask
         if vs is not None:
             vs_shape = self.vs.shape if isinstance(self.vs, np.ndarray) else self.vs.size()
             if vs_shape != ps.size():
                 raise ValueError("Expected vs.size() or vs.shape == ps.size(), but got {} vs {}"
                                  .format(vs_shape, ps.size()))
-            if self.one_hot:
-                self.one_hot = False
         if self.ps.dim() == 1 and batch_size is not None:
             self.ps = self.ps.expand(batch_size, self.ps.size(0))
             self.logits = self.logits.expand(batch_size, self.logits.size(0))
@@ -94,17 +87,13 @@ class Categorical(Distribution):
         """
         Ref: :py:meth:`pyro.distributions.distribution.Distribution.shape`
         """
-        if self.one_hot:
-            return self.batch_shape(x) + self.event_shape()
         return self.batch_shape(x) + (1,)
 
     def sample(self):
         """
-        Returns a sample which has the same shape as `ps` (or `vs`), except
-        that if ``one_hot=True`` (and no `vs` is specified), the last dimension
-        will have the same size as the number of events. The type of the sample
-        is `numpy.ndarray` if `vs` is a list or a numpy array, else a tensor
-        is returned.
+        Returns a sample which has the same shape as `ps` (or `vs`). The type
+        of the sample is `numpy.ndarray` if `vs` is a list or a numpy array,
+        else a tensor is returned.
 
         :return: sample from the Categorical distribution
         :rtype: numpy.ndarray or torch.LongTensor
@@ -118,8 +107,6 @@ class Categorical(Distribution):
                 return self.vs[sample_bool_index].reshape(*self.shape())
             else:
                 return self.vs.masked_select(sample_one_hot.byte())
-        if self.one_hot:
-            return Variable(sample_one_hot)
         return Variable(sample)
 
     def batch_log_pdf(self, x):
@@ -156,8 +143,6 @@ class Categorical(Distribution):
             if vs is not None:
                 vs = vs.expand(batch_ps_shape)
                 boolean_mask = (vs == x)
-            elif self.one_hot:
-                boolean_mask = x
             else:
                 boolean_mask = torch_zeros_like(logits.data).scatter_(-1, x.data.long(), 1)
         boolean_mask = boolean_mask.cuda() if logits.is_cuda else boolean_mask.cpu()
@@ -184,14 +169,10 @@ class Categorical(Distribution):
         :param vs: Optional parameter, enumerating the items in the support. This could either
             have a numeric or string type. This should have the same dimension as ``ps``.
         :type vs: list or numpy.ndarray or torch.autograd.Variable
-        :param one_hot: Denotes whether one hot encoding is enabled. This is True by default.
-            When set to false, and no explicit `vs` is provided, the last dimension gives
-            the one-hot encoded value from the support.
-        :type one_hot: boolean
         :return: Torch variable or numpy array enumerating the support of the categorical distribution.
             Each item in the return value, when enumerated along the first dimensions, yields a
             value from the distribution's support which has the same dimension as would be returned by
-            sample. If ``one_hot=True``, the last dimension is used for the one-hot encoding.
+            sample.
         :rtype: torch.autograd.Variable or numpy.ndarray.
         """
         sample_shape = self.batch_shape() + (1,)
@@ -203,10 +184,6 @@ class Categorical(Distribution):
                 return vs.transpose().reshape(*support_samples_size)
             else:
                 return torch.transpose(vs, 0, -1).contiguous().view(support_samples_size)
-        if self.one_hot:
-            return Variable(torch.stack([t.expand_as(self.ps) for t in torch_eye(*self.event_shape())]))
-        else:
-            LongTensor = torch.cuda.LongTensor if self.ps.is_cuda else torch.LongTensor
-            return Variable(
-                torch.stack([LongTensor([t]).expand(sample_shape)
-                             for t in torch.arange(0, *self.event_shape()).long()]))
+        LongTensor = torch.cuda.LongTensor if self.ps.is_cuda else torch.LongTensor
+        return Variable(
+            torch.stack([LongTensor([t]).expand(sample_shape) for t in torch.arange(0, *self.event_shape()).long()]))

@@ -71,7 +71,7 @@ def test_batch_log_pdf_shape(dist):
 
 
 def test_batch_log_pdf_mask(dist):
-    if dist.get_test_distribution_name() not in ('Normal', 'Bernoulli', 'Categorical'):
+    if dist.get_test_distribution_name() not in ('Normal', 'Bernoulli', 'Categorical', 'OneHotCategorical', 'Normal'):
         pytest.skip('Batch pdf masking not supported for the distribution.')
     d = dist.pyro_dist
     for idx in range(dist.get_num_test_data()):

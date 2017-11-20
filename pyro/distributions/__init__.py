@@ -14,6 +14,7 @@ from pyro.distributions.half_cauchy import HalfCauchy
 from pyro.distributions.log_normal import LogNormal
 from pyro.distributions.multinomial import Multinomial
 from pyro.distributions.normal import Normal
+from pyro.distributions.one_hot_categorical import OneHotCategorical
 from pyro.distributions.poisson import Poisson
 from pyro.distributions.random_primitive import RandomPrimitive
 from pyro.distributions.uniform import Uniform
@@ -31,5 +32,6 @@ halfcauchy = RandomPrimitive(HalfCauchy)
 lognormal = RandomPrimitive(LogNormal)
 multinomial = RandomPrimitive(Multinomial)
 normal = RandomPrimitive(Normal)
+one_hot_categorical = RandomPrimitive(OneHotCategorical)
 poisson = RandomPrimitive(Poisson)
 uniform = RandomPrimitive(Uniform)

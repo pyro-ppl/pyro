@@ -65,7 +65,7 @@ class Histogram(dist.Distribution):
             logits = Variable(logits)
         logits = logits - util.log_sum_exp(logits)
 
-        d = dist.Categorical(logits=logits, one_hot=False)
+        d = dist.OneHotCategorical(logits=logits)
         return d, values
 
     def _gen_weighted_samples(self, *args, **kwargs):
@@ -155,5 +155,5 @@ class TracePosterior(object):
         logits -= util.log_sum_exp(logits)
         if not isinstance(logits, torch.autograd.Variable):
             logits = Variable(logits)
-        ix = dist.categorical(logits=logits, one_hot=False)
+        ix = dist.categorical(logits=logits)
         return traces[ix.data[0]]
