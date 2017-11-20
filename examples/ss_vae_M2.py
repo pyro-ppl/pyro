@@ -128,14 +128,14 @@ class SSVAE(nn.Module):
             if ys is None:
                 ys = pyro.sample("y", dist.one_hot_categorical, alpha_prior)
             else:
-                pyro.observe("y", dist.one_hot_categorical, ys, alpha_prior)
+                pyro.sample("y", dist.one_hot_categorical, alpha_prior, obs=ys)
 
             # finally, score the image (x) using the handwriting style (z) and
             # the class label y (which digit to write) against the
             # parametrized distribution p(x|y,z) = bernoulli(decoder(y,z))
             # where `decoder` is a neural network
             mu = self.decoder.forward([zs, ys])
-            pyro.observe("x", dist.bernoulli, xs, mu)
+            pyro.sample("x", dist.bernoulli, mu, obs=xs)
 
     def guide(self, xs, ys=None):
         """
@@ -199,7 +199,11 @@ class SSVAE(nn.Module):
             # similar to the NIPS 14 paper (Kingma et al).
             if ys is not None:
                 alpha = self.encoder_y.forward(xs)
-                pyro.observe("y_aux", dist.one_hot_categorical, ys, alpha, log_pdf_mask=self.aux_loss_multiplier)
+                pyro.sample("y_aux",
+                            dist.one_hot_categorical,
+                            alpha,
+                            log_pdf_mask=self.aux_loss_multiplier,
+                            obs=ys)
 
     def guide_classify(self, xs, ys=None):
         """
