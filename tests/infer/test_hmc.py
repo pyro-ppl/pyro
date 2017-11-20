@@ -1,3 +1,5 @@
+import logging
+
 import pytest
 import torch
 import pyro.distributions as dist
@@ -7,6 +9,8 @@ import pyro
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.mcmc import MCMC
 
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 class GaussianChain(object):
     def __init__(self, dim, n, mu_0, lambda_prec):
@@ -19,8 +23,8 @@ class GaussianChain(object):
         mu = pyro.param('mu_0', self.mu_0)
         lambda_prec = self.lambda_prec
         for i in range(1, self.n + 1):
-            mu = pyro.sample('mu_{}'.format(i), dist.normal, mu, lambda_prec)
-        pyro.sample('obs', dist.normal, mu=mu, sigma=lambda_prec, obs=data)
+            mu = pyro.sample('mu_{}'.format(i), dist.normal, mu=mu, sigma=Variable(lambda_prec.data))
+        pyro.sample('obs', dist.normal, mu=mu, sigma=Variable(lambda_prec.data), obs=data)
 
     def analytic_values(self, data):
         lambda_tilde_posts = [self.lambda_prec]
@@ -40,14 +44,14 @@ class GaussianChain(object):
         return target_mus
 
 
-@pytest.mark.parametrize('dim, n', [(10, 3)])
-def test_hmc_conj_gaussian(dim, n):
-    fixture = GaussianChain(dim, n, 0, 1)
-    data = Variable(torch.ones(n, dim))
-    mcmc_run = MCMC(fixture.model, kernel=HMC, num_samples=400, warmup_steps=50, step_size=0.5, num_steps=4)
+@pytest.mark.parametrize('dim, chain_len, num_samples', [(10, 2, 1)])
+def test_hmc_conj_gaussian(dim, chain_len, num_samples):
+    fixture = GaussianChain(dim, chain_len, 0, 1)
+    data = Variable(torch.ones(num_samples, dim))
+    mcmc_run = MCMC(fixture.model, kernel=HMC, num_samples=600, warmup_steps=50, step_size=0.5, num_steps=4)
     traces = []
     for t, _ in mcmc_run._traces(data):
-        traces.append(t.nodes['mu_3']['value'])
+        traces.append(t.nodes['mu_2']['value'])
     print('Acceptance ratio: {}'.format(mcmc_run.acceptance_ratio))
     print('Posterior mean:')
     print(torch.mean(torch.stack(traces), 0).data)

@@ -48,7 +48,6 @@ class HMC(TraceKernel):
 
     def _grad_potential(self, z):
         log_joint_prob = self._log_prob(z)
-        print(log_joint_prob)
         log_joint_prob.backward()
         grad_potential = {}
         for name, value in z.items():
@@ -121,10 +120,10 @@ def test_normal_normal():
         pyro.sample('data', dist.normal, obs=data, mu=y, sigma=Variable(torch.ones(10)))
 
     data = Variable(torch.ones(1, 10))
-    hmc = MCMC(model, kernel=HMC, num_samples=400, warmup_steps=50, step_size=0.6, num_steps=3)
+    hmc = MCMC(model, kernel=HMC, num_samples=900, warmup_steps=50, step_size=0.6, num_steps=5)
     traces = []
     for t, _ in hmc._traces(data):
-        traces.append(t['x'])
+        traces.append(t.nodes['x']['value'])
     print('Acceptance ratio: {}'.format(hmc.acceptance_ratio))
     print('Posterior mean:')
     print(torch.mean(torch.stack(traces), 0).data)
