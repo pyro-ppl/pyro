@@ -5,11 +5,22 @@ import time
 import os
 import multiprocessing as mp
 from multiprocessing import Process, Manager, Semaphore, Lock, Queue, Array
+from multiprocessing.managers import BaseManager, SyncManager, ListProxy
+
 # from arrow import get as aget
 from arrow import now as anow
 from uuid import uuid4
 from numpy.random import normal, seed, choice
 from collections import defaultdict
+
+
+# Forking multiprocessing:
+# https://github.com/python/cpython/blob/3972628de3d569c88451a2a176a1c94d8822b8a6/Lib/multiprocessing/popen_fork.py
+
+# Managers:
+# https://github.com/python/cpython/blob/3972628de3d569c88451a2a176a1c94d8822b8a6/Lib/multiprocessing/context.py
+
+
 
 def get_uuid():
     return uuid4().hex
@@ -17,6 +28,8 @@ def get_uuid():
 
 def sample(mu, sigma):
     return normal(mu, sigma)
+
+
 
 def fork(fct_key, local_uuid, trace_dict, shared_dict, thread_dict, manager,
          clone_op=False, clone_thread=None):
@@ -127,12 +140,101 @@ def model(shared_traces, shared_threads, manager):
     fork("first", uuid, trace_dict, shared_traces, shared_threads, manager)
 
 
+def register_shared_objects(cls, keys_and_callables):
+    for key, kw in keys_and_callables.items():
+        print("registering {} - {}".format(key, kw))
+        cls.register(key, **kw)
+
+def access_shared_queue():
+    # pre-fork we add registers, they'll be there post fork
+    add_registers()
+    pid = os.fork()
+    if pid:
+        dm = DM()
+        dm.connect()
+        print("parent connected to dm")
+        queue = dm.get_shared_queue()
+        queue.put("hello master doofus")
+        os._exit(0)
+    else:
+        dm = DM()
+        dm.connect()
+        print("child connected to dm")
+        queue = dm.get_shared_queue()
+        queue.put("hello child doofus")
+        os._exit(0)
+
+class DM(SyncManager):
+    def __init__(self):
+        super(DM, self).__init__(address=('127.0.0.1', 50000), authkey=b'abracadabra')
+
+def add_registers():
+    DM.register("get_shared_queue")
+    DM.register("get_shared_traces")
+    DM.register("get_shared_threads")
+
+def start_dm():
+    shared_queue = Queue()
+    traces = {}
+    threads = {}
+    # DM.register('get_list', list, proxytype=ListProxy)
+    DM.register('get_shared_queue', callable=lambda: shared_queue)
+    DM.register('get_shared_traces', callable=lambda: traces)
+    DM.register('get_shared_threads', callable=lambda: threads)
+    DM().get_server().serve_forever()
+
 def main(*args, **kwargs):
     mp.set_start_method('fork')
-    manager = Manager()
 
-    shared_traces = manager.dict()
-    shared_threads = manager.dict()
+    s = Process(target=start_dm, args=())
+    s.daemon = True
+    s.start()
+    time.sleep(.1)
+    add_registers()
+    m = DM()
+    m.connect()
+    bb()
+
+    p = Process(target=access_shared_queue, args=())
+    p.start()
+    p.join()
+
+    bb()
+
+    # proc_address = ('127.0.0.1', 2000)
+
+    # print("Begin shared server")
+    # start_server(DopeManager, proc_address)
+    # # s = Process(target=start_server, args=(DopeManager, proc_address,))
+    # # s.daemon = True
+    # # s.start()
+
+    # # print("Letting server start, then access shared queue")
+    # time.sleep(2)
+    # fake_args = {}
+    # # DopeManager.register("nothing", callable=lambda: fake_args)
+    # dm = DopeManager(address=proc_address, authkey=b'dope')
+    # dm.connect()
+    # bb()
+    # # now access shared queue
+    # print("Begin acccess shared queue")
+    # m = Process(target=access_shared_queue, args=(DopeManager, proc_address,))
+    # # # runnign
+    # m.start()
+
+    # # # running
+    # m.join()
+    # # add_server_shared(DopeManager)
+
+
+
+    bb()
+    # manager = Manager()
+
+    # shared_traces = manager.dict()
+    # shared_threads = manager.dict()
+
+
     # shared_obj = manager.dict()
     all_processes = []
 
