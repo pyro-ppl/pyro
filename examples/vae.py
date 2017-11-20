@@ -96,7 +96,7 @@ class VAE(nn.Module):
         # decode the latent code z
         mu_img = self.decoder.forward(z)
         # score against actual images
-        pyro.observe("obs", dist.bernoulli, x.view(-1, 784), mu_img)
+        pyro.sample("obs", dist.bernoulli, mu_img, obs=x.view(-1, 784))
 
     # define the guide (i.e. variational distribution) q(z|x)
     def guide(self, x):

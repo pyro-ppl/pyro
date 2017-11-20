@@ -1,6 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
 import numbers
+import warnings
+
+import numpy as np
 
 import pyro
 import pyro.poutine as poutine
@@ -118,6 +121,8 @@ class Trace_ELBO(object):
             elbo += torch_data_sum(weight * elbo_particle)
 
         loss = -elbo
+        if np.isnan(loss):
+            warnings.warn('Encountered NAN loss')
         return loss
 
     def loss_and_grads(self, model, guide, *args, **kwargs):
@@ -176,5 +181,6 @@ class Trace_ELBO(object):
                 pyro.get_param_store().mark_params_active(trainable_params)
 
         loss = -elbo
-
+        if np.isnan(loss):
+            warnings.warn('Encountered NAN loss')
         return loss

@@ -6,9 +6,6 @@ from torch.autograd import Variable
 
 
 def log_gamma(xx):
-    if isinstance(xx, torch.Tensor):
-        xx = Variable(xx)
-    ttype = xx.data.type()
     gamma_coeff = [
         76.18009172947146,
         -86.50532032941677,
@@ -22,7 +19,7 @@ def log_gamma(xx):
     x = xx - 1.0
     t = x + 5.5
     t = t - (x + 0.5) * torch.log(t)
-    ser = Variable(torch.ones(x.size()).type(ttype)) * magic1
+    ser = torch_ones_like(x) * magic1
     for c in gamma_coeff:
         x = x + 1.0
         ser = ser + torch.pow(x / c, -1)
