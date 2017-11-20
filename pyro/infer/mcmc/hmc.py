@@ -253,20 +253,20 @@ def test_quartic_oscillator():
     energy_initial = energy(q, p)
     print("*** quartic oscillator ***")
     print("initial energy: {}".format(energy_initial.data[0]))
-    q_new, p_new = verlet_integrator(q, p, grad, 0.1, 3620)
+    q_new, p_new = verlet_integrator(q, p, grad, 0.1, 1810)
     energy_final = energy(q_new, p_new)
     assert_equal(energy_final, energy_initial)
-    assert_equal(q_new['x'].data[0], 0.02, prec=1.0e-3)
-    assert_equal(p_new['x'].data[0], 0.0, prec=1.0e-3)
+    assert_equal(q_new['x'].data[0], -0.02, prec=1.0e-4)
+    assert_equal(p_new['x'].data[0], 0.0, prec=1.0e-4)
     print("final energy: {}".format(energy_final.data[0]))
     print("-------------------------------------")
 
 
 def main():
-    test_verlet_integrator()
-    test_circular_planetary_motion()
+    #test_verlet_integrator()
+    #test_circular_planetary_motion()
     test_quartic_oscillator()
-    test_normal_normal()
+    #test_normal_normal()
 
 
 if __name__ == '__main__':
