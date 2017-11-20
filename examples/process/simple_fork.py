@@ -187,18 +187,24 @@ def multi_try(retries=1):
 
 @multi_try(20)
 def connect_add_message(msg):
-    dm = DM()
+
+    msg = "/".join([msg for i in range(25)])
+    random_list = np.random.randint(10)
+    dm = DM(random_list)
     print("Connect")
     dm.connect()
     print("Access")
-    print("update {}".format(msg))
+
+    print("update {} accessing {}".format(msg, random_list))
     # dm.get_shared_queue().put({get_uuid(): msg})
     # dm.get_shared_globals().update({get_uuid(): msg})
+    # shared_list = dm.get_shared_globals().get('shared_list_{}'.format(random_list))
     shared_list = dm.get_shared_globals().get('shared_list')
     # print("update {}".format(msg))
     # time.sleep(.1 + np.random.uniform(3))
     shared_list.append(msg)
     print("finish {}".format(msg))
+
 
 def access_shared_queue(i):
     # pre-fork we add registers, they'll be there post fork
@@ -208,21 +214,21 @@ def access_shared_queue(i):
     if pid:
         # attempt to get a connection up to ten times
         connect_add_message("hello master doofus {}".format(i))
-        # time.sleep(1)
         print("closing master {}".format(i))
+        time.sleep(3)
         os._exit(0)
 
     else:
 
         connect_add_message("hello child doofus {}".format(i))
-        # time.sleep(1)
         print("closing child {}".format(i))
+        time.sleep(3)
         os._exit(0)
 
 
 class DM(SyncManager):
-    def __init__(self):
-        super(DM, self).__init__(address=('127.0.0.1', 50000))  # , authkey=b'abracadabra')
+    def __init__(self, rand_val=0):
+        super(DM, self).__init__(address=('127.0.0.1', 50000 + rand_val))  # , authkey=b'abracadabra')
 
 def add_registers():
     DM.register("get_shared_queue")
@@ -231,7 +237,7 @@ def add_registers():
     DM.register("get_shared_traces")
     DM.register("get_shared_threads")
 
-def start_dm():
+def start_dm(i):
     shared_queue = Queue()
     traces = {}
     threads = {}
@@ -246,7 +252,7 @@ def start_dm():
     DM.register('create_list', list, proxytype=ListProxy)
     DM.register('get_shared_traces', callable=lambda: traces)
     DM.register('get_shared_threads', callable=lambda: threads)
-    DM().get_server().serve_forever()
+    DM(i).get_server().serve_forever()
 
 
 @multi_try(5)
@@ -256,41 +262,67 @@ def mt():
 
 
 def random_delay_target(fct, *args, **kwargs):
-    # time.sleep(.1 + np.random.uniform(0, 3))
+    # seed()
+    # time.sleep(.01 + np.random.uniform(0, 2))
     fct(*args, **kwargs)
 
 
 def main(*args, **kwargs):
     mp.set_start_method('fork')
 
-    s = Process(target=start_dm, args=())
-    s.daemon = True
-    s.start()
+    all_processes = []
+    sp = 10
+    for i in range(sp):
+        s = Process(target=start_dm, args=[i])
+        s.daemon = True
+        s.start()
+
     time.sleep(.1)
     add_registers()
-    m = DM()
-    m.connect()
 
-    gl = m.list()
-    m.get_shared_globals().update({'shared_list': gl})
+    mvs = []
+    for i in range(sp):
+        m = DM(i)
+        m.connect()
+
+        # round_robin_list = {'shared_list_{}'.format(i): m.list()
+        #                     for i in range(50)}
+
+        # m.get_shared_globals().update(round_robin_list)  # {'shared_list': gl})
+        gl = m.list()
+        m.get_shared_globals().update({'shared_list': gl})
+        mvs.append(m)
     # glist = m.create_list()
     # gg = )
     # .update({'shared_list': glist})
+    time.sleep(.5)
 
-    call_count = 25
-    all_processes = [Process(target=random_delay_target, args=[access_shared_queue, i])
-                     for i in range(call_count)]
+    call_count = 100
+    all_processes += [Process(target=random_delay_target, args=[access_shared_queue, i])
+                      for i in range(call_count)]
 
     list(map(lambda x: x.start(), all_processes))
+    time.sleep(2.5)
     bb()
     # print("Sleep waiting")
-    time.sleep(1)
-    mlist = m.get_shared_globals().get('shared_list')
-    messages = [mlist[i] for i in range(len(mlist))]
+    all_messages = 0
+    all_list = []
+    for m in mvs:
+        # for mname in round_robin_list:
+        mname = 'shared_list'
+        mlist = list(m.get_shared_globals().get(mname))
+        all_messages += len(mlist)
+        all_list.extend(mlist)
+
+    am = all_messages
+    al = all_list
+    # mlist = m.get_shared_globals().get('shared_list')
+    # messages = [mlist[i] for i in range(len(mlist))]
     bb()
     list(map(lambda x: x.join(), all_processes))
     # messages = [m.get_shared_queue().get() for i in range(2*call_count)]
     bb()
+    s.join()
 
     # proc_address = ('127.0.0.1', 2000)
 
