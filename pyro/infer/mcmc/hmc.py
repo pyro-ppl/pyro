@@ -208,15 +208,43 @@ def test_verlet_integrator():
     assert q_new['x'].data[0] != q['x'].data[0]
     energy_new = energy(q_new, p_new)
     assert_equal(energy_new, energy_cur)
+    assert_equal(q_new['x'].data[0], np.sin(1.0), prec=1.0e-4)
+    assert_equal(p_new['x'].data[0], np.cos(1.0), prec=1.0e-4)
     print("q_old: {}, p_old: {}".format(q['x'].data[0], p['x'].data[0]))
     print("q_new: {}, p_new: {}".format(q_new['x'].data[0], p_new['x'].data[0]))
     print("Energy - new: {}".format(energy_new.data[0]))
     print("-------------------------------------")
 
 
+def test_circular_planetary_motion():
+    def energy(q, p):
+        return 0.5 * p['x'] ** 2 + 0.5 * p['y'] ** 2 - \
+            1.0 / torch.pow(q['x'] ** 2 + q['y'] ** 2, 0.5)
+
+    def grad(q):
+        return {'x': q['x'] / torch.pow(q['x'] ** 2 + q['y'] ** 2, 1.5),
+                'y': q['y'] / torch.pow(q['x'] ** 2 + q['y'] ** 2, 1.5)}
+
+    q = {'x': Variable(torch.Tensor([1.0]), requires_grad=True),
+         'y': Variable(torch.Tensor([0.0]), requires_grad=True)}
+    p = {'x': Variable(torch.Tensor([0.0]), requires_grad=True),
+         'y': Variable(torch.Tensor([1.0]), requires_grad=True)}
+    energy_initial = energy(q, p)
+    print("*** circular planetary motion ***")
+    print("initial energy: {}".format(energy_initial.data[0]))
+    q_new, p_new = verlet_integrator(q, p, grad, 0.01, 628)
+    energy_final = energy(q_new, p_new)
+    assert_equal(energy_final, energy_initial)
+    assert_equal(q_new['x'].data[0], 1.0, prec=5.0e-3)
+    assert_equal(q_new['y'].data[0], 0.0, prec=5.0e-3)
+    print("final energy: {}".format(energy_final.data[0]))
+    print("-------------------------------------")
+
+
 def main():
     test_verlet_integrator()
     test_normal_normal()
+    test_circular_planetary_motion()
 
 
 if __name__ == '__main__':
