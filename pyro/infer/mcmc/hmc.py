@@ -241,10 +241,32 @@ def test_circular_planetary_motion():
     print("-------------------------------------")
 
 
+def test_quartic_oscillator():
+    def energy(q, p):
+        return 0.5 * p['x'] ** 2 + 0.25 * torch.pow(q['x'], 4.0)
+
+    def grad(q):
+        return {'x': torch.pow(q['x'], 3.0)}
+
+    q = {'x': Variable(torch.Tensor([0.02]), requires_grad=True)}
+    p = {'x': Variable(torch.Tensor([0.0]), requires_grad=True)}
+    energy_initial = energy(q, p)
+    print("*** quartic oscillator ***")
+    print("initial energy: {}".format(energy_initial.data[0]))
+    q_new, p_new = verlet_integrator(q, p, grad, 0.1, 3620)
+    energy_final = energy(q_new, p_new)
+    assert_equal(energy_final, energy_initial)
+    assert_equal(q_new['x'].data[0], 0.02, prec=1.0e-3)
+    assert_equal(p_new['x'].data[0], 0.0, prec=1.0e-3)
+    print("final energy: {}".format(energy_final.data[0]))
+    print("-------------------------------------")
+
+
 def main():
     test_verlet_integrator()
-    test_normal_normal()
     test_circular_planetary_motion()
+    test_quartic_oscillator()
+    test_normal_normal()
 
 
 if __name__ == '__main__':
