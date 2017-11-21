@@ -33,11 +33,13 @@ class OneHotCategorical(Distribution):
                              "but not both.".format(ps, logits))
         self.ps, self.logits = get_probs_and_logits(ps=ps, logits=logits, is_multidimensional=True)
         self.log_pdf_mask = log_pdf_mask
-        if self.ps.dim() == 1 and batch_size is not None:
-            self.ps = self.ps.expand(batch_size, self.ps.size(0))
-            self.logits = self.logits.expand(batch_size, self.logits.size(0))
-            if log_pdf_mask is not None and log_pdf_mask.dim() == 1:
-                self.log_pdf_mask = log_pdf_mask.expand(batch_size, log_pdf_mask.size(0))
+        if batch_size is not None:
+            if self.ps.dim() != 1:
+                raise NotImplementedError
+            self.ps = self.ps.expand(batch_size, *self.ps.size())
+            self.logits = self.logits.expand(batch_size, *self.logits.size())
+            if log_pdf_mask is not None:
+                self.log_pdf_mask = log_pdf_mask.expand(batch_size, *log_pdf_mask.size())
         super(OneHotCategorical, self).__init__(*args, **kwargs)
 
     def _process_data(self, x):
