@@ -10,9 +10,9 @@ import pyro.distributions as dist
 from tests.common import TestCase, assert_equal
 
 
-class TestCategorical(TestCase):
+class TestOneHotCategorical(TestCase):
     """
-    Tests methods specific to the Categorical distribution like nhot_encoding
+    Tests methods specific to the OneHotCategorical distribution
     """
 
     def setUp(self):
@@ -28,9 +28,6 @@ class TestCategorical(TestCase):
 
         # Discrete Distribution
         self.d_ps = Variable(torch.Tensor([[0.2, 0.3, 0.5], [0.1, 0.1, 0.8]]))
-        self.d_vs = Variable(torch.Tensor([[0, 1, 2], [3, 4, 5]]))
-        self.d_vs_arr = [['a', 'b', 'c'], ['d', 'e', 'f']]
-        self.d_vs_tup = (('a', 'b', 'c'), ('d', 'e', 'f'))
         self.d_test_data = Variable(torch.Tensor([[0], [5]]))
         self.d_v_test_data = [['a'], ['f']]
 
@@ -47,49 +44,13 @@ class TestCategorical(TestCase):
         self.discrete_arr_support_non_vec = [['a'], ['b'], ['c']]
         self.discrete_arr_support = [[['a'], ['d']], [['b'], ['e']], [['c'], ['f']]]
 
-    def test_discrete_log_pdf(self):
-        log_px_torch = dist.categorical.batch_log_pdf(self.d_test_data, self.d_ps, self.d_vs).data[0][0]
-        log_px_np = float(sp.multinomial.logpmf(np.array([1, 0, 0]), 1, self.d_ps[0].data.cpu().numpy()))
-        log_px_torch2 = dist.categorical.batch_log_pdf(self.d_test_data, self.d_ps, self.d_vs).data[1][0]
-        log_px_np2 = float(sp.multinomial.logpmf(np.array([0, 0, 1]), 1, self.d_ps[1].data.cpu().numpy()))
-        self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
-        self.assertEqual(log_px_torch2, log_px_np2, prec=1e-4)
-
-    def test_discrete_arr_logpdf(self):
-        log_px_torch = dist.categorical.batch_log_pdf(self.d_v_test_data,
-                                                      self.d_ps,
-                                                      self.d_vs_arr).data[0][0]
-        log_px_np = float(sp.multinomial.logpmf(np.array([1, 0, 0]), 1, self.d_ps[0].data.cpu().numpy()))
-        log_px_torch2 = dist.categorical.batch_log_pdf(self.d_v_test_data,
-                                                       self.d_ps,
-                                                       self.d_vs_arr).data[1][0]
-        log_px_np2 = float(sp.multinomial.logpmf(np.array([0, 0, 1]), 1, self.d_ps[1].data.cpu().numpy()))
-        self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
-        self.assertEqual(log_px_torch2, log_px_np2, prec=1e-4)
-
-    def test_one_hot_support_non_vectorized(self):
-        s = dist.categorical.enumerate_support(self.d_ps[0].squeeze(0))
+    def test_support_non_vectorized(self):
+        s = dist.one_hot_categorical.enumerate_support(self.d_ps[0].squeeze(0))
         assert_equal(s.data, self.support_one_hot_non_vec)
 
-    def test_one_hot_support(self):
-        s = dist.categorical.enumerate_support(self.d_ps)
+    def test_support(self):
+        s = dist.one_hot_categorical.enumerate_support(self.d_ps)
         assert_equal(s.data, self.support_one_hot)
-
-    def test_discrete_support_non_vectorized(self):
-        s = dist.categorical.enumerate_support(self.d_ps[0].squeeze(0), self.d_vs[0].squeeze(0))
-        assert_equal(s.data, self.discrete_support_non_vec)
-
-    def test_discrete_support(self):
-        s = dist.categorical.enumerate_support(self.d_ps, self.d_vs)
-        assert_equal(s.data, self.discrete_support)
-
-    def test_discrete_arr_support_non_vectorized(self):
-        s = dist.categorical.enumerate_support(self.d_ps[0].squeeze(0), self.d_vs_arr[0]).tolist()
-        assert_equal(s, self.discrete_arr_support_non_vec)
-
-    def test_discrete_arr_support(self):
-        s = dist.categorical.enumerate_support(self.d_ps, self.d_vs_arr).tolist()
-        assert_equal(s, self.discrete_arr_support)
 
 
 def wrap_nested(x, dim):
@@ -98,7 +59,7 @@ def wrap_nested(x, dim):
     return wrap_nested([x], dim-1)
 
 
-def assert_correct_dimensions(sample, ps, vs):
+def assert_correct_dimensions(sample, ps):
     ps_shape = list(ps.data.size())
     if isinstance(sample, torch.autograd.Variable):
         sample_shape = list(sample.data.size())
@@ -123,30 +84,27 @@ def vs(request):
     return request.param
 
 
-def modify_params_using_dims(ps, vs, dim):
-    ps = Variable(torch.Tensor(wrap_nested(ps, dim-1)))
-    if vs:
-        vs = wrap_nested(vs, dim-1)
-    return ps, vs
+def modify_params_using_dims(ps, dim):
+    return Variable(torch.Tensor(wrap_nested(ps, dim-1)))
 
 
-def test_support_dims(dim, vs, ps):
-    ps, vs = modify_params_using_dims(ps, vs, dim)
-    support = dist.categorical.enumerate_support(ps, vs)
+def test_support_dims(dim, ps):
+    ps = modify_params_using_dims(ps, dim)
+    support = dist.one_hot_categorical.enumerate_support(ps)
     for s in support:
-        assert_correct_dimensions(s, ps, vs)
+        assert_correct_dimensions(s, ps)
 
 
-def test_sample_dims(dim, vs, ps):
-    ps, vs = modify_params_using_dims(ps, vs, dim)
-    sample = dist.categorical.sample(ps, vs)
-    assert_correct_dimensions(sample, ps, vs)
+def test_sample_dims(dim, ps):
+    ps = modify_params_using_dims(ps, dim)
+    sample = dist.one_hot_categorical.sample(ps)
+    assert_correct_dimensions(sample, ps)
 
 
-def test_batch_log_dims(dim, vs, ps):
+def test_batch_log_dims(dim, ps):
     batch_pdf_shape = (3,) + (1,) * dim
     expected_log_pdf = np.array(wrap_nested(list(np.log(ps)), dim-1)).reshape(*batch_pdf_shape)
-    ps, vs = modify_params_using_dims(ps, vs, dim)
-    support = dist.categorical.enumerate_support(ps, vs)
-    batch_log_pdf = dist.categorical.batch_log_pdf(support, ps, vs)
+    ps = modify_params_using_dims(ps, dim)
+    support = dist.one_hot_categorical.enumerate_support(ps)
+    batch_log_pdf = dist.one_hot_categorical.batch_log_pdf(support, ps)
     assert_equal(batch_log_pdf.data.cpu().numpy(), expected_log_pdf)
