@@ -21,7 +21,7 @@ Learning a function of the form:
 # generate toy dataset
 def build_linear_dataset(N, p, noise_std=0.01):
     X = np.random.rand(N, p)
-    # use random weights from [0, 8]
+    # use random integer weights from [0, 7]
     w = np.random.randint(8, size=p)
     # set b = 1
     y = np.matmul(X, w) + np.repeat(1, N) + np.random.normal(0, noise_std, size=N)
