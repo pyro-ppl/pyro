@@ -2,17 +2,14 @@ from __future__ import absolute_import, division, print_function
 
 import numpy as np
 import torch
-from torch.autograd import Variable
 
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions.util import torch_ones_like, torch_zeros_like
-from pyro.infer.mcmc.mcmc import MCMC
 from pyro.infer.mcmc.trace_kernel import TraceKernel
 from pyro.infer.mcmc.verlet_integrator import verlet_integrator
 from pyro.util import ng_ones, ng_zeros
-from tests.common import assert_equal
 
 
 class HMC(TraceKernel):
@@ -110,52 +107,3 @@ class HMC(TraceKernel):
     @property
     def num_accepts(self):
         return self._accept_cnt
-
-
-def test_normal_normal():
-    def model(data):
-        mu = pyro.param('mu', Variable(torch.zeros(10), requires_grad=True))
-        x = pyro.sample('x', dist.normal, mu=mu, sigma=Variable(torch.ones(10)))
-        y = pyro.sample('y', dist.normal, mu=x, sigma=Variable(torch.ones(10)))
-        pyro.sample('data', dist.normal, obs=data, mu=y, sigma=Variable(torch.ones(10)))
-
-    data = Variable(torch.ones(1, 10))
-    hmc = MCMC(model, kernel=HMC, num_samples=900, warmup_steps=50, step_size=0.6, num_steps=5)
-    traces = []
-    for t, _ in hmc._traces(data):
-        traces.append(t.nodes['x']['value'])
-    print('Acceptance ratio: {}'.format(hmc.acceptance_ratio))
-    print('Posterior mean:')
-    print(torch.mean(torch.stack(traces), 0).data)
-    # gradients should not have been back-propagated.
-    print(pyro.get_param_store().get_param('mu').grad)
-
-
-def test_verlet_integrator():
-    def energy(q, p):
-        return 0.5 * p['x'] ** 2 + 0.5 * q['x'] ** 2
-
-    def grad(q):
-        return {'x': q['x']}
-
-    q = {'x': Variable(torch.Tensor([0.0]), requires_grad=True)}
-    p = {'x': Variable(torch.Tensor([1.0]), requires_grad=True)}
-    energy_cur = energy(q, p)
-    print("Energy - current: {}".format(energy_cur.data[0]))
-    q_new, p_new = verlet_integrator(q, p, grad, 0.01, 100)
-    assert q_new['x'].data[0] != q['x'].data[0]
-    energy_new = energy(q_new, p_new)
-    assert_equal(energy_new, energy_cur)
-    print("q_old: {}, p_old: {}".format(q['x'].data[0], p['x'].data[0]))
-    print("q_new: {}, p_new: {}".format(q_new['x'].data[0], p_new['x'].data[0]))
-    print("Energy - new: {}".format(energy_new.data[0]))
-    print("-------------------------------------")
-
-
-def main():
-    # test_verlet_integrator()
-    test_normal_normal()
-
-
-if __name__ == '__main__':
-    main()

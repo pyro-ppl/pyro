@@ -1,4 +1,5 @@
 import logging
+from collections import defaultdict
 
 import pytest
 import torch
@@ -8,8 +9,12 @@ from torch.autograd import Variable
 import pyro
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.mcmc import MCMC
+from pyro.infer.mcmc.verlet_integrator import verlet_integrator
+from tests.common import assert_equal
 
-logger = logging.getLogger()
+
+logging.basicConfig(format='%(levelname)s %(message)s')
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
@@ -27,7 +32,7 @@ class GaussianChain(object):
             mu = pyro.sample('mu_{}'.format(i), dist.normal, mu=mu, sigma=Variable(lambda_prec.data))
         pyro.sample('obs', dist.normal, mu=mu, sigma=Variable(lambda_prec.data), obs=data)
 
-    def analytic_values(self, data):
+    def analytic_means(self, data):
         lambda_tilde_posts = [self.lambda_prec]
         for k in range(1, self.n):
             lambda_tilde_k = (self.lambda_prec * lambda_tilde_posts[k - 1]) /\
@@ -45,19 +50,61 @@ class GaussianChain(object):
         return target_mus
 
 
-@pytest.mark.parametrize('dim, chain_len, num_samples', [(10, 2, 1)])
-def test_hmc_conj_gaussian(dim, chain_len, num_samples):
-    fixture = GaussianChain(dim, chain_len, 0, 1)
-    data = Variable(torch.ones(num_samples, dim))
+class TestFixture(object):
+    def __init__(self, dim, chain_len, num_samples):
+        self.dim = dim
+        self.chain_len = chain_len
+        self.num_samples = num_samples
+        self.fixture = GaussianChain(dim, chain_len, 0, 1)
+
+    @property
+    def model(self):
+        return self.fixture.model
+
+    @property
+    def data(self):
+        return Variable(torch.ones(self.num_samples, self.dim))
+
+    def analytic_means(self, data):
+        return self.fixture.analytic_means(data)
+
+    def id_fn(self):
+        return 'dim={}_chain-len={}_num_samples={}'.format(self.dim, self.chain_len, self.num_samples)
+
+
+@pytest.mark.parametrize('fixture',
+                         [
+                             TestFixture(dim=10, chain_len=3, num_samples=1),
+                             TestFixture(dim=10, chain_len=3, num_samples=5),
+                         ],
+                         ids=lambda x: x.id_fn())
+def test_hmc_conj_gaussian(fixture):
     mcmc_run = MCMC(fixture.model, kernel=HMC, num_samples=600, warmup_steps=50, step_size=0.5, num_steps=4)
-    traces = []
-    for t, _ in mcmc_run._traces(data):
-        traces.append(t.nodes['mu_2']['value'])
-    print('Acceptance ratio: {}'.format(mcmc_run.acceptance_ratio))
-    print('Posterior mean:')
-    print(torch.mean(torch.stack(traces), 0).data)
+    traces = defaultdict(list)
+    for t, _ in mcmc_run._traces(fixture.data):
+        for i in range(1, fixture.chain_len+1):
+            traces[i].append(t.nodes['mu_2']['value'])
+    analytic_means = fixture.analytic_means(fixture.data)
+    logger.info('Acceptance ratio: {}'.format(mcmc_run.acceptance_ratio))
+    logger.info('Posterior mean:')
+    logger.info(torch.mean(torch.stack(traces), 0).data)
 
 
-# g = GaussianChain(2, 2, 0, 1)
-# data = Variable(torch.ones(1, 2))
-# print g.analytic_values(data)
+def test_verlet_integrator():
+    def energy(q, p):
+        return 0.5 * p['x'] ** 2 + 0.5 * q['x'] ** 2
+
+    def grad(q):
+        return {'x': q['x']}
+
+    q = {'x': Variable(torch.Tensor([0.0]), requires_grad=True)}
+    p = {'x': Variable(torch.Tensor([1.0]), requires_grad=True)}
+    energy_cur = energy(q, p)
+    logger.info("Energy - current: {}".format(energy_cur.data[0]))
+    q_new, p_new = verlet_integrator(q, p, grad, 0.01, 100)
+    assert q_new['x'].data[0] != q['x'].data[0]
+    energy_new = energy(q_new, p_new)
+    assert_equal(energy_new, energy_cur)
+    logger.info("q_old: {}, p_old: {}".format(q['x'].data[0], p['x'].data[0]))
+    logger.info("q_new: {}, p_new: {}".format(q_new['x'].data[0], p_new['x'].data[0]))
+    logger.info("Energy - new: {}".format(energy_new.data[0]))
