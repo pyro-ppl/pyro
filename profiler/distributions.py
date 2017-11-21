@@ -85,8 +85,8 @@ def sample(dist, batch_size, *args, **kwargs):
 @Profile(
     tool=get_tool,
     tool_cfg=get_tool_cfg,
-    fn_id=
-    lambda dist, batch, *args, **kwargs: 'batch_log_pdf_' + dist.dist_class.__name__ + '_N=' + str(batch.size()[0]))
+    fn_id=lambda dist, batch, *args, **kwargs:  #
+    'batch_log_pdf_' + dist.dist_class.__name__ + '_N=' + str(batch.size()[0]))
 def batch_log_pdf(dist, batch, *args, **kwargs):
     return dist.batch_log_pdf(batch, *args, **kwargs)
 

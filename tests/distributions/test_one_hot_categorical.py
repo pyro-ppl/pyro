@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 import numpy as np
 import pytest
-import scipy.stats as sp
 import torch
 from torch.autograd import Variable
 
