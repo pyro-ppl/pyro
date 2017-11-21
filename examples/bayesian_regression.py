@@ -20,7 +20,7 @@ Learning a function of the form:
 
 # generate toy dataset
 def build_linear_dataset(N, p, noise_std=0.01):
-    X = np.random.randn(N, p)
+    X = np.random.rand(N, p)
     # use random weights from [0, 8]
     w = np.random.randint(8, size=p)
     # set b = 1
