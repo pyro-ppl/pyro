@@ -66,7 +66,7 @@ class TestFixture(object):
 
     @property
     def data(self):
-        return Variable(torch.ones(self.num_samples, self.dim))
+        return Variable(torch.ones(self.num_obs, self.dim))
 
     def analytic_means(self, data):
         return self.fixture.analytic_means(data)
@@ -80,11 +80,11 @@ def mse(t1, t2):
 
 
 @pytest.mark.parametrize('fixture', [
-    TestFixture(dim=10, chain_len=3, num_obs=1, step_size=0.5, num_steps=4),
-    TestFixture(dim=10, chain_len=3, num_obs=5, step_size=0.4, num_steps=3),
-    TestFixture(dim=10, chain_len=7, num_obs=5, step_size=0.4, num_steps=3),
+    TestFixture(dim=10, chain_len=3, num_obs=1, step_size=0.5, num_steps=4, num_samples=600),
+    TestFixture(dim=10, chain_len=3, num_obs=5, step_size=0.4, num_steps=3, num_samples=700),
+    TestFixture(dim=10, chain_len=7, num_obs=1, step_size=0.4, num_steps=4, num_samples=1300),
     ], ids=lambda x: x.id_fn())
-def test_hmc_conj_gaussian(fixture):
+def test_hmc_conjugate_gaussian(fixture):
     mcmc_run = MCMC(fixture.model,
                     kernel=HMC,
                     num_samples=fixture.num_samples,
