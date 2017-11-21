@@ -102,12 +102,7 @@ def get_batch_indices(N, batch_size):
     return all_batches
 
 
-def main():
-    parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', default=1000, type=int)
-    parser.add_argument('-b', '--batch-size', default=N, type=int)
-    parser.add_argument('--cuda', action='store_true')
-    args = parser.parse_args()
+def main(args):
     data = build_linear_dataset(N, p)
     if args.cuda:
         # make tensors and modules CUDA
@@ -135,4 +130,9 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(description="parse args")
+    parser.add_argument('-n', '--num-epochs', default=1000, type=int)
+    parser.add_argument('-b', '--batch-size', default=N, type=int)
+    parser.add_argument('--cuda', action='store_true')
+    args = parser.parse_args()
+    main(args)
