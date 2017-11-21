@@ -51,9 +51,12 @@ class GaussianChain(object):
 
 
 class TestFixture(object):
-    def __init__(self, dim, chain_len, num_samples):
+    def __init__(self, dim, chain_len, num_obs, step_size, num_steps, num_samples=600):
         self.dim = dim
         self.chain_len = chain_len
+        self.num_obs = num_obs
+        self.step_size = step_size
+        self.num_steps = num_steps
         self.num_samples = num_samples
         self.fixture = GaussianChain(dim, chain_len, 0, 1)
 
@@ -69,25 +72,42 @@ class TestFixture(object):
         return self.fixture.analytic_means(data)
 
     def id_fn(self):
-        return 'dim={}_chain-len={}_num_samples={}'.format(self.dim, self.chain_len, self.num_samples)
+        return 'dim={}_chain-len={}_num_obs={}'.format(self.dim, self.chain_len, self.num_obs)
 
 
-@pytest.mark.parametrize('fixture',
-                         [
-                             TestFixture(dim=10, chain_len=3, num_samples=1),
-                             TestFixture(dim=10, chain_len=3, num_samples=5),
-                         ],
-                         ids=lambda x: x.id_fn())
+def mse(t1, t2):
+    return (t1 - t2).pow(2).mean()
+
+
+@pytest.mark.parametrize('fixture', [
+    TestFixture(dim=10, chain_len=3, num_obs=1, step_size=0.5, num_steps=4),
+    TestFixture(dim=10, chain_len=3, num_obs=5, step_size=0.4, num_steps=3),
+    TestFixture(dim=10, chain_len=7, num_obs=5, step_size=0.4, num_steps=3),
+    ], ids=lambda x: x.id_fn())
 def test_hmc_conj_gaussian(fixture):
-    mcmc_run = MCMC(fixture.model, kernel=HMC, num_samples=600, warmup_steps=50, step_size=0.5, num_steps=4)
-    traces = defaultdict(list)
+    mcmc_run = MCMC(fixture.model,
+                    kernel=HMC,
+                    num_samples=fixture.num_samples,
+                    warmup_steps=50,
+                    step_size=fixture.step_size,
+                    num_steps=fixture.num_steps)
+    post_trace = defaultdict(list)
     for t, _ in mcmc_run._traces(fixture.data):
         for i in range(1, fixture.chain_len+1):
-            traces[i].append(t.nodes['mu_2']['value'])
+            param_name = 'mu_' + str(i)
+            post_trace[param_name].append(t.nodes[param_name]['value'])
     analytic_means = fixture.analytic_means(fixture.data)
     logger.info('Acceptance ratio: {}'.format(mcmc_run.acceptance_ratio))
-    logger.info('Posterior mean:')
-    logger.info(torch.mean(torch.stack(traces), 0).data)
+    for i in range(1, fixture.chain_len+1):
+        param_name = 'mu_' + str(i)
+        latent_mu = torch.mean(torch.stack(post_trace[param_name]), 0)
+        analytic_mean = analytic_means[i-1]
+        # Actual vs expected posterior means for the latents
+        logger.info('Posterior - {}'.format(param_name))
+        logger.info(latent_mu)
+        logger.info('Posterior (analytic) - {}'.format(param_name))
+        logger.info(analytic_means[i-1])
+        assert_equal(mse(latent_mu, analytic_mean).data[0], 0, prec=0.01)
 
 
 def test_verlet_integrator():
