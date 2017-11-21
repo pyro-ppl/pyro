@@ -11,7 +11,6 @@ import pyro
 import pyro.distributions as dist
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.mcmc import MCMC
-from pyro.infer.mcmc.verlet_integrator import verlet_integrator
 from tests.common import assert_equal
 
 logging.basicConfig(format='%(levelname)s %(message)s')
