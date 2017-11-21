@@ -64,10 +64,12 @@ class HMC(TraceKernel):
         # set the trace prototype to inter-convert between trace object
         # and dict object used by the integrator
         self._prototype_trace = poutine.trace(self.model).get_trace(*args, **kwargs)
+        # momenta distribution - currently standard normal
         for name, node in self._prototype_trace.iter_stochastic_nodes():
             r_mu = torch_zeros_like(node['value'])
             r_sigma = torch_ones_like(node['value'])
             self._r_dist[name] = dist.Normal(mu=r_mu, sigma=r_sigma)
+        # validate model
         for name, node in self._prototype_trace.iter_stochastic_nodes():
             if not node['fn'].reparameterized:
                 raise ValueError('Found non-reparameterized node in the model at site: {}'.format(name))
