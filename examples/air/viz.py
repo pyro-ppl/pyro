@@ -1,5 +1,4 @@
 from collections import namedtuple
-import torch
 import numpy as np
 from PIL import Image, ImageDraw
 import math
@@ -63,15 +62,7 @@ def draw_many(imgarrs, z_arr):
 z_obj = namedtuple('z', 's,x,y,pres')
 
 
-# Take the latent values returned by the batch version of the model,
-# and munge them into the format expected by the viz code.
-def post_process_latents(latents):
-    z_where, z_pres = latents
-    z_where = [z.cpu() for z in z_where]
-    z_pres = [z.cpu() for z in z_pres]
-    z_where_t = torch.stack(z_where).transpose(0, 1)
-    z_pres_t = torch.stack(z_pres).transpose(0, 1)
-    out = []
-    for z_where_i, z_pres_i in zip(z_where_t, z_pres_t):
-        out.append([z_obj._make(torch.cat([zw.data, zp.data])) for zw, zp in zip(z_where_i, z_pres_i)])
-    return out
+# Map a tensor of latents (as produced by latents_to_tensor) to a list
+# of z_obj named tuples.
+def tensor_to_objs(latents):
+    return [[z_obj._make(step) for step in z] for z in latents]

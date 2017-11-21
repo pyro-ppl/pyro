@@ -48,6 +48,11 @@ class AIR(nn.Module):
                  use_baselines=True,
                  baseline_scalar=None,
                  fudge_z_pres=False,
+                 scale_prior_mean=3.0,
+                 scale_prior_sd=0.1,
+                 pos_prior_mean=0.0,
+                 pos_prior_sd=1.0,
+                 likelihood_sd=0.3,
                  use_cuda=False):
 
         super(AIR, self).__init__()
@@ -61,6 +66,7 @@ class AIR(nn.Module):
         self.use_baselines = use_baselines and not fudge_z_pres
         self.baseline_scalar = baseline_scalar
         self.fudge_z_pres = fudge_z_pres
+        self.likelihood_sd = likelihood_sd
         self.use_cuda = use_cuda
 
         self.z_pres_size = 1
@@ -68,8 +74,12 @@ class AIR(nn.Module):
         # By making these parameters they will be moved to the gpu
         # when necessary. (They are not registered with pyro for
         # optimization.)
-        self.z_where_mu_prior = nn.Parameter(torch.FloatTensor([3.0, 0, 0]), requires_grad=False)
-        self.z_where_sigma_prior = nn.Parameter(torch.FloatTensor([0.1, 1, 1]), requires_grad=False)
+        self.z_where_mu_prior = nn.Parameter(
+            torch.FloatTensor([scale_prior_mean, pos_prior_mean, pos_prior_mean]),
+            requires_grad=False)
+        self.z_where_sigma_prior = nn.Parameter(
+            torch.FloatTensor([scale_prior_sd, pos_prior_sd, pos_prior_sd]),
+            requires_grad=False)
 
         # Create nn modules.
         rnn_input_size = x_size ** 2 if embed_net is None else embed_net[-1]
@@ -99,15 +109,6 @@ class AIR(nn.Module):
             self.cuda()
 
     def prior(self, n, **kwargs):
-        pyro.module("decode", self.decode)
-        return self.local_model(n, **kwargs)
-
-    def model(self, data, batch_size, **kwargs):
-        pyro.module("decode", self.decode)
-        with pyro.iarange('data', data.size(0), use_cuda=self.use_cuda) as ix:
-            return self.local_model(batch_size, data[ix], **kwargs)
-
-    def local_model(self, n, batch=None, **kwargs):
 
         state = ModelState(
             x=self.ng_zeros([n, self.x_size, self.x_size]),
@@ -118,13 +119,25 @@ class AIR(nn.Module):
         z_where = []
 
         for t in range(self.num_steps):
-            state = self.model_step(t, n, state, batch, **kwargs)
+            state = self.model_step(t, n, state, **kwargs)
             z_where.append(state.z_where)
             z_pres.append(state.z_pres)
 
         return (z_where, z_pres), state.x
 
-    def model_step(self, t, n, prev, batch, z_pres_prior_p=default_z_pres_prior_p):
+    def model(self, data, _, **kwargs):
+        pyro.module("decode", self.decode)
+        with pyro.iarange('data', data.size(0), use_cuda=self.use_cuda) as ix:
+            batch = data[ix]
+            n = batch.size(0)
+            (z_where, z_pres), x = self.prior(n, **kwargs)
+            pyro.sample('obs',
+                        dist.normal,
+                        x.view(n, -1),
+                        (self.likelihood_sd * self.ng_ones(1)).expand(n, self.x_size ** 2),
+                        obs=batch.view(n, -1))
+
+    def model_step(self, t, n, prev, z_pres_prior_p=default_z_pres_prior_p):
 
         # Sample presence indicators.
         if not self.fudge_z_pres:
@@ -166,31 +179,6 @@ class AIR(nn.Module):
         # objects can create pixel intensities > 1.)
         x = prev.x + (y * z_pres.view(-1, 1, 1))
 
-        if batch is not None:
-            # Add observations.
-
-            # Observations are made as soon as we are done generating
-            # objects for a data point. This ensures that future
-            # discrete choices are not included in the ELBO. i.e. The
-            # corresponding log(q/p) in the objectives will be zero
-            # since we mask out all future choices and make no further
-            # observations for data points that are complete.
-
-            if not self.use_masking:
-                observe_mask = 1.0
-            elif t == (self.num_steps - 1):
-                observe_mask = prev.z_pres
-            else:
-                observe_mask = prev.z_pres - z_pres
-
-            if self.use_masking or t == (self.num_steps - 1):
-                pyro.sample("obs_{}".format(t),
-                            dist.normal,
-                            x.view(n, -1),
-                            self.ng_ones(x.view(n, -1).size()) * 0.3,
-                            log_pdf_mask=observe_mask,
-                            obs=batch.view(n, -1))
-
         return ModelState(x=x, z_pres=z_pres, z_where=z_where)
 
     def guide(self, data, batch_size, **kwargs):
@@ -211,37 +199,35 @@ class AIR(nn.Module):
 
         with pyro.iarange('data', data.size(0), subsample_size=batch_size, use_cuda=self.use_cuda) as ix:
             batch = data[ix]
-            return self.local_guide(batch.size(0), batch)
+            n = batch.size(0)
 
-    def local_guide(self, n, batch):
+            # Embed inputs.
+            flattened_batch = batch.view(n, -1)
+            inputs = {
+                'raw': batch,
+                'embed': self.embed(flattened_batch),
+                'bl_embed': self.bl_embed(flattened_batch)
+            }
 
-        # Embed inputs.
-        flattened_batch = batch.view(n, -1)
-        inputs = {
-            'raw': batch,
-            'embed': self.embed(flattened_batch),
-            'bl_embed': self.bl_embed(flattened_batch)
-        }
+            # Initial state.
+            state = GuideState(
+                h=batch_expand(self.h_init, n),
+                c=batch_expand(self.c_init, n),
+                bl_h=batch_expand(self.bl_h_init, n),
+                bl_c=batch_expand(self.bl_c_init, n),
+                z_pres=self.ng_ones(n, self.z_pres_size),
+                z_where=batch_expand(self.z_where_init, n),
+                z_what=batch_expand(self.z_what_init, n))
 
-        # Initial state.
-        state = GuideState(
-            h=batch_expand(self.h_init, n),
-            c=batch_expand(self.c_init, n),
-            bl_h=batch_expand(self.bl_h_init, n),
-            bl_c=batch_expand(self.bl_c_init, n),
-            z_pres=self.ng_ones(n, self.z_pres_size),
-            z_where=batch_expand(self.z_where_init, n),
-            z_what=batch_expand(self.z_what_init, n))
+            z_pres = []
+            z_where = []
 
-        z_pres = []
-        z_where = []
+            for t in range(self.num_steps):
+                state = self.guide_step(t, n, state, inputs)
+                z_where.append(state.z_where)
+                z_pres.append(state.z_pres)
 
-        for t in range(self.num_steps):
-            state = self.guide_step(t, n, state, inputs)
-            z_where.append(state.z_where)
-            z_pres.append(state.z_pres)
-
-        return z_where, z_pres
+            return z_where, z_pres
 
     def guide_step(self, t, n, prev, inputs):
 
@@ -384,3 +370,12 @@ def image_to_window(z_where, window_size, image_size, images):
 # `-1` argument of `expand` doesn't seem to work with PyTorch 0.2.0.
 def batch_expand(t, n):
     return t.expand(n, t.size(1))
+
+
+# Combine z_pres and z_where (as returned by the model and guide) into
+# a single tensor, with size:
+# [batch_size, num_steps, z_where_size + z_pres_size]
+def latents_to_tensor(z):
+    return torch.stack([
+        torch.cat((z_where.cpu().data, z_pres.cpu().data), 1)
+        for z_where, z_pres in zip(*z)]).transpose(0, 1)
