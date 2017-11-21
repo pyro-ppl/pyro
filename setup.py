@@ -23,10 +23,8 @@ except (IOError, ImportError, OSError) as e:
 
 # Remove badges since they will always be obsolete.
 blacklist = ['Build Status', 'Latest Version', 'travis-ci.org', 'pypi.python.org']
-long_description = '\n'.join([
-    line for line in long_description.split('\n')
-    if not any(patt in line for patt in blacklist)
-])
+long_description = '\n'.join(
+    [line for line in long_description.split('\n') if not any(patt in line for patt in blacklist)])
 
 setup(
     name='pyro-ppl',
@@ -62,9 +60,7 @@ setup(
             'visdom',
             'torchvision',
         ],
-        'profile': [
-            'prettytable'
-        ],
+        'profile': ['prettytable'],
         'dev': [
             'torchvision',
             'flake8',

@@ -16,6 +16,8 @@ def unwrap_variable(x):
 # Distribution tests - all distributions
 
 def test_log_pdf(dist):
+    if dist.scipy_arg_fn is None:
+        pytest.skip('{}.log_pdf has no scipy equivalent'.format(dist.pyro_dist_obj.__name__))
     d = dist.pyro_dist
     for idx in dist.get_test_data_indices():
         dist_params = dist.get_dist_params(idx)
@@ -26,6 +28,8 @@ def test_log_pdf(dist):
 
 
 def test_batch_log_pdf(dist):
+    if dist.scipy_arg_fn is None:
+        pytest.skip('{}.log_pdf has no scipy equivalent'.format(dist.pyro_dist_obj.__name__))
     d = dist.pyro_dist
     for idx in dist.get_batch_data_indices():
         dist_params = dist.get_dist_params(idx)
@@ -71,7 +75,7 @@ def test_batch_log_pdf_shape(dist):
 
 
 def test_batch_log_pdf_mask(dist):
-    if dist.get_test_distribution_name() not in ('Normal', 'Bernoulli', 'Categorical'):
+    if dist.get_test_distribution_name() not in ('Normal', 'Bernoulli', 'Categorical', 'OneHotCategorical', 'Normal'):
         pytest.skip('Batch pdf masking not supported for the distribution.')
     d = dist.pyro_dist
     for idx in range(dist.get_num_test_data()):
@@ -96,7 +100,8 @@ def test_mean_and_variance(dist):
     for idx in dist.get_test_data_indices():
         num_samples = dist.get_num_samples(idx)
         dist_params = dist.get_dist_params(idx)
-        torch_samples = dist.get_samples(num_samples, **dist_params)
+        with xfail_if_not_implemented():
+            torch_samples = dist.get_samples(num_samples, **dist_params)
         sample_mean = torch_samples.float().mean(0)
         sample_var = torch_samples.float().var(0)
         try:

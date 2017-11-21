@@ -6,8 +6,8 @@ import torch
 from torch.autograd import Variable
 
 from profiler.profiling_utils import Profile, profile_print
-from pyro.distributions import (bernoulli, beta, categorical, cauchy, dirichlet, exponential,
-                                gamma, halfcauchy, lognormal, normal, poisson, uniform)
+from pyro.distributions import (bernoulli, beta, categorical, cauchy, dirichlet, exponential, gamma, halfcauchy,
+                                lognormal, normal, one_hot_categorical, poisson, uniform)
 
 
 def T(arr):
@@ -25,6 +25,9 @@ DISTRIBUTIONS = {
         'beta': T([3.2, 3.2, 3.2, 3.2])
     }),
     'categorical': (categorical, {
+        'ps': T([0.1, 0.3, 0.4, 0.2])
+    }),
+    'one_hot_categorical': (one_hot_categorical, {
         'ps': T([0.1, 0.3, 0.4, 0.2])
     }),
     'dirichlet': (dirichlet, {
@@ -74,8 +77,7 @@ def get_tool_cfg():
 @Profile(
     tool=get_tool,
     tool_cfg=get_tool_cfg,
-    fn_id=lambda dist, batch_size, *args, **kwargs:
-        'sample_' + dist.dist_class.__name__ + '_N=' + str(batch_size))
+    fn_id=lambda dist, batch_size, *args, **kwargs: 'sample_' + dist.dist_class.__name__ + '_N=' + str(batch_size))
 def sample(dist, batch_size, *args, **kwargs):
     return dist.sample(batch_size=batch_size, *args, **kwargs)
 
@@ -83,8 +85,8 @@ def sample(dist, batch_size, *args, **kwargs):
 @Profile(
     tool=get_tool,
     tool_cfg=get_tool_cfg,
-    fn_id=lambda dist, batch, *args, **kwargs:
-        'batch_log_pdf_' + dist.dist_class.__name__ + '_N=' + str(batch.size()[0]))
+    fn_id=lambda dist, batch, *args, **kwargs:  #
+    'batch_log_pdf_' + dist.dist_class.__name__ + '_N=' + str(batch.size()[0]))
 def batch_log_pdf(dist, batch, *args, **kwargs):
     return dist.batch_log_pdf(batch, *args, **kwargs)
 
@@ -102,8 +104,7 @@ def run_with_tool(tool, dists, batch_sizes):
     with profile_print(column_widths, field_format, template) as out:
         column_headers = []
         for size in batch_sizes:
-            column_headers += ['SAMPLE (N=' + str(size) + ')',
-                               'BATCH_LOG_PDF (N=' + str(size) + ')']
+            column_headers += ['SAMPLE (N=' + str(size) + ')', 'BATCH_LOG_PDF (N=' + str(size) + ')']
         out.header(['DISTRIBUTION'] + column_headers)
         for dist_name in dists:
             dist, params = DISTRIBUTIONS[dist_name]
@@ -128,32 +129,36 @@ def set_tool_cfg(args):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Profiling distributions library using various'
-                                                 'tools.')
-    parser.add_argument('--tool', nargs='?',
-                        default='timeit',
-                        help='Profile using tool. One of following should be specified:'
-                             ' ["timeit", "cprofile"]')
-    parser.add_argument('--batch_sizes',
-                        nargs='*',
-                        type=int,
-                        help='Batch size of tensor - max of 4 values allowed. '
-                             'Default = [10000, 100000]')
-    parser.add_argument('--dists',
-                        nargs='*',
-                        type=str,
-                        help='Run tests on distributions. One or more of following distributions '
-                             'are supported: ["bernoulli, "beta", "categorical", "dirichlet", '
-                             '"normal", "lognormal", "halfcauchy", "cauchy", "exponential", '
-                             '"poisson", "gamma", "uniform"] '
-                             'Default - Run profiling on all distributions')
-    parser.add_argument('--repeat',
-                        nargs='?',
-                        default=5,
-                        type=int,
-                        help='When profiling using "timeit", the number of repetitions to '
-                             'use for the profiled function. default=5. The minimum value '
-                             'is reported.')
+    parser = argparse.ArgumentParser(description='Profiling distributions library using various' 'tools.')
+    parser.add_argument(
+        '--tool',
+        nargs='?',
+        default='timeit',
+        help='Profile using tool. One of following should be specified:'
+        ' ["timeit", "cprofile"]')
+    parser.add_argument(
+        '--batch_sizes',
+        nargs='*',
+        type=int,
+        help='Batch size of tensor - max of 4 values allowed. '
+        'Default = [10000, 100000]')
+    parser.add_argument(
+        '--dists',
+        nargs='*',
+        type=str,
+        help='Run tests on distributions. One or more of following distributions '
+        'are supported: ["bernoulli, "beta", "categorical", "dirichlet", '
+        '"normal", "lognormal", "halfcauchy", "cauchy", "exponential", '
+        '"poisson", "one_hot_categorical", "gamma", "uniform"] '
+        'Default - Run profiling on all distributions')
+    parser.add_argument(
+        '--repeat',
+        nargs='?',
+        default=5,
+        type=int,
+        help='When profiling using "timeit", the number of repetitions to '
+        'use for the profiled function. default=5. The minimum value '
+        'is reported.')
     args = parser.parse_args()
     set_tool_cfg(args)
     dists = args.dists

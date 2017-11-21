@@ -202,9 +202,11 @@ class DMM(nn.Module):
             emission_probs_t = self.emitter(z_t)
             # the next statement instructs pyro to observe x_t according to the
             # bernoulli distribution p(x_t|z_t)
-            pyro.observe("obs_x_%d" % t, dist.bernoulli, mini_batch[:, t - 1, :],
-                         emission_probs_t,
-                         log_pdf_mask=mini_batch_mask[:, t - 1:t])
+            pyro.sample("obs_x_%d" % t,
+                        dist.bernoulli,
+                        emission_probs_t,
+                        log_pdf_mask=mini_batch_mask[:, t - 1:t],
+                        obs=mini_batch[:, t - 1, :])
             # the latent sampled at this time step will be conditioned upon
             # in the next time step so keep track of it
             z_prev = z_t

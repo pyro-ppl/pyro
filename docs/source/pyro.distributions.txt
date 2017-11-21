@@ -78,6 +78,13 @@ Multinomial
     :undoc-members:
     :show-inheritance:
 
+OneHotCategorical
+-----------------
+.. automodule:: pyro.distributions.one_hot_categorical
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Poisson
 -------
 .. automodule:: pyro.distributions.poisson

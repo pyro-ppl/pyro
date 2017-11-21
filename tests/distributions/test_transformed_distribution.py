@@ -63,9 +63,18 @@ def lognormal():
     return Fixture(pyro_dist=(dist.lognormal, LogNormal),
                    scipy_dist=sp.lognorm,
                    examples=[
-                       {'mu': [1.4], 'sigma': [0.4], 'test_data': [5.5]},
+                       {'mu': [1.4], 'sigma': [0.4],
+                        'test_data': [5.5]},
+                       {'mu': [1.4], 'sigma': [0.4],
+                        'test_data': [[5.5]]},
+                       {'mu': [[1.4, 0.4, 0.4], [1.4, 0.4, 0.6]],
+                        'sigma': [[2.6, 0.5, 0.5], [2.6, 0.5, 0.5]],
+                        'test_data': [[5.5, 6.4, 6.4], [5.5, 6.4, 6.4]]},
+                       {'mu': [[1.4], [0.4]], 'sigma': [[2.6], [0.5]],
+                        'test_data': [[5.5], [6.4]]}
                    ],
-                   scipy_arg_fn=lambda mu, sigma: ((np.array(sigma),), {"scale": np.exp(np.array(mu))}))
+                   scipy_arg_fn=lambda mu, sigma: ((np.array(sigma),),
+                                                   {"scale": np.exp(np.array(mu))}))
 
 
 def unwrap_variable(x):
@@ -108,3 +117,12 @@ def test_log_pdf_on_transformed_distribution(lognormal):
         sigma_lognorm.data.cpu().numpy(),
         scale=np.exp(mu_lognorm.data.cpu().numpy()))[0]
     assert_equal(log_px_torch, log_px_np, prec=1e-4)
+
+
+def test_shape(lognormal):
+    for idx in range(len(lognormal.test_data)):
+        dist_params = lognormal.get_dist_params(idx)
+        mu_lognorm = dist_params['mu']
+        sigma_lognorm = dist_params['sigma']
+        d = get_transformed_dist(dist.normal, sigma_lognorm, mu_lognorm)
+        assert_equal(d.sample(**dist_params).size(), d.shape(**dist_params))
