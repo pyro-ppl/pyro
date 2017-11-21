@@ -65,7 +65,7 @@ class Histogram(dist.Distribution):
             logits = Variable(logits)
         logits = logits - util.log_sum_exp(logits)
 
-        d = dist.OneHotCategorical(logits=logits)
+        d = dist.Categorical(logits=logits)
         return d, values
 
     def _gen_weighted_samples(self, *args, **kwargs):
