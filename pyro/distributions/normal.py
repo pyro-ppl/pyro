@@ -60,6 +60,8 @@ class Normal(Distribution):
         """
         Ref: :py:meth:`pyro.distributions.distribution.Distribution.event_shape`
         """
+        # XXX Until PyTorch supports scalars, this should return (1,)
+        # XXX After PyTorch supports scalars, this should return ()
         event_dim = 1
         return self.mu.size()[-event_dim:]
 

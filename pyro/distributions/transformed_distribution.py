@@ -95,6 +95,7 @@ class TransformedDistribution(Distribution):
             value = bijector.inverse(value)
         base_log_pdf = self.base_dist.batch_log_pdf(value, *args, **kwargs)
         if not isinstance(log_det_jacobian, numbers.Number):
+            log_det_jacobian = log_det_jacobian.contiguous().view(*base_log_pdf.size())
             assert log_det_jacobian.size() == base_log_pdf.size(), \
                 'Invalid batch_log_det_jacobian().size():\nexpected {}\nactual {}'.format(
                         base_log_pdf.size(), log_det_jacobian.size())
