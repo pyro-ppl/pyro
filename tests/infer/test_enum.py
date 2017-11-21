@@ -25,7 +25,7 @@ def test_iter_discrete_traces_scalar(graph_type):
         p = pyro.param("p", Variable(torch.Tensor([0.05])))
         ps = pyro.param("ps", Variable(torch.Tensor([0.1, 0.2, 0.3, 0.4])))
         x = pyro.sample("x", dist.Bernoulli(p))
-        y = pyro.sample("y", dist.Categorical(ps, one_hot=False))
+        y = pyro.sample("y", dist.Categorical(ps))
         return dict(x=x, y=y)
 
     traces = list(iter_discrete_traces(graph_type, model))
@@ -51,7 +51,7 @@ def test_iter_discrete_traces_vector(graph_type):
         ps = pyro.param("ps", Variable(torch.Tensor([[0.1, 0.2, 0.3, 0.4],
                                                      [0.4, 0.3, 0.2, 0.1]])))
         x = pyro.sample("x", dist.Bernoulli(p))
-        y = pyro.sample("y", dist.Categorical(ps, one_hot=False))
+        y = pyro.sample("y", dist.Categorical(ps))
         assert x.size() == (2, 1)
         assert y.size() == (2, 1)
         return dict(x=x, y=y)
@@ -66,7 +66,7 @@ def test_iter_discrete_traces_vector(graph_type):
         x = trace.nodes["x"]["value"].data.squeeze().long()[0]
         y = trace.nodes["y"]["value"].data.squeeze().long()[0]
         expected_scale = torch.exp(dist.Bernoulli(p).log_pdf(x) *
-                                   dist.Categorical(ps, one_hot=False).log_pdf(y))
+                                   dist.Categorical(ps).log_pdf(y))
         expected_scale = expected_scale.data.view(-1)[0]
         assert_equal(scale, expected_scale)
 
@@ -136,7 +136,7 @@ def gmm_batch_model(data):
     mus = Variable(torch.Tensor([-1, 1]))
     with pyro.iarange("data", len(data)) as batch:
         n = len(batch)
-        z = pyro.sample("z", dist.Categorical(p.unsqueeze(0).expand(n, 2)))
+        z = pyro.sample("z", dist.OneHotCategorical(p.unsqueeze(0).expand(n, 2)))
         assert z.size() == (n, 2)
         mu = torch.mv(z, mus)
         pyro.observe("x", dist.Normal(mu, sigma.expand(n)), data[batch])
@@ -147,7 +147,7 @@ def gmm_batch_guide(data):
         n = len(batch)
         ps = pyro.param("ps", Variable(torch.ones(n, 1) * 0.6, requires_grad=True))
         ps = torch.cat([ps, 1 - ps], dim=1)
-        z = pyro.sample("z", dist.Categorical(ps))
+        z = pyro.sample("z", dist.OneHotCategorical(ps))
         assert z.size() == (n, 2)
 
 

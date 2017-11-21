@@ -3,7 +3,7 @@ import torch
 from torch.autograd import Variable
 from torch.nn.functional import sigmoid
 
-from pyro.distributions import Bernoulli, Categorical
+from pyro.distributions import Bernoulli, OneHotCategorical
 from tests.common import assert_equal
 
 
@@ -52,7 +52,7 @@ def test_bernoulli_with_logits_overflow_gradient(init_tensor_type):
 @pytest.mark.parametrize('init_tensor_type', [torch.DoubleTensor, torch.FloatTensor])
 def test_categorical_gradient(init_tensor_type):
     p = Variable(init_tensor_type([0, 1]), requires_grad=True)
-    categorical = Categorical(p)
+    categorical = OneHotCategorical(p)
     log_pdf = categorical.batch_log_pdf(Variable(init_tensor_type([0, 1])))
     log_pdf.sum().backward()
     assert_equal(log_pdf.data[0], 0)
@@ -62,7 +62,7 @@ def test_categorical_gradient(init_tensor_type):
 @pytest.mark.parametrize('init_tensor_type', [torch.DoubleTensor, torch.FloatTensor])
 def test_categorical_gradient_with_logits(init_tensor_type):
     p = Variable(init_tensor_type([-float('inf'), 0]), requires_grad=True)
-    categorical = Categorical(logits=p)
+    categorical = OneHotCategorical(logits=p)
     log_pdf = categorical.batch_log_pdf(Variable(init_tensor_type([0, 1])))
     log_pdf.sum().backward()
     assert_equal(log_pdf.data[0], 0)

@@ -119,9 +119,9 @@ class Distribution(object):
         The right-hand tensor shape of samples, used for individual events. The
         event dimension(/s) is used to designate random variables that could
         potentially depend on each other, for instance in the case of Dirichlet
-        or the categorical distribution, but could also simply be used for logical
-        grouping, for example in the case of a normal distribution with a
-        diagonal covariance matrix.
+        or the OneHotCategorical distribution, but could also simply be used
+        for logical grouping, for example in the case of a normal distribution
+        with a diagonal covariance matrix.
 
         Samples are of shape `d.shape(x) == d.batch_shape(x) + d.event_shape()`.
 

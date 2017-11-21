@@ -8,7 +8,7 @@ import scipy.stats as sp
 
 import pyro.distributions as dist
 from pyro.distributions import (Bernoulli, Beta, Categorical, Cauchy, Dirichlet, Exponential, Gamma, HalfCauchy,
-                                LogNormal, Multinomial, Normal, Poisson, Uniform)
+                                LogNormal, Multinomial, Normal, OneHotCategorical, Poisson, Uniform)
 from tests.distributions.dist_fixture import Fixture
 
 continuous_dists = [
@@ -183,6 +183,26 @@ discrete_dists = [
             prec=0.08,
             is_discrete=True),
     Fixture(pyro_dist=(dist.categorical, Categorical),
+            scipy_dist=sp.multinomial,
+            examples=[
+                {'ps': [0.1, 0.6, 0.3],
+                 'test_data': [2]},
+                {'logits': list(map(math.log, [0.1, 0.6, 0.3])),
+                 'test_data': [2]},
+                {'logits': [list(map(math.log, [0.1, 0.6, 0.3])),
+                            list(map(math.log, [0.2, 0.4, 0.4]))],
+                 'test_data': [[2], [0]]},
+                {'ps': [[0.1, 0.6, 0.3],
+                        [0.2, 0.4, 0.4]],
+                 'test_data': [[2], [0]]}
+            ],
+            test_data_indices=[0, 1, 2],
+            batch_data_indices=[-1, -2],
+            scipy_arg_fn=None,
+            prec=0.05,
+            min_samples=10000,
+            is_discrete=True),
+    Fixture(pyro_dist=(dist.one_hot_categorical, OneHotCategorical),
             scipy_dist=sp.multinomial,
             examples=[
                 {'ps': [0.1, 0.6, 0.3],

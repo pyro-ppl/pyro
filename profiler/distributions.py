@@ -7,7 +7,7 @@ from torch.autograd import Variable
 
 from profiler.profiling_utils import Profile, profile_print
 from pyro.distributions import (bernoulli, beta, categorical, cauchy, dirichlet, exponential, gamma, halfcauchy,
-                                lognormal, normal, poisson, uniform)
+                                lognormal, normal, one_hot_categorical, poisson, uniform)
 
 
 def T(arr):
@@ -25,6 +25,9 @@ DISTRIBUTIONS = {
         'beta': T([3.2, 3.2, 3.2, 3.2])
     }),
     'categorical': (categorical, {
+        'ps': T([0.1, 0.3, 0.4, 0.2])
+    }),
+    'one_hot_categorical': (one_hot_categorical, {
         'ps': T([0.1, 0.3, 0.4, 0.2])
     }),
     'dirichlet': (dirichlet, {
@@ -146,7 +149,7 @@ def main():
         help='Run tests on distributions. One or more of following distributions '
         'are supported: ["bernoulli, "beta", "categorical", "dirichlet", '
         '"normal", "lognormal", "halfcauchy", "cauchy", "exponential", '
-        '"poisson", "gamma", "uniform"] '
+        '"poisson", "one_hot_categorical", "gamma", "uniform"] '
         'Default - Run profiling on all distributions')
     parser.add_argument(
         '--repeat',
