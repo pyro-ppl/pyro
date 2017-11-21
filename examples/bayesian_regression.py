@@ -17,12 +17,12 @@ Learning a function of the form:
     y = wx + b
 """
 
-
 # generate toy dataset
 def build_linear_dataset(N, p, noise_std=0.1):
-    X = np.linspace(-6, 6, num=N)
-    y = 3 * X + 1 + np.random.normal(0, noise_std, size=N)
+    X = np.linspace(-6, 6, num=N * p)
     X = X.reshape((N, p))
+    w = np.repeat(3, p)
+    y = np.matmul(X, w) + np.repeat(1, N) + np.random.normal(0, noise_std, size=N)
     y = y.reshape((N, 1))
     X, y = Variable(torch.Tensor(X)), Variable(torch.Tensor(y))
     return torch.cat((X, y), 1)
@@ -40,7 +40,7 @@ class RegressionModel(nn.Module):
 
 
 N = 100  # size of toy data
-p = 1  # number of features
+p = 5  # number of features
 
 softplus = nn.Softplus()
 regression_model = RegressionModel(p)
@@ -48,8 +48,8 @@ regression_model = RegressionModel(p)
 
 def model(data):
     # Create unit normal priors over the parameters
-    mu = Variable(torch.zeros(p, 1)).type_as(data)
-    sigma = Variable(torch.ones(p, 1)).type_as(data)
+    mu = Variable(torch.zeros(1, p)).type_as(data)
+    sigma = Variable(torch.ones(1, p)).type_as(data)
     bias_mu = Variable(torch.zeros(1)).type_as(data)
     bias_sigma = Variable(torch.ones(1)).type_as(data)
     w_prior, b_prior = Normal(mu, sigma), Normal(bias_mu, bias_sigma)
@@ -70,8 +70,8 @@ def model(data):
 
 
 def guide(data):
-    w_mu = Variable(torch.randn(p, 1).type_as(data.data), requires_grad=True)
-    w_log_sig = Variable((-3.0 * torch.ones(p, 1) + 0.05 * torch.randn(p, 1)).type_as(data.data), requires_grad=True)
+    w_mu = Variable(torch.randn(1, p).type_as(data.data), requires_grad=True)
+    w_log_sig = Variable((-3.0 * torch.ones(1, p) + 0.05 * torch.randn(1, p)).type_as(data.data), requires_grad=True)
     b_mu = Variable(torch.randn(1).type_as(data.data), requires_grad=True)
     b_log_sig = Variable((-3.0 * torch.ones(1) + 0.05 * torch.randn(1)).type_as(data.data), requires_grad=True)
     # register learnable params in the param store
