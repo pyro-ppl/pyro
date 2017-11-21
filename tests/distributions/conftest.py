@@ -198,7 +198,7 @@ discrete_dists = [
             ],
             test_data_indices=[0, 1, 2],
             batch_data_indices=[-1, -2],
-            scipy_arg_fn=lambda ps: ((1, np.array(ps)), {}),
+            scipy_arg_fn=None,
             prec=0.05,
             min_samples=10000,
             is_discrete=True),

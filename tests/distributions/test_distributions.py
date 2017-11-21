@@ -16,6 +16,8 @@ def unwrap_variable(x):
 # Distribution tests - all distributions
 
 def test_log_pdf(dist):
+    if dist.scipy_arg_fn is None:
+        pytest.skip('{}.log_pdf has no scipy equivalent'.format(dist.pyro_dist_obj.__name__))
     d = dist.pyro_dist
     for idx in dist.get_test_data_indices():
         dist_params = dist.get_dist_params(idx)
@@ -26,6 +28,8 @@ def test_log_pdf(dist):
 
 
 def test_batch_log_pdf(dist):
+    if dist.scipy_arg_fn is None:
+        pytest.skip('{}.log_pdf has no scipy equivalent'.format(dist.pyro_dist_obj.__name__))
     d = dist.pyro_dist
     for idx in dist.get_batch_data_indices():
         dist_params = dist.get_dist_params(idx)

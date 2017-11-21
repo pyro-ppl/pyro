@@ -80,14 +80,7 @@ class Categorical(Distribution):
         """
         Ref: :py:meth:`pyro.distributions.distribution.Distribution.event_shape`
         """
-        event_dim = 1
-        return self.ps.size()[-event_dim:]
-
-    def shape(self, x=None):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.shape`
-        """
-        return self.batch_shape(x) + (1,)
+        return (1,)
 
     def sample(self):
         """
