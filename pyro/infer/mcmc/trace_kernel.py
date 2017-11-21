@@ -7,6 +7,7 @@ from six import add_metaclass
 
 @add_metaclass(ABCMeta)
 class TraceKernel(object):
+
     @abstractmethod
     def setup(self, *args, **kwargs):
         pass

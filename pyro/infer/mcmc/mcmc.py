@@ -7,13 +7,8 @@ from pyro import poutine
 
 
 class MCMC(TracePosterior):
-    def __init__(self,
-                 model,
-                 kernel,
-                 warmup_steps,
-                 num_samples,
-                 *args,
-                 **kwargs):
+
+    def __init__(self, model, kernel, warmup_steps, num_samples, *args, **kwargs):
         self.model = model
         self.num_samples = num_samples
         self.warmup_steps = warmup_steps
