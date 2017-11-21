@@ -202,7 +202,7 @@ discrete_dists = [
             prec=0.05,
             min_samples=10000,
             is_discrete=True),
-    Fixture(pyro_dist=(dist.categorical, OneHotCategorical),
+    Fixture(pyro_dist=(dist.one_hot_categorical, OneHotCategorical),
             scipy_dist=sp.multinomial,
             examples=[
                 {'ps': [0.1, 0.6, 0.3],
