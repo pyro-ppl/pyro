@@ -8,7 +8,7 @@ def test_categorical_shape():
     ps = ng_ones(3, 2) / 2
     d = dist.Categorical(ps)
     assert d.batch_shape() == (3,)
-    assert d.event_shape() == (2,)
+    assert d.event_shape() == (1,)
     assert d.shape() == (3, 1)
     assert d.sample().size() == d.shape()
 

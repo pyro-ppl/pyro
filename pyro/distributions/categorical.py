@@ -169,7 +169,7 @@ class Categorical(Distribution):
         :rtype: torch.autograd.Variable or numpy.ndarray.
         """
         sample_shape = self.batch_shape() + (1,)
-        support_samples_size = (self.event_shape()) + sample_shape
+        support_samples_size = self.ps.size()[-1:] + sample_shape
         vs = self.vs
 
         if vs is not None:
@@ -179,4 +179,4 @@ class Categorical(Distribution):
                 return torch.transpose(vs, 0, -1).contiguous().view(support_samples_size)
         LongTensor = torch.cuda.LongTensor if self.ps.is_cuda else torch.LongTensor
         return Variable(
-            torch.stack([LongTensor([t]).expand(sample_shape) for t in torch.arange(0, *self.event_shape()).long()]))
+            torch.stack([LongTensor([t]).expand(sample_shape) for t in torch.arange(0, self.ps.size(-1)).long()]))
