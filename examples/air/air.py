@@ -131,11 +131,11 @@ class AIR(nn.Module):
             batch = data[ix]
             n = batch.size(0)
             (z_where, z_pres), x = self.prior(n, **kwargs)
-            pyro.observe('obs',
-                         dist.normal,
-                         batch.view(n, -1),
-                         x.view(n, -1),
-                         (self.likelihood_sd * self.ng_ones(1)).expand(n, self.x_size ** 2))
+            pyro.sample('obs',
+                        dist.normal,
+                        x.view(n, -1),
+                        (self.likelihood_sd * self.ng_ones(1)).expand(n, self.x_size ** 2),
+                        obs=batch.view(n, -1))
 
     def model_step(self, t, n, prev, z_pres_prior_p=default_z_pres_prior_p):
 
