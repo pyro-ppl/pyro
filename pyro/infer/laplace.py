@@ -1,5 +1,4 @@
 import pyro
-from pyro import poutine
 from pyro.infer.map import MAP
 from pyro.util import hessians
 
@@ -13,18 +12,14 @@ class Laplace(MAP):
     Laplace approximation.
     """
     def __init__(self, model, optim, *args, **kwargs):
-        model = poutine.lower(model)
+        super(Laplace, self).__init__(model, optim, *args, **kwargs)
 
-        def guide(*args, **kwargs):
-            pass
-
-        super(MAP, self).__init__(model, guide, optim, loss="ELBO", *args, **kwargs)
-
-    def get_hessians(self, params, data):
+    def get_hessians(self, params, *args, **kwargs):
         """
         :param xs: Parameters' name
         :returns: A dict of the form `param: Hessian`
         """
         xs = [pyro.param(p) for p in params]
-        hs = self.loss_and_grads(self.model, self.guide, data, callback=(hessians, xs))
+        kwargs["callback"] = (hessians, xs)
+        hs = self.loss_and_grads(self.model, self.guide, *args, **kwargs)
         return dict(zip(params, hs))
