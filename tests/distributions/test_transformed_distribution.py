@@ -56,26 +56,24 @@ class AffineExp(Bijector):
         """
         Calculates the elementwise determinant of the log jacobian
         """
-        return (torch.log(torch.abs(self.a)) + torch.log(y)).sum(-1)
+        return (torch.log(torch.abs(self.a)) + torch.log(y))
 
 
-@pytest.fixture()
-def lognormal():
+def make_lognormal(example):
     return Fixture(pyro_dist=(dist.lognormal, LogNormal),
                    scipy_dist=sp.lognorm,
-                   examples=[
-                       {'mu': [1.4], 'sigma': [0.4],
-                        'test_data': [5.5]},
-                       {'mu': [1.4], 'sigma': [0.4],
-                        'test_data': [[5.5]]},
-                       {'mu': [[1.4, 0.4, 0.4], [1.4, 0.4, 0.6]],
-                        'sigma': [[2.6, 0.5, 0.5], [2.6, 0.5, 0.5]],
-                        'test_data': [[5.5, 6.4, 6.4], [5.5, 6.4, 6.4]]},
-                       {'mu': [[1.4], [0.4]], 'sigma': [[2.6], [0.5]],
-                        'test_data': [[5.5], [6.4]]}
-                   ],
+                   examples=[example],
                    scipy_arg_fn=lambda mu, sigma: ((np.array(sigma),),
                                                    {"scale": np.exp(np.array(mu))}))
+
+
+EXAMPLES = list(map(make_lognormal, [
+    {'mu': [1.4], 'sigma': [0.4], 'test_data': [5.5]},
+    {'mu': [1.4], 'sigma': [0.4], 'test_data': [[5.5]]},
+    {'mu': [[1.4, 0.4, 0.4], [1.4, 0.4, 0.6]], 'sigma': [[2.6, 0.5, 0.5], [2.6, 0.5, 0.5]],
+     'test_data': [[5.5, 6.4, 6.4], [5.5, 6.4, 6.4]]},
+    {'mu': [[1.4], [0.4]], 'sigma': [[2.6], [0.5]], 'test_data': [[5.5], [6.4]]},
+]))
 
 
 def unwrap_variable(x):
@@ -87,7 +85,8 @@ def get_transformed_dist(distribution, affine_a, affine_b):
     return TransformedDistribution(distribution, bijector)
 
 
-def test_mean_and_var_on_transformed_distribution(lognormal):
+@pytest.mark.parametrize('lognormal', EXAMPLES)
+def test_mean_and_var(lognormal):
     mu_z = Variable(torch.zeros(1))
     sigma_z = Variable(torch.ones(1))
     dist_params = lognormal.get_dist_params(0)
@@ -104,44 +103,44 @@ def test_mean_and_var_on_transformed_distribution(lognormal):
     assert_equal(torch_var, analytic_var, prec=0.1)
 
 
-def test_log_pdf_on_transformed_distribution(lognormal):
-    for idx in range(len(lognormal.test_data)):
-        dist_params = lognormal.get_dist_params(idx)
-        mu_lognorm = dist_params['mu']
-        sigma_lognorm = dist_params['sigma']
-        mu_z = torch_zeros_like(mu_lognorm)
-        sigma_z = torch_ones_like(sigma_lognorm)
-        trans_dist = get_transformed_dist(dist.normal, sigma_lognorm, mu_lognorm)
-        test_data = lognormal.get_test_data(idx)
-        log_px_torch = trans_dist.log_pdf(test_data, mu_z, sigma_z).data[0]
-        log_px_np = sp.lognorm.logpdf(
-            test_data.data.cpu().numpy(),
-            sigma_lognorm.data.cpu().numpy(),
-            scale=np.exp(mu_lognorm.data.cpu().numpy())).sum()
-        assert_equal(log_px_torch, log_px_np, prec=1e-4)
+@pytest.mark.parametrize('lognormal', EXAMPLES)
+def test_log_pdf(lognormal):
+    dist_params = lognormal.get_dist_params(0)
+    mu_lognorm = dist_params['mu']
+    sigma_lognorm = dist_params['sigma']
+    mu_z = torch_zeros_like(mu_lognorm)
+    sigma_z = torch_ones_like(sigma_lognorm)
+    trans_dist = get_transformed_dist(dist.normal, sigma_lognorm, mu_lognorm)
+    test_data = lognormal.get_test_data(0)
+    log_px_torch = trans_dist.log_pdf(test_data, mu_z, sigma_z).data[0]
+    log_px_np = sp.lognorm.logpdf(
+        test_data.data.cpu().numpy(),
+        sigma_lognorm.data.cpu().numpy(),
+        scale=np.exp(mu_lognorm.data.cpu().numpy())).sum()
+    assert_equal(log_px_torch, log_px_np, prec=1e-4)
 
 
-def test_batch_log_pdf_on_transformed_distribution(lognormal):
-    for idx in range(len(lognormal.test_data)):
-        dist_params = lognormal.get_dist_params(idx)
-        mu_lognorm = dist_params['mu']
-        sigma_lognorm = dist_params['sigma']
-        mu_z = torch_zeros_like(mu_lognorm)
-        sigma_z = torch_ones_like(sigma_lognorm)
-        trans_dist = get_transformed_dist(dist.normal, sigma_lognorm, mu_lognorm)
-        test_data = lognormal.get_test_data(idx)
-        log_px_torch = trans_dist.batch_log_pdf(test_data, mu_z, sigma_z).data.cpu().numpy()
-        log_px_np = sp.lognorm.logpdf(
-            test_data.data.cpu().numpy(),
-            sigma_lognorm.data.cpu().numpy(),
-            scale=np.exp(mu_lognorm.data.cpu().numpy()))
-        assert_equal(log_px_torch, log_px_np, prec=1e-4)
+@pytest.mark.parametrize('lognormal', EXAMPLES)
+def test_batch_log_pdf(lognormal):
+    dist_params = lognormal.get_dist_params(0)
+    mu_lognorm = dist_params['mu']
+    sigma_lognorm = dist_params['sigma']
+    mu_z = torch_zeros_like(mu_lognorm)
+    sigma_z = torch_ones_like(sigma_lognorm)
+    trans_dist = get_transformed_dist(dist.normal, sigma_lognorm, mu_lognorm)
+    test_data = lognormal.get_test_data(0)
+    log_px_torch = trans_dist.batch_log_pdf(test_data, mu_z, sigma_z).data.cpu().numpy()
+    log_px_np = sp.lognorm.logpdf(
+        test_data.data.cpu().numpy(),
+        sigma_lognorm.data.cpu().numpy(),
+        scale=np.exp(mu_lognorm.data.cpu().numpy()))
+    assert_equal(log_px_torch, log_px_np, prec=1e-4)
 
 
+@pytest.mark.parametrize('lognormal', EXAMPLES)
 def test_shape(lognormal):
-    for idx in range(len(lognormal.test_data)):
-        dist_params = lognormal.get_dist_params(idx)
-        mu_lognorm = dist_params['mu']
-        sigma_lognorm = dist_params['sigma']
-        d = get_transformed_dist(dist.normal, sigma_lognorm, mu_lognorm)
-        assert_equal(d.sample(**dist_params).size(), d.shape(**dist_params))
+    dist_params = lognormal.get_dist_params(0)
+    mu_lognorm = dist_params['mu']
+    sigma_lognorm = dist_params['sigma']
+    d = get_transformed_dist(dist.normal, sigma_lognorm, mu_lognorm)
+    assert_equal(d.sample(**dist_params).size(), d.shape(**dist_params))
