@@ -70,7 +70,7 @@ class Categorical(Distribution):
             x = self._process_data(x)
             x_shape = x.shape if isinstance(x, np.ndarray) else x.size()
             try:
-                ps = self.ps.expand(x_shape[:-event_dim] + self.event_shape())
+                ps = self.ps.expand(x_shape[:-event_dim] + self.ps.size()[-1:])
             except RuntimeError as e:
                 raise ValueError("Parameter `ps` with shape {} is not broadcastable to "
                                  "the data shape {}. \nError: {}".format(ps.size(), x.size(), str(e)))
@@ -130,7 +130,7 @@ class Categorical(Distribution):
         # probability tensor mask when data is pytorch tensor
         else:
             x = x.cuda() if logits.is_cuda else x.cpu()
-            batch_ps_shape = self.batch_shape(x) + self.event_shape()
+            batch_ps_shape = self.batch_shape(x) + logits.size()[-1:]
             logits = logits.expand(batch_ps_shape)
 
             if vs is not None:
