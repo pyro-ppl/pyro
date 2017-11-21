@@ -1,4 +1,4 @@
-from pdb import set_trace as bb
+# from pdb import set_trace as bb
 import os
 import multiprocessing as mp
 import numpy as np
@@ -52,7 +52,7 @@ def connect_add_message(uuid, list_key, msg):
     red.r.connection_pool.disconnect()
 
 
-@multi_try(20, wait=1)
+@multi_try(20, wait=.1)
 def fork():
     pid = os.fork()
     return pid
@@ -131,7 +131,14 @@ def main(*args, **kwargs):
     rr.flushdb()
     # create num_threads == 200
     # rr.incr("num_threads", 200)
-    call_count = 50
+    # deeply related to process limits
+    # https://apple.stackexchange.com/questions/77410/how-do-i-increase-ulimit-u-max-user-processes
+    # Fixing ulimit shenangians for macbook pro:
+    # this is why the processes die
+    # https://blog.dekstroza.io/ulimit-shenanigans-on-osx-el-capitan/
+    # no such limits on opus gpu machines :)
+    call_count = 200
+
     # m = Manager()
     # bd = m.BoundedSemaphore(min(500, call_count))
     fork_size = 15
@@ -182,6 +189,8 @@ def main(*args, **kwargs):
      if sk not in sub_keys]
 
     list(map(lambda x: x.join(), all_processes))
+    print("sleep to wait for final print outs")
+    time.sleep(1.5)
     print("All processes forked, caught, released and killed")
 
 
