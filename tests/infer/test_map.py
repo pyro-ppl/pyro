@@ -30,7 +30,7 @@ def test_map_sample():
 def test_map_param():
 
     def model(data):
-        mu = pyro.param("mu", Variable(torch.zeros(0), requires_grad=True))
+        mu = pyro.param("mu", Variable(torch.zeros(1), requires_grad=True))
         for i, x in enumerate(data):
             pyro.observe("x_{}".format(i), dist.normal, x, mu, ng_ones(1))
 
