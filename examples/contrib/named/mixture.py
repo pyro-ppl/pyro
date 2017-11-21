@@ -33,7 +33,7 @@ def model(data, k):
 
 
 def local_model(latent, ps, mus, sigmas, obs=None):
-    i = latent.id.sample_(dist.categorical, softmax(ps), one_hot=False)
+    i = latent.id.sample_(dist.categorical, softmax(ps))
     return latent.x.sample_(dist.normal, mus[i], sigmas[i], obs=obs)
 
 
@@ -48,7 +48,7 @@ def guide(data, k):
 def local_guide(latent, k):
     # The local guide simply guesses category assignments.
     latent.ps.param_(Variable(torch.ones(k) / k, requires_grad=True))
-    latent.id.sample_(dist.categorical, softmax(latent.ps), one_hot=False)
+    latent.id.sample_(dist.categorical, softmax(latent.ps))
 
 
 def main(args):
