@@ -49,11 +49,19 @@ examples.
 
 Authors: Fritz Obermeyer, Alexander Rush
 """
+
 from __future__ import absolute_import, division, print_function
 
+import contextlib
 import functools
+from inspect import isclass
 
 import pyro
+import pyro.util
+
+
+def _is_named(obj):
+    return isinstance(obj, (Object, List, Dict))
 
 
 class Object(object):
@@ -79,18 +87,38 @@ class Object(object):
         not be mutated or removed. Trying to mutate this data structure may
         result in silent errors.
     """
-    def __init__(self, name):
+    def __init__(self, name="latent"):
         super(Object, self).__setattr__("_name", name)
         super(Object, self).__setattr__("_is_placeholder", True)
 
+    def _local_items(self):
+        return ((k, v) for k, v in self.__dict__.items()
+                if k[0] != "_")
+
+    def _items(self):
+        for key, val in self._local_items():
+            if _is_named(val):
+                for k, v in val._items():
+                    yield k, v
+            else:
+                name = "{}.{}".format(self._name, key)
+                yield name, val
+
     def __str__(self):
-        return super(Object, self).__getattribute__("_name")
+        return self._name
+
+    def __repr__(self):
+        out = "Object (\n"
+        for k, v in self._local_items():
+            out += "{} : {}\n".format(k, repr(v))
+        out += ")"
+        return out
 
     def __getattribute__(self, key):
         try:
             return super(Object, self).__getattribute__(key)
         except AttributeError:
-            name = "{}.{}".format(self, key)
+            name = "{}.{}".format(self._name, key)
             value = Object(name)
             super(Object, value).__setattr__(
                 "_set_value", lambda value: super(Object, self).__setattr__(key, value))
@@ -100,26 +128,26 @@ class Object(object):
 
     def __setattr__(self, key, value):
         if isinstance(value, (List, Dict)):
-            value._set_name("{}.{}".format(self, key))
+            value._set_name("{}.{}".format(self._name, key))
         if hasattr(self, key):
             old = super(Object, self).__getattribute__(key)
             if not isinstance(old, Object) or not old._is_placeholder:
-                raise RuntimeError("Cannot overwrite {}.{}".format(self, key))
+                raise RuntimeError("Cannot overwrite {}.{}".format(self._name, key))
         super(Object, self).__setattr__(key, value)
 
     @functools.wraps(pyro.sample)
     def sample_(self, fn, *args, **kwargs):
         if not self._is_placeholder:
-            raise RuntimeError("Cannot .sample_ an initialized named.Object {}".format(self))
-        value = pyro.sample(str(self), fn, *args, **kwargs)
+            raise RuntimeError("Cannot .sample_ an initialized named.Object {}".format(self._name))
+        value = pyro.sample(self._name, fn, *args, **kwargs)
         self._set_value(value)
         return value
 
     @functools.wraps(pyro.observe)
     def observe_(self, fn, obs, *args, **kwargs):
         if not self._is_placeholder:
-            raise RuntimeError("Cannot .observe_ an initialized named.Object {}".format(self))
-        value = pyro.observe(str(self), fn, obs, *args, **kwargs)
+            raise RuntimeError("Cannot .observe_ an initialized named.Object {}".format(self._name))
+        value = pyro.observe(self._name, fn, obs, *args, **kwargs)
         self._set_value(value)
         return value
 
@@ -127,9 +155,50 @@ class Object(object):
     def param_(self, *args, **kwargs):
         if not self._is_placeholder:
             raise RuntimeError("Cannot .param_ an initialized named.Object")
-        value = pyro.param(str(self), *args, **kwargs)
+        value = pyro.param(self._name, *args, **kwargs)
         self._set_value(value)
         return value
+
+    def set_(self, value):
+        if not self._is_placeholder:
+            raise RuntimeError("Cannot .set_ an initialized named.Object")
+        self._set_value(value)
+        return value
+
+    @contextlib.contextmanager
+    @functools.wraps(pyro.iarange)
+    def iarange_(self, *args, **kwargs):
+        if not self._is_placeholder:
+            raise RuntimeError("Cannot .iarange_ an initialized named.Object")
+
+        # Yields both a subsampled data and an indexed latent object.
+        with pyro.iarange(self._name, *args, **kwargs) as ind:
+            yield ind
+
+    @functools.wraps(pyro.irange)
+    def irange_(self, *args, **kwargs):
+        return pyro.irange(self._name, *args, **kwargs)  # Returns an iterator.
+
+    def ienumerate_(self, ls, *args, **kwargs):
+        self.plate = List()
+        for i in self.irange.irange_(len(ls), *args, **kwargs):
+            yield i, ls[i], self.plate.add()
+
+    @functools.wraps(pyro.module)
+    def module_(self, nn_module, tags="default"):
+        if not self._is_placeholder:
+            raise RuntimeError("Cannot .module_ an initialized named.Object")
+
+        assert hasattr(nn_module, "parameters"), "module has no parameters"
+        if isclass(nn_module):
+            raise NotImplementedError("pyro.module does not support class constructors for " +
+                                      "the argument nn_module")
+
+        for param_name, param_value in nn_module.named_parameters():
+            # register the parameter in the module with pyro
+            # this only does something substantive if the parameter hasn't been seen before
+            pyro.util.deep_getattr(self, param_name).param_(param_value, tags=tags)
+        return nn_module
 
 
 class List(list):
@@ -149,11 +218,9 @@ class List(list):
         not be mutated or removed. Trying to mutate this data structure may
         result in silent errors.
     """
-    def __init__(self, name=None):
+    def __init__(self, name=None, size=None):
         self._name = name
-
-    def __str__(self):
-        return self._name
+        self._size = size
 
     def _set_name(self, name):
         if self:
@@ -161,6 +228,18 @@ class List(list):
         if self._name is not None:
             raise RuntimeError("Cannot rename named.List: {}".format(self._name))
         self._name = name
+        if self._size is not None:
+            for i in range(self._size):
+                self.add()
+
+    def _items(self):
+        for i, obj in enumerate(self):
+            if _is_named(obj):
+                for k, v in obj._items():
+                    yield k, v
+            else:
+                name = "{}[{}]".format(self._name, i)
+                yield name, obj
 
     def add(self):
         """
@@ -177,6 +256,12 @@ class List(list):
             "_set_value", lambda value, i=i: self.__setitem__(i, value))
         self.append(value)
         return value
+
+    def __repr__(self):
+        return "List ( {} )".format(", ".join(map(repr, self)))
+
+    def __str__(self):
+        return self._name
 
     def __setitem__(self, pos, value):
         name = "{}[{}]".format(self._name, pos)
@@ -210,15 +295,28 @@ class Dict(dict):
     def __init__(self, name=None):
         self._name = name
 
-    def __str__(self):
-        return self._name
-
     def _set_name(self, name):
         if self:
             raise RuntimeError("Cannot name a named.Dict after data has been added")
         if self._name is not None:
             raise RuntimeError("Cannot rename named.Dict: {}".format(self._name))
         self._name = name
+
+    def _items(self):
+        for key, val in self.items():
+            if _is_named(val):
+                for k, v in val._items():
+                    yield k, v
+            else:
+                name = "{}[{!r}]".format(self._name, key)
+                yield name, val
+
+    def __repr__(self):
+        return "Dict (\n {} \n)".format(",".join(("{}: {}".format(k, repr(v))
+                                                  for k, v in self.items())))
+
+    def __str__(self):
+        return self._name
 
     def __getitem__(self, key):
         try:
