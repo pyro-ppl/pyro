@@ -17,11 +17,11 @@ Learning a function of the form:
     y = wx + b
 """
 
+
 # generate toy dataset
-def build_linear_dataset(N, p, noise_std=0.1):
-    X = np.linspace(-6, 6, num=N * p)
-    X = X.reshape((N, p))
-    w = np.repeat(3, p)
+def build_linear_dataset(N, p, noise_std=0.01):
+    X = np.random.randn(N, p)
+    w = np.random.randint(8, size=p)
     y = np.matmul(X, w) + np.repeat(1, N) + np.random.normal(0, noise_std, size=N)
     y = y.reshape((N, 1))
     X, y = Variable(torch.Tensor(X)), Variable(torch.Tensor(y))
@@ -40,7 +40,7 @@ class RegressionModel(nn.Module):
 
 
 N = 100  # size of toy data
-p = 5  # number of features
+p = 1  # number of features
 
 softplus = nn.Softplus()
 regression_model = RegressionModel(p)
@@ -90,7 +90,7 @@ def guide(data):
 
 
 # instantiate optim and inference objects
-optim = Adam({"lr": 0.01})
+optim = Adam({"lr": 0.001})
 svi = SVI(model, guide, optim, loss="ELBO")
 
 
