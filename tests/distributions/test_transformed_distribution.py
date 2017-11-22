@@ -1,7 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import numbers
-
 import numpy as np
 import pytest
 import scipy.stats as sp
@@ -78,15 +76,15 @@ EXAMPLES = list(map(make_lognormal, [
     },
     {
         'example': {
-            'mu': [[1.4, 0.4, 0.4], [1.4, 0.4, 0.6]],
-            'sigma': [[2.6, 0.5, 0.5], [2.6, 0.5, 0.5]],
+            'mu': [1.4, 0.4, 0.4],
+            'sigma': [1.2, 0.5, 0.5],
             'test_data': [[5.5, 6.4, 6.4], [0.5, 0.4, 0.4]],
         },
-        'min_samples': 10000,
+        'min_samples': 500000,
     },
     {
-        'example': {'mu': [[1.4], [0.4]], 'sigma': [[2.6], [0.5]], 'test_data': [[5.5], [6.4]]},
-        'min_samples': 10000,
+        'example': {'mu': [1.4], 'sigma': [1.2], 'test_data': [[5.5], [6.4]]},
+        'min_samples': 1000000,
     },
 ]))
 
@@ -100,7 +98,6 @@ def get_transformed_dist(distribution, affine_a, affine_b):
     return TransformedDistribution(distribution, bijector)
 
 
-@pytest.mark.xfail(reason='https://github.com/uber/pyro/issues/293')
 @pytest.mark.parametrize('lognormal', EXAMPLES)
 def test_mean_and_var(lognormal):
     dist_params = lognormal.get_dist_params(0)
@@ -109,18 +106,16 @@ def test_mean_and_var(lognormal):
     mu_z = torch_zeros_like(mu_lognorm)
     sigma_z = torch_ones_like(sigma_lognorm)
     trans_dist = get_transformed_dist(dist.normal, sigma_lognorm, mu_lognorm)
-    torch_samples = np.zeros([lognormal.get_num_samples(0)] + list(trans_dist.batch_shape(None, mu_z, sigma_z)))
-    for i in range(len(torch_samples)):
-        torch_samples[i] = trans_dist.sample(mu_z, sigma_z).data.cpu().numpy()
-    torch_mean = np.mean(torch_samples, axis=0)
-    torch_std = np.var(torch_samples, axis=0) ** 0.5
-    analytic_mean = unwrap_variable(lognormal.pyro_dist.analytic_mean(**dist_params))
-    analytic_std = unwrap_variable(lognormal.pyro_dist.analytic_var(**dist_params)) ** 0.5
-    if isinstance(torch_mean, numbers.Number):
-        analytic_mean = analytic_mean[0]
-        analytic_std = analytic_std[0]
-    assert_equal(torch_mean, analytic_mean, prec=0.1)
-    assert_equal(torch_std, analytic_std, prec=0.1)
+    torch_samples = trans_dist.sample(mu_z, sigma_z, batch_size=lognormal.get_num_samples(0))
+    torch_mean = torch.mean(torch_samples, 0)
+    torch_std = torch.std(torch_samples, 0)
+    analytic_mean = lognormal.pyro_dist.analytic_mean(**dist_params)
+    analytic_std = lognormal.pyro_dist.analytic_var(**dist_params) ** 0.5
+    # if isinstance(torch_mean, numbers.Number):
+    #     analytic_mean = analytic_mean[0]
+    #     analytic_std = analytic_std[0]
+    assert_equal(torch_mean, analytic_mean, prec=analytic_mean.data[0] * 0.01)
+    assert_equal(torch_std, analytic_std, prec=analytic_std.data[0] * 0.01)
 
 
 @pytest.mark.parametrize('lognormal', EXAMPLES)
