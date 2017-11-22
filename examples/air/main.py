@@ -198,7 +198,7 @@ def main(**kwargs):
         vis.images(draw_many(x, tensor_to_objs(latents_to_tensor(z))))
 
     def per_param_optim_args(module_name, param_name, tags):
-        lr = 1e-3 if 'baseline' in tags else 1e-4
+        lr = args.baseline_learning_rate if 'baseline' in tags else args.learning_rate
         return {'lr': lr}
 
     svi = SVI(air.model, air.guide,
@@ -250,6 +250,10 @@ if __name__ == '__main__':
                         help='number of optimization steps to take')
     parser.add_argument('-b', '--batch-size', type=int, default=64,
                         help='batch size')
+    parser.add_argument('-lr', '--learning-rate', type=float, default=1e-4,
+                        help='learning rate')
+    parser.add_argument('-blr', '--baseline-learning-rate', type=float, default=1e-3,
+                        help='baseline learning rate')
     parser.add_argument('--progress-every', type=int, default=1,
                         help='number of steps between writing progress to stdout')
     parser.add_argument('--eval-every', type=int, default=0,
