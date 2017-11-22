@@ -170,8 +170,7 @@ def main(**kwargs):
                       'pos_prior_mean',
                       'pos_prior_sd',
                       'scale_prior_mean',
-                      'scale_prior_sd',
-                      'fudge_z_pres']
+                      'scale_prior_sd']
     model_args = {key: getattr(args, key) for key in model_arg_keys if key in args}
     air = AIR(
         num_steps=args.model_steps,
@@ -322,8 +321,6 @@ if __name__ == '__main__':
                         help='std. dev. of the window scale prior')
     parser.add_argument('--no-masking', action='store_true', default=False,
                         help='do not mask out the costs of unused choices')
-    parser.add_argument('--fudge-z-pres', action='store_true', default=False,
-                        help='fudge z_pres to remove discreteness for testing')
     parser.add_argument('--seed', type=int, help='random seed', default=None)
     parser.add_argument('-v', '--verbose', action='store_true', default=False,
                         help='write hyper parameters and network architecture to stdout')
