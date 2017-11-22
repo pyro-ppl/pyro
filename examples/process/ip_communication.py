@@ -60,8 +60,14 @@ class RTraces():
     def get_all_keys(self, match="*"):
         return list(self.r.scan_iter(match=match))
 
-    def get_all_items(self):
-        return dict(map(lambda x: (x, loads(self.r.get(x))), self.get_all_keys()))
+    def get_all_items(self, match="*", all_keys=None):
+        all_keys = self.get_all_keys(match=match) if all_keys is None else all_keys
+        # queue all our requests as one
+        # https://stackoverflow.com/questions/22210671/redis-python-setting-multiple-key-values-in-one-operation
+        pipe = self.r.pipeline()
+        for k in all_keys:
+            pipe.get(k)
+        return dict(zip(all_keys, pipe.execute()))
 
     def get_value(self, key):
         return self.r.get(key)
@@ -72,6 +78,13 @@ class RTraces():
 
     def _clear_db(self):
         return self.r.flushdb()
+
+    def delete_list(self, del_list):
+        pipe = self.r.pipeline()
+        for k in del_list:
+            pipe.delete(k)
+        pipe.execute()
+        return self
 
 
 class RControl(RTraces):

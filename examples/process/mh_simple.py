@@ -114,10 +114,17 @@ class MetropolisHastings():
                               for i in range(self.num_particles)]
 
         # wait for all of our finished keys
-        finished_keys = self.sync_get_return_keys(self.num_particles)
+        finished_keys = self.sync_get_db_return(self.num_particles, self.traces.get_all_keys)
 
-        # store all relevant traces
-        self.trace_keys = set(map(RTraces.get_trace_from_key, finished_keys))
+        # get all our trace items
+        trace_items = self.traces.get_all_items(all_keys=finished_keys)
+        self.trace_keys = []
+        # store our traces internally (they're all auto accepted)
+        for site_uuid, trace in trace_items:
+            trace_uuid = RTraces.get_trace_from_key(site_uuid)
+            # save the trace
+            self.save_trace(trace_uuid, trace)
+            self.trace_keys.append(trace_uuid)
 
         # now we have a collection of finished traces, we can proceed like normal
         self._is_initialized = True
@@ -183,7 +190,7 @@ class MetropolisHastings():
 
         # we know all the keys are there, get all our finished traces
         finished_traces = {RTraces.get_trace_from_key(site_uuid): trace_obj
-                           for site_uuid, trace_obj in self.traces.get_all_items(match="*_RETURN")}
+                           for site_uuid, trace_obj in self.traces.get_all_items(all_keys=all_trace_keys)}
 
         # 4. get all the log pdfs
         trace_to_log_pdf = {trace_uuid: trace.nodes(data='batch_log_pdf')[RTraces.get_trace_key(trace_uuid, "_RETURN")]
@@ -211,6 +218,7 @@ class MetropolisHastings():
                 #
                 print("add the trace internally (if we're post burn-in)")
                 self.save_trace(new_trace_uuid, finished_traces[new_trace_uuid])
+                # keeping it around, gotta know about it
 
             else:
                 # reject!
@@ -218,15 +226,29 @@ class MetropolisHastings():
                 # issue kill commands to all sites
                 kill_traces.append(new_trace_uuid)
 
+                # remove from our set of full traces
+                del finished_traces[new_trace_uuid]
+
+        # prepare for the kill
+        # we have a bunch of trace_uuids we want to kill, but each trace might have many sample sites
         kill_traces = set(kill_traces)
-        kill_sites = [site_uuid for site_uuid in all_trace_keys if RTraces.get_trace_from_key(site_uuid) in kill_traces]
+
+        # get all of the possible sample sites
+        all_sample_sites = [tid for tid in self.traces.get_all_keys()]
+
+        # we plan to kill any sample sites whose trace_uuid match a kill trace from above
+        kill_sites = [site_uuid for site_uuid in all_sample_sites
+                      if RTraces.get_trace_from_key(site_uuid) in kill_traces]
 
         # 6. kill off all the rejected proposals. we don't need any of those forks or children
         for lock_uuid in kill_sites:
             self.locks.release_lock(lock_uuid, KillCommand())
 
-        # TODO: 7. set the current traces
-        raise NotImplementedError("working on getting the latest traces for next step")
+        # kill all of the trace objects as well, no need to clutter
+        self.traces.delete_list(kill_sites)
+
+        # 7. set the current trace keys and move on to next step
+        self.trace_keys = finished_traces.keys()
 
 
 def model():
