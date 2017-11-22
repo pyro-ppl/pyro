@@ -2,7 +2,6 @@
 from pickle import dumps
 from ip_communication import RLock, RTraces, RMessages, RPairs, get_uuid
 from os import fork, _exit
-import pyro
 from numpy.random import seed, randint
 from torch import manual_seed
 
@@ -133,35 +132,27 @@ class ResampleCloneContinueCommand(CloneCommand):
                 .execute_control_site(*args, **kwargs)
 
 
-class ResampleForkContinueCommand(ForkContinueCommand):
-
-    def __init__(self, seed=None, preserve_parent=False, uuid_on_sample=True):
-        self.seed = seed
+class ApplyFunctionForkContinueCommand(ForkContinueCommand):
+    def __init__(self, preserve_parent=False, uuid_on_sample=True):
         self.uuid_on_sample = uuid_on_sample
         self.preserve_parent = preserve_parent
-        super(ResampleForkContinueCommand, self).__init__()
+        super(ApplyFunctionForkContinueCommand, self).__init__()
+
+    def apply_function(self, *args, **kwargs):
+        pass
 
     # resample then lock on site again
-    def execute_control_site(self, trace_uuid, site_name, trace_poutine, msg):
+    def execute_control_site(self, trace_uuid, site_name, trace_poutine, *args, **kwargs):
 
         # we want to preserve the parent command point
         if self.preserve_parent:
             # first we fork, then we get to continue as parent
-            super(ResampleForkContinueCommand, self).execute_control_site(trace_uuid,
-                                                                          site_name,
-                                                                          trace_poutine,
-                                                                          msg)
-
-        seed(self.seed)
-        # set our seed manually, or use numpy random setup to seed
-        manual_seed(self.seed if self.seed is not None else randint(0, 10000000))
-
-        print("Conducting: {}".format(msg))
-        # resample this site inside of pyro stack
-        assert msg["type"] == "sample", "Cannot execute a resample at a non-sample node"
-        print("Resampling: {}".format(site_name))
-        # resample from the poutine we had going
-        trace_poutine._pyro_sample(msg)
+            super(ApplyFunctionForkContinueCommand, self).execute_control_site(trace_uuid,
+                                                                               site_name,
+                                                                               trace_poutine,
+                                                                               *args, **kwargs)
+        # wake up and do something
+        self.apply_function(trace_uuid, site_name, trace_poutine, *args, **kwargs)
 
         # we're part of a new object now
         if self.uuid_on_sample:
@@ -179,9 +170,43 @@ class ResampleForkContinueCommand(ForkContinueCommand):
             # overwrite the old
             trace_uuid = child_trace_uuid
 
-        return super(ResampleForkContinueCommand, self).execute_control_site(trace_uuid,
-                                                                             site_name,
-                                                                             trace_poutine, msg)
+        return super(ApplyFunctionForkContinueCommand, self).execute_control_site(trace_uuid,
+                                                                                  site_name,
+                                                                                  trace_poutine,
+                                                                                  *args, **kwargs)
+
+
+# Function takes a sample_nudge at construction, and simply applies the nudge to the existing value
+# lots of assumptions made, and no assertions or checks
+class NudgeForkContinueCommand(ApplyFunctionForkContinueCommand):
+    def __init__(self, sample_nudge, *args, **kwargs):
+        self.sample_nudge = sample_nudge
+        super(NudgeForkContinueCommand, self).__init__(*args, **kwargs)
+
+    def apply_function(self, trace_uuid, site_name, trace_poutine, msg):
+        # wake up and add our nudge factor to the original value
+        trace_poutine.trace.add_node(msg["name"], force=True, value=msg["value"] + self.sample_nudge)
+
+
+# Take a given object and resample and continue\
+# this is nice because we can fork and resample
+class ResampleForkContinueCommand(ApplyFunctionForkContinueCommand):
+
+    def __init__(self, seed=None, *args, **kwargs):
+        self.seed = seed
+        super(ResampleForkContinueCommand, self).__init__()
+
+    def apply_function(self, trace_uuid, site_name, trace_poutine, msg):
+        seed(self.seed)
+        # set our seed manually, or use numpy random setup to seed
+        manual_seed(self.seed if self.seed is not None else randint(0, 10000000))
+
+        print("Conducting: {}".format(msg))
+        # resample this site inside of pyro stack
+        assert msg["type"] == "sample", "Cannot execute a resample at a non-sample node"
+        print("Resampling: {}".format(site_name))
+        # resample from the poutine we had going
+        trace_poutine._pyro_sample(msg)
 
 
 # wake up, calculate the log pdf of the trace, store it, then go back to sleep

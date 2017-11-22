@@ -48,7 +48,7 @@ class Trace(networkx.DiGraph):
         """
         # XXX should do more validation than this
         if kwargs["type"] != "param":
-            assert site_name not in self, \
+            assert not kwargs.pop("force", False) and site_name not in self, \
                 "site {} already in trace".format(site_name)
 
         # XXX should copy in case site gets mutated, or dont bother?

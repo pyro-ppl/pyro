@@ -5,6 +5,7 @@ from multiprocessing import Process
 from numpy.random import choice
 import time
 import pyro
+from torch import log as tlog
 from networkx import DiGraph
 from pyro.poutine import TracePoutine
 import pyro.distributions as dist
@@ -12,7 +13,7 @@ from pickle import loads
 from torch import Tensor as T
 from torch.autograd import Variable as V
 from command_points import add_control_point, ForkContinueCommand, LogPdfCommand
-from command_points import ResampleForkContinueCommand, ResampleCloneContinueCommand, CloneCommand, KillCommand
+from command_points import NudgeForkContinueCommand, ResampleCloneContinueCommand, CloneCommand, KillCommand
 from ip_communication import get_uuid, multi_try, RTraces, RLock, RMessages, RPairs
 from collections import defaultdict
 
@@ -81,9 +82,8 @@ class ForkPoutine(TracePoutine):
         }
 
         # append batch_log_pdf to our _RETURN node before serializing in control points
-        # this is highly inappropriate
-        # TODO: adjust pyro.poutine.Trace to allow appending to a trace node with a force command
-        DiGraph.add_node(self.trace, "_RETURN", batch_log_pdf=self.trace.batch_log_pdf())
+        # notice the force=True to add to existing obj
+        self.trace.add_node("_RETURN", force=True, batch_log_pdf=self.trace.batch_log_pdf())
 
         # create a final control point that we can use to calculate other values
         add_control_point(self.trace_uuid, "_RETURN", self, self.CommandCls(), msg)
@@ -94,9 +94,12 @@ class ForkPoutine(TracePoutine):
 
 class MetropolisHastings():
 
-    def __init__(self, model, num_particles):
+    def __init__(self, model, num_particles, proposal_dist, *args, **kwargs):
         self.num_particles = num_particles
         self.model = model
+        self.proposal_dist = proposal_dist
+        self.proposal_args = args
+        self.proposal_kwargs = kwargs.copy()
         self.traces = RTraces()
         self.locks = RLock()
         self.fork_pairs = RPairs()
@@ -150,6 +153,7 @@ class MetropolisHastings():
         if not self._is_initialized:
             self._initialize()
 
+        # see alg 2, page 772 here: http://proceedings.mlr.press/v15/wingate11a/wingate11a.pdf
         # now we need to go through our particles
         # 1. get all particles and sites
         # 2. randomly select site for each particle
@@ -173,12 +177,16 @@ class MetropolisHastings():
         site_samples = {trace_uuid: choice(sites)
                         for trace_uuid, sites in trace_to_sites.items()}
 
+        # proposal_samples = {}
+
         # release the locks and resample fork
         for lock_uuid in site_samples.values():
             # Preserve the original site in case we reject and want to branch from here again
             # TODO: logic for MH says we should ignore all remaining forks and just store our _RETURN
             # TODO: This is a generic resample (orig to test logic), but actually we need to nudge with proposal
-            self.locks.release_lock(lock_uuid, ResampleForkContinueCommand(seed=None, preserve_parent=True))
+            nudge_amt = self.proposal_dist().sample(*self.proposal_args, **self.proposal_kwargs)
+            # proposal_samples[RTraces.get_trace_from_key(lock_uuid)] = nudge_amt
+            self.locks.release_lock(lock_uuid, NudgeForkContinueCommand(nudge_amt, preserve_parent=True))
 
         # should have this many _RETURN traces
         post_lock_size = len(self.trace_keys) + len(site_samples)
@@ -193,7 +201,13 @@ class MetropolisHastings():
                            for site_uuid, trace_obj in self.traces.get_all_items(all_keys=all_trace_keys)}
 
         # 4. get all the log pdfs
-        trace_to_log_pdf = {trace_uuid: trace.nodes(data='batch_log_pdf')[RTraces.get_trace_key(trace_uuid, "_RETURN")]
+        trace_to_log_pdf = {trace_uuid: {
+                                'sample': trace.nodes(data='value')[RTraces.get_trace_key(trace_uuid,
+                                                                                          "_RETURN")],
+                                'trace_length': trace.number_of_nodes(),
+                                'batch_log_pdf': trace.nodes(data='batch_log_pdf')[RTraces.get_trace_key(trace_uuid,
+                                                                                                         "_RETURN")]
+                            }
                             for trace_uuid, trace in finished_traces.items()}
 
         # Get the resampled mappings
@@ -206,16 +220,36 @@ class MetropolisHastings():
             assert orig_trace_uuid in prev_to_new_trace_map, "Unknown mapping, did you miss a lock?"
             new_trace_uuid = prev_to_new_trace_map[orig_trace_uuid]
 
-            # comapre log of orig vs log of proposed
-            logp_orig = trace_to_log_pdf[orig_trace_uuid]
-            logp_proposal = trace_to_log_pdf[new_trace_uuid]
+            orig_trace_details = trace_to_log_pdf[orig_trace_uuid]
+            proposed_trace_details = trace_to_log_pdf[new_trace_uuid]
 
-            delta = (logp_proposal - logp_orig).data[0]
+            # comapre log of orig vs log of proposed
+            logp_orig = orig_trace_details['batch_log_pdf']
+            logp_proposal = proposed_trace_details['batch_log_pdf']
+
+            # X'
+            x_original = orig_trace_details['sample']
+            x_prime = proposed_trace_details['sample']
+
+            # alg2 pg 772, line 7-8 http://proceedings.mlr.press/v15/wingate11a/wingate11a.pdf
+            # R = -log(len(old_trace)) + PD(X').log_pdf(X)
+            # F = -log(len(new_trace)) + PD(X).log_pdf(X')
+            R = -tlog(VTA(orig_trace_details['trace_length'])) + \
+                self.proposal_dist(x_prime).log_pdf(x_original)
+
+            F = -tlog(VTA(proposed_trace_details['trace_length'])) + \
+                self.proposal_dist(x_original).log_pdf(x_prime)
+
+            # get our delta y'all
+            # alg2 line 12
+            delta = (logp_proposal - logp_orig + R - F).data[0]
+
             # 5. accept according to ratio logp_proposed/logp_orig
             # https://github.com/mcleonard/sampyl/blob/master/sampyl/samplers/metropolis.py#L95
+            # http://proceedings.mlr.press/v15/wingate11a/wingate11a.pdf
+            # http://dippl.org/chapters/06-mcmc.html
             if np.isfinite(delta) and np.log(np.random.uniform()) < delta:
                 # accept!
-                #
                 print("add the trace internally (if we're post burn-in)")
                 self.save_trace(new_trace_uuid, finished_traces[new_trace_uuid])
                 # keeping it around, gotta know about it
