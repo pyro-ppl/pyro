@@ -110,9 +110,10 @@ def test_mean_and_var(lognormal):
     torch_mean = torch.mean(torch_samples, 0)
     torch_std = torch.std(torch_samples, 0)
     analytic_mean = lognormal.pyro_dist.analytic_mean(**dist_params)
-    analytic_std = lognormal.pyro_dist.analytic_var(**dist_params) ** 0.5
-    assert_equal(torch_mean, analytic_mean, prec=analytic_mean.data[0] * 0.01)
-    assert_equal(torch_std, analytic_std, prec=analytic_std.data[0] * 0.01)
+    analytic_std = lognormal.pyro_dist.analytic_var(**dist_params) ** 0.05
+    precision = analytic_mean.max() * 0.05
+    assert_equal(torch_mean, analytic_mean, prec=precision)
+    assert_equal(torch_std, analytic_std, prec=precision)
 
 
 @pytest.mark.parametrize('lognormal', EXAMPLES)
