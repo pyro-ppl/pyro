@@ -16,7 +16,6 @@ from torch.autograd import Variable
 import pyro
 import pyro.distributions as dist
 from modules import Identity, Encoder, Decoder, MLP, Predict
-from pyro.distributions import Bernoulli, Uniform, Delta
 from pyro.util import ng_zeros, ng_ones, zeros
 
 
@@ -47,7 +46,6 @@ class AIR(nn.Module):
                  use_masking=True,
                  use_baselines=True,
                  baseline_scalar=None,
-                 fudge_z_pres=False,
                  scale_prior_mean=3.0,
                  scale_prior_sd=0.1,
                  pos_prior_mean=0.0,
@@ -62,10 +60,9 @@ class AIR(nn.Module):
         self.window_size = window_size
         self.z_what_size = z_what_size
         self.rnn_hidden_size = rnn_hidden_size
-        self.use_masking = use_masking and not fudge_z_pres
-        self.use_baselines = use_baselines and not fudge_z_pres
+        self.use_masking = use_masking
+        self.use_baselines = use_baselines
         self.baseline_scalar = baseline_scalar
-        self.fudge_z_pres = fudge_z_pres
         self.likelihood_sd = likelihood_sd
         self.use_cuda = use_cuda
 
@@ -140,11 +137,9 @@ class AIR(nn.Module):
     def model_step(self, t, n, prev, z_pres_prior_p=default_z_pres_prior_p):
 
         # Sample presence indicators.
-        if not self.fudge_z_pres:
-            z_pres_dist = Bernoulli(z_pres_prior_p(t) * prev.z_pres)
-        else:
-            z_pres_dist = Uniform(self.ng_zeros(n, 1), self.ng_ones(n, 1))
-        z_pres = pyro.sample('z_pres_{}'.format(t), z_pres_dist)
+        z_pres = pyro.sample('z_pres_{}'.format(t),
+                             dist.bernoulli,
+                             z_pres_prior_p(t) * prev.z_pres)
 
         # If zero is sampled for a data point, then no more objects
         # will be added to its output image. We can't
@@ -239,12 +234,9 @@ class AIR(nn.Module):
         bl_value, bl_h, bl_c = self.baseline_step(prev, inputs)
 
         # Sample presence.
-        if not self.fudge_z_pres:
-            z_pres_dist = Bernoulli(z_pres_p * prev.z_pres)
-        else:
-            z_pres_dist = Delta(z_pres_p * prev.z_pres)
         z_pres = pyro.sample('z_pres_{}'.format(t),
-                             z_pres_dist,
+                             dist.bernoulli,
+                             z_pres_p * prev.z_pres,
                              baseline=dict(baseline_value=bl_value))
 
         log_pdf_mask = z_pres if self.use_masking else None
