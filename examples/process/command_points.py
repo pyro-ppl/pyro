@@ -69,6 +69,7 @@ class ForkContinueCommand(ControlCommand):
 
     def parent_fct(self, trace_uuid, site_name, trace_poutine, *args, **kwargs):
         # parent site simply continues
+        print("trace parent {} - {}".format(trace_uuid, site_name))
         pass
 
 
@@ -79,6 +80,7 @@ class CloneCommand(ForkContinueCommand):
 
     # don't do anything here
     def serialize_trace(self, *args, **kwargs):
+        print("")
         pass
 
     # when the execute command gets called, the child will branch
@@ -105,8 +107,15 @@ class CloneCommand(ForkContinueCommand):
                 # add this pair to redis
                 RPairs().add_pair_uuids(pair_key).kill_connection()
 
+                # store the cloned trace
+                ForkContinueCommand.serialize_trace(self,
+                                                    child_trace_uuid,
+                                                    site_name,
+                                                    trace_poutine.trace)
+
                 # we're the child, store with new child uuid
-                self.child_fct(child_trace_uuid, site_name, trace_poutine, *args, **kwargs)
+                # must RETURN here because otherwise we'd fall through to exit command
+                return self.child_fct(child_trace_uuid, site_name, trace_poutine, *args, **kwargs)
 
         # kill the parent, we've done our job
         _exit(0)
@@ -120,19 +129,29 @@ class ResampleCloneContinueCommand(CloneCommand):
     def child_fct(self, *args, **kwargs):
         # normally we would wait, instead we simple run a resampleforkcontinue
         # we already handle the new id, don't create uuid_on_sample
-        return ResampleForkContinueCommand(self.seed, uuid_on_sample=False)\
+        return ResampleForkContinueCommand(self.seed, preserve_parent=False, uuid_on_sample=False)\
                 .execute_control_site(*args, **kwargs)
 
 
 class ResampleForkContinueCommand(ForkContinueCommand):
 
-    def __init__(self, seed=None, uuid_on_sample=True):
+    def __init__(self, seed=None, preserve_parent=False, uuid_on_sample=True):
         self.seed = seed
         self.uuid_on_sample = uuid_on_sample
+        self.preserve_parent = preserve_parent
         super(ResampleForkContinueCommand, self).__init__()
 
     # resample then lock on site again
     def execute_control_site(self, trace_uuid, site_name, trace_poutine, msg):
+
+        # we want to preserve the parent command point
+        if self.preserve_parent:
+            # first we fork, then we get to continue as parent
+            super(ResampleForkContinueCommand, self).execute_control_site(trace_uuid,
+                                                                          site_name,
+                                                                          trace_poutine,
+                                                                          msg)
+
         seed(self.seed)
         # set our seed manually, or use numpy random setup to seed
         manual_seed(self.seed if self.seed is not None else randint(0, 10000000))

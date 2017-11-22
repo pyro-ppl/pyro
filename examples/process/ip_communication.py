@@ -52,9 +52,13 @@ class RTraces():
     def get_trace_key(trace_uuid, site_name):
         return "{}-{}".format(trace_uuid, site_name)
 
+    @staticmethod
+    def get_trace_from_key(trace_uuid):
+        return trace_uuid.split("-")[0]
+
     # expensive method to return everything from db
-    def get_all_keys(self):
-        return list(self.r.scan_iter(match="*"))
+    def get_all_keys(self, match="*"):
+        return list(self.r.scan_iter(match=match))
 
     def get_all_items(self):
         return dict(map(lambda x: (x, loads(self.r.get(x))), self.get_all_keys()))
@@ -106,6 +110,11 @@ class RPairs(RTraces):
     @staticmethod
     def get_pair_name(uuid_base, uuid_clone, site_name):
         return "{},{}-{}".format(uuid_base, uuid_clone, site_name)
+
+    @staticmethod
+    def get_pair_from_key(trace_uuid):
+        base_to_new = trace_uuid.split("-")[0]
+        return base_to_new.split(",")
 
 
 class RLock(RTraces):
