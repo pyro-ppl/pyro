@@ -19,11 +19,13 @@ Learning a function of the form:
 
 
 # generate toy dataset
-def build_linear_dataset(N, p, noise_std=0.1):
-    X = np.linspace(-6, 6, num=N)
-    y = 3 * X + 1 + np.random.normal(0, noise_std, size=N)
-    X = X.reshape((N, p))
-    y = y.reshape((N, 1))
+def build_linear_dataset(N, p, noise_std=0.01):
+    X = np.random.rand(N, p)
+    # use random integer weights from [0, 7]
+    w = np.random.randint(8, size=p)
+    # set b = 1
+    y = np.matmul(X, w) + np.repeat(1, N) + np.random.normal(0, noise_std, size=N)
+    y = y.reshape(N, 1)
     X, y = Variable(torch.Tensor(X)), Variable(torch.Tensor(y))
     return torch.cat((X, y), 1)
 
@@ -48,8 +50,8 @@ regression_model = RegressionModel(p)
 
 def model(data):
     # Create unit normal priors over the parameters
-    mu = Variable(torch.zeros(p, 1)).type_as(data)
-    sigma = Variable(torch.ones(p, 1)).type_as(data)
+    mu = Variable(torch.zeros(1, p)).type_as(data)
+    sigma = Variable(torch.ones(1, p)).type_as(data)
     bias_mu = Variable(torch.zeros(1)).type_as(data)
     bias_sigma = Variable(torch.ones(1)).type_as(data)
     w_prior, b_prior = Normal(mu, sigma), Normal(bias_mu, bias_sigma)
@@ -70,8 +72,8 @@ def model(data):
 
 
 def guide(data):
-    w_mu = Variable(torch.randn(p, 1).type_as(data.data), requires_grad=True)
-    w_log_sig = Variable((-3.0 * torch.ones(p, 1) + 0.05 * torch.randn(p, 1)).type_as(data.data), requires_grad=True)
+    w_mu = Variable(torch.randn(1, p).type_as(data.data), requires_grad=True)
+    w_log_sig = Variable((-3.0 * torch.ones(1, p) + 0.05 * torch.randn(1, p)).type_as(data.data), requires_grad=True)
     b_mu = Variable(torch.randn(1).type_as(data.data), requires_grad=True)
     b_log_sig = Variable((-3.0 * torch.ones(1) + 0.05 * torch.randn(1)).type_as(data.data), requires_grad=True)
     # register learnable params in the param store
@@ -90,7 +92,7 @@ def guide(data):
 
 
 # instantiate optim and inference objects
-optim = Adam({"lr": 0.01})
+optim = Adam({"lr": 0.001})
 svi = SVI(model, guide, optim, loss="ELBO")
 
 
@@ -102,12 +104,7 @@ def get_batch_indices(N, batch_size):
     return all_batches
 
 
-def main():
-    parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', default=1000, type=int)
-    parser.add_argument('-b', '--batch-size', default=N, type=int)
-    parser.add_argument('--cuda', action='store_true')
-    args = parser.parse_args()
+def main(args):
     data = build_linear_dataset(N, p)
     if args.cuda:
         # make tensors and modules CUDA
@@ -135,4 +132,9 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(description="parse args")
+    parser.add_argument('-n', '--num-epochs', default=1000, type=int)
+    parser.add_argument('-b', '--batch-size', default=N, type=int)
+    parser.add_argument('--cuda', action='store_true')
+    args = parser.parse_args()
+    main(args)
