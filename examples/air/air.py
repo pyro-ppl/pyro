@@ -16,7 +16,6 @@ from torch.autograd import Variable
 import pyro
 import pyro.distributions as dist
 from modules import Identity, Encoder, Decoder, MLP, Predict
-from pyro.distributions import Bernoulli, Uniform, Delta
 from pyro.util import ng_zeros, ng_ones, zeros
 
 
