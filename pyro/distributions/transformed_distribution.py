@@ -1,7 +1,11 @@
 from __future__ import absolute_import, division, print_function
 
+import numbers
+from abc import ABCMeta, abstractmethod
+
 import torch
 import torch.nn as nn
+from six import add_metaclass
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
@@ -72,22 +76,33 @@ class TransformedDistribution(Distribution):
         Scores the sample by inverting the bijector(s) and computing the score using the score
         of the base distribution and the log det jacobian
         """
-        inverses = []
-        next_to_invert = y
+        value = y
+        log_pdf = 0.0
         for bijector in reversed(self.bijectors):
-            inverse = bijector.inverse(next_to_invert)
-            inverses.append(inverse)
-            next_to_invert = inverse
-        log_pdf_base = self.base_dist.log_pdf(inverses[-1], *args, **kwargs)
-        log_det_jacobian = self.bijectors[-1].log_det_jacobian(y, *args, **kwargs)
-        for bijector, inverse in zip(list(reversed(self.bijectors))[1:], inverses[:-1]):
-            log_det_jacobian += bijector.log_det_jacobian(inverse, *args, **kwargs)
-        return log_pdf_base - log_det_jacobian
+            log_pdf -= bijector.log_det_jacobian(value, *args, **kwargs)
+            value = bijector.inverse(value)
+        log_pdf += self.base_dist.log_pdf(value, *args, **kwargs)
+        return log_pdf
 
     def batch_log_pdf(self, y, *args, **kwargs):
-        raise NotImplementedError("https://github.com/uber/pyro/issues/293")
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_log_pdf`
+        """
+        value = y
+        log_det_jacobian = 0.0
+        for bijector in reversed(self.bijectors):
+            log_det_jacobian += bijector.batch_log_det_jacobian(value, *args, **kwargs)
+            value = bijector.inverse(value)
+        base_log_pdf = self.base_dist.batch_log_pdf(value, *args, **kwargs)
+        if not isinstance(log_det_jacobian, numbers.Number):
+            log_det_jacobian = log_det_jacobian.contiguous().view(*base_log_pdf.size())
+            assert log_det_jacobian.size() == base_log_pdf.size(), \
+                'Invalid batch_log_det_jacobian().size():\nexpected {}\nactual {}'.format(
+                        base_log_pdf.size(), log_det_jacobian.size())
+        return base_log_pdf - log_det_jacobian
 
 
+@add_metaclass(ABCMeta)
 class Bijector(nn.Module):
     """
     Abstract class `Bijector`. `Bijector` are bijective transformations with computable
@@ -98,6 +113,7 @@ class Bijector(nn.Module):
         super(Bijector, self).__init__(*args, **kwargs)
         self.add_inverse_to_cache = False
 
+    @abstractmethod
     def __call__(self, *args, **kwargs):
         """
         Virtual forward method
@@ -106,6 +122,7 @@ class Bijector(nn.Module):
         """
         raise NotImplementedError()
 
+    @abstractmethod
     def inverse(self, *args, **kwargs):
         """
         Virtual inverse method
@@ -116,9 +133,17 @@ class Bijector(nn.Module):
 
     def log_det_jacobian(self, *args, **kwargs):
         """
-        Virtual logdet jacobian method.
+        Default logdet jacobian method.
 
         Computes the log det jacobian `|dy/dx|`
+        """
+        return self.batch_log_det_jacobian(*args, **kwargs).sum()
+
+    def batch_log_det_jacobian(self, *args, **kwargs):
+        """
+        Virtual elementwise logdet jacobian method.
+
+        Computes the log abs det jacobian `|dy/dx|`
         """
         raise NotImplementedError()
 
@@ -221,15 +246,16 @@ class InverseAutoregressiveFlow(Bijector):
             "key collision in _add_intermediate_to_cache"
         self._intermediates_cache[(y, name)] = intermediate
 
-    def log_det_jacobian(self, y, *args, **kwargs):
+    def batch_log_det_jacobian(self, y, *args, **kwargs):
         """
-        Calculates the determinant of the log jacobian
+        Calculates the elementwise determinant of the log jacobian
         """
         if (y, 'sigma') in self._intermediates_cache:
             sigma = self._intermediates_cache.pop((y, 'sigma'))
         else:
             raise KeyError("Bijector InverseAutoregressiveFlow expected to find" +
                            "key in intermediates cache but didn't")
+        log_sigma = torch.log(sigma)
         if 'log_pdf_mask' in kwargs:
-            return torch.sum(kwargs['log_pdf_mask'] * torch.log(sigma))
-        return torch.sum(torch.log(sigma))
+            log_sigma = log_sigma * kwargs['log_pdf_mask']
+        return log_sigma.sum(-1)

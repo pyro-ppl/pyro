@@ -179,6 +179,7 @@ def _safe_coalesce(t):
 
 
 # TODO Split this into assert_equal() and assert_close() or assert_almost_equal().
+# TODO Use atol and rtol instead of prec
 def assert_equal(x, y, prec=1e-5, msg=''):
     x, y = _unwrap_variables(x, y)
 
