@@ -116,25 +116,13 @@ class AIR(nn.Module):
         z_where = []
 
         for t in range(self.num_steps):
-            state = self.model_step(t, n, state, **kwargs)
+            state = self.prior_step(t, n, state, **kwargs)
             z_where.append(state.z_where)
             z_pres.append(state.z_pres)
 
         return (z_where, z_pres), state.x
 
-    def model(self, data, _, **kwargs):
-        pyro.module("decode", self.decode)
-        with pyro.iarange('data', data.size(0), use_cuda=self.use_cuda) as ix:
-            batch = data[ix]
-            n = batch.size(0)
-            (z_where, z_pres), x = self.prior(n, **kwargs)
-            pyro.sample('obs',
-                        dist.normal,
-                        x.view(n, -1),
-                        (self.likelihood_sd * self.ng_ones(1)).expand(n, self.x_size ** 2),
-                        obs=batch.view(n, -1))
-
-    def model_step(self, t, n, prev, z_pres_prior_p=default_z_pres_prior_p):
+    def prior_step(self, t, n, prev, z_pres_prior_p=default_z_pres_prior_p):
 
         # Sample presence indicators.
         z_pres = pyro.sample('z_pres_{}'.format(t),
@@ -175,6 +163,18 @@ class AIR(nn.Module):
         x = prev.x + (y * z_pres.view(-1, 1, 1))
 
         return ModelState(x=x, z_pres=z_pres, z_where=z_where)
+
+    def model(self, data, _, **kwargs):
+        pyro.module("decode", self.decode)
+        with pyro.iarange('data', data.size(0), use_cuda=self.use_cuda) as ix:
+            batch = data[ix]
+            n = batch.size(0)
+            (z_where, z_pres), x = self.prior(n, **kwargs)
+            pyro.sample('obs',
+                        dist.normal,
+                        x.view(n, -1),
+                        (self.likelihood_sd * self.ng_ones(1)).expand(n, self.x_size ** 2),
+                        obs=batch.view(n, -1))
 
     def guide(self, data, batch_size, **kwargs):
         pyro.module('rnn', self.rnn),
