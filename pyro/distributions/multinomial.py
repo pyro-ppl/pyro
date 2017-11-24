@@ -2,10 +2,9 @@ from __future__ import absolute_import, division, print_function
 
 import numpy as np
 import torch
-from torch.autograd import Variable
-
 from pyro.distributions.distribution import Distribution
 from pyro.distributions.util import log_gamma, torch_multinomial
+from torch.autograd import Variable
 
 
 class Multinomial(Distribution):
@@ -26,7 +25,13 @@ class Multinomial(Distribution):
         if ps.dim() not in (1, 2):
             raise ValueError("Parameter `ps` must be either 1 or 2 dimensional.")
         self.ps = ps
-        self.n = n
+        if isinstance(n, int):
+            n = torch.LongTensor([n])
+            if self.ps.is_cuda:
+                n = n.cuda()
+            self.n = Variable(n)
+        else:
+            self.n = n
         if ps.dim() == 1 and batch_size is not None:
             self.ps = ps.expand(batch_size, ps.size(0))
             self.n = n.expand(batch_size, n.size(0))
