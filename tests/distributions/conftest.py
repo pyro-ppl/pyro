@@ -139,7 +139,7 @@ discrete_dists = [
             min_samples=10000,
             is_discrete=True),
     Fixture(pyro_dist=(dist.binomial, Binomial),
-            scipy_dict=sp.binom,
+            scipy_dist=sp.binom,
             examples=[
                 {'ps': [0.6], 'n': [8],
                  'test_data': [4]},

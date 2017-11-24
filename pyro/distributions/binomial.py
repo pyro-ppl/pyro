@@ -55,13 +55,14 @@ class Binomial(Distribution):
         """
         Ref: :py:meth:`pyro.distributions.distribution.Distribution.event_shape`
         """
-        return 1
+        event_dim = 1
+        return self.ps.size()[-event_dim:]
 
     def sample(self):
         """
         Ref: :py:meth:`pyro.distributions.distribution.Distribution.sample`
         """
-        counts = torch.sum(1 - self.expanded_sample(), dim=-1, keepdim=True)
+        counts = torch.sum(self.expanded_sample(), dim=-1, keepdim=True)
         return counts
 
     def expanded_sample(self):
@@ -77,10 +78,11 @@ class Binomial(Distribution):
         """
         Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_log_pdf`
         """
+        n = self.n.type_as(x)
         batch_log_pdf_shape = self.batch_shape(x) + (1,)
-        log_factorial_n = log_gamma(self.n.float() + 1)
-        log_factorial_xs = log_gamma(x + 1) + log_gamma(self.n.float() - x + 1)
-        log_powers = x * torch.log(self.ps) + (self.n.float() - x) * torch.log(1 - self.ps)
+        log_factorial_n = log_gamma(n + 1)
+        log_factorial_xs = log_gamma(x + 1) + log_gamma(n - x + 1)
+        log_powers = x * torch.log(self.ps) + (n - x) * torch.log(1 - self.ps)
         batch_log_pdf = log_factorial_n - log_factorial_xs + log_powers
         return batch_log_pdf.contiguous().view(batch_log_pdf_shape)
 
@@ -88,10 +90,10 @@ class Binomial(Distribution):
         """
         Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_mean`
         """
-        return self.n * self.ps
+        return self.n.type_as(self.ps) * self.ps
 
     def analytic_var(self):
         """
         Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_var`
         """
-        return self.n * self.ps * (1 - self.ps)
+        return self.n.type_as(self.ps) * self.ps * (1 - self.ps)

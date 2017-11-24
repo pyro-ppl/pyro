@@ -97,10 +97,10 @@ class Multinomial(Distribution):
         """
         Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_mean`
         """
-        return self.n * self.ps
+        return self.n.type_as(self.ps) * self.ps
 
     def analytic_var(self):
         """
         Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_var`
         """
-        return self.n * self.ps * (1 - self.ps)
+        return self.n.type_as(self.ps) * self.ps * (1 - self.ps)
