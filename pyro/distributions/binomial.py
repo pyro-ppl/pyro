@@ -32,7 +32,7 @@ class Binomial(Distribution):
                 n = n.cuda()
             n = Variable(n)
         self.n = n.expand_as(self.ps)
-        super(Multinomial, self).__init__(*args, **kwargs)
+        super(Binomial, self).__init__(*args, **kwargs)
         
     def batch_shape(self, x=None):
         """
