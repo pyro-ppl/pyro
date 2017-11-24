@@ -26,16 +26,14 @@ class Multinomial(Distribution):
         if ps.dim() not in (1, 2):
             raise ValueError("Parameter `ps` must be either 1 or 2 dimensional.")
         self.ps = ps
+        if ps.dim() == 1 and batch_size is not None:
+            self.ps = ps.expand(batch_size, ps.size(0))
         if isinstance(n, int):
             n = torch.LongTensor([n])
             if self.ps.is_cuda:
                 n = n.cuda()
-            self.n = Variable(n)
-        else:
-            self.n = n
-        if ps.dim() == 1 and batch_size is not None:
-            self.ps = ps.expand(batch_size, ps.size(0))
-            self.n = n.expand(batch_size, n.size(0))
+            n = Variable(n)
+        self.n = n.expand_as(self.ps)
         super(Multinomial, self).__init__(*args, **kwargs)
 
     def batch_shape(self, x=None):
