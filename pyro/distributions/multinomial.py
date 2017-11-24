@@ -2,9 +2,10 @@ from __future__ import absolute_import, division, print_function
 
 import numpy as np
 import torch
+from torch.autograd import Variable
+
 from pyro.distributions.distribution import Distribution
 from pyro.distributions.util import log_gamma, torch_multinomial
-from torch.autograd import Variable
 
 
 class Multinomial(Distribution):

@@ -3,12 +3,12 @@ from __future__ import absolute_import, division, print_function
 import math
 
 import numpy as np
-import pyro.distributions as dist
 import pytest
 import scipy.stats as sp
+
+import pyro.distributions as dist
 from pyro.distributions import (Bernoulli, Beta, Binomial, Categorical, Cauchy, Dirichlet, Exponential, Gamma,
                                 HalfCauchy, LogNormal, Multinomial, Normal, OneHotCategorical, Poisson, Uniform)
-
 from tests.distributions.dist_fixture import Fixture
 
 continuous_dists = [
