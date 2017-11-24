@@ -33,7 +33,7 @@ class Binomial(Distribution):
             n = Variable(n)
         self.n = n.expand_as(self.ps)
         super(Binomial, self).__init__(*args, **kwargs)
-        
+
     def batch_shape(self, x=None):
         """
         Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_shape`
@@ -50,7 +50,7 @@ class Binomial(Distribution):
                 raise ValueError("Parameter `ps` with shape {} is not broadcastable to "
                                  "the data shape {}. \nError: {}".format(ps.size(), x.size(), str(e)))
         return ps.size()[:-event_dim]
-        
+
     def event_shape(self):
         """
         Ref: :py:meth:`pyro.distributions.distribution.Distribution.event_shape`
@@ -63,7 +63,7 @@ class Binomial(Distribution):
         """
         counts = torch.sum(1 - self.expanded_sample(), dim=-1, keepdim=True)
         return counts
-    
+
     def expanded_sample(self):
         # get the int from Variable or Tensor
         if self.n.data.dim() == 2:
@@ -72,16 +72,16 @@ class Binomial(Distribution):
             n = int(self.n.data.cpu()[0])
         ps = torch.cat((1 - self.ps, self.ps), dim=-1)
         return Variable(torch_multinomial(ps.data, n, replacement=True))
-    
+
     def batch_log_pdf(self, x):
         """
         Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_log_pdf`
         """
         batch_log_pdf_shape = self.batch_shape(x) + (1,)
-        log_factorial_n = log_gamma(self.n + 1)
-        log_factorial_x = log_gamma(x + 1)
-        log_powers = x * torch.log(self.ps) + (self.n - x) * torch.log(1 - self.ps)
-        batch_log_pdf = log_factorial_n - log_factorial_x + log_powers
+        log_factorial_n = log_gamma(self.n.float() + 1)
+        log_factorial_xs = log_gamma(x + 1) + log_gamma(self.n.float() - x + 1)
+        log_powers = x * torch.log(self.ps) + (self.n.float() - x) * torch.log(1 - self.ps)
+        batch_log_pdf = log_factorial_n - log_factorial_xs + log_powers
         return batch_log_pdf.contiguous().view(batch_log_pdf_shape)
 
     def analytic_mean(self):
