@@ -25,15 +25,16 @@ class Multinomial(Distribution):
     def __init__(self, ps, n, batch_size=None, *args, **kwargs):
         if ps.dim() not in (1, 2):
             raise ValueError("Parameter `ps` must be either 1 or 2 dimensional.")
-        self.ps = ps
-        if ps.dim() == 1 and batch_size is not None:
-            self.ps = ps.expand(batch_size, ps.size(0))
         if isinstance(n, int):
-            n = torch.LongTensor([n])
-            if self.ps.is_cuda:
+            n = torch.LongTensor([n]).type_as(ps.data)
+            if ps.is_cuda:
                 n = n.cuda()
             n = Variable(n)
-        self.n = n.expand_as(self.ps)
+        self.ps = ps
+        self.n = n
+        if ps.dim() == 1 and batch_size is not None:
+            self.ps = ps.expand(batch_size, ps.size(0))
+            self.n = n.expand(batch_size, n.size(0))
         super(Multinomial, self).__init__(*args, **kwargs)
 
     def batch_shape(self, x=None):
@@ -97,10 +98,10 @@ class Multinomial(Distribution):
         """
         Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_mean`
         """
-        return self.n.type_as(self.ps) * self.ps
+        return self.n * self.ps
 
     def analytic_var(self):
         """
         Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_var`
         """
-        return self.n.type_as(self.ps) * self.ps * (1 - self.ps)
+        return self.n * self.ps * (1 - self.ps)
