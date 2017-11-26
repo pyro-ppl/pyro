@@ -6,8 +6,8 @@ from numpy.random import seed, randint
 from torch import manual_seed
 
 
-def add_control_point(trace_uuid, site_name, trace_dict, ctrl_behavior, *args, **kwargs):
-    return ctrl_behavior.execute_control_site(trace_uuid, site_name, trace_dict, *args, **kwargs)
+def add_control_point(trace, site_name, ctrl_behavior, *args, **kwargs):
+    return ctrl_behavior.execute_control_site(trace, site_name, *args, **kwargs)
 
 
 class ControlCommand():
@@ -23,27 +23,27 @@ class ControlCommand():
         locker.kill_connection()
         return wake_command
 
-    def execute_control_site(self, trace_uuid, site_name, trace_dict, *args, **kwargs):
+    def execute_control_site(self, trace, site_name, *args, **kwargs):
         raise NotImplementedError("Abstract class")
 
 
 class ForkContinueCommand(ControlCommand):
 
     # don't actually serialize everything and send back
-    def serialize_trace(self, trace_uuid, site_name, trace_dict):
+    def serialize_trace(self, trace, site_name):
 
         # clone and continue says parent continue, child gets frozen
-        trace_str = dumps(trace_dict)
+        trace_str = dumps(trace)
 
         # set the trace object in our shared redis db, then kill conn
-        RTraces().set_trace(trace_uuid, site_name, trace_str).kill_connection()
+        RTraces().set_trace(trace.trace_uuid, site_name, trace_str).kill_connection()
 
     # create a branch, freeze it, then continue
-    def execute_control_site(self, trace_uuid, site_name, trace_poutine, *args, **kwargs):
-        print("Fork/Continue at site: {}, {}, {}".format(trace_uuid, site_name, trace_poutine))
+    def execute_control_site(self, trace, site_name, *args, **kwargs):
+        print("Fork/Continue at site: {}, {}, {}".format(trace.trace_uuid, site_name, trace))
 
         # serialize the trace
-        self.serialize_trace(trace_uuid, site_name, trace_poutine.trace)
+        self.serialize_trace(trace, site_name)
 
         # try fork and proceed
         pid = fork()
@@ -51,24 +51,24 @@ class ForkContinueCommand(ControlCommand):
         # continue
         if pid:
             # we're the parent
-            return self.parent_fct(trace_uuid, site_name, trace_poutine, *args, **kwargs)
+            return self.parent_fct(trace, site_name, *args, **kwargs)
         else:
             # we're the child
-            return self.child_fct(trace_uuid, site_name, trace_poutine, *args, **kwargs)
+            return self.child_fct(trace, site_name, *args, **kwargs)
 
-    def child_fct(self, trace_uuid, site_name, trace_poutine, *args, **kwargs):
+    def child_fct(self, trace, site_name, *args, **kwargs):
 
         # we'll wait on this, get back how to continue
-        wake_command = self.wait_on_lock(trace_uuid, site_name)
+        wake_command = self.wait_on_lock(trace.trace_uuid, site_name)
 
         # when we wake up, we'll read a new control object, then
         # execute accordingly
         assert issubclass(type(wake_command), ControlCommand), "Lock must be behavior for lock release"
-        return wake_command.execute_control_site(trace_uuid, site_name, trace_poutine, *args, **kwargs)
+        return wake_command.execute_control_site(trace, site_name, *args, **kwargs)
 
-    def parent_fct(self, trace_uuid, site_name, trace_poutine, *args, **kwargs):
+    def parent_fct(self, trace, site_name, *args, **kwargs):
         # parent site simply continues
-        print("trace parent {} - {}".format(trace_uuid, site_name))
+        print("trace parent {} - {}".format(trace.trace_uuid, site_name))
         pass
 
 
@@ -85,14 +85,14 @@ class CloneCommand(ForkContinueCommand):
     # when the execute command gets called, the child will branch
     # then wait at the old address
     # then the parent will fork a bunch more and store the children with a new address
-    def parent_fct(self, trace_uuid, site_name, trace_poutine, *args, **kwargs):
+    def parent_fct(self, trace, site_name, *args, **kwargs):
 
         # parent site will control the forking
         for i in range(self.clone_count):
 
             # then set our pairing
             child_trace_uuid = get_uuid()
-            pair_key = RPairs.get_pair_name(trace_uuid, child_trace_uuid, site_name)
+            pair_key = RPairs.get_pair_name(trace.trace_uuid, child_trace_uuid, site_name)
 
             # try fork and proceed
             pid = fork()
@@ -101,20 +101,19 @@ class CloneCommand(ForkContinueCommand):
             if pid == 0:
 
                 # from here on out, the trace has a new ID
-                trace_poutine.trace_uuid = child_trace_uuid
+                trace.trace_uuid = child_trace_uuid
 
                 # add this pair to redis
                 RPairs().add_pair_uuids(pair_key).kill_connection()
 
                 # store the cloned trace
                 ForkContinueCommand.serialize_trace(self,
-                                                    child_trace_uuid,
-                                                    site_name,
-                                                    trace_poutine.trace)
+                                                    trace,
+                                                    site_name)
 
                 # we're the child, store with new child uuid
                 # must RETURN here because otherwise we'd fall through to exit command
-                return self.child_fct(child_trace_uuid, site_name, trace_poutine, *args, **kwargs)
+                return self.child_fct(trace, site_name, *args, **kwargs)
 
         # kill the parent, we've done our job
         _exit(0)
@@ -142,37 +141,32 @@ class ApplyFunctionForkContinueCommand(ForkContinueCommand):
         pass
 
     # resample then lock on site again
-    def execute_control_site(self, trace_uuid, site_name, trace_poutine, *args, **kwargs):
+    def execute_control_site(self, trace, site_name, *args, **kwargs):
 
         # we want to preserve the parent command point
         if self.preserve_parent:
             # first we fork, then we get to continue as parent
-            super(ApplyFunctionForkContinueCommand, self).execute_control_site(trace_uuid,
+            super(ApplyFunctionForkContinueCommand, self).execute_control_site(trace,
                                                                                site_name,
-                                                                               trace_poutine,
                                                                                *args, **kwargs)
         # wake up and do something
-        self.apply_function(trace_uuid, site_name, trace_poutine, *args, **kwargs)
+        self.apply_function(trace, site_name, *args, **kwargs)
 
         # we're part of a new object now
         if self.uuid_on_sample:
 
             # create a new sample to continue onwards
             child_trace_uuid = get_uuid()
-            pair_key = RPairs.get_pair_name(trace_uuid, child_trace_uuid, site_name)
+            pair_key = RPairs.get_pair_name(trace.trace_uuid, child_trace_uuid, site_name)
 
             # from here on out, the trace has a new ID
-            trace_poutine.trace_uuid = child_trace_uuid
+            trace.trace_uuid = child_trace_uuid
 
             # add this pair to redis
             RPairs().add_pair_uuids(pair_key).kill_connection()
 
-            # overwrite the old
-            trace_uuid = child_trace_uuid
-
-        return super(ApplyFunctionForkContinueCommand, self).execute_control_site(trace_uuid,
+        return super(ApplyFunctionForkContinueCommand, self).execute_control_site(trace,
                                                                                   site_name,
-                                                                                  trace_poutine,
                                                                                   *args, **kwargs)
 
 
@@ -183,9 +177,9 @@ class NudgeForkContinueCommand(ApplyFunctionForkContinueCommand):
         self.sample_nudge = sample_nudge
         super(NudgeForkContinueCommand, self).__init__(*args, **kwargs)
 
-    def apply_function(self, trace_uuid, site_name, trace_poutine, msg):
+    def apply_function(self, trace, site_name, msg):
         # wake up and add our nudge factor to the original value
-        trace_poutine.trace.add_node(msg["name"], force=True, value=msg["value"] + self.sample_nudge)
+        trace.add_node(msg["name"], force=True, value=msg["value"] + self.sample_nudge)
 
 
 # Take a given object and resample and continue\
@@ -196,7 +190,7 @@ class ResampleForkContinueCommand(ApplyFunctionForkContinueCommand):
         self.seed = seed
         super(ResampleForkContinueCommand, self).__init__()
 
-    def apply_function(self, trace_uuid, site_name, trace_poutine, msg):
+    def apply_function(self, trace, site_name, msg):
         seed(self.seed)
         # set our seed manually, or use numpy random setup to seed
         manual_seed(self.seed if self.seed is not None else randint(0, 10000000))
@@ -206,19 +200,19 @@ class ResampleForkContinueCommand(ApplyFunctionForkContinueCommand):
         assert msg["type"] == "sample", "Cannot execute a resample at a non-sample node"
         print("Resampling: {}".format(site_name))
         # resample from the poutine we had going
-        trace_poutine._pyro_sample(msg)
+        trace._pyro_sample(msg)
 
 
 # wake up, calculate the log pdf of the trace, store it, then go back to sleep
 class LogPdfCommand(ControlCommand):
 
     # resample then lock on site again
-    def execute_control_site(self, trace_uuid, site_name, trace_dict, *args, **kwargs):
+    def execute_control_site(self, trace, site_name, *args, **kwargs):
 
-        log_uuid = RTraces.get_trace_key(trace_uuid, site_name)
+        log_uuid = RTraces.get_trace_key(trace.trace_uuid, site_name)
 
         # use the trace to calculate log_pdf
-        trace_pdf = trace_dict.batch_log_pdf()
+        trace_pdf = trace.batch_log_pdf()
 
         # do something else with trace?
 
@@ -226,18 +220,19 @@ class LogPdfCommand(ControlCommand):
         RMessages().set_msg(log_uuid, dumps({'log_pdf': trace_pdf})).kill_connection()
 
         # we'll wait on this, get back how to continue
-        wake_command = self.wait_on_lock(trace_uuid, site_name)
+        wake_command = self.wait_on_lock(trace.trace_uuid, site_name)
 
         # when we wake up, we'll read a new control object, then
         # execute accordingly
         assert issubclass(type(wake_command), ControlCommand), "Lock must be behavior for lock release"
-        return wake_command.execute_control_site(trace_uuid, site_name, trace_dict, *args, **kwargs)
+        return wake_command.execute_control_site(trace, site_name, *args, **kwargs)
 
 
 # wake up, calculate the log pdf of the trace, store it, then go back to sleep
 class KillCommand(ControlCommand):
 
     # resample then lock on site again
-    def execute_control_site(self, trace_uuid, site_name, trace_dict, *args, **kwargs):
+    def execute_control_site(self, *args, **kwargs):
         # simple as clearing and exiting
+        # TODO: remove self from redis?
         _exit(0)

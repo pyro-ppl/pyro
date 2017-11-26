@@ -130,6 +130,7 @@ class RPairs(RTraces):
         return base_to_new.split(",")
 
 
+# support pushing multiple locks. if you wait on a lock that already has a key, you'll immediately pull
 class RLock(RTraces):
 
     def __init__(self):
@@ -138,19 +139,28 @@ class RLock(RTraces):
 
     def add_lock_and_wait(self, lock_name, retry_interval=.1):
 
-        # kill the lock, make sure it doesn't exist
-        self.r.delete(lock_name)
+        # check if a lock exists
+        lock_exists = self.r.exists(lock_name) and self.r.llen(lock_name) > 0
 
         # sleep until wake up!
-        while not self.r.exists(lock_name):
+        while not lock_exists:
+            # check for existence
+            lock_exists = self.r.exists(lock_name) and self.r.llen(lock_name) > 0
+
             # print("sleep waiting {}".format(int(self.r.get(lock_name).decode())))
             sleep(retry_interval)
 
-        return loads(self.r.get(lock_name))
+        # otherwise, we already have a lock to process
+        # pull from the front of the list (oldest keys, fifo)
+        r_val = loads(self.r.lpop(lock_name))
+
+        # then return
+        return r_val
 
     # perhaps we want to release with a different message?
     def release_lock(self, lock_name, command_behavior):
-        self.r.set(lock_name, dumps(command_behavior))
+        # push the end of the list (right push)
+        self.r.rpush(lock_name, dumps(command_behavior))
         return self
 
 

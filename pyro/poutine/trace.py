@@ -5,6 +5,7 @@ import warnings
 
 import networkx
 import numpy as np
+from uuid import uuid4 as get_uuid
 
 
 def _warn_if_nan(name, variable):
@@ -34,6 +35,7 @@ class Trace(networkx.DiGraph):
         assert graph_type in ("flat", "dense"), \
             "{} not a valid graph type".format(graph_type)
         self.graph_type = graph_type
+        self.trace_uuid = kwargs.pop("trace_uuid", get_uuid())
         super(Trace, self).__init__(*args, **kwargs)
 
     def add_node(self, site_name, *args, **kwargs):
@@ -60,7 +62,9 @@ class Trace(networkx.DiGraph):
         Identical to super(Trace, self).copy(), but preserves the type
         and the self.graph_type attribute
         """
-        return Trace(super(Trace, self).copy(), graph_type=self.graph_type)
+        return Trace(super(Trace, self).copy(),
+                     graph_type=self.graph_type,
+                     trace_uuid=self.trace_uuid)
 
     def log_pdf(self, site_filter=lambda name, site: True):
         """
