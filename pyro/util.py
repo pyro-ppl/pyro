@@ -7,11 +7,22 @@ import warnings
 import graphviz
 import numpy as np
 import torch
+from uuid import uuid4
 from torch.autograd import Variable
 from torch.nn import Parameter
 
 from pyro.poutine.poutine import _PYRO_STACK
 from pyro.poutine.util import site_is_subsample
+from sys import stdout
+
+
+def print_update(ix, total, msg):
+    stdout.write("\r " + msg + " {0:.0f}% ".format(100*(ix + 1.0)/total))
+    stdout.flush()
+
+
+def get_uuid():
+    return uuid4().hex
 
 
 def parse_torch_version():

@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+from pdb import set_trace as bb
 import pyro
 import pyro.distributions as dist
 # from pyro.infer.mcmc.trace_kernel import TraceKernel
@@ -22,8 +23,10 @@ def VTA(val):
     return VT([val])
 
 
-def nodes_minus(trace, minus=set()):
-    return [n for n in trace.nodes() if n not in minus]
+# get all the sample sites
+def sample_sites(trace, minus=set()):
+    return [nid for nid, n in trace.nodes(data=True)
+            if nid not in minus and n["type"] == 'sample']
 
 
 class NormalProposal():
@@ -34,11 +37,15 @@ class NormalProposal():
         self.tune_frequency = tune_frequency
         self._tune_cnt = self.tune_frequency
 
-    def sample(self):
-        return dist.Normal().sample(self.mu, self.scale*self.sigma)
+    def sample(self, mu_size):
+        return self(self.mu.expand(mu_size)).sample()
 
     def __call__(self, mu):
-        return dist.Normal(mu)
+        sigma = self.scale*self.sigma
+        # sigma just a number? expand to equal the must
+        if tuple(sigma.data.shape) != mu.data.shape:
+            sigma = sigma.expand_as(mu.data)
+        return dist.Normal(mu, sigma)
 
     # borrowed from:
     # https://github.com/mcleonard/sampyl/blob/master/sampyl/samplers/metropolis.py#L102
@@ -99,6 +106,7 @@ class MH(TraceKernel):
         self._kwargs = kwargs
 
         # use our poutine to get command access to the model
+        print("INITIALIZING FORKS")
         self.fork_control = ForkPoutine(self.model, ForkContinueCommand).initialize(1)
 
         # get a singular trace -- synchronous call here, running trace on another thread
@@ -109,7 +117,13 @@ class MH(TraceKernel):
         if isnan(prototype_trace_log_pdf) or isinf(prototype_trace_log_pdf):
             raise ValueError('Model specification incorrect - trace log pdf is NaN, Inf or 0.')
 
+        # setup returns the first trace to run
+        return self._prototype_trace
+
     def cleanup(self):
+        print("CLEANING UP POST-MH")
+        bb()
+
         # sync kill all forks and threads
         self.fork_control.kill_all()
 
@@ -127,40 +141,41 @@ class MH(TraceKernel):
         # 3. Sync call continue with nudge from modified state
         # 4. Calculate values for delta choice
         # how many nodes? == nodes - 1 because there is a _trace_uuid node
-        trace_nodes = nodes_minus(trace, minus=["_trace_uuid"])
+        trace_nodes = sample_sites(trace)
         trace_length = len(trace_nodes)
 
         # 1. randomly sample a site to modify in trace
         r_site = choice(trace_nodes)
 
-        # now we create a nudge amount
-        nudge_amt = self.proposal_dist().sample()
+        # now we create a nudge amount for each var in the sample
+        nudge_amt = self.proposal_dist.sample(trace.node[r_site]['value'].data.shape)
 
         # now nudge and continue
         prop_trace = self.fork_control.continue_trace(trace, r_site,
-                                                      NudgeForkContinueCommand(nudge_amt, preserve_parent=True))
+                                                      NudgeForkContinueCommand(nudge_amt,
+                                                                               preserve_parent=True))
 
-        prop_trace_nodes = nodes_minus(prop_trace, minus=["_trace_uuid"])
+        prop_trace_nodes = sample_sites(prop_trace)
         prop_trace_length = len(prop_trace_nodes)
 
         # alg2 pg 772 http://proceedings.mlr.press/v15/wingate11a/wingate11a.pdf
 
         # get logp for both traces
-        logp_original = trace.node[_R()]["batch_log_pdf"]
-        logp_proposal = prop_trace.node[_R()]["batch_log_pdf"]
+        logp_original = trace.node[_R()]["batch_log_pdf"].view(-1)
+        logp_proposal = prop_trace.node[_R()]["batch_log_pdf"].view(-1)
 
         # get our sample at the proposed site
         # get X and X'
-        x_original = trace.node[r_site]["sample"]
-        x_proposal = prop_trace.node[r_site]["sample"]
+        x_original = trace.node[r_site]["value"]
+        x_proposal = prop_trace.node[r_site]["value"]
 
         # alg2 pg 772, line 7-8 http://proceedings.mlr.press/v15/wingate11a/wingate11a.pdf
         # R = -log(len(old_trace)) + PD(X').log_pdf(X)
         # F = -log(len(new_trace)) + PD(X).log_pdf(X')
-        R = -tlog(VTA(trace_length)) + \
+        R = -tlog(VTA(trace_length)).type_as(x_original) + \
             self.proposal_dist(x_proposal).log_pdf(x_original)
 
-        F = -tlog(VTA(prop_trace_length)) + \
+        F = -tlog(VTA(prop_trace_length)).type_as(x_original) + \
             self.proposal_dist(x_original).log_pdf(x_proposal)
 
         # ll' - ll + R - F
@@ -172,6 +187,11 @@ class MH(TraceKernel):
         if isfinite(delta.data[0]) and rand.log().data[0] < delta.data[0]:
             self._accept_cnt += 1
             ret_trace = prop_trace
+            # we can kill the old trace, nothing desirable here
+            self.fork_control.kill_trace(trace, r_site)
+        else:
+            # kill the whole proposed trace otherwise -- it was rejected!
+            self.fork_control.kill_trace(prop_trace, "_INPUT")
 
         # tune the proposal object -- if outside of tune_frequency, this will ignore
         self.proposal_dist.tune(self._accept_cnt/self._call_cnt)

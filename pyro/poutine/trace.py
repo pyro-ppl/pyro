@@ -5,7 +5,7 @@ import warnings
 
 import networkx
 import numpy as np
-from uuid import uuid4 as get_uuid
+from pyro.util import get_uuid
 
 
 def _warn_if_nan(name, variable):
@@ -49,8 +49,8 @@ class Trace(networkx.DiGraph):
         instead of silently overwriting.
         """
         # XXX should do more validation than this
-        if kwargs["type"] != "param":
-            assert not kwargs.pop("force", False) and site_name not in self, \
+        if not kwargs.pop("force", False) and kwargs["type"] != "param":
+            assert site_name not in self, \
                 "site {} already in trace".format(site_name)
 
         # XXX should copy in case site gets mutated, or dont bother?

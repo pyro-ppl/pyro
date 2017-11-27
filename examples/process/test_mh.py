@@ -12,6 +12,8 @@ import pyro.distributions as dist
 from mh import MH, NormalProposal
 from mcmc.mcmc import MCMC
 from pyro.util import ng_ones, ng_zeros
+from multiprocessing import set_start_method
+from ip_communication import RTraces
 # from pyro.infer.mcmc.mh import MH
 # from pyro.infer.mcmc.mcmc import MCMC
 from tests.common import assert_equal
@@ -87,10 +89,14 @@ def mse(t1, t2):
     'fixture', [
         TestFixture(dim=10, chain_len=3, num_obs=1, tune_frequency=100, num_samples=600),
         TestFixture(dim=10, chain_len=3, num_obs=5, tune_frequency=50, num_samples=700),
-        TestFixture(dim=10, chain_len=7, num_obs=1, tune_frequency=150, num_samples=1300),
+        TestFixture(dim=10, chain_len=7, num_obs=2, tune_frequency=150, num_samples=1300),
     ],
     ids=lambda x: x.id_fn())
 def test_mh_conjugate_gaussian(fixture):
+    logger.info("Flushing local redis instance")
+    RTraces().r.flushall()
+    set_start_method('fork')
+
     mcmc_run = MCMC(
         fixture.model,
         kernel=MH,
@@ -118,5 +124,5 @@ def test_mh_conjugate_gaussian(fixture):
 
 
 if __name__ == "__main__":
-    tf = TestFixture(dim=10, chain_len=3, num_obs=1, tune_frequency=100, num_samples=600)
+    tf = TestFixture(dim=10, chain_len=3, num_obs=2, tune_frequency=100, num_samples=600)
     test_mh_conjugate_gaussian(tf)

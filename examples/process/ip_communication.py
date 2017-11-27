@@ -1,12 +1,7 @@
 from redis import StrictRedis
 from pickle import loads, dumps
-from uuid import uuid4
 from time import sleep
 from functools import wraps
-
-
-def get_uuid():
-    return uuid4().hex
 
 
 def get_all_messages(rr, list_key):
@@ -109,10 +104,13 @@ class RPairs(RTraces):
         super(RPairs, self).__init__(db=3)
 
     def get_pair_uuids(self, uuid_base):
-        return list(self.r.scan_iter("{}*".format(uuid_base)))
+        return map_decode(self.r.scan_iter("{}*".format(uuid_base)))
         # pair_count = self.r.llen(uuid_base)
         # # slice out these pairs, convert them to strings
         # return map_decode(self.r.lrange(uuid_base, 0, pair_count))
+
+    def get_inv_pair_uuids(self, uuid_pair):
+        return map_decode(self.r.scan_iter("*,{}*".format(uuid_pair)))
 
     # pair the uuid_base with some of the clones
     def add_pair_uuids(self, pair_uuid, value_str=b''):
@@ -139,20 +137,24 @@ class RLock(RTraces):
 
     def add_lock_and_wait(self, lock_name, retry_interval=.1):
 
+        self.r.delete(lock_name)
+        # print("Lock count- {}:{}".format(lock_name, self.r.llen(lock_name)))
         # check if a lock exists
-        lock_exists = self.r.exists(lock_name) and self.r.llen(lock_name) > 0
+        lock_exists = self.r.exists(lock_name)  # and self.r.llen(lock_name) > 0
 
         # sleep until wake up!
         while not lock_exists:
             # check for existence
-            lock_exists = self.r.exists(lock_name) and self.r.llen(lock_name) > 0
+            lock_exists = self.r.exists(lock_name)  # and self.r.llen(lock_name) > 0
 
             # print("sleep waiting {}".format(int(self.r.get(lock_name).decode())))
             sleep(retry_interval)
 
         # otherwise, we already have a lock to process
         # pull from the front of the list (oldest keys, fifo)
-        r_val = loads(self.r.lpop(lock_name))
+        # r_val = loads(self.r.lpop(lock_name))
+        r_val = loads(self.r.get(lock_name))
+        self.r.delete(lock_name)
 
         # then return
         return r_val
@@ -160,7 +162,8 @@ class RLock(RTraces):
     # perhaps we want to release with a different message?
     def release_lock(self, lock_name, command_behavior):
         # push the end of the list (right push)
-        self.r.rpush(lock_name, dumps(command_behavior))
+        self.r.set(lock_name, dumps(command_behavior))
+        # self.r.rpush(lock_name, dumps(command_behavior))
         return self
 
 
