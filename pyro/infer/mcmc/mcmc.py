@@ -31,7 +31,7 @@ class MCMC(TracePosterior):
             self._t += 1
             if self._t < self.warmup_steps:
                 continue
-            yield (trace, trace.log_pdf())
+            yield (trace, 1.0)
         self.kernel.cleanup()
 
     @property
