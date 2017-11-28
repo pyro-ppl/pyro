@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import numbers
+
 import torch
 from torch.autograd import Variable
 
@@ -21,7 +23,7 @@ class Binomial(Distribution):
     def __init__(self, ps, n, batch_size=None, *args, **kwargs):
         if ps.dim() not in (1, 2):
             raise ValueError("Parameter `ps` must be either 1 or 2 dimensional.")
-        if isinstance(n, int):
+        if isinstance(n, numbers.Number):
             n = torch.LongTensor([n]).type_as(ps.data)
             if ps.is_cuda:
                 n = n.cuda()

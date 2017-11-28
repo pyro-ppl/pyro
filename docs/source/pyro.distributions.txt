@@ -13,6 +13,13 @@ Beta
     :undoc-members:
     :show-inheritance:
 
+Binomial
+--------
+.. automodule:: pyro.distributions.binomial
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Categorical
 -----------
 .. automodule:: pyro.distributions.categorical
