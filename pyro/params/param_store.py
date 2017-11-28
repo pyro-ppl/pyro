@@ -42,6 +42,9 @@ class ParamStoreDict(object):
         self._param_tags = defaultdict(lambda: set())  # dictionary from tag to param names
         self._tag_params = defaultdict(lambda: set())  # dictionary from param name to tags
 
+    def __contains__(self, name):
+        return name in self._params
+
     def clear(self):
         """
         Clear the ParamStore
