@@ -1,29 +1,48 @@
 from __future__ import absolute_import, division, print_function
 
+import functools
+import os
+
 import torch
 import torch.nn.functional as F
 from torch.autograd import Variable
 
+# TODO Decide based on torch.__version__ once torch.distributions matures.
+USE_TORCH_DISTRIBUTIONS = int(os.environ.get('PYRO_USE_TORCH_DISTRIBUTIONS', 0))
 
-def broadcast_shape(*shapes):
+
+def torch_wrapper(pyro_dist):
+    """
+    Decorator for optional wrappers around torch.distributions classes.
+    """
+    if USE_TORCH_DISTRIBUTIONS:
+        return lambda wrapper: functools.wraps(pyro_dist)(wrapper)
+    else:
+        return lambda wrapper: pyro_dist
+
+
+def broadcast_shape(*shapes, **kwargs):
     """
     Similar to ``np.broadcast()`` but for shapes.
     Equivalent to ``np.broadcast(*map(np.empty, shapes)).shape``.
 
     :param tuple shapes: shapes of tensors.
+    :param bool strict: whether to use extend-but-not-resize broadcasting.
     :returns: broadcasted shape
     :rtype: tuple
     :raises: ValueError
     """
+    strict = kwargs.pop('strict', False)
     reversed_shape = []
     for shape in shapes:
         for i, size in enumerate(reversed(shape)):
             if i >= len(reversed_shape):
                 reversed_shape.append(size)
-            elif reversed_shape[i] == 1:
+            elif reversed_shape[i] == 1 and not strict:
                 reversed_shape[i] = size
-            elif size != 1 and reversed_shape[i] != size:
-                raise ValueError('shape mismatch: objects cannot be broadcast to a single shape')
+            elif reversed_shape[i] != size and (size != 1 or strict):
+                raise ValueError('shape mismatch: objects cannot be broadcast to a single shape: {}'.format(
+                    ' vs '.join(map(str, shapes))))
     return tuple(reversed(reversed_shape))
 
 
