@@ -7,8 +7,8 @@ import pytest
 import scipy.stats as sp
 
 import pyro.distributions as dist
-from pyro.distributions import (Bernoulli, Beta, Categorical, Cauchy, Dirichlet, Exponential, Gamma, HalfCauchy,
-                                LogNormal, Multinomial, Normal, OneHotCategorical, Poisson, Uniform)
+from pyro.distributions import (Bernoulli, Beta, Binomial, Categorical, Cauchy, Dirichlet, Exponential, Gamma,
+                                HalfCauchy, LogNormal, Multinomial, Normal, OneHotCategorical, Poisson, Uniform)
 from tests.distributions.dist_fixture import Fixture
 
 continuous_dists = [
@@ -135,6 +135,20 @@ discrete_dists = [
                  'test_data': [[2, 4, 2], [1, 4, 3]]}
             ],
             scipy_arg_fn=lambda ps, n: ((n[0], np.array(ps)), {}),
+            prec=0.05,
+            min_samples=10000,
+            is_discrete=True),
+    Fixture(pyro_dist=(dist.binomial, Binomial),
+            scipy_dist=sp.binom,
+            examples=[
+                {'ps': [0.6], 'n': [8],
+                 'test_data': [4]},
+                {'ps': [0.3], 'n': [8],
+                 'test_data': [[2], [4]]},
+                {'ps': [[0.2], [0.4]], 'n': [[8], [8]],
+                 'test_data': [[4], [3]]}
+            ],
+            scipy_arg_fn=lambda ps, n: ((n[0], ps[0]), {}),
             prec=0.05,
             min_samples=10000,
             is_discrete=True),

@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 import numbers
 
-import numpy as np
 import torch
 from torch.autograd import Variable
 
@@ -10,17 +9,14 @@ from pyro.distributions.distribution import Distribution
 from pyro.distributions.util import log_gamma, torch_multinomial
 
 
-class Multinomial(Distribution):
+class Binomial(Distribution):
     """
-    Multinomial distribution.
+    Binomial distribution.
 
-    Distribution over counts for `n` independent `Categorical(ps)` trials.
+    Distribution over counts for `n` independent `Bernoulli(ps)` trials.
 
-    This is often used in conjunction with `torch.nn.Softmax` to ensure
-    probabilites `ps` are normalized.
-
-    :param torch.autograd.Variable ps: Probabilities (real). Should be positive
-        and should normalized over the rightmost axis.
+    :param torch.autograd.Variable ps: Probabilities. Should lie in the
+        interval `[0,1]`.
     :param int n: Number of trials. Should be positive.
     """
 
@@ -37,7 +33,7 @@ class Multinomial(Distribution):
         if ps.dim() == 1 and batch_size is not None:
             self.ps = ps.expand(batch_size, ps.size(0))
             self.n = n.expand(batch_size, n.size(0))
-        super(Multinomial, self).__init__(*args, **kwargs)
+        super(Binomial, self).__init__(*args, **kwargs)
 
     def batch_shape(self, x=None):
         """
@@ -68,14 +64,7 @@ class Multinomial(Distribution):
         """
         Ref: :py:meth:`pyro.distributions.distribution.Distribution.sample`
         """
-        counts = np.apply_along_axis(
-            lambda x: np.bincount(x, minlength=self.ps.size()[-1]),
-            axis=-1,
-            arr=self.expanded_sample().data.cpu().numpy())
-        counts = torch.from_numpy(counts)
-        if self.ps.is_cuda:
-            counts = counts.cuda()
-        return Variable(counts)
+        return torch.sum(self.expanded_sample(), dim=-1, keepdim=True)
 
     def expanded_sample(self):
         # get the int from Variable or Tensor
@@ -83,16 +72,17 @@ class Multinomial(Distribution):
             n = int(self.n.data.cpu()[0][0])
         else:
             n = int(self.n.data.cpu()[0])
-        return Variable(torch_multinomial(self.ps.data, n, replacement=True))
+        ps = torch.cat((1 - self.ps, self.ps), dim=-1)
+        return Variable(torch_multinomial(ps.data, n, replacement=True))
 
     def batch_log_pdf(self, x):
         """
         Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_log_pdf`
         """
         batch_log_pdf_shape = self.batch_shape(x) + (1,)
-        log_factorial_n = log_gamma(x.sum(-1) + 1)
-        log_factorial_xs = log_gamma(x + 1).sum(-1)
-        log_powers = (x * torch.log(self.ps)).sum(-1)
+        log_factorial_n = log_gamma(self.n + 1)
+        log_factorial_xs = log_gamma(x + 1) + log_gamma(self.n - x + 1)
+        log_powers = x * torch.log(self.ps) + (self.n - x) * torch.log(1 - self.ps)
         batch_log_pdf = log_factorial_n - log_factorial_xs + log_powers
         return batch_log_pdf.contiguous().view(batch_log_pdf_shape)
 
