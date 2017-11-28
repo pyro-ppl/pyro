@@ -113,7 +113,7 @@ class Normal(Distribution):
 class TorchNormal(Distribution):
     """
     Compatibility wrapper around
-    `torch.distributions.Normal <http://pytorch.org/docs/master/_modules/torch/distributions.html#Normal`_
+    `torch.distributions.Normal <http://pytorch.org/docs/master/_modules/torch/distributions.html#Normal>`_
     """
     try:
         reparameterized = torch.distributions.Normal.reparameterized
