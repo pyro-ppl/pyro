@@ -46,6 +46,28 @@ def broadcast_shape(*shapes, **kwargs):
     return tuple(reversed(reversed_shape))
 
 
+def broadcast_shape(*shapes):
+    """
+    Similar to ``np.broadcast()`` but for shapes.
+    Equivalent to ``np.broadcast(*map(np.empty, shapes)).shape``.
+
+    :param tuple shapes: shapes of tensors.
+    :returns: broadcasted shape
+    :rtype: tuple
+    :raises: ValueError
+    """
+    reversed_shape = []
+    for shape in shapes:
+        for i, size in enumerate(reversed(shape)):
+            if i >= len(reversed_shape):
+                reversed_shape.append(size)
+            elif reversed_shape[i] == 1:
+                reversed_shape[i] = size
+            elif size != 1 and reversed_shape[i] != size:
+                raise ValueError('shape mismatch: objects cannot be broadcast to a single shape')
+    return tuple(reversed(reversed_shape))
+
+
 def log_gamma(xx):
     gamma_coeff = [
         76.18009172947146,

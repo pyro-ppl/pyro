@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 # distribution classes
 from pyro.distributions.bernoulli import Bernoulli
 from pyro.distributions.beta import Beta
+from pyro.distributions.binomial import Binomial
 from pyro.distributions.categorical import Categorical
 from pyro.distributions.cauchy import Cauchy
 from pyro.distributions.delta import Delta
@@ -22,6 +23,7 @@ from pyro.distributions.uniform import Uniform
 # function aliases
 bernoulli = RandomPrimitive(Bernoulli)
 beta = RandomPrimitive(Beta)
+binomial = RandomPrimitive(Binomial)
 categorical = RandomPrimitive(Categorical)
 cauchy = RandomPrimitive(Cauchy)
 delta = RandomPrimitive(Delta)
