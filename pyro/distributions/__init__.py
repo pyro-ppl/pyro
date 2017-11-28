@@ -14,7 +14,7 @@ from pyro.distributions.gamma import Gamma
 from pyro.distributions.half_cauchy import HalfCauchy
 from pyro.distributions.log_normal import LogNormal
 from pyro.distributions.multinomial import Multinomial
-from pyro.distributions.normal import Normal
+from pyro.distributions.normal import WrapNormal as Normal
 from pyro.distributions.one_hot_categorical import OneHotCategorical
 from pyro.distributions.poisson import Poisson
 from pyro.distributions.random_primitive import RandomPrimitive
