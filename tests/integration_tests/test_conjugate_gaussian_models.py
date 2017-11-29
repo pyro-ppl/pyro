@@ -103,12 +103,12 @@ class GaussianChainTests(TestCase):
             def array_to_string(y):
                 return str(map(lambda x: "%.3f" % x.data.cpu().numpy()[0], y))
 
-        logger.debug("lambdas: " + array_to_string(self.lambdas))
-        logger.debug("target_mus: " + array_to_string(self.target_mus[1:]))
-        logger.debug("target_kappas: " + array_to_string(self.target_kappas[1:]))
-        logger.debug("lambda_posts: " + array_to_string(self.lambda_posts[1:]))
-        logger.debug("lambda_tilde_posts: " + array_to_string(self.lambda_tilde_posts))
-        pyro.clear_param_store()
+            logger.debug("lambdas: " + array_to_string(self.lambdas))
+            logger.debug("target_mus: " + array_to_string(self.target_mus[1:]))
+            logger.debug("target_kappas: " + array_to_string(self.target_kappas[1:]))
+            logger.debug("lambda_posts: " + array_to_string(self.lambda_posts[1:]))
+            logger.debug("lambda_tilde_posts: " + array_to_string(self.lambda_tilde_posts))
+            pyro.clear_param_store()
 
         def model(*args, **kwargs):
             next_mean = self.mu0
