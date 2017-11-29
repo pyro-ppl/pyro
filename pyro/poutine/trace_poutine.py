@@ -124,11 +124,18 @@ class TracePoutine(Poutine):
         Adds appropriate edges based on cond_indep_stack information
         upon exiting the context.
         """
+        self.trace.add_node("_RETURN", name="_RETURN", type="return", value=self.ret_value)
         if self.graph_type == "dense":
             identify_dense_edges(self.trace)
             self.trace.graph["vectorized_map_data_info"] = \
                 get_vectorized_map_data_info(self.trace)
         return super(TracePoutine, self).__exit__(*args, **kwargs)
+
+    def _init_trace(self, *args, **kwargs):
+        self.trace = Trace(graph_type=self.graph_type)
+        self.trace.add_node("_INPUT",
+                            name="_INPUT", type="args",
+                            args=args, kwargs=kwargs)
 
     def __call__(self, *args, **kwargs):
         """
@@ -142,13 +149,10 @@ class TracePoutine(Poutine):
         stores the arguments and return value of the function in special sites,
         and returns self.fn's return value
         """
-        self.trace = Trace(graph_type=self.graph_type)
-        self.trace.add_node("_INPUT",
-                            name="_INPUT", type="args",
-                            args=args, kwargs=kwargs)
-        ret = super(TracePoutine, self).__call__(*args, **kwargs)
-        self.trace.add_node("_RETURN", name="_RETURN", type="return", value=ret)
-        return ret
+        self._init_trace(*args, **kwargs)
+        with self:
+            self.ret_value = self.fn(*args, **kwargs)
+            return self.ret_value
 
     def get_trace(self, *args, **kwargs):
         """
@@ -162,12 +166,7 @@ class TracePoutine(Poutine):
         return self.trace.copy()
 
     def _reset(self):
-        tr = Trace(graph_type=self.graph_type)
-        tr.add_node("_INPUT",
-                    name="_INPUT", type="input",
-                    args=self.trace.nodes["_INPUT"]["args"],
-                    kwargs=self.trace.nodes["_INPUT"]["kwargs"])
-        self.trace = tr
+        self._init_trace(*self.trace.nodes["_INPUT"]["args"], **self.trace.nodes["_INPUT"]["kwargs"])
         super(TracePoutine, self)._reset()
 
     def _pyro_sample(self, msg):

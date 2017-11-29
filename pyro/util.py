@@ -185,14 +185,17 @@ def apply_stack(initial_msg):
         msg = frame._prepare_site(msg)
 
     # go until time to stop?
-    for frame in stack:
+    i = 0
+    while i < len(stack):
         assert msg["type"] in ("sample", "param"), \
             "{} is an invalid site type, how did that get there?".format(msg["type"])
-
-        msg["value"] = getattr(frame, "_pyro_{}".format(msg["type"]))(msg)
+        print("sample {}".format(stack[i]))
+        msg["value"] = getattr(stack[i], "_pyro_{}".format(msg["type"]))(msg)
 
         if msg["stop"]:
             break
+
+        i += 1
 
     return msg
 

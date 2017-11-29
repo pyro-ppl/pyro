@@ -28,6 +28,7 @@ class Poutine(object):
         Constructor. Doesn't do much, just stores the stochastic function.
         """
         self.fn = fn
+        self.uuid = id(self)
 
     def __call__(self, *args, **kwargs):
         """
@@ -102,7 +103,7 @@ class Poutine(object):
             # this poutine should be on the bottom of the stack.
             # If so, remove it from the stack.
             # if not, raise a ValueError because something really weird happened.
-            if _PYRO_STACK[0] == self:
+            if _PYRO_STACK[0] == self or _PYRO_STACK[0].uuid == self.uuid:
                 _PYRO_STACK.pop(0)
             else:
                 # should never get here, but just in case...
@@ -114,8 +115,16 @@ class Poutine(object):
             # then remove it and everything below it in the stack.
             if self in _PYRO_STACK:
                 loc = _PYRO_STACK.index(self)
-                for i in range(0, loc + 1):
-                    _PYRO_STACK.pop(0)
+            else:
+                # look for the uuid inside the stack (might not be same object!)
+                for loc, frame in enumerate(_PYRO_STACK):
+                    if frame.uuid == self.uuid:
+                        break
+                else:
+                    raise ValueError("This Poutine is not in the stack")
+
+            for i in range(0, loc + 1):
+                _PYRO_STACK.pop(0)
 
     def _reset(self):
         """
