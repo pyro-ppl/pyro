@@ -98,7 +98,7 @@ class GaussianChainTests(TestCase):
     def do_elbo_test(self, reparameterized, n_steps, lr, prec, difficulty=1.0):
         n_repa_nodes = torch.sum(self.which_nodes_reparam) if not reparameterized else self.N
         logger.info(" - - - - - DO GAUSSIAN %d-CHAIN ELBO TEST  [reparameterized = %s; %d/%d] - - - - - " %
-              (self.N, reparameterized, n_repa_nodes, self.N))
+                    (self.N, reparameterized, n_repa_nodes, self.N))
         if self.N < 0:
             def array_to_string(y):
                 return str(map(lambda x: "%.3f" % x.data.cpu().numpy()[0], y))
@@ -363,9 +363,9 @@ class GaussianPyramidTests(TestCase):
         n_repa_nodes = torch.sum(self.which_nodes_reparam) if not reparameterized \
             else len(self.q_topo_sort)
         logger.info((" - - - DO GAUSSIAN %d-LAYERED PYRAMID ELBO TEST " +
-              "(with a total of %d RVs) [reparameterized=%s; %d/%d; perm=%s] - - -") %
-              (self.N, (2 ** self.N) - 1, reparameterized, n_repa_nodes,
-               len(self.q_topo_sort), model_permutation))
+                     "(with a total of %d RVs) [reparameterized=%s; %d/%d; perm=%s] - - -") %
+                    (self.N, (2 ** self.N) - 1, reparameterized, n_repa_nodes,
+                     len(self.q_topo_sort), model_permutation))
         pyro.clear_param_store()
 
         def model(*args, **kwargs):
