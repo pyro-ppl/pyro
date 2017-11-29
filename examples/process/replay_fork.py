@@ -9,6 +9,8 @@ import pyro
 import pyro.infer
 import pyro.poutine as poutine
 import pyro.distributions as dist
+from numpy.random import seed, randint
+
 
 from redis import StrictRedis
 
@@ -69,6 +71,8 @@ class SnapshotPoutine(poutine.TracePoutine):
             signal.signal(signal.SIGCONT, _handle_cont)
             signal.signal(signal.SIGINT, _handle_int)
             signal.pause()
+            seed()
+            torch.manual_seed(randint(10000000))
             self.is_child = True
             # child resume:
             # wake up
@@ -113,14 +117,18 @@ class SnapshotPoutine(poutine.TracePoutine):
 
             # parent and child unwind (add _RETURN statement)
             # self.frame_replace.__exit__(*args, **kwargs)
-            super(SnapshotPoutine, self).__exit__(*args, **kwargs)
+            # super(SnapshotPoutine, self).__exit__(*args, **kwargs)
+            cur_stack[0].ret_value = self.ret_value
+            cur_stack[0].__exit__(*args, **kwargs)
+
             # self.frame_replace.__exit__(*args, **kwargs)
 
             print("ABOUT TO EXIT CHILD WITH TRACE {}".format(self.trace.nodes()))
+            print("ALT TRACE {}".format(cur_stack[0].trace.nodes()))
             # send back the pid and the stack
             stack_obj = {
                          'stack': cur_stack,
-                         'trace': self.trace,
+                         'trace': cur_stack[0].trace,
                          'value': self.ret_value}  # self.trace.node['_RETURN']['value']}
 
             # send back the stack
@@ -238,8 +246,9 @@ def main():
     print("model sample b")
     pyro.sample("b", dist.normal, ng_zeros(1), ng_ones(1))
     print("model sample c")
-    pyro.sample("c", dist.normal, ng_zeros(1), ng_ones(1))
+    c = pyro.sample("c", dist.normal, ng_zeros(1), ng_ones(1))
 
+    return c
 
 if __name__ == "__main__":
 
@@ -260,11 +269,14 @@ if __name__ == "__main__":
     # post_trace_2 = poutine.trace(res_pt).get_trace()
     post_trace_2 = res_pt.get_trace()
     print("FINISHED RESUME TRACE 2")
+    res_pt.site = "c"
+    post_trace_3 = res_pt.get_trace()
 
     print("Expecting value b/c to be different")
-    print("Original trace {}".format(trace.nodes(data='pid')))
-    print("New trace_1 {}".format(post_trace_1.nodes(data='pid')))
-    print("New trace_2 {}".format(post_trace_2.nodes(data='pid')))
+    print("Original trace {}".format(trace.nodes(data='value')))
+    print("New trace_1 {}".format(post_trace_1.nodes(data='value')))
+    print("New trace_2 {}".format(post_trace_2.nodes(data='value')))
+    print("New trace_3 {}".format(post_trace_3.nodes(data='value')))
 
 
 
