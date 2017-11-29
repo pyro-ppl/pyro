@@ -24,6 +24,26 @@ class Object(object):
     def __init__(self):
         pass
 
+# refactors:
+# consult eli on trace and replay
+# futures interface
+# renaming/killing
+# get rid of some of the cruft
+# add non-fork MH
+
+# naming:
+# poutine.resume?
+
+# testing:
+# logs in redis for each fork created: sequentially with pids - grab log and test for invariants
+# ^ process tracing will be useful
+# speed/performance
+# neeraj benchmark profiles
+
+# fork strat:
+# MH base example in trace/replay
+# fork logic + MH separate
+
 
 def call_and_response(locks, fork_id, call_method='get_trace', *args, **kwargs):
     retry_interval = kwargs.pop('retry_interval', .1)
