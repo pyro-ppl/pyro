@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import logging
 import os
 import time
 
@@ -14,6 +15,8 @@ import pyro.distributions as dist
 import pyro.optim as optim
 from pyro.infer import SVI
 from tests.common import TestCase
+
+logger = logging.getLogger(__name__)
 
 
 def param_mse(name, target):
@@ -34,7 +37,6 @@ class GaussianChainTests(TestCase):
         self.data.append(Variable(torch.Tensor([0.10])))
         self.n_data = Variable(torch.Tensor([len(self.data)]))
         self.sum_data = self.data[0] + self.data[1] + self.data[2] + self.data[3]
-        self.verbose = True
 
     def setup_chain(self, N):
         self.N = N  # number of latent variables in the chain
@@ -102,11 +104,11 @@ class GaussianChainTests(TestCase):
                 def array_to_string(y):
                     return str(map(lambda x: "%.3f" % x.data.cpu().numpy()[0], y))
 
-                print("lambdas: " + array_to_string(self.lambdas))
-                print("target_mus: " + array_to_string(self.target_mus[1:]))
-                print("target_kappas: " + array_to_string(self.target_kappas[1:]))
-                print("lambda_posts: " + array_to_string(self.lambda_posts[1:]))
-                print("lambda_tilde_posts: " + array_to_string(self.lambda_tilde_posts))
+            logger.debug("lambdas: " + array_to_string(self.lambdas))
+            logger.debug("target_mus: " + array_to_string(self.target_mus[1:]))
+            logger.debug("target_kappas: " + array_to_string(self.target_kappas[1:]))
+            logger.debug("lambda_posts: " + array_to_string(self.lambda_posts[1:]))
+            logger.debug("lambda_tilde_posts: " + array_to_string(self.lambda_tilde_posts))
         pyro.clear_param_store()
 
         def model(*args, **kwargs):
@@ -154,7 +156,7 @@ class GaussianChainTests(TestCase):
             t0 = time.time()
             svi.step()
 
-            if (step % 5000 == 0 or step == n_steps - 1) and self.verbose:
+            if step % 5000 == 0 or step == n_steps - 1:
                 kappa_errors, log_sig_errors, mu_errors = [], [], []
                 for k in range(1, self.N + 1):
                     if k != self.N:
@@ -168,10 +170,10 @@ class GaussianChainTests(TestCase):
                 max_errors = (np.max(mu_errors), np.max(log_sig_errors), np.max(kappa_errors))
                 min_errors = (np.min(mu_errors), np.min(log_sig_errors), np.min(kappa_errors))
                 mean_errors = (np.mean(mu_errors), np.mean(log_sig_errors), np.mean(kappa_errors))
-                print("[max errors]   (mu, log_sigma, kappa) = (%.4f, %.4f, %.4f)" % max_errors)
-                print("[min errors]   (mu, log_sigma, kappa) = (%.4f, %.4f, %.4f)" % min_errors)
-                print("[mean errors]  (mu, log_sigma, kappa) = (%.4f, %.4f, %.4f)" % mean_errors)
-                print("[step time = %.3f;  N = %d;  step = %d]\n" % (time.time() - t0, self.N, step))
+                logger.debug("[max errors]   (mu, log_sigma, kappa) = (%.4f, %.4f, %.4f)" % max_errors)
+                logger.debug("[min errors]   (mu, log_sigma, kappa) = (%.4f, %.4f, %.4f)" % min_errors)
+                logger.debug("[mean errors]  (mu, log_sigma, kappa) = (%.4f, %.4f, %.4f)" % mean_errors)
+                logger.debug("[step time = %.3f;  N = %d;  step = %d]\n" % (time.time() - t0, self.N, step))
 
         self.assertEqual(0.0, max_errors[0], prec=prec)
         self.assertEqual(0.0, max_errors[1], prec=prec)
@@ -184,7 +186,6 @@ class GaussianPyramidTests(TestCase):
 
     def setUp(self):
         self.mu0 = Variable(torch.Tensor([0.52]))
-        self.verbose = True
 
     def setup_pyramid(self, N):
         # pyramid of normals with known covariances and latent means
@@ -363,7 +364,7 @@ class GaussianPyramidTests(TestCase):
         if self.verbose:
             n_repa_nodes = torch.sum(self.which_nodes_reparam) if not reparameterized \
                 else len(self.q_topo_sort)
-            print((" - - - DO GAUSSIAN %d-LAYERED PYRAMID ELBO TEST " +
+            logger.info((" - - - DO GAUSSIAN %d-LAYERED PYRAMID ELBO TEST " +
                   "(with a total of %d RVs) [reparameterized=%s; %d/%d; perm=%s] - - -") %
                   (self.N, (2 ** self.N) - 1, reparameterized, n_repa_nodes,
                    len(self.q_topo_sort), model_permutation))
@@ -459,7 +460,7 @@ class GaussianPyramidTests(TestCase):
             t0 = time.time()
             svi.step()
 
-            if (step % 5000 == 0 or step == n_steps - 1) and self.verbose:
+            if step % 5000 == 0 or step == n_steps - 1:
                 log_sig_errors = []
                 for node in self.target_lambdas:
                     target_log_sig = -0.5 * torch.log(self.target_lambdas[node])
@@ -474,11 +475,11 @@ class GaussianPyramidTests(TestCase):
                 almost_leftmost_constant_error = param_mse('constant_term_' + leftmost_node[:-1] + 'R',
                                                            self.target_almost_leftmost_constant)
 
-                print("[mean function constant errors (partial)]   %.4f  %.4f" %
-                      (leftmost_constant_error, almost_leftmost_constant_error))
-                print("[min/mean/max log(sigma) errors]   %.4f  %.4f   %.4f" % (min_log_sig_error,
-                      mean_log_sig_error, max_log_sig_error))
-                print("[step time = %.3f;  N = %d;  step = %d]\n" % (time.time() - t0, self.N, step))
+                logger.debug("[mean function constant errors (partial)]   %.4f  %.4f" %
+                             (leftmost_constant_error, almost_leftmost_constant_error))
+                logger.debug("[min/mean/max log(sigma) errors]   %.4f  %.4f   %.4f" %
+                             (min_log_sig_error, mean_log_sig_error, max_log_sig_error))
+                logger.debug("[step time = %.3f;  N = %d;  step = %d]\n" % (time.time() - t0, self.N, step))
 
         self.assertEqual(0.0, max_log_sig_error, prec=prec)
         self.assertEqual(0.0, leftmost_constant_error, prec=prec)

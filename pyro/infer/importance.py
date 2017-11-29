@@ -1,8 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
+import logging
+
 import pyro.poutine as poutine
 
 from .abstract_infer import TracePosterior
+
+logger = logging.getLogger(__name__)
 
 
 class Importance(TracePosterior):
@@ -22,7 +26,7 @@ class Importance(TracePosterior):
         super(Importance, self).__init__()
         if num_samples is None:
             num_samples = 10
-            print("num_samples not provided, defaulting to {}".format(num_samples))
+            logger.warn("num_samples not provided, defaulting to {}".format(num_samples))
         if guide is None:
             # propose from the prior by making a guide from the model by hiding observes
             guide = poutine.block(model, hide_types=["observe"])
