@@ -189,7 +189,7 @@ def apply_stack(initial_msg):
     while i < len(stack):
         assert msg["type"] in ("sample", "param"), \
             "{} is an invalid site type, how did that get there?".format(msg["type"])
-        print("sample {}".format(stack[i]))
+
         msg["value"] = getattr(stack[i], "_pyro_{}".format(msg["type"]))(msg)
 
         if msg["stop"]:
