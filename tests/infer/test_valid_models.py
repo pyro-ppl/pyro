@@ -47,7 +47,7 @@ def assert_warning(model, guide, **kwargs):
         inference.step()
         assert len(w), 'No warnings were raised'
         for warning in w:
-            logger.warn(warning)
+            logger.info(warning)
 
 
 @pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
