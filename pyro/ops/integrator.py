@@ -19,8 +19,8 @@ def velocity_verlet(z, r, potential_fn, step_size, num_steps):
     :param int num_steps: number of discrete time steps over which to integrate.
     :return tuple (z_next, r_next): final position and momenta, having same types as (z, r).
     """
-    z_next = {key: val.clone().data for key, val in z.items()}
-    r_next = {key: val.clone().data for key, val in r.items()}
+    z_next = {key: val.data.clone() for key, val in z.items()}
+    r_next = {key: val.data.clone() for key, val in r.items()}
     grads = _grad(potential_fn, z_next)
 
     for _ in range(num_steps):
@@ -41,6 +41,6 @@ def velocity_verlet(z, r, potential_fn, step_size, num_steps):
 def _grad(potential_fn, z):
     z = {k: Variable(v, requires_grad=True) for k, v in z.items()}
     z_keys, z_nodes = zip(*z.items())
-    grads = grad(potential_fn(z), z_nodes, create_graph=True)
+    grads = grad(potential_fn(z), z_nodes)
     grads = [v.data for v in grads]
     return dict(zip(z_keys, grads))
