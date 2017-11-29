@@ -107,8 +107,8 @@ def test_elbo_mapdata(batch_size, map_type):
                 pyro.param("log_sig_q"),
                 2.0))
 
-        if verbose and k % 500 == 0:
-            print("errors", mu_error.data.cpu().numpy()[0], log_sig_error.data.cpu().numpy()[0])
+        if k % 500 == 0:
+            logger.debug("errors", mu_error.data.cpu().numpy()[0], log_sig_error.data.cpu().numpy()[0])
 
     assert_equal(Variable(torch.zeros(1)), mu_error, prec=0.05)
     assert_equal(Variable(torch.zeros(1)), log_sig_error, prec=0.06)

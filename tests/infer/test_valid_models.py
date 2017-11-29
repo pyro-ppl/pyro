@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import logging
 import warnings
 
 import pytest
@@ -10,6 +11,8 @@ import pyro
 import pyro.distributions as dist
 from pyro.infer import SVI
 from pyro.optim import Adam
+
+logger = logging.getLogger(__name__)
 
 # This file tests a variety of model,guide pairs with valid and invalid structure.
 
@@ -44,7 +47,7 @@ def assert_warning(model, guide, **kwargs):
         inference.step()
         assert len(w), 'No warnings were raised'
         for warning in w:
-            print(warning)
+            logger.warn(warning)
 
 
 @pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])

@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import logging
+
 import numpy as np
 import pytest
 import torch
@@ -12,6 +14,8 @@ from pyro.infer import SVI
 from pyro.optim import Adam
 from pyro.util import ng_ones, ng_zeros
 from tests.common import assert_equal
+
+logger = logging.getLogger(__name__)
 
 
 @pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
@@ -48,6 +52,6 @@ def test_subsample_gradient(trace_graph, reparameterized, subsample):
 
     expected_grads = {'mu': np.array([0.5, -2.0]), 'sigma': np.array([2.0])}
     for name in sorted(params):
-        print('\nexpected {} = {}'.format(name, expected_grads[name]))
-        print('actual   {} = {}'.format(name, actual_grads[name]))
+        logger.info('\nexpected {} = {}'.format(name, expected_grads[name]))
+        logger.info('actual   {} = {}'.format(name, actual_grads[name]))
     assert_equal(actual_grads, expected_grads, prec=precision)

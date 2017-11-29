@@ -339,8 +339,8 @@ class PoissonGammaTests(TestCase):
             svi.step()
             alpha_error = param_abs_error("alpha_q_log", self.log_alpha_n)
             beta_error = param_abs_error("beta_q_log", self.log_beta_n)
-            if k % 500 == 0 and self.verbose:
-                print("alpha_q_log_error, beta_q_log_error: %.4f, %.4f" % (alpha_error, beta_error))
+            if k % 500 == 0:
+                logger.debug("alpha_q_log_error, beta_q_log_error: %.4f, %.4f" % (alpha_error, beta_error))
 
         self.assertEqual(0.0, alpha_error, prec=0.08)
         self.assertEqual(0.0, beta_error, prec=0.08)

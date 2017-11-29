@@ -96,19 +96,18 @@ class GaussianChainTests(TestCase):
         self.do_elbo_test(False, 5000, 0.001, 0.05, difficulty=0.6)
 
     def do_elbo_test(self, reparameterized, n_steps, lr, prec, difficulty=1.0):
-        if self.verbose:
-            n_repa_nodes = torch.sum(self.which_nodes_reparam) if not reparameterized else self.N
-            print(" - - - - - DO GAUSSIAN %d-CHAIN ELBO TEST  [reparameterized = %s; %d/%d] - - - - - " %
-                  (self.N, reparameterized, n_repa_nodes, self.N))
-            if self.N < 0:
-                def array_to_string(y):
-                    return str(map(lambda x: "%.3f" % x.data.cpu().numpy()[0], y))
+        n_repa_nodes = torch.sum(self.which_nodes_reparam) if not reparameterized else self.N
+        logger.info(" - - - - - DO GAUSSIAN %d-CHAIN ELBO TEST  [reparameterized = %s; %d/%d] - - - - - " %
+              (self.N, reparameterized, n_repa_nodes, self.N))
+        if self.N < 0:
+            def array_to_string(y):
+                return str(map(lambda x: "%.3f" % x.data.cpu().numpy()[0], y))
 
-            logger.debug("lambdas: " + array_to_string(self.lambdas))
-            logger.debug("target_mus: " + array_to_string(self.target_mus[1:]))
-            logger.debug("target_kappas: " + array_to_string(self.target_kappas[1:]))
-            logger.debug("lambda_posts: " + array_to_string(self.lambda_posts[1:]))
-            logger.debug("lambda_tilde_posts: " + array_to_string(self.lambda_tilde_posts))
+        logger.debug("lambdas: " + array_to_string(self.lambdas))
+        logger.debug("target_mus: " + array_to_string(self.target_mus[1:]))
+        logger.debug("target_kappas: " + array_to_string(self.target_kappas[1:]))
+        logger.debug("lambda_posts: " + array_to_string(self.lambda_posts[1:]))
+        logger.debug("lambda_tilde_posts: " + array_to_string(self.lambda_tilde_posts))
         pyro.clear_param_store()
 
         def model(*args, **kwargs):
@@ -361,13 +360,12 @@ class GaussianPyramidTests(TestCase):
 
     def do_elbo_test(self, reparameterized, n_steps, lr, prec, beta1,
                      difficulty=1.0, model_permutation=False):
-        if self.verbose:
-            n_repa_nodes = torch.sum(self.which_nodes_reparam) if not reparameterized \
-                else len(self.q_topo_sort)
-            logger.info((" - - - DO GAUSSIAN %d-LAYERED PYRAMID ELBO TEST " +
-                  "(with a total of %d RVs) [reparameterized=%s; %d/%d; perm=%s] - - -") %
-                  (self.N, (2 ** self.N) - 1, reparameterized, n_repa_nodes,
-                   len(self.q_topo_sort), model_permutation))
+        n_repa_nodes = torch.sum(self.which_nodes_reparam) if not reparameterized \
+            else len(self.q_topo_sort)
+        logger.info((" - - - DO GAUSSIAN %d-LAYERED PYRAMID ELBO TEST " +
+              "(with a total of %d RVs) [reparameterized=%s; %d/%d; perm=%s] - - -") %
+              (self.N, (2 ** self.N) - 1, reparameterized, n_repa_nodes,
+               len(self.q_topo_sort), model_permutation))
         pyro.clear_param_store()
 
         def model(*args, **kwargs):
