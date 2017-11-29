@@ -1,8 +1,8 @@
 import torch
 import signal
-from os import pipe, fork, fdopen, set_inheritable, _exit, close, kill, getpid
-import torch.multiprocessing as mp
-from multiprocessing import Queue
+from os import fork, _exit, kill, getpid
+# import torch.multiprocessing as mp
+# from multiprocessing import Queue
 from cloudpickle import loads, dumps
 
 import pyro
@@ -44,11 +44,11 @@ def _swap_stack(frame, new_stack):
     pyro._PYRO_STACK.extend(new_stack)
 
 
-class SnapshotPoutine(poutine.TracePoutine):
+class NightmarePoutine(poutine.TracePoutine):
 
     def __init__(self, *args, **kwargs):
         self.is_child = False
-        super(SnapshotPoutine, self).__init__(*args, **kwargs)
+        super(NightmarePoutine, self).__init__(*args, **kwargs)
 
     def _pyro_sample(self, msg):
 
@@ -99,7 +99,7 @@ class SnapshotPoutine(poutine.TracePoutine):
 
         # return self._pyro_sample(msg)
         # print(msg)
-        return super(SnapshotPoutine, self)._pyro_sample(msg)
+        return super(NightmarePoutine, self)._pyro_sample(msg)
 
     def __exit__(self, *args, **kwargs):
 
@@ -107,7 +107,7 @@ class SnapshotPoutine(poutine.TracePoutine):
         cur_stack = list(pyro._PYRO_STACK)
 
         # parent and child unwind (add _RETURN statement)
-        # super(SnapshotPoutine, self).__exit__(*args, **kwargs)
+        # super(NightmarePoutine, self).__exit__(*args, **kwargs)
 
         # if child:
         # ran until exit
@@ -117,7 +117,7 @@ class SnapshotPoutine(poutine.TracePoutine):
 
             # parent and child unwind (add _RETURN statement)
             # self.frame_replace.__exit__(*args, **kwargs)
-            # super(SnapshotPoutine, self).__exit__(*args, **kwargs)
+            # super(NightmarePoutine, self).__exit__(*args, **kwargs)
             cur_stack[0].ret_value = self.ret_value
             cur_stack[0].__exit__(*args, **kwargs)
 
@@ -146,24 +146,23 @@ class SnapshotPoutine(poutine.TracePoutine):
             _exit(0)
         else:
             # parent and child unwind (add _RETURN statement)
-            super(SnapshotPoutine, self).__exit__(*args, **kwargs)
-
+            super(NightmarePoutine, self).__exit__(*args, **kwargs)
 
     def _init_trace(self, *args, **kwargs):
         print(" Snap Init trace")
-        r_val = super(SnapshotPoutine, self)._init_trace(*args, **kwargs)
+        r_val = super(NightmarePoutine, self)._init_trace(*args, **kwargs)
         # self.trace.graph["queue"] = Queue()
         return r_val
 
 
-class ResumePoutine(SnapshotPoutine):
+class DoubleNightmarePoutine(NightmarePoutine):
 
     def __init__(self, fn, trace, site):
         self.site = site
         self.trace = trace
 
         self.pid = getpid()
-        super(ResumePoutine, self).__init__(fn)
+        super(DoubleNightmarePoutine, self).__init__(fn)
 
     def _init_trace(self, *args, **kwargs):
         print(" Resume Init trace, remove to be sampled")
@@ -180,7 +179,7 @@ class ResumePoutine(SnapshotPoutine):
 
     def __enter__(self, *args, **kwargs):
         # make sure we install self on the stack
-        super(ResumePoutine, self).__enter__(*args, **kwargs)
+        super(DoubleNightmarePoutine, self).__enter__(*args, **kwargs)
 
         def _handle_cont(*args):
             pass
@@ -193,7 +192,6 @@ class ResumePoutine(SnapshotPoutine):
         # send signal to resume
         frame_loc = pyro._PYRO_STACK.index(self)
 
-        orig_trace = self.trace
         self.trace = self._post_site_trace()
         stack_obj = {'pid': getpid(), 'stack': pyro._PYRO_STACK[frame_loc:]}
 
@@ -236,7 +234,7 @@ class ResumePoutine(SnapshotPoutine):
     def __exit__(self, *args, **kwargs):
         if "_RETURN" in self.trace:
             self.trace.remove_node("_RETURN")
-        super(ResumePoutine, self).__exit__(*args, **kwargs)
+        super(DoubleNightmarePoutine, self).__exit__(*args, **kwargs)
 
 
 def main():
@@ -250,15 +248,16 @@ def main():
 
     return c
 
+
 if __name__ == "__main__":
 
     # get our trace, with snapshots at each sample statement
-    trace = SnapshotPoutine(main).get_trace()
+    trace = NightmarePoutine(main).get_trace()
 
     print(trace.graph)
 
     # resume from site b, continuing till end
-    res_pt = ResumePoutine(main, trace, "b")
+    res_pt = DoubleNightmarePoutine(main, trace, "b")
 
     # we want to resume twice from the same point
     print("Resuming twice from original trace at site b")
