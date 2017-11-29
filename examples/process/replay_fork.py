@@ -184,9 +184,14 @@ class NightmarePoutine(poutine.TracePoutine):
         post_site = self.trace.copy()
         site_loc = list(post_site.nodes()).index(self.site)
         # remove all post-site traces
-        # post_site.remove_node("_RETURN")
-        post_site.remove_nodes_from([n for n_ix, n in enumerate(post_site.nodes())
-                                     if n_ix >= site_loc])
+        nodes_to_remove = [self.site]
+        for i, node in enumerate(post_site.nodes()):
+            if i > site_loc:
+                nodes_to_remove.append(node)
+                if post_site.nodes[node]["type"] == "sample":
+                    kill(post_site.nodes[node]["pid"], signal.SIGTERM)
+
+        post_site.remove_nodes_from(nodes_to_remove)
 
         return post_site
 
@@ -379,8 +384,8 @@ if __name__ == "__main__":
     print("Expecting value b/c to be different")
 
     def pt(tr):
-        return "{}".format(list(map(lambda x: (x[0], x[1].data[0] if x[1] is not None else ''),
-                                    tr.nodes(data='value'))))
+        return "{}".format(list(map(lambda x: (x[0], x[1] if x[1] is not None else ''),
+                                    tr.nodes(data='pid'))))
 
     print("Original trace {}".format(pt(trace)))
     print("New trace_1 {}".format(pt(post_trace_1)))
