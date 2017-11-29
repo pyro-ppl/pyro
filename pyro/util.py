@@ -392,3 +392,22 @@ def deep_getattr(obj, name):
     Throws an AttributeError if bad attribute
     """
     return functools.reduce(getattr, name.split("."), obj)
+
+
+def hessians(ys, xs):
+    """
+    :param ys: A sequence of Variables whose sum is used as output
+    :param xs: A sequence of Variables to be obtained Hessians
+    :returns: A tuple of Hessian matrices (2D Tensors)
+
+    Get Hessians of sum of `ys` (output) with respect to each `x` in `xs`. Note that
+    each `x` should be a 1D tensor.
+    """
+    y = ys.sum()
+    for x in xs:
+        assert x.dim() == 1
+    y_xs = torch.autograd.grad(y, xs, create_graph=True)
+    hs = tuple(torch.stack([torch.autograd.grad(y_x[i], x, retain_graph=True)[0].data
+                            for i in range(x.size(0))])
+               for x, y_x in zip(xs, y_xs))
+    return hs

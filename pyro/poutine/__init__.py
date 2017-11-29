@@ -10,6 +10,7 @@ from .condition_poutine import ConditionPoutine
 from .escape_poutine import EscapePoutine
 from .indep_poutine import IndepPoutine  # noqa: F401
 from .lift_poutine import LiftPoutine
+from .lower_poutine import LowerPoutine
 from .poutine import _PYRO_STACK, Poutine  # noqa: F401
 from .replay_poutine import ReplayPoutine
 from .scale_poutine import ScalePoutine
@@ -68,6 +69,18 @@ def lift(fn, prior):
     Prior should be a callable or a dict of names to callables.
     """
     return LiftPoutine(fn, prior)
+
+
+def lower(fn):
+    """
+    :param fn: function whose sample sites will be lowered to params
+    :returns: stochastic function wrapped in LowerPoutine
+
+    Given a stochastic function with sample calls from a prior, creates a
+    stochastic function where each sample site is replaced by a param site
+    (denoting the parameter) plus an observe site (denoting the prior).
+    """
+    return LowerPoutine(fn)
 
 
 def block(fn, hide=None, expose=None, hide_types=None, expose_types=None):

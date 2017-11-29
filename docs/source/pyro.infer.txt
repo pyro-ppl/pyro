@@ -30,3 +30,11 @@ Search
     :undoc-members:
     :show-inheritance:
 
+
+MAP
+---
+
+.. automodule:: pyro.infer.map
+    :members:
+    :undoc-members:
+    :show-inheritance:

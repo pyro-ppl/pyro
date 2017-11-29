@@ -134,6 +134,8 @@ class Trace_ELBO(object):
         Performs backward on the latter. Num_particle many samples are used to form the estimators.
         """
         elbo = 0.0
+        callback = kwargs.pop("callback", None)
+        cb_returns = []
         # grab a trace from the generator
         for weight, model_trace, guide_trace, log_r in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = weight * 0
@@ -177,9 +179,17 @@ class Trace_ELBO(object):
 
             if trainable_params:
                 surrogate_loss_particle = -surrogate_elbo_particle
-                torch_backward(surrogate_loss_particle)
+                cb_return = torch_backward(surrogate_loss_particle, callback)
+                if cb_return is not None:
+                    cb_returns.append(cb_return)
                 pyro.get_param_store().mark_params_active(trainable_params)
 
+        if cb_returns != []:
+            cb_return = list(cb_returns[0])
+            for i in range(1, len(cb_returns)):
+                for j in range(len(cb_returns[0])):
+                    cb_return[j] += cb_returns[i][j]
+            return cb_return
         loss = -elbo
         if np.isnan(loss):
             warnings.warn('Encountered NAN loss')

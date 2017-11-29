@@ -370,6 +370,30 @@ class LiftPoutineTests(TestCase):
                                 not lifted_tr.nodes[key_name]["is_observed"])
 
 
+def test_lower_poutine():
+    pyro.clear_param_store()
+    store = pyro.get_param_store()
+
+    def model():
+        mu = pyro.param("mu", Variable(torch.ones(1), requires_grad=True))
+        x = pyro.sample("x", dist.normal, mu, ng_ones(1))
+        pyro.observe("y", dist.normal, x, ng_ones(1), ng_ones(1))
+
+    # Check behavior on two iterations, one before and one after param exists.
+    for step in range(2):
+        print(step)
+        tr = poutine.trace(poutine.lower(model)).get_trace()
+        assert "mu" in tr.nodes
+        assert tr.nodes["mu"]["type"] == "param"
+        assert tr.nodes["mu"]["value"] is store.get_param("mu")
+        assert "x" in tr.nodes
+        assert tr.nodes["x"]["type"] == "param"
+        assert tr.nodes["x"]["value"] is store.get_param("x")
+        assert "prior.x" in tr.nodes
+        assert tr.nodes["prior.x"]["type"] == "sample"
+        assert tr.nodes["prior.x"]["is_observed"]
+
+
 class QueuePoutineMixedTest(TestCase):
 
     def setUp(self):

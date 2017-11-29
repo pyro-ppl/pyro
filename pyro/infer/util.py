@@ -25,10 +25,12 @@ def torch_sum(x):
     return x.sum()
 
 
-def torch_backward(x):
+def torch_backward(x, callback=None):
     """
     Like ``x.backward()`` for a ``torch.autograd.Variable``, but also accepts
     numbers (a no-op if given a number).
     """
+    if callback is not None:
+        return callback[0](x, *callback[1:])
     if isinstance(x, torch.autograd.Variable):
         x.backward()

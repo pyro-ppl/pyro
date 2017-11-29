@@ -10,7 +10,7 @@ class SVI(object):
     """
     :param model: the model (callable containing Pyro primitives)
     :param guide: the guide (callable containing Pyro primitives)
-    :param optim: a wrapper a for a PyTorch optimizer
+    :param optim: a wrapper for a PyTorch optimizer
     :type optim: pyro.optim.PyroOptim
     :param loss: this is either a string that specifies the loss function to be used (currently
         the only supported built-in loss is 'ELBO') or a user-provided loss function;
