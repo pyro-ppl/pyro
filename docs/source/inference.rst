@@ -10,4 +10,10 @@ Look here for more inference algorithms in future versions of Pyro.
 
 See `Intro II <http://pyro.ai/examples/intro_part_ii.html>`_ for a discussion of inference in Pyro.
 
-.. include:: pyro.infer.txt
+.. toctree::
+   :glob:
+   :maxdepth: 2
+   :caption: Contents:
+
+   inference_algos
+   mcmc

@@ -1,0 +1,1 @@
+.. include:: pyro.infer.txt
