@@ -40,26 +40,26 @@ jobs:
               - make docs
         - python: 2.7
           env: STAGE=unit
-          script: pytest -vs --cov=pyro --stage unit
+          script: pytest -vs --cov=pyro --stage unit --durations 20
         - python: 2.7
           env: STAGE=examples
           script: pytest -vs --cov=pyro --stage test_examples
         - python: 3.5
           env: STAGE=unit
-          script: pytest -vs --cov=pyro --stage unit
+          script: pytest -vs --cov=pyro --stage unit --durations 20
         - python: 3.5
           env: STAGE=examples
           script: pytest -vs --cov=pyro --stage test_examples
         - stage: integration test
           python: 2.7
           env: STAGE=integration_batch_1
-          script: pytest -vs --cov=pyro --stage integration_batch_1
+          script: pytest -vs --cov=pyro --stage integration_batch_1 --durations 10
         - python: 2.7
           env: STAGE=integration_batch_2
-          script: pytest -vs --cov=pyro --stage integration_batch_2
+          script: pytest -vs --cov=pyro --stage integration_batch_2 --durations 10
         - python: 3.5
           env: STAGE=integration_batch_1
-          script: pytest -vs --cov=pyro --stage integration_batch_1
+          script: pytest -vs --cov=pyro --stage integration_batch_1 --durations 10
         - python: 3.5
           env: STAGE=integration_batch_2
-          script: pytest -vs --cov=pyro --stage integration_batch_2
+          script: pytest -vs --cov=pyro --stage integration_batch_2 --durations 10
