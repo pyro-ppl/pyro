@@ -157,6 +157,7 @@ class TestFixedModelGuide(TestCase):
         assert self.do_test_fixedness(fixed_tags=["bogus_tag"])
 
 
+@pytest.mark.stage("integration", "integration_batch_2")
 class PoissonGammaTests(TestCase):
     def setUp(self):
         # poisson-gamma model
@@ -322,6 +323,7 @@ class LogNormalNormalGuide(nn.Module):
         self.tau_q_log = Parameter(tau_q_log_init)
 
 
+@pytest.mark.stage("integration", "integration_batch_2")
 class LogNormalNormalTests(TestCase):
     def setUp(self):
         # lognormal-normal model
