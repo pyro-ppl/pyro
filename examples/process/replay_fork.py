@@ -13,26 +13,21 @@ import pyro.distributions as dist
 from numpy.random import seed, randint
 from functools import partial
 from redis import StrictRedis
-from multiprocessing import Pipe
-
-# queue = Manager().queue()
-# Queue()
+import os
 
 
-class R():
-    def __init__(self, db=0, *args, **kwargs):
-        self.r = StrictRedis(host='localhost', db=db, port=6379, *args, **kwargs)
-        # pass
+def ipc_get(pid, db=0):
+    r = StrictRedis(host='localhost', db=db)
+    val = r.get(pid)
+    r.delete(pid)
+    r.connection_pool.disconnect()
+    return val
 
-    def put(self, val):
-        self.r.set("key", val)
-        # queue.put(val)
-        # pass
 
-    def get(self):
-        # return queue.get(0)
-        # pass
-        return self.r.get("key")
+def ipc_put(pid, val, db=0):
+    r = StrictRedis(host='localhost', db=db)
+    r.set(pid, val)
+    r.connection_pool.disconnect()
 
 
 def _swap_stack(frame, new_stack):
@@ -78,7 +73,7 @@ def _fork_and_wake(msg, parent_fct, child_fct):
 
     # snapshot
     print("forking at {}: {}".format(msg["name"], getpid()))
-    parent_pipe, child_pipe = Pipe()
+
     pid = fork()
     if pid:  # parent
         return parent_fct(msg, pid)
@@ -91,7 +86,8 @@ def _fork_and_wake(msg, parent_fct, child_fct):
         signal.signal(signal.SIGINT, signal.default_int_handler)
 
         # read from queue
-        pt_ctx = loads(R().get())
+        pt_ctx = loads(ipc_get(getpid()))
+        # pt_ctx = loads(R().get())
 
         # wake up and then call the child fct with the object we received
         return child_fct(msg, getpid(), pt_ctx)
@@ -108,6 +104,11 @@ class NightmarePoutine(poutine.TracePoutine):
         super(NightmarePoutine, self).__init__(fn, *args, **kwargs)
 
     def _parent_sample(self, sample, msg, pid, *args, **kwargs):
+
+        if "pid" in msg:
+            # kill the old pid
+            kill(msg["pid"], signal.SIGINT)
+
         msg["pid"] = pid
 
         # what do parents do? normal behavior
@@ -169,7 +170,8 @@ class NightmarePoutine(poutine.TracePoutine):
 
             # send back the stack
             # self.trace.graph["queue"].put(dumps(stack_obj))
-            R().put(dumps(stack_obj))
+            # R().put(dumps(stack_obj))
+            ipc_put(self.pid, dumps(stack_obj))
 
             def _handle_cont():
                 pass
@@ -230,7 +232,8 @@ class NightmarePoutine(poutine.TracePoutine):
             stack_obj = {'pid': getpid(), 'stack': pyro._PYRO_STACK[frame_loc:]}
 
             # send our stack across the queue
-            R().put(dumps(stack_obj))
+            # R().put(dumps(stack_obj))
+            ipc_put(pid, dumps(stack_obj))
             # self.trace = orig_trace
             # self.trace.graph["queue"].put(dumps(stack_obj))
 
@@ -247,7 +250,8 @@ class NightmarePoutine(poutine.TracePoutine):
             print("PARENT AWAKE {} is child? {}".format(getpid(), self.is_child))
 
             # get the stack
-            pt_ctx = loads(R().get())
+            # pt_ctx = loads(R().get())
+            pt_ctx = loads(ipc_get(getpid()))
 
             # use response to swap stack
             print("MASTER STACK MERGE")
@@ -279,6 +283,16 @@ def main():
     return c
 
 
+def kill_trace(tr):
+    for site_name, site in tr.nodes(data=True):
+        if 'pid' in site:
+            print("Killing {} at {}".format(site['pid'], site_name))
+            try:
+                kill(site['pid'], signal.SIGINT)
+            except ProcessLookupError:
+                pass
+
+
 if __name__ == "__main__":
 
     # get our trace, with snapshots at each sample statement
@@ -292,32 +306,40 @@ if __name__ == "__main__":
                                     tr.nodes(data='value'))))
 
 
-    proposal_trace = poutine.trace(main).get_trace()
-    proposal_trace.node["b"]['value'] = pyro.sample("b", dist.normal, ng_zeros(1), ng_ones(1))
+    # proposal_trace = poutine.trace(main).get_trace()
+    # proposal_trace.node["b"]['value'] = pyro.sample("b", dist.normal, ng_zeros(1), ng_ones(1))
 
     # resume from site b, continuing till end
-    res_pt = poutine.trace(poutine.replay(NightmarePoutine(main, trace, "b"), proposal_trace))
+    res_pt = NightmarePoutine(main, trace, "b")  # , proposal_trace)
 
     # we want to resume twice from the same point
     print("Resuming twice from original trace at site b")
     # post_trace_1 = poutine.trace(res_pt).get_trace()
     print("\n\nSTART RESUME TRACE 1")
-    post_trace_1 = res_pt.get_trace()
+    post_trace_1 = (res_pt).get_trace()
     print("FINISHED RESUME TRACE 1\n\n")
     res_pt.site = "a"
-    # post_trace_2 = poutine.trace(res_pt).get_trace()
+    # post_trace_2 = (res_pt).get_trace()
     print("\n\nSTART RESUME TRACE 2")
-    post_trace_2 = res_pt.get_trace()
+    post_trace_2 = (res_pt).get_trace()
     print("FINISHED RESUME TRACE 2\n\n")
     res_pt.site = "c"
-    post_trace_3 = res_pt.get_trace()
+    post_trace_3 = (res_pt).get_trace()
     print("Expecting value b/c to be different")
 
     print("Original trace {}".format(pt(trace)))
-    print("Proposal trace {}".format(pt(proposal_trace)))
+    # print("Proposal trace {}".format(pt(proposal_trace)))
     print("New trace_1 {}".format(pt(post_trace_1)))
     print("New trace_2 {}".format(pt(post_trace_2)))
     print("New trace_3 {}".format(pt(post_trace_3)))
 
+    print("Terminating trace_1 {}")
+    kill_trace(post_trace_1)
+    print("Terminating trace_2 {}")
+    kill_trace(post_trace_2)
+    print("Terminating trace_3 {}")
+    kill_trace(post_trace_3)
+    kill_trace(trace)
+    print("FINISHED!")
 
 
