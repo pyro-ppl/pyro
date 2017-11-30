@@ -117,6 +117,7 @@ class TracePoutine(Poutine):
             graph_type = "flat"
         assert graph_type in ("flat", "dense")
         self.graph_type = graph_type
+        self.ret_value = None
         super(TracePoutine, self).__init__(fn)
 
     def __exit__(self, *args, **kwargs):
@@ -220,3 +221,9 @@ class TracePoutine(Poutine):
         site.update(value=val)
         self.trace.add_node(msg["name"], **site)
         return val
+
+    def update(self, poutine_frame):
+        if hasattr(poutine_frame, 'trace'):
+            self.trace = poutine_frame.trace
+        self.ret_value = poutine_frame.ret_value
+        self.graph_type = poutine_frame.graph_type

@@ -211,3 +211,12 @@ class Poutine(object):
         # to prevent it from being queried again.
         msg["done"] = True
         return ret
+
+    def update(self, poutine_frame):
+        """
+        Updates class variables from another frame of the same type.
+        Used for pyro stack swap and merge operations.
+
+        By default, does nothing, but overridden in derived classes.
+        """
+        pass

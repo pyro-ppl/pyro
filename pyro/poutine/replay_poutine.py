@@ -84,3 +84,7 @@ class ReplayPoutine(Poutine):
         # case 2: dict, negative: sample from model
         else:
             return super(ReplayPoutine, self)._pyro_sample(msg)
+
+    def update(self, poutine_frame):
+        self.guide_trace = poutine_frame.guide_trace
+        self.sites = poutine_frame.sites
