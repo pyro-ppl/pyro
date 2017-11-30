@@ -13,7 +13,6 @@ import pyro.distributions as dist
 from numpy.random import seed, randint
 from functools import partial
 from redis import StrictRedis
-import os
 
 
 def ipc_get(pid, db=0):
@@ -289,7 +288,7 @@ def kill_trace(tr):
             print("Killing {} at {}".format(site['pid'], site_name))
             try:
                 kill(site['pid'], signal.SIGINT)
-            except ProcessLookupError:
+            except ProcessLookupError:  # noqa: F821
                 pass
 
 
@@ -304,7 +303,6 @@ if __name__ == "__main__":
     def pt(tr):
         return "{}".format(list(map(lambda x: (x[0], x[1].data[0] if x[1] is not None else ''),
                                     tr.nodes(data='value'))))
-
 
     # proposal_trace = poutine.trace(main).get_trace()
     # proposal_trace.node["b"]['value'] = pyro.sample("b", dist.normal, ng_zeros(1), ng_ones(1))
