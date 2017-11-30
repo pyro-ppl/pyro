@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import logging
+
 import pytest
 import torch
 from torch.autograd import Variable
@@ -10,6 +12,8 @@ import pyro.optim as optim
 import pyro.poutine as poutine
 from pyro.infer import SVI
 from tests.common import assert_equal, requires_cuda
+
+logger = logging.getLogger(__name__)
 
 
 @pytest.mark.stage("integration", "integration_batch_1")
@@ -43,12 +47,9 @@ def test_elbo_mapdata(batch_size, map_type):
     analytic_log_sig_n = -0.5 * torch.log(analytic_lam_n)
     analytic_mu_n = sum_data * (lam / analytic_lam_n) +\
         mu0 * (lam0 / analytic_lam_n)
-    verbose = True
     n_steps = 7000
 
-    if verbose:
-        print("DOING ELBO TEST [bs = {}, map_type = {}]".format(
-            batch_size, map_type))
+    logger.debug("DOING ELBO TEST [bs = {}, map_type = {}]".format(batch_size, map_type))
     pyro.clear_param_store()
 
     def model():
@@ -106,8 +107,8 @@ def test_elbo_mapdata(batch_size, map_type):
                 pyro.param("log_sig_q"),
                 2.0))
 
-        if verbose and k % 500 == 0:
-            print("errors", mu_error.data.cpu().numpy()[0], log_sig_error.data.cpu().numpy()[0])
+        if k % 500 == 0:
+            logger.debug("errors - {}, {}".format(mu_error.data.cpu().numpy()[0], log_sig_error.data.cpu().numpy()[0]))
 
     assert_equal(Variable(torch.zeros(1)), mu_error, prec=0.05)
     assert_equal(Variable(torch.zeros(1)), log_sig_error, prec=0.06)

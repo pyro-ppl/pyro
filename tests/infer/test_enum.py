@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import itertools
+import logging
 import math
 
 import pytest
@@ -15,6 +16,8 @@ from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.trace_elbo import Trace_ELBO
 from pyro.infer.tracegraph_elbo import TraceGraph_ELBO
 from tests.common import assert_equal, xfail_if_not_implemented
+
+logger = logging.getLogger(__name__)
 
 
 @pytest.mark.parametrize("graph_type", ["flat", "dense"])
@@ -65,8 +68,7 @@ def test_iter_discrete_traces_vector(graph_type):
     for scale, trace in traces:
         x = trace.nodes["x"]["value"].data.squeeze().long()[0]
         y = trace.nodes["y"]["value"].data.squeeze().long()[0]
-        expected_scale = torch.exp(dist.Bernoulli(p).log_pdf(x) *
-                                   dist.Categorical(ps).log_pdf(y))
+        expected_scale = torch.exp(dist.Bernoulli(p).log_pdf(x) * dist.Categorical(ps).log_pdf(y))
         expected_scale = expected_scale.data.view(-1)[0]
         assert_equal(scale, expected_scale)
 
@@ -103,7 +105,7 @@ def gmm_model(data, verbose=False):
         assert z.size() == (1,)
         z = z.long().data[0]
         if verbose:
-            print("M{} z_{} = {}".format("  " * i, i, z))
+            logger.debug("M{} z_{} = {}".format("  " * i, i, z))
         pyro.observe("x_{}".format(i), dist.Normal(mus[z], sigma), data[i])
 
 
@@ -114,7 +116,7 @@ def gmm_guide(data, verbose=False):
         assert z.size() == (1,)
         z = z.long().data[0]
         if verbose:
-            print("G{} z_{} = {}".format("  " * i, i, z))
+            logger.debug("G{} z_{} = {}".format("  " * i, i, z))
 
 
 @pytest.mark.parametrize("data_size", [1, 2, 3])
@@ -125,7 +127,7 @@ def test_gmm_iter_discrete_traces(model, data_size, graph_type):
     data = Variable(torch.arange(0, data_size))
     traces = list(iter_discrete_traces(graph_type, model, data=data, verbose=True))
     # This non-vectorized version is exponential in data_size:
-    assert len(traces) == 2 ** data_size
+    assert len(traces) == 2**data_size
 
 
 # A Gaussian mixture model, with vectorized batching.
@@ -213,7 +215,7 @@ def test_bern_elbo_gradient(enum_discrete, trace_graph):
         p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
         pyro.sample("z", dist.Bernoulli(p))
 
-    print("Computing gradients using surrogate loss")
+    logger.info("Computing gradients using surrogate loss")
     Elbo = TraceGraph_ELBO if trace_graph else Trace_ELBO
     elbo = Elbo(enum_discrete=enum_discrete,
                 num_particles=(1 if enum_discrete else num_particles))
@@ -223,12 +225,12 @@ def test_bern_elbo_gradient(enum_discrete, trace_graph):
     assert params, "no params found"
     actual_grads = {name: pyro.param(name).grad.clone() for name in params}
 
-    print("Computing gradients using finite difference")
+    logger.info("Computing gradients using finite difference")
     elbo = Trace_ELBO(num_particles=num_particles)
     expected_grads = finite_difference(lambda: elbo.loss(model, guide), delta=0.2)
 
     for name in params:
-        print("\n".join([
+        logger.info("\n".join([
             "{} {}".format(name, "-" * 30),
             "expected = {}".format(expected_grads[name].data.cpu().numpy()),
             "  actual = {}".format(actual_grads[name].data.cpu().numpy()),
@@ -251,7 +253,7 @@ def test_gmm_elbo_gradient(model, guide, enum_discrete, trace_graph):
     num_particles = 4000
     data = Variable(torch.Tensor([-1, 1]))
 
-    print("Computing gradients using surrogate loss")
+    logger.info("Computing gradients using surrogate loss")
     Elbo = TraceGraph_ELBO if trace_graph else Trace_ELBO
     elbo = Elbo(enum_discrete=enum_discrete,
                 num_particles=(1 if enum_discrete else num_particles))
@@ -261,12 +263,12 @@ def test_gmm_elbo_gradient(model, guide, enum_discrete, trace_graph):
     assert params, "no params found"
     actual_grads = {name: pyro.param(name).grad.clone() for name in params}
 
-    print("Computing gradients using finite difference")
+    logger.info("Computing gradients using finite difference")
     elbo = Trace_ELBO(num_particles=num_particles)
     expected_grads = finite_difference(lambda: elbo.loss(model, guide, data))
 
     for name in params:
-        print("\n".join([
+        logger.info("\n".join([
             "{} {}".format(name, "-" * 30),
             "expected = {}".format(expected_grads[name].data.cpu().numpy()),
             "  actual = {}".format(actual_grads[name].data.cpu().numpy()),

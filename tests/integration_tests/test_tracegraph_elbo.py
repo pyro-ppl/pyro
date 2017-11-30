@@ -7,6 +7,7 @@ from torch import nn as nn
 from torch.autograd import Variable
 from torch.nn import Parameter
 
+import logging
 import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
@@ -17,6 +18,7 @@ from tests.common import TestCase
 from tests.distributions.test_transformed_distribution import AffineExp
 
 pytestmark = pytest.mark.stage("integration", "integration_batch_2")
+logger = logging.getLogger(__name__)
 
 
 def param_mse(name, target):
@@ -48,7 +50,6 @@ class NormalNormalTests(TestCase):
         self.analytic_log_sig_n = -0.5 * torch.log(self.analytic_lam_n)
         self.analytic_mu_n = self.sum_data * (self.lam / self.analytic_lam_n) +\
             self.mu0 * (self.lam0 / self.analytic_lam_n)
-        self.verbose = True
 
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 1000)
@@ -58,8 +59,7 @@ class NormalNormalTests(TestCase):
         self.do_elbo_test(False, 5000)
 
     def do_elbo_test(self, reparameterized, n_steps):
-        if self.verbose:
-            print(" - - - - - DO NORMALNORMAL ELBO TEST  [reparameterized = %s] - - - - - " % reparameterized)
+        logger.info(" - - - - - DO NORMALNORMAL ELBO TEST  [reparameterized = %s] - - - - - " % reparameterized)
         pyro.clear_param_store()
 
         def model():
@@ -91,8 +91,8 @@ class NormalNormalTests(TestCase):
 
             mu_error = param_mse("mu_q", self.analytic_mu_n)
             log_sig_error = param_mse("log_sig_q", self.analytic_log_sig_n)
-            if k % 250 == 0 and self.verbose:
-                print("mu error, log(sigma) error:  %.4f, %.4f" % (mu_error, log_sig_error))
+            if k % 250 == 0:
+                logger.debug("mu error, log(sigma) error:  %.4f, %.4f" % (mu_error, log_sig_error))
 
         self.assertEqual(0.0, mu_error, prec=0.03)
         self.assertEqual(0.0, log_sig_error, prec=0.03)
@@ -119,7 +119,6 @@ class NormalNormalNormalTests(TestCase):
         self.analytic_log_sig_n = -0.5 * torch.log(self.analytic_lam_n)
         self.analytic_mu_n = self.sum_data * (self.lam / self.analytic_lam_n) +\
             self.mu0 * (self.lam0 / self.analytic_lam_n)
-        self.verbose = True
 
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, True, 5000, 0.02, 0.002, False, False)
@@ -137,10 +136,9 @@ class NormalNormalNormalTests(TestCase):
                           use_decaying_avg_baseline=False)
 
     def do_elbo_test(self, repa1, repa2, n_steps, prec, lr, use_nn_baseline, use_decaying_avg_baseline):
-        if self.verbose:
-            print(" - - - - - DO NORMALNORMALNORMAL ELBO TEST - - - - - -")
-            print("[reparameterized = %s, %s; nn_baseline = %s, decaying_baseline = %s]" %
-                  (repa1, repa2, use_nn_baseline, use_decaying_avg_baseline))
+        logger.info(" - - - - - DO NORMALNORMALNORMAL ELBO TEST - - - - - -")
+        logger.info("[reparameterized = %s, %s; nn_baseline = %s, decaying_baseline = %s]" %
+                    (repa1, repa2, use_nn_baseline, use_decaying_avg_baseline))
         pyro.clear_param_store()
 
         if use_nn_baseline:
@@ -219,10 +217,10 @@ class NormalNormalNormalTests(TestCase):
             kappa_error = param_mse("kappa_q", 0.5 * ng_ones(1))
             log_sig_prime_error = param_mse("log_sig_q_prime", -0.5 * torch.log(2.0 * self.lam0))
 
-            if k % 500 == 0 and self.verbose:
-                print("errors:  %.4f, %.4f" % (mu_error, log_sig_error), end='')
-                print(", %.4f, %.4f" % (mu_prime_error, log_sig_prime_error), end='')
-                print(", %.4f" % kappa_error)
+            if k % 500 == 0:
+                logger.debug("errors:  %.4f, %.4f" % (mu_error, log_sig_error))
+                logger.debug(", %.4f, %.4f" % (mu_prime_error, log_sig_prime_error))
+                logger.debug(", %.4f" % kappa_error)
 
         self.assertEqual(0.0, mu_error, prec=prec)
         self.assertEqual(0.0, log_sig_error, prec=prec)
@@ -250,11 +248,9 @@ class BernoulliBetaTests(TestCase):
         # posterior beta
         self.log_alpha_n = torch.log(self.alpha_n)
         self.log_beta_n = torch.log(self.beta_n)
-        self.verbose = True
 
     def test_elbo_nonreparameterized(self):
-        if self.verbose:
-            print(" - - - - - DO BERNOULLI-BETA ELBO TEST - - - - - ")
+        logger.info(" - - - - - DO BERNOULLI-BETA ELBO TEST - - - - - ")
         pyro.clear_param_store()
 
         def model():
@@ -283,8 +279,8 @@ class BernoulliBetaTests(TestCase):
             alpha_error = param_abs_error("alpha_q_log", self.log_alpha_n)
             beta_error = param_abs_error("beta_q_log", self.log_beta_n)
 
-            if k % 500 == 0 and self.verbose:
-                print("alpha_error, beta_error: %.4f, %.4f" % (alpha_error, beta_error))
+            if k % 500 == 0:
+                logger.debug("alpha_error, beta_error: %.4f, %.4f" % (alpha_error, beta_error))
 
         self.assertEqual(0.0, alpha_error, prec=0.03)
         self.assertEqual(0.0, beta_error, prec=0.04)
@@ -308,11 +304,9 @@ class PoissonGammaTests(TestCase):
             Variable(torch.Tensor([self.n_data]))  # posterior beta
         self.log_alpha_n = torch.log(self.alpha_n)
         self.log_beta_n = torch.log(self.beta_n)
-        self.verbose = True
 
     def test_elbo_nonreparameterized(self):
-        if self.verbose:
-            print(" - - - - - DO POISSON-GAMMA ELBO TEST - - - - - ")
+        logger.info(" - - - - - DO POISSON-GAMMA ELBO TEST - - - - - ")
         pyro.clear_param_store()
 
         def model():
@@ -345,8 +339,8 @@ class PoissonGammaTests(TestCase):
             svi.step()
             alpha_error = param_abs_error("alpha_q_log", self.log_alpha_n)
             beta_error = param_abs_error("beta_q_log", self.log_beta_n)
-            if k % 500 == 0 and self.verbose:
-                print("alpha_q_log_error, beta_q_log_error: %.4f, %.4f" % (alpha_error, beta_error))
+            if k % 500 == 0:
+                logger.debug("alpha_q_log_error, beta_q_log_error: %.4f, %.4f" % (alpha_error, beta_error))
 
         self.assertEqual(0.0, alpha_error, prec=0.08)
         self.assertEqual(0.0, beta_error, prec=0.08)
@@ -366,11 +360,9 @@ class ExponentialGammaTests(TestCase):
         self.beta_n = self.beta0 + torch.sum(self.data)  # posterior beta
         self.log_alpha_n = torch.log(self.alpha_n)
         self.log_beta_n = torch.log(self.beta_n)
-        self.verbose = True
 
     def test_elbo_nonreparameterized(self):
-        if self.verbose:
-            print(" - - - - - DO EXPONENTIAL-GAMMA ELBO TEST - - - - - ")
+        logger.info(" - - - - - DO EXPONENTIAL-GAMMA ELBO TEST - - - - - ")
         pyro.clear_param_store()
 
         def model():
@@ -399,8 +391,8 @@ class ExponentialGammaTests(TestCase):
             alpha_error = param_abs_error("alpha_q_log", self.log_alpha_n)
             beta_error = param_abs_error("beta_q_log", self.log_beta_n)
 
-            if k % 500 == 0 and self.verbose:
-                print("alpha_error, beta_error: %.4f, %.4f" % (alpha_error, beta_error))
+            if k % 500 == 0:
+                logger.debug("alpha_error, beta_error: %.4f, %.4f" % (alpha_error, beta_error))
 
         self.assertEqual(0.0, alpha_error, prec=0.03)
         self.assertEqual(0.0, beta_error, prec=0.03)
@@ -432,7 +424,6 @@ class LogNormalNormalTests(TestCase):
         self.mu_n = mu_numerator / self.tau_n  # posterior mu
         self.log_mu_n = torch.log(self.mu_n)
         self.log_tau_n = torch.log(self.tau_n)
-        self.verbose = True
 
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 7000, 0.95, 0.001)
@@ -441,8 +432,7 @@ class LogNormalNormalTests(TestCase):
         self.do_elbo_test(False, 7000, 0.95, 0.001)
 
     def do_elbo_test(self, reparameterized, n_steps, beta1, lr):
-        if self.verbose:
-            print(" - - - - - DO LOGNORMAL-NORMAL ELBO TEST [repa = %s] - - - - - " % reparameterized)
+        logger.info(" - - - - - DO LOGNORMAL-NORMAL ELBO TEST [repa = %s] - - - - - " % reparameterized)
         pyro.clear_param_store()
         pt_guide = LogNormalNormalGuide(self.log_mu_n.data + 0.17,
                                         self.log_tau_n.data - 0.143)
@@ -471,15 +461,14 @@ class LogNormalNormalTests(TestCase):
 
             mu_error = param_abs_error("mymodule$$$mu_q_log", self.log_mu_n)
             tau_error = param_abs_error("mymodule$$$tau_q_log", self.log_tau_n)
-            if k % 500 == 0 and self.verbose:
-                print("mu_error, tau_error = %.4f, %.4f" % (mu_error, tau_error))
+            if k % 500 == 0:
+                logger.debug("mu_error, tau_error = %.4f, %.4f" % (mu_error, tau_error))
 
         self.assertEqual(0.0, mu_error, prec=0.05)
         self.assertEqual(0.0, tau_error, prec=0.05)
 
     def test_elbo_with_transformed_distribution(self):
-        if self.verbose:
-            print(" - - - - - DO LOGNORMAL-NORMAL ELBO TEST [uses TransformedDistribution] - - - - - ")
+        logger.info(" - - - - - DO LOGNORMAL-NORMAL ELBO TEST [uses TransformedDistribution] - - - - - ")
         pyro.clear_param_store()
 
         def model():
@@ -512,8 +501,8 @@ class LogNormalNormalTests(TestCase):
             mu_error = param_abs_error("mu_q_log", self.log_mu_n)
             tau_error = param_abs_error("tau_q_log", self.log_tau_n)
 
-            if k % 500 == 0 and self.verbose:
-                print("mu_error, tau_error = %.4f, %.4f" % (mu_error, tau_error))
+            if k % 500 == 0:
+                logger.debug("mu_error, tau_error = %.4f, %.4f" % (mu_error, tau_error))
 
         self.assertEqual(0.0, mu_error, prec=0.05)
         self.assertEqual(0.0, tau_error, prec=0.05)
@@ -543,7 +532,6 @@ class RaoBlackwellizationTests(TestCase):
         self.analytic_log_sig_n = -0.5 * torch.log(self.analytic_lam_n)
         self.analytic_mu_n = self.sum_data * (self.lam / self.analytic_lam_n) +\
             self.mu0 * (self.lam0 / self.analytic_lam_n)
-        self.verbose = True
 
     # this tests rao-blackwellization in elbo for nested list map_datas
     def test_nested_list_map_data_in_elbo(self, n_steps=4000):
@@ -604,8 +592,8 @@ class RaoBlackwellizationTests(TestCase):
 
             mu_error = param_mse("mu_q", self.analytic_mu_n)
             log_sig_error = param_mse("log_sig_q", self.analytic_log_sig_n)
-            if k % 500 == 0 and self.verbose:
-                print("mu error, log(sigma) error:  %.4f, %.4f" % (mu_error, log_sig_error))
+            if k % 500 == 0:
+                logger.debug("mu error, log(sigma) error:  %.4f, %.4f" % (mu_error, log_sig_error))
 
         self.assertEqual(0.0, mu_error, prec=0.04)
         self.assertEqual(0.0, log_sig_error, prec=0.04)
@@ -710,10 +698,10 @@ class RaoBlackwellizationTests(TestCase):
                     superfluous_error = torch.max(torch.max(mean_0_error, mean_1_error), mean_2_error)
                     superfluous_errors.append(superfluous_error.data.cpu().numpy()[0])
 
-            if step % 500 == 0 and self.verbose:
-                print("mu error, log(sigma) error:  %.4f, %.4f" % (mu_error, log_sig_error))
+            if step % 500 == 0:
+                logger.debug("mu error, log(sigma) error:  %.4f, %.4f" % (mu_error, log_sig_error))
                 if n_superfluous_top > 0 or n_superfluous_bottom > 0:
-                    print("superfluous error: %.4f" % np.max(superfluous_errors))
+                    logger.debug("superfluous error: %.4f" % np.max(superfluous_errors))
 
         self.assertEqual(0.0, mu_error, prec=0.04)
         self.assertEqual(0.0, log_sig_error, prec=0.05)
