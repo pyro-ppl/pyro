@@ -48,10 +48,10 @@ def normal_normal_model(data):
 def test_mcmc_interface():
     data = Variable(torch.Tensor([1.0]))
     kernel = PriorKernel(normal_normal_model)
-    mcmc = MCMC(kernel=kernel, num_samples=500)
+    mcmc = MCMC(kernel=kernel, num_samples=800)
     marginal = Marginal(mcmc)
     samples = []
-    for _ in range(100):
+    for _ in range(400):
         samples.append(marginal.sample(data))
     sample_mean = torch.mean(torch.stack(samples), 0)
     sample_std = torch.std(torch.stack(samples), 0)
