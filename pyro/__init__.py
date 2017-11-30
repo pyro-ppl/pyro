@@ -412,3 +412,29 @@ def random_module(name, nn_module, prior, *args, **kwargs):
         # update_module_params must be True or the lifted module will not update local params
         return lifted_fn(name, nn_copy, update_module_params=True, *args, **kwargs)
     return _fn
+
+
+def batched_random_module(name, prior, *args, **kwargs):
+    """
+    takes a prior of all the parameters
+    then returns a subsample of them on each call
+    note this is NOT vectorized_rm
+    """
+    assert hasattr(nn_module, "parameters"), "Module is not a NN module."
+    # nn_module - pt nn module pf batch size
+    # idx - longtensor of indices
+    def _fn(idx, nn_module):
+        nn_copy = copy.deepcopy(nn_module)
+        # register params in param store
+        batched_prior = prior.index_select(0, idx)
+        lifted_fn = poutine.lift(module, batched_prior)
+        # update_module_params must be True or the lifted module will not update local params
+        return lifted_fn(name, nn_copy, update_module_params=True, *args, **kwargs)
+    return _fn
+
+def vectorized_random_module(name, prior, *args, **kwargs):
+    """
+    vectorized random module
+    equivalent to runing n neural nets forward in parallel
+    """
+    pass
