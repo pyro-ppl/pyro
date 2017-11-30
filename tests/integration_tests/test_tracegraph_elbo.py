@@ -218,8 +218,8 @@ class NormalNormalNormalTests(TestCase):
             log_sig_prime_error = param_mse("log_sig_q_prime", -0.5 * torch.log(2.0 * self.lam0))
 
             if k % 500 == 0:
-                logger.debug("errors:  %.4f, %.4f" % (mu_error, log_sig_error), end='')
-                logger.debug(", %.4f, %.4f" % (mu_prime_error, log_sig_prime_error), end='')
+                logger.debug("errors:  %.4f, %.4f" % (mu_error, log_sig_error))
+                logger.debug(", %.4f, %.4f" % (mu_prime_error, log_sig_prime_error))
                 logger.debug(", %.4f" % kappa_error)
 
         self.assertEqual(0.0, mu_error, prec=prec)
