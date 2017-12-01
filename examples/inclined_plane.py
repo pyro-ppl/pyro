@@ -86,11 +86,7 @@ def model(observed_data):
     return mu
 
 
-def main():
-    parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-samples', default=500, type=int)
-    args = parser.parse_args()
-
+def main(args):
     # create an importance sampler (the prior is used as the proposal distribution)
     posterior = Importance(model, guide=None, num_samples=args.num_samples)
     # create a marginal object that consumes the raw execution traces provided by the importance sampler
@@ -127,4 +123,8 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(description="parse args")
+    parser.add_argument('-n', '--num-samples', default=500, type=int)
+    args = parser.parse_args()
+
+    main(args)
