@@ -26,7 +26,8 @@ def _get_baseline_options(site):
                      options_dict.pop('nn_baseline_input', None),
                      options_dict.pop('use_decaying_avg_baseline', False),
                      options_dict.pop('baseline_beta', 0.90),
-                     options_dict.pop('baseline_value', None))
+                     options_dict.pop('baseline_value', None),
+                     options_dict.pop('use_lax', False))
     if options_dict:
         raise ValueError("Unrecognized baseline options: {}".format(options_dict.keys()))
     return options_tuple
@@ -128,13 +129,14 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
     # XXX should the average baseline be in the param store as below?
     surrogate_elbo = 0.0
     baseline_loss = 0.0
+    lax_elbo = 0.0
     for node in non_reparam_nodes:
         guide_site = guide_trace.nodes[node]
         log_pdf_key = 'batch_log_pdf' if node in guide_vec_md_nodes else 'log_pdf'
         downstream_cost = downstream_costs[node]
         baseline = 0.0
         (nn_baseline, nn_baseline_input, use_decaying_avg_baseline, baseline_beta,
-            baseline_value) = _get_baseline_options(guide_site)
+            baseline_value, use_lax) = _get_baseline_options(guide_site)
         use_nn_baseline = nn_baseline is not None
         use_baseline_value = baseline_value is not None
         assert(not (use_nn_baseline and use_baseline_value)), \
@@ -154,7 +156,8 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
             baseline += baseline_value
         if use_nn_baseline or use_baseline_value:
             # accumulate baseline loss
-            baseline_loss += torch.pow(downstream_cost.detach() - baseline, 2.0).sum()
+            if not use_lax:
+                baseline_loss += torch.pow(downstream_cost.detach() - baseline, 2.0).sum()
 
         guide_log_pdf = guide_site[log_pdf_key] / guide_site["scale"]  # not scaled by subsampling
         if use_nn_baseline or use_decaying_avg_baseline or use_baseline_value:
@@ -163,6 +166,13 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
                     node, downstream_cost.size(), baseline.size()))
             downstream_cost = downstream_cost - baseline
         surrogate_elbo += (guide_log_pdf * downstream_cost.detach()).sum()
+        if use_lax:
+            lax_elbo += (guide_log_pdf * downstream_cost).sum() + baseline  # FIXME incorrectly detached
+
+    # FIXME This gradient computation needs more intracate use of torch.autograd.grad().
+    if use_lax:
+        for g in torch.autograd.grad(lax_elbo, ['TODO'], create_graph=True):
+            g.norm().backward()
 
     return surrogate_elbo, baseline_loss
 
