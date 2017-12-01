@@ -4,7 +4,7 @@ from __future__ import absolute_import, division, print_function
 from pyro.distributions.bernoulli import Bernoulli
 from pyro.distributions.beta import Beta
 from pyro.distributions.binomial import Binomial
-from pyro.distributions.categorical import Categorical
+from pyro.distributions.categorical import WrapCategorical as Categorical
 from pyro.distributions.cauchy import Cauchy
 from pyro.distributions.delta import Delta
 from pyro.distributions.dirichlet import Dirichlet
