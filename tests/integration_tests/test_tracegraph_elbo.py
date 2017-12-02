@@ -157,7 +157,7 @@ class NormalNormalNormalTests(TestCase):
                     h = self.sigmoid(self.lin1(x))
                     return self.lin2(h)
 
-            mu_prime_baseline = pyro.module("mu_prime_baseline", VanillaBaselineNN(2, 5), tags="baseline")
+            mu_prime_baseline = VanillaBaselineNN(2, 5)
         else:
             mu_prime_baseline = None
 
@@ -194,15 +194,24 @@ class NormalNormalNormalTests(TestCase):
             mu_latent_prime_dist = dist.Normal(kappa_q.expand_as(mu_latent) * mu_latent + mu_q_prime,
                                                sig_q_prime,
                                                reparameterized=repa1)
+            pyro.module("mu_prime_baseline", mu_prime_baseline, tags="baseline")
             pyro.sample("mu_latent_prime",
                         mu_latent_prime_dist,
                         baseline=dict(nn_baseline=mu_prime_baseline,
                                       nn_baseline_input=mu_latent,
-                                      use_decaying_avg_baseline=use_decaying_avg_baseline))
+                                      use_decaying_avg_baseline=use_decaying_avg_baseline,
+                                      use_lax=use_lax))
 
             return mu_latent
 
-        adam = optim.Adam({"lr": .0015, "betas": (0.97, 0.999)})
+        def per_param_callable(module_name, param_name, tags):
+            if 'baseline' in tags:
+                return {"lr": 1.0e-6, "betas": (0.90, 0.999)}
+            else:
+                return {"lr": 0.0015, "betas": (0.97, 0.999)}
+
+        adam = optim.Adam(per_param_callable)
+        #adam = optim.Adam({"lr": .0015, "betas": (0.97, 0.999)})
         svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
 
         for k in range(n_steps):

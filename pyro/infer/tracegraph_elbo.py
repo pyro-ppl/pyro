@@ -171,21 +171,33 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
                 raise ValueError("Expected baseline at site {} to be {} instead got {}".format(
                     node, downstream_cost.size(), baseline.size()))
             downstream_cost = downstream_cost - baseline
-        grads_log_q = autograd.grad(guide_log_pdf, trainable_params, create_graph=True)
+        grads_log_q = autograd.grad(guide_log_pdf, trainable_params, create_graph=True, allow_unused=True)
         cost_x_grads = []
         for g, p in zip(grads_log_q, trainable_params):
-            cost_x_grads.append(downstream_cost * g)
+            cost_x_grad = downstream_cost * g if g is not None else None
+            cost_x_grads.append(cost_x_grad)
+            if cost_x_grad is None:
+                continue
             if p.grad is None:
                 p.grad = -cost_x_grads[-1]
             else:
                 p.grad -= cost_x_grads[-1]
         if use_lax:
-            grads_baseline = autograd.grad(baseline, trainable_params, create_graph=True)
+            grads_baseline = autograd.grad(baseline, trainable_params, create_graph=True, allow_unused=True)
             for k, g, p in zip(range(len(trainable_params)), grads_baseline, trainable_params):
-                p.grad -= g
-                cost_x_grads[k] += g
+                if g is not None:
+                    if p.grad is None:
+                        p.grad = -g
+                    else:
+                        p.grad -= g
+                    if cost_x_grads[k] is None:
+                        cost_x_grads[k] = g
+                    else:
+                        cost_x_grads[k] += g
             for cost_x_grad in cost_x_grads:
-                baseline_loss += cost_x_grad.norm()
+                if cost_x_grad is not None:
+                    # XXX fudge factor so that baseline gradients less crazy
+                    baseline_loss += 1.0e-4*cost_x_grad.norm()
 
         #surrogate_elbo += (guide_log_pdf * downstream_cost.detach()).sum()
         #if use_lax:
