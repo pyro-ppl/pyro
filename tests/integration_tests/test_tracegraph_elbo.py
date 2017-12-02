@@ -133,9 +133,12 @@ class NormalNormalNormalTests(TestCase):
 
     def test_elbo_nonreparameterized_nn_baseline(self):
         self.do_elbo_test(False, True, 12000, 0.04, 0.0015, use_nn_baseline=True,
-                          use_decaying_avg_baseline=False)
+                          use_decaying_avg_baseline=False, use_lax=False)
+        self.do_elbo_test(False, True, 12000, 0.04, 0.0015, use_nn_baseline=True,
+                          use_decaying_avg_baseline=False, use_lax=True)
 
-    def do_elbo_test(self, repa1, repa2, n_steps, prec, lr, use_nn_baseline, use_decaying_avg_baseline):
+    def do_elbo_test(self, repa1, repa2, n_steps, prec, lr, use_nn_baseline, use_decaying_avg_baseline,
+                     use_lax=False):
         logger.info(" - - - - - DO NORMALNORMALNORMAL ELBO TEST - - - - - -")
         logger.info("[reparameterized = %s, %s; nn_baseline = %s, decaying_baseline = %s]" %
                     (repa1, repa2, use_nn_baseline, use_decaying_avg_baseline))
@@ -198,12 +201,6 @@ class NormalNormalNormalTests(TestCase):
                                       use_decaying_avg_baseline=use_decaying_avg_baseline))
 
             return mu_latent
-
-        # optim = Optimize(model, guide,
-        #                 torch.optim.Adam, {"lr": lr, "betas": (0.97, 0.999)},
-        #                 loss="ELBO", trace_graph=True,
-        #                 auxiliary_optim_constructor=torch.optim.Adam,
-        #                 auxiliary_optim_args={"lr": 5.0 * lr, "betas": (0.90, 0.999)})
 
         adam = optim.Adam({"lr": .0015, "betas": (0.97, 0.999)})
         svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)

@@ -6,6 +6,7 @@ from collections import namedtuple
 import networkx
 import numpy as np
 import torch
+import torch.autograd as autograd
 
 import pyro
 import pyro.poutine as poutine
@@ -122,7 +123,7 @@ def _compute_elbo_reparam(model_trace, guide_trace, non_reparam_nodes):
 
 
 def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
-                              non_reparam_nodes, downstream_costs):
+                              non_reparam_nodes, downstream_costs, trainable_params):
     # construct all the reinforce-like terms.
     # we include only downstream costs to reduce variance
     # optionally include baselines to further reduce variance
@@ -149,15 +150,20 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
             avg_downstream_cost_old.data = avg_downstream_cost_new.data  # XXX copy_() ?
             baseline += avg_downstream_cost_old
         if use_nn_baseline:
-            # block nn_baseline_input gradients except in baseline loss
-            baseline += nn_baseline(detach_iterable(nn_baseline_input))
+            if not use_lax:
+                # block nn_baseline_input gradients except in baseline loss
+                baseline += nn_baseline(detach_iterable(nn_baseline_input))
+            else:
+                baseline += nn_baseline(nn_baseline_input)
         elif use_baseline_value:
             # it's on the user to make sure baseline_value tape only points to baseline params
+            # if using baseline mse loss
             baseline += baseline_value
         if use_nn_baseline or use_baseline_value:
             # accumulate baseline loss
             if not use_lax:
-                baseline_loss += torch.pow(downstream_cost.detach() - baseline, 2.0).sum()
+                # XXX is the division on the next line what we want?
+                baseline_loss += torch.pow(downstream_cost.detach() - baseline, 2.0).sum() / guide_site["scale"]
 
         guide_log_pdf = guide_site[log_pdf_key] / guide_site["scale"]  # not scaled by subsampling
         if use_nn_baseline or use_decaying_avg_baseline or use_baseline_value:
@@ -165,14 +171,30 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
                 raise ValueError("Expected baseline at site {} to be {} instead got {}".format(
                     node, downstream_cost.size(), baseline.size()))
             downstream_cost = downstream_cost - baseline
-        surrogate_elbo += (guide_log_pdf * downstream_cost.detach()).sum()
+        grads_log_q = autograd.grad(guide_log_pdf, trainable_params, create_graph=True)
+        cost_x_grads = []
+        for g, p in zip(grads_log_q, trainable_params):
+            cost_x_grads.append(downstream_cost * g)
+            if p.grad is None:
+                p.grad = -cost_x_grads[-1]
+            else:
+                p.grad -= cost_x_grads[-1]
         if use_lax:
-            lax_elbo += (guide_log_pdf * downstream_cost).sum() + baseline  # FIXME incorrectly detached
+            grads_baseline = autograd.grad(baseline, trainable_params, create_graph=True)
+            for k, g, p in zip(range(len(trainable_params)), grads_baseline, trainable_params):
+                p.grad -= g
+                cost_x_grads[k] += g
+            for cost_x_grad in cost_x_grads:
+                baseline_loss += cost_x_grad.norm()
+
+        #surrogate_elbo += (guide_log_pdf * downstream_cost.detach()).sum()
+        #if use_lax:
+        #    lax_elbo += (guide_log_pdf * downstream_cost).sum() + baseline  # FIXME incorrectly detached
 
     # FIXME This gradient computation needs more intracate use of torch.autograd.grad().
-    if use_lax:
-        for g in torch.autograd.grad(lax_elbo, ['TODO'], create_graph=True):
-            g.norm().backward()
+    #if use_lax:
+    #    for g in torch.autograd.grad(lax_elbo, ['TODO'], create_graph=True):
+    #        g.norm().backward()
 
     return surrogate_elbo, baseline_loss
 
@@ -292,6 +314,9 @@ class TraceGraph_ELBO(object):
         model_trace.compute_batch_log_pdf(site_filter=lambda name, site: name in model_vec_md_nodes)
         model_trace.log_pdf()
 
+        # collect parameters to train from model and guide
+        trainable_params = set(p for trace in (model_trace, guide_trace) for p in trace.parameters)
+
         # compute elbo for reparameterized nodes
         non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
         elbo, surrogate_elbo = _compute_elbo_reparam(model_trace, guide_trace, non_reparam_nodes)
@@ -302,14 +327,9 @@ class TraceGraph_ELBO(object):
             downstream_costs = _compute_downstream_costs(
                     model_trace, guide_trace,  model_vec_md_nodes, guide_vec_md_nodes, non_reparam_nodes)
             surrogate_elbo_term, baseline_loss = _compute_elbo_non_reparam(
-                    guide_trace, guide_vec_md_nodes, non_reparam_nodes, downstream_costs)
+                    guide_trace, guide_vec_md_nodes, non_reparam_nodes, downstream_costs,
+                    trainable_params)
             surrogate_elbo += surrogate_elbo_term
-
-        # collect parameters to train from model and guide
-        trainable_params = set(site["value"]
-                               for trace in (model_trace, guide_trace)
-                               for site in trace.nodes.values()
-                               if site["type"] == "param")
 
         if trainable_params:
             surrogate_loss = -surrogate_elbo
