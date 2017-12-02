@@ -25,6 +25,8 @@ def discover_examples():
                 args = ['--num-epochs=1']
             elif '--num-steps' in text:
                 args = ['--num-steps=1']
+            elif '--num-samples' in text:
+                args = ['--num-samples=1']
             else:
                 # Either this is not a main file, or we don't know how to run it cheaply.
                 continue
