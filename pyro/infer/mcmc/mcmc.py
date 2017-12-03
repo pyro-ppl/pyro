@@ -48,8 +48,8 @@ class MCMC(TracePosterior):
                 if diagnostic_info is not None:
                     self.logger.info(diagnostic_info)
             trace = self.kernel.sample(trace)
+            self._t += 1
             if self._t < self.warmup_steps:
                 continue
             yield (trace, Variable(torch.Tensor([1.0])))
-            self._t += 1
         self.kernel.cleanup()

@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-# from pdb import set_trace as bb
+from pdb import set_trace as bb
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
@@ -26,7 +26,8 @@ def VTA(val):
 # get all the sample sites
 def sample_sites(trace, minus=set()):
     return [nid for nid, n in trace.nodes(data=True)
-            if nid not in minus and n["type"] == 'sample']
+            if nid not in minus and n["type"] == 'sample'
+            and not n["is_observed"]]
 
 
 class NormalProposal():
@@ -46,6 +47,7 @@ class NormalProposal():
         # sigma just a number? expand to equal the must
         if tuple(sigma.data.shape) != mu.data.shape:
             sigma = sigma.expand_as(mu.data)
+
         return dist.Normal(mu, sigma)
 
     # borrowed from:
@@ -185,13 +187,8 @@ class MH(TraceKernel):
         # alg2 pg 772 http://proceedings.mlr.press/v15/wingate11a/wingate11a.pdf
 
         # get logp for both traces
-        logp_original = prop_trace.batch_log_pdf() \
-            if 'batch_log_pdf' not in trace.node[_R] \
-            else trace.node[_R]
-
-        logp_proposal = prop_trace.batch_log_pdf() \
-            if 'batch_log_pdf' not in prop_trace.node[_R] \
-            else prop_trace.node[_R]
+        logp_original = trace.log_pdf()
+        logp_proposal = prop_trace.log_pdf()
 
         # alg2 pg 772, line 7-8 http://proceedings.mlr.press/v15/wingate11a/wingate11a.pdf
         # R = -log(len(old_trace)) + PD(X').log_pdf(X)
@@ -203,13 +200,12 @@ class MH(TraceKernel):
             self.proposal_dist(trace_value).log_pdf(proposal_value)
 
         # ll' - ll + R - F
-        delta = ((logp_proposal - logp_original) + (R - F)).sum()
+        delta = (logp_proposal - logp_original) + (R - F)
 
         # get our delta y'all
         # alg2 line 12
         rand = pyro.sample('rand_t='.format(self._call_cnt), dist.uniform, a=ng_zeros(1), b=ng_ones(1))
         accept_trace, reject_trace = None, None
-
         if isfinite(delta.data[0]) and rand.log().data[0] < delta.data[0]:
             # accept!
             self._accept_cnt += 1
@@ -217,7 +213,6 @@ class MH(TraceKernel):
             # accept the proposal, clean up the old trace
             accept_trace = prop_trace
             reject_trace = trace
-
         else:
             # keep the same trace, reject the proposed
             accept_trace = trace
@@ -235,7 +230,11 @@ class MH(TraceKernel):
         self._cleanup_trace(reject_trace, accept_trace=accept_trace)
 
         # tune the proposal object -- if outside of tune_frequency, this will ignore
-        self.proposal_dist.tune(self._accept_cnt/self._call_cnt)
+        self.proposal_dist.tune(self.acceptance_ratio)
 
         # return old trace or new trace according to accepted or not
         return accept_trace
+
+    @property
+    def acceptance_ratio(self):
+        return self._accept_cnt / self._call_cnt
