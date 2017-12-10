@@ -19,6 +19,7 @@ from pyro.distributions.one_hot_categorical import OneHotCategorical
 from pyro.distributions.poisson import Poisson
 from pyro.distributions.random_primitive import RandomPrimitive
 from pyro.distributions.uniform import Uniform
+from pyro.distributions.multivariate_normal import MultivariateNormal
 
 # function aliases
 bernoulli = RandomPrimitive(Bernoulli)
@@ -37,3 +38,4 @@ normal = RandomPrimitive(Normal)
 one_hot_categorical = RandomPrimitive(OneHotCategorical)
 poisson = RandomPrimitive(Poisson)
 uniform = RandomPrimitive(Uniform)
+multivariate_normal = RandomPrimitive(MultivariateNormal)
