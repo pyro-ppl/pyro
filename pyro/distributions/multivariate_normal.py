@@ -16,14 +16,20 @@ class MultivariateNormal(Distribution):
     :param torch.autograd.Variable mu: Mean.
     :param torch.autograd.Variable sigma: Covariance matrix.
         Must be symmetric and positive semidefinite.
+    :param is_cholesky: Should be set to True if you want to directly pass a cholesky decomposition as sigma.
     """
 
-    def __init__(self, mu, sigma, batch_size=None, *args, **kwargs):
+    def __init__(self, mu, sigma, batch_size=None, is_cholesky = False, use_inverse_for_batch_log=False, *args, **kwargs):
         self.mu = mu
         self.output_shape = mu.shape
-        self.sigma = sigma
-        # potrf is the very sensible name for the Cholesky decomposition in PyTorch
-        self.sigma_cholesky = torch.potrf(sigma)
+        self.use_inverse_for_batch_log = use_inverse_for_batch_log
+        if not is_cholesky:
+            self.sigma = sigma
+            # potrf is the very sensible name for the Cholesky decomposition in PyTorch
+            self.sigma_cholesky = torch.potrf(sigma)
+        else:
+            self.sigma = sigma.transpose(0,1) @ sigma
+            self.sigma_cholesky = sigma
         if mu.dim() > 1:
             raise ValueError("The mean must be a vector, but got mu.size() = {}".format(mu.size()))
 
@@ -52,7 +58,8 @@ class MultivariateNormal(Distribution):
         return transformed_sample
 
     def batch_log_pdf(self, x):
-        raise NotImplementedError()
+        normalization_factor = 0.5 * torch.log(self.sigma_cholesky.diag().prod()) + (self.mu.shape[0] / 2) * np.log(np.pi)
+        return -(normalization_factor + 0.5 * torch.sum((x-self.mu) * (torch.potri(self.sigma_cholesky) @ (x-self.mu))))
 
     def analytic_mean(self):
         """
