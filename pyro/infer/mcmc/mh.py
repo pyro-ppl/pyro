@@ -46,15 +46,21 @@ class NormalProposal():
 
     def sample(self, site_node):
         cur_val = site_node['value']
-        return cur_val + self(self.mu.expand_as(cur_val)).sample()
-
-    def __call__(self, mu):
+        mu = self.mu.expand_as(cur_val)
         sigma = self.scale*self.sigma
+
         # sigma just a number? expand to equal the must
         if tuple(sigma.data.shape) != mu.data.shape:
             sigma = sigma.expand_as(mu.data)
 
-        return dist.Normal(mu, sigma)
+        return cur_val + dist.Normal(mu, sigma).sample()
+
+    def log_pdf_given(self, y, given_x):
+        # center our distribution at mu = given_x, then
+        # get log pdf of y
+        mu = given_x
+        sigma = self.scale*self.sigma
+        return dist.Normal(mu, sigma).log_pdf(y)
 
     # borrowed from:
     # https://github.com/mcleonard/sampyl/blob/master/sampyl/samplers/metropolis.py#L102
@@ -199,13 +205,14 @@ class MH(TraceKernel):
         logp_proposal = prop_trace.log_pdf()
 
         # alg2 pg 772, line 7-8 http://proceedings.mlr.press/v15/wingate11a/wingate11a.pdf
-        # R = -log(len(old_trace)) + PD(X').log_pdf(X)
-        # F = -log(len(new_trace)) + PD(X).log_pdf(X')
-        R = -tlog(VTA(trace_length)).type_as(trace_value) + \
-            self.proposal_dist(proposal_value).log_pdf(trace_value)
 
+        # R = -log(len(old_trace)) + PD(X').log_pdf(X)
+        R = -tlog(VTA(trace_length)).type_as(trace_value) + \
+            self.proposal_dist.log_pdf_given(trace_value, given_x=proposal_value)
+
+        # F = -log(len(new_trace)) + PD(X).log_pdf(X')
         F = -tlog(VTA(prop_trace_length)).type_as(trace_value) + \
-            self.proposal_dist(trace_value).log_pdf(proposal_value)
+            self.proposal_dist.log_pdf_given(proposal_value, given_x=trace_value)
 
         # ll' - ll + R - F
         delta = (logp_proposal - logp_original) + (R - F)
