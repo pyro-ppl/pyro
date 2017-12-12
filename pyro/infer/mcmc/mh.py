@@ -23,6 +23,12 @@ def VTA(val):
     return VT([val])
 
 
+def assert_valid_trace(trace):
+    assert not any(['fn' in n and isinstance(n['fn'], pyro._Subsample)
+                    for nid, n in trace.nodes(data=True)]), \
+                    "Single Site MH does not currently handle mapdata in model."
+
+
 # get all the sample sites
 def sample_sites(trace, minus=set()):
     return [nid for nid, n in trace.nodes(data=True)
@@ -112,6 +118,7 @@ class MH(TraceKernel):
     def initial_trace(self):
         # maintain all traces, may need to kill at the end
         trace = poutine.trace(self.model).get_trace(*self._args, **self._kwargs)
+        assert_valid_trace(trace)
         self._kernel_traces.append(trace)
         return trace
 
@@ -179,6 +186,7 @@ class MH(TraceKernel):
         # depending on replay type, this can be pretty efficient!
         # TODO: Send r_site to know where to start replaying
         prop_trace = poutine.trace(poutine.replay(self.model, replay_proposal)).get_trace(*self._args, **self._kwargs)
+        assert_valid_trace(prop_trace)
 
         # how many sample sites in our new trace
         prop_trace_nodes = sample_sites(prop_trace)
@@ -204,7 +212,8 @@ class MH(TraceKernel):
 
         # get our delta y'all
         # alg2 line 12
-        rand = pyro.sample('rand_t='.format(self._call_cnt), dist.uniform, a=ng_zeros(1), b=ng_ones(1))
+        rand = pyro.sample('rand_t='.format(self._call_cnt),
+                           dist.uniform, a=ng_zeros(1), b=ng_ones(1))
         accept_trace, reject_trace = None, None
         if isfinite(delta.data[0]) and rand.log().data[0] < delta.data[0]:
             # accept!

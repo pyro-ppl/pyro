@@ -24,20 +24,23 @@ class MCMC(TracePosterior):
         during the warmup phase are discarded.
     """
 
-    def __init__(self, kernel, num_samples, warmup_steps=0):
+    def __init__(self, kernel, num_samples, warmup_steps=0, lag_steps=1):
         self.kernel = kernel
         self.warmup_steps = warmup_steps
         self.num_samples = num_samples
+        self.lag_steps = lag_steps
         if warmup_steps >= num_samples:
             raise ValueError('Number of warmup iterations - {} >= Number of MCMC samples - {}'
                              .format(warmup_steps, num_samples))
         self._t = None
+        self._lag = None
         self.logger = logging.getLogger(__name__)
         super(MCMC, self).__init__()
 
     def _traces(self, *args, **kwargs):
         self.kernel.setup(*args, **kwargs)
         self._t = 0
+        self._lag = 0
         trace = self.kernel.initial_trace()
         self.logger.info('Starting MCMC using kernel - {} ...'.format(self.kernel.__class__.__name__))
         logging_interval = int(math.ceil((self.warmup_steps + self.num_samples) / 20))
@@ -48,8 +51,13 @@ class MCMC(TracePosterior):
                 if diagnostic_info is not None:
                     self.logger.info(diagnostic_info)
             trace = self.kernel.sample(trace)
-            self._t += 1
             if self._t < self.warmup_steps:
+                self._t += 1
                 continue
-            yield (trace, Variable(torch.Tensor([1.0])))
+
+            if self._lag % self.lag_steps == 0:
+                self._t += 1
+                yield (trace, Variable(torch.Tensor([1.0])))
+            self._lag += 1
+
         self.kernel.cleanup()
