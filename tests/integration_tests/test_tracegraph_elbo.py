@@ -132,9 +132,9 @@ class NormalNormalNormalTests(TestCase):
                           use_decaying_avg_baseline=True)
 
     def test_elbo_nonreparameterized_nn_baseline(self):
-        self.do_elbo_test(False, True, 12000, 0.04, 0.0015, use_nn_baseline=True,
+        self.do_elbo_test(False, True, 5000, 0.04, 0.0015, use_nn_baseline=True,
                           use_decaying_avg_baseline=False, use_lax=False)
-        self.do_elbo_test(False, True, 12000, 0.04, 0.0015, use_nn_baseline=True,
+        self.do_elbo_test(False, True, 5000, 0.04, 0.0015, use_nn_baseline=True,
                           use_decaying_avg_baseline=False, use_lax=True)
 
     def do_elbo_test(self, repa1, repa2, n_steps, prec, lr, use_nn_baseline, use_decaying_avg_baseline,
@@ -206,7 +206,7 @@ class NormalNormalNormalTests(TestCase):
 
         def per_param_callable(module_name, param_name, tags):
             if 'baseline' in tags:
-                return {"lr": 1.0e-6, "betas": (0.90, 0.999)}
+                return {"lr": 1.0e-2, "betas": (0.90, 0.999)}
             else:
                 return {"lr": 0.0015, "betas": (0.97, 0.999)}
 
@@ -224,7 +224,7 @@ class NormalNormalNormalTests(TestCase):
             log_sig_prime_error = param_mse("log_sig_q_prime", -0.5 * torch.log(2.0 * self.lam0))
 
             if k % 500 == 0:
-                logger.debug("errors:  %.4f, %.4f" % (mu_error, log_sig_error))
+                logger.debug("errors [%04d]:  %.4f, %.4f" % (k, mu_error, log_sig_error))
                 logger.debug(", %.4f, %.4f" % (mu_prime_error, log_sig_prime_error))
                 logger.debug(", %.4f" % kappa_error)
 

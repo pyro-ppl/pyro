@@ -130,7 +130,6 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
     # XXX should the average baseline be in the param store as below?
     surrogate_elbo = 0.0
     baseline_loss = 0.0
-    lax_elbo = 0.0
     for node in non_reparam_nodes:
         guide_site = guide_trace.nodes[node]
         log_pdf_key = 'batch_log_pdf' if node in guide_vec_md_nodes else 'log_pdf'
@@ -150,11 +149,13 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
             avg_downstream_cost_old.data = avg_downstream_cost_new.data  # XXX copy_() ?
             baseline += avg_downstream_cost_old
         if use_nn_baseline:
-            if not use_lax:
+            #if not use_lax:
                 # block nn_baseline_input gradients except in baseline loss
-                baseline += nn_baseline(detach_iterable(nn_baseline_input))
-            else:
-                baseline += nn_baseline(nn_baseline_input)
+            baseline += nn_baseline(detach_iterable(nn_baseline_input))
+            if use_lax:
+                baseline_undetached = nn_baseline(nn_baseline_input)
+            #else:
+            #    baseline += nn_baseline(nn_baseline_input)
         elif use_baseline_value:
             # it's on the user to make sure baseline_value tape only points to baseline params
             # if using baseline mse loss
@@ -170,11 +171,15 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
             if downstream_cost.size() != baseline.size():
                 raise ValueError("Expected baseline at site {} to be {} instead got {}".format(
                     node, downstream_cost.size(), baseline.size()))
-            downstream_cost = downstream_cost - baseline
-        grads_log_q = autograd.grad(guide_log_pdf, trainable_params, create_graph=True, allow_unused=True)
+            downstream_cost = downstream_cost.detach() - baseline
+        bl_params = set(list(nn_baseline.parameters()))
+        trainable_params_minus_bl_params = list(set(trainable_params) - bl_params)
+        bl_params = list(bl_params)
+        grads_log_q = autograd.grad(guide_log_pdf, trainable_params_minus_bl_params,
+                                    create_graph=True, allow_unused=True)
         cost_x_grads = []
-        for g, p in zip(grads_log_q, trainable_params):
-            cost_x_grad = downstream_cost * g if g is not None else None
+        for g, p in zip(grads_log_q, trainable_params_minus_bl_params):
+            cost_x_grad = downstream_cost * g.detach() if g is not None else None
             cost_x_grads.append(cost_x_grad)
             if cost_x_grad is None:
                 continue
@@ -183,8 +188,10 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
             else:
                 p.grad -= cost_x_grads[-1]
         if use_lax:
-            grads_baseline = autograd.grad(baseline, trainable_params, create_graph=True, allow_unused=True)
-            for k, g, p in zip(range(len(trainable_params)), grads_baseline, trainable_params):
+            grads_baseline = autograd.grad(baseline_undetached, trainable_params_minus_bl_params,
+                                           create_graph=True, allow_unused=True)
+            for k, g, p in zip(range(len(trainable_params_minus_bl_params)), grads_baseline,
+                               trainable_params_minus_bl_params):
                 if g is not None:
                     if p.grad is None:
                         p.grad = -g
@@ -196,19 +203,9 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
                         cost_x_grads[k] += g
             for cost_x_grad in cost_x_grads:
                 if cost_x_grad is not None:
-                    # XXX fudge factor so that baseline gradients less crazy
-                    baseline_loss += 1.0e-4*cost_x_grad.norm()
+                    baseline_loss += cost_x_grad.norm()
 
-        #surrogate_elbo += (guide_log_pdf * downstream_cost.detach()).sum()
-        #if use_lax:
-        #    lax_elbo += (guide_log_pdf * downstream_cost).sum() + baseline  # FIXME incorrectly detached
-
-    # FIXME This gradient computation needs more intracate use of torch.autograd.grad().
-    #if use_lax:
-    #    for g in torch.autograd.grad(lax_elbo, ['TODO'], create_graph=True):
-    #        g.norm().backward()
-
-    return surrogate_elbo, baseline_loss
+    return surrogate_elbo, baseline_loss, bl_params
 
 
 class TraceGraph_ELBO(object):
@@ -327,7 +324,7 @@ class TraceGraph_ELBO(object):
         model_trace.log_pdf()
 
         # collect parameters to train from model and guide
-        trainable_params = set(p for trace in (model_trace, guide_trace) for p in trace.parameters)
+        trainable_params = list(set(p for trace in (model_trace, guide_trace) for p in trace.parameters))
 
         # compute elbo for reparameterized nodes
         non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
@@ -338,15 +335,24 @@ class TraceGraph_ELBO(object):
         if non_reparam_nodes:
             downstream_costs = _compute_downstream_costs(
                     model_trace, guide_trace,  model_vec_md_nodes, guide_vec_md_nodes, non_reparam_nodes)
-            surrogate_elbo_term, baseline_loss = _compute_elbo_non_reparam(
+            surrogate_elbo_term, baseline_loss, bl_params = _compute_elbo_non_reparam(
                     guide_trace, guide_vec_md_nodes, non_reparam_nodes, downstream_costs,
                     trainable_params)
             surrogate_elbo += surrogate_elbo_term
 
         if trainable_params:
             surrogate_loss = -surrogate_elbo
-            torch_backward(weight * (surrogate_loss + baseline_loss))
+            torch_backward(weight * surrogate_loss)
             pyro.get_param_store().mark_params_active(trainable_params)
+        if bl_params:
+            bl_grads = autograd.grad(weight * baseline_loss, bl_params)
+            for p, g in zip(bl_params, bl_grads):
+                if g is not None:
+                    if p.grad is None:
+                        p.grad = g
+                    else:
+                        p.grad += g
+            pyro.get_param_store().mark_params_active(bl_params)
 
         loss = -elbo
         if np.isnan(loss):
