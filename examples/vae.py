@@ -127,18 +127,7 @@ class VAE(nn.Module):
         return xs, mu
 
 
-def main():
-    # parse command line arguments
-    parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', default=101, type=int, help='number of training epochs')
-    parser.add_argument('-tf', '--test-frequency', default=5, type=int, help='how often we evaluate the test set')
-    parser.add_argument('-lr', '--learning-rate', default=1.0e-3, type=float, help='learning rate')
-    parser.add_argument('-b1', '--beta1', default=0.95, type=float, help='beta1 adam hyperparameter')
-    parser.add_argument('--cuda', action='store_true', default=False, help='whether to use cuda')
-    parser.add_argument('-visdom', '--visdom_flag', default=False, help='Whether plotting in visdom is desired')
-    parser.add_argument('-i-tsne', '--tsne_iter', default=100, type=int, help='epoch when tsne visualization runs')
-    args = parser.parse_args()
-
+def main(args):
     # setup MNIST data loaders
     # train_loader, test_loader
     train_loader, test_loader = setup_data_loaders(MNIST, use_cuda=args.cuda, batch_size=256)
@@ -221,4 +210,15 @@ def main():
 
 
 if __name__ == '__main__':
-    model = main()
+    # parse command line arguments
+    parser = argparse.ArgumentParser(description="parse args")
+    parser.add_argument('-n', '--num-epochs', default=101, type=int, help='number of training epochs')
+    parser.add_argument('-tf', '--test-frequency', default=5, type=int, help='how often we evaluate the test set')
+    parser.add_argument('-lr', '--learning-rate', default=1.0e-3, type=float, help='learning rate')
+    parser.add_argument('-b1', '--beta1', default=0.95, type=float, help='beta1 adam hyperparameter')
+    parser.add_argument('--cuda', action='store_true', default=False, help='whether to use cuda')
+    parser.add_argument('-visdom', '--visdom_flag', default=False, help='Whether plotting in visdom is desired')
+    parser.add_argument('-i-tsne', '--tsne_iter', default=100, type=int, help='epoch when tsne visualization runs')
+    args = parser.parse_args()
+
+    model = main(args)
