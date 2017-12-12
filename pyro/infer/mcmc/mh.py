@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-from pdb import set_trace as bb
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
