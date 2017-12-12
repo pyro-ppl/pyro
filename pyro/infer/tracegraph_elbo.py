@@ -152,8 +152,8 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
             #if not use_lax:
                 # block nn_baseline_input gradients except in baseline loss
             baseline += nn_baseline(detach_iterable(nn_baseline_input))
-            if use_lax:
-                baseline_undetached = nn_baseline(nn_baseline_input)
+            #if use_lax:
+            #    baseline_undetached = nn_baseline(nn_baseline_input)
             #else:
             #    baseline += nn_baseline(nn_baseline_input)
         elif use_baseline_value:
@@ -188,7 +188,7 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
             else:
                 p.grad -= cost_x_grads[-1]
         if use_lax:
-            grads_baseline = autograd.grad(baseline_undetached, trainable_params_minus_bl_params,
+            grads_baseline = autograd.grad(baseline, trainable_params_minus_bl_params,
                                            create_graph=True, allow_unused=True)
             for k, g, p in zip(range(len(trainable_params_minus_bl_params)), grads_baseline,
                                trainable_params_minus_bl_params):
