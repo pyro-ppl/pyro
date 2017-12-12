@@ -58,8 +58,9 @@ class MultivariateNormal(Distribution):
         return transformed_sample
 
     def batch_log_pdf(self, x):
+        batch_size = x.size()[0]
         normalization_factor = 0.5 * torch.log(self.sigma_cholesky.diag().prod()) + (self.mu.shape[0] / 2) * np.log(np.pi)
-        return -(normalization_factor + 0.5 * torch.sum((x-self.mu) * (torch.potri(self.sigma_cholesky) @ (x-self.mu))))
+        return -(normalization_factor + 0.5 * torch.sum((x-self.mu).unsqueeze(2) * torch.bmm(torch.potri(self.sigma_cholesky).expand(batch_size, *self.sigma_cholesky.size()), (x-self.mu).view(*x.size(), 1)), 1))
 
     def analytic_mean(self):
         """
