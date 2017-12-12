@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import warnings
+
 import numpy as np
 
 import torch
@@ -185,21 +187,23 @@ class Categorical(Distribution):
             torch.stack([LongTensor([t]).expand(sample_shape) for t in torch.arange(0, self.ps.size(-1)).long()]))
 
 
-class TorchNormal(Distribution):
+class TorchCategorical(Distribution):
     """
     Compatibility wrapper around
-    `torch.distributions.Normal <http://pytorch.org/docs/master/_modules/torch/distributions.html#Normal>`_
+    `torch.distributions.Categorical <http://pytorch.org/docs/master/_modules/torch/distributions.html#Categorical>`_
     """
-    try:
-        reparameterized = torch.distributions.Normal.reparameterized
-    except (ImportError, AttributeError):
-        reparameterized = False
-    enumerable = False
+    reparameterized = False
+    enumerable = True
 
-    def __init__(self, mu, sigma, *args, **kwargs):
-        self._torch_dist = torch.distributions.Normal(mean=mu, std=sigma)
-        self._param_shape = torch.Size(broadcast_shape(mu.size(), sigma.size(), strict=True))
-        super(TorchNormal, self).__init__(*args, **kwargs)
+    def __init__(self, ps=None, vs=None, logits=None, log_pdf_mask=None, *args, **kwargs):
+        if logits is not None:
+            ps = torch.exp(logits - torch.max(logits))
+            ps /= ps.sum(-1, True)
+        self._torch_dist = torch.distributions.Categorical(probs=ps)
+        self._param_shape = ps.size()
+        self.ps = ps
+        self.log_pdf_mask = log_pdf_mask
+        super(TorchCategorical, self).__init__(*args, **kwargs)
 
     def batch_shape(self, x=None):
         x_shape = [] if x is None else x.size()
@@ -214,30 +218,34 @@ class TorchNormal(Distribution):
 
     def batch_log_pdf(self, x):
         batch_log_pdf_shape = self.batch_shape(x) + (1,)
-        if self.reparameterized:
-            log_pxs = self._torch_dist.log_prob(x, requires_grad=True)
-        else:
-            log_pxs = self._torch_dist.log_prob(x)
-        batch_log_pdf = torch.sum(log_pxs, -1)
-        return batch_log_pdf.contiguous().view(batch_log_pdf_shape)
+        log_pxs = self._torch_dist.log_prob(x)
+        batch_log_pdf = torch.sum(log_pxs, -1).contiguous().view(batch_log_pdf_shape)
+        if self.log_pdf_mask is not None:
+            batch_log_pdf = batch_log_pdf * self.log_pdf_mask
+        return batch_log_pdf
+
+    def enumerate_support(self):
+        sample_shape = self.batch_shape() + (1,)
+        LongTensor = torch.cuda.LongTensor if self.ps.is_cuda else torch.LongTensor
+        return Variable(torch.stack([
+            LongTensor([t]).expand(sample_shape)
+            for t in torch.arange(0, self.ps.size(-1)).long()
+        ]))
 
 
 def _warn_fallback(message):
-    warnings.warn('{}, falling back to Normal'.format(message), DeprecationWarning)
+    warnings.warn('{}, falling back to Categorical'.format(message), DeprecationWarning)
 
 
-@torch_wrapper(Normal)
-def WrapCategorical(mu, sigma, batch_size=None, log_pdf_mask=None, *args, **kwargs):
-    reparameterized = kwargs.pop('reparameterized', None)
+@torch_wrapper(Categorical)
+def WrapCategorical(ps=None, vs=None, logits=None, batch_size=None, log_pdf_mask=None, *args, **kwargs):
+    assert not kwargs.pop('reparameterized', False)
     if not hasattr(torch, 'distributions'):
         _warn_fallback('Missing module torch.distribution')
     elif not hasattr(torch.distributions, 'Categorical'):
         _warn_fallback('Missing class torch.distribution.Categorical')
-    elif batch_size is not None or log_pdf_mask is not None or args or kwargs:
+    elif vs is not None or batch_size is not None or args or kwargs:
         _warn_fallback('Unsupported args')
-    elif reparameterized and not TorchNormal.reparameterized:
-        _warn_fallback('Unsupported reparameterized=True')
     else:
-        return TorchNormal(mu, sigma, reparameterized=reparameterized)
-    return Normal(mu, sigma, batch_size=batch_size, log_pdf_mask=log_pdf_mask,
-                  reparameterized=reparameterized, *args, **kwargs)
+        return TorchCategorical(ps, vs, logits, log_pdf_mask=log_pdf_mask, *args, **kwargs)
+    return Categorical(ps, vs, logits, batch_size=batch_size, log_pdf_mask=log_pdf_mask, *args, **kwargs)
