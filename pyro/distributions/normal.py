@@ -116,14 +116,15 @@ class TorchNormal(Distribution):
     `torch.distributions.Normal <http://pytorch.org/docs/master/_modules/torch/distributions.html#Normal>`_
     """
     try:
-        reparameterized = torch.distributions.Normal.reparameterized
+        reparameterized = torch.distributions.Normal.has_rsample
     except (ImportError, AttributeError):
         reparameterized = False
     enumerable = False
 
-    def __init__(self, mu, sigma, *args, **kwargs):
+    def __init__(self, mu, sigma, log_pdf_mask=None, *args, **kwargs):
         self._torch_dist = torch.distributions.Normal(mean=mu, std=sigma)
         self._param_shape = torch.Size(broadcast_shape(mu.size(), sigma.size(), strict=True))
+        self.log_pdf_mask = log_pdf_mask
         super(TorchNormal, self).__init__(*args, **kwargs)
 
     def batch_shape(self, x=None):
@@ -135,16 +136,18 @@ class TorchNormal(Distribution):
         return self._param_shape[-1:]
 
     def sample(self):
-        return self._torch_dist.sample()
+        if self.reparameterized:
+            return self._torch_dist.rsample()
+        else:
+            return self._torch_dist.sample()
 
     def batch_log_pdf(self, x):
         batch_log_pdf_shape = self.batch_shape(x) + (1,)
-        if self.reparameterized:
-            log_pxs = self._torch_dist.log_prob(x, requires_grad=True)
-        else:
-            log_pxs = self._torch_dist.log_prob(x)
-        batch_log_pdf = torch.sum(log_pxs, -1)
-        return batch_log_pdf.contiguous().view(batch_log_pdf_shape)
+        log_pxs = self._torch_dist.log_prob(x,)
+        batch_log_pdf = torch.sum(log_pxs, -1).contiguous().view(batch_log_pdf_shape)
+        if self.log_pdf_mask is not None:
+            batch_log_pdf = batch_log_pdf * self.log_pdf_mask
+        return batch_log_pdf
 
 
 def _warn_fallback(message):
@@ -158,11 +161,12 @@ def WrapNormal(mu, sigma, batch_size=None, log_pdf_mask=None, *args, **kwargs):
         _warn_fallback('Missing module torch.distribution')
     elif not hasattr(torch.distributions, 'Normal'):
         _warn_fallback('Missing class torch.distribution.Normal')
-    elif batch_size is not None or log_pdf_mask is not None or args or kwargs:
+    elif batch_size is not None or args or kwargs:
         _warn_fallback('Unsupported args')
     elif reparameterized and not TorchNormal.reparameterized:
         _warn_fallback('Unsupported reparameterized=True')
     else:
-        return TorchNormal(mu, sigma, reparameterized=reparameterized)
+        return TorchNormal(mu, sigma, log_pdf_mask=log_pdf_mask,
+                           reparameterized=reparameterized, *args, **kwargs)
     return Normal(mu, sigma, batch_size=batch_size, log_pdf_mask=log_pdf_mask,
                   reparameterized=reparameterized, *args, **kwargs)
