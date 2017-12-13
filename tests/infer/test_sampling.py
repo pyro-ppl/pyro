@@ -7,10 +7,10 @@ from torch.autograd import Variable
 import pyro
 import pyro.infer
 from pyro.distributions import Bernoulli, Normal
-from tests.common import TestCase
+from tests.common import assert_equal
 
 
-class HMMSamplingTestCase(TestCase):
+class HMMSamplingTestCase(object):
 
     def setUp(self):
 
@@ -38,7 +38,7 @@ class HMMSamplingTestCase(TestCase):
         self.model = model
 
 
-class NormalNormalSamplingTestCase(TestCase):
+class NormalNormalSamplingTestCase(object):
 
     def setUp(self):
 
@@ -65,7 +65,7 @@ class NormalNormalSamplingTestCase(TestCase):
         self.guide = guide
 
 
-class SearchTest(HMMSamplingTestCase):
+class TestSearch(HMMSamplingTestCase):
 
     def test_complete(self):
         posterior = pyro.infer.Search(self.model)
@@ -99,7 +99,7 @@ class SearchTest(HMMSamplingTestCase):
             assert i + 1 in tr_rets
 
 
-class ImportanceTest(NormalNormalSamplingTestCase):
+class TestImportance(NormalNormalSamplingTestCase):
 
     @pytest.mark.init(rng_seed=0)
     def test_importance_guide(self):
@@ -108,10 +108,8 @@ class ImportanceTest(NormalNormalSamplingTestCase):
         posterior_samples = [marginal() for i in range(1000)]
         posterior_mean = torch.mean(torch.cat(posterior_samples))
         posterior_stddev = torch.std(torch.cat(posterior_samples), 0)
-        self.assertEqual(0, torch.norm(posterior_mean - self.mu_mean).data[0],
-                         prec=0.01)
-        self.assertEqual(0, torch.norm(posterior_stddev - self.mu_stddev).data[0],
-                         prec=0.1)
+        assert_equal(0, torch.norm(posterior_mean - self.mu_mean).data[0], prec=0.01)
+        assert_equal(0, torch.norm(posterior_stddev - self.mu_stddev).data[0], prec=0.1)
 
     @pytest.mark.init(rng_seed=0)
     def test_importance_prior(self):
@@ -120,7 +118,5 @@ class ImportanceTest(NormalNormalSamplingTestCase):
         posterior_samples = [marginal() for i in range(1000)]
         posterior_mean = torch.mean(torch.cat(posterior_samples))
         posterior_stddev = torch.std(torch.cat(posterior_samples), 0)
-        self.assertEqual(0, torch.norm(posterior_mean - self.mu_mean).data[0],
-                         prec=0.01)
-        self.assertEqual(0, torch.norm(posterior_stddev - self.mu_stddev).data[0],
-                         prec=0.1)
+        assert_equal(0, torch.norm(posterior_mean - self.mu_mean).data[0], prec=0.01)
+        assert_equal(0, torch.norm(posterior_stddev - self.mu_stddev).data[0], prec=0.1)

@@ -12,7 +12,7 @@ import pyro.optim as optim
 from pyro.distributions.transformed_distribution import TransformedDistribution
 from pyro.infer.svi import SVI
 from pyro.util import ng_ones, ng_zeros
-from tests.common import TestCase
+from tests.common import assert_equal
 from tests.distributions.test_transformed_distribution import AffineExp
 
 
@@ -24,7 +24,7 @@ def param_abs_error(name, target):
     return torch.sum(torch.abs(target - pyro.param(name))).data.cpu().numpy()[0]
 
 
-class NormalNormalTests(TestCase):
+class TestNormalNormal(object):
 
     def setUp(self):
         # normal-normal; known covariance
@@ -86,11 +86,11 @@ class NormalNormalTests(TestCase):
             mu_error = param_mse("mu_q", self.analytic_mu_n)
             log_sig_error = param_mse("log_sig_q", self.analytic_log_sig_n)
 
-        self.assertEqual(0.0, mu_error, prec=0.05)
-        self.assertEqual(0.0, log_sig_error, prec=0.05)
+        assert_equal(0.0, mu_error, prec=0.05)
+        assert_equal(0.0, log_sig_error, prec=0.05)
 
 
-class TestFixedModelGuide(TestCase):
+class TestFixedModelGuide(object):
     def setUp(self):
         self.data = Variable(torch.Tensor([2.0]))
         self.alpha_q_log_0 = 0.17 * torch.ones(1)
@@ -158,7 +158,7 @@ class TestFixedModelGuide(TestCase):
 
 
 @pytest.mark.stage("integration", "integration_batch_2")
-class PoissonGammaTests(TestCase):
+class TestPoissonGamma(object):
     def setUp(self):
         # poisson-gamma model
         # gamma prior hyperparameter
@@ -212,11 +212,11 @@ class PoissonGammaTests(TestCase):
 
         alpha_error = param_abs_error("alpha_q_log", self.log_alpha_n)
         beta_error = param_abs_error("beta_q_log", self.log_beta_n)
-        self.assertEqual(0.0, alpha_error, prec=0.08)
-        self.assertEqual(0.0, beta_error, prec=0.08)
+        assert_equal(0.0, alpha_error, prec=0.08)
+        assert_equal(0.0, beta_error, prec=0.08)
 
 
-class ExponentialGammaTests(TestCase):
+class TestExponentialGamma(object):
     def setUp(self):
         # exponential-gamma model
         # gamma prior hyperparameter
@@ -258,11 +258,11 @@ class ExponentialGammaTests(TestCase):
 
         alpha_error = param_abs_error("alpha_q_log", self.log_alpha_n)
         beta_error = param_abs_error("beta_q_log", self.log_beta_n)
-        self.assertEqual(0.0, alpha_error, prec=0.08)
-        self.assertEqual(0.0, beta_error, prec=0.08)
+        assert_equal(0.0, alpha_error, prec=0.08)
+        assert_equal(0.0, beta_error, prec=0.08)
 
 
-class BernoulliBetaTests(TestCase):
+class TestBernoulliBeta(object):
     def setUp(self):
         # bernoulli-beta model
         # beta prior hyperparameter
@@ -312,8 +312,8 @@ class BernoulliBetaTests(TestCase):
             alpha_error = param_abs_error("alpha_q_log", self.log_alpha_n)
             beta_error = param_abs_error("beta_q_log", self.log_beta_n)
 
-        self.assertEqual(0.0, alpha_error, prec=0.08)
-        self.assertEqual(0.0, beta_error, prec=0.08)
+        assert_equal(0.0, alpha_error, prec=0.08)
+        assert_equal(0.0, beta_error, prec=0.08)
 
 
 class LogNormalNormalGuide(nn.Module):
@@ -324,7 +324,7 @@ class LogNormalNormalGuide(nn.Module):
 
 
 @pytest.mark.stage("integration", "integration_batch_2")
-class LogNormalNormalTests(TestCase):
+class TestLogNormalNormal(object):
     def setUp(self):
         # lognormal-normal model
         # putting some of the parameters inside of a torch module to
@@ -377,8 +377,8 @@ class LogNormalNormalTests(TestCase):
 
         mu_error = param_abs_error("mymodule$$$mu_q_log", self.log_mu_n)
         tau_error = param_abs_error("mymodule$$$tau_q_log", self.log_tau_n)
-        self.assertEqual(0.0, mu_error, prec=0.07)
-        self.assertEqual(0.0, tau_error, prec=0.07)
+        assert_equal(0.0, mu_error, prec=0.07)
+        assert_equal(0.0, tau_error, prec=0.07)
 
     def test_elbo_with_transformed_distribution(self):
         pyro.clear_param_store()
@@ -414,11 +414,11 @@ class LogNormalNormalTests(TestCase):
 
         mu_error = param_abs_error("mu_q_log", self.log_mu_n)
         tau_error = param_abs_error("tau_q_log", self.log_tau_n)
-        self.assertEqual(0.0, mu_error, prec=0.05)
-        self.assertEqual(0.0, tau_error, prec=0.05)
+        assert_equal(0.0, mu_error, prec=0.05)
+        assert_equal(0.0, tau_error, prec=0.05)
 
 
-class SafetyTests(TestCase):
+class TestSafety(object):
 
     def setUp(self):
         # normal-normal; known covariance

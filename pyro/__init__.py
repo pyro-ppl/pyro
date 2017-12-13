@@ -2,10 +2,10 @@ from __future__ import absolute_import, division, print_function
 
 import contextlib
 import copy
+import logging
 import warnings
 from collections import OrderedDict
 from inspect import isclass
-import logging
 
 import torch
 from torch.autograd import Variable

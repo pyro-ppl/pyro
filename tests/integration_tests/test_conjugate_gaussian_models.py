@@ -14,7 +14,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
 from pyro.infer import SVI
-from tests.common import TestCase
+from tests.common import assert_equal
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ def param_mse(name, target):
 
 @pytest.mark.stage("integration", "integration_batch_1")
 @pytest.mark.init(rng_seed=0)
-class GaussianChainTests(TestCase):
+class TestGaussianChain(object):
     # chain of normals with known covariances and latent means
 
     def setUp(self):
@@ -178,14 +178,14 @@ class GaussianChainTests(TestCase):
                 logger.debug("[mean errors]  (mu, log_sigma, kappa) = (%.4f, %.4f, %.4f)" % mean_errors)
                 logger.debug("[step time = %.3f;  N = %d;  step = %d]\n" % (time.time() - t0, self.N, step))
 
-        self.assertEqual(0.0, max_errors[0], prec=prec)
-        self.assertEqual(0.0, max_errors[1], prec=prec)
-        self.assertEqual(0.0, max_errors[2], prec=prec)
+        assert_equal(0.0, max_errors[0], prec=prec)
+        assert_equal(0.0, max_errors[1], prec=prec)
+        assert_equal(0.0, max_errors[2], prec=prec)
 
 
 @pytest.mark.stage("integration", "integration_batch_2")
 @pytest.mark.init(rng_seed=0)
-class GaussianPyramidTests(TestCase):
+class TestGaussianPyramid(object):
 
     def setUp(self):
         self.mu0 = Variable(torch.Tensor([0.52]))
@@ -484,6 +484,6 @@ class GaussianPyramidTests(TestCase):
                              (min_log_sig_error, mean_log_sig_error, max_log_sig_error))
                 logger.debug("[step time = %.3f;  N = %d;  step = %d]\n" % (time.time() - t0, self.N, step))
 
-        self.assertEqual(0.0, max_log_sig_error, prec=prec)
-        self.assertEqual(0.0, leftmost_constant_error, prec=prec)
-        self.assertEqual(0.0, almost_leftmost_constant_error, prec=prec)
+        assert_equal(0.0, max_log_sig_error, prec=prec)
+        assert_equal(0.0, leftmost_constant_error, prec=prec)
+        assert_equal(0.0, almost_leftmost_constant_error, prec=prec)

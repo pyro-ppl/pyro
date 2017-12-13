@@ -6,10 +6,10 @@ import torch
 from torch.autograd import Variable
 
 import pyro.distributions as dist
-from tests.common import TestCase, assert_equal
+from tests.common import assert_equal
 
 
-class TestOneHotCategorical(TestCase):
+class TestOneHotCategorical(object):
     """
     Tests methods specific to the OneHotCategorical distribution
     """

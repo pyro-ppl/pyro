@@ -9,10 +9,9 @@ from torch import nn as nn
 from torch.autograd import Variable
 
 import pyro
-from tests.common import TestCase
 
 
-class ParamStoreDictTests(TestCase):
+class TestParamStoreDict(object):
 
     def setUp(self):
         pyro.clear_param_store()
@@ -40,11 +39,9 @@ class ParamStoreDictTests(TestCase):
         assert len(list(param_store_params.keys())) == 5
         assert len(list(param_store_param_to_name.values())) == 5
 
-        pyro.get_param_store().save('paramstore.unittest.out')
         pyro.clear_param_store()
         assert len(list(pyro.get_param_store()._params)) == 0
         assert len(list(pyro.get_param_store()._param_to_name)) == 0
-        pyro.get_param_store().load('paramstore.unittest.out')
 
         def modules_are_equal():
             weights_equal = np.sum(np.fabs(self.linear_module3.weight.data.cpu().numpy() -

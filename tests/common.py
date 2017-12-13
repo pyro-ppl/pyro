@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 import contextlib
 import numbers
 import os
-import unittest
 import warnings
 from copy import deepcopy
 from itertools import product
@@ -227,13 +226,3 @@ def assert_not_equal(x, y, prec=1e-5, msg=''):
     except AssertionError:
         pass
     raise AssertionError("{} \nValues are equal: x={}, y={}, prec={}".format(msg, x, y, prec))
-
-
-class TestCase(unittest.TestCase):
-    precision = 1e-5
-
-    def assertEqual(self, x, y, prec=None, message=''):
-        assert_equal(x, y, prec, message)
-
-    def assertNotEqual(self, x, y, prec=None, message=''):
-        assert_not_equal(x, y, prec, message)
