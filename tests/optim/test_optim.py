@@ -1,7 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-from unittest import TestCase
-
 import torch
 from torch.autograd import Variable
 
@@ -11,7 +9,7 @@ from pyro.distributions import Normal
 from pyro.infer import SVI
 
 
-class OptimTests(TestCase):
+class TestOptim(object):
 
     def setUp(self):
         # normal-normal; known covariance
@@ -61,10 +59,8 @@ class OptimTests(TestCase):
 
         svi.step()
         adam_initial_step_count = list(adam.get_state()['mu_q']['state'].items())[0][1]['step']
-        adam.save('adam.unittest.save')
         svi.step()
         adam_final_step_count = list(adam.get_state()['mu_q']['state'].items())[0][1]['step']
-        adam2.load('adam.unittest.save')
         svi2.step()
         adam2_step_count_after_load_and_step = list(adam2.get_state()['mu_q']['state'].items())[0][1]['step']
 

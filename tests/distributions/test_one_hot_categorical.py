@@ -1,7 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-from unittest import TestCase
-
 import numpy as np
 import pytest
 import torch
@@ -11,7 +9,7 @@ import pyro.distributions as dist
 from tests.common import assert_equal
 
 
-class TestOneHotCategorical(TestCase):
+class TestOneHotCategorical(object):
     """
     Tests methods specific to the OneHotCategorical distribution
     """

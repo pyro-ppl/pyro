@@ -1,7 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-from unittest import TestCase
-
 import numpy as np
 import pytest
 import torch
@@ -13,7 +11,7 @@ from pyro.nn import AutoRegressiveNN
 pytestmark = pytest.mark.init(rng_seed=123)
 
 
-class InverseAutoregressiveFlowTests(TestCase):
+class TestInverseAutoregressiveFlow(object):
     def setUp(self):
         self.epsilon = 1.0e-6
 
@@ -56,7 +54,7 @@ class InverseAutoregressiveFlowTests(TestCase):
             self._test_jacobian(input_dim, 3 * input_dim + 1)
 
 
-class AutoRegressiveNNTests(TestCase):
+class TestAutoRegressiveNN(object):
 
     def setUp(self):
         self.epsilon = 1.0e-6

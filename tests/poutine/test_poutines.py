@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import functools
-from unittest import TestCase
 
 import pytest
 import torch
@@ -22,7 +21,7 @@ def eq(x, y, prec=1e-10):
 
 
 # XXX name is a bit silly
-class NormalNormalNormalPoutineTestCase(TestCase):
+class NormalNormalNormalPoutineTestCase(object):
 
     def setUp(self):
         pyro.clear_param_store()
@@ -64,7 +63,7 @@ class NormalNormalNormalPoutineTestCase(TestCase):
         self.partial_sample_sites = {"latent1": "latent1"}
 
 
-class TracePoutineTests(NormalNormalNormalPoutineTestCase):
+class TestTracePoutine(NormalNormalNormalPoutineTestCase):
 
     def test_trace_full(self):
         guide_trace = poutine.trace(self.guide).get_trace()
@@ -85,7 +84,7 @@ class TracePoutineTests(NormalNormalNormalPoutineTestCase):
                      model_trace.nodes["_RETURN"]["value"])
 
 
-class ReplayPoutineTests(NormalNormalNormalPoutineTestCase):
+class TestReplayPoutine(NormalNormalNormalPoutineTestCase):
 
     def test_replay_full(self):
         guide_trace = poutine.trace(self.guide).get_trace()
@@ -120,7 +119,7 @@ class ReplayPoutineTests(NormalNormalNormalPoutineTestCase):
             assert_equal(model_trace.nodes[name]["value"], tr2.nodes[name]["value"])
 
 
-class BlockPoutineTests(NormalNormalNormalPoutineTestCase):
+class TestBlockPoutine(NormalNormalNormalPoutineTestCase):
 
     def test_block_full(self):
         model_trace = poutine.trace(poutine.block(self.model)).get_trace()
@@ -186,7 +185,7 @@ class BlockPoutineTests(NormalNormalNormalPoutineTestCase):
                 assert name not in guide_trace
 
 
-class QueuePoutineDiscreteTest(TestCase):
+class TestQueuePoutineDiscrete(object):
 
     def setUp(self):
 
@@ -259,7 +258,7 @@ class Model(nn.Module):
         return self.fc(x)
 
 
-class LiftPoutineTests(TestCase):
+class TestLiftPoutine(object):
 
     def setUp(self):
         pyro.clear_param_store()
@@ -367,7 +366,7 @@ class LiftPoutineTests(TestCase):
                 assert not lifted_tr.nodes[key_name]["is_observed"]
 
 
-class QueuePoutineMixedTest(TestCase):
+class TestQueuePoutineMixed(object):
 
     def setUp(self):
 
@@ -417,7 +416,7 @@ class QueuePoutineMixedTest(TestCase):
         assert values[0]["z"] != values[1]["z"]  # Almost surely true.
 
 
-class IndirectLambdaPoutineTests(TestCase):
+class TestIndirectLambdaPoutine(object):
 
     def setUp(self):
 
@@ -469,7 +468,7 @@ class IndirectLambdaPoutineTests(TestCase):
         _test_scale_factor(2, 1, [2.0] * 2)
 
 
-class ConditionPoutineTests(NormalNormalNormalPoutineTestCase):
+class TestConditionPoutine(NormalNormalNormalPoutineTestCase):
 
     def test_condition(self):
         data = {"latent2": Variable(torch.randn(2))}
@@ -532,7 +531,7 @@ class ConditionPoutineTests(NormalNormalNormalPoutineTestCase):
         assert eq(sample_from_do_model, ng_zeros(1))
 
 
-class EscapePoutineTests(TestCase):
+class TestEscapePoutine(object):
 
     def setUp(self):
 

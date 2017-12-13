@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import logging
-from unittest import TestCase
 
 import numpy as np
 import pytest
@@ -31,7 +30,7 @@ def param_abs_error(name, target):
     return torch.sum(torch.abs(target - pyro.param(name))).data.cpu().numpy()[0]
 
 
-class NormalNormalTests(TestCase):
+class TestNormalNormal(object):
 
     def setUp(self):
         # normal-normal; known covariance
@@ -100,7 +99,7 @@ class NormalNormalTests(TestCase):
         assert_equal(0.0, log_sig_error, prec=0.03)
 
 
-class NormalNormalNormalTests(TestCase):
+class TestNormalNormalNormal(object):
 
     def setUp(self):
         # normal-normal-normal; known covariance
@@ -231,7 +230,7 @@ class NormalNormalNormalTests(TestCase):
         assert_equal(0.0, kappa_error, prec=prec)
 
 
-class BernoulliBetaTests(TestCase):
+class TestBernoulliBeta(object):
     def setUp(self):
         # bernoulli-beta model
         # beta prior hyperparameter
@@ -288,7 +287,7 @@ class BernoulliBetaTests(TestCase):
         assert_equal(0.0, beta_error, prec=0.04)
 
 
-class PoissonGammaTests(TestCase):
+class TestPoissonGamma(object):
     def setUp(self):
         # poisson-gamma model
         # gamma prior hyperparameter
@@ -348,7 +347,7 @@ class PoissonGammaTests(TestCase):
         assert_equal(0.0, beta_error, prec=0.08)
 
 
-class ExponentialGammaTests(TestCase):
+class TestExponentialGamma(object):
     def setUp(self):
         # exponential-gamma model
         # gamma prior hyperparameter
@@ -407,7 +406,7 @@ class LogNormalNormalGuide(nn.Module):
         self.tau_q_log = Parameter(tau_q_log_init)
 
 
-class LogNormalNormalTests(TestCase):
+class TestLogNormalNormal(object):
     def setUp(self):
         # lognormal-normal model
         # putting some of the parameters inside of a torch module to
@@ -512,7 +511,7 @@ class LogNormalNormalTests(TestCase):
 
 @pytest.mark.init(rng_seed=0)
 @pytest.mark.stage("integration", "integration_batch_1")
-class RaoBlackwellizationTests(TestCase):
+class TestRaoBlackwellization(object):
     def setUp(self):
         # normal-normal; known covariance
         self.lam0 = Variable(torch.Tensor([0.1, 0.1]))   # precision of prior

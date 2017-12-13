@@ -1,7 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-from unittest import TestCase
-
 import numpy as np
 import torch
 from torch.autograd import Variable
@@ -10,7 +8,7 @@ import pyro.distributions as dist
 from tests.common import assert_equal
 
 
-class TestDelta(TestCase):
+class TestDelta(object):
     def setUp(self):
         self.v = Variable(torch.Tensor([3]))
         self.vs = Variable(torch.Tensor([[0], [1], [2], [3]]))

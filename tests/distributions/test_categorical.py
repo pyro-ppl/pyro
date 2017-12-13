@@ -1,7 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-from unittest import TestCase
-
 import numpy as np
 import pytest
 import scipy.stats as sp
@@ -12,7 +10,7 @@ import pyro.distributions as dist
 from tests.common import assert_equal
 
 
-class TestCategorical(TestCase):
+class TestCategorical(object):
     """
     Tests methods specific to the Categorical distribution
     """

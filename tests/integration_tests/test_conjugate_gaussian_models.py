@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 import logging
 import os
 import time
-from unittest import TestCase
 
 import networkx
 import numpy as np
@@ -26,7 +25,7 @@ def param_mse(name, target):
 
 @pytest.mark.stage("integration", "integration_batch_1")
 @pytest.mark.init(rng_seed=0)
-class GaussianChainTests(TestCase):
+class TestGaussianChain(object):
     # chain of normals with known covariances and latent means
 
     def setUp(self):
@@ -186,7 +185,7 @@ class GaussianChainTests(TestCase):
 
 @pytest.mark.stage("integration", "integration_batch_2")
 @pytest.mark.init(rng_seed=0)
-class GaussianPyramidTests(TestCase):
+class TestGaussianPyramid(object):
 
     def setUp(self):
         self.mu0 = Variable(torch.Tensor([0.52]))

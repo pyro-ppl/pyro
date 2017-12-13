@@ -1,7 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-from unittest import TestCase
-
 import pytest
 import torch
 from torch import nn as nn
@@ -26,7 +24,7 @@ def param_abs_error(name, target):
     return torch.sum(torch.abs(target - pyro.param(name))).data.cpu().numpy()[0]
 
 
-class NormalNormalTests(TestCase):
+class TestNormalNormal(object):
 
     def setUp(self):
         # normal-normal; known covariance
@@ -92,7 +90,7 @@ class NormalNormalTests(TestCase):
         assert_equal(0.0, log_sig_error, prec=0.05)
 
 
-class TestFixedModelGuide(TestCase):
+class TestFixedModelGuide(object):
     def setUp(self):
         self.data = Variable(torch.Tensor([2.0]))
         self.alpha_q_log_0 = 0.17 * torch.ones(1)
@@ -160,7 +158,7 @@ class TestFixedModelGuide(TestCase):
 
 
 @pytest.mark.stage("integration", "integration_batch_2")
-class PoissonGammaTests(TestCase):
+class TestPoissonGamma(object):
     def setUp(self):
         # poisson-gamma model
         # gamma prior hyperparameter
@@ -218,7 +216,7 @@ class PoissonGammaTests(TestCase):
         assert_equal(0.0, beta_error, prec=0.08)
 
 
-class ExponentialGammaTests(TestCase):
+class TestExponentialGamma(object):
     def setUp(self):
         # exponential-gamma model
         # gamma prior hyperparameter
@@ -264,7 +262,7 @@ class ExponentialGammaTests(TestCase):
         assert_equal(0.0, beta_error, prec=0.08)
 
 
-class BernoulliBetaTests(TestCase):
+class TestBernoulliBeta(object):
     def setUp(self):
         # bernoulli-beta model
         # beta prior hyperparameter
@@ -326,7 +324,7 @@ class LogNormalNormalGuide(nn.Module):
 
 
 @pytest.mark.stage("integration", "integration_batch_2")
-class LogNormalNormalTests(TestCase):
+class TestLogNormalNormal(object):
     def setUp(self):
         # lognormal-normal model
         # putting some of the parameters inside of a torch module to
@@ -420,7 +418,7 @@ class LogNormalNormalTests(TestCase):
         assert_equal(0.0, tau_error, prec=0.05)
 
 
-class SafetyTests(TestCase):
+class TestSafety(object):
 
     def setUp(self):
         # normal-normal; known covariance

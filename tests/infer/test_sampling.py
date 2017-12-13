@@ -1,7 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-from unittest import TestCase
-
 import pytest
 import torch
 from torch.autograd import Variable
@@ -12,7 +10,7 @@ from pyro.distributions import Bernoulli, Normal
 from tests.common import assert_equal
 
 
-class HMMSamplingTestCase(TestCase):
+class HMMSamplingTestCase(object):
 
     def setUp(self):
 
@@ -40,7 +38,7 @@ class HMMSamplingTestCase(TestCase):
         self.model = model
 
 
-class NormalNormalSamplingTestCase(TestCase):
+class NormalNormalSamplingTestCase(object):
 
     def setUp(self):
 
@@ -67,7 +65,7 @@ class NormalNormalSamplingTestCase(TestCase):
         self.guide = guide
 
 
-class SearchTest(HMMSamplingTestCase):
+class TestSearch(HMMSamplingTestCase):
 
     def test_complete(self):
         posterior = pyro.infer.Search(self.model)
@@ -101,7 +99,7 @@ class SearchTest(HMMSamplingTestCase):
             assert i + 1 in tr_rets
 
 
-class ImportanceTest(NormalNormalSamplingTestCase):
+class TestImportance(NormalNormalSamplingTestCase):
 
     @pytest.mark.init(rng_seed=0)
     def test_importance_guide(self):
