@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+from unittest import TestCase
+
 import pytest
 import torch
 from torch import nn as nn
@@ -12,7 +14,7 @@ import pyro.optim as optim
 from pyro.distributions.transformed_distribution import TransformedDistribution
 from pyro.infer.svi import SVI
 from pyro.util import ng_ones, ng_zeros
-from tests.common import TestCase
+from tests.common import assert_equal
 from tests.distributions.test_transformed_distribution import AffineExp
 
 
@@ -86,8 +88,8 @@ class NormalNormalTests(TestCase):
             mu_error = param_mse("mu_q", self.analytic_mu_n)
             log_sig_error = param_mse("log_sig_q", self.analytic_log_sig_n)
 
-        self.assertEqual(0.0, mu_error, prec=0.05)
-        self.assertEqual(0.0, log_sig_error, prec=0.05)
+        assert_equal(0.0, mu_error, prec=0.05)
+        assert_equal(0.0, log_sig_error, prec=0.05)
 
 
 class TestFixedModelGuide(TestCase):
@@ -212,8 +214,8 @@ class PoissonGammaTests(TestCase):
 
         alpha_error = param_abs_error("alpha_q_log", self.log_alpha_n)
         beta_error = param_abs_error("beta_q_log", self.log_beta_n)
-        self.assertEqual(0.0, alpha_error, prec=0.08)
-        self.assertEqual(0.0, beta_error, prec=0.08)
+        assert_equal(0.0, alpha_error, prec=0.08)
+        assert_equal(0.0, beta_error, prec=0.08)
 
 
 class ExponentialGammaTests(TestCase):
@@ -258,8 +260,8 @@ class ExponentialGammaTests(TestCase):
 
         alpha_error = param_abs_error("alpha_q_log", self.log_alpha_n)
         beta_error = param_abs_error("beta_q_log", self.log_beta_n)
-        self.assertEqual(0.0, alpha_error, prec=0.08)
-        self.assertEqual(0.0, beta_error, prec=0.08)
+        assert_equal(0.0, alpha_error, prec=0.08)
+        assert_equal(0.0, beta_error, prec=0.08)
 
 
 class BernoulliBetaTests(TestCase):
@@ -312,8 +314,8 @@ class BernoulliBetaTests(TestCase):
             alpha_error = param_abs_error("alpha_q_log", self.log_alpha_n)
             beta_error = param_abs_error("beta_q_log", self.log_beta_n)
 
-        self.assertEqual(0.0, alpha_error, prec=0.08)
-        self.assertEqual(0.0, beta_error, prec=0.08)
+        assert_equal(0.0, alpha_error, prec=0.08)
+        assert_equal(0.0, beta_error, prec=0.08)
 
 
 class LogNormalNormalGuide(nn.Module):
@@ -377,8 +379,8 @@ class LogNormalNormalTests(TestCase):
 
         mu_error = param_abs_error("mymodule$$$mu_q_log", self.log_mu_n)
         tau_error = param_abs_error("mymodule$$$tau_q_log", self.log_tau_n)
-        self.assertEqual(0.0, mu_error, prec=0.07)
-        self.assertEqual(0.0, tau_error, prec=0.07)
+        assert_equal(0.0, mu_error, prec=0.07)
+        assert_equal(0.0, tau_error, prec=0.07)
 
     def test_elbo_with_transformed_distribution(self):
         pyro.clear_param_store()
@@ -414,8 +416,8 @@ class LogNormalNormalTests(TestCase):
 
         mu_error = param_abs_error("mu_q_log", self.log_mu_n)
         tau_error = param_abs_error("tau_q_log", self.log_tau_n)
-        self.assertEqual(0.0, mu_error, prec=0.05)
-        self.assertEqual(0.0, tau_error, prec=0.05)
+        assert_equal(0.0, mu_error, prec=0.05)
+        assert_equal(0.0, tau_error, prec=0.05)
 
 
 class SafetyTests(TestCase):

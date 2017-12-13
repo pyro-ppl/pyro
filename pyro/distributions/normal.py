@@ -164,5 +164,5 @@ def WrapNormal(mu, sigma, batch_size=None, log_pdf_mask=None, *args, **kwargs):
         _warn_fallback('Unsupported reparameterized=True')
     else:
         return TorchNormal(mu, sigma, reparameterized=reparameterized)
-    return Normal(mu, sigma, batch_size=batch_size, log_pdf_mask=log_pdf_mask,
-                  reparameterized=reparameterized, *args, **kwargs)
+    return Normal(
+        mu, sigma, batch_size=batch_size, log_pdf_mask=log_pdf_mask, reparameterized=reparameterized, *args, **kwargs)
