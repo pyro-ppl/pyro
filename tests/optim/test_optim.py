@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+from unittest import TestCase
+
 import torch
 from torch.autograd import Variable
 
@@ -7,7 +9,6 @@ import pyro
 import pyro.optim as optim
 from pyro.distributions import Normal
 from pyro.infer import SVI
-from tests.common import TestCase
 
 
 class OptimTests(TestCase):

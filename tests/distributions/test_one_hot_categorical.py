@@ -1,12 +1,14 @@
 from __future__ import absolute_import, division, print_function
 
+from unittest import TestCase
+
 import numpy as np
 import pytest
 import torch
 from torch.autograd import Variable
 
 import pyro.distributions as dist
-from tests.common import TestCase, assert_equal
+from tests.common import assert_equal
 
 
 class TestOneHotCategorical(TestCase):
