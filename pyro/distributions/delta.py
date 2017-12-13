@@ -75,4 +75,4 @@ class Delta(Distribution):
         :return: torch variable enumerating the support of the delta distribution.
         :rtype: torch.autograd.Variable.
         """
-        return Variable(self.v.data)
+        return Variable(self.v.data.unsqueeze(0))

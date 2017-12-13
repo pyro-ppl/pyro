@@ -179,7 +179,7 @@ class Categorical(Distribution):
         elif vs is not None:
             result = torch.transpose(vs, 0, -1).contiguous().view(support_samples_size)
         else:
-            shape = self.ps.shape[:-1] + (1,)
+            shape = self.ps.size()[:-1] + (1,)
             result = torch.arange(self.ps.size(-1)).long()
             result = result.view((-1,) + (1,) * len(shape)).expand((-1,) + shape)
 

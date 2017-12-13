@@ -106,7 +106,11 @@ class Bernoulli(Distribution):
             sample.
         :rtype: torch.autograd.Variable.
         """
-        return Variable(torch.stack([torch.Tensor([t]).expand_as(self.ps) for t in [0, 1]]))
+        result = torch.arange(2).long()
+        result = result.view((-1,) + (1,) * self.ps.dim()).expand((-1,) + self.ps.size())
+        if self.ps.is_cuda:
+            result = result.cuda(self.ps.get_device())
+        return Variable(result)
 
     def analytic_mean(self):
         """
