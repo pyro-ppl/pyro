@@ -142,7 +142,6 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
     # we include only downstream costs to reduce variance
     # optionally include baselines to further reduce variance
     # XXX should the average baseline be in the param store as below?
-    surrogate_elbo = 0.0
     baseline_loss = 0.0
     # the following are needed in case we're using lax baselines
     full_gradients = [None] * len(trainable_params_minus_bl_params)
@@ -186,6 +185,7 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
                                     create_graph=True, allow_unused=True)
         for k in range(len(grads_log_q)):
             g, p = grads_log_q[k], trainable_params_minus_bl_params[k]
+            # assemble the reinforce-like term
             cost_times_grad = downstream_cost * g.detach() if g is not None else None
             if cost_times_grad is None:
                 continue  # log_q didn't depend on parameter p
@@ -201,11 +201,12 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
                     full_gradients[k] += cost_times_grad
 
     # if any nodes have use_lax then construct lax baseline_loss
+    # have to compute at end because there may be cross-terms in the norm
     for full_gradient in full_gradients:
         if full_gradient is not None:
             baseline_loss += full_gradient.norm()
 
-    return surrogate_elbo, baseline_loss
+    return baseline_loss
 
 
 class TraceGraph_ELBO(object):
@@ -336,14 +337,17 @@ class TraceGraph_ELBO(object):
         if non_reparam_nodes:
             downstream_costs = _compute_downstream_costs(
                     model_trace, guide_trace,  model_vec_md_nodes, guide_vec_md_nodes, non_reparam_nodes)
-            surrogate_elbo_term, baseline_loss = _compute_elbo_non_reparam(
+            baseline_loss = _compute_elbo_non_reparam(
                     guide_trace, guide_vec_md_nodes, non_reparam_nodes, downstream_costs,
                     trainable_params_minus_bl_params)
-            surrogate_elbo += surrogate_elbo_term
 
         if trainable_params:
             surrogate_loss = -surrogate_elbo
-            torch_backward(weight * surrogate_loss)
+            # XXX this try block is a hack that will go away when we phase out backward()
+            try:
+                torch_backward(weight * surrogate_loss)
+            except RuntimeError:
+                pass
             torch_backward(weight * baseline_loss)
             pyro.get_param_store().mark_params_active(trainable_params)
 

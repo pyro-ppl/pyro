@@ -124,11 +124,11 @@ class NormalNormalNormalTests(TestCase):
         self.do_elbo_test(True, True, 5000, 0.02, 0.002, False, False)
 
     def test_elbo_nonreparameterized_both_baselines(self):
-        self.do_elbo_test(False, False, 15000, 0.05, 0.001, use_nn_baseline=True,
+        self.do_elbo_test(False, False, 5000, 0.05, 0.001, use_nn_baseline=True,
                           use_decaying_avg_baseline=True)
 
     def test_elbo_nonreparameterized_decaying_baseline(self):
-        self.do_elbo_test(True, False, 12000, 0.04, 0.0015, use_nn_baseline=False,
+        self.do_elbo_test(True, False, 5000, 0.04, 0.0015, use_nn_baseline=False,
                           use_decaying_avg_baseline=True)
 
     def test_elbo_nonreparameterized_nn_baseline(self):
@@ -194,7 +194,8 @@ class NormalNormalNormalTests(TestCase):
             mu_latent_prime_dist = dist.Normal(kappa_q.expand_as(mu_latent) * mu_latent + mu_q_prime,
                                                sig_q_prime,
                                                reparameterized=repa1)
-            pyro.module("mu_prime_baseline", mu_prime_baseline, tags="baseline")
+            if mu_prime_baseline is not None:
+                pyro.module("mu_prime_baseline", mu_prime_baseline, tags="baseline")
             pyro.sample("mu_latent_prime",
                         mu_latent_prime_dist,
                         baseline=dict(nn_baseline=mu_prime_baseline,
@@ -206,7 +207,7 @@ class NormalNormalNormalTests(TestCase):
 
         def per_param_callable(module_name, param_name, tags):
             if 'baseline' in tags:
-                return {"lr": 1.0e-1, "betas": (0.90, 0.999)}
+                return {"lr": 5.0e-2, "betas": (0.90, 0.999)}
             else:
                 return {"lr": 0.0015, "betas": (0.97, 0.999)}
 
