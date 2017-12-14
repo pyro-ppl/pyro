@@ -162,3 +162,11 @@ class Trace(networkx.DiGraph):
         are not reparameterizable primitive distributions
         """
         return list(set(self.stochastic_nodes) - set(self.reparameterized_nodes))
+
+    def iter_stochastic_nodes(self):
+        """
+        Returns an iterator over stochastic nodes in the trace.
+        """
+        for name, node in self.nodes.items():
+            if node["type"] == "sample" and not node["is_observed"]:
+                yield name, node
