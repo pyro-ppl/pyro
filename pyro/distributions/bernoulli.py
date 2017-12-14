@@ -107,7 +107,7 @@ class Bernoulli(Distribution):
         :rtype: torch.autograd.Variable.
         """
         result = torch.arange(0, 2).long()
-        result = result.view((-1,) + (1,) * self.ps.dim()).expand((-1,) + self.ps.size())
+        result = result.view((-1,) + (1,) * self.ps.dim()).expand((2,) + self.ps.size())
         if self.ps.is_cuda:
             result = result.cuda(self.ps.get_device())
         return Variable(result)
