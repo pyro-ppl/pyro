@@ -140,8 +140,8 @@ class NormalNormalNormalTests(TestCase):
     def do_elbo_test(self, repa1, repa2, n_steps, prec, lr, use_nn_baseline, use_decaying_avg_baseline,
                      use_lax=False):
         logger.info(" - - - - - DO NORMALNORMALNORMAL ELBO TEST - - - - - -")
-        logger.info("[reparameterized = %s, %s; nn_baseline = %s, decaying_baseline = %s]" %
-                    (repa1, repa2, use_nn_baseline, use_decaying_avg_baseline))
+        logger.info("[reparameterized = %s, %s; nn_baseline = %s, decaying_baseline = %s, use_lax = %s]" %
+                    (repa1, repa2, use_nn_baseline, use_decaying_avg_baseline, use_lax))
         pyro.clear_param_store()
 
         if use_nn_baseline:
@@ -206,12 +206,11 @@ class NormalNormalNormalTests(TestCase):
 
         def per_param_callable(module_name, param_name, tags):
             if 'baseline' in tags:
-                return {"lr": 1.0e-2, "betas": (0.90, 0.999)}
+                return {"lr": 1.0e-1, "betas": (0.90, 0.999)}
             else:
                 return {"lr": 0.0015, "betas": (0.97, 0.999)}
 
         adam = optim.Adam(per_param_callable)
-        #adam = optim.Adam({"lr": .0015, "betas": (0.97, 0.999)})
         svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
 
         for k in range(n_steps):
@@ -225,8 +224,8 @@ class NormalNormalNormalTests(TestCase):
 
             if k % 500 == 0:
                 logger.debug("errors [%04d]:  %.4f, %.4f" % (k, mu_error, log_sig_error))
-                logger.debug(", %.4f, %.4f" % (mu_prime_error, log_sig_prime_error))
-                logger.debug(", %.4f" % kappa_error)
+                logger.debug("                %.4f, %.4f, %.4f" % (mu_prime_error,
+                    log_sig_prime_error, kappa_error))
 
         self.assertEqual(0.0, mu_error, prec=prec)
         self.assertEqual(0.0, log_sig_error, prec=prec)
