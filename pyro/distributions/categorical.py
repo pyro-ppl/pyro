@@ -180,7 +180,7 @@ class Categorical(Distribution):
             result = torch.transpose(vs, 0, -1).contiguous().view(support_samples_size)
         else:
             shape = self.ps.size()[:-1] + (1,)
-            result = torch.arange(self.ps.size(-1)).long()
+            result = torch.arange(0, self.ps.size(-1)).long()
             result = result.view((-1,) + (1,) * len(shape)).expand((-1,) + shape)
 
         if not isinstance(result, Variable):
