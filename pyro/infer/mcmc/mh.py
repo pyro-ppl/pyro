@@ -5,27 +5,19 @@ import pyro.distributions as dist
 from pyro import poutine
 from pyro.infer.mcmc.trace_kernel import TraceKernel
 from pyro.util import ng_ones, ng_zeros
-from torch import Tensor as T
-from torch.autograd import Variable as V
+from torch import Tensor
+from torch.autograd import Variable
 from numpy.random import choice
 from numpy import isfinite
-from torch import log as tlog
-
-_R = '_RETURN'
+import torch
 
 
-def VT(val):
-    return V(T(val))
-
-
-def VTA(val):
-    return VT([val])
-
-
-def assert_valid_trace(trace):
-    assert not any(['fn' in n and isinstance(n['fn'], pyro._Subsample)
-                    for nid, n in trace.nodes(data=True)]), \
-                    "Single Site MH does not currently handle mapdata in model."
+def check_valid_mh_trace(trace):
+    # function checks if there are any map_data constructs
+    # those aren't yet supported in single-site mh
+    if any(['fn' in n and isinstance(n['fn'], pyro._Subsample)
+            for nid, n in trace.nodes(data=True)]):
+        raise NotImplementedError("Single Site MH does not currently handle mapdata in model.")
 
 
 # get all the sample sites
@@ -35,7 +27,7 @@ def sample_sites(trace, minus=set()):
             and not n["is_observed"]]
 
 
-class NormalProposal():
+class NormalProposal(object):
     def __init__(self, mu, sigma, tune_frequency=100):
         self.mu = mu
         self.sigma = sigma
@@ -61,9 +53,10 @@ class NormalProposal():
         sigma = self.scale*self.sigma
         return dist.Normal(mu, sigma).log_pdf(y)
 
-    # borrowed from:
-    # https://github.com/mcleonard/sampyl/blob/master/sampyl/samplers/metropolis.py#L102
-    # which in turn borrows from pymc3
+    # Code from:
+    # https://github.com/pymc-devs/pymc3/blob/master/pymc3/step_methods/metropolis.py#L180
+    # license for pymc3:
+    # https://github.com/pymc-devs/pymc3/blob/master/LICENSE
     def tune(self, acceptance):
         self._tune_cnt -= 1
         if self._tune_cnt > 0:
@@ -123,7 +116,7 @@ class MH(TraceKernel):
     def initial_trace(self):
         # maintain all traces, may need to kill at the end
         trace = poutine.trace(self.model).get_trace(*self._args, **self._kwargs)
-        assert_valid_trace(trace)
+        check_valid_mh_trace(trace)
         self._kernel_traces.append(trace)
         return trace
 
@@ -133,6 +126,12 @@ class MH(TraceKernel):
         self._kernel_traces = []
 
     def _cleanup_trace(self, reject_trace, accept_trace=None):
+        """
+        Important for subclasses, e.g. to allow cleanup of any pause/resume trace structure
+
+        :param reject_trace: A trace that is to be rejected by the MH sample procedure.
+        :param accept_trace: (optional) The currently accepted trace.
+        """
         pass
 
     @property
@@ -191,7 +190,7 @@ class MH(TraceKernel):
         # depending on replay type, this can be pretty efficient!
         # TODO: Send r_site to know where to start replaying
         prop_trace = poutine.trace(poutine.replay(self.model, replay_proposal)).get_trace(*self._args, **self._kwargs)
-        assert_valid_trace(prop_trace)
+        check_valid_mh_trace(prop_trace)
 
         # how many sample sites in our new trace
         prop_trace_nodes = sample_sites(prop_trace)
@@ -206,11 +205,11 @@ class MH(TraceKernel):
         # alg2 pg 772, line 7-8 http://proceedings.mlr.press/v15/wingate11a/wingate11a.pdf
 
         # R = -log(len(old_trace)) + PD(X').log_pdf(X)
-        R = -tlog(VTA(trace_length)).type_as(trace_value) + \
+        R = -torch.log(Variable(Tensor([trace_length]))).type_as(trace_value) + \
             self.proposal_dist.log_pdf_given(trace_value, given_x=proposal_value)
 
         # F = -log(len(new_trace)) + PD(X).log_pdf(X')
-        F = -tlog(VTA(prop_trace_length)).type_as(trace_value) + \
+        F = -torch.log(Variable(Tensor([prop_trace_length]))).type_as(trace_value) + \
             self.proposal_dist.log_pdf_given(proposal_value, given_x=trace_value)
 
         # ll' - ll + R - F
