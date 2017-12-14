@@ -168,4 +168,4 @@ class Trace(networkx.DiGraph):
         """
         Gets a list of all param sites in trace
         """
-    	return [site["value"] for site in self.nodes.values() if site["type"] == "param"]
+        return [site["value"] for site in self.nodes.values() if site["type"] == "param"]

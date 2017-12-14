@@ -5,7 +5,6 @@ from collections import namedtuple
 
 import networkx
 import numpy as np
-import torch
 import torch.autograd as autograd
 
 import pyro
@@ -327,7 +326,7 @@ class TraceGraph_ELBO(object):
         non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
         # collect parameters to train from model and guide
         trainable_params, trainable_params_minus_bl_params = _get_sorted_params(model_trace,
-            guide_trace, non_reparam_nodes)
+                                                                                guide_trace, non_reparam_nodes)
 
         # compute elbo for reparameterized nodes
         elbo, surrogate_elbo = _compute_elbo_reparam(model_trace, guide_trace, non_reparam_nodes)
