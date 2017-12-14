@@ -227,15 +227,7 @@ def setup(args):
     return train_loader, test_loader
 
 
-def main():
-    parser = argparse.ArgumentParser(description='VAE using MNIST dataset')
-    parser.add_argument('-n', '--num-epochs', nargs='?', default=10, type=int)
-    parser.add_argument('--batch_size', nargs='?', default=128, type=int)
-    parser.add_argument('--rng_seed', nargs='?', default=0, type=int)
-    parser.add_argument('--impl', nargs='?', default='pyro', type=str)
-    parser.add_argument('--skip_eval', action='store_true')
-    parser.set_defaults(skip_eval=False)
-    args = parser.parse_args()
+def main(args):
     train_loader, test_loader = setup(args)
     if args.impl == 'pyro':
         vae = PyroVAEImpl(args, train_loader, test_loader)
@@ -252,4 +244,12 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(description='VAE using MNIST dataset')
+    parser.add_argument('-n', '--num-epochs', nargs='?', default=10, type=int)
+    parser.add_argument('--batch_size', nargs='?', default=128, type=int)
+    parser.add_argument('--rng_seed', nargs='?', default=0, type=int)
+    parser.add_argument('--impl', nargs='?', default='pyro', type=str)
+    parser.add_argument('--skip_eval', action='store_true')
+    parser.set_defaults(skip_eval=False)
+    args = parser.parse_args()
+    main(args)

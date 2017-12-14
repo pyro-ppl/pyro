@@ -17,7 +17,7 @@ TEST_EXAMPLES = []
 EXAMPLE_IDS = []
 
 ModelArgs = namedtuple('model_args', ['step_size', 'num_steps', 'q_i', 'p_i', 'q_f', 'p_f', 'prec'])
-TestCase = namedtuple('test_case', ['model', 'args'])
+Example = namedtuple('test_case', ['model', 'args'])
 
 
 def tensor(arr):
@@ -31,8 +31,8 @@ def register_model(init_args):
     """
     def register_fn(model):
         for args in init_args:
-            test_case = TestCase(model, args)
-            TEST_EXAMPLES.append(test_case)
+            test_example = Example(model, args)
+            TEST_EXAMPLES.append(test_example)
             EXAMPLE_IDS.append(model.__name__)
     return register_fn
 

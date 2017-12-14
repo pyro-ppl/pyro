@@ -1,11 +1,13 @@
 from __future__ import absolute_import, division, print_function
 
+from unittest import TestCase
+
 import numpy as np
 import torch
 from torch.autograd import Variable
 
 import pyro.distributions as dist
-from tests.common import TestCase, assert_equal
+from tests.common import assert_equal
 
 
 class TestDelta(TestCase):
@@ -25,13 +27,13 @@ class TestDelta(TestCase):
 
     def test_log_pdf(self):
         log_px_torch = dist.delta.log_pdf(self.test_data, self.v).data
-        self.assertEqual(torch.sum(log_px_torch), 0)
+        assert_equal(torch.sum(log_px_torch), 0)
 
     def test_batch_log_pdf(self):
         log_px_torch = dist.delta.batch_log_pdf(self.batch_test_data_1, self.vs_expanded).data
-        self.assertEqual(torch.sum(log_px_torch), 0)
+        assert_equal(torch.sum(log_px_torch), 0)
         log_px_torch = dist.delta.batch_log_pdf(self.batch_test_data_2, self.vs_expanded).data
-        self.assertEqual(torch.sum(log_px_torch), float('-inf'))
+        assert_equal(torch.sum(log_px_torch), float('-inf'))
 
     def test_batch_log_pdf_shape(self):
         assert dist.delta.batch_log_pdf(self.batch_test_data_3, self.vs).size() == (4, 1)
@@ -42,8 +44,8 @@ class TestDelta(TestCase):
                          for _ in range(self.n_samples)]
         torch_mean = np.mean(torch_samples)
         torch_var = np.var(torch_samples)
-        self.assertEqual(torch_mean, self.analytic_mean)
-        self.assertEqual(torch_var, self.analytic_var)
+        assert_equal(torch_mean, self.analytic_mean)
+        assert_equal(torch_var, self.analytic_var)
 
     def test_support(self):
         actual_support = dist.delta.enumerate_support(self.vs)

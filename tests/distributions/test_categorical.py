@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+from unittest import TestCase
+
 import numpy as np
 import pytest
 import scipy.stats as sp
@@ -7,7 +9,7 @@ import torch
 from torch.autograd import Variable
 
 import pyro.distributions as dist
-from tests.common import TestCase, assert_equal
+from tests.common import assert_equal
 
 
 class TestCategorical(TestCase):
@@ -43,14 +45,14 @@ class TestCategorical(TestCase):
     def test_log_pdf(self):
         log_px_torch = dist.categorical.batch_log_pdf(self.test_data, self.ps).data[0]
         log_px_np = float(sp.multinomial.logpmf(np.array([0, 0, 1]), 1, self.ps.data.cpu().numpy()))
-        self.assertEqual(log_px_torch, log_px_np, prec=1e-4)
+        assert_equal(log_px_torch, log_px_np, prec=1e-4)
 
     def test_mean_and_var(self):
         torch_samples = [dist.categorical(self.ps).data.cpu().numpy()
                          for _ in range(self.n_samples)]
         _, counts = np.unique(torch_samples, return_counts=True)
         computed_mean = float(counts[0]) / self.n_samples
-        self.assertEqual(computed_mean, self.analytic_mean.data.cpu().numpy()[0], prec=0.05)
+        assert_equal(computed_mean, self.analytic_mean.data.cpu().numpy()[0], prec=0.05)
 
     def test_support_non_vectorized(self):
         s = dist.categorical.enumerate_support(self.d_ps[0].squeeze(0), self.d_vs[0].squeeze(0))

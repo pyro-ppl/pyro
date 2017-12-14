@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+from unittest import TestCase
+
 import numpy as np
 import pytest
 import torch
@@ -7,7 +9,6 @@ from torch.autograd import Variable
 
 from pyro.distributions.transformed_distribution import InverseAutoregressiveFlow
 from pyro.nn import AutoRegressiveNN
-from tests.common import TestCase
 
 pytestmark = pytest.mark.init(rng_seed=123)
 
@@ -46,9 +47,9 @@ class InverseAutoregressiveFlowTests(TestCase):
         diag_sum = torch.sum(torch.diag(nonzero(permuted_jacobian)))
         lower_sum = torch.sum(torch.tril(nonzero(permuted_jacobian), diagonal=-1))
 
-        self.assertTrue(ldt_discrepancy < self.epsilon)
-        self.assertTrue(diag_sum == float(input_dim))
-        self.assertTrue(lower_sum == float(0.0))
+        assert ldt_discrepancy < self.epsilon
+        assert diag_sum == float(input_dim)
+        assert lower_sum == float(0.0)
 
     def test_jacobians(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
@@ -83,7 +84,7 @@ class AutoRegressiveNNTests(TestCase):
                     permuted_jacobian[j, k] = jacobian[permutation[j], permutation[k]]
 
             lower_sum = torch.sum(torch.tril(nonzero(permuted_jacobian), diagonal=0))
-            self.assertTrue(lower_sum == float(0.0))
+            assert lower_sum == float(0.0)
 
     def test_jacobians(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
