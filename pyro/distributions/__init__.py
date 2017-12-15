@@ -7,7 +7,7 @@ from pyro.distributions.binomial import Binomial
 from pyro.distributions.categorical import WrapCategorical as Categorical
 from pyro.distributions.cauchy import Cauchy
 from pyro.distributions.delta import Delta
-from pyro.distributions.dirichlet import Dirichlet
+from pyro.distributions.dirichlet import WrapDirichlet as Dirichlet
 from pyro.distributions.distribution import Distribution  # noqa: F401
 from pyro.distributions.exponential import Exponential
 from pyro.distributions.gamma import WrapGamma as Gamma
