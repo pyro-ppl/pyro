@@ -26,7 +26,7 @@ class Binomial(Distribution):
         if isinstance(n, numbers.Number):
             n = torch.LongTensor([n]).type_as(ps.data)
             if ps.is_cuda:
-                n = n.cuda()
+                n = n.cuda(ps.get_device())
             n = Variable(n)
         self.ps = ps
         self.n = n

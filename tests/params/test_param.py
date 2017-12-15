@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from copy import copy
+from unittest import TestCase
 
 import numpy as np
 import torch
@@ -9,7 +10,6 @@ from torch import nn as nn
 from torch.autograd import Variable
 
 import pyro
-from tests.common import TestCase
 
 
 class ParamStoreDictTests(TestCase):

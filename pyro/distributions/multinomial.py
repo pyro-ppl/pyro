@@ -30,7 +30,7 @@ class Multinomial(Distribution):
         if isinstance(n, numbers.Number):
             n = torch.LongTensor([n]).type_as(ps.data)
             if ps.is_cuda:
-                n = n.cuda()
+                n = n.cuda(ps.get_device())
             n = Variable(n)
         self.ps = ps
         self.n = n
@@ -74,7 +74,7 @@ class Multinomial(Distribution):
             arr=self.expanded_sample().data.cpu().numpy())
         counts = torch.from_numpy(counts)
         if self.ps.is_cuda:
-            counts = counts.cuda()
+            counts = counts.cuda(self.ps.get_device())
         return Variable(counts)
 
     def expanded_sample(self):

@@ -1,5 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
+import logging
+from unittest import TestCase
+
 import numpy as np
 import pytest
 import torch
@@ -7,14 +10,13 @@ from torch import nn as nn
 from torch.autograd import Variable
 from torch.nn import Parameter
 
-import logging
 import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
 from pyro.distributions.transformed_distribution import TransformedDistribution
 from pyro.infer import SVI
 from pyro.util import ng_ones, ng_zeros
-from tests.common import TestCase
+from tests.common import assert_equal
 from tests.distributions.test_transformed_distribution import AffineExp
 
 pytestmark = pytest.mark.stage("integration", "integration_batch_2")
@@ -94,8 +96,8 @@ class NormalNormalTests(TestCase):
             if k % 250 == 0:
                 logger.debug("mu error, log(sigma) error:  %.4f, %.4f" % (mu_error, log_sig_error))
 
-        self.assertEqual(0.0, mu_error, prec=0.03)
-        self.assertEqual(0.0, log_sig_error, prec=0.03)
+        assert_equal(0.0, mu_error, prec=0.03)
+        assert_equal(0.0, log_sig_error, prec=0.03)
 
 
 class NormalNormalNormalTests(TestCase):
@@ -222,11 +224,11 @@ class NormalNormalNormalTests(TestCase):
                 logger.debug(", %.4f, %.4f" % (mu_prime_error, log_sig_prime_error))
                 logger.debug(", %.4f" % kappa_error)
 
-        self.assertEqual(0.0, mu_error, prec=prec)
-        self.assertEqual(0.0, log_sig_error, prec=prec)
-        self.assertEqual(0.0, mu_prime_error, prec=prec)
-        self.assertEqual(0.0, log_sig_prime_error, prec=prec)
-        self.assertEqual(0.0, kappa_error, prec=prec)
+        assert_equal(0.0, mu_error, prec=prec)
+        assert_equal(0.0, log_sig_error, prec=prec)
+        assert_equal(0.0, mu_prime_error, prec=prec)
+        assert_equal(0.0, log_sig_prime_error, prec=prec)
+        assert_equal(0.0, kappa_error, prec=prec)
 
 
 class BernoulliBetaTests(TestCase):
@@ -282,8 +284,8 @@ class BernoulliBetaTests(TestCase):
             if k % 500 == 0:
                 logger.debug("alpha_error, beta_error: %.4f, %.4f" % (alpha_error, beta_error))
 
-        self.assertEqual(0.0, alpha_error, prec=0.03)
-        self.assertEqual(0.0, beta_error, prec=0.04)
+        assert_equal(0.0, alpha_error, prec=0.03)
+        assert_equal(0.0, beta_error, prec=0.04)
 
 
 class PoissonGammaTests(TestCase):
@@ -342,8 +344,8 @@ class PoissonGammaTests(TestCase):
             if k % 500 == 0:
                 logger.debug("alpha_q_log_error, beta_q_log_error: %.4f, %.4f" % (alpha_error, beta_error))
 
-        self.assertEqual(0.0, alpha_error, prec=0.08)
-        self.assertEqual(0.0, beta_error, prec=0.08)
+        assert_equal(0.0, alpha_error, prec=0.08)
+        assert_equal(0.0, beta_error, prec=0.08)
 
 
 class ExponentialGammaTests(TestCase):
@@ -394,8 +396,8 @@ class ExponentialGammaTests(TestCase):
             if k % 500 == 0:
                 logger.debug("alpha_error, beta_error: %.4f, %.4f" % (alpha_error, beta_error))
 
-        self.assertEqual(0.0, alpha_error, prec=0.03)
-        self.assertEqual(0.0, beta_error, prec=0.03)
+        assert_equal(0.0, alpha_error, prec=0.03)
+        assert_equal(0.0, beta_error, prec=0.03)
 
 
 class LogNormalNormalGuide(nn.Module):
@@ -464,8 +466,8 @@ class LogNormalNormalTests(TestCase):
             if k % 500 == 0:
                 logger.debug("mu_error, tau_error = %.4f, %.4f" % (mu_error, tau_error))
 
-        self.assertEqual(0.0, mu_error, prec=0.05)
-        self.assertEqual(0.0, tau_error, prec=0.05)
+        assert_equal(0.0, mu_error, prec=0.05)
+        assert_equal(0.0, tau_error, prec=0.05)
 
     def test_elbo_with_transformed_distribution(self):
         logger.info(" - - - - - DO LOGNORMAL-NORMAL ELBO TEST [uses TransformedDistribution] - - - - - ")
@@ -504,8 +506,8 @@ class LogNormalNormalTests(TestCase):
             if k % 500 == 0:
                 logger.debug("mu_error, tau_error = %.4f, %.4f" % (mu_error, tau_error))
 
-        self.assertEqual(0.0, mu_error, prec=0.05)
-        self.assertEqual(0.0, tau_error, prec=0.05)
+        assert_equal(0.0, mu_error, prec=0.05)
+        assert_equal(0.0, tau_error, prec=0.05)
 
 
 @pytest.mark.init(rng_seed=0)
@@ -595,8 +597,8 @@ class RaoBlackwellizationTests(TestCase):
             if k % 500 == 0:
                 logger.debug("mu error, log(sigma) error:  %.4f, %.4f" % (mu_error, log_sig_error))
 
-        self.assertEqual(0.0, mu_error, prec=0.04)
-        self.assertEqual(0.0, log_sig_error, prec=0.04)
+        assert_equal(0.0, mu_error, prec=0.04)
+        assert_equal(0.0, log_sig_error, prec=0.04)
 
     # this tests rao-blackwellization and baselines for a vectorized map_data
     # inside of a list map_data with superfluous random variables to complexify the
@@ -703,7 +705,7 @@ class RaoBlackwellizationTests(TestCase):
                 if n_superfluous_top > 0 or n_superfluous_bottom > 0:
                     logger.debug("superfluous error: %.4f" % np.max(superfluous_errors))
 
-        self.assertEqual(0.0, mu_error, prec=0.04)
-        self.assertEqual(0.0, log_sig_error, prec=0.05)
+        assert_equal(0.0, mu_error, prec=0.04)
+        assert_equal(0.0, log_sig_error, prec=0.05)
         if n_superfluous_top > 0 or n_superfluous_bottom > 0:
-            self.assertEqual(0.0, np.max(superfluous_errors), prec=0.04)
+            assert_equal(0.0, np.max(superfluous_errors), prec=0.04)
