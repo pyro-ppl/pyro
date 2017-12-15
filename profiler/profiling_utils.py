@@ -74,7 +74,7 @@ def profile_print(column_widths=None, field_format=None, template='column'):
     try:
         yield out_buffer
     finally:
-        out_buffer. print()
+        out_buffer.print()
 
 
 def profile_timeit(fn_callable, repeat=1):
