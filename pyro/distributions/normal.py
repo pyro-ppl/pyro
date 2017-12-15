@@ -139,8 +139,4 @@ def WrapNormal(mu, sigma, batch_size=None, log_pdf_mask=None, *args, **kwargs):
         raise NotImplementedError('Missing class torch.distribution.Normal')
     elif batch_size is not None or args or kwargs:
         raise NotImplementedError('Unsupported args')
-    else:
-        return TorchNormal(mu, sigma, log_pdf_mask=log_pdf_mask,
-                           reparameterized=reparameterized, *args, **kwargs)
-    return Normal(mu, sigma, batch_size=batch_size, log_pdf_mask=log_pdf_mask,
-                  reparameterized=reparameterized, *args, **kwargs)
+    return TorchNormal(mu, sigma, log_pdf_mask=log_pdf_mask, reparameterized=reparameterized, *args, **kwargs)

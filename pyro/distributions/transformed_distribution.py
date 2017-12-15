@@ -235,8 +235,8 @@ class InverseAutoregressiveFlow(Bijector):
             x = self._intermediates_cache.pop((y, 'x'))
             return x
         else:
-            raise KeyError("Bijector InverseAutoregressiveFlow expected to find" +
-                           "key in intermediates cache but didn't")
+            raise KeyError(
+                "Bijector InverseAutoregressiveFlow expected to find" + "key in intermediates cache but didn't")
 
     def _add_intermediate_to_cache(self, intermediate, y, name):
         """
@@ -253,8 +253,8 @@ class InverseAutoregressiveFlow(Bijector):
         if (y, 'sigma') in self._intermediates_cache:
             sigma = self._intermediates_cache.pop((y, 'sigma'))
         else:
-            raise KeyError("Bijector InverseAutoregressiveFlow expected to find" +
-                           "key in intermediates cache but didn't")
+            raise KeyError(
+                "Bijector InverseAutoregressiveFlow expected to find" + "key in intermediates cache but didn't")
         log_sigma = torch.log(sigma)
         if 'log_pdf_mask' in kwargs:
             log_sigma = log_sigma * kwargs['log_pdf_mask']

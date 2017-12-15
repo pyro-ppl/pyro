@@ -130,9 +130,4 @@ def WrapBeta(alpha, beta, batch_size=None, log_pdf_mask=None, *args, **kwargs):
         raise NotImplementedError('Missing class torch.distribution.Beta')
     elif batch_size is not None or args or kwargs:
         raise NotImplementedError('Unsupported args')
-    else:
-        return TorchBeta(alpha, beta, log_pdf_mask=log_pdf_mask,
-                         reparameterized=reparameterized, *args, **kwargs)
-    assert not reparameterized
-    assert log_pdf_mask is None
-    return Beta(alpha, beta, batch_size=batch_size, log_pdf_mask=log_pdf_mask, *args, **kwargs)
+    return TorchBeta(alpha, beta, log_pdf_mask=log_pdf_mask, reparameterized=reparameterized, *args, **kwargs)

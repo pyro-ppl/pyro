@@ -39,6 +39,7 @@ class TorchDistribution(Distribution):
     Compatibility wrapper around
     `torch.distributions.Distribution <http://pytorch.org/docs/master/_modules/torch/distributions.html#Distribution>`_
     """
+
     def __init__(self, torch_dist, log_pdf_mask=None, *args, **kwargs):
         super(TorchDistribution, self).__init__(*args, **kwargs)
         self.torch_dist = torch_dist

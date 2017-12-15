@@ -43,8 +43,8 @@ class Categorical(Distribution):
         if vs is not None:
             vs_shape = self.vs.shape if isinstance(self.vs, np.ndarray) else self.vs.size()
             if vs_shape != ps.size():
-                raise ValueError("Expected vs.size() or vs.shape == ps.size(), but got {} vs {}"
-                                 .format(vs_shape, ps.size()))
+                raise ValueError("Expected vs.size() or vs.shape == ps.size(), but got {} vs {}".format(
+                    vs_shape, ps.size()))
         if batch_size is not None:
             if self.ps.dim() != 1:
                 raise NotImplementedError
@@ -231,7 +231,5 @@ def WrapCategorical(ps=None, vs=None, logits=None, batch_size=None, log_pdf_mask
         raise NotImplementedError('Missing class torch.distribution.Categorical')
     elif vs is not None or batch_size is not None or args or kwargs:
         raise NotImplementedError('Unsupported args')
-    else:
-        raise NotImplementedError('FIXME wrapper is buggy')  # TODO
-        return TorchCategorical(ps, vs, logits, log_pdf_mask=log_pdf_mask, *args, **kwargs)
-    return Categorical(ps, vs, logits, batch_size=batch_size, log_pdf_mask=log_pdf_mask, *args, **kwargs)
+    raise NotImplementedError('FIXME wrapper is buggy')  # TODO
+    return TorchCategorical(ps, vs, logits, log_pdf_mask=log_pdf_mask, *args, **kwargs)
