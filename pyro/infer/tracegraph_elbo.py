@@ -121,6 +121,7 @@ def _compute_elbo_reparam(model_trace, guide_trace, non_reparam_nodes):
     return elbo, surrogate_elbo
 
 
+# helper to split model/guide params from baseline params
 def _get_sorted_params(model_trace, guide_trace, non_reparam_nodes):
     trainable_params = list(set(p for trace in (model_trace, guide_trace) for p in trace.parameters))
     bl_params = set()
@@ -182,6 +183,7 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
         # compute model/guide gradients (these still need to be scaled by cost terms)
         grads_log_q = autograd.grad(guide_log_pdf, trainable_params_minus_bl_params,
                                     create_graph=True, allow_unused=True)
+        # loop over the gradients we just computed
         for k in range(len(grads_log_q)):
             g, p = grads_log_q[k], trainable_params_minus_bl_params[k]
             # assemble the reinforce-like term
@@ -199,8 +201,8 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
                 else:
                     full_gradients[k] += cost_times_grad
 
-    # if any nodes have use_lax then construct lax baseline_loss
-    # have to compute at end because there may be cross-terms in the norm
+    # if any nodes have use_lax then construct lax baseline_loss.
+    # we have to compute this at the end because there may be cross-terms in the norm
     for full_gradient in full_gradients:
         if full_gradient is not None:
             baseline_loss += full_gradient.norm()
@@ -342,7 +344,9 @@ class TraceGraph_ELBO(object):
 
         if trainable_params:
             surrogate_loss = -surrogate_elbo
-            # XXX this try block is a hack that will go away when we phase out backward()
+            # XXX this try block is a hack that will go away when we phase out backward().
+            # since backward() doesn't support the flag allow_unused=True,
+            # the backward call can error if it doesn't depend on any differentiable Variables
             try:
                 torch_backward(weight * surrogate_loss)
             except RuntimeError:
