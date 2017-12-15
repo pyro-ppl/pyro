@@ -1,7 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import warnings
-
 import numpy as np
 import torch
 from torch.autograd import Variable
@@ -132,19 +130,15 @@ class TorchNormal(TorchDistribution):
         return self._param_shape[-1:]
 
 
-def _warn_fallback(message):
-    warnings.warn('{}, falling back to Normal'.format(message), DeprecationWarning)
-
-
 @torch_wrapper(Normal)
 def WrapNormal(mu, sigma, batch_size=None, log_pdf_mask=None, *args, **kwargs):
     reparameterized = kwargs.pop('reparameterized', None)
     if not hasattr(torch, 'distributions'):
-        _warn_fallback('Missing module torch.distribution')
+        raise NotImplementedError('Missing module torch.distribution')
     elif not hasattr(torch.distributions, 'Normal'):
-        _warn_fallback('Missing class torch.distribution.Normal')
+        raise NotImplementedError('Missing class torch.distribution.Normal')
     elif batch_size is not None or args or kwargs:
-        _warn_fallback('Unsupported args')
+        raise NotImplementedError('Unsupported args')
     else:
         return TorchNormal(mu, sigma, log_pdf_mask=log_pdf_mask,
                            reparameterized=reparameterized, *args, **kwargs)

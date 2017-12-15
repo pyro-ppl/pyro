@@ -1,7 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import warnings
-
 import numpy as np
 import torch
 from torch.autograd import Variable
@@ -224,19 +222,16 @@ class TorchCategorical(TorchDistribution):
         return self.torch_dist.sample().float()
 
 
-def _warn_fallback(message):
-    warnings.warn('{}, falling back to Categorical'.format(message), DeprecationWarning)
-
-
 @torch_wrapper(Categorical)
 def WrapCategorical(ps=None, vs=None, logits=None, batch_size=None, log_pdf_mask=None, *args, **kwargs):
     assert not kwargs.pop('reparameterized', False)
     if not hasattr(torch, 'distributions'):
-        _warn_fallback('Missing module torch.distribution')
+        raise NotImplementedError('Missing module torch.distribution')
     elif not hasattr(torch.distributions, 'Categorical'):
-        _warn_fallback('Missing class torch.distribution.Categorical')
+        raise NotImplementedError('Missing class torch.distribution.Categorical')
     elif vs is not None or batch_size is not None or args or kwargs:
-        _warn_fallback('Unsupported args')
-    elif False:  # FIXME This does not yet work.
+        raise NotImplementedError('Unsupported args')
+    else:
+        raise NotImplementedError('FIXME wrapper is buggy')  # TODO
         return TorchCategorical(ps, vs, logits, log_pdf_mask=log_pdf_mask, *args, **kwargs)
     return Categorical(ps, vs, logits, batch_size=batch_size, log_pdf_mask=log_pdf_mask, *args, **kwargs)

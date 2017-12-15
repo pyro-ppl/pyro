@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import numbers
-import warnings
 
 import scipy.stats as spr
 import torch
@@ -119,21 +118,18 @@ class TorchGamma(TorchDistribution):
         return self._param_shape[-1:]
 
 
-def _warn_fallback(message):
-    warnings.warn('{}, falling back to Gamma'.format(message), DeprecationWarning)
-
-
 @torch_wrapper(Gamma)
 def WrapGamma(alpha, batch_size=None, log_pdf_mask=None, *args, **kwargs):
     reparameterized = kwargs.pop('reparameterized', None)
     if not hasattr(torch, 'distributions'):
-        _warn_fallback('Missing module torch.distribution')
+        raise NotImplementedError('Missing module torch.distribution')
     elif not hasattr(torch.distributions, 'Gamma'):
-        _warn_fallback('Missing class torch.distribution.Gamma')
+        raise NotImplementedError('Missing class torch.distribution.Gamma')
     elif batch_size is not None or args or kwargs:
-        _warn_fallback('Unsupported args')
+        raise NotImplementedError('Unsupported args')
     else:
         return TorchGamma(alpha, log_pdf_mask=log_pdf_mask,
                           reparameterized=reparameterized, *args, **kwargs)
     assert not reparameterized
+    assert log_pdf_mask is None
     return Gamma(alpha, batch_size=batch_size, log_pdf_mask=log_pdf_mask, *args, **kwargs)

@@ -7,7 +7,8 @@ import torch
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
-from pyro.distributions.util import log_gamma
+from pyro.distributions.torch_wrapper import TorchDistribution, torch_wrapper
+from pyro.distributions.util import broadcast_shape, log_gamma
 
 
 class Beta(Distribution):
@@ -97,3 +98,41 @@ class Beta(Distribution):
         """
         return torch.pow(self.analytic_mean(), 2.0) * self.beta / \
             (self.alpha * (self.alpha + self.beta + Variable(torch.ones([1]))))
+
+
+class TorchBeta(TorchDistribution):
+    """
+    Compatibility wrapper around
+    `torch.distributions.Beta <http://pytorch.org/docs/master/_modules/torch/distributions.html#Beta>`_
+    """
+    reparameterized = True
+
+    def __init__(self, alpha, beta, log_pdf_mask=None, *args, **kwargs):
+        torch_dist = torch.distributions.Beta(alpha, beta)
+        super(TorchBeta, self).__init__(torch_dist, log_pdf_mask, *args, **kwargs)
+        self._param_shape = broadcast_shape(alpha.size(), beta.size(), strict=True)
+
+    def batch_shape(self, x=None):
+        x_shape = [] if x is None else x.size()
+        shape = torch.Size(broadcast_shape(x_shape, self._param_shape, strict=True))
+        return shape[:-1]
+
+    def event_shape(self):
+        return self._param_shape[-1:]
+
+
+@torch_wrapper(Beta)
+def WrapBeta(alpha, beta, batch_size=None, log_pdf_mask=None, *args, **kwargs):
+    reparameterized = kwargs.pop('reparameterized', None)
+    if not hasattr(torch, 'distributions'):
+        raise NotImplementedError('Missing module torch.distribution')
+    elif not hasattr(torch.distributions, 'Beta'):
+        raise NotImplementedError('Missing class torch.distribution.Beta')
+    elif batch_size is not None or args or kwargs:
+        raise NotImplementedError('Unsupported args')
+    else:
+        return TorchBeta(alpha, beta, log_pdf_mask=log_pdf_mask,
+                         reparameterized=reparameterized, *args, **kwargs)
+    assert not reparameterized
+    assert log_pdf_mask is None
+    return Beta(alpha, beta, batch_size=batch_size, log_pdf_mask=log_pdf_mask, *args, **kwargs)

@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import functools
 import os
+import warnings
 
 import torch
 
@@ -15,10 +16,22 @@ def torch_wrapper(pyro_dist):
     """
     Decorator for optional wrappers around torch.distributions classes.
     """
-    if USE_TORCH_DISTRIBUTIONS:
-        return lambda wrapper: functools.wraps(pyro_dist)(wrapper)
-    else:
+    if not USE_TORCH_DISTRIBUTIONS:
         return lambda wrapper: pyro_dist
+
+    def decorator(wrapper):
+
+        @functools.wraps(pyro_dist)
+        def wrapper_with_fallback(*args, **kwargs):
+            try:
+                return wrapper(*args, **kwargs)
+            except NotImplementedError as e:
+                warnings.warn('{}, falling back to {}'.format(e.message, pyro_dist.__name__), DeprecationWarning)
+                return pyro_dist(*args, **kwargs)
+
+        return wrapper_with_fallback
+
+    return decorator
 
 
 class TorchDistribution(Distribution):
