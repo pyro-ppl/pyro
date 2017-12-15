@@ -5,7 +5,7 @@ from collections import namedtuple
 
 import networkx
 import numpy as np
-import torch
+import torch.autograd as autograd
 
 import pyro
 import pyro.poutine as poutine
@@ -26,7 +26,8 @@ def _get_baseline_options(site):
                      options_dict.pop('nn_baseline_input', None),
                      options_dict.pop('use_decaying_avg_baseline', False),
                      options_dict.pop('baseline_beta', 0.90),
-                     options_dict.pop('baseline_value', None))
+                     options_dict.pop('baseline_value', None),
+                     options_dict.pop('use_lax', False))
     if options_dict:
         raise ValueError("Unrecognized baseline options: {}".format(options_dict.keys()))
     return options_tuple
@@ -120,21 +121,38 @@ def _compute_elbo_reparam(model_trace, guide_trace, non_reparam_nodes):
     return elbo, surrogate_elbo
 
 
+# helper to split model/guide params from baseline params
+def _get_sorted_params(model_trace, guide_trace, non_reparam_nodes):
+    trainable_params = list(set(p for trace in (model_trace, guide_trace) for p in trace.parameters))
+    bl_params = set()
+    for node in non_reparam_nodes:
+        guide_site = guide_trace.nodes[node]
+        (nn_baseline, nn_baseline_input, use_decaying_avg_baseline, baseline_beta,
+            baseline_value, use_lax) = _get_baseline_options(guide_site)
+        if nn_baseline is not None:
+            bl_params.update(set(nn_baseline.parameters()))
+    trainable_params_minus_bl_params = list(set(trainable_params) - bl_params)
+    return trainable_params, trainable_params_minus_bl_params
+
+
 def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
-                              non_reparam_nodes, downstream_costs):
+                              non_reparam_nodes, downstream_costs,  #
+                              trainable_params_minus_bl_params):
     # construct all the reinforce-like terms.
     # we include only downstream costs to reduce variance
     # optionally include baselines to further reduce variance
     # XXX should the average baseline be in the param store as below?
-    surrogate_elbo = 0.0
     baseline_loss = 0.0
+    # the following are needed in case we're using lax baselines
+    full_gradients = [None] * len(trainable_params_minus_bl_params)
+
     for node in non_reparam_nodes:
         guide_site = guide_trace.nodes[node]
         log_pdf_key = 'batch_log_pdf' if node in guide_vec_md_nodes else 'log_pdf'
         downstream_cost = downstream_costs[node]
         baseline = 0.0
         (nn_baseline, nn_baseline_input, use_decaying_avg_baseline, baseline_beta,
-            baseline_value) = _get_baseline_options(guide_site)
+            baseline_value, use_lax) = _get_baseline_options(guide_site)
         use_nn_baseline = nn_baseline is not None
         use_baseline_value = baseline_value is not None
         assert(not (use_nn_baseline and use_baseline_value)), \
@@ -147,24 +165,49 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
             avg_downstream_cost_old.data = avg_downstream_cost_new.data  # XXX copy_() ?
             baseline += avg_downstream_cost_old
         if use_nn_baseline:
-            # block nn_baseline_input gradients except in baseline loss
             baseline += nn_baseline(detach_iterable(nn_baseline_input))
         elif use_baseline_value:
             # it's on the user to make sure baseline_value tape only points to baseline params
+            # if using baseline_value
             baseline += baseline_value
         if use_nn_baseline or use_baseline_value:
             # accumulate baseline loss
-            baseline_loss += torch.pow(downstream_cost.detach() - baseline, 2.0).sum()
-
+            if not use_lax:
+                baseline_loss += ((downstream_cost.detach() - baseline)).norm()
         guide_log_pdf = guide_site[log_pdf_key] / guide_site["scale"]  # not scaled by subsampling
         if use_nn_baseline or use_decaying_avg_baseline or use_baseline_value:
             if downstream_cost.size() != baseline.size():
                 raise ValueError("Expected baseline at site {} to be {} instead got {}".format(
                     node, downstream_cost.size(), baseline.size()))
-            downstream_cost = downstream_cost - baseline
-        surrogate_elbo += (guide_log_pdf * downstream_cost.detach()).sum()
+            downstream_cost = downstream_cost.detach() - baseline
+        # compute model/guide gradients (these still need to be scaled by cost terms)
+        grads_log_q = autograd.grad(guide_log_pdf, trainable_params_minus_bl_params,
+                                    create_graph=True, allow_unused=True)
+        # loop over the gradients we just computed
+        for k in range(len(grads_log_q)):
+            g, p = grads_log_q[k], trainable_params_minus_bl_params[k]
+            # assemble the reinforce-like term
+            cost_times_grad = downstream_cost * g.detach() if g is not None else None
+            if cost_times_grad is None:
+                continue  # log_q didn't depend on parameter p
+            if p.grad is None:
+                p.grad = -cost_times_grad  # this is the first time we've differentiated w.r.t. p
+            else:
+                p.grad -= cost_times_grad  # otherwise accumulate p gradient
+            if use_lax:  # if using lax, we keep track of the gradients to compute the lax baseline_loss
+                assert(use_nn_baseline), "lax estimator must use nn_baseline and not baseline_value"
+                if full_gradients[k] is None:
+                    full_gradients[k] = cost_times_grad
+                else:
+                    full_gradients[k] += cost_times_grad
 
-    return surrogate_elbo, baseline_loss
+    # if any nodes have use_lax then construct lax baseline_loss.
+    # we have to compute this at the end because there may be cross-terms in the norm
+    for full_gradient in full_gradients:
+        if full_gradient is not None:
+            baseline_loss += full_gradient.norm()
+
+    return baseline_loss
 
 
 class TraceGraph_ELBO(object):
@@ -282,8 +325,12 @@ class TraceGraph_ELBO(object):
         model_trace.compute_batch_log_pdf(site_filter=lambda name, site: name in model_vec_md_nodes)
         model_trace.log_pdf()
 
-        # compute elbo for reparameterized nodes
         non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
+        # collect parameters to train from model and guide
+        trainable_params, trainable_params_minus_bl_params = _get_sorted_params(model_trace,
+                                                                                guide_trace, non_reparam_nodes)
+
+        # compute elbo for reparameterized nodes
         elbo, surrogate_elbo = _compute_elbo_reparam(model_trace, guide_trace, non_reparam_nodes)
 
         # the following computations are only necessary if we have non-reparameterizable nodes
@@ -291,19 +338,20 @@ class TraceGraph_ELBO(object):
         if non_reparam_nodes:
             downstream_costs = _compute_downstream_costs(
                     model_trace, guide_trace,  model_vec_md_nodes, guide_vec_md_nodes, non_reparam_nodes)
-            surrogate_elbo_term, baseline_loss = _compute_elbo_non_reparam(
-                    guide_trace, guide_vec_md_nodes, non_reparam_nodes, downstream_costs)
-            surrogate_elbo += surrogate_elbo_term
-
-        # collect parameters to train from model and guide
-        trainable_params = set(site["value"]
-                               for trace in (model_trace, guide_trace)
-                               for site in trace.nodes.values()
-                               if site["type"] == "param")
+            baseline_loss = _compute_elbo_non_reparam(
+                    guide_trace, guide_vec_md_nodes, non_reparam_nodes, downstream_costs,
+                    trainable_params_minus_bl_params)
 
         if trainable_params:
             surrogate_loss = -surrogate_elbo
-            torch_backward(weight * (surrogate_loss + baseline_loss))
+            # XXX this try block is a hack that will go away when we phase out backward().
+            # since backward() doesn't support the flag allow_unused=True,
+            # the backward call can error if it doesn't depend on any differentiable Variables
+            try:
+                torch_backward(weight * surrogate_loss)
+            except RuntimeError:
+                pass
+            torch_backward(weight * baseline_loss)
             pyro.get_param_store().mark_params_active(trainable_params)
 
         loss = -elbo

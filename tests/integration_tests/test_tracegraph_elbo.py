@@ -126,21 +126,24 @@ class NormalNormalNormalTests(TestCase):
         self.do_elbo_test(True, True, 5000, 0.02, 0.002, False, False)
 
     def test_elbo_nonreparameterized_both_baselines(self):
-        self.do_elbo_test(False, False, 15000, 0.05, 0.001, use_nn_baseline=True,
+        self.do_elbo_test(False, False, 5000, 0.05, 0.001, use_nn_baseline=True,
                           use_decaying_avg_baseline=True)
 
     def test_elbo_nonreparameterized_decaying_baseline(self):
-        self.do_elbo_test(True, False, 12000, 0.04, 0.0015, use_nn_baseline=False,
+        self.do_elbo_test(True, False, 5000, 0.04, 0.0015, use_nn_baseline=False,
                           use_decaying_avg_baseline=True)
 
     def test_elbo_nonreparameterized_nn_baseline(self):
-        self.do_elbo_test(False, True, 12000, 0.04, 0.0015, use_nn_baseline=True,
-                          use_decaying_avg_baseline=False)
+        self.do_elbo_test(False, True, 5000, 0.04, 0.0015, use_nn_baseline=True,
+                          use_decaying_avg_baseline=False, use_lax=False)
+        self.do_elbo_test(False, True, 5000, 0.04, 0.0015, use_nn_baseline=True,
+                          use_decaying_avg_baseline=False, use_lax=True)
 
-    def do_elbo_test(self, repa1, repa2, n_steps, prec, lr, use_nn_baseline, use_decaying_avg_baseline):
+    def do_elbo_test(self, repa1, repa2, n_steps, prec, lr, use_nn_baseline, use_decaying_avg_baseline,
+                     use_lax=False):
         logger.info(" - - - - - DO NORMALNORMALNORMAL ELBO TEST - - - - - -")
-        logger.info("[reparameterized = %s, %s; nn_baseline = %s, decaying_baseline = %s]" %
-                    (repa1, repa2, use_nn_baseline, use_decaying_avg_baseline))
+        logger.info("[reparameterized = %s, %s; nn_baseline = %s, decaying_baseline = %s, use_lax = %s]" %
+                    (repa1, repa2, use_nn_baseline, use_decaying_avg_baseline, use_lax))
         pyro.clear_param_store()
 
         if use_nn_baseline:
@@ -156,7 +159,7 @@ class NormalNormalNormalTests(TestCase):
                     h = self.sigmoid(self.lin1(x))
                     return self.lin2(h)
 
-            mu_prime_baseline = pyro.module("mu_prime_baseline", VanillaBaselineNN(2, 5), tags="baseline")
+            mu_prime_baseline = VanillaBaselineNN(2, 5)
         else:
             mu_prime_baseline = None
 
@@ -193,21 +196,24 @@ class NormalNormalNormalTests(TestCase):
             mu_latent_prime_dist = dist.Normal(kappa_q.expand_as(mu_latent) * mu_latent + mu_q_prime,
                                                sig_q_prime,
                                                reparameterized=repa1)
+            if mu_prime_baseline is not None:
+                pyro.module("mu_prime_baseline", mu_prime_baseline, tags="baseline")
             pyro.sample("mu_latent_prime",
                         mu_latent_prime_dist,
                         baseline=dict(nn_baseline=mu_prime_baseline,
                                       nn_baseline_input=mu_latent,
-                                      use_decaying_avg_baseline=use_decaying_avg_baseline))
+                                      use_decaying_avg_baseline=use_decaying_avg_baseline,
+                                      use_lax=use_lax))
 
             return mu_latent
 
-        # optim = Optimize(model, guide,
-        #                 torch.optim.Adam, {"lr": lr, "betas": (0.97, 0.999)},
-        #                 loss="ELBO", trace_graph=True,
-        #                 auxiliary_optim_constructor=torch.optim.Adam,
-        #                 auxiliary_optim_args={"lr": 5.0 * lr, "betas": (0.90, 0.999)})
+        def per_param_callable(module_name, param_name, tags):
+            if 'baseline' in tags:
+                return {"lr": 5.0e-2, "betas": (0.90, 0.999)}
+            else:
+                return {"lr": 0.0015, "betas": (0.97, 0.999)}
 
-        adam = optim.Adam({"lr": .0015, "betas": (0.97, 0.999)})
+        adam = optim.Adam(per_param_callable)
         svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
 
         for k in range(n_steps):
@@ -220,9 +226,9 @@ class NormalNormalNormalTests(TestCase):
             log_sig_prime_error = param_mse("log_sig_q_prime", -0.5 * torch.log(2.0 * self.lam0))
 
             if k % 500 == 0:
-                logger.debug("errors:  %.4f, %.4f" % (mu_error, log_sig_error))
-                logger.debug(", %.4f, %.4f" % (mu_prime_error, log_sig_prime_error))
-                logger.debug(", %.4f" % kappa_error)
+                logger.debug("errors [%04d]:  %.4f, %.4f" % (k, mu_error, log_sig_error))
+                logger.debug("                %.4f, %.4f, %.4f" % (mu_prime_error,
+                    log_sig_prime_error, kappa_error))
 
         assert_equal(0.0, mu_error, prec=prec)
         assert_equal(0.0, log_sig_error, prec=prec)

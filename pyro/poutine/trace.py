@@ -162,3 +162,10 @@ class Trace(networkx.DiGraph):
         are not reparameterizable primitive distributions
         """
         return list(set(self.stochastic_nodes) - set(self.reparameterized_nodes))
+
+    @property
+    def parameters(self):
+        """
+        Gets a list of all param sites in trace
+        """
+        return [site["value"] for site in self.nodes.values() if site["type"] == "param"]
