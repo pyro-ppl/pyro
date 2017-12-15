@@ -225,11 +225,9 @@ class TorchCategorical(TorchDistribution):
 @torch_wrapper(Categorical)
 def WrapCategorical(ps=None, vs=None, logits=None, batch_size=None, log_pdf_mask=None, *args, **kwargs):
     assert not kwargs.pop('reparameterized', False)
-    if not hasattr(torch, 'distributions'):
-        raise NotImplementedError('Missing module torch.distribution')
-    elif not hasattr(torch.distributions, 'Categorical'):
+    if not hasattr(torch.distributions, 'Categorical'):
         raise NotImplementedError('Missing class torch.distribution.Categorical')
-    elif vs is not None or batch_size is not None or args or kwargs:
+    elif vs is not None or batch_size is not None:
         raise NotImplementedError('Unsupported args')
     raise NotImplementedError('FIXME wrapper is buggy')  # TODO
     return TorchCategorical(ps, vs, logits, log_pdf_mask=log_pdf_mask, *args, **kwargs)

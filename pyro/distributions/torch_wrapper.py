@@ -19,6 +19,10 @@ def torch_wrapper(pyro_dist):
     if not USE_TORCH_DISTRIBUTIONS:
         return lambda wrapper: pyro_dist
 
+    if not hasattr(torch.distributions, pyro_dist.__name__):
+        return lambda wrapper: pyro_dist
+    torch_dist = getattr(torch.distributions, pyro_dist.__name__)
+
     def decorator(wrapper):
 
         @functools.wraps(pyro_dist)
@@ -29,6 +33,9 @@ def torch_wrapper(pyro_dist):
                 warnings.warn('{}, falling back to {}'.format(e.message, pyro_dist.__name__), DeprecationWarning)
                 return pyro_dist(*args, **kwargs)
 
+        # Set attributes for use by RandomPrimitive.
+        wrapper_with_fallback.reparameterized = torch_dist.has_rsample
+        wrapper_with_fallback.enumerable = torch_dist.has_enumerate_support
         return wrapper_with_fallback
 
     return decorator

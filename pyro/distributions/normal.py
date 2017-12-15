@@ -133,10 +133,8 @@ class TorchNormal(TorchDistribution):
 @torch_wrapper(Normal)
 def WrapNormal(mu, sigma, batch_size=None, log_pdf_mask=None, *args, **kwargs):
     reparameterized = kwargs.pop('reparameterized', None)
-    if not hasattr(torch, 'distributions'):
-        raise NotImplementedError('Missing module torch.distribution')
-    elif not hasattr(torch.distributions, 'Normal'):
+    if not hasattr(torch.distributions, 'Normal'):
         raise NotImplementedError('Missing class torch.distribution.Normal')
-    elif batch_size is not None or args or kwargs:
+    elif batch_size is not None:
         raise NotImplementedError('Unsupported args')
     return TorchNormal(mu, sigma, log_pdf_mask=log_pdf_mask, reparameterized=reparameterized, *args, **kwargs)

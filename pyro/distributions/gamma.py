@@ -104,10 +104,10 @@ class TorchGamma(TorchDistribution):
     """
     reparameterized = True
 
-    def __init__(self, alpha, log_pdf_mask=None, *args, **kwargs):
-        torch_dist = torch.distributions.Gamma(alpha)
+    def __init__(self, alpha, beta, log_pdf_mask=None, *args, **kwargs):
+        torch_dist = torch.distributions.Gamma(alpha, beta)
         super(TorchGamma, self).__init__(torch_dist, log_pdf_mask, *args, **kwargs)
-        self._param_shape = alpha.size()
+        self._param_shape = broadcast_shape(alpha.size(), beta.size(), strict=True)
 
     def batch_shape(self, x=None):
         x_shape = [] if x is None else x.size()
@@ -119,12 +119,10 @@ class TorchGamma(TorchDistribution):
 
 
 @torch_wrapper(Gamma)
-def WrapGamma(alpha, batch_size=None, log_pdf_mask=None, *args, **kwargs):
+def WrapGamma(alpha, beta, batch_size=None, log_pdf_mask=None, *args, **kwargs):
     reparameterized = kwargs.pop('reparameterized', None)
-    if not hasattr(torch, 'distributions'):
-        raise NotImplementedError('Missing module torch.distribution')
-    elif not hasattr(torch.distributions, 'Gamma'):
+    if not hasattr(torch.distributions, 'Gamma'):
         raise NotImplementedError('Missing class torch.distribution.Gamma')
-    elif batch_size is not None or args or kwargs:
+    elif batch_size is not None:
         raise NotImplementedError('Unsupported args')
-    return TorchGamma(alpha, log_pdf_mask=log_pdf_mask, reparameterized=reparameterized, *args, **kwargs)
+    return TorchGamma(alpha, beta, log_pdf_mask=log_pdf_mask, reparameterized=reparameterized, *args, **kwargs)

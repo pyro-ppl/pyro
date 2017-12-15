@@ -124,10 +124,8 @@ class TorchBeta(TorchDistribution):
 @torch_wrapper(Beta)
 def WrapBeta(alpha, beta, batch_size=None, log_pdf_mask=None, *args, **kwargs):
     reparameterized = kwargs.pop('reparameterized', None)
-    if not hasattr(torch, 'distributions'):
-        raise NotImplementedError('Missing module torch.distribution')
-    elif not hasattr(torch.distributions, 'Beta'):
+    if not hasattr(torch.distributions, 'Beta'):
         raise NotImplementedError('Missing class torch.distribution.Beta')
-    elif batch_size is not None or args or kwargs:
+    elif batch_size is not None:
         raise NotImplementedError('Unsupported args')
     return TorchBeta(alpha, beta, log_pdf_mask=log_pdf_mask, reparameterized=reparameterized, *args, **kwargs)

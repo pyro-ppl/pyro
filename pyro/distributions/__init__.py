@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 # distribution classes
 from pyro.distributions.bernoulli import Bernoulli
-from pyro.distributions.beta import Beta
+from pyro.distributions.beta import WrapBeta as Beta
 from pyro.distributions.binomial import Binomial
 from pyro.distributions.categorical import WrapCategorical as Categorical
 from pyro.distributions.cauchy import Cauchy
@@ -10,7 +10,7 @@ from pyro.distributions.delta import Delta
 from pyro.distributions.dirichlet import Dirichlet
 from pyro.distributions.distribution import Distribution  # noqa: F401
 from pyro.distributions.exponential import Exponential
-from pyro.distributions.gamma import Gamma
+from pyro.distributions.gamma import WrapGamma as Gamma
 from pyro.distributions.half_cauchy import HalfCauchy
 from pyro.distributions.log_normal import LogNormal
 from pyro.distributions.multinomial import Multinomial
