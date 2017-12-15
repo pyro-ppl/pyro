@@ -119,7 +119,7 @@ class TorchNormal(TorchDistribution):
     reparameterized = True
 
     def __init__(self, mu, sigma, log_pdf_mask=None, *args, **kwargs):
-        torch_dist = torch.distributions.Normal(mean=mu, std=sigma)
+        torch_dist = torch.distributions.Normal(mu, sigma)
         super(TorchNormal, self).__init__(torch_dist, log_pdf_mask, *args, **kwargs)
         self._param_shape = torch.Size(broadcast_shape(mu.size(), sigma.size(), strict=True))
 
@@ -131,14 +131,6 @@ class TorchNormal(TorchDistribution):
     def event_shape(self):
         return self._param_shape[-1:]
 
-    def batch_log_pdf(self, x):
-        batch_log_pdf_shape = self.batch_shape(x) + (1,)
-        log_pxs = self.torch_dist.log_prob(x)
-        batch_log_pdf = torch.sum(log_pxs, -1).contiguous().view(batch_log_pdf_shape)
-        if self.log_pdf_mask is not None:
-            batch_log_pdf = batch_log_pdf * self.log_pdf_mask
-        return batch_log_pdf
-
 
 def _warn_fallback(message):
     warnings.warn('{}, falling back to Normal'.format(message), DeprecationWarning)
@@ -146,7 +138,7 @@ def _warn_fallback(message):
 
 @torch_wrapper(Normal)
 def WrapNormal(mu, sigma, batch_size=None, log_pdf_mask=None, *args, **kwargs):
-    reparameterized = kwargs.pop('reparameterized', True)
+    reparameterized = kwargs.pop('reparameterized', None)
     if not hasattr(torch, 'distributions'):
         _warn_fallback('Missing module torch.distribution')
     elif not hasattr(torch.distributions, 'Normal'):

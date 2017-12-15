@@ -1,13 +1,15 @@
 from __future__ import absolute_import, division, print_function
 
 import numbers
+import warnings
 
 import scipy.stats as spr
 import torch
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
-from pyro.distributions.util import log_gamma
+from pyro.distributions.torch_wrapper import TorchDistribution, torch_wrapper
+from pyro.distributions.util import broadcast_shape, log_gamma
 
 
 class Gamma(Distribution):
@@ -94,3 +96,44 @@ class Gamma(Distribution):
         Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_var`
         """
         return self.alpha / torch.pow(self.beta, 2.0)
+
+
+class TorchGamma(TorchDistribution):
+    """
+    Compatibility wrapper around
+    `torch.distributions.Gamma <http://pytorch.org/docs/master/_modules/torch/distributions.html#Gamma>`_
+    """
+    reparameterized = True
+
+    def __init__(self, alpha, log_pdf_mask=None, *args, **kwargs):
+        torch_dist = torch.distributions.Gamma(alpha)
+        super(TorchGamma, self).__init__(torch_dist, log_pdf_mask, *args, **kwargs)
+        self._param_shape = alpha.size()
+
+    def batch_shape(self, x=None):
+        x_shape = [] if x is None else x.size()
+        shape = torch.Size(broadcast_shape(x_shape, self._param_shape, strict=True))
+        return shape[:-1]
+
+    def event_shape(self):
+        return self._param_shape[-1:]
+
+
+def _warn_fallback(message):
+    warnings.warn('{}, falling back to Gamma'.format(message), DeprecationWarning)
+
+
+@torch_wrapper(Gamma)
+def WrapGamma(alpha, batch_size=None, log_pdf_mask=None, *args, **kwargs):
+    reparameterized = kwargs.pop('reparameterized', None)
+    if not hasattr(torch, 'distributions'):
+        _warn_fallback('Missing module torch.distribution')
+    elif not hasattr(torch.distributions, 'Gamma'):
+        _warn_fallback('Missing class torch.distribution.Gamma')
+    elif batch_size is not None or args or kwargs:
+        _warn_fallback('Unsupported args')
+    else:
+        return TorchGamma(alpha, log_pdf_mask=log_pdf_mask,
+                          reparameterized=reparameterized, *args, **kwargs)
+    assert not reparameterized
+    return Gamma(alpha, batch_size=batch_size, log_pdf_mask=log_pdf_mask, *args, **kwargs)

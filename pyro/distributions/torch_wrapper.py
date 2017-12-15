@@ -3,6 +3,8 @@ from __future__ import absolute_import, division, print_function
 import functools
 import os
 
+import torch
+
 from pyro.distributions.distribution import Distribution
 
 # TODO Decide based on torch.__version__ once torch.distributions matures.
@@ -36,9 +38,11 @@ class TorchDistribution(Distribution):
             return self.torch_dist.sample()
 
     def batch_log_pdf(self, x):
-        batch_log_pdf = self.torch_dist.log_prob(x)
+        batch_log_pdf_shape = self.batch_shape(x) + (1,)
+        log_pxs = self.torch_dist.log_prob(x)
+        batch_log_pdf = torch.sum(log_pxs, -1).contiguous().view(batch_log_pdf_shape)
         if self.log_pdf_mask is not None:
-            batch_log_pdf *= self.log_pdf_mask
+            batch_log_pdf = batch_log_pdf * self.log_pdf_mask
         return batch_log_pdf
 
     def enumerate_support(self):

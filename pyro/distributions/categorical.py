@@ -206,7 +206,7 @@ class TorchCategorical(TorchDistribution):
             ps = torch.exp(logits - torch.max(logits))
             ps /= ps.sum(-1, True)
         self._param_shape = ps.size()
-        torch_dist = torch.distributions.Categorical(probs=ps)
+        torch_dist = torch.distributions.Categorical(ps)
         super(TorchCategorical, self).__init__(torch_dist, log_pdf_mask, *args, **kwargs)
 
     def batch_shape(self, x=None):
@@ -237,7 +237,6 @@ def WrapCategorical(ps=None, vs=None, logits=None, batch_size=None, log_pdf_mask
         _warn_fallback('Missing class torch.distribution.Categorical')
     elif vs is not None or batch_size is not None or args or kwargs:
         _warn_fallback('Unsupported args')
-    else:
-        pass  # FIXME
-        # return TorchCategorical(ps, vs, logits, log_pdf_mask=log_pdf_mask, *args, **kwargs)
+    elif False:  # FIXME This does not yet work.
+        return TorchCategorical(ps, vs, logits, log_pdf_mask=log_pdf_mask, *args, **kwargs)
     return Categorical(ps, vs, logits, batch_size=batch_size, log_pdf_mask=log_pdf_mask, *args, **kwargs)
