@@ -3,12 +3,12 @@ from __future__ import absolute_import, division, print_function
 import warnings
 
 import numpy as np
-
 import torch
-from pyro.distributions.distribution import Distribution
-from pyro.distributions.util import (broadcast_shape, get_probs_and_logits, torch_multinomial, torch_wrapper,
-                                     torch_zeros_like)
 from torch.autograd import Variable
+
+from pyro.distributions.distribution import Distribution
+from pyro.distributions.torch_wrapper import TorchDistribution, torch_wrapper
+from pyro.distributions.util import broadcast_shape, get_probs_and_logits, torch_multinomial, torch_zeros_like
 
 
 class Categorical(Distribution):
@@ -194,23 +194,20 @@ class Categorical(Distribution):
         return result
 
 
-class TorchCategorical(Distribution):
+class TorchCategorical(TorchDistribution):
     """
     Compatibility wrapper around
     `torch.distributions.Categorical <http://pytorch.org/docs/master/_modules/torch/distributions.html#Categorical>`_
     """
-    reparameterized = False
     enumerable = True
 
     def __init__(self, ps=None, vs=None, logits=None, log_pdf_mask=None, *args, **kwargs):
         if logits is not None:
             ps = torch.exp(logits - torch.max(logits))
             ps /= ps.sum(-1, True)
-        self._torch_dist = torch.distributions.Categorical(probs=ps)
         self._param_shape = ps.size()
-        self.ps = ps
-        self.log_pdf_mask = log_pdf_mask
-        super(TorchCategorical, self).__init__(*args, **kwargs)
+        torch_dist = torch.distributions.Categorical(probs=ps)
+        super(TorchCategorical, self).__init__(torch_dist, log_pdf_mask, *args, **kwargs)
 
     def batch_shape(self, x=None):
         x_shape = [] if x is None else x.size()
@@ -220,24 +217,11 @@ class TorchCategorical(Distribution):
     def event_shape(self):
         return self._param_shape[-1:]
 
-    def sample(self):
-        return self._torch_dist.sample()
-
     def batch_log_pdf(self, x):
-        batch_log_pdf_shape = self.batch_shape(x) + (1,)
-        log_pxs = self._torch_dist.log_prob(x)
-        batch_log_pdf = torch.sum(log_pxs, -1).contiguous().view(batch_log_pdf_shape)
-        if self.log_pdf_mask is not None:
-            batch_log_pdf = batch_log_pdf * self.log_pdf_mask
-        return batch_log_pdf
+        return self.torch_dist.log_prob(x.long())
 
-    def enumerate_support(self):
-        sample_shape = self.batch_shape() + (1,)
-        LongTensor = torch.cuda.LongTensor if self.ps.is_cuda else torch.LongTensor
-        return Variable(torch.stack([
-            LongTensor([t]).expand(sample_shape)
-            for t in torch.arange(0, self.ps.size(-1)).long()
-        ]))
+    def sample(self):
+        return self.torch_dist.sample().float()
 
 
 def _warn_fallback(message):
@@ -254,5 +238,6 @@ def WrapCategorical(ps=None, vs=None, logits=None, batch_size=None, log_pdf_mask
     elif vs is not None or batch_size is not None or args or kwargs:
         _warn_fallback('Unsupported args')
     else:
-        return TorchCategorical(ps, vs, logits, log_pdf_mask=log_pdf_mask, *args, **kwargs)
+        pass  # FIXME
+        # return TorchCategorical(ps, vs, logits, log_pdf_mask=log_pdf_mask, *args, **kwargs)
     return Categorical(ps, vs, logits, batch_size=batch_size, log_pdf_mask=log_pdf_mask, *args, **kwargs)

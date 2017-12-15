@@ -7,7 +7,8 @@ import torch
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
-from pyro.distributions.util import broadcast_shape, torch_wrapper
+from pyro.distributions.torch_wrapper import TorchDistribution, torch_wrapper
+from pyro.distributions.util import broadcast_shape
 
 
 class Normal(Distribution):
@@ -110,22 +111,17 @@ class Normal(Distribution):
         return torch.pow(self.sigma, 2)
 
 
-class TorchNormal(Distribution):
+class TorchNormal(TorchDistribution):
     """
     Compatibility wrapper around
     `torch.distributions.Normal <http://pytorch.org/docs/master/_modules/torch/distributions.html#Normal>`_
     """
-    try:
-        reparameterized = torch.distributions.Normal.has_rsample
-    except (ImportError, AttributeError):
-        reparameterized = False
-    enumerable = False
+    reparameterized = True
 
     def __init__(self, mu, sigma, log_pdf_mask=None, *args, **kwargs):
-        self._torch_dist = torch.distributions.Normal(mean=mu, std=sigma)
+        torch_dist = torch.distributions.Normal(mean=mu, std=sigma)
+        super(TorchNormal, self).__init__(torch_dist, log_pdf_mask, *args, **kwargs)
         self._param_shape = torch.Size(broadcast_shape(mu.size(), sigma.size(), strict=True))
-        self.log_pdf_mask = log_pdf_mask
-        super(TorchNormal, self).__init__(*args, **kwargs)
 
     def batch_shape(self, x=None):
         x_shape = [] if x is None else x.size()
@@ -135,15 +131,9 @@ class TorchNormal(Distribution):
     def event_shape(self):
         return self._param_shape[-1:]
 
-    def sample(self):
-        if self.reparameterized:
-            return self._torch_dist.rsample()
-        else:
-            return self._torch_dist.sample()
-
     def batch_log_pdf(self, x):
         batch_log_pdf_shape = self.batch_shape(x) + (1,)
-        log_pxs = self._torch_dist.log_prob(x,)
+        log_pxs = self.torch_dist.log_prob(x)
         batch_log_pdf = torch.sum(log_pxs, -1).contiguous().view(batch_log_pdf_shape)
         if self.log_pdf_mask is not None:
             batch_log_pdf = batch_log_pdf * self.log_pdf_mask
@@ -156,15 +146,13 @@ def _warn_fallback(message):
 
 @torch_wrapper(Normal)
 def WrapNormal(mu, sigma, batch_size=None, log_pdf_mask=None, *args, **kwargs):
-    reparameterized = kwargs.pop('reparameterized', None)
+    reparameterized = kwargs.pop('reparameterized', True)
     if not hasattr(torch, 'distributions'):
         _warn_fallback('Missing module torch.distribution')
     elif not hasattr(torch.distributions, 'Normal'):
         _warn_fallback('Missing class torch.distribution.Normal')
     elif batch_size is not None or args or kwargs:
         _warn_fallback('Unsupported args')
-    elif reparameterized and not TorchNormal.reparameterized:
-        _warn_fallback('Unsupported reparameterized=True')
     else:
         return TorchNormal(mu, sigma, log_pdf_mask=log_pdf_mask,
                            reparameterized=reparameterized, *args, **kwargs)

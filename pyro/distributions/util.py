@@ -1,24 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
-import functools
-import os
-
 import torch
 import torch.nn.functional as F
 from torch.autograd import Variable
-
-# TODO Decide based on torch.__version__ once torch.distributions matures.
-USE_TORCH_DISTRIBUTIONS = int(os.environ.get('PYRO_USE_TORCH_DISTRIBUTIONS', 0))
-
-
-def torch_wrapper(pyro_dist):
-    """
-    Decorator for optional wrappers around torch.distributions classes.
-    """
-    if USE_TORCH_DISTRIBUTIONS:
-        return lambda wrapper: functools.wraps(pyro_dist)(wrapper)
-    else:
-        return lambda wrapper: pyro_dist
 
 
 def broadcast_shape(*shapes, **kwargs):

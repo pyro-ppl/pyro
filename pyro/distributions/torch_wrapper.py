@@ -1,0 +1,45 @@
+from __future__ import absolute_import, division, print_function
+
+import functools
+import os
+
+from pyro.distributions.distribution import Distribution
+
+# TODO Decide based on torch.__version__ once torch.distributions matures.
+USE_TORCH_DISTRIBUTIONS = int(os.environ.get('PYRO_USE_TORCH_DISTRIBUTIONS', 0))
+
+
+def torch_wrapper(pyro_dist):
+    """
+    Decorator for optional wrappers around torch.distributions classes.
+    """
+    if USE_TORCH_DISTRIBUTIONS:
+        return lambda wrapper: functools.wraps(pyro_dist)(wrapper)
+    else:
+        return lambda wrapper: pyro_dist
+
+
+class TorchDistribution(Distribution):
+    """
+    Compatibility wrapper around
+    `torch.distributions.Distribution <http://pytorch.org/docs/master/_modules/torch/distributions.html#Distribution>`_
+    """
+    def __init__(self, torch_dist, log_pdf_mask=None, *args, **kwargs):
+        super(TorchDistribution, self).__init__(*args, **kwargs)
+        self.torch_dist = torch_dist
+        self.log_pdf_mask = log_pdf_mask
+
+    def sample(self):
+        if self.reparameterized:
+            return self.torch_dist.rsample()
+        else:
+            return self.torch_dist.sample()
+
+    def batch_log_pdf(self, x):
+        batch_log_pdf = self.torch_dist.log_prob(x)
+        if self.log_pdf_mask is not None:
+            batch_log_pdf *= self.log_pdf_mask
+        return batch_log_pdf
+
+    def enumerate_support(self):
+        return self.torch_dist.enumerate_support()
