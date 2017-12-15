@@ -89,7 +89,7 @@ def move_to_same_host_as(source, destin):
     """
     Returns source or a copy of `source` such that `source.is_cuda == `destin.is_cuda`.
     """
-    return source.cuda() if destin.is_cuda else source.cpu()
+    return source.cuda(destin.get_device()) if destin.is_cuda else source.cpu()
 
 
 def torch_zeros_like(x):

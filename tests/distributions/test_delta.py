@@ -19,8 +19,8 @@ class TestDelta(TestCase):
         self.batch_test_data_1 = Variable(torch.arange(0, 4).unsqueeze(1).expand(4, 3))
         self.batch_test_data_2 = Variable(torch.arange(4, 8).unsqueeze(1).expand(4, 3))
         self.batch_test_data_3 = Variable(torch.Tensor([[3], [3], [3], [3]]))
-        self.expected_support = [[0], [1], [2], [3]]
-        self.expected_support_non_vec = [3]
+        self.expected_support = [[[0], [1], [2], [3]]]
+        self.expected_support_non_vec = [[3]]
         self.analytic_mean = 3
         self.analytic_var = 0
         self.n_samples = 10
@@ -50,5 +50,7 @@ class TestDelta(TestCase):
     def test_support(self):
         actual_support = dist.delta.enumerate_support(self.vs)
         actual_support_non_vec = dist.delta.enumerate_support(self.v)
+        assert len(actual_support) == 1
+        assert len(actual_support_non_vec) == 1
         assert_equal(actual_support.data, torch.Tensor(self.expected_support))
         assert_equal(actual_support_non_vec.data, torch.Tensor(self.expected_support_non_vec))

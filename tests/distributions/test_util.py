@@ -33,7 +33,7 @@ def test_broadcast_shape(shapes):
     ([2, 1], [1, 3, 1]),
 ])
 def test_broadcast_shape_error(shapes):
-    with pytest.raises(ValueError):
+    with pytest.raises((ValueError, RuntimeError)):
         broadcast_shape(*shapes)
 
 

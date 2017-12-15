@@ -109,7 +109,7 @@ class OneHotCategorical(Distribution):
         batch_pdf_shape = self.batch_shape(x) + (1,)
         batch_ps_shape = self.batch_shape(x) + self.event_shape()
         logits = logits.expand(batch_ps_shape)
-        boolean_mask = x.cuda() if logits.is_cuda else x.cpu()
+        boolean_mask = x.cuda(logits.get_device()) if logits.is_cuda else x.cpu()
         # apply log function to masked probability tensor
         batch_log_pdf = logits.masked_select(boolean_mask.byte()).contiguous().view(batch_pdf_shape)
         if self.log_pdf_mask is not None:
@@ -137,7 +137,10 @@ class OneHotCategorical(Distribution):
             sample. The last dimension is used for the one-hot encoding.
         :rtype: torch.autograd.Variable.
         """
-        return Variable(torch.stack([t.expand_as(self.ps) for t in torch_eye(*self.event_shape())]))
+        result = torch.stack([t.expand_as(self.ps) for t in torch_eye(*self.event_shape())])
+        if self.ps.is_cuda:
+            result = result.cuda(self.ps.get_device())
+        return Variable(result)
 
     def analytic_mean(self):
         """

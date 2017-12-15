@@ -131,7 +131,7 @@ class Categorical(Distribution):
             boolean_mask = torch.from_numpy((vs == x).astype(int))
         # probability tensor mask when data is pytorch tensor
         else:
-            x = x.cuda() if logits.is_cuda else x.cpu()
+            x = x.cuda(logits.get_device()) if logits.is_cuda else x.cpu()
             batch_ps_shape = self.batch_shape(x) + logits.size()[-1:]
             logits = logits.expand(batch_ps_shape)
 
@@ -140,7 +140,7 @@ class Categorical(Distribution):
                 boolean_mask = (vs == x)
             else:
                 boolean_mask = torch_zeros_like(logits.data).scatter_(-1, x.data.long(), 1)
-        boolean_mask = boolean_mask.cuda() if logits.is_cuda else boolean_mask.cpu()
+        boolean_mask = boolean_mask.cuda(logits.get_device()) if logits.is_cuda else boolean_mask.cpu()
         if not isinstance(boolean_mask, Variable):
             boolean_mask = Variable(boolean_mask)
         # apply log function to masked probability tensor
@@ -174,11 +174,18 @@ class Categorical(Distribution):
         support_samples_size = self.ps.size()[-1:] + sample_shape
         vs = self.vs
 
-        if vs is not None:
-            if isinstance(vs, np.ndarray):
-                return vs.transpose().reshape(*support_samples_size)
-            else:
-                return torch.transpose(vs, 0, -1).contiguous().view(support_samples_size)
-        LongTensor = torch.cuda.LongTensor if self.ps.is_cuda else torch.LongTensor
-        return Variable(
-            torch.stack([LongTensor([t]).expand(sample_shape) for t in torch.arange(0, self.ps.size(-1)).long()]))
+        if isinstance(vs, np.ndarray):
+            return vs.transpose().reshape(*support_samples_size)
+        elif vs is not None:
+            result = torch.transpose(vs, 0, -1).contiguous().view(support_samples_size)
+        else:
+            shape = self.ps.size()[:-1] + (1,)
+            cardinality = self.ps.size()[-1]
+            result = torch.arange(0, cardinality).long()
+            result = result.view((cardinality,) + (1,) * len(shape)).expand((cardinality,) + shape)
+
+        if not isinstance(result, Variable):
+            result = Variable(result)
+        if self.ps.is_cuda:
+            result = result.cuda(self.ps.get_device())
+        return result
