@@ -11,18 +11,27 @@ class MultivariateNormal(Distribution):
     Multivariate normal (Gaussian) distribution.
 
     A distribution over vectors in which all the elements have a joint
-    Gaussian distribution.
+    Gaussian distribution. Currently does not support batching parameters.
 
-    :param torch.autograd.Variable mu: Mean.
-    :param torch.autograd.Variable sigma: Covariance matrix.
-        Must be symmetric and positive semidefinite.
-    :param is_cholesky: Should be set to True if you want to directly pass a cholesky decomposition as sigma.
+    :param torch.autograd.Variable mu: Mean. Must be a vector (Variable containing a 1d Tensor).
+    :param torch.autograd.Variable sigma: Covariance matrix. Must be
+    symmetric and positive semidefinite.
+    :param is_cholesky: Should be set to True if you want to directly pass a
+    Cholesky decomposition of the covariance matrix as sigma.
+    :param use_inverse_for_batch_log: If this is set to true, the torch.inverse
+    function will be used to compute the log_pdf. This means that the results of log_pdf can be differentiated with
+    reference to sigma. Since the gradient of torch.potri is currently not implemented differentiation of log_pdf wrt
+    sigma is not possible when using the Cholesky decomposition, it is however much faster and therefore enabled by
+    default.
+    :raises: NotImplementedError if batch_size is passed, ValueError if the shape of mean or Sigma is not supported.
     """
 
     def __init__(self, mu, sigma, batch_size=None, is_cholesky=False, use_inverse_for_batch_log=False, *args, **kwargs):
         self.mu = mu
         self.output_shape = mu.shape
         self.use_inverse_for_batch_log = use_inverse_for_batch_log
+        if not batch_size is None:
+            raise NotImplementedError("Batching parameters is currently not supported by MultivariateNormal")
         if not is_cholesky:
             self.sigma = sigma
             # potrf is the very sensible name for the Cholesky decomposition in PyTorch
@@ -72,12 +81,19 @@ class MultivariateNormal(Distribution):
         return transformed_sample if not n == 1 else transformed_sample.squeeze(0)
 
     def batch_log_pdf(self, x):
+        """
+        Return the logarithm of the probability density function evaluated at x.
+        :param x: The points for which the log_pdf should be evaluated batched along axis 0.
+        :return: A `torch.autograd.Variable` of size x.size()[0]
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_log_pdf`
+        """
         batch_size = x.size()[0]
         normalization_factor = 0.5 * torch.log(self.sigma_cholesky.diag()).sum() + (self.mu.shape[0] / 2) * np.log(
             np.pi)
-        print(normalization_factor)
+        sigma_inverse = torch.inverse(self.sigma) if self.use_inverse_for_batch_log else torch.potri(
+            self.sigma_cholesky)
         return -(normalization_factor + 0.5 * torch.sum((x - self.mu).unsqueeze(2) * torch.bmm(
-            torch.potri(self.sigma_cholesky).expand(batch_size, *self.sigma_cholesky.size()),
+            sigma_inverse.expand(batch_size, *self.sigma_cholesky.size()),
             (x - self.mu).view(*x.size(), 1)), 1))
 
     def analytic_mean(self):
