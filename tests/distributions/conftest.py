@@ -8,7 +8,8 @@ import scipy.stats as sp
 
 import pyro.distributions as dist
 from pyro.distributions import (Bernoulli, Beta, Binomial, Categorical, Cauchy, Dirichlet, Exponential, Gamma,
-                                HalfCauchy, LogNormal, Multinomial, Normal, OneHotCategorical, Poisson, Uniform)
+                                HalfCauchy, LogNormal, Multinomial, Normal, OneHotCategorical, Poisson, Uniform,
+                                MultivariateNormal)
 from tests.distributions.dist_fixture import Fixture
 
 continuous_dists = [
@@ -75,6 +76,17 @@ continuous_dists = [
             scipy_arg_fn=lambda mu, sigma: ((), {"loc": np.array(mu), "scale": np.array(sigma)}),
             prec=0.07,
             min_samples=50000),
+    Fixture(pyro_dist=(dist.multivariate_normal, MultivariateNormal),
+            scipy_dist=sp.multivariate_normal,
+            examples=[
+               {#'mu': torch.Tensor(np.arange(0, 100)), 'sigma': torch.Tensor(1/(1+(np.arange(0, 100).reshape([-1, 1])
+                #                                         - np.arange(0, 100).reshape([1, -1]))**2)),
+                 'mu': [2.0, 1.0], 'sigma': [[1.0, 0.5], [0.5, 1.0]],
+                 'test_data': [2.0, 1.0]},
+            ],
+            scipy_arg_fn=lambda mu, sigma: ((), {"mean": np.array(mu), "cov": np.array(sigma)}),
+            prec=0.1,
+            min_samples=500000),
     Fixture(pyro_dist=(dist.lognormal, LogNormal),
             scipy_dist=sp.lognorm,
             examples=[
