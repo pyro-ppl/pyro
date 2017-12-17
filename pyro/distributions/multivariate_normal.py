@@ -49,14 +49,14 @@ class MultivariateNormal(Distribution):
         """
         Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_shape`
         """
-        mu = self.mu.expand(self.batch_size, *self.mu.size())
+        mu = self.mu.expand(self.batch_size, *self.mu.size()).squeeze(0)
         if x is not None:
             if x.size()[-1] != mu.size()[-1]:
                 raise ValueError("The event size for the data and distribution parameters must match.\n"
                                  "Expected x.size()[-1] == self.mu.size()[0], but got {} vs {}".format(
                                     x.size(-1), mu.size(-1)))
             try:
-                mu = self.mu.expand_as(x)
+                mu = mu.expand_as(x)
             except RuntimeError as e:
                 raise ValueError("Parameter `mu` with shape {} is not broadcastable to "
                                  "the data shape {}. \nError: {}".format(mu.size(), x.size(), str(e)))
@@ -80,7 +80,7 @@ class MultivariateNormal(Distribution):
         batch_size = self.batch_size if n == -1 else n
         uncorrelated_standard_sample = Variable(torch.randn(batch_size, *self.mu.size()).type_as(self.mu.data))
         transformed_sample = self.mu + uncorrelated_standard_sample @ self.sigma_cholesky
-        return transformed_sample #if not batch_size == 1 else transformed_sample.squeeze(0)
+        return transformed_sample
 
     def batch_log_pdf(self, x, normalized=True):
         """
@@ -102,9 +102,6 @@ class MultivariateNormal(Distribution):
             2*np.pi) if normalized else 0
         sigma_inverse = torch.inverse(self.sigma) if self.use_inverse_for_batch_log else torch.potri(
             self.sigma_cholesky)
-        print (x.shape)
-        print (self.batch_shape(x))
-        print (batch_log_pdf_shape)
         return -(normalization_factor + 0.5 * torch.sum((x - self.mu).unsqueeze(2) * torch.bmm(
             sigma_inverse.expand(batch_size, *self.sigma_cholesky.size()),
             (x - self.mu).view(*x.size(), 1)), 1)).view(batch_log_pdf_shape)

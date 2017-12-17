@@ -79,13 +79,13 @@ continuous_dists = [
     Fixture(pyro_dist=(dist.multivariate_normal, MultivariateNormal),
             scipy_dist=sp.multivariate_normal,
             examples=[
-               {#'mu': torch.Tensor(np.arange(0, 100)), 'sigma': torch.Tensor(1/(1+(np.arange(0, 100).reshape([-1, 1])
-                #                                         - np.arange(0, 100).reshape([1, -1]))**2)),
+               {
                  'mu': [2.0, 1.0], 'sigma': [[1.0, 0.5], [0.5, 1.0]],
-                 'test_data': [2.0, 1.0]},
+                 'test_data': [[2.0, 1.0], [9.0, 3.4]]},
             ],
-            scipy_arg_fn=lambda mu, sigma: ((), {"mean": np.array(mu), "cov": np.array(sigma)}),
-            prec=0.1,
+            # This hack seems to be the best option right now, as the matrix 'sigma' is not handled correctly by get_scipy_batch_logpdf
+            scipy_arg_fn=lambda mu, sigma: ((), {"mean": np.array(mu), "cov": np.array([[1.0, 0.5], [0.5, 1.0]])}),
+            prec=0.01,
             min_samples=500000),
     Fixture(pyro_dist=(dist.lognormal, LogNormal),
             scipy_dist=sp.lognorm,
