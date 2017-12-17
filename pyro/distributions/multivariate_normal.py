@@ -61,7 +61,7 @@ class MultivariateNormal(Distribution):
                 raise ValueError("Parameter `mu` with shape {} is not broadcastable to "
                                  "the data shape {}. \nError: {}".format(mu.size(), x.size(), str(e)))
 
-        return mu.size()[:-1]#torch.Size((self.batch_size, )) #if self.batch_size > 1 else torch.Size()
+        return mu.size()[:-1]
 
     def event_shape(self):
         """
@@ -90,11 +90,9 @@ class MultivariateNormal(Distribution):
         :param normalized: If set to false the normalization
         constant is omitted is the results. This might be preferable, as computing the determinant of sigma might not
         always be numerically stable. Defaults to `True`.
-        :return: A `torch.autograd.Variable` of size x.size()[0]
+        :return: A `torch.autograd.Variable` of size self.batch_shape(x) + (1,)
         Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_log_pdf`
         """
-        mu = self.mu
-        mu.expand(self.shape(x))
         batch_size = x.size()[0] if len(x.size()) > len(self.mu.size()) else 1
         batch_log_pdf_shape = self.batch_shape(x) + (1,)
         x = x.view(batch_size, *self.mu.size())
