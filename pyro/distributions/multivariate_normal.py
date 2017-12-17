@@ -94,7 +94,7 @@ class MultivariateNormal(Distribution):
         batch_size = x.size()[0] if len(x.size()) > len(self.mu.size()) else 1
         x = x.view(batch_size, *self.mu.size())
         normalization_factor = torch.log(self.sigma_cholesky.diag()).sum() + (self.mu.shape[0] / 2) * np.log(
-            np.pi) if normalized else 0
+            2*np.pi) if normalized else 0
         sigma_inverse = torch.inverse(self.sigma) if self.use_inverse_for_batch_log else torch.potri(
             self.sigma_cholesky)
         return -(normalization_factor + 0.5 * torch.sum((x - self.mu).unsqueeze(2) * torch.bmm(

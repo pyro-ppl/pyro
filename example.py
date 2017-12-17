@@ -5,13 +5,14 @@ from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 from torch.autograd import Variable
 
-Sigma = Variable(1 * torch.ones(1,1))
-mu = Variable(0 * torch.ones(1))
+Sigma = Variable(2 * torch.ones(1,1))
+mu = Variable(1 * torch.ones(1))
 
 gaussian = pyro.distributions.MultivariateNormal(mu, Sigma)
 in_ = Variable(torch.arange(-10, 10, 0.01).unsqueeze(1))
 plt.plot(in_.data.numpy(), torch.exp(gaussian.batch_log_pdf(in_)).data.numpy())
-plt.plot(in_.data.numpy(), 1/np.sqrt(np.pi)*torch.exp(-in_**2/2).data.numpy())
+plt.plot(in_.data.numpy(), 1/np.sqrt(4*np.pi)*torch.exp(-(in_-1)**2/4).data.numpy())
+plt.hist(gaussian.sample(10000).data.numpy(), normed=True, bins=100)
 plt.show()
 
 Sigma = Variable(10 * torch.randn(2, 2))
