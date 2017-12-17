@@ -55,7 +55,7 @@ class MultivariateNormal(Distribution):
             if x.size()[-1] != mu.size()[0]:
                 raise ValueError("The event size for the data and distribution parameters must match.\n"
                                  "Expected x.size()[-1] == self.mu.size()[0], but got {} vs {}".format(
-                    x.size(-1), mu.size(-1)))
+                                    x.size(-1), mu.size(-1)))
             try:
                 mu = self.mu.expand_as(x)
             except RuntimeError as e:
@@ -73,23 +73,28 @@ class MultivariateNormal(Distribution):
         """
         A classic multivariate normal sampler.
 
-        :param n: The number of samples to be drawn. Defaults to 1.
+        :param n: The number of samples to be drawn. Samples are batched along the first axis. Defaults to 1.
         Ref: :py:meth:`pyro.distributions.distribution.Distribution.sample`
         """
         uncorrelated_standard_sample = Variable(torch.randn(n, *self.mu.size()).type_as(self.mu.data))
         transformed_sample = self.mu + uncorrelated_standard_sample @ self.sigma_cholesky
         return transformed_sample if not n == 1 else transformed_sample.squeeze(0)
 
-    def batch_log_pdf(self, x):
+    def batch_log_pdf(self, x, normalized = True):
         """
         Return the logarithm of the probability density function evaluated at x.
-        :param x: The points for which the log_pdf should be evaluated batched along axis 0.
+        :param x: The points for which the
+        log_pdf should be evaluated batched along axis 0.
+        :param normalized: If set to false the normalization
+        constant is omitted is the results. This might be preferable, as computing the determinant of sigma might not
+        always be numerically stable. Defaults to `True`.
         :return: A `torch.autograd.Variable` of size x.size()[0]
         Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_log_pdf`
         """
-        batch_size = x.size()[0]
-        normalization_factor = 0.5 * torch.log(self.sigma_cholesky.diag()).sum() + (self.mu.shape[0] / 2) * np.log(
-            np.pi)
+        batch_size = x.size()[0] if len(x.size()) > len(self.mu.size()) else 1
+        x = x.view(batch_size, *self.mu.size())
+        normalization_factor = torch.log(self.sigma_cholesky.diag()).sum() + (self.mu.shape[0] / 2) * np.log(
+            np.pi) if normalized else 0
         sigma_inverse = torch.inverse(self.sigma) if self.use_inverse_for_batch_log else torch.potri(
             self.sigma_cholesky)
         return -(normalization_factor + 0.5 * torch.sum((x - self.mu).unsqueeze(2) * torch.bmm(
