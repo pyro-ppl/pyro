@@ -49,7 +49,7 @@ class MultivariateNormal(Distribution):
         """
         Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_shape`
         """
-        mu = self.mu
+        mu = self.mu.expand(self.batch_size, *self.mu.size())
         if x is not None:
             if x.size()[-1] != mu.size()[-1]:
                 raise ValueError("The event size for the data and distribution parameters must match.\n"
@@ -61,7 +61,7 @@ class MultivariateNormal(Distribution):
                 raise ValueError("Parameter `mu` with shape {} is not broadcastable to "
                                  "the data shape {}. \nError: {}".format(mu.size(), x.size(), str(e)))
 
-        return torch.Size((self.batch_size, )) #if self.batch_size > 1 else torch.Size()
+        return mu.size()[:-1]#torch.Size((self.batch_size, )) #if self.batch_size > 1 else torch.Size()
 
     def event_shape(self):
         """
@@ -96,12 +96,15 @@ class MultivariateNormal(Distribution):
         mu = self.mu
         mu.expand(self.shape(x))
         batch_size = x.size()[0] if len(x.size()) > len(self.mu.size()) else 1
+        batch_log_pdf_shape = self.batch_shape(x) + (1,)
         x = x.view(batch_size, *self.mu.size())
         normalization_factor = torch.log(self.sigma_cholesky.diag()).sum() + (self.mu.shape[0] / 2) * np.log(
             2*np.pi) if normalized else 0
         sigma_inverse = torch.inverse(self.sigma) if self.use_inverse_for_batch_log else torch.potri(
             self.sigma_cholesky)
-        batch_log_pdf_shape = self.batch_shape(x) + (1,)
+        print (x.shape)
+        print (self.batch_shape(x))
+        print (batch_log_pdf_shape)
         return -(normalization_factor + 0.5 * torch.sum((x - self.mu).unsqueeze(2) * torch.bmm(
             sigma_inverse.expand(batch_size, *self.sigma_cholesky.size()),
             (x - self.mu).view(*x.size(), 1)), 1)).view(batch_log_pdf_shape)
