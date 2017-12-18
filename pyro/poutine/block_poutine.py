@@ -1,3 +1,5 @@
+from __future__ import absolute_import, division, print_function
+
 from .poutine import Poutine
 
 
@@ -93,11 +95,17 @@ class BlockPoutine(Poutine):
         3. msg["name"] not in self.expose and msg["type"] not in self.expose_types
         4. self.hide_all == True
         """
+        # handle observes
+        if msg["type"] == "sample" and msg["is_observed"]:
+            msg_type = "observe"
+        else:
+            msg_type = msg["type"]
+
         # decision rule for hiding:
         if (msg["name"] in self.hide) or \
-           (msg["type"] in self.hide_types) or \
+           (msg_type in self.hide_types) or \
            ((msg["name"] not in self.expose) and
-            (msg["type"] not in self.expose_types) and self.hide_all):  # noqa: E129
+            (msg_type not in self.expose_types) and self.hide_all):  # noqa: E129
 
             return True
         # otherwise expose
@@ -113,18 +121,6 @@ class BlockPoutine(Poutine):
         Applies self._block_up to decide whether to hide the site.
         """
         ret = super(BlockPoutine, self)._pyro_sample(msg)
-        msg["stop"] = self._block_up(msg)
-        return ret
-
-    def _pyro_observe(self, msg):
-        """
-        :param msg:  current message at a trace site
-        :returns: the observed value at the site.
-
-        Default observe behavior with a side effect.
-        Applies self._block_up to decide whether to hide the site.
-        """
-        ret = super(BlockPoutine, self)._pyro_observe(msg)
         msg["stop"] = self._block_up(msg)
         return ret
 

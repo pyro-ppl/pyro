@@ -1,3 +1,7 @@
+from __future__ import absolute_import, division, print_function
+
+import warnings
+
 import pyro
 
 
@@ -23,6 +27,29 @@ def pytest_addoption(parser):
                      help="Only run tests matching the stage NAME.")
 
 
+def _get_highest_specificity_marker(stage_marker):
+    """
+    Get the most specific stage marker corresponding to the test. Specificity
+    of test function marker is the highest, followed by test class marker and
+    module marker.
+
+    :return: List of most specific stage markers for the test.
+    """
+    is_test_collected = False
+    selected_stages = []
+    try:
+        for marker in stage_marker:
+            selected_stages = list(marker.args)
+            is_test_collected = True
+            break
+    except TypeError:
+        selected_stages = list(stage_marker.args)
+        is_test_collected = True
+    if not is_test_collected:
+        raise RuntimeError("stage marker needs at least one stage to be specified.")
+    return selected_stages
+
+
 def pytest_collection_modifyitems(config, items):
     test_stages = set(config.getoption("--stage"))
     if not test_stages or "all" in test_stages:
@@ -31,9 +58,14 @@ def pytest_collection_modifyitems(config, items):
     deselected_items = []
     for item in items:
         stage_marker = item.get_marker("stage")
-        if not stage_marker or not test_stages.isdisjoint(stage_marker.args):
+        if not stage_marker:
             selected_items.append(item)
-        else:
+            warnings.warn("No stage associated with the test {}. Will run on each stage invocation.".format(item.name))
+            continue
+        item_stage_markers = _get_highest_specificity_marker(stage_marker)
+        if test_stages.isdisjoint(item_stage_markers):
             deselected_items.append(item)
+        else:
+            selected_items.append(item)
     config.hook.pytest_deselected(items=deselected_items)
     items[:] = selected_items

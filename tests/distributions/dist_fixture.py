@@ -1,66 +1,120 @@
-import json
+from __future__ import absolute_import, division, print_function
+
 import math
-import numbers
 
 import numpy as np
 import torch
 from torch.autograd import Variable
+
+from pyro.distributions.util import get_probs_and_logits
+
+SINGLE_TEST_DATUM_IDX = [0]
+BATCH_TEST_DATA_IDX = [-1]
 
 
 class Fixture(object):
     def __init__(self,
                  pyro_dist=None,
                  scipy_dist=None,
-                 dist_params=None,
-                 test_data=None,
+                 examples=None,
                  scipy_arg_fn=None,
                  prec=0.05,
                  min_samples=None,
                  is_discrete=False,
-                 expected_support_file=None,
-                 expected_support_key=''):
-        self.pyro_dist = pyro_dist
+                 expected_support_non_vec=None,
+                 expected_support=None,
+                 test_data_indices=None,
+                 batch_data_indices=None):
+        self.pyro_dist, self.pyro_dist_obj = pyro_dist
         self.scipy_dist = scipy_dist
-        self.dist_params = dist_params
-        self.test_data = test_data
+        self.dist_params, self.test_data = self._extract_fixture_data(examples)
         self.scipy_arg_fn = scipy_arg_fn
         self.min_samples = min_samples
         self.prec = prec
         self.is_discrete = is_discrete
-        self.support_file = expected_support_file
-        self.support_key = expected_support_key
+        self.expected_support_non_vec = expected_support_non_vec
+        self.expected_support = expected_support
+        self.test_data_indices = test_data_indices
+        self.batch_data_indices = batch_data_indices
 
-    def get_samples(self, num_samples, *dist_params):
-        return [self.pyro_dist(*dist_params).data.cpu().numpy() for _ in range(num_samples)]
+    def get_batch_data_indices(self):
+        if not self.batch_data_indices:
+            return BATCH_TEST_DATA_IDX
+        return self.batch_data_indices
 
-    def get_test_data(self, idx=None):
-        test_data = self.test_data
-        if idx is not None:
-            test_data = self.test_data[idx]
-        return tensor_wrap(test_data)
+    def get_test_data_indices(self):
+        if not self.test_data_indices:
+            return SINGLE_TEST_DATUM_IDX
+        return self.test_data_indices
 
-    def get_dist_params(self, idx=None):
-        dist_params = self.dist_params
-        if idx is not None:
-            return map_tensor_wrap(dist_params[idx])
-        return map_tensor_wrap(zip(*dist_params))
+    def _extract_fixture_data(self, examples):
+        dist_params, test_data = [], []
+        for ex in examples:
+            test_data.append(ex.pop('test_data'))
+            dist_params.append(ex)
+        return dist_params, test_data
+
+    def get_num_test_data(self):
+        return len(self.test_data)
+
+    def get_samples(self, num_samples, **dist_params):
+        return self.pyro_dist(batch_size=num_samples, **dist_params)
+
+    def get_test_data(self, idx, wrap_tensor=True):
+        if not wrap_tensor:
+            return self.test_data[idx]
+        return tensor_wrap(self.test_data[idx])[0]
+
+    def get_dist_params(self, idx, wrap_tensor=True):
+        if not wrap_tensor:
+            return self.dist_params[idx]
+        return tensor_wrap(**self.dist_params[idx])
+
+    def _convert_logits_to_ps(self, dist_params):
+        if 'logits' in dist_params:
+            logits = Variable(torch.Tensor(dist_params.pop('logits')))
+            is_multidimensional = self.get_test_distribution_name() != 'Bernoulli'
+            ps, _ = get_probs_and_logits(logits=logits, is_multidimensional=is_multidimensional)
+            dist_params['ps'] = list(ps.data.cpu().numpy())
+        return dist_params
 
     def get_scipy_logpdf(self, idx):
-        args, kwargs = self.scipy_arg_fn(*self.dist_params[idx])
+        if not self.scipy_arg_fn:
+            return
+        dist_params = self.get_dist_params(idx, wrap_tensor=False)
+        dist_params = self._convert_logits_to_ps(dist_params)
+        args, kwargs = self.scipy_arg_fn(**dist_params)
         if self.is_discrete:
-            log_pdf = self.scipy_dist.logpmf(self.test_data[idx], *args, **kwargs)
+            log_pdf = self.scipy_dist.logpmf(self.get_test_data(idx, wrap_tensor=False), *args, **kwargs)
         else:
-            log_pdf = self.scipy_dist.logpdf(self.test_data[idx], *args, **kwargs)
+            log_pdf = self.scipy_dist.logpdf(self.get_test_data(idx, wrap_tensor=False), *args, **kwargs)
         return np.sum(log_pdf)
 
-    def get_scipy_batch_logpdf(self):
-        return [self.get_scipy_logpdf(i) for i in range(len(self.test_data))]
-
-    def get_pyro_logpdf(self, idx):
-        return self.pyro_dist.log_pdf(self.get_test_data(idx), *self.get_dist_params(idx))
-
-    def get_pyro_batch_logpdf(self):
-        return self.pyro_dist.batch_log_pdf(self.get_test_data(), *self.get_dist_params())
+    def get_scipy_batch_logpdf(self, idx):
+        if not self.scipy_arg_fn:
+            return
+        dist_params = self.get_dist_params(idx, wrap_tensor=False)
+        dist_params_wrapped = self.get_dist_params(idx)
+        dist_params = self._convert_logits_to_ps(dist_params)
+        test_data = self.get_test_data(idx, wrap_tensor=False)
+        test_data_wrapped = self.get_test_data(idx)
+        shape = self.pyro_dist.shape(test_data_wrapped, **dist_params_wrapped)
+        batch_log_pdf = []
+        for i in range(len(test_data)):
+            batch_params = {}
+            for k in dist_params:
+                param = np.broadcast_to(dist_params[k], shape)
+                batch_params[k] = param[i]
+            args, kwargs = self.scipy_arg_fn(**batch_params)
+            if self.is_discrete:
+                batch_log_pdf.append(self.scipy_dist.logpmf(test_data[i],
+                                                            *args,
+                                                            **kwargs))
+            else:
+                batch_log_pdf.append(self.scipy_dist.logpdf(test_data[i],
+                                                            *args,
+                                                            **kwargs))
+        return batch_log_pdf
 
     def get_num_samples(self, idx):
         """
@@ -79,7 +133,7 @@ class Fixture(object):
         required_precision = self.prec / tol
         if not self.scipy_dist:
             return min_samples
-        args, kwargs = self.scipy_arg_fn(*self.dist_params[idx])
+        args, kwargs = self.scipy_arg_fn(**self.get_dist_params(idx, wrap_tensor=False))
         try:
             fourth_moment = np.max(self.scipy_dist.moment(4, *args, **kwargs))
             var = np.max(self.scipy_dist.var(*args, **kwargs))
@@ -88,22 +142,22 @@ class Fixture(object):
             return min_samples
         return max(min_samples, min_computed_samples)
 
-    def get_expected_support(self):
-        if not self.support_file:
-            return None
-        with open(self.support_file) as data:
-            data = json.load(data)
-        return [torch.Tensor(x) for x in data[self.support_key]]
-
     def get_test_distribution_name(self):
-        return self.pyro_dist.__class__.__name__
+        pyro_dist_class = getattr(self.pyro_dist, 'dist_class', self.pyro_dist.__class__)
+        return pyro_dist_class.__name__
 
 
-def tensor_wrap(value):
-    if isinstance(value, numbers.Number):
-        return Variable(torch.Tensor([value]))
-    return Variable(torch.Tensor(value))
-
-
-def map_tensor_wrap(list_vals):
-    return [tensor_wrap(x) for x in list_vals]
+def tensor_wrap(*args, **kwargs):
+    tensor_list, tensor_map = [], {}
+    for arg in args:
+        wrapped_arg = Variable(torch.Tensor(arg)) if isinstance(arg, list) else arg
+        tensor_list.append(wrapped_arg)
+    for k in kwargs:
+        kwarg = kwargs[k]
+        wrapped_kwarg = Variable(torch.Tensor(kwarg)) if isinstance(kwarg, list) else kwarg
+        tensor_map[k] = wrapped_kwarg
+    if args and not kwargs:
+        return tensor_list
+    if kwargs and not args:
+        return tensor_map
+    return tensor_list, tensor_map

@@ -1,53 +1,42 @@
+from __future__ import absolute_import, division, print_function
+
 import functools
+
+from pyro import util
 
 # poutines
 from .block_poutine import BlockPoutine
-from .poutine import Poutine  # noqa: F401
-from .replay_poutine import ReplayPoutine
-from .trace_poutine import TracePoutine
-from .tracegraph_poutine import TraceGraphPoutine
-from .lift_poutine import LiftPoutine
 from .condition_poutine import ConditionPoutine
-from .lambda_poutine import LambdaPoutine  # noqa: F401
 from .escape_poutine import EscapePoutine
-
-# trace data structures
-from .trace import Trace, TraceGraph  # noqa: F401
-from pyro import util
-
+from .indep_poutine import IndepPoutine  # noqa: F401
+from .lift_poutine import LiftPoutine
+from .poutine import _PYRO_STACK, Poutine  # noqa: F401
+from .replay_poutine import ReplayPoutine
+from .scale_poutine import ScalePoutine
+from .trace import Trace  # noqa: F401
+from .trace_poutine import TracePoutine
 
 ############################################
 # Begin primitive operations
 ############################################
 
-def trace(fn):
+
+def trace(fn, graph_type=None):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
+    :param graph_type: string that specifies the kind of graph to construct
     :returns: stochastic function wrapped in a TracePoutine
     :rtype: pyro.poutine.TracePoutine
 
     Alias for TracePoutine constructor.
 
     Given a callable that contains Pyro primitive calls, return a TracePoutine callable
-    that records the inputs and outputs to those primitive calls.
+    that records the inputs and outputs to those primitive calls
+    and their dependencies.
+
     Adds trace data structure site constructors to primitive stacks
     """
-    return TracePoutine(fn)
-
-
-def tracegraph(fn):
-    """
-    :param fn: a stochastic function (callable containing pyro primitive calls)
-    :returns: stochastic function wrapped in a TraceGraphPoutine
-    :rtype: pyro.poutine.TraceGraphPoutine
-
-    Alias for TraceGraphPoutine constructor.
-
-    Given a callable that contains Pyro primitive calls,, return a TraceGraphPoutine callable
-    that records the inputs and outputs to those primitive calls and their dependencies.
-    Adds trace and tracegraph data structure site constructors to primitive stacks
-    """
-    return TraceGraphPoutine(fn)
+    return TracePoutine(fn, graph_type=graph_type)
 
 
 def replay(fn, trace, sites=None):
@@ -134,6 +123,37 @@ def condition(fn, data):
     return ConditionPoutine(fn, data=data)
 
 
+def indep(fn, name, vectorized):
+    """
+    :param fn: a stochastic function (callable containing pyro primitive calls)
+    :param str name: a name for subsample sites
+    :param bool vectorized: True for ``iarange``, False for ``irange``
+    :returns: stochastic function wrapped in an IndepPoutine
+    :rtype: pyro.poutine.IndepPoutine
+
+    Alias for IndepPoutine constructor.
+
+    Used internally by ``iarange`` and ``irange``.
+    """
+    return IndepPoutine(fn, name=name, vectorized=vectorized)
+
+
+def scale(fn, scale):
+    """
+    :param fn: a stochastic function (callable containing pyro primitive calls)
+    :param scale: a positive scaling factor
+    :returns: stochastic function wrapped in a ScalePoutine
+    :rtype: pyro.poutine.ScalePoutine
+
+    Alias for ScalePoutine constructor.
+
+    Given a stochastic function with some sample statements and a positive
+    scale factor, scale the score of all sample and observe sites in the
+    function.
+    """
+    return ScalePoutine(fn, scale=scale)
+
+
 #########################################
 # Begin composite operations
 #########################################
@@ -199,6 +219,8 @@ def queue(fn, queue, max_tries=None,
                                    functools.partial(escape_fn, next_trace)))
                 return ftr(*args, **kwargs)
             except util.NonlocalExit as site_container:
+                for frame in _PYRO_STACK:
+                    frame._reset()
                 for tr in extend_fn(ftr.trace.copy(), site_container.site,
                                     num_samples=num_samples):
                     queue.put(tr)

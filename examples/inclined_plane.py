@@ -1,28 +1,26 @@
 from __future__ import print_function
 
 import argparse
-import sys
 
 import numpy as np
 import torch
-import torch.optim as optim
 from torch.autograd import Variable
 
 import pyro
-from pyro.distributions import Uniform, DiagNormal
-from pyro.infer.kl_qp import KL_QP
+from pyro.distributions import Uniform, Normal
+from pyro.infer import Importance, Marginal
 
 """
-Samantha really likes physics---but she likes pyro even more. Instead of using
+Samantha really likes physics---but she likes Pyro even more. Instead of using
 calculus to do her physics lab homework (which she could easily do), she's going
 to use bayesian inference. The problem setup is as follows. In lab she observed
 a little box slide down an inclined plane (length of 2 meters and with an incline of
-30 degrees) 10 times. Each time she measured and recorded the descent time. The timing
+30 degrees) 20 times. Each time she measured and recorded the descent time. The timing
 device she used has a known measurement error of 20 milliseconds. Using the observed
 data, she wants to infer the coefficient of friction mu between the box and the inclined
-plane. She already has python code that can simulate the amount of time that it takes
-the little box to slide down the inclined plane as a function of mu. Using pyro, she
-can reverse the simulator and infer mu from the observed descent times.
+plane. She already has (deterministic) python code that can simulate the amount of time
+that it takes the little box to slide down the inclined plane as a function of mu. Using
+Pyro, she can reverse the simulator and infer mu from the observed descent times.
 """
 
 little_g = 9.8  # m/s/s
@@ -31,22 +29,22 @@ time_measurement_sigma = 0.02  # observation noise in seconds (known quantity)
 
 
 # the forward simulator, which does numerical integration of the equations of motion
-# in steps of size dx, and optionally includes measurement noise
+# in steps of size dt, and optionally includes measurement noise
 
-def simulate(mu, length=2.0, phi=np.pi / 6.0, dx=0.01, noise_sigma=None):
+def simulate(mu, length=2.0, phi=np.pi / 6.0, dt=0.005, noise_sigma=None):
     T = Variable(torch.zeros(1))
     velocity = Variable(torch.zeros(1))
     displacement = Variable(torch.zeros(1))
     acceleration = Variable(torch.Tensor([little_g * np.sin(phi)])) - \
         Variable(torch.Tensor([little_g * np.cos(phi)])) * mu
 
-    if acceleration.data[0] <= 0.0:  # the box doesn't slide if the friction is too large
-        return Variable(torch.Tensor([np.inf]))
+    if acceleration.data[0] <= 0.0:             # the box doesn't slide if the friction is too large
+        return Variable(torch.Tensor([1.0e5]))  # return a very large time instead of infinity
 
     while displacement.data[0] < length:  # otherwise slide to the end of the inclined plane
-        velocity = torch.sqrt(velocity * velocity + 2.0 * dx * acceleration)
-        displacement += dx
-        T += dx / velocity
+        displacement += velocity * dt
+        velocity += acceleration * dt
+        T += dt
 
     if noise_sigma is None:
         return T
@@ -65,63 +63,46 @@ def analytic_T(mu, length=2.0, phi=np.pi / 6.0):
 
 # generate N_obs observations using simulator and the true coefficient of friction mu0
 print("generating simulated data using the true coefficient of friction %.3f" % mu0)
-N_obs = 10
-observed_data = [simulate(Variable(torch.Tensor([mu0])), noise_sigma=time_measurement_sigma)
-                 for _ in range(N_obs)]
+N_obs = 20
+torch.manual_seed(2)
+observed_data = torch.cat([simulate(Variable(torch.Tensor([mu0])), noise_sigma=time_measurement_sigma)
+                           for _ in range(N_obs)])
 observed_mean = np.mean([T.data[0] for T in observed_data])
 
 
 # define model with uniform prior on mu and gaussian noise on the descent time
-
 def model(observed_data):
     mu_prior = Uniform(Variable(torch.zeros(1)), Variable(torch.ones(1)))
     mu = pyro.sample("mu", mu_prior)
 
     def observe_T(T_obs, obs_name):
         T_simulated = simulate(mu)
-        T_obs_dist = DiagNormal(T_simulated, Variable(torch.Tensor([time_measurement_sigma])))
+        T_obs_dist = Normal(T_simulated, Variable(torch.Tensor([time_measurement_sigma])))
         pyro.observe(obs_name, T_obs_dist, T_obs)
 
-    pyro.map_data("map", observed_data, lambda i, x: observe_T(x, "obs_%d" % i), batch_size=1)
+    for i, T_obs in enumerate(observed_data):
+        observe_T(T_obs, "obs_%d" % i)
+
     return mu
 
 
-# define a gaussian variational approximation for the posterior over mu
+def main(args):
+    # create an importance sampler (the prior is used as the proposal distribution)
+    posterior = Importance(model, guide=None, num_samples=args.num_samples)
+    # create a marginal object that consumes the raw execution traces provided by the importance sampler
+    marginal = Marginal(posterior)
+    # get posterior samples of mu (which is the return value of model)
+    print("doing importance sampling...")
+    posterior_samples = [marginal(observed_data) for i in range(args.num_samples)]
 
-def guide(observed_data):
-    mean_mu = pyro.param("mean_mu", Variable(torch.Tensor([0.25]), requires_grad=True))
-    log_sigma_mu = pyro.param("log_sigma_mu", Variable(torch.Tensor([-4.0]), requires_grad=True))
-    sigma_mu = torch.exp(log_sigma_mu)
-    mu = pyro.sample("mu", DiagNormal(mean_mu, sigma_mu))
-    pyro.map_data("map", observed_data, lambda i, x: None, batch_size=1)
-    return mu
-
-
-# do variational inference using KL_QP
-print("doing inference with simulated data")
-verbose = True
-kl_optim = KL_QP(model, guide, pyro.optim(optim.Adam, {"lr": 0.003, "betas": (0.93, 0.993)}))
-
-
-def main():
-    parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', nargs='?', default=1000, type=int)
-    args = parser.parse_args()
-    for step in range(args.num_epochs):
-        kl_optim.step(observed_data)  # loss
-        if step % 100 == 0:
-            if verbose:
-                print("[epoch %d] mean_mu: %.3f" % (step, pyro.param("mean_mu").data[0]))
-                print("[epoch %d] sigma_mu: %.3f" % (step,
-                                                     torch.exp(pyro.param("log_sigma_mu")).data[0]))
-            else:
-                print(".", end='')
-            sys.stdout.flush()
+    # calculate statistics over posterior samples
+    posterior_mean = torch.mean(torch.cat(posterior_samples))
+    posterior_std_dev = torch.std(torch.cat(posterior_samples), 0)
 
     # report results
-    inferred_mu = pyro.param("mean_mu").data[0]
-    inferred_mu_uncertainty = torch.exp(pyro.param("log_sigma_mu")).data[0]
-    print("\nthe coefficient of friction inferred by pyro is %.3f +- %.3f" %
+    inferred_mu = posterior_mean.data[0]
+    inferred_mu_uncertainty = posterior_std_dev.data[0]
+    print("the coefficient of friction inferred by pyro is %.3f +- %.3f" %
           (inferred_mu, inferred_mu_uncertainty))
 
     # note that, given the finite step size in the simulator, the simulated descent times will
@@ -130,10 +111,20 @@ def main():
     # but will be systematically off from the third number
     print("the mean observed descent time in the dataset is: %.4f seconds" % observed_mean)
     print("the (forward) simulated descent time for the inferred (mean) mu is: %.4f seconds" %
-          simulate(pyro.param("mean_mu")).data[0])
-    print("elementary calulus gives the descent time for the inferred (mean) mu as: %.4f seconds" %
-          analytic_T(pyro.param("mean_mu").data[0]))
+          simulate(posterior_mean).data[0])
+    print(("disregarding measurement noise, elementary calculus gives the descent time\n" +
+           "for the inferred (mean) mu as: %.4f seconds") % analytic_T(posterior_mean.data[0]))
+
+    """
+    ################## EXERCISE ###################
+    # vectorize the computations in this example! #
+    ###############################################
+    """
 
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(description="parse args")
+    parser.add_argument('-n', '--num-samples', default=500, type=int)
+    args = parser.parse_args()
+
+    main(args)

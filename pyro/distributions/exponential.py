@@ -1,3 +1,5 @@
+from __future__ import absolute_import, division, print_function
+
 import torch
 from torch.autograd import Variable
 
@@ -6,66 +8,74 @@ from pyro.distributions.distribution import Distribution
 
 class Exponential(Distribution):
     """
-    :param lam: rate *(real (0, Infinity))*
+    Exponential parameterized by scale `lambda`.
 
-    Exponential parameterized by lambda
+    This is often used in conjunction with `torch.nn.Softplus` to ensure the
+    `lam` parameter is positive.
+
+    :param torch.autograd.Variable lam: Scale parameter (a.k.a. `lambda`).
+        Should be positive.
     """
+    reparameterized = True
 
-    def _sanitize_input(self, lam):
-        if lam is not None:
-            # stateless distribution
-            return lam
-        elif self.lam is not None:
-            # stateful distribution
-            return self.lam
-        else:
-            raise ValueError("Parameter(s) were None")
-
-    def __init__(self, lam=None, batch_size=1, *args, **kwargs):
-        """
-        Params:
-          `lam` - lambda
-        """
+    def __init__(self, lam, batch_size=None, *args, **kwargs):
         self.lam = lam
-        if lam is not None:
-            if lam.dim() == 1 and batch_size > 1:
-                self.lam = lam.expand(batch_size, lam.size(0))
-        self.reparameterized = True
+        if lam.dim() == 1 and batch_size is not None:
+            self.lam = lam.expand(batch_size, lam.size(0))
         super(Exponential, self).__init__(*args, **kwargs)
 
-    def sample(self, lam=None, *args, **kwargs):
+    def batch_shape(self, x=None):
         """
-        reparameterized sampler.
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_shape`
         """
-        lam = self._sanitize_input(lam)
-        eps = Variable(torch.rand(lam.size()).type_as(lam.data))
-        x = -torch.log(eps) / lam
+        event_dim = 1
+        lam = self.lam
+        if x is not None:
+            if x.size()[-event_dim] != lam.size()[-event_dim]:
+                raise ValueError("The event size for the data and distribution parameters must match.\n"
+                                 "Expected x.size()[-1] == self.lam.size()[-1], but got {} vs {}".format(
+                                     x.size(-1), lam.size(-1)))
+            try:
+                lam = self.lam.expand_as(x)
+            except RuntimeError as e:
+                raise ValueError("Parameter `lam` with shape {} is not broadcastable to "
+                                 "the data shape {}. \nError: {}".format(lam.size(), x.size(), str(e)))
+        return lam.size()[:-event_dim]
+
+    def event_shape(self):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.event_shape`
+        """
+        event_dim = 1
+        return self.lam.size()[-event_dim:]
+
+    def sample(self):
+        """
+        Reparameterized sampler.
+
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.sample`
+        """
+        eps = Variable(torch.rand(self.lam.size()).type_as(self.lam.data))
+        x = -torch.log(eps) / self.lam
         return x
 
-    def log_pdf(self, x, lam=None, *args, **kwargs):
+    def batch_log_pdf(self, x):
         """
-        exponential log-likelihood
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_log_pdf`
         """
-        lam = self._sanitize_input(lam)
-        ll = - lam * x + torch.log(lam)
-        return torch.sum(ll)
+        lam = self.lam.expand(self.shape(x))
+        ll = -lam * x + torch.log(lam)
+        batch_log_pdf_shape = self.batch_shape(x) + (1,)
+        return torch.sum(ll, -1).contiguous().view(batch_log_pdf_shape)
 
-    def batch_log_pdf(self, x, lam=None, batch_size=1, *args, **kwargs):
+    def analytic_mean(self):
         """
-        exponential log-likelihood
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_mean`
         """
-        lam = self._sanitize_input(lam)
-        if x.dim() == 1 and lam.dim() == 1 and batch_size == 1:
-            return self.log_pdf(x, lam)
-        elif x.dim() == 1:
-            x = x.expand(batch_size, x.size(0))
-        ll = - lam * x + torch.log(lam)
-        return torch.sum(ll, 1)
+        return torch.pow(self.lam, -1.0)
 
-    def analytic_mean(self, lam=None):
-        lam = self._sanitize_input(lam)
-        return torch.pow(lam, -1.0)
-
-    def analytic_var(self, lam=None):
-        lam = self._sanitize_input(lam)
-        return torch.pow(lam, -2.0)
+    def analytic_var(self):
+        """
+        Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_var`
+        """
+        return torch.pow(self.lam, -2.0)

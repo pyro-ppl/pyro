@@ -1,20 +1,21 @@
+from __future__ import absolute_import, division, print_function
+
 import contextlib
-import os
-import sys
-import unittest
 import numbers
+import os
 import warnings
 from copy import deepcopy
-from pytest import approx
 from itertools import product
-from numpy.testing import assert_allclose
 
 import numpy as np
+import pytest
 import torch
 import torch.cuda
+from numpy.testing import assert_allclose
+from pytest import approx
 from torch.autograd import Variable
 
-torch.set_default_tensor_type('torch.DoubleTensor')
+torch.set_default_tensor_type(os.environ.get('PYRO_TENSOR_TYPE', 'torch.DoubleTensor'))
 
 """
 Contains test utilities for assertions, approximate comparison (of tensors and other objects).
@@ -35,6 +36,10 @@ def suppress_warnings(fn):
             fn(*args, **kwargs)
 
     return wrapper
+
+
+requires_cuda = pytest.mark.skipif(not torch.cuda.is_available(),
+                                   reason="cuda is not available")
 
 
 def get_cpu_type(t):
@@ -67,6 +72,24 @@ def to_gpu(obj, type_map={}):
 
 
 @contextlib.contextmanager
+def tensors_default_to(host):
+    """
+    Context manager to temporarily use Cpu or Cuda tensors in Pytorch.
+
+    :param str host: Either "cuda" or "cpu".
+    """
+    assert host in ('cpu', 'cuda'), host
+    old_module = torch.Tensor.__module__
+    name = torch.Tensor.__name__
+    new_module = 'torch.cuda' if host == 'cuda' else 'torch'
+    torch.set_default_tensor_type('{}.{}'.format(new_module, name))
+    try:
+        yield
+    finally:
+        torch.set_default_tensor_type('{}.{}'.format(old_module, name))
+
+
+@contextlib.contextmanager
 def freeze_rng_state():
     rng_state = torch.get_rng_state()
     if torch.cuda.is_available():
@@ -75,6 +98,14 @@ def freeze_rng_state():
     if torch.cuda.is_available():
         torch.cuda.set_rng_state(cuda_rng_state)
     torch.set_rng_state(rng_state)
+
+
+@contextlib.contextmanager
+def xfail_if_not_implemented(msg="Not implemented"):
+    try:
+        yield
+    except NotImplementedError as e:
+        pytest.xfail(reason="{}: {}".format(msg, e))
 
 
 def iter_indices(tensor):
@@ -147,6 +178,7 @@ def _safe_coalesce(t):
 
 
 # TODO Split this into assert_equal() and assert_close() or assert_almost_equal().
+# TODO Use atol and rtol instead of prec
 def assert_equal(x, y, prec=1e-5, msg=''):
     x, y = _unwrap_variables(x, y)
 
@@ -176,7 +208,7 @@ def assert_equal(x, y, prec=1e-5, msg=''):
     elif isinstance(x, dict):
         assert set(x.keys()) == set(y.keys())
         for key, x_val in x.items():
-            assert_equal(x_val, y[key], prec, msg)
+            assert_equal(x_val, y[key], prec, msg='{} {}'.format(key, msg))
     elif is_iterable(x) and is_iterable(y):
         if prec == 0:
             assert len(x) == len(y)
@@ -194,45 +226,3 @@ def assert_not_equal(x, y, prec=1e-5, msg=''):
     except AssertionError:
         pass
     raise AssertionError("{} \nValues are equal: x={}, y={}, prec={}".format(msg, x, y, prec))
-
-
-class TestCase(unittest.TestCase):
-    precision = 1e-5
-
-    def assertEqual(self, x, y, prec=None, message=''):
-        assert_equal(x, y, prec, message)
-
-    def assertNotEqual(self, x, y, prec=None, message=''):
-        assert_not_equal(x, y, prec, message)
-
-    def assertObjectIn(self, obj, iterable):
-        for elem in iterable:
-            if id(obj) == id(elem):
-                return
-        raise AssertionError("object not found in iterable")
-
-    if sys.version_info < (3, 2):
-        # assertRaisesRegexp renamed assertRaisesRegex in 3.2
-        assertRaisesRegex = unittest.TestCase.assertRaisesRegexp
-
-
-def download_file(url, path, binary=True):
-    if sys.version_info < (3,):
-        import urllib2
-        request = urllib2
-        error = urllib2
-    else:
-        import urllib.request
-        import urllib.error
-        request = urllib.request
-        error = urllib.error
-
-    if os.path.exists(path):
-        return True
-    try:
-        data = request.urlopen(url, timeout=15).read()
-        with open(path, 'wb' if binary else 'w') as f:
-            f.write(data)
-        return True
-    except error.URLError:
-        return False

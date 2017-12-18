@@ -1,63 +1,65 @@
 language: python
 
-sudo: required
+sudo: true
 
 env:
     global:
         - PYTHONPATH=$PWD:$PYTHONPATH
 
-before_install:
-    - sudo apt-get update -qq
-    - sudo apt-get install libblas-dev liblapack-dev libatlas-base-dev gfortran
-
 install:
-    # this will be in setup.py
-    - pip install numpy scipy cloudpickle funcy graphviz networkx visdom
-    # install test dependencies
-    - pip install pytest pytest-cov flake8
     # install pytorch and its dependencies
     - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
           pip install http://download.pytorch.org/whl/cu75/torch-0.2.0.post2-cp27-cp27mu-manylinux1_x86_64.whl;
       else
           pip install http://download.pytorch.org/whl/cu75/torch-0.2.0.post2-cp35-cp35m-manylinux1_x86_64.whl;
       fi
-    - pip install torchvision
+    - pip install -e .[test]
     - pip freeze
+
+branches:
+    only:
+        - master
+        - dev
 
 jobs:
     fast_finish: true
     include:
-        - stage: lint/docs
+        - stage: lint
           python: 2.7
-          before_install:
-              - pip install flake8
-              - pip install -r docs/requirements.txt
+          before_install: pip install flake8 nbstripout nbformat
+          install:
           script:
               - make lint
-              - make docs
+              #- make scrub;
+              #  git diff-index --quiet HEAD
         - stage: unit test
           python: 2.7
+          env: STAGE=docs
+          script: 
+              - pip install -r docs/requirements.txt
+              - make docs
+        - python: 2.7
           env: STAGE=unit
-          script: pytest -vs --cov=pyro --stage unit
+          script: pytest -vs --cov=pyro --stage unit --durations 20
         - python: 2.7
           env: STAGE=examples
           script: pytest -vs --cov=pyro --stage test_examples
         - python: 3.5
           env: STAGE=unit
-          script: pytest -vs --cov=pyro --stage unit
+          script: pytest -vs --cov=pyro --stage unit --durations 20
         - python: 3.5
           env: STAGE=examples
           script: pytest -vs --cov=pyro --stage test_examples
         - stage: integration test
           python: 2.7
           env: STAGE=integration_batch_1
-          script: pytest -vs --cov=pyro --stage integration_batch_1
+          script: pytest -vs --cov=pyro --stage integration_batch_1 --durations 10
         - python: 2.7
           env: STAGE=integration_batch_2
-          script: pytest -vs --cov=pyro --stage integration_batch_2
+          script: pytest -vs --cov=pyro --stage integration_batch_2 --durations 10
         - python: 3.5
           env: STAGE=integration_batch_1
-          script: pytest -vs --cov=pyro --stage integration_batch_1
+          script: pytest -vs --cov=pyro --stage integration_batch_1 --durations 10
         - python: 3.5
           env: STAGE=integration_batch_2
-          script: pytest -vs --cov=pyro --stage integration_batch_2
+          script: pytest -vs --cov=pyro --stage integration_batch_2 --durations 10

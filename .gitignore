@@ -2,7 +2,9 @@ run_outputs*
 .DS_Store
 data
 examples/processed
+examples/results
 examples/raw
+examples/dmm/*.pkl
 processed
 raw
 
@@ -66,7 +68,8 @@ nosetests.xml
 coverage.xml
 *,cover
 .hypothesis/
-paramstore.unittest.out
+*.out
+adam.unittest.save
 
 # Translations
 *.mo
@@ -84,7 +87,7 @@ instance/
 .scrapy
 
 # Sphinx documentation
-docs/build/
+build/
 
 # PyBuilder
 target/

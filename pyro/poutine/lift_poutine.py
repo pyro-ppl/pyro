@@ -1,5 +1,8 @@
+from __future__ import absolute_import, division, print_function
+
 from pyro import params
 from pyro.distributions import Distribution
+
 from .poutine import Poutine
 
 
@@ -26,7 +29,7 @@ class LiftPoutine(Poutine):
 
     def _prepare_site(self, msg):
         """
-        Sets flags of params that will be overriden so they are not
+        Sets flags of params that will be overridden so they are not
         reexecuted in the stack and not added to the param store.
         """
         name = msg["name"]
@@ -51,11 +54,18 @@ class LiftPoutine(Poutine):
             # prior is a dict of distributions
             if param_name in self.prior.keys():
                 msg["fn"] = self.prior[param_name]
+                if isinstance(msg['fn'], Distribution):
+                    msg["args"] = ()
+                    msg["kwargs"] = {}
+                    msg["baseline"] = {}
             else:
                 return super(LiftPoutine, self)._pyro_param(msg)
         elif isinstance(self.prior, Distribution):
             # prior is a distribution
             msg["fn"] = self.prior
+            msg["args"] = ()
+            msg["kwargs"] = {}
+            msg["baseline"] = {}
         elif callable(self.prior):
             if not isinstance(self.prior, Distribution):
                 # prior is a stochastic fn. block sample
@@ -66,4 +76,5 @@ class LiftPoutine(Poutine):
             return super(LiftPoutine, self)._pyro_param(msg)
         msg["type"] = "sample"
         msg["done"] = False
+        msg["is_observed"] = False
         return self._pyro_sample(msg)

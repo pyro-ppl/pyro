@@ -1,14 +1,29 @@
+from __future__ import absolute_import, division, print_function
+
+from unittest import TestCase
+
+import pytest
 import torch
-import torch.optim
 from torch import nn as nn
 from torch.autograd import Variable
 from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
-from pyro.distributions.transformed_distribution import AffineExp, TransformedDistribution
-from pyro.infer.kl_qp import KL_QP
-from tests.common import TestCase
+import pyro.optim as optim
+from pyro.distributions.transformed_distribution import TransformedDistribution
+from pyro.infer.svi import SVI
+from pyro.util import ng_ones, ng_zeros
+from tests.common import assert_equal
+from tests.distributions.test_transformed_distribution import AffineExp
+
+
+def param_mse(name, target):
+    return torch.sum(torch.pow(target - pyro.param(name), 2.0)).data.cpu().numpy()[0]
+
+
+def param_abs_error(name, target):
+    return torch.sum(torch.abs(target - pyro.param(name))).data.cpu().numpy()[0]
 
 
 class NormalNormalTests(TestCase):
@@ -32,25 +47,23 @@ class NormalNormalTests(TestCase):
         self.analytic_log_sig_n = -0.5 * torch.log(self.analytic_lam_n)
         self.analytic_mu_n = self.sum_data * (self.lam / self.analytic_lam_n) +\
             self.mu0 * (self.lam0 / self.analytic_lam_n)
-        self.n_is_samples = 5000
-        self.batch_size = 0
+        self.batch_size = 4
 
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 5000)
 
-    # FIXME
-    # def test_elbo_nonreparameterized(self):
-    #     self.do_elbo_test(False, 15000)
+    def test_elbo_nonreparameterized(self):
+        self.do_elbo_test(False, 15000)
 
     def do_elbo_test(self, reparameterized, n_steps):
-        pyro.get_param_store().clear()
+        pyro.clear_param_store()
 
         def model():
-            mu_latent = pyro.sample("mu_latent", dist.diagnormal,
+            mu_latent = pyro.sample("mu_latent", dist.normal,
                                     self.mu0, torch.pow(self.lam0, -0.5))
             pyro.map_data("aaa", self.data, lambda i,
                           x: pyro.observe(
-                              "obs_%d" % i, dist.diagnormal,
+                              "obs_%d" % i, dist.normal,
                               x, mu_latent, torch.pow(self.lam, -0.5)),
                           batch_size=self.batch_size)
             return mu_latent
@@ -59,63 +72,24 @@ class NormalNormalTests(TestCase):
             mu_q = pyro.param("mu_q", Variable(self.analytic_mu_n.data + 0.134 * torch.ones(2),
                                                requires_grad=True))
             log_sig_q = pyro.param("log_sig_q", Variable(
-                                   self.analytic_log_sig_n.data - 0.09 * torch.ones(2),
+                                   self.analytic_log_sig_n.data - 0.14 * torch.ones(2),
                                    requires_grad=True))
             sig_q = torch.exp(log_sig_q)
-            dist.diagnormal.reparameterized = reparameterized
-            pyro.sample("mu_latent", dist.diagnormal, mu_q, sig_q)
+            pyro.sample("mu_latent", dist.Normal(mu_q, sig_q, reparameterized=reparameterized))
             pyro.map_data("aaa", self.data, lambda i, x: None,
                           batch_size=self.batch_size)
 
-        kl_optim = KL_QP(
-            model, guide, pyro.optim(
-                torch.optim.Adam, {
-                    "lr": .001}))
+        adam = optim.Adam({"lr": .001})
+        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
+
         for k in range(n_steps):
-            kl_optim.step()
+            svi.step()
 
-        mu_error = torch.sum(
-            torch.pow(
-                self.analytic_mu_n -
-                pyro.param("mu_q"),
-                2.0))
-        log_sig_error = torch.sum(
-            torch.pow(
-                self.analytic_log_sig_n -
-                pyro.param("log_sig_q"),
-                2.0))
-        self.assertEqual(0.0, mu_error.data.cpu().numpy()[0], prec=0.05)
-        self.assertEqual(0.0, log_sig_error.data.cpu().numpy()[0], prec=0.05)
+            mu_error = param_mse("mu_q", self.analytic_mu_n)
+            log_sig_error = param_mse("log_sig_q", self.analytic_log_sig_n)
 
-# THIS TEST IS BROKEN BECAUSE OF EXPECTATION/BATCH DIMENSION ISSUES
-#     def test_importance_sampling(self):
-#   def model():
-#       mu_latent = pyro.sample("mu_latent",
-#                     DiagNormal(self.mu0, torch.pow(self.lam0, -0.5)))
-#       x_dist = DiagNormal(mu_latent, torch.pow(self.lam, -0.5))
-#       x = pyro.observe("obs", x_dist, self.data)
-#               return mu_latent
-#
-#   def guide():
-#       mu_latent = pyro.sample("mu_latent",
-#                   DiagNormal(self.analytic_mu_n, 1.1*torch.pow(self.analytic_lam_n, -0.5)))
-#
-#         is_infer = ImportanceSampling(model, guide)
-#         expected_mean0 = lw_expectation(is_infer, lambda x: x[0], self.n_is_samples)
-#         expected_mean1 = lw_expectation(is_infer, lambda x: x[1], self.n_is_samples)
-#         expected_mean = Variable(torch.Tensor([expected_mean0.data.cpu().numpy()[0],
-#                         expected_mean1.data.cpu().numpy()[0]]))
-#         expected_var0  = lw_expectation(is_infer, lambda x: torch.pow(x[0]-expected_mean0,2.0),
-#                                        self.n_is_samples).data.cpu().numpy()[0]
-#         expected_var1  = lw_expectation(is_infer, lambda x: torch.pow(x[1]-expected_mean1,2.0),
-#                                        self.n_is_samples).data.cpu().numpy()[0]
-#         expected_var = (expected_var0 + expected_var1)
-#         analytic_var = torch.sum(torch.pow(self.analytic_lam_n,-1.0)).data.cpu().numpy()[0]
-#
-#         mu_error  = torch.sum(torch.pow(expected_mean-self.analytic_mu_n,2.0)).data.cpu().numpy()[0]
-#         var_error = analytic_var - expected_var
-#   self.assertEqual(0.0, mu_error, prec=0.005)
-#   self.assertEqual(0.0, var_error, prec=0.010)
+        assert_equal(0.0, mu_error, prec=0.05)
+        assert_equal(0.0, log_sig_error, prec=0.05)
 
 
 class TestFixedModelGuide(TestCase):
@@ -126,16 +100,16 @@ class TestFixedModelGuide(TestCase):
         self.alpha_p_log_0 = 0.11 * torch.ones(1)
         self.beta_p_log_0 = 0.13 * torch.ones(1)
 
-    def do_test_fixedness(self, model_fixed, guide_fixed):
-        pyro.get_param_store().clear()
+    def do_test_fixedness(self, fixed_tags):
+        pyro.clear_param_store()
 
         def model():
             alpha_p_log = pyro.param(
                 "alpha_p_log", Variable(
-                    self.alpha_p_log_0, requires_grad=True))
+                    self.alpha_p_log_0.clone(), requires_grad=True), tags="model")
             beta_p_log = pyro.param(
                 "beta_p_log", Variable(
-                    self.beta_p_log_0, requires_grad=True))
+                    self.beta_p_log_0.clone(), requires_grad=True), tags="model")
             alpha_p, beta_p = torch.exp(alpha_p_log), torch.exp(beta_p_log)
             lambda_latent = pyro.sample("lambda_latent", dist.gamma, alpha_p, beta_p)
             pyro.observe("obs", dist.poisson, self.data, lambda_latent)
@@ -144,35 +118,48 @@ class TestFixedModelGuide(TestCase):
         def guide():
             alpha_q_log = pyro.param(
                 "alpha_q_log", Variable(
-                    self.alpha_q_log_0, requires_grad=True))
+                    self.alpha_q_log_0.clone(), requires_grad=True), tags="guide")
             beta_q_log = pyro.param(
                 "beta_q_log", Variable(
-                    self.beta_q_log_0, requires_grad=True))
+                    self.beta_q_log_0.clone(), requires_grad=True), tags="guide")
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             pyro.sample("lambda_latent", dist.gamma, alpha_q, beta_q)
 
-        kl_optim = KL_QP(model, guide, pyro.optim(torch.optim.Adam, {"lr": .001}),
-                         model_fixed=model_fixed, guide_fixed=guide_fixed)
-        for _ in range(10):
-            kl_optim.step()
+        def per_param_args(module_name, param_name, tags):
+            if tags in fixed_tags:
+                    return {'lr': 0.0}
+            else:
+                return {'lr': 0.0}
+
+        adam = optim.Adam(per_param_args)
+        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
+
+        for _ in range(3):
+            svi.step()
 
         model_unchanged = (torch.equal(pyro.param("alpha_p_log").data, self.alpha_p_log_0)) and\
                           (torch.equal(pyro.param("beta_p_log").data, self.beta_p_log_0))
         guide_unchanged = (torch.equal(pyro.param("alpha_q_log").data, self.alpha_q_log_0)) and\
                           (torch.equal(pyro.param("beta_q_log").data, self.beta_q_log_0))
-        bad = (model_fixed and (not model_unchanged)) or (guide_fixed and (not guide_unchanged))
-        return (not bad)
+        model_changed = not model_unchanged
+        guide_changed = not guide_unchanged
+        error = ('model' in fixed_tags and model_changed) or ('guide' in fixed_tags and guide_changed)
+        return (not error)
 
     def test_model_fixed(self):
-        assert self.do_test_fixedness(model_fixed=True, guide_fixed=False)
+        assert self.do_test_fixedness(fixed_tags=["model"])
 
     def test_guide_fixed(self):
-        assert self.do_test_fixedness(model_fixed=False, guide_fixed=True)
+        assert self.do_test_fixedness(fixed_tags=["guide"])
 
-    def test_guide_and_model_fixed(self):
-        assert self.do_test_fixedness(model_fixed=True, guide_fixed=True)
+    def test_guide_and_model_both_fixed(self):
+        assert self.do_test_fixedness(fixed_tags=["model", "guide"])
+
+    def test_guide_and_model_free(self):
+        assert self.do_test_fixedness(fixed_tags=["bogus_tag"])
 
 
+@pytest.mark.stage("integration", "integration_batch_2")
 class PoissonGammaTests(TestCase):
     def setUp(self):
         # poisson-gamma model
@@ -193,7 +180,7 @@ class PoissonGammaTests(TestCase):
         self.log_beta_n = torch.log(self.beta_n)
 
     def test_elbo_nonreparameterized(self):
-        pyro.get_param_store().clear()
+        pyro.clear_param_store()
 
         def model():
             lambda_latent = pyro.sample("lambda_latent", dist.gamma, self.alpha0, self.beta0)
@@ -219,30 +206,16 @@ class PoissonGammaTests(TestCase):
             pyro.sample("lambda_latent", dist.gamma, alpha_q, beta_q)
             pyro.map_data("aaa", self.data, lambda i, x: None, batch_size=3)
 
-        kl_optim = KL_QP(
-            model, guide, pyro.optim(
-                torch.optim.Adam, {
-                    "lr": .0002, "betas": (
-                        0.97, 0.999)}))
-        for k in range(25000):
-            kl_optim.step()
-#            if k%1000==0:
-#                 print "alpha_q", torch.exp(pyro.param("alpha_q_log")).data.numpy()[0]
-#                 print "beta_q", torch.exp(pyro.param("beta_q_log")).data.numpy()[0]
-#
-#         print "alpha_n", self.alpha_n.data.numpy()[0]
-#         print "beta_n", self.beta_n.data.numpy()[0]
-#         print "alpha_0", self.alpha0.data.numpy()[0]
-#         print "beta_0", self.beta0.data.numpy()[0]
+        adam = optim.Adam({"lr": .0002, "betas": (0.97, 0.999)})
+        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
 
-        alpha_error = torch.abs(
-            pyro.param("alpha_q_log") -
-            self.log_alpha_n).data.cpu().numpy()[0]
-        beta_error = torch.abs(
-            pyro.param("beta_q_log") -
-            self.log_beta_n).data.cpu().numpy()[0]
-        self.assertEqual(0.0, alpha_error, prec=0.08)
-        self.assertEqual(0.0, beta_error, prec=0.08)
+        for k in range(25000):
+            svi.step()
+
+        alpha_error = param_abs_error("alpha_q_log", self.log_alpha_n)
+        beta_error = param_abs_error("beta_q_log", self.log_beta_n)
+        assert_equal(0.0, alpha_error, prec=0.08)
+        assert_equal(0.0, beta_error, prec=0.08)
 
 
 class ExponentialGammaTests(TestCase):
@@ -261,7 +234,7 @@ class ExponentialGammaTests(TestCase):
         self.log_beta_n = torch.log(self.beta_n)
 
     def test_elbo_nonreparameterized(self):
-        pyro.get_param_store().clear()
+        pyro.clear_param_store()
 
         def model():
             lambda_latent = pyro.sample("lambda_latent", dist.gamma, self.alpha0, self.beta0)
@@ -279,24 +252,16 @@ class ExponentialGammaTests(TestCase):
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             pyro.sample("lambda_latent", dist.gamma, alpha_q, beta_q)
 
-        kl_optim = KL_QP(
-            model, guide, pyro.optim(
-                torch.optim.Adam, {
-                    "lr": .0003, "betas": (
-                        0.97, 0.999)}))
-        for k in range(10001):
-            kl_optim.step()
+        adam = optim.Adam({"lr": .0003, "betas": (0.97, 0.999)})
+        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
 
-        alpha_error = torch.abs(
-            pyro.param("alpha_q_log") -
-            self.log_alpha_n).data.cpu().numpy()[0]
-        beta_error = torch.abs(
-            pyro.param("beta_q_log") -
-            self.log_beta_n).data.cpu().numpy()[0]
-        # print "alpha_error", alpha_error
-        # print "beta_error", beta_error
-        self.assertEqual(0.0, alpha_error, prec=0.08)
-        self.assertEqual(0.0, beta_error, prec=0.08)
+        for k in range(10001):
+            svi.step()
+
+        alpha_error = param_abs_error("alpha_q_log", self.log_alpha_n)
+        beta_error = param_abs_error("beta_q_log", self.log_beta_n)
+        assert_equal(0.0, alpha_error, prec=0.08)
+        assert_equal(0.0, beta_error, prec=0.08)
 
 
 class BernoulliBetaTests(TestCase):
@@ -311,8 +276,7 @@ class BernoulliBetaTests(TestCase):
         self.data.append(Variable(torch.Tensor([1.0])))
         self.data.append(Variable(torch.Tensor([1.0])))
         self.n_data = len(self.data)
-        self.batch_size = 0
-        self.n_steps = 6001
+        self.batch_size = None
         data_sum = self.data[0] + self.data[1] + self.data[2] + self.data[3]
         self.alpha_n = self.alpha0 + data_sum  # posterior alpha
         self.beta_n = self.beta0 - data_sum + \
@@ -322,7 +286,7 @@ class BernoulliBetaTests(TestCase):
         self.log_beta_n = torch.log(self.beta_n)
 
     def test_elbo_nonreparameterized(self):
-        pyro.get_param_store().clear()
+        pyro.clear_param_store()
 
         def model():
             p_latent = pyro.sample("p_latent", dist.beta, self.alpha0, self.beta0)
@@ -341,27 +305,17 @@ class BernoulliBetaTests(TestCase):
             pyro.sample("p_latent", dist.beta, alpha_q, beta_q)
             pyro.map_data("aaa", self.data, lambda i, x: None, batch_size=self.batch_size)
 
-        kl_optim = KL_QP(model, guide, pyro.optim(torch.optim.Adam,
-                                                  {"lr": .001, "betas": (0.97, 0.999)}))
-        for k in range(self.n_steps):
-            kl_optim.step()
-#             if k%1000==0:
-#                 print "alpha_q", torch.exp(pyro.param("alpha_q_log")).data.numpy()[0]
-#                 print "beta_q", torch.exp(pyro.param("beta_q_log")).data.numpy()[0]
-#
-#         print "alpha_n", self.alpha_n.data.numpy()[0]
-#         print "beta_n", self.beta_n.data.numpy()[0]
-#         print "alpha_0", self.alpha0.data.numpy()[0]
-#         print "beta_0", self.beta0.data.numpy()[0]
+        adam = optim.Adam({"lr": .001, "betas": (0.97, 0.999)})
+        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
 
-        alpha_error = torch.abs(
-            pyro.param("alpha_q_log") -
-            self.log_alpha_n).data.cpu().numpy()[0]
-        beta_error = torch.abs(
-            pyro.param("beta_q_log") -
-            self.log_beta_n).data.cpu().numpy()[0]
-        self.assertEqual(0.0, alpha_error, prec=0.08)
-        self.assertEqual(0.0, beta_error, prec=0.08)
+        for k in range(10001):
+            svi.step()
+
+            alpha_error = param_abs_error("alpha_q_log", self.log_alpha_n)
+            beta_error = param_abs_error("beta_q_log", self.log_beta_n)
+
+        assert_equal(0.0, alpha_error, prec=0.08)
+        assert_equal(0.0, beta_error, prec=0.08)
 
 
 class LogNormalNormalGuide(nn.Module):
@@ -371,6 +325,7 @@ class LogNormalNormalGuide(nn.Module):
         self.tau_q_log = Parameter(tau_q_log_init)
 
 
+@pytest.mark.stage("integration", "integration_batch_2")
 class LogNormalNormalTests(TestCase):
     def setUp(self):
         # lognormal-normal model
@@ -394,17 +349,16 @@ class LogNormalNormalTests(TestCase):
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 12000)
 
-    # FIXME
-    # def test_elbo_nonreparameterized(self):
-    #     self.do_elbo_test(False, 15000)
+    def test_elbo_nonreparameterized(self):
+        self.do_elbo_test(False, 15000)
 
     def do_elbo_test(self, reparameterized, n_steps):
-        pyro.get_param_store().clear()
+        pyro.clear_param_store()
         pt_guide = LogNormalNormalGuide(self.log_mu_n.data + 0.17,
                                         self.log_tau_n.data - 0.143)
 
         def model():
-            mu_latent = pyro.sample("mu_latent", dist.diagnormal,
+            mu_latent = pyro.sample("mu_latent", dist.normal,
                                     self.mu0, torch.pow(self.tau0, -0.5))
             sigma = torch.pow(self.tau, -0.5)
             pyro.observe("obs0", dist.lognormal, self.data[0], mu_latent, sigma)
@@ -415,35 +369,29 @@ class LogNormalNormalTests(TestCase):
             pyro.module("mymodule", pt_guide)
             mu_q, tau_q = torch.exp(pt_guide.mu_q_log), torch.exp(pt_guide.tau_q_log)
             sigma = torch.pow(tau_q, -0.5)
-            dist.diagnormal.reparameterized = reparameterized
-            pyro.sample("mu_latent", dist.diagnormal, mu_q, sigma)
+            pyro.sample("mu_latent", dist.Normal(mu_q, sigma, reparameterized=reparameterized))
 
-        kl_optim = KL_QP(model, guide, pyro.optim(torch.optim.Adam,
-                                                  {"lr": .0005, "betas": (0.96, 0.999)}))
+        adam = optim.Adam({"lr": .0005, "betas": (0.96, 0.999)})
+        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
+
         for k in range(n_steps):
-            kl_optim.step()
+            svi.step()
 
-        mu_error = torch.abs(
-            pyro.param("mymodule$$$mu_q_log") -
-            self.log_mu_n).data.cpu().numpy()[0]
-        tau_error = torch.abs(
-            pyro.param("mymodule$$$tau_q_log") -
-            self.log_tau_n).data.cpu().numpy()[0]
-        # print "mu_error", mu_error
-        # print "tau_error", tau_error
-        self.assertEqual(0.0, mu_error, prec=0.07)
-        self.assertEqual(0.0, tau_error, prec=0.07)
+        mu_error = param_abs_error("mymodule$$$mu_q_log", self.log_mu_n)
+        tau_error = param_abs_error("mymodule$$$tau_q_log", self.log_tau_n)
+        assert_equal(0.0, mu_error, prec=0.07)
+        assert_equal(0.0, tau_error, prec=0.07)
 
     def test_elbo_with_transformed_distribution(self):
-        pyro.get_param_store().clear()
+        pyro.clear_param_store()
 
         def model():
-            zero = Variable(torch.zeros(1, 1))
-            one = Variable(torch.ones(1, 1))
-            mu_latent = pyro.sample("mu_latent", dist.diagnormal,
+            zero = Variable(torch.zeros(1))
+            one = Variable(torch.ones(1))
+            mu_latent = pyro.sample("mu_latent", dist.normal,
                                     self.mu0, torch.pow(self.tau0, -0.5))
             bijector = AffineExp(torch.pow(self.tau, -0.5), mu_latent)
-            x_dist = TransformedDistribution(dist.diagnormal, bijector)
+            x_dist = TransformedDistribution(dist.normal, bijector)
             pyro.observe("obs0", x_dist, self.data[0], zero, one)
             pyro.observe("obs1", x_dist, self.data[1], zero, one)
             return mu_latent
@@ -458,18 +406,68 @@ class LogNormalNormalTests(TestCase):
             tau_q_log = pyro.param("tau_q_log", Variable(self.log_tau_n.data - 0.143,
                                                          requires_grad=True))
             mu_q, tau_q = torch.exp(mu_q_log), torch.exp(tau_q_log)
-            pyro.sample("mu_latent", dist.diagnormal, mu_q, torch.pow(tau_q, -0.5))
+            pyro.sample("mu_latent", dist.normal, mu_q, torch.pow(tau_q, -0.5))
 
-        kl_optim = KL_QP(model, guide, pyro.optim(torch.optim.Adam,
-                                                  {"lr": .0005, "betas": (0.96, 0.999)}))
+        adam = optim.Adam({"lr": .0005, "betas": (0.96, 0.999)})
+        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
+
         for k in range(12001):
-            kl_optim.step()
+            svi.step()
 
-        mu_error = torch.abs(
-            pyro.param("mu_q_log") -
-            self.log_mu_n).data.cpu().numpy()[0]
-        tau_error = torch.abs(
-            pyro.param("tau_q_log") -
-            self.log_tau_n).data.cpu().numpy()[0]
-        self.assertEqual(0.0, mu_error, prec=0.05)
-        self.assertEqual(0.0, tau_error, prec=0.05)
+        mu_error = param_abs_error("mu_q_log", self.log_mu_n)
+        tau_error = param_abs_error("tau_q_log", self.log_tau_n)
+        assert_equal(0.0, mu_error, prec=0.05)
+        assert_equal(0.0, tau_error, prec=0.05)
+
+
+class SafetyTests(TestCase):
+
+    def setUp(self):
+        # normal-normal; known covariance
+        def model_dup():
+            pyro.param("mu_q", Variable(torch.ones(1), requires_grad=True))
+            pyro.sample("mu_q", dist.normal, ng_zeros(1), ng_ones(1))
+
+        def model_obs_dup():
+            pyro.sample("mu_q", dist.normal, ng_zeros(1), ng_ones(1))
+            pyro.observe("mu_q", dist.normal, ng_zeros(1), ng_ones(1), ng_zeros(1))
+
+        def model():
+            pyro.sample("mu_q", dist.normal, ng_zeros(1), ng_ones(1))
+
+        def guide():
+            p = pyro.param("p", Variable(torch.ones(1), requires_grad=True))
+            pyro.sample("mu_q", dist.normal, ng_zeros(1), p)
+            pyro.sample("mu_q_2", dist.normal, ng_zeros(1), p)
+
+        self.duplicate_model = model_dup
+        self.duplicate_obs = model_obs_dup
+        self.model = model
+        self.guide = guide
+
+    def test_duplicate_names(self):
+        pyro.clear_param_store()
+
+        adam = optim.Adam({"lr": .001})
+        svi = SVI(self.duplicate_model, self.guide, adam, loss="ELBO", trace_graph=False)
+
+        with pytest.raises(RuntimeError):
+            svi.step()
+
+    def test_extra_samples(self):
+        pyro.clear_param_store()
+
+        adam = optim.Adam({"lr": .001})
+        svi = SVI(self.model, self.guide, adam, loss="ELBO", trace_graph=False)
+
+        with pytest.warns(Warning):
+            svi.step()
+
+    def test_duplicate_obs_name(self):
+        pyro.clear_param_store()
+
+        adam = optim.Adam({"lr": .001})
+        svi = SVI(self.duplicate_obs, self.guide, adam, loss="ELBO", trace_graph=False)
+
+        with pytest.raises(RuntimeError):
+            svi.step()

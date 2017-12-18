@@ -1,4 +1,9 @@
-import pyro
+from __future__ import absolute_import, division, print_function
+
+from pyro.params import _PYRO_PARAM_STORE
+
+# the global pyro stack
+_PYRO_STACK = []
 
 
 class Poutine(object):
@@ -51,10 +56,10 @@ class Poutine(object):
         Derived versions cannot be overridden to take arguments
         and must always return self.
         """
-        if not (self in pyro._PYRO_STACK):
+        if not (self in _PYRO_STACK):
             # if this poutine is not already installed,
             # put it on the bottom of the stack.
-            pyro._PYRO_STACK.insert(0, self)
+            _PYRO_STACK.insert(0, self)
 
             # necessary to return self because the return value of __enter__
             # is bound to VAR in with EXPR as VAR.
@@ -93,12 +98,12 @@ class Poutine(object):
         They are all None unless the body of the with statement raised an exception.
         """
         if exc_type is None:  # callee or enclosed block returned successfully
-            # if the callee or enclosed block returned successfuly,
+            # if the callee or enclosed block returned successfully,
             # this poutine should be on the bottom of the stack.
             # If so, remove it from the stack.
             # if not, raise a ValueError because something really weird happened.
-            if pyro._PYRO_STACK[0] == self:
-                pyro._PYRO_STACK.pop(0)
+            if _PYRO_STACK[0] == self:
+                _PYRO_STACK.pop(0)
             else:
                 # should never get here, but just in case...
                 raise ValueError("This Poutine is not on the bottom of the stack")
@@ -107,10 +112,18 @@ class Poutine(object):
             # when the callee or enclosed block raises an exception,
             # find this poutine's position in the stack,
             # then remove it and everything below it in the stack.
-            if self in pyro._PYRO_STACK:
-                loc = pyro._PYRO_STACK.index(self)
+            if self in _PYRO_STACK:
+                loc = _PYRO_STACK.index(self)
                 for i in range(0, loc + 1):
-                    pyro._PYRO_STACK.pop(0)
+                    _PYRO_STACK.pop(0)
+
+    def _reset(self):
+        """
+        Resets the computation to the beginning, un-sampling all sample sites.
+
+        By default, does nothing, but overridden in derived classes.
+        """
+        pass
 
     def _prepare_site(self, msg):
         """
@@ -130,7 +143,8 @@ class Poutine(object):
         :returns: a sample from the stochastic function at the site.
 
         Implements default pyro.sample Poutine behavior:
-        call the function at the site and return the result.
+        if the observation at the site is not None, return the observation;
+        else call the function and return the result.
 
         Derived classes often compute a side effect,
         then call super(Derived, self)._pyro_sample(msg).
@@ -144,43 +158,17 @@ class Poutine(object):
         # don't reexecute the function at the site,
         # and do any side effects using the stored return value.
         if msg["done"]:
-            return msg["ret"]
+            return msg["value"]
 
-        val = fn(*args, **kwargs)
+        if msg["is_observed"]:
+            assert msg["value"] is not None
+            val = msg["value"]
+        else:
+            val = fn(*args, **kwargs)
 
         # after fn has been called, update msg to prevent it from being called again.
         msg["done"] = True
         return val
-
-    def _pyro_observe(self, msg):
-        """
-        :param msg: current message at a trace site.
-        :returns: the observed value at the site.
-
-        Implements default pyro.observe Poutine behavior:
-        if the observation at the site is not None, return the observation;
-        else call the function and return the result.
-
-        Derived classes often compute a side effect,
-        then call super(Derived, self)._pyro_observe(msg).
-        """
-        fn, obs, args, kwargs = \
-            msg["fn"], msg["obs"], msg["args"], msg["kwargs"]
-
-        # msg["done"] enforces the guarantee in the poutine execution model
-        # that a site's non-effectful primary computation should only be executed once:
-        # if the site already has a stored return value,
-        # don't reexecute the function at the site,
-        # and do any side effects using the stored return value.
-        if msg["done"]:
-            return msg["ret"]
-
-        msg["done"] = True
-
-        if obs is None:
-            return fn(*args, **kwargs)
-        else:
-            return obs
 
     def _pyro_param(self, msg):
         """
@@ -206,9 +194,9 @@ class Poutine(object):
         # don't reexecute the function at the site,
         # and do any side effects using the stored return value.
         if msg["done"]:
-            return msg["ret"]
+            return msg["value"]
 
-        ret = pyro._param_store.get_param(name, *args, **kwargs)
+        ret = _PYRO_PARAM_STORE.get_param(name, *args, **kwargs)
 
         # after the param store has been queried, update msg["done"]
         # to prevent it from being queried again.

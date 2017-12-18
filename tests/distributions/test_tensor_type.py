@@ -1,3 +1,5 @@
+from __future__ import absolute_import, division, print_function
+
 import pytest
 import scipy.stats as sp
 import torch
@@ -66,5 +68,5 @@ def test_float_type(float_test_data, float_alpha, float_beta, test_data, alpha, 
 
 
 def test_conflicting_types(test_data, float_alpha, beta):
-    with pytest.raises(TypeError):
+    with pytest.raises((TypeError, RuntimeError)):
         dist.beta.log_pdf(test_data, float_alpha, beta)

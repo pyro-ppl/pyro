@@ -13,9 +13,23 @@ Beta
     :undoc-members:
     :show-inheritance:
 
+Binomial
+--------
+.. automodule:: pyro.distributions.binomial
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Categorical
 -----------
 .. automodule:: pyro.distributions.categorical
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+Cauchy
+------
+.. automodule:: pyro.distributions.cauchy
     :members:
     :undoc-members:
     :show-inheritance:
@@ -28,9 +42,9 @@ Delta
     :show-inheritance:
 
 
-DiagNormal
+Normal
 ----------
-.. automodule:: pyro.distributions.diag_normal
+.. automodule:: pyro.distributions.normal
     :members:
     :undoc-members:
     :show-inheritance:
@@ -49,6 +63,14 @@ Gamma
     :undoc-members:
     :show-inheritance:
 
+HalfCauchy
+----------------------------------------
+
+.. automodule:: pyro.distributions.half_cauchy
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 LogNormal
 ---------
 .. automodule:: pyro.distributions.log_normal
@@ -63,16 +85,9 @@ Multinomial
     :undoc-members:
     :show-inheritance:
 
-Normal
-------
-.. automodule:: pyro.distributions.normal
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-NormalChol
-----------
-.. automodule:: pyro.distributions.normal_chol
+OneHotCategorical
+-----------------
+.. automodule:: pyro.distributions.one_hot_categorical
     :members:
     :undoc-members:
     :show-inheritance:
@@ -80,13 +95,6 @@ NormalChol
 Poisson
 -------
 .. automodule:: pyro.distributions.poisson
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-TransformedDistribution
------------------------
-.. automodule:: pyro.distributions.transformed_distribution
     :members:
     :undoc-members:
     :show-inheritance:

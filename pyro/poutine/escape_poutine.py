@@ -1,4 +1,7 @@
+from __future__ import absolute_import, division, print_function
+
 from pyro.util import NonlocalExit
+
 from .poutine import Poutine
 
 
@@ -10,7 +13,7 @@ class EscapePoutine(Poutine):
         """
         :param fn: a stochastic function (callable containing pyro primitive calls)
         :param escape_fn: function that takes a msg as input and returns True
-        if the poutine should perform a nonlocal exit at that site.
+            if the poutine should perform a nonlocal exit at that site.
 
         Constructor.  Stores fn and escape_fn.
         """
