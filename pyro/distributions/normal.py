@@ -153,16 +153,12 @@ def _warn_fallback(message):
 
 @torch_wrapper(Normal)
 def WrapNormal(mu, sigma, batch_size=None, log_pdf_mask=None, *args, **kwargs):
-    reparameterized = kwargs.pop('reparameterized', None)
     if not hasattr(torch, 'distributions'):
         _warn_fallback('Missing module torch.distribution')
     elif not hasattr(torch.distributions, 'Normal'):
         _warn_fallback('Missing class torch.distribution.Normal')
     elif batch_size is not None or log_pdf_mask is not None or args or kwargs:
         _warn_fallback('Unsupported args')
-    elif reparameterized and not TorchNormal.reparameterized:
-        _warn_fallback('Unsupported reparameterized=True')
     else:
-        return TorchNormal(mu, sigma, reparameterized=reparameterized)
-    return Normal(
-        mu, sigma, batch_size=batch_size, log_pdf_mask=log_pdf_mask, reparameterized=reparameterized, *args, **kwargs)
+        return TorchNormal(mu, sigma)
+    return Normal(mu, sigma, batch_size=batch_size, log_pdf_mask=log_pdf_mask, *args, **kwargs)
