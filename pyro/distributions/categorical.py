@@ -42,8 +42,8 @@ class Categorical(Distribution):
         if vs is not None:
             vs_shape = self.vs.shape if isinstance(self.vs, np.ndarray) else self.vs.size()
             if vs_shape != ps.size():
-                raise ValueError("Expected vs.size() or vs.shape == ps.size(), but got {} vs {}".format(
-                    vs_shape, ps.size()))
+                raise ValueError("Expected vs.size() or vs.shape == ps.size(), but got {} vs {}"
+                                 .format(vs_shape, ps.size()))
         if batch_size is not None:
             if self.ps.dim() != 1:
                 raise NotImplementedError
