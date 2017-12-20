@@ -15,6 +15,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
 from pyro.infer import SVI
+from tests import fakes
 from tests.common import assert_equal
 
 logger = logging.getLogger(__name__)
@@ -146,9 +147,8 @@ class GaussianChainTests(TestCase):
                                              requires_grad=True))
                 mean_function = mu_q if k == self.N else kappa_q * previous_sample + mu_q
                 node_flagged = True if self.which_nodes_reparam[k - 1] == 1.0 else False
-                repa = True if reparameterized else node_flagged
-                latent_dist = dist.Normal(mean_function, sig_q, reparameterized=repa)
-                mu_latent = pyro.sample("mu_latent_%d" % k, latent_dist,
+                normal = dist.normal if reparameterized or node_flagged else fakes.nonreparameterized_normal
+                mu_latent = pyro.sample("mu_latent_%d" % k, normal, mean_function, sig_q,
                                         baseline=dict(use_decaying_avg_baseline=True))
                 previous_sample = mu_latent
             return previous_sample
@@ -436,10 +436,8 @@ class GaussianPyramidTests(TestCase):
                                                     requires_grad=True))
                     mean_function_node = mean_function_node + kappa_dep * latents_dict[dep]
                 node_flagged = True if self.which_nodes_reparam[i] == 1.0 else False
-                repa = True if reparameterized else node_flagged
-                latent_dist_node = dist.Normal(mean_function_node, torch.exp(log_sig_node),
-                                               reparameterized=repa)
-                latent_node = pyro.sample(node, latent_dist_node,
+                normal = dist.normal if reparameterized or node_flagged else fakes.nonreparameterized_normal
+                latent_node = pyro.sample(node, normal, mean_function_node, torch.exp(log_sig_node),
                                           baseline=dict(use_decaying_avg_baseline=True,
                                                         baseline_beta=0.96))
                 latents_dict[node] = latent_node

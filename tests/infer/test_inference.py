@@ -14,6 +14,7 @@ import pyro.optim as optim
 from pyro.distributions.transformed_distribution import TransformedDistribution
 from pyro.infer.svi import SVI
 from pyro.util import ng_ones, ng_zeros
+from tests import fakes
 from tests.common import assert_equal
 from tests.distributions.test_transformed_distribution import AffineExp
 
@@ -75,7 +76,8 @@ class NormalNormalTests(TestCase):
                                    self.analytic_log_sig_n.data - 0.14 * torch.ones(2),
                                    requires_grad=True))
             sig_q = torch.exp(log_sig_q)
-            pyro.sample("mu_latent", dist.Normal(mu_q, sig_q, reparameterized=reparameterized))
+            normal = dist.normal if reparameterized else fakes.nonreparameterized_normal
+            pyro.sample("mu_latent", normal, mu_q, sig_q)
             pyro.map_data("aaa", self.data, lambda i, x: None,
                           batch_size=self.batch_size)
 
@@ -369,7 +371,8 @@ class LogNormalNormalTests(TestCase):
             pyro.module("mymodule", pt_guide)
             mu_q, tau_q = torch.exp(pt_guide.mu_q_log), torch.exp(pt_guide.tau_q_log)
             sigma = torch.pow(tau_q, -0.5)
-            pyro.sample("mu_latent", dist.Normal(mu_q, sigma, reparameterized=reparameterized))
+            normal = dist.normal if reparameterized else fakes.nonreparameterized_normal
+            pyro.sample("mu_latent", normal, mu_q, sigma)
 
         adam = optim.Adam({"lr": .0005, "betas": (0.96, 0.999)})
         svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
