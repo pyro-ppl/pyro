@@ -6,8 +6,7 @@ import torch
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
-from pyro.distributions.torch_wrapper import TorchDistribution, torch_wrapper
-from pyro.distributions.util import broadcast_shape, log_beta
+from pyro.distributions.util import log_beta
 
 
 class Dirichlet(Distribution):
@@ -107,40 +106,3 @@ class Dirichlet(Distribution):
         """
         sum_alpha = torch.sum(self.alpha)
         return self.alpha * (sum_alpha - self.alpha) / (torch.pow(sum_alpha, 2) * (1 + sum_alpha))
-
-
-class TorchDirichlet(TorchDistribution):
-    """
-    Compatibility wrapper around
-    `torch.distributions.Dirichlet <http://pytorch.org/docs/master/_modules/torch/distributions.html#Dirichlet>`_
-    """
-    reparameterized = True
-
-    def __init__(self, alpha, log_pdf_mask=None, *args, **kwargs):
-        torch_dist = torch.distributions.Dirichlet(alpha)
-        super(TorchDirichlet, self).__init__(torch_dist, log_pdf_mask, *args, **kwargs)
-        self._param_shape = alpha.size()
-
-    def batch_shape(self, x=None):
-        x_shape = [] if x is None else x.size()
-        shape = torch.Size(broadcast_shape(x_shape, self._param_shape, strict=True))
-        return shape[:-1]
-
-    def event_shape(self):
-        return self._param_shape[-1:]
-
-    def batch_log_pdf(self, x):
-        batch_log_pdf = self.torch_dist.log_prob(x).view(self.batch_shape(x) + (1,))
-        if self.log_pdf_mask is not None:
-            batch_log_pdf = batch_log_pdf * self.log_pdf_mask
-        return batch_log_pdf
-
-
-@torch_wrapper(Dirichlet)
-def WrapDirichlet(alpha, batch_size=None, log_pdf_mask=None, *args, **kwargs):
-    if not hasattr(torch.distributions, 'Dirichlet'):
-        raise NotImplementedError('Missing class torch.distribution.Dirichlet')
-    elif batch_size is not None:
-        raise NotImplementedError('Unsupported args')
-    raise NotImplementedError('FIXME wrapper is buggy')  # TODO
-    return TorchDirichlet(alpha, log_pdf_mask=log_pdf_mask, *args, **kwargs)

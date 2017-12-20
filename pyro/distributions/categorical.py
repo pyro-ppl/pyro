@@ -5,8 +5,7 @@ import torch
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
-from pyro.distributions.torch_wrapper import TorchDistribution, torch_wrapper
-from pyro.distributions.util import broadcast_shape, get_probs_and_logits, torch_multinomial, torch_zeros_like
+from pyro.distributions.util import get_probs_and_logits, torch_multinomial, torch_zeros_like
 
 
 class Categorical(Distribution):
@@ -190,44 +189,3 @@ class Categorical(Distribution):
         if self.ps.is_cuda:
             result = result.cuda(self.ps.get_device())
         return result
-
-
-class TorchCategorical(TorchDistribution):
-    """
-    Compatibility wrapper around
-    `torch.distributions.Categorical <http://pytorch.org/docs/master/_modules/torch/distributions.html#Categorical>`_
-    """
-    enumerable = True
-
-    def __init__(self, ps=None, vs=None, logits=None, log_pdf_mask=None, *args, **kwargs):
-        if logits is not None:
-            ps = torch.exp(logits - torch.max(logits))
-            ps /= ps.sum(-1, True)
-        self._param_shape = ps.size()
-        torch_dist = torch.distributions.Categorical(ps)
-        super(TorchCategorical, self).__init__(torch_dist, log_pdf_mask, *args, **kwargs)
-
-    def batch_shape(self, x=None):
-        x_shape = [] if x is None else x.size()
-        shape = torch.Size(broadcast_shape(x_shape, self._param_shape, strict=True))
-        return shape[:-1]
-
-    def event_shape(self):
-        return self._param_shape[-1:]
-
-    def batch_log_pdf(self, x):
-        return self.torch_dist.log_prob(x.long())
-
-    def sample(self):
-        return self.torch_dist.sample().float()
-
-
-@torch_wrapper(Categorical)
-def WrapCategorical(ps=None, vs=None, logits=None, batch_size=None, log_pdf_mask=None, *args, **kwargs):
-    assert not kwargs.pop('reparameterized', False)
-    if not hasattr(torch.distributions, 'Categorical'):
-        raise NotImplementedError('Missing class torch.distribution.Categorical')
-    elif vs is not None or batch_size is not None:
-        raise NotImplementedError('Unsupported args')
-    raise NotImplementedError('FIXME wrapper is buggy')  # TODO
-    return TorchCategorical(ps, vs, logits, log_pdf_mask=log_pdf_mask, *args, **kwargs)

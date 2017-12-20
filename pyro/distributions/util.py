@@ -5,6 +5,27 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 
 
+def copy_docs_from(source_class):
+    """
+    Decorator to copy class and method docs from source to destin class.
+    """
+
+    def decorator(destin_class):
+        destin_class.__doc__ = source_class.__doc__
+        for name in dir(destin_class):
+            if name.startswith('_'):
+                continue
+            try:
+                source_attr = getattr(source_class, name)
+                destin_attr = getattr(destin_class, name)
+                destin_attr.__doc__ = source_attr.__doc__
+            except AttributeError:
+                pass
+        return destin_class
+
+    return decorator
+
+
 def broadcast_shape(*shapes, **kwargs):
     """
     Similar to ``np.broadcast()`` but for shapes.

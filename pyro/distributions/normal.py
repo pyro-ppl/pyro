@@ -5,8 +5,6 @@ import torch
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
-from pyro.distributions.torch_wrapper import TorchDistribution, torch_wrapper
-from pyro.distributions.util import broadcast_shape
 
 
 class Normal(Distribution):
@@ -107,33 +105,3 @@ class Normal(Distribution):
         Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_var`
         """
         return torch.pow(self.sigma, 2)
-
-
-class TorchNormal(TorchDistribution):
-    """
-    Compatibility wrapper around
-    `torch.distributions.Normal <http://pytorch.org/docs/master/_modules/torch/distributions.html#Normal>`_
-    """
-    reparameterized = True
-
-    def __init__(self, mu, sigma, log_pdf_mask=None, *args, **kwargs):
-        torch_dist = torch.distributions.Normal(mu, sigma)
-        super(TorchNormal, self).__init__(torch_dist, log_pdf_mask, *args, **kwargs)
-        self._param_shape = torch.Size(broadcast_shape(mu.size(), sigma.size(), strict=True))
-
-    def batch_shape(self, x=None):
-        x_shape = [] if x is None else x.size()
-        shape = torch.Size(broadcast_shape(x_shape, self._param_shape, strict=True))
-        return shape[:-1]
-
-    def event_shape(self):
-        return self._param_shape[-1:]
-
-
-@torch_wrapper(Normal)
-def WrapNormal(mu, sigma, batch_size=None, log_pdf_mask=None, *args, **kwargs):
-    if not hasattr(torch.distributions, 'Normal'):
-        raise NotImplementedError('Missing class torch.distribution.Normal')
-    elif batch_size is not None:
-        raise NotImplementedError('Unsupported args')
-    return TorchNormal(mu, sigma, log_pdf_mask=log_pdf_mask, *args, **kwargs)

@@ -7,8 +7,7 @@ import torch
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
-from pyro.distributions.torch_wrapper import TorchDistribution, torch_wrapper
-from pyro.distributions.util import broadcast_shape, log_gamma
+from pyro.distributions.util import log_gamma
 
 
 class Gamma(Distribution):
@@ -95,33 +94,3 @@ class Gamma(Distribution):
         Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_var`
         """
         return self.alpha / torch.pow(self.beta, 2.0)
-
-
-class TorchGamma(TorchDistribution):
-    """
-    Compatibility wrapper around
-    `torch.distributions.Gamma <http://pytorch.org/docs/master/_modules/torch/distributions.html#Gamma>`_
-    """
-    reparameterized = True
-
-    def __init__(self, alpha, beta, log_pdf_mask=None, *args, **kwargs):
-        torch_dist = torch.distributions.Gamma(alpha, beta)
-        super(TorchGamma, self).__init__(torch_dist, log_pdf_mask, *args, **kwargs)
-        self._param_shape = broadcast_shape(alpha.size(), beta.size(), strict=True)
-
-    def batch_shape(self, x=None):
-        x_shape = [] if x is None else x.size()
-        shape = torch.Size(broadcast_shape(x_shape, self._param_shape, strict=True))
-        return shape[:-1]
-
-    def event_shape(self):
-        return self._param_shape[-1:]
-
-
-@torch_wrapper(Gamma)
-def WrapGamma(alpha, beta, batch_size=None, log_pdf_mask=None, *args, **kwargs):
-    if not hasattr(torch.distributions, 'Gamma'):
-        raise NotImplementedError('Missing class torch.distribution.Gamma')
-    elif batch_size is not None:
-        raise NotImplementedError('Unsupported args')
-    return TorchGamma(alpha, beta, log_pdf_mask=log_pdf_mask, *args, **kwargs)
