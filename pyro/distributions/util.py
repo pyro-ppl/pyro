@@ -11,16 +11,18 @@ def copy_docs_from(source_class):
     """
 
     def decorator(destin_class):
-        destin_class.__doc__ = source_class.__doc__
+        if not destin_class.__doc__:
+            destin_class.__doc__ = source_class.__doc__
         for name in dir(destin_class):
             if name.startswith('_'):
                 continue
-            try:
-                source_attr = getattr(source_class, name)
-                destin_attr = getattr(destin_class, name)
-                destin_attr.__doc__ = source_attr.__doc__
-            except AttributeError:
-                pass
+            destin_attr = getattr(destin_class, name)
+            destin_attr = getattr(destin_attr, '__func__', destin_attr)
+            source_attr = getattr(source_class, name, None)
+            source_doc = getattr(source_attr, '__doc__', None)
+            if source_doc and not getattr(destin_attr, '__doc__', None):
+                print('DEBUG ' + name)
+                destin_attr.__doc__ = source_doc
         return destin_class
 
     return decorator
