@@ -120,9 +120,8 @@ class TorchGamma(TorchDistribution):
 
 @torch_wrapper(Gamma)
 def WrapGamma(alpha, beta, batch_size=None, log_pdf_mask=None, *args, **kwargs):
-    reparameterized = kwargs.pop('reparameterized', None)
     if not hasattr(torch.distributions, 'Gamma'):
         raise NotImplementedError('Missing class torch.distribution.Gamma')
     elif batch_size is not None:
         raise NotImplementedError('Unsupported args')
-    return TorchGamma(alpha, beta, log_pdf_mask=log_pdf_mask, reparameterized=reparameterized, *args, **kwargs)
+    return TorchGamma(alpha, beta, log_pdf_mask=log_pdf_mask, *args, **kwargs)

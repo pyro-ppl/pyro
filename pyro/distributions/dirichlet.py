@@ -138,10 +138,9 @@ class TorchDirichlet(TorchDistribution):
 
 @torch_wrapper(Dirichlet)
 def WrapDirichlet(alpha, batch_size=None, log_pdf_mask=None, *args, **kwargs):
-    reparameterized = kwargs.pop('reparameterized', None)
     if not hasattr(torch.distributions, 'Dirichlet'):
         raise NotImplementedError('Missing class torch.distribution.Dirichlet')
     elif batch_size is not None:
         raise NotImplementedError('Unsupported args')
     raise NotImplementedError('FIXME wrapper is buggy')  # TODO
-    return TorchDirichlet(alpha, log_pdf_mask=log_pdf_mask, reparameterized=reparameterized, *args, **kwargs)
+    return TorchDirichlet(alpha, log_pdf_mask=log_pdf_mask, *args, **kwargs)
