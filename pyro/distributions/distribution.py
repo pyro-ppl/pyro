@@ -88,12 +88,6 @@ class Distribution(object):
     reparameterized = False
     enumerable = False
 
-    def __init__(self):
-        """
-        Constructor for base distribution class.
-        """
-        pass
-
     def batch_shape(self, x=None, *args, **kwargs):
         """
         The left-hand tensor shape of samples, used for batching.
