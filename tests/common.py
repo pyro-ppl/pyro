@@ -197,6 +197,8 @@ def assert_equal(x, y, prec=1e-5, msg=''):
         else:
             assert_allclose(x, y, atol=prec, equal_nan=True)
     elif isinstance(x, numbers.Number) and isinstance(y, numbers.Number):
+        if not msg:
+            msg = '{} vs {}'.format(x, y)
         if prec == 0:
             assert x == y, msg
         else:
