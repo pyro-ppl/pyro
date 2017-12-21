@@ -21,7 +21,6 @@ def copy_docs_from(source_class):
             source_attr = getattr(source_class, name, None)
             source_doc = getattr(source_attr, '__doc__', None)
             if source_doc and not getattr(destin_attr, '__doc__', None):
-                print('DEBUG ' + name)
                 destin_attr.__doc__ = source_doc
         return destin_class
 
