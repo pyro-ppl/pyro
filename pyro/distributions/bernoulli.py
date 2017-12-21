@@ -4,9 +4,10 @@ import torch
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
-from pyro.distributions.util import get_probs_and_logits
+from pyro.distributions.util import copy_docs_from, get_probs_and_logits
 
 
+@copy_docs_from(Distribution)
 class Bernoulli(Distribution):
     """
     Bernoulli distribution.
@@ -44,9 +45,6 @@ class Bernoulli(Distribution):
         super(Bernoulli, self).__init__(*args, **kwargs)
 
     def batch_shape(self, x=None):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_shape`.
-        """
         event_dim = 1
         ps = self.ps
         if x is not None:
@@ -63,22 +61,13 @@ class Bernoulli(Distribution):
         return ps.size()[:-event_dim]
 
     def event_shape(self):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.event_shape`.
-        """
         event_dim = 1
         return self.ps.size()[-event_dim:]
 
     def sample(self):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.sample`.
-        """
         return Variable(torch.bernoulli(self.ps.data))
 
     def batch_log_pdf(self, x):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_log_pdf`
-        """
         batch_log_pdf_shape = self.batch_shape(x) + (1,)
         max_val = (-self.logits).clamp(min=0)
         binary_cross_entropy = self.logits - self.logits * x + max_val + \
@@ -113,13 +102,7 @@ class Bernoulli(Distribution):
         return Variable(result)
 
     def analytic_mean(self):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_mean`.
-        """
         return self.ps
 
     def analytic_var(self):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_var`.
-        """
         return self.ps * (1 - self.ps)

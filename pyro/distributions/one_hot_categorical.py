@@ -4,9 +4,10 @@ import torch
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
-from pyro.distributions.util import get_probs_and_logits, torch_eye, torch_multinomial, torch_zeros_like
+from pyro.distributions.util import copy_docs_from, get_probs_and_logits, torch_eye, torch_multinomial, torch_zeros_like
 
 
+@copy_docs_from(Distribution)
 class OneHotCategorical(Distribution):
     """
     OneHotCategorical (discrete) distribution.
@@ -48,9 +49,6 @@ class OneHotCategorical(Distribution):
         return x
 
     def batch_shape(self, x=None):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_shape`
-        """
         event_dim = 1
         ps = self.ps
         if x is not None:
@@ -63,16 +61,10 @@ class OneHotCategorical(Distribution):
         return ps.size()[:-event_dim]
 
     def event_shape(self):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.event_shape`
-        """
         event_dim = 1
         return self.ps.size()[-event_dim:]
 
     def shape(self, x=None):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.shape`
-        """
         return self.batch_shape(x) + self.event_shape()
 
     def sample(self):
@@ -143,13 +135,7 @@ class OneHotCategorical(Distribution):
         return Variable(result)
 
     def analytic_mean(self):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_mean`.
-        """
         return self.ps
 
     def analytic_var(self):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_var`.
-        """
         return self.ps * (1 - self.ps)
