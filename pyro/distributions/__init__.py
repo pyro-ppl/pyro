@@ -18,6 +18,8 @@ from pyro.distributions.normal import WrapNormal as Normal
 from pyro.distributions.one_hot_categorical import OneHotCategorical
 from pyro.distributions.poisson import Poisson
 from pyro.distributions.random_primitive import RandomPrimitive
+from pyro.distributions.relaxed_bernoulli import LogitRelaxedBernoulli, RelaxedBernoulli
+from pyro.distributions.relaxed_categorical import ExpRelaxedCategorical, RelaxedCategorical
 from pyro.distributions.uniform import Uniform
 
 # function aliases
@@ -25,6 +27,10 @@ bernoulli = RandomPrimitive(Bernoulli)
 beta = RandomPrimitive(Beta)
 binomial = RandomPrimitive(Binomial)
 categorical = RandomPrimitive(Categorical)
+logit_relaxed_bernoulli = RandomPrimitive(LogitRelaxedBernoulli)
+relaxed_bernoulli = RandomPrimitive(RelaxedBernoulli)
+exp_relaxed_categorical = RandomPrimitive(ExpRelaxedCategorical)
+relaxed_categorical = RandomPrimitive(RelaxedCategorical)
 cauchy = RandomPrimitive(Cauchy)
 delta = RandomPrimitive(Delta)
 dirichlet = RandomPrimitive(Dirichlet)

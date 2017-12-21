@@ -10,6 +10,7 @@ from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
 from pyro.nn import AutoRegressiveNN
+from pyro.distributions.util import _get_clamping_buffer
 
 
 class TransformedDistribution(Distribution):
@@ -259,3 +260,35 @@ class InverseAutoregressiveFlow(Bijector):
         if 'log_pdf_mask' in kwargs:
             log_sigma = log_sigma * kwargs['log_pdf_mask']
         return log_sigma.sum(-1)
+
+
+class SigmoidBijector(Bijector):
+
+    def __init__(self):
+        super(SigmoidBijector, self).__init__()
+
+    def __call__(self, x, *args, **kwargs):
+        return torch.sigmoid(x)
+
+    def inverse(self, y, *args, **kwargs):
+        eps = _get_clamping_buffer(y)
+        return torch.log(y.clamp(min=eps)) + torch.log1p((-y).clamp(max=-eps))
+
+    def batch_log_det_jacobian(self, y, *args, **kwargs):
+        return (torch.log(y) + torch.log1p(-y)).sum(-1).unsqueeze(-1)
+
+
+class ExpBijector(Bijector):
+
+    def __init__(self):
+        super(ExpBijector, self).__init__()
+
+    def __call__(self, x, *args, **kwargs):
+        return torch.exp(x)
+
+    def inverse(self, y, *args, **kwargs):
+        eps = _get_clamping_buffer(y)
+        return torch.log(y.clamp(min=eps))
+
+    def batch_log_det_jacobian(self, y, *args, **kwargs):
+        return torch.log(y).sum(-1).unsqueeze(-1)
