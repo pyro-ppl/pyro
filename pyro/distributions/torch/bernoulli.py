@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 from pyro.distributions.bernoulli import Bernoulli as _Bernoulli
 from pyro.distributions.torch_wrapper import TorchDistribution
-from pyro.distributions.util import copy_docs_from
+from pyro.distributions.util import copy_docs_from, get_clamping_buffer
 
 
 @copy_docs_from(_Bernoulli)
@@ -18,6 +18,8 @@ class Bernoulli(TorchDistribution):
                              "but not both.".format(ps, logits))
         if ps is None:
             ps = F.sigmoid(logits)
+        eps = get_clamping_buffer(ps)
+        ps = ps.clamp(min=eps, max=1-eps)
         torch_dist = torch.distributions.Bernoulli(ps)
         x_shape = ps.size()
         event_dim = 1
