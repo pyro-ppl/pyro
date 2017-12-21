@@ -197,8 +197,6 @@ class TraceGraph_ELBO(object):
         """
         runs the guide and runs the model against the guide with
         the result packaged as a tracegraph generator
-
-        XXX support for automatically settings args/kwargs to volatile?
         """
 
         for i in range(self.num_particles):
