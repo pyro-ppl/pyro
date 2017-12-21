@@ -1,24 +1,31 @@
 from __future__ import absolute_import, division, print_function
 
-import functools
-import os
-
 import torch
 import torch.nn.functional as F
 from torch.autograd import Variable
 
-# TODO Decide based on torch.__version__ once torch.distributions matures.
-USE_TORCH_DISTRIBUTIONS = int(os.environ.get('PYRO_USE_TORCH_DISTRIBUTIONS', 0))
 
+def copy_docs_from(source_class):
+    """
+    Decorator to copy class and method docs from source to destin class.
+    """
 
-def torch_wrapper(pyro_dist):
-    """
-    Decorator for optional wrappers around torch.distributions classes.
-    """
-    if USE_TORCH_DISTRIBUTIONS:
-        return lambda wrapper: functools.wraps(pyro_dist)(wrapper)
-    else:
-        return lambda wrapper: pyro_dist
+    def decorator(destin_class):
+        if not destin_class.__doc__:
+            destin_class.__doc__ = source_class.__doc__
+        for name in dir(destin_class):
+            if name.startswith('_'):
+                continue
+            destin_attr = getattr(destin_class, name)
+            destin_attr = getattr(destin_attr, '__func__', destin_attr)
+            source_attr = getattr(source_class, name, None)
+            source_doc = getattr(source_attr, '__doc__', None)
+            if source_doc and not getattr(destin_attr, '__doc__', None):
+                print('DEBUG ' + name)
+                destin_attr.__doc__ = source_doc
+        return destin_class
+
+    return decorator
 
 
 def broadcast_shape(*shapes, **kwargs):
