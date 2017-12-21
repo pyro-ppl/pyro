@@ -102,7 +102,7 @@ def get_mini_batch_mask(mini_batch, seq_lengths):
 # as a mini-batch in reverse temporal order (`mini_batch_reversed`).
 # it also deals with the fact that packed sequences (which are what what we
 # feed to the PyTorch rnn) need to be sorted by sequence length.
-def get_mini_batch(mini_batch_indices, sequences, seq_lengths, volatile=False, cuda=False):
+def get_mini_batch(mini_batch_indices, sequences, seq_lengths, cuda=False):
     # get the sequence lengths of the mini-batch
     seq_lengths = seq_lengths[mini_batch_indices]
     # sort the sequence lengths
@@ -120,9 +120,9 @@ def get_mini_batch(mini_batch_indices, sequences, seq_lengths, volatile=False, c
     mini_batch_mask = get_mini_batch_mask(mini_batch, sorted_seq_lengths)
 
     # wrap in PyTorch Variables
-    mini_batch = Variable(torch.Tensor(mini_batch), volatile=volatile)
-    mini_batch_reversed = Variable(torch.Tensor(mini_batch_reversed), volatile=volatile)
-    mini_batch_mask = Variable(torch.Tensor(mini_batch_mask), volatile=volatile)
+    mini_batch = Variable(torch.Tensor(mini_batch))
+    mini_batch_reversed = Variable(torch.Tensor(mini_batch_reversed))
+    mini_batch_mask = Variable(torch.Tensor(mini_batch_mask))
 
     # cuda() here because need to cuda() before packing
     if cuda:
