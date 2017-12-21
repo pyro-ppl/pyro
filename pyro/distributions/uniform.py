@@ -4,8 +4,10 @@ import torch
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
+from pyro.distributions.util import copy_docs_from
 
 
+@copy_docs_from(Distribution)
 class Uniform(Distribution):
     """
     Uniform distribution over the continuous interval `[a, b]`.
@@ -27,9 +29,6 @@ class Uniform(Distribution):
         super(Uniform, self).__init__(*args, **kwargs)
 
     def batch_shape(self, x=None):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_shape`
-        """
         event_dim = 1
         a = self.a
         if x is not None:
@@ -45,29 +44,17 @@ class Uniform(Distribution):
         return a.size()[:-event_dim]
 
     def event_shape(self):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.event_shape`
-        """
         event_dim = 1
         return self.a.size()[-event_dim:]
 
     def shape(self, x=None):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.shape`
-        """
         return self.batch_shape(x) + self.event_shape()
 
     def sample(self):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.sample`
-        """
         eps = Variable(torch.rand(self.a.size()).type_as(self.a.data))
         return self.a + torch.mul(eps, self.b - self.a)
 
     def batch_log_pdf(self, x):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_log_pdf`
-        """
         a = self.a.expand(self.shape(x))
         b = self.b.expand(self.shape(x))
         lb = x.ge(a).type_as(a)
@@ -76,13 +63,7 @@ class Uniform(Distribution):
         return torch.sum(torch.log(lb.mul(ub)) - torch.log(b - a), -1).contiguous().view(batch_log_pdf_shape)
 
     def analytic_mean(self):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_mean`
-        """
         return 0.5 * (self.a + self.b)
 
     def analytic_var(self):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_var`
-        """
         return torch.pow(self.b - self.a, 2) / 12

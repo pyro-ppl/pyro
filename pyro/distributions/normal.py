@@ -5,8 +5,10 @@ import torch
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
+from pyro.distributions.util import copy_docs_from
 
 
+@copy_docs_from(Distribution)
 class Normal(Distribution):
     """
     Univariate normal (Gaussian) distribution.
@@ -39,9 +41,6 @@ class Normal(Distribution):
         super(Normal, self).__init__(*args, **kwargs)
 
     def batch_shape(self, x=None):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_shape`
-        """
         event_dim = 1
         mu = self.mu
         if x is not None:
@@ -57,30 +56,17 @@ class Normal(Distribution):
         return mu.size()[:-event_dim]
 
     def event_shape(self):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.event_shape`
-        """
         # XXX Until PyTorch supports scalars, this should return (1,)
         # XXX After PyTorch supports scalars, this should return ()
         event_dim = 1
         return self.mu.size()[-event_dim:]
 
     def sample(self):
-        """
-        Reparameterized Normal sampler.
-
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.sample`
-        """
         eps = Variable(torch.randn(self.mu.size()).type_as(self.mu.data))
         z = self.mu + eps * self.sigma
         return z if self.reparameterized else z.detach()
 
     def batch_log_pdf(self, x):
-        """
-        Diagonal Normal log-likelihood
-
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_log_pdf`
-        """
         # expand to patch size of input
         mu = self.mu.expand(self.shape(x))
         sigma = self.sigma.expand(self.shape(x))
@@ -95,13 +81,7 @@ class Normal(Distribution):
         return batch_log_pdf.contiguous().view(batch_log_pdf_shape)
 
     def analytic_mean(self):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_mean`
-        """
         return self.mu
 
     def analytic_var(self):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_var`
-        """
         return torch.pow(self.sigma, 2)
