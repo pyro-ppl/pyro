@@ -182,7 +182,7 @@ def softmax(x, dim=-1):
     return soft_max_nd.transpose(dim, len(input_size) - 1)
 
 
-def _get_clamping_buffer(tensor):
+def get_clamping_buffer(tensor):
     clamp_eps = 1e-6
     if isinstance(tensor, Variable):
         tensor = tensor.data
@@ -210,7 +210,7 @@ def get_probs_and_logits(ps=None, logits=None, is_multidimensional=True):
     """
     assert (ps is None) != (logits is None)
     if ps is not None:
-        eps = _get_clamping_buffer(ps)
+        eps = get_clamping_buffer(ps)
         ps_clamped = ps.clamp(min=eps, max=1 - eps)
     if is_multidimensional:
         if ps is None:

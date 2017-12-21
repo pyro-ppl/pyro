@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 import os
 
-from pyro.distributions.bernoulli import Bernoulli
 from pyro.distributions.binomial import Binomial
 from pyro.distributions.categorical import Categorical
 from pyro.distributions.cauchy import Cauchy
@@ -21,18 +20,19 @@ USE_TORCH_DISTRIBUTIONS = int(os.environ.get('PYRO_USE_TORCH_DISTRIBUTIONS', 0))
 
 # distribution classes with working torch versions
 if USE_TORCH_DISTRIBUTIONS:
+    from pyro.distributions.torch.bernoulli import Bernoulli
     from pyro.distributions.torch.beta import Beta
     from pyro.distributions.torch.dirichlet import Dirichlet
     from pyro.distributions.torch.exponential import Exponential
     from pyro.distributions.torch.gamma import Gamma
     from pyro.distributions.torch.normal import Normal
 else:
+    from pyro.distributions.bernoulli import Bernoulli
     from pyro.distributions.beta import Beta
     from pyro.distributions.dirichlet import Dirichlet
     from pyro.distributions.exponential import Exponential
     from pyro.distributions.gamma import Gamma
     from pyro.distributions.normal import Normal
-
 
 # function aliases
 bernoulli = RandomPrimitive(Bernoulli)
