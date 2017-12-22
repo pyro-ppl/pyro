@@ -35,18 +35,15 @@ class NormalNormalTests(TestCase):
         self.mu0 = Variable(torch.Tensor([0.0, 0.5]))   # prior mean
         # known precision of observation noise
         self.lam = Variable(torch.Tensor([6.0, 4.0]))
-        self.data = []
-        self.data.append(Variable(torch.Tensor([-0.1, 0.3])))
-        self.data.append(Variable(torch.Tensor([0.00, 0.4])))
-        self.data.append(Variable(torch.Tensor([0.20, 0.5])))
-        self.data.append(Variable(torch.Tensor([0.10, 0.7])))
+        self.data = Variable(torch.Tensor([[-0.1, 0.3],
+                                           [0.00, 0.4],
+                                           [0.20, 0.5],
+                                           [0.10, 0.7]]))
         self.n_data = Variable(torch.Tensor([len(self.data)]))
-        self.sum_data = self.data[0] + \
-            self.data[1] + self.data[2] + self.data[3]
-        self.analytic_lam_n = self.lam0 + \
-            self.n_data.expand_as(self.lam) * self.lam
+        self.data_sum = self.data.sum(0)
+        self.analytic_lam_n = self.lam0 + self.n_data.expand_as(self.lam) * self.lam
         self.analytic_log_sig_n = -0.5 * torch.log(self.analytic_lam_n)
-        self.analytic_mu_n = self.sum_data * (self.lam / self.analytic_lam_n) +\
+        self.analytic_mu_n = self.data_sum * (self.lam / self.analytic_lam_n) +\
             self.mu0 * (self.lam0 / self.analytic_lam_n)
         self.batch_size = 4
 
@@ -62,11 +59,7 @@ class NormalNormalTests(TestCase):
         def model():
             mu_latent = pyro.sample("mu_latent", dist.normal,
                                     self.mu0, torch.pow(self.lam0, -0.5))
-            pyro.map_data("aaa", self.data, lambda i,
-                          x: pyro.observe(
-                              "obs_%d" % i, dist.normal,
-                              x, mu_latent, torch.pow(self.lam, -0.5)),
-                          batch_size=self.batch_size)
+            pyro.observe("obs", dist.normal, self.data, mu_latent, torch.pow(self.lam, -0.5))
             return mu_latent
 
         def guide():
@@ -78,8 +71,6 @@ class NormalNormalTests(TestCase):
             sig_q = torch.exp(log_sig_q)
             normal = dist.normal if reparameterized else fakes.nonreparameterized_normal
             pyro.sample("mu_latent", normal, mu_q, sig_q)
-            pyro.map_data("aaa", self.data, lambda i, x: None,
-                          batch_size=self.batch_size)
 
         adam = optim.Adam({"lr": .001})
         svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
@@ -169,13 +160,10 @@ class PoissonGammaTests(TestCase):
         self.alpha0 = Variable(torch.Tensor([1.0]))
         # gamma prior hyperparameter
         self.beta0 = Variable(torch.Tensor([1.0]))
-        self.data = []
-        self.data.append(Variable(torch.Tensor([1.0])))
-        self.data.append(Variable(torch.Tensor([2.0])))
-        self.data.append(Variable(torch.Tensor([3.0])))
+        self.data = Variable(torch.Tensor([[1.0], [2.0], [3.0]]))
         self.n_data = len(self.data)
-        sum_data = self.data[0] + self.data[1] + self.data[2]
-        self.alpha_n = self.alpha0 + sum_data  # posterior alpha
+        data_sum = self.data.sum(0)
+        self.alpha_n = self.alpha0 + data_sum  # posterior alpha
         self.beta_n = self.beta0 + \
             Variable(torch.Tensor([self.n_data]))  # posterior beta
         self.log_alpha_n = torch.log(self.alpha_n)
@@ -194,9 +182,7 @@ class PoissonGammaTests(TestCase):
 
         def model():
             lambda_latent = pyro.sample("lambda_latent", gamma, self.alpha0, self.beta0)
-            pyro.map_data("aaa",
-                          self.data, lambda i, x: pyro.observe(
-                              "obs_{}".format(i), dist.poisson, x, lambda_latent), batch_size=3)
+            pyro.observe("obs", dist.poisson, self.data, lambda_latent)
             return lambda_latent
 
         def guide():
@@ -214,7 +200,6 @@ class PoissonGammaTests(TestCase):
                     requires_grad=True))
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             pyro.sample("lambda_latent", gamma, alpha_q, beta_q)
-            pyro.map_data("aaa", self.data, lambda i, x: None, batch_size=3)
 
         adam = optim.Adam({"lr": .0002, "betas": (0.97, 0.999)})
         svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
@@ -291,7 +276,7 @@ class BernoulliBetaTests(TestCase):
         self.data = Variable(torch.Tensor([[0.0], [1.0], [1.0], [1.0]]))
         self.n_data = len(self.data)
         self.batch_size = None
-        data_sum = self.data.data.sum()
+        data_sum = self.data.sum(0)
         self.alpha_n = self.alpha0 + data_sum  # posterior alpha
         self.beta_n = self.beta0 - data_sum + \
             Variable(torch.Tensor([self.n_data]))
