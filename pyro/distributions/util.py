@@ -182,7 +182,7 @@ def softmax(x, dim=-1):
     return soft_max_nd.transpose(dim, len(input_size) - 1)
 
 
-def get_clamping_buffer(tensor):
+def _get_clamping_buffer(tensor):
     clamp_eps = 1e-6
     if isinstance(tensor, Variable):
         tensor = tensor.data
@@ -210,7 +210,7 @@ def get_probs_and_logits(ps=None, logits=None, is_multidimensional=True):
     """
     assert (ps is None) != (logits is None)
     if ps is not None:
-        eps = get_clamping_buffer(ps)
+        eps = _get_clamping_buffer(ps)
         ps_clamped = ps.clamp(min=eps, max=1 - eps)
     if is_multidimensional:
         if ps is None:
@@ -223,3 +223,32 @@ def get_probs_and_logits(ps=None, logits=None, is_multidimensional=True):
         else:
             logits = torch.log(ps_clamped) - torch.log1p(-ps_clamped)
     return ps, logits
+
+
+def get_clamped_probs(ps=None, logits=None, is_multidimensional=True):
+    """
+    Clamp probabilities, given probability values or logits. Either ``ps`` or
+    ``logits`` should be specified, but not both.
+
+    :param ps: tensor of probabilities. Should be in the interval *[0, 1]*.
+        If, ``is_multidimensional = True``, then must be normalized along
+        axis -1.
+    :param logits: tensor of logit values.  For the multidimensional case,
+        the values, when exponentiated along the last dimension, must sum
+        to 1.
+    :param is_multidimensional: determines the computation of ps from logits,
+        and vice-versa. For the multi-dimensional case, logit values are
+        assumed to be log probabilities, whereas for the uni-dimensional case,
+        it specifically refers to log odds.
+    :return: clamped probabilities.
+    """
+    if (ps is None) == (logits is None):
+        raise ValueError("Got ps={}, logits={}. Either `ps` or `logits` must be specified, "
+                         "but not both.".format(ps, logits))
+    if ps is None:
+        ps = softmax(logits, -1) if is_multidimensional else F.sigmoid(logits)
+    eps = _get_clamping_buffer(ps)
+    ps = ps.clamp(min=eps, max=1 - eps)
+    if is_multidimensional:
+        ps /= ps.sum(-1, True)
+    return ps
