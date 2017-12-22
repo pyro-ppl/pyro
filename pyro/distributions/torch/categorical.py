@@ -19,7 +19,7 @@ class Categorical(TorchDistribution):
         super(Categorical, self).__init__(torch_dist, x_shape, event_dim, *args, **kwargs)
 
     def sample(self):
-        x = self.torch_dist.sample(self._sample_shape).float()
+        x = self.torch_dist.sample(self._sample_shape)
         return x.view(self._sample_shape + self._x_shape)
 
     def batch_log_pdf(self, x):
@@ -31,6 +31,6 @@ class Categorical(TorchDistribution):
         return batch_log_pdf
 
     def enumerate_support(self):
-        values = self.torch_dist.enumerate_support().float()
+        values = self.torch_dist.enumerate_support()
         sample_shape = (self.torch_dist.probs.shape[-1],)
         return values.view(sample_shape + self._x_shape)
