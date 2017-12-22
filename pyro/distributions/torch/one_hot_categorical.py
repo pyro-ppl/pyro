@@ -5,7 +5,7 @@ from torch.autograd import Variable
 
 from pyro.distributions.one_hot_categorical import OneHotCategorical as _OneHotCategorical
 from pyro.distributions.torch_wrapper import TorchDistribution
-from pyro.distributions.util import copy_docs_from, get_probs_and_logits
+from pyro.distributions.util import copy_docs_from, get_clamped_probs
 
 
 @copy_docs_from(_OneHotCategorical)
@@ -13,7 +13,7 @@ class OneHotCategorical(TorchDistribution):
     enumerable = True
 
     def __init__(self, ps=None, logits=None, *args, **kwargs):
-        ps, logits = get_probs_and_logits(ps, logits, is_multidimensional=True)
+        ps = get_clamped_probs(ps, logits, is_multidimensional=True)
         torch_dist = torch.distributions.Categorical(ps)  # TODO switch to OneHotCategorical
         x_shape = ps.shape
         event_dim = 1
