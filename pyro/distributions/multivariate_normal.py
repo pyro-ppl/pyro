@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 import torch
 from torch.autograd import Variable
+
 from pyro.distributions.distribution import Distribution
 
 
@@ -47,7 +48,7 @@ class MultivariateNormal(Distribution):
             if x.size()[-1] != mu.size()[-1]:
                 raise ValueError("The event size for the data and distribution parameters must match.\n"
                                  "Expected x.size()[-1] == self.mu.size()[0], but got {} vs {}".format(
-                                    x.size(-1), mu.size(-1)))
+                                     x.size(-1), mu.size(-1)))
             try:
                 mu = mu.expand_as(x)
             except RuntimeError as e:
@@ -87,8 +88,8 @@ class MultivariateNormal(Distribution):
         batch_size = x.size()[0] if len(x.size()) > len(self.mu.size()) else 1
         batch_log_pdf_shape = self.batch_shape(x) + (1,)
         x = x.view(batch_size, *self.mu.size())
-        normalization_factor = torch.log(self.sigma_cholesky.diag()).sum() + (self.mu.shape[0] / 2) * np.log(
-            2*np.pi) if normalized else 0
+        normalization_factor = torch.log(
+            self.sigma_cholesky.diag()).sum() + (self.mu.shape[0] / 2) * np.log(2 * np.pi) if normalized else 0
         sigma_inverse = torch.inverse(self.sigma) if self.use_inverse_for_batch_log else torch.potri(
             self.sigma_cholesky)
         return -(normalization_factor + 0.5 * torch.sum((x - self.mu).unsqueeze(2) * torch.bmm(
