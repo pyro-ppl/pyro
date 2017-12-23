@@ -27,6 +27,7 @@ class MultivariateNormal(Distribution):
     """
 
     reparameterized = True
+
     def __init__(self, mu, sigma, batch_size=None, is_cholesky=False, use_inverse_for_batch_log=False, *args, **kwargs):
         self.mu = mu
         self.output_shape = mu.shape
