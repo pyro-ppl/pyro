@@ -26,6 +26,7 @@ class MultivariateNormal(Distribution):
     :raises: ValueError if the shape of mean or sigma is not supported.
     """
 
+    reparameterized = True
     def __init__(self, mu, sigma, batch_size=None, is_cholesky=False, use_inverse_for_batch_log=False, *args, **kwargs):
         self.mu = mu
         self.output_shape = mu.shape
@@ -78,7 +79,7 @@ class MultivariateNormal(Distribution):
         batch_size = self.batch_size
         uncorrelated_standard_sample = Variable(torch.randn(batch_size, *self.mu.size()).type_as(self.mu.data))
         transformed_sample = self.mu + uncorrelated_standard_sample @ self.sigma_cholesky
-        return transformed_sample
+        return transformed_sample if self.reparameterized else transformed_sample.detach()
 
     def batch_log_pdf(self, x, normalized=True):
         """
