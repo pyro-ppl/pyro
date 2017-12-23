@@ -83,7 +83,7 @@ continuous_dists = [
                  'mu': [2.0, 1.0], 'sigma': [[1.0, 0.5], [0.5, 1.0]],
                  'test_data': [[2.0, 1.0], [9.0, 3.4]]},
             ],
-            # This hack seems to be the best option right now, as the matrix 'sigma' is not handled correctly by get_scipy_batch_logpdf
+            # This hack seems to be the best option right now, as 'sigma' is not handled well by get_scipy_batch_logpdf
             scipy_arg_fn=lambda mu, sigma: ((), {"mean": np.array(mu), "cov": np.array([[1.0, 0.5], [0.5, 1.0]])}),
             prec=0.01,
             min_samples=500000),

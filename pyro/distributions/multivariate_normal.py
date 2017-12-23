@@ -16,8 +16,13 @@ class MultivariateNormal(Distribution):
 
     :param torch.autograd.Variable mu: Mean. Must be a vector (Variable containing a 1d Tensor).
     :param torch.autograd.Variable sigma: Covariance matrix. Must be symmetric and positive semidefinite.
-    :param is_cholesky: Should be set to True if you want to directly pass a Cholesky decomposition of the covariance matrix as `sigma`.
-    :param use_inverse_for_batch_log: If this is set to true, the torch.inverse function will be used to compute log_pdf. This means that the results of log_pdf can be differentiated with respect to sigma. Since the gradient of torch.potri is currently not implemented, differentiation of log_pdf wrt. sigma is not possible when using the Cholesky decomposition. Using the Cholesky decomposition is however much faster and therefore enabled by default.
+    :param is_cholesky: Should be set to True if you want to directly pass a Cholesky decomposition
+        of the covariance matrix as `sigma`.
+    :param use_inverse_for_batch_log: If this is set to true, the torch.inverse function will be used to compute
+        log_pdf. This means that the results of log_pdf can be differentiated with respect to sigma.
+        Since the gradient of torch.potri is currently not implemented, differentiation of log_pdf wrt. sigma is not
+        possible when using the Cholesky decomposition. Using the Cholesky decomposition is however much faster and
+        therefore enabled by default.
     :raises: ValueError if the shape of mean or sigma is not supported.
     """
 
@@ -80,7 +85,9 @@ class MultivariateNormal(Distribution):
         Return the logarithm of the probability density function evaluated at x.
 
         :param x: The points for which the log_pdf should be evaluated batched along axis 0.
-        :param normalized: If set to `False` the normalization constant is omitted in the results. This might be preferable, as computing the determinant of sigma might not always be numerically stable. Defaults to `True`.
+        :param normalized: If set to `False` the normalization constant is omitted in the results.
+            This might be preferable, as computing the determinant of sigma might not always be numerically stable.
+            Defaults to `True`.
         :return: A `torch.autograd.Variable` of size `self.batch_shape(x) + (1,)`
 
         Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_log_pdf`
