@@ -79,7 +79,7 @@ class MultivariateNormal(Distribution):
         """
         batch_size = self.batch_size
         uncorrelated_standard_sample = Variable(torch.randn(batch_size, *self.mu.size()).type_as(self.mu.data))
-        transformed_sample = self.mu + torch.mm(uncorrelated_standard_sample,self.sigma_cholesky)
+        transformed_sample = self.mu + torch.mm(uncorrelated_standard_sample, self.sigma_cholesky)
         return transformed_sample if self.reparameterized else transformed_sample.detach()
 
     def batch_log_pdf(self, x, normalized=True):
@@ -103,7 +103,7 @@ class MultivariateNormal(Distribution):
             self.sigma_cholesky)
         return -(normalization_factor + 0.5 * torch.sum((x - self.mu).unsqueeze(2) * torch.bmm(
             sigma_inverse.expand(batch_size, *self.sigma_cholesky.size()),
-            (x - self.mu).view(*x.size(), 1)), 1)).view(batch_log_pdf_shape)
+            (x - self.mu).unsqueeze(-1)), 1)).view(batch_log_pdf_shape)
 
     def analytic_mean(self):
         """
