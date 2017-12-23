@@ -37,7 +37,7 @@ class MultivariateNormal(Distribution):
             self.sigma = sigma
             self.sigma_cholesky = torch.potrf(sigma)
         else:
-            self.sigma = sigma.transpose(0, 1) @ sigma
+            self.sigma = torch.mm(sigma.transpose(0, 1), sigma)
             self.sigma_cholesky = sigma
         if mu.dim() > 1:
             raise ValueError("The mean must be a vector, but got mu.size() = {}".format(mu.size()))
@@ -79,7 +79,7 @@ class MultivariateNormal(Distribution):
         """
         batch_size = self.batch_size
         uncorrelated_standard_sample = Variable(torch.randn(batch_size, *self.mu.size()).type_as(self.mu.data))
-        transformed_sample = self.mu + uncorrelated_standard_sample @ self.sigma_cholesky
+        transformed_sample = self.mu + torch.mm(uncorrelated_standard_sample,self.sigma_cholesky)
         return transformed_sample if self.reparameterized else transformed_sample.detach()
 
     def batch_log_pdf(self, x, normalized=True):
