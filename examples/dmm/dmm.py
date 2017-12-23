@@ -293,10 +293,10 @@ def main(args):
     test_seq_lengths = rep(test_seq_lengths)
     val_batch, val_batch_reversed, val_batch_mask, val_seq_lengths = poly.get_mini_batch(
         np.arange(n_eval_samples * val_data_sequences.shape[0]), rep(val_data_sequences),
-        val_seq_lengths, volatile=True, cuda=args.cuda)
+        val_seq_lengths, cuda=args.cuda)
     test_batch, test_batch_reversed, test_batch_mask, test_seq_lengths = poly.get_mini_batch(
         np.arange(n_eval_samples * test_data_sequences.shape[0]), rep(test_data_sequences),
-        test_seq_lengths, volatile=True, cuda=args.cuda)
+        test_seq_lengths, cuda=args.cuda)
 
     # instantiate the dmm
     dmm = DMM(rnn_dropout_rate=args.rnn_dropout_rate, num_iafs=args.num_iafs,

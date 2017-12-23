@@ -34,7 +34,7 @@ class ClippedAdam(Optimizer):
 
     def step(self, closure=None):
         """
-        :param closure:: An optional closure that reevaluates the model and returns the loss.
+        :param closure: An optional closure that reevaluates the model and returns the loss.
 
         Performs a single optimization step.
         """

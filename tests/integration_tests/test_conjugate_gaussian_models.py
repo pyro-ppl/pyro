@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import logging
 import os
 import time
+from unittest import TestCase
 
 import networkx
 import numpy as np
@@ -14,7 +15,8 @@ import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
 from pyro.infer import SVI
-from tests.common import TestCase
+from tests import fakes
+from tests.common import assert_equal
 
 logger = logging.getLogger(__name__)
 
@@ -145,9 +147,8 @@ class GaussianChainTests(TestCase):
                                              requires_grad=True))
                 mean_function = mu_q if k == self.N else kappa_q * previous_sample + mu_q
                 node_flagged = True if self.which_nodes_reparam[k - 1] == 1.0 else False
-                repa = True if reparameterized else node_flagged
-                latent_dist = dist.Normal(mean_function, sig_q, reparameterized=repa)
-                mu_latent = pyro.sample("mu_latent_%d" % k, latent_dist,
+                normal = dist.normal if reparameterized or node_flagged else fakes.nonreparameterized_normal
+                mu_latent = pyro.sample("mu_latent_%d" % k, normal, mean_function, sig_q,
                                         baseline=dict(use_decaying_avg_baseline=True))
                 previous_sample = mu_latent
             return previous_sample
@@ -178,9 +179,9 @@ class GaussianChainTests(TestCase):
                 logger.debug("[mean errors]  (mu, log_sigma, kappa) = (%.4f, %.4f, %.4f)" % mean_errors)
                 logger.debug("[step time = %.3f;  N = %d;  step = %d]\n" % (time.time() - t0, self.N, step))
 
-        self.assertEqual(0.0, max_errors[0], prec=prec)
-        self.assertEqual(0.0, max_errors[1], prec=prec)
-        self.assertEqual(0.0, max_errors[2], prec=prec)
+        assert_equal(0.0, max_errors[0], prec=prec)
+        assert_equal(0.0, max_errors[1], prec=prec)
+        assert_equal(0.0, max_errors[2], prec=prec)
 
 
 @pytest.mark.stage("integration", "integration_batch_2")
@@ -435,10 +436,8 @@ class GaussianPyramidTests(TestCase):
                                                     requires_grad=True))
                     mean_function_node = mean_function_node + kappa_dep * latents_dict[dep]
                 node_flagged = True if self.which_nodes_reparam[i] == 1.0 else False
-                repa = True if reparameterized else node_flagged
-                latent_dist_node = dist.Normal(mean_function_node, torch.exp(log_sig_node),
-                                               reparameterized=repa)
-                latent_node = pyro.sample(node, latent_dist_node,
+                normal = dist.normal if reparameterized or node_flagged else fakes.nonreparameterized_normal
+                latent_node = pyro.sample(node, normal, mean_function_node, torch.exp(log_sig_node),
                                           baseline=dict(use_decaying_avg_baseline=True,
                                                         baseline_beta=0.96))
                 latents_dict[node] = latent_node
@@ -484,6 +483,6 @@ class GaussianPyramidTests(TestCase):
                              (min_log_sig_error, mean_log_sig_error, max_log_sig_error))
                 logger.debug("[step time = %.3f;  N = %d;  step = %d]\n" % (time.time() - t0, self.N, step))
 
-        self.assertEqual(0.0, max_log_sig_error, prec=prec)
-        self.assertEqual(0.0, leftmost_constant_error, prec=prec)
-        self.assertEqual(0.0, almost_leftmost_constant_error, prec=prec)
+        assert_equal(0.0, max_log_sig_error, prec=prec)
+        assert_equal(0.0, leftmost_constant_error, prec=prec)
+        assert_equal(0.0, almost_leftmost_constant_error, prec=prec)

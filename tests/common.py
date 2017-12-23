@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 import contextlib
 import numbers
 import os
-import unittest
 import warnings
 from copy import deepcopy
 from itertools import product
@@ -198,6 +197,8 @@ def assert_equal(x, y, prec=1e-5, msg=''):
         else:
             assert_allclose(x, y, atol=prec, equal_nan=True)
     elif isinstance(x, numbers.Number) and isinstance(y, numbers.Number):
+        if not msg:
+            msg = '{} vs {}'.format(x, y)
         if prec == 0:
             assert x == y, msg
         else:
@@ -212,10 +213,12 @@ def assert_equal(x, y, prec=1e-5, msg=''):
             assert_equal(x_val, y[key], prec, msg='{} {}'.format(key, msg))
     elif is_iterable(x) and is_iterable(y):
         if prec == 0:
-            assert len(x) == len(y)
+            assert len(x) == len(y), msg
             for xi, yi in zip(x, y):
                 assert_equal(xi, yi, prec, msg)
         else:
+            if not msg:
+                msg = '{} vs {}'.format(x, y)
             assert list(x) == approx(list(y), prec), msg
     else:
         assert x == y, msg
@@ -227,13 +230,3 @@ def assert_not_equal(x, y, prec=1e-5, msg=''):
     except AssertionError:
         pass
     raise AssertionError("{} \nValues are equal: x={}, y={}, prec={}".format(msg, x, y, prec))
-
-
-class TestCase(unittest.TestCase):
-    precision = 1e-5
-
-    def assertEqual(self, x, y, prec=None, message=''):
-        assert_equal(x, y, prec, message)
-
-    def assertNotEqual(self, x, y, prec=None, message=''):
-        assert_not_equal(x, y, prec, message)

@@ -40,6 +40,7 @@ test-cuda: lint FORCE
 	PYRO_TENSOR_TYPE=torch.cuda.DoubleTensor pytest -vx -n 8 --stage unit
 
 test-torch-dist: lint FORCE
+	PYRO_USE_TORCH_DISTRIBUTIONS=1 pytest -v tests/distributions
 	PYRO_USE_TORCH_DISTRIBUTIONS=1 pytest -vx -n auto --stage unit
 
 clean: FORCE

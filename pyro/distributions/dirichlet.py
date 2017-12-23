@@ -6,9 +6,10 @@ import torch
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
-from pyro.distributions.util import log_beta
+from pyro.distributions.util import copy_docs_from, log_beta
 
 
+@copy_docs_from(Distribution)
 class Dirichlet(Distribution):
     """
     Dirichlet distribution parameterized by a vector `alpha`.
@@ -32,9 +33,6 @@ class Dirichlet(Distribution):
         super(Dirichlet, self).__init__(*args, **kwargs)
 
     def batch_shape(self, x=None):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_shape`
-        """
         event_dim = 1
         alpha = self.alpha
         if x is not None:
@@ -50,9 +48,6 @@ class Dirichlet(Distribution):
         return alpha.size()[:-event_dim]
 
     def event_shape(self):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.event_shape`
-        """
         return self.alpha.size()[-1:]
 
     def sample(self):
@@ -94,15 +89,9 @@ class Dirichlet(Distribution):
         return (x_sum - beta).contiguous().view(batch_log_pdf_shape)
 
     def analytic_mean(self):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_mean`
-        """
         sum_alpha = torch.sum(self.alpha)
         return self.alpha / sum_alpha
 
     def analytic_var(self):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_var`
-        """
         sum_alpha = torch.sum(self.alpha)
         return self.alpha * (sum_alpha - self.alpha) / (torch.pow(sum_alpha, 2) * (1 + sum_alpha))

@@ -16,6 +16,7 @@ from examples.util import RESULTS_DIR
 from pyro.distributions import Normal, Bernoulli
 from pyro.infer import SVI
 from pyro.optim import Adam
+from pyro.shim import torch_no_grad
 from pyro.util import ng_zeros, ng_ones
 
 """
@@ -125,9 +126,10 @@ class VAE(object):
         self.set_train(is_train=False)
         test_loss = 0
         for i, (x, _) in enumerate(self.test_loader):
-            x = Variable(x, volatile=True)
-            recon_x = self.model_eval(x)[0]
-            test_loss += self.compute_loss_and_gradient(x)
+            with torch_no_grad():
+                x = Variable(x)
+                recon_x = self.model_eval(x)[0]
+                test_loss += self.compute_loss_and_gradient(x)
             if i == 0:
                 n = min(x.size(0), 8)
                 comparison = torch.cat([x[:n],
@@ -227,15 +229,7 @@ def setup(args):
     return train_loader, test_loader
 
 
-def main():
-    parser = argparse.ArgumentParser(description='VAE using MNIST dataset')
-    parser.add_argument('-n', '--num-epochs', nargs='?', default=10, type=int)
-    parser.add_argument('--batch_size', nargs='?', default=128, type=int)
-    parser.add_argument('--rng_seed', nargs='?', default=0, type=int)
-    parser.add_argument('--impl', nargs='?', default='pyro', type=str)
-    parser.add_argument('--skip_eval', action='store_true')
-    parser.set_defaults(skip_eval=False)
-    args = parser.parse_args()
+def main(args):
     train_loader, test_loader = setup(args)
     if args.impl == 'pyro':
         vae = PyroVAEImpl(args, train_loader, test_loader)
@@ -252,4 +246,12 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(description='VAE using MNIST dataset')
+    parser.add_argument('-n', '--num-epochs', nargs='?', default=10, type=int)
+    parser.add_argument('--batch_size', nargs='?', default=128, type=int)
+    parser.add_argument('--rng_seed', nargs='?', default=0, type=int)
+    parser.add_argument('--impl', nargs='?', default='pyro', type=str)
+    parser.add_argument('--skip_eval', action='store_true')
+    parser.set_defaults(skip_eval=False)
+    args = parser.parse_args()
+    main(args)

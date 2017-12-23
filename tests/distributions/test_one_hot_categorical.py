@@ -1,12 +1,14 @@
 from __future__ import absolute_import, division, print_function
 
+from unittest import TestCase
+
 import numpy as np
 import pytest
 import torch
 from torch.autograd import Variable
 
 import pyro.distributions as dist
-from tests.common import TestCase, assert_equal
+from tests.common import assert_equal
 
 
 class TestOneHotCategorical(TestCase):
@@ -74,12 +76,6 @@ def dim(request):
 
 @pytest.fixture(params=[[0.3, 0.5, 0.2]], ids=None)
 def ps(request):
-    return request.param
-
-
-@pytest.fixture(params=[None, [3, 4, 5], ["a", "b", "c"]],
-                ids=["vs=None", "vs=list(num)", "vs=list(str)"])
-def vs(request):
     return request.param
 
 

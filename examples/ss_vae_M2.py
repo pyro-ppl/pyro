@@ -8,17 +8,16 @@ from utils.mnist_cached import MNISTCached, setup_data_loaders
 from pyro.infer import SVI
 from pyro.optim import Adam
 from pyro.nn import ClippedSoftmax, ClippedSigmoid
+from pyro.shim import parse_torch_version
 from utils.custom_mlp import MLP, Exp
 from utils.vae_plots import plot_conditional_samples_ssvae, mnist_test_tsne_ssvae
 from util import set_seed, print_and_log, mkdir_p
 import torch.nn as nn
 
 version_warning = '''
-11/02/2017: This example does not work with the release version 0.2 of pytorch.
-Please install Pytorch from the latest master branch of pytorch or wait a week for the new release.
-This example uses a data loader that requires very recent PyTorch features.
+11/02/2017: This example does not work with PyTorch 0.2, please install PyTorch 0.3.
 '''
-torch_version = pyro.util.parse_torch_version()
+torch_version = parse_torch_version()
 if (torch_version < (0, 2, 1) and not torch_version[-1].startswith("+")):
     print(version_warning)
     sys.exit(0)
