@@ -11,19 +11,13 @@ class MultivariateNormal(Distribution):
     Multivariate normal (Gaussian) distribution.
 
     A distribution over vectors in which all the elements have a joint
-    Gaussian distribution. Currently does not support batching parameters.
+    Gaussian density.
 
     :param torch.autograd.Variable mu: Mean. Must be a vector (Variable containing a 1d Tensor).
-    :param torch.autograd.Variable sigma: Covariance matrix. Must be
-    symmetric and positive semidefinite.
-    :param is_cholesky: Should be set to True if you want to directly pass a
-    Cholesky decomposition of the covariance matrix as sigma.
-    :param use_inverse_for_batch_log: If this is set to true, the torch.inverse
-    function will be used to compute the log_pdf. This means that the results of log_pdf can be differentiated with
-    reference to sigma. Since the gradient of torch.potri is currently not implemented differentiation of log_pdf wrt
-    sigma is not possible when using the Cholesky decomposition, it is however much faster and therefore enabled by
-    default.
-    :raises: ValueError if the shape of mean or Sigma is not supported.
+    :param torch.autograd.Variable sigma: Covariance matrix. Must be symmetric and positive semidefinite.
+    :param is_cholesky: Should be set to True if you want to directly pass a Cholesky decomposition of the covariance matrix as `sigma`.
+    :param use_inverse_for_batch_log: If this is set to true, the torch.inverse function will be used to compute log_pdf. This means that the results of log_pdf can be differentiated with respect to sigma. Since the gradient of torch.potri is currently not implemented, differentiation of log_pdf wrt. sigma is not possible when using the Cholesky decomposition. Using the Cholesky decomposition is however much faster and therefore enabled by default.
+    :raises: ValueError if the shape of mean or sigma is not supported.
     """
 
     def __init__(self, mu, sigma, batch_size=None, is_cholesky=False, use_inverse_for_batch_log=False, *args, **kwargs):
@@ -33,7 +27,6 @@ class MultivariateNormal(Distribution):
         self.batch_size = batch_size if batch_size is not None else 1
         if not is_cholesky:
             self.sigma = sigma
-            # potrf is the very sensible name for the Cholesky decomposition in PyTorch
             self.sigma_cholesky = torch.potrf(sigma)
         else:
             self.sigma = sigma.transpose(0, 1) @ sigma
@@ -69,15 +62,14 @@ class MultivariateNormal(Distribution):
         """
         return self.mu.size()[-1:]
 
-    def sample(self, n=-1):
+    def sample(self):
         """
-        A classic multivariate normal sampler.
+        Generate a sample with the specified covariance matrix and mean.
 
-        :param n: The number of samples to be drawn. Samples are batched along the first axis. Defaults to the
-        batch_size passed to the constructor.
         Ref: :py:meth:`pyro.distributions.distribution.Distribution.sample`
+
         """
-        batch_size = self.batch_size if n == -1 else n
+        batch_size = self.batch_size
         uncorrelated_standard_sample = Variable(torch.randn(batch_size, *self.mu.size()).type_as(self.mu.data))
         transformed_sample = self.mu + uncorrelated_standard_sample @ self.sigma_cholesky
         return transformed_sample
@@ -85,12 +77,11 @@ class MultivariateNormal(Distribution):
     def batch_log_pdf(self, x, normalized=True):
         """
         Return the logarithm of the probability density function evaluated at x.
-        :param x: The points for which the
-        log_pdf should be evaluated batched along axis 0.
-        :param normalized: If set to false the normalization
-        constant is omitted is the results. This might be preferable, as computing the determinant of sigma might not
-        always be numerically stable. Defaults to `True`.
-        :return: A `torch.autograd.Variable` of size self.batch_shape(x) + (1,)
+
+        :param x: The points for which the log_pdf should be evaluated batched along axis 0.
+        :param normalized: If set to `False` the normalization constant is omitted in the results. This might be preferable, as computing the determinant of sigma might not always be numerically stable. Defaults to `True`.
+        :return: A `torch.autograd.Variable` of size `self.batch_shape(x) + (1,)`
+
         Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_log_pdf`
         """
         batch_size = x.size()[0] if len(x.size()) > len(self.mu.size()) else 1
