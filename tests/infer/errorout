@@ -1,0 +1,300 @@
+============================= test session starts ==============================
+platform linux -- Python 3.6.1, pytest-3.3.1, py-1.5.2, pluggy-0.6.0
+rootdir: /home/saikat/pyvirtual, inifile:
+collected 8 items
+
+test_gradient.py .F..FFFF                                                [100%]
+
+=================================== FAILURES ===================================
+__________________ test_subsample_gradient[Trace-nonreparam] ___________________
+
+trace_graph = False, reparameterized = False
+
+    @pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
+    @pytest.mark.parametrize("trace_graph", [False, True], ids=["Trace", "TraceGraph"])
+    def test_subsample_gradient(trace_graph, reparameterized):
+        pyro.clear_param_store()
+        data_size = 2
+        subsample_size = 1
+        num_particles = 1000
+        precision = 0.333
+        data = dist.normal(ng_zeros(data_size), ng_ones(data_size))
+    
+        def model(subsample_size):
+            with pyro.iarange("data", len(data), subsample_size) as ind:
+                x = data[ind]
+                z = pyro.sample("z", dist.Normal(ng_zeros(len(x)), ng_ones(len(x)),
+                                                 reparameterized=reparameterized))
+                pyro.observe("x", dist.Normal(z, ng_ones(len(x)), reparameterized=reparameterized), x)
+    
+        def guide(subsample_size):
+            mu = pyro.param("mu", lambda: Variable(torch.zeros(len(data)), requires_grad=True))
+            sigma = pyro.param("sigma", lambda: Variable(torch.ones(1), requires_grad=True))
+            with pyro.iarange("data", len(data), subsample_size) as ind:
+                mu = mu[ind]
+                sigma = sigma.expand(subsample_size)
+                pyro.sample("z", dist.Normal(mu, sigma, reparameterized=reparameterized))
+    
+        optim = Adam({"lr": 0.1})
+        inference = SVI(model, guide, optim, loss="ELBO",
+                        trace_graph=trace_graph, num_particles=num_particles)
+    
+        # Compute gradients without subsampling.
+        inference.loss_and_grads(model, guide, subsample_size=data_size)
+        params = dict(pyro.get_param_store().named_parameters())
+        expected_grads = {name: param.grad.data.clone() for name, param in params.items()}
+        zero_grads(params.values())
+    
+        # Compute gradients with subsampling.
+        inference.loss_and_grads(model, guide, subsample_size=subsample_size)
+        actual_grads = {name: param.grad.data.clone() for name, param in params.items()}
+    
+        for name in sorted(params):
+            print('\nexpected {} = {}'.format(name, expected_grads[name].cpu().numpy()))
+            print('actual   {} = {}'.format(name, actual_grads[name].cpu().numpy()))
+>       assert_equal(actual_grads, expected_grads, prec=precision)
+
+test_gradient.py:60: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../pyro_h/tests/common.py:211: in assert_equal
+    assert_equal(x_val, y[key], prec, msg='{} {}'.format(key, msg))
+../pyro_h/tests/common.py:193: in assert_equal
+    assert_tensors_equal(x, y, prec, msg)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+a = 
+ 2.1125
+[torch.DoubleTensor of size 1]
+
+b = 
+ 2.7960
+[torch.DoubleTensor of size 1]
+, prec = 0.333, msg = 'sigma '
+
+    def assert_tensors_equal(a, b, prec=1e-5, msg=''):
+        assert a.size() == b.size(), msg
+        if prec == 0:
+            assert (a == b).all(), msg
+        elif a.numel() > 0:
+            b = b.type_as(a)
+            b = b.cuda(device=a.get_device()) if a.is_cuda else b.cpu()
+            # check that NaNs are in the same locations
+            nan_mask = a != a
+            assert torch.equal(nan_mask, b != b), msg
+            diff = a - b
+            diff[nan_mask] = 0
+            if diff.is_signed():
+                diff = diff.abs()
+            max_err = diff.max()
+>           assert max_err < prec, msg
+E           AssertionError: sigma
+
+../pyro_h/tests/common.py:153: AssertionError
+----------------------------- Captured stdout call -----------------------------
+
+expected mu = [-1.41904427 -1.01616185]
+actual   mu = [-1.5536702  -1.26003422]
+
+expected sigma = [ 2.79604917]
+actual   sigma = [ 2.11254503]
+________________ test_kl_qp_gradient_step_golden[reparam-Trace] ________________
+
+trace_graph = False, reparameterized = True
+
+    @pytest.mark.init(rng_seed=0)
+    @pytest.mark.parametrize("trace_graph", [False, True], ids=["Trace", "TraceGraph"])
+    @pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "non-reparam"])
+    def test_kl_qp_gradient_step_golden(trace_graph, reparameterized):
+        verbose = True
+        pyro.clear_param_store()
+        mu_q_expected = {True: -1.1780080795288086, False: -1.178008079528809}[reparameterized]
+        log_sig_q_expected = {True: -0.30474236607551575, False: -0.30474188923835754}[reparameterized]
+        tolerance = 1.0e-7
+    
+        def model():
+            mu_latent = pyro.sample("mu_latent", dist.Normal(ng_zeros(1), ng_ones(1), reparameterized=reparameterized))
+            pyro.observe('obs', dist.normal, Variable(torch.Tensor([0.23])), mu_latent, ng_ones(1))
+            return mu_latent
+    
+        def guide():
+            mu_q = pyro.param("mu_q", Variable(torch.randn(1), requires_grad=True))
+            log_sig_q = pyro.param("log_sig_q", Variable(torch.randn(1), requires_grad=True))
+            sig_q = torch.exp(log_sig_q)
+            return pyro.sample("mu_latent", dist.Normal(mu_q, sig_q, reparameterized=reparameterized))
+    
+        optim = Adam({"lr": .10})
+        svi = SVI(model, guide, optim, loss="ELBO", trace_graph=trace_graph)
+        svi.step()
+    
+        new_mu_q = pyro.param("mu_q").data.cpu().numpy()[0]
+        new_log_sig_q = pyro.param("log_sig_q").data.cpu().numpy()[0]
+    
+        if verbose:
+            print("\nafter one step mu_q was %.15f; expected %.15f" % (new_mu_q, mu_q_expected))
+            print("after one step log_sig_q was %.15f expected %.15f" % (new_log_sig_q, log_sig_q_expected))
+    
+        if pyro.param("mu_q").is_cuda:
+            # Ignore this case since cuda is too nondeterministic.
+            pass
+        else:
+>           assert np.fabs(new_mu_q - mu_q_expected) < tolerance
+E           AssertionError: assert 1.7048234072979425 < 1e-07
+E            +  where 1.7048234072979425 = <ufunc 'fabs'>((0.52681532776913387 - -1.1780080795288086))
+E            +    where <ufunc 'fabs'> = np.fabs
+
+test_gradient.py:102: AssertionError
+----------------------------- Captured stdout call -----------------------------
+
+after one step mu_q was 0.526815327769134; expected -1.178008079528809
+after one step log_sig_q was -0.556184596631566 expected -0.304742366075516
+_____________ test_kl_qp_gradient_step_golden[reparam-TraceGraph] ______________
+
+trace_graph = True, reparameterized = True
+
+    @pytest.mark.init(rng_seed=0)
+    @pytest.mark.parametrize("trace_graph", [False, True], ids=["Trace", "TraceGraph"])
+    @pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "non-reparam"])
+    def test_kl_qp_gradient_step_golden(trace_graph, reparameterized):
+        verbose = True
+        pyro.clear_param_store()
+        mu_q_expected = {True: -1.1780080795288086, False: -1.178008079528809}[reparameterized]
+        log_sig_q_expected = {True: -0.30474236607551575, False: -0.30474188923835754}[reparameterized]
+        tolerance = 1.0e-7
+    
+        def model():
+            mu_latent = pyro.sample("mu_latent", dist.Normal(ng_zeros(1), ng_ones(1), reparameterized=reparameterized))
+            pyro.observe('obs', dist.normal, Variable(torch.Tensor([0.23])), mu_latent, ng_ones(1))
+            return mu_latent
+    
+        def guide():
+            mu_q = pyro.param("mu_q", Variable(torch.randn(1), requires_grad=True))
+            log_sig_q = pyro.param("log_sig_q", Variable(torch.randn(1), requires_grad=True))
+            sig_q = torch.exp(log_sig_q)
+            return pyro.sample("mu_latent", dist.Normal(mu_q, sig_q, reparameterized=reparameterized))
+    
+        optim = Adam({"lr": .10})
+        svi = SVI(model, guide, optim, loss="ELBO", trace_graph=trace_graph)
+        svi.step()
+    
+        new_mu_q = pyro.param("mu_q").data.cpu().numpy()[0]
+        new_log_sig_q = pyro.param("log_sig_q").data.cpu().numpy()[0]
+    
+        if verbose:
+            print("\nafter one step mu_q was %.15f; expected %.15f" % (new_mu_q, mu_q_expected))
+            print("after one step log_sig_q was %.15f expected %.15f" % (new_log_sig_q, log_sig_q_expected))
+    
+        if pyro.param("mu_q").is_cuda:
+            # Ignore this case since cuda is too nondeterministic.
+            pass
+        else:
+>           assert np.fabs(new_mu_q - mu_q_expected) < tolerance
+E           AssertionError: assert 1.5942839233747259 < 1e-07
+E            +  where 1.5942839233747259 = <ufunc 'fabs'>((0.41627584384591737 - -1.1780080795288086))
+E            +    where <ufunc 'fabs'> = np.fabs
+
+test_gradient.py:102: AssertionError
+----------------------------- Captured stdout call -----------------------------
+
+after one step mu_q was 0.416275843845917; expected -1.178008079528809
+after one step log_sig_q was 0.849021130606715 expected -0.304742366075516
+______________ test_kl_qp_gradient_step_golden[non-reparam-Trace] ______________
+
+trace_graph = False, reparameterized = False
+
+    @pytest.mark.init(rng_seed=0)
+    @pytest.mark.parametrize("trace_graph", [False, True], ids=["Trace", "TraceGraph"])
+    @pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "non-reparam"])
+    def test_kl_qp_gradient_step_golden(trace_graph, reparameterized):
+        verbose = True
+        pyro.clear_param_store()
+        mu_q_expected = {True: -1.1780080795288086, False: -1.178008079528809}[reparameterized]
+        log_sig_q_expected = {True: -0.30474236607551575, False: -0.30474188923835754}[reparameterized]
+        tolerance = 1.0e-7
+    
+        def model():
+            mu_latent = pyro.sample("mu_latent", dist.Normal(ng_zeros(1), ng_ones(1), reparameterized=reparameterized))
+            pyro.observe('obs', dist.normal, Variable(torch.Tensor([0.23])), mu_latent, ng_ones(1))
+            return mu_latent
+    
+        def guide():
+            mu_q = pyro.param("mu_q", Variable(torch.randn(1), requires_grad=True))
+            log_sig_q = pyro.param("log_sig_q", Variable(torch.randn(1), requires_grad=True))
+            sig_q = torch.exp(log_sig_q)
+            return pyro.sample("mu_latent", dist.Normal(mu_q, sig_q, reparameterized=reparameterized))
+    
+        optim = Adam({"lr": .10})
+        svi = SVI(model, guide, optim, loss="ELBO", trace_graph=trace_graph)
+        svi.step()
+    
+        new_mu_q = pyro.param("mu_q").data.cpu().numpy()[0]
+        new_log_sig_q = pyro.param("log_sig_q").data.cpu().numpy()[0]
+    
+        if verbose:
+            print("\nafter one step mu_q was %.15f; expected %.15f" % (new_mu_q, mu_q_expected))
+            print("after one step log_sig_q was %.15f expected %.15f" % (new_log_sig_q, log_sig_q_expected))
+    
+        if pyro.param("mu_q").is_cuda:
+            # Ignore this case since cuda is too nondeterministic.
+            pass
+        else:
+>           assert np.fabs(new_mu_q - mu_q_expected) < tolerance
+E           AssertionError: assert 0.41040279053886719 < 1e-07
+E            +  where 0.41040279053886719 = <ufunc 'fabs'>((-0.76760528898994185 - -1.178008079528809))
+E            +    where <ufunc 'fabs'> = np.fabs
+
+test_gradient.py:102: AssertionError
+----------------------------- Captured stdout call -----------------------------
+
+after one step mu_q was -0.767605288989942; expected -1.178008079528809
+after one step log_sig_q was 1.852320989877438 expected -0.304741889238358
+___________ test_kl_qp_gradient_step_golden[non-reparam-TraceGraph] ____________
+
+trace_graph = True, reparameterized = False
+
+    @pytest.mark.init(rng_seed=0)
+    @pytest.mark.parametrize("trace_graph", [False, True], ids=["Trace", "TraceGraph"])
+    @pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "non-reparam"])
+    def test_kl_qp_gradient_step_golden(trace_graph, reparameterized):
+        verbose = True
+        pyro.clear_param_store()
+        mu_q_expected = {True: -1.1780080795288086, False: -1.178008079528809}[reparameterized]
+        log_sig_q_expected = {True: -0.30474236607551575, False: -0.30474188923835754}[reparameterized]
+        tolerance = 1.0e-7
+    
+        def model():
+            mu_latent = pyro.sample("mu_latent", dist.Normal(ng_zeros(1), ng_ones(1), reparameterized=reparameterized))
+            pyro.observe('obs', dist.normal, Variable(torch.Tensor([0.23])), mu_latent, ng_ones(1))
+            return mu_latent
+    
+        def guide():
+            mu_q = pyro.param("mu_q", Variable(torch.randn(1), requires_grad=True))
+            log_sig_q = pyro.param("log_sig_q", Variable(torch.randn(1), requires_grad=True))
+            sig_q = torch.exp(log_sig_q)
+            return pyro.sample("mu_latent", dist.Normal(mu_q, sig_q, reparameterized=reparameterized))
+    
+        optim = Adam({"lr": .10})
+        svi = SVI(model, guide, optim, loss="ELBO", trace_graph=trace_graph)
+        svi.step()
+    
+        new_mu_q = pyro.param("mu_q").data.cpu().numpy()[0]
+        new_log_sig_q = pyro.param("log_sig_q").data.cpu().numpy()[0]
+    
+        if verbose:
+            print("\nafter one step mu_q was %.15f; expected %.15f" % (new_mu_q, mu_q_expected))
+            print("after one step log_sig_q was %.15f expected %.15f" % (new_log_sig_q, log_sig_q_expected))
+    
+        if pyro.param("mu_q").is_cuda:
+            # Ignore this case since cuda is too nondeterministic.
+            pass
+        else:
+>           assert np.fabs(new_mu_q - mu_q_expected) < tolerance
+E           AssertionError: assert 0.43039970510433812 < 1e-07
+E            +  where 0.43039970510433812 = <ufunc 'fabs'>((-0.74760837442447092 - -1.178008079528809))
+E            +    where <ufunc 'fabs'> = np.fabs
+
+test_gradient.py:102: AssertionError
+----------------------------- Captured stdout call -----------------------------
+
+after one step mu_q was -0.747608374424471; expected -1.178008079528809
+after one step log_sig_q was 0.084474705202826 expected -0.304741889238358
+===================== 5 failed, 3 passed in 16.58 seconds ======================
