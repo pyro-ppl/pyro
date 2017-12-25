@@ -30,12 +30,12 @@ class MultivariateNormal(Distribution):
 
     def __init__(self, mu, sigma, batch_size=None, is_cholesky=False, use_inverse_for_batch_log=False, *args, **kwargs):
         self.mu = mu
-        self.output_shape = mu.shape
+        self.output_shape = mu.size()
         self.use_inverse_for_batch_log = use_inverse_for_batch_log
         self.batch_size = batch_size if batch_size is not None else 1
         if not is_cholesky:
             self.sigma = sigma
-            self.sigma_cholesky = torch.potrf(sigma)
+            self.sigma_cholesky = Variable(torch.potrf(sigma.data)) if torch.__version__ < '0.3.0' else torch.potrf(sigma)
         else:
             self.sigma = torch.mm(sigma.transpose(0, 1), sigma)
             self.sigma_cholesky = sigma
@@ -73,7 +73,7 @@ class MultivariateNormal(Distribution):
     def sample(self):
         """
         Generate a sample with the specified covariance matrix and mean.
-
+        Differentiation wrt. to Sigma is only supported on PyTorch version 0.3.0 or higher.
         Ref: :py:meth:`pyro.distributions.distribution.Distribution.sample`
 
         """
@@ -98,9 +98,10 @@ class MultivariateNormal(Distribution):
         batch_log_pdf_shape = self.batch_shape(x) + (1,)
         x = x.view(batch_size, *self.mu.size())
         normalization_factor = torch.log(
-            self.sigma_cholesky.diag()).sum() + (self.mu.shape[0] / 2) * np.log(2 * np.pi) if normalized else 0
-        sigma_inverse = torch.inverse(self.sigma) if self.use_inverse_for_batch_log else torch.potri(
-            self.sigma_cholesky)
+            self.sigma_cholesky.diag()).sum() + (self.mu.size()[0] / 2) * np.log(2 * np.pi) if normalized else 0
+        potri_compat = lambda var:Variable(torch.potri(var.data)) if torch.__version__ < '0.3.0' else torch.potri(var)
+        sigma_inverse = torch.inverse(self.sigma) if self.use_inverse_for_batch_log else \
+            potri_compat(self.sigma_cholesky)
         return -(normalization_factor + 0.5 * torch.sum((x - self.mu).unsqueeze(2) * torch.bmm(
             sigma_inverse.expand(batch_size, *self.sigma_cholesky.size()),
             (x - self.mu).unsqueeze(-1)), 1)).view(batch_log_pdf_shape)
