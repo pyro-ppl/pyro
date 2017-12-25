@@ -7,6 +7,10 @@ from torch.autograd import Variable
 from pyro.distributions.distribution import Distribution
 
 
+def potri_compat(var):
+    return Variable(torch.potri(var.data)) if torch.__version__ < '0.3.0' else torch.potri(var)
+
+
 class MultivariateNormal(Distribution):
     """
     Multivariate normal (Gaussian) distribution.
@@ -35,7 +39,8 @@ class MultivariateNormal(Distribution):
         self.batch_size = batch_size if batch_size is not None else 1
         if not is_cholesky:
             self.sigma = sigma
-            self.sigma_cholesky = Variable(torch.potrf(sigma.data)) if torch.__version__ < '0.3.0' else torch.potrf(sigma)
+            self.sigma_cholesky = Variable(torch.potrf(sigma.data)) if torch.__version__ < '0.3.0' else torch.potrf(
+                sigma)
         else:
             self.sigma = torch.mm(sigma.transpose(0, 1), sigma)
             self.sigma_cholesky = sigma
@@ -55,7 +60,7 @@ class MultivariateNormal(Distribution):
             if x.size()[-1] != mu.size()[-1]:
                 raise ValueError("The event size for the data and distribution parameters must match.\n"
                                  "Expected x.size()[-1] == self.mu.size()[0], but got {} vs {}".format(
-                                     x.size(-1), mu.size(-1)))
+                                    x.size(-1), mu.size(-1)))
             try:
                 mu = mu.expand_as(x)
             except RuntimeError as e:
@@ -99,7 +104,6 @@ class MultivariateNormal(Distribution):
         x = x.view(batch_size, *self.mu.size())
         normalization_factor = torch.log(
             self.sigma_cholesky.diag()).sum() + (self.mu.size()[0] / 2) * np.log(2 * np.pi) if normalized else 0
-        potri_compat = lambda var:Variable(torch.potri(var.data)) if torch.__version__ < '0.3.0' else torch.potri(var)
         sigma_inverse = torch.inverse(self.sigma) if self.use_inverse_for_batch_log else \
             potri_compat(self.sigma_cholesky)
         return -(normalization_factor + 0.5 * torch.sum((x - self.mu).unsqueeze(2) * torch.bmm(
