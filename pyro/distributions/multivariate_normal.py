@@ -12,6 +12,10 @@ def potri_compat(var):
     return Variable(torch.potri(var.data)) if torch.__version__ < '0.3.0' else torch.potri(var)
 
 
+def potrf_compat(var):
+    return Variable(torch.potrf(var.data)) if torch.__version__ < '0.3.0' else torch.potrf(var)
+
+
 @copy_docs_from(Distribution)
 class MultivariateNormal(Distribution):
     """
@@ -37,8 +41,10 @@ class MultivariateNormal(Distribution):
 
     reparameterized = True
 
-    def __init__(self, loc, covariance_matrix, scale_tril=None, batch_size=None, use_inverse_for_batch_log=False,
+    def __init__(self, loc, covariance_matrix=None, scale_tril=None, batch_size=None, use_inverse_for_batch_log=False,
                  normalized=True, *args, **kwargs):
+        if covariance_matrix is None and scale_tril is None:
+            raise ValueError('At least one of covariance_matrix or scale_tril must be specified')
         self.mu = loc
         self.output_shape = loc.size()
         self.use_inverse_for_batch_log = use_inverse_for_batch_log
@@ -51,8 +57,7 @@ class MultivariateNormal(Distribution):
                 raise ValueError("The covariance matrix must be a matrix, but got covariance_matrix.size() = {}".format(
                                     loc.size()))
             self.sigma = covariance_matrix
-            self.sigma_cholesky = Variable(
-                torch.potrf(covariance_matrix.data)) if torch.__version__ < '0.3.0' else torch.potrf(covariance_matrix)
+            self.sigma_cholesky = potrf_compat(covariance_matrix)
         else:
             if not scale_tril.dim() == 2:
                 raise ValueError("The Cholesky decomposition of the covariance matrix must be a matrix, "
