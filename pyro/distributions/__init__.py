@@ -2,6 +2,21 @@ from __future__ import absolute_import, division, print_function
 
 import os
 
+# Notice to Contributors. (@fritzo 2017-12-26)
+#
+# The Pyro team is moving pyro.distributions implementations upstream to
+# torch.distributions, aiming for the PyTorch 0.4 release and Pyro 0.2 release
+# in late Jan or Feb 2018.
+# Tasks: https://github.com/probtorch/pytorch/projects/1
+# Design Doc: https://goo.gl/9ccYsq
+#
+# To contribute new distributions you can either:
+# 1. (Preferred) Implement a new distributions in torch.distributions and then
+#    create a wrapper in pyro.distributions.torch.
+# 2. Implement a new distribution in pyro.distribution and let Pyro devs move
+#    this implementation upstream to torch.distributions.
+
+# TODO move these implementations upstream to torch.distributions
 from pyro.distributions.binomial import Binomial
 from pyro.distributions.cauchy import Cauchy
 from pyro.distributions.delta import Delta
@@ -13,10 +28,8 @@ from pyro.distributions.poisson import Poisson
 from pyro.distributions.random_primitive import RandomPrimitive
 from pyro.distributions.uniform import Uniform
 
-# TODO Decide based on torch.__version__ once torch.distributions matures.
+# distribution classes with working torch versions in torch.distributions
 USE_TORCH_DISTRIBUTIONS = int(os.environ.get('PYRO_USE_TORCH_DISTRIBUTIONS', 0))
-
-# distribution classes with working torch versions
 if USE_TORCH_DISTRIBUTIONS:
     from pyro.distributions.torch.bernoulli import Bernoulli
     from pyro.distributions.torch.beta import Beta
