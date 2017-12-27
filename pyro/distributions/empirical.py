@@ -5,8 +5,8 @@ import torch
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
+from pyro.distributions.categorical import Categorical
 from pyro.distributions.util import copy_docs_from
-import pyro.poutine as poutine
 import pyro.util as util
 
 
@@ -47,7 +47,7 @@ class Empirical(Distribution):
     """
     enumerable = True
 
-    def __init__(self, values, logits=None, *args, **kwargs):
+    def __init__(self, values, logits=None, batch_size=None, log_pdf_mask=None, *args, **kwargs):
         super(Empirical, self).__init__(*args, **kwargs)
         self.values = list(values)
         if logits is None:
@@ -57,6 +57,10 @@ class Empirical(Distribution):
             logits = Variable(logits)
         logprobs = logits - util.log_sum_exp(logits)
         self._categorical = Categorical(logits=logprobs)
+        if batch_size is not None:
+            raise NotImplementedError
+        if log_pdf_mask is not None:
+            raise NotImplementedError
 
     def batch_shape(self, x=None):
         if x is not None:
@@ -71,10 +75,14 @@ class Empirical(Distribution):
         return self.values[ix]
 
     def log_pdf(self, x):
+        if hasattr(x,"size") and x.size() != self.event_shape():
+            raise ValueError
         ix = _index(self.values, x)
         return self._categorical.log_pdf(Variable(torch.Tensor([ix])))
 
     def batch_log_pdf(self, x):
+        if hasattr(x,"size") and x.size() != self.event_shape():
+            raise ValueError
         ix = _index(self.values, x)
         return self._categorical.batch_log_pdf(Variable(torch.Tensor([ix])))
 
