@@ -21,6 +21,7 @@ from pyro.distributions.binomial import Binomial
 from pyro.distributions.cauchy import Cauchy
 from pyro.distributions.delta import Delta
 from pyro.distributions.distribution import Distribution  # noqa: F401
+from pyro.distributions.empirical import Empirical
 from pyro.distributions.half_cauchy import HalfCauchy
 from pyro.distributions.log_normal import LogNormal
 from pyro.distributions.multinomial import Multinomial
@@ -57,6 +58,7 @@ categorical = RandomPrimitive(Categorical)
 cauchy = RandomPrimitive(Cauchy)
 delta = RandomPrimitive(Delta)
 dirichlet = RandomPrimitive(Dirichlet)
+empirical = RandomPrimitive(Empirical)
 exponential = RandomPrimitive(Exponential)
 gamma = RandomPrimitive(Gamma)
 halfcauchy = RandomPrimitive(HalfCauchy)

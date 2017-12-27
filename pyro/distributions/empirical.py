@@ -4,7 +4,8 @@ import numpy as np
 import torch
 from torch.autograd import Variable
 
-import pyro.distributions as dist
+from pyro.distributions.distribution import Distribution
+from pyro.distributions.util import copy_docs_from
 import pyro.poutine as poutine
 import pyro.util as util
 
@@ -38,54 +39,46 @@ def _index(seq, value):
     return -1
 
 
-class Histogram(dist.Distribution):
+@copy_docs_from(Distribution)
+class Empirical(Distribution):
     """
     Abstract Histogram distribution of equality-comparable values.
     Should only be used inside Marginal.
     """
     enumerable = True
 
-    @util.memoize
-    def _dist_and_values(self, *args, **kwargs):
-        # XXX currently this whole object is very inefficient
-        values, logits = [], []
-        for value, logit in self._gen_weighted_samples(*args, **kwargs):
-            ix = _index(values, value)
-            if ix == -1:
-                # Value is new.
-                values.append(value)
-                logits.append(logit)
-            else:
-                # Value has already been seen.
-                logits[ix] = util.log_sum_exp(torch.stack([logits[ix], logit]).squeeze())
+    def __init__(self, values, logits=None, *args, **kwargs):
+        super(Empirical, self).__init__(*args, **kwargs)
+        self.values = list(values)
+        if logits is None:
+            logits = torch.zeros(len(self.values))
 
-        logits = torch.stack(logits).squeeze()
-        logits -= util.log_sum_exp(logits)
         if not isinstance(logits, torch.autograd.Variable):
             logits = Variable(logits)
-        logits = logits - util.log_sum_exp(logits)
+        logprobs = logits - util.log_sum_exp(logits)
+        self._categorical = Categorical(logits=logprobs)
 
-        d = dist.Categorical(logits=logits)
-        return d, values
+    def batch_shape(self, x=None):
+        if x is not None:
+            raise NotImplementedError
+        return torch.Size()
 
-    def _gen_weighted_samples(self, *args, **kwargs):
-        raise NotImplementedError("_gen_weighted_samples is abstract method")
+    def event_shape(self):
+        return self.values[0].size()
 
-    def sample(self, *args, **kwargs):
-        d, values = self._dist_and_values(*args, **kwargs)
-        ix = d.sample().data[0]
-        return values[ix]
+    def sample(self):
+        ix = self._categorical.sample().data[0] 
+        return self.values[ix]
 
-    def log_pdf(self, val, *args, **kwargs):
-        d, values = self._dist_and_values(*args, **kwargs)
-        ix = _index(values, val)
-        return d.log_pdf(Variable(torch.Tensor([ix])))
+    def log_pdf(self, x):
+        ix = _index(self.values, x)
+        return self._categorical.log_pdf(Variable(torch.Tensor([ix])))
 
-    def batch_log_pdf(self, val, *args, **kwargs):
-        d, values = self._dist_and_values(*args, **kwargs)
-        ix = _index(values, val)
-        return d.batch_log_pdf(Variable(torch.Tensor([ix])))
+    def batch_log_pdf(self, x):
+        ix = _index(self.values, x)
+        return self._categorical.batch_log_pdf(Variable(torch.Tensor([ix])))
 
-    def enumerate_support(self, *args, **kwargs):
-        d, values = self._dist_and_values(*args, **kwargs)
-        return values[:]
+    def enumerate_support(self):
+        return self.values[:]
+
+
