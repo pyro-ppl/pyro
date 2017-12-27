@@ -16,6 +16,7 @@ from examples.util import RESULTS_DIR
 from pyro.distributions import Normal, Bernoulli
 from pyro.infer import SVI
 from pyro.optim import Adam
+from pyro.shim import torch_no_grad
 from pyro.util import ng_zeros, ng_ones
 
 """
@@ -125,9 +126,10 @@ class VAE(object):
         self.set_train(is_train=False)
         test_loss = 0
         for i, (x, _) in enumerate(self.test_loader):
-            x = Variable(x, volatile=True)
-            recon_x = self.model_eval(x)[0]
-            test_loss += self.compute_loss_and_gradient(x)
+            with torch_no_grad():
+                x = Variable(x)
+                recon_x = self.model_eval(x)[0]
+                test_loss += self.compute_loss_and_gradient(x)
             if i == 0:
                 n = min(x.size(0), 8)
                 comparison = torch.cat([x[:n],

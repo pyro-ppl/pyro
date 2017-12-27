@@ -1,13 +1,16 @@
 from __future__ import absolute_import, division, print_function
 
+import warnings
+
 import numpy as np
+
 import torch
+from pyro.distributions.distribution import Distribution
+from pyro.distributions.util import copy_docs_from, get_probs_and_logits, torch_multinomial, torch_zeros_like
 from torch.autograd import Variable
 
-from pyro.distributions.distribution import Distribution
-from pyro.distributions.util import get_probs_and_logits, torch_multinomial, torch_zeros_like
 
-
+@copy_docs_from(Distribution)
 class Categorical(Distribution):
     """
     Categorical (discrete) distribution.
@@ -40,6 +43,7 @@ class Categorical(Distribution):
         self.vs = self._process_data(vs)
         self.log_pdf_mask = log_pdf_mask
         if vs is not None:
+            warnings.warn('Categorical vs argument is deprecated', UserWarning)
             vs_shape = self.vs.shape if isinstance(self.vs, np.ndarray) else self.vs.size()
             if vs_shape != ps.size():
                 raise ValueError("Expected vs.size() or vs.shape == ps.size(), but got {} vs {}"
@@ -63,9 +67,6 @@ class Categorical(Distribution):
         return x
 
     def batch_shape(self, x=None):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_shape`
-        """
         event_dim = 1
         ps = self.ps
         if x is not None:
@@ -79,9 +80,6 @@ class Categorical(Distribution):
         return ps.size()[:-event_dim]
 
     def event_shape(self):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.event_shape`
-        """
         return (1,)
 
     def sample(self):

@@ -1,24 +1,30 @@
 from __future__ import absolute_import, division, print_function
 
-import functools
-import os
-
 import torch
 import torch.nn.functional as F
 from torch.autograd import Variable
 
-# TODO Decide based on torch.__version__ once torch.distributions matures.
-USE_TORCH_DISTRIBUTIONS = int(os.environ.get('PYRO_USE_TORCH_DISTRIBUTIONS', 0))
 
+def copy_docs_from(source_class):
+    """
+    Decorator to copy class and method docs from source to destin class.
+    """
 
-def torch_wrapper(pyro_dist):
-    """
-    Decorator for optional wrappers around torch.distributions classes.
-    """
-    if USE_TORCH_DISTRIBUTIONS:
-        return lambda wrapper: functools.wraps(pyro_dist)(wrapper)
-    else:
-        return lambda wrapper: pyro_dist
+    def decorator(destin_class):
+        if not destin_class.__doc__:
+            destin_class.__doc__ = source_class.__doc__
+        for name in dir(destin_class):
+            if name.startswith('_'):
+                continue
+            destin_attr = getattr(destin_class, name)
+            destin_attr = getattr(destin_attr, '__func__', destin_attr)
+            source_attr = getattr(source_class, name, None)
+            source_doc = getattr(source_attr, '__doc__', None)
+            if source_doc and not getattr(destin_attr, '__doc__', None):
+                destin_attr.__doc__ = source_doc
+        return destin_class
+
+    return decorator
 
 
 def broadcast_shape(*shapes, **kwargs):
@@ -217,3 +223,32 @@ def get_probs_and_logits(ps=None, logits=None, is_multidimensional=True):
         else:
             logits = torch.log(ps_clamped) - torch.log1p(-ps_clamped)
     return ps, logits
+
+
+def get_clamped_probs(ps=None, logits=None, is_multidimensional=True):
+    """
+    Clamp probabilities, given probability values or logits. Either ``ps`` or
+    ``logits`` should be specified, but not both.
+
+    :param ps: tensor of probabilities. Should be in the interval *[0, 1]*.
+        If, ``is_multidimensional = True``, then must be normalized along
+        axis -1.
+    :param logits: tensor of logit values.  For the multidimensional case,
+        the values, when exponentiated along the last dimension, must sum
+        to 1.
+    :param is_multidimensional: determines the computation of ps from logits,
+        and vice-versa. For the multi-dimensional case, logit values are
+        assumed to be log probabilities, whereas for the uni-dimensional case,
+        it specifically refers to log odds.
+    :return: clamped probabilities.
+    """
+    if (ps is None) == (logits is None):
+        raise ValueError("Got ps={}, logits={}. Either `ps` or `logits` must be specified, "
+                         "but not both.".format(ps, logits))
+    if ps is None:
+        ps = softmax(logits, -1) if is_multidimensional else F.sigmoid(logits)
+    eps = _get_clamping_buffer(ps)
+    ps = ps.clamp(min=eps, max=1 - eps)
+    if is_multidimensional:
+        ps /= ps.sum(-1, True)
+    return ps
