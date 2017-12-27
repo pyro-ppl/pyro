@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import numpy as np
+import warnings
 import torch
 from torch.autograd import Variable
 
@@ -123,6 +124,9 @@ class MultivariateNormal(Distribution):
         return transformed_sample if self.reparameterized else transformed_sample.detach()
 
     def batch_log_pdf(self, x):
+        if not self.normalized and self.sigma_cholesky.requires_grad:
+            warnings.warn("Gradients will not take normalization into account if normalized=False.")
+
         batch_size = x.size()[0] if len(x.size()) > len(self.mu.size()) else 1
         batch_log_pdf_shape = self.batch_shape(x) + (1,)
         x = x.view(batch_size, *self.mu.size())
