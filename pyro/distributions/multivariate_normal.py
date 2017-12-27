@@ -16,6 +16,28 @@ def potrf_compat(var):
     return Variable(torch.potrf(var.data)) if torch.__version__ < '0.3.0' else torch.potrf(var)
 
 
+def linear_solve_compat(matrix, matrix_chol, y):
+    """Solves the equation ``torch.mm(matrix, x) = y`` for x."""
+    assert matrix.requires_grad == matrix_chol.requires_grad
+    if matrix.requires_grad or y.requires_grad:
+        # If derivatives are required, use the more expensive gesv.
+        return torch.gesv(y, matrix)[0]
+    else:
+        # Use the cheaper Cholesky solver.
+        return torch.potrs(y, matrix_chol)
+
+
+def matrix_inverse_compat(matrix, matrix_chol):
+    """Computes the inverse of a positive semidefinite square matrix"""
+    assert matrix.requires_grad == matrix_chol.requires_grad
+    if matrix.requires_grad:
+        # If derivatives are required, use the more expensive inverse.
+        return torch.inverse(matrix)
+    else:
+        # Use the cheaper Cholesky based potri.
+        return potri_compat(matrix_chol)
+
+
 @copy_docs_from(Distribution)
 class MultivariateNormal(Distribution):
     """
@@ -106,8 +128,7 @@ class MultivariateNormal(Distribution):
         x = x.view(batch_size, *self.mu.size())
         normalization_factor = torch.log(
             self.sigma_cholesky.diag()).sum() + (self.mu.size()[0] / 2) * np.log(2 * np.pi) if self.normalized else 0
-        sigma_inverse = torch.inverse(self.sigma) if self.use_inverse_for_batch_log else \
-            potri_compat(self.sigma_cholesky)
+        sigma_inverse = matrix_inverse_compat(self.sigma, self.sigma_cholesky)
         return -(normalization_factor + 0.5 * torch.sum((x - self.mu).unsqueeze(2) * torch.bmm(
             sigma_inverse.expand(batch_size, *self.sigma_cholesky.size()),
             (x - self.mu).unsqueeze(-1)), 1)).view(batch_log_pdf_shape)
