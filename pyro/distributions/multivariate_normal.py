@@ -29,7 +29,7 @@ def linear_solve_compat(matrix, matrix_chol, y):
 
 
 def matrix_inverse_compat(matrix, matrix_chol):
-    """Computes the inverse of a positive semidefinite square matrix"""
+    """Computes the inverse of a positive semidefinite square matrix."""
     assert matrix.requires_grad == matrix_chol.requires_grad
     if matrix.requires_grad:
         # If derivatives are required, use the more expensive inverse.
@@ -41,25 +41,30 @@ def matrix_inverse_compat(matrix, matrix_chol):
 
 @copy_docs_from(Distribution)
 class MultivariateNormal(Distribution):
-    """
-    Multivariate normal (Gaussian) distribution.
+    """Multivariate normal (Gaussian) distribution.
 
-    A distribution over vectors in which all the elements have a joint
-    Gaussian density.
+    A distribution over vectors in which all the elements have a joint Gaussian
+    density.
 
-    :param torch.autograd.Variable loc: Mean. Must be a vector (Variable containing a 1d Tensor).
-    :param torch.autograd.Variable covariance_matrix: Covariance matrix. Must be symmetric and positive semidefinite.
-    :param torch.autograd.Variable scale_tril: The Cholesky decomposition of the covariance matrix. You can pass this
-            instead of `covariance_matrix`.
-    :param use_inverse_for_batch_log: If this is set to true, the torch.inverse function will be used to compute
-        log_pdf. This means that the results of log_pdf can be differentiated with respect to the covariance matrix.
-        Since the gradient of torch.potri is currently not implemented, differentiation of log_pdf wrt. covariance
-        matrix is not possible when using the Cholesky decomposition. Using the Cholesky decomposition is however much
-        faster and therefore enabled by default.
-    :param normalized: If set to `False` the normalization constant is omitted in the results of batch_log_pdf and
-            log_pdf. This might be preferable, as computing the determinant of the covariance matrix might not
-            always be numerically stable. Defaults to `True`.
+    :param torch.autograd.Variable loc: Mean. Must be a vector (Variable
+        containing a 1d Tensor).
+    :param torch.autograd.Variable covariance_matrix: Covariance matrix.
+        Must be symmetric and positive semidefinite.
+    :param torch.autograd.Variable scale_tril: The Cholesky decomposition of
+        the covariance matrix. You can pass this instead of `covariance_matrix`.
+    :param use_inverse_for_batch_log: If this is set to true, the torch.inverse
+        function will be used to compute log_pdf. This means that the results of
+        log_pdf can be differentiated with respect to the covariance matrix.
+        Since the gradient of torch.potri is currently not implemented,
+        differentiation of log_pdf wrt. covariance matrix is not possible when
+        using the Cholesky decomposition. Using the Cholesky decomposition is
+        however much faster and therefore enabled by default.
+    :param normalized: If set to `False` the normalization constant is omitted
+        in the results of batch_log_pdf and log_pdf. This might be preferable,
+        as computing the determinant of the covariance matrix might not always
+        be numerically stable. Defaults to `True`.
     :raises: ValueError if the shape of any parameter is not supported.
+
     """
 
     reparameterized = True
@@ -112,9 +117,10 @@ class MultivariateNormal(Distribution):
         return self.mu.size()[-1:]
 
     def sample(self):
-        """
-        Generate a sample with the specified covariance matrix and mean.
-        Differentiation wrt. to the covariance matrix is only supported on PyTorch version 0.3.0 or higher.
+        """Generate a sample with the specified covariance matrix and mean.
+
+        Differentiation wrt. to the covariance matrix is only supported on
+        PyTorch version 0.3.0 or higher.
         Ref: :py:meth:`pyro.distributions.distribution.Distribution.sample`
 
         """
