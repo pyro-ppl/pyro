@@ -7,8 +7,8 @@ import pytest
 import scipy.stats as sp
 
 import pyro.distributions as dist
-from pyro.distributions import (Bernoulli, Beta, Binomial, Categorical, Cauchy, Dirichlet, Empirical, Exponential, Gamma,
-                                HalfCauchy, LogNormal, Multinomial, Normal, OneHotCategorical, Poisson, Uniform)
+from pyro.distributions import (Bernoulli, Beta, Binomial, Categorical, Cauchy, Dirichlet, Empirical, Exponential,
+                                Gamma, HalfCauchy, LogNormal, Multinomial, Normal, OneHotCategorical, Poisson, Uniform)
 from tests.distributions.dist_fixture import Fixture
 
 continuous_dists = [
@@ -239,17 +239,9 @@ discrete_dists = [
     Fixture(pyro_dist=(dist.empirical, Empirical),
             scipy_dist=sp.multinomial,
             examples=[
-                {'values': [[1], [2], [3], [4]], 'logits': list(map(math.log, [0.4, 0.1, 0.35, 0.15])), 'test_data':[[1],[2]]},
-                # {'ps': [0.1, 0.6, 0.3],
-                #  'test_data': [0, 0, 1]},
-                # {'logits': list(map(math.log, [0.1, 0.6, 0.3])),
-                #  'test_data': [0, 0, 1]},
-                # {'logits': [list(map(math.log, [0.1, 0.6, 0.3])),
-                #             list(map(math.log, [0.2, 0.4, 0.4]))],
-                #  'test_data': [[0, 0, 1], [1, 0, 0]]},
-                # {'ps': [[0.1, 0.6, 0.3],
-                #         [0.2, 0.4, 0.4]],
-                #  'test_data': [[0, 0, 1], [1, 0, 0]]}
+                {'values': [[1], [2], [3], [4]],
+                 'logits': list(map(math.log, [0.4, 0.1, 0.35, 0.15])),
+                 'test_data':[[1], [2]]},
             ],
             test_data_indices=[0],
             batch_data_indices=[],

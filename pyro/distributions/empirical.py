@@ -42,8 +42,8 @@ def _index(seq, value):
 @copy_docs_from(Distribution)
 class Empirical(Distribution):
     """
-    Abstract Histogram distribution of equality-comparable values.
-    Should only be used inside Marginal.
+    Empirical distribution sketch.
+    Missing: automatically construct logits from a dataset by checking for unique values and replicates
     """
     enumerable = True
 
@@ -71,22 +71,20 @@ class Empirical(Distribution):
         return self.values[0].size()
 
     def sample(self):
-        ix = self._categorical.sample().data[0] 
+        ix = self._categorical.sample().data[0]
         return self.values[ix]
 
     def log_pdf(self, x):
-        if hasattr(x,"size") and x.size() != self.event_shape():
+        if hasattr(x, "size") and x.size() != self.event_shape():
             raise ValueError
         ix = _index(self.values, x)
         return self._categorical.log_pdf(Variable(torch.Tensor([ix])))
 
     def batch_log_pdf(self, x):
-        if hasattr(x,"size") and x.size() != self.event_shape():
+        if hasattr(x, "size") and x.size() != self.event_shape():
             raise ValueError
         ix = _index(self.values, x)
         return self._categorical.batch_log_pdf(Variable(torch.Tensor([ix])))
 
     def enumerate_support(self):
         return self.values[:]
-
-
