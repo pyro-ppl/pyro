@@ -1,9 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
 import numpy as np
-import pytest
 import torch
 
+import pytest
 from pyro.distributions import RandomPrimitive
 from pyro.util import ng_ones, ng_zeros
 from tests.common import assert_equal, xfail_if_not_implemented

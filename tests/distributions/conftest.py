@@ -8,7 +8,8 @@ import scipy.stats as sp
 
 import pyro.distributions as dist
 from pyro.distributions import (Bernoulli, Beta, Binomial, Categorical, Cauchy, Dirichlet, Exponential, Gamma,
-                                HalfCauchy, LogNormal, Multinomial, Normal, OneHotCategorical, Poisson, Uniform)
+                                HalfCauchy, LogNormal, Multinomial, Normal, OneHotCategorical, Poisson,
+                                RelaxedBernoulli, RelaxedCategorical, Uniform)
 from tests.distributions.dist_fixture import Fixture
 
 continuous_dists = [
@@ -121,6 +122,31 @@ continuous_dists = [
                  'test_data': [[1.0], [0.35]]}
             ],
             scipy_arg_fn=lambda mu, gamma: ((), {"loc": np.array(mu), "scale": np.array(gamma)})),
+    Fixture(pyro_dist=(dist.relaxed_bernoulli, RelaxedBernoulli),
+            examples=[
+                {'ps': [0.25],
+                 'temperature': [0.01],
+                 'test_data': [0.8]},
+                {'ps': [0.25, 0.25],
+                 'temperature': [0.6],
+                 'test_data': [[[0.2, 0.3]], [[0.15, 0.25]], [[0.3, 0.35]]]},
+                {'logits': [math.log(p / (1 - p)) for p in (0.25, 0.25)],
+                 'temperature': [0.2],
+                 'test_data': [[[0.25, 0.28]], [[0.15, 0.25]], [[0.3, 0.35]]]},
+            ],
+            prec=0.01,
+            min_samples=10000,
+            is_discrete=False),
+    Fixture(pyro_dist=(dist.relaxed_categorical, RelaxedCategorical),
+            examples=[
+                {'logits': [0.1, 1],
+                 'temperature': [0.2],
+                 'test_data': [[0.01, 0.99]]},
+                {'ps': [[0.1, 0.6, 0.3],
+                        [0.2, 0.4, 0.4]],
+                 'temperature': [0.8],
+                 'test_data': [[0.05, .65, 0.3], [0.12, 0.58, 0.3]]}
+            ]),
 ]
 
 discrete_dists = [
