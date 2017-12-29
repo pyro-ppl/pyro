@@ -24,6 +24,7 @@ from pyro.distributions.distribution import Distribution  # noqa: F401
 from pyro.distributions.half_cauchy import HalfCauchy
 from pyro.distributions.log_normal import LogNormal
 from pyro.distributions.multinomial import Multinomial
+from pyro.distributions.multivariate_normal import MultivariateNormal
 from pyro.distributions.poisson import Poisson
 from pyro.distributions.random_primitive import RandomPrimitive
 from pyro.distributions.uniform import Uniform
@@ -66,3 +67,4 @@ normal = RandomPrimitive(Normal)
 one_hot_categorical = RandomPrimitive(OneHotCategorical)
 poisson = RandomPrimitive(Poisson)
 uniform = RandomPrimitive(Uniform)
+multivariate_normal = RandomPrimitive(MultivariateNormal)
