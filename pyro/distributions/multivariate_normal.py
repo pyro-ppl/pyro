@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import numpy as np
-import warnings
 import torch
 from torch.autograd import Variable
 
@@ -83,14 +82,14 @@ class MultivariateNormal(Distribution):
         if covariance_matrix is not None:
             if not covariance_matrix.dim() == 2:
                 raise ValueError("The covariance matrix must be a matrix, but got covariance_matrix.size() = {}".format(
-                                    loc.size()))
+                    loc.size()))
             self.sigma = covariance_matrix
             self.sigma_cholesky = potrf_compat(covariance_matrix)
         else:
             if not scale_tril.dim() == 2:
                 raise ValueError("The Cholesky decomposition of the covariance matrix must be a matrix, "
                                  "but got scale_tril.size() = {}".format(
-                                    loc.size()))
+                                     loc.size()))
             self.sigma = torch.mm(scale_tril.transpose(0, 1), scale_tril)
             self.sigma_cholesky = scale_tril
         if loc.dim() > 1:
@@ -104,7 +103,7 @@ class MultivariateNormal(Distribution):
             if x.size()[-1] != mu.size()[-1]:
                 raise ValueError("The event size for the data and distribution parameters must match.\n"
                                  "Expected x.size()[-1] == self.mu.size()[0], but got {} vs {}".format(
-                                    x.size(-1), mu.size(-1)))
+                                     x.size(-1), mu.size(-1)))
             try:
                 mu = mu.expand_as(x)
             except RuntimeError as e:
@@ -125,19 +124,24 @@ class MultivariateNormal(Distribution):
 
         """
         batch_size = self.batch_size
-        uncorrelated_standard_sample = Variable(torch.randn(batch_size, *self.mu.size()).type_as(self.mu.data))
-        transformed_sample = self.mu + torch.mm(uncorrelated_standard_sample, self.sigma_cholesky)
+        uncorrelated_standard_sample = Variable(torch.randn(
+            batch_size, *self.mu.size()).type_as(self.mu.data))
+        transformed_sample = self.mu + \
+            torch.mm(uncorrelated_standard_sample, self.sigma_cholesky)
         return transformed_sample if self.reparameterized else transformed_sample.detach()
 
     def batch_log_pdf(self, x):
         if not self.normalized and self.sigma_cholesky.requires_grad:
-            warnings.warn("Gradients will not take normalization into account if normalized=False.")
+            raise NotImplementedError("Differentiation is not supported (yet) if normalized=False.")
 
         batch_size = x.size()[0] if len(x.size()) > len(self.mu.size()) else 1
         batch_log_pdf_shape = self.batch_shape(x) + (1,)
         x = x.view(batch_size, *self.mu.size())
+        # TODO Implement the gradient of the normalization factor if normalized=False
         normalization_factor = torch.log(
             self.sigma_cholesky.diag()).sum() + (self.mu.size()[0] / 2) * np.log(2 * np.pi) if self.normalized else 0
+        # TODO It may be useful to switch between matrix_inverse_compat() and linear_solve_compat() based on the
+        # batch size and the size of the covariance matrix
         sigma_inverse = matrix_inverse_compat(self.sigma, self.sigma_cholesky)
         return -(normalization_factor + 0.5 * torch.sum((x - self.mu).unsqueeze(2) * torch.bmm(
             sigma_inverse.expand(batch_size, *self.sigma_cholesky.size()),
