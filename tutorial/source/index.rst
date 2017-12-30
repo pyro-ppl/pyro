@@ -20,6 +20,7 @@ Welcome to Pyro Examples and Tutorials!
    dmm
    air
    ss-vae
+   gmm
 
 
 Indices and tables
