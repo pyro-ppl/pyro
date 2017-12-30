@@ -18,7 +18,6 @@ import os
 
 # TODO move these implementations upstream to torch.distributions
 from pyro.distributions.binomial import Binomial
-from pyro.distributions.cauchy import Cauchy
 from pyro.distributions.delta import Delta
 from pyro.distributions.distribution import Distribution  # noqa: F401
 from pyro.distributions.half_cauchy import HalfCauchy
@@ -34,6 +33,7 @@ if USE_TORCH_DISTRIBUTIONS:
     from pyro.distributions.torch.bernoulli import Bernoulli
     from pyro.distributions.torch.beta import Beta
     from pyro.distributions.torch.categorical import Categorical
+    from pyro.distributions.torch.cauchy import Cauchy
     from pyro.distributions.torch.dirichlet import Dirichlet
     from pyro.distributions.torch.exponential import Exponential
     from pyro.distributions.torch.gamma import Gamma
@@ -44,6 +44,7 @@ else:
     from pyro.distributions.bernoulli import Bernoulli
     from pyro.distributions.beta import Beta
     from pyro.distributions.categorical import Categorical
+    from pyro.distributions.cauchy import Cauchy
     from pyro.distributions.dirichlet import Dirichlet
     from pyro.distributions.exponential import Exponential
     from pyro.distributions.gamma import Gamma
