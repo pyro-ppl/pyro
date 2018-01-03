@@ -2,8 +2,9 @@ from __future__ import absolute_import, division, print_function
 
 from abc import ABCMeta, abstractmethod
 
-import torch
 from six import add_metaclass
+
+import torch
 
 
 @add_metaclass(ABCMeta)
@@ -168,7 +169,8 @@ class Distribution(object):
         Evaluates total log probability density of a batch of samples.
 
         :param torch.autograd.Variable x: A value.
-        :return: total log probability density as a one-dimensional torch.autograd.Variable of size 1.
+        :return: total log probability density as a one-dimensional
+            torch.autograd.Variable of size 1.
         :rtype: torch.autograd.Variable
         """
         return torch.sum(self.batch_log_pdf(x, *args, **kwargs))
@@ -186,6 +188,33 @@ class Distribution(object):
         :rtype: torch.autograd.Variable
         """
         raise NotImplementedError
+
+    def score_function_term(self, x):
+        """
+        Evaluates the portion of `batch_log_pdf` not accounted for by
+        reparameterization.
+
+        This should return zero for fully reparameterized distributions and
+        return `batch_log_pdf` for fully unreparameterized distributions.
+        Partially reparameterized distributions should define
+        `.reparameterized=True` and return the portion of `batch_log_pdf` that
+        is not accounted for in the reparameterized gradient estimator.
+
+        This function can be used to produce an unbiased gradient estimator by
+        combining the pathwise estimator on the gradient of `.sample()` plus
+        the score function part on the result of this function.
+
+        :param torch.autograd.Variable x: A single value or a batch of values
+            batched along axis 0.
+        :return: log probability densities as a one-dimensional
+            `torch.autograd.Variable` with same batch size as value and params.
+            The shape of the result should be `self.batch_size()`.
+        :rtype: torch.autograd.Variable or the number 0.0
+        """
+        if self.reparameterized:
+            return 0.0
+        else:
+            return self.batch_log_pdf(x)
 
     def enumerate_support(self, *args, **kwargs):
         """

@@ -2,6 +2,18 @@ from __future__ import absolute_import, division, print_function
 
 import os
 
+# TODO move these implementations upstream to torch.distributions
+from pyro.distributions.binomial import Binomial
+from pyro.distributions.delta import Delta
+from pyro.distributions.distribution import Distribution  # noqa: F401
+from pyro.distributions.half_cauchy import HalfCauchy
+from pyro.distributions.log_normal import LogNormal
+from pyro.distributions.multinomial import Multinomial
+from pyro.distributions.multivariate_normal import MultivariateNormal
+from pyro.distributions.poisson import Poisson
+from pyro.distributions.random_primitive import RandomPrimitive
+from pyro.distributions.rejector import ExplicitRejector, ImplicitRejector  # noqa: F401
+
 # Notice to Contributors. (@fritzo 2017-12-26)
 #
 # The Pyro team is moving pyro.distributions implementations upstream to
@@ -16,16 +28,6 @@ import os
 # 2. Implement a new distribution in pyro.distribution and let Pyro devs move
 #    this implementation upstream to torch.distributions.
 
-# TODO move these implementations upstream to torch.distributions
-from pyro.distributions.binomial import Binomial
-from pyro.distributions.delta import Delta
-from pyro.distributions.distribution import Distribution  # noqa: F401
-from pyro.distributions.half_cauchy import HalfCauchy
-from pyro.distributions.log_normal import LogNormal
-from pyro.distributions.multinomial import Multinomial
-from pyro.distributions.multivariate_normal import MultivariateNormal
-from pyro.distributions.poisson import Poisson
-from pyro.distributions.random_primitive import RandomPrimitive
 
 # distribution classes with working torch versions in torch.distributions
 USE_TORCH_DISTRIBUTIONS = int(os.environ.get('PYRO_USE_TORCH_DISTRIBUTIONS', 0))
