@@ -11,7 +11,7 @@ class ImplicitRejector(Distribution):
     Rejection sampled distribution given an acceptance rate function.
 
     :param Distribution proposer: A distribution object that samples
-        batched propsals via `proposer.sample()`.
+        batched propsals via `proposer()`.
     :param callable acceptor: A callable that inputs a batch of proposals
         and returns a batch of acceptance probabilities.
     """
@@ -26,8 +26,9 @@ class ImplicitRejector(Distribution):
         sample = None
         done = None
         while True:
-            proposal = self.proposer.sample()
-            prob_accept = self.acceptor(proposal)
+            proposal = self.proposer()
+            log_prob_accept = self.acceptor(proposal)
+            prob_accept = torch.exp(log_prob_accept)
             accept = torch.bernoulli(prob_accept).byte()
             if sample is None:
                 # Initialize on first iteration.
@@ -38,7 +39,7 @@ class ImplicitRejector(Distribution):
                 done |= accept
             if done.all():
                 break
-        return sample.detach()
+        return sample
 
     def batch_log_pdf(self, x):
         return self.proposal.batch_log_pdf(x) + self.acceptor(x)
@@ -53,7 +54,7 @@ class ExplicitRejector(Distribution):
     """
     Rejection sampled distribution given a target distribution.
 
-    :param Distribution proposer: A distribution that implements `.sample()`
+    :param Distribution proposer: A distribution that implements `__call__()`
         and `.batch_log_pdf()`.
     :param Distribution target: A distribution that implements
         `.batch_log_pdf()`.
@@ -72,7 +73,7 @@ class ExplicitRejector(Distribution):
         sample = None
         done = None
         while True:
-            proposal = self.proposer.sample()
+            proposal = self.proposer()
             log_prob_accept = (self.target.batch_log_pdf(proposal) - self.log_scale -
                                self.proposer.batch_log_pdf(proposal))
             assert (log_prob_accept <= 0).all(), 'bad log_scale'

@@ -14,6 +14,10 @@ from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match
 
 
+def is_identically_zero(x):
+    return isinstance(x, numbers.Number) and x == 0
+
+
 def check_enum_discrete_can_run(model_trace, guide_trace):
     """
     Checks whether `enum_discrete` is supported for the given (model, guide) pair.
@@ -145,14 +149,22 @@ class Trace_ELBO(object):
                         surrogate_elbo_particle += model_site[log_pdf]
                     else:
                         guide_site = guide_trace.nodes[name]
-                        lp_lq = model_site[log_pdf] - guide_site[log_pdf]
-                        elbo_particle += lp_lq
-                        if guide_site["fn"].reparameterized:
-                            surrogate_elbo_particle += lp_lq
+                        elbo_particle += model_site[log_pdf] - guide_site[log_pdf]
+                        use_rsvi = False  # TODO make this True always.
+                        if use_rsvi:
+                            surrogate_elbo_particle += model_site[log_pdf]
+                            if guide_site["fn"].reparameterized:
+                                surrogate_elbo_particle -= guide_site[log_pdf]
+                            score_function_term = 'TODO refactor trace to not eagerly compute log_pdf'
+                            if not is_identically_zero(score_function_term):
+                                surrogate_elbo_particle += log_r.detach() * score_function_term / guide_site["scale"]
                         else:
-                            # XXX should the user be able to control inclusion of the -logq term below?
-                            guide_log_pdf = guide_site[log_pdf] / guide_site["scale"]  # not scaled by subsampling
-                            surrogate_elbo_particle += model_site[log_pdf] + log_r.detach() * guide_log_pdf
+                            if guide_site["fn"].reparameterized:
+                                surrogate_elbo_particle += model_site[log_pdf] - guide_site[log_pdf]
+                            else:
+                                # XXX should the user be able to control inclusion of the -logq term below?
+                                guide_log_pdf = guide_site[log_pdf] / guide_site["scale"]  # not scaled by subsampling
+                                surrogate_elbo_particle += model_site[log_pdf] + log_r.detach() * guide_log_pdf
 
             # drop terms of weight zero to avoid nans
             if isinstance(weight, numbers.Number):
