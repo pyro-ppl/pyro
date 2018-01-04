@@ -42,8 +42,7 @@ def matrix_inverse_compat(matrix, matrix_chol):
 class _NormalizationConstant(Function):
     @staticmethod
     def forward(ctx, sigma, sigma_cholesky, inverse, dimension, return_zero):
-        ctx.save_for_backward(inverse)
-        ctx.save_for_backward(sigma_cholesky)
+        ctx.save_for_backward(inverse, sigma_cholesky)
         results = torch.Tensor(
             [torch.log(sigma_cholesky.diag()).sum() + (dimension / 2) * np.log(2 * np.pi)]).type_as(sigma_cholesky)
         return results if not return_zero else torch.zeros(1).type_as(sigma_cholesky)
