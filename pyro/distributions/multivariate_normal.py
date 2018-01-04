@@ -43,15 +43,17 @@ class _NormalizationConstant(Function):
     @staticmethod
     def forward(ctx, sigma, sigma_cholesky, inverse, dimension, return_zero):
         ctx.save_for_backward(inverse)
+        ctx.save_for_backward(sigma_cholesky)
         results = torch.Tensor(
             [torch.log(sigma_cholesky.diag()).sum() + (dimension / 2) * np.log(2 * np.pi)]).type_as(sigma_cholesky)
         return results if not return_zero else torch.zeros(1).type_as(sigma_cholesky)
 
     @staticmethod
     def backward(ctx, grad_output):
-        inverse, = ctx.saved_variables
-        grad = 2 * inverse - torch.diag(torch.diag(inverse))
-        return grad_output * grad, None, None, None, None
+        inverse, sigma_cholesky = ctx.saved_variables
+        grad = inverse - 0.5 * torch.diag(torch.diag(inverse))
+        grad_cholesky = torch.diag(torch.diag(torch.inverse(sigma_cholesky)))
+        return grad_output * grad, grad_output * grad_cholesky, None, None, None
 
 
 @copy_docs_from(Distribution)
@@ -147,9 +149,6 @@ class MultivariateNormal(Distribution):
         return transformed_sample if self.reparameterized else transformed_sample.detach()
 
     def batch_log_pdf(self, x):
-        if not self.normalized and self.sigma_cholesky.requires_grad:
-            raise NotImplementedError("Differentiation is not supported (yet) if normalized=False.")
-
         batch_size = x.size()[0] if len(x.size()) > len(self.mu.size()) else 1
         batch_log_pdf_shape = self.batch_shape(x) + (1,)
         x = x.view(batch_size, *self.mu.size())
