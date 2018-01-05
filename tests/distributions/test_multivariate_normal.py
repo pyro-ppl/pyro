@@ -9,7 +9,9 @@ from pyro.distributions import MultivariateNormal
 
 class TestMultivariateNormal(TestCase):
     """
-    Tests if the gradients of batch_log_pdf are the same regardless of normalization.
+    Tests if the gradients of batch_log_pdf are the same regardless of normalization. The test is run once for a
+    distribution that is parameterized by the full covariance matrix and once for one that is parameterized by the
+    cholesky decomposition of the covariance matrix.
     """
 
     def setUp(self):
