@@ -246,8 +246,7 @@ class BernoulliBetaTests(TestCase):
 
         def model():
             p_latent = pyro.sample("p_latent", beta, self.alpha0, self.beta0)
-            pyro.sample("obs", dist.bernoulli, torch.pow(torch.pow(p_latent, 2.0), 0.5),
-                        obs=self.data)
+            pyro.sample("obs", dist.bernoulli, p_latent, obs=self.data)
             return p_latent
 
         def guide():
