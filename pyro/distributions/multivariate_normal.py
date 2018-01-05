@@ -19,7 +19,6 @@ def potrf_compat(var):
 
 def linear_solve_compat(matrix, matrix_chol, y):
     """Solves the equation ``torch.mm(matrix, x) = y`` for x."""
-    assert matrix.requires_grad == matrix_chol.requires_grad
     if matrix.requires_grad or y.requires_grad:
         # If derivatives are required, use the more expensive gesv.
         return torch.gesv(y, matrix)[0]
@@ -30,8 +29,7 @@ def linear_solve_compat(matrix, matrix_chol, y):
 
 def matrix_inverse_compat(matrix, matrix_chol):
     """Computes the inverse of a positive semidefinite square matrix."""
-    assert matrix.requires_grad == matrix_chol.requires_grad
-    if matrix.requires_grad:
+    if matrix.requires_grad or matrix_chol.requires_grad:
         # If derivatives are required, use the more expensive inverse.
         return torch.inverse(matrix)
     else:
