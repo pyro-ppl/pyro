@@ -5,11 +5,11 @@ from collections import namedtuple
 
 import networkx
 import numpy as np
-import torch
 
 import pyro
 import pyro.poutine as poutine
-from pyro.infer.util import torch_backward, torch_data_sum
+import torch
+from pyro.infer.util import torch_backward, torch_data_sum, trace_batch_log_pdf, trace_log_pdf
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, detach_iterable, ng_zeros
 
@@ -224,7 +224,8 @@ class TraceGraph_ELBO(object):
         """
         elbo = 0.0
         for weight, model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
-            guide_trace.log_pdf(), model_trace.log_pdf()
+            trace_log_pdf(guide_trace)
+            trace_log_pdf(model_trace)
 
             elbo_particle = 0.0
 
@@ -275,10 +276,10 @@ class TraceGraph_ELBO(object):
 
         # have the trace compute all the individual (batch) log pdf terms
         # so that they are available below
-        guide_trace.compute_batch_log_pdf(site_filter=lambda name, site: name in guide_vec_md_nodes)
-        guide_trace.log_pdf()
-        model_trace.compute_batch_log_pdf(site_filter=lambda name, site: name in model_vec_md_nodes)
-        model_trace.log_pdf()
+        trace_batch_log_pdf(guide_trace, site_filter=lambda name, site: name in guide_vec_md_nodes, sum_sites=False)
+        trace_batch_log_pdf(model_trace, site_filter=lambda name, site: name in model_vec_md_nodes, sum_sites=False)
+        trace_log_pdf(guide_trace)
+        trace_log_pdf(model_trace)
 
         # compute elbo for reparameterized nodes
         non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)

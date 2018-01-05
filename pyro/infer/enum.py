@@ -3,11 +3,11 @@ from __future__ import absolute_import, division, print_function
 import functools
 
 import torch
-from torch.autograd import Variable
-
 from pyro import poutine, util
+from pyro.infer.util import trace_batch_log_pdf
 from pyro.poutine.trace import Trace
 from six.moves.queue import LifoQueue
+from torch.autograd import Variable
 
 
 def site_is_discrete(name, site):
@@ -43,7 +43,7 @@ def iter_discrete_traces(graph_type, fn, *args, **kwargs):
             continue
 
         # Scale trace by probability of discrete choices.
-        log_pdf = full_trace.batch_log_pdf(site_filter=site_is_discrete)
+        log_pdf = trace_batch_log_pdf(full_trace, site_filter=site_is_discrete)
         if isinstance(log_pdf, float):
             log_pdf = torch.Tensor([log_pdf])
         if isinstance(log_pdf, torch.Tensor):

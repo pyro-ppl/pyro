@@ -9,7 +9,7 @@ import pyro
 import pyro.poutine as poutine
 from pyro.distributions.util import torch_zeros_like
 from pyro.infer.enum import iter_discrete_traces
-from pyro.infer.util import torch_backward, torch_data_sum, torch_sum
+from pyro.infer.util import torch_backward, torch_data_sum, torch_sum, trace_batch_log_pdf, trace_log_pdf
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match
 
@@ -24,8 +24,8 @@ def check_enum_discrete_can_run(model_trace, guide_trace):
     """
     # Check that all batch_log_pdf shapes are the same,
     # since we currently do not correctly handle broadcasting.
-    model_trace.compute_batch_log_pdf()
-    guide_trace.compute_batch_log_pdf()
+    trace_batch_log_pdf(model_trace, sum_sites=False)
+    trace_batch_log_pdf(guide_trace, sum_sites=False)
     shapes = {}
     for source, trace in [("model", model_trace), ("guide", guide_trace)]:
         for name, site in trace.nodes.items():
@@ -73,7 +73,7 @@ class Trace_ELBO(object):
                     model_trace = prune_subsample_sites(model_trace)
                     check_enum_discrete_can_run(model_trace, guide_trace)
 
-                    log_r = model_trace.batch_log_pdf() - guide_trace.batch_log_pdf()
+                    log_r = trace_batch_log_pdf(model_trace) - trace_batch_log_pdf(guide_trace)
                     weight = scale / self.num_particles
                     yield weight, model_trace, guide_trace, log_r
                 continue
@@ -85,7 +85,7 @@ class Trace_ELBO(object):
             guide_trace = prune_subsample_sites(guide_trace)
             model_trace = prune_subsample_sites(model_trace)
 
-            log_r = model_trace.log_pdf() - guide_trace.log_pdf()
+            log_r = trace_log_pdf(model_trace) - trace_log_pdf(guide_trace)
             weight = 1.0 / self.num_particles
             yield weight, model_trace, guide_trace, log_r
 
