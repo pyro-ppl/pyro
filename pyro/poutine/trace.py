@@ -1,19 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
 import collections
-import warnings
 
 import networkx
-import numpy as np
-
-
-def _warn_if_nan(name, variable):
-    value = variable.data[0]
-    if np.isnan(value):
-        warnings.warn("Encountered NAN log_pdf at site '{}'".format(name))
-    if np.isinf(value) and value > 0:
-        warnings.warn("Encountered +inf log_pdf at site '{}'".format(name))
-    # Note that -inf log_pdf is fine: it is merely a zero-probability event.
 
 
 class Trace(networkx.DiGraph):
@@ -61,70 +50,6 @@ class Trace(networkx.DiGraph):
         and the self.graph_type attribute
         """
         return Trace(super(Trace, self).copy(), graph_type=self.graph_type)
-
-    def log_pdf(self, site_filter=lambda name, site: True):
-        """
-        Compute the local and overall log-probabilities of the trace.
-
-        The local computation is memoized.
-
-        :returns: total log probability.
-        :rtype: torch.autograd.Variable
-        """
-        log_p = 0.0
-        for name, site in self.nodes.items():
-            if site["type"] == "sample" and site_filter(name, site):
-                try:
-                    site_log_p = site["log_pdf"]
-                except KeyError:
-                    args, kwargs = site["args"], site["kwargs"]
-                    site_log_p = site["fn"].log_pdf(
-                        site["value"], *args, **kwargs) * site["scale"]
-                    site["log_pdf"] = site_log_p
-                    _warn_if_nan(name, site_log_p)
-                log_p += site_log_p
-        return log_p
-
-    # XXX This only makes sense when all tensors have compatible shape.
-    def batch_log_pdf(self, site_filter=lambda name, site: True):
-        """
-        Compute the batched local and overall log-probabilities of the trace.
-
-        The local computation is memoized, and also stores the local `.log_pdf()`.
-        """
-        log_p = 0.0
-        for name, site in self.nodes.items():
-            if site["type"] == "sample" and site_filter(name, site):
-                try:
-                    site_log_p = site["batch_log_pdf"]
-                except KeyError:
-                    args, kwargs = site["args"], site["kwargs"]
-                    site_log_p = site["fn"].batch_log_pdf(
-                        site["value"], *args, **kwargs) * site["scale"]
-                    site["batch_log_pdf"] = site_log_p
-                    site["log_pdf"] = site_log_p.sum()
-                    _warn_if_nan(name, site["log_pdf"])
-                # Here log_p may be broadcast to a larger tensor:
-                log_p = log_p + site_log_p
-        return log_p
-
-    def compute_batch_log_pdf(self, site_filter=lambda name, site: True):
-        """
-        Compute the batched local log-probabilities at each site of the trace.
-
-        The local computation is memoized, and also stores the local `.log_pdf()`.
-        """
-        for name, site in self.nodes.items():
-            if site["type"] == "sample" and site_filter(name, site):
-                try:
-                    site["batch_log_pdf"]
-                except KeyError:
-                    args, kwargs = site["args"], site["kwargs"]
-                    site_log_p = site["fn"].batch_log_pdf(
-                        site["value"], *args, **kwargs) * site["scale"]
-                    site["batch_log_pdf"] = site_log_p
-                    site["log_pdf"] = site_log_p.sum()
-                    _warn_if_nan(name, site["log_pdf"])
 
     @property
     def observation_nodes(self):

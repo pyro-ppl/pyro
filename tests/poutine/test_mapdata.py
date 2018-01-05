@@ -3,15 +3,16 @@ from __future__ import absolute_import, division, print_function
 import logging
 
 import pytest
-import torch
-from torch.autograd import Variable
 
 import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
 import pyro.poutine as poutine
+import torch
 from pyro.infer import SVI
+from pyro.infer.util import trace_batch_log_pdf, trace_log_pdf
 from tests.common import assert_equal, requires_cuda
+from torch.autograd import Variable
 
 logger = logging.getLogger(__name__)
 
@@ -317,8 +318,8 @@ def map_data_iter_cuda_model(subsample_size):
 ], ids=["iarange", "irange", "map_data_vector", "map_data_iter"])
 def test_cuda(model, subsample_size):
     tr = poutine.trace(model).get_trace(subsample_size)
-    assert tr.log_pdf().is_cuda
-    assert tr.batch_log_pdf().is_cuda
+    assert trace_log_pdf(tr).is_cuda
+    assert trace_batch_log_pdf(tr).is_cuda
 
 
 @pytest.mark.parametrize('model', [

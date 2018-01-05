@@ -3,8 +3,8 @@ from __future__ import absolute_import, division, print_function
 import logging
 
 import pyro.poutine as poutine
-
-from .abstract_infer import TracePosterior
+from pyro.infer.abstract_infer import TracePosterior
+from pyro.infer.util import trace_log_pdf
 
 logger = logging.getLogger(__name__)
 
@@ -42,5 +42,5 @@ class Importance(TracePosterior):
             guide_trace = poutine.trace(self.guide).get_trace(*args, **kwargs)
             model_trace = poutine.trace(
                 poutine.replay(self.model, guide_trace)).get_trace(*args, **kwargs)
-            log_weight = model_trace.log_pdf() - guide_trace.log_pdf()
+            log_weight = trace_log_pdf(model_trace) - trace_log_pdf(guide_trace)
             yield (model_trace, log_weight)

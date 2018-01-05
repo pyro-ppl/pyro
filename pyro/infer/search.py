@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import pyro.poutine as poutine
 from pyro.infer import TracePosterior
+from pyro.infer.util import trace_log_pdf
 from six.moves.queue import Queue
 
 
@@ -39,4 +40,4 @@ class Search(TracePosterior):
             poutine.queue(self.model, queue=self.queue, max_tries=self.max_tries))
         while not self.queue.empty():
             tr = p.get_trace(*args, **kwargs)
-            yield (tr, tr.log_pdf())
+            yield (tr, trace_log_pdf(tr))
