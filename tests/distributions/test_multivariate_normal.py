@@ -3,8 +3,9 @@ from __future__ import absolute_import, division, print_function
 from unittest import TestCase
 
 import torch
-from torch.autograd import Variable
+from torch.autograd import Variable, grad
 from pyro.distributions import MultivariateNormal
+from tests.common import assert_equal
 
 
 class TestMultivariateNormal(TestCase):
@@ -30,23 +31,11 @@ class TestMultivariateNormal(TestCase):
         self.full_mv = MultivariateNormal(self.mu, self.sigma, normalized=False)
 
     def test_log_pdf_gradients_cholesky(self):
-        self.cholesky_mv.log_pdf(self.sample).backward()
-        grad1 = self.L.grad.data.clone()
-        self.L.grad.data.zero_()
-
-        self.cholesky_mv_normalized.log_pdf(self.sample).backward()
-        grad2 = self.L.grad.data.clone()
-        self.L.grad.data.zero_()
-
-        assert torch.dist(grad1, grad2) < 1e-6
+        grad1 = grad([self.cholesky_mv.log_pdf(self.sample)], [self.L])[0].data
+        grad2 = grad([self.cholesky_mv_normalized.log_pdf(self.sample)], [self.L])[0].data
+        assert_equal(grad1, grad2)
 
     def test_log_pdf_gradients(self):
-        self.full_mv.log_pdf(self.sample).backward()
-        grad1 = self.sigma.grad.data.clone()
-        self.sigma.grad.data.zero_()
-
-        self.full_mv_normalized.log_pdf(self.sample).backward()
-        grad2 = self.sigma.grad.data.clone()
-        self.sigma.grad.data.zero_()
-
-        assert torch.dist(grad1, grad2) < 1e-6
+        grad1 = grad([self.full_mv.log_pdf(self.sample)], [self.sigma])[0].data
+        grad2 = grad([self.full_mv_normalized.log_pdf(self.sample)], [self.sigma])[0].data
+        assert_equal(grad1, grad2)

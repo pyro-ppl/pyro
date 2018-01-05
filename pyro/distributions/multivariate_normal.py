@@ -38,12 +38,17 @@ def matrix_inverse_compat(matrix, matrix_chol):
 
 
 class _NormalizationConstant(Function):
+    """
+    This computes either zero or the true normalization constant depending on normalized,
+    but always computes the true gradient.
+    """
     @staticmethod
-    def forward(ctx, sigma, sigma_cholesky, inverse, dimension, return_zero):
+    def forward(ctx, sigma, sigma_cholesky, inverse, dimension, normalized):
         ctx.save_for_backward(inverse, sigma_cholesky)
-        results = torch.Tensor(
-            [torch.log(sigma_cholesky.diag()).sum() + (dimension / 2) * np.log(2 * np.pi)]).type_as(sigma_cholesky)
-        return results if not return_zero else torch.zeros(1).type_as(sigma_cholesky)
+        if normalized:
+            return torch.log(sigma_cholesky.diag()).sum(-1) + (dimension / 2) * np.log(2 * np.pi)
+        else:
+            return torch.zeros(1).type_as(sigma_cholesky)
 
     @staticmethod
     def backward(ctx, grad_output):
@@ -153,7 +158,7 @@ class MultivariateNormal(Distribution):
         # batch size and the size of the covariance matrix
         sigma_inverse = matrix_inverse_compat(self.sigma, self.sigma_cholesky)
         normalization_factor = _NormalizationConstant.apply(self.sigma, self.sigma_cholesky, sigma_inverse,
-                                                            self.mu.size()[0], not self.normalized)
+                                                            self.mu.size()[0], self.normalized)
         return -(normalization_factor + 0.5 * torch.sum((x - self.mu).unsqueeze(2) * torch.bmm(
             sigma_inverse.expand(batch_size, *self.sigma_cholesky.size()),
             (x - self.mu).unsqueeze(-1)), 1)).view(batch_log_pdf_shape)
