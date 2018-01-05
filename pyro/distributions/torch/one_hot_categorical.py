@@ -17,9 +17,6 @@ class OneHotCategorical(TorchDistribution):
         event_dim = 1
         super(OneHotCategorical, self).__init__(torch_dist, x_shape, event_dim, *args, **kwargs)
 
-    def sample(self):
-        return self.torch_dist.sample(self._sample_shape)
-
     def batch_log_pdf(self, x):
         batch_log_pdf_shape = self.batch_shape(x) + (1,)
         log_pxs = self.torch_dist.log_prob(x)
