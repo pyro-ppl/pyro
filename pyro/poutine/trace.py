@@ -6,9 +6,12 @@ import warnings
 import networkx
 import numpy as np
 
+from torch.autograd import Variable
 
-def _warn_if_nan(name, variable):
-    value = variable.data[0]
+
+def _warn_if_nan(name, value):
+    if isinstance(value, Variable):
+        value = value.data[0]
     if np.isnan(value):
         warnings.warn("Encountered NAN log_pdf at site '{}'".format(name))
     if np.isinf(value) and value > 0:
@@ -125,6 +128,19 @@ class Trace(networkx.DiGraph):
                     site["batch_log_pdf"] = site_log_p
                     site["log_pdf"] = site_log_p.sum()
                     _warn_if_nan(name, site["log_pdf"])
+
+    def compute_score_parts(self):
+        """
+        Compute the batched local score parts at each site of the trace.
+        """
+        for name, site in self.nodes.items():
+            if site["type"] == "sample" and "score_parts" not in site:
+                value = site["fn"].score_parts(
+                    site["value"], *site["args"], **site["kwargs"]) * site["scale"]
+                site["score_parts"] = value
+                site["batch_log_pdf"] = value[0]
+                site["log_pdf"] = value[0].sum()
+                _warn_if_nan(name, site["log_pdf"])
 
     @property
     def observation_nodes(self):

@@ -44,6 +44,9 @@ class RandomPrimitive(Distribution):
     def batch_log_pdf(self, x, *args, **kwargs):
         return self.dist_class(*args, **kwargs).batch_log_pdf(x)
 
+    def score_parts(self, x, *args, **kwargs):
+        return self.dist_class(*args, **kwargs).score_parts(x)
+
     def enumerate_support(self, *args, **kwargs):
         return self.dist_class(*args, **kwargs).enumerate_support()
 

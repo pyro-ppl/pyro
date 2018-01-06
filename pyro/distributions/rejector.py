@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import torch
 from pyro.distributions.distribution import Distribution
+from pyro.distributions.score_parts import ScoreParts
 from pyro.distributions.util import copy_docs_from
 
 
@@ -10,89 +11,83 @@ class ImplicitRejector(Distribution):
     """
     Rejection sampled distribution given an acceptance rate function.
 
-    :param Distribution proposer: A distribution object that samples
-        batched propsals via `proposer()`.
-    :param callable acceptor: A callable that inputs a batch of proposals
-        and returns a batch of acceptance probabilities.
+    :param Distribution propose: A proposal distribution that samples batched
+        propsals via `propose()`.
+    :param callable log_prob_accept: A callable that inputs a batch of proposals
+        and returns a batch of log acceptance probabilities.
     """
     reparameterized = True
 
-    def __init__(self, proposer, acceptor):
-        self.proposer = proposer
-        self.acceptor = acceptor
+    def __init__(self, propose, log_prob_accept):
+        self.propose = propose
+        self.log_prob_accept = log_prob_accept
+        self._log_prob_accept_cache = None, None
+        self._propose_batch_log_pdf_cache = None, None
+
+    def _log_prob_accept(self, x):
+        if x is not self._log_prob_accept_cache[0]:
+            self._log_prob_accept_cache = x, self.log_prob_accept(x)
+        return self._log_prob_accept_cache[1]
+
+    def _propose_batch_log_pdf(self, x):
+        if x is not self._propose_batch_log_pdf_cache[0]:
+            self._propose_batch_log_pdf_cache = x, self.propose.batch_log_pdf(x)
+        return self._propose_batch_log_pdf_cache[1]
 
     def sample(self):
         # Implements parallel batched accept-reject sampling.
-        sample = None
-        done = None
-        while True:
-            proposal = self.proposer()
-            log_prob_accept = self.acceptor(proposal)
-            prob_accept = torch.exp(log_prob_accept)
-            accept = torch.bernoulli(prob_accept).byte()
-            if sample is None:
-                # Initialize on first iteration.
-                sample = proposal
-                done = accept
-            elif accept.any():
-                sample[accept] = proposal[accept]
+        x = self.propose()
+        log_prob_accept = self.log_prob_accept(x)
+        assert (log_prob_accept <= 1e-6).all(), 'bad log_scale'
+        done = torch.bernoulli(torch.exp(log_prob_accept)).byte()
+        while not done.all():
+            proposed_x = self.propose()
+            proposed_log_prob_accept = self.log_prob_accept(proposed_x)
+            accept = torch.bernoulli(torch.exp(proposed_log_prob_accept)).byte() & ~done
+            if accept.any():
+                x[accept] = proposed_x[accept]
+                log_prob_accept[accept] = proposed_log_prob_accept[accept]
                 done |= accept
-            if done.all():
-                break
-        return sample
+        self._log_prob_accept_cache = x, log_prob_accept
+        return x
 
     def batch_log_pdf(self, x):
-        return self.proposal.batch_log_pdf(x) + self.acceptor(x)
+        return self._propose_batch_log_pdf(x) + self._log_prob_accept(x)
 
-    def score_function_term(self, x):
-        # TODO look into caching strategies
-        return self.acceptor(x)
+    def score_parts(self, x):
+        score_function = self._log_prob_accept(x)
+        log_pdf = self.batch_log_pdf(x)
+        return ScoreParts(log_pdf, score_function, log_pdf)
 
 
 @copy_docs_from(Distribution)
-class ExplicitRejector(Distribution):
+class ExplicitRejector(ImplicitRejector):
     """
     Rejection sampled distribution given a target distribution.
 
-    :param Distribution proposer: A distribution that implements `__call__()`
-        and `.batch_log_pdf()`.
-    :param Distribution target: A distribution that implements
+    :param Distribution propose: A proposal distribution that samples batched
+        proposals via `propose()`.
+    :param Distribution target: A target distribution that implements
         `.batch_log_pdf()`.
     :param Variable log_scale: A batch of log scale factors satisfying:
-        `proposer.batch_log_pdf(x) + log_scale >= target.batch_log_pdf(x)`.
+        `propose.batch_log_pdf(x) + log_scale >= target.batch_log_pdf(x)`.
     """
     reparameterized = True
 
-    def __init__(self, proposer, target, log_scale):
-        self.proposer = proposer
+    def __init__(self, propose, target, log_scale):
+        super(ExplicitRejector, self).__init__(propose, self.log_prob_accept)
         self.target = target
         self.log_scale = log_scale
+        self._target_batch_log_pdf_cache = None, None
 
-    def sample(self):
-        # Implements parallel batched accept-reject sampling.
-        sample = None
-        done = None
-        while True:
-            proposal = self.proposer()
-            log_prob_accept = (self.target.batch_log_pdf(proposal) - self.log_scale -
-                               self.proposer.batch_log_pdf(proposal))
-            assert (log_prob_accept <= 0).all(), 'bad log_scale'
-            accept = torch.bernoulli(torch.exp(log_prob_accept)).byte()
-            if sample is None:
-                # Initialize on first iteration.
-                sample = proposal
-                done = accept
-            elif accept.any():
-                sample[accept] = proposal[accept]
-                done |= accept
-            if done.all():
-                break
-        return sample
+    def log_prob_accept(self, x):
+        return (self._target_batch_log_pdf(x) - self.log_scale -
+                self._propose_batch_log_pdf(x))
+
+    def _target_batch_log_pdf(self, x):
+        if x is not self._target_batch_log_pdf_cache[0]:
+            self._target_batch_log_pdf_cache = x, self.target.batch_log_pdf(x)
+        return self._target_batch_log_pdf_cache[1]
 
     def batch_log_pdf(self, x):
-        return self.target.batch_log_pdf(x)
-
-    def score_function_term(self, x):
-        # TODO look into caching strategies
-        return (self.target.batch_log_pdf(x) - self.log_scale -
-                self.proposer.batch_log_pdf(x))
+        return self._target_batch_log_pdf(x)

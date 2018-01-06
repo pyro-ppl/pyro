@@ -5,6 +5,7 @@ from abc import ABCMeta, abstractmethod
 from six import add_metaclass
 
 import torch
+from pyro.distributions.score_parts import ScoreParts
 
 
 @add_metaclass(ABCMeta)
@@ -189,32 +190,14 @@ class Distribution(object):
         """
         raise NotImplementedError
 
-    def score_function_term(self, x):
-        """
-        Evaluates the portion of `batch_log_pdf` not accounted for by
-        reparameterization.
-
-        This should return zero for fully reparameterized distributions and
-        return `batch_log_pdf` for fully unreparameterized distributions.
-        Partially reparameterized distributions should define
-        `.reparameterized=True` and return the portion of `batch_log_pdf` that
-        is not accounted for in the reparameterized gradient estimator.
-
-        This function can be used to produce an unbiased gradient estimator by
-        combining the pathwise estimator on the gradient of `.sample()` plus
-        the score function part on the result of this function.
-
-        :param torch.autograd.Variable x: A single value or a batch of values
-            batched along axis 0.
-        :return: log probability densities as a one-dimensional
-            `torch.autograd.Variable` with same batch size as value and params.
-            The shape of the result should be `self.batch_size()`.
-        :rtype: torch.autograd.Variable or the number 0.0
-        """
+    def score_parts(self, x, *args, **kwargs):
+        log_pdf = self.batch_log_pdf(x, *args, **kwargs)
         if self.reparameterized:
-            return 0.0
+            return ScoreParts(log_pdf, 0, log_pdf)
         else:
-            return self.batch_log_pdf(x)
+            # XXX should the user be able to control inclusion of the entropy term?
+            # See Roeder, Wu, Duvenaud (2017) "Sticking the Landing" https://arxiv.org/abs/1703.09194
+            return ScoreParts(log_pdf, log_pdf, 0)
 
     def enumerate_support(self, *args, **kwargs):
         """

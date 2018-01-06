@@ -16,27 +16,28 @@ class RejectionStandardGamma(ImplicitRejector):
     augment shape.
     """
     def __init__(self, alpha):
-        super(RejectionStandardGamma, self).__init__(self._proposer, self._acceptor)
-        assert (alpha >= 1).all()
+        super(RejectionStandardGamma, self).__init__(self.propose, self.log_prob_accept)
+        if not (alpha >= 1).all():
+            raise NotImplementedError('alpha < 1 is not supported')
         self.alpha = alpha
         # The following are Marsaglia & Tsang's variable names.
         self._d = self.alpha - 1.0 / 3.0
         self._c = 1.0 / torch.sqrt(9.0 * self._d)
 
-    def _proposer(self):
+    def propose(self):
         # Marsaglia & Tsang's x == Naesseth's epsilon
         x = self.alpha.new(self.alpha.shape).normal_()
         y = 1.0 + self._c * x
         v = y * y * y
         return (self._d * v).clamp_(1e-30, 1e30)
 
-    def _acceptor(self, value):
+    def log_prob_accept(self, value):
         v = value / self._d
         y = torch.pow(v, 1.0 / 3.0)
         x = (y - 1.0) / self._c
-        log_p_accept = 0.5 * x * x + self._d * (1.0 - v + torch.log(v))
-        log_p_accept[y <= 0] = -float('inf')
-        return log_p_accept
+        log_prob_accept = 0.5 * x * x + self._d * (1.0 - v + torch.log(v))
+        log_prob_accept[y <= 0] = -float('inf')
+        return log_prob_accept
 
 
 """
