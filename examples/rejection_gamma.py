@@ -94,8 +94,8 @@ class ShapeAugmentedStandardGamma(Distribution):
     def score_parts(self, boosted_x):
         assert self._unboost_x_cache[0] is boosted_x
         x = self._unboost_x_cache[1]
-        score_function = self._rejection_gamma.score_parts(boosted_x)[1]
-        log_pdf = self.batch_log_pdf(x)
+        score_function = self._rejection_gamma.score_parts(x)[1]
+        log_pdf = self.batch_log_pdf(boosted_x)
         return ScoreParts(log_pdf, score_function, log_pdf)
 
 
