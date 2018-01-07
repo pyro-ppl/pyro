@@ -42,13 +42,11 @@ class ImplicitRejector(Distribution):
         done = torch.bernoulli(torch.exp(log_prob_accept)).byte()
         while not done.all():
             proposed_x = self.propose()
-            proposed_log_prob_accept = self.log_prob_accept(proposed_x)
-            accept = torch.bernoulli(torch.exp(proposed_log_prob_accept)).byte() & ~done
+            log_prob_accept = self.log_prob_accept(proposed_x)
+            accept = torch.bernoulli(torch.exp(log_prob_accept)).byte() & ~done
             if accept.any():
                 x[accept] = proposed_x[accept]
-                log_prob_accept[accept] = proposed_log_prob_accept[accept]
                 done |= accept
-        self._log_prob_accept_cache = x, log_prob_accept
         return x
 
     def batch_log_pdf(self, x):

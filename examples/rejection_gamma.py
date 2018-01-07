@@ -1,10 +1,10 @@
 from __future__ import absolute_import, division, print_function
 
 import torch
-
 from pyro.distributions.distribution import Distribution
 from pyro.distributions.gamma import Gamma
 from pyro.distributions.rejector import ImplicitRejector
+from pyro.distributions.score_parts import ScoreParts
 from pyro.distributions.util import copy_docs_from
 
 
@@ -17,9 +17,10 @@ class RejectionStandardGamma(ImplicitRejector):
     """
     def __init__(self, alpha):
         super(RejectionStandardGamma, self).__init__(self.propose, self.log_prob_accept)
-        if alpha.data.min() <  1:
+        if alpha.data.min() < 1:
             raise NotImplementedError('alpha < 1 is not supported')
         self.alpha = alpha
+        self._standard_gamma = Gamma(alpha, alpha.new([1]).expand_as(alpha))
         # The following are Marsaglia & Tsang's variable names.
         self._d = self.alpha - 1.0 / 3.0
         self._c = 1.0 / torch.sqrt(9.0 * self._d)
@@ -39,6 +40,9 @@ class RejectionStandardGamma(ImplicitRejector):
         log_prob_accept[y <= 0] = -float('inf')
         return log_prob_accept
 
+    def batch_log_pdf(self, x):
+        return self._standard_gamma.batch_log_pdf(x)
+
 
 # Note it's easy to implement a full Gamma distribution on top of
 # our `StandardGamma`:
@@ -57,8 +61,10 @@ class RejectionGamma(Distribution):
     def batch_log_pdf(self, x):
         return self._standard_gamma.batch_log_pdf(x / self.beta) - torch.log(self.beta)
 
-    def score_function_term(self, x):
-        return self._standard_gamma(x / self.beta)
+    def score_parts(self, x):
+        log_pdf, score_function, _ = self._standard_gamma.score_parts(x / self.beta)
+        log_pdf = log_pdf - torch.log(self.beta)
+        return ScoreParts(log_pdf, score_function, log_pdf)
 
 
 # Next let's implement Shape Augmentation.
@@ -72,16 +78,33 @@ class ShapeAugmentedStandardGamma(Distribution):
         self._boost = boost
         self._rejection_gamma = RejectionStandardGamma(alpha + boost)
         self._standard_gamma = Gamma(alpha, alpha.new([1]).expand_as(alpha))
+        self._unboost_x_cache = None, None
 
     def sample(self):
         x = self._rejection_gamma.sample()
+        boosted_x = x.clone()
         for i in range(self._boost):
-            x *= (1 - x.new(x.shape).uniform_()) ** (1 / (i + self._alpha))
-        return x
+            boosted_x *= (1 - x.new(x.shape).uniform_()) ** (1 / (i + self._alpha))
+        self._unboost_x_cache = boosted_x, x
+        return boosted_x
 
     def batch_log_pdf(self, x):
         return self._standard_gamma.batch_log_pdf(x)
 
-    def score_parts(self, x):
-        # TODO compute shape-augmented g_cor term here
-        raise NotImplementedError
+    def score_parts(self, boosted_x):
+        assert self._unboost_x_cache[0] is boosted_x
+        x = self._unboost_x_cache[1]
+        score_function = self._rejection_gamma.score_parts(boosted_x)[1]
+        log_pdf = self.batch_log_pdf(x)
+        return ScoreParts(log_pdf, score_function, log_pdf)
+
+
+def kl_gamma_gamma(p, q):
+    p = getattr(p, 'torch_dist', p)
+    q = getattr(q, 'torch_dist', q)
+
+    # Adapted from https://stats.stackexchange.com/questions/11646
+    def f(a, b, c, d):
+        return -d * a / c + b * a.log() - torch.lgamma(b) + (b - 1) * torch.digamma(d) + (1 - b) * c.log()
+
+    return f(p.beta, p.alpha, p.beta, p.alpha) - f(q.beta, q.alpha, p.beta, p.alpha)
