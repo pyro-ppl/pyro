@@ -16,6 +16,7 @@ class ImplicitRejector(Distribution):
     :param callable log_prob_accept: A callable that inputs a batch of proposals
         and returns a batch of log acceptance probabilities.
     """
+    stateful = True
     reparameterized = True
 
     def __init__(self, propose, log_prob_accept):

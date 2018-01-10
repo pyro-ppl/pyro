@@ -10,6 +10,8 @@ class RandomPrimitive(Distribution):
     __slots__ = ['dist_class']
 
     def __init__(self, dist_class):
+        if dist_class.stateful:
+            raise TypeError('Cannot wrap stateful class {} in RandomPrimitive.'.format(type(dist_class)))
         self.dist_class = dist_class
         super(RandomPrimitive, self).__init__()
 

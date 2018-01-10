@@ -87,6 +87,7 @@ class Distribution(object):
     Take a look at the `examples <http://pyro.ai/examples>`_ to see how they interact
     with inference algorithms.
     """
+    stateful = False
     reparameterized = False
     enumerable = False
 
