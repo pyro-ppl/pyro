@@ -18,6 +18,7 @@ from tests import fakes
 from tests.common import assert_equal
 from tests.distributions.test_transformed_distribution import AffineExp
 
+from pyro.distributions.rejection_gamma import ShapeAugmentedGamma
 
 def param_mse(name, target):
     return torch.sum(torch.pow(target - pyro.param(name), 2.0)).data.cpu().numpy()[0]
@@ -230,17 +231,19 @@ class ExponentialGammaTests(TestCase):
 
     @pytest.mark.skipif(not dist.gamma.reparameterized, reason='not implemented')
     def test_elbo_reparameterized(self):
-        self.do_elbo_test(True, 5000)
+        self.do_elbo_test(dist.Gamma, 5000)
+
+    def test_elbo_rsvi(self):
+        self.do_elbo_test(ShapeAugmentedGamma, 5000)
 
     def test_elbo_nonreparameterized(self):
-        self.do_elbo_test(False, 10000)
+        self.do_elbo_test(fakes.NonReparameterizedGamma, 10000)
 
-    def do_elbo_test(self, reparameterized, n_steps):
+    def do_elbo_test(self, gamma_dist, n_steps):
         pyro.clear_param_store()
-        gamma = dist.gamma if reparameterized else fakes.nonreparameterized_gamma
 
         def model():
-            lambda_latent = pyro.sample("lambda_latent", gamma, self.alpha0, self.beta0)
+            lambda_latent = pyro.sample("lambda_latent", gamma_dist(self.alpha0, self.beta0))
             pyro.observe("obs0", dist.exponential, self.data[0], lambda_latent)
             pyro.observe("obs1", dist.exponential, self.data[1], lambda_latent)
             return lambda_latent
@@ -253,7 +256,7 @@ class ExponentialGammaTests(TestCase):
                 "beta_q_log",
                 Variable(self.log_beta_n.data - 0.143, requires_grad=True))
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
-            pyro.sample("lambda_latent", gamma, alpha_q, beta_q)
+            pyro.sample("lambda_latent", gamma_dist(alpha_q, beta_q))
 
         adam = optim.Adam({"lr": .0003, "betas": (0.97, 0.999)})
         svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
