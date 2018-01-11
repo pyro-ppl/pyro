@@ -7,12 +7,16 @@ env:
         - PYTHONPATH=$PWD:$PYTHONPATH
 
 install:
-    # install pytorch and its dependencies
+    # download and install PyTorch wheel
+    - pip install --upgrade awscli
+    - mkdir -p tmp
     - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
-          pip install http://download.pytorch.org/whl/cpu/torch-0.3.0.post4-cp27-cp27mu-linux_x86_64.whl;
+        aws s3 --no-sign-request sync s3://pyro-ppl/ci tmp --exclude "*" --include "*-cp27-*";
       else
-          pip install http://download.pytorch.org/whl/cpu/torch-0.3.0.post4-cp35-cp35m-linux_x86_64.whl;
+        aws s3 --no-sign-request sync s3://pyro-ppl/ci tmp --exclude "*" --include "*-cp36-*";
       fi
+    - pip install tmp/*
+    - rm -r tmp
     - pip install -e .[test]
     - pip freeze
 
