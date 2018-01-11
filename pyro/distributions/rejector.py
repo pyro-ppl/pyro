@@ -39,12 +39,14 @@ class ImplicitRejector(Distribution):
         # Implements parallel batched accept-reject sampling.
         x = self.propose()
         log_prob_accept = self.log_prob_accept(x)
-        assert (log_prob_accept <= 1e-6).all(), 'bad log_scale'
-        done = torch.bernoulli(torch.exp(log_prob_accept)).byte()
+        # assert (log_prob_accept <= 1e-6).all(), 'bad log_scale'
+        probs = torch.exp(log_prob_accept).clamp_(0.0, 1.0)
+        done = torch.bernoulli(probs).byte()
         while not done.all():
             proposed_x = self.propose()
             log_prob_accept = self.log_prob_accept(proposed_x)
-            accept = torch.bernoulli(torch.exp(log_prob_accept)).byte() & ~done
+            prob_accept = torch.exp(log_prob_accept).clamp_(0.0, 1.0)
+            accept = torch.bernoulli(prob_accept).byte() & ~done
             if accept.any():
                 x[accept] = proposed_x[accept]
                 done |= accept
