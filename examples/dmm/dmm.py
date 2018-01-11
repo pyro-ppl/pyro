@@ -222,8 +222,7 @@ class DMM(nn.Module):
 
         # if on gpu we need the fully broadcast view of the rnn initial state
         # to be in contiguous gpu memory
-        h_0_contig = self.h_0 if not self.use_cuda \
-            else self.h_0.expand(1, mini_batch.size(0), self.rnn.hidden_size).contiguous()
+        h_0_contig = self.h_0.expand(1, mini_batch.size(0), self.rnn.hidden_size).contiguous()
         # push the observed x's through the rnn;
         # rnn_output contains the hidden state at each time step
         rnn_output, _ = self.rnn(mini_batch_reversed, h_0_contig)
