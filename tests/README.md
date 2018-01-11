@@ -28,5 +28,6 @@ ln -s /usr/bin/cmake3 /usr/bin/cmake
 ```
  - Then run, `./build_cpu.sh` under the `directory`, which will create the required binaries 
  in `/wheelhouse` directory.
- - Upload the binaries to the S3 bucket `s3://pyro-ppl/ci` with public read permissions.
+ - Upload the binaries for python 2.7 (`torch*cp27mu*.whl`) and python 3.5 (`torch*cp35m*.whl`) 
+   to the S3 bucket `s3://pyro-ppl/ci` with public read permissions.
  

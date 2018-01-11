@@ -13,7 +13,7 @@ install:
     - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
         aws s3 --no-sign-request sync s3://pyro-ppl/ci tmp --exclude "*" --include "*-cp27-*";
       else
-        aws s3 --no-sign-request sync s3://pyro-ppl/ci tmp --exclude "*" --include "*-cp36-*";
+        aws s3 --no-sign-request sync s3://pyro-ppl/ci tmp --exclude "*" --include "*-cp35-*";
       fi
     - pip install tmp/*
     - rm -r tmp
