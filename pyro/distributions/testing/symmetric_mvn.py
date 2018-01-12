@@ -7,12 +7,14 @@ from torch.autograd import Function
 
 
 class _SymmetricSample(Function):
-    def forward(self, ctx, mu, sigma_cholesky):
-        self.white = mu.new(mu.size()).normal_()
-        return mu + torch.mm(self.white, sigma_cholesky)
+    @staticmethod
+    def forward(ctx, mu, sigma_cholesky):
+        ctx.white = mu.new(mu.size()).normal_()
+        return mu + torch.mm(ctx.white, sigma_cholesky)
 
-    def backward(self, ctx, grad_output):
-        asymmetric = grad_output.unsqueeze(-1) * self.white.unsqueeze(-2)
+    @staticmethod
+    def backward(ctx, grad_output):
+        asymmetric = grad_output.unsqueeze(-1) * ctx.white.unsqueeze(-2)
         grad = asymmetric + asymmetric.transpose(-1, -2)
         grad *= 0.5
         return grad
@@ -21,6 +23,6 @@ class _SymmetricSample(Function):
 @copy_docs_from(MultivariateNormal)
 class SymmetricMultivariateNormal(MultivariateNormal):
     def sample(self):
-        mu = self.mu.expand(self.batch_size, self.mu.size())
-        result = _SymmetricSample(mu, self.sigma_cholesky)
+        mu = self.mu.expand(self.batch_size, *self.mu.size())
+        result = _SymmetricSample.apply(mu, self.sigma_cholesky)
         return result if self.reparameterized else result.detach()
