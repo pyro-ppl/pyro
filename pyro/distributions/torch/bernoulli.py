@@ -17,12 +17,3 @@ class Bernoulli(TorchDistribution):
         x_shape = ps.size()
         event_dim = 1
         super(Bernoulli, self).__init__(torch_dist, x_shape, event_dim, *args, **kwargs)
-
-    def sample(self):
-        return super(Bernoulli, self).sample().type_as(self.torch_dist.probs)
-
-    def batch_log_pdf(self, x):
-        return super(Bernoulli, self).batch_log_pdf(x.long())
-
-    def enumerate_support(self):
-        return super(Bernoulli, self).enumerate_support().type_as(self.torch_dist.probs)
