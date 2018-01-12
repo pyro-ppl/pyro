@@ -13,8 +13,8 @@ class TorchDistribution(Distribution):
     `torch.distributions.Distribution <http://pytorch.org/docs/master/_modules/torch/distributions.html#Distribution>`_
     """
 
-    def __init__(self, torch_dist, x_shape, event_dim, batch_size=None, log_pdf_mask=None, *args, **kwargs):
-        super(Distribution, self).__init__(*args, **kwargs)
+    def __init__(self, torch_dist, x_shape, event_dim, batch_size=None, log_pdf_mask=None):
+        super(TorchDistribution, self).__init__()
         self.torch_dist = torch_dist
         self.log_pdf_mask = log_pdf_mask
         self._x_shape = x_shape
