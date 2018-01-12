@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 import torch
 from pyro.distributions.multivariate_normal import MultivariateNormal
 from pyro.distributions.util import copy_docs_from
-from torch.autograd import Function
+from torch.autograd import Function, Variable
 
 
 class _SymmetricSample(Function):
@@ -14,10 +14,10 @@ class _SymmetricSample(Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        asymmetric = grad_output.unsqueeze(-1) * ctx.white.unsqueeze(-2)
-        grad = asymmetric + asymmetric.transpose(-1, -2)
+        grad = (grad_output.unsqueeze(-2) * Variable(ctx.white.unsqueeze(-1))).squeeze(0)
+        grad = grad + grad.transpose(-1, -2)
         grad *= 0.5
-        return grad
+        return grad_output, torch.triu(grad)
 
 
 @copy_docs_from(MultivariateNormal)
