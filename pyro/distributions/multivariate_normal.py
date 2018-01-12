@@ -6,6 +6,7 @@ from torch.autograd import Variable
 
 from pyro.distributions.util import copy_docs_from
 from pyro.distributions.distribution import Distribution
+from torch.autograd import Function
 
 
 def potri_compat(var):
@@ -18,7 +19,6 @@ def potrf_compat(var):
 
 def linear_solve_compat(matrix, matrix_chol, y):
     """Solves the equation ``torch.mm(matrix, x) = y`` for x."""
-    assert matrix.requires_grad == matrix_chol.requires_grad
     if matrix.requires_grad or y.requires_grad:
         # If derivatives are required, use the more expensive gesv.
         return torch.gesv(y, matrix)[0]
@@ -29,13 +29,33 @@ def linear_solve_compat(matrix, matrix_chol, y):
 
 def matrix_inverse_compat(matrix, matrix_chol):
     """Computes the inverse of a positive semidefinite square matrix."""
-    assert matrix.requires_grad == matrix_chol.requires_grad
-    if matrix.requires_grad:
+    if matrix.requires_grad or matrix_chol.requires_grad:
         # If derivatives are required, use the more expensive inverse.
         return torch.inverse(matrix)
     else:
         # Use the cheaper Cholesky based potri.
         return potri_compat(matrix_chol)
+
+
+class _NormalizationConstant(Function):
+    """
+    This computes either zero or the true normalization constant depending on normalized,
+    but always computes the true gradient.
+    """
+    @staticmethod
+    def forward(ctx, sigma, sigma_cholesky, inverse, dimension, normalized):
+        ctx.save_for_backward(inverse, sigma_cholesky)
+        if normalized:
+            return torch.log(sigma_cholesky.diag()).sum(-1) + (dimension / 2) * np.log(2 * np.pi)
+        else:
+            return torch.zeros(1).type_as(sigma_cholesky)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        inverse, sigma_cholesky = ctx.saved_variables
+        grad = inverse - 0.5 * torch.diag(torch.diag(inverse))
+        grad_cholesky = torch.diag(torch.diag(torch.inverse(sigma_cholesky)))
+        return grad_output * grad, grad_output * grad_cholesky, None, None, None
 
 
 @copy_docs_from(Distribution)
@@ -131,18 +151,14 @@ class MultivariateNormal(Distribution):
         return transformed_sample if self.reparameterized else transformed_sample.detach()
 
     def batch_log_pdf(self, x):
-        if not self.normalized and self.sigma_cholesky.requires_grad:
-            raise NotImplementedError("Differentiation is not supported (yet) if normalized=False.")
-
         batch_size = x.size()[0] if len(x.size()) > len(self.mu.size()) else 1
         batch_log_pdf_shape = self.batch_shape(x) + (1,)
         x = x.view(batch_size, *self.mu.size())
-        # TODO Implement the gradient of the normalization factor if normalized=False
-        normalization_factor = torch.log(
-            self.sigma_cholesky.diag()).sum() + (self.mu.size()[0] / 2) * np.log(2 * np.pi) if self.normalized else 0
         # TODO It may be useful to switch between matrix_inverse_compat() and linear_solve_compat() based on the
         # batch size and the size of the covariance matrix
         sigma_inverse = matrix_inverse_compat(self.sigma, self.sigma_cholesky)
+        normalization_factor = _NormalizationConstant.apply(self.sigma, self.sigma_cholesky, sigma_inverse,
+                                                            self.mu.size()[0], self.normalized)
         return -(normalization_factor + 0.5 * torch.sum((x - self.mu).unsqueeze(2) * torch.bmm(
             sigma_inverse.expand(batch_size, *self.sigma_cholesky.size()),
             (x - self.mu).unsqueeze(-1)), 1)).view(batch_log_pdf_shape)
