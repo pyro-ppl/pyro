@@ -36,6 +36,8 @@ integration-test: lint FORCE
 
 test-all: lint FORCE
 	pytest -vx -n auto
+	CI=1 grep -l smoke_test tutorial/source/*.ipynb \
+	  | xargs pytest -vx --nbval-lax
 
 test-cuda: lint FORCE
 	PYRO_TENSOR_TYPE=torch.cuda.DoubleTensor pytest -vx -n 8 --stage unit
