@@ -33,9 +33,11 @@ class TestMultivariateNormal(TestCase):
     def test_log_pdf_gradients_cholesky(self):
         grad1 = grad([self.cholesky_mv.log_pdf(self.sample)], [self.L])[0].data
         grad2 = grad([self.cholesky_mv_normalized.log_pdf(self.sample)], [self.L])[0].data
-        assert_equal(grad1, grad2)
+        prec = 1e-8 * (grad1.abs().max() + grad2.abs().max())
+        assert_equal(grad1, grad2, prec=prec)
 
     def test_log_pdf_gradients(self):
         grad1 = grad([self.full_mv.log_pdf(self.sample)], [self.sigma])[0].data
         grad2 = grad([self.full_mv_normalized.log_pdf(self.sample)], [self.sigma])[0].data
-        assert_equal(grad1, grad2)
+        prec = 1e-8 * (grad1.abs().max() + grad2.abs().max())
+        assert_equal(grad1, grad2, prec=prec)
