@@ -191,10 +191,24 @@ class Distribution(object):
         """
         raise NotImplementedError
 
+    def entropy(self):
+        """
+        Returns the entropy of this distribution, per parameter.
+
+        :return: an entropy tensor of shape `batch_shape`
+        :rtype: torch.autograd.Variable
+        """
+        raise NotImplementedError
+
     def score_parts(self, x, *args, **kwargs):
         log_pdf = self.batch_log_pdf(x, *args, **kwargs)
         if self.reparameterized:
-            return ScoreParts(log_pdf, 0, log_pdf)
+            try:
+                entropy_term = self.entropy()
+                entropy_term *= -1
+            except NotImplementedError:
+                entropy_term = log_pdf
+            return ScoreParts(log_pdf, 0, entropy_term)
         else:
             # XXX should the user be able to control inclusion of the entropy term?
             # See Roeder, Wu, Duvenaud (2017) "Sticking the Landing" https://arxiv.org/abs/1703.09194

@@ -47,3 +47,7 @@ class TorchDistribution(Distribution):
 
     def enumerate_support(self):
         return self.torch_dist.enumerate_support()
+
+    def entropy(self):
+        shape = self.batch_shape() + (1,)
+        return self.torch_dist.entropy().contiguous().view(shape)
