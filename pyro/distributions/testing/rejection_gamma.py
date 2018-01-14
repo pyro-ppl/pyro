@@ -71,6 +71,8 @@ class RejectionGamma(Distribution):
 
 @copy_docs_from(Gamma)
 class ShapeAugmentedGamma(Distribution):
+    reparameterized = True
+
     def __init__(self, alpha, beta, boost=1):
         if alpha.min() + boost < 1:
             raise ValueError('Need to boost at least once for alpha < 1')
