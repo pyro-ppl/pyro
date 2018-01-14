@@ -14,8 +14,8 @@ from torch.autograd import Variable
 import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
+from pyro.distributions.testing import fakes
 from pyro.infer import SVI
-from tests import fakes
 from tests.common import assert_equal
 
 logger = logging.getLogger(__name__)

@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-import os
+import warnings
 
 # TODO move these implementations upstream to torch.distributions
 from pyro.distributions.binomial import Binomial
@@ -18,7 +18,7 @@ from pyro.distributions.rejector import ExplicitRejector, ImplicitRejector  # no
 #
 # The Pyro team is moving pyro.distributions implementations upstream to
 # torch.distributions, aiming for the PyTorch 0.4 release and Pyro 0.2 release
-# in late Jan or Feb 2018.
+# around Feb 2018.
 # Tasks: https://github.com/probtorch/pytorch/projects/1
 # Design Doc: https://goo.gl/9ccYsq
 #
@@ -30,8 +30,7 @@ from pyro.distributions.rejector import ExplicitRejector, ImplicitRejector  # no
 
 
 # distribution classes with working torch versions in torch.distributions
-USE_TORCH_DISTRIBUTIONS = int(os.environ.get('PYRO_USE_TORCH_DISTRIBUTIONS', 0))
-if USE_TORCH_DISTRIBUTIONS:
+try:
     from pyro.distributions.torch.bernoulli import Bernoulli
     from pyro.distributions.torch.beta import Beta
     from pyro.distributions.torch.categorical import Categorical
@@ -42,7 +41,10 @@ if USE_TORCH_DISTRIBUTIONS:
     from pyro.distributions.torch.normal import Normal
     from pyro.distributions.torch.one_hot_categorical import OneHotCategorical
     from pyro.distributions.torch.uniform import Uniform
-else:
+except ImportError:
+    warnings.warn('Using deprecated Pyro 0.1.2 builtin distributions. '
+                  'Please upgrade to latest PyTorch 0.4 prerelease on the master branch.',
+                  DeprecationWarning)
     from pyro.distributions.bernoulli import Bernoulli
     from pyro.distributions.beta import Beta
     from pyro.distributions.categorical import Categorical

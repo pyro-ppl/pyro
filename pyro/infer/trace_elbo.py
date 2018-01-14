@@ -4,6 +4,7 @@ import numbers
 import warnings
 
 import numpy as np
+from torch.autograd import Variable
 
 import pyro
 import pyro.poutine as poutine
@@ -106,7 +107,10 @@ class Trace_ELBO(object):
         for weight, model_trace, guide_trace, log_r in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = weight * 0
 
-            log_pdf = "batch_log_pdf" if (self.enum_discrete and weight.size(0) > 1) else "log_pdf"
+            if (self.enum_discrete and isinstance(weight, Variable) and weight.size(0) > 1):
+                log_pdf = "batch_log_pdf"
+            else:
+                log_pdf = "log_pdf"
             for name in model_trace.nodes.keys():
                 if model_trace.nodes[name]["type"] == "sample":
                     if model_trace.nodes[name]["is_observed"]:
@@ -144,9 +148,13 @@ class Trace_ELBO(object):
             surrogate_elbo_particle = weight * 0
             batched = (self.enum_discrete and weight.size(0) > 1)
             # compute elbo and surrogate elbo
+            if (self.enum_discrete and isinstance(weight, Variable) and weight.size(0) > 1):
+                log_pdf = "batch_log_pdf"
+            else:
+                log_pdf = "log_pdf"
             for name, model_site in model_trace.nodes.items():
                 if model_site["type"] == "sample":
-                    model_log_pdf = model_site["batch_log_pdf" if batched else "log_pdf"]
+                    model_log_pdf = model_site[log_pdf]
                     if model_site["is_observed"]:
                         elbo_particle += model_log_pdf
                         surrogate_elbo_particle += model_log_pdf

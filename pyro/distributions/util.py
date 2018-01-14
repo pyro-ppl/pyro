@@ -151,7 +151,7 @@ def torch_multinomial(input, num_samples, replacement=False):
     Does not support keyword argument `out`.
     """
     if input.is_cuda:
-        return torch_multinomial(input.cpu(), num_samples, replacement).cuda()
+        return torch.multinomial(input.cpu(), num_samples, replacement).cuda(input.get_device())
     else:
         return torch.multinomial(input, num_samples, replacement)
 

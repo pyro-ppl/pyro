@@ -4,7 +4,7 @@ import torch
 
 from pyro.distributions.categorical import Categorical as _Categorical
 from pyro.distributions.torch_wrapper import TorchDistribution
-from pyro.distributions.util import copy_docs_from, get_clamped_probs
+from pyro.distributions.util import copy_docs_from
 
 
 @copy_docs_from(_Categorical)
@@ -12,9 +12,9 @@ class Categorical(TorchDistribution):
     enumerable = True
 
     def __init__(self, ps=None, logits=None, *args, **kwargs):
-        ps = get_clamped_probs(ps, logits, is_multidimensional=True)
-        torch_dist = torch.distributions.Categorical(ps)
-        x_shape = ps.shape[:-1] + (1,)
+        torch_dist = torch.distributions.Categorical(probs=ps, logits=logits)
+        x_shape = ps.shape[:-1] + (1,) if ps is not None \
+            else logits.shape[:-1] + (1,)
         event_dim = 1
         super(Categorical, self).__init__(torch_dist, x_shape, event_dim, *args, **kwargs)
 
