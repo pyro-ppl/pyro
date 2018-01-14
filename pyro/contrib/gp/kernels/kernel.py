@@ -12,14 +12,4 @@ class Kernel(nn.Module):
         super(nn.Module, self).__init__()
         pass
 
-
-
-    def __add__(self, other):
-        return Add(self, other)
-
-    def __mul__(self, other):
-        return Mul(self, other)
-
-
-class Add(Kernel):
-    pass
+    
