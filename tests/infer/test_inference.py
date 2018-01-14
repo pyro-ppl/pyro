@@ -12,13 +12,13 @@ import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
 from pyro.distributions.testing import fakes
+from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
 from pyro.distributions.transformed_distribution import TransformedDistribution
 from pyro.infer.svi import SVI
 from pyro.util import ng_ones, ng_zeros
 from tests.common import assert_equal
 from tests.distributions.test_transformed_distribution import AffineExp
 
-from pyro.distributions.rejection_gamma import ShapeAugmentedGamma
 
 def param_mse(name, target):
     return torch.sum(torch.pow(target - pyro.param(name), 2.0)).data.cpu().numpy()[0]
