@@ -78,7 +78,7 @@ class ShapeAugmentedGamma(Gamma):
             raise ValueError('Need to boost at least once for alpha < 1')
         super(ShapeAugmentedGamma, self).__init__(alpha, beta)
         self._boost = boost
-        self._rejection_gamma = RejectionStandardGamma(alpha + boost)
+        self._rejection_gamma = RejectionGamma(alpha + boost, beta)
         self._unboost_x_cache = None, None
 
     def sample(self):
@@ -86,15 +86,15 @@ class ShapeAugmentedGamma(Gamma):
         boosted_x = x.clone()
         for i in range(self._boost):
             boosted_x *= (1 - x.new(x.shape).uniform_()) ** (1 / (i + self.alpha))
-        self._unboost_x_cache = boosted_x / self.beta, x
-        return self._unboost_x_cache[0]
+        self._unboost_x_cache = boosted_x, x
+        return boosted_x
 
-    def score_parts(self, boosted_x):
-        assert self._unboost_x_cache[0] is boosted_x
+    def score_parts(self, boosted_x=None):
+        if boosted_x is None:
+            boosted_x = self._unboost_x_cache[0]
+        assert boosted_x is self._unboost_x_cache[0]
         x = self._unboost_x_cache[1]
-        score_function = self._rejection_gamma.score_parts(x)[1]
-        log_pdf = self.batch_log_pdf(boosted_x)
-        return ScoreParts(log_pdf, score_function, log_pdf)
+        return self._rejection_gamma.score_parts(x)
 
 
 def kl_gamma_gamma(p, q):
