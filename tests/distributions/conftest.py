@@ -8,7 +8,8 @@ import scipy.stats as sp
 
 import pyro.distributions as dist
 from pyro.distributions import (Bernoulli, Beta, Binomial, Categorical, Cauchy, Dirichlet, Exponential, Gamma,
-                                HalfCauchy, LogNormal, Multinomial, Normal, OneHotCategorical, Poisson, Uniform)
+                                HalfCauchy, LogNormal, Multinomial, MultivariateNormal, Normal, OneHotCategorical,
+                                Poisson, Uniform)
 from tests.distributions.dist_fixture import Fixture
 
 continuous_dists = [
@@ -75,6 +76,19 @@ continuous_dists = [
             scipy_arg_fn=lambda mu, sigma: ((), {"loc": np.array(mu), "scale": np.array(sigma)}),
             prec=0.07,
             min_samples=50000),
+    Fixture(pyro_dist=(dist.multivariate_normal, MultivariateNormal),
+            scipy_dist=sp.multivariate_normal,
+            examples=[
+                {'loc': [2.0, 1.0], 'covariance_matrix': [[1.0, 0.5], [0.5, 1.0]],
+                    'test_data': [[2.0, 1.0], [9.0, 3.4]]},
+                {'loc': [2.0, 1.0], 'scale_tril': [[1.0, 0.5], [0, 3900231685776981/4503599627370496]],
+                 'test_data': [[2.0, 1.0], [9.0, 3.4]]}
+            ],
+            # This hack seems to be the best option right now, as 'sigma' is not handled well by get_scipy_batch_logpdf
+            scipy_arg_fn=lambda loc, covariance_matrix=None, scale_tril=None:
+                ((), {"mean": np.array(loc), "cov": np.array([[1.0, 0.5], [0.5, 1.0]])}),
+            prec=0.01,
+            min_samples=500000),
     Fixture(pyro_dist=(dist.lognormal, LogNormal),
             scipy_dist=sp.lognorm,
             examples=[

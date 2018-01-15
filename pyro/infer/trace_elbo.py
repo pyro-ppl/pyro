@@ -4,6 +4,7 @@ import numbers
 import warnings
 
 import numpy as np
+from torch.autograd import Variable
 
 import pyro
 import pyro.poutine as poutine
@@ -59,8 +60,6 @@ class Trace_ELBO(object):
         """
         runs the guide and runs the model against the guide with
         the result packaged as a trace generator
-
-        XXX support for automatically settings args/kwargs to volatile?
         """
 
         for i in range(self.num_particles):
@@ -102,7 +101,10 @@ class Trace_ELBO(object):
         for weight, model_trace, guide_trace, log_r in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = weight * 0
 
-            log_pdf = "batch_log_pdf" if (self.enum_discrete and weight.size(0) > 1) else "log_pdf"
+            if (self.enum_discrete and isinstance(weight, Variable) and weight.size(0) > 1):
+                log_pdf = "batch_log_pdf"
+            else:
+                log_pdf = "log_pdf"
             for name in model_trace.nodes.keys():
                 if model_trace.nodes[name]["type"] == "sample":
                     if model_trace.nodes[name]["is_observed"]:
@@ -139,7 +141,10 @@ class Trace_ELBO(object):
             elbo_particle = weight * 0
             surrogate_elbo_particle = weight * 0
             # compute elbo and surrogate elbo
-            log_pdf = "batch_log_pdf" if (self.enum_discrete and weight.size(0) > 1) else "log_pdf"
+            if (self.enum_discrete and isinstance(weight, Variable) and weight.size(0) > 1):
+                log_pdf = "batch_log_pdf"
+            else:
+                log_pdf = "log_pdf"
             for name, model_site in model_trace.nodes.items():
                 if model_site["type"] == "sample":
                     if model_site["is_observed"]:

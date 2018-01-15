@@ -118,7 +118,7 @@ def test_score_errors_event_dim_mismatch(dist):
     for idx in dist.get_batch_data_indices():
         dist_params = dist.get_dist_params(idx)
         test_data_wrong_dims = ng_ones(d.shape(**dist_params) + (1,))
-        with pytest.raises(ValueError):
+        with pytest.raises((ValueError, RuntimeError)):
             d.batch_log_pdf(test_data_wrong_dims, **dist_params)
 
 

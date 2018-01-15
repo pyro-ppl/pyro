@@ -222,8 +222,7 @@ class DMM(nn.Module):
 
         # if on gpu we need the fully broadcast view of the rnn initial state
         # to be in contiguous gpu memory
-        h_0_contig = self.h_0 if not self.use_cuda \
-            else self.h_0.expand(1, mini_batch.size(0), self.rnn.hidden_size).contiguous()
+        h_0_contig = self.h_0.expand(1, mini_batch.size(0), self.rnn.hidden_size).contiguous()
         # push the observed x's through the rnn;
         # rnn_output contains the hidden state at each time step
         rnn_output, _ = self.rnn(mini_batch_reversed, h_0_contig)
@@ -293,10 +292,10 @@ def main(args):
     test_seq_lengths = rep(test_seq_lengths)
     val_batch, val_batch_reversed, val_batch_mask, val_seq_lengths = poly.get_mini_batch(
         np.arange(n_eval_samples * val_data_sequences.shape[0]), rep(val_data_sequences),
-        val_seq_lengths, volatile=True, cuda=args.cuda)
+        val_seq_lengths, cuda=args.cuda)
     test_batch, test_batch_reversed, test_batch_mask, test_seq_lengths = poly.get_mini_batch(
         np.arange(n_eval_samples * test_data_sequences.shape[0]), rep(test_data_sequences),
-        test_seq_lengths, volatile=True, cuda=args.cuda)
+        test_seq_lengths, cuda=args.cuda)
 
     # instantiate the dmm
     dmm = DMM(rnn_dropout_rate=args.rnn_dropout_rate, num_iafs=args.num_iafs,

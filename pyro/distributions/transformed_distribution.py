@@ -9,9 +9,11 @@ from six import add_metaclass
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
+from pyro.distributions.util import copy_docs_from
 from pyro.nn import AutoRegressiveNN
 
 
+@copy_docs_from(Distribution)
 class TransformedDistribution(Distribution):
     """
     Transforms the base distribution by applying a sequence of `Bijector`s to it.
@@ -54,15 +56,9 @@ class TransformedDistribution(Distribution):
         return next_input
 
     def batch_shape(self, x=None, *args, **kwargs):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_shape`
-        """
         return self.base_dist.batch_shape(x, *args, **kwargs)
 
     def event_shape(self, *args, **kwargs):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.event_shape`
-        """
         return self.base_dist.event_shape(*args, **kwargs)
 
     def log_pdf(self, y, *args, **kwargs):
@@ -85,9 +81,6 @@ class TransformedDistribution(Distribution):
         return log_pdf
 
     def batch_log_pdf(self, y, *args, **kwargs):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_log_pdf`
-        """
         value = y
         log_det_jacobian = 0.0
         for bijector in reversed(self.bijectors):

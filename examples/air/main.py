@@ -5,6 +5,7 @@ AIR applied to the multi-mnist data set [1].
 understanding with generative models." Advances in Neural Information
 Processing Systems. 2016.
 """
+from __future__ import division
 
 import math
 import os

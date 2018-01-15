@@ -1,30 +1,17 @@
 from __future__ import absolute_import, division, print_function
 
 import functools
-import re
 import warnings
 
 import graphviz
 import numpy as np
-import torch
-from torch.autograd import Variable
-from torch.nn import Parameter
 
+import torch
 from pyro.poutine.poutine import _PYRO_STACK
 from pyro.poutine.util import site_is_subsample
-
-
-def parse_torch_version():
-    """
-    Parses `torch.__version__` into a semver-ish version tuple.
-    This is needed to handle subpatch `_n` parts outside of the semver spec.
-
-    :returns: a tuple `(major, minor, patch, extra_stuff)`
-    """
-    match = re.match(r"(\d\.\d\.\d)(.*)", torch.__version__)
-    major, minor, patch = map(int, match.group(1).split("."))
-    extra_stuff = match.group(2)
-    return major, minor, patch, extra_stuff
+from pyro.shim import is_volatile
+from torch.autograd import Variable
+from torch.nn import Parameter
 
 
 def detach_iterable(iterable):
@@ -142,7 +129,7 @@ def zero_grads(tensors):
     """
     for p in tensors:
         if p.grad is not None:
-            if p.grad.volatile:
+            if is_volatile(p.grad):
                 p.grad.data.zero_()
             else:
                 data = p.grad.data

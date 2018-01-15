@@ -88,17 +88,6 @@ class Distribution(object):
     reparameterized = False
     enumerable = False
 
-    def __init__(self, reparameterized=None):
-        """
-        Constructor for base distribution class.
-
-        :param bool reparameterized: Optional argument to override whether
-            instance should be considered reparameterized (by default, this
-            is decided by the class).
-        """
-        if reparameterized is not None:
-            self.reparameterized = reparameterized
-
     def batch_shape(self, x=None, *args, **kwargs):
         """
         The left-hand tensor shape of samples, used for batching.

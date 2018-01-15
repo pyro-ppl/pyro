@@ -79,12 +79,6 @@ def ps(request):
     return request.param
 
 
-@pytest.fixture(params=[None, [3, 4, 5], ["a", "b", "c"]],
-                ids=["vs=None", "vs=list(num)", "vs=list(str)"])
-def vs(request):
-    return request.param
-
-
 def modify_params_using_dims(ps, dim):
     return Variable(torch.Tensor(wrap_nested(ps, dim-1)))
 

@@ -8,8 +8,10 @@ import torch
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
+from pyro.distributions.util import copy_docs_from
 
 
+@copy_docs_from(Distribution)
 class Cauchy(Distribution):
     """
     Cauchy (a.k.a. Lorentz) distribution.
@@ -38,9 +40,6 @@ class Cauchy(Distribution):
         super(Cauchy, self).__init__(*args, **kwargs)
 
     def batch_shape(self, x=None):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_shape`
-        """
         event_dim = 1
         mu = self.mu
         if x is not None:
@@ -56,16 +55,10 @@ class Cauchy(Distribution):
         return mu.size()[:-event_dim]
 
     def event_shape(self):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.event_shape`
-        """
         event_dim = 1
         return self.mu.size()[-event_dim:]
 
     def sample(self):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.sample`
-        """
         np_sample = spr.cauchy.rvs(self.mu.data.cpu().numpy(), self.gamma.data.cpu().numpy())
         if isinstance(np_sample, numbers.Number):
             np_sample = [np_sample]
@@ -73,9 +66,6 @@ class Cauchy(Distribution):
         return sample
 
     def batch_log_pdf(self, x):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.batch_log_pdf`
-        """
         # expand to patch size of input
         mu = self.mu.expand(self.shape(x))
         gamma = self.gamma.expand(self.shape(x))
@@ -86,13 +76,7 @@ class Cauchy(Distribution):
         return log_pdf.contiguous().view(batch_log_pdf_shape)
 
     def analytic_mean(self):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_mean`
-        """
         raise ValueError("Cauchy has no defined mean")
 
     def analytic_var(self):
-        """
-        Ref: :py:meth:`pyro.distributions.distribution.Distribution.analytic_var`
-        """
         raise ValueError("Cauchy has no defined variance")
