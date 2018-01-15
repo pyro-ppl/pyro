@@ -1,13 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
-from torch.autograd import Variable
 import torch.nn as nn
 
 
 class Kernel(nn.Module):
     """
     Base class for kernels used in Gaussian Process.
-    
+
     Every inherited class should implement the forward pass which
         take inputs X, X2 and return their covariance matrix.
     """

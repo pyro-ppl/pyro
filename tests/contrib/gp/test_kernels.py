@@ -6,6 +6,7 @@ from torch.autograd import Variable
 from pyro.contrib.gp.kernels import RBF
 from tests.common import assert_equal
 
+
 def test_K_rbf():
     kernel = RBF(variance=torch.Tensor([2]), lengthscale=torch.Tensor([2]))
     X = Variable(torch.Tensor([[1, 0, 1], [2, 1, 3]]))

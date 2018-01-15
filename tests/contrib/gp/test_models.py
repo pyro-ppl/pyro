@@ -7,6 +7,7 @@ from pyro.contrib.gp.kernels import RBF
 from pyro.contrib.gp.models import GPRegression
 from tests.common import assert_equal
 
+
 def test_forward_gpr():
     kernel = RBF(torch.ones(1), torch.ones(1))
     X = Variable(torch.Tensor([[1, 2, 3], [4, 5, 6]]))
@@ -21,4 +22,3 @@ def test_forward_gpr():
     assert cov.size(1) == 2
     assert_equal(loc.data.sum(), kernel.K(X).matmul(y).data.sum())
     assert_equal(cov.data.abs().sum(), 0)
-    
