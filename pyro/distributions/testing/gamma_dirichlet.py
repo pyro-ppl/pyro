@@ -37,7 +37,7 @@ class ShapeAugmentedDirichlet(Dirichlet):
     def score_parts(self, x):
         log_pdf = self.batch_log_pdf(x)
         if self.allow_bias:
-            score_function =  0
+            score_function = 0
         else:
             score_function = self._gamma.score_parts()[1].sum(-1, True)
             assert score_function.shape == log_pdf.shape, (score_function.shape, log_pdf.shape)
