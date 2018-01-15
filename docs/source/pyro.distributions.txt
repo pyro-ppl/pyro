@@ -49,6 +49,13 @@ Normal
     :undoc-members:
     :show-inheritance:
 
+MultivariateNormal
+------------------
+.. automodule:: pyro.distributions.multivariate_normal
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Exponential
 -----------
 .. automodule:: pyro.distributions.exponential

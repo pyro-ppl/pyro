@@ -45,3 +45,7 @@ git clone git@github.com:uber/pyro.git
 cd pyro
 pip install .
 ```
+
+## Running Pyro from a Docker Container
+
+Refer to the instructions [here](docker/README.md).

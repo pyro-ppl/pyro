@@ -213,10 +213,12 @@ def assert_equal(x, y, prec=1e-5, msg=''):
             assert_equal(x_val, y[key], prec, msg='{} {}'.format(key, msg))
     elif is_iterable(x) and is_iterable(y):
         if prec == 0:
-            assert len(x) == len(y)
+            assert len(x) == len(y), msg
             for xi, yi in zip(x, y):
                 assert_equal(xi, yi, prec, msg)
         else:
+            if not msg:
+                msg = '{} vs {}'.format(x, y)
             assert list(x) == approx(list(y), prec), msg
     else:
         assert x == y, msg

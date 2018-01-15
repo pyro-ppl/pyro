@@ -35,8 +35,6 @@ class TestCategorical(TestCase):
 
         self.support_non_vec = torch.Tensor([[0], [1], [2]])
         self.support = torch.Tensor([[[0], [0]], [[1], [1]], [[2], [2]]])
-        self.arr_support_non_vec = [['a'], ['b'], ['c']]
-        self.arr_support = [[['a'], ['d']], [['b'], ['e']], [['c'], ['f']]]
 
     def test_log_pdf(self):
         log_px_torch = dist.categorical.batch_log_pdf(self.test_data, self.ps).data[0]
@@ -65,15 +63,6 @@ def wrap_nested(x, dim):
     return wrap_nested([x], dim-1)
 
 
-def assert_correct_dimensions(sample, ps):
-    ps_shape = list(ps.data.size())
-    if isinstance(sample, torch.autograd.Variable):
-        sample_shape = list(sample.data.size())
-    else:
-        sample_shape = list(sample.shape)
-    assert_equal(sample_shape, ps_shape[:-1] + [1])
-
-
 @pytest.fixture(params=[1, 2, 3], ids=lambda x: "dim=" + str(x))
 def dim(request):
     return request.param
@@ -91,14 +80,13 @@ def modify_params_using_dims(ps, dim):
 def test_support_dims(dim, ps):
     ps = modify_params_using_dims(ps, dim)
     support = dist.categorical.enumerate_support(ps)
-    for s in support:
-        assert_correct_dimensions(s, ps)
+    assert_equal(support.size(), torch.Size((ps.size(-1),) + ps.size()[:-1] + (1,)))
 
 
 def test_sample_dims(dim, ps):
     ps = modify_params_using_dims(ps, dim)
     sample = dist.categorical.sample(ps)
-    assert_correct_dimensions(sample, ps)
+    assert_equal(sample.size(), ps.size()[:-1] + (1,))
 
 
 def test_batch_log_dims(dim, ps):

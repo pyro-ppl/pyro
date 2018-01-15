@@ -138,17 +138,15 @@ class AIR(nn.Module):
         # Sample attention window position.
         z_where = pyro.sample('z_where_{}'.format(t),
                               dist.normal,
-                              self.z_where_mu_prior,
-                              self.z_where_sigma_prior,
-                              batch_size=n,
+                              self.z_where_mu_prior.expand(n, self.z_where_size),
+                              self.z_where_sigma_prior.expand(n, self.z_where_size),
                               log_pdf_mask=sample_mask)
 
         # Sample latent code for contents of the attention window.
         z_what = pyro.sample('z_what_{}'.format(t),
                              dist.normal,
-                             self.ng_zeros([self.z_what_size]),
-                             self.ng_ones([self.z_what_size]),
-                             batch_size=n,
+                             self.ng_zeros([n, self.z_what_size]),
+                             self.ng_ones([n, self.z_what_size]),
                              log_pdf_mask=sample_mask)
 
         # Map latent code to pixel space.

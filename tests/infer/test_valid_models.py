@@ -486,6 +486,7 @@ def test_no_iarange_enum_discrete_batch_error():
     assert_error(model, guide, enum_discrete=True)
 
 
+@pytest.mark.xfail(reason="torch.distributions.Bernoulli is too permissive")
 def test_enum_discrete_global_local_error():
 
     def model():
