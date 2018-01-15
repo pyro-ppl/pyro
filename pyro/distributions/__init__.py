@@ -22,7 +22,6 @@ from pyro.distributions.delta import Delta
 from pyro.distributions.distribution import Distribution  # noqa: F401
 from pyro.distributions.half_cauchy import HalfCauchy
 from pyro.distributions.log_normal import LogNormal
-from pyro.distributions.multinomial import Multinomial
 from pyro.distributions.multivariate_normal import MultivariateNormal
 from pyro.distributions.poisson import Poisson
 from pyro.distributions.random_primitive import RandomPrimitive
@@ -36,6 +35,7 @@ try:
     from pyro.distributions.torch.dirichlet import Dirichlet
     from pyro.distributions.torch.exponential import Exponential
     from pyro.distributions.torch.gamma import Gamma
+    from pyro.distributions.torch.multinomial import Multinomial
     from pyro.distributions.torch.normal import Normal
     from pyro.distributions.torch.one_hot_categorical import OneHotCategorical
     from pyro.distributions.torch.uniform import Uniform
@@ -50,6 +50,7 @@ except ImportError:
     from pyro.distributions.dirichlet import Dirichlet
     from pyro.distributions.exponential import Exponential
     from pyro.distributions.gamma import Gamma
+    from pyro.distributions.multinomial import Multinomial
     from pyro.distributions.normal import Normal
     from pyro.distributions.one_hot_categorical import OneHotCategorical
     from pyro.distributions.uniform import Uniform
