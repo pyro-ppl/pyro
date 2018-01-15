@@ -1,26 +1,28 @@
 from __future__ import absolute_import, division, print_function
 
+import torch
 from torch.autograd import Variable
 import torch.nn as nn
 from torch.nn import Parameter
 
+import pyro
 import pyro.distributions as dist
-from pyro.util import ng_ones, ng_zeros
+from pyro.util import ng_zeros
 
 
 class GPRegression(nn.Module):
     """
     Gaussian Process regression module.
     """
-    def __init__(self, X, y, kernel, priors={}, noise=torch.ones(1)):
-        super(GPRegressor, self).__init__()
+    def __init__(self, X, y, kernel, noise=torch.ones(1), priors={}):
+        super(GPRegression, self).__init__()
         self.X = X
         self.y = y
         self.input_dim = X.size(0)
         self.kernel = kernel
-        self.priors = priors
         # TODO: define noise as a nn.Module, so we can train/set prior to it
         self.noise = Variable(noise.type_as(X.data))
+        self.priors = priors
         
     def model(self):
         kernel_fn = pyro.random_module(self.kernel.name, self.kernel, self.priors)

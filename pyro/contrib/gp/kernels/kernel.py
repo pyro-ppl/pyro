@@ -42,8 +42,8 @@ class Kernel(nn.Module):
         if X.dim() == 2:
             active_dims = self.active_dims
             if active_dims is None:
-                active_dims = slice(X.size(1)) 
-            return X[:, self.active_dims]
+                active_dims = slice(X.size(1))
+            return X[:, active_dims]
         elif X.dim() == 1:
             return X.unsqueeze(1)
         else:

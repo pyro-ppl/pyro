@@ -25,8 +25,8 @@ class RBF(Kernel):
             X = X.unsqueeze(1)
             Z = Z.unsqueeze(1)
 
-        XX = (X ** 2).sum(1)
-        ZZ = (Z ** 2).sum(1)
-        XZ = X.mm(Z.t())    
-        r2 = XX + ZZ - 2 * XZ
-        return self.variance * torch.exp(0.5 * r2 / self.lengthscale**2)
+        X2 = (X ** 2).sum(1, keepdim=True)
+        Z2 = (Z ** 2).sum(1, keepdim=True)
+        XZ = X.matmul(Z.t())
+        d2 = X2 - 2 * XZ + Z2.t()
+        return self.variance * torch.exp(-0.5 * d2 / self.lengthscale**2)
