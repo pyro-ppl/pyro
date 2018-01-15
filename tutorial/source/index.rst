@@ -21,6 +21,7 @@ Welcome to Pyro Examples and Tutorials!
    air
    ss-vae
    gmm
+   gp
 
 
 Indices and tables

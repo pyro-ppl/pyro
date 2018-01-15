@@ -19,11 +19,12 @@ class RBF(Kernel):
     def forward(self, X, Z=None):
         if Z is None:
             Z = X
-        if X.size() != Z.size():
-            raise ValueError("Inputs must have the same shapes.")
         if X.dim() == 1:
             X = X.unsqueeze(1)
+        if Z.dim() == 1:
             Z = Z.unsqueeze(1)
+        if X.size(1) != Z.size(1):
+            raise ValueError("Inputs must have the same number of features.")
 
         X2 = (X ** 2).sum(1, keepdim=True)
         Z2 = (Z ** 2).sum(1, keepdim=True)

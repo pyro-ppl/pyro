@@ -26,7 +26,7 @@ class GPRegression(nn.Module):
         kernel_fn = pyro.random_module(self.kernel.name, self.kernel, self.priors)
         kernel = kernel_fn()
         K = kernel.K(self.X) + self.noise.repeat(self.input_dim).diag()
-        zero_loc = Variable(torch.zeros(self.input_dim).type_as(K))
+        zero_loc = Variable(torch.zeros(self.input_dim).type_as(K.data))
         pyro.sample("f", dist.MultivariateNormal(zero_loc, K), obs=self.y)
 
     def guide(self):
