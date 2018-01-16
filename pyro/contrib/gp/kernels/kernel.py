@@ -21,8 +21,8 @@ class Kernel(nn.Module):
         Calculate covariance matrix of inputs on active dimensionals.
 
         :param torch.autograd.Variable X: A 2D tensor of size `N x input_dim`.
-        :param torch.autograd.Variable X2: A 2D tensor of size `N x input_dim`.
-        :return: Covariance matrix of X and X2 with size `N x N`.
+        :param torch.autograd.Variable Z: A 2D tensor of size `N x input_dim`.
+        :return: Covariance matrix of X and Z with size `N x N`.
         :rtype: torch.autograd.Variable
         """
         if Z is None:

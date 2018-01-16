@@ -8,7 +8,7 @@ from .kernel import Kernel
 
 class RBF(Kernel):
     """
-    Implementation of RBF kernel.
+    Implementation of Radial Basis Function kernel.
     """
 
     def __init__(self, variance=torch.ones(1), lengthscale=torch.ones(1), active_dims=None, name="RBF"):
