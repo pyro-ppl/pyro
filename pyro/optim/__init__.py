@@ -30,7 +30,7 @@ def Adagrad(optim_args):
 
 def AdagradRMSProp(optim_args):
     """
-    A wrapper for an optimizer that is a mash-up of Adgarad and RMSProp
+    A wrapper for an optimizer that is a mash-up of Adagrad and RMSProp
     """
     return PyroOptim(pt_AdagradRMSProp, optim_args)
 
