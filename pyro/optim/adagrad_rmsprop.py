@@ -6,11 +6,13 @@ from torch.optim.optimizer import Optimizer
 
 class AdagradRMSProp(Optimizer):
     """
-    Implements a mash-up of the Adagrad algorithm and RMSProp. See ref. [1].
+    Implements a mash-up of the Adagrad algorithm and RMSProp. For the precise
+    update equation see equations 10 and 11 in reference [1].
 
     References:
     [1] 'Automatic Differentiation Variational Inference', Alp Kucukelbir,
         Dustin Tran, Rajesh Ranganath, Andrew Gelman, David M. Blei
+        URL: https://arxiv.org/abs/1603.00788
     [2] 'Lecture 6.5 RmsProp: Divide the gradient by a running average
         of its recent magnitude', Tieleman, T. and Hinton, G.,
         COURSERA: Neural Networks for Machine Learning.
