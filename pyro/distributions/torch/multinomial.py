@@ -5,13 +5,24 @@ import numbers
 import torch
 from torch.autograd import Variable
 
-from pyro.distributions.multinomial import Multinomial as _Multinomial
 from pyro.distributions.torch_wrapper import TorchDistribution
 from pyro.distributions.util import copy_docs_from
 
 
-@copy_docs_from(_Multinomial)
+@copy_docs_from(TorchDistribution)
 class Multinomial(TorchDistribution):
+    """
+    Multinomial distribution.
+
+    Distribution over counts for `n` independent `Categorical(ps)` trials.
+
+    This is often used in conjunction with `torch.nn.Softmax` to ensure
+    probabilites `ps` are normalized.
+
+    :param torch.autograd.Variable ps: Probabilities (real). Should be positive
+        and should normalized over the rightmost axis.
+    :param int n: Number of trials. Should be positive.
+    """
     enumerable = True
 
     def __init__(self, ps, n, *args, **kwargs):
