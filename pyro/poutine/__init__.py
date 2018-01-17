@@ -10,7 +10,7 @@ from .condition_poutine import ConditionPoutine
 from .escape_poutine import EscapePoutine
 from .indep_poutine import IndepPoutine  # noqa: F401
 from .lift_poutine import LiftPoutine
-from .poutine import _PYRO_STACK, Poutine  # noqa: F401
+from .poutine import _PYRO_STACK, _DEFAULT_CONTEXT, Poutine  # noqa: F401
 from .replay_poutine import ReplayPoutine
 from .scale_poutine import ScalePoutine
 from .trace import Trace  # noqa: F401

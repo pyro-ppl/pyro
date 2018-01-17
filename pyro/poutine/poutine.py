@@ -5,6 +5,16 @@ from pyro.params import _PYRO_PARAM_STORE
 # the global pyro stack
 _PYRO_STACK = []
 
+# a layer of indirection for the _DEFAULT_CONTEXT flag
+class DefaultContext():
+    def __init__(self):
+        pass
+
+    def is_active(self):
+        return len(_PYRO_STACK) == 0
+
+# default context is active iff the model code is executed unwrapped
+_DEFAULT_CONTEXT = DefaultContext()
 
 class Poutine(object):
     """
