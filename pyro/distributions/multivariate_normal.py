@@ -77,7 +77,7 @@ class MultivariateNormal(Distribution):
         Since the gradient of torch.potri is currently not implemented,
         differentiation of log_pdf wrt. covariance matrix is not possible when
         using the Cholesky decomposition. Using the Cholesky decomposition is
-        however much faster and therefore enabled by default.
+        however much faster for large matrices.
     :param normalized: If set to `False` the normalization constant is omitted
         in the results of batch_log_pdf and log_pdf. This might be preferable,
         as computing the determinant of the covariance matrix might not always
@@ -88,7 +88,7 @@ class MultivariateNormal(Distribution):
 
     reparameterized = True
 
-    def __init__(self, loc, covariance_matrix=None, scale_tril=None, batch_size=None, use_inverse_for_batch_log=False,
+    def __init__(self, loc, covariance_matrix=None, scale_tril=None, batch_size=None, use_inverse_for_batch_log=True,
                  normalized=True, *args, **kwargs):
         if covariance_matrix is None and scale_tril is None:
             raise ValueError('At least one of covariance_matrix or scale_tril must be specified')

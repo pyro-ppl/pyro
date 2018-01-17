@@ -6,6 +6,13 @@ from pyro.distributions.util import copy_docs_from
 from torch.autograd import Function, Variable
 
 
+def _MVN_backward(white, grad_output):
+    grad = (grad_output.unsqueeze(-2) * white.unsqueeze(-1)).squeeze(0)
+    grad = grad + grad.transpose(-1, -2)
+    grad *= 0.5
+    return grad_output, torch.triu(grad)
+
+
 class _SymmetricSample(Function):
     @staticmethod
     def forward(ctx, mu, sigma_cholesky):
@@ -14,10 +21,7 @@ class _SymmetricSample(Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        grad = (grad_output.unsqueeze(-2) * Variable(ctx.white.unsqueeze(-1))).squeeze(0)
-        grad = grad + grad.transpose(-1, -2)
-        grad *= 0.5
-        return grad_output, torch.triu(grad)
+        return _MVN_backward(Variable(ctx.white), grad_output)
 
 
 @copy_docs_from(MultivariateNormal)
