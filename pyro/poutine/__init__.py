@@ -13,6 +13,7 @@ from .lift_poutine import LiftPoutine
 from .poutine import _PYRO_STACK, Poutine  # noqa: F401
 from .replay_poutine import ReplayPoutine
 from .scale_poutine import ScalePoutine
+from .scope_poutine import ScopePoutine
 from .trace import Trace  # noqa: F401
 from .trace_poutine import TracePoutine
 
@@ -152,6 +153,13 @@ def scale(fn, scale):
     function.
     """
     return ScalePoutine(fn, scale=scale)
+
+
+def scope(fn, prefix=None, multi=None, flat=None):
+    """
+    TODO docs
+    """
+    return ScopePoutine(fn, prefix=prefix, multi=multi, flat=flat)
 
 
 #########################################
