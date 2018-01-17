@@ -1,8 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
-from pyro.distributions.beta import Beta
-from pyro.distributions.gamma import Gamma
-from pyro.distributions.normal import Normal
+from pyro.distributions import Beta
+from pyro.distributions import Gamma
+from pyro.distributions import Normal
 from pyro.distributions.random_primitive import RandomPrimitive
 
 
