@@ -82,9 +82,13 @@ def sample(name, fn, *args, **kwargs):
         if obs is not None:
             msg["value"] = obs
             msg["is_observed"] = True
+
         # apply the stack and return its return value
         out_msg = apply_stack(msg)
         return out_msg["value"]
+
+        # output message and return the reply
+        # return yield msg
 
 
 def observe(name, fn, obs, *args, **kwargs):

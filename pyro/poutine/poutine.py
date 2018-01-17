@@ -8,10 +8,16 @@ _PYRO_STACK = []
 # a layer of indirection for the _DEFAULT_CONTEXT flag
 class DefaultContext():
     def __init__(self):
-        pass
+        self.active_handlers = 0
 
     def is_active(self):
         return len(_PYRO_STACK) == 0
+
+    def register(self):
+        self.active_handlers = self.active_handlers + 1
+
+    def deregister(self):
+        self.active_handlers = self.active_handlers - 1
 
 # default context is active iff the model code is executed unwrapped
 _DEFAULT_CONTEXT = DefaultContext()
@@ -66,6 +72,8 @@ class Poutine(object):
         Derived versions cannot be overridden to take arguments
         and must always return self.
         """
+        _DEFAULT_CONTEXT.register()
+
         if not (self in _PYRO_STACK):
             # if this poutine is not already installed,
             # put it on the bottom of the stack.
@@ -126,6 +134,8 @@ class Poutine(object):
                 loc = _PYRO_STACK.index(self)
                 for i in range(0, loc + 1):
                     _PYRO_STACK.pop(0)
+
+        _DEFAULT_CONTEXT.deregister()
 
     def _reset(self):
         """
