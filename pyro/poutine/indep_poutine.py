@@ -31,11 +31,10 @@ class IndepPoutine(Poutine):
         self.counter += 1
         return super(IndepPoutine, self).__enter__()
 
-    def _prepare_site(self, msg):
-        """
-        Construct the message that is consumed by ``TracePoutine``;
-        ``cond_indep_stack`` encodes the nested sequence of ``irange`` branches
-        that the site at name is within.
-        """
+    def _pyro_sample(self, msg):
         msg["cond_indep_stack"].append(CondIndepStackFrame(self.name, self.counter, self.vectorized))
-        return msg
+        return super(IndepPoutine, self)._pyro_sample(msg)
+
+    def _pyro_param(self, msg):
+        msg["cond_indep_stack"].append(CondIndepStackFrame(self.name, self.counter, self.vectorized))
+        return super(IndepPoutine, self)._pyro_param(msg)

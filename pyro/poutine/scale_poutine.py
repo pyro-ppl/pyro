@@ -19,6 +19,10 @@ class ScalePoutine(Poutine):
         self.scale = scale
         super(ScalePoutine, self).__init__(fn)
 
-    def _prepare_site(self, msg):
+    def _pyro_sample(self, msg):
         msg["scale"] = self.scale * msg["scale"]
-        return msg
+        return super(ScalePoutine, self)._pyro_sample(msg)
+
+    def _pyro_param(self, msg):
+        msg["scale"] = self.scale * msg["scale"]
+        return super(ScalePoutine, self)._pyro_param(msg)
