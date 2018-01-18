@@ -23,7 +23,9 @@ class Multinomial(TorchDistribution):
 
     :param torch.autograd.Variable ps: Probabilities (real). Should be positive
         and should normalized over the rightmost axis.
-    :param int n: Optional number of trials. Should be positive.
+    :param int n: Optional number of trials. Should be positive. Defaults to 1.
+        Note that this is ignored by `.log_pdf()` which infers a `n` from each
+        event.
     """
     enumerable = True
 
