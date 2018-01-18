@@ -145,6 +145,13 @@ class Poutine(object):
         """
         pass
 
+    def _process_message(self, msg):
+        """
+        :param msg: current message at a trace site
+        :returns: modified message after performing appropriate operations
+        """
+        return getattr(self, "_pyro_{}".format(msg["type"]))(msg)
+
     def _pyro_sample(self, msg):
         """
         :param msg: current message at a trace site.
