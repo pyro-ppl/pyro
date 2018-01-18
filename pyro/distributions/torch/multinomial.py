@@ -15,17 +15,19 @@ class Multinomial(TorchDistribution):
     Multinomial distribution.
 
     Distribution over counts for `n` independent `Categorical(ps)` trials.
+    Note that `n` need not be specified if only :meth:`log_pdf` is used, e.g.
+    if this distribution is used only in :meth:`pyro.observe` statements.
 
     This is often used in conjunction with `torch.nn.Softmax` to ensure
     probabilites `ps` are normalized.
 
     :param torch.autograd.Variable ps: Probabilities (real). Should be positive
         and should normalized over the rightmost axis.
-    :param int n: Number of trials. Should be positive.
+    :param int n: Optional number of trials. Should be positive.
     """
     enumerable = True
 
-    def __init__(self, ps, n, *args, **kwargs):
+    def __init__(self, ps, n=1, *args, **kwargs):
         if isinstance(n, Variable):
             n = n.data
         if not isinstance(n, numbers.Number):

@@ -141,6 +141,8 @@ discrete_dists = [
     Fixture(pyro_dist=(dist.multinomial, Multinomial),
             scipy_dist=sp.multinomial,
             examples=[
+                {'ps': [0.1, 0.6, 0.3],
+                 'test_data': [0, 1, 0]},
                 {'ps': [0.1, 0.6, 0.3], 'n': [8],
                  'test_data': [2, 4, 2]},
                 {'ps': [0.1, 0.6, 0.3], 'n': [8],
@@ -148,7 +150,7 @@ discrete_dists = [
                 {'ps': [[0.1, 0.6, 0.3], [0.2, 0.4, 0.4]], 'n': [[8], [8]],
                  'test_data': [[2, 4, 2], [1, 4, 3]]}
             ],
-            scipy_arg_fn=lambda ps, n: ((n[0], np.array(ps)), {}),
+            scipy_arg_fn=lambda ps, n=[1]: ((n[0], np.array(ps)), {}),
             prec=0.05,
             min_samples=10000,
             is_discrete=True),
