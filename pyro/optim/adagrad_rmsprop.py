@@ -20,12 +20,13 @@ class AdagradRMSProp(Optimizer):
         Duchi, John, Hazan, E and Singer, Y.
 
     Arguments:
-        params (iterable): iterable of parameters to optimize or dicts defining
-            parameter groups
-        eta (float, optional): sets the step size scale (default: 1.0)
-        t (float, optional): momentum parameter (default: 0.1)
-        delta (float, optional): modulates the exponent that controls how the
-            step size decales (default: 1e-16)
+    :param params: iterable of parameters to optimize or dicts defining parameter groups
+    :param eta: sets the step size scale (optional; default: 1.0)
+    :type eta: float
+    :param t:  t, optional): momentum parameter (optional; default: 0.1)
+    :type t: float
+    :param delta: modulates the exponent that controls how the step size scales (optional: default: 1e-16)
+    :type delta: float
     """
 
     def __init__(self, params, eta=1.0, delta=1.0e-16, t=0.1):
@@ -45,11 +46,10 @@ class AdagradRMSProp(Optimizer):
                 state['sum'].share_memory_()
 
     def step(self, closure=None):
-        """Performs a single optimization step.
+        """
+        Performs a single optimization step.
 
-        Arguments:
-            closure (callable, optional): A closure that reevaluates the model
-                and returns the loss.
+        :param closure: A (optional) closure that reevaluates the model and returns the loss.
         """
         loss = None
         if closure is not None:
@@ -67,8 +67,12 @@ class AdagradRMSProp(Optimizer):
 
                 state = self.state[p]
                 state['step'] += 1
-                state['sum'] *= (1.0 - group['t'])
-                state['sum'] += group['t'] * grad * grad
+                if state['step'] == 1:
+                    # if first step, initialize variance bit to grad^2
+                    state['sum'] = grad * grad
+                else:
+                    state['sum'] *= (1.0 - group['t'])
+                    state['sum'] += group['t'] * grad * grad
 
                 lr = group['eta'] * (state['step'] ** (-0.5 + group['delta']))
                 std = state['sum'].sqrt()
