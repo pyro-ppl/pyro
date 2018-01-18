@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import logging
 from collections import defaultdict, namedtuple
 
+import os
 import pytest
 import torch
 from torch.autograd import Variable
@@ -47,7 +48,7 @@ def rmse(t1, t2):
     return (t1 - t2).pow(2).mean().sqrt()
 
 
-TestCase = namedtuple('TestCase', [
+T = namedtuple('TestExample', [
     'fixture',
     'num_samples',
     'warmup_steps',
@@ -57,49 +58,59 @@ TestCase = namedtuple('TestCase', [
     'mean_tol',
     'std_tol'])
 
-# TODO: delete slow test cases once code is in master
 TEST_CASES = [
-    TestCase(GaussianChain(dim=10, chain_len=3, num_obs=1),
-             num_samples=800,
-             warmup_steps=50,
-             hmc_params={'step_size': 0.5,
-                         'num_steps': 4},
-             expected_means=[0.25, 0.50, 0.75],
-             expected_precs=[1.33, 1, 1.33],
-             mean_tol=0.03,
-             std_tol=0.06),
+    T(
+        GaussianChain(dim=10, chain_len=3, num_obs=1),
+        num_samples=800,
+        warmup_steps=50,
+        hmc_params={'step_size': 0.5,
+                    'num_steps': 4},
+        expected_means=[0.25, 0.50, 0.75],
+        expected_precs=[1.33, 1, 1.33],
+        mean_tol=0.03,
+        std_tol=0.06,
+    ),
+    T(
+        GaussianChain(dim=10, chain_len=4, num_obs=1),
+        num_samples=1200,
+        warmup_steps=300,
+        hmc_params={'step_size': 0.46,
+                    'num_steps': 5},
+        expected_means=[0.20, 0.40, 0.60, 0.80],
+        expected_precs=[1.25, 0.83, 0.83, 1.25],
+        mean_tol=0.06,
+        std_tol=0.06,
+    ),
     # XXX: Very sensitive to HMC parameters. Biased estimate is obtained
     # without enough samples and/or larger step size.
-    TestCase(GaussianChain(dim=5, chain_len=2, num_obs=10000),
-             num_samples=2000,
-             warmup_steps=500,
-             hmc_params={'step_size': 0.013,
-                         'num_steps': 25},
-             expected_means=[0.5, 1.0],
-             expected_precs=[2.0, 10000],
-             mean_tol=0.05,
-             std_tol=0.05),
-    TestCase(GaussianChain(dim=10, chain_len=4, num_obs=1),
-             num_samples=1200,
-             warmup_steps=300,
-             hmc_params={'step_size': 0.46,
-                         'num_steps': 5},
-             expected_means=[0.20, 0.40, 0.60, 0.80],
-             expected_precs=[1.25, 0.83, 0.83, 1.25],
-             mean_tol=0.06,
-             std_tol=0.06),
-    TestCase(GaussianChain(dim=5, chain_len=9, num_obs=1),
-             num_samples=3000,
-             warmup_steps=500,
-             hmc_params={'step_size': 0.3,
-                         'num_steps': 8},
-             expected_means=[0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90],
-             expected_precs=[1.11, 0.63, 0.48, 0.42, 0.4, 0.42, 0.48, 0.63, 1.11],
-             mean_tol=0.08,
-             std_tol=0.08),
+    pytest.param(*T(
+        GaussianChain(dim=5, chain_len=2, num_obs=10000),
+        num_samples=2000,
+        warmup_steps=500,
+        hmc_params={'step_size': 0.013,
+                    'num_steps': 25},
+        expected_means=[0.5, 1.0],
+        expected_precs=[2.0, 10000],
+        mean_tol=0.05,
+        std_tol=0.05,
+    ), marks=pytest.mark.skipif('CI' in os.environ and os.environ['CI'] == 'true',
+                                reason='Slow test - skip on CI')),
+    pytest.param(*T(
+        GaussianChain(dim=5, chain_len=9, num_obs=1),
+        num_samples=3000,
+        warmup_steps=500,
+        hmc_params={'step_size': 0.3,
+                    'num_steps': 8},
+        expected_means=[0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90],
+        expected_precs=[1.11, 0.63, 0.48, 0.42, 0.4, 0.42, 0.48, 0.63, 1.11],
+        mean_tol=0.08,
+        std_tol=0.08,
+    ), marks=pytest.mark.skipif('CI' in os.environ and os.environ['CI'] == 'true',
+                                reason='Slow test - skip on CI'))
 ]
 
-TEST_IDS = [t[0].id_fn() for t in TEST_CASES]
+TEST_IDS = [t[0].id_fn() if type(t).__name__ == 'TestExample'
+            else t[0][0].id_fn() for t in TEST_CASES]
 
 
 @pytest.mark.parametrize(
@@ -134,11 +145,31 @@ def test_hmc_conjugate_gaussian(fixture,
         logger.info(latent_mu)
         logger.info('Posterior mean (expected) - {}'.format(param_name))
         logger.info(expected_mean)
-        assert_equal(rmse(latent_mu, expected_mean).data[0], 0, prec=mean_tol)
+        assert_equal(rmse(latent_mu, expected_mean).data[0], 0.0, prec=mean_tol)
 
         # Actual vs expected posterior precisions for the latents
         logger.info('Posterior std (actual) - {}'.format(param_name))
         logger.info(latent_std)
         logger.info('Posterior std (expected) - {}'.format(param_name))
         logger.info(expected_std)
-        assert_equal(rmse(latent_std, expected_std).data[0], 0, prec=std_tol)
+        assert_equal(rmse(latent_std, expected_std).data[0], 0.0, prec=std_tol)
+
+
+def test_logistic_regression():
+    dim = 3
+    true_coefs = Variable(torch.arange(1, dim+1))
+    data = Variable(torch.randn(2000, dim))
+    labels = dist.bernoulli.sample(logits=true_coefs * data)
+
+    def model(data):
+        coefs_mean = Variable(torch.zeros(dim), requires_grad=True)
+        coefs = pyro.sample('beta', dist.normal, mu=coefs_mean, sigma=Variable(torch.ones(dim)))
+        y = pyro.sample('y', dist.bernoulli, logits=coefs * data, obs=labels)
+        return y
+    hmc_kernel = HMC(model, step_size=0.0855, num_steps=4)
+    mcmc_run = MCMC(hmc_kernel, num_samples=2000, warmup_steps=400)
+    posterior = []
+    for t, _ in mcmc_run._traces(data):
+        posterior.append(t.nodes['beta']['value'])
+    posterior_mean = torch.mean(torch.stack(posterior), 0)
+    assert_equal(rmse(true_coefs, posterior_mean).data[0], 0.0, prec=0.15)
