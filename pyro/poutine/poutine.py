@@ -185,6 +185,7 @@ class Poutine(object):
             val = msg["value"]
         else:
             val = fn(*args, **kwargs)
+            msg["value"] = val
 
         # after fn has been called, update msg to prevent it from being called again.
         msg["done"] = True
@@ -217,6 +218,7 @@ class Poutine(object):
             return msg["value"]
 
         ret = _PYRO_PARAM_STORE.get_param(name, *args, **kwargs)
+        msg["value"] = ret
 
         # after the param store has been queried, update msg["done"]
         # to prevent it from being queried again.
