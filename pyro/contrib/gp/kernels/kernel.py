@@ -16,7 +16,7 @@ class Kernel(nn.Module):
         self.active_dims = active_dims
         self.name = name
 
-    def K(self, X, Z=None):
+    def forward(self, X, Z=None):
         """
         Calculate covariance matrix of inputs on active dimensionals.
 
@@ -25,17 +25,15 @@ class Kernel(nn.Module):
         :return: Covariance matrix of X and Z with size `N x N`.
         :rtype: torch.autograd.Variable
         """
-        if Z is None:
-            Z = X
-        X = self._slice_X(X)
-        Z = self._slice_X(Z)
-        K = self(X, Z)
-        return K
+        raise NotImplementedError
 
     def _slice_X(self, X):
         """
-        :param torch.autograd.Variable X: A 2D tensor.
-        :return: Slice X according to `self.active_dims`.
+        Slice X according to `self.active_dims`. If X is 1 dimensional then returns
+            a 2D tensor of size `N x 1`.
+
+        :param torch.autograd.Variable X: A 1D or 2D tensor.
+        :return: A 2D slice of X.
         :rtype: torch.autograd.Variable
         """
         if X.dim() == 2:

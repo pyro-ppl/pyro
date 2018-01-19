@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import torch
 from torch.autograd import Variable
 import torch.nn as nn
 
@@ -11,16 +10,26 @@ import pyro.distributions as dist
 class GPRegression(nn.Module):
     """
     Gaussian Process regression module.
+
+    :param torch.autograd.Variable X: A tensor of inputs.
+    :param torch.autograd.Variable y: A tensor of outputs for training.
+    :param pyro.gp.kernels.Kernel kernel: A Pyro kernel object.
+    :param torch.Tensor noise: An optional noise tensor.
+    :param dict priors: A mapping from kernel parameter's names to priors.
     """
-    def __init__(self, X, y, kernel, noise=torch.ones(1), priors={}):
+    def __init__(self, X, y, kernel, noise=None, priors=None):
         super(GPRegression, self).__init__()
         self.X = X
         self.y = y
         self.input_dim = X.size(0)
         self.kernel = kernel
         # TODO: define noise as a nn.Module, so we can train/set prior to it
-        self.noise = Variable(noise.type_as(X.data))
+        self.noise = noise
+        if noise is None:
+            self.noise = Variable(X.data.new([1]))
         self.priors = priors
+        if priors is None:
+            self.priors = {}
 
     def model(self):
         kernel_fn = pyro.random_module(self.kernel.name, self.kernel, self.priors)

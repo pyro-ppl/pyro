@@ -19,10 +19,8 @@ class RBF(Kernel):
     def forward(self, X, Z=None):
         if Z is None:
             Z = X
-        if X.dim() == 1:
-            X = X.unsqueeze(1)
-        if Z.dim() == 1:
-            Z = Z.unsqueeze(1)
+        X = self._slice_X(X)
+        Z = self._slice_X(Z)
         if X.size(1) != Z.size(1):
             raise ValueError("Inputs must have the same number of features.")
 
