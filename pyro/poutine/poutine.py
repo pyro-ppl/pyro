@@ -32,7 +32,6 @@ class Poutine(object):
         Constructor. Doesn't do much, just stores the stochastic function.
         """
         self.fn = fn
-        self.am_i_child = False
 
     def __call__(self, *args, **kwargs):
         """
