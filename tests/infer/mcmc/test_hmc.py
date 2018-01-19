@@ -159,18 +159,18 @@ def test_logistic_regression():
     dim = 3
     true_coefs = Variable(torch.arange(1, dim+1))
     data = Variable(torch.randn(2000, dim))
-    labels = dist.bernoulli.sample(logits=true_coefs * data)
+    labels = dist.bernoulli.sample(logits=(true_coefs * data).sum(-1))
 
     def model(data):
         coefs_mean = Variable(torch.zeros(dim), requires_grad=True)
         coefs = pyro.sample('beta', dist.normal, mu=coefs_mean, sigma=Variable(torch.ones(dim)))
-        y = pyro.sample('y', dist.bernoulli, logits=coefs * data, obs=labels)
+        y = pyro.sample('y', dist.bernoulli, logits=(coefs * data).sum(-1), obs=labels)
         return y
 
     hmc_kernel = HMC(model, step_size=0.0855, num_steps=4)
-    mcmc_run = MCMC(hmc_kernel, num_samples=2000, warmup_steps=400)
+    mcmc_run = MCMC(hmc_kernel, num_samples=500, warmup_steps=100)
     posterior = []
     for trace, _ in mcmc_run._traces(data):
         posterior.append(trace.nodes['beta']['value'])
     posterior_mean = torch.mean(torch.stack(posterior), 0)
-    assert_equal(rmse(true_coefs, posterior_mean).data[0], 0.0, prec=0.15)
+    assert_equal(rmse(true_coefs, posterior_mean).data[0], 0.0, prec=0.05)
