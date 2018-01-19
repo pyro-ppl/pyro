@@ -1,9 +1,28 @@
 from __future__ import absolute_import, division, print_function
 
+from greenlet import greenlet
+
 from pyro.params import _PYRO_PARAM_STORE
 
 # the global pyro stack
 _PYRO_STACK = []
+
+
+def am_i_wrapped():
+    """
+    :returns: True iff the currently executing code is wrapped in a poutine
+    """
+    return greenlet.getcurrent().parent is not None
+
+
+def send_message(msg):
+    """
+    :param msg: a message to be sent
+    :returns: reply message
+    Sends a message to encapsulating poutine.
+    """
+    assert am_i_wrapped()
+    return greenlet.getcurrent().parent.switch(msg)
 
 
 class Poutine(object):
@@ -39,7 +58,17 @@ class Poutine(object):
         as the stored function.
         """
         with self:
-            return self.fn(*args, **kwargs)
+            c = greenlet(self.fn)
+            t = c.switch(*args, **kwargs)
+            while not c.dead:
+                msg = t
+                self._process_message(msg)
+                if am_i_wrapped() and not msg["stop"]:
+                    reply = greenlet.getcurrent().parent.switch(msg)
+                else:
+                    reply = msg
+                t = c.switch(reply)
+        return t
 
     def __enter__(self):
         """
@@ -56,23 +85,6 @@ class Poutine(object):
         Derived versions cannot be overridden to take arguments
         and must always return self.
         """
-        if not (self in _PYRO_STACK):
-            # if this poutine is not already installed,
-            # put it on the bottom of the stack.
-            _PYRO_STACK.insert(0, self)
-
-            # necessary to return self because the return value of __enter__
-            # is bound to VAR in with EXPR as VAR.
-            return self
-        else:
-            # note: currently we raise an error if trying to install a poutine twice.
-            # However, this isn't strictly necessary,
-            # and blocks recursive poutine execution patterns like
-            # like calling self.__call__ inside of self.__call__
-            # or with Poutine(...) as p: with p: <BLOCK>
-            # It's hard to imagine use cases for this pattern,
-            # but it could in principle be enabled...
-            raise ValueError("cannot install a Poutine instance twice")
 
     def __exit__(self, exc_type, exc_value, traceback):
         """
@@ -97,25 +109,6 @@ class Poutine(object):
         Users should never be specifying these.
         They are all None unless the body of the with statement raised an exception.
         """
-        if exc_type is None:  # callee or enclosed block returned successfully
-            # if the callee or enclosed block returned successfully,
-            # this poutine should be on the bottom of the stack.
-            # If so, remove it from the stack.
-            # if not, raise a ValueError because something really weird happened.
-            if _PYRO_STACK[0] == self:
-                _PYRO_STACK.pop(0)
-            else:
-                # should never get here, but just in case...
-                raise ValueError("This Poutine is not on the bottom of the stack")
-        else:  # the wrapped function or block raised an exception
-            # poutine exception handling:
-            # when the callee or enclosed block raises an exception,
-            # find this poutine's position in the stack,
-            # then remove it and everything below it in the stack.
-            if self in _PYRO_STACK:
-                loc = _PYRO_STACK.index(self)
-                for i in range(0, loc + 1):
-                    _PYRO_STACK.pop(0)
 
     def _reset(self):
         """
@@ -125,17 +118,15 @@ class Poutine(object):
         """
         pass
 
-    def _prepare_site(self, msg):
+    def _process_message(self, msg):
         """
         :param msg: current message at a trace site
-        :returns: the updated message at the same trace site
-
-        Adds any information to the message that poutines below it on the stack
-        may need to execute properly.
-
-        By default, does nothing, but overridden in derived classes.
+        :returns: modified message after performing appropriate operations
         """
-        return msg
+        if "reset" in msg and msg["reset"]:
+            self._reset()
+        else:
+            return getattr(self, "_pyro_{}".format(msg["type"]))(msg)
 
     def _pyro_sample(self, msg):
         """
@@ -165,6 +156,7 @@ class Poutine(object):
             val = msg["value"]
         else:
             val = fn(*args, **kwargs)
+            msg["value"] = val
 
         # after fn has been called, update msg to prevent it from being called again.
         msg["done"] = True
@@ -197,6 +189,7 @@ class Poutine(object):
             return msg["value"]
 
         ret = _PYRO_PARAM_STORE.get_param(name, *args, **kwargs)
+        msg["value"] = ret
 
         # after the param store has been queried, update msg["done"]
         # to prevent it from being queried again.

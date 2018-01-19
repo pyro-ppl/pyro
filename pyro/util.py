@@ -156,16 +156,15 @@ def apply_stack(initial_msg):
     # msg is used to pass information up and down the stack
     msg = initial_msg
 
-    # first, gather all information necessary to apply the stack to this site
-    for frame in reversed(stack):
-        msg = frame._prepare_site(msg)
-
     # go until time to stop?
     for frame in stack:
         assert msg["type"] in ("sample", "param"), \
             "{} is an invalid site type, how did that get there?".format(msg["type"])
 
-        msg["value"] = getattr(frame, "_pyro_{}".format(msg["type"]))(msg)
+        # t = getattr(frame, "_pyro_{}".format(msg["type"]))(msg)
+        t = frame._process_message(msg)
+        assert msg["value"] is t  # temporary invariant for refactoring
+        msg["value"] = t
 
         if msg["stop"]:
             break

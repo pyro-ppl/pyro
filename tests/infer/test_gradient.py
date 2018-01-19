@@ -19,6 +19,7 @@ from tests.common import assert_equal
 logger = logging.getLogger(__name__)
 
 
+@pytest.mark.xfail(reason="noisy")
 @pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
 @pytest.mark.parametrize("subsample", [False, True], ids=["full", "subsample"])
 @pytest.mark.parametrize("trace_graph", [False, True], ids=["Trace", "TraceGraph"])

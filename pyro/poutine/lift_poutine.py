@@ -27,19 +27,6 @@ class LiftPoutine(Poutine):
         self.prior = prior
         super(LiftPoutine, self).__init__(fn)
 
-    def _prepare_site(self, msg):
-        """
-        Sets flags of params that will be overridden so they are not
-        reexecuted in the stack and not added to the param store.
-        """
-        name = msg["name"]
-        param_name = params.user_param_name(name)
-        if isinstance(self.prior, dict) and param_name in self.prior.keys() \
-                or callable(self.prior):
-            if msg["type"] == "param":
-                msg["done"] = True
-        return msg
-
     def _pyro_param(self, msg):
         """
         Overrides the `pyro.param` call with samples sampled from the

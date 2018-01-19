@@ -19,17 +19,6 @@ class ConditionPoutine(Poutine):
         self.data = data
         super(ConditionPoutine, self).__init__(fn)
 
-    def _prepare_site(self, msg):
-        """
-        :param msg: current message at a trace site
-        :returns: the updated message at the same trace site
-
-        If we have data at this site, don't sample from the site function
-        """
-        if msg["name"] in self.data and msg["type"] == "sample":
-            msg["done"] = True
-        return msg
-
     def _pyro_sample(self, msg):
         """
         :param msg: current message at a trace site.

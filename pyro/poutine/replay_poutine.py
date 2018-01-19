@@ -36,27 +36,6 @@ class ReplayPoutine(Poutine):
             raise TypeError(
                 "unrecognized type {} for sites".format(str(type(sites))))
 
-    def _prepare_site(self, msg):
-        """
-        :param msg: current message at a trace site.
-        :returns: the same message, possibly with some fields mutated.
-
-        If the site type is "map_data",
-        passes map_data batch indices from the guide trace
-        all the way down to the bottom of the stack,
-        so that the correct indices are used.
-
-        If the site type is "sample",
-        sets the return value and the "done" flag
-        so that poutines below it do not execute their sample functions at that site.
-        """
-        if msg["name"] in self.sites:
-            if msg["type"] == "sample" and not msg["is_observed"]:
-                msg["done"] = True
-                msg["value"] = self.guide_trace.nodes[self.sites[msg["name"]]]["value"]
-
-        return msg
-
     def _pyro_sample(self, msg):
         """
         :param msg: current message at a trace site.
@@ -80,7 +59,9 @@ class ReplayPoutine(Poutine):
                     self.guide_trace.nodes[g_name]["is_observed"]:
                 raise RuntimeError("site {} must be sample in guide_trace".format(g_name))
             msg["done"] = True
-            return self.guide_trace.nodes[g_name]["value"]
+            val = self.guide_trace.nodes[g_name]["value"]
+            msg["value"] = val
+            return val
         # case 2: dict, negative: sample from model
         else:
             return super(ReplayPoutine, self)._pyro_sample(msg)
