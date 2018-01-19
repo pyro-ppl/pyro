@@ -34,7 +34,7 @@ class GPRegression(nn.Module):
     def model(self):
         kernel_fn = pyro.random_module(self.kernel.name, self.kernel, self.priors)
         kernel = kernel_fn()
-        K = kernel.K(self.X) + self.noise.repeat(self.input_dim).diag()
+        K = kernel(self.X) + self.noise.repeat(self.input_dim).diag()
         zero_loc = Variable(K.data.new([0]).expand(self.input_dim))
         pyro.sample("f", dist.MultivariateNormal(zero_loc, K), obs=self.y)
 
@@ -63,10 +63,10 @@ class GPRegression(nn.Module):
         if Z.dim() == 1:
             Z = Z.unsqueeze(1)
         kernel = self.guide()
-        K = kernel.K(self.X) + self.noise.repeat(self.input_dim).diag()
+        K = kernel(self.X) + self.noise.repeat(self.input_dim).diag()
         K_xz = kernel(self.X, Z)
         K_zx = K_xz.t()
-        K_zz = kernel.K(Z)
+        K_zz = kernel(Z)
         loc = K_zx.matmul(self.y.gesv(K)[0]).squeeze(1)
         covariance_matrix = K_zz - K_zx.matmul(K_xz.gesv(K)[0])
         return loc, covariance_matrix
