@@ -20,5 +20,5 @@ def test_forward_gpr():
     assert loc.size(0) == 2
     assert cov.size(0) == 2
     assert cov.size(1) == 2
-    assert_equal(loc.data.sum(), kernel.K(X).matmul(y).data.sum())
+    assert_equal(loc.data.sum(), kernel(X).matmul(y).data.sum())
     assert_equal(cov.data.abs().sum(), 0)

@@ -24,9 +24,10 @@ class GPRegression(nn.Module):
         self.input_dim = X.size(0)
         self.kernel = kernel
         # TODO: define noise as a nn.Module, so we can train/set prior to it
-        self.noise = noise
         if noise is None:
             self.noise = Variable(X.data.new([1]))
+        else:
+            self.noise = Variable(noise)
         self.priors = priors
         if priors is None:
             self.priors = {}
