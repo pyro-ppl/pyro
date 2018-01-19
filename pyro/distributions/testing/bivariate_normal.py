@@ -53,12 +53,25 @@ class BivariateNormal(Distribution):
         return self.scale_triu.diag().log().sum() + (1 + math.log(2 * math.pi))
 
 
-def _BVN_backward(white, scale_triu, grad_output):
+def _BVN_backward_fritz(white, scale_triu, grad_output):
     grad = (grad_output.unsqueeze(-2) * white.unsqueeze(-1)).squeeze(0)
     white_grad = torch.mm(scale_triu.t(), grad)
     white_grad = 0.5 * (white_grad + white_grad.t())
     grad = torch.trtrs(white_grad, scale_triu, transpose=True)[0].t()
     return grad_output, torch.triu(grad)
+
+
+# TODO get this to work
+def _BVN_backward_martin(white, scale_triu, grad_output):
+    grad = (grad_output.unsqueeze(-2) * white.unsqueeze(-1)).squeeze(0)
+    x = torch.trtrs(white, scale_triu, transpose=True)[0]
+    y = torch.mm(scale_triu.t(), grad_output)
+    grad += (x.unsqueeze(-2) * y.unsqueeze(-1)).squeeze(0)
+    grad *= 0.5
+    return grad_output, torch.triu(grad)
+
+
+_BVN_backward = _BVN_backward_fritz
 
 
 class _SymmetricSample(Function):
