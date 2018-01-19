@@ -2,13 +2,26 @@ from __future__ import absolute_import, division, print_function
 
 from greenlet import greenlet
 
-from pyro import util
-
 from pyro.params import _PYRO_PARAM_STORE
 
 # the global pyro stack
 _PYRO_STACK = []
 
+def am_i_wrapped():
+    """
+    :returns: True iff the currently executing code is wrapped in a poutine
+    """
+    return greenlet.getcurrent().parent is not None
+
+
+def send_message(msg):
+    """
+    :param msg: a message to be sent
+    :returns: reply message
+    Sends a message to encapsulating poutine.
+    """
+    assert am_i_wrapped()
+    return greenlet.getcurrent().parent.switch(msg)
 
 class Poutine(object):
     """
@@ -48,7 +61,7 @@ class Poutine(object):
             while not c.dead:
                 msg = t
                 self._process_message(msg)
-                if util.am_i_wrapped() and not msg["stop"]:
+                if am_i_wrapped() and not msg["stop"]:
                     reply = greenlet.getcurrent().parent.switch(msg)
                 else:
                     reply = msg
