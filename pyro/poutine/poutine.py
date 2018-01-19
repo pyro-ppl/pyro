@@ -1,28 +1,13 @@
 from __future__ import absolute_import, division, print_function
 
+from greenlet import greenlet
+
+from pyro import util
+
 from pyro.params import _PYRO_PARAM_STORE
 
 # the global pyro stack
 _PYRO_STACK = []
-
-
-# a layer of indirection for the _DEFAULT_CONTEXT flag
-class DefaultContext():
-    def __init__(self):
-        self.active_handlers = 0
-
-    def is_active(self):
-        return len(_PYRO_STACK) == 0
-
-    def register(self):
-        self.active_handlers = self.active_handlers + 1
-
-    def deregister(self):
-        self.active_handlers = self.active_handlers - 1
-
-
-# default context is active iff the model code is executed unwrapped
-_DEFAULT_CONTEXT = DefaultContext()
 
 
 class Poutine(object):
@@ -47,6 +32,9 @@ class Poutine(object):
         Constructor. Doesn't do much, just stores the stochastic function.
         """
         self.fn = fn
+        self.am_i_child = False
+        if isinstance(fn, Poutine):
+            fn.am_i_child = True
 
     def __call__(self, *args, **kwargs):
         """
@@ -58,7 +46,17 @@ class Poutine(object):
         as the stored function.
         """
         with self:
-            return self.fn(*args, **kwargs)
+            c = greenlet(self.fn)
+            t = c.switch(*args, **kwargs)
+            while not c.dead:
+                msg = t
+                self._process_message(msg)
+                if util.am_i_wrapped() and not msg["stop"]:
+                    reply = greenlet.getcurrent().parent.switch(msg)
+                else:
+                    reply = msg
+                t = c.switch(reply)
+        return t
 
     def __enter__(self):
         """
@@ -75,25 +73,6 @@ class Poutine(object):
         Derived versions cannot be overridden to take arguments
         and must always return self.
         """
-        _DEFAULT_CONTEXT.register()
-
-        if not (self in _PYRO_STACK):
-            # if this poutine is not already installed,
-            # put it on the bottom of the stack.
-            _PYRO_STACK.insert(0, self)
-
-            # necessary to return self because the return value of __enter__
-            # is bound to VAR in with EXPR as VAR.
-            return self
-        else:
-            # note: currently we raise an error if trying to install a poutine twice.
-            # However, this isn't strictly necessary,
-            # and blocks recursive poutine execution patterns like
-            # like calling self.__call__ inside of self.__call__
-            # or with Poutine(...) as p: with p: <BLOCK>
-            # It's hard to imagine use cases for this pattern,
-            # but it could in principle be enabled...
-            raise ValueError("cannot install a Poutine instance twice")
 
     def __exit__(self, exc_type, exc_value, traceback):
         """
@@ -118,27 +97,6 @@ class Poutine(object):
         Users should never be specifying these.
         They are all None unless the body of the with statement raised an exception.
         """
-        if exc_type is None:  # callee or enclosed block returned successfully
-            # if the callee or enclosed block returned successfully,
-            # this poutine should be on the bottom of the stack.
-            # If so, remove it from the stack.
-            # if not, raise a ValueError because something really weird happened.
-            if _PYRO_STACK[0] == self:
-                _PYRO_STACK.pop(0)
-            else:
-                # should never get here, but just in case...
-                raise ValueError("This Poutine is not on the bottom of the stack")
-        else:  # the wrapped function or block raised an exception
-            # poutine exception handling:
-            # when the callee or enclosed block raises an exception,
-            # find this poutine's position in the stack,
-            # then remove it and everything below it in the stack.
-            if self in _PYRO_STACK:
-                loc = _PYRO_STACK.index(self)
-                for i in range(0, loc + 1):
-                    _PYRO_STACK.pop(0)
-
-        _DEFAULT_CONTEXT.deregister()
 
     def _reset(self):
         """
@@ -153,7 +111,10 @@ class Poutine(object):
         :param msg: current message at a trace site
         :returns: modified message after performing appropriate operations
         """
-        return getattr(self, "_pyro_{}".format(msg["type"]))(msg)
+        if "reset" in msg and msg["reset"]:
+            self._reset()
+        else:
+            return getattr(self, "_pyro_{}".format(msg["type"]))(msg)
 
     def _pyro_sample(self, msg):
         """

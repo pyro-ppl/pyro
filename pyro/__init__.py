@@ -6,6 +6,7 @@ import logging
 import warnings
 from collections import OrderedDict
 from inspect import isclass
+import greenlet
 
 import torch
 from torch.autograd import Variable
@@ -13,7 +14,7 @@ from torch.autograd import Variable
 import pyro.poutine as poutine
 from pyro.distributions.distribution import Distribution
 from pyro.params import _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, param_with_module_name
-from pyro.poutine import _PYRO_STACK, _DEFAULT_CONTEXT, condition, do  # noqa: F401
+from pyro.poutine import _PYRO_STACK, condition, do  # noqa: F401
 from pyro.util import apply_stack, deep_getattr, get_tensor_data, ones, set_rng_seed, zeros  # noqa: F401
 
 __version__ = '0.1.2'
@@ -55,7 +56,7 @@ def sample(name, fn, *args, **kwargs):
     baseline = kwargs.pop("baseline", {})
     # check if stack is empty
     # if stack empty, default behavior (defined here)
-    if _DEFAULT_CONTEXT.is_active():
+    if not util.am_i_wrapped():
         if obs is not None:
             warnings.warn("trying to observe a value outside of inference at " + name,
                           RuntimeWarning)
@@ -84,7 +85,8 @@ def sample(name, fn, *args, **kwargs):
             msg["is_observed"] = True
 
         # apply the stack and return its return value
-        out_msg = apply_stack(msg)
+        msg = apply_stack(msg)
+        out_msg = greenlet.getcurrent().parent.switch(msg)
         return out_msg["value"]
 
         # output message and return the reply
@@ -234,7 +236,7 @@ def iarange(name, size=None, subsample_size=None, subsample=None, use_cuda=None)
     extended discussion.
     """
     subsample, scale = _subsample(name, size, subsample_size, subsample, use_cuda)
-    if _DEFAULT_CONTEXT.is_active():
+    if not util.am_i_wrapped():
         yield subsample
     else:
         with poutine.scale(None, scale):
@@ -271,7 +273,7 @@ def irange(name, size, subsample_size=None, subsample=None, use_cuda=None):
     subsample, scale = _subsample(name, size, subsample_size, subsample, use_cuda)
     if isinstance(subsample, Variable):
         subsample = subsample.data
-    if _DEFAULT_CONTEXT.is_active():
+    if not util.am_i_wrapped():
         for i in subsample:
             yield i
     else:
@@ -319,7 +321,7 @@ def param(name, *args, **kwargs):
     :param name: name of parameter
     :returns: parameter
     """
-    if _DEFAULT_CONTEXT.is_active():
+    if not util.am_i_wrapped():
         return _PYRO_PARAM_STORE.get_param(name, *args, **kwargs)
     else:
         msg = {
@@ -334,7 +336,7 @@ def param(name, *args, **kwargs):
             "stop": False,
         }
         # apply the stack and return its return value
-        out_msg = apply_stack(msg)
+        out_msg = greenlet.getcurrent().parent.switch(msg)
         return out_msg["value"]
 
 

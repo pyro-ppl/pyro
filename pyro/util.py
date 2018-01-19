@@ -5,6 +5,7 @@ import warnings
 
 import graphviz
 import numpy as np
+import greenlet
 
 import torch
 from pyro.poutine.poutine import _PYRO_STACK
@@ -378,3 +379,18 @@ def deep_getattr(obj, name):
     Throws an AttributeError if bad attribute
     """
     return functools.reduce(getattr, name.split("."), obj)
+
+def am_i_wrapped():
+    """
+    :returns: True iff the currently executing code is wrapped in a poutine
+    """
+    return greenlet.getcurrent().parent is not None
+
+def send_message(msg):
+    """
+    :param msg: a message to be sent
+    :returns: reply message
+    Sends a message to encapsulating poutine.
+    """
+    assert am_i_wrapped()
+    return greenlet.getcurrent().parent.switch(msg)

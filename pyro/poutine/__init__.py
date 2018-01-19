@@ -10,7 +10,7 @@ from .condition_poutine import ConditionPoutine
 from .escape_poutine import EscapePoutine
 from .indep_poutine import IndepPoutine  # noqa: F401
 from .lift_poutine import LiftPoutine
-from .poutine import _PYRO_STACK, _DEFAULT_CONTEXT, Poutine  # noqa: F401
+from .poutine import _PYRO_STACK, Poutine  # noqa: F401
 from .replay_poutine import ReplayPoutine
 from .scale_poutine import ScalePoutine
 from .trace import Trace  # noqa: F401
@@ -219,8 +219,8 @@ def queue(fn, queue, max_tries=None,
                                    functools.partial(escape_fn, next_trace)))
                 return ftr(*args, **kwargs)
             except util.NonlocalExit as site_container:
-                for frame in _PYRO_STACK:
-                    frame._reset()
+                if util.am_i_wrapped():
+                    util.send_message({"reset": True, "stop": False})
                 for tr in extend_fn(ftr.trace.copy(), site_container.site,
                                     num_samples=num_samples):
                     queue.put(tr)
