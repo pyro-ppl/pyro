@@ -44,6 +44,7 @@ setup(
         'observations>=0.1.4',
         'torch',
         'six>=1.10.0',
+        'greenlet'
     ],
     extras_require={
         'notebooks': ['jupyter>=1.0.0'],
