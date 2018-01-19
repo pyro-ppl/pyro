@@ -33,8 +33,6 @@ class Poutine(object):
         """
         self.fn = fn
         self.am_i_child = False
-        if isinstance(fn, Poutine):
-            fn.am_i_child = True
 
     def __call__(self, *args, **kwargs):
         """
