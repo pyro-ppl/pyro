@@ -7,6 +7,7 @@ from pyro.params import _PYRO_PARAM_STORE
 # the global pyro stack
 _PYRO_STACK = []
 
+
 def am_i_wrapped():
     """
     :returns: True iff the currently executing code is wrapped in a poutine
@@ -22,6 +23,7 @@ def send_message(msg):
     """
     assert am_i_wrapped()
     return greenlet.getcurrent().parent.switch(msg)
+
 
 class Poutine(object):
     """
