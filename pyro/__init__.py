@@ -16,6 +16,7 @@ from pyro.distributions.distribution import Distribution
 from pyro.params import _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, param_with_module_name
 from pyro.poutine import _PYRO_STACK, condition, do  # noqa: F401
 from pyro.util import apply_stack, deep_getattr, get_tensor_data, ones, set_rng_seed, zeros  # noqa: F401
+import pyro.util as util
 
 __version__ = '0.1.2'
 

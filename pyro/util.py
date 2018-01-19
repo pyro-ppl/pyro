@@ -380,11 +380,13 @@ def deep_getattr(obj, name):
     """
     return functools.reduce(getattr, name.split("."), obj)
 
+
 def am_i_wrapped():
     """
     :returns: True iff the currently executing code is wrapped in a poutine
     """
     return greenlet.getcurrent().parent is not None
+
 
 def send_message(msg):
     """

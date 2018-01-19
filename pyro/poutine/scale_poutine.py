@@ -106,7 +106,6 @@ class ScalePoutine(Poutine):
                 for i in range(0, loc + 1):
                     _PYRO_STACK.pop(0)
 
-
     def _pyro_sample(self, msg):
         msg["scale"] = self.scale * msg["scale"]
         return super(ScalePoutine, self)._pyro_sample(msg)
