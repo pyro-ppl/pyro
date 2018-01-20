@@ -57,6 +57,7 @@ setup(
             'pytest-cov',
             'nbval',
             # examples/tutorials
+            'matplotlib',
             'visdom',
             'torchvision',
         ],
