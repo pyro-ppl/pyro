@@ -129,7 +129,7 @@ def test_score_errors_non_broadcastable_data_shape(dist):
         shape = d.shape(**dist_params)
         non_broadcastable_shape = (shape[0] + 1,) + shape[1:]
         test_data_non_broadcastable = ng_ones(non_broadcastable_shape)
-        with pytest.raises(ValueError):
+        with pytest.raises((ValueError, RuntimeError)):
             d.batch_log_pdf(test_data_non_broadcastable, **dist_params)
 
 
