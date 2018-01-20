@@ -23,7 +23,8 @@ class GPRegression(nn.Module):
         self.y = y
         self.input_dim = X.size(0)
         self.kernel = kernel
-        # TODO: define noise as a nn.Module, so we can train/set prior to it
+        # TODO: define noise as a Likelihood (another nn.Module beside kernel),
+        # then we can train/set prior to it
         if noise is None:
             self.noise = Variable(X.data.new([1]))
         else:
@@ -68,6 +69,7 @@ class GPRegression(nn.Module):
         K_xz = kernel(self.X, Z)
         K_zx = K_xz.t()
         K_zz = kernel(Z)
-        loc = K_zx.matmul(self.y.gesv(K)[0]).squeeze(1)
-        covariance_matrix = K_zz - K_zx.matmul(K_xz.gesv(K)[0])
+        triu = K.potrf()
+        loc = K_zx.matmul(self.y.potrs(triu)).squeeze(1)
+        covariance_matrix = K_zz - K_zx.matmul(K_xz.potrs(triu))    
         return loc, covariance_matrix

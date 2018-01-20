@@ -11,8 +11,13 @@ class Kernel(nn.Module):
         take inputs X, X2 and return their covariance matrix.
     """
 
-    def __init__(self, active_dims=None, name=None):
+    def __init__(self, input_dim, active_dims=None, name=None):
         super(Kernel, self).__init__()
+        if active_dims is None:
+            active_dims = slice(input_dim)
+        elif input_dim != len(active_dims):
+            raise ValueError("Input size and the length of active dimensionals should be equal.")
+        self.input_dim = input_dim
         self.active_dims = active_dims
         self.name = name
 
@@ -37,10 +42,7 @@ class Kernel(nn.Module):
         :rtype: torch.autograd.Variable
         """
         if X.dim() == 2:
-            active_dims = self.active_dims
-            if active_dims is None:
-                active_dims = slice(X.size(1))
-            return X[:, active_dims]
+            return X[:, self.active_dims]
         elif X.dim() == 1:
             return X.unsqueeze(1)
         else:
