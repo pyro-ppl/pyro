@@ -55,9 +55,7 @@ jobs:
           script: pytest -vs --cov=pyro --stage unit --durations 20
         - python: 3.5
           env: STAGE=examples
-          script:
-              - pytest -vs --cov=pyro --stage test_examples
-              - grep -l smoke_test tutorial/source/*.ipynb | xargs pytest -v --nbval-lax
+          script: pytest -vs --cov=pyro --stage test_examples
         - stage: integration test
           python: 2.7
           env: STAGE=integration_batch_1
