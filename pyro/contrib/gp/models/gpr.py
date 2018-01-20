@@ -71,5 +71,5 @@ class GPRegression(nn.Module):
         K_zz = kernel(Z)
         triu = K.potrf()
         loc = K_zx.matmul(self.y.potrs(triu)).squeeze(1)
-        covariance_matrix = K_zz - K_zx.matmul(K_xz.potrs(triu))    
+        covariance_matrix = K_zz - K_zx.matmul(K_xz.potrs(triu))
         return loc, covariance_matrix
