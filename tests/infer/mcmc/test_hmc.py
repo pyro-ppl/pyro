@@ -67,7 +67,7 @@ TEST_CASES = [
                     'num_steps': 4},
         expected_means=[0.25, 0.50, 0.75],
         expected_precs=[1.33, 1, 1.33],
-        mean_tol=0.03,
+        mean_tol=0.04,
         std_tol=0.06,
     ),
     T(
