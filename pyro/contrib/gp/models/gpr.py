@@ -71,6 +71,6 @@ class GPRegression(nn.Module):
         K_zz = kernel(Z)
         # TODO: use torch.trtrs when it supports cuda tensors
         K_inv = K.inverse()
-        loc = K_zx.matmul(K_inv.matmul(y))
+        loc = K_zx.matmul(K_inv.matmul(self.y))
         covariance_matrix = K_zz - K_zx.matmul(K_inv.matmul(K_xz))
         return loc, covariance_matrix
