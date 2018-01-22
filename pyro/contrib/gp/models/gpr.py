@@ -69,7 +69,8 @@ class GPRegression(nn.Module):
         K_xz = kernel(self.X, Z)
         K_zx = K_xz.t()
         K_zz = kernel(Z)
-        triu = K.potrf()
-        loc = K_zx.matmul(self.y.potrs(triu)).squeeze(1)
-        covariance_matrix = K_zz - K_zx.matmul(K_xz.potrs(triu))
+        # TODO: use torch.trtrs when it supports cuda tensors
+        K_inv = K.inverse()
+        loc = K_zx.matmul(K_inv.matmul(y))
+        covariance_matrix = K_zz - K_zx.matmul(K_inv.matmul(K_xz))
         return loc, covariance_matrix
