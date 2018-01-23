@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import torch
 from pyro.distributions.distribution import Distribution
-from pyro.distributions.gamma import Gamma
+from pyro.distributions.torch.gamma import Gamma
 from pyro.distributions.rejector import Rejector
 from pyro.distributions.score_parts import ScoreParts
 from pyro.distributions.util import copy_docs_from
