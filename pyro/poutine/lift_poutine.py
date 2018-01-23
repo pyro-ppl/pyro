@@ -3,12 +3,12 @@ from __future__ import absolute_import, division, print_function
 from pyro import params
 from pyro.distributions import Distribution
 
-from .poutine import Poutine
+from .poutine import Messenger, Poutine
 
 
-class LiftPoutine(Poutine):
+class LiftMessenger(Messenger):
     """
-    Poutine which "lifts" parameters to random samples.
+    Messenger which "lifts" parameters to random samples.
     Given a stochastic function with param calls and a prior,
     creates a stochastic function where all param calls are
     replaced by sampling from prior.
@@ -16,16 +16,15 @@ class LiftPoutine(Poutine):
     Prior should be a callable or a dict of names to callables.
     """
 
-    def __init__(self, fn, prior):
+    def __init__(self, prior):
         """
-        :param fn: stochastic function
         :param prior: prior used to lift parameters. Prior can be of type
                       dict, pyro.distributions, or a python stochastic fn
 
         Constructor
         """
+        super(LiftMessenger, self).__init__()
         self.prior = prior
-        super(LiftPoutine, self).__init__(fn)
 
     def _prepare_site(self, msg):
         """
@@ -59,7 +58,7 @@ class LiftPoutine(Poutine):
                     msg["kwargs"] = {}
                     msg["baseline"] = {}
             else:
-                return super(LiftPoutine, self)._pyro_param(msg)
+                return super(LiftMessenger, self)._pyro_param(msg)
         elif isinstance(self.prior, Distribution):
             # prior is a distribution
             msg["fn"] = self.prior
@@ -73,8 +72,46 @@ class LiftPoutine(Poutine):
             msg["fn"] = self.prior
         else:
             # otherwise leave as is
-            return super(LiftPoutine, self)._pyro_param(msg)
+            return super(LiftMessenger, self)._pyro_param(msg)
         msg["type"] = "sample"
         msg["done"] = False
         msg["is_observed"] = False
         return self._pyro_sample(msg)
+
+class LiftPoutine(Poutine):
+    """
+    Poutine which "lifts" parameters to random samples.
+    Given a stochastic function with param calls and a prior,
+    creates a stochastic function where all param calls are
+    replaced by sampling from prior.
+
+    Prior should be a callable or a dict of names to callables.
+    """
+
+    def __init__(self, fn, prior):
+        """
+        :param fn: stochastic function
+        :param prior: prior used to lift parameters. Prior can be of type
+                      dict, pyro.distributions, or a python stochastic fn
+
+        Constructor
+        """
+        super(LiftPoutine, self).__init__(fn)
+        self.msngr = LiftMessenger(prior)
+
+    def _prepare_site(self, msg):
+        """
+        Sets flags of params that will be overridden so they are not
+        reexecuted in the stack and not added to the param store.
+        """
+        return self.msngr._prepare_site(msg)
+
+    def _pyro_param(self, msg):
+        """
+        Overrides the `pyro.param` call with samples sampled from the
+        distribution specified in the prior. The prior can be a
+        pyro.distributions object or a dict of distributions keyed
+        on the param names. If the param name does not match the
+        name the keys in the prior, that param name is unchanged.
+        """
+        return self.msngr._pyro_param(msg)
