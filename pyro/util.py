@@ -7,6 +7,7 @@ import graphviz
 import numpy as np
 
 import torch
+from pyro.params import _PYRO_PARAM_STORE
 from pyro.poutine.poutine import _PYRO_STACK
 from pyro.poutine.util import site_is_subsample
 from pyro.shim import is_volatile
