@@ -22,6 +22,56 @@ def validate_message(msg):
     assert msg["type"] in ("sample", "param"), \
         "{} is an invalid site type, how did that get there?".format(msg["type"])
 
+def default_process_message(msg):
+    """
+    Default method for processing messages in inference.
+    :param msg: a message to be processed
+    :returns: None
+    """
+    validate_message(msg)
+    if msg["type"] == "sample":
+        fn, args, kwargs = \
+            msg["fn"], msg["args"], msg["kwargs"]
+
+        # msg["done"] enforces the guarantee in the poutine execution model
+        # that a site's non-effectful primary computation should only be executed once:
+        # if the site already has a stored return value,
+        # don't reexecute the function at the site,
+        # and do any side effects using the stored return value.
+        if msg["done"]:
+            return msg
+
+        if msg["is_observed"]:
+            assert msg["value"] is not None
+            val = msg["value"]
+        else:
+            val = fn(*args, **kwargs)
+
+        # after fn has been called, update msg to prevent it from being called again.
+        msg["done"] = True
+        msg["value"] = val
+    elif msg["type"] == "param":
+        name, args, kwargs = \
+            msg["name"], msg["args"], msg["kwargs"]
+
+        # msg["done"] enforces the guarantee in the poutine execution model
+        # that a site's non-effectful primary computation should only be executed once:
+        # if the site already has a stored return value,
+        # don't reexecute the function at the site,
+        # and do any side effects using the stored return value.
+        if msg["done"]:
+            return msg
+
+        ret = _PYRO_PARAM_STORE.get_param(name, *args, **kwargs)
+
+        # after the param store has been queried, update msg["done"]
+        # to prevent it from being queried again.
+        msg["done"] = True
+        msg["value"] = ret
+    else:
+        assert False
+    return None
+
 def am_i_wrapped():
     """
     Checks whether the current computation is wrapped in a poutine.
@@ -187,6 +237,8 @@ def apply_stack(initial_msg):
 
         if msg["stop"]:
             break
+
+    default_process_message(msg)
 
     for frame in reversed(stack[0:counter]):
         frame._postprocess_message(msg)
