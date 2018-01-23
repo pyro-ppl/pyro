@@ -41,8 +41,9 @@ class HMC(TraceKernel):
         z_trace = self._prototype_trace
         for name, value in z.items():
             z_trace.nodes[name]['value'] = value
-        return poutine.trace(poutine.replay(self.model, trace=z_trace)) \
-            .get_trace(*self._args, **self._kwargs)
+        trace_poutine = poutine.trace(poutine.replay(self.model, trace=z_trace))
+        trace_poutine(*self._args, **self._kwargs)
+        return trace_poutine.trace
 
     def _potential_energy(self, z):
         return -self._get_trace(z).log_pdf()
@@ -66,7 +67,6 @@ class HMC(TraceKernel):
         self._accept_cnt = 0
         self._args = args
         self._kwargs = kwargs
-        self._kwargs['clone'] = False
         # set the trace prototype to inter-convert between trace object
         # and dict object used by the integrator
         self._prototype_trace = poutine.trace(self.model).get_trace(*args, **kwargs)

@@ -158,10 +158,7 @@ class TracePoutine(Poutine):
         Helper method for a very common use case.
         Calls this poutine and returns its trace instead of the function's return value.
         """
-        clone = kwargs.pop('clone', True)
         self(*args, **kwargs)
-        if not clone:
-            return self.trace
         return self.trace.copy()
 
     def _reset(self):
