@@ -149,7 +149,7 @@ def _subsample(name, size=None, subsample_size=None, subsample=None, use_cuda=No
         subsample_size = 1
     elif subsample is None:
         names = [name]
-        names += [str(f.counter) for f in _PYRO_STACK if isinstance(f, poutine.IndepPoutine)]
+        names += [str(f.msngr.counter) for f in _PYRO_STACK if isinstance(f, poutine.IndepPoutine)]
         subsample = sample("_".join(names), _Subsample(size, subsample_size, use_cuda))
 
     if subsample_size is None:
@@ -274,6 +274,7 @@ def irange(name, size, subsample_size=None, subsample=None, use_cuda=None):
         indep_context = poutine.indep(None, name, vectorized=False)
         with poutine.scale(None, scale):
             for i in subsample:
+                indep_context.msngr.next_context()
                 with indep_context:
                     yield i
 
