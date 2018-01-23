@@ -79,7 +79,8 @@ class ReplayMessenger(Messenger):
                     self.guide_trace.nodes[g_name]["is_observed"]:
                 raise RuntimeError("site {} must be sample in guide_trace".format(g_name))
             msg["done"] = True
-            return self.guide_trace.nodes[g_name]["value"]
+            msg["value"] = self.guide_trace.nodes[g_name]["value"]
+            return msg
         # case 2: dict, negative: sample from model
         else:
             return super(ReplayMessenger, self)._pyro_sample(msg)

@@ -151,7 +151,7 @@ class TraceMessenger(Messenger):
     def _pyro_sample(self, msg):
         """
         :param msg: current message at a trace site.
-        :returns: a sample from the stochastic function at the site.
+        :returns: updated message
 
         Implements default pyro.sample Poutine behavior with an additional side effect:
         if the observation at the site is not None,
@@ -171,16 +171,17 @@ class TraceMessenger(Messenger):
                 # Cannot sample after a previous sample statement.
                 raise RuntimeError("Multiple pyro.sample sites named '{}'".format(name))
 
-        val = super(TraceMessenger, self)._pyro_sample(msg)
+        super(TraceMessenger, self)._pyro_sample(msg)
+        val = msg["value"]
         site = msg.copy()
         site.update(value=val)
         self.trace.add_node(name, **site)
-        return val
+        return msg
 
     def _pyro_param(self, msg):
         """
         :param msg: current message at a trace site.
-        :returns: the result of querying the parameter store
+        :returns: updated message
 
         Implements default pyro.param Poutine behavior with an additional side effect:
         queries the parameter store with the site name and varargs
@@ -194,11 +195,12 @@ class TraceMessenger(Messenger):
             if self.trace.nodes[msg['name']]['type'] == "sample":
                 raise RuntimeError("{} is already in the trace as a sample".format(msg['name']))
 
-        val = super(TraceMessenger, self)._pyro_param(msg)
+        super(TraceMessenger, self)._pyro_param(msg)
+        val = msg["value"]
         site = msg.copy()
         site.update(value=val)
         self.trace.add_node(msg["name"], **site)
-        return val
+        return msg
 
 
 class TracePoutine(Poutine):

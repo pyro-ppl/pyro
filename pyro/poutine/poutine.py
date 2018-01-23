@@ -118,7 +118,7 @@ class Messenger(object):
     def _pyro_sample(self, msg):
         """
         :param msg: current message at a trace site.
-        :returns: a sample from the stochastic function at the site.
+        :returns: updated message
 
         Implements default pyro.sample Messenger behavior:
         if the observation at the site is not None, return the observation;
@@ -136,7 +136,7 @@ class Messenger(object):
         # don't reexecute the function at the site,
         # and do any side effects using the stored return value.
         if msg["done"]:
-            return msg["value"]
+            return msg
 
         if msg["is_observed"]:
             assert msg["value"] is not None
@@ -146,12 +146,13 @@ class Messenger(object):
 
         # after fn has been called, update msg to prevent it from being called again.
         msg["done"] = True
-        return val
+        msg["value"] = val
+        return msg
 
     def _pyro_param(self, msg):
         """
         :param msg: current message at a trace site.
-        :returns: the result of querying the parameter store
+        :returns: updated message
 
         Implements default pyro.param Messenger behavior:
         queries the parameter store with the site name and varargs
@@ -172,14 +173,15 @@ class Messenger(object):
         # don't reexecute the function at the site,
         # and do any side effects using the stored return value.
         if msg["done"]:
-            return msg["value"]
+            return msg
 
         ret = _PYRO_PARAM_STORE.get_param(name, *args, **kwargs)
 
         # after the param store has been queried, update msg["done"]
         # to prevent it from being queried again.
         msg["done"] = True
-        return ret
+        msg["value"] = ret
+        return msg
 
 
 class Poutine(object):

@@ -173,7 +173,7 @@ def apply_stack(initial_msg):
         assert msg["type"] in ("sample", "param"), \
             "{} is an invalid site type, how did that get there?".format(msg["type"])
 
-        msg["value"] = frame._process_message(msg)
+        frame._process_message(msg)
 
         if msg["stop"]:
             break
