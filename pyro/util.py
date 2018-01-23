@@ -225,10 +225,6 @@ def apply_stack(initial_msg):
     # msg is used to pass information up and down the stack
     msg = initial_msg
 
-    # first, gather all information necessary to apply the stack to this site
-    for frame in reversed(stack):
-        frame._prepare_site(msg)
-
     counter = 0
     # go until time to stop?
     for frame in stack:
