@@ -37,4 +37,4 @@ class IndepMessenger(Messenger):
         that the site at name is within.
         """
         msg["cond_indep_stack"].append(CondIndepStackFrame(self.name, self.counter, self.vectorized))
-        return msg
+        return None

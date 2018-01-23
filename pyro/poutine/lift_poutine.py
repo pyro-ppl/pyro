@@ -37,7 +37,7 @@ class LiftMessenger(Messenger):
                 or callable(self.prior):
             if msg["type"] == "param":
                 msg["done"] = True
-        return msg
+        return None
 
     def _pyro_param(self, msg):
         """

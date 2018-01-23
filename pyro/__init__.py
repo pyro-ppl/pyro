@@ -83,8 +83,8 @@ def sample(name, fn, *args, **kwargs):
             msg["value"] = obs
             msg["is_observed"] = True
         # apply the stack and return its return value
-        out_msg = apply_stack(msg)
-        return out_msg["value"]
+        apply_stack(msg)
+        return msg["value"]
 
 
 def observe(name, fn, obs, *args, **kwargs):
@@ -331,8 +331,8 @@ def param(name, *args, **kwargs):
             "stop": False,
         }
         # apply the stack and return its return value
-        out_msg = apply_stack(msg)
-        return out_msg["value"]
+        apply_stack(msg)
+        return msg["value"]
 
 
 def module(name, nn_module, tags="default", update_module_params=False):

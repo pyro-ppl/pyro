@@ -108,10 +108,10 @@ class Messenger(object):
     def _process_message(self, msg):
         """
         :param msg: current message at a trace site
-        :returns: the result of the query from the message
+        :returns: None
 
         Process the message by calling appropriate method of itself based
-        on message type.
+        on message type. The message is updated in place.
         """
         return getattr(self, "_pyro_{}".format(msg["type"]))(msg)
 
@@ -147,7 +147,7 @@ class Messenger(object):
         # after fn has been called, update msg to prevent it from being called again.
         msg["done"] = True
         msg["value"] = val
-        return msg
+        return None
 
     def _pyro_param(self, msg):
         """
@@ -181,7 +181,7 @@ class Messenger(object):
         # to prevent it from being queried again.
         msg["done"] = True
         msg["value"] = ret
-        return msg
+        return None
 
 
 class Poutine(object):

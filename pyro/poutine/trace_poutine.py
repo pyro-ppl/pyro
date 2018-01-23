@@ -176,7 +176,7 @@ class TraceMessenger(Messenger):
         site = msg.copy()
         site.update(value=val)
         self.trace.add_node(name, **site)
-        return msg
+        return None
 
     def _pyro_param(self, msg):
         """
@@ -200,7 +200,7 @@ class TraceMessenger(Messenger):
         site = msg.copy()
         site.update(value=val)
         self.trace.add_node(msg["name"], **site)
-        return msg
+        return None
 
 
 class TracePoutine(Poutine):

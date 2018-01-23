@@ -166,7 +166,7 @@ def apply_stack(initial_msg):
 
     # first, gather all information necessary to apply the stack to this site
     for frame in reversed(stack):
-        msg = frame._prepare_site(msg)
+        frame._prepare_site(msg)
 
     # go until time to stop?
     for frame in stack:
@@ -178,7 +178,7 @@ def apply_stack(initial_msg):
         if msg["stop"]:
             break
 
-    return msg
+    return None
 
 
 class NonlocalExit(Exception):
