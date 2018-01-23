@@ -3,13 +3,13 @@ from __future__ import absolute_import, division, print_function
 import torch
 from pyro.distributions.distribution import Distribution
 from pyro.distributions.gamma import Gamma
-from pyro.distributions.rejector import ImplicitRejector
+from pyro.distributions.rejector import Rejector
 from pyro.distributions.score_parts import ScoreParts
 from pyro.distributions.util import copy_docs_from
 
 
 @copy_docs_from(Gamma)
-class RejectionStandardGamma(ImplicitRejector):
+class RejectionStandardGamma(Rejector):
     """
     Naive Marsaglia & Tsang rejection sampler for standard Gamma distibution.
     This assumes `alpha >= 1` and does not boost `alpha` boosting or
@@ -66,6 +66,7 @@ class RejectionGamma(Distribution):
 
 @copy_docs_from(Gamma)
 class ShapeAugmentedGamma(Gamma):
+    stateful = True
     reparameterized = True
 
     def __init__(self, alpha, beta, boost=1):

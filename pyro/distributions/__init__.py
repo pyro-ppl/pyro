@@ -23,7 +23,7 @@ from pyro.distributions.log_normal import LogNormal
 from pyro.distributions.multivariate_normal import MultivariateNormal
 from pyro.distributions.poisson import Poisson
 from pyro.distributions.random_primitive import RandomPrimitive
-from pyro.distributions.rejector import ExplicitRejector, ImplicitRejector  # noqa: F401
+from pyro.distributions.rejector import Rejector  # noqa: F401
 
 # distribution classes with working torch versions in torch.distributions
 from pyro.distributions.torch.bernoulli import Bernoulli

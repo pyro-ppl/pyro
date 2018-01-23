@@ -7,22 +7,25 @@ from pyro.distributions.util import copy_docs_from
 
 
 @copy_docs_from(Distribution)
-class ImplicitRejector(Distribution):
+class Rejector(Distribution):
     """
     Rejection sampled distribution given an acceptance rate function.
 
     :param Distribution propose: A proposal distribution that samples batched
         propsals via `propose()`.
-    :param callable log_prob_accept: A callable that inputs a batch of proposals
-        and returns a batch of log acceptance probabilities.
+    :param callable log_prob_accept: A callable that inputs a batch of
+        proposals and returns a batch of log acceptance probabilities.
+    :param log_scale: Total log probability of acceptance. This is needed
+        only if :meth:`batch_log_pdf` needs to be normalized.
     """
     stateful = True
     reparameterized = True
 
-    def __init__(self, propose, log_prob_accept):
+    def __init__(self, propose, log_prob_accept, log_scale=None):
         self.propose = propose
         self.log_prob_accept = log_prob_accept
         self._log_prob_accept_cache = None, None
+        self._log_scale = 0 if log_scale is None else log_scale
         self._propose_batch_log_pdf_cache = None, None
 
     def _log_prob_accept(self, x):
@@ -52,42 +55,9 @@ class ImplicitRejector(Distribution):
         return x
 
     def batch_log_pdf(self, x):
-        return self._propose_batch_log_pdf(x) + self._log_prob_accept(x)
+        return self._propose_batch_log_pdf(x) + self._log_prob_accept(x) - self._log_scale
 
     def score_parts(self, x):
         score_function = self._log_prob_accept(x)
         log_pdf = self.batch_log_pdf(x)
         return ScoreParts(log_pdf, score_function, log_pdf)
-
-
-@copy_docs_from(Distribution)
-class ExplicitRejector(ImplicitRejector):
-    """
-    Rejection sampled distribution given a target distribution.
-
-    :param Distribution propose: A proposal distribution that samples batched
-        proposals via `propose()`.
-    :param Distribution target: A target distribution that implements
-        `.batch_log_pdf()`.
-    :param Variable log_scale: A batch of log scale factors satisfying:
-        `propose.batch_log_pdf(x) + log_scale >= target.batch_log_pdf(x)`.
-    """
-    reparameterized = True
-
-    def __init__(self, propose, target, log_scale):
-        super(ExplicitRejector, self).__init__(propose, self.log_prob_accept)
-        self.target = target
-        self.log_scale = log_scale
-        self._target_batch_log_pdf_cache = None, None
-
-    def log_prob_accept(self, x):
-        return (self._target_batch_log_pdf(x) - self.log_scale -
-                self._propose_batch_log_pdf(x))
-
-    def _target_batch_log_pdf(self, x):
-        if x is not self._target_batch_log_pdf_cache[0]:
-            self._target_batch_log_pdf_cache = x, self.target.batch_log_pdf(x)
-        return self._target_batch_log_pdf_cache[1]
-
-    def batch_log_pdf(self, x):
-        return self._target_batch_log_pdf(x)
