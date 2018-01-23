@@ -135,8 +135,6 @@ class Trace(networkx.DiGraph):
         """
         for name, site in self.nodes.items():
             if site["type"] == "sample" and "score_parts" not in site:
-                # Note that ScoreParts overloads the multiplication operator
-                # to correctly scale each of its three parts.
                 value = site["fn"].score_parts(
                     site["value"], *site["args"], **site["kwargs"]) * site["scale"]
                 site["score_parts"] = value
