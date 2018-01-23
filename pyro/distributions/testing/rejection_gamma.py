@@ -44,9 +44,6 @@ class RejectionStandardGamma(ImplicitRejector):
         return self._standard_gamma.batch_log_pdf(x)
 
 
-# Note it's easy to implement a full Gamma distribution on top of
-# our `StandardGamma`:
-
 @copy_docs_from(Gamma)
 class RejectionGamma(Distribution):
     reparameterized = True
@@ -66,8 +63,6 @@ class RejectionGamma(Distribution):
         log_pdf = log_pdf - torch.log(self.beta)
         return ScoreParts(log_pdf, score_function, log_pdf)
 
-
-# Next let's implement Shape Augmentation.
 
 @copy_docs_from(Gamma)
 class ShapeAugmentedGamma(Gamma):
@@ -95,14 +90,3 @@ class ShapeAugmentedGamma(Gamma):
         assert boosted_x is self._unboost_x_cache[0]
         x = self._unboost_x_cache[1]
         return self._rejection_gamma.score_parts(x)
-
-
-def kl_gamma_gamma(p, q):
-    p = getattr(p, 'torch_dist', p)
-    q = getattr(q, 'torch_dist', q)
-
-    # Adapted from https://stats.stackexchange.com/questions/11646
-    def f(a, b, c, d):
-        return -d * a / c + b * a.log() - torch.lgamma(b) + (b - 1) * torch.digamma(d) + (1 - b) * c.log()
-
-    return f(p.beta, p.alpha, p.beta, p.alpha) - f(q.beta, q.alpha, p.beta, p.alpha)

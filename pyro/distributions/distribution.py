@@ -191,24 +191,22 @@ class Distribution(object):
         """
         raise NotImplementedError
 
-    def entropy(self):
-        """
-        Returns the entropy of this distribution, per parameter.
-
-        :return: an entropy tensor of shape `batch_shape`
-        :rtype: torch.autograd.Variable
-        """
-        raise NotImplementedError
-
     def score_parts(self, x, *args, **kwargs):
+        """
+        Computes ingredients for stochastic gradient estimators of ELBO.
+
+        The default implementation is correct both for non-reparameterized and
+        for fully reparameterized distributions. Partially reparameterized
+        distributions should override this method to compute correct
+        `.score_function` and `.entropy_term` parts.
+
+        :param torch.autograd.Variable x: A single value or batch of values.
+        :return: A `ScoreParts` object containing parts of the ELBO estimator.
+        :rtype: ScoreParts
+        """
         log_pdf = self.batch_log_pdf(x, *args, **kwargs)
         if self.reparameterized:
-            try:
-                entropy_term = self.entropy()
-                entropy_term *= -1
-            except NotImplementedError:
-                entropy_term = log_pdf
-            return ScoreParts(log_pdf, 0, entropy_term)
+            return ScoreParts(log_pdf, 0, log_pdf)
         else:
             # XXX should the user be able to control inclusion of the entropy term?
             # See Roeder, Wu, Duvenaud (2017) "Sticking the Landing" https://arxiv.org/abs/1703.09194
