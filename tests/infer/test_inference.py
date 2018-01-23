@@ -237,7 +237,7 @@ class ExponentialGammaTests(TestCase):
         self.do_elbo_test(ShapeAugmentedGamma, 5000)
 
     def test_elbo_nonreparameterized(self):
-        self.do_elbo_test(fakes.NonReparameterizedGamma, 10000)
+        self.do_elbo_test(fakes.NonreparameterizedGamma, 10000)
 
     def do_elbo_test(self, gamma_dist, n_steps):
         pyro.clear_param_store()
