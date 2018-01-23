@@ -20,3 +20,10 @@ class ScaleMessenger(Messenger):
     def _prepare_site(self, msg):
         msg["scale"] = self.scale * msg["scale"]
         return None
+
+    def _process_message(self, msg):
+        return None
+
+    def _postprocess_message(self, msg):
+        msg["scale"] = msg["scale"] / self.scale
+        return None
