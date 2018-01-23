@@ -47,7 +47,9 @@ jobs:
           script: pytest -vs --cov=pyro --stage unit --durations 20
         - python: 2.7
           env: STAGE=examples
-          script: pytest -vs --cov=pyro --stage test_examples
+          script:
+              - pytest -vs --cov=pyro --stage test_examples
+              - grep -l smoke_test tutorial/source/*.ipynb | xargs pytest -v --nbval-lax
         - python: 3.5
           env: STAGE=unit
           script: pytest -vs --cov=pyro --stage unit --durations 20
