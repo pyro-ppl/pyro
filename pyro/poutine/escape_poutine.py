@@ -37,9 +37,6 @@ class EscapeMessenger(Messenger):
             msg["continuation"] = cont
         return None
 
-    def _pyro_param(self, msg):
-        return None
-
 
 class EscapePoutine(Poutine):
     """
