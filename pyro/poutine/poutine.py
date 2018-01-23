@@ -226,25 +226,3 @@ class Poutine(object):
         By default, does nothing, but overridden in derived classes.
         """
         self.msngr._reset()
-
-    def _prepare_site(self, msg):
-        """
-        :param msg: current message at a trace site
-        :returns: the updated message at the same trace site
-
-        Adds any information to the message that poutines below it on the stack
-        may need to execute properly.
-
-        By default, does nothing, but overridden in derived classes.
-        """
-        return self.msngr._prepare_site(msg)
-
-    def _process_message(self, msg):
-        """
-        :param msg: current message at a trace site
-        :returns: result of the query represented by the message
-
-        Processes the message by calling appropriate method of itself
-        determined by message type.
-        """
-        return self.msngr._process_message(msg)
