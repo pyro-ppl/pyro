@@ -6,6 +6,104 @@ from pyro.params import _PYRO_PARAM_STORE
 _PYRO_STACK = []
 
 
+class Messenger(object):
+    """
+    Class of transformers for messages passed during inference.
+    Most inference operations are implemented in subclasses of this.
+    """
+
+    def __init__(self):
+        pass
+
+    def _prepare_site(self, msg):
+        """
+        :param msg: current message at a trace site
+        :returns: the updated message at the same trace site
+
+        Adds any information to the message that messengers below it on the stack
+        may need to execute properly.
+
+        By default, does nothing, but overridden in derived classes.
+        """
+        return msg
+
+    def _process_message(self, msg):
+        """
+        :param msg: current message at a trace site
+        :returns: the result of the query from the message
+
+        Process the message by calling appropriate method of itself based
+        on message type.
+        """
+        return getattr(self, "_pyro_{}".format(msg["type"]))(msg)
+
+    def _pyro_sample(self, msg):
+        """
+        :param msg: current message at a trace site.
+        :returns: a sample from the stochastic function at the site.
+
+        Implements default pyro.sample Messenger behavior:
+        if the observation at the site is not None, return the observation;
+        else call the function and return the result.
+
+        Derived classes often compute a side effect,
+        then call super(Derived, self)._pyro_sample(msg).
+        """
+        fn, args, kwargs = \
+            msg["fn"], msg["args"], msg["kwargs"]
+
+        # msg["done"] enforces the guarantee in the poutine execution model
+        # that a site's non-effectful primary computation should only be executed once:
+        # if the site already has a stored return value,
+        # don't reexecute the function at the site,
+        # and do any side effects using the stored return value.
+        if msg["done"]:
+            return msg["value"]
+
+        if msg["is_observed"]:
+            assert msg["value"] is not None
+            val = msg["value"]
+        else:
+            val = fn(*args, **kwargs)
+
+        # after fn has been called, update msg to prevent it from being called again.
+        msg["done"] = True
+        return val
+
+    def _pyro_param(self, msg):
+        """
+        :param msg: current message at a trace site.
+        :returns: the result of querying the parameter store
+
+        Implements default pyro.param Messenger behavior:
+        queries the parameter store with the site name and varargs
+        and returns the result of the query.
+
+        If the parameter doesn't exist, create it using the site varargs.
+        If it does exist, grab it from the parameter store.
+
+        Derived classes often compute a side effect,
+        then call super(Derived, self)._pyro_param(msg).
+        """
+        name, args, kwargs = \
+            msg["name"], msg["args"], msg["kwargs"]
+
+        # msg["done"] enforces the guarantee in the poutine execution model
+        # that a site's non-effectful primary computation should only be executed once:
+        # if the site already has a stored return value,
+        # don't reexecute the function at the site,
+        # and do any side effects using the stored return value.
+        if msg["done"]:
+            return msg["value"]
+
+        ret = _PYRO_PARAM_STORE.get_param(name, *args, **kwargs)
+
+        # after the param store has been queried, update msg["done"]
+        # to prevent it from being queried again.
+        msg["done"] = True
+        return ret
+
+
 class Poutine(object):
     """
     Context manager class that modifies behavior
