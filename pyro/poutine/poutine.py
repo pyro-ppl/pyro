@@ -1,7 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-from pyro.params import _PYRO_PARAM_STORE
-
 # the global pyro stack
 _PYRO_STACK = []
 

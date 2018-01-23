@@ -197,6 +197,7 @@ class TraceMessenger(Messenger):
         self.trace.add_node(msg["name"], **site)
         return None
 
+
 class TracePoutine(Poutine):
     """
     Execution trace poutine.

@@ -23,6 +23,7 @@ def validate_message(msg):
     assert msg["type"] in ("sample", "param"), \
         "{} is an invalid site type, how did that get there?".format(msg["type"])
 
+
 def default_process_message(msg):
     """
     Default method for processing messages in inference.
@@ -72,6 +73,7 @@ def default_process_message(msg):
     else:
         assert False
     return None
+
 
 def am_i_wrapped():
     """
