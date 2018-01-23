@@ -15,6 +15,9 @@ class Messenger(object):
     def __init__(self):
         pass
 
+    def _reset(self):
+        pass
+
     def _prepare_site(self, msg):
         """
         :param msg: current message at a trace site
