@@ -118,6 +118,17 @@ class TraceMessenger(Messenger):
         assert graph_type in ("flat", "dense")
         self.graph_type = graph_type
 
+    def __exit__(self, *args, **kwargs):
+        """
+        Adds appropriate edges based on cond_indep_stack information
+        upon exiting the context.
+        """
+        if self.graph_type == "dense":
+            identify_dense_edges(self.trace)
+            self.trace.graph["vectorized_map_data_info"] = \
+                get_vectorized_map_data_info(self.trace)
+        return super(TraceMessenger, self).__exit__(*args, **kwargs)
+
     def get_trace(self, *args, **kwargs):
         """
         :returns: data structure
@@ -210,17 +221,6 @@ class TracePoutine(Poutine):
         """
         super(TracePoutine, self).__init__(fn)
         self.msngr = TraceMessenger(graph_type)
-
-    def __exit__(self, *args, **kwargs):
-        """
-        Adds appropriate edges based on cond_indep_stack information
-        upon exiting the context.
-        """
-        if self.msngr.graph_type == "dense":
-            identify_dense_edges(self.msngr.trace)
-            self.msngr.trace.graph["vectorized_map_data_info"] = \
-                get_vectorized_map_data_info(self.msngr.trace)
-        return super(TracePoutine, self).__exit__(*args, **kwargs)
 
     def __call__(self, *args, **kwargs):
         """
