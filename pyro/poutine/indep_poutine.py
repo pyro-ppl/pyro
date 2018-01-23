@@ -30,18 +30,10 @@ class IndepMessenger(Messenger):
         """
         self.counter += 1
 
-    def _prepare_site(self, msg):
-        """
-        Construct the message that is consumed by ``TracePoutine``;
-        ``cond_indep_stack`` encodes the nested sequence of ``irange`` branches
-        that the site at name is within.
-        """
-        msg["cond_indep_stack"].append(CondIndepStackFrame(self.name, self.counter, self.vectorized))
-        return None
-
     def _process_message(self, msg):
+        msg["cond_indep_stack"].insert(0,CondIndepStackFrame(self.name, self.counter, self.vectorized))
         return None
 
     def _postprocess_message(self, msg):
-        msg["cond_indep_stack"] = msg["cond_indep_stack"][:-1]
+        msg["cond_indep_stack"] = msg["cond_indep_stack"][1:]
         return None

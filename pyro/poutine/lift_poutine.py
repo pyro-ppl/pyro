@@ -26,19 +26,6 @@ class LiftMessenger(Messenger):
         super(LiftMessenger, self).__init__()
         self.prior = prior
 
-    def _prepare_site(self, msg):
-        """
-        Sets flags of params that will be overridden so they are not
-        reexecuted in the stack and not added to the param store.
-        """
-        name = msg["name"]
-        param_name = params.user_param_name(name)
-        if isinstance(self.prior, dict) and param_name in self.prior.keys() \
-                or callable(self.prior):
-            if msg["type"] == "param":
-                msg["done"] = True
-        return None
-
     def _pyro_sample(self, msg):
         return None
 
@@ -77,7 +64,6 @@ class LiftMessenger(Messenger):
             # otherwise leave as is
             return None
         msg["type"] = "sample"
-        msg["done"] = False
         msg["is_observed"] = False
         return self._pyro_sample(msg)
 
