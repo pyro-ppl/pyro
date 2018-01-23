@@ -10,7 +10,8 @@ class TraceKernel(object):
 
     def setup(self, *args, **kwargs):
         """
-        Optional method to reset the state at the start of the simulation run.
+        Optional method to set up any state required at the start of the
+        simulation run.
 
         :param \*args: Algorithm specific positional arguments.
         :param \*\*kwargs: Algorithm specific keyword arguments.
