@@ -137,6 +137,16 @@ class Poutine(object):
         """
         return msg
 
+    def _process_message(self, msg):
+        """
+        :param msg: current message at a trace site
+        :returns: result of the query represented by the message
+
+        Processes the message by calling appropriate method of itself
+        determined by message type.
+        """
+        return getattr(self, "_pyro_{}".format(msg["type"]))(msg)
+
     def _pyro_sample(self, msg):
         """
         :param msg: current message at a trace site.
