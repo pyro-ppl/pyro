@@ -53,9 +53,10 @@ class ConditionMessenger(Messenger):
             else:
                 msg["value"] = self.data[name]
             msg["is_observed"] = True
-            return super(ConditionMessenger, self)._pyro_sample(msg)
-        else:
-            return super(ConditionMessenger, self)._pyro_sample(msg)
+        return None
+
+    def _pyro_param(self, msg):
+        return None
 
 
 class ConditionPoutine(Poutine):

@@ -35,8 +35,10 @@ class EscapeMessenger(Messenger):
             def cont(m):
                 raise NonlocalExit(m)
             msg["continuation"] = cont
-        else:
-            return super(EscapeMessenger, self)._pyro_sample(msg)
+        return None
+
+    def _pyro_param(self, msg):
+        return None
 
 
 class EscapePoutine(Poutine):

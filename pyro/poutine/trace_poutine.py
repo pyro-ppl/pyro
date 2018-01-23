@@ -170,8 +170,6 @@ class TraceMessenger(Messenger):
             elif site['type'] == 'sample':
                 # Cannot sample after a previous sample statement.
                 raise RuntimeError("Multiple pyro.sample sites named '{}'".format(name))
-
-        super(TraceMessenger, self)._pyro_sample(msg)
         return None
 
     def _pyro_param(self, msg):
@@ -190,8 +188,6 @@ class TraceMessenger(Messenger):
         if msg["name"] in self.trace:
             if self.trace.nodes[msg['name']]['type'] == "sample":
                 raise RuntimeError("{} is already in the trace as a sample".format(msg['name']))
-
-        super(TraceMessenger, self)._pyro_param(msg)
         return None
 
     def _postprocess_message(self, msg):

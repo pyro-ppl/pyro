@@ -39,6 +39,9 @@ class LiftMessenger(Messenger):
                 msg["done"] = True
         return None
 
+    def _pyro_sample(self, msg):
+        return None
+
     def _pyro_param(self, msg):
         """
         Overrides the `pyro.param` call with samples sampled from the
@@ -58,7 +61,7 @@ class LiftMessenger(Messenger):
                     msg["kwargs"] = {}
                     msg["baseline"] = {}
             else:
-                return super(LiftMessenger, self)._pyro_param(msg)
+                return None
         elif isinstance(self.prior, Distribution):
             # prior is a distribution
             msg["fn"] = self.prior
@@ -72,7 +75,7 @@ class LiftMessenger(Messenger):
             msg["fn"] = self.prior
         else:
             # otherwise leave as is
-            return super(LiftMessenger, self)._pyro_param(msg)
+            return None
         msg["type"] = "sample"
         msg["done"] = False
         msg["is_observed"] = False
