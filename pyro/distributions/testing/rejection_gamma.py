@@ -73,9 +73,8 @@ class ShapeAugmentedGamma(Gamma):
         if alpha.min() + boost < 1:
             raise ValueError('Need to boost at least once for alpha < 1')
         super(ShapeAugmentedGamma, self).__init__(alpha, beta)
-        self.alpha = alpha
         self._boost = boost
-        self._rejection_gamma = RejectionGamma(alpha + boost, beta)
+        self._rejection_gamma = RejectionGamma(self.alpha + boost, self.beta)
         self._unboost_x_cache = None, None
 
     def sample(self):

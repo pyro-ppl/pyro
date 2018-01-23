@@ -146,7 +146,7 @@ class Trace_ELBO(object):
         for weight, model_trace, guide_trace, log_r in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = weight * 0
             surrogate_elbo_particle = weight * 0
-            batched = (self.enum_discrete and weight.size(0) > 1)
+            batched = (self.enum_discrete and isinstance(weight, Variable) and weight.size(0) > 1)
             # compute elbo and surrogate elbo
             if (self.enum_discrete and isinstance(weight, Variable) and weight.size(0) > 1):
                 log_pdf = "batch_log_pdf"
