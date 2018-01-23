@@ -235,10 +235,10 @@ class TracePoutine(Poutine):
         and returns self.fn's return value
         """
         self.msngr.trace = Trace(graph_type=self.msngr.graph_type)
-        self.trace = self.msngr.trace # for compatibility with code that accessed trace directly
+        self.trace = self.msngr.trace  # for compatibility with code that accesses trace directly
         self.msngr.trace.add_node("_INPUT",
-                            name="_INPUT", type="args",
-                            args=args, kwargs=kwargs)
+                                  name="_INPUT", type="args",
+                                  args=args, kwargs=kwargs)
         ret = super(TracePoutine, self).__call__(*args, **kwargs)
         self.msngr.trace.add_node("_RETURN", name="_RETURN", type="return", value=ret)
         return ret

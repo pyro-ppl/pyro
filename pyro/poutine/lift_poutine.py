@@ -78,6 +78,7 @@ class LiftMessenger(Messenger):
         msg["is_observed"] = False
         return self._pyro_sample(msg)
 
+
 class LiftPoutine(Poutine):
     """
     Poutine which "lifts" parameters to random samples.

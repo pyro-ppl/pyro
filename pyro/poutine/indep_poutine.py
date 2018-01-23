@@ -39,6 +39,7 @@ class IndepMessenger(Messenger):
         msg["cond_indep_stack"].append(CondIndepStackFrame(self.name, self.counter, self.vectorized))
         return msg
 
+
 class IndepPoutine(Poutine):
     """
     This poutine keeps track of stack of independence information declared by

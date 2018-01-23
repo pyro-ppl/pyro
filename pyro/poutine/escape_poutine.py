@@ -35,6 +35,7 @@ class EscapeMessenger(Messenger):
         else:
             return super(EscapeMessenger, self)._pyro_sample(msg)
 
+
 class EscapePoutine(Poutine):
     """
     Poutine that does a nonlocal exit by raising a util.NonlocalExit exception

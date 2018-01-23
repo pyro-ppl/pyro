@@ -57,6 +57,7 @@ class ConditionMessenger(Messenger):
         else:
             return super(ConditionMessenger, self)._pyro_sample(msg)
 
+
 class ConditionPoutine(Poutine):
     """
     Adds values at observe sites to condition on data and override sampling

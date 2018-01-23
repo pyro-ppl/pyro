@@ -21,6 +21,7 @@ def am_i_wrapped():
     """
     return len(_PYRO_STACK) > 0
 
+
 def detach_iterable(iterable):
     if isinstance(iterable, Variable):
         return iterable.detach()

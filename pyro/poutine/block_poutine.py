@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from .poutine import Messenger, Poutine
 
+
 class BlockMessenger(Messenger):
 
     def __init__(self,

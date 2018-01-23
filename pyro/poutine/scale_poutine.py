@@ -21,6 +21,7 @@ class ScaleMessenger(Messenger):
         msg["scale"] = self.scale * msg["scale"]
         return msg
 
+
 class ScalePoutine(Poutine):
     """
     This poutine rescales the log probability score.

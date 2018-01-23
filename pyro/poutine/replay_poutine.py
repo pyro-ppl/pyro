@@ -84,6 +84,7 @@ class ReplayMessenger(Messenger):
         else:
             return super(ReplayMessenger, self)._pyro_sample(msg)
 
+
 class ReplayPoutine(Poutine):
     """
     Poutine for replaying from an existing execution trace.
