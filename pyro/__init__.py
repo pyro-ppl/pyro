@@ -77,6 +77,7 @@ def sample(name, fn, *args, **kwargs):
             "cond_indep_stack": [],
             "done": False,
             "stop": False,
+            "continuation": None
         }
         # handle observation
         if obs is not None:
@@ -329,6 +330,7 @@ def param(name, *args, **kwargs):
             "value": None,
             "done": False,
             "stop": False,
+            "continuation": None
         }
         # apply the stack and return its return value
         apply_stack(msg)

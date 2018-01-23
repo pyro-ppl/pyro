@@ -31,7 +31,10 @@ class EscapeMessenger(Messenger):
         """
         if self.escape_fn(msg):
             msg["done"] = True
-            raise NonlocalExit(msg)
+            msg["stop"] = True
+            def cont(m):
+                raise NonlocalExit(m)
+            msg["continuation"] = cont
         else:
             return super(EscapeMessenger, self)._pyro_sample(msg)
 

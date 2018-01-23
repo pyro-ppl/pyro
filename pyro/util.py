@@ -184,6 +184,10 @@ def apply_stack(initial_msg):
     for frame in reversed(stack[0:counter]):
         frame._postprocess_message(msg)
 
+    cont = msg["continuation"]
+    if cont is not None:
+        cont(msg)
+
     return None
 
 
