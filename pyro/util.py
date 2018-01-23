@@ -14,6 +14,14 @@ from torch.autograd import Variable
 from torch.nn import Parameter
 
 
+def validate_message(msg):
+    """
+    Asserts that the message has a valid format.
+    :returns: None
+    """
+    assert msg["type"] in ("sample", "param"), \
+        "{} is an invalid site type, how did that get there?".format(msg["type"])
+
 def am_i_wrapped():
     """
     Checks whether the current computation is wrapped in a poutine.
@@ -171,8 +179,7 @@ def apply_stack(initial_msg):
     counter = 0
     # go until time to stop?
     for frame in stack:
-        assert msg["type"] in ("sample", "param"), \
-            "{} is an invalid site type, how did that get there?".format(msg["type"])
+        validate_message(msg)
 
         counter = counter + 1
 
