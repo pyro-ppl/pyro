@@ -14,6 +14,13 @@ from torch.autograd import Variable
 from torch.nn import Parameter
 
 
+def am_i_wrapped():
+    """
+    Checks whether the current computation is wrapped in a poutine.
+    :returns: bool
+    """
+    return len(_PYRO_STACK) > 0
+
 def detach_iterable(iterable):
     if isinstance(iterable, Variable):
         return iterable.detach()
