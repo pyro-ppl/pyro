@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import torch
+
 from pyro.distributions import Distribution
 
 
@@ -34,7 +36,8 @@ class RandomPrimitive(Distribution):
         return self.dist_class(*args, **kwargs).shape(x)
 
     def sample(self, *args, **kwargs):
-        return self.dist_class(*args, **kwargs).sample()
+        sample_shape = kwargs.pop('sample_shape', torch.Size())
+        return self.dist_class(*args, **kwargs).sample(sample_shape)
 
     __call__ = sample
 

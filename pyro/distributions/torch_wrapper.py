@@ -13,13 +13,12 @@ class TorchDistribution(Distribution):
     `torch.distributions.Distribution <http://pytorch.org/docs/master/_modules/torch/distributions.html#Distribution>`_
     """
 
-    def __init__(self, torch_dist, x_shape, event_dim, batch_size=None, log_pdf_mask=None):
+    def __init__(self, torch_dist, x_shape, event_dim, log_pdf_mask=None, *args, **kwargs):
         super(TorchDistribution, self).__init__()
         self.torch_dist = torch_dist
         self.log_pdf_mask = log_pdf_mask
         self._x_shape = x_shape
         self._event_dim = event_dim
-        self._sample_shape = torch.Size() if batch_size is None else torch.Size((batch_size,))
 
     def batch_shape(self, x=None):
         x_shape = [] if x is None else x.size()
@@ -31,11 +30,11 @@ class TorchDistribution(Distribution):
         event_start = len(self._x_shape) - self._event_dim
         return self._x_shape[event_start:]
 
-    def sample(self):
+    def sample(self, sample_shape=torch.Size()):
         if self.reparameterized:
-            return self.torch_dist.rsample(self._sample_shape)
+            return self.torch_dist.rsample(sample_shape)
         else:
-            return self.torch_dist.sample(self._sample_shape)
+            return self.torch_dist.sample(sample_shape)
 
     def batch_log_pdf(self, x):
         batch_log_pdf_shape = self.batch_shape(x) + (1,)

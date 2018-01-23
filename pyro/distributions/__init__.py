@@ -15,12 +15,9 @@ from __future__ import absolute_import, division, print_function
 #    this implementation upstream to torch.distributions.
 
 # TODO move these implementations upstream to torch.distributions
-from pyro.distributions.binomial import Binomial
 from pyro.distributions.delta import Delta
 from pyro.distributions.distribution import Distribution  # noqa: F401
-from pyro.distributions.half_cauchy import HalfCauchy
 from pyro.distributions.log_normal import LogNormal
-from pyro.distributions.poisson import Poisson
 from pyro.distributions.random_primitive import RandomPrimitive
 
 # distribution classes with working torch versions in torch.distributions
@@ -40,18 +37,15 @@ from pyro.distributions.torch.uniform import Uniform
 # function aliases
 bernoulli = RandomPrimitive(Bernoulli)
 beta = RandomPrimitive(Beta)
-binomial = RandomPrimitive(Binomial)
 categorical = RandomPrimitive(Categorical)
 cauchy = RandomPrimitive(Cauchy)
 delta = RandomPrimitive(Delta)
 dirichlet = RandomPrimitive(Dirichlet)
 exponential = RandomPrimitive(Exponential)
 gamma = RandomPrimitive(Gamma)
-halfcauchy = RandomPrimitive(HalfCauchy)
 lognormal = RandomPrimitive(LogNormal)
 multinomial = RandomPrimitive(Multinomial)
 normal = RandomPrimitive(Normal)
 one_hot_categorical = RandomPrimitive(OneHotCategorical)
-poisson = RandomPrimitive(Poisson)
 uniform = RandomPrimitive(Uniform)
 multivariate_normal = RandomPrimitive(MultivariateNormal)
