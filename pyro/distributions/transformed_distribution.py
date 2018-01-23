@@ -56,7 +56,7 @@ class TransformedDistribution(Distribution):
         return next_input
 
     def batch_shape(self, x=None, *args, **kwargs):
-        return self.base_dist.batch_shape(x, *args, **kwargs)
+        return self.base_dist.batch_shape(*args, **kwargs)
 
     def event_shape(self, *args, **kwargs):
         return self.base_dist.event_shape(*args, **kwargs)

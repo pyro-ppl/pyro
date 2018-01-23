@@ -32,10 +32,7 @@ class Categorical(TorchDistribution):
 
     def __init__(self, ps=None, logits=None, *args, **kwargs):
         torch_dist = torch.distributions.Categorical(probs=ps, logits=logits)
-        x_shape = ps.shape[:-1] + (1,) if ps is not None \
-            else logits.shape[:-1] + (1,)
-        event_dim = 1
-        super(Categorical, self).__init__(torch_dist, x_shape, event_dim, *args, **kwargs)
+        super(Categorical, self).__init__(torch_dist, *args, **kwargs)
 
     def sample(self, sample_shape=torch.Size()):
         """
@@ -46,8 +43,7 @@ class Categorical(TorchDistribution):
         :return: sample from the Categorical distribution
         :rtype: numpy.ndarray or torch.LongTensor
         """
-        x = self.torch_dist.sample(sample_shape)
-        return x.view(sample_shape + self._x_shape)
+        return super(Categorical, self).sample(sample_shape)
 
     def batch_log_pdf(self, x):
         """
@@ -65,12 +61,7 @@ class Categorical(TorchDistribution):
         :return: tensor with log probabilities for each of the batches.
         :rtype: torch.autograd.Variable
         """
-        log_pxs = self.torch_dist.log_prob(x.squeeze(-1)).unsqueeze(-1)
-        batch_log_pdf_shape = self.batch_shape(x) + (1,)
-        batch_log_pdf = torch.sum(log_pxs, -1).contiguous().view(batch_log_pdf_shape)
-        if self.log_pdf_mask is not None:
-            batch_log_pdf = batch_log_pdf * self.log_pdf_mask
-        return batch_log_pdf
+        return super(Categorical, self).batch_log_pdf(x)
 
     def enumerate_support(self):
         """
@@ -93,6 +84,4 @@ class Categorical(TorchDistribution):
             sample.
         :rtype: torch.autograd.Variable or numpy.ndarray.
         """
-        values = self.torch_dist.enumerate_support()
-        sample_shape = (self.torch_dist.probs.shape[-1],)
-        return values.view(sample_shape + self._x_shape)
+        return super(Categorical, self).enumerate_support()

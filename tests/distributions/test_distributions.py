@@ -5,6 +5,7 @@ import pytest
 import torch
 
 from pyro.distributions import RandomPrimitive
+from pyro.distributions.util import broadcast_shape
 from pyro.util import ng_ones, ng_zeros
 from tests.common import assert_equal, xfail_if_not_implemented
 
@@ -39,23 +40,12 @@ def test_batch_log_pdf(dist):
         assert_equal(logpdf_sum_pyro, logpdf_sum_np)
 
 
-def test_shape(dist):
-    d = dist.pyro_dist
-    for idx in dist.get_test_data_indices():
-        dist_params = dist.get_dist_params(idx)
-        with xfail_if_not_implemented():
-            assert d.shape(**dist_params) == d.batch_shape(**dist_params) + d.event_shape(**dist_params)
-
-
 def test_sample_shape(dist):
-    d = dist.pyro_dist
     for idx in range(dist.get_num_test_data()):
         dist_params = dist.get_dist_params(idx)
         x_func = dist.pyro_dist.sample(**dist_params)
         x_obj = dist.pyro_dist_obj(**dist_params).sample()
         assert_equal(x_obj.size(), x_func.size())
-        with xfail_if_not_implemented():
-            assert(x_func.size() == d.shape(x_func, **dist_params))
 
 
 def test_batch_log_pdf_shape(dist):
@@ -65,7 +55,7 @@ def test_batch_log_pdf_shape(dist):
         x = dist.get_test_data(idx)
         with xfail_if_not_implemented():
             # Get batch pdf shape after broadcasting.
-            expected_shape = d.batch_shape(x, **dist_params) + (1,)
+            expected_shape = broadcast_shape(d.shape(**dist_params), x.size())[:-1] + (1,)
             log_p_func = d.batch_log_pdf(x, **dist_params)
             log_p_obj = dist.pyro_dist_obj(**dist_params).batch_log_pdf(x)
             # assert that the functional and object forms return
@@ -82,8 +72,8 @@ def test_batch_log_pdf_mask(dist):
         dist_params = dist.get_dist_params(idx)
         x = dist.get_test_data(idx)
         with xfail_if_not_implemented():
-            batch_pdf_shape = d.batch_shape(**dist_params) + (1,)
-            batch_pdf_shape_broadcasted = d.batch_shape(x, **dist_params) + (1,)
+            batch_pdf_shape = d.shape(**dist_params)[:-1] + (1,)
+            batch_pdf_shape_broadcasted = broadcast_shape(d.shape(**dist_params), x.size())[:-1] + (1,)
             zeros_mask = ng_zeros(1)  # should be broadcasted to data dims
             ones_mask = ng_ones(batch_pdf_shape)  # should be broadcasted to data dims
             half_mask = ng_ones(1) * 0.5

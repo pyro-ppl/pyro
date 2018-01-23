@@ -38,14 +38,7 @@ class Multinomial(TorchDistribution):
             n = n.view(-1)[0]
         n = int(n)
         torch_dist = torch.distributions.Multinomial(n, probs=ps)
-        x_shape = ps.shape
-        event_dim = 1
-        super(Multinomial, self).__init__(torch_dist, x_shape, event_dim, *args, **kwargs)
+        super(Multinomial, self).__init__(torch_dist, *args, **kwargs)
 
     def batch_log_pdf(self, x):
-        batch_log_pdf_shape = self.batch_shape(x) + (1,)
-        log_pxs = self.torch_dist.log_prob(x)
-        batch_log_pdf = log_pxs.view(batch_log_pdf_shape)
-        if self.log_pdf_mask is not None:
-            batch_log_pdf = batch_log_pdf * self.log_pdf_mask
-        return batch_log_pdf
+        return super(Multinomial, self).batch_log_pdf(x)

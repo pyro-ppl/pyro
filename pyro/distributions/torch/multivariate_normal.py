@@ -7,7 +7,7 @@ from torch.distributions import constraints
 from torch.distributions.utils import lazy_property
 
 from pyro.distributions.torch_wrapper import TorchDistribution
-from pyro.distributions.util import broadcast_shape, copy_docs_from
+from pyro.distributions.util import copy_docs_from
 
 
 def _matrix_inverse_compat(matrix, matrix_chol):
@@ -64,15 +64,10 @@ class MultivariateNormal(TorchDistribution):
 
     def __init__(self, loc, covariance_matrix, *args, **kwargs):
         torch_dist = TorchMultivariateNormal(loc, covariance_matrix)
-        x_shape = torch.Size(broadcast_shape(loc.shape, covariance_matrix.shape[:-1], strict=True))
-        event_dim = 1
-        super(MultivariateNormal, self).__init__(torch_dist, x_shape, event_dim, *args, **kwargs)
+        super(MultivariateNormal, self).__init__(torch_dist, *args, **kwargs)
 
     def batch_log_pdf(self, x):
-        batch_log_pdf = self.torch_dist.log_prob(x).view(self.batch_shape(x) + (1,))
-        if self.log_pdf_mask is not None:
-            batch_log_pdf = batch_log_pdf * self.log_pdf_mask
-        return batch_log_pdf
+        return super(MultivariateNormal, self).batch_log_pdf(x)
 
     def analytic_mean(self):
         return self.torch_dist.loc

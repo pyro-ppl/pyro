@@ -29,9 +29,7 @@ class OneHotCategorical(TorchDistribution):
 
     def __init__(self, ps=None, logits=None, *args, **kwargs):
         torch_dist = torch.distributions.OneHotCategorical(probs=ps, logits=logits)
-        x_shape = ps.shape if ps is not None else logits.shape
-        event_dim = 1
-        super(OneHotCategorical, self).__init__(torch_dist, x_shape, event_dim, *args, **kwargs)
+        super(OneHotCategorical, self).__init__(torch_dist, *args, **kwargs)
 
     def sample(self, sample_shape=torch.Size()):
         """
@@ -58,12 +56,7 @@ class OneHotCategorical(TorchDistribution):
         :return: tensor with log probabilities for each of the batches.
         :rtype: torch.autograd.Variable
         """
-        batch_log_pdf_shape = self.batch_shape(x) + (1,)
-        log_pxs = self.torch_dist.log_prob(x)
-        batch_log_pdf = log_pxs.view(batch_log_pdf_shape)
-        if self.log_pdf_mask is not None:
-            batch_log_pdf = batch_log_pdf * self.log_pdf_mask
-        return batch_log_pdf
+        return super(OneHotCategorical, self).batch_log_pdf(x)
 
     def enumerate_support(self):
         """
@@ -86,5 +79,4 @@ class OneHotCategorical(TorchDistribution):
             sample. The last dimension is used for the one-hot encoding.
         :rtype: torch.autograd.Variable.
         """
-        values = self.torch_dist.enumerate_support()
-        return values.view(self.event_shape() + self._x_shape)
+        return super(OneHotCategorical, self).enumerate_support()

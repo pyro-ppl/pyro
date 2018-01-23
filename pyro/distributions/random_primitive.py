@@ -25,9 +25,9 @@ class RandomPrimitive(Distribution):
     def reparameterized(self):
         return self.dist_class.reparameterized
 
-    def batch_shape(self, x=None, *args, **kwargs):
+    def batch_shape(self, *args, **kwargs):
         kwargs.pop('sample_shape', None)
-        return self.dist_class(*args, **kwargs).batch_shape(x)
+        return self.dist_class(*args, **kwargs).batch_shape()
 
     def event_shape(self, *args, **kwargs):
         kwargs.pop('sample_shape', None)
@@ -37,9 +37,9 @@ class RandomPrimitive(Distribution):
         kwargs.pop('sample_shape', None)
         return self.dist_class(*args, **kwargs).event_dim()
 
-    def shape(self, x=None, *args, **kwargs):
-        kwargs.pop('sample_shape', None)
-        return self.dist_class(*args, **kwargs).shape(x)
+    def shape(self, *args, **kwargs):
+        sample_shape = kwargs.pop('sample_shape', torch.Size())
+        return self.dist_class(*args, **kwargs).shape(sample_shape)
 
     def sample(self, *args, **kwargs):
         sample_shape = kwargs.pop('sample_shape', torch.Size())

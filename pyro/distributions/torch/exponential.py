@@ -21,6 +21,4 @@ class Exponential(TorchDistribution):
 
     def __init__(self, lam, *args, **kwargs):
         torch_dist = torch.distributions.Exponential(lam)
-        x_shape = lam.size()
-        event_dim = 1
-        super(Exponential, self).__init__(torch_dist, x_shape, event_dim, *args, **kwargs)
+        super(Exponential, self).__init__(torch_dist, *args, **kwargs)
