@@ -1,23 +1,22 @@
 from __future__ import absolute_import, division, print_function
 
-from .poutine import Poutine
+from .poutine import Messenger, Poutine
 from .trace import Trace
 
 
-class ConditionPoutine(Poutine):
+class ConditionMessenger(Messenger):
     """
     Adds values at observe sites to condition on data and override sampling
     """
-    def __init__(self, fn, data):
+    def __init__(self, data):
         """
-        :param fn: a stochastic function (callable containing pyro primitive calls)
         :param data: a dict or a Trace
 
         Constructor. Doesn't do much, just stores the stochastic function
         and the data to condition on.
         """
+        super(ConditionMessenger, self).__init__()
         self.data = data
-        super(ConditionPoutine, self).__init__(fn)
 
     def _prepare_site(self, msg):
         """
@@ -54,6 +53,44 @@ class ConditionPoutine(Poutine):
             else:
                 msg["value"] = self.data[name]
             msg["is_observed"] = True
-            return super(ConditionPoutine, self)._pyro_sample(msg)
+            return super(ConditionMessenger, self)._pyro_sample(msg)
         else:
-            return super(ConditionPoutine, self)._pyro_sample(msg)
+            return super(ConditionMessenger, self)._pyro_sample(msg)
+
+class ConditionPoutine(Poutine):
+    """
+    Adds values at observe sites to condition on data and override sampling
+    """
+    def __init__(self, fn, data):
+        """
+        :param fn: a stochastic function (callable containing pyro primitive calls)
+        :param data: a dict or a Trace
+
+        Constructor. Doesn't do much, just stores the stochastic function
+        and the data to condition on.
+        """
+        super(ConditionPoutine, self).__init__(fn)
+        self.msngr = ConditionMessenger(data)
+
+    def _prepare_site(self, msg):
+        """
+        :param msg: current message at a trace site
+        :returns: the updated message at the same trace site
+
+        If we have data at this site, don't sample from the site function
+        """
+        return self.msngr._prepare_site(msg)
+
+    def _pyro_sample(self, msg):
+        """
+        :param msg: current message at a trace site.
+        :returns: a sample from the stochastic function at the site.
+
+        If msg["name"] appears in self.data,
+        convert the sample site into an observe site
+        whose observed value is the value from self.data[msg["name"]].
+
+        Otherwise, implements default sampling behavior
+        with no additional effects.
+        """
+        return self.msngr._pyro_sample(msg)
