@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from .poutine import Messenger, Poutine
+from .poutine import Messenger
 
 
 class ScaleMessenger(Messenger):
