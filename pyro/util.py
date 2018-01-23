@@ -168,15 +168,21 @@ def apply_stack(initial_msg):
     for frame in reversed(stack):
         frame._prepare_site(msg)
 
+    counter = 0
     # go until time to stop?
     for frame in stack:
         assert msg["type"] in ("sample", "param"), \
             "{} is an invalid site type, how did that get there?".format(msg["type"])
 
+        counter = counter + 1
+
         frame._process_message(msg)
 
         if msg["stop"]:
             break
+
+    for frame in reversed(stack[0:counter]):
+        frame._postprocess_message(msg)
 
     return None
 
