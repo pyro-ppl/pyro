@@ -34,13 +34,7 @@ class HMC(TraceKernel):
         self.model = model
         self.step_size = step_size
         self.num_steps = num_steps
-        # simulation run attributes - will be set in self._setup at start of run
-        self._t = 0
-        self._r_dist = {}
-        self._args = None
-        self._kwargs = None
-        self._accept_cnt = None
-        self._prototype_trace = None
+        self._reset()
         super(HMC, self).__init__()
 
     def _get_trace(self, z):
@@ -60,9 +54,16 @@ class HMC(TraceKernel):
     def initial_trace(self):
         return poutine.trace(self.model).get_trace(*self._args, **self._kwargs)
 
+    def _reset(self):
+        self._t = 0
+        self._r_dist = {}
+        self._args = None
+        self._kwargs = None
+        self._accept_cnt = None
+        self._prototype_trace = None
+
     def setup(self, *args, **kwargs):
         self._accept_cnt = 0
-        self._t = 0
         self._args = args
         self._kwargs = kwargs
         self._kwargs['clone'] = False
@@ -82,12 +83,7 @@ class HMC(TraceKernel):
             raise ValueError('Model specification incorrect - trace log pdf is NaN, Inf or 0.')
 
     def cleanup(self):
-        self._t = 0
-        self._r_dist = {}
-        self._args = None
-        self._kwargs = None
-        self._accept_cnt = None
-        self._prototype_trace = None
+        self._reset()
 
     def sample(self, trace):
         z = {name: node['value'] for name, node in trace.iter_stochastic_nodes()}
