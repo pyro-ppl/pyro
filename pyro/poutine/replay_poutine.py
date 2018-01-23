@@ -98,34 +98,4 @@ class ReplayPoutine(Poutine):
         Constructor.
         Stores guide_trace in an attribute.
         """
-        super(ReplayPoutine, self).__init__(fn)
-        self.msngr = ReplayMessenger(guide_trace, sites)
-
-    def _prepare_site(self, msg):
-        """
-        :param msg: current message at a trace site.
-        :returns: the same message, possibly with some fields mutated.
-
-        If the site type is "map_data",
-        passes map_data batch indices from the guide trace
-        all the way down to the bottom of the stack,
-        so that the correct indices are used.
-
-        If the site type is "sample",
-        sets the return value and the "done" flag
-        so that poutines below it do not execute their sample functions at that site.
-        """
-        return self.msngr._prepare_site(msg)
-
-    def _pyro_sample(self, msg):
-        """
-        :param msg: current message at a trace site.
-
-        At a sample site that appears in self.guide_trace,
-        returns the value from self.guide_trace instead of sampling
-        from the stochastic function at the site.
-
-        At a sample site that does not appear in self.guide_trace,
-        reverts to default Poutine._pyro_sample behavior with no additional side effects.
-        """
-        return self.msngr._pyro_sample(msg)
+        super(ReplayPoutine, self).__init__(ReplayMessenger(guide_trace, sites), fn)

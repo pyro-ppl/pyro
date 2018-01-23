@@ -219,8 +219,7 @@ class TracePoutine(Poutine):
         :param string graph_type: string that specifies the type of graph
             to construct (currently only "flat" or "dense" supported)
         """
-        super(TracePoutine, self).__init__(fn)
-        self.msngr = TraceMessenger(graph_type)
+        super(TracePoutine, self).__init__(TraceMessenger(graph_type), fn)
 
     def __call__(self, *args, **kwargs):
         """
@@ -253,37 +252,3 @@ class TracePoutine(Poutine):
         """
         self(*args, **kwargs)
         return self.msngr.get_trace()
-
-    def _reset(self):
-        self.msngr._reset()
-        super(TracePoutine, self)._reset()
-
-    def _pyro_sample(self, msg):
-        """
-        :param msg: current message at a trace site.
-        :returns: a sample from the stochastic function at the site.
-
-        Implements default pyro.sample Poutine behavior with an additional side effect:
-        if the observation at the site is not None,
-        then store the observation in self.trace
-        and return the observation,
-        else call the function,
-        then store the return value in self.trace
-        and return the return value.
-        """
-        return self.msngr._pyro_sample(msg)
-
-    def _pyro_param(self, msg):
-        """
-        :param msg: current message at a trace site.
-        :returns: the result of querying the parameter store
-
-        Implements default pyro.param Poutine behavior with an additional side effect:
-        queries the parameter store with the site name and varargs
-        and returns the result of the query.
-
-        If the parameter doesn't exist, create it using the site varargs.
-        If it does exist, grab it from the parameter store.
-        Store the parameter in self.trace, and then return the parameter.
-        """
-        return self.msngr._pyro_param(msg)

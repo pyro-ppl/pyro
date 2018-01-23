@@ -97,22 +97,4 @@ class LiftPoutine(Poutine):
 
         Constructor
         """
-        super(LiftPoutine, self).__init__(fn)
-        self.msngr = LiftMessenger(prior)
-
-    def _prepare_site(self, msg):
-        """
-        Sets flags of params that will be overridden so they are not
-        reexecuted in the stack and not added to the param store.
-        """
-        return self.msngr._prepare_site(msg)
-
-    def _pyro_param(self, msg):
-        """
-        Overrides the `pyro.param` call with samples sampled from the
-        distribution specified in the prior. The prior can be a
-        pyro.distributions object or a dict of distributions keyed
-        on the param names. If the param name does not match the
-        name the keys in the prior, that param name is unchanged.
-        """
-        return self.msngr._pyro_param(msg)
+        super(LiftPoutine, self).__init__(LiftMessenger(prior), fn)

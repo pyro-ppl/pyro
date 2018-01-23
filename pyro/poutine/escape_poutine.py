@@ -48,17 +48,4 @@ class EscapePoutine(Poutine):
 
         Constructor.  Stores fn and escape_fn.
         """
-        super(EscapePoutine, self).__init__(fn)
-        self.msngr = EscapeMessenger(escape_fn)
-
-    def _pyro_sample(self, msg):
-        """
-        :param msg: current message at a trace site
-        :returns: a sample from the stochastic function at the site.
-
-        Evaluates self.escape_fn on the site (self.escape_fn(msg)).
-
-        If this returns True, raises an exception NonlocalExit(msg).
-        Else, implements default _pyro_sample behavior with no additional effects.
-        """
-        return self.msngr._pyro_sample(msg)
+        super(EscapePoutine, self).__init__(EscapeMessenger(escape_fn), fn)

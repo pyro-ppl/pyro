@@ -160,25 +160,5 @@ class BlockPoutine(Poutine):
         3. msg["name"] not in expose and msg["type"] not in expose_types
         4. hide_all == True
         """
-        super(BlockPoutine, self).__init__(fn)
-        self.msngr = BlockMessenger(hide_all, expose_all, hide, expose, hide_types, expose_types)
-
-    def _pyro_sample(self, msg):
-        """
-        :param msg:  current message at a trace site
-        :returns: a sample from the stochastic function at the site.
-
-        Default sample behavior with a side effect.
-        Applies self._block_up to decide whether to hide the site.
-        """
-        return self.msngr._pyro_sample(msg)
-
-    def _pyro_param(self, msg):
-        """
-        :param msg:  current message at a trace site
-        :returns: the result of querying the parameter store.
-
-        Default param behavior with a side effect.
-        Applies self._block_up to decide whether to hide the site.
-        """
-        return self.msngr._pyro_param(msg)
+        msngr = BlockMessenger(hide_all, expose_all, hide, expose, hide_types, expose_types)
+        super(BlockPoutine, self).__init__(msngr, fn)
