@@ -172,10 +172,6 @@ class TraceMessenger(Messenger):
                 raise RuntimeError("Multiple pyro.sample sites named '{}'".format(name))
 
         super(TraceMessenger, self)._pyro_sample(msg)
-        val = msg["value"]
-        site = msg.copy()
-        site.update(value=val)
-        self.trace.add_node(name, **site)
         return None
 
     def _pyro_param(self, msg):
@@ -196,12 +192,14 @@ class TraceMessenger(Messenger):
                 raise RuntimeError("{} is already in the trace as a sample".format(msg['name']))
 
         super(TraceMessenger, self)._pyro_param(msg)
+        return None
+
+    def _postprocess_message(self, msg):
         val = msg["value"]
         site = msg.copy()
         site.update(value=val)
         self.trace.add_node(msg["name"], **site)
         return None
-
 
 class TracePoutine(Poutine):
     """
