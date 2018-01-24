@@ -73,7 +73,7 @@ def test_standard_gamma_elbo(alpha):
     assert_equal(actual.mean(), expected.mean(), prec=0.01, msg='bad grad for alpha')
 
 
-@pytest.mark.xfail
+@pytest.mark.xfail('Unknown bug in ShapeAugmentedGamma')
 @pytest.mark.parametrize('alpha', [0.2, 0.5, 1.0, 2.0, 5.0])
 @pytest.mark.parametrize('beta', [0.2, 0.5, 1.0, 2.0, 5.0])
 def test_gamma_elbo(alpha, beta):
