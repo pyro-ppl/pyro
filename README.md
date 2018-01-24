@@ -46,6 +46,11 @@ cd pyro
 pip install .
 ```
 
+Note that to use Pyro's `dev` branch, you will need to build PyTorch's master branch. 
+Refer to the [README](https://github.com/pytorch/pytorch/blob/master/README.md) for more details.
+Otherwise, to use the latest version of Pyro that is compatible with PyTorch release, 
+use the `master` branch.
+
 ## Running Pyro from a Docker Container
 
 Refer to the instructions [here](docker/README.md).
