@@ -80,6 +80,10 @@ class RejectionGamma(Gamma):
 
 @copy_docs_from(Gamma)
 class ShapeAugmentedGamma(Gamma):
+    """
+    This implements the shape augmentation trick of
+    Naesseth, Ruiz, Linderman, Blei (2017) https://arxiv.org/abs/1610.05683
+    """
     stateful = True
     reparameterized = True
 
@@ -104,4 +108,6 @@ class ShapeAugmentedGamma(Gamma):
             boosted_x = self._unboost_x_cache[0]
         assert boosted_x is self._unboost_x_cache[0]
         x = self._unboost_x_cache[1]
-        return self._rejection_gamma.score_parts(x)
+        _, score_function, _ = self._rejection_gamma.score_parts(x)
+        log_pdf = self.batch_log_pdf(boosted_x)
+        return log_pdf, score_function, log_pdf

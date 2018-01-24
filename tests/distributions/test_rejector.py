@@ -95,7 +95,6 @@ def test_gamma_elbo(alpha, beta):
     assert_equal(actual[1] / scale[1], expected[1] / scale[1], prec=0.01, msg='bad grad for beta')
 
 
-@pytest.mark.xfail
 @pytest.mark.parametrize('alpha', [0.2, 0.5, 1.0, 2.0, 5.0])
 @pytest.mark.parametrize('beta', [0.2, 0.5, 1.0, 2.0, 5.0])
 def test_shape_augmented_gamma_elbo(alpha, beta):
@@ -111,5 +110,8 @@ def test_shape_augmented_gamma_elbo(alpha, beta):
     for guide in [guide1, guide2]:
         grads.append(compute_elbo_grad(model, guide, [alphas, betas]))
     expected, actual = grads
-    assert_equal(actual[0].data.mean(), expected[0].data.mean(), prec=0.01, msg='bad grad for alpha')
-    assert_equal(actual[1].data.mean(), expected[1].data.mean(), prec=0.01, msg='bad grad for beta')
+    expected = [g.data.mean() for g in expected]
+    actual = [g.data.mean() for g in actual]
+    scale = [(1 + abs(g)) for g in expected]
+    assert_equal(actual[0] / scale[0], expected[0] / scale[0], prec=0.05, msg='bad grad for alpha')
+    assert_equal(actual[1] / scale[1], expected[1] / scale[1], prec=0.05, msg='bad grad for beta')
