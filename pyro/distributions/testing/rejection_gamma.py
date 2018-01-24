@@ -1,10 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
 import torch
+
 from pyro.distributions.distribution import Distribution
-from pyro.distributions.torch.gamma import Gamma
 from pyro.distributions.rejector import Rejector
 from pyro.distributions.score_parts import ScoreParts
+from pyro.distributions.torch.gamma import Gamma
+from pyro.distributions.torch.normal import Normal
 from pyro.distributions.util import copy_docs_from
 
 
@@ -16,7 +18,6 @@ class RejectionStandardGamma(Rejector):
     augment shape.
     """
     def __init__(self, alpha):
-        super(RejectionStandardGamma, self).__init__(self.propose, self.log_prob_accept)
         if alpha.data.min() < 1:
             raise NotImplementedError('alpha < 1 is not supported')
         self.alpha = alpha
@@ -24,6 +25,10 @@ class RejectionStandardGamma(Rejector):
         # The following are Marsaglia & Tsang's variable names.
         self._d = self.alpha - 1.0 / 3.0
         self._c = 1.0 / torch.sqrt(9.0 * self._d)
+        # Compute log scale using Gamma.batch_log_pdf().
+        x = self._d.detach()  # just an arbitrary x.
+        log_scale = self.propose_batch_log_pdf(x) + self.log_prob_accept(x) - self.batch_log_pdf(x)
+        super(RejectionStandardGamma, self).__init__(self.propose, self.log_prob_accept, log_scale)
 
     def propose(self):
         # Marsaglia & Tsang's x == Naesseth's epsilon
@@ -31,6 +36,16 @@ class RejectionStandardGamma(Rejector):
         y = 1.0 + self._c * x
         v = y * y * y
         return (self._d * v).clamp_(1e-30, 1e30)
+
+    def propose_batch_log_pdf(self, value):
+        v = value / self._d
+        result = -self._d.log()
+        y = v.pow(1 / 3)
+        result -= torch.log(3 * y ** 2)
+        x = (y - 1) / self._c
+        result -= self._c.log()
+        result += Normal(torch.zeros_like(self.alpha), torch.ones_like(self.alpha)).batch_log_pdf(x)
+        return result
 
     def log_prob_accept(self, value):
         v = value / self._d

@@ -6,7 +6,7 @@ from torch.autograd import Variable, grad
 
 from pyro.distributions import Exponential, Gamma
 from pyro.distributions.testing.rejection_exponential import RejectionExponential
-from pyro.distributions.testing.rejection_gamma import RejectionStandardGamma
+from pyro.distributions.testing.rejection_gamma import RejectionStandardGamma, ShapeAugmentedGamma
 from tests.common import assert_equal
 
 
@@ -25,8 +25,9 @@ def test_rejector(rate, factor):
     num_samples = 100000
     rates = Variable(torch.Tensor([rate]).expand(num_samples, 1), requires_grad=True)
     factors = Variable(torch.Tensor([factor]).expand(num_samples, 1), requires_grad=True)
+
     dist1 = Exponential(rates)
-    dist2 = RejectionExponential(rates, factors)
+    dist2 = RejectionExponential(rates, factors)  # implemented using Rejector
     x1 = dist1.sample()
     x2 = dist2.sample()
     assert_equal(x1.mean(), x2.mean(), prec=0.02, msg='bug in .sample()')
@@ -34,7 +35,6 @@ def test_rejector(rate, factor):
     assert_equal(dist1.batch_log_pdf(x1), dist2.batch_log_pdf(x1), msg='bug in .batch_log_pdf()')
 
 
-@pytest.mark.xfail
 @pytest.mark.parametrize('rate', [0.5, 1.0, 2.0])
 @pytest.mark.parametrize('factor', [0.25, 0.5, 1.0])
 def test_exponential_elbo(rate, factor):
@@ -44,7 +44,7 @@ def test_exponential_elbo(rate, factor):
 
     model = Exponential(Variable(torch.ones(num_samples, 1)))
     guide1 = Exponential(rates)
-    guide2 = RejectionExponential(rates, factors)
+    guide2 = RejectionExponential(rates, factors)  # implemented using Rejector
 
     grads = []
     for guide in [guide1, guide2]:
@@ -52,7 +52,6 @@ def test_exponential_elbo(rate, factor):
     expected, actual = grads
     assert_equal(actual.mean(), expected.mean(), prec=0.05, msg='bad grad for rate')
 
-    # FIXME this fails
     actual = compute_elbo_grad(model, guide2, [factors])[0].data
     assert_equal(actual.mean(), 0.0, prec=0.05, msg='bad grad for factor')
 
@@ -72,3 +71,23 @@ def test_standard_gamma_elbo(alpha):
         grads.append(compute_elbo_grad(model, guide, [alphas])[0].data)
     expected, actual = grads
     assert_equal(actual.mean(), expected.mean(), prec=0.01, msg='bad grad for alpha')
+
+
+@pytest.mark.xfail
+@pytest.mark.parametrize('alpha', [0.2, 0.5, 1.0, 2.0, 5.0])
+@pytest.mark.parametrize('beta', [0.2, 0.5, 1.0, 2.0, 5.0])
+def test_gamma_elbo(alpha, beta):
+    num_samples = 100000
+    alphas = Variable(torch.Tensor([alpha]).expand(num_samples, 1), requires_grad=True)
+    betas = Variable(torch.Tensor([beta]).expand(num_samples, 1), requires_grad=True)
+
+    model = Gamma(Variable(torch.ones(num_samples, 1)), Variable(torch.ones(num_samples, 1)))
+    guide1 = Gamma(alphas, betas)
+    guide2 = ShapeAugmentedGamma(alphas, betas)  # implemented using Rejector
+
+    grads = []
+    for guide in [guide1, guide2]:
+        grads.append(compute_elbo_grad(model, guide, [alphas, betas]))
+    expected, actual = grads
+    assert_equal(actual[0].data.mean(), expected[0].data.mean(), prec=0.01, msg='bad grad for alpha')
+    assert_equal(actual[1].data.mean(), expected[1].data.mean(), prec=0.01, msg='bad grad for beta')

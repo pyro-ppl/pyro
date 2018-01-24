@@ -15,22 +15,23 @@ class Rejector(Distribution):
         propsals via `propose()`.
     :param callable log_prob_accept: A callable that inputs a batch of
         proposals and returns a batch of log acceptance probabilities.
-    :param log_scale: Total log probability of acceptance. This is needed
-        only if :meth:`batch_log_pdf` needs to be normalized.
+    :param log_scale: Total log probability of acceptance.
     """
     stateful = True
     reparameterized = True
 
-    def __init__(self, propose, log_prob_accept, log_scale=None):
+    def __init__(self, propose, log_prob_accept, log_scale):
         self.propose = propose
         self.log_prob_accept = log_prob_accept
+        self._log_scale = log_scale
+
+        # These LRU(1) caches allow work to be shared across different method calls.
         self._log_prob_accept_cache = None, None
-        self._log_scale = 0 if log_scale is None else log_scale
         self._propose_batch_log_pdf_cache = None, None
 
     def _log_prob_accept(self, x):
         if x is not self._log_prob_accept_cache[0]:
-            self._log_prob_accept_cache = x, self.log_prob_accept(x)
+            self._log_prob_accept_cache = x, self.log_prob_accept(x) - self._log_scale
         return self._log_prob_accept_cache[1]
 
     def _propose_batch_log_pdf(self, x):
@@ -55,7 +56,7 @@ class Rejector(Distribution):
         return x
 
     def batch_log_pdf(self, x):
-        return self._propose_batch_log_pdf(x) + self._log_prob_accept(x) - self._log_scale
+        return self._propose_batch_log_pdf(x) + self._log_prob_accept(x)
 
     def score_parts(self, x):
         score_function = self._log_prob_accept(x)
