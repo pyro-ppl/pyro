@@ -56,6 +56,7 @@ class RandomPrimitive(Distribution):
         return self.dist_class(*args, **kwargs).batch_log_pdf(x)
 
     def score_parts(self, x, *args, **kwargs):
+        kwargs.pop('sample_shape', None)
         return self.dist_class(*args, **kwargs).score_parts(x)
 
     def enumerate_support(self, *args, **kwargs):
