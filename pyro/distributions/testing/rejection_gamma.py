@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 import torch
 
-from pyro.distributions.distribution import Distribution
 from pyro.distributions.rejector import Rejector
 from pyro.distributions.score_parts import ScoreParts
 from pyro.distributions.torch.gamma import Gamma
@@ -59,23 +58,23 @@ class RejectionStandardGamma(Rejector):
 
 
 @copy_docs_from(Gamma)
-class RejectionGamma(Distribution):
+class RejectionGamma(Gamma):
     stateful = True
     reparameterized = True
 
     def __init__(self, alpha, beta):
-        self._standard_gamma = RejectionStandardGamma(alpha)
-        self.beta = beta
+        super(RejectionGamma, self).__init__(alpha, beta)
+        self._standard_gamma = RejectionStandardGamma(self.alpha)
 
     def sample(self):
-        return self._standard_gamma.sample() * self.beta
+        return self._standard_gamma.sample() / self.beta
 
     def batch_log_pdf(self, x):
-        return self._standard_gamma.batch_log_pdf(x / self.beta) - torch.log(self.beta)
+        return self._standard_gamma.batch_log_pdf(x * self.beta) + torch.log(self.beta)
 
     def score_parts(self, x):
-        log_pdf, score_function, _ = self._standard_gamma.score_parts(x / self.beta)
-        log_pdf = log_pdf - torch.log(self.beta)
+        log_pdf, score_function, _ = self._standard_gamma.score_parts(x * self.beta)
+        log_pdf = log_pdf + torch.log(self.beta)
         return ScoreParts(log_pdf, score_function, log_pdf)
 
 
