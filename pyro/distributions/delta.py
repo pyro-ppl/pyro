@@ -20,12 +20,10 @@ class Delta(Distribution):
     """
     enumerable = True
 
-    def __init__(self, v, batch_size=None, *args, **kwargs):
+    def __init__(self, v, *args, **kwargs):
         self.v = v
         if not isinstance(self.v, Variable):
             self.v = Variable(self.v)
-        if v.dim() == 1 and batch_size is not None:
-            self.v = v.expand(v, v.size(0))
         super(Delta, self).__init__(*args, **kwargs)
 
     def batch_shape(self, x=None):
@@ -47,8 +45,9 @@ class Delta(Distribution):
         event_dim = 1
         return self.v.size()[-event_dim:]
 
-    def sample(self):
-        return self.v
+    def sample(self, sample_shape=torch.Size()):
+        shape = sample_shape + self.v.size()
+        return self.v.expand(shape)
 
     def batch_log_pdf(self, x):
         v = self.v

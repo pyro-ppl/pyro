@@ -25,14 +25,11 @@ class LogNormal(Distribution):
     """
     reparameterized = True
 
-    def __init__(self, mu, sigma, batch_size=None, *args, **kwargs):
+    def __init__(self, mu, sigma, *args, **kwargs):
         self.mu = mu
         self.sigma = sigma
         if mu.size() != sigma.size():
             raise ValueError("Expected mu.size() == sigma.size(), but got {} vs {}".format(mu.size(), sigma.size()))
-        if mu.dim() == 1 and batch_size is not None:
-            self.mu = mu.expand(batch_size, mu.size(0))
-            self.sigma = sigma.expand(batch_size, sigma.size(0))
         super(LogNormal, self).__init__(*args, **kwargs)
 
     def batch_shape(self, x=None):
@@ -54,8 +51,9 @@ class LogNormal(Distribution):
         event_dim = 1
         return self.mu.size()[-event_dim:]
 
-    def sample(self):
-        eps = Variable(torch.randn(self.mu.size()).type_as(self.mu.data))
+    def sample(self, sample_shape=torch.Size()):
+        shape = sample_shape + self.mu.size()
+        eps = Variable(torch.randn(shape).type_as(self.mu.data))
         z = self.mu + self.sigma * eps
         return torch.exp(z)
 

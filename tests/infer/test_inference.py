@@ -85,6 +85,7 @@ class NormalNormalTests(TestCase):
         assert_equal(0.0, log_sig_error, prec=0.05)
 
 
+@pytest.mark.skip("Reinstate once poisson is migrated to PyTorch - https://github.com/uber/pyro/issues/699")
 class TestFixedModelGuide(TestCase):
     def setUp(self):
         self.data = Variable(torch.Tensor([2.0]))
@@ -153,6 +154,7 @@ class TestFixedModelGuide(TestCase):
 
 
 @pytest.mark.stage("integration", "integration_batch_2")
+@pytest.mark.skip("Reinstate once poisson is migrated to PyTorch - https://github.com/uber/pyro/issues/699")
 class PoissonGammaTests(TestCase):
     def setUp(self):
         # poisson-gamma model

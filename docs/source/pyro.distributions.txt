@@ -13,13 +13,6 @@ Beta
     :undoc-members:
     :show-inheritance:
 
-Binomial
---------
-.. automodule:: pyro.distributions.binomial
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 Categorical
 -----------
 .. automodule:: pyro.distributions.torch.categorical
@@ -70,14 +63,6 @@ Gamma
     :undoc-members:
     :show-inheritance:
 
-HalfCauchy
-----------------------------------------
-
-.. automodule:: pyro.distributions.half_cauchy
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 LogNormal
 ---------
 .. automodule:: pyro.distributions.log_normal
@@ -95,13 +80,6 @@ Multinomial
 OneHotCategorical
 -----------------
 .. automodule:: pyro.distributions.torch.one_hot_categorical
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-Poisson
--------
-.. automodule:: pyro.distributions.poisson
     :members:
     :undoc-members:
     :show-inheritance:

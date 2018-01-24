@@ -106,7 +106,7 @@ def test_mean_and_var(lognormal):
     mu_z = torch_zeros_like(mu_lognorm)
     sigma_z = torch_ones_like(sigma_lognorm)
     trans_dist = get_transformed_dist(dist.normal, sigma_lognorm, mu_lognorm)
-    torch_samples = trans_dist.sample(mu_z, sigma_z, batch_size=lognormal.get_num_samples(0))
+    torch_samples = trans_dist.sample(mu_z, sigma_z, sample_shape=torch.Size((lognormal.get_num_samples(0),)))
     torch_mean = torch.mean(torch_samples, 0)
     torch_std = torch.std(torch_samples, 0)
     analytic_mean = lognormal.pyro_dist.analytic_mean(**dist_params)

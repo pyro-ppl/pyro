@@ -28,7 +28,7 @@ class Dirichlet(TorchDistribution):
         event_dim = 1
         super(Dirichlet, self).__init__(torch_dist, x_shape, event_dim, *args, **kwargs)
 
-    def sample(self):
+    def sample(self, sample_shape=torch.Size()):
         """
         Draws either a single sample (if alpha.dim() == 1), or one sample per param (if alpha.dim() == 2).
 
@@ -36,7 +36,7 @@ class Dirichlet(TorchDistribution):
 
         :param torch.autograd.Variable alpha:
         """
-        return super(Dirichlet, self).sample()
+        return super(Dirichlet, self).sample(sample_shape)
 
     def batch_log_pdf(self, x):
         """
