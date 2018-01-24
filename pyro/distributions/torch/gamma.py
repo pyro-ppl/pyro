@@ -28,8 +28,14 @@ class Gamma(TorchDistribution):
 
     @property
     def alpha(self):
-        return self.torch_dist.concentration
+        try:
+            return self.torch_dist.concentration
+        except AttributeError:
+            return self.torch_dist.alpha  # DEPRECATED
 
     @property
     def beta(self):
-        return self.torch_dist.rate
+        try:
+            return self.torch_dist.rate
+        except AttributeError:
+            return self.torch_dist.alpha  # DEPRECATED
