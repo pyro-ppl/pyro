@@ -1,9 +1,9 @@
 """
 Schelling coordination game with false belief:
-Two agents, Alice and Bob, claim to want to meet.
+Two spies, Alice and Bob, claim to want to meet.
 Bob wants to meet Alice, but Alice actually wants to avoid Bob.
 
-They choose between two locations
+They must choose between two locations without communicating
 by recursively reasoning about one another.
 
 Taken from: http://forestdb.org/models/schelling-falsebelief.html

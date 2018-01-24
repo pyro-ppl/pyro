@@ -1,8 +1,8 @@
 """
 Schelling coordination game:
-Two agents, Alice and Bob, want to meet.
+Two spies, Alice and Bob, want to meet.
 
-They choose between two locations
+They must choose between two locations without communicating
 by recursively reasoning about one another.
 
 Taken from: http://forestdb.org/models/schelling.html
