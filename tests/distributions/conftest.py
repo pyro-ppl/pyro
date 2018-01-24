@@ -7,9 +7,8 @@ import pytest
 import scipy.stats as sp
 
 import pyro.distributions as dist
-from pyro.distributions import (Bernoulli, Beta, Binomial, Categorical, Cauchy, Dirichlet, Exponential, Gamma,
-                                HalfCauchy, LogNormal, Multinomial, MultivariateNormal, Normal, OneHotCategorical,
-                                Poisson, Uniform)
+from pyro.distributions import (Bernoulli, Beta, Categorical, Cauchy, Dirichlet, Exponential, Gamma,
+                                Multinomial, MultivariateNormal, Normal, OneHotCategorical, Uniform)
 from tests.distributions.dist_fixture import Fixture
 
 continuous_dists = [
@@ -87,19 +86,6 @@ continuous_dists = [
                 ((), {"mean": np.array(loc), "cov": np.array([[1.0, 0.5], [0.5, 1.0]])}),
             prec=0.01,
             min_samples=500000),
-    Fixture(pyro_dist=(dist.lognormal, LogNormal),
-            scipy_dist=sp.lognorm,
-            examples=[
-                {'mu': [1.4], 'sigma': [0.4],
-                 'test_data': [5.5]},
-                {'mu': [1.4], 'sigma': [0.4],
-                 'test_data': [[5.5]]},
-                {'mu': [[1.4, 0.4], [1.4, 0.4]], 'sigma': [[2.6, 0.5], [2.6, 0.5]],
-                 'test_data': [[5.5, 6.4], [5.5, 6.4]]},
-                {'mu': [[1.4], [0.4]], 'sigma': [[2.6], [0.5]],
-                 'test_data': [[5.5], [6.4]]}
-            ],
-            scipy_arg_fn=lambda mu, sigma: ((np.array(sigma),), {"scale": np.exp(np.array(mu))})),
     Fixture(pyro_dist=(dist.dirichlet, Dirichlet),
             scipy_dist=sp.dirichlet,
             examples=[
@@ -122,17 +108,6 @@ continuous_dists = [
                  'test_data': [[0.4], [0.35]]}
             ],
             scipy_arg_fn=lambda mu, gamma: ((), {"loc": np.array(mu), "scale": np.array(gamma)})),
-    Fixture(pyro_dist=(dist.halfcauchy, HalfCauchy),
-            scipy_dist=sp.halfcauchy,
-            examples=[
-                {'mu': [0.5], 'gamma': [1.2],
-                 'test_data': [1.0]},
-                {'mu': [0.5, 0.5], 'gamma': [1.2, 1.2],
-                 'test_data': [[1.0, 1.0], [1.0, 1.0]]},
-                {'mu': [[0.5], [0.3]], 'gamma': [[1.2], [1.0]],
-                 'test_data': [[1.0], [0.35]]}
-            ],
-            scipy_arg_fn=lambda mu, gamma: ((), {"loc": np.array(mu), "scale": np.array(gamma)})),
 ]
 
 discrete_dists = [
@@ -149,20 +124,6 @@ discrete_dists = [
                  'test_data': [[2, 4, 2], [1, 4, 3]]}
             ],
             scipy_arg_fn=lambda ps, n=[1]: ((n[0], np.array(ps)), {}),
-            prec=0.05,
-            min_samples=10000,
-            is_discrete=True),
-    Fixture(pyro_dist=(dist.binomial, Binomial),
-            scipy_dist=sp.binom,
-            examples=[
-                {'ps': [0.6], 'n': [8],
-                 'test_data': [4]},
-                {'ps': [0.3], 'n': [8],
-                 'test_data': [[2], [4]]},
-                {'ps': [[0.2], [0.4]], 'n': [[8], [8]],
-                 'test_data': [[4], [3]]}
-            ],
-            scipy_arg_fn=lambda ps, n: ((n[0], ps[0]), {}),
             prec=0.05,
             min_samples=10000,
             is_discrete=True),
@@ -193,23 +154,6 @@ discrete_dists = [
             is_discrete=True,
             expected_support_non_vec=[[0], [1]],
             expected_support=[[[0, 0], [0, 0]], [[1, 1], [1, 1]]]),
-    Fixture(pyro_dist=(dist.poisson, Poisson),
-            scipy_dist=sp.poisson,
-            examples=[
-                {'lam': [2.0],
-                 'test_data': [0]},
-                {'lam': [3.0],
-                 'test_data': [1]},
-                {'lam': [6.0],
-                 'test_data': [4]},
-                {'lam': [2.0, 3.0, 6.0],
-                 'test_data': [[0, 1, 4], [0, 1, 4]]},
-                {'lam': [[2.0], [3.0], [6.0]],
-                 'test_data': [[0], [1], [4]]}
-            ],
-            scipy_arg_fn=lambda lam: ((np.array(lam),), {}),
-            prec=0.08,
-            is_discrete=True),
     Fixture(pyro_dist=(dist.categorical, Categorical),
             scipy_dist=sp.multinomial,
             examples=[

@@ -274,6 +274,7 @@ class BernoulliBetaTests(TestCase):
         assert_equal(0.0, beta_error, prec=0.04)
 
 
+@pytest.mark.skip('Reinstate once poisson is migrated to PyTorch - https://github.com/uber/pyro/issues/699')
 class PoissonGammaTests(TestCase):
     def setUp(self):
         # poisson-gamma model

@@ -37,7 +37,7 @@ class Categorical(TorchDistribution):
         event_dim = 1
         super(Categorical, self).__init__(torch_dist, x_shape, event_dim, *args, **kwargs)
 
-    def sample(self):
+    def sample(self, sample_shape=torch.Size()):
         """
         Returns a sample which has the same shape as `ps` (or `vs`). The type
         of the sample is `numpy.ndarray` if `vs` is a list or a numpy array,
@@ -46,8 +46,8 @@ class Categorical(TorchDistribution):
         :return: sample from the Categorical distribution
         :rtype: numpy.ndarray or torch.LongTensor
         """
-        x = self.torch_dist.sample(self._sample_shape)
-        return x.view(self._sample_shape + self._x_shape)
+        x = self.torch_dist.sample(sample_shape)
+        return x.view(sample_shape + self._x_shape)
 
     def batch_log_pdf(self, x):
         """

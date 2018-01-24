@@ -33,7 +33,7 @@ class OneHotCategorical(TorchDistribution):
         event_dim = 1
         super(OneHotCategorical, self).__init__(torch_dist, x_shape, event_dim, *args, **kwargs)
 
-    def sample(self):
+    def sample(self, sample_shape=torch.Size()):
         """
         Returns a sample which has the same shape as `ps`, except that the last dimension
         will have the same size as the number of events.
@@ -41,7 +41,7 @@ class OneHotCategorical(TorchDistribution):
         :return: sample from the OneHotCategorical distribution
         :rtype: torch.Tensor
         """
-        return super(OneHotCategorical, self).sample()
+        return super(OneHotCategorical, self).sample(sample_shape)
 
     def batch_log_pdf(self, x):
         """

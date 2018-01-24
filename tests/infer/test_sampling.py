@@ -49,7 +49,7 @@ class NormalNormalSamplingTestCase(TestCase):
         def model():
             mu = pyro.sample("mu", Normal(Variable(torch.zeros(1)),
                                           Variable(torch.ones(1))))
-            xd = Normal(mu, Variable(torch.ones(1)), batch_size=50)
+            xd = Normal(mu, Variable(torch.ones(1)))
             pyro.observe("xs", xd, self.data)
             return mu
 
