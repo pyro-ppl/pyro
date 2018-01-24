@@ -55,5 +55,5 @@ def test_mcmc_interface():
         samples.append(marginal.sample(data))
     sample_mean = torch.mean(torch.stack(samples), 0)
     sample_std = torch.std(torch.stack(samples), 0)
-    assert_equal(sample_mean.data, torch.Tensor([0.0]), prec=5e-2)
-    assert_equal(sample_std.data, torch.Tensor([1.0]), prec=5e-2)
+    assert_equal(sample_mean.data, torch.Tensor([0.0]), prec=0.08)
+    assert_equal(sample_std.data, torch.Tensor([1.0]), prec=0.08)

@@ -51,7 +51,7 @@ Normal
 
 MultivariateNormal
 ------------------
-.. automodule:: pyro.distributions.multivariate_normal
+.. automodule:: pyro.distributions.torch.multivariate_normal
     :members:
     :undoc-members:
     :show-inheritance:
