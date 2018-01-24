@@ -206,11 +206,11 @@ class Distribution(object):
         """
         log_pdf = self.batch_log_pdf(x, *args, **kwargs)
         if self.reparameterized:
-            return ScoreParts(log_pdf, 0, log_pdf)
+            return ScoreParts(log_pdf=log_pdf, score_function=0, entropy_term=log_pdf)
         else:
             # XXX should the user be able to control inclusion of the entropy term?
             # See Roeder, Wu, Duvenaud (2017) "Sticking the Landing" https://arxiv.org/abs/1703.09194
-            return ScoreParts(log_pdf, log_pdf, 0)
+            return ScoreParts(log_pdf=log_pdf, score_function=log_pdf, entropy_term=0)
 
     def enumerate_support(self, *args, **kwargs):
         """

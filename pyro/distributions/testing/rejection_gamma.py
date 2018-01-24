@@ -14,8 +14,7 @@ from pyro.distributions.util import copy_docs_from
 class RejectionStandardGamma(Rejector):
     """
     Naive Marsaglia & Tsang rejection sampler for standard Gamma distibution.
-    This assumes `alpha >= 1` and does not boost `alpha` boosting or
-    augment shape.
+    This assumes `alpha >= 1` and does not boost `alpha` or augment shape.
     """
     def __init__(self, alpha):
         if alpha.data.min() < 1:
@@ -61,6 +60,7 @@ class RejectionStandardGamma(Rejector):
 
 @copy_docs_from(Gamma)
 class RejectionGamma(Distribution):
+    stateful = True
     reparameterized = True
 
     def __init__(self, alpha, beta):
