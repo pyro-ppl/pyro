@@ -11,9 +11,9 @@ class RBF(Kernel):
     Implementation of Radial Basis Function kernel.
 
     By default, parameters will be `torch.nn.Parameter`s containing `torch.FloatTensor`s.
-        To cast them to the correct data type or GPU device, we can call methods such as
-        `.double()`, `.cuda(device=None)`,... See
-        `torch.nn.Module <http://pytorch.org/docs/master/nn.html#torch.nn.Module>`_ for more information.
+    To cast them to the correct data type or GPU device, we can call methods such as
+    `.double()`, `.cuda(device=None)`,... See
+    `torch.nn.Module <http://pytorch.org/docs/master/nn.html#torch.nn.Module>`_ for more information.
 
     :param int input_dim: Dimension of inputs for this kernel.
     :param torch.Tensor variance: Variance parameter of this kernel.
