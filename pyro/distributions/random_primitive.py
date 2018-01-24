@@ -24,15 +24,19 @@ class RandomPrimitive(Distribution):
         return self.dist_class.reparameterized
 
     def batch_shape(self, x=None, *args, **kwargs):
+        kwargs.pop('sample_shape', None)
         return self.dist_class(*args, **kwargs).batch_shape(x)
 
     def event_shape(self, *args, **kwargs):
+        kwargs.pop('sample_shape', None)
         return self.dist_class(*args, **kwargs).event_shape()
 
     def event_dim(self, *args, **kwargs):
+        kwargs.pop('sample_shape', None)
         return self.dist_class(*args, **kwargs).event_dim()
 
     def shape(self, x=None, *args, **kwargs):
+        kwargs.pop('sample_shape', None)
         return self.dist_class(*args, **kwargs).shape(x)
 
     def sample(self, *args, **kwargs):
@@ -42,16 +46,21 @@ class RandomPrimitive(Distribution):
     __call__ = sample
 
     def log_pdf(self, x, *args, **kwargs):
+        kwargs.pop('sample_shape', None)
         return self.dist_class(*args, **kwargs).log_pdf(x)
 
     def batch_log_pdf(self, x, *args, **kwargs):
+        kwargs.pop('sample_shape', None)
         return self.dist_class(*args, **kwargs).batch_log_pdf(x)
 
     def enumerate_support(self, *args, **kwargs):
+        kwargs.pop('sample_shape', None)
         return self.dist_class(*args, **kwargs).enumerate_support()
 
     def analytic_mean(self, *args, **kwargs):
+        kwargs.pop('sample_shape', None)
         return self.dist_class(*args, **kwargs).analytic_mean()
 
     def analytic_var(self, *args, **kwargs):
+        kwargs.pop('sample_shape', None)
         return self.dist_class(*args, **kwargs).analytic_var()
