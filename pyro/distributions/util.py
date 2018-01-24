@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 
 
-def copy_docs_from(source_class):
+def copy_docs_from(source_class, full_text=False):
     """
     Decorator to copy class and method docs from source to destin class.
     """
@@ -21,7 +21,11 @@ def copy_docs_from(source_class):
             source_attr = getattr(source_class, name, None)
             source_doc = getattr(source_attr, '__doc__', None)
             if source_doc and not getattr(destin_attr, '__doc__', None):
-                destin_attr.__doc__ = source_doc
+                if full_text or source_doc.startswith('See '):
+                    destin_attr.__doc__ = source_doc
+                else:
+                    destin_attr.__doc__ = 'See :meth:`{}.{}.{}`'.format(
+                        source_class.__module__, source_class.__name__, source_attr.__name__)
         return destin_class
 
     return decorator
