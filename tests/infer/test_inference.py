@@ -171,7 +171,6 @@ class PoissonGammaTests(TestCase):
         self.log_alpha_n = torch.log(self.alpha_n)
         self.log_beta_n = torch.log(self.beta_n)
 
-    @pytest.mark.skipif(not dist.gamma.reparameterized, reason='not implemented')
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 10000)
 
@@ -230,7 +229,6 @@ class ExponentialGammaTests(TestCase):
         self.log_alpha_n = torch.log(self.alpha_n)
         self.log_beta_n = torch.log(self.beta_n)
 
-    @pytest.mark.skipif(not dist.gamma.reparameterized, reason='not implemented')
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 5000)
 
@@ -286,8 +284,6 @@ class BernoulliBetaTests(TestCase):
         self.log_alpha_n = torch.log(self.alpha_n)
         self.log_beta_n = torch.log(self.beta_n)
 
-    @pytest.mark.xfail(reason='low precision gradient?')
-    @pytest.mark.skipif(not dist.beta.reparameterized, reason='not implemented')
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 10000)
 
