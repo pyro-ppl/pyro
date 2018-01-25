@@ -112,4 +112,4 @@ class ShapeAugmentedGamma(Gamma):
         x = self._unboost_x_cache[1]
         _, score_function, _ = self._rejection_gamma.score_parts(x)
         log_pdf = self.batch_log_pdf(boosted_x)
-        return log_pdf, score_function, log_pdf
+        return ScoreParts(log_pdf, score_function, log_pdf)

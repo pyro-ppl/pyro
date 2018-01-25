@@ -235,7 +235,6 @@ class ExponentialGammaTests(TestCase):
         assert dist.gamma.reparameterized
         self.do_elbo_test(dist.Gamma, 5000)
 
-    @pytest.mark.xfail
     def test_elbo_rsvi(self):
         self.do_elbo_test(ShapeAugmentedGamma, 5000)
 
