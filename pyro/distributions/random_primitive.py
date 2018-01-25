@@ -12,6 +12,8 @@ class RandomPrimitive(Distribution):
     __slots__ = ['dist_class']
 
     def __init__(self, dist_class):
+        if dist_class.stateful:
+            raise TypeError('Cannot wrap stateful class {} in RandomPrimitive.'.format(type(dist_class)))
         self.dist_class = dist_class
         super(RandomPrimitive, self).__init__()
 
@@ -52,6 +54,10 @@ class RandomPrimitive(Distribution):
     def batch_log_pdf(self, x, *args, **kwargs):
         kwargs.pop('sample_shape', None)
         return self.dist_class(*args, **kwargs).batch_log_pdf(x)
+
+    def score_parts(self, x, *args, **kwargs):
+        kwargs.pop('sample_shape', None)
+        return self.dist_class(*args, **kwargs).score_parts(x)
 
     def enumerate_support(self, *args, **kwargs):
         kwargs.pop('sample_shape', None)

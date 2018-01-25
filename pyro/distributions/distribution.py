@@ -2,8 +2,10 @@ from __future__ import absolute_import, division, print_function
 
 from abc import ABCMeta, abstractmethod
 
-import torch
 from six import add_metaclass
+
+import torch
+from pyro.distributions.score_parts import ScoreParts
 
 
 @add_metaclass(ABCMeta)
@@ -85,6 +87,7 @@ class Distribution(object):
     Take a look at the `examples <http://pyro.ai/examples>`_ to see how they interact
     with inference algorithms.
     """
+    stateful = False
     reparameterized = False
     enumerable = False
 
@@ -168,7 +171,8 @@ class Distribution(object):
         Evaluates total log probability density of a batch of samples.
 
         :param torch.autograd.Variable x: A value.
-        :return: total log probability density as a one-dimensional torch.autograd.Variable of size 1.
+        :return: total log probability density as a one-dimensional
+            torch.autograd.Variable of size 1.
         :rtype: torch.autograd.Variable
         """
         return torch.sum(self.batch_log_pdf(x, *args, **kwargs))
@@ -186,6 +190,27 @@ class Distribution(object):
         :rtype: torch.autograd.Variable
         """
         raise NotImplementedError
+
+    def score_parts(self, x, *args, **kwargs):
+        """
+        Computes ingredients for stochastic gradient estimators of ELBO.
+
+        The default implementation is correct both for non-reparameterized and
+        for fully reparameterized distributions. Partially reparameterized
+        distributions should override this method to compute correct
+        `.score_function` and `.entropy_term` parts.
+
+        :param torch.autograd.Variable x: A single value or batch of values.
+        :return: A `ScoreParts` object containing parts of the ELBO estimator.
+        :rtype: ScoreParts
+        """
+        log_pdf = self.batch_log_pdf(x, *args, **kwargs)
+        if self.reparameterized:
+            return ScoreParts(log_pdf=log_pdf, score_function=0, entropy_term=log_pdf)
+        else:
+            # XXX should the user be able to control inclusion of the entropy term?
+            # See Roeder, Wu, Duvenaud (2017) "Sticking the Landing" https://arxiv.org/abs/1703.09194
+            return ScoreParts(log_pdf=log_pdf, score_function=log_pdf, entropy_term=0)
 
     def enumerate_support(self, *args, **kwargs):
         """
