@@ -289,7 +289,6 @@ class BernoulliBetaTests(TestCase):
         self.log_alpha_n = torch.log(self.alpha_n)
         self.log_beta_n = torch.log(self.beta_n)
 
-    @pytest.mark.xfail(reason='low precision gradient?')
     def test_elbo_reparameterized(self):
         assert dist.beta.reparameterized
         self.do_elbo_test(True, 10000)

@@ -93,8 +93,9 @@ TEST_CASES = [
         expected_precs=[2.0, 10000],
         mean_tol=0.05,
         std_tol=0.05,
-    ), marks=pytest.mark.skipif('CI' in os.environ and os.environ['CI'] == 'true',
-                                reason='Slow test - skip on CI')),
+    ), marks=[pytest.mark.xfail(reason="flaky"),
+              pytest.mark.skipif('CI' in os.environ and os.environ['CI'] == 'true',
+                                 reason='Slow test - skip on CI')]),
     pytest.param(*T(
         GaussianChain(dim=5, chain_len=9, num_obs=1),
         num_samples=3000,
