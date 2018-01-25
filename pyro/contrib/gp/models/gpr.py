@@ -12,7 +12,7 @@ class GPRegression(nn.Module):
     Gaussian Process regression module.
 
     :param torch.autograd.Variable X: A tensor of inputs.
-    :param torch.autograd.Variable y: A tensor of outputs for training.
+    :param torch.autograd.Variable y: A tensor of output data for training.
     :param pyro.gp.kernels.Kernel kernel: A Pyro kernel object.
     :param torch.Tensor noise: An optional noise tensor.
     :param dict priors: A mapping from kernel parameter's names to priors.
@@ -66,11 +66,20 @@ class GPRegression(nn.Module):
             Z = Z.unsqueeze(1)
         kernel = self.guide()
         K = kernel(self.X) + self.noise.repeat(self.input_dim).diag()
+
         K_xz = kernel(self.X, Z)
         K_zx = K_xz.t()
         K_zz = kernel(Z)
-        # TODO: use torch.trtrs when it supports cuda tensors
+
+        # TODO Use torch.trtrs or torch.potrs when it supports cuda tensors
+        # and is differentiable.
+        # Refer to Gaussian processes for machine learning main gpr algorithm
+        # L = torch.potrf(K, upper=False)
+        # alpha = torch.potrs(L, self.y, upper=False)
+
         K_inv = K.inverse()
-        loc = K_zx.matmul(K_inv.matmul(self.y))
+        alpha = K_inv.matmul(self.y)
+        loc = K_zx.matmul(alpha)
         covariance_matrix = K_zz - K_zx.matmul(K_inv.matmul(K_xz))
+
         return loc, covariance_matrix
