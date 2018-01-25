@@ -64,7 +64,8 @@ class RejectionGamma(Gamma):
 
     def __init__(self, alpha, beta):
         super(RejectionGamma, self).__init__(alpha, beta)
-        self._standard_gamma = RejectionStandardGamma(self.alpha)
+        self._standard_gamma = RejectionStandardGamma(alpha)
+        self.beta = beta
 
     def sample(self):
         return self._standard_gamma.sample() / self.beta
@@ -91,8 +92,9 @@ class ShapeAugmentedGamma(Gamma):
         if alpha.min() + boost < 1:
             raise ValueError('Need to boost at least once for alpha < 1')
         super(ShapeAugmentedGamma, self).__init__(alpha, beta)
+        self.alpha = alpha
         self._boost = boost
-        self._rejection_gamma = RejectionGamma(self.alpha + boost, self.beta)
+        self._rejection_gamma = RejectionGamma(alpha + boost, beta)
         self._unboost_x_cache = None, None
 
     def sample(self):

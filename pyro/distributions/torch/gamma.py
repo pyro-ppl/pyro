@@ -25,17 +25,3 @@ class Gamma(TorchDistribution):
         x_shape = torch.Size(broadcast_shape(alpha.size(), beta.size(), strict=True))
         event_dim = 1
         super(Gamma, self).__init__(torch_dist, x_shape, event_dim, *args, **kwargs)
-
-    @property
-    def alpha(self):
-        try:
-            return self.torch_dist.concentration
-        except AttributeError:
-            return self.torch_dist.alpha  # DEPRECATED
-
-    @property
-    def beta(self):
-        try:
-            return self.torch_dist.rate
-        except AttributeError:
-            return self.torch_dist.alpha  # DEPRECATED
