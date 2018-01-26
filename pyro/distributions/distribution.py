@@ -45,7 +45,7 @@ class Distribution(object):
     Pyro follows the same distribution shape semantics as PyTorch. It distinguishes
     between three different roles for tensor shapes of samples:
 
-    - *sample shape* corresponds to iid samples drawn from the distribution.
+    - *sample shape* corresponds to the shape of the iid samples drawn from the distribution.
       This is taken as an argument by the distribution's `sample` method.
     - *batch shape* corresponds to non-identical (independent) parameterizations of
       the distribution, inferred from the distribution's parameter shapes. This is
@@ -104,7 +104,8 @@ class Distribution(object):
         The right-hand tensor shape of parameters used for individual events. The
         event dimension(/s) is used to designate random variables that could
         potentially depend on each other, for instance in the case of Dirichlet
-        or the OneHotCategorical distribution.
+        or the OneHotCategorical distribution. Note that ``event_shape`` is
+        empty for all univariate distributions.
 
         Samples are of shape :code:`d.shape(sample_shape) == sample_shape +
         d.batch_shape() + d.event_shape()`.
