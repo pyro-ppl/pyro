@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 import torch
 
 from pyro.distributions.distribution import Distribution
-from pyro.distributions.util import broadcast_shape, copy_docs_from
+from pyro.distributions.util import copy_docs_from
 
 
 @copy_docs_from(Distribution)
@@ -30,16 +30,11 @@ class TorchDistribution(Distribution):
         else:
             return self.torch_dist.sample(sample_shape)
 
-    def batch_log_pdf(self, x):
-        shape = broadcast_shape(self.shape(), x.size(), strict=True)
-        batch_log_pdf_shape = shape[:-1] + (1,)
-        log_pxs = self.torch_dist.log_prob(x)
-        if len(shape) > len(log_pxs.size()):
-            log_pxs = log_pxs.unsqueeze(-1)
-        batch_log_pdf = torch.sum(log_pxs, -1).contiguous().view(batch_log_pdf_shape)
+    def log_prob(self, x):
+        log_prob = self.torch_dist.log_prob(x)
         if self.log_pdf_mask is not None:
-            batch_log_pdf = batch_log_pdf * self.log_pdf_mask
-        return batch_log_pdf
+            log_prob = log_prob * self.log_pdf_mask
+        return log_prob
 
     def enumerate_support(self):
         return self.torch_dist.enumerate_support()

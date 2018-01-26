@@ -30,17 +30,16 @@ class Delta(Distribution):
         return self.v.size()
 
     def event_shape(self):
-        return ()
+        return torch.Size()
 
     def sample(self, sample_shape=torch.Size()):
         shape = sample_shape + self.v.size()
         return self.v.expand(shape)
 
-    def batch_log_pdf(self, x):
+    def log_prob(self, x):
         v = self.v
         v = v.expand(broadcast_shape(self.shape(), x.size()))
-        batch_shape = v.size()[:-1] + (1,)
-        return torch.sum(torch.eq(x, v).float().log(), -1).contiguous().view(batch_shape)
+        return torch.eq(x, v).float().log()
 
     def enumerate_support(self, v=None):
         """

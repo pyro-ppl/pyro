@@ -131,9 +131,9 @@ class _Subsample(Distribution):
             result = Variable(torch.randperm(self.size)[:self.subsample_size])
         return result.cuda() if self.use_cuda else result
 
-    def batch_log_pdf(self, x):
+    def log_prob(self, x):
         # This is zero so that iarange can provide an unbiased estimate of
-        # the non-subsampled batch_log_pdf.
+        # the non-subsampled log_prob.
         result = Variable(torch.zeros(1))
         return result.cuda() if self.use_cuda else result
 

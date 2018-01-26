@@ -36,7 +36,7 @@ class Dirichlet(TorchDistribution):
         """
         return super(Dirichlet, self).sample(sample_shape)
 
-    def batch_log_pdf(self, x):
+    def log_prob(self, x):
         """
         Evaluates log probability density over one or a batch of samples.
 
@@ -50,4 +50,4 @@ class Dirichlet(TorchDistribution):
         :return: log probability densities of each element in the batch.
         :rtype: torch.autograd.Variable of torch.Tensor of dimension 1.
         """
-        return super(Dirichlet, self).batch_log_pdf(x)
+        return super(Dirichlet, self).log_prob(x)

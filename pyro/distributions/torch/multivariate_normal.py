@@ -65,12 +65,3 @@ class MultivariateNormal(TorchDistribution):
     def __init__(self, loc, covariance_matrix, *args, **kwargs):
         torch_dist = TorchMultivariateNormal(loc, covariance_matrix)
         super(MultivariateNormal, self).__init__(torch_dist, *args, **kwargs)
-
-    def batch_log_pdf(self, x):
-        return super(MultivariateNormal, self).batch_log_pdf(x)
-
-    def analytic_mean(self):
-        return self.torch_dist.loc
-
-    def analytic_var(self):
-        return torch.diag(self.torch_dist.covariance_matrix)

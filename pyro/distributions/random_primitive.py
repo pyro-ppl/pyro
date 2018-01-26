@@ -47,13 +47,9 @@ class RandomPrimitive(Distribution):
 
     __call__ = sample
 
-    def log_pdf(self, x, *args, **kwargs):
+    def log_prob(self, x, *args, **kwargs):
         kwargs.pop('sample_shape', None)
-        return self.dist_class(*args, **kwargs).log_pdf(x)
-
-    def batch_log_pdf(self, x, *args, **kwargs):
-        kwargs.pop('sample_shape', None)
-        return self.dist_class(*args, **kwargs).batch_log_pdf(x)
+        return self.dist_class(*args, **kwargs).log_prob(x)
 
     def score_parts(self, x, *args, **kwargs):
         kwargs.pop('sample_shape', None)

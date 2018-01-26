@@ -81,8 +81,8 @@ class Trace(networkx.DiGraph):
                     site_log_p = site["log_pdf"]
                 except KeyError:
                     args, kwargs = site["args"], site["kwargs"]
-                    site_log_p = site["fn"].log_pdf(
-                        site["value"], *args, **kwargs) * site["scale"]
+                    site_log_p = site["fn"].log_prob(
+                        site["value"], *args, **kwargs).sum() * site["scale"]
                     site["log_pdf"] = site_log_p
                     _warn_if_nan(name, site_log_p)
                 log_p += site_log_p
@@ -102,7 +102,7 @@ class Trace(networkx.DiGraph):
                     site_log_p = site["batch_log_pdf"]
                 except KeyError:
                     args, kwargs = site["args"], site["kwargs"]
-                    site_log_p = site["fn"].batch_log_pdf(
+                    site_log_p = site["fn"].log_prob(
                         site["value"], *args, **kwargs) * site["scale"]
                     site["batch_log_pdf"] = site_log_p
                     site["log_pdf"] = site_log_p.sum()
@@ -123,7 +123,7 @@ class Trace(networkx.DiGraph):
                     site["batch_log_pdf"]
                 except KeyError:
                     args, kwargs = site["args"], site["kwargs"]
-                    site_log_p = site["fn"].batch_log_pdf(
+                    site_log_p = site["fn"].log_prob(
                         site["value"], *args, **kwargs) * site["scale"]
                     site["batch_log_pdf"] = site_log_p
                     site["log_pdf"] = site_log_p.sum()

@@ -5,7 +5,7 @@ import torch
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
-from pyro.distributions.util import copy_docs_from, broadcast_shape
+from pyro.distributions.util import copy_docs_from
 
 
 @copy_docs_from(Distribution)
@@ -44,16 +44,11 @@ class LogNormal(Distribution):
         z = self.mu + self.sigma * eps
         return torch.exp(z)
 
-    def batch_log_pdf(self, x):
-        mu = self.mu
-        sigma = self.sigma
-        ll_1 = Variable(torch.Tensor([-0.5 * np.log(2.0 * np.pi)]).type_as(mu.data).expand_as(x))
-        ll_2 = -torch.log(sigma * x)
-        ll_3 = -0.5 * torch.pow((torch.log(x) - mu) / sigma, 2.0)
-        batch_log_pdf = torch.sum(ll_1 + ll_2 + ll_3, -1)
-        batch_log_pdf_shape = broadcast_shape(self.shape(),
-                                              x.size(), strict=True)[:-1] + (1,)
-        return batch_log_pdf.contiguous().view(batch_log_pdf_shape)
+    def log_prob(self, x):
+        ll_1 = Variable(torch.Tensor([-0.5 * np.log(2.0 * np.pi)]).type_as(self.mu.data).expand_as(x))
+        ll_2 = -torch.log(self.sigma * x)
+        ll_3 = -0.5 * torch.pow((torch.log(x) - self.mu) / self.sigma, 2.0)
+        return ll_1 + ll_2 + ll_3
 
     def analytic_mean(self):
         return torch.exp(self.mu + 0.5 * torch.pow(self.sigma, 2.0))

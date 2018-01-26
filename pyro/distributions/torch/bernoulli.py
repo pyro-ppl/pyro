@@ -34,20 +34,3 @@ class Bernoulli(TorchDistribution):
     def __init__(self, ps=None, logits=None, *args, **kwargs):
         torch_dist = torch.distributions.Bernoulli(probs=ps, logits=logits)
         super(Bernoulli, self).__init__(torch_dist, *args, **kwargs)
-
-    def enumerate_support(self):
-        """
-        Returns the Bernoulli distribution's support, as a tensor along the first dimension.
-
-        Note that this returns support values of all the batched RVs in lock-step, rather
-        than the full cartesian product. To iterate over the cartesian product, you must
-        construct univariate Bernoullis and use itertools.product() over all univariate
-        variables (may be expensive).
-
-        :return: torch variable enumerating the support of the Bernoulli distribution.
-            Each item in the return value, when enumerated along the first dimensions, yields a
-            value from the distribution's support which has the same dimension as would be returned by
-            sample.
-        :rtype: torch.autograd.Variable.
-        """
-        return super(Bernoulli, self).enumerate_support()

@@ -45,14 +45,14 @@ def test_bernoulli_batch_log_pdf_shape():
     ps = ng_ones(3, 2)
     x = ng_ones(3, 2)
     d = dist.Bernoulli(ps)
-    assert d.batch_log_pdf(x).size() == (3, 1)
+    assert d.log_prob(x).size() == (3, 2)
 
 
 def test_categorical_batch_log_pdf_shape():
     ps = ng_ones(3, 2, 4) / 4
     x = ng_zeros(3, 2)
     d = dist.Categorical(ps)
-    assert d.batch_log_pdf(x).size() == (3, 1)
+    assert d.log_prob(x).size() == (3, 2)
 
 
 def test_one_hot_categorical_batch_log_pdf_shape():
@@ -60,7 +60,7 @@ def test_one_hot_categorical_batch_log_pdf_shape():
     x = ng_zeros(3, 2, 4)
     x[:, :, 0] = 1
     d = dist.OneHotCategorical(ps)
-    assert d.batch_log_pdf(x).size() == (3, 2, 1)
+    assert d.log_prob(x).size() == (3, 2)
 
 
 def test_normal_batch_log_pdf_shape():
@@ -68,7 +68,7 @@ def test_normal_batch_log_pdf_shape():
     sigma = ng_ones(3, 2)
     x = ng_zeros(3, 2)
     d = dist.Normal(mu, sigma)
-    assert d.batch_log_pdf(x).size() == (3, 1)
+    assert d.log_prob(x).size() == (3, 2)
 
 
 def test_diag_normal_batch_log_pdf_shape():

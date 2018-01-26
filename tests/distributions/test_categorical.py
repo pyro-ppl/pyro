@@ -37,7 +37,7 @@ class TestCategorical(TestCase):
         self.support = torch.Tensor([[0, 0], [1, 1], [2, 2]])
 
     def test_log_pdf(self):
-        log_px_torch = dist.categorical.batch_log_pdf(self.test_data, self.ps).data[0]
+        log_px_torch = dist.categorical.log_prob(self.test_data, self.ps).sum().data[0]
         log_px_np = float(sp.multinomial.logpmf(np.array([0, 0, 1]), 1, self.ps.data.cpu().numpy()))
         assert_equal(log_px_torch, log_px_np, prec=1e-4)
 
@@ -86,13 +86,15 @@ def test_support_dims(dim, ps):
 def test_sample_dims(dim, ps):
     ps = modify_params_using_dims(ps, dim)
     sample = dist.categorical.sample(ps)
-    assert_equal(sample.size(), dist.categorical.shape(ps))
+    expected_shape = dist.categorical.shape(ps)
+    if not expected_shape:
+        expected_shape = torch.Size((1,))
+    assert_equal(sample.size(), expected_shape)
 
 
-@pytest.mark.xfail(reason='batch_log_pdf sums out leading dims.')
 def test_batch_log_dims(dim, ps):
     ps = modify_params_using_dims(ps, dim)
-    batch_pdf_shape = torch.Size(ps.size()[:-1] + (1,))
+    log_prob_shape = torch.Size((3,) + dist.categorical.batch_shape(ps))
     support = dist.categorical.enumerate_support(ps)
-    batch_log_pdf = dist.categorical.batch_log_pdf(support, ps)
-    assert_equal(batch_log_pdf.size(), batch_pdf_shape)
+    log_prob = dist.categorical.log_prob(support, ps)
+    assert_equal(log_prob.size(), log_prob_shape)

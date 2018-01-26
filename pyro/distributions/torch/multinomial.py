@@ -39,6 +39,3 @@ class Multinomial(TorchDistribution):
         n = int(n)
         torch_dist = torch.distributions.Multinomial(n, probs=ps)
         super(Multinomial, self).__init__(torch_dist, *args, **kwargs)
-
-    def batch_log_pdf(self, x):
-        return super(Multinomial, self).batch_log_pdf(x)
