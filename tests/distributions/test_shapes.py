@@ -88,7 +88,7 @@ def test_diag_normal_batch_log_pdf_shape():
 def test_diag_normal_log_pdf_mask_shape():
     mu = ng_zeros(4, 3)
     sigma = ng_zeros(4, 3)
-    mask = ng_ones(4, 1)  # note that 3 was summed out  TODO will become (2,)
+    mask = ng_ones(4, 1)  # note that 3 was summed out  TODO will become (4,)
     # TODO this will need extra_event_dims=1
     d = dist.Normal(mu, sigma, log_pdf_mask=mask)
     x = d.sample()
