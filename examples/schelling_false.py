@@ -21,7 +21,9 @@ from pyro.infer import Marginal, Search
 
 def location(preference):
     """
-    Flips a weighted coin to decide between two locations to meet
+    Flips a weighted coin to decide between two locations to meet.
+    In this example, we assume that Alice and Bob share a prior preference
+    for one location over another, reflected in the value of preference below.
     """
     return pyro.sample("loc", bernoulli, preference)
 
@@ -68,5 +70,18 @@ def bob(preference, depth):
 # by marginalizing over her decision process
 alice_decision = Marginal(Search(alice_fb))
 
-print(sum([alice_decision(Variable(torch.Tensor([0.55])), 3)
-           for i in range(10)]))
+# Here Alice and Bob slightly prefer one location over the other a priori
+shared_preference = Variable(torch.Tensor([0.55]))
+
+alice_depth = 3
+num_samples = 10
+
+# draw num_samples samples from Alice's decision process
+# and use those to estimate the marginal probability
+# that Alice chooses their preferred location
+alice_prob = sum([alice_decision(shared_preference, alice_depth)
+                  for i in range(num_samples)]) / float(num_samples)
+
+print("Empirical frequency of Alice choosing their favored location " +
+      "given preference {} and recursion depth {}: {}"
+      .format(shared_preference, alice_depth, alice_prob))
