@@ -207,8 +207,10 @@ def enum_extend(trace, msg, num_samples=None):
         num_samples = -1
 
     # Batched .enumerate_support() assumes batched values are independent.
-    batch_shape = broadcast_shape(msg["fn"].shape(*msg["args"], **msg["kwargs"]),
-                                  msg["value"].size())[:-1]
+    shape = broadcast_shape(msg["fn"].shape(*msg["args"], **msg["kwargs"]),
+                            msg["value"].size())
+    batch_dims = len(shape) - msg['fn'].event_dim(*msg["args"], **msg["kwargs"])
+    batch_shape = shape[:batch_dims]
     is_batched = any(size > 1 for size in batch_shape)
     inside_iarange = any(frame.vectorized for frame in msg["cond_indep_stack"])
     if is_batched and not inside_iarange:

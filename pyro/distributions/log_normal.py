@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-import numpy as np
+import math
 import torch
 from torch.autograd import Variable
 
@@ -45,7 +45,7 @@ class LogNormal(Distribution):
         return torch.exp(z)
 
     def log_prob(self, x):
-        ll_1 = Variable(torch.Tensor([-0.5 * np.log(2.0 * np.pi)]).type_as(self.mu.data).expand_as(x))
+        ll_1 = -0.5 * math.log(2.0 * math.pi)
         ll_2 = -torch.log(self.sigma * x)
         ll_3 = -0.5 * torch.pow((torch.log(x) - self.mu) / self.sigma, 2.0)
         return ll_1 + ll_2 + ll_3
