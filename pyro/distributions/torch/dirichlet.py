@@ -24,9 +24,7 @@ class Dirichlet(TorchDistribution):
         :param int batch_size: DEPRECATED.
         """
         torch_dist = torch.distributions.Dirichlet(alpha)
-        x_shape = alpha.size()
-        event_dim = 1
-        super(Dirichlet, self).__init__(torch_dist, x_shape, event_dim, *args, **kwargs)
+        super(Dirichlet, self).__init__(torch_dist, *args, **kwargs)
 
     def sample(self, sample_shape=torch.Size()):
         """
@@ -52,7 +50,4 @@ class Dirichlet(TorchDistribution):
         :return: log probability densities of each element in the batch.
         :rtype: torch.autograd.Variable of torch.Tensor of dimension 1.
         """
-        batch_log_pdf = self.torch_dist.log_prob(x).view(self.batch_shape(x) + (1,))
-        if self.log_pdf_mask is not None:
-            batch_log_pdf = batch_log_pdf * self.log_pdf_mask
-        return batch_log_pdf
+        return super(Dirichlet, self).batch_log_pdf(x)

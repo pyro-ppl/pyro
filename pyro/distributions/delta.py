@@ -4,7 +4,7 @@ import torch
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
-from pyro.distributions.util import copy_docs_from
+from pyro.distributions.util import copy_docs_from, broadcast_shape
 
 
 @copy_docs_from(Distribution)
@@ -26,24 +26,11 @@ class Delta(Distribution):
             self.v = Variable(self.v)
         super(Delta, self).__init__(*args, **kwargs)
 
-    def batch_shape(self, x=None):
-        event_dim = 1
-        v = self.v
-        if x is not None:
-            if x.size()[-event_dim] != v.size()[-event_dim]:
-                raise ValueError("The event size for the data and distribution parameters must match.\n"
-                                 "Expected x.size()[-1] == self.v.size()[-1], but got {} vs {}".format(
-                                     x.size(-1), v.size(-1)))
-            try:
-                v = self.v.expand_as(x)
-            except RuntimeError as e:
-                raise ValueError("Parameter `v` with shape {} is not broadcastable to "
-                                 "the data shape {}. \nError: {}".format(v.size(), x.size(), str(e)))
-        return v.size()[:-event_dim]
+    def batch_shape(self):
+        return self.v.size()
 
     def event_shape(self):
-        event_dim = 1
-        return self.v.size()[-event_dim:]
+        return ()
 
     def sample(self, sample_shape=torch.Size()):
         shape = sample_shape + self.v.size()
@@ -51,8 +38,8 @@ class Delta(Distribution):
 
     def batch_log_pdf(self, x):
         v = self.v
-        v = v.expand(self.shape(x))
-        batch_shape = self.batch_shape(x) + (1,)
+        v = v.expand(broadcast_shape(self.shape(), x.size()))
+        batch_shape = v.size()[:-1] + (1,)
         return torch.sum(torch.eq(x, v).float().log(), -1).contiguous().view(batch_shape)
 
     def enumerate_support(self, v=None):

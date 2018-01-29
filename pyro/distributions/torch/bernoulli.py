@@ -33,9 +33,7 @@ class Bernoulli(TorchDistribution):
 
     def __init__(self, ps=None, logits=None, *args, **kwargs):
         torch_dist = torch.distributions.Bernoulli(probs=ps, logits=logits)
-        x_shape = ps.size() if ps is not None else logits.size()
-        event_dim = 1
-        super(Bernoulli, self).__init__(torch_dist, x_shape, event_dim, *args, **kwargs)
+        super(Bernoulli, self).__init__(torch_dist, *args, **kwargs)
 
     def enumerate_support(self):
         """

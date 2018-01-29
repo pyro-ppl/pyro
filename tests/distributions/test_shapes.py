@@ -8,8 +8,8 @@ def test_categorical_shape():
     ps = ng_ones(3, 2) / 2
     d = dist.Categorical(ps)
     assert d.batch_shape() == (3,)
-    assert d.event_shape() == (1,)
-    assert d.shape() == (3, 1)
+    assert d.event_shape() == ()
+    assert d.shape() == (3,)
     assert d.sample().size() == d.shape()
 
 
@@ -26,8 +26,8 @@ def test_normal_shape():
     mu = ng_zeros(3, 2)
     sigma = ng_ones(3, 2)
     d = dist.Normal(mu, sigma)
-    assert d.batch_shape() == (3,)
-    assert d.event_shape() == (2,)
+    assert d.batch_shape() == (3, 2)
+    assert d.event_shape() == ()
     assert d.shape() == (3, 2)
     assert d.sample().size() == d.shape()
 
@@ -50,9 +50,9 @@ def test_bernoulli_batch_log_pdf_shape():
 
 def test_categorical_batch_log_pdf_shape():
     ps = ng_ones(3, 2, 4) / 4
-    x = ng_zeros(3, 2, 1)
+    x = ng_zeros(3, 2)
     d = dist.Categorical(ps)
-    assert d.batch_log_pdf(x).size() == (3, 2, 1)
+    assert d.batch_log_pdf(x).size() == (3, 1)
 
 
 def test_one_hot_categorical_batch_log_pdf_shape():

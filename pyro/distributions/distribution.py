@@ -91,7 +91,7 @@ class Distribution(object):
     reparameterized = False
     enumerable = False
 
-    def batch_shape(self, x=None, *args, **kwargs):
+    def batch_shape(self, *args, **kwargs):
         """
         The left-hand tensor shape of samples, used for batching.
 
@@ -106,7 +106,7 @@ class Distribution(object):
         """
         raise NotImplementedError
 
-    def event_shape(self, x=None, *args, **kwargs):
+    def event_shape(self, *args, **kwargs):
         """
         The right-hand tensor shape of samples, used for individual events. The
         event dimension(/s) is used to designate random variables that could
@@ -129,7 +129,7 @@ class Distribution(object):
         """
         return len(self.event_shape(*args, **kwargs))
 
-    def shape(self, x=None, *args, **kwargs):
+    def shape(self, sample_shape=torch.Size(), *args, **kwargs):
         """
         The tensor shape of samples from this distribution.
 
@@ -138,7 +138,10 @@ class Distribution(object):
         :return: Tensor shape of samples.
         :rtype: torch.Size
         """
-        return self.batch_shape(x, *args, **kwargs) + self.event_shape(*args, **kwargs)
+        shape = sample_shape + self.batch_shape(*args, **kwargs) + self.event_shape(*args, **kwargs)
+        if not shape:
+            shape = torch.Size((1,))
+        return shape
 
     def __call__(self, *args, **kwargs):
         """

@@ -33,8 +33,8 @@ class TestCategorical(TestCase):
 
         self.n_samples = 50000
 
-        self.support_non_vec = torch.Tensor([[0], [1], [2]])
-        self.support = torch.Tensor([[[0], [0]], [[1], [1]], [[2], [2]]])
+        self.support_non_vec = torch.Tensor([0, 1, 2])
+        self.support = torch.Tensor([[0, 0], [1, 1], [2, 2]])
 
     def test_log_pdf(self):
         log_px_torch = dist.categorical.batch_log_pdf(self.test_data, self.ps).data[0]
@@ -80,19 +80,19 @@ def modify_params_using_dims(ps, dim):
 def test_support_dims(dim, ps):
     ps = modify_params_using_dims(ps, dim)
     support = dist.categorical.enumerate_support(ps)
-    assert_equal(support.size(), torch.Size((ps.size(-1),) + ps.size()[:-1] + (1,)))
+    assert_equal(support.size(), torch.Size((ps.size(-1),) + ps.size()[:-1]))
 
 
 def test_sample_dims(dim, ps):
     ps = modify_params_using_dims(ps, dim)
     sample = dist.categorical.sample(ps)
-    assert_equal(sample.size(), ps.size()[:-1] + (1,))
+    assert_equal(sample.size(), dist.categorical.shape(ps))
 
 
+@pytest.mark.xfail(reason='batch_log_pdf sums out leading dims.')
 def test_batch_log_dims(dim, ps):
-    batch_pdf_shape = (3,) + (1,) * dim
-    expected_log_pdf = np.array(wrap_nested(list(np.log(ps)), dim-1)).reshape(*batch_pdf_shape)
     ps = modify_params_using_dims(ps, dim)
+    batch_pdf_shape = torch.Size(ps.size()[:-1] + (1,))
     support = dist.categorical.enumerate_support(ps)
     batch_log_pdf = dist.categorical.batch_log_pdf(support, ps)
-    assert_equal(batch_log_pdf.data.cpu().numpy(), expected_log_pdf)
+    assert_equal(batch_log_pdf.size(), batch_pdf_shape)

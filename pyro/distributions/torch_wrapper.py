@@ -13,22 +13,16 @@ class TorchDistribution(Distribution):
     `torch.distributions.Distribution <http://pytorch.org/docs/master/_modules/torch/distributions.html#Distribution>`_
     """
 
-    def __init__(self, torch_dist, x_shape, event_dim, log_pdf_mask=None):
+    def __init__(self, torch_dist, log_pdf_mask=None):
         super(TorchDistribution, self).__init__()
         self.torch_dist = torch_dist
         self.log_pdf_mask = log_pdf_mask
-        self._x_shape = x_shape
-        self._event_dim = event_dim
 
-    def batch_shape(self, x=None):
-        x_shape = [] if x is None else x.size()
-        shape = torch.Size(broadcast_shape(x_shape, self._x_shape, strict=True))
-        event_start = len(shape) - self._event_dim
-        return shape[:event_start]
+    def batch_shape(self):
+        return self.torch_dist.batch_shape
 
     def event_shape(self):
-        event_start = len(self._x_shape) - self._event_dim
-        return self._x_shape[event_start:]
+        return self.torch_dist.event_shape
 
     def sample(self, sample_shape=torch.Size()):
         if self.reparameterized:
@@ -37,8 +31,11 @@ class TorchDistribution(Distribution):
             return self.torch_dist.sample(sample_shape)
 
     def batch_log_pdf(self, x):
-        batch_log_pdf_shape = self.batch_shape(x) + (1,)
+        shape = broadcast_shape(self.shape(), x.size(), strict=True)
+        batch_log_pdf_shape = shape[:-1] + (1,)
         log_pxs = self.torch_dist.log_prob(x)
+        if len(shape) > len(log_pxs.size()):
+            log_pxs = log_pxs.unsqueeze(-1)
         batch_log_pdf = torch.sum(log_pxs, -1).contiguous().view(batch_log_pdf_shape)
         if self.log_pdf_mask is not None:
             batch_log_pdf = batch_log_pdf * self.log_pdf_mask

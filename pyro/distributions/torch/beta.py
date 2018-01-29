@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 import torch
 
 from pyro.distributions.torch_wrapper import TorchDistribution
-from pyro.distributions.util import broadcast_shape, copy_docs_from
+from pyro.distributions.util import copy_docs_from
 
 
 @copy_docs_from(TorchDistribution)
@@ -23,6 +23,4 @@ class Beta(TorchDistribution):
 
     def __init__(self, alpha, beta, *args, **kwargs):
         torch_dist = torch.distributions.Beta(alpha, beta)
-        x_shape = torch.Size(broadcast_shape(alpha.size(), beta.size(), strict=True))
-        event_dim = 1
-        super(Beta, self).__init__(torch_dist, x_shape, event_dim, *args, **kwargs)
+        super(Beta, self).__init__(torch_dist, *args, **kwargs)

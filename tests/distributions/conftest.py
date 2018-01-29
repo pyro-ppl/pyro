@@ -8,7 +8,7 @@ import scipy.stats as sp
 
 import pyro.distributions as dist
 from pyro.distributions import (Bernoulli, Beta, Categorical, Cauchy, Dirichlet, Exponential, Gamma,
-                                Multinomial, MultivariateNormal, Normal, OneHotCategorical, Uniform)
+                                Multinomial, MultivariateNormal, LogNormal, Normal, OneHotCategorical, Uniform)
 from tests.distributions.dist_fixture import Fixture
 
 continuous_dists = [
@@ -60,6 +60,19 @@ continuous_dists = [
                  'test_data': [[0.4], [0.6]]}
             ],
             scipy_arg_fn=lambda alpha, beta: ((np.array(alpha), np.array(beta)), {})),
+    Fixture(pyro_dist=(dist.lognormal, LogNormal),
+            scipy_dist=sp.lognorm,
+            examples=[
+                {'mu': [1.4], 'sigma': [0.4],
+                 'test_data': [5.5]},
+                {'mu': [1.4], 'sigma': [0.4],
+                 'test_data': [[5.5]]},
+                {'mu': [[1.4, 0.4], [1.4, 0.4]], 'sigma': [[2.6, 0.5], [2.6, 0.5]],
+                 'test_data': [[5.5, 6.4], [5.5, 6.4]]},
+                {'mu': [[1.4], [0.4]], 'sigma': [[2.6], [0.5]],
+                 'test_data': [[5.5], [6.4]]}
+            ],
+            scipy_arg_fn=lambda mu, sigma: ((np.array(sigma),), {"scale": np.exp(np.array(mu))})),
     Fixture(pyro_dist=(dist.normal, Normal),
             scipy_dist=sp.norm,
             examples=[
@@ -163,10 +176,10 @@ discrete_dists = [
                  'test_data': [2]},
                 {'logits': [list(map(math.log, [0.1, 0.6, 0.3])),
                             list(map(math.log, [0.2, 0.4, 0.4]))],
-                 'test_data': [[2], [0]]},
+                 'test_data': [2, 0]},
                 {'ps': [[0.1, 0.6, 0.3],
                         [0.2, 0.4, 0.4]],
-                 'test_data': [[2], [0]]}
+                 'test_data': [2, 0]}
             ],
             test_data_indices=[0, 1, 2],
             batch_data_indices=[-1, -2],
