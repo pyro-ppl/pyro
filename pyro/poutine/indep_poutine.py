@@ -33,7 +33,3 @@ class IndepMessenger(Messenger):
     def _process_message(self, msg):
         msg["cond_indep_stack"].insert(0, CondIndepStackFrame(self.name, self.counter, self.vectorized))
         return None
-
-    def _postprocess_message(self, msg):
-        msg["cond_indep_stack"] = msg["cond_indep_stack"][1:]
-        return None
