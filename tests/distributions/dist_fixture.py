@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from torch.autograd import Variable
 
-from pyro.distributions.util import get_probs_and_logits
+from pyro.distributions.util import get_probs_and_logits, broadcast_shape
 
 SINGLE_TEST_DATUM_IDX = [0]
 BATCH_TEST_DATA_IDX = [-1]
@@ -98,7 +98,7 @@ class Fixture(object):
         dist_params = self._convert_logits_to_ps(dist_params)
         test_data = self.get_test_data(idx, wrap_tensor=False)
         test_data_wrapped = self.get_test_data(idx)
-        shape = self.pyro_dist.shape(test_data_wrapped, **dist_params_wrapped)
+        shape = broadcast_shape(self.pyro_dist.shape(**dist_params_wrapped), test_data_wrapped.size())
         batch_log_pdf = []
         for i in range(len(test_data)):
             batch_params = {}

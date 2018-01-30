@@ -2,8 +2,10 @@ from __future__ import absolute_import, division, print_function
 
 from abc import ABCMeta, abstractmethod
 
-import torch
 from six import add_metaclass
+
+import torch
+from pyro.distributions.score_parts import ScoreParts
 
 
 @add_metaclass(ABCMeta)
@@ -12,19 +14,19 @@ class Distribution(object):
     Base class for parameterized probability distributions.
 
     Distributions in Pyro are stochastic function objects with ``.sample()`` and
-    ``.log_pdf()`` methods. Pyro provides two versions of each stochastic function:
+    ``.log_prob()`` methods. Pyro provides two versions of each stochastic function:
 
     `(i)` lowercase versions that take parameters::
 
-      x = dist.bernoulli(param)             # Returns a sample of size size(param).
-      p = dist.bernoulli.log_pdf(x, param)  # Evaluates log probability of x.
+      x = dist.bernoulli(param)              # Returns a sample of size size(param).
+      p = dist.bernoulli.log_prob(x, param)  # Evaluates log probability of x.
 
     and `(ii)` UpperCase distribution classes that can construct stochastic functions with
     fixed parameters::
 
       d = dist.Bernoulli(param)
-      x = d()                               # Samples a sample of size size(param).
-      p = d.log_pdf(x)                      # Evaluates log probability of x.
+      x = d()                                # Samples a sample of size size(param).
+      p = d.log_prob(x)                      # Evaluates log probability of x.
 
     Under the hood the lowercase versions are aliases for the UpperCase versions.
 
@@ -40,43 +42,37 @@ class Distribution(object):
       x = d.sample(*args, **kwargs)
       assert x.shape == d.shape(*args, **kwargs)
 
-    Pyro distinguishes two different roles for tensor shapes of samples:
+    Pyro follows the same distribution shape semantics as PyTorch. It distinguishes
+    between three different roles for tensor shapes of samples:
 
-    - The leftmost dimension corresponds to iid *batching*, which can be
-      treated specially during inference via the ``.batch_log_pdf()`` method.
-    - The rightmost dimensions correspond to *event shape*.
+    - *sample shape* corresponds to the shape of the iid samples drawn from the distribution.
+      This is taken as an argument by the distribution's `sample` method.
+    - *batch shape* corresponds to non-identical (independent) parameterizations of
+      the distribution, inferred from the distribution's parameter shapes. This is
+      fixed for a distribution instance.
+    - *event shape* corresponds to the event dimensions of the distribution, which
+      is fixed for a distribution class. These are collapsed when we try to score
+      a sample from the distribution via `d.log_prob(x)`.
 
     These shapes are related by the equation::
 
-      assert d.shape(*args, **kwargs) == (d.batch_shape(*args, **kwargs) +
-                                          d.event_shape(*args, **kwargs))
+      assert d.shape(sample_shape, *args, **kwargs) == sample_shape +
+                                                       d.batch_shape(*args, **kwargs) +
+                                                       d.event_shape(*args, **kwargs)
 
-    There are exceptions, for instance, in the case of the Categorical distribution,
-    without one hot encoding.
-
-    Distributions provide a vectorized ``.batch_log_pdf()`` method that evaluates
+    Distributions provide a vectorized ``.log_prob()`` method that evaluates
     the log probability density of each event in a batch independently,
-    returning a tensor of shape ``d.batch_shape(x) + (1,)``::
+    returning a tensor of shape ``d.batch_shape(x)``::
 
       x = d.sample(*args, **kwargs)
-      assert x.shape == d.shape(*args, **kwargs)
-      log_p = d.batch_log_pdf(x, *args, **kwargs)
-      assert log_p.shape == d.batch_shape(*args, **kwargs) + (1,)
-
-    Distributions may also support broadcasting of the ``.log_pdf()`` and
-    ``.batch_log_pdf()`` methods, which may each be evaluated with a sample
-    tensor `x` that is larger than (but broadcastable from) the parameters.
-    In this case, ``d.batch_shape(x)`` will return the shape of the broadcasted
-    batch shape using the data tensor `x`::
-
-      x = d.sample()
-      xx = torch.stack([x, x])
-      d.batch_log_pdf(xx).size() == d.batch_shape(xx) + (1,))  # returns True
+      assert x.size() == d.shape(sample_shape, *args, **kwargs)
+      log_p = d.log_prob(x, *args, **kwargs)
+      assert log_p.size() == d.batch_shape(*args, **kwargs)
 
     **Implementing New Distributions**:
 
     Derived classes must implement the following methods: ``.sample()``,
-    :code:`.batch_log_pdf()`, ``.batch_shape()``, and ``.event_shape()``.
+    ``.log_prob()``, ``.batch_shape()``, and ``.event_shape()``.
     Discrete classes may also implement the ``.enumerate_support()`` method to improve
     gradient estimates and set ``.enumerable = True``.
 
@@ -85,34 +81,34 @@ class Distribution(object):
     Take a look at the `examples <http://pyro.ai/examples>`_ to see how they interact
     with inference algorithms.
     """
+    stateful = False
     reparameterized = False
     enumerable = False
 
-    def batch_shape(self, x=None, *args, **kwargs):
+    def batch_shape(self, *args, **kwargs):
         """
-        The left-hand tensor shape of samples, used for batching.
+        The left-hand tensor shape of parameters used to index the (possibly)
+        non-identical independent draws from the distribution.
 
-        Samples are of shape :code:`d.shape(x) == d.batch_shape(x) + d.event_shape()`.
+        Samples are of shape :code:`d.shape(sample_shape) == sample_shape +
+        d.batch_shape() + d.event_shape()`.
 
-        :param x: Data that is used to determine the batch shape. This is optional. If
-            not specified, the distribution parameters are used to determine the shape
-            of the batch that is returned from :code:`sample()`.
         :return: Tensor shape used for batching.
         :rtype: torch.Size
         :raises: ValueError if the parameters are not broadcastable to the data shape
         """
         raise NotImplementedError
 
-    def event_shape(self, x=None, *args, **kwargs):
+    def event_shape(self, *args, **kwargs):
         """
-        The right-hand tensor shape of samples, used for individual events. The
+        The right-hand tensor shape of parameters used for individual events. The
         event dimension(/s) is used to designate random variables that could
         potentially depend on each other, for instance in the case of Dirichlet
-        or the OneHotCategorical distribution, but could also simply be used
-        for logical grouping, for example in the case of a normal distribution
-        with a diagonal covariance matrix.
+        or the OneHotCategorical distribution. Note that ``event_shape`` is
+        empty for all univariate distributions.
 
-        Samples are of shape `d.shape(x) == d.batch_shape(x) + d.event_shape()`.
+        Samples are of shape :code:`d.shape(sample_shape) == sample_shape +
+        d.batch_shape() + d.event_shape()`.
 
         :return: Tensor shape used for individual events.
         :rtype: torch.Size
@@ -126,16 +122,20 @@ class Distribution(object):
         """
         return len(self.event_shape(*args, **kwargs))
 
-    def shape(self, x=None, *args, **kwargs):
+    def shape(self, sample_shape=torch.Size(), *args, **kwargs):
         """
         The tensor shape of samples from this distribution.
 
-        Samples are of shape `d.shape(x) == d.batch_shape(x) + d.event_shape()`.
+        Samples are of shape :code:`d.shape(sample_shape) == sample_shape +
+        d.batch_shape() + d.event_shape()`.
 
+        :param sample_shape: the size of the iid batch to be drawn from the
+            distribution.
+        :type sample_shape: torch.Size
         :return: Tensor shape of samples.
         :rtype: torch.Size
         """
-        return self.batch_shape(x, *args, **kwargs) + self.event_shape(*args, **kwargs)
+        return sample_shape + self.batch_shape(*args, **kwargs) + self.event_shape(*args, **kwargs)
 
     def __call__(self, *args, **kwargs):
         """
@@ -150,31 +150,24 @@ class Distribution(object):
         return self.sample(*args, **kwargs)
 
     @abstractmethod
-    def sample(self, *args, **kwargs):
+    def sample(self, sample_shape=torch.Size(), *args, **kwargs):
         """
         Samples a random value.
 
         For tensor distributions, the returned Variable should have the same `.size()` as the
         parameters, unless otherwise noted.
 
+        :param sample_shape: the size of the iid batch to be drawn from the
+            distribution.
+        :type sample_shape: torch.Size
         :return: A random value or batch of random values (if parameters are
             batched). The shape of the result should be `self.size()`.
         :rtype: torch.autograd.Variable
         """
         raise NotImplementedError
 
-    def log_pdf(self, x, *args, **kwargs):
-        """
-        Evaluates total log probability density of a batch of samples.
-
-        :param torch.autograd.Variable x: A value.
-        :return: total log probability density as a one-dimensional torch.autograd.Variable of size 1.
-        :rtype: torch.autograd.Variable
-        """
-        return torch.sum(self.batch_log_pdf(x, *args, **kwargs))
-
     @abstractmethod
-    def batch_log_pdf(self, x, *args, **kwargs):
+    def log_prob(self, x, *args, **kwargs):
         """
         Evaluates log probability densities for each of a batch of samples.
 
@@ -187,37 +180,37 @@ class Distribution(object):
         """
         raise NotImplementedError
 
+    def score_parts(self, x, *args, **kwargs):
+        """
+        Computes ingredients for stochastic gradient estimators of ELBO.
+
+        The default implementation is correct both for non-reparameterized and
+        for fully reparameterized distributions. Partially reparameterized
+        distributions should override this method to compute correct
+        `.score_function` and `.entropy_term` parts.
+
+        :param torch.autograd.Variable x: A single value or batch of values.
+        :return: A `ScoreParts` object containing parts of the ELBO estimator.
+        :rtype: ScoreParts
+        """
+        log_pdf = self.log_prob(x, *args, **kwargs)
+        if self.reparameterized:
+            return ScoreParts(log_pdf=log_pdf, score_function=0, entropy_term=log_pdf)
+        else:
+            # XXX should the user be able to control inclusion of the entropy term?
+            # See Roeder, Wu, Duvenaud (2017) "Sticking the Landing" https://arxiv.org/abs/1703.09194
+            return ScoreParts(log_pdf=log_pdf, score_function=log_pdf, entropy_term=0)
+
     def enumerate_support(self, *args, **kwargs):
         """
-        Returns a representation of the parametrized distribution's support.
+        Returns a representation of the parametrized distribution's support,
+        along the first dimension. This is implemented only by discrete
+        distributions.
 
-        This is implemented only by discrete distributions.
+        Note that this returns support values of all the batched RVs in
+        lock-step, rather than the full cartesian product.
 
         :return: An iterator over the distribution's discrete support.
         :rtype: iterator
         """
         raise NotImplementedError("Support not implemented for {}".format(type(self)))
-
-    def analytic_mean(self, *args, **kwargs):
-        """
-        Analytic mean of the distribution, to be implemented by derived classes.
-
-        Note that this is optional, and currently only used for testing distributions.
-
-        :return: Analytic mean.
-        :rtype: torch.autograd.Variable.
-        :raises: NotImplementedError if mean cannot be analytically computed.
-        """
-        raise NotImplementedError("Method not implemented by the subclass {}".format(type(self)))
-
-    def analytic_var(self, *args, **kwargs):
-        """
-        Analytic variance of the distribution, to be implemented by derived classes.
-
-        Note that this is optional, and currently only used for testing distributions.
-
-        :return: Analytic variance.
-        :rtype: torch.autograd.Variable.
-        :raises: NotImplementedError if variance cannot be analytically computed.
-        """
-        raise NotImplementedError("Method not implemented by the subclass {}".format(type(self)))

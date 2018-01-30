@@ -9,6 +9,7 @@ DOCKER_WORK_DIR=/workspace/shared
 HOST_WORK_DIR=${HOME}/workspace/pyro_docker
 UID=$(shell id -u)
 GID=$(shell id -g)
+OSTYPE=$(shell uname)
 USER=pyromancer
 
 # Optional args
@@ -26,6 +27,7 @@ ifeq ($(img), )
 else
 	IMG_NAME=${img}
 endif
+
 
 help:
 	@fgrep -h "##" ${MAKEFILE_LIST} | fgrep -v fgrep | sed -e 's/##//'
@@ -49,6 +51,7 @@ build: ##
 	--build-arg base_img=${BASE_IMG} \
 	--build-arg uid=${UID} \
 	--build-arg gid=${GID} \
+	--build-arg ostype=${OSTYPE} \
 	--build-arg python_version=${python_version} \
 	--build-arg pytorch_branch=${pytorch_branch} \
 	--build-arg pyro_branch=${pyro_branch} -f ${DOCKER_FILE} .
@@ -68,6 +71,7 @@ build-gpu: ##
 	--build-arg base_img=${BASE_CUDA_IMG} \
 	--build-arg uid=${UID} \
 	--build-arg gid=${GID} \
+	--build-arg ostype=${OSTYPE} \
 	--build-arg cuda=1 \
 	--build-arg python_version=${python_version} \
 	--build-arg pytorch_branch=${pytorch_branch} \

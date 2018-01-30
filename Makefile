@@ -15,7 +15,7 @@ lint: FORCE
 	flake8
 
 scrub: FORCE
-	find tutorial -name "*.ipynb" | xargs python -m nbstripout --keep-output
+	find tutorial -name "*.ipynb" | xargs python -m nbstripout --keep-output --keep-count
 
 format: FORCE
 	yapf -i *.py pyro/distributions/*.py profiler/*.py docs/source/conf.py

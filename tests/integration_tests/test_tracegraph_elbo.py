@@ -233,7 +233,6 @@ class BernoulliBetaTests(TestCase):
         self.log_beta_n = torch.log(self.beta_n)
 
     @pytest.mark.xfail(reason='poorly-tuned Adam params?')
-    @pytest.mark.skipif(not dist.beta.reparameterized, reason='not implemented')
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 3000, 0.95, 0.0007)
 
@@ -289,7 +288,6 @@ class PoissonGammaTests(TestCase):
         self.log_alpha_n = torch.log(self.alpha_n)
         self.log_beta_n = torch.log(self.beta_n)
 
-    @pytest.mark.skipif(not dist.gamma.reparameterized, reason='not implemented')
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 8000, 0.95, 0.0007)
 
@@ -352,7 +350,6 @@ class ExponentialGammaTests(TestCase):
         self.log_beta_n = torch.log(self.beta_n)
 
     @pytest.mark.xfail(reason='poorly-tuned Adam params?')
-    @pytest.mark.skipif(not dist.gamma.reparameterized, reason='not implemented')
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 8000, 0.95, 0.0007)
 
@@ -595,16 +592,19 @@ class RaoBlackwellizationTests(TestCase):
                 self.data_tensor[3 * _out + _in, :] = self.data[_out][_in]
 
         def model():
-            mu_latent = pyro.sample("mu_latent", fakes.nonreparameterized_normal, self.mu0, torch.pow(self.lam0, -0.5))
+            mu_latent = pyro.sample("mu_latent", fakes.nonreparameterized_normal,
+                                    self.mu0,
+                                    torch.pow(self.lam0, -0.5))
 
             def obs_inner(i, _i, _x):
                 for k in range(n_superfluous_top):
                     pyro.sample("z_%d_%d" % (i, k),
-                                fakes.nonreparameterized_normal, ng_zeros(4 - i, 1), ng_ones(4 - i, 1))
-                pyro.observe("obs_%d" % i, dist.normal, _x, mu_latent, torch.pow(self.lam, -0.5))
+                                fakes.nonreparameterized_normal, ng_zeros(4 - i), ng_ones(4 - i))
+                pyro.observe("obs_%d" % i, dist.normal, _x, mu_latent, torch.pow(self.lam, -0.5),
+                             extra_event_dims=1)
                 for k in range(n_superfluous_top, n_superfluous_top + n_superfluous_bottom):
                     pyro.sample("z_%d_%d" % (i, k),
-                                fakes.nonreparameterized_normal, ng_zeros(4 - i, 1), ng_ones(4 - i, 1))
+                                fakes.nonreparameterized_normal, ng_zeros(4 - i), ng_ones(4 - i))
 
             def obs_outer(i, x):
                 pyro.map_data("map_obs_inner_%d" % i, x, lambda _i, _x:
@@ -638,11 +638,13 @@ class RaoBlackwellizationTests(TestCase):
                 for k in range(n_superfluous_top + n_superfluous_bottom):
                     z_baseline = pyro.module("z_baseline_%d_%d" % (i, k),
                                              pt_superfluous_baselines[3 * k + i], tags="baseline")
-                    baseline_value = z_baseline(mu_latent.detach()).unsqueeze(-1)
+                    baseline_value = z_baseline(mu_latent.detach())
                     mean_i = pyro.param("mean_%d_%d" % (i, k),
-                                        Variable(0.5 * torch.ones(4 - i, 1), requires_grad=True))
+                                        Variable(0.5 * torch.ones(4 - i), requires_grad=True))
                     pyro.sample("z_%d_%d" % (i, k),
-                                fakes.nonreparameterized_normal, mean_i, ng_ones(4 - i, 1),
+                                fakes.nonreparameterized_normal,
+                                mean_i,
+                                ng_ones(4 - i),
                                 baseline=dict(baseline_value=baseline_value))
 
             def obs_outer(i, x):

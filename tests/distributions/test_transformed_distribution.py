@@ -55,7 +55,7 @@ class AffineExp(Bijector):
         """
         Calculates the elementwise determinant of the log jacobian
         """
-        return (torch.log(torch.abs(self.a)) + torch.log(y)).sum(-1).unsqueeze(-1)
+        return torch.log(torch.abs(self.a)) + torch.log(y)
 
 
 def make_lognormal(kwargs):
@@ -125,7 +125,7 @@ def test_log_pdf(lognormal):
     sigma_z = torch_ones_like(sigma_lognorm)
     trans_dist = get_transformed_dist(dist.normal, sigma_lognorm, mu_lognorm)
     test_data = lognormal.get_test_data(0)
-    log_px_torch = trans_dist.log_pdf(test_data, mu_z, sigma_z).data[0]
+    log_px_torch = trans_dist.log_prob(test_data, mu_z, sigma_z).sum().data[0]
     log_px_np = sp.lognorm.logpdf(
         test_data.data.cpu().numpy(),
         sigma_lognorm.data.cpu().numpy(),
@@ -134,7 +134,7 @@ def test_log_pdf(lognormal):
 
 
 @pytest.mark.parametrize('lognormal', EXAMPLES)
-def test_batch_log_pdf(lognormal):
+def test_log_prob(lognormal):
     dist_params = lognormal.get_dist_params(0)
     mu_lognorm = dist_params['mu']
     sigma_lognorm = dist_params['sigma']
@@ -142,11 +142,11 @@ def test_batch_log_pdf(lognormal):
     sigma_z = torch_ones_like(sigma_lognorm)
     trans_dist = get_transformed_dist(dist.normal, sigma_lognorm, mu_lognorm)
     test_data = lognormal.get_test_data(0)
-    log_px_torch = trans_dist.batch_log_pdf(test_data, mu_z, sigma_z).data.cpu().numpy()
+    log_px_torch = trans_dist.log_prob(test_data, mu_z, sigma_z).data.cpu().numpy()
     log_px_np = sp.lognorm.logpdf(
         test_data.data.cpu().numpy(),
         sigma_lognorm.data.cpu().numpy(),
-        scale=np.exp(mu_lognorm.data.cpu().numpy())).sum(-1, keepdims=True)
+        scale=np.exp(mu_lognorm.data.cpu().numpy()))
     assert_equal(log_px_torch, log_px_np, prec=1e-4)
 
 

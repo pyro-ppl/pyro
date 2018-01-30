@@ -12,6 +12,8 @@ class RandomPrimitive(Distribution):
     __slots__ = ['dist_class']
 
     def __init__(self, dist_class):
+        if dist_class.stateful:
+            raise TypeError('Cannot wrap stateful class {} in RandomPrimitive.'.format(type(dist_class)))
         self.dist_class = dist_class
         super(RandomPrimitive, self).__init__()
 
@@ -23,9 +25,9 @@ class RandomPrimitive(Distribution):
     def reparameterized(self):
         return self.dist_class.reparameterized
 
-    def batch_shape(self, x=None, *args, **kwargs):
+    def batch_shape(self, *args, **kwargs):
         kwargs.pop('sample_shape', None)
-        return self.dist_class(*args, **kwargs).batch_shape(x)
+        return self.dist_class(*args, **kwargs).batch_shape()
 
     def event_shape(self, *args, **kwargs):
         kwargs.pop('sample_shape', None)
@@ -35,9 +37,9 @@ class RandomPrimitive(Distribution):
         kwargs.pop('sample_shape', None)
         return self.dist_class(*args, **kwargs).event_dim()
 
-    def shape(self, x=None, *args, **kwargs):
-        kwargs.pop('sample_shape', None)
-        return self.dist_class(*args, **kwargs).shape(x)
+    def shape(self, *args, **kwargs):
+        sample_shape = kwargs.pop('sample_shape', torch.Size())
+        return self.dist_class(*args, **kwargs).shape(sample_shape)
 
     def sample(self, *args, **kwargs):
         sample_shape = kwargs.pop('sample_shape', torch.Size())
@@ -45,13 +47,13 @@ class RandomPrimitive(Distribution):
 
     __call__ = sample
 
-    def log_pdf(self, x, *args, **kwargs):
+    def log_prob(self, x, *args, **kwargs):
         kwargs.pop('sample_shape', None)
-        return self.dist_class(*args, **kwargs).log_pdf(x)
+        return self.dist_class(*args, **kwargs).log_prob(x)
 
-    def batch_log_pdf(self, x, *args, **kwargs):
+    def score_parts(self, x, *args, **kwargs):
         kwargs.pop('sample_shape', None)
-        return self.dist_class(*args, **kwargs).batch_log_pdf(x)
+        return self.dist_class(*args, **kwargs).score_parts(x)
 
     def enumerate_support(self, *args, **kwargs):
         kwargs.pop('sample_shape', None)
