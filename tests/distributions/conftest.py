@@ -7,8 +7,9 @@ import pytest
 import scipy.stats as sp
 
 import pyro.distributions as dist
-from pyro.distributions import (Bernoulli, Beta, Categorical, Cauchy, Dirichlet, Exponential, Gamma,
-                                Multinomial, MultivariateNormal, LogNormal, Normal, OneHotCategorical, Uniform)
+from pyro.distributions import (Bernoulli, Beta, Binomial, Categorical, Cauchy, Dirichlet, Exponential, Gamma,
+                                Multinomial, MultivariateNormal, LogNormal, Normal, OneHotCategorical, Poisson,
+                                Uniform)
 from tests.distributions.dist_fixture import Fixture
 
 continuous_dists = [
@@ -167,6 +168,20 @@ discrete_dists = [
             is_discrete=True,
             expected_support_non_vec=[[0], [1]],
             expected_support=[[[0, 0], [0, 0]], [[1, 1], [1, 1]]]),
+    Fixture(pyro_dist=(dist.binomial, Binomial),
+            scipy_dist=sp.binom,
+            examples=[
+                {'ps': [0.6], 'n': 8,
+                 'test_data': [4]},
+                {'ps': [0.3], 'n': 8,
+                 'test_data': [[2], [4]]},
+                {'ps': [[0.2], [0.4]], 'n': 8,
+                 'test_data': [[4], [3]]}
+            ],
+            scipy_arg_fn=lambda ps, n: ((n, ps[0]), {}),
+            prec=0.05,
+            min_samples=10000,
+            is_discrete=True),
     Fixture(pyro_dist=(dist.categorical, Categorical),
             scipy_dist=sp.multinomial,
             examples=[
@@ -206,6 +221,23 @@ discrete_dists = [
             scipy_arg_fn=lambda ps: ((1, np.array(ps)), {}),
             prec=0.05,
             min_samples=10000,
+            is_discrete=True),
+    Fixture(pyro_dist=(dist.poisson, Poisson),
+            scipy_dist=sp.poisson,
+            examples=[
+                {'lam': [2.0],
+                 'test_data': [0]},
+                {'lam': [3.0],
+                 'test_data': [1]},
+                {'lam': [6.0],
+                 'test_data': [4]},
+                {'lam': [2.0, 3.0, 6.0],
+                 'test_data': [[0, 1, 4], [0, 1, 4]]},
+                {'lam': [[2.0], [3.0], [6.0]],
+                 'test_data': [[0], [1], [4]]}
+            ],
+            scipy_arg_fn=lambda lam: ((np.array(lam),), {}),
+            prec=0.08,
             is_discrete=True),
 ]
 
