@@ -10,6 +10,7 @@ Taken from: http://forestdb.org/models/schelling.html
 
 from __future__ import print_function
 
+import argparse
 import torch
 from torch.autograd import Variable
 
@@ -50,22 +51,32 @@ def bob(preference, depth):
         return bob_prior
 
 
-# We sample Bob's choice of location by marginalizing
-# over his decision process.
-bob_decision = Marginal(Search(bob))
+def main(args):
+    # We sample Bob's choice of location by marginalizing
+    # over his decision process.
+    bob_decision = Marginal(Search(bob))
 
-# Here Alice and Bob slightly prefer one location over the other a priori
-shared_preference = Variable(torch.Tensor([0.6]))
+    # Here Alice and Bob slightly prefer one location over the other a priori
+    shared_preference = Variable(torch.Tensor([args.preference]))
 
-bob_depth = 2
-num_samples = 10
+    bob_depth = args.depth
+    num_samples = args.num_samples
 
-# draw num_samples samples from Bob's decision process
-# and use those to estimate the marginal probability
-# that Bob chooses their preferred location
-bob_prob = sum([bob_decision(shared_preference, bob_depth)
-                for i in range(num_samples)]) / float(num_samples)
+    # draw num_samples samples from Bob's decision process
+    # and use those to estimate the marginal probability
+    # that Bob chooses their preferred location
+    bob_prob = sum([bob_decision(shared_preference, bob_depth)
+                    for i in range(num_samples)]) / float(num_samples)
 
-print("Empirical frequency of Bob choosing their favored location " +
-      "given preference {} and recursion depth {}: {}"
-      .format(shared_preference, bob_depth, bob_prob))
+    print("Empirical frequency of Bob choosing their favored location " +
+          "given preference {} and recursion depth {}: {}"
+          .format(shared_preference, bob_depth, bob_prob))
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="parse args")
+    parser.add_argument('-n', '--num-samples', default=10, type=int)
+    parser.add_argument('--depth', default=2, type=int)
+    parser.add_argument('--preference', default=0.6, type=float)
+    args = parser.parse_args()
+    main(args)
