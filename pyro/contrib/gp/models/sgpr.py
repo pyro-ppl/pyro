@@ -37,14 +37,14 @@ class _SparseMultivariateNormal(dist.MultivariateNormal):
 
     def log_prob(self, value):
         delta = value - self.loc
-        logdet, mahalanobis_squared = self._compute_logdet_and_mahalabonis(
+        logdet, mahalanobis_squared = self._compute_logdet_and_mahalanobis(
             self.covariance_matrix_D_term, self.covariance_matrix_W_term, delta, self.trace_term)
         normalization_const = 0.5 * (self.event_shape[-1] * math.log(2 * math.pi) + logdet)
         return -(normalization_const + 0.5 * mahalanobis_squared)
 
-    def _compute_logdet_and_mahalabonis(self, D, W, y, trace_term=0):
+    def _compute_logdet_and_mahalanobis(self, D, W, y, trace_term=0):
         """
-        Calculates log determinant and (squared) Mahalabonis term of covariance
+        Calculates log determinant and (squared) Mahalanobis term of covariance
         matrix (D + Wt.W), where D is a diagonal matrix, based on the
         "Woodbury matrix identity" and "matrix determinant lemma":
             inv(D + Wt.W) = inv(D) - inv(D).Wt.inv(I + W.inv(D).Wt).W.inv(D)
@@ -59,9 +59,9 @@ class _SparseMultivariateNormal(dist.MultivariateNormal):
 
         logdet = 2 * L.diag().log().sum() + D.diag().log().sum()
 
-        mahalabonis1 = 0.5 * (y * y / D).sum(-1)
-        mahalabonis2 = 0.5 * (Linv_W_Dinv_y * Linv_W_Dinv_y).sum()
-        mahalanobis_squared = mahalabonis1 - mahalabonis2 + trace_term
+        mahalanobis1 = 0.5 * (y * y / D).sum(-1)
+        mahalanobis2 = 0.5 * (Linv_W_Dinv_y * Linv_W_Dinv_y).sum()
+        mahalanobis_squared = mahalanobis1 - mahalanobis2 + trace_term
 
         return logdet, mahalanobis_squared
 
