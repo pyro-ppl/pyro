@@ -8,13 +8,7 @@ import torch.nn as nn
 import pyro
 import pyro.distributions as dist
 
-
-def _matrix_triangular_solve_compat(b, A, upper=True):
-    """Computes the solution to the linear equation AX = b, where A is a triangular matrix."""
-    if A.requires_grad or A.is_cuda:
-        return A.inverse().matmul(b)
-    else:
-        return b.trtrs(A, upper=upper)[0].view(b.size())
+from .util import _matrix_triangular_solve_compat
 
 
 class _SparseMultivariateNormal(dist.MultivariateNormal):
@@ -93,14 +87,9 @@ class SparseGPRegression(nn.Module):
         self.Xu = Xu
 
         self.num_data = self.X.size(0)
-        self.num_inducing = self.Xu().size(0)
 
-        # TODO: define noise as a Likelihood (another nn.Module beside kernel),
-        # then we can train/set prior to it
-        if noise is None:
-            self.noise = Variable(X.data.new([1]))
-        else:
-            self.noise = Variable(noise)
+        # TODO: define noise as a Likelihood (a nn.Module)
+        self.noise = Variable(noise) if noise is not None else Variable(X.data.new([1]))
 
         if approx is None:
             self.approx = "VFE"
@@ -173,7 +162,7 @@ class SparseGPRegression(nn.Module):
 
     def forward(self, Xnew):
         """
-        Compute the parameters of `p(y|Xnew) ~ N(loc, cov)`
+        Compute the parameters of `p(y|Xnew) ~ N(loc, covariance_matrix)`
             w.r.t. the new input Xnew.
 
         :param torch.autograd.Variable Xnew: A 2D tensor.
