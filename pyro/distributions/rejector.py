@@ -36,7 +36,7 @@ class Rejector(Distribution):
 
     def _propose_batch_log_pdf(self, x):
         if x is not self._propose_batch_log_pdf_cache[0]:
-            self._propose_batch_log_pdf_cache = x, self.propose.batch_log_pdf(x)
+            self._propose_batch_log_pdf_cache = x, self.propose.log_prob(x)
         return self._propose_batch_log_pdf_cache[1]
 
     def sample(self):
@@ -55,10 +55,10 @@ class Rejector(Distribution):
                 done |= accept
         return x
 
-    def batch_log_pdf(self, x):
+    def log_prob(self, x):
         return self._propose_batch_log_pdf(x) + self._log_prob_accept(x)
 
     def score_parts(self, x):
         score_function = self._log_prob_accept(x)
-        log_pdf = self.batch_log_pdf(x)
+        log_pdf = self.log_prob(x)
         return ScoreParts(log_pdf, score_function, log_pdf)

@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 import torch
 
 from pyro.distributions.torch_wrapper import TorchDistribution
-from pyro.distributions.util import broadcast_shape, copy_docs_from
+from pyro.distributions.util import copy_docs_from
 
 
 @copy_docs_from(TorchDistribution)
@@ -27,6 +27,4 @@ class Normal(TorchDistribution):
 
     def __init__(self, mu, sigma, *args, **kwargs):
         torch_dist = torch.distributions.Normal(mu, sigma)
-        x_shape = torch.Size(broadcast_shape(mu.size(), sigma.size(), strict=True))
-        event_dim = 1
-        super(Normal, self).__init__(torch_dist, x_shape, event_dim, *args, **kwargs)
+        super(Normal, self).__init__(torch_dist, *args, **kwargs)
