@@ -8,7 +8,7 @@ ARG pyro_branch=release
 ARG pytorch_branch=release
 ARG uid=1000
 ARG gid=1000
-ARG ostype=linux
+ARG ostype=Linux
 
 # Configurable settings
 ENV USER_NAME pyromancer
@@ -35,7 +35,7 @@ RUN curl -o ~/miniconda.sh -O  https://repo.continuum.io/miniconda/Miniconda3-la
 ENV CMAKE_PREFIX_PATH="$(dirname $(which conda))/../"
 
 # Change to default user
-RUN bash -c 'if [ ${ostype} == linux ]; then groupadd -r --gid ${gid} ${USER_NAME}; fi && \
+RUN bash -c 'if [ ${ostype} == Linux ]; then groupadd -r --gid ${gid} ${USER_NAME}; fi && \
     useradd -r --create-home --shell /bin/bash --uid ${uid} --gid ${gid} ${USER_NAME}'
 WORKDIR ${WORK_DIR}
 RUN chown ${USER_NAME} ${WORK_DIR} ${CONDA_DIR} -R
