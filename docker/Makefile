@@ -27,6 +27,13 @@ else
 	IMG_NAME=${img}
 endif
 
+# Determine OS type
+ifeq ($(findstring ${OSTYPE}, darwin),)
+	OS=osx
+else
+	OS=linux
+endif
+
 help:
 	@fgrep -h "##" ${MAKEFILE_LIST} | fgrep -v fgrep | sed -e 's/##//'
 
@@ -49,6 +56,7 @@ build: ##
 	--build-arg base_img=${BASE_IMG} \
 	--build-arg uid=${UID} \
 	--build-arg gid=${GID} \
+	--build-arg ostype=${OS} \
 	--build-arg python_version=${python_version} \
 	--build-arg pytorch_branch=${pytorch_branch} \
 	--build-arg pyro_branch=${pyro_branch} -f ${DOCKER_FILE} .
@@ -68,6 +76,7 @@ build-gpu: ##
 	--build-arg base_img=${BASE_CUDA_IMG} \
 	--build-arg uid=${UID} \
 	--build-arg gid=${GID} \
+	--build-arg ostype=${OS} \
 	--build-arg cuda=1 \
 	--build-arg python_version=${python_version} \
 	--build-arg pytorch_branch=${pytorch_branch} \
