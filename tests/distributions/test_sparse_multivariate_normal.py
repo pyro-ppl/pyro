@@ -12,22 +12,34 @@ def test_scaleu():
     loc = Variable(torch.Tensor([1, 2, 1, 2, 0]))
     D = Variable(torch.Tensor([1, 2, 3, 4, 5]))
     W = Variable(torch.Tensor([[1, -1, 2, 3, 4], [2, 3, 1, 2, 4]]))
-    cov = D + W.t().matmul(W)
+    cov = D.diag() + W.t().matmul(W)
 
     mvn = MultivariateNormal(loc, cov)
     sparse_mvn = SparseMultivariateNormal(loc, D, W)
 
-    assert_equal(mvn.scaleu, sparse_mvn.scaleu)
+    assert_equal(mvn.torch_dist.scale_triu, sparse_mvn.scale_triu)
 
 
 def test_batch_log_pdf():
     loc = Variable(torch.Tensor([2, 1, 1, 2, 2]))
     D = Variable(torch.Tensor([1, 2, 3, 1, 3]))
     W = Variable(torch.Tensor([[1, -1, 2, 2, 4], [2, 1, 1, 2, 6]]))
-    y = Variable(torch.Tensor([2, 3, 4, 1, 7]))
-    cov = D + W.t().matmul(W)
+    x = Variable(torch.Tensor([2, 3, 4, 1, 7]))
+    cov = D.diag() + W.t().matmul(W)
 
     mvn = MultivariateNormal(loc, cov)
     sparse_mvn = SparseMultivariateNormal(loc, D, W)
 
-    assert_equal(mvn.batch_log_pdf(y), sparse_mvn.batch_log_pdf(y))
+    assert_equal(mvn.batch_log_pdf(x), sparse_mvn.batch_log_pdf(x))
+
+
+def test_analytic_var():
+    loc = Variable(torch.Tensor([1, 1, 1, 2, 0]))
+    D = Variable(torch.Tensor([1, 2, 2, 4, 5]))
+    W = Variable(torch.Tensor([[3, -1, 3, 3, 4], [2, 3, 1, 3, 4]]))
+    cov = D.diag() + W.t().matmul(W)
+
+    mvn = MultivariateNormal(loc, cov)
+    sparse_mvn = SparseMultivariateNormal(loc, D, W)
+
+    assert_equal(mvn.analytic_var(), sparse_mvn.analytic_var())

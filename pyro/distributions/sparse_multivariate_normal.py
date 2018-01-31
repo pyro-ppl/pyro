@@ -53,10 +53,10 @@ class SparseMultivariateNormal(Distribution):
         # We use the following formula to increase the numerically computation stability
         # when using Cholesky decomposition (see GPML section 3.4.3):
         #     D + W.T @ W = D1/2 @ (I + D-1/2 @ W.T @ W @ D-1/2) @ D1/2
-        Dsqrt = self.D.sqrt()
-        A = self.W / Dsqrt
+        Dsqrt = self.covariance_matrix_D_term.sqrt()
+        A = self.covariance_matrix_W_term / Dsqrt
         At_A = A.t().matmul(A)
-        Id = Variable(A.data.new[1]).expand(A.size(1)).diag()
+        Id = Variable(A.data.new([1])).expand(A.size(1)).diag()
         K = Id + At_A
         U = K.potrf()
         return U * Dsqrt
@@ -92,14 +92,14 @@ class SparseMultivariateNormal(Distribution):
         delta = x - self.loc
         logdet, mahalanobis_squared = self._compute_logdet_and_mahalanobis(
             self.covariance_matrix_D_term, self.covariance_matrix_W_term, delta, self.trace_term)
-        normalization_const = 0.5 * (self.event_shape[-1] * math.log(2 * math.pi) + logdet)
+        normalization_const = 0.5 * (self.event_shape()[-1] * math.log(2 * math.pi) + logdet)
         return -(normalization_const + 0.5 * mahalanobis_squared)
 
     def analytic_mean(self):
         return self.loc
 
     def analytic_var(self):
-        return self.D + (self.W ** 2).sum(0)
+        return self.covariance_matrix_D_term + (self.covariance_matrix_W_term ** 2).sum(0)
 
     def _compute_logdet_and_mahalanobis(self, D, W, y, trace_term=0):
         """
@@ -112,14 +112,14 @@ class SparseMultivariateNormal(Distribution):
         W_Dinv = W / D
         Id = Variable(W.data.new([1])).expand(W.size(0)).diag()
         K = Id + W_Dinv.matmul(W.t())
-        L = K.portf(upper=False)
+        L = K.potrf(upper=False)
         W_Dinv_y = W_Dinv.matmul(y)
         Linv_W_Dinv_y = matrix_triangular_solve_compat(W_Dinv_y, L, upper=False)
 
-        logdet = 2 * L.diag().log().sum() + D.diag().log().sum()
+        logdet = 2 * L.diag().log().sum() + D.log().sum()
 
-        mahalanobis1 = 0.5 * (y * y / D).sum(-1)
-        mahalanobis2 = 0.5 * (Linv_W_Dinv_y * Linv_W_Dinv_y).sum()
+        mahalanobis1 = (y * y / D).sum(-1)
+        mahalanobis2 = (Linv_W_Dinv_y * Linv_W_Dinv_y).sum()
         mahalanobis_squared = mahalanobis1 - mahalanobis2 + trace_term
 
         return logdet, mahalanobis_squared
