@@ -55,8 +55,8 @@ class TransformedDistribution(Distribution):
             next_input = y
         return next_input
 
-    def shape(self, sample_shape=torch.Size(), *args, **kwargs):
-        return self.base_dist.shape(sample_shape, *args, **kwargs)
+    def shape(self, *args, **kwargs):
+        return self.base_dist.shape(*args, **kwargs)
 
     def batch_shape(self, *args, **kwargs):
         return self.base_dist.batch_shape(*args, **kwargs)
