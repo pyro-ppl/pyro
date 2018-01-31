@@ -27,18 +27,18 @@ class _SparseMultivariateNormal(dist.MultivariateNormal):
         according to q(y) = N(y|loc, cov).exp(-1/2 * trace_term).
     """
 
-    def __init__(self, loc, covariance_matrix_D_term, covariance_matrix_W_term,
+    def __init__(self, loc, covariance_matrix_D, covariance_matrix_W,
                  trace_term=None, *args, **kwargs):
         covariance_matrix = None
         super(_SparseMultivariateNormal, self).__init__(loc, covariance_matrix, *args, **kwargs)
-        self.covariance_matrix_D_term = covariance_matrix_D_term
-        self.covariance_matrix_W_term = covariance_matrix_W_term
+        self.covariance_matrix_D = covariance_matrix_D
+        self.covariance_matrix_W = covariance_matrix_W
         self.trace_term = trace_term if trace_term is not None else 0
 
     def log_prob(self, value):
         delta = value - self.loc
         logdet, mahalanobis_squared = self._compute_logdet_and_mahalanobis(
-            self.covariance_matrix_D_term, self.covariance_matrix_W_term, delta, self.trace_term)
+            self.covariance_matrix_D, self.covariance_matrix_W, delta, self.trace_term)
         normalization_const = 0.5 * (self.event_shape[-1] * math.log(2 * math.pi) + logdet)
         return -(normalization_const + 0.5 * mahalanobis_squared)
 
@@ -111,29 +111,29 @@ class SparseGPRegression(nn.Module):
         Kuu = kernel(Xu)
         Kuf = kernel(Xu, self.X)
         Luu = Kuu.potrf(upper=False)
-        # W_term = inv(Luu) @ Kuf
-        W_term = _matrix_triangular_solve_compat(Kuf, Luu, upper=False)
+        # W = inv(Luu) @ Kuf
+        W = _matrix_triangular_solve_compat(Kuf, Luu, upper=False)
 
-        D_term = self.noise.expand(self.num_data)
+        D = self.noise.expand(self.num_data)
         trace_term = 0
         if self.approx == "FITC" or self.approx == "VFE":
             # TODO: reduce computational cost to compute Kffdiag to O(N)
             Kff = kernel(self.X)
             Kffdiag = Kff.diag()
 
-            # Qff = Kfu @ inv(Kuu) @ Kuf = W_term.T @ W_term
-            Qffdiag = (W_term ** 2).sum(dim=0)
+            # Qff = Kfu @ inv(Kuu) @ Kuf = W.T @ W
+            Qffdiag = (W ** 2).sum(dim=0)
 
             if self.approx == "FITC":
-                D_term += Kffdiag - Qffdiag
+                D += Kffdiag - Qffdiag
             else:  # approx = "VFE"
                 trace_term += (Kffdiag - Qffdiag).sum() / self.noise
 
-        zero_loc = Variable(D_term.data.new([0]).expand(self.num_data))
+        zero_loc = Variable(D.data.new([0]).expand(self.num_data))
         # DTC: cov = Qff + noise, trace_term = 0
         # FITC: cov = Qff + diag(Kff - Qff) + noise, trace_term = 0
         # VFE: cov = Qff + noise, trace_term = tr(Kff - Qff) / noise
-        pyro.sample("y", _SparseMultivariateNormal(zero_loc, D_term, W_term), obs=self.y)
+        pyro.sample("y", _SparseMultivariateNormal(zero_loc, D, W), obs=self.y)
 
     def guide(self):
         kernel_guide_prior = {}
@@ -162,8 +162,8 @@ class SparseGPRegression(nn.Module):
 
     def forward(self, Xnew):
         """
-        Compute the parameters of `p(y|Xnew) ~ N(loc, covariance_matrix)`
-            w.r.t. the new input Xnew.
+        Computes the parameters of `p(y|Xnew) ~ N(loc, covariance_matrix)`
+        w.r.t. the new input Xnew.
 
         :param torch.autograd.Variable Xnew: A 2D tensor.
         :return: loc and covariance matrix of p(y|Xnew).
@@ -174,9 +174,44 @@ class SparseGPRegression(nn.Module):
         if Xnew.dim() == 1:
             Xnew = Xnew.unsqueeze(1)
 
-        # TODO: implement the inference
-        # kernel, Xu = self.guide()
-        # Kuu = kernel(Xu)
-        # Kus = kernel(Xu, Xnew)
-        # Kss = kernel(Xnew)
-        pass
+        kernel, Xu = self.guide()
+        Kuu = kernel(Xu)
+        Kus = kernel(Xu, Xnew)
+        Kuf = kernel(Xu, self.X)
+        Luu = Kuu.potrf(upper=False)
+
+        # loc = Ksu @ S @ Kuf @ inv(D) @ y
+        # cov = Kss - Ksu @ inv(Kuu) @ Kus + Ksu @ S @ Kus
+        # S = inv[Kuu + Kuf @ inv(D) @ Kfu]
+        #   = inv(Luu).T @ inv[I + inv(Luu) @ Kuf @ inv(D) @ Kfu @ inv(Luu).T] @ inv(Luu)
+        #   = inv(Luu).T @ inv[I + W @ inv(D) @ W.T] @ inv(Luu)
+        #   = inv(Luu).T @ inv(L).T @ inv(L) @ inv(Luu)
+
+        W = _matrix_triangular_solve_compat(Kuf, Luu, upper=False)
+        D = self.noise.expand(self.num_data)
+        if self.approx == "FITC":
+            Kff = kernel(self.X)  # TODO: make it faster
+            Kffdiag = Kff.diag()
+
+            Qffdiag = (W ** 2).sum(dim=0)
+            D += Kffdiag - Qffdiag
+
+        W_Dinv = W / D
+        Id = Variable(W.data.new([1])).expand(W.size(0)).diag()
+        K = Id + W_Dinv.matmul(W.t())
+        L = K.potrf(upper=False)
+
+        Ws = _matrix_triangular_solve_compat(Kus, Luu, upper=False)
+        Linv_Ws = _matrix_triangular_solve_compat(Ws, L, upper=False)
+
+        # loc = Linv_Ws.T @ inv(L) @ W_Dinv @ y
+        W_Dinv_y = W_Dinv.matmul(self.y)
+        Linv_W_Dinv_y = _matrix_triangular_solve_compat(W_Dinv_y, L, upper=False)
+        loc = Linv_Ws.t().matmul(Linv_W_Dinv_y)
+
+        # cov = Kss - Ws.T @ Ws + Linv_Ws.T @ Linv_Ws
+        Kss = kernel(Xnew)
+        Qss = Ws.t().matmul(Ws)
+        cov = Kss - Qss + Linv_Ws.t().matmul(Linv_Ws)
+
+        return loc, cov

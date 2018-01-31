@@ -56,7 +56,7 @@ class GPRegression(nn.Module):
 
     def forward(self, Xnew):
         """
-        Compute the parameters of `p(y|Xnew) ~ N(loc, covariance_matrix)`
+        Compute the parameters of `p(y|Xnew) ~ N(loc, cov)`
             w.r.t. the new input Xnew.
 
         :param torch.autograd.Variable Xnew: A 2D tensor.
@@ -72,14 +72,16 @@ class GPRegression(nn.Module):
         Kff = kernel(self.X) + self.noise.expand(self.num_data).diag()
         Kfs = kernel(self.X, Xnew)
         Kss = kernel(Xnew)
-
         Lff = Kff.potrf(upper=False)
+
         Lffinv_y = _matrix_triangular_solve_compat(self.y, Lff, upper=False)
         Lffinv_Kfs = _matrix_triangular_solve_compat(Kfs, Lff, upper=False)
-        Qss = Lffinv_Kfs.t().matmul(Lffinv_Kfs)
 
         # loc = Kfs.T @ inv(Kff) @ y
-        loc = Lffinv_Kfs.matmul(Lffinv_y)
-        covariance_matrix = Kss - Qss
+        loc = Lffinv_Kfs.t().matmul(Lffinv_y)
 
-        return loc, covariance_matrix
+        # cov = Kss - Ksf @ inv(Kff) @ Kfs
+        Qss = Lffinv_Kfs.t().matmul(Lffinv_Kfs)
+        cov = Kss - Qss
+
+        return loc, cov
