@@ -31,8 +31,9 @@ def discover_examples():
                 continue
             example = os.path.relpath(path, EXAMPLES_DIR)
             CPU_EXAMPLES.append((example, args))
-            if '--enum-discrete' in text:
-                CPU_EXAMPLES.append((example, args + ['--enum-discrete']))
+            for flag in ['--enum-discrete', '--aux-loss']:
+                if flag in text:
+                    CPU_EXAMPLES.append((example, args + [flag]))
             if '--cuda' in text:
                 CUDA_EXAMPLES.append((example, args + ['--cuda']))
     CPU_EXAMPLES.sort()
