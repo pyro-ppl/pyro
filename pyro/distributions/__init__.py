@@ -18,6 +18,7 @@ from pyro.distributions.delta import Delta
 from pyro.distributions.distribution import Distribution  # noqa: F401
 from pyro.distributions.random_primitive import RandomPrimitive
 from pyro.distributions.rejector import Rejector  # noqa: F401
+from pyro.distributions.torch_wrapper import kl_divergence  # noqa: F401
 
 # distribution classes with working torch versions in torch.distributions
 from pyro.distributions.torch.bernoulli import Bernoulli

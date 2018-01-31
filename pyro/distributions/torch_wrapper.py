@@ -51,3 +51,21 @@ class TorchDistribution(Distribution):
 
     def enumerate_support(self):
         return self.torch_dist.enumerate_support()
+
+
+def kl_divergence(p, q):
+    r"""
+    Compute Kullback-Leibler divergence :math:`KL(p \| q)` between two distributions.
+
+    :param Distribution p: a Pyro distribution.
+    :param Distribution q: a Pyro distribution.
+    :returns: a batch of KL divergences of shape ``batch_shape``
+    :rtype: torch.autograd.Variable:
+    :raises: NotImplementedError if the KL divergence has not been implemented.
+    """
+    if isinstance(p, TorchDistribution) and isinstance(q, TorchDistribution):
+        kl = torch.distributions.kl_divergence(p.torch_dist, q.torch_dist)
+        for _ in range(max(p.extra_event_dims, q.extra_event_dims)):
+            kl = kl.sum(-1)
+        return kl
+    raise NotImplementedError
