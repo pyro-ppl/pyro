@@ -39,9 +39,6 @@ def test_variance():
     W = Variable(torch.Tensor([[3, -1, 3, 3, 4], [2, 3, 1, 3, 4]]))
     cov = D.diag() + W.t().matmul(W)
 
-    mvn = MultivariateNormal(loc, cov)
     sparse_mvn = SparseMultivariateNormal(loc, D, W)
 
-    # TODO: enable this test when MultivariateNormal distribution support
-    # variance method
-    # assert_equal(mvn.variance(), sparse_mvn.variance())
+    assert_equal(sparse_mvn.variance, cov.diag())

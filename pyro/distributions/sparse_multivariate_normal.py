@@ -47,7 +47,7 @@ class SparseMultivariateNormal(Distribution):
 
         self.trace_term = trace_term if trace_term is not None else 0
         super(SparseMultivariateNormal, self).__init__(*args, **kwargs)
-        
+
     @property
     def mean(self):
         return self.loc
