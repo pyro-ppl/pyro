@@ -29,9 +29,11 @@ class RBF(Kernel):
             lengthscale = torch.ones(input_dim)
         self.lengthscale = Parameter(lengthscale)
 
-    def forward(self, X, Z=None):
+    def forward(self, X, Z=None, diag=False):
+        if diag:
+            return self.Kdiag(X)
         if Z is None:
-            Z = X
+            return self.variance.expand(X.size(0), X.size(0))
         X = self._slice_X(X)
         Z = self._slice_X(Z)
         if X.size(1) != Z.size(1):
@@ -44,3 +46,6 @@ class RBF(Kernel):
         XZ = scaled_X.matmul(scaled_Z.t())
         d2 = X2 - 2 * XZ + Z2.t()
         return self.variance * torch.exp(-0.5 * d2)
+
+    def Kdiag(self, X):
+        return self.variance.expand(X.size(0))

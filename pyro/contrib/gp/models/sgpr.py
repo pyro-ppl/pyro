@@ -78,8 +78,10 @@ class SparseGPRegression(nn.Module):
     :param str approx: One of approximation methods: 'DTC', 'FITC', and 'VFE' (default).
     :param dict kernel_prior: A mapping from kernel parameter's names to priors.
     :param dict Xu_prior: A mapping from inducing point parameter named 'Xu' to a prior.
+    :param float jitter: An additional jitter to help stablize Cholesky decomposition.
     """
-    def __init__(self, X, y, kernel, Xu, noise=None, approx=None, kernel_prior=None, Xu_prior=None):
+    def __init__(self, X, y, kernel, Xu, noise=None, approx=None, kernel_prior=None,
+                 Xu_prior=None, jitter=1e-6):
         super(SparseGPRegression, self).__init__()
         self.X = X
         self.y = y
@@ -87,6 +89,7 @@ class SparseGPRegression(nn.Module):
         self.Xu = Xu
 
         self.num_data = self.X.size(0)
+        self.num_inducing = self.Xu.size(0)
 
         # TODO: define noise as a Likelihood (a nn.Module)
         self.noise = Variable(noise) if noise is not None else Variable(X.data.new([1]))
@@ -96,10 +99,13 @@ class SparseGPRegression(nn.Module):
         elif approx in ["DTC", "FITC", "VFE"]:
             self.approx = approx
         else:
-            raise ValueError("The sparse approximation method should be one of 'DTC', 'FITC', 'VFE'.")
+            raise ValueError("The sparse approximation method should be one of 'DTC', "
+                             "'FITC', 'VFE'.")
 
         self.kernel_prior = kernel_prior if kernel_prior is not None else {}
         self.Xu_prior = Xu_prior if Xu_prior is not None else {}
+
+        self.jitter = Variable(self.X.data.new([jitter]))
 
     def model(self):
         kernel_fn = pyro.random_module(self.kernel.name, self.kernel, self.kernel_priors)
@@ -108,7 +114,7 @@ class SparseGPRegression(nn.Module):
         Xu_fn = pyro.random_module(self.Xu.name, self.Xu, self.Xu_priors)
         Xu = Xu_fn()()  # Xu is a nn.Module
 
-        Kuu = kernel(Xu)
+        Kuu = kernel(Xu) + self.jitter.expand(self.num_inducing)
         Kuf = kernel(Xu, self.X)
         Luu = Kuu.potrf(upper=False)
         # W = inv(Luu) @ Kuf
@@ -117,10 +123,7 @@ class SparseGPRegression(nn.Module):
         D = self.noise.expand(self.num_data)
         trace_term = 0
         if self.approx == "FITC" or self.approx == "VFE":
-            # TODO: reduce computational cost to compute Kffdiag to O(N)
-            Kff = kernel(self.X)
-            Kffdiag = Kff.diag()
-
+            Kffdiag = kernel(self.X, diag=True)
             # Qff = Kfu @ inv(Kuu) @ Kuf = W.T @ W
             Qffdiag = (W ** 2).sum(dim=0)
 
@@ -129,7 +132,7 @@ class SparseGPRegression(nn.Module):
             else:  # approx = "VFE"
                 trace_term += (Kffdiag - Qffdiag).sum() / self.noise
 
-        zero_loc = Variable(D.data.new([0]).expand(self.num_data))
+        zero_loc = Variable(D.data.new([0])).expand(self.num_data)
         # DTC: cov = Qff + noise, trace_term = 0
         # FITC: cov = Qff + diag(Kff - Qff) + noise, trace_term = 0
         # VFE: cov = Qff + noise, trace_term = tr(Kff - Qff) / noise
@@ -160,12 +163,14 @@ class SparseGPRegression(nn.Module):
 
         return kernel, Xu
 
-    def forward(self, Xnew):
+    def forward(self, Xnew, full_cov=False, noiseless=True):
         """
-        Computes the parameters of `p(y|Xnew) ~ N(loc, covariance_matrix)`
+        Computes the parameters of `p(y|Xnew) ~ N(loc, cov)`
         w.r.t. the new input Xnew.
 
         :param torch.autograd.Variable Xnew: A 2D tensor.
+        :param bool full_cov: Predict
+        :
         :return: loc and covariance matrix of p(y|Xnew).
         :rtype: torch.autograd.Variable and torch.autograd.Variable
         """
@@ -175,11 +180,14 @@ class SparseGPRegression(nn.Module):
             Xnew = Xnew.unsqueeze(1)
 
         kernel, Xu = self.guide()
-        Kuu = kernel(Xu)
+        Kuu = kernel(Xu) + self.jitter.expand(self.num_inducing)
         Kus = kernel(Xu, Xnew)
         Kuf = kernel(Xu, self.X)
         Luu = Kuu.potrf(upper=False)
 
+        # Ref: "A Unifying View of Sparse Approximate Gaussian Process Regression"
+        #    by Quiñonero-Candela, J., & Rasmussen, C. E. (2005).
+        #
         # loc = Ksu @ S @ Kuf @ inv(D) @ y
         # cov = Kss - Ksu @ inv(Kuu) @ Kus + Ksu @ S @ Kus
         # S = inv[Kuu + Kuf @ inv(D) @ Kfu]
@@ -190,14 +198,12 @@ class SparseGPRegression(nn.Module):
         W = _matrix_triangular_solve_compat(Kuf, Luu, upper=False)
         D = self.noise.expand(self.num_data)
         if self.approx == "FITC":
-            Kff = kernel(self.X)  # TODO: make it faster
-            Kffdiag = Kff.diag()
-
+            Kffdiag = kernel(self.X, diag=True)
             Qffdiag = (W ** 2).sum(dim=0)
             D += Kffdiag - Qffdiag
 
         W_Dinv = W / D
-        Id = Variable(W.data.new([1])).expand(W.size(0)).diag()
+        Id = Variable(W.data.new([1])).expand(self.num_inducing).diag()
         K = Id + W_Dinv.matmul(W.t())
         L = K.potrf(upper=False)
 
@@ -210,8 +216,13 @@ class SparseGPRegression(nn.Module):
         loc = Linv_Ws.t().matmul(Linv_W_Dinv_y)
 
         # cov = Kss - Ws.T @ Ws + Linv_Ws.T @ Linv_Ws
-        Kss = kernel(Xnew)
-        Qss = Ws.t().matmul(Ws)
-        cov = Kss - Qss + Linv_Ws.t().matmul(Linv_Ws)
+        if full_cov:
+            Kss = kernel(Xnew)
+            Qss = Ws.t().matmul(Ws)
+            cov = Kss - Qss + Linv_Ws.t().matmul(Linv_Ws)
+        else:
+            Kssdiag = kernel(Xnew, diag=True)
+            Qssdiag = (Ws ** 2).sum(dim=0)
+            cov = Kssdiag - Qssdiag + (Linv_Ws ** 2).sum(dim=0)
 
         return loc, cov

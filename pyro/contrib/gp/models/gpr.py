@@ -18,8 +18,9 @@ class GPRegression(nn.Module):
     :param pyro.contrib.gp.kernels.Kernel kernel: A Pyro kernel object.
     :param torch.Tensor noise: An optional noise tensor.
     :param dict priors: A mapping from kernel parameter's names to priors.
+    :param float jitter: An additional jitter to help stablize Cholesky decomposition.
     """
-    def __init__(self, X, y, kernel, noise=None, kernel_prior=None):
+    def __init__(self, X, y, kernel, noise=None, kernel_prior=None, jitter=1e-6):
         super(GPRegression, self).__init__()
         self.X = X
         self.y = y
@@ -32,12 +33,14 @@ class GPRegression(nn.Module):
 
         self.kernel_prior = kernel_prior if kernel_prior is not None else {}
 
+        self.jitter = Variable(self.X.data.new([jitter]))
+
     def model(self):
         kernel_fn = pyro.random_module(self.kernel.name, self.kernel, self.kernel_prior)
         kernel = kernel_fn()
 
         K = kernel(self.X) + self.noise.expand(self.num_data).diag()
-        zero_loc = Variable(K.data.new([0]).expand(self.num_data))
+        zero_loc = Variable(K.data.new([0])).expand(self.num_data)
         pyro.sample("y", dist.MultivariateNormal(zero_loc, K), obs=self.y)
 
     def guide(self):
@@ -54,7 +57,7 @@ class GPRegression(nn.Module):
 
         return kernel
 
-    def forward(self, Xnew):
+    def forward(self, Xnew, full_cov=False, noiseless=True):
         """
         Compute the parameters of `p(y|Xnew) ~ N(loc, cov)`
             w.r.t. the new input Xnew.
@@ -69,9 +72,12 @@ class GPRegression(nn.Module):
             Xnew = Xnew.unsqueeze(1)
 
         kernel = self.guide()
-        Kff = kernel(self.X) + self.noise.expand(self.num_data).diag()
+        Kff = kernel(self.X)
+        if noiseless:
+            Kff += self.jitter.expand(self.num_data).diag()
+        else:
+            Kff += self.noise.expand(self.num_data).diag()
         Kfs = kernel(self.X, Xnew)
-        Kss = kernel(Xnew)
         Lff = Kff.potrf(upper=False)
 
         Lffinv_y = _matrix_triangular_solve_compat(self.y, Lff, upper=False)
@@ -81,7 +87,13 @@ class GPRegression(nn.Module):
         loc = Lffinv_Kfs.t().matmul(Lffinv_y)
 
         # cov = Kss - Ksf @ inv(Kff) @ Kfs
-        Qss = Lffinv_Kfs.t().matmul(Lffinv_Kfs)
-        cov = Kss - Qss
+        if full_cov:
+            Kss = kernel(Xnew)
+            Qss = Lffinv_Kfs.t().matmul(Lffinv_Kfs)
+            cov = Kss - Qss
+        else:
+            Kssdiag = kernel(Xnew, diag=True)
+            Qssdiag = (Lffinv_Kfs ** 2).sum(dim=0)
+            cov = Kssdiag - Qssdiag
 
         return loc, cov
