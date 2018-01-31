@@ -165,6 +165,7 @@ class Trace_ELBO(object):
                         if not batched:
                             guide_log_pdf = guide_log_pdf.sum()
 
+                        # Try to use analytic computation.
                         try:
                             kl = kl_divergence(guide_site['fn'], model_site['fn'])
                         except NotImplementedError:
@@ -174,19 +175,21 @@ class Trace_ELBO(object):
                                 kl = kl.sum()
                             elbo_particle -= kl.data.sum()
                             surrogate_elbo_particle -= kl
-                        else:
-                            elbo_particle += model_log_pdf - guide_log_pdf
-                            surrogate_elbo_particle += model_log_pdf
+                            continue
 
-                            if not is_identically_zero(entropy_term):
-                                if not batched:
-                                    entropy_term = entropy_term.sum()
-                                surrogate_elbo_particle -= entropy_term
+                        # Fall back to monte carlo estimate.
+                        elbo_particle += model_log_pdf - guide_log_pdf
+                        surrogate_elbo_particle += model_log_pdf
 
-                            if not is_identically_zero(score_function_term):
-                                if not batched:
-                                    score_function_term = score_function_term.sum()
-                                surrogate_elbo_particle += log_r.detach() * score_function_term
+                        if not is_identically_zero(entropy_term):
+                            if not batched:
+                                entropy_term = entropy_term.sum()
+                            surrogate_elbo_particle -= entropy_term
+
+                        if not is_identically_zero(score_function_term):
+                            if not batched:
+                                score_function_term = score_function_term.sum()
+                            surrogate_elbo_particle += log_r.detach() * score_function_term
 
             # drop terms of weight zero to avoid nans
             if isinstance(weight, numbers.Number):
