@@ -5,8 +5,7 @@ import torch.nn as nn
 
 import pyro
 import pyro.distributions as dist
-
-from .util import _matrix_triangular_solve_compat
+from pyro.distributions.util import matrix_triangular_solve_compat
 
 
 class GPRegression(nn.Module):
@@ -80,8 +79,8 @@ class GPRegression(nn.Module):
         Kfs = kernel(self.X, Xnew)
         Lff = Kff.potrf(upper=False)
 
-        Lffinv_y = _matrix_triangular_solve_compat(self.y, Lff, upper=False)
-        Lffinv_Kfs = _matrix_triangular_solve_compat(Kfs, Lff, upper=False)
+        Lffinv_y = matrix_triangular_solve_compat(self.y, Lff, upper=False)
+        Lffinv_Kfs = matrix_triangular_solve_compat(Kfs, Lff, upper=False)
 
         # loc = Kfs.T @ inv(Kff) @ y
         loc = Lffinv_Kfs.t().matmul(Lffinv_y)

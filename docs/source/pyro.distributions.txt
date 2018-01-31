@@ -48,6 +48,13 @@ MultivariateNormal
     :members:
     :undoc-members:
     :show-inheritance:
+    
+SparseMultivariateNormal
+------------------------
+.. automodule:: pyro.distributions.sparse_multivariate_normal
+    :members:
+    :undoc-members:
+    :show-inheritance:
 
 Exponential
 -----------

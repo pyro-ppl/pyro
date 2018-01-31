@@ -1,69 +1,11 @@
 from __future__ import absolute_import, division, print_function
 
-import math
-
 from torch.autograd import Variable
 import torch.nn as nn
 
 import pyro
 import pyro.distributions as dist
-
-from .util import _matrix_triangular_solve_compat
-
-
-class _SparseMultivariateNormal(dist.MultivariateNormal):
-    """Sparse Multivariate Normal distribution.
-
-    Approximates covariance matrix in terms D and W, according to
-        covariance_matrix ~ D + W.T @ W.
-
-    :param torch.autograd.Variable loc: Mean.
-        Must be in 1 dimensional of size N
-    :param torch.autograd.Variable covariance_matrix_D_term: D term.
-        Must be in 1 dimensional of size N.
-    :param torch.autograd.Variable covariance_matrix_D_term: W term.
-        Must be in 2 dimensional of size M x N.
-    :param float trace_term: A optional term to be added into Mahalabonis term
-        according to q(y) = N(y|loc, cov).exp(-1/2 * trace_term).
-    """
-
-    def __init__(self, loc, covariance_matrix_D, covariance_matrix_W,
-                 trace_term=None, *args, **kwargs):
-        covariance_matrix = None
-        super(_SparseMultivariateNormal, self).__init__(loc, covariance_matrix, *args, **kwargs)
-        self.covariance_matrix_D = covariance_matrix_D
-        self.covariance_matrix_W = covariance_matrix_W
-        self.trace_term = trace_term if trace_term is not None else 0
-
-    def log_prob(self, value):
-        delta = value - self.loc
-        logdet, mahalanobis_squared = self._compute_logdet_and_mahalanobis(
-            self.covariance_matrix_D, self.covariance_matrix_W, delta, self.trace_term)
-        normalization_const = 0.5 * (self.event_shape[-1] * math.log(2 * math.pi) + logdet)
-        return -(normalization_const + 0.5 * mahalanobis_squared)
-
-    def _compute_logdet_and_mahalanobis(self, D, W, y, trace_term=0):
-        """
-        Calculates log determinant and (squared) Mahalanobis term of covariance
-        matrix (D + Wt.W), where D is a diagonal matrix, based on the
-        "Woodbury matrix identity" and "matrix determinant lemma":
-            inv(D + Wt.W) = inv(D) - inv(D).Wt.inv(I + W.inv(D).Wt).W.inv(D)
-            log|D + Wt.W| = log|Id + Wt.inv(D).W| + log|D|
-        """
-        W_Dinv = W / D
-        Id = Variable(W.data.new([1])).expand(W.size(0)).diag()
-        K = Id + W_Dinv.matmul(W.t())
-        L = K.portf(upper=False)
-        W_Dinv_y = W_Dinv.matmul(y)
-        Linv_W_Dinv_y = _matrix_triangular_solve_compat(W_Dinv_y, L, upper=False)
-
-        logdet = 2 * L.diag().log().sum() + D.diag().log().sum()
-
-        mahalanobis1 = 0.5 * (y * y / D).sum(-1)
-        mahalanobis2 = 0.5 * (Linv_W_Dinv_y * Linv_W_Dinv_y).sum()
-        mahalanobis_squared = mahalanobis1 - mahalanobis2 + trace_term
-
-        return logdet, mahalanobis_squared
+from pyro.distributions.util import matrix_triangular_solve_compat
 
 
 class SparseGPRegression(nn.Module):
@@ -118,7 +60,7 @@ class SparseGPRegression(nn.Module):
         Kuf = kernel(Xu, self.X)
         Luu = Kuu.potrf(upper=False)
         # W = inv(Luu) @ Kuf
-        W = _matrix_triangular_solve_compat(Kuf, Luu, upper=False)
+        W = matrix_triangular_solve_compat(Kuf, Luu, upper=False)
 
         D = self.noise.expand(self.num_data)
         trace_term = 0
@@ -136,7 +78,7 @@ class SparseGPRegression(nn.Module):
         # DTC: cov = Qff + noise, trace_term = 0
         # FITC: cov = Qff + diag(Kff - Qff) + noise, trace_term = 0
         # VFE: cov = Qff + noise, trace_term = tr(Kff - Qff) / noise
-        pyro.sample("y", _SparseMultivariateNormal(zero_loc, D, W), obs=self.y)
+        pyro.sample("y", dist.SparseMultivariateNormal(zero_loc, D, W), obs=self.y)
 
     def guide(self):
         kernel_guide_prior = {}
@@ -195,7 +137,7 @@ class SparseGPRegression(nn.Module):
         #   = inv(Luu).T @ inv[I + W @ inv(D) @ W.T] @ inv(Luu)
         #   = inv(Luu).T @ inv(L).T @ inv(L) @ inv(Luu)
 
-        W = _matrix_triangular_solve_compat(Kuf, Luu, upper=False)
+        W = matrix_triangular_solve_compat(Kuf, Luu, upper=False)
         D = self.noise.expand(self.num_data)
         if self.approx == "FITC":
             Kffdiag = kernel(self.X, diag=True)
@@ -207,12 +149,12 @@ class SparseGPRegression(nn.Module):
         K = Id + W_Dinv.matmul(W.t())
         L = K.potrf(upper=False)
 
-        Ws = _matrix_triangular_solve_compat(Kus, Luu, upper=False)
-        Linv_Ws = _matrix_triangular_solve_compat(Ws, L, upper=False)
+        Ws = matrix_triangular_solve_compat(Kus, Luu, upper=False)
+        Linv_Ws = matrix_triangular_solve_compat(Ws, L, upper=False)
 
         # loc = Linv_Ws.T @ inv(L) @ W_Dinv @ y
         W_Dinv_y = W_Dinv.matmul(self.y)
-        Linv_W_Dinv_y = _matrix_triangular_solve_compat(W_Dinv_y, L, upper=False)
+        Linv_W_Dinv_y = matrix_triangular_solve_compat(W_Dinv_y, L, upper=False)
         loc = Linv_Ws.t().matmul(Linv_W_Dinv_y)
 
         # cov = Kss - Ws.T @ Ws + Linv_Ws.T @ Linv_Ws
