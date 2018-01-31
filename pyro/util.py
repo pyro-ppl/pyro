@@ -7,6 +7,8 @@ import graphviz
 import numpy as np
 
 import torch
+
+from pyro.distributions.util import broadcast_shape
 from pyro.poutine.poutine import _PYRO_STACK
 from pyro.poutine.util import site_is_subsample
 from pyro.shim import is_volatile
@@ -205,7 +207,10 @@ def enum_extend(trace, msg, num_samples=None):
         num_samples = -1
 
     # Batched .enumerate_support() assumes batched values are independent.
-    batch_shape = msg["fn"].batch_shape(msg["value"], *msg["args"], **msg["kwargs"])
+    shape = broadcast_shape(msg["fn"].shape(*msg["args"], **msg["kwargs"]),
+                            msg["value"].size())
+    batch_dims = len(shape) - msg['fn'].event_dim(*msg["args"], **msg["kwargs"])
+    batch_shape = shape[:batch_dims]
     is_batched = any(size > 1 for size in batch_shape)
     inside_iarange = any(frame.vectorized for frame in msg["cond_indep_stack"])
     if is_batched and not inside_iarange:
@@ -356,8 +361,8 @@ def check_model_guide_match(model_trace, guide_trace):
         model_site = model_trace.nodes[name]
         guide_site = guide_trace.nodes[name]
         if hasattr(model_site["fn"], "shape") and hasattr(guide_site["fn"], "shape"):
-            model_shape = model_site["fn"].shape(None, *model_site["args"], **model_site["kwargs"])
-            guide_shape = guide_site["fn"].shape(None, *guide_site["args"], **guide_site["kwargs"])
+            model_shape = model_site["fn"].shape(*model_site["args"], **model_site["kwargs"])
+            guide_shape = guide_site["fn"].shape(*guide_site["args"], **guide_site["kwargs"])
             if model_shape != guide_shape:
                 raise ValueError("Model and guide dims disagree at site '{}': {} vs {}".format(
                     name, model_shape, guide_shape))

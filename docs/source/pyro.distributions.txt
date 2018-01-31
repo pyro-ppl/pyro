@@ -96,7 +96,7 @@ Poisson
     :members:
     :undoc-members:
     :show-inheritance:
-    
+
 SparseMultivariateNormal
 ------------------------
 .. automodule:: pyro.distributions.sparse_multivariate_normal

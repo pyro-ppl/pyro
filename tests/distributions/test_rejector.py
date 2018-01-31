@@ -12,7 +12,7 @@ from tests.common import assert_equal
 
 def compute_elbo_grad(model, guide, variables):
     x = guide.sample()
-    model_log_pdf = model.batch_log_pdf(x)
+    model_log_pdf = model.log_prob(x)
     guide_log_pdf, score_function, entropy_term = guide.score_parts(x)
     log_r = model_log_pdf - guide_log_pdf
     surrogate_elbo = model_log_pdf + log_r.detach() * score_function - entropy_term
@@ -32,7 +32,7 @@ def test_rejector(rate, factor):
     x2 = dist2.sample()
     assert_equal(x1.mean(), x2.mean(), prec=0.02, msg='bug in .sample()')
     assert_equal(x1.std(), x2.std(), prec=0.02, msg='bug in .sample()')
-    assert_equal(dist1.batch_log_pdf(x1), dist2.batch_log_pdf(x1), msg='bug in .batch_log_pdf()')
+    assert_equal(dist1.log_prob(x1), dist2.log_prob(x1), msg='bug in .log_prob()')
 
 
 @pytest.mark.parametrize('rate', [0.5, 1.0, 2.0])

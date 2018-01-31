@@ -23,9 +23,9 @@ class RejectionStandardGamma(Rejector):
         # The following are Marsaglia & Tsang's variable names.
         self._d = self.alpha - 1.0 / 3.0
         self._c = 1.0 / torch.sqrt(9.0 * self._d)
-        # Compute log scale using Gamma.batch_log_pdf().
+        # Compute log scale using Gamma.log_prob().
         x = self._d.detach()  # just an arbitrary x.
-        log_scale = self.propose_batch_log_pdf(x) + self.log_prob_accept(x) - self.batch_log_pdf(x)
+        log_scale = self.propose_log_prob(x) + self.log_prob_accept(x) - self.log_prob(x)
         super(RejectionStandardGamma, self).__init__(self.propose, self.log_prob_accept, log_scale)
 
     def propose(self):
@@ -35,14 +35,14 @@ class RejectionStandardGamma(Rejector):
         v = y * y * y
         return (self._d * v).clamp_(1e-30, 1e30)
 
-    def propose_batch_log_pdf(self, value):
+    def propose_log_prob(self, value):
         v = value / self._d
         result = -self._d.log()
         y = v.pow(1 / 3)
         result -= torch.log(3 * y ** 2)
         x = (y - 1) / self._c
         result -= self._c.log()
-        result += Normal(torch.zeros_like(self.alpha), torch.ones_like(self.alpha)).batch_log_pdf(x)
+        result += Normal(torch.zeros_like(self.alpha), torch.ones_like(self.alpha)).log_prob(x)
         return result
 
     def log_prob_accept(self, value):
@@ -53,8 +53,8 @@ class RejectionStandardGamma(Rejector):
         log_prob_accept[y <= 0] = -float('inf')
         return log_prob_accept
 
-    def batch_log_pdf(self, x):
-        return self._standard_gamma.batch_log_pdf(x)
+    def log_prob(self, x):
+        return self._standard_gamma.log_prob(x)
 
 
 @copy_docs_from(Gamma)
@@ -70,8 +70,8 @@ class RejectionGamma(Gamma):
     def sample(self):
         return self._standard_gamma.sample() / self.beta
 
-    def batch_log_pdf(self, x):
-        return self._standard_gamma.batch_log_pdf(x * self.beta) + torch.log(self.beta)
+    def log_prob(self, x):
+        return self._standard_gamma.log_prob(x * self.beta) + torch.log(self.beta)
 
     def score_parts(self, x):
         log_pdf, score_function, _ = self._standard_gamma.score_parts(x * self.beta)
@@ -111,5 +111,5 @@ class ShapeAugmentedGamma(Gamma):
         assert boosted_x is self._unboost_x_cache[0]
         x = self._unboost_x_cache[1]
         _, score_function, _ = self._rejection_gamma.score_parts(x)
-        log_pdf = self.batch_log_pdf(boosted_x)
+        log_pdf = self.log_prob(boosted_x)
         return ScoreParts(log_pdf, score_function, log_pdf)

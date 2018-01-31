@@ -41,7 +41,7 @@ class MCMC(TracePosterior):
         trace = self.kernel.initial_trace()
         self.logger.info('Starting MCMC using kernel - {} ...'.format(self.kernel.__class__.__name__))
         logging_interval = int(math.ceil((self.warmup_steps + self.num_samples) / 20))
-        while self._t <= self.warmup_steps + self.num_samples:
+        while self._t < self.warmup_steps + self.num_samples:
             self._t += 1
             if self._t % logging_interval == 0:
                 self.logger.info('Iteration: {}.'.format(self._t))
