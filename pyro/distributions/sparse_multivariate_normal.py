@@ -48,6 +48,14 @@ class SparseMultivariateNormal(Distribution):
         self.trace_term = trace_term if trace_term is not None else 0
         super(SparseMultivariateNormal, self).__init__(*args, **kwargs)
 
+    @property
+    def mean(self):
+        return self.loc
+
+    @property
+    def variance(self):
+        return self.covariance_matrix_D_term + (self.covariance_matrix_W_term ** 2).sum(0)
+
     @lazy_property
     def scale_triu(self):
         # We use the following formula to increase the numerically computation stability
@@ -84,7 +92,7 @@ class SparseMultivariateNormal(Distribution):
         white = self.loc.new(sample_shape + self.loc.shape).normal_()
         return self.loc + torch.matmul(white, self.scale_triu)
 
-    def batch_log_pdf(self, x):
+    def log_prob(self, x):
         batch_shape = self.batch_shape(x)
         if batch_shape != torch.Size([]):
             raise ValueError("Batch calculation of log probability is not supported "
@@ -94,12 +102,6 @@ class SparseMultivariateNormal(Distribution):
             self.covariance_matrix_D_term, self.covariance_matrix_W_term, delta, self.trace_term)
         normalization_const = 0.5 * (self.event_shape()[-1] * math.log(2 * math.pi) + logdet)
         return -(normalization_const + 0.5 * mahalanobis_squared)
-
-    def analytic_mean(self):
-        return self.loc
-
-    def analytic_var(self):
-        return self.covariance_matrix_D_term + (self.covariance_matrix_W_term ** 2).sum(0)
 
     def _compute_logdet_and_mahalanobis(self, D, W, y, trace_term=0):
         """
