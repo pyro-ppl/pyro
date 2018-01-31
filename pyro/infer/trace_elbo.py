@@ -52,7 +52,8 @@ class Trace_ELBO(object):
     """
     def __init__(self,
                  num_particles=1,
-                 enum_discrete=False):
+                 enum_discrete=False,
+                 use_analytic_kl=False):
         """
         :param num_particles: the number of particles/samples used to form the ELBO (gradient) estimators
         :param bool enum_discrete: whether to sum over discrete latent variables, rather than sample them
@@ -60,6 +61,7 @@ class Trace_ELBO(object):
         super(Trace_ELBO, self).__init__()
         self.num_particles = num_particles
         self.enum_discrete = enum_discrete
+        self.use_analytic_kl = use_analytic_kl
 
     def _get_traces(self, model, guide, *args, **kwargs):
         """
@@ -166,16 +168,17 @@ class Trace_ELBO(object):
                             guide_log_pdf = guide_log_pdf.sum()
 
                         # Try to use analytic computation.
-                        try:
-                            kl = kl_divergence(guide_site['fn'], model_site['fn'])
-                        except NotImplementedError:
-                            kl = None
-                        if kl is not None and (kl.data == kl.data).all():  # work around NAN bugs in PyTorch
-                            if not batched:
-                                kl = kl.sum()
-                            elbo_particle -= kl.data.sum()
-                            surrogate_elbo_particle -= kl
-                            continue
+                        if self.use_analytic_kl:
+                            try:
+                                kl = kl_divergence(guide_site['fn'], model_site['fn'])
+                            except NotImplementedError:
+                                kl = None
+                            if kl is not None and (kl.data == kl.data).all():  # work around NAN bugs in PyTorch
+                                if not batched:
+                                    kl = kl.sum()
+                                elbo_particle -= kl.data.sum()
+                                surrogate_elbo_particle -= kl
+                                continue
 
                         # Fall back to monte carlo estimate.
                         elbo_particle += model_log_pdf - guide_log_pdf
