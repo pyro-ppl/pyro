@@ -49,7 +49,7 @@ class BlockPoutine(Poutine):
         1. msg["name"] in hide
         2. msg["type"] in hide_types
         3. msg["name"] not in expose and msg["type"] not in expose_types
-        4. hide_all == True
+        4. hide_all == True and hide, hide_types, and expose_types are all None
         """
         super(BlockPoutine, self).__init__(fn)
         # first, some sanity checks:
@@ -71,8 +71,12 @@ class BlockPoutine(Poutine):
         # hide_types and expose_types intersect?
         if hide_types is None:
             hide_types = []
+        else:
+            hide_all = False
         if expose_types is None:
             expose_types = []
+        else:
+            hide_all = False
         assert set(hide_types).isdisjoint(set(expose_types)), \
             "cannot hide and expose a site type"
 
