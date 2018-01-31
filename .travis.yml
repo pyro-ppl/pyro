@@ -45,6 +45,7 @@ jobs:
         - python: 2.7
           env: STAGE=profiler
           script:
+              - pip install -e .[profile]
               - python -m profiler.distributions
         - stage: unit test
           python: 2.7
