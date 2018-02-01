@@ -103,11 +103,10 @@ continuous_dists = [
     Fixture(pyro_dist=(dist.sparse_multivariate_normal, SparseMultivariateNormal),
             scipy_dist=sp.multivariate_normal,
             examples=[
-                {'loc': [2.0, 1.0], 'covariance_matrix_D_term': [0.5, 0.5],
-                 'covariance_matrix_W_term': [[1.0, 0.5]],
+                {'loc': [2.0, 1.0], 'D_term': [0.5, 0.5], 'W_term': [[1.0, 0.5]],
                  'test_data': [[2.0, 1.0], [9.0, 3.4]]},
             ],
-            scipy_arg_fn=lambda loc, covariance_matrix_D_term=None, covariance_matrix_W_term=None:
+            scipy_arg_fn=lambda loc, D_term, W_term:
                 ((), {"mean": np.array(loc), "cov": np.array([[1.5, 0.5], [0.5, 0.75]])}),
             prec=0.01,
             min_samples=500000),

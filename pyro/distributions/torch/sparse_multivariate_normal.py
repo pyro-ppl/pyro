@@ -75,21 +75,23 @@ class TorchSparseMultivariateNormal(torch.distributions.Distribution):
             inv(D + Wt.W) = inv(D) - inv(D).Wt.inv(I + W.inv(D).Wt).W.inv(D)
             log|D + Wt.W| = log|Id + Wt.inv(D).W| + log|D|
         """
-        if y.dim() > 1:
-            raise ValueError("Batch calculation of log probability is not supported "
-                             "for this distribution.")
         W_Dinv = W / D
         M = W.size(0)
         Id = torch.eye(M, M, out=Variable(W.data.new(M, M)))
         K = Id + W_Dinv.matmul(W.t())
         L = K.potrf(upper=False)
-        W_Dinv_y = W_Dinv.matmul(y)
+        if y.dim() == 1:
+            W_Dinv_y = W_Dinv.matmul(y)
+        elif y.dim() == 2:
+            W_Dinv_y = W_Dinv.matmul(y.t())
         Linv_W_Dinv_y = matrix_triangular_solve_compat(W_Dinv_y, L, upper=False)
+        if y.dim() == 2:
+            Linv_W_Dinv_y = Linv_W_Dinv_y.t()
 
         logdet = 2 * L.diag().log().sum() + D.log().sum()
 
         mahalanobis1 = (y * y / D).sum(-1)
-        mahalanobis2 = (Linv_W_Dinv_y * Linv_W_Dinv_y).sum()
+        mahalanobis2 = (Linv_W_Dinv_y * Linv_W_Dinv_y).sum(-1)
         mahalanobis_squared = mahalanobis1 - mahalanobis2 + trace_term
 
         return logdet, mahalanobis_squared
