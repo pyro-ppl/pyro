@@ -9,7 +9,7 @@ import scipy.stats as sp
 import pyro.distributions as dist
 from pyro.distributions import (Bernoulli, Beta, Binomial, Categorical, Cauchy, Dirichlet, Exponential, Gamma,
                                 Multinomial, MultivariateNormal, LogNormal, Normal, OneHotCategorical, Poisson,
-                                Uniform)
+                                SparseMultivariateNormal, Uniform)
 from tests.distributions.dist_fixture import Fixture
 
 continuous_dists = [
@@ -96,8 +96,19 @@ continuous_dists = [
                  'test_data': [[2.0, 1.0], [9.0, 3.4]]},
             ],
             # This hack seems to be the best option right now, as 'sigma' is not handled well by get_scipy_batch_logpdf
-            scipy_arg_fn=lambda loc, covariance_matrix=None, scale_triu=None:
+            scipy_arg_fn=lambda loc, covariance_matrix=None:
                 ((), {"mean": np.array(loc), "cov": np.array([[1.0, 0.5], [0.5, 1.0]])}),
+            prec=0.01,
+            min_samples=500000),
+    Fixture(pyro_dist=(dist.sparse_multivariate_normal, SparseMultivariateNormal),
+            scipy_dist=sp.multivariate_normal,
+            examples=[
+                {'loc': [2.0, 1.0], 'covariance_matrix_D_term': [0.5, 0.5],
+                 'covariance_matrix_W_term': [[1.0, 0.5]],
+                 'test_data': [[2.0, 1.0], [9.0, 3.4]]},
+            ],
+            scipy_arg_fn=lambda loc, covariance_matrix_D_term=None, covariance_matrix_W_term=None:
+                ((), {"mean": np.array(loc), "cov": np.array([[1.5, 0.5], [0.5, 0.75]])}),
             prec=0.01,
             min_samples=500000),
     Fixture(pyro_dist=(dist.dirichlet, Dirichlet),
