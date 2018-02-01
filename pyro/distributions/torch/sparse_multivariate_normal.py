@@ -64,7 +64,7 @@ class TorchSparseMultivariateNormal(torch.distributions.Distribution):
         delta = value - self.loc
         logdet, mahalanobis_squared = self._compute_logdet_and_mahalanobis(
             self.covariance_matrix_D_term, self.covariance_matrix_W_term, delta, self.trace_term)
-        normalization_const = 0.5 * (self.event_shape()[-1] * math.log(2 * math.pi) + logdet)
+        normalization_const = 0.5 * (self.event_shape[-1] * math.log(2 * math.pi) + logdet)
         return -(normalization_const + 0.5 * mahalanobis_squared)
 
     def _compute_logdet_and_mahalanobis(self, D, W, y, trace_term=0):
