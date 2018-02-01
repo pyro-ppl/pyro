@@ -13,7 +13,7 @@ import pyro.distributions as dist
 import pyro.optim as optim
 from pyro.distributions.testing import fakes
 from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
-from pyro.distributions.transformed_distribution import TransformedDistribution
+from pyro.distributions import TransformedDistribution
 from pyro.infer.svi import SVI
 from pyro.util import ng_ones, ng_zeros
 from tests.common import assert_equal

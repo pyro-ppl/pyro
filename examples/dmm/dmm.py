@@ -20,8 +20,8 @@ from pyro.infer import SVI
 from pyro.optim import ClippedAdam
 import pyro.distributions as dist
 from pyro.util import ng_ones
-from pyro.distributions.transformed_distribution import InverseAutoregressiveFlow
-from pyro.distributions.transformed_distribution import TransformedDistribution
+from pyro.distributions import InverseAutoregressiveFlow
+from pyro.distributions import TransformedDistribution
 import six.moves.cPickle as pickle
 import polyphonic_data_loader as poly
 from os.path import exists
@@ -421,7 +421,7 @@ if __name__ == '__main__':
     parser.add_argument('-ae', '--annealing-epochs', type=int, default=1000)
     parser.add_argument('-maf', '--minimum-annealing-factor', type=float, default=0.1)
     parser.add_argument('-rdr', '--rnn-dropout-rate', type=float, default=0.1)
-    parser.add_argument('-iafs', '--num-iafs', type=int, default=0)
+    parser.add_argument('-iafs', '--num-iafs', type=int, default=1)
     parser.add_argument('-id', '--iaf-dim', type=int, default=100)
     parser.add_argument('-cf', '--checkpoint-freq', type=int, default=0)
     parser.add_argument('-lopt', '--load-opt', type=str, default='')

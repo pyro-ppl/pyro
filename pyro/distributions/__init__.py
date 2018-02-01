@@ -35,6 +35,8 @@ from pyro.distributions.torch.normal import Normal
 from pyro.distributions.torch.one_hot_categorical import OneHotCategorical
 from pyro.distributions.torch.poisson import Poisson
 from pyro.distributions.torch.uniform import Uniform
+from pyro.distributions.torch.transformed_distribution import TransformedDistribution  # noqa: F401
+from pyro.distributions.torch.iaf import InverseAutoregressiveFlow  # noqa: F401
 
 # function aliases
 bernoulli = RandomPrimitive(Bernoulli)

@@ -27,15 +27,15 @@ class RandomPrimitive(Distribution):
 
     def batch_shape(self, *args, **kwargs):
         kwargs.pop('sample_shape', None)
-        return self.dist_class(*args, **kwargs).batch_shape()
+        return self.dist_class(*args, **kwargs).batch_shape
 
     def event_shape(self, *args, **kwargs):
         kwargs.pop('sample_shape', None)
-        return self.dist_class(*args, **kwargs).event_shape()
+        return self.dist_class(*args, **kwargs).event_shape
 
     def event_dim(self, *args, **kwargs):
         kwargs.pop('sample_shape', None)
-        return self.dist_class(*args, **kwargs).event_dim()
+        return self.dist_class(*args, **kwargs).event_dim
 
     def shape(self, *args, **kwargs):
         sample_shape = kwargs.pop('sample_shape', torch.Size())

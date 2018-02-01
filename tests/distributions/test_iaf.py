@@ -7,7 +7,7 @@ import pytest
 import torch
 from torch.autograd import Variable
 
-from pyro.distributions.transformed_distribution import InverseAutoregressiveFlow
+from pyro.distributions.torch.iaf import InverseAutoregressiveFlow
 from pyro.nn import AutoRegressiveNN
 
 pytestmark = pytest.mark.init(rng_seed=123)
@@ -40,7 +40,7 @@ class InverseAutoregressiveFlowTests(TestCase):
             for k in range(input_dim):
                 permuted_jacobian[j, k] = jacobian[permutation[j], permutation[k]]
 
-        analytic_ldt = iaf.log_det_jacobian(iaf_x).data.cpu().numpy()[0]
+        analytic_ldt = iaf.log_abs_det_jacobian(None, iaf_x).sum().data.cpu().numpy()[0]
         numeric_ldt = torch.sum(torch.log(torch.diag(permuted_jacobian)))
         ldt_discrepancy = np.fabs(analytic_ldt - numeric_ldt)
 

@@ -39,7 +39,9 @@ class Rejector(Distribution):
             self._propose_batch_log_pdf_cache = x, self.propose.log_prob(x)
         return self._propose_batch_log_pdf_cache[1]
 
-    def sample(self):
+    def sample(self, sample_shape=torch.Size()):
+        if sample_shape:
+            raise ValueError("Arbitrary `sample_shape` not supported by Distribution class.")
         # Implements parallel batched accept-reject sampling.
         x = self.propose()
         log_prob_accept = self.log_prob_accept(x)
