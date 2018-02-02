@@ -41,7 +41,7 @@ class Rejector(Distribution):
 
     def sample(self, sample_shape=torch.Size()):
         if sample_shape:
-            raise ValueError("Arbitrary `sample_shape` not supported by Distribution class.")
+            raise ValueError("Arbitrary `sample_shape` not supported by Rejector class.")
         # Implements parallel batched accept-reject sampling.
         x = self.propose()
         log_prob_accept = self.log_prob_accept(x)
