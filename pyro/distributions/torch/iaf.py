@@ -120,4 +120,4 @@ class InverseAutoregressiveFlow(Transform):
         else:
             raise KeyError("Bijector InverseAutoregressiveFlow expected to find" +
                            "key in intermediates cache but didn't")
-        return torch.log(sigma)
+        return sigma.log().sum(-1)
