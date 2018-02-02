@@ -269,3 +269,18 @@ def get_clamped_probs(ps=None, logits=None, is_multidimensional=True):
     if is_multidimensional:
         ps /= ps.sum(-1, True)
     return ps
+
+
+def matrix_triangular_solve_compat(b, A, upper=True):
+    """
+    Computes the solution to the linear equation AX = b,
+    where A is a triangular matrix.
+
+    :param b: A 1D or 2D tensor of size N or N x C.
+    :param A: A 2D tensor of size N X N.
+    :param upper: A flag if A is a upper triangular matrix or not.
+    """
+    if A.requires_grad or A.is_cuda:
+        return A.inverse().matmul(b)
+    else:
+        return b.trtrs(A, upper=upper)[0].view(b.size())
