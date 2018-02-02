@@ -33,7 +33,7 @@ class RBF(Kernel):
         if diag:
             return self.Kdiag(X)
         if Z is None:
-            return self.variance.expand(X.size(0), X.size(0))
+            Z = X
         X = self._slice_X(X)
         Z = self._slice_X(Z)
         if X.size(1) != Z.size(1):

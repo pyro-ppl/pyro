@@ -31,7 +31,7 @@ class SparseGPRegression(nn.Module):
         self.Xu = Xu
 
         self.num_data = self.X.size(0)
-        self.num_inducing = self.Xu.size(0)
+        self.num_inducing = self.Xu().size(0)
 
         # TODO: define noise as a Likelihood (a nn.Module)
         self.noise = Variable(noise) if noise is not None else Variable(X.data.new([1]))
@@ -50,11 +50,11 @@ class SparseGPRegression(nn.Module):
         self.jitter = Variable(self.X.data.new([jitter]))
 
     def model(self):
-        kernel_fn = pyro.random_module(self.kernel.name, self.kernel, self.kernel_priors)
+        kernel_fn = pyro.random_module(self.kernel.name, self.kernel, self.kernel_prior)
         kernel = kernel_fn()
 
-        Xu_fn = pyro.random_module(self.Xu.name, self.Xu, self.Xu_priors)
-        Xu = Xu_fn()()  # Xu is a nn.Module
+        Xu_fn = pyro.random_module(self.Xu.name, self.Xu, self.Xu_prior)
+        Xu = Xu_fn().inducing_points
 
         Kuu = kernel(Xu) + self.jitter.expand(self.num_inducing)
         Kuf = kernel(Xu, self.X)
@@ -70,7 +70,7 @@ class SparseGPRegression(nn.Module):
             Qffdiag = (W ** 2).sum(dim=0)
 
             if self.approx == "FITC":
-                D += Kffdiag - Qffdiag
+                D = D + Kffdiag - Qffdiag
             else:  # approx = "VFE"
                 trace_term += (Kffdiag - Qffdiag).sum() / self.noise
 
@@ -85,7 +85,7 @@ class SparseGPRegression(nn.Module):
         for p in self.kernel_prior:
             p_MAP_name = pyro.param_with_module_name(self.kernel.name, p) + "_MAP"
             # init params by their prior means
-            p_MAP = pyro.param(p_MAP_name, Variable(self.kernel_prior[p].analytic_mean().data.clone(),
+            p_MAP = pyro.param(p_MAP_name, Variable(self.kernel_prior[p].torch_dist.mean.data.clone(),
                                                     requires_grad=True))
             kernel_guide_prior[p] = dist.Delta(p_MAP)
 
@@ -96,16 +96,16 @@ class SparseGPRegression(nn.Module):
         for p in self.Xu_prior:
             p_MAP_name = pyro.param_with_module_name(self.Xu.name, p) + "_MAP"
             # init params by their prior means
-            p_MAP = pyro.param(p_MAP_name, Variable(self.Xu_prior[p].analytic_mean().data.clone(),
+            p_MAP = pyro.param(p_MAP_name, Variable(self.Xu_prior[p].torch_dist.mean.data.clone(),
                                                     requires_grad=True))
             Xu_guide_prior[p] = dist.Delta(p_MAP)
 
         Xu_fn = pyro.random_module(self.Xu.name, self.Xu, Xu_guide_prior)
-        Xu = Xu_fn()()
+        Xu = Xu_fn().inducing_points
 
         return kernel, Xu
 
-    def forward(self, Xnew, full_cov=False, noiseless=True):
+    def forward(self, Xnew, full_cov=False, noiseless=False):
         """
         Computes the parameters of `p(y|Xnew) ~ N(loc, cov)`
         w.r.t. the new input Xnew.
@@ -142,7 +142,7 @@ class SparseGPRegression(nn.Module):
         if self.approx == "FITC":
             Kffdiag = kernel(self.X, diag=True)
             Qffdiag = (W ** 2).sum(dim=0)
-            D += Kffdiag - Qffdiag
+            D = D + Kffdiag - Qffdiag
 
         W_Dinv = W / D
         Id = Variable(W.data.new([1])).expand(self.num_inducing).diag()

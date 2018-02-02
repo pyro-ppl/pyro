@@ -47,7 +47,7 @@ class GPRegression(nn.Module):
         for p in self.kernel_prior:
             p_MAP_name = pyro.param_with_module_name(self.kernel.name, p) + "_MAP"
             # init params by their prior means
-            p_MAP = pyro.param(p_MAP_name, Variable(self.kernel_prior[p].analytic_mean().data.clone(),
+            p_MAP = pyro.param(p_MAP_name, Variable(self.kernel_prior[p].torch_dist.mean.data.clone(),
                                                     requires_grad=True))
             kernel_guide_prior[p] = dist.Delta(p_MAP)
 
@@ -56,7 +56,7 @@ class GPRegression(nn.Module):
 
         return kernel
 
-    def forward(self, Xnew, full_cov=False, noiseless=True):
+    def forward(self, Xnew, full_cov=False, noiseless=False):
         """
         Compute the parameters of `p(y|Xnew) ~ N(loc, cov)`
             w.r.t. the new input Xnew.
@@ -73,9 +73,9 @@ class GPRegression(nn.Module):
         kernel = self.guide()
         Kff = kernel(self.X)
         if noiseless:
-            Kff += self.jitter.expand(self.num_data).diag()
+            Kff = Kff + self.jitter.expand(self.num_data).diag()
         else:
-            Kff += self.noise.expand(self.num_data).diag()
+            Kff = Kff + self.noise.expand(self.num_data).diag()
         Kfs = kernel(self.X, Xnew)
         Lff = Kff.potrf(upper=False)
 

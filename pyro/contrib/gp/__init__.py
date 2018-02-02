@@ -7,8 +7,9 @@ from torch.nn import Parameter
 class InducingPoints(nn.Module):
 
     def __init__(self, Xu, name="inducing_points"):
-        super(self, InducingPoints).__init__()
+        super(InducingPoints, self).__init__()
         self.inducing_points = Parameter(Xu)
+        self.name = name
 
     def forward(self):
         return self.inducing_points
