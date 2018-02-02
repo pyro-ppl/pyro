@@ -1,20 +1,13 @@
 TransformedDistribution
 -----------------------
-.. autoclass:: pyro.distributions.transformed_distribution.TransformedDistribution
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-Bijector
---------
-.. autoclass:: pyro.distributions.transformed_distribution.Bijector
+.. autoclass:: pyro.distributions.torch.transformed_distribution.TransformedDistribution
     :members:
     :undoc-members:
     :show-inheritance:
 
 InverseAutoRegressiveFlow
 -------------------------
-.. autoclass:: pyro.distributions.transformed_distribution.InverseAutoregressiveFlow
+.. autoclass:: pyro.distributions.torch.iaf.InverseAutoregressiveFlow
     :members:
     :undoc-members:
     :show-inheritance:

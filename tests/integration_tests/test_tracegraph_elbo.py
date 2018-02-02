@@ -14,7 +14,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
 from pyro.distributions.testing import fakes
-from pyro.distributions.transformed_distribution import TransformedDistribution
+from pyro.distributions import TransformedDistribution
 from pyro.infer import SVI
 from pyro.util import ng_ones, ng_zeros
 from tests.common import assert_equal

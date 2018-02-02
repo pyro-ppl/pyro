@@ -7,8 +7,8 @@ from pyro.util import ng_ones, ng_zeros
 def test_categorical_shape():
     ps = ng_ones(3, 2) / 2
     d = dist.Categorical(ps)
-    assert d.batch_shape() == (3,)
-    assert d.event_shape() == ()
+    assert d.batch_shape == (3,)
+    assert d.event_shape == ()
     assert d.shape() == (3,)
     assert d.sample().size() == d.shape()
 
@@ -16,8 +16,8 @@ def test_categorical_shape():
 def test_one_hot_categorical_shape():
     ps = ng_ones(3, 2) / 2
     d = dist.OneHotCategorical(ps)
-    assert d.batch_shape() == (3,)
-    assert d.event_shape() == (2,)
+    assert d.batch_shape == (3,)
+    assert d.event_shape == (2,)
     assert d.shape() == (3, 2)
     assert d.sample().size() == d.shape()
 
@@ -26,8 +26,8 @@ def test_normal_shape():
     mu = ng_zeros(3, 2)
     sigma = ng_ones(3, 2)
     d = dist.Normal(mu, sigma)
-    assert d.batch_shape() == (3, 2)
-    assert d.event_shape() == ()
+    assert d.batch_shape == (3, 2)
+    assert d.event_shape == ()
     assert d.shape() == (3, 2)
     assert d.sample().size() == d.shape()
 
@@ -35,8 +35,8 @@ def test_normal_shape():
 def test_dirichlet_shape():
     alpha = ng_ones(3, 2) / 2
     d = dist.Dirichlet(alpha)
-    assert d.batch_shape() == (3,)
-    assert d.event_shape() == (2,)
+    assert d.batch_shape == (3,)
+    assert d.event_shape == (2,)
     assert d.shape() == (3, 2)
     assert d.sample().size() == d.shape()
 

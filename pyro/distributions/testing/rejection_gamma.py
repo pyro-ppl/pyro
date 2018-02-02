@@ -67,7 +67,7 @@ class RejectionGamma(Gamma):
         self._standard_gamma = RejectionStandardGamma(alpha)
         self.beta = beta
 
-    def sample(self):
+    def sample(self, sample_shape=torch.Size()):
         return self._standard_gamma.sample() / self.beta
 
     def log_prob(self, x):
@@ -97,7 +97,9 @@ class ShapeAugmentedGamma(Gamma):
         self._rejection_gamma = RejectionGamma(alpha + boost, beta)
         self._unboost_x_cache = None, None
 
-    def sample(self):
+    def sample(self, sample_shape=torch.Size()):
+        if sample_shape:
+            raise ValueError("Arbitrary `sample_shape` not supported by Distribution class.")
         x = self._rejection_gamma.sample()
         boosted_x = x.clone()
         for i in range(self._boost):
