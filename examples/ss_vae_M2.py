@@ -188,11 +188,8 @@ class SSVAE(nn.Module):
             # similar to the NIPS 14 paper (Kingma et al).
             if ys is not None:
                 alpha = self.encoder_y.forward(xs)
-                pyro.sample("y_aux",
-                            dist.one_hot_categorical,
-                            alpha,
-                            log_pdf_mask=self.aux_loss_multiplier,
-                            obs=ys)
+                with pyro.poutine.scale(None, self.aux_loss_multiplier):
+                    pyro.sample("y_aux", dist.one_hot_categorical, alpha, obs=ys)
 
     def guide_classify(self, xs, ys=None):
         """

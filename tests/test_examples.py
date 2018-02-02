@@ -30,9 +30,14 @@ def discover_examples():
                 # Either this is not a main file, or we don't know how to run it cheaply.
                 continue
             example = os.path.relpath(path, EXAMPLES_DIR)
+            # TODO: May be worth whitelisting the set of arguments to test
+            # for each example.
             CPU_EXAMPLES.append((example, args))
-            if '--enum-discrete' in text:
-                CPU_EXAMPLES.append((example, args + ['--enum-discrete']))
+            for flag in ['--enum-discrete', '--aux-loss']:
+                if flag in text:
+                    CPU_EXAMPLES.append((example, args + [flag]))
+            if '--num-iafs' in text:
+                CPU_EXAMPLES.append((example, args + ['--num-iafs=1']))
             if '--cuda' in text:
                 CUDA_EXAMPLES.append((example, args + ['--cuda']))
     CPU_EXAMPLES.sort()
