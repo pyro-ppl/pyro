@@ -54,8 +54,6 @@ def make_ids(examples):
 @pytest.mark.stage("test_examples")
 @pytest.mark.parametrize('example,args', CPU_EXAMPLES, ids=make_ids(CPU_EXAMPLES))
 def test_cpu(example, args):
-    if 'dmm' in example:
-        pytest.skip(msg='IAF does not work with torch.transforms')
     example = os.path.join(EXAMPLES_DIR, example)
     check_call([sys.executable, example] + args)
 
