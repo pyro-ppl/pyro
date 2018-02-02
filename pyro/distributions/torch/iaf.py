@@ -120,4 +120,4 @@ class InverseAutoregressiveFlow(Transform):
         else:
             raise KeyError("Bijector InverseAutoregressiveFlow expected to find" +
                            "key in intermediates cache but didn't")
-        return sigma.log().sum(-1)
+        return sigma.log()

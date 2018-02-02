@@ -26,7 +26,7 @@ class InverseAutoregressiveFlowTests(TestCase):
 
         x = Variable(torch.randn(1, input_dim))
         iaf_x = iaf(x)
-        analytic_ldt = iaf.log_abs_det_jacobian(x, iaf_x).data.cpu().numpy()[0]
+        analytic_ldt = iaf.log_abs_det_jacobian(x, iaf_x).data.sum()
 
         for j in range(input_dim):
             for k in range(input_dim):
@@ -34,7 +34,7 @@ class InverseAutoregressiveFlowTests(TestCase):
                 epsilon_vector[0, j] = self.epsilon
                 iaf_x_eps = iaf(x + Variable(epsilon_vector))
                 delta = (iaf_x_eps - iaf_x) / self.epsilon
-                jacobian[j, k] = float(delta[0, k].data.cpu().numpy()[0])
+                jacobian[j, k] = float(delta[0, k].data.sum())
 
         permutation = iaf.arn.get_permutation()
         permuted_jacobian = jacobian.clone()
