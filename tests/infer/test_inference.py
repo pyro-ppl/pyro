@@ -396,12 +396,12 @@ class LogNormalNormalTests(TestCase):
         def model():
             zero = Variable(torch.zeros(1))
             one = Variable(torch.ones(1))
-            mu_latent = pyro.sample("mu_latent", dist.normal,
-                                    self.mu0, torch.pow(self.tau0, -0.5))
+            mu_latent = pyro.sample("mu_latent",
+                                    dist.Normal(self.mu0, torch.pow(self.tau0, -0.5)))
             bijector = AffineExp(torch.pow(self.tau, -0.5), mu_latent)
-            x_dist = TransformedDistribution(dist.normal, bijector)
-            pyro.observe("obs0", x_dist, self.data[0], zero, one)
-            pyro.observe("obs1", x_dist, self.data[1], zero, one)
+            x_dist = TransformedDistribution(dist.Normal(zero, one), bijector)
+            pyro.observe("obs0", x_dist, self.data[0])
+            pyro.observe("obs1", x_dist, self.data[1])
             return mu_latent
 
         def guide():
