@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import torch
 from torch.autograd import Variable
 import torch.nn as nn
 
@@ -128,7 +129,7 @@ class SparseGPRegression(nn.Module):
         Luu = Kuu.potrf(upper=False)
 
         # Ref: "A Unifying View of Sparse Approximate Gaussian Process Regression"
-        #    by Quiñonero-Candela, J., & Rasmussen, C. E. (2005).
+        #    by Quinonero-Candela, J., & Rasmussen, C. E. (2005).
         #
         # loc = Ksu @ S @ Kuf @ inv(D) @ y
         # cov = Kss - Ksu @ inv(Kuu) @ Kus + Ksu @ S @ Kus
@@ -145,7 +146,8 @@ class SparseGPRegression(nn.Module):
             D = D + Kffdiag - Qffdiag
 
         W_Dinv = W / D
-        Id = Variable(W.data.new([1])).expand(self.num_inducing).diag()
+        M = W.size(0)
+        Id = torch.eye(M, M, out=Variable(W.data.new(M, M)))
         K = Id + W_Dinv.matmul(W.t())
         L = K.potrf(upper=False)
 

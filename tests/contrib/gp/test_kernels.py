@@ -24,5 +24,5 @@ def test_Kdiag():
     X = Variable(torch.Tensor([[1, 2, 1], [2, 3, 3]]))
     K = kernel(X)
     Kdiag = kernel(X, diag=True)
-    
+
     assert_equal(K.diag(), Kdiag)
