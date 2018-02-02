@@ -15,7 +15,7 @@ Beta
 
 Binomial
 ---------
-.. automodule:: pyro.distributions.binomial
+.. automodule:: pyro.distributions.torch.binomial
     :members:
     :undoc-members:
     :show-inheritance:
@@ -92,14 +92,14 @@ OneHotCategorical
 
 Poisson
 --------
-.. automodule:: pyro.distributions.poisson
+.. automodule:: pyro.distributions.torch.poisson
     :members:
     :undoc-members:
     :show-inheritance:
 
 SparseMultivariateNormal
 ------------------------
-.. automodule:: pyro.distributions.sparse_multivariate_normal
+.. automodule:: pyro.distributions.torch.sparse_multivariate_normal
     :members:
     :undoc-members:
     :show-inheritance:

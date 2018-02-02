@@ -18,7 +18,6 @@ from pyro.distributions.delta import Delta
 from pyro.distributions.distribution import Distribution  # noqa: F401
 from pyro.distributions.random_primitive import RandomPrimitive
 from pyro.distributions.rejector import Rejector  # noqa: F401
-from pyro.distributions.sparse_multivariate_normal import SparseMultivariateNormal
 
 # distribution classes with working torch versions in torch.distributions
 from pyro.distributions.torch.bernoulli import Bernoulli
@@ -35,6 +34,7 @@ from pyro.distributions.torch.multivariate_normal import MultivariateNormal
 from pyro.distributions.torch.normal import Normal
 from pyro.distributions.torch.one_hot_categorical import OneHotCategorical
 from pyro.distributions.torch.poisson import Poisson
+from pyro.distributions.torch.sparse_multivariate_normal import SparseMultivariateNormal
 from pyro.distributions.torch.uniform import Uniform
 
 # function aliases
