@@ -55,19 +55,21 @@ class InverseAutoregressiveFlow(Transform):
         super(InverseAutoregressiveFlow, self).__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
-        self.arn = AutoRegressiveNN(input_dim, hidden_dim, output_dim_multiplier=2, permutation=permutation)
-        self.sigmoid = nn.Sigmoid()
-        self.sigmoid_bias = Variable(torch.Tensor([sigmoid_bias]))
+        self.module = nn.Module()
+        self.module.arn = AutoRegressiveNN(input_dim, hidden_dim, output_dim_multiplier=2, permutation=permutation)
+        self.module.sigmoid = nn.Sigmoid()
+        self.module.sigmoid_bias = Variable(torch.Tensor([sigmoid_bias]))
         self._intermediates_cache = {}
         self.add_inverse_to_cache = True
 
-    def get_arn(self):
+    @property
+    def arn(self):
         """
         :rtype: pyro.nn.AutoRegressiveNN
 
         Return the AutoRegressiveNN associated with the InverseAutoregressiveFlow
         """
-        return self.arn
+        return self.module.arn
 
     def _call(self, x):
         """
@@ -77,8 +79,8 @@ class InverseAutoregressiveFlow(Transform):
         Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
         sample from the base distribution (or the output of a previous flow)
         """
-        hidden = self.arn(x)
-        sigma = self.sigmoid(hidden[:, 0:self.input_dim] + self.sigmoid_bias.type_as(hidden))
+        hidden = self.module.arn(x)
+        sigma = self.module.sigmoid(hidden[:, 0:self.input_dim] + self.module.sigmoid_bias.type_as(hidden))
         mean = hidden[:, self.input_dim:]
         y = sigma * x + (Variable(torch.ones(sigma.size())).type_as(sigma) - sigma) * mean
         self._add_intermediate_to_cache(sigma, y, 'sigma')
@@ -97,7 +99,7 @@ class InverseAutoregressiveFlow(Transform):
             x = self._intermediates_cache.pop((y, 'x'))
             return x
         else:
-            raise KeyError("Bijector InverseAutoregressiveFlow expected to find" +
+            raise KeyError("InverseAutoregressiveFlow expected to find "
                            "key in intermediates cache but didn't")
 
     def _add_intermediate_to_cache(self, intermediate, y, name):
