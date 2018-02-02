@@ -7,6 +7,7 @@ from torch.autograd import Variable
 import pyro.distributions as dist
 import pyro.poutine as poutine
 import pyro.util as util
+from pyro.distributions import RandomPrimitive
 
 
 def _eq(x, y):
@@ -78,6 +79,8 @@ class Histogram(dist.Distribution):
         d, values = self._dist_and_values(*args, **kwargs)
         ix = d.sample().data[0]
         return values[ix]
+
+    __call__ = sample
 
     def log_pdf(self, val, *args, **kwargs):
         d, values = self._dist_and_values(*args, **kwargs)
