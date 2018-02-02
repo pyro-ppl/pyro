@@ -55,7 +55,10 @@ class TransformedDistribution(Distribution):
             next_input = y
         return next_input
 
-    def batch_shape(self, x=None, *args, **kwargs):
+    def shape(self, *args, **kwargs):
+        return self.base_dist.shape(*args, **kwargs)
+
+    def batch_shape(self, *args, **kwargs):
         return self.base_dist.batch_shape(*args, **kwargs)
 
     def event_shape(self, *args, **kwargs):
@@ -242,4 +245,4 @@ class InverseAutoregressiveFlow(Bijector):
         log_sigma = torch.log(sigma)
         if 'log_pdf_mask' in kwargs:
             log_sigma = log_sigma * kwargs['log_pdf_mask']
-        return log_sigma.sum(-1)
+        return log_sigma

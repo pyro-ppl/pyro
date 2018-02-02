@@ -36,13 +36,19 @@ jobs:
               - make lint
               #- make scrub;
               #  git diff-index --quiet HEAD
-        - stage: unit test
+        - stage: auxiliary modules
           python: 2.7
           env: STAGE=docs
-          script: 
+          script:
               - pip install -r docs/requirements.txt
               - make docs
         - python: 2.7
+          env: STAGE=profiler
+          script:
+              - pip install -e .[profile]
+              - python -m profiler.distributions
+        - stage: unit test
+          python: 2.7
           env: STAGE=unit
           script: pytest -vs --cov=pyro --stage unit --durations 20
         - python: 2.7
