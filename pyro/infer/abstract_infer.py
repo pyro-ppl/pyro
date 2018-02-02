@@ -79,6 +79,8 @@ class Histogram(dist.Distribution):
         ix = d.sample().data[0]
         return values[ix]
 
+    __call__ = sample
+
     def log_pdf(self, val, *args, **kwargs):
         d, values = self._dist_and_values(*args, **kwargs)
         ix = _index(values, val)

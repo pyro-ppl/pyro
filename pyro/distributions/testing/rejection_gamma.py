@@ -68,6 +68,8 @@ class RejectionGamma(Gamma):
         self.beta = beta
 
     def sample(self, sample_shape=torch.Size()):
+        if sample_shape:
+            raise ValueError("Arbitrary `sample_shape` not supported by Distribution class.")
         return self._standard_gamma.sample() / self.beta
 
     def log_prob(self, x):
