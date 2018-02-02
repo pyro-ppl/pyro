@@ -55,12 +55,13 @@ def test_batch_log_prob_shape(dist):
         with xfail_if_not_implemented():
             # Get log_prob shape after broadcasting.
             expected_shape = _log_prob_shape(d, x.size())
-            log_p_func = d.log_prob(x)
-            log_p_obj = dist.pyro_dist_class(**dist_params).log_prob(x)
+            log_p_obj = d.log_prob(x)
+            assert log_p_obj.size() == expected_shape
             # assert that the functional and object forms return
             # the same log_prob values.
-            assert_equal(log_p_func.size(), log_p_obj.size())
-            assert log_p_func.size() == expected_shape
+            if dist.pyro_dist is not None:
+                log_p_func = dist.pyro_dist.log_prob(x, **dist_params)
+                assert_equal(log_p_func, log_p_obj)
 
 
 def test_log_prob_mask(dist):
