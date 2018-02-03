@@ -12,8 +12,8 @@ class Rejector(Distribution):
     Rejection sampled distribution given an acceptance rate function.
 
     :param Distribution propose: A proposal distribution that samples batched
-        propsals via `propose()`. :meth:`sample` supports a ``sample_shape``
-        arg only if `propose()` supports a `sample_shape` arg.
+        propsals via ``propose()``. :meth:`sample` supports a ``sample_shape``
+        arg only if ``propose()`` supports a ``sample_shape`` arg.
     :param callable log_prob_accept: A callable that inputs a batch of
         proposals and returns a batch of log acceptance probabilities.
     :param log_scale: Total log probability of acceptance.
