@@ -178,6 +178,7 @@ def test_logistic_regression():
     assert_equal(rmse(true_coefs, posterior_mean).data[0], 0.0, prec=0.05)
 
 
+@pytest.mark.xfail(reason="Example gives biased mean estimate.")
 def test_bernoulli_beta():
     def model(data):
         alpha = pyro.param('alpha', Variable(torch.Tensor([0.5, 0.5]), requires_grad=True))
@@ -194,4 +195,4 @@ def test_bernoulli_beta():
     for trace, _ in mcmc_run._traces(data):
         posterior.append(trace.nodes['p_latent']['value'])
     posterior_mean = torch.mean(torch.stack(posterior), 0)
-    print(posterior_mean)
+    assert_equal(posterior_mean.data, true_probs.data, prec=0.05)
