@@ -26,9 +26,11 @@ class Delta(Distribution):
             self.v = Variable(self.v)
         super(Delta, self).__init__(*args, **kwargs)
 
+    @property
     def batch_shape(self):
         return self.v.size()
 
+    @property
     def event_shape(self):
         return torch.Size()
 

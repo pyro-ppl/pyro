@@ -117,7 +117,7 @@ class _Subsample(Distribution):
         self.subsample_size = subsample_size
         self.use_cuda = torch.Tensor.is_cuda if use_cuda is None else use_cuda
 
-    def sample(self):
+    def sample(self, sample_shape=None):
         """
         :returns: a random subsample of `range(size)`
         :rtype: torch.autograd.Variable of torch.LongTensor
