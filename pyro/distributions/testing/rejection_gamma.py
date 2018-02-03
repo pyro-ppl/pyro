@@ -4,6 +4,8 @@ import torch
 
 from pyro.distributions.rejector import Rejector
 from pyro.distributions.score_parts import ScoreParts
+from pyro.distributions.torch.beta import Beta
+from pyro.distributions.torch.dirichlet import Dirichlet
 from pyro.distributions.torch.gamma import Gamma
 from pyro.distributions.torch.normal import Normal
 from pyro.distributions.util import copy_docs_from
@@ -117,3 +119,39 @@ class ShapeAugmentedGamma(Gamma):
         _, score_function, _ = self._rejection_gamma.score_parts(x)
         log_pdf = self.log_prob(boosted_x)
         return ScoreParts(log_pdf, score_function, log_pdf)
+
+
+@copy_docs_from(Dirichlet)
+class ShapeAugmentedDirichlet(Dirichlet):
+    """
+    Implementation of ``Dirichlet`` via ``ShapeAugmentedGamma``.
+
+    This naive implementation has stochastic reparameterized gradients, which
+    have higher variance than PyTorch's ``Dirichlet`` implementation.
+    """
+    def __init__(self, alpha, boost=1):
+        super(ShapeAugmentedDirichlet, self).__init__(alpha)
+        self._gamma = ShapeAugmentedGamma(alpha, torch.ones_like(alpha), boost)
+
+    def sample(self, sample_shape=torch.Size()):
+        gammas = self._gamma.sample(sample_shape)
+        return gammas / gammas.sum(-1, True)
+
+
+@copy_docs_from(Beta)
+class ShapeAugmentedBeta(Beta):
+    """
+    Implementation of ``Beta`` via ``ShapeAugmentedGamma``.
+
+    This naive implementation has stochastic reparameterized gradients, which
+    have higher variance than PyTorch's ``Beta`` implementation.
+    """
+    def __init__(self, alpha, beta, boost=1):
+        super(ShapeAugmentedBeta, self).__init__(alpha, beta)
+        alpha_beta = torch.stack([alpha, beta], -1)
+        self._gamma = ShapeAugmentedGamma(alpha_beta, torch.ones_like(alpha_beta), boost)
+
+    def sample(self, sample_shape=torch.Size()):
+        gammas = self._gamma.sample(sample_shape)
+        probs = gammas / gammas.sum(-1, True)
+        return probs[..., 0]
