@@ -1,9 +1,10 @@
 from __future__ import absolute_import, division, print_function
 
 from torch.autograd import Variable, grad
+from torch.distributions.transforms import identity_transform
 
 
-def velocity_verlet(z, r, potential_fn, step_size, num_steps):
+def unconstrained_velocity_verlet(z, r, potential_fn, step_size, num_steps):
     """
     Second order symplectic integrator that uses the velocity verlet algorithm.
 
@@ -44,3 +45,20 @@ def _grad(potential_fn, z):
     grads = grad(potential_fn(z), z_nodes)
     grads = [v.data for v in grads]
     return dict(zip(z_keys, grads))
+
+
+def velocity_verlet(z, r, potential_fn, step_size, num_steps, transforms={}):
+    u = {transforms.get(name, identity_transform)(z_name) for name, z_name in z.items()}
+
+    def constrained_potential_fn(u):
+        z = {transforms.get(name, identity_transform).inv(u_name) for name, u_name in u.items()}
+        result = potential_fn(z)
+        for site_name, transform in transforms.items():
+            x = z[site_name]
+            y = transform(x)
+            result += transform.log_abs_det_jacobian(x, y).sum()
+        return result
+
+    u_next, r_next = velocity_verlet(u, r, potential_fn, step_size, num_steps)
+    z_next = {transforms.get(name, identity_transform).inv(u_name) for name, u_name in u_next.items()}
+    return z_next, r_next

@@ -19,6 +19,10 @@ class TorchDistribution(Distribution):
         self.log_pdf_mask = log_pdf_mask
         self.extra_event_dims = extra_event_dims
 
+    @property
+    def support(self):
+        return self.torch_dist.support
+
     def batch_shape(self):
         if self.extra_event_dims == 0:
             return self.torch_dist.batch_shape
