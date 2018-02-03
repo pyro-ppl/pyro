@@ -12,7 +12,7 @@ from pyro.distributions import (Bernoulli, Beta, Binomial, Categorical, Cauchy, 
                                 SparseMultivariateNormal, Uniform)
 from pyro.distributions.testing.naive_dirichlet import NaiveBeta, NaiveDirichlet
 from pyro.distributions.testing.rejection_exponential import RejectionExponential
-from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
+from pyro.distributions.testing.rejection_gamma import ShapeAugmentedBeta, ShapeAugmentedDirichlet, ShapeAugmentedGamma
 from tests.distributions.dist_fixture import Fixture
 
 continuous_dists = [
@@ -99,6 +99,17 @@ continuous_dists = [
                  'test_data': [[0.4], [0.6]]}
             ],
             scipy_arg_fn=lambda alpha, beta: ((np.array(alpha), np.array(beta)), {})),
+    Fixture(pyro_dist=(dist.beta, ShapeAugmentedBeta),
+            scipy_dist=sp.beta,
+            examples=[
+                {'alpha': [2.4], 'beta': [3.6],
+                 'test_data': [0.4]},
+                {'alpha': [[2.4, 2.4], [3.6, 3.6]], 'beta': [[2.5, 2.5], [2.5, 2.5]],
+                 'test_data': [[[5.5, 4.4], [5.5, 4.4]]]},
+                {'alpha': [[2.4], [3.7]], 'beta': [[3.6], [2.5]],
+                 'test_data': [[0.4], [0.6]]}
+            ],
+            scipy_arg_fn=lambda alpha, beta: ((np.array(alpha), np.array(beta)), {})),
     Fixture(pyro_dist=(dist.lognormal, LogNormal),
             scipy_dist=sp.lognorm,
             examples=[
@@ -160,6 +171,17 @@ continuous_dists = [
             ],
             scipy_arg_fn=lambda alpha: ((alpha,), {})),
     Fixture(pyro_dist=(dist.dirichlet, NaiveDirichlet),
+            scipy_dist=sp.dirichlet,
+            examples=[
+                {'alpha': [2.4, 3, 6],
+                 'test_data': [0.2, 0.45, 0.35]},
+                {'alpha': [2.4, 3, 6],
+                 'test_data': [[0.2, 0.45, 0.35], [0.2, 0.45, 0.35]]},
+                {'alpha': [[2.4, 3, 6], [3.2, 1.2, 0.4]],
+                 'test_data': [[0.2, 0.45, 0.35], [0.3, 0.4, 0.3]]}
+            ],
+            scipy_arg_fn=lambda alpha: ((alpha,), {})),
+    Fixture(pyro_dist=(dist.dirichlet, ShapeAugmentedDirichlet),
             scipy_dist=sp.dirichlet,
             examples=[
                 {'alpha': [2.4, 3, 6],
