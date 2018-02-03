@@ -50,7 +50,7 @@ def _grad(potential_fn, z):
 def velocity_verlet(z, r, potential_fn, step_size, num_steps, transforms={}):
     u = {transforms.get(name, identity_transform)(z_name) for name, z_name in z.items()}
 
-    def constrained_potential_fn(u):
+    def unconstrained_potential_fn(u):
         z = {transforms.get(name, identity_transform).inv(u_name) for name, u_name in u.items()}
         result = potential_fn(z)
         for site_name, transform in transforms.items():
@@ -59,6 +59,6 @@ def velocity_verlet(z, r, potential_fn, step_size, num_steps, transforms={}):
             result += transform.log_abs_det_jacobian(x, y).sum()
         return result
 
-    u_next, r_next = velocity_verlet(u, r, potential_fn, step_size, num_steps)
+    u_next, r_next = unconstrained_velocity_verlet(u, r, unconstrained_potential_fn, step_size, num_steps)
     z_next = {transforms.get(name, identity_transform).inv(u_name) for name, u_name in u_next.items()}
     return z_next, r_next
