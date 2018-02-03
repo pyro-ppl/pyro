@@ -53,7 +53,7 @@ def velocity_verlet(z, r, potential_fn, step_size, num_steps, transforms={}):
     def unconstrained_potential_fn(u):
         z = {transforms.get(name, identity_transform).inv(u_name) for name, u_name in u.items()}
         result = potential_fn(z)
-        for site_name, transform in transforms.items():
+        for name, transform in transforms.items():
             result += transform.log_abs_det_jacobian(u[name], z[name]).sum()
         return result
 
