@@ -9,6 +9,27 @@ from pyro.distributions.testing.rejection_exponential import RejectionExponentia
 from pyro.distributions.testing.rejection_gamma import RejectionGamma, RejectionStandardGamma, ShapeAugmentedGamma
 from tests.common import assert_equal
 
+SIZES = list(map(torch.Size, [[], [1], [2], [3], [1, 1], [1, 2], [2, 3, 4]]))
+
+
+@pytest.mark.parametrize('sample_shape', SIZES)
+@pytest.mark.parametrize('batch_shape', filter(bool, SIZES))
+def test_rejection_standard_gamma_sample_shape(sample_shape, batch_shape):
+    alphas = Variable(torch.ones(batch_shape))
+    dist = RejectionStandardGamma(alphas)
+    x = dist.sample(sample_shape)
+    assert x.shape == sample_shape + batch_shape
+
+
+@pytest.mark.parametrize('sample_shape', SIZES)
+@pytest.mark.parametrize('batch_shape', filter(bool, SIZES))
+def test_rejection_exponential_sample_shape(sample_shape, batch_shape):
+    rates = Variable(torch.ones(batch_shape))
+    factors = Variable(torch.ones(batch_shape)) * 0.5
+    dist = RejectionExponential(rates, factors)
+    x = dist.sample(sample_shape)
+    assert x.shape == sample_shape + batch_shape
+
 
 def compute_elbo_grad(model, guide, variables):
     x = guide.sample()

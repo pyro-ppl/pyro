@@ -28,9 +28,9 @@ class RejectionStandardGamma(Rejector):
         log_scale = self.propose_log_prob(x) + self.log_prob_accept(x) - self.log_prob(x)
         super(RejectionStandardGamma, self).__init__(self.propose, self.log_prob_accept, log_scale)
 
-    def propose(self):
+    def propose(self, sample_shape=torch.Size()):
         # Marsaglia & Tsang's x == Naesseth's epsilon
-        x = self.alpha.new(self.alpha.shape).normal_()
+        x = self.alpha.new(sample_shape + self.alpha.shape).normal_()
         y = 1.0 + self._c * x
         v = y * y * y
         return (self._d * v).clamp_(1e-30, 1e30)
@@ -68,9 +68,7 @@ class RejectionGamma(Gamma):
         self.beta = beta
 
     def sample(self, sample_shape=torch.Size()):
-        if sample_shape:
-            raise ValueError("Arbitrary `sample_shape` not supported by RejectionGamma class.")
-        return self._standard_gamma.sample() / self.beta
+        return self._standard_gamma.sample(sample_shape) / self.beta
 
     def log_prob(self, x):
         return self._standard_gamma.log_prob(x * self.beta) + torch.log(self.beta)
@@ -100,9 +98,7 @@ class ShapeAugmentedGamma(Gamma):
         self._unboost_x_cache = None, None
 
     def sample(self, sample_shape=torch.Size()):
-        if sample_shape:
-            raise ValueError("Arbitrary `sample_shape` not supported by ShapeAugmentedGamma class.")
-        x = self._rejection_gamma.sample()
+        x = self._rejection_gamma.sample(sample_shape)
         boosted_x = x.clone()
         for i in range(self._boost):
             boosted_x *= (1 - x.new(x.shape).uniform_()) ** (1 / (i + self.alpha))
