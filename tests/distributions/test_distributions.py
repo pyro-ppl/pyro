@@ -13,9 +13,9 @@ def _unwrap_variable(x):
     return x.data.cpu().numpy()
 
 
-def _log_prob_shape(dist, x_size=torch.Size(), **dist_params):
-    event_dims = len(dist.event_shape(**dist_params))
-    expected_shape = broadcast_shape(dist.shape(**dist_params), x_size, strict=True)
+def _log_prob_shape(dist, x_size=torch.Size()):
+    event_dims = len(dist.event_shape)
+    expected_shape = broadcast_shape(dist.shape(), x_size, strict=True)
     if event_dims > 0:
         expected_shape = expected_shape[:-event_dims]
     if not expected_shape:
@@ -91,7 +91,7 @@ def test_score_errors_event_dim_mismatch(dist):
         dist_params = dist.get_dist_params(idx)
         d = dist.pyro_dist_class(**dist_params)
         test_data_wrong_dims = ng_ones(d.shape() + (1,))
-        if len(d.event_shape()) > 0:
+        if len(d.event_shape) > 0:
             if dist.get_test_distribution_name() == 'MultivariateNormal':
                 pytest.skip('MultivariateNormal does not do shape validation in log_prob.')
             if dist.get_test_distribution_name() == 'SparseMultivariateNormal':

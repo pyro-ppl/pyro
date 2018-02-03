@@ -22,8 +22,10 @@ class RejectionExponential(Rejector):
         assert result.max() <= 0, result.max()
         return result
 
+    @property
     def batch_shape(self):
         return self.rate.shape
 
+    @property
     def event_shape(self):
         return torch.Size()
