@@ -7,6 +7,7 @@ from torch.autograd import Variable, grad
 from pyro.distributions import Exponential, Gamma
 from pyro.distributions.testing.rejection_exponential import RejectionExponential
 from pyro.distributions.testing.rejection_gamma import RejectionGamma, RejectionStandardGamma, ShapeAugmentedGamma
+from pyro.distributions.testing.rejection_gamma import ShapeAugmentedBeta
 from tests.common import assert_equal
 
 
@@ -115,3 +116,21 @@ def test_shape_augmented_gamma_elbo(alpha, beta):
     scale = [(1 + abs(g)) for g in expected]
     assert_equal(actual[0] / scale[0], expected[0] / scale[0], prec=0.05, msg='bad grad for alpha')
     assert_equal(actual[1] / scale[1], expected[1] / scale[1], prec=0.05, msg='bad grad for beta')
+
+@pytest.mark.parametrize('alpha', [0.5, 1.0, 4.0])
+@pytest.mark.parametrize('beta', [0.5, 1.0, 4.0])
+def test_shape_augmented_beta(alpha, beta):
+    num_samples = 10000
+    alphas = Variable(torch.Tensor([alpha]).expand(num_samples, 1), requires_grad=True)
+    betas = Variable(torch.Tensor([beta]).expand(num_samples, 1), requires_grad=True)
+    dist = ShapeAugmentedBeta(alphas, betas)  # implemented using Rejector
+    z = dist.sample()
+    cost = z.sum()
+    (cost + cost.detach() * dist.score_parts(z)[1]).backward()
+    mean_alpha_grad = alphas.grad.data.mean()
+    mean_beta_grad = betas.grad.data.mean()
+    tot = alpha + beta
+    expected_alpha_grad = beta / tot ** 2
+    expected_beta_grad = -alpha / tot ** 2
+    assert_equal(mean_alpha_grad, expected_alpha_grad, prec=0.01, msg='bad grad for alpha')
+    assert_equal(mean_beta_grad, expected_beta_grad, prec=0.01, msg='bad grad for beta')
