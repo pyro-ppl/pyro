@@ -176,3 +176,22 @@ def test_logistic_regression():
         posterior.append(trace.nodes['beta']['value'])
     posterior_mean = torch.mean(torch.stack(posterior), 0)
     assert_equal(rmse(true_coefs, posterior_mean).data[0], 0.0, prec=0.05)
+
+
+def test_bernoulli_beta():
+    def model(data):
+        alpha = pyro.param('alpha', Variable(torch.Tensor([0.5, 0.5]), requires_grad=True))
+        beta = pyro.param('beta', Variable(torch.Tensor([0.5, 0.5]), requires_grad=True))
+        p_latent = pyro.sample("p_latent", dist.Beta(alpha, beta))
+        pyro.observe("obs", dist.bernoulli, data, p_latent)
+        return p_latent
+
+    hmc_kernel = HMC(model, step_size=0.07, num_steps=3)
+    mcmc_run = MCMC(hmc_kernel, num_samples=1500, warmup_steps=200)
+    posterior = []
+    true_probs = Variable(torch.Tensor([0.9, 0.1]))
+    data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((100,))))
+    for trace, _ in mcmc_run._traces(data):
+        posterior.append(trace.nodes['p_latent']['value'])
+    posterior_mean = torch.mean(torch.stack(posterior), 0)
+    print(posterior_mean)
