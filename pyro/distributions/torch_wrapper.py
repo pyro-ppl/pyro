@@ -23,12 +23,14 @@ class TorchDistribution(Distribution):
     def support(self):
         return self.torch_dist.support
 
+    @property
     def batch_shape(self):
         if self.extra_event_dims == 0:
             return self.torch_dist.batch_shape
         batch_dims = len(self.torch_dist.batch_shape) - self.extra_event_dims
         return self.torch_dist.batch_shape[:batch_dims]
 
+    @property
     def event_shape(self):
         if self.extra_event_dims == 0:
             return self.torch_dist.event_shape

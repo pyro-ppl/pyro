@@ -72,9 +72,14 @@ class Histogram(dist.Distribution):
         raise NotImplementedError("_gen_weighted_samples is abstract method")
 
     def sample(self, *args, **kwargs):
+        sample_shape = kwargs.pop("sample_shape", None)
+        if sample_shape:
+            raise ValueError("Arbitrary `sample_shape` not supported by Histogram class.")
         d, values = self._dist_and_values(*args, **kwargs)
         ix = d.sample().data[0]
         return values[ix]
+
+    __call__ = sample
 
     def log_pdf(self, val, *args, **kwargs):
         d, values = self._dist_and_values(*args, **kwargs)
