@@ -6,19 +6,8 @@ from torch.distributions.transforms import identity_transform
 
 def unconstrained_velocity_verlet(z, r, potential_fn, step_size, num_steps):
     """
-    Second order symplectic integrator that uses the velocity verlet algorithm.
-
-    :param dict z: dictionary of sample site names and their current values
-        (type ``torch.autograd.Variable``).
-    :param dict r: dictionary of sample site names and corresponding momenta
-        (type ``torch.autograd.Variable``).
-    :param callable potential_fn: function that returns potential energy given z
-        for each sample site. The negative gradient of the function with respect
-        to ``z`` determines the rate of change of the corresponding sites'
-        momenta ``r``.
-    :param float step_size: step size for each time step iteration.
-    :param int num_steps: number of discrete time steps over which to integrate.
-    :return tuple (z_next, r_next): final position and momenta, having same types as (z, r).
+    Velocity verlet integrator for the case where all sample sites are unconstrained.
+    See :func:`~pyro.ops.integrator.velocity_verlet`.
     """
     z_next = {key: val.data.clone() for key, val in z.items()}
     r_next = {key: val.data.clone() for key, val in r.items()}
@@ -47,8 +36,27 @@ def _grad(potential_fn, z):
     return dict(zip(z_keys, grads))
 
 
-def velocity_verlet(z, r, potential_fn, step_size, num_steps, transforms={}):
-    u = {name: transforms.get(name, identity_transform)(z_name) for name, z_name in z.items()}
+def velocity_verlet(z, r, potential_fn, step_size, num_steps, transforms=None):
+    """
+    Second order symplectic integrator that uses the velocity verlet algorithm.
+
+    :param dict z: dictionary of sample site names and their current values
+        (type ``torch.autograd.Variable``).
+    :param dict r: dictionary of sample site names and corresponding momenta
+        (type ``torch.autograd.Variable``).
+    :param callable potential_fn: function that returns potential energy given z
+        for each sample site. The negative gradient of the function with respect
+        to ``z`` determines the rate of change of the corresponding sites'
+        momenta ``r``.
+    :param float step_size: step size for each time step iteration.
+    :param int num_steps: number of discrete time steps over which to integrate.
+    :param dict transforms: Optional dictionary that specifies a transform
+        for a sample site with constrained support to unconstrained space. The
+        transform should be invertible, and implement `log_abs_det_jacobian`.
+    :return tuple (z_next, r_next): final position and momenta, having same types as (z, r).
+    """
+    if transforms is None:
+        return unconstrained_velocity_verlet(z, r, potential_fn, step_size=step_size, num_steps=num_steps)
 
     def unconstrained_potential_fn(u):
         z = {name: transforms.get(name, identity_transform).inv(u_name) for name, u_name in u.items()}
@@ -57,6 +65,7 @@ def velocity_verlet(z, r, potential_fn, step_size, num_steps, transforms={}):
             result += transform.log_abs_det_jacobian(z[name], u[name]).sum()
         return result
 
+    u = {name: transforms.get(name, identity_transform)(z_name) for name, z_name in z.items()}
     u_next, r_next = unconstrained_velocity_verlet(u, r, unconstrained_potential_fn, step_size, num_steps)
     z_next = {name: transforms.get(name, identity_transform).inv(u_name) for name, u_name in u_next.items()}
     return z_next, r_next

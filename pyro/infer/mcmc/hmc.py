@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import numpy as np
 import torch
-from torch.distributions import biject_to
+from torch.distributions import biject_to, constraints
 
 import pyro
 import pyro.distributions as dist
@@ -77,8 +77,8 @@ class HMC(TraceKernel):
             r_mu = torch_zeros_like(node['value'])
             r_sigma = torch_ones_like(node['value'])
             self._r_dist[name] = dist.Normal(mu=r_mu, sigma=r_sigma)
-        for name, node in self._prototype_trace.iter_stochastic_nodes():
-            self._transforms[name] = biject_to(node['fn'].support).inv
+            if node['fn'].support is not constraints.real:
+                self._transforms[name] = biject_to(node['fn'].support).inv
         prototype_trace_log_pdf = self._prototype_trace.log_pdf().data[0]
         if np.isnan(prototype_trace_log_pdf) or np.isinf(prototype_trace_log_pdf):
             raise ValueError('Model specification incorrect - trace log pdf is NaN, Inf or 0.')
@@ -89,7 +89,10 @@ class HMC(TraceKernel):
     def sample(self, trace):
         z = {name: node['value'] for name, node in trace.iter_stochastic_nodes()}
         r = {name: pyro.sample('r_{}_t={}'.format(name, self._t), self._r_dist[name]) for name in z}
-        z_new, r_new = velocity_verlet(z, r, self._potential_energy, self.step_size, self.num_steps,
+        z_new, r_new = velocity_verlet(z, r,
+                                       self._potential_energy,
+                                       self.step_size,
+                                       self.num_steps,
                                        self._transforms)
         # apply Metropolis correction
         energy_proposal = self._energy(z_new, r_new)
