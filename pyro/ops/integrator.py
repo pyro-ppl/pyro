@@ -36,7 +36,7 @@ def _grad(potential_fn, z):
     return dict(zip(z_keys, grads))
 
 
-def velocity_verlet(z, r, potential_fn, step_size, num_steps, transforms=None):
+def velocity_verlet(z, r, potential_fn, step_size, num_steps, transforms={}):
     """
     Second order symplectic integrator that uses the velocity verlet algorithm.
 
@@ -55,17 +55,17 @@ def velocity_verlet(z, r, potential_fn, step_size, num_steps, transforms=None):
         transform should be invertible, and implement `log_abs_det_jacobian`.
     :return tuple (z_next, r_next): final position and momenta, having same types as (z, r).
     """
-    if transforms is None:
+    if not transforms:
         return unconstrained_velocity_verlet(z, r, potential_fn, step_size=step_size, num_steps=num_steps)
 
     def unconstrained_potential_fn(u):
-        z = {name: transforms.get(name, identity_transform).inv(u_name) for name, u_name in u.items()}
+        z = {name: transforms.get(name, identity_transform).inv(value) for name, value in u.items()}
         result = potential_fn(z)
         for name, transform in transforms.items():
             result += transform.log_abs_det_jacobian(z[name], u[name]).sum()
         return result
 
-    u = {name: transforms.get(name, identity_transform)(z_name) for name, z_name in z.items()}
+    u = {name: transforms.get(name, identity_transform)(value) for name, value in z.items()}
     u_next, r_next = unconstrained_velocity_verlet(u, r, unconstrained_potential_fn, step_size, num_steps)
-    z_next = {name: transforms.get(name, identity_transform).inv(u_name) for name, u_name in u_next.items()}
+    z_next = {name: transforms.get(name, identity_transform).inv(value) for name, value in u_next.items()}
     return z_next, r_next
