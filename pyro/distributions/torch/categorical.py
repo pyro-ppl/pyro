@@ -2,35 +2,31 @@ from __future__ import absolute_import, division, print_function
 
 import torch
 
-from pyro.distributions.categorical import Categorical as _Categorical
 from pyro.distributions.torch_wrapper import TorchDistribution
 from pyro.distributions.util import copy_docs_from
 
 
-@copy_docs_from(_Categorical)
+@copy_docs_from(TorchDistribution)
 class Categorical(TorchDistribution):
+    """
+    Categorical (discrete) distribution.
+
+    Discrete distribution over elements of `vs` with :math:`P(vs[i]) \\propto ps[i]`.
+    ``.sample()`` returns an element of ``vs`` category index.
+
+    :param ps: Probabilities. These should be non-negative and normalized
+        along the rightmost axis.
+    :type ps: torch.autograd.Variable
+    :param logits: Log probability values. When exponentiated, these should
+        sum to 1 along the last axis. Either `ps` or `logits` should be
+        specified but not both.
+    :type logits: torch.autograd.Variable
+    :param vs: Optional list of values in the support.
+    :type vs: list or numpy.ndarray or torch.autograd.Variable
+    :type batch_size: int
+    """
     enumerable = True
 
     def __init__(self, ps=None, logits=None, *args, **kwargs):
         torch_dist = torch.distributions.Categorical(probs=ps, logits=logits)
-        x_shape = ps.shape[:-1] + (1,) if ps is not None \
-            else logits.shape[:-1] + (1,)
-        event_dim = 1
-        super(Categorical, self).__init__(torch_dist, x_shape, event_dim, *args, **kwargs)
-
-    def sample(self):
-        x = self.torch_dist.sample(self._sample_shape)
-        return x.view(self._sample_shape + self._x_shape)
-
-    def batch_log_pdf(self, x):
-        log_pxs = self.torch_dist.log_prob(x.squeeze(-1)).unsqueeze(-1)
-        batch_log_pdf_shape = self.batch_shape(x) + (1,)
-        batch_log_pdf = torch.sum(log_pxs, -1).contiguous().view(batch_log_pdf_shape)
-        if self.log_pdf_mask is not None:
-            batch_log_pdf = batch_log_pdf * self.log_pdf_mask
-        return batch_log_pdf
-
-    def enumerate_support(self):
-        values = self.torch_dist.enumerate_support()
-        sample_shape = (self.torch_dist.probs.shape[-1],)
-        return values.view(sample_shape + self._x_shape)
+        super(Categorical, self).__init__(torch_dist, *args, **kwargs)

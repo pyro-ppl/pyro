@@ -2,15 +2,14 @@ from __future__ import absolute_import, division, print_function
 
 import os
 import sys
-from collections import OrderedDict
 from subprocess import check_call
 
 import pytest
 
 from tests.common import EXAMPLES_DIR, requires_cuda
 
-CPU_EXAMPLES = OrderedDict()
-CUDA_EXAMPLES = OrderedDict()
+CPU_EXAMPLES = []
+CUDA_EXAMPLES = []
 
 
 def discover_examples():
@@ -31,16 +30,29 @@ def discover_examples():
                 # Either this is not a main file, or we don't know how to run it cheaply.
                 continue
             example = os.path.relpath(path, EXAMPLES_DIR)
-            CPU_EXAMPLES[example] = args
+            # TODO: May be worth whitelisting the set of arguments to test
+            # for each example.
+            CPU_EXAMPLES.append((example, args))
+            for flag in ['--enum-discrete', '--aux-loss']:
+                if flag in text:
+                    CPU_EXAMPLES.append((example, args + [flag]))
+            if '--num-iafs' in text:
+                CPU_EXAMPLES.append((example, args + ['--num-iafs=1']))
             if '--cuda' in text:
-                CUDA_EXAMPLES[example] = args + ['--cuda']
+                CUDA_EXAMPLES.append((example, args + ['--cuda']))
+    CPU_EXAMPLES.sort()
+    CUDA_EXAMPLES.sort()
 
 
 discover_examples()
 
 
+def make_ids(examples):
+    return ['{} {}'.format(example, ' '.join(args)) for example, args in examples]
+
+
 @pytest.mark.stage("test_examples")
-@pytest.mark.parametrize('example,args', CPU_EXAMPLES.items(), ids=list(CPU_EXAMPLES))
+@pytest.mark.parametrize('example,args', CPU_EXAMPLES, ids=make_ids(CPU_EXAMPLES))
 def test_cpu(example, args):
     example = os.path.join(EXAMPLES_DIR, example)
     check_call([sys.executable, example] + args)
@@ -48,7 +60,7 @@ def test_cpu(example, args):
 
 @requires_cuda
 @pytest.mark.stage("test_examples")
-@pytest.mark.parametrize('example,args', CUDA_EXAMPLES.items(), ids=list(CUDA_EXAMPLES))
+@pytest.mark.parametrize('example,args', CUDA_EXAMPLES, ids=make_ids(CUDA_EXAMPLES))
 def test_cuda(example, args):
     example = os.path.join(EXAMPLES_DIR, example)
     check_call([sys.executable, example] + args)

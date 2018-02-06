@@ -8,3 +8,4 @@ Contributed Code
    :maxdepth: 2
 
    contrib.named
+   contrib.gp

@@ -118,7 +118,7 @@ class _Subsample(Distribution):
         self.subsample_size = subsample_size
         self.use_cuda = torch.Tensor.is_cuda if use_cuda is None else use_cuda
 
-    def sample(self):
+    def sample(self, sample_shape=None):
         """
         :returns: a random subsample of `range(size)`
         :rtype: torch.autograd.Variable of torch.LongTensor
@@ -132,9 +132,9 @@ class _Subsample(Distribution):
             result = Variable(torch.randperm(self.size)[:self.subsample_size])
         return result.cuda() if self.use_cuda else result
 
-    def batch_log_pdf(self, x):
+    def log_prob(self, x):
         # This is zero so that iarange can provide an unbiased estimate of
-        # the non-subsampled batch_log_pdf.
+        # the non-subsampled log_prob.
         result = Variable(torch.zeros(1))
         return result.cuda() if self.use_cuda else result
 

@@ -4,6 +4,7 @@ import numbers
 import warnings
 
 import numpy as np
+from torch.autograd import Variable
 
 import pyro
 import pyro.poutine as poutine
@@ -12,6 +13,10 @@ from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.util import torch_backward, torch_data_sum, torch_sum
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match
+
+
+def is_identically_zero(x):
+    return isinstance(x, numbers.Number) and x == 0
 
 
 def check_enum_discrete_can_run(model_trace, guide_trace):
@@ -73,6 +78,7 @@ class Trace_ELBO(object):
                     model_trace = prune_subsample_sites(model_trace)
                     check_enum_discrete_can_run(model_trace, guide_trace)
 
+                    guide_trace.compute_score_parts()
                     log_r = model_trace.batch_log_pdf() - guide_trace.batch_log_pdf()
                     weight = scale / self.num_particles
                     yield weight, model_trace, guide_trace, log_r
@@ -85,6 +91,7 @@ class Trace_ELBO(object):
             guide_trace = prune_subsample_sites(guide_trace)
             model_trace = prune_subsample_sites(model_trace)
 
+            guide_trace.compute_score_parts()
             log_r = model_trace.log_pdf() - guide_trace.log_pdf()
             weight = 1.0 / self.num_particles
             yield weight, model_trace, guide_trace, log_r
@@ -100,7 +107,10 @@ class Trace_ELBO(object):
         for weight, model_trace, guide_trace, log_r in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = weight * 0
 
-            log_pdf = "batch_log_pdf" if (self.enum_discrete and weight.size(0) > 1) else "log_pdf"
+            if (self.enum_discrete and isinstance(weight, Variable) and weight.size(0) > 1):
+                log_pdf = "batch_log_pdf"
+            else:
+                log_pdf = "log_pdf"
             for name in model_trace.nodes.keys():
                 if model_trace.nodes[name]["type"] == "sample":
                     if model_trace.nodes[name]["is_observed"]:
@@ -136,23 +146,36 @@ class Trace_ELBO(object):
         for weight, model_trace, guide_trace, log_r in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = weight * 0
             surrogate_elbo_particle = weight * 0
+            batched = (self.enum_discrete and isinstance(weight, Variable) and weight.size(0) > 1)
             # compute elbo and surrogate elbo
-            log_pdf = "batch_log_pdf" if (self.enum_discrete and weight.size(0) > 1) else "log_pdf"
+            if (self.enum_discrete and isinstance(weight, Variable) and weight.size(0) > 1):
+                log_pdf = "batch_log_pdf"
+            else:
+                log_pdf = "log_pdf"
             for name, model_site in model_trace.nodes.items():
                 if model_site["type"] == "sample":
+                    model_log_pdf = model_site[log_pdf]
                     if model_site["is_observed"]:
-                        elbo_particle += model_site[log_pdf]
-                        surrogate_elbo_particle += model_site[log_pdf]
+                        elbo_particle += model_log_pdf
+                        surrogate_elbo_particle += model_log_pdf
                     else:
                         guide_site = guide_trace.nodes[name]
-                        lp_lq = model_site[log_pdf] - guide_site[log_pdf]
-                        elbo_particle += lp_lq
-                        if guide_site["fn"].reparameterized:
-                            surrogate_elbo_particle += lp_lq
-                        else:
-                            # XXX should the user be able to control inclusion of the -logq term below?
-                            guide_log_pdf = guide_site[log_pdf] / guide_site["scale"]  # not scaled by subsampling
-                            surrogate_elbo_particle += model_site[log_pdf] + log_r.detach() * guide_log_pdf
+                        guide_log_pdf, score_function_term, entropy_term = guide_site["score_parts"]
+
+                        if not batched:
+                            guide_log_pdf = guide_log_pdf.sum()
+                        elbo_particle += model_log_pdf - guide_log_pdf
+                        surrogate_elbo_particle += model_log_pdf
+
+                        if not is_identically_zero(entropy_term):
+                            if not batched:
+                                entropy_term = entropy_term.sum()
+                            surrogate_elbo_particle -= entropy_term
+
+                        if not is_identically_zero(score_function_term):
+                            if not batched:
+                                score_function_term = score_function_term.sum()
+                            surrogate_elbo_particle += log_r.detach() * score_function_term
 
             # drop terms of weight zero to avoid nans
             if isinstance(weight, numbers.Number):

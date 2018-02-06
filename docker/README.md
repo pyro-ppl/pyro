@@ -40,6 +40,10 @@ make notebook-gpu img=pyro-gpu-dev-3.6
 
 For help on the `make` commands available, run `make help`.
 
+**NOTE (Mac Users)**: Please increase the memory available to the Docker application
+via *Preferences --> Advanced* from 2GB (default) to at least 4GB prior to building the
+docker image (specially for building PyTorch from source).
+
 ### Running the Docker container
 
 Once the image is built, the docker container can be started via `docker run`, or 

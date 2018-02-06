@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 
 
-def copy_docs_from(source_class):
+def copy_docs_from(source_class, full_text=False):
     """
     Decorator to copy class and method docs from source to destin class.
     """
@@ -21,7 +21,24 @@ def copy_docs_from(source_class):
             source_attr = getattr(source_class, name, None)
             source_doc = getattr(source_attr, '__doc__', None)
             if source_doc and not getattr(destin_attr, '__doc__', None):
-                destin_attr.__doc__ = source_doc
+                if full_text or source_doc.startswith('See '):
+                    destin_doc = source_doc
+                else:
+                    attr_name = source_attr.fget.__name__ if isinstance(source_attr, property) \
+                        else source_attr.__name__
+                    destin_doc = 'See :meth:`{}.{}.{}`'.format(
+                        source_class.__module__, source_class.__name__, attr_name)
+                if isinstance(destin_attr, property):
+                    # Set docs for object properties.
+                    # Since __doc__ is read-only, we need to reset the property
+                    # with the updated doc.
+                    updated_property = property(destin_attr.fget,
+                                                destin_attr.fset,
+                                                destin_attr.fdel,
+                                                destin_doc)
+                    setattr(destin_class, name, updated_property)
+                else:
+                    destin_attr.__doc__ = destin_doc
         return destin_class
 
     return decorator
@@ -151,7 +168,7 @@ def torch_multinomial(input, num_samples, replacement=False):
     Does not support keyword argument `out`.
     """
     if input.is_cuda:
-        return torch_multinomial(input.cpu(), num_samples, replacement).cuda()
+        return torch.multinomial(input.cpu(), num_samples, replacement).cuda(input.get_device())
     else:
         return torch.multinomial(input, num_samples, replacement)
 
@@ -252,3 +269,18 @@ def get_clamped_probs(ps=None, logits=None, is_multidimensional=True):
     if is_multidimensional:
         ps /= ps.sum(-1, True)
     return ps
+
+
+def matrix_triangular_solve_compat(b, A, upper=True):
+    """
+    Computes the solution to the linear equation AX = b,
+    where A is a triangular matrix.
+
+    :param b: A 1D or 2D tensor of size N or N x C.
+    :param A: A 2D tensor of size N X N.
+    :param upper: A flag if A is a upper triangular matrix or not.
+    """
+    if A.requires_grad or A.is_cuda:
+        return A.inverse().matmul(b)
+    else:
+        return b.trtrs(A, upper=upper)[0].view(b.size())
