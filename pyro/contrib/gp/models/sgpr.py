@@ -13,6 +13,13 @@ class SparseGPRegression(nn.Module):
     """
     Sparse Gaussian Process Regression module.
 
+    The models implement three approximation methods:
+        Deterministic Training Conditional (DTC),
+        Fully Independent Training Conditional (FITC),
+        Variational Free Energy (VFE).
+    For an overview, see: "A unifying framework for sparse Gaussian process approximation using
+    power expectation propagation" by Bui, T. D., Yan, J., & Turner, R. E. (2016).
+
     :param torch.autograd.Variable X: A tensor of inputs.
     :param torch.autograd.Variable y: A tensor of outputs for training.
     :param pyro.contrib.gp.kernels.Kernel kernel: A Pyro kernel object.
@@ -108,13 +115,13 @@ class SparseGPRegression(nn.Module):
 
     def forward(self, Xnew, full_cov=False, noiseless=False):
         """
-        Computes the parameters of `p(y|Xnew) ~ N(loc, cov)`
+        Computes the parameters of `p(y*|Xnew) ~ N(loc, cov)`
         w.r.t. the new input Xnew.
 
         :param torch.autograd.Variable Xnew: A 2D tensor.
-        :param bool full_cov: Predict
-        :
-        :return: loc and covariance matrix of p(y|Xnew).
+        :param bool full_cov: Predict full covariance matrix or just its diagonal.
+        :param bool noiseless: Include noise in the prediction or not.
+        :return: loc and covariance matrix of p(y*|Xnew).
         :rtype: torch.autograd.Variable and torch.autograd.Variable
         """
         if Xnew.dim() == 2 and self.X.size(1) != Xnew.size(1):
@@ -129,7 +136,7 @@ class SparseGPRegression(nn.Module):
         Luu = Kuu.potrf(upper=False)
 
         # Ref: "A Unifying View of Sparse Approximate Gaussian Process Regression"
-        #    by Quinonero-Candela, J., & Rasmussen, C. E. (2005).
+        #     by Quinonero-Candela, J., & Rasmussen, C. E. (2005).
         #
         # loc = Ksu @ S @ Kuf @ inv(D) @ y
         # cov = Kss - Ksu @ inv(Kuu) @ Kus + Ksu @ S @ Kus
@@ -162,10 +169,14 @@ class SparseGPRegression(nn.Module):
         # cov = Kss - Ws.T @ Ws + Linv_Ws.T @ Linv_Ws
         if full_cov:
             Kss = kernel(Xnew)
+            if not noiseless:
+                Kss = Kss + self.noise.expand(Xnew.size(0)).diag()
             Qss = Ws.t().matmul(Ws)
             cov = Kss - Qss + Linv_Ws.t().matmul(Linv_Ws)
         else:
             Kssdiag = kernel(Xnew, diag=True)
+            if not noiseless:
+                Kssdiag = Kssdiag + self.noise.expand(Xnew.size(0))
             Qssdiag = (Ws ** 2).sum(dim=0)
             cov = Kssdiag - Qssdiag + (Linv_Ws ** 2).sum(dim=0)
 

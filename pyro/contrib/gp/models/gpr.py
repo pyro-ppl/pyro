@@ -17,9 +17,8 @@ class GPRegression(nn.Module):
     :param pyro.contrib.gp.kernels.Kernel kernel: A Pyro kernel object.
     :param torch.Tensor noise: An optional noise tensor.
     :param dict priors: A mapping from kernel parameter's names to priors.
-    :param float jitter: An additional jitter to help stablize Cholesky decomposition.
     """
-    def __init__(self, X, y, kernel, noise=None, kernel_prior=None, jitter=1e-6):
+    def __init__(self, X, y, kernel, noise=None, kernel_prior=None):
         super(GPRegression, self).__init__()
         self.X = X
         self.y = y
@@ -31,8 +30,6 @@ class GPRegression(nn.Module):
         self.noise = Variable(noise) if noise is not None else Variable(X.data.new([1]))
 
         self.kernel_prior = kernel_prior if kernel_prior is not None else {}
-
-        self.jitter = Variable(self.X.data.new([jitter]))
 
     def model(self):
         kernel_fn = pyro.random_module(self.kernel.name, self.kernel, self.kernel_prior)
@@ -58,11 +55,13 @@ class GPRegression(nn.Module):
 
     def forward(self, Xnew, full_cov=False, noiseless=False):
         """
-        Compute the parameters of `p(y|Xnew) ~ N(loc, cov)`
+        Compute the parameters of `p(y*|Xnew) ~ N(loc, cov)`
             w.r.t. the new input Xnew.
 
         :param torch.autograd.Variable Xnew: A 2D tensor.
-        :return: loc and covariance matrix of p(y|Xnew).
+        :param bool full_cov: Predict full covariance matrix or just its diagonal.
+        :param bool noiseless: Include noise in the prediction or not.
+        :return: loc and covariance matrix of p(y*|Xnew).
         :rtype: torch.autograd.Variable and torch.autograd.Variable
         """
         if Xnew.dim() == 2 and self.X.size(1) != Xnew.size(1):
@@ -72,10 +71,7 @@ class GPRegression(nn.Module):
 
         kernel = self.guide()
         Kff = kernel(self.X)
-        if noiseless:
-            Kff = Kff + self.jitter.expand(self.num_data).diag()
-        else:
-            Kff = Kff + self.noise.expand(self.num_data).diag()
+        Kff = Kff + self.noise.expand(self.num_data).diag()
         Kfs = kernel(self.X, Xnew)
         Lff = Kff.potrf(upper=False)
 
@@ -88,10 +84,14 @@ class GPRegression(nn.Module):
         # cov = Kss - Ksf @ inv(Kff) @ Kfs
         if full_cov:
             Kss = kernel(Xnew)
+            if not noiseless:
+                Kss = Kss + self.noise.expand(Xnew.size(0)).diag()
             Qss = Lffinv_Kfs.t().matmul(Lffinv_Kfs)
             cov = Kss - Qss
         else:
             Kssdiag = kernel(Xnew, diag=True)
+            if not noiseless:
+                Kssdiag = Kssdiag + self.noise.expand(Xnew.size(0))
             Qssdiag = (Lffinv_Kfs ** 2).sum(dim=0)
             cov = Kssdiag - Qssdiag
 

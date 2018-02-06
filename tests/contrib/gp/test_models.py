@@ -60,16 +60,16 @@ def test_forward_sgpr_vs_gpr():
 
     gpr = GPRegression(X, y, kernel, noise=noise)
     sgpr = SparseGPRegression(X, y, kernel, Xu, noise=noise)
-    sgpr_ftic = SparseGPRegression(X, y, kernel, Xu, approx="FITC", noise=noise)
+    sgpr_fitc = SparseGPRegression(X, y, kernel, Xu, approx="FITC", noise=noise)
 
     loc_gpr, cov_gpr = gpr(Xnew, full_cov=True)
     loc_sgpr, cov_sgpr = sgpr(Xnew, full_cov=True)
-    loc_ftic, cov_ftic = sgpr_ftic(Xnew, full_cov=True)
+    loc_fitc, cov_fitc = sgpr_fitc(Xnew, full_cov=True)
 
     loc_gpr, sd_gpr = gpr(Xnew, full_cov=False)
     loc_sgpr, sd_sgpr = sgpr(Xnew, full_cov=False)
 
     assert_equal(loc_gpr, loc_sgpr)
     assert_equal(cov_gpr, cov_sgpr, prec=1e-4)
-    assert_equal(cov_sgpr, cov_ftic, prec=1e-4)
+    assert_equal(cov_sgpr, cov_fitc, prec=1e-4)
     assert_equal(sd_gpr, sd_sgpr, prec=1e-4)
