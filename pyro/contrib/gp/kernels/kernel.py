@@ -21,13 +21,25 @@ class Kernel(nn.Module):
         self.active_dims = active_dims
         self.name = name
 
-    def forward(self, X, Z=None):
+    def forward(self, X, Z=None, diag=False):
         """
         Calculate covariance matrix of inputs on active dimensionals.
 
         :param torch.autograd.Variable X: A 2D tensor of size `N x input_dim`.
-        :param torch.autograd.Variable Z: A 2D tensor of size `N x input_dim`.
-        :return: Covariance matrix of X and Z with size `N x N`.
+        :param torch.autograd.Variable Z: An optional 2D tensor of size `M x input_dim`.
+        :param bool diag: A flag to decide if we want to return a full covariance matrix
+            or just its diagonal part.
+        :return: Covariance matrix of X and Z with size `N x M`.
+        :rtype: torch.autograd.Variable
+        """
+        raise NotImplementedError
+
+    def Kdiag(self, X):
+        """
+        Calculate the diagonal part of covariance matrix on active dimensionals.
+
+        :param torch.autograd.Variable X: A 2D tensor of size `N x input_dim`.
+        :return: Diagonal part of covariance matrix K(X, X).
         :rtype: torch.autograd.Variable
         """
         raise NotImplementedError

@@ -34,7 +34,10 @@ from pyro.distributions.torch.multivariate_normal import MultivariateNormal
 from pyro.distributions.torch.normal import Normal
 from pyro.distributions.torch.one_hot_categorical import OneHotCategorical
 from pyro.distributions.torch.poisson import Poisson
+from pyro.distributions.torch.sparse_multivariate_normal import SparseMultivariateNormal
 from pyro.distributions.torch.uniform import Uniform
+from pyro.distributions.torch.transformed_distribution import TransformedDistribution  # noqa: F401
+from pyro.distributions.torch.iaf import InverseAutoregressiveFlow  # noqa: F401
 
 # function aliases
 bernoulli = RandomPrimitive(Bernoulli)
@@ -53,3 +56,4 @@ one_hot_categorical = RandomPrimitive(OneHotCategorical)
 poisson = RandomPrimitive(Poisson)
 uniform = RandomPrimitive(Uniform)
 multivariate_normal = RandomPrimitive(MultivariateNormal)
+sparse_multivariate_normal = RandomPrimitive(SparseMultivariateNormal)

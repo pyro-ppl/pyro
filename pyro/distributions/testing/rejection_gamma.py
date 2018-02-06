@@ -4,6 +4,8 @@ import torch
 
 from pyro.distributions.rejector import Rejector
 from pyro.distributions.score_parts import ScoreParts
+from pyro.distributions.torch.beta import Beta
+from pyro.distributions.torch.dirichlet import Dirichlet
 from pyro.distributions.torch.gamma import Gamma
 from pyro.distributions.torch.normal import Normal
 from pyro.distributions.util import copy_docs_from
@@ -28,9 +30,9 @@ class RejectionStandardGamma(Rejector):
         log_scale = self.propose_log_prob(x) + self.log_prob_accept(x) - self.log_prob(x)
         super(RejectionStandardGamma, self).__init__(self.propose, self.log_prob_accept, log_scale)
 
-    def propose(self):
+    def propose(self, sample_shape=torch.Size()):
         # Marsaglia & Tsang's x == Naesseth's epsilon
-        x = self.alpha.new(self.alpha.shape).normal_()
+        x = self.alpha.new(sample_shape + self.alpha.shape).normal_()
         y = 1.0 + self._c * x
         v = y * y * y
         return (self._d * v).clamp_(1e-30, 1e30)
@@ -67,8 +69,8 @@ class RejectionGamma(Gamma):
         self._standard_gamma = RejectionStandardGamma(alpha)
         self.beta = beta
 
-    def sample(self):
-        return self._standard_gamma.sample() / self.beta
+    def sample(self, sample_shape=torch.Size()):
+        return self._standard_gamma.sample(sample_shape) / self.beta
 
     def log_prob(self, x):
         return self._standard_gamma.log_prob(x * self.beta) + torch.log(self.beta)
@@ -97,8 +99,8 @@ class ShapeAugmentedGamma(Gamma):
         self._rejection_gamma = RejectionGamma(alpha + boost, beta)
         self._unboost_x_cache = None, None
 
-    def sample(self):
-        x = self._rejection_gamma.sample()
+    def sample(self, sample_shape=torch.Size()):
+        x = self._rejection_gamma.sample(sample_shape)
         boosted_x = x.clone()
         for i in range(self._boost):
             boosted_x *= (1 - x.new(x.shape).uniform_()) ** (1 / (i + self.alpha))
@@ -113,3 +115,39 @@ class ShapeAugmentedGamma(Gamma):
         _, score_function, _ = self._rejection_gamma.score_parts(x)
         log_pdf = self.log_prob(boosted_x)
         return ScoreParts(log_pdf, score_function, log_pdf)
+
+
+@copy_docs_from(Dirichlet)
+class ShapeAugmentedDirichlet(Dirichlet):
+    """
+    Implementation of ``Dirichlet`` via ``ShapeAugmentedGamma``.
+
+    This naive implementation has stochastic reparameterized gradients, which
+    have higher variance than PyTorch's ``Dirichlet`` implementation.
+    """
+    def __init__(self, alpha, boost=1):
+        super(ShapeAugmentedDirichlet, self).__init__(alpha)
+        self._gamma = ShapeAugmentedGamma(alpha, torch.ones_like(alpha), boost)
+
+    def sample(self, sample_shape=torch.Size()):
+        gammas = self._gamma.sample(sample_shape)
+        return gammas / gammas.sum(-1, True)
+
+
+@copy_docs_from(Beta)
+class ShapeAugmentedBeta(Beta):
+    """
+    Implementation of ``Beta`` via ``ShapeAugmentedGamma``.
+
+    This naive implementation has stochastic reparameterized gradients, which
+    have higher variance than PyTorch's ``Beta`` implementation.
+    """
+    def __init__(self, alpha, beta, boost=1):
+        super(ShapeAugmentedBeta, self).__init__(alpha, beta)
+        alpha_beta = torch.stack([alpha, beta], -1)
+        self._gamma = ShapeAugmentedGamma(alpha_beta, torch.ones_like(alpha_beta), boost)
+
+    def sample(self, sample_shape=torch.Size()):
+        gammas = self._gamma.sample(sample_shape)
+        probs = gammas / gammas.sum(-1, True)
+        return probs[..., 0]
