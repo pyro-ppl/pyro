@@ -8,8 +8,11 @@ import scipy.stats as sp
 
 import pyro.distributions as dist
 from pyro.distributions import (Bernoulli, Beta, Binomial, Categorical, Cauchy, Dirichlet, Exponential, Gamma,
-                                Multinomial, MultivariateNormal, LogNormal, Normal, OneHotCategorical, Poisson,
-                                Uniform)
+                                LogNormal, Multinomial, MultivariateNormal, Normal, OneHotCategorical, Poisson,
+                                SparseMultivariateNormal, Uniform)
+from pyro.distributions.testing.naive_dirichlet import NaiveBeta, NaiveDirichlet
+from pyro.distributions.testing.rejection_exponential import RejectionExponential
+from pyro.distributions.testing.rejection_gamma import ShapeAugmentedBeta, ShapeAugmentedDirichlet, ShapeAugmentedGamma
 from tests.distributions.dist_fixture import Fixture
 
 continuous_dists = [
@@ -39,6 +42,19 @@ continuous_dists = [
                  'test_data': [[5.5], [3.2]]},
             ],
             scipy_arg_fn=lambda lam: ((), {"scale": 1.0 / np.array(lam)})),
+    Fixture(pyro_dist=(None, RejectionExponential),
+            scipy_dist=sp.expon,
+            examples=[
+                {'rate': [2.4], 'factor': [0.5],
+                 'test_data': [5.5]},
+                {'rate': [2.4, 5.5], 'factor': [0.5],
+                 'test_data': [[[5.5, 3.2]], [[5.5, 3.2]], [[5.5, 3.2]]]},
+                {'rate': [[2.4, 5.5]], 'factor': [0.5],
+                 'test_data': [[[5.5, 3.2]], [[5.5, 3.2]], [[5.5, 3.2]]]},
+                {'rate': [[2.4], [5.5]], 'factor': [0.5],
+                 'test_data': [[5.5], [3.2]]},
+            ],
+            scipy_arg_fn=lambda rate, factor: ((), {"scale": 1.0 / np.array(rate)})),
     Fixture(pyro_dist=(dist.gamma, Gamma),
             scipy_dist=sp.gamma,
             examples=[
@@ -50,7 +66,40 @@ continuous_dists = [
             ],
             scipy_arg_fn=lambda alpha, beta: ((np.array(alpha),),
                                               {"scale": 1.0 / np.array(beta)})),
+    Fixture(pyro_dist=(dist.gamma, ShapeAugmentedGamma),
+            scipy_dist=sp.gamma,
+            examples=[
+                {'alpha': [2.4], 'beta': [3.2],
+                 'test_data': [5.5]},
+                {'alpha': [[2.4, 2.4], [3.2, 3.2]], 'beta': [[2.4, 2.4], [3.2, 3.2]],
+                 'test_data': [[[5.5, 4.4], [5.5, 4.4]]]},
+                {'alpha': [[2.4], [2.4]], 'beta': [[3.2], [3.2]], 'test_data': [[5.5], [4.4]]}
+            ],
+            scipy_arg_fn=lambda alpha, beta: ((np.array(alpha),),
+                                              {"scale": 1.0 / np.array(beta)})),
     Fixture(pyro_dist=(dist.beta, Beta),
+            scipy_dist=sp.beta,
+            examples=[
+                {'alpha': [2.4], 'beta': [3.6],
+                 'test_data': [0.4]},
+                {'alpha': [[2.4, 2.4], [3.6, 3.6]], 'beta': [[2.5, 2.5], [2.5, 2.5]],
+                 'test_data': [[[5.5, 4.4], [5.5, 4.4]]]},
+                {'alpha': [[2.4], [3.7]], 'beta': [[3.6], [2.5]],
+                 'test_data': [[0.4], [0.6]]}
+            ],
+            scipy_arg_fn=lambda alpha, beta: ((np.array(alpha), np.array(beta)), {})),
+    Fixture(pyro_dist=(dist.beta, NaiveBeta),
+            scipy_dist=sp.beta,
+            examples=[
+                {'alpha': [2.4], 'beta': [3.6],
+                 'test_data': [0.4]},
+                {'alpha': [[2.4, 2.4], [3.6, 3.6]], 'beta': [[2.5, 2.5], [2.5, 2.5]],
+                 'test_data': [[[5.5, 4.4], [5.5, 4.4]]]},
+                {'alpha': [[2.4], [3.7]], 'beta': [[3.6], [2.5]],
+                 'test_data': [[0.4], [0.6]]}
+            ],
+            scipy_arg_fn=lambda alpha, beta: ((np.array(alpha), np.array(beta)), {})),
+    Fixture(pyro_dist=(dist.beta, ShapeAugmentedBeta),
             scipy_dist=sp.beta,
             examples=[
                 {'alpha': [2.4], 'beta': [3.6],
@@ -96,11 +145,43 @@ continuous_dists = [
                  'test_data': [[2.0, 1.0], [9.0, 3.4]]},
             ],
             # This hack seems to be the best option right now, as 'sigma' is not handled well by get_scipy_batch_logpdf
-            scipy_arg_fn=lambda loc, covariance_matrix=None, scale_triu=None:
+            scipy_arg_fn=lambda loc, covariance_matrix=None:
                 ((), {"mean": np.array(loc), "cov": np.array([[1.0, 0.5], [0.5, 1.0]])}),
             prec=0.01,
             min_samples=500000),
+    Fixture(pyro_dist=(dist.sparse_multivariate_normal, SparseMultivariateNormal),
+            scipy_dist=sp.multivariate_normal,
+            examples=[
+                {'loc': [2.0, 1.0], 'D_term': [0.5, 0.5], 'W_term': [[1.0, 0.5]],
+                 'test_data': [[2.0, 1.0], [9.0, 3.4]]},
+            ],
+            scipy_arg_fn=lambda loc, D_term=None, W_term=None:
+                ((), {"mean": np.array(loc), "cov": np.array([[1.5, 0.5], [0.5, 0.75]])}),
+            prec=0.01,
+            min_samples=500000),
     Fixture(pyro_dist=(dist.dirichlet, Dirichlet),
+            scipy_dist=sp.dirichlet,
+            examples=[
+                {'alpha': [2.4, 3, 6],
+                 'test_data': [0.2, 0.45, 0.35]},
+                {'alpha': [2.4, 3, 6],
+                 'test_data': [[0.2, 0.45, 0.35], [0.2, 0.45, 0.35]]},
+                {'alpha': [[2.4, 3, 6], [3.2, 1.2, 0.4]],
+                 'test_data': [[0.2, 0.45, 0.35], [0.3, 0.4, 0.3]]}
+            ],
+            scipy_arg_fn=lambda alpha: ((alpha,), {})),
+    Fixture(pyro_dist=(dist.dirichlet, NaiveDirichlet),
+            scipy_dist=sp.dirichlet,
+            examples=[
+                {'alpha': [2.4, 3, 6],
+                 'test_data': [0.2, 0.45, 0.35]},
+                {'alpha': [2.4, 3, 6],
+                 'test_data': [[0.2, 0.45, 0.35], [0.2, 0.45, 0.35]]},
+                {'alpha': [[2.4, 3, 6], [3.2, 1.2, 0.4]],
+                 'test_data': [[0.2, 0.45, 0.35], [0.3, 0.4, 0.3]]}
+            ],
+            scipy_arg_fn=lambda alpha: ((alpha,), {})),
+    Fixture(pyro_dist=(dist.dirichlet, ShapeAugmentedDirichlet),
             scipy_dist=sp.dirichlet,
             examples=[
                 {'alpha': [2.4, 3, 6],

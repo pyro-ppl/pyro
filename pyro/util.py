@@ -8,6 +8,7 @@ import numpy as np
 
 import torch
 
+from pyro.distributions import RandomPrimitive
 from pyro.distributions.util import broadcast_shape
 from pyro.poutine.poutine import _PYRO_STACK
 from pyro.poutine.util import site_is_subsample
@@ -207,9 +208,14 @@ def enum_extend(trace, msg, num_samples=None):
         num_samples = -1
 
     # Batched .enumerate_support() assumes batched values are independent.
-    shape = broadcast_shape(msg["fn"].shape(*msg["args"], **msg["kwargs"]),
-                            msg["value"].size())
-    batch_dims = len(shape) - msg['fn'].event_dim(*msg["args"], **msg["kwargs"])
+    if isinstance(msg["fn"], RandomPrimitive):
+        dist_shape = msg["fn"].shape(*msg["args"], **msg["kwargs"])
+        event_dim = msg['fn'].event_dim(*msg["args"], **msg["kwargs"])
+    else:
+        dist_shape = msg["fn"].shape(msg["kwargs"].pop("sample_shape", torch.Size()))
+        event_dim = msg['fn'].event_dim
+    shape = broadcast_shape(dist_shape, msg["value"].size())
+    batch_dims = len(shape) - event_dim
     batch_shape = shape[:batch_dims]
     is_batched = any(size > 1 for size in batch_shape)
     inside_iarange = any(frame.vectorized for frame in msg["cond_indep_stack"])
