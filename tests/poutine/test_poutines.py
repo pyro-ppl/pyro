@@ -185,6 +185,16 @@ class BlockPoutineTests(NormalNormalNormalPoutineTestCase):
                 assert name not in model_trace
                 assert name not in guide_trace
 
+    def test_block_tutorial_case(self):
+        model_trace = poutine.trace(self.model).get_trace()
+        guide_trace = poutine.trace(
+            poutine.block(self.guide, hide_types=["observe"])).get_trace()
+
+        assert "latent1" in model_trace
+        assert "latent1" in guide_trace
+        assert "obs" in model_trace
+        assert "obs" not in guide_trace
+
 
 class QueuePoutineDiscreteTest(TestCase):
 

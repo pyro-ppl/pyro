@@ -49,7 +49,7 @@ class BlockPoutine(Poutine):
         1. msg["name"] in hide
         2. msg["type"] in hide_types
         3. msg["name"] not in expose and msg["type"] not in expose_types
-        4. hide_all == True
+        4. hide_all == True and hide, hide_types, and expose_types are all None
         """
         super(BlockPoutine, self).__init__(fn)
         # first, some sanity checks:
@@ -65,14 +65,23 @@ class BlockPoutine(Poutine):
 
         if expose is None:
             expose = []
+        else:
+            hide_all = True
+
         assert set(hide).isdisjoint(set(expose)), \
             "cannot hide and expose a site"
 
         # hide_types and expose_types intersect?
         if hide_types is None:
             hide_types = []
+        else:
+            hide_all = False
+
         if expose_types is None:
             expose_types = []
+        else:
+            hide_all = True
+
         assert set(hide_types).isdisjoint(set(expose_types)), \
             "cannot hide and expose a site type"
 
@@ -93,7 +102,7 @@ class BlockPoutine(Poutine):
         1. msg["name"] in self.hide
         2. msg["type"] in self.hide_types
         3. msg["name"] not in self.expose and msg["type"] not in self.expose_types
-        4. self.hide_all == True
+        4. self.hide_all == True and hide, hide_types, and expose_types are all None
         """
         # handle observes
         if msg["type"] == "sample" and msg["is_observed"]:
@@ -101,11 +110,13 @@ class BlockPoutine(Poutine):
         else:
             msg_type = msg["type"]
 
+        is_not_exposed = (msg["name"] not in self.expose) and \
+                         (msg_type not in self.expose_types)
+
         # decision rule for hiding:
         if (msg["name"] in self.hide) or \
            (msg_type in self.hide_types) or \
-           ((msg["name"] not in self.expose) and
-            (msg_type not in self.expose_types) and self.hide_all):  # noqa: E129
+           (is_not_exposed and self.hide_all):  # noqa: E129
 
             return True
         # otherwise expose
