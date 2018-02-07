@@ -136,7 +136,7 @@ def indep(name, vectorized):
     return IndepMessenger(name=name, vectorized=vectorized)
 
 
-def scale(scale):
+def scale(null, scale):
     """
     :param scale: a positive scaling factor
     :rtype: pyro.poutine.ScaleMessenger
