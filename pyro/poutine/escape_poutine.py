@@ -34,6 +34,9 @@ class EscapeMessenger(Messenger):
             msg["stop"] = True
 
             def cont(m):
+                # for enumeration, we need a value at the site to get the shape
+                if m["value"] is None:
+                    m["value"] = m["fn"](*m["args"], **m["kwargs"])
                 raise NonlocalExit(m)
             msg["continuation"] = cont
         return None
