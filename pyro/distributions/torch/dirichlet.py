@@ -2,23 +2,52 @@ from __future__ import absolute_import, division, print_function
 
 import torch
 
-from pyro.distributions.dirichlet import Dirichlet as _Dirichlet
 from pyro.distributions.torch_wrapper import TorchDistribution
 from pyro.distributions.util import copy_docs_from
 
 
-@copy_docs_from(_Dirichlet)
+@copy_docs_from(TorchDistribution)
 class Dirichlet(TorchDistribution):
+    """
+    Dirichlet distribution parameterized by a vector `alpha`.
+
+    Dirichlet is a multivariate generalization of the Beta distribution.
+
+    :param alpha:  *(real (0, Infinity))*
+    """
     reparameterized = True
 
     def __init__(self, alpha, *args, **kwargs):
+        """
+        :param alpha: A vector of concentration parameters.
+        :type alpha: None or a torch.autograd.Variable of a torch.Tensor of dimension 1 or 2.
+        :param int batch_size: DEPRECATED.
+        """
         torch_dist = torch.distributions.Dirichlet(alpha)
-        x_shape = alpha.size()
-        event_dim = 1
-        super(Dirichlet, self).__init__(torch_dist, x_shape, event_dim, *args, **kwargs)
+        super(Dirichlet, self).__init__(torch_dist, *args, **kwargs)
 
-    def batch_log_pdf(self, x):
-        batch_log_pdf = self.torch_dist.log_prob(x).view(self.batch_shape(x) + (1,))
-        if self.log_pdf_mask is not None:
-            batch_log_pdf = batch_log_pdf * self.log_pdf_mask
-        return batch_log_pdf
+    def sample(self, sample_shape=torch.Size()):
+        """
+        Draws either a single sample (if alpha.dim() == 1), or one sample per param (if alpha.dim() == 2).
+
+        (Un-reparameterized).
+
+        :param torch.autograd.Variable alpha:
+        """
+        return super(Dirichlet, self).sample(sample_shape)
+
+    def log_prob(self, x):
+        """
+        Evaluates log probability density over one or a batch of samples.
+
+        Each of alpha and x can be either a single value or a batch of values batched along dimension 0.
+        If they are both batches, their batch sizes must agree.
+        In any case, the rightmost size must agree.
+
+        :param torch.autograd.Variable x: A value (if x.dim() == 1) or or batch of values (if x.dim() == 2).
+        :param alpha: A vector of concentration parameters.
+        :type alpha: torch.autograd.Variable or None.
+        :return: log probability densities of each element in the batch.
+        :rtype: torch.autograd.Variable of torch.Tensor of dimension 1.
+        """
+        return super(Dirichlet, self).log_prob(x)

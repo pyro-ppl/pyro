@@ -58,14 +58,14 @@ def test_batch_log_pdf(dist):
             data = dist.get_test_data(idx)
             params = dist.get_dist_params(idx)
         with xfail_if_not_implemented():
-            cpu_value = dist.pyro_dist.batch_log_pdf(data, **params)
+            cpu_value = dist.pyro_dist.log_prob(data, **params)
         assert not cpu_value.is_cuda
 
         # Compute GPU value.
         with tensors_default_to("cuda"):
             data = dist.get_test_data(idx)
             params = dist.get_dist_params(idx)
-        cuda_value = dist.pyro_dist.batch_log_pdf(data, **params)
+        cuda_value = dist.pyro_dist.log_prob(data, **params)
         assert cuda_value.is_cuda
 
         assert_equal(cpu_value, cuda_value.cpu())

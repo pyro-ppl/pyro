@@ -26,18 +26,18 @@ class TestDelta(TestCase):
         self.n_samples = 10
 
     def test_log_pdf(self):
-        log_px_torch = dist.delta.log_pdf(self.test_data, self.v).data
-        assert_equal(torch.sum(log_px_torch), 0)
+        log_px_torch = dist.delta.log_prob(self.test_data, self.v).sum().data[0]
+        assert_equal(log_px_torch, 0)
 
-    def test_batch_log_pdf(self):
-        log_px_torch = dist.delta.batch_log_pdf(self.batch_test_data_1, self.vs_expanded).data
+    def test_batch_log_prob(self):
+        log_px_torch = dist.delta.log_prob(self.batch_test_data_1, self.vs_expanded).data
         assert_equal(torch.sum(log_px_torch), 0)
-        log_px_torch = dist.delta.batch_log_pdf(self.batch_test_data_2, self.vs_expanded).data
+        log_px_torch = dist.delta.log_prob(self.batch_test_data_2, self.vs_expanded).data
         assert_equal(torch.sum(log_px_torch), float('-inf'))
 
-    def test_batch_log_pdf_shape(self):
-        assert dist.delta.batch_log_pdf(self.batch_test_data_3, self.vs).size() == (4, 1)
-        assert dist.delta.batch_log_pdf(self.batch_test_data_3, self.v).size() == (4, 1)
+    def test_batch_log_prob_shape(self):
+        assert dist.delta.log_prob(self.batch_test_data_3, self.vs).size() == (4, 1)
+        assert dist.delta.log_prob(self.batch_test_data_3, self.v).size() == (4, 1)
 
     def test_mean_and_var(self):
         torch_samples = [dist.delta(self.v).data.cpu().numpy()

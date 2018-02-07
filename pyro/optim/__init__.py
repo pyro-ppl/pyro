@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import torch
 
 from .clipped_adam import ClippedAdam as pt_ClippedAdam
+from .adagrad_rmsprop import AdagradRMSProp as pt_AdagradRMSProp
 from .optim import PyroOptim
 
 
@@ -25,6 +26,13 @@ def Adagrad(optim_args):
     A wrapper for torch.optim.Adagrad
     """
     return PyroOptim(torch.optim.Adagrad, optim_args)
+
+
+def AdagradRMSProp(optim_args):
+    """
+    A wrapper for an optimizer that is a mash-up of Adagrad and RMSProp
+    """
+    return PyroOptim(pt_AdagradRMSProp, optim_args)
 
 
 def Adamax(optim_args):

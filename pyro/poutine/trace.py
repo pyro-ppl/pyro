@@ -6,9 +6,12 @@ import warnings
 import networkx
 import numpy as np
 
+from torch.autograd import Variable
 
-def _warn_if_nan(name, variable):
-    value = variable.data[0]
+
+def _warn_if_nan(name, value):
+    if isinstance(value, Variable):
+        value = value.data[0]
     if np.isnan(value):
         warnings.warn("Encountered NAN log_pdf at site '{}'".format(name))
     if np.isinf(value) and value > 0:
@@ -78,8 +81,8 @@ class Trace(networkx.DiGraph):
                     site_log_p = site["log_pdf"]
                 except KeyError:
                     args, kwargs = site["args"], site["kwargs"]
-                    site_log_p = site["fn"].log_pdf(
-                        site["value"], *args, **kwargs) * site["scale"]
+                    site_log_p = site["fn"].log_prob(
+                        site["value"], *args, **kwargs).sum() * site["scale"]
                     site["log_pdf"] = site_log_p
                     _warn_if_nan(name, site_log_p)
                 log_p += site_log_p
@@ -99,7 +102,7 @@ class Trace(networkx.DiGraph):
                     site_log_p = site["batch_log_pdf"]
                 except KeyError:
                     args, kwargs = site["args"], site["kwargs"]
-                    site_log_p = site["fn"].batch_log_pdf(
+                    site_log_p = site["fn"].log_prob(
                         site["value"], *args, **kwargs) * site["scale"]
                     site["batch_log_pdf"] = site_log_p
                     site["log_pdf"] = site_log_p.sum()
@@ -120,11 +123,26 @@ class Trace(networkx.DiGraph):
                     site["batch_log_pdf"]
                 except KeyError:
                     args, kwargs = site["args"], site["kwargs"]
-                    site_log_p = site["fn"].batch_log_pdf(
+                    site_log_p = site["fn"].log_prob(
                         site["value"], *args, **kwargs) * site["scale"]
                     site["batch_log_pdf"] = site_log_p
                     site["log_pdf"] = site_log_p.sum()
                     _warn_if_nan(name, site["log_pdf"])
+
+    def compute_score_parts(self):
+        """
+        Compute the batched local score parts at each site of the trace.
+        """
+        for name, site in self.nodes.items():
+            if site["type"] == "sample" and "score_parts" not in site:
+                # Note that ScoreParts overloads the multiplication operator
+                # to correctly scale each of its three parts.
+                value = site["fn"].score_parts(
+                    site["value"], *site["args"], **site["kwargs"]) * site["scale"]
+                site["score_parts"] = value
+                site["batch_log_pdf"] = value[0]
+                site["log_pdf"] = value[0].sum()
+                _warn_if_nan(name, site["log_pdf"])
 
     @property
     def observation_nodes(self):
@@ -162,3 +180,11 @@ class Trace(networkx.DiGraph):
         are not reparameterizable primitive distributions
         """
         return list(set(self.stochastic_nodes) - set(self.reparameterized_nodes))
+
+    def iter_stochastic_nodes(self):
+        """
+        Returns an iterator over stochastic nodes in the trace.
+        """
+        for name, node in self.nodes.items():
+            if node["type"] == "sample" and not node["is_observed"]:
+                yield name, node

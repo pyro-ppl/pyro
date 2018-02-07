@@ -44,6 +44,22 @@ To run a single test from the command line
 pytest -vs {path_to_test}::{test_name}
 ```
 
+## Testing Tutorials
+
+We run some tutorials on travis to avoid bit rot.
+To enable a tutorial for testing
+
+1.  Add a line `smoke_test = ('CI' in os.environ)` to your tutorial. Our test
+    scripts only test tutorials that contain the string `smoke_test`.
+2.  Each time you do something expensive for many iterations, set the number
+    of iterations like this:
+    ```py
+    for epoch in range(200 if not smoke_test else 1):
+        ...
+    ```
+
+You can test locally by running `make test-tutorials`.
+
 # Profiling
 
 The profiler module contains scripts to support profiling different 

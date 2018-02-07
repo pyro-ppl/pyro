@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from torch.autograd import Variable
 
-from pyro.distributions.util import get_probs_and_logits
+from pyro.distributions.util import get_probs_and_logits, broadcast_shape
 
 SINGLE_TEST_DATUM_IDX = [0]
 BATCH_TEST_DATA_IDX = [-1]
@@ -25,7 +25,7 @@ class Fixture(object):
                  expected_support=None,
                  test_data_indices=None,
                  batch_data_indices=None):
-        self.pyro_dist, self.pyro_dist_obj = pyro_dist
+        self.pyro_dist, self.pyro_dist_class = pyro_dist
         self.scipy_dist = scipy_dist
         self.dist_params, self.test_data = self._extract_fixture_data(examples)
         self.scipy_arg_fn = scipy_arg_fn
@@ -58,7 +58,7 @@ class Fixture(object):
         return len(self.test_data)
 
     def get_samples(self, num_samples, **dist_params):
-        return self.pyro_dist(batch_size=num_samples, **dist_params)
+        return self.pyro_dist_class(**dist_params).sample(sample_shape=torch.Size((num_samples,)))
 
     def get_test_data(self, idx, wrap_tensor=True):
         if not wrap_tensor:
@@ -98,7 +98,7 @@ class Fixture(object):
         dist_params = self._convert_logits_to_ps(dist_params)
         test_data = self.get_test_data(idx, wrap_tensor=False)
         test_data_wrapped = self.get_test_data(idx)
-        shape = self.pyro_dist.shape(test_data_wrapped, **dist_params_wrapped)
+        shape = broadcast_shape(self.pyro_dist_class(**dist_params_wrapped).shape(), test_data_wrapped.size())
         batch_log_pdf = []
         for i in range(len(test_data)):
             batch_params = {}
@@ -143,8 +143,7 @@ class Fixture(object):
         return max(min_samples, min_computed_samples)
 
     def get_test_distribution_name(self):
-        pyro_dist_class = getattr(self.pyro_dist, 'dist_class', self.pyro_dist.__class__)
-        return pyro_dist_class.__name__
+        return self.pyro_dist_class.__name__
 
 
 def tensor_wrap(*args, **kwargs):

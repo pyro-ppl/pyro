@@ -1,22 +1,21 @@
 from __future__ import absolute_import, division, print_function
 
-from .poutine import Poutine
+from .poutine import Messenger, Poutine
 
 
-class ReplayPoutine(Poutine):
+class ReplayMessenger(Messenger):
     """
-    Poutine for replaying from an existing execution trace.
+    Messenger for replaying from an existing execution trace.
     """
 
-    def __init__(self, fn, guide_trace, sites=None):
+    def __init__(self, guide_trace, sites=None):
         """
-        :param fn: a stochastic function (callable containing pyro primitive calls)
         :param guide_trace: a trace whose values should be reused
 
         Constructor.
         Stores guide_trace in an attribute.
         """
-        super(ReplayPoutine, self).__init__(fn)
+        super(ReplayMessenger, self).__init__()
         assert guide_trace is not None, "must provide guide_trace"
         self.guide_trace = guide_trace
         # case 1: no sites
@@ -36,26 +35,13 @@ class ReplayPoutine(Poutine):
             raise TypeError(
                 "unrecognized type {} for sites".format(str(type(sites))))
 
-    def _prepare_site(self, msg):
-        """
-        :param msg: current message at a trace site.
-        :returns: the same message, possibly with some fields mutated.
-
-        If the site type is "map_data",
-        passes map_data batch indices from the guide trace
-        all the way down to the bottom of the stack,
-        so that the correct indices are used.
-
-        If the site type is "sample",
-        sets the return value and the "done" flag
-        so that poutines below it do not execute their sample functions at that site.
-        """
+    def _process_message(self, msg):
         if msg["name"] in self.sites:
             if msg["type"] == "sample" and not msg["is_observed"]:
                 msg["done"] = True
                 msg["value"] = self.guide_trace.nodes[self.sites[msg["name"]]]["value"]
 
-        return msg
+        return super(ReplayMessenger, self)._process_message(msg)
 
     def _pyro_sample(self, msg):
         """
@@ -80,7 +66,24 @@ class ReplayPoutine(Poutine):
                     self.guide_trace.nodes[g_name]["is_observed"]:
                 raise RuntimeError("site {} must be sample in guide_trace".format(g_name))
             msg["done"] = True
-            return self.guide_trace.nodes[g_name]["value"]
-        # case 2: dict, negative: sample from model
-        else:
-            return super(ReplayPoutine, self)._pyro_sample(msg)
+            msg["value"] = self.guide_trace.nodes[g_name]["value"]
+        return None
+
+    def _pyro_param(self, msg):
+        return None
+
+
+class ReplayPoutine(Poutine):
+    """
+    Poutine for replaying from an existing execution trace.
+    """
+
+    def __init__(self, fn, guide_trace, sites=None):
+        """
+        :param fn: a stochastic function (callable containing pyro primitive calls)
+        :param guide_trace: a trace whose values should be reused
+
+        Constructor.
+        Stores guide_trace in an attribute.
+        """
+        super(ReplayPoutine, self).__init__(ReplayMessenger(guide_trace, sites), fn)
