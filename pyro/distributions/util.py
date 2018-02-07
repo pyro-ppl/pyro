@@ -24,10 +24,8 @@ def copy_docs_from(source_class, full_text=False):
                 if full_text or source_doc.startswith('See '):
                     destin_doc = source_doc
                 else:
-                    attr_name = source_attr.fget.__name__ if isinstance(source_attr, property) \
-                        else source_attr.__name__
                     destin_doc = 'See :meth:`{}.{}.{}`'.format(
-                        source_class.__module__, source_class.__name__, attr_name)
+                        source_class.__module__, source_class.__name__, name)
                 if isinstance(destin_attr, property):
                     # Set docs for object properties.
                     # Since __doc__ is read-only, we need to reset the property
