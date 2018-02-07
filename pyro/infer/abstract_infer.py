@@ -81,11 +81,6 @@ class Histogram(dist.Distribution):
 
     __call__ = sample
 
-    def log_pdf(self, val, *args, **kwargs):
-        d, values = self._dist_and_values(*args, **kwargs)
-        ix = _index(values, val)
-        return d.log_pdf(Variable(torch.Tensor([ix])))
-
     def log_prob(self, val, *args, **kwargs):
         d, values = self._dist_and_values(*args, **kwargs)
         ix = _index(values, val)
@@ -130,9 +125,6 @@ class Marginal(Histogram):
                 val = {name: tr.nodes[name]["value"]
                        for name in self.sites}
             yield (val, log_w)
-
-    def log_prob(self, val, *args, **kwargs):
-        raise NotImplementedError("log_prob not well defined for Marginal")
 
 
 class TracePosterior(object):
