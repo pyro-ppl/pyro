@@ -53,3 +53,6 @@ class TorchDistribution(Distribution):
 
     def enumerate_support(self):
         return self.torch_dist.enumerate_support()
+
+    def _validate_log_prob_arg(self, value):
+        self.torch_dist._validate_log_prob_arg(value)
