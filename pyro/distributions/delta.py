@@ -38,18 +38,15 @@ class Delta(Distribution):
         shape = sample_shape + self.v.size()
         return self.v.expand(shape)
 
-    def log_prob(self, x):
-        v = self.v
-        v = v.expand(broadcast_shape(self.shape(), x.size()))
+    def log_prob(self, x, sample_shape=torch.Size()):
+        v = self.v.expand(broadcast_shape(sample_shape + self.v.shape, x.shape))
         return torch.eq(x, v).float().log()
 
-    def enumerate_support(self, v=None):
+    def enumerate_support(self, sample_shape=torch.Size()):
         """
         Returns the delta distribution's support, as a tensor along the first dimension.
 
-        :param v: torch variable where each element of the tensor represents the point at
-            which the delta distribution is concentrated.
         :return: torch variable enumerating the support of the delta distribution.
         :rtype: torch.autograd.Variable.
         """
-        return Variable(self.v.data.unsqueeze(0))
+        return Variable(self.sample(sample_shape).data.unsqueeze(0))
