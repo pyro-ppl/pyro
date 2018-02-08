@@ -20,13 +20,7 @@ class TorchDistribution(Distribution):
         self.log_pdf_mask = log_pdf_mask
         self.extra_event_dims = extra_event_dims
 
-    @property
-    def reparameterized(self):
-        return self.torch_dist.has_rsample
-
-    @property
-    def enumerable(self):
-        return self.torch_dist.has_enumerate_support
+    # TODO define .reparameterized, .enumerable properties once RandomPrimitive is gone
 
     @constraints.dependent_property
     def params(self):
