@@ -1,35 +1,35 @@
 
 Bernoulli
 ---------
-.. automodule:: pyro.distributions.bernoulli
+.. automodule:: pyro.distributions.torch.bernoulli
     :members:
     :undoc-members:
     :show-inheritance:
 
 Beta
 ----
-.. automodule:: pyro.distributions.beta
+.. automodule:: pyro.distributions.torch.beta
     :members:
     :undoc-members:
     :show-inheritance:
 
 Binomial
---------
-.. automodule:: pyro.distributions.binomial
+---------
+.. automodule:: pyro.distributions.torch.binomial
     :members:
     :undoc-members:
     :show-inheritance:
 
 Categorical
 -----------
-.. automodule:: pyro.distributions.categorical
+.. automodule:: pyro.distributions.torch.categorical
     :members:
     :undoc-members:
     :show-inheritance:
 
 Cauchy
 ------
-.. automodule:: pyro.distributions.cauchy
+.. automodule:: pyro.distributions.torch.cauchy
     :members:
     :undoc-members:
     :show-inheritance:
@@ -37,14 +37,6 @@ Cauchy
 Delta
 -----
 .. automodule:: pyro.distributions.delta
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-
-Normal
-----------
-.. automodule:: pyro.distributions.normal
     :members:
     :undoc-members:
     :show-inheritance:
@@ -58,57 +50,70 @@ Empirical
 
 Exponential
 -----------
-.. automodule:: pyro.distributions.exponential
+.. automodule:: pyro.distributions.torch.exponential
     :members:
     :undoc-members:
     :show-inheritance:
 
 Gamma
 -----
-.. automodule:: pyro.distributions.gamma
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-HalfCauchy
-----------------------------------------
-
-.. automodule:: pyro.distributions.half_cauchy
+.. automodule:: pyro.distributions.torch.gamma
     :members:
     :undoc-members:
     :show-inheritance:
 
 LogNormal
 ---------
-.. automodule:: pyro.distributions.log_normal
+.. automodule:: pyro.distributions.torch.log_normal
     :members:
     :undoc-members:
     :show-inheritance:
 
 Multinomial
 -----------
-.. automodule:: pyro.distributions.multinomial
+.. automodule:: pyro.distributions.torch.multinomial
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+MultivariateNormal
+------------------
+.. automodule:: pyro.distributions.torch.multivariate_normal
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+Normal
+----------
+.. automodule:: pyro.distributions.torch.normal
     :members:
     :undoc-members:
     :show-inheritance:
 
 OneHotCategorical
 -----------------
-.. automodule:: pyro.distributions.one_hot_categorical
+.. automodule:: pyro.distributions.torch.one_hot_categorical
     :members:
     :undoc-members:
     :show-inheritance:
 
 Poisson
--------
-.. automodule:: pyro.distributions.poisson
+--------
+.. automodule:: pyro.distributions.torch.poisson
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+SparseMultivariateNormal
+------------------------
+.. automodule:: pyro.distributions.torch.sparse_multivariate_normal
     :members:
     :undoc-members:
     :show-inheritance:
 
 Uniform
 -------
-.. automodule:: pyro.distributions.uniform
+.. automodule:: pyro.distributions.torch.uniform
     :members:
     :undoc-members:
     :show-inheritance:

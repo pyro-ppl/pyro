@@ -180,12 +180,12 @@ def test_iarange_ok(trace_graph, subsample_size):
     def model():
         p = Variable(torch.Tensor([0.5]))
         with pyro.iarange("iarange", 10, subsample_size) as ind:
-            pyro.sample("x", dist.bernoulli, p, batch_size=len(ind))
+            pyro.sample("x", dist.bernoulli, p, sample_shape=(len(ind),))
 
     def guide():
         p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
         with pyro.iarange("iarange", 10, subsample_size) as ind:
-            pyro.sample("x", dist.bernoulli, p, batch_size=len(ind))
+            pyro.sample("x", dist.bernoulli, p, sample_shape=(len(ind),))
 
     assert_ok(model, guide, trace_graph=trace_graph)
 
@@ -196,12 +196,12 @@ def test_iarange_no_size_ok(trace_graph):
     def model():
         p = Variable(torch.Tensor([0.5]))
         with pyro.iarange("iarange"):
-            pyro.sample("x", dist.bernoulli, p, batch_size=10)
+            pyro.sample("x", dist.bernoulli, p, sample_shape=(10,))
 
     def guide():
         p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
         with pyro.iarange("iarange"):
-            pyro.sample("x", dist.bernoulli, p, batch_size=10)
+            pyro.sample("x", dist.bernoulli, p, sample_shape=(10,))
 
     assert_ok(model, guide, trace_graph=trace_graph)
 
@@ -284,13 +284,13 @@ def test_iarange_irange_warning():
         p = Variable(torch.Tensor([0.5]))
         with pyro.iarange("iarange", 10, 5) as ind:
             for i in pyro.irange("irange", 10, 5):
-                pyro.sample("x_{}".format(i), dist.bernoulli, p, batch_size=len(ind))
+                pyro.sample("x_{}".format(i), dist.bernoulli, p, sample_shape=(len(ind),))
 
     def guide():
         p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
         with pyro.iarange("iarange", 10, 5) as ind:
             for i in pyro.irange("irange", 10, 5):
-                pyro.sample("x_{}".format(i), dist.bernoulli, p, batch_size=len(ind))
+                pyro.sample("x_{}".format(i), dist.bernoulli, p, sample_shape=(len(ind),))
 
     assert_warning(model, guide, trace_graph=True)
 
@@ -302,13 +302,13 @@ def test_irange_iarange_ok(trace_graph):
         p = Variable(torch.Tensor([0.5]))
         for i in pyro.irange("irange", 10, 5):
             with pyro.iarange("iarange", 10, 5) as ind:
-                pyro.sample("x_{}".format(i), dist.bernoulli, p, batch_size=len(ind))
+                pyro.sample("x_{}".format(i), dist.bernoulli, p, sample_shape=(len(ind),))
 
     def guide():
         p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
         for i in pyro.irange("irange", 10, 5):
             with pyro.iarange("iarange", 10, 5) as ind:
-                pyro.sample("x_{}".format(i), dist.bernoulli, p, batch_size=len(ind))
+                pyro.sample("x_{}".format(i), dist.bernoulli, p, sample_shape=(len(ind),))
 
     assert_ok(model, guide, trace_graph=trace_graph)
 
@@ -319,13 +319,13 @@ def test_nested_iarange_iarange_warning():
         p = Variable(torch.Tensor([0.5]))
         with pyro.iarange("iarange_0", 10, 5) as ind1:
             with pyro.iarange("iarange_1", 10, 5) as ind2:
-                pyro.sample("x", dist.bernoulli, p, batch_size=len(ind1) * len(ind2))
+                pyro.sample("x", dist.bernoulli, p, sample_shape=(len(ind1) * len(ind2),))
 
     def guide():
         p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
         with pyro.iarange("iarange_0", 10, 5) as ind1:
             with pyro.iarange("iarange_1", 10, 5) as ind2:
-                pyro.sample("x", dist.bernoulli, p, batch_size=len(ind1) * len(ind2))
+                pyro.sample("x", dist.bernoulli, p, sample_shape=(len(ind1) * len(ind2),))
 
     assert_warning(model, guide, trace_graph=True)
 
@@ -335,16 +335,16 @@ def test_nonnested_iarange_iarange_warning():
     def model():
         p = Variable(torch.Tensor([0.5]))
         with pyro.iarange("iarange_0", 10, 5) as ind1:
-            pyro.sample("x0", dist.bernoulli, p, batch_size=len(ind1))
+            pyro.sample("x0", dist.bernoulli, p, sample_shape=(len(ind1),))
         with pyro.iarange("iarange_1", 10, 5) as ind2:
-            pyro.sample("x1", dist.bernoulli, p, batch_size=len(ind2))
+            pyro.sample("x1", dist.bernoulli, p, sample_shape=(len(ind2),))
 
     def guide():
         p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
         with pyro.iarange("iarange_0", 10, 5) as ind1:
-            pyro.sample("x0", dist.bernoulli, p, batch_size=len(ind1))
+            pyro.sample("x0", dist.bernoulli, p, sample_shape=(len(ind1),))
         with pyro.iarange("iarange_1", 10, 5) as ind2:
-            pyro.sample("x1", dist.bernoulli, p, batch_size=len(ind2))
+            pyro.sample("x1", dist.bernoulli, p, sample_shape=(len(ind2),))
 
     assert_warning(model, guide, trace_graph=True)
 
@@ -362,10 +362,10 @@ def test_three_indep_iarange_at_different_depths_ok():
             if i == 0:
                 for j in pyro.irange("irange1", 2):
                     with pyro.iarange("iarange1", 10, 5) as ind:
-                        pyro.sample("y_%d" % j, dist.bernoulli, p, batch_size=len(ind))
+                        pyro.sample("y_%d" % j, dist.bernoulli, p, sample_shape=(len(ind),))
             elif i == 1:
                 with pyro.iarange("iarange1", 10, 5) as ind:
-                    pyro.sample("z", dist.bernoulli, p, batch_size=len(ind))
+                    pyro.sample("z", dist.bernoulli, p, sample_shape=(len(ind),))
 
     def guide():
         p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
@@ -374,10 +374,10 @@ def test_three_indep_iarange_at_different_depths_ok():
             if i == 0:
                 for j in pyro.irange("irange1", 2):
                     with pyro.iarange("iarange1", 10, 5) as ind:
-                        pyro.sample("y_%d" % j, dist.bernoulli, p, batch_size=len(ind))
+                        pyro.sample("y_%d" % j, dist.bernoulli, p, sample_shape=(len(ind),))
             elif i == 1:
                 with pyro.iarange("iarange1", 10, 5) as ind:
-                    pyro.sample("z", dist.bernoulli, p, batch_size=len(ind))
+                    pyro.sample("z", dist.bernoulli, p, sample_shape=(len(ind),))
 
     assert_ok(model, guide, trace_graph=True)
 
@@ -388,12 +388,12 @@ def test_iarange_wrong_size_error():
     def model():
         p = Variable(torch.Tensor([0.5]))
         with pyro.iarange("iarange", 10, 5) as ind:
-            pyro.sample("x", dist.bernoulli, p, batch_size=1 + len(ind))
+            pyro.sample("x", dist.bernoulli, p, sample_shape=(1 + len(ind),))
 
     def guide():
         p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
         with pyro.iarange("iarange", 10, 5) as ind:
-            pyro.sample("x", dist.bernoulli, p, batch_size=1 + len(ind))
+            pyro.sample("x", dist.bernoulli, p, sample_shape=(1 + len(ind),))
 
     assert_error(model, guide, trace_graph=True)
 
@@ -446,12 +446,12 @@ def test_iarange_enum_discrete_batch_ok():
     def model():
         p = Variable(torch.Tensor([0.5]))
         with pyro.iarange("iarange", 10, 5) as ind:
-            pyro.sample("x", dist.bernoulli, p, batch_size=len(ind))
+            pyro.sample("x", dist.bernoulli, p, sample_shape=(len(ind),))
 
     def guide():
         p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
         with pyro.iarange("iarange", 10, 5) as ind:
-            pyro.sample("x", dist.bernoulli, p, batch_size=len(ind))
+            pyro.sample("x", dist.bernoulli, p, sample_shape=(len(ind),))
 
     assert_ok(model, guide, enum_discrete=True)
 
@@ -462,13 +462,13 @@ def test_iarange_enum_discrete_no_discrete_vars_ok():
         mu = Variable(torch.zeros(2, 1))
         sigma = Variable(torch.ones(2, 1))
         with pyro.iarange("iarange", 10, 5) as ind:
-            pyro.sample("x", dist.normal, mu, sigma, batch_size=len(ind))
+            pyro.sample("x", dist.normal, mu, sigma, sample_shape=(len(ind),))
 
     def guide():
         mu = pyro.param("mu", Variable(torch.zeros(2, 1), requires_grad=True))
         sigma = pyro.param("sigma", Variable(torch.ones(2, 1), requires_grad=True))
         with pyro.iarange("iarange", 10, 5) as ind:
-            pyro.sample("x", dist.normal, mu, sigma, batch_size=len(ind))
+            pyro.sample("x", dist.normal, mu, sigma, sample_shape=(len(ind),))
 
     assert_ok(model, guide, enum_discrete=True)
 
@@ -477,29 +477,28 @@ def test_no_iarange_enum_discrete_batch_error():
 
     def model():
         p = Variable(torch.Tensor([0.5]))
-        pyro.sample("x", dist.bernoulli, p, batch_size=5)
+        pyro.sample("x", dist.bernoulli, p, sample_shape=(5,))
 
     def guide():
         p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
-        pyro.sample("x", dist.bernoulli, p, batch_size=5)
+        pyro.sample("x", dist.bernoulli, p, sample_shape=(5,))
 
     assert_error(model, guide, enum_discrete=True)
 
 
+@pytest.mark.xfail(reason="torch.distributions.Bernoulli is too permissive")
 def test_enum_discrete_global_local_error():
-    if dist.USE_TORCH_DISTRIBUTIONS:
-        pytest.xfail(reason="torch Bernoulli is too permissive?")
 
     def model():
         p = Variable(torch.Tensor([0.5]))
         pyro.sample("x", dist.bernoulli, p)
         with pyro.iarange("iarange", 10, 5) as ind:
-            pyro.sample("y", dist.bernoulli, p, batch_size=len(ind))
+            pyro.sample("y", dist.bernoulli, p, sample_shape=(len(ind),))
 
     def guide():
         p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
         pyro.sample("x", dist.bernoulli, p)
         with pyro.iarange("iarange", 10, 5) as ind:
-            pyro.sample("y", dist.bernoulli, p, batch_size=len(ind))
+            pyro.sample("y", dist.bernoulli, p, sample_shape=(len(ind),))
 
     assert_error(model, guide, enum_discrete=True)

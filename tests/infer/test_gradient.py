@@ -10,10 +10,10 @@ from torch.autograd import Variable
 
 import pyro
 import pyro.distributions as dist
+from pyro.distributions.testing import fakes
 from pyro.infer import SVI
 from pyro.optim import Adam
 from pyro.util import ng_ones, ng_zeros
-from tests import fakes
 from tests.common import assert_equal
 
 logger = logging.getLogger(__name__)

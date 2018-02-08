@@ -1,26 +1,16 @@
 
 import torch
 import pyro
-import sys
 from torch.autograd import Variable
 import pyro.distributions as dist
 from utils.mnist_cached import MNISTCached, setup_data_loaders
 from pyro.infer import SVI
 from pyro.optim import Adam
 from pyro.nn import ClippedSoftmax, ClippedSigmoid
-from pyro.shim import parse_torch_version
 from utils.custom_mlp import MLP, Exp
 from utils.vae_plots import plot_conditional_samples_ssvae, mnist_test_tsne_ssvae
 from util import set_seed, print_and_log, mkdir_p
 import torch.nn as nn
-
-version_warning = '''
-11/02/2017: This example does not work with PyTorch 0.2, please install PyTorch 0.3.
-'''
-torch_version = parse_torch_version()
-if (torch_version < (0, 2, 1) and not torch_version[-1].startswith("+")):
-    print(version_warning)
-    sys.exit(0)
 
 
 class SSVAE(nn.Module):
@@ -119,7 +109,7 @@ class SSVAE(nn.Module):
             # sample the handwriting style from the constant prior distribution
             prior_mu = Variable(torch.zeros([batch_size, self.z_dim]))
             prior_sigma = Variable(torch.ones([batch_size, self.z_dim]))
-            zs = pyro.sample("z", dist.normal, prior_mu, prior_sigma)
+            zs = pyro.sample("z", dist.normal, prior_mu, prior_sigma, extra_event_dims=1)
 
             # if the label y (which digit to write) is supervised, sample from the
             # constant prior, otherwise, observe the value (i.e. score it against the constant prior)
@@ -134,7 +124,7 @@ class SSVAE(nn.Module):
             # parametrized distribution p(x|y,z) = bernoulli(decoder(y,z))
             # where `decoder` is a neural network
             mu = self.decoder.forward([zs, ys])
-            pyro.sample("x", dist.bernoulli, mu, obs=xs)
+            pyro.sample("x", dist.bernoulli, mu, extra_event_dims=1, obs=xs)
 
     def guide(self, xs, ys=None):
         """
@@ -161,7 +151,7 @@ class SSVAE(nn.Module):
             # sample (and score) the latent handwriting-style with the variational
             # distribution q(z|x,y) = normal(mu(x,y),sigma(x,y))
             mu, sigma = self.encoder_z.forward([xs, ys])
-            zs = pyro.sample("z", dist.normal, mu, sigma)   # noqa: F841
+            pyro.sample("z", dist.normal, mu, sigma, extra_event_dims=1)
 
     def classifier(self, xs):
         """
@@ -198,11 +188,8 @@ class SSVAE(nn.Module):
             # similar to the NIPS 14 paper (Kingma et al).
             if ys is not None:
                 alpha = self.encoder_y.forward(xs)
-                pyro.sample("y_aux",
-                            dist.one_hot_categorical,
-                            alpha,
-                            log_pdf_mask=self.aux_loss_multiplier,
-                            obs=ys)
+                with pyro.poutine.scale(None, self.aux_loss_multiplier):
+                    pyro.sample("y_aux", dist.one_hot_categorical, alpha, obs=ys)
 
     def guide_classify(self, xs, ys=None):
         """
@@ -214,11 +201,11 @@ class SSVAE(nn.Module):
         # sample the handwriting style from the constant prior distribution
         prior_mu = Variable(torch.zeros([batch_size, self.z_dim]))
         prior_sigma = Variable(torch.ones([batch_size, self.z_dim]))
-        zs = pyro.sample("z", dist.normal, prior_mu, prior_sigma)
+        zs = pyro.sample("z", dist.normal, prior_mu, prior_sigma, extra_event_dims=1)
 
         # sample an image using the decoder
         mu = self.decoder.forward([zs, ys])
-        xs = pyro.sample("sample", dist.bernoulli, mu)
+        xs = pyro.sample("sample", dist.bernoulli, mu, extra_event_dims=1)
         return xs, mu
 
 

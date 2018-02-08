@@ -15,7 +15,7 @@ lint: FORCE
 	flake8
 
 scrub: FORCE
-	find tutorial -name "*.ipynb" | xargs python -m nbstripout --keep-output
+	find tutorial -name "*.ipynb" | xargs python -m nbstripout --keep-output --keep-count
 
 format: FORCE
 	yapf -i *.py pyro/distributions/*.py profiler/*.py docs/source/conf.py
@@ -28,13 +28,16 @@ test-examples: lint FORCE
 	pytest -vx -n auto --stage test_examples
 
 test-tutorials: lint FORCE
-	pytest -v -n auto --nbval-lax tutorial/
+	CI=1 grep -l smoke_test tutorial/source/*.ipynb \
+	  | xargs pytest -vx --nbval-lax
 
 integration-test: lint FORCE
 	pytest -vx -n auto --stage integration
 
 test-all: lint FORCE
 	pytest -vx -n auto
+	CI=1 grep -l smoke_test tutorial/source/*.ipynb \
+	  | xargs pytest -vx --nbval-lax
 
 test-cuda: lint FORCE
 	PYRO_TENSOR_TYPE=torch.cuda.DoubleTensor pytest -vx -n 8 --stage unit

@@ -42,14 +42,14 @@ class MCMC(TracePosterior):
         self.logger.info('Starting MCMC using kernel - {} ...'.format(self.kernel.__class__.__name__))
         logging_interval = int(math.ceil((self.warmup_steps + self.num_samples) / 20))
         while self._t < self.warmup_steps + self.num_samples:
+            self._t += 1
             if self._t % logging_interval == 0:
                 self.logger.info('Iteration: {}.'.format(self._t))
                 diagnostic_info = self.kernel.diagnostics(self._t)
                 if diagnostic_info is not None:
                     self.logger.info(diagnostic_info)
             trace = self.kernel.sample(trace)
-            if self._t < self.warmup_steps:
+            if self._t <= self.warmup_steps:
                 continue
             yield (trace, Variable(torch.Tensor([1.0])))
-            self._t += 1
         self.kernel.cleanup()

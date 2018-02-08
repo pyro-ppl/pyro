@@ -11,10 +11,11 @@ from torch.nn import Parameter
 import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
-from pyro.distributions.transformed_distribution import TransformedDistribution
+from pyro.distributions.testing import fakes
+from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
+from pyro.distributions import TransformedDistribution
 from pyro.infer.svi import SVI
 from pyro.util import ng_ones, ng_zeros
-from tests import fakes
 from tests.common import assert_equal
 from tests.distributions.test_transformed_distribution import AffineExp
 
@@ -85,6 +86,7 @@ class NormalNormalTests(TestCase):
         assert_equal(0.0, log_sig_error, prec=0.05)
 
 
+@pytest.mark.skip("Reinstate once poisson is migrated to PyTorch - https://github.com/uber/pyro/issues/699")
 class TestFixedModelGuide(TestCase):
     def setUp(self):
         self.data = Variable(torch.Tensor([2.0]))
@@ -153,6 +155,7 @@ class TestFixedModelGuide(TestCase):
 
 
 @pytest.mark.stage("integration", "integration_batch_2")
+@pytest.mark.skip("Reinstate once poisson is migrated to PyTorch - https://github.com/uber/pyro/issues/699")
 class PoissonGammaTests(TestCase):
     def setUp(self):
         # poisson-gamma model
@@ -169,8 +172,8 @@ class PoissonGammaTests(TestCase):
         self.log_alpha_n = torch.log(self.alpha_n)
         self.log_beta_n = torch.log(self.beta_n)
 
-    @pytest.mark.skipif(not dist.gamma.reparameterized, reason='not implemented')
     def test_elbo_reparameterized(self):
+        assert dist.gamma.reparameterized
         self.do_elbo_test(True, 10000)
 
     def test_elbo_nonreparameterized(self):
@@ -228,19 +231,21 @@ class ExponentialGammaTests(TestCase):
         self.log_alpha_n = torch.log(self.alpha_n)
         self.log_beta_n = torch.log(self.beta_n)
 
-    @pytest.mark.skipif(not dist.gamma.reparameterized, reason='not implemented')
     def test_elbo_reparameterized(self):
-        self.do_elbo_test(True, 5000)
+        assert dist.gamma.reparameterized
+        self.do_elbo_test(dist.Gamma, 5000)
+
+    def test_elbo_rsvi(self):
+        self.do_elbo_test(ShapeAugmentedGamma, 5000)
 
     def test_elbo_nonreparameterized(self):
-        self.do_elbo_test(False, 10000)
+        self.do_elbo_test(fakes.NonreparameterizedGamma, 10000)
 
-    def do_elbo_test(self, reparameterized, n_steps):
+    def do_elbo_test(self, gamma_dist, n_steps):
         pyro.clear_param_store()
-        gamma = dist.gamma if reparameterized else fakes.nonreparameterized_gamma
 
         def model():
-            lambda_latent = pyro.sample("lambda_latent", gamma, self.alpha0, self.beta0)
+            lambda_latent = pyro.sample("lambda_latent", gamma_dist(self.alpha0, self.beta0))
             pyro.observe("obs0", dist.exponential, self.data[0], lambda_latent)
             pyro.observe("obs1", dist.exponential, self.data[1], lambda_latent)
             return lambda_latent
@@ -253,7 +258,7 @@ class ExponentialGammaTests(TestCase):
                 "beta_q_log",
                 Variable(self.log_beta_n.data - 0.143, requires_grad=True))
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
-            pyro.sample("lambda_latent", gamma, alpha_q, beta_q)
+            pyro.sample("lambda_latent", gamma_dist(alpha_q, beta_q))
 
         adam = optim.Adam({"lr": .0003, "betas": (0.97, 0.999)})
         svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
@@ -284,9 +289,8 @@ class BernoulliBetaTests(TestCase):
         self.log_alpha_n = torch.log(self.alpha_n)
         self.log_beta_n = torch.log(self.beta_n)
 
-    @pytest.mark.xfail(reason='low precision gradient?')
-    @pytest.mark.skipif(not dist.beta.reparameterized, reason='not implemented')
     def test_elbo_reparameterized(self):
+        assert dist.beta.reparameterized
         self.do_elbo_test(True, 10000)
 
     def test_elbo_nonreparameterized(self):
@@ -392,12 +396,12 @@ class LogNormalNormalTests(TestCase):
         def model():
             zero = Variable(torch.zeros(1))
             one = Variable(torch.ones(1))
-            mu_latent = pyro.sample("mu_latent", dist.normal,
-                                    self.mu0, torch.pow(self.tau0, -0.5))
+            mu_latent = pyro.sample("mu_latent",
+                                    dist.Normal(self.mu0, torch.pow(self.tau0, -0.5)))
             bijector = AffineExp(torch.pow(self.tau, -0.5), mu_latent)
-            x_dist = TransformedDistribution(dist.normal, bijector)
-            pyro.observe("obs0", x_dist, self.data[0], zero, one)
-            pyro.observe("obs1", x_dist, self.data[1], zero, one)
+            x_dist = TransformedDistribution(dist.Normal(zero, one), bijector)
+            pyro.observe("obs0", x_dist, self.data[0])
+            pyro.observe("obs1", x_dist, self.data[1])
             return mu_latent
 
         def guide():

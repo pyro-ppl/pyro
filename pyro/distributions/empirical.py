@@ -5,9 +5,9 @@ import torch
 from torch.autograd import Variable
 
 from pyro.distributions.distribution import Distribution
-from pyro.distributions.categorical import Categorical
+from pyro.distributions.torch.categorical import Categorical
 from pyro.distributions.util import copy_docs_from
-import pyro.util as util
+from pyro.util import log_sum_exp
 
 
 def _eq(x, y):
@@ -47,7 +47,7 @@ class Empirical(Distribution):
     """
     enumerable = True
 
-    def __init__(self, values, logits=None, batch_size=None, log_pdf_mask=None, *args, **kwargs):
+    def __init__(self, values, logits=None, log_pdf_mask=None, *args, **kwargs):
         super(Empirical, self).__init__(*args, **kwargs)
         self.values = list(values)
         if logits is None:
@@ -55,36 +55,30 @@ class Empirical(Distribution):
 
         if not isinstance(logits, torch.autograd.Variable):
             logits = Variable(logits)
-        logprobs = logits - util.log_sum_exp(logits)
+        logprobs = logits - log_sum_exp(logits)
         self._categorical = Categorical(logits=logprobs)
-        if batch_size is not None:
-            raise NotImplementedError
         if log_pdf_mask is not None:
             raise NotImplementedError
 
-    def batch_shape(self, x=None):
-        if x is not None:
-            raise NotImplementedError
+    @property
+    def batch_shape(self):
         return torch.Size()
 
+    @property
     def event_shape(self):
         return self.values[0].size()
 
-    def sample(self):
+    def sample(self, sample_shape=torch.Size()):
+        if sample_shape:
+            raise NotImplementedError
         ix = self._categorical.sample().data[0]
         return self.values[ix]
 
-    def log_pdf(self, x):
+    def log_prob(self, x):
         if hasattr(x, "size") and x.size() != self.event_shape():
             raise ValueError
         ix = _index(self.values, x)
-        return self._categorical.log_pdf(Variable(torch.Tensor([ix])))
-
-    def batch_log_pdf(self, x):
-        if hasattr(x, "size") and x.size() != self.event_shape():
-            raise ValueError
-        ix = _index(self.values, x)
-        return self._categorical.batch_log_pdf(Variable(torch.Tensor([ix])))
+        return self._categorical.log_prob(Variable(torch.Tensor([ix])))
 
     def enumerate_support(self):
         return self.values[:]

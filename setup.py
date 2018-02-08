@@ -37,7 +37,6 @@ setup(
     author_email='pyro@uber.com',
     install_requires=[
         'numpy>=1.7',
-        'scipy>=0.19.0',
         'cloudpickle>=0.3.1',
         'graphviz>=0.8',
         'networkx>=2.0.0',
@@ -56,7 +55,9 @@ setup(
             'pytest',
             'pytest-cov',
             'nbval',
+            'scipy>=0.19.0',
             # examples/tutorials
+            'matplotlib',
             'visdom',
             'torchvision',
         ],
