@@ -14,7 +14,7 @@ class PyroOptim(object):
     :param optim_args: a dictionary of learning arguments for the optimizer or a callable that returns
         such dictionaries
     """
-    def __init__(self, optim_constructor, optim_args):
+    def __init__(self, optim_constructor, optim_args, arg_checker=None):
         self.pt_optim_constructor = optim_constructor
 
         # must be callable or dict
@@ -29,6 +29,9 @@ class PyroOptim(object):
 
         # any optimizer state that's waiting to be consumed (because that parameter hasn't been seen before)
         self._state_waiting_to_be_consumed = {}
+
+        # function to check that parameters are within bounds
+        self.arg_checker = arg_checker
 
     def __call__(self, params,  *args, **kwargs):
         """
@@ -114,6 +117,10 @@ class PyroOptim(object):
 
             # must be dictionary
             assert isinstance(opt_dict, dict), "per-param optim arg must return defaults dictionary"
+            if self.arg_checker:
+                self.arg_checker(opt_dict)
             return opt_dict
         else:
+            if self.arg_checker:
+                self.arg_checker(self.pt_optim_args)
             return self.pt_optim_args

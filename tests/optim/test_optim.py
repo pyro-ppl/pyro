@@ -75,3 +75,7 @@ class OptimTests(TestCase):
         free_param_unchanged = torch.equal(pyro.param(free_param).data, torch.zeros(1))
         fixed_param_unchanged = torch.equal(pyro.param(fixed_param).data, torch.zeros(1))
         assert fixed_param_unchanged and not free_param_unchanged
+        adam3 = optim.Adam({'betas': (1.0, 0.9)})
+        svi3 = SVI(model, guide, adam3, loss="ELBO", trace_graph=True)
+        with self.assertRaisesRegexp(ValueError, "Invalid beta parameter at index 0: 1.0"):
+            svi3.step()
