@@ -184,7 +184,7 @@ class TraceGraph_ELBO(object):
     [2] `Neural Variational Inference and Learning in Belief Networks`
         Andriy Mnih, Karol Gregor
     """
-    def __init__(self, num_particles=1, enum_discrete=False):
+    def __init__(self, num_particles=1, enum_discrete=False, use_analytic_kl=False):
         """
         :param num_particles: the number of particles (samples) used to form the estimator
         :param bool enum_discrete: whether to sum over discrete latent variables, rather than sample them
@@ -192,6 +192,8 @@ class TraceGraph_ELBO(object):
         super(TraceGraph_ELBO, self).__init__()
         self.num_particles = num_particles
         self.enum_discrete = enum_discrete
+        if use_analytic_kl:
+            raise NotImplementedError("https://github.com/uber/pyro/issues/688")
 
     def _get_traces(self, model, guide, *args, **kwargs):
         """
