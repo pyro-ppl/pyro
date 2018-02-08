@@ -3,6 +3,7 @@ import pyro.util
 import pyro.poutine as poutine
 import pyro.distributions as dist
 
+import contextlib
 import functools
 import torch
 from torch.autograd import Variable
