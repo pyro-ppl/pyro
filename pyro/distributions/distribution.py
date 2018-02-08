@@ -170,7 +170,7 @@ class Distribution(object):
         raise NotImplementedError
 
     @abstractmethod
-    def log_prob(self, x):
+    def log_prob(self, x, sample_shape=torch.Size()):
         """
         Evaluates log probability densities for each of a batch of samples.
 
@@ -183,7 +183,7 @@ class Distribution(object):
         """
         raise NotImplementedError
 
-    def score_parts(self, x):
+    def score_parts(self, x, sample_shape=torch.Size()):
         """
         Computes ingredients for stochastic gradient estimators of ELBO.
 
@@ -196,7 +196,7 @@ class Distribution(object):
         :return: A `ScoreParts` object containing parts of the ELBO estimator.
         :rtype: ScoreParts
         """
-        log_pdf = self.log_prob(x)
+        log_pdf = self.log_prob(x, sample_shape)
         if self.reparameterized:
             return ScoreParts(log_pdf=log_pdf, score_function=0, entropy_term=log_pdf)
         else:
@@ -204,7 +204,7 @@ class Distribution(object):
             # See Roeder, Wu, Duvenaud (2017) "Sticking the Landing" https://arxiv.org/abs/1703.09194
             return ScoreParts(log_pdf=log_pdf, score_function=log_pdf, entropy_term=0)
 
-    def enumerate_support(self):
+    def enumerate_support(self, sample_shape=torch.Size()):
         """
         Returns a representation of the parametrized distribution's support,
         along the first dimension. This is implemented only by discrete

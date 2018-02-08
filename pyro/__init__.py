@@ -132,7 +132,7 @@ class _Subsample(Distribution):
             result = Variable(torch.randperm(self.size)[:self.subsample_size])
         return result.cuda() if self.use_cuda else result
 
-    def log_prob(self, x):
+    def log_prob(self, x, sample_shape=torch.Size()):
         # This is zero so that iarange can provide an unbiased estimate of
         # the non-subsampled log_prob.
         result = Variable(torch.zeros(1))

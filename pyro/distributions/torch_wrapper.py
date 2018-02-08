@@ -40,7 +40,9 @@ class TorchDistribution(Distribution):
         else:
             return self.torch_dist.sample(sample_shape)
 
-    def log_prob(self, x):
+    def log_prob(self, x, sample_shape=torch.Size()):
+        if sample_shape:
+            x = x.expand(sample_shape + self.torch_dist.batch_shape + self.torch_dist.event_shape)
         log_prob = self.torch_dist.log_prob(x)
         for _ in range(self.extra_event_dims):
             log_prob = log_prob.sum(-1)
@@ -51,5 +53,9 @@ class TorchDistribution(Distribution):
             log_prob = log_prob * self.log_pdf_mask
         return log_prob
 
-    def enumerate_support(self):
-        return self.torch_dist.enumerate_support()
+    def enumerate_support(self, sample_shape=torch.Size()):
+        value = self.torch_dist.enumerate_support()
+        if sample_shape:
+            value = value.contiguous().view(
+                value.shape[:1] + sample_shape + self.torch_dist.batch_shape + self.torch_dist.event_shape)
+        return value

@@ -48,16 +48,16 @@ class RandomPrimitive(Distribution):
     __call__ = sample
 
     def log_prob(self, x, *args, **kwargs):
-        kwargs.pop('sample_shape', None)
-        return self.dist_class(*args, **kwargs).log_prob(x)
+        sample_shape = kwargs.pop('sample_shape', torch.Size())
+        return self.dist_class(*args, **kwargs).log_prob(x, sample_shape)
 
     def score_parts(self, x, *args, **kwargs):
-        kwargs.pop('sample_shape', None)
-        return self.dist_class(*args, **kwargs).score_parts(x)
+        sample_shape = kwargs.pop('sample_shape', torch.Size())
+        return self.dist_class(*args, **kwargs).score_parts(x, sample_shape)
 
     def enumerate_support(self, *args, **kwargs):
-        kwargs.pop('sample_shape', None)
-        return self.dist_class(*args, **kwargs).enumerate_support()
+        sample_shape = kwargs.pop('sample_shape', torch.Size())
+        return self.dist_class(*args, **kwargs).enumerate_support(sample_shape)
 
     def analytic_mean(self, *args, **kwargs):
         kwargs.pop('sample_shape', None)

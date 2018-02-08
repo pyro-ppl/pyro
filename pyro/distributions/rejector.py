@@ -56,10 +56,10 @@ class Rejector(Distribution):
                 done |= accept
         return x
 
-    def log_prob(self, x):
+    def log_prob(self, x, sample_shape=torch.Size()):
         return self._propose_batch_log_pdf(x) + self._log_prob_accept(x)
 
-    def score_parts(self, x):
+    def score_parts(self, x, sample_shape=torch.Size()):
         score_function = self._log_prob_accept(x)
-        log_pdf = self.log_prob(x)
+        log_pdf = self.log_prob(x, sample_shape)
         return ScoreParts(log_pdf, score_function, log_pdf)
