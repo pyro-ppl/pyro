@@ -25,21 +25,21 @@ class RandomPrimitive(Distribution):
     def reparameterized(self):
         return self.dist_class.reparameterized
 
-    def batch_shape(self, x=None, *args, **kwargs):
+    def batch_shape(self, *args, **kwargs):
         kwargs.pop('sample_shape', None)
-        return self.dist_class(*args, **kwargs).batch_shape(x)
+        return self.dist_class(*args, **kwargs).batch_shape
 
     def event_shape(self, *args, **kwargs):
         kwargs.pop('sample_shape', None)
-        return self.dist_class(*args, **kwargs).event_shape()
+        return self.dist_class(*args, **kwargs).event_shape
 
     def event_dim(self, *args, **kwargs):
         kwargs.pop('sample_shape', None)
-        return self.dist_class(*args, **kwargs).event_dim()
+        return self.dist_class(*args, **kwargs).event_dim
 
-    def shape(self, x=None, *args, **kwargs):
-        kwargs.pop('sample_shape', None)
-        return self.dist_class(*args, **kwargs).shape(x)
+    def shape(self, *args, **kwargs):
+        sample_shape = kwargs.pop('sample_shape', torch.Size())
+        return self.dist_class(*args, **kwargs).shape(sample_shape)
 
     def sample(self, *args, **kwargs):
         sample_shape = kwargs.pop('sample_shape', torch.Size())
@@ -47,13 +47,9 @@ class RandomPrimitive(Distribution):
 
     __call__ = sample
 
-    def log_pdf(self, x, *args, **kwargs):
+    def log_prob(self, x, *args, **kwargs):
         kwargs.pop('sample_shape', None)
-        return self.dist_class(*args, **kwargs).log_pdf(x)
-
-    def batch_log_pdf(self, x, *args, **kwargs):
-        kwargs.pop('sample_shape', None)
-        return self.dist_class(*args, **kwargs).batch_log_pdf(x)
+        return self.dist_class(*args, **kwargs).log_prob(x)
 
     def score_parts(self, x, *args, **kwargs):
         kwargs.pop('sample_shape', None)

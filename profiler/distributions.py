@@ -6,7 +6,7 @@ import torch
 from torch.autograd import Variable
 
 from profiler.profiling_utils import Profile, profile_print
-from pyro.distributions import (bernoulli, beta, categorical, cauchy, dirichlet, exponential, gamma, halfcauchy,
+from pyro.distributions import (bernoulli, beta, categorical, cauchy, dirichlet, exponential, gamma,
                                 lognormal, normal, one_hot_categorical, poisson, uniform)
 
 
@@ -40,10 +40,6 @@ DISTRIBUTIONS = {
     'lognormal': (lognormal, {
         'mu': T([0.5, 0.5, 0.5, 0.5]),
         'sigma': T([1.2, 1.2, 1.2, 1.2])
-    }),
-    'halfcauchy': (halfcauchy, {
-        'mu': T([0.5, 0.5, 0.5, 0.5]),
-        'gamma': T([1.2, 1.2, 1.2, 1.2])
     }),
     'cauchy': (cauchy, {
         'mu': T([0.5, 0.5, 0.5, 0.5]),
@@ -79,7 +75,7 @@ def get_tool_cfg():
     tool_cfg=get_tool_cfg,
     fn_id=lambda dist, batch_size, *args, **kwargs: 'sample_' + dist.dist_class.__name__ + '_N=' + str(batch_size))
 def sample(dist, batch_size, *args, **kwargs):
-    return dist.sample(batch_size=batch_size, *args, **kwargs)
+    return dist.sample(sample_shape=(batch_size,), *args, **kwargs)
 
 
 @Profile(
@@ -87,8 +83,8 @@ def sample(dist, batch_size, *args, **kwargs):
     tool_cfg=get_tool_cfg,
     fn_id=lambda dist, batch, *args, **kwargs:  #
     'batch_log_pdf_' + dist.dist_class.__name__ + '_N=' + str(batch.size()[0]))
-def batch_log_pdf(dist, batch, *args, **kwargs):
-    return dist.batch_log_pdf(batch, *args, **kwargs)
+def log_prob(dist, batch, *args, **kwargs):
+    return dist.log_prob(batch, *args, **kwargs)
 
 
 def run_with_tool(tool, dists, batch_sizes):
@@ -104,14 +100,14 @@ def run_with_tool(tool, dists, batch_sizes):
     with profile_print(column_widths, field_format, template) as out:
         column_headers = []
         for size in batch_sizes:
-            column_headers += ['SAMPLE (N=' + str(size) + ')', 'BATCH_LOG_PDF (N=' + str(size) + ')']
+            column_headers += ['SAMPLE (N=' + str(size) + ')', 'LOG_PROB (N=' + str(size) + ')']
         out.header(['DISTRIBUTION'] + column_headers)
         for dist_name in dists:
             dist, params = DISTRIBUTIONS[dist_name]
             result_row = [dist_name]
             for size in batch_sizes:
                 sample_result, sample_prof = sample(dist, batch_size=size, **params)
-                _, logpdf_prof = batch_log_pdf(dist, sample_result, **params)
+                _, logpdf_prof = log_prob(dist, sample_result, **params)
                 result_row += [sample_prof, logpdf_prof]
             out.push(result_row)
 

@@ -12,7 +12,8 @@ class Rejector(Distribution):
     Rejection sampled distribution given an acceptance rate function.
 
     :param Distribution propose: A proposal distribution that samples batched
-        propsals via `propose()`.
+        proposals via ``propose()``. :meth:`sample` supports a ``sample_shape``
+        arg only if ``propose()`` supports a ``sample_shape`` arg.
     :param callable log_prob_accept: A callable that inputs a batch of
         proposals and returns a batch of log acceptance probabilities.
     :param log_scale: Total log probability of acceptance.
@@ -36,17 +37,17 @@ class Rejector(Distribution):
 
     def _propose_batch_log_pdf(self, x):
         if x is not self._propose_batch_log_pdf_cache[0]:
-            self._propose_batch_log_pdf_cache = x, self.propose.batch_log_pdf(x)
+            self._propose_batch_log_pdf_cache = x, self.propose.log_prob(x)
         return self._propose_batch_log_pdf_cache[1]
 
-    def sample(self):
+    def sample(self, sample_shape=torch.Size()):
         # Implements parallel batched accept-reject sampling.
-        x = self.propose()
+        x = self.propose(sample_shape) if sample_shape else self.propose()
         log_prob_accept = self.log_prob_accept(x)
         probs = torch.exp(log_prob_accept).clamp_(0.0, 1.0)
         done = torch.bernoulli(probs).byte()
         while not done.all():
-            proposed_x = self.propose()
+            proposed_x = self.propose(sample_shape) if sample_shape else self.propose()
             log_prob_accept = self.log_prob_accept(proposed_x)
             prob_accept = torch.exp(log_prob_accept).clamp_(0.0, 1.0)
             accept = torch.bernoulli(prob_accept).byte() & ~done
@@ -55,10 +56,10 @@ class Rejector(Distribution):
                 done |= accept
         return x
 
-    def batch_log_pdf(self, x):
+    def log_prob(self, x):
         return self._propose_batch_log_pdf(x) + self._log_prob_accept(x)
 
     def score_parts(self, x):
         score_function = self._log_prob_accept(x)
-        log_pdf = self.batch_log_pdf(x)
+        log_pdf = self.log_prob(x)
         return ScoreParts(log_pdf, score_function, log_pdf)

@@ -7,7 +7,7 @@ from torch.distributions import constraints
 from torch.distributions.utils import lazy_property
 
 from pyro.distributions.torch_wrapper import TorchDistribution
-from pyro.distributions.util import broadcast_shape, copy_docs_from
+from pyro.distributions.util import copy_docs_from
 
 
 def _matrix_inverse_compat(matrix, matrix_chol):
@@ -17,7 +17,7 @@ def _matrix_inverse_compat(matrix, matrix_chol):
         return torch.inverse(matrix)
     else:
         # Use the cheaper Cholesky based potri.
-        return torch.potri(matrix_chol)
+        return torch.potri(matrix_chol, upper=False)
 
 
 # TODO Move this upstream to PyTorch.
@@ -32,19 +32,27 @@ class TorchMultivariateNormal(torch.distributions.Distribution):
         batch_shape, event_shape = loc.shape[:-1], loc.shape[-1:]
         super(TorchMultivariateNormal, self).__init__(batch_shape, event_shape)
 
+    @property
+    def mean(self):
+        return self.loc
+
+    @property
+    def variance(self):
+        return self.covariance_matrix.diag()
+
     @lazy_property
-    def scale_triu(self):
-        return torch.potrf(self.covariance_matrix)
+    def scale_tril(self):
+        return torch.potrf(self.covariance_matrix, upper=False)
 
     def rsample(self, sample_shape=torch.Size()):
         white = self.loc.new(sample_shape + self.loc.shape).normal_()
-        return self.loc + torch.matmul(white, self.scale_triu)
+        return self.loc + torch.matmul(white, self.scale_tril.t())
 
     def log_prob(self, value):
         delta = value - self.loc
-        sigma_inverse = _matrix_inverse_compat(self.covariance_matrix, self.scale_triu)
+        sigma_inverse = _matrix_inverse_compat(self.covariance_matrix, self.scale_tril)
         normalization_const = ((0.5 * self.event_shape[-1]) * math.log(2 * math.pi) +
-                               self.scale_triu.diag().log().sum(-1))
+                               self.scale_tril.diag().log().sum(-1))
         mahalanobis_squared = (delta * torch.matmul(delta, sigma_inverse)).sum(-1)
         return -(normalization_const + 0.5 * mahalanobis_squared)
 
@@ -64,18 +72,4 @@ class MultivariateNormal(TorchDistribution):
 
     def __init__(self, loc, covariance_matrix, *args, **kwargs):
         torch_dist = TorchMultivariateNormal(loc, covariance_matrix)
-        x_shape = torch.Size(broadcast_shape(loc.shape, covariance_matrix.shape[:-1], strict=True))
-        event_dim = 1
-        super(MultivariateNormal, self).__init__(torch_dist, x_shape, event_dim, *args, **kwargs)
-
-    def batch_log_pdf(self, x):
-        batch_log_pdf = self.torch_dist.log_prob(x).view(self.batch_shape(x) + (1,))
-        if self.log_pdf_mask is not None:
-            batch_log_pdf = batch_log_pdf * self.log_pdf_mask
-        return batch_log_pdf
-
-    def analytic_mean(self):
-        return self.torch_dist.loc
-
-    def analytic_var(self):
-        return torch.diag(self.torch_dist.covariance_matrix)
+        super(MultivariateNormal, self).__init__(torch_dist, *args, **kwargs)
