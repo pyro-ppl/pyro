@@ -11,8 +11,13 @@ def Adam(optim_args):
     """
     A wrapper for torch.optim.Adam
     """
-    return PyroOptim(torch.optim.Adam, optim_args)
+    return PyroOptim(torch.optim.Adam, optim_args, _adam_checker)
 
+def _adam_checker(optim_args):
+    assert (optim_args['betas'][0] >= 0.0 and optim_args['betas'][0] < 1.0 \
+        if 'betas' in optim_args.keys() else True), "Invalid beta parameter at index 0: %f" % optim_args['betas'][0]
+    assert (optim_args['betas'][1] >= 0.0 and optim_args['betas'][1] < 1.0 \
+        if 'betas' in optim_args.keys() else True), "Invalid beta parameter at index 1: %f" % optim_args['betas'][1]
 
 def Adadelta(optim_args):
     """
