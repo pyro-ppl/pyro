@@ -26,6 +26,14 @@ class TransformedDistribution(TorchDistribution):
         super(TransformedDistribution, self).__init__(torch_dist, *args, **kwargs)
 
     @property
+    def base_dist(self):
+        return self.torch_dist.base_dist
+
+    @property
+    def transforms(self):
+        return self.torch_dist.transforms
+
+    @property
     def reparameterized(self):
         return self.base_dist.reparameterized
 
