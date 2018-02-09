@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import numbers
 import warnings
 from collections import namedtuple
 
@@ -15,6 +16,8 @@ from pyro.util import check_model_guide_match, detach_iterable, ng_zeros
 
 CostNode = namedtuple("CostNode", ["cost", "nonzero_expectation"])
 
+def is_identically_zero(x):
+        return isinstance(x, numbers.Number) and x == 0
 
 def _get_baseline_options(site):
     """
@@ -156,13 +159,15 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
             # accumulate baseline loss
             baseline_loss += torch.pow(downstream_cost.detach() - baseline, 2.0).sum()
 
-        guide_log_pdf = guide_site[log_pdf_key] / guide_site["scale"]  # not scaled by subsampling
+        guide_log_pdf, score_function_term, entropy_term = guide_site["score_parts"]
+        if log_pdf_key=='log_pdf':
+            score_function_term = score_function_term.sum()
         if use_nn_baseline or use_decaying_avg_baseline or use_baseline_value:
             if downstream_cost.size() != baseline.size():
                 raise ValueError("Expected baseline at site {} to be {} instead got {}".format(
                     node, downstream_cost.size(), baseline.size()))
             downstream_cost = downstream_cost - baseline
-        surrogate_elbo += (guide_log_pdf * downstream_cost.detach()).sum()
+        surrogate_elbo += (score_function_term * downstream_cost.detach()).sum()
 
     return surrogate_elbo, baseline_loss
 
@@ -279,6 +284,7 @@ class TraceGraph_ELBO(object):
         guide_trace.log_pdf()
         model_trace.compute_batch_log_pdf(site_filter=lambda name, site: name in model_vec_md_nodes)
         model_trace.log_pdf()
+        guide_trace.compute_score_parts()
 
         # compute elbo for reparameterized nodes
         non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
