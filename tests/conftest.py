@@ -13,6 +13,7 @@ def pytest_configure(config):
 
 
 def pytest_runtest_setup(item):
+    pyro.clear_param_store()
     test_initialize_marker = item.get_marker("init")
     if test_initialize_marker:
         rng_seed = test_initialize_marker.kwargs["rng_seed"]
