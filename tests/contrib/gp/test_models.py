@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 import torch
 from torch.autograd import Variable
 
-import pyro
 from pyro.contrib.gp.kernels import RBF
 from pyro.contrib.gp.models import GPRegression, SparseGPRegression
 from pyro.contrib.gp import InducingPoints
