@@ -14,7 +14,7 @@ from pyro.infer.util import torch_backward, torch_data_sum
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, detach_iterable, ng_zeros
 
-CostNode = namedtuple("CostNode", ["cost", "nonzero_expectation"])
+#CostNode = namedtuple("CostNode", ["cost", "nonzero_expectation"])
 
 def is_identically_zero(x):
         return isinstance(x, numbers.Number) and x == 0
@@ -99,28 +99,35 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
 def _compute_elbo_reparam(model_trace, guide_trace, non_reparam_nodes):
     # prepare a list of all the cost nodes, each of which is +- log_pdf
     cost_nodes = []
+    elbo = 0.0
+    surrogate_elbo = 0.0
     for name, model_site in model_trace.nodes.items():
         if model_site["type"] == "sample":
             if model_site["is_observed"]:
-                cost_nodes.append(CostNode(model_site["log_pdf"], True))
+                #cost_nodes.append(CostNode(model_site["log_pdf"], True))
+                elbo += model_site["log_pdf"]
+                surrogate_elbo += model_site["log_pdf"]
             else:
                 # cost node from model sample
-                cost_nodes.append(CostNode(model_site["log_pdf"], True))
+                # cost_nodes.append(CostNode(model_site["log_pdf"], True))
+                elbo += model_site["log_pdf"]
+                surrogate_elbo += model_site["log_pdf"]
                 # cost node from guide sample
                 guide_site = guide_trace.nodes[name]
-                zero_expectation = name in non_reparam_nodes
-                cost_nodes.append(CostNode(-guide_site["log_pdf"], not zero_expectation))
+                elbo -= guide_site["score_parts"][2]
+                surrogate_elbo -= guide_site["score_parts"][2]
+                #cost_nodes.append(CostNode(-guide_site["log_pdf"], not zero_expectation))
 
     # compute the elbo; if all stochastic nodes are reparameterizable, we're done
     # this bit is never differentiated: it's here for getting an estimate of the elbo itself
-    elbo = torch_data_sum(sum(c.cost for c in cost_nodes))
+    # elbo = torch_data_sum(sum(c.cost for c in cost_nodes))
 
     # compute the surrogate elbo, removing terms whose gradient is zero
     # this is the bit that's actually differentiated
     # XXX should the user be able to control if these terms are included?
-    surrogate_elbo = sum(c.cost for c in cost_nodes if c.nonzero_expectation)
+    # surrogate_elbo = sum(c.cost for c in cost_nodes if c.nonzero_expectation)
 
-    return elbo, surrogate_elbo
+    return torch_data_sum(elbo), surrogate_elbo
 
 
 def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
