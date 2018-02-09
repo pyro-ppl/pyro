@@ -19,11 +19,17 @@ class RandomPrimitive(Distribution):
 
     @property
     def enumerable(self):
-        return self.dist_class.enumerable
+        result = self.dist_class.enumerable
+        if result not in (True, False):
+            raise NotImplementedError('Cannot determine .enumerable; please avoid RandomPrimitive')
+        return result
 
     @property
     def reparameterized(self):
-        return self.dist_class.reparameterized
+        result = self.dist_class.reparameterized
+        if result not in (True, False):
+            raise NotImplementedError('Cannot determine .reparameterized; please avoid RandomPrimitive')
+        return result
 
     def batch_shape(self, *args, **kwargs):
         kwargs.pop('sample_shape', None)
