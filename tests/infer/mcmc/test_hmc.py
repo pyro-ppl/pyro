@@ -33,8 +33,9 @@ class GaussianChain(object):
         mu = pyro.param('mu_0', self.mu_0)
         lambda_prec = self.lambda_prec
         for i in range(1, self.chain_len + 1):
-            mu = pyro.sample('mu_{}'.format(i), dist.normal, mu=mu, sigma=Variable(lambda_prec.data))
-        pyro.sample('obs', dist.normal, mu=mu, sigma=Variable(lambda_prec.data), obs=data)
+            mu = pyro.sample('mu_{}'.format(i),
+                             dist.Normal(mu=mu, sigma=Variable(lambda_prec.data)))
+        pyro.sample('obs', dist.Normal(mu, Variable(lambda_prec.data)), obs=data)
 
     @property
     def data(self):
@@ -161,12 +162,12 @@ def test_logistic_regression():
     dim = 3
     true_coefs = Variable(torch.arange(1, dim+1))
     data = Variable(torch.randn(2000, dim))
-    labels = dist.bernoulli.sample(logits=(true_coefs * data).sum(-1))
+    labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
 
     def model(data):
         coefs_mean = Variable(torch.zeros(dim), requires_grad=True)
-        coefs = pyro.sample('beta', dist.normal, mu=coefs_mean, sigma=Variable(torch.ones(dim)))
-        y = pyro.sample('y', dist.bernoulli, logits=(coefs * data).sum(-1), obs=labels)
+        coefs = pyro.sample('beta', dist.Normal(coefs_mean, Variable(torch.ones(dim))))
+        y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
         return y
 
     hmc_kernel = HMC(model, step_size=0.0855, num_steps=4)

@@ -30,9 +30,9 @@ def test_named_object():
     def model():
         latent = named.Object("latent")
         mu = latent.mu.param_(Variable(torch.zeros(1)))
-        foo = latent.foo.sample_(dist.normal, mu, ng_ones(1))
-        latent.bar.observe_(dist.normal, foo, mu, ng_ones(1))
-        latent.x.z.sample_(dist.normal, mu, ng_ones(1))
+        foo = latent.foo.sample_(dist.Normal(mu, ng_ones(1)))
+        latent.bar.observe_(dist.Normal(mu, ng_ones(1)), foo)
+        latent.x.z.sample_(dist.Normal(mu, ng_ones(1)))
 
     tr = poutine.trace(model).get_trace()
     assert get_sample_names(tr) == set(["latent.foo", "latent.x.z"])
@@ -46,9 +46,9 @@ def test_named_list():
     def model():
         latent = named.List("latent")
         mu = latent.add().param_(Variable(torch.zeros(1)))
-        foo = latent.add().sample_(dist.normal, mu, ng_ones(1))
-        latent.add().observe_(dist.normal, foo, mu, ng_ones(1))
-        latent.add().z.sample_(dist.normal, mu, ng_ones(1))
+        foo = latent.add().sample_(dist.Normal(mu, ng_ones(1)))
+        latent.add().observe_(dist.Normal(mu, ng_ones(1)), foo)
+        latent.add().z.sample_(dist.Normal(mu, ng_ones(1)))
 
     tr = poutine.trace(model).get_trace()
     assert get_sample_names(tr) == set(["latent[1]", "latent[3].z"])
@@ -62,9 +62,9 @@ def test_named_dict():
     def model():
         latent = named.Dict("latent")
         mu = latent["mu"].param_(Variable(torch.zeros(1)))
-        foo = latent["foo"].sample_(dist.normal, mu, ng_ones(1))
-        latent["bar"].observe_(dist.normal, foo, mu, ng_ones(1))
-        latent["x"].z.sample_(dist.normal, mu, ng_ones(1))
+        foo = latent["foo"].sample_(dist.Normal(mu, ng_ones(1)))
+        latent["bar"].observe_(dist.Normal(mu, ng_ones(1)), foo)
+        latent["x"].z.sample_(dist.Normal(mu, ng_ones(1)))
 
     tr = poutine.trace(model).get_trace()
     assert get_sample_names(tr) == set(["latent['foo']", "latent['x'].z"])
@@ -80,8 +80,8 @@ def test_nested():
         latent.list = named.List()
         mu = latent.list.add().mu.param_(Variable(torch.zeros(1)))
         latent.dict = named.Dict()
-        foo = latent.dict["foo"].foo.sample_(dist.normal, mu, ng_ones(1))
-        latent.object.bar.observe_(dist.normal, foo, mu, ng_ones(1))
+        foo = latent.dict["foo"].foo.sample_(dist.Normal(mu, ng_ones(1)))
+        latent.object.bar.observe_(dist.Normal(mu, ng_ones(1)), foo)
 
     tr = poutine.trace(model).get_trace()
     assert get_sample_names(tr) == set(["latent.dict['foo'].foo"])

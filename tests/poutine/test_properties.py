@@ -60,7 +60,7 @@ tr_normal.add_node("normal_0", type="sample", is_observed=False, value=ng_zeros(
                 condition={'data': {'normal_0': ng_zeros(1)}},
                 do={'data': {'normal_0': ng_zeros(1)}})
 def normal_model():
-    normal_0 = pyro.sample('normal_0', dist.normal, ng_zeros(1), ng_ones(1))
+    normal_0 = pyro.sample('normal_0', dist.Normal(ng_zeros(1), ng_ones(1)))
     return [normal_0]
 
 
@@ -73,9 +73,10 @@ tr_normal_normal.add_node("normal_0", type="sample", is_observed=False, value=ng
                 condition={'data': {'normal_0': ng_zeros(1)}},
                 do={'data': {'normal_0': ng_zeros(1)}})
 def normal_normal_model():
-    normal_0 = pyro.sample('normal_0', dist.normal, ng_zeros(1), ng_ones(1))
+    normal_0 = pyro.sample('normal_0', dist.Normal(ng_zeros(1), ng_ones(1)))
     normal_1 = ng_ones(1)
-    pyro.observe('normal_1', dist.normal, normal_1, normal_0, ng_ones(1))
+    pyro.sample('normal_1', dist.Normal(normal_0, ng_ones(1)),
+                obs=normal_1)
     return [normal_0, normal_1]
 
 
@@ -88,10 +89,11 @@ tr_bernoulli_normal.add_node("bern_0", type="sample", is_observed=False, value=n
                 condition={'data': {'bern_0': ng_ones(1)}},
                 do={'data': {'bern_0': ng_ones(1)}})
 def bernoulli_normal_model():
-    bern_0 = pyro.sample('bern_0', dist.bernoulli, ng_zeros(1) * 1e-2)
+    bern_0 = pyro.sample('bern_0', dist.Bernoulli(ng_zeros(1) * 1e-2))
     mu = ng_ones(1) if bern_0.data[0] else -ng_ones(1)
     normal_0 = ng_ones(1)
-    pyro.observe('normal_0', dist.normal, normal_0, mu, ng_ones(1) * 1e-2)
+    pyro.sample('normal_0', dist.Normal(mu, ng_ones(1) * 1e-2),
+                obs=normal_0)
     return [bern_0, normal_0]
 
 
