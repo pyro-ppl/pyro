@@ -24,7 +24,7 @@ class SparseVariationalGP(nn.Module):
     """
     def __init__(self, X, y, kernel, likelihood, Xu, kernel_prior=None,
                  Xu_prior=None, jitter=1e-6):
-        super(GPRegression, self).__init__()
+        super(SparseVariationalGP, self).__init__()
         self.X = X
         self.y = y
         self.kernel = kernel
@@ -42,6 +42,8 @@ class SparseVariationalGP(nn.Module):
     def model(self):
         kernel_fn = pyro.random_module(self.kernel.name, self.kernel, self.kernel_prior)
         kernel = kernel_fn()
+        
+        
 
         zero_loc = Variable(self.X.data.new([0])).expand(self.num_data)
         Kffdiag = kernel(self.X, diag=True)
@@ -82,6 +84,8 @@ class SparseVariationalGP(nn.Module):
                                       requires_grad=True)
         unconstrained_Lu = pyro.param("unconstrained_q_u_tril", Lu_0)
         Lu = transform_to(constraints.lower_cholesky)(unconstrained_Lu)
+        
+        
         
         q_f_loc, q_f_cov = self._predict_f(self.X, kernel, Xu, mu, Lu, full_cov=False)
 

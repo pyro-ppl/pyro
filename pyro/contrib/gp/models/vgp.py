@@ -17,14 +17,11 @@ class VariationalGP(nn.Module):
     :param torch.autograd.Variable y: A tensor of outputs for training.
     :param pyro.contrib.gp.kernels.Kernel kernel: A Pyro kernel object.
     :param pyro.contrib.gp.likelihoods.Likelihood likelihood: A likelihood module.
-    :param pyro.contrib.gp.InducingPoints Xu: An inducing-point module for spare approximation.
     :param dict kernel_prior: A mapping from kernel parameter's names to priors.
-    :param dict Xu_prior: A mapping from inducing point parameter named 'Xu' to a prior.
     :param float jitter: An additional jitter to help stablize Cholesky decomposition.
     """
-    def __init__(self, X, y, kernel, likelihood, Xu, kernel_prior=None,
-                 Xu_prior=None, jitter=1e-6):
-        super(GPRegression, self).__init__()
+    def __init__(self, X, y, kernel, likelihood, kernel_prior=None, jitter=1e-6):
+        super(VariationalGP, self).__init__()
         self.X = X
         self.y = y
         self.kernel = kernel
@@ -59,8 +56,16 @@ class VariationalGP(nn.Module):
 
         kernel_fn = pyro.random_module(self.kernel.name, self.kernel, kernel_guide_prior)
         kernel = kernel_fn()
+        # util here
         
-        # TODO: implement
+        # construct variational guide
+        mu_0 = Variable(Xu.data.new(self.num_inducing).zero_(), requires_grad=True)
+        mu = pyro.param("q_u_loc", mu_0)
+        unconstrained_Lu_0 = Variable(Xu.data.new(self.num_inducing, self.num_inducing).zero_(),
+                                      requires_grad=True)
+        unconstrained_Lu = pyro.param("unconstrained_q_u_tril", Lu_0)
+        Lu = transform_to(constraints.lower_cholesky)(unconstrained_Lu)
+        #
         return kernel
 
     def forward(self, Xnew, full_cov=False):
@@ -79,7 +84,3 @@ class VariationalGP(nn.Module):
             Xnew = Xnew.unsqueeze(1)
 
         # TODO: implement
-    
-    def _predict_f(X, kernel, Xu, mu, Lu, full_cov=False):
-        # TODO: implement
-        pass
