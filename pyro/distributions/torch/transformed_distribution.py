@@ -11,7 +11,7 @@ from pyro.distributions.util import copy_docs_from
 class TransformedDistribution(TorchDistribution):
     r"""
     Extension of the Distribution class, which applies a sequence of Transforms
-    to a base distribution.  Let f be the composition of transforms applied,
+    to a base distribution.  Let f be the composition of transforms applied::
 
         X ~ BaseDistribution
         Y = f(X) ~ TransformedDistribution(BaseDistribution, [f])
@@ -24,3 +24,22 @@ class TransformedDistribution(TorchDistribution):
             raise ValueError('`base_dist` cannot be a RandomPrimitive instance.')
         torch_dist = torch.distributions.TransformedDistribution(base_dist, transforms)
         super(TransformedDistribution, self).__init__(torch_dist, *args, **kwargs)
+
+    @property
+    def base_dist(self):
+        return self.torch_dist.base_dist
+
+    @property
+    def transforms(self):
+        return self.torch_dist.transforms
+
+    @property
+    def reparameterized(self):
+        return self.base_dist.reparameterized
+
+    # We need to override .sample() because PyTorch .sample() is detached.
+    def sample(self, sample_shape=torch.Size()):
+        x = self.base_dist.sample(sample_shape)
+        for transform in self.transforms:
+            x = transform(x)
+        return x

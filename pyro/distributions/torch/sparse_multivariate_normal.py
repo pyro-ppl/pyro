@@ -70,8 +70,9 @@ class TorchSparseMultivariateNormal(torch.distributions.Distribution):
     def _compute_logdet_and_mahalanobis(self, D, W, y, trace_term=0):
         """
         Calculates log determinant and (squared) Mahalanobis term of covariance
-        matrix (D + Wt.W), where D is a diagonal matrix, based on the
-        "Woodbury matrix identity" and "matrix determinant lemma":
+        matrix ``(D + Wt.W)``, where ``D`` is a diagonal matrix, based on the
+        "Woodbury matrix identity" and "matrix determinant lemma"::
+
             inv(D + Wt.W) = inv(D) - inv(D).Wt.inv(I + W.inv(D).Wt).W.inv(D)
             log|D + Wt.W| = log|Id + Wt.inv(D).W| + log|D|
         """
@@ -103,10 +104,12 @@ class SparseMultivariateNormal(TorchDistribution):
     Sparse Multivariate Normal distribution.
 
     Implements fast computation for log probability of Multivariate Normal distribution
-    when the covariance matrix has the form:
+    when the covariance matrix has the form::
+
         covariance_matrix = D + W.T @ W.
-    Here D is a diagonal vector and W is a matrix of size M x N. The computation will be
-    beneficial when M << N.
+
+    Here D is a diagonal vector and ``W`` is a matrix of size ``M x N``. The
+    computation will be beneficial when ``M << N``.
 
     :param torch.autograd.Variable loc: Mean.
         Must be in 1 dimensional of size N.
