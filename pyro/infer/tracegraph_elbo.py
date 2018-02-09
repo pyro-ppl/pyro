@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 import numbers
 import warnings
-from collections import namedtuple
 
 import networkx
 import numpy as np
@@ -14,10 +13,10 @@ from pyro.infer.util import torch_backward, torch_data_sum
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, detach_iterable, ng_zeros
 
-#CostNode = namedtuple("CostNode", ["cost", "nonzero_expectation"])
 
 def is_identically_zero(x):
         return isinstance(x, numbers.Number) and x == 0
+
 
 def _get_baseline_options(site):
     """
@@ -98,13 +97,12 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
 
 def _compute_elbo_reparam(model_trace, guide_trace, non_reparam_nodes):
     # prepare a list of all the cost nodes, each of which is +- log_pdf
-    cost_nodes = []
     elbo = 0.0
     surrogate_elbo = 0.0
     for name, model_site in model_trace.nodes.items():
         if model_site["type"] == "sample":
             if model_site["is_observed"]:
-                #cost_nodes.append(CostNode(model_site["log_pdf"], True))
+                # cost_nodes.append(CostNode(model_site["log_pdf"], True))
                 elbo += model_site["log_pdf"]
                 surrogate_elbo += model_site["log_pdf"]
             else:
@@ -116,7 +114,7 @@ def _compute_elbo_reparam(model_trace, guide_trace, non_reparam_nodes):
                 guide_site = guide_trace.nodes[name]
                 elbo -= guide_site["score_parts"][2]
                 surrogate_elbo -= guide_site["score_parts"][2]
-                #cost_nodes.append(CostNode(-guide_site["log_pdf"], not zero_expectation))
+                # cost_nodes.append(CostNode(-guide_site["log_pdf"], not zero_expectation))
 
     # compute the elbo; if all stochastic nodes are reparameterizable, we're done
     # this bit is never differentiated: it's here for getting an estimate of the elbo itself
@@ -167,7 +165,7 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
             baseline_loss += torch.pow(downstream_cost.detach() - baseline, 2.0).sum()
 
         guide_log_pdf, score_function_term, entropy_term = guide_site["score_parts"]
-        if log_pdf_key=='log_pdf':
+        if log_pdf_key == 'log_pdf':
             score_function_term = score_function_term.sum()
         if use_nn_baseline or use_decaying_avg_baseline or use_baseline_value:
             if downstream_cost.size() != baseline.size():
