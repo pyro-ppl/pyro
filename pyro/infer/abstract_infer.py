@@ -72,14 +72,14 @@ class Histogram(dist.Distribution):
         raise NotImplementedError("_gen_weighted_samples is abstract method")
 
     def sample(self, *args, **kwargs):
+        sample_shape = kwargs.pop("sample_shape", None)
+        if sample_shape:
+            raise ValueError("Arbitrary `sample_shape` not supported by Histogram class.")
         d, values = self._dist_and_values(*args, **kwargs)
         ix = d.sample().data[0]
         return values[ix]
 
-    def log_pdf(self, val, *args, **kwargs):
-        d, values = self._dist_and_values(*args, **kwargs)
-        ix = _index(values, val)
-        return d.log_pdf(Variable(torch.Tensor([ix])))
+    __call__ = sample
 
     def log_prob(self, val, *args, **kwargs):
         d, values = self._dist_and_values(*args, **kwargs)
@@ -125,9 +125,6 @@ class Marginal(Histogram):
                 val = {name: tr.nodes[name]["value"]
                        for name in self.sites}
             yield (val, log_w)
-
-    def log_prob(self, val, *args, **kwargs):
-        raise NotImplementedError("log_prob not well defined for Marginal")
 
 
 class TracePosterior(object):

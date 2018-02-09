@@ -85,7 +85,8 @@ class Distribution(object):
     reparameterized = False
     enumerable = False
 
-    def batch_shape(self, *args, **kwargs):
+    @property
+    def batch_shape(self):
         """
         The left-hand tensor shape of parameters used to index the (possibly)
         non-identical independent draws from the distribution.
@@ -99,7 +100,8 @@ class Distribution(object):
         """
         raise NotImplementedError
 
-    def event_shape(self, *args, **kwargs):
+    @property
+    def event_shape(self):
         """
         The right-hand tensor shape of parameters used for individual events. The
         event dimension(/s) is used to designate random variables that could
@@ -115,14 +117,15 @@ class Distribution(object):
         """
         raise NotImplementedError
 
-    def event_dim(self, *args, **kwargs):
+    @property
+    def event_dim(self):
         """
         :return: Number of dimensions of individual events.
         :rtype: int
         """
-        return len(self.event_shape(*args, **kwargs))
+        return len(self.event_shape)
 
-    def shape(self, sample_shape=torch.Size(), *args, **kwargs):
+    def shape(self, sample_shape=torch.Size()):
         """
         The tensor shape of samples from this distribution.
 
@@ -135,9 +138,9 @@ class Distribution(object):
         :return: Tensor shape of samples.
         :rtype: torch.Size
         """
-        return sample_shape + self.batch_shape(*args, **kwargs) + self.event_shape(*args, **kwargs)
+        return sample_shape + self.batch_shape + self.event_shape
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, sample_shape=torch.Size()):
         """
         Samples a random value (just an alias for `.sample(*args, **kwargs)`).
 
@@ -147,10 +150,10 @@ class Distribution(object):
         :return: A random value.
         :rtype: torch.autograd.Variable
         """
-        return self.sample(*args, **kwargs)
+        return self.sample(sample_shape=sample_shape)
 
     @abstractmethod
-    def sample(self, sample_shape=torch.Size(), *args, **kwargs):
+    def sample(self, sample_shape=torch.Size()):
         """
         Samples a random value.
 
@@ -167,7 +170,7 @@ class Distribution(object):
         raise NotImplementedError
 
     @abstractmethod
-    def log_prob(self, x, *args, **kwargs):
+    def log_prob(self, x):
         """
         Evaluates log probability densities for each of a batch of samples.
 
@@ -180,7 +183,7 @@ class Distribution(object):
         """
         raise NotImplementedError
 
-    def score_parts(self, x, *args, **kwargs):
+    def score_parts(self, x):
         """
         Computes ingredients for stochastic gradient estimators of ELBO.
 
@@ -193,7 +196,7 @@ class Distribution(object):
         :return: A `ScoreParts` object containing parts of the ELBO estimator.
         :rtype: ScoreParts
         """
-        log_pdf = self.log_prob(x, *args, **kwargs)
+        log_pdf = self.log_prob(x)
         if self.reparameterized:
             return ScoreParts(log_pdf=log_pdf, score_function=0, entropy_term=log_pdf)
         else:
@@ -201,7 +204,7 @@ class Distribution(object):
             # See Roeder, Wu, Duvenaud (2017) "Sticking the Landing" https://arxiv.org/abs/1703.09194
             return ScoreParts(log_pdf=log_pdf, score_function=log_pdf, entropy_term=0)
 
-    def enumerate_support(self, *args, **kwargs):
+    def enumerate_support(self):
         """
         Returns a representation of the parametrized distribution's support,
         along the first dimension. This is implemented only by discrete

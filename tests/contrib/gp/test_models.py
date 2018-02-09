@@ -57,6 +57,7 @@ def test_forward_sgpr():
 
 def test_forward_sgpr_vs_gpr():
     kernel = RBF(input_dim=3, variance=torch.Tensor([2]), lengthscale=torch.Tensor([2]))
+    kernel = RBF(input_dim=3, variance=torch.ones(2), lengthscale=torch.ones(2))
     X = Variable(torch.Tensor([[2, 5, 3], [4, 3, 7]]))
     y = Variable(torch.Tensor([0, 1]))
     Xu = InducingPoints(X.data.clone())  # must be set to compare

@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import torch
+from torch.distributions import constraints
 
 from pyro.distributions.distribution import Distribution
 from pyro.distributions.util import copy_docs_from
@@ -19,12 +20,24 @@ class TorchDistribution(Distribution):
         self.log_pdf_mask = log_pdf_mask
         self.extra_event_dims = extra_event_dims
 
+    # TODO define .reparameterized, .enumerable properties once RandomPrimitive is gone
+
+    @constraints.dependent_property
+    def params(self):
+        return self.torch_dist.params
+
+    @constraints.dependent_property
+    def support(self):
+        return self.torch_dist.support
+
+    @property
     def batch_shape(self):
         if self.extra_event_dims == 0:
             return self.torch_dist.batch_shape
         batch_dims = len(self.torch_dist.batch_shape) - self.extra_event_dims
         return self.torch_dist.batch_shape[:batch_dims]
 
+    @property
     def event_shape(self):
         if self.extra_event_dims == 0:
             return self.torch_dist.event_shape
@@ -51,3 +64,6 @@ class TorchDistribution(Distribution):
 
     def enumerate_support(self):
         return self.torch_dist.enumerate_support()
+
+    def _validate_log_prob_arg(self, value):
+        self.torch_dist._validate_log_prob_arg(value)

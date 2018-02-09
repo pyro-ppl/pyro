@@ -19,23 +19,29 @@ class RandomPrimitive(Distribution):
 
     @property
     def enumerable(self):
-        return self.dist_class.enumerable
+        result = self.dist_class.enumerable
+        if result not in (True, False):
+            raise NotImplementedError('Cannot determine .enumerable; please avoid RandomPrimitive')
+        return result
 
     @property
     def reparameterized(self):
-        return self.dist_class.reparameterized
+        result = self.dist_class.reparameterized
+        if result not in (True, False):
+            raise NotImplementedError('Cannot determine .reparameterized; please avoid RandomPrimitive')
+        return result
 
     def batch_shape(self, *args, **kwargs):
         kwargs.pop('sample_shape', None)
-        return self.dist_class(*args, **kwargs).batch_shape()
+        return self.dist_class(*args, **kwargs).batch_shape
 
     def event_shape(self, *args, **kwargs):
         kwargs.pop('sample_shape', None)
-        return self.dist_class(*args, **kwargs).event_shape()
+        return self.dist_class(*args, **kwargs).event_shape
 
     def event_dim(self, *args, **kwargs):
         kwargs.pop('sample_shape', None)
-        return self.dist_class(*args, **kwargs).event_dim()
+        return self.dist_class(*args, **kwargs).event_dim
 
     def shape(self, *args, **kwargs):
         sample_shape = kwargs.pop('sample_shape', torch.Size())

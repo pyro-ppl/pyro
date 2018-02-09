@@ -7,7 +7,29 @@ from torch.autograd import Variable, grad
 from pyro.distributions import Exponential, Gamma
 from pyro.distributions.testing.rejection_exponential import RejectionExponential
 from pyro.distributions.testing.rejection_gamma import RejectionGamma, RejectionStandardGamma, ShapeAugmentedGamma
+from pyro.distributions.testing.rejection_gamma import ShapeAugmentedBeta
 from tests.common import assert_equal
+
+SIZES = list(map(torch.Size, [[], [1], [2], [3], [1, 1], [1, 2], [2, 3, 4]]))
+
+
+@pytest.mark.parametrize('sample_shape', SIZES)
+@pytest.mark.parametrize('batch_shape', filter(bool, SIZES))
+def test_rejection_standard_gamma_sample_shape(sample_shape, batch_shape):
+    alphas = Variable(torch.ones(batch_shape))
+    dist = RejectionStandardGamma(alphas)
+    x = dist.sample(sample_shape)
+    assert x.shape == sample_shape + batch_shape
+
+
+@pytest.mark.parametrize('sample_shape', SIZES)
+@pytest.mark.parametrize('batch_shape', filter(bool, SIZES))
+def test_rejection_exponential_sample_shape(sample_shape, batch_shape):
+    rates = Variable(torch.ones(batch_shape))
+    factors = Variable(torch.ones(batch_shape)) * 0.5
+    dist = RejectionExponential(rates, factors)
+    x = dist.sample(sample_shape)
+    assert x.shape == sample_shape + batch_shape
 
 
 def compute_elbo_grad(model, guide, variables):
@@ -115,3 +137,21 @@ def test_shape_augmented_gamma_elbo(alpha, beta):
     scale = [(1 + abs(g)) for g in expected]
     assert_equal(actual[0] / scale[0], expected[0] / scale[0], prec=0.05, msg='bad grad for alpha')
     assert_equal(actual[1] / scale[1], expected[1] / scale[1], prec=0.05, msg='bad grad for beta')
+
+
+@pytest.mark.parametrize('alpha', [0.5, 1.0, 4.0])
+@pytest.mark.parametrize('beta', [0.5, 1.0, 4.0])
+def test_shape_augmented_beta(alpha, beta):
+    num_samples = 10000
+    alphas = Variable(torch.Tensor([alpha]).expand(num_samples, 1), requires_grad=True)
+    betas = Variable(torch.Tensor([beta]).expand(num_samples, 1), requires_grad=True)
+    dist = ShapeAugmentedBeta(alphas, betas)  # implemented using Rejector
+    z = dist.sample()
+    cost = z.sum()
+    (cost + cost.detach() * dist.score_parts(z)[1]).backward()
+    mean_alpha_grad = alphas.grad.data.mean()
+    mean_beta_grad = betas.grad.data.mean()
+    expected_alpha_grad = beta / (alpha + beta) ** 2
+    expected_beta_grad = -alpha / (alpha + beta) ** 2
+    assert_equal(mean_alpha_grad, expected_alpha_grad, prec=0.01, msg='bad grad for alpha')
+    assert_equal(mean_beta_grad, expected_beta_grad, prec=0.01, msg='bad grad for beta')
