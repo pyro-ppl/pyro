@@ -112,8 +112,8 @@ def _compute_elbo_reparam(model_trace, guide_trace, non_reparam_nodes):
                 surrogate_elbo += model_site["log_pdf"]
                 # cost node from guide sample
                 guide_site = guide_trace.nodes[name]
-                elbo -= guide_site["score_parts"][2]
-                surrogate_elbo -= guide_site["score_parts"][2]
+                elbo -= guide_site["score_parts"][2].sum()
+                surrogate_elbo -= guide_site["score_parts"][2].sum()
                 # cost_nodes.append(CostNode(-guide_site["log_pdf"], not zero_expectation))
 
     # compute the elbo; if all stochastic nodes are reparameterizable, we're done
