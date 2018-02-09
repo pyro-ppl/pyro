@@ -71,8 +71,8 @@ def test_mean_and_var(lognormal):
     torch_samples = trans_dist.sample(sample_shape=torch.Size((lognormal.get_num_samples(0),)))
     torch_mean = torch.mean(torch_samples, 0)
     torch_std = torch.std(torch_samples, 0)
-    analytic_mean = lognormal.pyro_dist_class(**dist_params).analytic_mean()
-    analytic_std = lognormal.pyro_dist_class(**dist_params).analytic_var() ** 0.5
+    analytic_mean = lognormal.pyro_dist(**dist_params).analytic_mean()
+    analytic_std = lognormal.pyro_dist(**dist_params).analytic_var() ** 0.5
     precision = analytic_mean.max().data[0] * 0.05
     assert_equal(torch_mean, analytic_mean, prec=precision)
     assert_equal(torch_std, analytic_std, prec=precision)
