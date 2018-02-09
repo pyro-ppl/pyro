@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 import torch
 from torch.autograd import Variable
 
-
+import pyro
 from pyro.contrib.gp.kernels import RBF
 from pyro.contrib.gp.models import GPRegression, SparseGPRegression
 from pyro.contrib.gp import InducingPoints
@@ -11,7 +11,7 @@ from tests.common import assert_equal
 
 
 def test_forward_gpr():
-    kernel = RBF(input_dim=3, variance=torch.Tensor([1]), lengthscale=torch.Tensor([3]), name="rbf1")
+    kernel = RBF(input_dim=3, variance=torch.Tensor([1]), lengthscale=torch.Tensor([3]))
     X = Variable(torch.Tensor([[1, 2, 3], [4, 5, 6]]))
     y = Variable(torch.Tensor([0, 1]))
     # hacky: noise ~ 0, Xnew = X
@@ -19,6 +19,8 @@ def test_forward_gpr():
     noise = torch.Tensor([1e-6])
 
     gpr = GPRegression(X, y, kernel, noise=noise)
+
+    pyro.clear_param_store()
     loc, cov = gpr(Xnew, full_cov=True)
 
     assert loc.dim() == 1
@@ -31,15 +33,17 @@ def test_forward_gpr():
 
 
 def test_forward_sgpr():
-    kernel = RBF(input_dim=3, variance=torch.Tensor([2]), lengthscale=torch.Tensor([2]), name="rbf2")
+    kernel = RBF(input_dim=3, variance=torch.Tensor([2]), lengthscale=torch.Tensor([2]))
     X = Variable(torch.Tensor([[1, 5, 3], [4, 3, 7]]))
     y = Variable(torch.Tensor([0, 1]))
     # hacky: noise ~ 0, Xnew = Xu = X
-    Xu = InducingPoints(X.data.clone(), name="Xu2")
+    Xu = InducingPoints(X.data.clone())
     Xnew = X
     noise = torch.Tensor([1e-6])
 
     sgpr = SparseGPRegression(X, y, kernel, Xu, noise=noise)
+
+    pyro.clear_param_store()
     loc, cov = sgpr(Xnew, full_cov=True)
 
     assert loc.dim() == 1
@@ -52,10 +56,10 @@ def test_forward_sgpr():
 
 
 def test_forward_sgpr_vs_gpr():
-    kernel = RBF(input_dim=3, variance=torch.Tensor([2]), lengthscale=torch.Tensor([2]), name="rbf3")
+    kernel = RBF(input_dim=3, variance=torch.Tensor([2]), lengthscale=torch.Tensor([2]))
     X = Variable(torch.Tensor([[2, 5, 3], [4, 3, 7]]))
     y = Variable(torch.Tensor([0, 1]))
-    Xu = InducingPoints(X.data.clone(), name="Xu3")  # must be set to compare
+    Xu = InducingPoints(X.data.clone())  # must be set to compare
     Xnew = Variable(torch.Tensor([[3, 1, 4], [1, 3, 1]]))
     noise = torch.Tensor([1])
 
@@ -63,6 +67,7 @@ def test_forward_sgpr_vs_gpr():
     sgpr = SparseGPRegression(X, y, kernel, Xu, noise=noise)
     sgpr_fitc = SparseGPRegression(X, y, kernel, Xu, approx="FITC", noise=noise)
 
+    pyro.clear_param_store()
     loc_gpr, cov_gpr = gpr(Xnew, full_cov=True)
     loc_sgpr, cov_sgpr = sgpr(Xnew, full_cov=True)
     loc_fitc, cov_fitc = sgpr_fitc(Xnew, full_cov=True)
