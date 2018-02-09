@@ -20,7 +20,6 @@ def test_forward_gpr():
 
     gpr = GPRegression(X, y, kernel, noise=noise)
 
-    pyro.clear_param_store()
     loc, cov = gpr(Xnew, full_cov=True)
 
     assert loc.dim() == 1
@@ -43,7 +42,6 @@ def test_forward_sgpr():
 
     sgpr = SparseGPRegression(X, y, kernel, Xu, noise=noise)
 
-    pyro.clear_param_store()
     loc, cov = sgpr(Xnew, full_cov=True)
 
     assert loc.dim() == 1
@@ -57,7 +55,6 @@ def test_forward_sgpr():
 
 def test_forward_sgpr_vs_gpr():
     kernel = RBF(input_dim=3, variance=torch.Tensor([2]), lengthscale=torch.Tensor([2]))
-    kernel = RBF(input_dim=3, variance=torch.ones(2), lengthscale=torch.ones(2))
     X = Variable(torch.Tensor([[2, 5, 3], [4, 3, 7]]))
     y = Variable(torch.Tensor([0, 1]))
     Xu = InducingPoints(X.data.clone())  # must be set to compare
@@ -68,7 +65,6 @@ def test_forward_sgpr_vs_gpr():
     sgpr = SparseGPRegression(X, y, kernel, Xu, noise=noise)
     sgpr_fitc = SparseGPRegression(X, y, kernel, Xu, approx="FITC", noise=noise)
 
-    pyro.clear_param_store()
     loc_gpr, cov_gpr = gpr(Xnew, full_cov=True)
     loc_sgpr, cov_sgpr = sgpr(Xnew, full_cov=True)
     loc_fitc, cov_fitc = sgpr_fitc(Xnew, full_cov=True)
