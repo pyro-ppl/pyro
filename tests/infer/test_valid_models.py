@@ -82,7 +82,7 @@ def test_variable_clash_in_model_error(trace_graph):
     def model():
         p = Variable(torch.Tensor([0.5]))
         pyro.sample("x", dist.Bernoulli(p))
-        pyro.sample("x", dist.bernoulli, p)  # Should error here.
+        pyro.sample("x", dist.Bernoulli(p))  # Should error here.
 
     def guide():
         p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
@@ -133,7 +133,7 @@ def test_variable_clash_in_guide_error(trace_graph):
     def guide():
         p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
         pyro.sample("x", dist.Bernoulli(p))
-        pyro.sample("x", dist.bernoulli, p)  # Should error here.
+        pyro.sample("x", dist.Bernoulli(p))  # Should error here.
 
     assert_error(model, guide, trace_graph=trace_graph)
 

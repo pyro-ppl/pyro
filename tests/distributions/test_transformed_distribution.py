@@ -16,7 +16,7 @@ from tests.distributions.dist_fixture import Fixture
 
 def make_lognormal(kwargs):
     kwargs['examples'] = [kwargs.pop('example')]
-    return Fixture(pyro_dist=(dist.lognormal, LogNormal),
+    return Fixture(pyro_dist=LogNormal,
                    scipy_dist=sp.lognorm,
                    scipy_arg_fn=lambda mu, sigma: ((np.array(sigma),),
                                                    {"scale": np.exp(np.array(mu))}),
@@ -71,8 +71,8 @@ def test_mean_and_var(lognormal):
     torch_samples = trans_dist.sample(sample_shape=torch.Size((lognormal.get_num_samples(0),)))
     torch_mean = torch.mean(torch_samples, 0)
     torch_std = torch.std(torch_samples, 0)
-    analytic_mean = lognormal.pyro_dist.analytic_mean(**dist_params)
-    analytic_std = lognormal.pyro_dist.analytic_var(**dist_params) ** 0.5
+    analytic_mean = lognormal.pyro_dist_class(**dist_params).analytic_mean()
+    analytic_std = lognormal.pyro_dist_class(**dist_params).analytic_var() ** 0.5
     precision = analytic_mean.max().data[0] * 0.05
     assert_equal(torch_mean, analytic_mean, prec=precision)
     assert_equal(torch_std, analytic_std, prec=precision)

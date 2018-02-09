@@ -37,16 +37,6 @@ def test_batch_log_prob(dist):
         assert_equal(log_prob_sum_pyro, log_prob_sum_np)
 
 
-def test_sample_shape(dist):
-    for idx in range(dist.get_num_test_data()):
-        if dist.pyro_dist is None:
-            continue  # stateful distributions cannot implement a function interface
-        dist_params = dist.get_dist_params(idx)
-        x_func = dist.pyro_dist.sample(**dist_params)
-        x_obj = dist.pyro_dist_class(**dist_params).sample()
-        assert_equal(x_obj.size(), x_func.size())
-
-
 def test_batch_log_prob_shape(dist):
     for idx in range(dist.get_num_test_data()):
         dist_params = dist.get_dist_params(idx)
@@ -57,11 +47,6 @@ def test_batch_log_prob_shape(dist):
             expected_shape = _log_prob_shape(d, x.size())
             log_p_obj = d.log_prob(x)
             assert log_p_obj.size() == expected_shape
-            # assert that the functional and object forms return
-            # the same log_prob values.
-            if dist.pyro_dist is not None:
-                log_p_func = dist.pyro_dist.log_prob(x, **dist_params)
-                assert_equal(log_p_func, log_p_obj)
 
 
 def test_log_prob_mask(dist):

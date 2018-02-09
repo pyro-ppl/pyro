@@ -25,7 +25,7 @@ class Fixture(object):
                  expected_support=None,
                  test_data_indices=None,
                  batch_data_indices=None):
-        self.pyro_dist, self.pyro_dist_class = pyro_dist
+        self.pyro_dist_class = pyro_dist
         self.scipy_dist = scipy_dist
         self.dist_params, self.test_data = self._extract_fixture_data(examples)
         self.scipy_arg_fn = scipy_arg_fn
