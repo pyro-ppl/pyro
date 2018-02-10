@@ -47,12 +47,12 @@ def sample(name, fn, *args, **kwargs):
     :param fn: distribution class or function
     :param obs: observed datum (optional; should only be used in context of
         inference) optionally specified in kwargs
-    :param dict baseline: Optional dictionary of baseline parameters specified
+    :param dict infer: Optional dictionary of inference parameters specified
         in kwargs. See inference documentation for details.
     :returns: sample
     """
     obs = kwargs.pop("obs", None)
-    baseline = kwargs.pop("baseline", {})
+    infer = kwargs.pop("infer", {})
     # check if stack is empty
     # if stack empty, default behavior (defined here)
     if not am_i_wrapped():
@@ -72,7 +72,7 @@ def sample(name, fn, *args, **kwargs):
             "args": args,
             "kwargs": kwargs,
             "value": None,
-            "baseline": baseline,
+            "infer": infer,
             "scale": 1.0,
             "cond_indep_stack": [],
             "done": False,

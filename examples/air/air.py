@@ -234,7 +234,7 @@ class AIR(nn.Module):
         z_pres = pyro.sample('z_pres_{}'.format(t),
                              dist.Bernoulli(z_pres_p * prev.z_pres,
                                             extra_event_dims=1),
-                             baseline=dict(baseline_value=bl_value.squeeze(-1)))
+                             infer=dict(baseline=dict(baseline_value=bl_value.squeeze(-1))))
 
         log_pdf_mask = z_pres.squeeze(-1) if self.use_masking else None
         z_where = pyro.sample('z_where_{}'.format(t),
