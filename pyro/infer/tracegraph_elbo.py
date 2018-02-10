@@ -270,8 +270,7 @@ class TraceGraph_ELBO(object):
         model_vec_md_nodes = model_vec_md_info['nodes'] if do_vec_rb else set()
 
         # have the trace compute all the individual (batch) log pdf terms
-        # so that they are available below
-        # model_trace.compute_batch_log_pdf(site_filter=lambda name, site: name in model_vec_md_nodes)
+        # and score function terms (if present) so that they are available below
         model_trace.compute_batch_log_pdf()
         guide_trace.compute_score_parts()
 
