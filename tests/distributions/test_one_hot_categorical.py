@@ -46,11 +46,11 @@ class TestOneHotCategorical(TestCase):
         self.discrete_arr_support = [[['a'], ['d']], [['b'], ['e']], [['c'], ['f']]]
 
     def test_support_non_vectorized(self):
-        s = dist.one_hot_categorical.enumerate_support(self.d_ps[0].squeeze(0))
+        s = dist.OneHotCategorical(self.d_ps[0].squeeze(0)).enumerate_support()
         assert_equal(s.data, self.support_one_hot_non_vec)
 
     def test_support(self):
-        s = dist.one_hot_categorical.enumerate_support(self.d_ps)
+        s = dist.OneHotCategorical(self.d_ps).enumerate_support()
         assert_equal(s.data, self.support_one_hot)
 
 
@@ -85,14 +85,14 @@ def modify_params_using_dims(ps, dim):
 
 def test_support_dims(dim, ps):
     ps = modify_params_using_dims(ps, dim)
-    support = dist.one_hot_categorical.enumerate_support(ps)
+    support = dist.OneHotCategorical(ps).enumerate_support()
     for s in support:
         assert_correct_dimensions(s, ps)
 
 
 def test_sample_dims(dim, ps):
     ps = modify_params_using_dims(ps, dim)
-    sample = dist.one_hot_categorical.sample(ps)
+    sample = dist.OneHotCategorical(ps).sample()
     assert_correct_dimensions(sample, ps)
 
 
@@ -100,6 +100,6 @@ def test_batch_log_dims(dim, ps):
     batch_pdf_shape = (3,) + (1,) * (dim-1)
     expected_log_pdf = np.array(wrap_nested(list(np.log(ps)), dim-1)).reshape(*batch_pdf_shape)
     ps = modify_params_using_dims(ps, dim)
-    support = dist.one_hot_categorical.enumerate_support(ps)
-    log_prob = dist.one_hot_categorical.log_prob(support, ps)
+    support = dist.OneHotCategorical(ps).enumerate_support()
+    log_prob = dist.OneHotCategorical(ps).log_prob(support)
     assert_equal(log_prob.data.cpu().numpy(), expected_log_pdf)
