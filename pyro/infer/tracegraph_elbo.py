@@ -8,9 +8,9 @@ import torch
 
 import pyro
 import pyro.poutine as poutine
-from pyro.infer.util import torch_backward, torch_data_sum
+from pyro.infer.util import torch_backward, torch_data_sum, is_identically_zero
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_match, detach_iterable, ng_zeros, is_identically_zero
+from pyro.util import check_model_guide_match, detach_iterable, ng_zeros
 
 
 def _get_baseline_options(site):
