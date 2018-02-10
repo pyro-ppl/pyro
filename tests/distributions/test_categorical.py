@@ -37,23 +37,23 @@ class TestCategorical(TestCase):
         self.support = torch.Tensor([[0, 0], [1, 1], [2, 2]])
 
     def test_log_pdf(self):
-        log_px_torch = dist.categorical.log_prob(self.test_data, self.ps).sum().data[0]
+        log_px_torch = dist.Categorical(self.ps).log_prob(self.test_data).sum().data[0]
         log_px_np = float(sp.multinomial.logpmf(np.array([0, 0, 1]), 1, self.ps.data.cpu().numpy()))
         assert_equal(log_px_torch, log_px_np, prec=1e-4)
 
     def test_mean_and_var(self):
-        torch_samples = [dist.categorical(self.ps).data.cpu().numpy()
+        torch_samples = [dist.Categorical(self.ps).sample().data.cpu().numpy()
                          for _ in range(self.n_samples)]
         _, counts = np.unique(torch_samples, return_counts=True)
         computed_mean = float(counts[0]) / self.n_samples
         assert_equal(computed_mean, self.analytic_mean.data.cpu().numpy()[0], prec=0.05)
 
     def test_support_non_vectorized(self):
-        s = dist.categorical.enumerate_support(self.d_ps[0].squeeze(0))
+        s = dist.Categorical(self.d_ps[0].squeeze(0)).enumerate_support()
         assert_equal(s.data, self.support_non_vec)
 
     def test_support(self):
-        s = dist.categorical.enumerate_support(self.d_ps)
+        s = dist.Categorical(self.d_ps).enumerate_support()
         assert_equal(s.data, self.support)
 
 
@@ -79,14 +79,14 @@ def modify_params_using_dims(ps, dim):
 
 def test_support_dims(dim, ps):
     ps = modify_params_using_dims(ps, dim)
-    support = dist.categorical.enumerate_support(ps)
+    support = dist.Categorical(ps).enumerate_support()
     assert_equal(support.size(), torch.Size((ps.size(-1),) + ps.size()[:-1]))
 
 
 def test_sample_dims(dim, ps):
     ps = modify_params_using_dims(ps, dim)
-    sample = dist.categorical.sample(ps)
-    expected_shape = dist.categorical.shape(ps)
+    sample = dist.Categorical(ps).sample()
+    expected_shape = dist.Categorical(ps).shape()
     if not expected_shape:
         expected_shape = torch.Size((1,))
     assert_equal(sample.size(), expected_shape)
@@ -94,7 +94,7 @@ def test_sample_dims(dim, ps):
 
 def test_batch_log_dims(dim, ps):
     ps = modify_params_using_dims(ps, dim)
-    log_prob_shape = torch.Size((3,) + dist.categorical.batch_shape(ps))
-    support = dist.categorical.enumerate_support(ps)
-    log_prob = dist.categorical.log_prob(support, ps)
+    log_prob_shape = torch.Size((3,) + dist.Categorical(ps).batch_shape)
+    support = dist.Categorical(ps).enumerate_support()
+    log_prob = dist.Categorical(ps).log_prob(support)
     assert_equal(log_prob.size(), log_prob_shape)
