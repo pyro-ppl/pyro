@@ -22,13 +22,24 @@ class InducingPoints(nn.Module):
 
 
 class Parameterized(nn.Module):
+    """
+    Parameterized module.
+
+    This is a base class for other classes in this Gaussian Process module.
+    The method `set_prior(param, prior)` will be used to set priors to parameters.
+    The method `set_constraint(param, prior)` will be used to set constraints to parameters.
+    We use `set_mode(mode)` to interchange between "model" and guide" (default).
+    If a parameter has a prior, we will use Maximum A Posteriori (MAP) for its guide.
+    The method `link_param(param)` is used as a wrapper for `pyro.param()` or
+    `pyro.sample()` call.
+    """
 
     def __init__(self):
         super(Parameterized, self).__init__()
         self._priors = {}
         self._constraints = {}
-        self._mode = "model"
-        self._name = ""
+        self._mode = "guide"
+        self._name = None
 
     def set_prior(self, param, prior):
         self._priors[param] = prior
@@ -41,12 +52,9 @@ class Parameterized(nn.Module):
             raise ValueError("Mode should be either 'model' or 'guide', but got {}.".format(mode))
         self._mode = mode
 
-    def set_name(self, name):
-        self._name = name
-
     def link_param(self, param):
         prior = self._priors[param] if param in self._priors else None
-        if self._name == "":
+        if self._name is None:
             param_name = param
         else:
             param_name = pyro.param_with_module_name(self._name, param)
