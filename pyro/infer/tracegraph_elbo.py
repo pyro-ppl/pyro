@@ -96,34 +96,25 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
 
 
 def _compute_elbo_reparam(model_trace, guide_trace, non_reparam_nodes):
-    # prepare a list of all the cost nodes, each of which is +- log_pdf
     elbo = 0.0
     surrogate_elbo = 0.0
     for name, model_site in model_trace.nodes.items():
         if model_site["type"] == "sample":
             if model_site["is_observed"]:
-                # cost_nodes.append(CostNode(model_site["log_pdf"], True))
                 elbo += model_site["log_pdf"]
                 surrogate_elbo += model_site["log_pdf"]
             else:
-                # cost node from model sample
-                # cost_nodes.append(CostNode(model_site["log_pdf"], True))
+                # deal with log p(z|...) term
                 elbo += model_site["log_pdf"]
                 surrogate_elbo += model_site["log_pdf"]
-                # cost node from guide sample
+                # deal with log q(z|...) term, if present
                 guide_site = guide_trace.nodes[name]
-                elbo -= guide_site["score_parts"][2].sum()
-                surrogate_elbo -= guide_site["score_parts"][2].sum()
-                # cost_nodes.append(CostNode(-guide_site["log_pdf"], not zero_expectation))
+                elbo -= guide_site["log_pdf"]
+                entropy_term =  guide_site["score_parts"].entropy_term
+                if not is_identically_zero(entropy_term):
+                    surrogate_elbo -= entropy_term.sum()
 
-    # compute the elbo; if all stochastic nodes are reparameterizable, we're done
-    # this bit is never differentiated: it's here for getting an estimate of the elbo itself
-    # elbo = torch_data_sum(sum(c.cost for c in cost_nodes))
-
-    # compute the surrogate elbo, removing terms whose gradient is zero
-    # this is the bit that's actually differentiated
-    # XXX should the user be able to control if these terms are included?
-    # surrogate_elbo = sum(c.cost for c in cost_nodes if c.nonzero_expectation)
+    # elbo is never differentiated, surragate_elbo is
 
     return torch_data_sum(elbo), surrogate_elbo
 
@@ -164,7 +155,7 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
             # accumulate baseline loss
             baseline_loss += torch.pow(downstream_cost.detach() - baseline, 2.0).sum()
 
-        guide_log_pdf, score_function_term, entropy_term = guide_site["score_parts"]
+        score_function_term = guide_site["score_parts"].score_function
         if log_pdf_key == 'log_pdf':
             score_function_term = score_function_term.sum()
         if use_nn_baseline or use_decaying_avg_baseline or use_baseline_value:
