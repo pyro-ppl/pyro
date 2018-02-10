@@ -92,11 +92,11 @@ class VAE(nn.Module):
         z_mu = ng_zeros([x.size(0), self.z_dim], type_as=x.data)
         z_sigma = ng_ones([x.size(0), self.z_dim], type_as=x.data)
         # sample from prior (value will be sampled by guide when computing the ELBO)
-        z = pyro.sample("latent", dist.normal, z_mu, z_sigma)
+        z = pyro.sample("latent", dist.Normal(z_mu, z_sigma))
         # decode the latent code z
         mu_img = self.decoder.forward(z)
         # score against actual images
-        pyro.sample("obs", dist.bernoulli, mu_img, obs=x.view(-1, 784))
+        pyro.sample("obs", dist.Bernoulli(mu_img), obs=x.view(-1, 784))
 
     # define the guide (i.e. variational distribution) q(z|x)
     def guide(self, x):
@@ -105,14 +105,14 @@ class VAE(nn.Module):
         # use the encoder to get the parameters used to define q(z|x)
         z_mu, z_sigma = self.encoder.forward(x)
         # sample the latent code z
-        pyro.sample("latent", dist.normal, z_mu, z_sigma)
+        pyro.sample("latent", dist.Normal(z_mu, z_sigma))
 
     # define a helper function for reconstructing images
     def reconstruct_img(self, x):
         # encode image x
         z_mu, z_sigma = self.encoder(x)
         # sample in latent space
-        z = dist.normal(z_mu, z_sigma)
+        z = dist.Normal(z_mu, z_sigma).sample()
         # decode the image (note we don't sample in image space)
         mu_img = self.decoder(z)
         return mu_img
@@ -121,9 +121,9 @@ class VAE(nn.Module):
         # sample the handwriting style from the constant prior distribution
         prior_mu = Variable(torch.zeros([batch_size, self.z_dim]))
         prior_sigma = Variable(torch.ones([batch_size, self.z_dim]))
-        zs = pyro.sample("z", dist.normal, prior_mu, prior_sigma)
+        zs = pyro.sample("z", dist.Normal(prior_mu, prior_sigma))
         mu = self.decoder.forward(zs)
-        xs = pyro.sample("sample", dist.bernoulli, mu)
+        xs = pyro.sample("sample", dist.Bernoulli(mu))
         return xs, mu
 
 
