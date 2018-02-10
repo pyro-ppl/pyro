@@ -272,7 +272,6 @@ class TraceGraph_ELBO(object):
         # have the trace compute all the individual (batch) log pdf terms
         # so that they are available below
         guide_trace.compute_batch_log_pdf(site_filter=lambda name, site: name in guide_vec_md_nodes)
-        guide_trace.log_pdf()
         model_trace.compute_batch_log_pdf(site_filter=lambda name, site: name in model_vec_md_nodes)
         model_trace.log_pdf()
         guide_trace.compute_score_parts()
