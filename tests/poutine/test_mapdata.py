@@ -21,8 +21,7 @@ def test_batch_dim(batch_dim):
 
     def local_model(ixs, _xs):
         xs = _xs.view(-1, _xs.size(2))
-        return pyro.sample("xs", dist.normal,
-                           xs, Variable(torch.ones(xs.size())))
+        return pyro.sample("xs", dist.Normal(xs, Variable(torch.ones(xs.size()))))
 
     def model():
         return pyro.map_data("md", data, local_model,
@@ -45,7 +44,7 @@ def test_nested_map_data():
                              pyro.map_data("a_{}".format(i), stds,
                                            lambda j, y:
                                            pyro.sample("x_{}{}".format(i, j),
-                                                       dist.normal, x, y),
+                                                       dist.Normal(x, y)),
                                            batch_size=std_batch_size),
                              batch_size=mean_batch_size)
 
@@ -65,7 +64,7 @@ def iarange_model(subsample_size):
     mu = Variable(torch.zeros(20))
     sigma = Variable(torch.ones(20))
     with pyro.iarange('iarange', 20, subsample_size) as batch:
-        pyro.sample("x", dist.normal, mu[batch], sigma[batch])
+        pyro.sample("x", dist.Normal(mu[batch], sigma[batch]))
         result = list(batch.data)
     return result
 
@@ -75,7 +74,7 @@ def irange_model(subsample_size):
     sigma = Variable(torch.ones(20))
     result = []
     for i in pyro.irange('irange', 20, subsample_size):
-        pyro.sample("x_{}".format(i), dist.normal, mu[i], sigma[i])
+        pyro.sample("x_{}".format(i), dist.Normal(mu[i], sigma[i]))
         result.append(i)
     return result
 
@@ -87,7 +86,7 @@ def nested_irange_model(subsample_size):
     for i in pyro.irange("outer", 20, subsample_size):
         result.append([])
         for j in pyro.irange("inner", 20, 5):
-            pyro.sample("x_{}_{}".format(i, j), dist.normal, mu[i] + mu[j], sigma[i] + sigma[j])
+            pyro.sample("x_{}_{}".format(i, j), dist.Normal(mu[i] + mu[j], sigma[i] + sigma[j]))
             result[-1].append(j)
     return result
 
@@ -97,7 +96,7 @@ def map_data_vector_model(subsample_size):
     sigma = Variable(torch.ones(20))
 
     def local_model(batch, unused):
-        pyro.sample("x", dist.normal, mu[batch], sigma[batch])
+        pyro.sample("x", dist.Normal(mu[batch], sigma[batch]))
         return batch
 
     LongTensor = torch.cuda.LongTensor if torch.Tensor.is_cuda else torch.LongTensor
@@ -111,7 +110,7 @@ def map_data_iter_model(subsample_size):
     sigma = Variable(torch.ones(20))
 
     def local_model(i, unused):
-        pyro.sample("x_{}".format(i), dist.normal, mu[i], sigma[i])
+        pyro.sample("x_{}".format(i), dist.Normal(mu[i], sigma[i]))
         return i
 
     return pyro.map_data('mapdata', range(20), local_model, batch_size=subsample_size)
@@ -181,21 +180,21 @@ def iarange_cuda_model(subsample_size):
     mu = Variable(torch.zeros(20).cuda())
     sigma = Variable(torch.ones(20).cuda())
     with pyro.iarange("data", 20, subsample_size, use_cuda=True) as batch:
-        pyro.sample("x", dist.normal, mu[batch], sigma[batch])
+        pyro.sample("x", dist.Normal(mu[batch], sigma[batch]))
 
 
 def irange_cuda_model(subsample_size):
     mu = Variable(torch.zeros(20).cuda())
     sigma = Variable(torch.ones(20).cuda())
     for i in pyro.irange("data", 20, subsample_size, use_cuda=True):
-        pyro.sample("x_{}".format(i), dist.normal, mu[i], sigma[i])
+        pyro.sample("x_{}".format(i), dist.Normal(mu[i], sigma[i]))
 
 
 def map_data_vector_cuda_model(subsample_size):
     mu = Variable(torch.zeros(20).cuda())
     sigma = Variable(torch.ones(20).cuda())
     pyro.map_data("data", mu,
-                  lambda i, mu: pyro.sample("x", dist.normal, mu, sigma[i]),
+                  lambda i, mu: pyro.sample("x", dist.Normal(mu, sigma[i])),
                   batch_size=subsample_size, use_cuda=True)
 
 
@@ -203,7 +202,7 @@ def map_data_iter_cuda_model(subsample_size):
     mu = Variable(torch.zeros(20).cuda())
     sigma = Variable(torch.ones(20).cuda())
     pyro.map_data("data", list(mu),
-                  lambda i, mu: pyro.sample("x_{}".format(i), dist.normal, mu, sigma[i]),
+                  lambda i, mu: pyro.sample("x_{}".format(i), dist.Normal(mu, sigma[i])),
                   batch_size=subsample_size, use_cuda=True)
 
 

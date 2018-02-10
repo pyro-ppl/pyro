@@ -7,16 +7,13 @@ import pytest
 import scipy.stats as sp
 
 import pyro.distributions as dist
-from pyro.distributions import (Bernoulli, Beta, Binomial, Categorical, Cauchy, Dirichlet, Exponential, Gamma,
-                                LogNormal, Multinomial, MultivariateNormal, Normal, OneHotCategorical, Poisson,
-                                SparseMultivariateNormal, Uniform)
 from pyro.distributions.testing.naive_dirichlet import NaiveBeta, NaiveDirichlet
 from pyro.distributions.testing.rejection_exponential import RejectionExponential
 from pyro.distributions.testing.rejection_gamma import ShapeAugmentedBeta, ShapeAugmentedDirichlet, ShapeAugmentedGamma
 from tests.distributions.dist_fixture import Fixture
 
 continuous_dists = [
-    Fixture(pyro_dist=(dist.uniform, Uniform),
+    Fixture(pyro_dist=dist.Uniform,
             scipy_dist=sp.uniform,
             examples=[
                 {'a': [2], 'b': [2.5],
@@ -29,7 +26,7 @@ continuous_dists = [
             ],
             scipy_arg_fn=lambda a, b: ((), {"loc": np.array(a),
                                             "scale": np.array(b) - np.array(a)})),
-    Fixture(pyro_dist=(dist.exponential, Exponential),
+    Fixture(pyro_dist=dist.Exponential,
             scipy_dist=sp.expon,
             examples=[
                 {'lam': [2.4],
@@ -42,7 +39,7 @@ continuous_dists = [
                  'test_data': [[5.5], [3.2]]},
             ],
             scipy_arg_fn=lambda lam: ((), {"scale": 1.0 / np.array(lam)})),
-    Fixture(pyro_dist=(None, RejectionExponential),
+    Fixture(pyro_dist=RejectionExponential,
             scipy_dist=sp.expon,
             examples=[
                 {'rate': [2.4], 'factor': [0.5],
@@ -55,7 +52,7 @@ continuous_dists = [
                  'test_data': [[5.5], [3.2]]},
             ],
             scipy_arg_fn=lambda rate, factor: ((), {"scale": 1.0 / np.array(rate)})),
-    Fixture(pyro_dist=(dist.gamma, Gamma),
+    Fixture(pyro_dist=dist.Gamma,
             scipy_dist=sp.gamma,
             examples=[
                 {'alpha': [2.4], 'beta': [3.2],
@@ -66,7 +63,7 @@ continuous_dists = [
             ],
             scipy_arg_fn=lambda alpha, beta: ((np.array(alpha),),
                                               {"scale": 1.0 / np.array(beta)})),
-    Fixture(pyro_dist=(dist.gamma, ShapeAugmentedGamma),
+    Fixture(pyro_dist=ShapeAugmentedGamma,
             scipy_dist=sp.gamma,
             examples=[
                 {'alpha': [2.4], 'beta': [3.2],
@@ -77,7 +74,7 @@ continuous_dists = [
             ],
             scipy_arg_fn=lambda alpha, beta: ((np.array(alpha),),
                                               {"scale": 1.0 / np.array(beta)})),
-    Fixture(pyro_dist=(dist.beta, Beta),
+    Fixture(pyro_dist=dist.Beta,
             scipy_dist=sp.beta,
             examples=[
                 {'alpha': [2.4], 'beta': [3.6],
@@ -88,7 +85,7 @@ continuous_dists = [
                  'test_data': [[0.4], [0.6]]}
             ],
             scipy_arg_fn=lambda alpha, beta: ((np.array(alpha), np.array(beta)), {})),
-    Fixture(pyro_dist=(dist.beta, NaiveBeta),
+    Fixture(pyro_dist=NaiveBeta,
             scipy_dist=sp.beta,
             examples=[
                 {'alpha': [2.4], 'beta': [3.6],
@@ -99,7 +96,7 @@ continuous_dists = [
                  'test_data': [[0.4], [0.6]]}
             ],
             scipy_arg_fn=lambda alpha, beta: ((np.array(alpha), np.array(beta)), {})),
-    Fixture(pyro_dist=(dist.beta, ShapeAugmentedBeta),
+    Fixture(pyro_dist=ShapeAugmentedBeta,
             scipy_dist=sp.beta,
             examples=[
                 {'alpha': [2.4], 'beta': [3.6],
@@ -110,7 +107,7 @@ continuous_dists = [
                  'test_data': [[0.4], [0.6]]}
             ],
             scipy_arg_fn=lambda alpha, beta: ((np.array(alpha), np.array(beta)), {})),
-    Fixture(pyro_dist=(dist.lognormal, LogNormal),
+    Fixture(pyro_dist=dist.LogNormal,
             scipy_dist=sp.lognorm,
             examples=[
                 {'mu': [1.4], 'sigma': [0.4],
@@ -123,7 +120,7 @@ continuous_dists = [
                  'test_data': [[5.5], [6.4]]}
             ],
             scipy_arg_fn=lambda mu, sigma: ((np.array(sigma),), {"scale": np.exp(np.array(mu))})),
-    Fixture(pyro_dist=(dist.normal, Normal),
+    Fixture(pyro_dist=dist.Normal,
             scipy_dist=sp.norm,
             examples=[
                 {'mu': [2.0], 'sigma': [4.0],
@@ -138,7 +135,7 @@ continuous_dists = [
             scipy_arg_fn=lambda mu, sigma: ((), {"loc": np.array(mu), "scale": np.array(sigma)}),
             prec=0.07,
             min_samples=50000),
-    Fixture(pyro_dist=(dist.multivariate_normal, MultivariateNormal),
+    Fixture(pyro_dist=dist.MultivariateNormal,
             scipy_dist=sp.multivariate_normal,
             examples=[
                 {'loc': [2.0, 1.0], 'covariance_matrix': [[1.0, 0.5], [0.5, 1.0]],
@@ -149,7 +146,7 @@ continuous_dists = [
                 ((), {"mean": np.array(loc), "cov": np.array([[1.0, 0.5], [0.5, 1.0]])}),
             prec=0.01,
             min_samples=500000),
-    Fixture(pyro_dist=(dist.sparse_multivariate_normal, SparseMultivariateNormal),
+    Fixture(pyro_dist=dist.SparseMultivariateNormal,
             scipy_dist=sp.multivariate_normal,
             examples=[
                 {'loc': [2.0, 1.0], 'D_term': [0.5, 0.5], 'W_term': [[1.0, 0.5]],
@@ -159,7 +156,7 @@ continuous_dists = [
                 ((), {"mean": np.array(loc), "cov": np.array([[1.5, 0.5], [0.5, 0.75]])}),
             prec=0.01,
             min_samples=500000),
-    Fixture(pyro_dist=(dist.dirichlet, Dirichlet),
+    Fixture(pyro_dist=dist.Dirichlet,
             scipy_dist=sp.dirichlet,
             examples=[
                 {'alpha': [2.4, 3, 6],
@@ -170,7 +167,7 @@ continuous_dists = [
                  'test_data': [[0.2, 0.45, 0.35], [0.3, 0.4, 0.3]]}
             ],
             scipy_arg_fn=lambda alpha: ((alpha,), {})),
-    Fixture(pyro_dist=(dist.dirichlet, NaiveDirichlet),
+    Fixture(pyro_dist=NaiveDirichlet,
             scipy_dist=sp.dirichlet,
             examples=[
                 {'alpha': [2.4, 3, 6],
@@ -181,7 +178,7 @@ continuous_dists = [
                  'test_data': [[0.2, 0.45, 0.35], [0.3, 0.4, 0.3]]}
             ],
             scipy_arg_fn=lambda alpha: ((alpha,), {})),
-    Fixture(pyro_dist=(dist.dirichlet, ShapeAugmentedDirichlet),
+    Fixture(pyro_dist=ShapeAugmentedDirichlet,
             scipy_dist=sp.dirichlet,
             examples=[
                 {'alpha': [2.4, 3, 6],
@@ -192,7 +189,7 @@ continuous_dists = [
                  'test_data': [[0.2, 0.45, 0.35], [0.3, 0.4, 0.3]]}
             ],
             scipy_arg_fn=lambda alpha: ((alpha,), {})),
-    Fixture(pyro_dist=(dist.cauchy, Cauchy),
+    Fixture(pyro_dist=dist.Cauchy,
             scipy_dist=sp.cauchy,
             examples=[
                 {'mu': [0.5], 'gamma': [1.2],
@@ -206,7 +203,7 @@ continuous_dists = [
 ]
 
 discrete_dists = [
-    Fixture(pyro_dist=(dist.multinomial, Multinomial),
+    Fixture(pyro_dist=dist.Multinomial,
             scipy_dist=sp.multinomial,
             examples=[
                 {'ps': [0.1, 0.6, 0.3],
@@ -222,7 +219,7 @@ discrete_dists = [
             prec=0.05,
             min_samples=10000,
             is_discrete=True),
-    Fixture(pyro_dist=(dist.bernoulli, Bernoulli),
+    Fixture(pyro_dist=dist.Bernoulli,
             scipy_dist=sp.bernoulli,
             examples=[
                 {'ps': [0.25],
@@ -249,7 +246,7 @@ discrete_dists = [
             is_discrete=True,
             expected_support_non_vec=[[0], [1]],
             expected_support=[[[0, 0], [0, 0]], [[1, 1], [1, 1]]]),
-    Fixture(pyro_dist=(dist.binomial, Binomial),
+    Fixture(pyro_dist=dist.Binomial,
             scipy_dist=sp.binom,
             examples=[
                 {'ps': [0.6], 'n': 8,
@@ -263,7 +260,7 @@ discrete_dists = [
             prec=0.05,
             min_samples=10000,
             is_discrete=True),
-    Fixture(pyro_dist=(dist.categorical, Categorical),
+    Fixture(pyro_dist=dist.Categorical,
             scipy_dist=sp.multinomial,
             examples=[
                 {'ps': [0.1, 0.6, 0.3],
@@ -283,7 +280,7 @@ discrete_dists = [
             prec=0.05,
             min_samples=10000,
             is_discrete=True),
-    Fixture(pyro_dist=(dist.one_hot_categorical, OneHotCategorical),
+    Fixture(pyro_dist=dist.OneHotCategorical,
             scipy_dist=sp.multinomial,
             examples=[
                 {'ps': [0.1, 0.6, 0.3],
@@ -303,7 +300,7 @@ discrete_dists = [
             prec=0.05,
             min_samples=10000,
             is_discrete=True),
-    Fixture(pyro_dist=(dist.poisson, Poisson),
+    Fixture(pyro_dist=dist.Poisson,
             scipy_dist=sp.poisson,
             examples=[
                 {'lam': [2.0],

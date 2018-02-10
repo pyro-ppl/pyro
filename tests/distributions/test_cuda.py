@@ -13,7 +13,7 @@ def test_sample(dist):
         with tensors_default_to("cpu"):
             params = dist.get_dist_params(idx)
         try:
-            cpu_value = dist.pyro_dist.sample(**params)
+            cpu_value = dist.pyro_dist(**params).sample()
         except ValueError as e:
             pytest.xfail('CPU version fails: {}'.format(e))
         assert not cpu_value.is_cuda
@@ -21,7 +21,7 @@ def test_sample(dist):
         # Compute GPU value.
         with tensors_default_to("cuda"):
             params = dist.get_dist_params(idx)
-        cuda_value = dist.pyro_dist.sample(**params)
+        cuda_value = dist.pyro_dist(**params).sample()
         assert cuda_value.is_cuda
 
         assert_equal(cpu_value.size(), cuda_value.size())
@@ -36,14 +36,14 @@ def test_log_pdf(dist):
             data = dist.get_test_data(idx)
             params = dist.get_dist_params(idx)
         with xfail_if_not_implemented():
-            cpu_value = dist.pyro_dist.log_pdf(data, **params)
+            cpu_value = dist.pyro_dist(**params).log_pdf(data)
         assert not cpu_value.is_cuda
 
         # Compute GPU value.
         with tensors_default_to("cuda"):
             data = dist.get_test_data(idx)
             params = dist.get_dist_params(idx)
-        cuda_value = dist.pyro_dist.log_pdf(data, **params)
+        cuda_value = dist.pyro_dist(**params).log_pdf(data)
         assert cuda_value.is_cuda
 
         assert_equal(cpu_value, cuda_value.cpu())
@@ -58,14 +58,14 @@ def test_batch_log_pdf(dist):
             data = dist.get_test_data(idx)
             params = dist.get_dist_params(idx)
         with xfail_if_not_implemented():
-            cpu_value = dist.pyro_dist.log_prob(data, **params)
+            cpu_value = dist.pyro_dist(**params).log_prob(data)
         assert not cpu_value.is_cuda
 
         # Compute GPU value.
         with tensors_default_to("cuda"):
             data = dist.get_test_data(idx)
             params = dist.get_dist_params(idx)
-        cuda_value = dist.pyro_dist.log_prob(data, **params)
+        cuda_value = dist.pyro_dist(**params).log_prob(data)
         assert cuda_value.is_cuda
 
         assert_equal(cpu_value, cuda_value.cpu())
