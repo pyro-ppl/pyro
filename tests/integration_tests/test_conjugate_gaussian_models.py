@@ -125,8 +125,8 @@ class GaussianChainTests(TestCase):
 
             mu_N = next_mean
             for i, x in enumerate(self.data):
-                pyro.observe("obs_%d" % i, dist.normal, x, mu_N,
-                             torch.pow(self.lambdas[self.N], -0.5))
+                pyro.sample("obs_%d" % i, dist.Normal(mu_N, torch.pow(self.lambdas[self.N], -0.5)),
+                            obs=x)
             return mu_N
 
         def guide(*args, **kwargs):
@@ -147,9 +147,9 @@ class GaussianChainTests(TestCase):
                                              requires_grad=True))
                 mean_function = mu_q if k == self.N else kappa_q * previous_sample + mu_q
                 node_flagged = True if self.which_nodes_reparam[k - 1] == 1.0 else False
-                normal = dist.normal if reparameterized or node_flagged else fakes.nonreparameterized_normal
-                mu_latent = pyro.sample("mu_latent_%d" % k, normal, mean_function, sig_q,
-                                        baseline=dict(use_decaying_avg_baseline=True))
+                Normal = dist.Normal if reparameterized or node_flagged else fakes.NonreparameterizedNormal
+                mu_latent = pyro.sample("mu_latent_%d" % k, Normal(mean_function, sig_q),
+                                        infer=dict(baseline=dict(use_decaying_avg_baseline=True)))
                 previous_sample = mu_latent
             return previous_sample
 
@@ -409,9 +409,9 @@ class GaussianPyramidTests(TestCase):
 
             for i, data_i in enumerate(self.data):
                 for k, x in enumerate(data_i):
-                    pyro.observe("obs_%s_%d" % (previous_latents_and_names[i][1], k),
-                                 dist.normal, x, previous_latents_and_names[i][0],
-                                 torch.pow(self.lambdas[-1], -0.5))
+                    pyro.sample("obs_%s_%d" % (previous_latents_and_names[i][1], k),
+                                dist.Normal(previous_latents_and_names[i][0], torch.pow(self.lambdas[-1], -0.5)),
+                                obs=x)
             return top_latent
 
         def guide(*args, **kwargs):
@@ -436,10 +436,10 @@ class GaussianPyramidTests(TestCase):
                                                     requires_grad=True))
                     mean_function_node = mean_function_node + kappa_dep * latents_dict[dep]
                 node_flagged = True if self.which_nodes_reparam[i] == 1.0 else False
-                normal = dist.normal if reparameterized or node_flagged else fakes.nonreparameterized_normal
-                latent_node = pyro.sample(node, normal, mean_function_node, torch.exp(log_sig_node),
-                                          baseline=dict(use_decaying_avg_baseline=True,
-                                                        baseline_beta=0.96))
+                Normal = dist.Normal if reparameterized or node_flagged else fakes.NonreparameterizedNormal
+                latent_node = pyro.sample(node, Normal(mean_function_node, torch.exp(log_sig_node)),
+                                          infer=dict(baseline=dict(use_decaying_avg_baseline=True,
+                                                                   baseline_beta=0.96)))
                 latents_dict[node] = latent_node
 
             return latents_dict['mu_latent_1']

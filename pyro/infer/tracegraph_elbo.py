@@ -18,10 +18,10 @@ CostNode = namedtuple("CostNode", ["cost", "nonzero_expectation"])
 
 def _get_baseline_options(site):
     """
-    Extracts baseline options from ``site["baseline"]``.
+    Extracts baseline options from ``site["infer"]["baseline"]``.
     """
     # XXX default for baseline_beta currently set here
-    options_dict = site["baseline"].copy()
+    options_dict = site["infer"].get("baseline", {}).copy()
     options_tuple = (options_dict.pop('nn_baseline', None),
                      options_dict.pop('nn_baseline_input', None),
                      options_dict.pop('use_decaying_avg_baseline', False),

@@ -52,24 +52,27 @@ def test_elbo_mapdata(batch_size, map_type):
     pyro.clear_param_store()
 
     def model():
-        mu_latent = pyro.sample("mu_latent", dist.normal,
-                                mu0, torch.pow(lam0, -0.5))
+        mu_latent = pyro.sample("mu_latent",
+                                dist.Normal(mu0, torch.pow(lam0, -0.5)))
         if map_type == "list":
-            pyro.map_data("aaa", data, lambda i,
-                          x: pyro.observe(
-                              "obs_%d" % i, dist.normal,
-                              x, mu_latent, torch.pow(lam, -0.5)), batch_size=batch_size)
+            pyro.map_data("aaa", data,
+                          lambda i, x: pyro.sample("obs_%d" % i,
+                                                   dist.Normal(mu_latent, torch.pow(lam, -0.5)),
+                                                   obs=x),
+                          batch_size=batch_size)
         elif map_type == "tensor":
             tdata = torch.cat([xi.view(1, -1) for xi in data], 0)
             pyro.map_data("aaa", tdata,
                           # XXX get batch size args to dist right
-                          lambda i, x: pyro.observe("obs", dist.normal, x, mu_latent,
-                                                    torch.pow(lam, -0.5)),
+                          lambda i, x: pyro.sample("obs",
+                                                   dist.Normal(mu_latent, torch.pow(lam, -0.5)),
+                                                   obs=x),
                           batch_size=batch_size)
         else:
             for i, x in enumerate(data):
                 pyro.observe('obs_%d' % i,
-                             dist.normal, x, mu_latent, torch.pow(lam, -0.5))
+                             dist.Normal(mu_latent, torch.pow(lam, -0.5)),
+                             obs=x)
         return mu_latent
 
     def guide():
@@ -79,7 +82,7 @@ def test_elbo_mapdata(batch_size, map_type):
             analytic_log_sig_n.data - torch.Tensor([-0.18, 0.23]),
             requires_grad=True))
         sig_q = torch.exp(log_sig_q)
-        pyro.sample("mu_latent", dist.normal, mu_q, sig_q)
+        pyro.sample("mu_latent", dist.Normal(mu_q, sig_q))
         if map_type == "list" or map_type is None:
             pyro.map_data("aaa", data, lambda i, x: None, batch_size=batch_size)
         elif map_type == "tensor":
