@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import torch
 from torch.autograd import Variable
 from torch.distributions import constraints, transform_to
 import torch.nn as nn
@@ -12,6 +13,9 @@ from pyro.distributions.util import matrix_triangular_solve_compat
 class VariationalGP(nn.Module):
     """
     Variational Gaussian Process module.
+
+    This model can be seen as a special version of SparseVariationalGP model
+    with `Xu = X`.
 
     :param torch.autograd.Variable X: A tensor of inputs.
     :param torch.autograd.Variable y: A tensor of outputs for training.
@@ -38,12 +42,11 @@ class VariationalGP(nn.Module):
         kernel = kernel_fn()
 
         zero_loc = Variable(self.X.data.new([0])).expand(self.num_data)
-        Kffdiag = kernel(self.X, diag=True)
-        
-        f = pyro.sample("f", dist.Normal(zero_loc, Kffdiag))
-        likelihood = pyro.condition(self.likelihood, data={"y": self.y})
-        return likelihood(f)
-    
+        Kff = kernel(self.X) + self.jitter.expand(self.num_data).diag()
+
+        f = pyro.sample("f", dist.MultivariateNormal(zero_loc, Kff))
+        self.likelihood(f, obs=self.y)
+
     def guide(self):
         # TODO: refactor/remove from here
         kernel_guide_prior = {}
@@ -57,21 +60,22 @@ class VariationalGP(nn.Module):
         kernel_fn = pyro.random_module(self.kernel.name, self.kernel, kernel_guide_prior)
         kernel = kernel_fn()
         # util here
-        
-        # construct variational guide
-        mu_0 = Variable(Xu.data.new(self.num_inducing).zero_(), requires_grad=True)
-        mu = pyro.param("q_u_loc", mu_0)
-        unconstrained_Lu_0 = Variable(Xu.data.new(self.num_inducing, self.num_inducing).zero_(),
+
+        # define variational parameters
+        mf_0 = Variable(self.X.new(self.num_data).zero_(), requires_grad=True)
+        mf = pyro.param("f_loc", mf_0)
+        unconstrained_Lf_0 = Variable(self.X.data.new(self.num_data, self.num_data).zero_(),
                                       requires_grad=True)
-        unconstrained_Lu = pyro.param("unconstrained_q_u_tril", Lu_0)
-        Lu = transform_to(constraints.lower_cholesky)(unconstrained_Lu)
-        #
-        return kernel
+        unconstrained_Lf = pyro.param("unconstrained_f_tril", unconstrained_Lf_0)
+        Lf = transform_to(constraints.lower_cholesky)(unconstrained_Lf)
+
+        pyro.sample("f", dist.MultivariateNormal(loc=mf, scale_tril=Lf))
+        return kernel, mf, Lf
 
     def forward(self, Xnew, full_cov=False):
         """
-        Compute the parameters of `f* ~ N(f_loc, f_cov)` and a stochastic function
-        for `y* ~ self.likelihood(f*)`.
+        Compute the parameters of `f* ~ N(f*_loc, f*_cov)` according to
+            `p(f*,f|y) = p(f*|f).p(f|y) ~ p(f*|f).q(f)`, then marginalize out variable `f`.
 
         :param torch.autograd.Variable Xnew: A 2D tensor.
         :param bool full_cov: Predict full covariance matrix of f or just its diagonal.
@@ -83,4 +87,32 @@ class VariationalGP(nn.Module):
         if Xnew.dim() == 1:
             Xnew = Xnew.unsqueeze(1)
 
-        # TODO: implement
+        kernel, mf, Lf = self.guide()
+
+        # see `SparseVariationalGP` module for the derivation
+
+        Kff = kernel(self.X) + self.jitter.expand(self.num_data)
+        Kfs = kernel(self.X, Xnew)
+        Lff = Kff.potrf(upper=False)
+
+        pack = torch.cat((mf.unsqueeze(1), Kfs, Lf), dim=1)
+        Lffinv_pack = matrix_triangular_solve_compat(pack, Lff, upper=False)
+        Lffinv_mf = Lffinv_pack[:, 0]
+        W = Lffinv_pack[:, 1:-self.num_data]
+        V = Lffinv_pack[:, -self.num_data:]
+        Vt_W = V.t().matmul(W)
+
+        fs_loc = W.t().matmul(Lffinv_mf)
+
+        if full_cov:
+            Kss = kernel(Xnew)
+            Qss = W.t().matmul(W)
+            K = Vt_W.t().matmul(Vt_W)
+            fs_cov = Kss - Qss + K
+        else:
+            Kssdiag = kernel(Xnew, diag=True)
+            Qssdiag = (W ** 2).sum(dim=0)
+            Kdiag = (Vt_W ** 2).sum(dim=0)
+            fs_cov = Kssdiag - Qssdiag + Kdiag
+
+        return fs_loc, fs_cov

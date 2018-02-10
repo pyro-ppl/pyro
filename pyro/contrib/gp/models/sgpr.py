@@ -17,8 +17,14 @@ class SparseGPRegression(nn.Module):
         Deterministic Training Conditional (DTC),
         Fully Independent Training Conditional (FITC),
         Variational Free Energy (VFE).
-    For an overview, see: "A unifying framework for sparse Gaussian process approximation using
-    power expectation propagation" by Bui, T. D., Yan, J., & Turner, R. E. (2016).
+
+    References
+
+    [1] `A Unifying View of Sparse Approximate Gaussian Process Regression`
+    Joaquin Quinonero-Candela, Carl E. Rasmussen
+
+    [2] `Variational learning of inducing variables in sparse Gaussian processes`
+    Michalis Titsias
 
     :param torch.autograd.Variable X: A tensor of inputs.
     :param torch.autograd.Variable y: A tensor of outputs for training.
@@ -64,7 +70,7 @@ class SparseGPRegression(nn.Module):
         Xu_fn = pyro.random_module(self.Xu.name, self.Xu, self.Xu_prior)
         Xu = Xu_fn().inducing_points
 
-        Kuu = kernel(Xu) + self.jitter.expand(self.num_inducing)
+        Kuu = kernel(Xu) + self.jitter.expand(self.num_inducing).diag()
         Kuf = kernel(Xu, self.X)
         Luu = Kuu.potrf(upper=False)
         # W = inv(Luu) @ Kuf
@@ -130,14 +136,11 @@ class SparseGPRegression(nn.Module):
             Xnew = Xnew.unsqueeze(1)
 
         kernel, Xu = self.guide()
-        Kuu = kernel(Xu) + self.jitter.expand(self.num_inducing)
+        Kuu = kernel(Xu) + self.jitter.expand(self.num_inducing).diag()
         Kus = kernel(Xu, Xnew)
         Kuf = kernel(Xu, self.X)
         Luu = Kuu.potrf(upper=False)
 
-        # Ref: "A Unifying View of Sparse Approximate Gaussian Process Regression"
-        #     by Quinonero-Candela, J., & Rasmussen, C. E. (2005).
-        #
         # loc = Ksu @ S @ Kuf @ inv(D) @ y
         # cov = Kss - Ksu @ inv(Kuu) @ Kus + Ksu @ S @ Kus
         # S = inv[Kuu + Kuf @ inv(D) @ Kfu]
