@@ -16,7 +16,7 @@ def test_empirical_with_strings():
     values = ["abc", "def", "gef", "abd"]
     dist = Empirical(values)
     x = dist.sample()
-    p = dist.log_pdf(x)
+    p = dist.log_prob(x)
     assert_equal(p, Variable(torch.log(torch.Tensor([.25]))))
 
 
@@ -24,4 +24,4 @@ def test_empirical_with_strings():
 def test_empirical_deduplicate():
     values = ["abc", "abc", "def", "gef"]
     dist = Empirical(values)
-    assert_equal(dist.log_pdf("abc"), Variable(torch.log(torch.Tensor([.5]))))
+    assert_equal(dist.log_prob("abc"), Variable(torch.log(torch.Tensor([.5]))))

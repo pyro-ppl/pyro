@@ -42,8 +42,11 @@ def _index(seq, value):
 @copy_docs_from(Distribution)
 class Empirical(Distribution):
     """
-    Empirical distribution sketch.
-    Missing: automatically construct logits from a dataset by checking for unique values and replicates
+    Empirical distribution.
+
+    :param iterable values: An iterable of values.
+    :param Variable logits: An optional tensor of logits.
+        By default these are zero.
     """
     enumerable = True
 
