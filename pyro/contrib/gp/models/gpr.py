@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import torch
 from torch.autograd import Variable
 import torch.nn as nn
 
@@ -11,6 +12,11 @@ from pyro.distributions.util import matrix_triangular_solve_compat
 class GPRegression(nn.Module):
     """
     Gaussian Process Regression module.
+
+    References
+
+    [1] `Gaussian Processes for Machine Learning`
+    Carl E. Rasmussen, Christopher K. I. Williams
 
     :param torch.autograd.Variable X: A tensor of inputs.
     :param torch.autograd.Variable y: A tensor of output data for training.
@@ -75,8 +81,10 @@ class GPRegression(nn.Module):
         Kfs = kernel(self.X, Xnew)
         Lff = Kff.potrf(upper=False)
 
-        Lffinv_y = matrix_triangular_solve_compat(self.y, Lff, upper=False)
-        Lffinv_Kfs = matrix_triangular_solve_compat(Kfs, Lff, upper=False)
+        pack = torch.cat((self.y.unsqueeze(1), Kfs), dim=1)
+        Lffinv_pack = matrix_triangular_solve_compat(pack, Lff, upper=False)
+        Lffinv_y = Lffinv_pack[:, 0]
+        Lffinv_Kfs = Lffinv_pack[:, 1:]
 
         # loc = Kfs.T @ inv(Kff) @ y
         loc = Lffinv_Kfs.t().matmul(Lffinv_y)

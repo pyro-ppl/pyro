@@ -2,23 +2,10 @@ from __future__ import absolute_import, division, print_function
 
 from torch.autograd import Variable
 import torch.nn as nn
-from torch.nn import Parameter
 from torch.distributions import transform_to
 
 import pyro
 import pyro.distributions as dist
-
-
-# TODO: remove this class
-class InducingPoints(nn.Module):
-
-    def __init__(self, Xu, name="inducing_points"):
-        super(InducingPoints, self).__init__()
-        self.inducing_points = Parameter(Xu)
-        self.name = name
-
-    def forward(self):
-        return self.inducing_points
 
 
 class Parameterized(nn.Module):

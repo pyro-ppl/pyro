@@ -144,7 +144,7 @@ class Trace_ELBO(object):
             surrogate_elbo_particle = weight * 0
             batched = (self.enum_discrete and isinstance(weight, Variable) and weight.size(0) > 1)
             # compute elbo and surrogate elbo
-            if (self.enum_discrete and isinstance(weight, Variable) and weight.size(0) > 1):
+            if batched:
                 log_pdf = "batch_log_pdf"
             else:
                 log_pdf = "log_pdf"
