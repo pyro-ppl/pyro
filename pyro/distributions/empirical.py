@@ -76,7 +76,7 @@ class Empirical(Distribution):
 
     def log_prob(self, x):
         if hasattr(x, "size") and x.size() != self.event_shape:
-            raise ValueError
+            raise NotImplementedError('TODO support batching')
         ix = _index(self.values, x)
         return self._categorical.log_prob(Variable(torch.Tensor([ix])))
 

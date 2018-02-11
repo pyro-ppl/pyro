@@ -305,7 +305,7 @@ discrete_dists = [
             examples=[
                 {'values': [[1], [2], [3], [4]],
                  'logits': list(map(math.log, [0.4, 0.1, 0.35, 0.15])),
-                 'test_data':[[1], [2]]},
+                 'test_data':[2]},
             ],
             test_data_indices=[0],
             batch_data_indices=[],
