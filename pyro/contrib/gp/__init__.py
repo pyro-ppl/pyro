@@ -75,7 +75,7 @@ class Parameterized(nn.Module):
 
     def fix_param(self, param, value=None):
         """
-        Fixes parameter to a specic value. If ``value=None``, fixes parameter to the
+        Fixes a parameter to a specic value. If ``value=None``, fixes the parameter to the
         default value.
 
         :param str param: Name of a parameter.
