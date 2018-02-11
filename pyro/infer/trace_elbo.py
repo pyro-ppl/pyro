@@ -10,13 +10,9 @@ import pyro
 import pyro.poutine as poutine
 from pyro.distributions.util import torch_zeros_like
 from pyro.infer.enum import iter_discrete_traces
-from pyro.infer.util import torch_backward, torch_data_sum, torch_sum
+from pyro.infer.util import torch_backward, torch_data_sum, torch_sum, is_identically_zero
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match
-
-
-def is_identically_zero(x):
-    return isinstance(x, numbers.Number) and x == 0
 
 
 def check_enum_discrete_can_run(model_trace, guide_trace):
