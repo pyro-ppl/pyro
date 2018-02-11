@@ -16,17 +16,17 @@ class SparseGPRegression(Model):
     """
     Sparse Gaussian Process Regression module.
 
-    The models implement three approximation methods:
-        Deterministic Training Conditional (DTC),
-        Fully Independent Training Conditional (FITC),
-        Variational Free Energy (VFE).
+    This module implements three approximation methods:
+    Deterministic Training Conditional (DTC),
+    Fully Independent Training Conditional (FITC),
+    Variational Free Energy (VFE).
 
     References
 
-    [1] `A Unifying View of Sparse Approximate Gaussian Process Regression`
+    [1] `A Unifying View of Sparse Approximate Gaussian Process Regression`,
     Joaquin Quinonero-Candela, Carl E. Rasmussen
 
-    [2] `Variational learning of inducing variables in sparse Gaussian processes`
+    [2] `Variational learning of inducing variables in sparse Gaussian processes`,
     Michalis Titsias
 
     :param torch.autograd.Variable X: A tensor of inputs.
@@ -43,7 +43,7 @@ class SparseGPRegression(Model):
         self.y = y
         self.kernel = kernel
         self.num_data = self.X.size(0)
-        
+
         self.Xu = Parameter(Xu)
         self.num_inducing = self.Xu.size(0)
 

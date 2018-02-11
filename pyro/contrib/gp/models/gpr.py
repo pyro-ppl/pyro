@@ -18,7 +18,7 @@ class GPRegression(Model):
 
     References
 
-    [1] `Gaussian Processes for Machine Learning`
+    [1] `Gaussian Processes for Machine Learning`,
     Carl E. Rasmussen, Christopher K. I. Williams
 
     :param torch.autograd.Variable X: A tensor of inputs.
