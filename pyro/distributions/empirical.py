@@ -3,11 +3,11 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 import torch
 from torch.autograd import Variable
+from torch.distributions.utils import log_sum_exp
 
 from pyro.distributions.distribution import Distribution
 from pyro.distributions.torch.categorical import Categorical
 from pyro.distributions.util import copy_docs_from
-from pyro.util import log_sum_exp
 
 
 def _eq(x, y):
