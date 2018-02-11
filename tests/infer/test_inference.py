@@ -58,9 +58,11 @@ class NormalNormalTests(TestCase):
         pyro.clear_param_store()
 
         def model():
-            mu_latent = pyro.sample("mu_latent", dist.normal,
-                                    self.mu0, torch.pow(self.lam0, -0.5))
-            pyro.observe("obs", dist.normal, self.data, mu_latent, torch.pow(self.lam, -0.5))
+            mu_latent = pyro.sample("mu_latent",
+                                    dist.Normal(self.mu0, torch.pow(self.lam0, -0.5)))
+            pyro.sample("obs",
+                        dist.Normal(mu_latent, torch.pow(self.lam, -0.5)),
+                        obs=self.data)
             return mu_latent
 
         def guide():
@@ -70,8 +72,8 @@ class NormalNormalTests(TestCase):
                                    self.analytic_log_sig_n.data - 0.14 * torch.ones(2),
                                    requires_grad=True))
             sig_q = torch.exp(log_sig_q)
-            normal = dist.normal if reparameterized else fakes.nonreparameterized_normal
-            pyro.sample("mu_latent", normal, mu_q, sig_q)
+            Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
+            pyro.sample("mu_latent", Normal(mu_q, sig_q))
 
         adam = optim.Adam({"lr": .001})
         svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
@@ -106,8 +108,8 @@ class TestFixedModelGuide(TestCase):
                 "beta_p_log", Variable(
                     self.beta_p_log_0.clone(), requires_grad=True), tags="model")
             alpha_p, beta_p = torch.exp(alpha_p_log), torch.exp(beta_p_log)
-            lambda_latent = pyro.sample("lambda_latent", dist.gamma, alpha_p, beta_p)
-            pyro.observe("obs", dist.poisson, self.data, lambda_latent)
+            lambda_latent = pyro.sample("lambda_latent", dist.Gamma(alpha_p, beta_p))
+            pyro.sample("obs", dist.Poisson(lambda_latent), obs=self.data)
             return lambda_latent
 
         def guide():
@@ -118,7 +120,7 @@ class TestFixedModelGuide(TestCase):
                 "beta_q_log", Variable(
                     self.beta_q_log_0.clone(), requires_grad=True), tags="guide")
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
-            pyro.sample("lambda_latent", dist.gamma, alpha_q, beta_q)
+            pyro.sample("lambda_latent", dist.Gamma(alpha_q, beta_q))
 
         def per_param_args(module_name, param_name, tags):
             if tags in fixed_tags:
@@ -173,7 +175,7 @@ class PoissonGammaTests(TestCase):
         self.log_beta_n = torch.log(self.beta_n)
 
     def test_elbo_reparameterized(self):
-        assert dist.gamma.reparameterized
+        assert dist.Gamma.reparameterized
         self.do_elbo_test(True, 10000)
 
     def test_elbo_nonreparameterized(self):
@@ -181,11 +183,11 @@ class PoissonGammaTests(TestCase):
 
     def do_elbo_test(self, reparameterized, n_steps):
         pyro.clear_param_store()
-        gamma = dist.gamma if reparameterized else fakes.nonreparameterized_gamma
+        Gamma = dist.Gamma if reparameterized else fakes.NonreparameterizedGamma
 
         def model():
-            lambda_latent = pyro.sample("lambda_latent", gamma, self.alpha0, self.beta0)
-            pyro.observe("obs", dist.poisson, self.data, lambda_latent)
+            lambda_latent = pyro.sample("lambda_latent", Gamma(self.alpha0, self.beta0))
+            pyro.sample("obs", dist.Poisson(lambda_latent), obs=self.data)
             return lambda_latent
 
         def guide():
@@ -202,7 +204,7 @@ class PoissonGammaTests(TestCase):
                     0.143,
                     requires_grad=True))
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
-            pyro.sample("lambda_latent", gamma, alpha_q, beta_q)
+            pyro.sample("lambda_latent", Gamma(alpha_q, beta_q))
 
         adam = optim.Adam({"lr": .0002, "betas": (0.97, 0.999)})
         svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
@@ -232,22 +234,23 @@ class ExponentialGammaTests(TestCase):
         self.log_beta_n = torch.log(self.beta_n)
 
     def test_elbo_reparameterized(self):
-        assert dist.gamma.reparameterized
+        assert dist.Gamma.reparameterized
         self.do_elbo_test(dist.Gamma, 5000)
 
     def test_elbo_rsvi(self):
         self.do_elbo_test(ShapeAugmentedGamma, 5000)
+        self.do_elbo_test(ShapeAugmentedGamma, 5000, True)
 
     def test_elbo_nonreparameterized(self):
         self.do_elbo_test(fakes.NonreparameterizedGamma, 10000)
 
-    def do_elbo_test(self, gamma_dist, n_steps):
+    def do_elbo_test(self, gamma_dist, n_steps, trace_graph=False):
         pyro.clear_param_store()
 
         def model():
             lambda_latent = pyro.sample("lambda_latent", gamma_dist(self.alpha0, self.beta0))
-            pyro.observe("obs0", dist.exponential, self.data[0], lambda_latent)
-            pyro.observe("obs1", dist.exponential, self.data[1], lambda_latent)
+            pyro.sample("obs0", dist.Exponential(lambda_latent), obs=self.data[0])
+            pyro.sample("obs1", dist.Exponential(lambda_latent), obs=self.data[1])
             return lambda_latent
 
         def guide():
@@ -261,7 +264,7 @@ class ExponentialGammaTests(TestCase):
             pyro.sample("lambda_latent", gamma_dist(alpha_q, beta_q))
 
         adam = optim.Adam({"lr": .0003, "betas": (0.97, 0.999)})
-        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
+        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=trace_graph)
 
         for k in range(n_steps):
             svi.step()
@@ -290,7 +293,7 @@ class BernoulliBetaTests(TestCase):
         self.log_beta_n = torch.log(self.beta_n)
 
     def test_elbo_reparameterized(self):
-        assert dist.beta.reparameterized
+        assert dist.Beta.reparameterized
         self.do_elbo_test(True, 10000)
 
     def test_elbo_nonreparameterized(self):
@@ -298,11 +301,11 @@ class BernoulliBetaTests(TestCase):
 
     def do_elbo_test(self, reparameterized, n_steps):
         pyro.clear_param_store()
-        beta = dist.beta if reparameterized else fakes.nonreparameterized_beta
+        Beta = dist.Beta if reparameterized else fakes.NonreparameterizedBeta
 
         def model():
-            p_latent = pyro.sample("p_latent", beta, self.alpha0, self.beta0)
-            pyro.observe("obs", dist.bernoulli, self.data, p_latent)
+            p_latent = pyro.sample("p_latent", Beta(self.alpha0, self.beta0))
+            pyro.observe("obs", dist.Bernoulli(p_latent), obs=self.data)
             return p_latent
 
         def guide():
@@ -311,7 +314,7 @@ class BernoulliBetaTests(TestCase):
             beta_q_log = pyro.param("beta_q_log",
                                     Variable(self.log_beta_n.data - 0.143, requires_grad=True))
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
-            pyro.sample("p_latent", beta, alpha_q, beta_q)
+            pyro.sample("p_latent", Beta(alpha_q, beta_q))
 
         adam = optim.Adam({"lr": .001, "betas": (0.97, 0.999)})
         svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
@@ -365,19 +368,19 @@ class LogNormalNormalTests(TestCase):
                                         self.log_tau_n.data - 0.143)
 
         def model():
-            mu_latent = pyro.sample("mu_latent", dist.normal,
-                                    self.mu0, torch.pow(self.tau0, -0.5))
+            mu_latent = pyro.sample("mu_latent",
+                                    dist.Normal(self.mu0, torch.pow(self.tau0, -0.5)))
             sigma = torch.pow(self.tau, -0.5)
-            pyro.observe("obs0", dist.lognormal, self.data[0], mu_latent, sigma)
-            pyro.observe("obs1", dist.lognormal, self.data[1], mu_latent, sigma)
+            pyro.observe("obs0", dist.LogNormal(mu_latent, sigma), obs=self.data[0])
+            pyro.observe("obs1", dist.LogNormal(mu_latent, sigma), obs=self.data[1])
             return mu_latent
 
         def guide():
             pyro.module("mymodule", pt_guide)
             mu_q, tau_q = torch.exp(pt_guide.mu_q_log), torch.exp(pt_guide.tau_q_log)
             sigma = torch.pow(tau_q, -0.5)
-            normal = dist.normal if reparameterized else fakes.nonreparameterized_normal
-            pyro.sample("mu_latent", normal, mu_q, sigma)
+            Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
+            pyro.sample("mu_latent", Normal(mu_q, sigma))
 
         adam = optim.Adam({"lr": .0005, "betas": (0.96, 0.999)})
         svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
@@ -414,7 +417,7 @@ class LogNormalNormalTests(TestCase):
             tau_q_log = pyro.param("tau_q_log", Variable(self.log_tau_n.data - 0.143,
                                                          requires_grad=True))
             mu_q, tau_q = torch.exp(mu_q_log), torch.exp(tau_q_log)
-            pyro.sample("mu_latent", dist.normal, mu_q, torch.pow(tau_q, -0.5))
+            pyro.sample("mu_latent", dist.Normal(mu_q, torch.pow(tau_q, -0.5)))
 
         adam = optim.Adam({"lr": .0005, "betas": (0.96, 0.999)})
         svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
@@ -434,19 +437,19 @@ class SafetyTests(TestCase):
         # normal-normal; known covariance
         def model_dup():
             pyro.param("mu_q", Variable(torch.ones(1), requires_grad=True))
-            pyro.sample("mu_q", dist.normal, ng_zeros(1), ng_ones(1))
+            pyro.sample("mu_q", dist.Normal(ng_zeros(1), ng_ones(1)))
 
         def model_obs_dup():
-            pyro.sample("mu_q", dist.normal, ng_zeros(1), ng_ones(1))
-            pyro.observe("mu_q", dist.normal, ng_zeros(1), ng_ones(1), ng_zeros(1))
+            pyro.sample("mu_q", dist.Normal(ng_zeros(1), ng_ones(1)))
+            pyro.sample("mu_q", dist.Normal(ng_zeros(1), ng_ones(1)), obs=ng_zeros(1))
 
         def model():
-            pyro.sample("mu_q", dist.normal, ng_zeros(1), ng_ones(1))
+            pyro.sample("mu_q", dist.Normal(ng_zeros(1), ng_ones(1)))
 
         def guide():
             p = pyro.param("p", Variable(torch.ones(1), requires_grad=True))
-            pyro.sample("mu_q", dist.normal, ng_zeros(1), p)
-            pyro.sample("mu_q_2", dist.normal, ng_zeros(1), p)
+            pyro.sample("mu_q", dist.Normal(ng_zeros(1), p))
+            pyro.sample("mu_q_2", dist.Normal(ng_zeros(1), p))
 
         self.duplicate_model = model_dup
         self.duplicate_obs = model_obs_dup
