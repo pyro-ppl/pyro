@@ -23,7 +23,7 @@ class InducingPoints(nn.Module):
 
 class Parameterized(nn.Module):
     """
-    Parameterized module.
+    Parameterized class.
 
     This is a base class for other classes in this Gaussian Process module.
     """
@@ -49,7 +49,7 @@ class Parameterized(nn.Module):
         Sets a constraint to a parameter.
 
         :param str param: Name of a parameter.
-        :param torch.distributions.constraints.Constraint constraint: A pytorch constraint.
+        :param torch.distributions.constraints.Constraint constraint: A Pytorch constraint.
             See `Pytorch's docs
             <http://pytorch.org/docs/master/distributions.html#module-torch.distributions.constraints>`_
             for a list of constraints.
@@ -58,7 +58,7 @@ class Parameterized(nn.Module):
 
     def set_mode(self, mode):
         """
-        Sets mode for the module. `self.link_param(param)` method will used this mode to
+        Sets mode for the module. `self.register_param(param)` method will used this mode to
         decide its logic.
 
         :param str mode: Either "model" or "guide".
