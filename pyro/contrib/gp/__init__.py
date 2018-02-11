@@ -26,12 +26,6 @@ class Parameterized(nn.Module):
     Parameterized module.
 
     This is a base class for other classes in this Gaussian Process module.
-    The method `set_prior(param, prior)` will be used to set priors to parameters.
-    The method `set_constraint(param, prior)` will be used to set constraints to parameters.
-    We use `set_mode(mode)` to interchange between "model" and guide" (default).
-    If a parameter has a prior, we will use Maximum A Posteriori (MAP) for its guide.
-    The method `link_param(param)` is used as a wrapper for `pyro.param()` or
-    `pyro.sample()` call.
     """
 
     def __init__(self):
@@ -42,17 +36,44 @@ class Parameterized(nn.Module):
         self._name = None
 
     def set_prior(self, param, prior):
+        """
+        Sets a prior to a parameter.
+
+        :param str param: Name of a parameter.
+        :param pyro.distributions.Distribution prior: A prior distribution for random variable `param`.
+        """
         self._priors[param] = prior
 
     def set_constraint(self, param, constraint):
+        """
+        Sets a constraint to a parameter.
+
+        :param str param: Name of a parameter.
+        :param torch.distributions.constraints.Constraint constraint: A pytorch constraint.
+            See `Pytorch's docs
+            <http://pytorch.org/docs/master/distributions.html#module-torch.distributions.constraints>`_
+            for a list of constraints.
+        """
         self._constraints[param] = constraint
 
     def set_mode(self, mode):
+        """
+        Sets mode for the module. `self.link_param(param)` method will used this mode to
+        decide its logic.
+
+        :param str mode: Either "model" or "guide".
+        """
         if mode not in ["model", "guide"]:
             raise ValueError("Mode should be either 'model' or 'guide', but got {}.".format(mode))
         self._mode = mode
 
-    def link_param(self, param):
+    def register_param(self, param):
+        """
+        Registers a parameter to Pyro. It can be seen as a wrapper for `pyro.param()` and
+        `pyro.sample()` calls.
+
+        :param str param: Name of a parameter.
+        """
         prior = self._priors[param] if param in self._priors else None
         if self._name is None:
             param_name = param
