@@ -12,22 +12,27 @@ class Parameterized(nn.Module):
     """
     Parameterized class.
 
-    This is a base class for other classes in this Gaussian Process module.
+    This is a base class for other classes in Gaussian Process.
+    By default, a parameter will be a ``torch.nn.Parameter`` containing ``torch.FloatTensor``.
+    To cast them to the correct data type or GPU device, we can call methods such as
+    ``.double()``, ``.cuda(device=0)``,...
+    See `torch.nn.Module
+    <http://pytorch.org/docs/master/nn.html#torch.nn.Module>`_ for more information.
     """
 
     def __init__(self):
         super(Parameterized, self).__init__()
         self._priors = {}
         self._constraints = {}
-        self._mode = "guide"
         self._name = None
+        self._registered_params = {}
 
     def set_prior(self, param, prior):
         """
         Sets a prior to a parameter.
 
         :param str param: Name of a parameter.
-        :param pyro.distributions.Distribution prior: A prior distribution for random variable `param`.
+        :param pyro.distributions.Distribution prior: A prior distribution for random variable ``param``.
         """
         self._priors[param] = prior
 
@@ -45,21 +50,35 @@ class Parameterized(nn.Module):
 
     def set_mode(self, mode):
         """
-        Sets mode for the module. `self.register_param(param)` method will used this mode to
-        decide its logic.
+        Sets mode for the module to be able to use its parameters in stochastic functions.
 
         :param str mode: Either "model" or "guide".
         """
         if mode not in ["model", "guide"]:
             raise ValueError("Mode should be either 'model' or 'guide', but got {}.".format(mode))
-        self._mode = mode
+        for param in self._parameters:
+            self._registered_params[param] = self.register_param(param, mode)
+        return self
 
-    def register_param(self, param):
+    def get_param(self, param):
+        """
+        Gets param to be used in stochastic functions. The correct behavior will depend on
+        the current `mode` of the module.
+
+        :param str param: Name of a parameter.
+        """
+        if param not in self._registered_params:  # set_mode() has not been called yet
+            return getattr(self, param)
+        else:
+            return self._registered_params[param]
+
+    def register_param(self, param, mode="model"):
         """
         Registers a parameter to Pyro. It can be seen as a wrapper for `pyro.param()` and
         `pyro.sample()` calls.
 
         :param str param: Name of a parameter.
+        :param str mode: Either "model" or "guide".
         """
         prior = self._priors[param] if param in self._priors else None
         if self._name is None:
@@ -79,7 +98,7 @@ class Parameterized(nn.Module):
                                                  requires_grad=True)
                 p = transform_to(constraint)(pyro.param(unconstrained_param_name,
                                                         unconstrained_param_0))
-        elif self._mode == "model":
+        elif mode == "model":
             p = pyro.sample(param_name, prior)
         else:  # prior != None and mode = "guide"
             MAP_param_name = param_name + "_MAP"

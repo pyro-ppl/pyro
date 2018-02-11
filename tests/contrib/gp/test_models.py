@@ -5,7 +5,6 @@ from torch.autograd import Variable
 
 from pyro.contrib.gp.kernels import RBF
 from pyro.contrib.gp.models import GPRegression, SparseGPRegression
-from pyro.contrib.gp import InducingPoints
 from tests.common import assert_equal
 
 
@@ -35,7 +34,7 @@ def test_forward_sgpr():
     X = Variable(torch.Tensor([[1, 5, 3], [4, 3, 7]]))
     y = Variable(torch.Tensor([0, 1]))
     # hacky: noise ~ 0, Xnew = Xu = X
-    Xu = InducingPoints(X.data.clone())
+    Xu = X.data
     Xnew = X
     noise = torch.Tensor([1e-6])
 
@@ -56,7 +55,7 @@ def test_forward_sgpr_vs_gpr():
     kernel = RBF(input_dim=3, variance=torch.Tensor([2]), lengthscale=torch.Tensor([2]))
     X = Variable(torch.Tensor([[2, 5, 3], [4, 3, 7]]))
     y = Variable(torch.Tensor([0, 1]))
-    Xu = InducingPoints(X.data.clone())  # must be set to compare
+    Xu = X.data  # must be set to compare
     Xnew = Variable(torch.Tensor([[3, 1, 4], [1, 3, 1]]))
     noise = torch.Tensor([1])
 

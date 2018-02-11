@@ -2,14 +2,17 @@ from __future__ import absolute_import, division, print_function
 
 import torch
 from torch.autograd import Variable
-import torch.nn as nn
+from torch.distributions import constraints
+from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
 from pyro.distributions.util import matrix_triangular_solve_compat
 
+from .model import Model
 
-class SparseGPRegression(nn.Module):
+
+class SparseGPRegression(Model):
     """
     Sparse Gaussian Process Regression module.
 
@@ -29,11 +32,9 @@ class SparseGPRegression(nn.Module):
     :param torch.autograd.Variable X: A tensor of inputs.
     :param torch.autograd.Variable y: A tensor of outputs for training.
     :param pyro.contrib.gp.kernels.Kernel kernel: A Pyro kernel object.
-    :param pyro.contrib.gp.InducingPoints Xu: An inducing-point module for spare approximation.
     :param torch.Tensor noise: An optional noise tensor.
-    :param str approx: One of approximation methods: 'DTC', 'FITC', and 'VFE' (default).
-    :param dict kernel_prior: A mapping from kernel parameter's names to priors.
-    :param dict Xu_prior: A mapping from inducing point parameter named 'Xu' to a prior.
+    :param torch.Tensor Xu: An inducing-point parameter.
+    :param str approx: One of approximation methods: "DTC", "FITC", and "VFE" (default).
     :param float jitter: An additional jitter to help stablize Cholesky decomposition.
     """
     def __init__(self, X, y, kernel, Xu, noise=None, approx=None, kernel_prior=None,
@@ -42,13 +43,15 @@ class SparseGPRegression(nn.Module):
         self.X = X
         self.y = y
         self.kernel = kernel
-        self.Xu = Xu
-
         self.num_data = self.X.size(0)
-        self.num_inducing = self.Xu().size(0)
 
-        # TODO: define noise as a Likelihood (a nn.Module)
-        self.noise = Variable(noise) if noise is not None else Variable(X.data.new([1]))
+        if noise is None:
+            noise = self.X.data.new([1])
+        self.noise = Parameter(noise)
+        self.set_constraint("noise", constraints.positive)
+
+        self.Xu = Parameter(Xu)
+        self.num_inducing = self.Xu.size(0)
 
         if approx is None:
             self.approx = "VFE"
@@ -58,17 +61,12 @@ class SparseGPRegression(nn.Module):
             raise ValueError("The sparse approximation method should be one of 'DTC', "
                              "'FITC', 'VFE'.")
 
-        self.kernel_prior = kernel_prior if kernel_prior is not None else {}
-        self.Xu_prior = Xu_prior if Xu_prior is not None else {}
-
         self.jitter = Variable(self.X.data.new([jitter]))
 
     def model(self):
-        kernel_fn = pyro.random_module(self.kernel.name, self.kernel, self.kernel_prior)
-        kernel = kernel_fn()
-
-        Xu_fn = pyro.random_module(self.Xu.name, self.Xu, self.Xu_prior)
-        Xu = Xu_fn().inducing_points
+        kernel = self.kernel.set_mode("model")
+        noise = self.register_param("noise", mode="model")
+        Xu = self.register_param("Xu", mode="model")
 
         Kuu = kernel(Xu) + self.jitter.expand(self.num_inducing).diag()
         Kuf = kernel(Xu, self.X)
@@ -76,7 +74,7 @@ class SparseGPRegression(nn.Module):
         # W = inv(Luu) @ Kuf
         W = matrix_triangular_solve_compat(Kuf, Luu, upper=False)
 
-        D = self.noise.expand(self.num_data)
+        D = noise.expand(self.num_data)
         trace_term = 0
         if self.approx == "FITC" or self.approx == "VFE":
             Kffdiag = kernel(self.X, diag=True)
@@ -86,7 +84,7 @@ class SparseGPRegression(nn.Module):
             if self.approx == "FITC":
                 D = D + Kffdiag - Qffdiag
             else:  # approx = "VFE"
-                trace_term += (Kffdiag - Qffdiag).sum() / self.noise
+                trace_term += (Kffdiag - Qffdiag).sum() / noise
 
         zero_loc = Variable(D.data.new([0])).expand(self.num_data)
         # DTC: cov = Qff + noise, trace_term = 0
@@ -95,39 +93,20 @@ class SparseGPRegression(nn.Module):
         pyro.sample("y", dist.SparseMultivariateNormal(zero_loc, D, W, trace_term), obs=self.y)
 
     def guide(self):
-        kernel_guide_prior = {}
-        for p in self.kernel_prior:
-            p_MAP_name = pyro.param_with_module_name(self.kernel.name, p) + "_MAP"
-            # init params by their prior means
-            p_MAP = pyro.param(p_MAP_name, Variable(self.kernel_prior[p].torch_dist.mean.data.clone(),
-                                                    requires_grad=True))
-            kernel_guide_prior[p] = dist.Delta(p_MAP)
+        kernel = self.kernel.set_mode("guide")
+        noise = self.register_param("noise", mode="guide")
+        Xu = self.register_param("Xu", mode="guide")
 
-        kernel_fn = pyro.random_module(self.kernel.name, self.kernel, kernel_guide_prior)
-        kernel = kernel_fn()
+        return kernel, noise, Xu
 
-        Xu_guide_prior = {}
-        for p in self.Xu_prior:
-            p_MAP_name = pyro.param_with_module_name(self.Xu.name, p) + "_MAP"
-            # init params by their prior means
-            p_MAP = pyro.param(p_MAP_name, Variable(self.Xu_prior[p].torch_dist.mean.data.clone(),
-                                                    requires_grad=True))
-            Xu_guide_prior[p] = dist.Delta(p_MAP)
-
-        Xu_fn = pyro.random_module(self.Xu.name, self.Xu, Xu_guide_prior)
-        Xu = Xu_fn().inducing_points
-
-        return kernel, Xu
-
-    def forward(self, Xnew, full_cov=False, noiseless=False):
+    def forward(self, Xnew, full_cov=False, noiseless=True):
         """
-        Computes the parameters of `p(y*|Xnew) ~ N(loc, cov)`
-        w.r.t. the new input Xnew.
+        Computes the parameters of ``p(y*|Xnew) ~ N(loc, cov)`` w.r.t. the new input ``Xnew``.
 
         :param torch.autograd.Variable Xnew: A 2D tensor.
-        :param bool full_cov: Predict full covariance matrix or just its diagonal.
-        :param bool noiseless: Include noise in the prediction or not.
-        :return: loc and covariance matrix of p(y*|Xnew).
+        :param bool full_cov: Predicts full covariance matrix or just its diagonal.
+        :param bool noiseless: Includes noise in the prediction or not.
+        :return: loc and covariance matrix of ``p(y*|Xnew)``.
         :rtype: torch.autograd.Variable and torch.autograd.Variable
         """
         if Xnew.dim() == 2 and self.X.size(1) != Xnew.size(1):
@@ -135,7 +114,8 @@ class SparseGPRegression(nn.Module):
         if Xnew.dim() == 1:
             Xnew = Xnew.unsqueeze(1)
 
-        kernel, Xu = self.guide()
+        kernel, noise, Xu = self.guide()
+
         Kuu = kernel(Xu) + self.jitter.expand(self.num_inducing).diag()
         Kus = kernel(Xu, Xnew)
         Kuf = kernel(Xu, self.X)
@@ -173,13 +153,13 @@ class SparseGPRegression(nn.Module):
         if full_cov:
             Kss = kernel(Xnew)
             if not noiseless:
-                Kss = Kss + self.noise.expand(Xnew.size(0)).diag()
+                Kss = Kss + noise.expand(Xnew.size(0)).diag()
             Qss = Ws.t().matmul(Ws)
             cov = Kss - Qss + Linv_Ws.t().matmul(Linv_Ws)
         else:
             Kssdiag = kernel(Xnew, diag=True)
             if not noiseless:
-                Kssdiag = Kssdiag + self.noise.expand(Xnew.size(0))
+                Kssdiag = Kssdiag + noise.expand(Xnew.size(0))
             Qssdiag = (Ws ** 2).sum(dim=0)
             cov = Kssdiag - Qssdiag + (Linv_Ws ** 2).sum(dim=0)
 
