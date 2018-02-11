@@ -16,6 +16,7 @@ from __future__ import absolute_import, division, print_function
 
 from pyro.distributions.delta import Delta
 from pyro.distributions.distribution import Distribution  # noqa: F401
+from pyro.distributions.empirical import Empirical
 from pyro.distributions.random_primitive import RandomPrimitive
 from pyro.distributions.rejector import Rejector  # noqa: F401
 
@@ -47,6 +48,7 @@ categorical = RandomPrimitive(Categorical)
 cauchy = RandomPrimitive(Cauchy)
 delta = RandomPrimitive(Delta)
 dirichlet = RandomPrimitive(Dirichlet)
+empirical = RandomPrimitive(Empirical)
 exponential = RandomPrimitive(Exponential)
 gamma = RandomPrimitive(Gamma)
 lognormal = RandomPrimitive(LogNormal)

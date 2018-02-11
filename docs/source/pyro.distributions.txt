@@ -41,6 +41,13 @@ Delta
     :undoc-members:
     :show-inheritance:
 
+Empirical
+-----------
+.. automodule:: pyro.distributions.empirical
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Exponential
 -----------
 .. automodule:: pyro.distributions.torch.exponential
