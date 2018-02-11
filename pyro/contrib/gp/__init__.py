@@ -57,7 +57,7 @@ class Parameterized(nn.Module):
         if mode not in ["model", "guide"]:
             raise ValueError("Mode should be either 'model' or 'guide', but got {}.".format(mode))
         for param in self._parameters:
-            self._registered_params[param] = self.register_param(param, mode)
+            self._register_param(param, mode)
         return self
 
     def get_param(self, param):
@@ -72,7 +72,7 @@ class Parameterized(nn.Module):
         else:
             return self._registered_params[param]
 
-    def register_param(self, param, mode="model"):
+    def _register_param(self, param, mode="model"):
         """
         Registers a parameter to Pyro. It can be seen as a wrapper for `pyro.param()` and
         `pyro.sample()` calls.
@@ -106,4 +106,4 @@ class Parameterized(nn.Module):
             MAP_param = pyro.param(MAP_param_name, MAP_param_0)
             p = pyro.sample(param_name, dist.Delta(MAP_param))
 
-        return p
+        self._registered_params[param] = p

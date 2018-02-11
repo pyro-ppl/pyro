@@ -40,7 +40,8 @@ class GPRegression(Model):
 
     def model(self):
         kernel = self.kernel.set_mode("model")
-        noise = self.register_param("noise", mode="model")
+        self.set_mode("model")
+        noise = self.get_param("noise")
 
         K = kernel(self.X) + noise.expand(self.num_data).diag()
         zero_loc = Variable(K.data.new([0])).expand(self.num_data)
@@ -48,7 +49,8 @@ class GPRegression(Model):
 
     def guide(self):
         kernel = self.kernel.set_mode("guide")
-        noise = self.register_param("noise", mode="guide")
+        self.set_mode("guide")
+        noise = self.get_param("noise")
 
         return kernel, noise
 
