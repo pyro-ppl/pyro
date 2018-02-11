@@ -32,26 +32,25 @@ class SparseGPRegression(Model):
     :param torch.autograd.Variable X: A tensor of inputs.
     :param torch.autograd.Variable y: A tensor of outputs for training.
     :param pyro.contrib.gp.kernels.Kernel kernel: A Pyro kernel object.
-    :param torch.Tensor noise: An optional noise tensor.
     :param torch.Tensor Xu: An inducing-point parameter.
+    :param torch.Tensor noise: An optional noise tensor.
     :param str approx: One of approximation methods: "DTC", "FITC", and "VFE" (default).
     :param float jitter: An additional jitter to help stablize Cholesky decomposition.
     """
-    def __init__(self, X, y, kernel, Xu, noise=None, approx=None, kernel_prior=None,
-                 Xu_prior=None, jitter=1e-6):
+    def __init__(self, X, y, kernel, Xu, noise=None, approx=None, jitter=1e-6):
         super(SparseGPRegression, self).__init__()
         self.X = X
         self.y = y
         self.kernel = kernel
         self.num_data = self.X.size(0)
+        
+        self.Xu = Parameter(Xu)
+        self.num_inducing = self.Xu.size(0)
 
         if noise is None:
             noise = self.X.data.new([1])
         self.noise = Parameter(noise)
         self.set_constraint("noise", constraints.positive)
-
-        self.Xu = Parameter(Xu)
-        self.num_inducing = self.Xu.size(0)
 
         if approx is None:
             self.approx = "VFE"

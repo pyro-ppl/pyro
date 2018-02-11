@@ -30,7 +30,8 @@ class Parameterized(nn.Module):
 
     def set_prior(self, param, prior):
         """
-        Sets a prior to a parameter.
+        Sets a prior to a parameter. Use `set_prior(param, None)` to remove the prior distribution of
+        the parameter.
 
         :param str param: Name of a parameter.
         :param pyro.distributions.Distribution prior: A prior distribution for random variable ``param``.
@@ -39,7 +40,8 @@ class Parameterized(nn.Module):
 
     def set_constraint(self, param, constraint):
         """
-        Sets a constraint to a parameter.
+        Sets a constraint to a parameter. Use `set_constraint(param, None)` to remove the constraint of
+        the parameter.
 
         :param str param: Name of a parameter.
         :param torch.distributions.constraints.Constraint constraint: A Pytorch constraint.
@@ -101,9 +103,8 @@ class Parameterized(nn.Module):
         :param str param: Name of a parameter.
         :param str mode: Either "model" or "guide".
         """
-        fixed_value = self._fixed_params.pop(param, None)
-        if fixed_value is not None:
-            self._registered_params[param] = fixed_value
+        if param in self._fixed_params:
+            self._registered_params[param] = self._fixed_params[param]
             return
         prior = self._priors[param] if param in self._priors else None
         if self._name is None:
