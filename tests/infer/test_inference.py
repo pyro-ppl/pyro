@@ -239,11 +239,12 @@ class ExponentialGammaTests(TestCase):
 
     def test_elbo_rsvi(self):
         self.do_elbo_test(ShapeAugmentedGamma, 5000)
+        self.do_elbo_test(ShapeAugmentedGamma, 5000, True)
 
     def test_elbo_nonreparameterized(self):
         self.do_elbo_test(fakes.NonreparameterizedGamma, 10000)
 
-    def do_elbo_test(self, gamma_dist, n_steps):
+    def do_elbo_test(self, gamma_dist, n_steps, trace_graph=False):
         pyro.clear_param_store()
 
         def model():
@@ -263,7 +264,7 @@ class ExponentialGammaTests(TestCase):
             pyro.sample("lambda_latent", gamma_dist(alpha_q, beta_q))
 
         adam = optim.Adam({"lr": .0003, "betas": (0.97, 0.999)})
-        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
+        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=trace_graph)
 
         for k in range(n_steps):
             svi.step()
