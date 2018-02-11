@@ -5,7 +5,7 @@ import pytest
 import torch
 
 from pyro.distributions.util import broadcast_shape
-from pyro.util import ng_ones, ng_zeros
+from pyro.util import ng_ones
 from tests.common import assert_equal, xfail_if_not_implemented
 
 
@@ -47,28 +47,6 @@ def test_batch_log_prob_shape(dist):
             expected_shape = _log_prob_shape(d, x.size())
             log_p_obj = d.log_prob(x)
             assert log_p_obj.size() == expected_shape
-
-
-def test_log_prob_mask(dist):
-    if dist.get_test_distribution_name() not in ('Normal', 'Bernoulli', 'Categorical', 'OneHotCategorical', 'Normal'):
-        pytest.skip('Batch pdf masking not supported for the distribution.')
-    for idx in range(dist.get_num_test_data()):
-        dist_params = dist.get_dist_params(idx)
-        d = dist.pyro_dist(**dist_params)
-        x = dist.get_test_data(idx)
-        with xfail_if_not_implemented():
-            log_prob_shape = _log_prob_shape(d)
-            log_prob_shape_broadcasted = _log_prob_shape(d, x.size())
-            zeros_mask = ng_zeros(1)  # should be broadcasted to data dims
-            ones_mask = ng_ones(log_prob_shape)  # should be broadcasted to data dims
-            half_mask = ng_ones(1) * 0.5
-            batch_log_pdf = d.log_prob(x)
-            log_prob_zeros_mask = dist.pyro_dist(log_pdf_mask=zeros_mask, **dist_params).log_prob(x)
-            log_prob_ones_mask = dist.pyro_dist(log_pdf_mask=ones_mask, **dist_params).log_prob(x)
-            log_prob_half_mask = dist.pyro_dist(log_pdf_mask=half_mask, **dist_params).log_prob(x)
-            assert_equal(log_prob_ones_mask, batch_log_pdf)
-            assert_equal(log_prob_zeros_mask, ng_zeros(log_prob_shape_broadcasted))
-            assert_equal(log_prob_half_mask, 0.5 * batch_log_pdf)
 
 
 def test_score_errors_event_dim_mismatch(dist):

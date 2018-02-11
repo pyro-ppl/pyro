@@ -8,6 +8,7 @@ import numpy as np
 from torch.autograd import Variable
 
 from pyro.distributions.torch_wrapper import TorchDistribution
+from pyro.distributions.util import scale_tensor
 
 
 def _warn_if_nan(name, value):
@@ -83,9 +84,11 @@ class Trace(networkx.DiGraph):
                 except KeyError:
                     args, kwargs = site["args"], site["kwargs"]
                     if isinstance(site["fn"], TorchDistribution):
-                        site_log_p = site["fn"].log_prob(site["value"]).sum() * site["scale"]
+                        site_log_p = site["fn"].log_prob(site["value"])
                     else:
-                        site_log_p = site["fn"].log_prob(site["value"], *args, **kwargs).sum() * site["scale"]
+                        site_log_p = site["fn"].log_prob(site["value"], *args, **kwargs)
+                    site_log_p = scale_tensor(site_log_p, site["scale"])
+                    site_log_p = site_log_p.sum()
                     site["log_pdf"] = site_log_p
                     _warn_if_nan(name, site_log_p)
                 log_p += site_log_p
@@ -106,9 +109,10 @@ class Trace(networkx.DiGraph):
                 except KeyError:
                     args, kwargs = site["args"], site["kwargs"]
                     if isinstance(site["fn"], TorchDistribution):
-                        site_log_p = site["fn"].log_prob(site["value"]) * site["scale"]
+                        site_log_p = site["fn"].log_prob(site["value"])
                     else:
-                        site_log_p = site["fn"].log_prob(site["value"], *args, **kwargs) * site["scale"]
+                        site_log_p = site["fn"].log_prob(site["value"], *args, **kwargs)
+                    site_log_p = scale_tensor(site_log_p, site["scale"])
                     site["batch_log_pdf"] = site_log_p
                     site["log_pdf"] = site_log_p.sum()
                     _warn_if_nan(name, site["log_pdf"])
@@ -129,9 +133,10 @@ class Trace(networkx.DiGraph):
                 except KeyError:
                     args, kwargs = site["args"], site["kwargs"]
                     if isinstance(site["fn"], TorchDistribution):
-                        site_log_p = site["fn"].log_prob(site["value"]) * site["scale"]
+                        site_log_p = site["fn"].log_prob(site["value"])
                     else:
-                        site_log_p = site["fn"].log_prob(site["value"], *args, **kwargs) * site["scale"]
+                        site_log_p = site["fn"].log_prob(site["value"], *args, **kwargs)
+                    site_log_p = scale_tensor(site_log_p, site["scale"])
                     site["batch_log_pdf"] = site_log_p
                     site["log_pdf"] = site_log_p.sum()
                     _warn_if_nan(name, site["log_pdf"])
