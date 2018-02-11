@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import numbers
+
 import torch
 import torch.nn.functional as F
 from torch.autograd import Variable
@@ -65,6 +67,18 @@ def broadcast_shape(*shapes, **kwargs):
                 raise ValueError('shape mismatch: objects cannot be broadcast to a single shape: {}'.format(
                     ' vs '.join(map(str, shapes))))
     return tuple(reversed(reversed_shape))
+
+
+def sum_rightmost(value, dim):
+    """
+    Sum out ``dim`` many rightmost dimensions of a given tensor.
+
+    :param torch.autograd.Variable value: A tensor of ``.dim()`` at least ``dim``.
+    :param int dim: The number of rightmost dims to sum out.
+    """
+    if dim == 0 or isinstance(value, numbers.Number):
+        return value
+    return value.contiguous().view(value.shape[:-dim] + (-1,)).sum(-1)
 
 
 def log_gamma(xx):
