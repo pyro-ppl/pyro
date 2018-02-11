@@ -72,7 +72,7 @@ class GPRegression(Model):
         kernel, noise = self.guide()
 
         Kff = self.kernel(self.X)
-        Kff = Kff + self.noise.expand(self.num_data).diag()
+        Kff = Kff + noise.expand(self.num_data).diag()
         Kfs = kernel(self.X, Xnew)
         Lff = Kff.potrf(upper=False)
 
@@ -89,13 +89,13 @@ class GPRegression(Model):
         if full_cov:
             Kss = kernel(Xnew)
             if not noiseless:
-                Kss = Kss + self.noise.expand(Xnew.size(0)).diag()
+                Kss = Kss + noise.expand(Xnew.size(0)).diag()
             Qss = W.t().matmul(W)
             cov = Kss - Qss
         else:
             Kssdiag = kernel(Xnew, diag=True)
             if not noiseless:
-                Kssdiag = Kssdiag + self.noise.expand(Xnew.size(0))
+                Kssdiag = Kssdiag + noise.expand(Xnew.size(0))
             Qssdiag = (W ** 2).sum(dim=0)
             cov = Kssdiag - Qssdiag
 

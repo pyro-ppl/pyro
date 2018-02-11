@@ -65,8 +65,9 @@ class SparseGPRegression(Model):
 
     def model(self):
         kernel = self.kernel.set_mode("model")
-        noise = self.register_param("noise", mode="model")
-        Xu = self.register_param("Xu", mode="model")
+        self.set_mode("model")
+        noise = self.get_param("noise")
+        Xu = self.get_param("Xu")
 
         Kuu = kernel(Xu) + self.jitter.expand(self.num_inducing).diag()
         Kuf = kernel(Xu, self.X)
@@ -94,8 +95,9 @@ class SparseGPRegression(Model):
 
     def guide(self):
         kernel = self.kernel.set_mode("guide")
-        noise = self.register_param("noise", mode="guide")
-        Xu = self.register_param("Xu", mode="guide")
+        self.set_mode("guide")
+        noise = self.get_param("noise")
+        Xu = self.get_param("Xu")
 
         return kernel, noise, Xu
 
@@ -129,7 +131,7 @@ class SparseGPRegression(Model):
         #   = inv(Luu).T @ inv(L).T @ inv(L) @ inv(Luu)
 
         W = matrix_triangular_solve_compat(Kuf, Luu, upper=False)
-        D = self.noise.expand(self.num_data)
+        D = noise.expand(self.num_data)
         if self.approx == "FITC":
             Kffdiag = kernel(self.X, diag=True)
             Qffdiag = (W ** 2).sum(dim=0)
