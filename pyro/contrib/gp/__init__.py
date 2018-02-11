@@ -26,6 +26,7 @@ class Parameterized(nn.Module):
         self._constraints = {}
         self._name = None
         self._registered_params = {}
+        self._fixed_params = {}
 
     def set_prior(self, param, prior):
         """
@@ -62,8 +63,8 @@ class Parameterized(nn.Module):
 
     def get_param(self, param):
         """
-        Gets param to be used in stochastic functions. The correct behavior will depend on
-        the current `mode` of the module.
+        Gets variable to be used in stochastic functions. The correct behavior will depend on
+        the current ``mode`` of the module.
 
         :param str param: Name of a parameter.
         """
@@ -71,6 +72,26 @@ class Parameterized(nn.Module):
             return getattr(self, param)
         else:
             return self._registered_params[param]
+
+    def fix_param(self, param, value=None):
+        """
+        Fixes parameter to a specic value. If ``value=None``, fixes parameter to the
+        default value.
+
+        :param str param: Name of a parameter.
+        :param torch.Tensor value: A tensor to be fixed to ``param``.
+        """
+        if value is None:
+            value = getattr(self, param).data
+        self._fixed_params[param] = Variable(value)
+
+    def unfix_param(self, param):
+        """
+        Unfixes a parameter.
+
+        :param str param: Name of a parameter.
+        """
+        self._fixed_params.pop(param, None)
 
     def _register_param(self, param, mode="model"):
         """
@@ -80,6 +101,10 @@ class Parameterized(nn.Module):
         :param str param: Name of a parameter.
         :param str mode: Either "model" or "guide".
         """
+        fixed_value = self._fixed_params.pop(param, None)
+        if fixed_value is not None:
+            self._registered_params[param] = fixed_value
+            return
         prior = self._priors[param] if param in self._priors else None
         if self._name is None:
             param_name = param
@@ -88,14 +113,15 @@ class Parameterized(nn.Module):
 
         if prior is None:
             constraint = self._constraints[param] if param in self._constraints else None
-            tmp = getattr(self, param)
+            default_value = getattr(self, param)
             if constraint is None:
-                p = pyro.param(param_name, tmp)
+                p = pyro.param(param_name, default_value)
             else:
                 # TODO: use `constraint_to` inside `pyro.param(...)` when available
                 unconstrained_param_name = param_name + "_unconstrained"
-                unconstrained_param_0 = Variable(transform_to(constraint).inv(tmp).data.clone(),
-                                                 requires_grad=True)
+                unconstrained_param_0 = Variable(
+                    transform_to(constraint).inv(default_value).data.clone(),
+                    requires_grad=True)
                 p = transform_to(constraint)(pyro.param(unconstrained_param_name,
                                                         unconstrained_param_0))
         elif mode == "model":

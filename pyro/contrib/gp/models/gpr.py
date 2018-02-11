@@ -71,7 +71,7 @@ class GPRegression(Model):
 
         kernel, noise = self.guide()
 
-        Kff = self.kernel(self.X)
+        Kff = kernel(self.X)
         Kff = Kff + noise.expand(self.num_data).diag()
         Kfs = kernel(self.X, Xnew)
         Lff = Kff.potrf(upper=False)
