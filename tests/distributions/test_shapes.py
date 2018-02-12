@@ -81,12 +81,3 @@ def test_diag_normal_batch_log_pdf_shape():
     x2 = d2.sample()
     assert d1.log_prob(x1).size() == (2,)
     assert d2.log_prob(x2).size() == (2,)
-
-
-def test_diag_normal_log_pdf_mask_shape():
-    mu = ng_zeros(4, 3)
-    sigma = ng_zeros(4, 3)
-    mask = ng_ones(4,)
-    d = dist.Normal(mu, sigma, log_pdf_mask=mask, extra_event_dims=1)
-    x = d.sample()
-    assert d.log_prob(x).size() == (4,)

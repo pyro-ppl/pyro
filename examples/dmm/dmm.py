@@ -19,6 +19,7 @@ import pyro
 from pyro.infer import SVI
 from pyro.optim import ClippedAdam
 import pyro.distributions as dist
+import pyro.poutine as poutine
 from pyro.util import ng_ones
 from pyro.distributions import InverseAutoregressiveFlow
 from pyro.distributions import TransformedDistribution
@@ -184,7 +185,7 @@ class DMM(nn.Module):
         # sample the latents z and observed x's one time step at a time
         for t in range(1, T_max + 1):
             # the next three lines of code sample z_t ~ p(z_t | z_{t-1})
-            # note that (both here and elsewhere) log_pdf_mask takes care of both
+            # note that (both here and elsewhere) poutine.scale takes care of both
             # (i)  KL annealing; and
             # (ii) raggedness in the observed data (i.e. different sequences
             #      in the mini-batch have different lengths)
@@ -192,17 +193,16 @@ class DMM(nn.Module):
             # first compute the parameters of the diagonal gaussian distribution p(z_t | z_{t-1})
             z_mu, z_sigma = self.trans(z_prev)
             # then sample z_t according to dist.Normal(z_mu, z_sigma)
-            z_t = pyro.sample("z_%d" % t,
-                              dist.Normal(z_mu, z_sigma,
-                                          log_pdf_mask=annealing_factor * mini_batch_mask[:, t - 1:t]))
+            with poutine.scale(None, annealing_factor * mini_batch_mask[:, t - 1:t]):
+                z_t = pyro.sample("z_%d" % t, dist.Normal(z_mu, z_sigma))
 
             # compute the probabilities that parameterize the bernoulli likelihood
             emission_probs_t = self.emitter(z_t)
             # the next statement instructs pyro to observe x_t according to the
             # bernoulli distribution p(x_t|z_t)
-            pyro.sample("obs_x_%d" % t,
-                        dist.Bernoulli(emission_probs_t, log_pdf_mask=mini_batch_mask[:, t - 1:t]),
-                        obs=mini_batch[:, t - 1, :])
+            with poutine.scale(None, mini_batch_mask[:, t - 1:t]):
+                pyro.sample("obs_x_%d" % t, dist.Bernoulli(emission_probs_t),
+                            obs=mini_batch[:, t - 1, :])
             # the latent sampled at this time step will be conditioned upon
             # in the next time step so keep track of it
             z_prev = z_t
@@ -236,13 +236,12 @@ class DMM(nn.Module):
             # parameterized by self.iafs to the base distribution defined in the previous line
             # to yield a transformed distribution that we use for q(z_t|...)
             if len(self.iafs) > 0:
-                z_dist = TransformedDistribution(dist.Normal(z_mu, z_sigma), self.iafs,
-                                                 log_pdf_mask=mini_batch_mask[:, t - 1:t])
+                z_dist = TransformedDistribution(dist.Normal(z_mu, z_sigma), self.iafs)
             else:
-                z_dist = dist.Normal(z_mu, z_sigma, log_pdf_mask=mini_batch_mask[:, t - 1:t])
+                z_dist = dist.Normal(z_mu, z_sigma)
 
             # sample z_t from the distribution z_dist
-            with pyro.poutine.scale(None, annealing_factor):
+            with pyro.poutine.scale(None, annealing_factor * mini_batch_mask[:, t - 1:t]):
                 z_t = pyro.sample("z_%d" % t, z_dist)
             # the latent sampled at this time step will be conditioned upon in the next time step
             # so keep track of it

@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import numbers
+
 import torch
 import torch.nn.functional as F
 from torch.autograd import Variable
@@ -42,6 +44,22 @@ def copy_docs_from(source_class, full_text=False):
     return decorator
 
 
+def is_identically_zero(x):
+    """
+    Check if argument is exactly the number zero. True for the number zero;
+    false for other numbers; false for ``torch.autograd.Variable``s.
+    """
+    return isinstance(x, numbers.Number) and x == 0
+
+
+def is_identically_one(x):
+    """
+    Check if argument is exactly the number one. True for the number one;
+    false for other numbers; false for ``torch.autograd.Variable``s.
+    """
+    return isinstance(x, numbers.Number) and x == 1
+
+
 def broadcast_shape(*shapes, **kwargs):
     """
     Similar to ``np.broadcast()`` but for shapes.
@@ -65,6 +83,19 @@ def broadcast_shape(*shapes, **kwargs):
                 raise ValueError('shape mismatch: objects cannot be broadcast to a single shape: {}'.format(
                     ' vs '.join(map(str, shapes))))
     return tuple(reversed(reversed_shape))
+
+
+def scale_tensor(tensor, scale):
+    """
+    Safely scale a tensor without increasing its ``.size()``.
+    """
+    if is_identically_zero(tensor) or is_identically_one(scale):
+        return tensor
+    result = tensor * scale
+    if not isinstance(result, numbers.Number) and result.shape != tensor.shape:
+        raise ValueError("Broadcasting error: scale is incompatible with tensor: "
+                         "{} vs {}".format(scale.shape, tensor.shape))
+    return result
 
 
 def log_gamma(xx):
@@ -169,6 +200,15 @@ def torch_multinomial(input, num_samples, replacement=False):
         return torch.multinomial(input.cpu(), num_samples, replacement).cuda(input.get_device())
     else:
         return torch.multinomial(input, num_samples, replacement)
+
+
+def torch_sign(value):
+    """
+    Like ``torch.sign()`` but also works for numbers.
+    """
+    if isinstance(value, numbers.Number):
+        return (value > 0) - (value < 0)
+    return torch.sign(value)
 
 
 def softmax(x, dim=-1):

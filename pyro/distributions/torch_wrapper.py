@@ -14,10 +14,9 @@ class TorchDistribution(Distribution):
     `torch.distributions.Distribution <http://pytorch.org/docs/master/_modules/torch/distributions.html#Distribution>`_
     """
 
-    def __init__(self, torch_dist, log_pdf_mask=None, extra_event_dims=0):
+    def __init__(self, torch_dist, extra_event_dims=0):
         super(TorchDistribution, self).__init__()
         self.torch_dist = torch_dist
-        self.log_pdf_mask = log_pdf_mask
         self.extra_event_dims = extra_event_dims
 
     # TODO define .reparameterized, .enumerable properties once RandomPrimitive is gone
@@ -55,11 +54,6 @@ class TorchDistribution(Distribution):
         log_prob = self.torch_dist.log_prob(x)
         for _ in range(self.extra_event_dims):
             log_prob = log_prob.sum(-1)
-        if self.log_pdf_mask is not None:
-            # Prevent accidental broadcasting of log_prob tensor,
-            # e.g. (64, 1), (64,) --> (64, 64)
-            assert len(self.log_pdf_mask.size()) <= len(log_prob.size())
-            log_prob = log_prob * self.log_pdf_mask
         return log_prob
 
     def enumerate_support(self):
