@@ -3,53 +3,50 @@ from __future__ import absolute_import, division, print_function
 import torch
 from torch.autograd import Variable
 from torch.distributions import constraints, transform_to
-import torch.nn as nn
+from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
 from pyro.distributions.util import matrix_triangular_solve_compat
 
+from .model import Model
 
-class SparseVariationalGP(nn.Module):
+
+class SparseVariationalGP(Model):
     """
     Sparse Variational Gaussian Process module.
 
     References
 
-    [1] `Scalable variational Gaussian process classification`
+    [1] `Scalable variational Gaussian process classification`,
     James Hensman, Alexander G. de G. Matthews, Zoubin Ghahramani
 
     :param torch.autograd.Variable X: A tensor of inputs.
     :param torch.autograd.Variable y: A tensor of outputs for training.
     :param pyro.contrib.gp.kernels.Kernel kernel: A Pyro kernel object.
+    :param torch.Tensor Xu: An inducing-point parameter.
     :param pyro.contrib.gp.likelihoods.Likelihood likelihood: A likelihood module.
-    :param pyro.contrib.gp.InducingPoints Xu: An inducing-point module for spare approximation.
-    :param dict kernel_prior: A mapping from kernel parameter's names to priors.
-    :param dict Xu_prior: A mapping from inducing point parameter named 'Xu' to a prior.
     :param float jitter: An additional jitter to help stablize Cholesky decomposition.
     """
-    def __init__(self, X, y, kernel, likelihood, Xu, kernel_prior=None, Xu_prior=None, jitter=1e-6):
+    def __init__(self, X, y, kernel, Xu, likelihood, jitter=1e-6):
         super(SparseVariationalGP, self).__init__()
         self.X = X
         self.y = y
         self.kernel = kernel
-        self.likelihood = likelihood
-        self.Xu = Xu
-
         self.num_data = self.X.size(0)
-        self.num_inducing = self.Xu().size(0)
 
-        self.kernel_prior = kernel_prior if kernel_prior is not None else {}
-        self.Xu_prior = Xu_prior if Xu_prior is not None else {}
+        self.Xu = Parameter(Xu)
+        self.num_inducing = self.Xu.size(0)
+
+        self.likelihood = likelihood
 
         self.jitter = Variable(self.X.data.new([jitter]))
 
     def model(self):
-        kernel_fn = pyro.random_module(self.kernel.name, self.kernel, self.kernel_prior)
-        kernel = kernel_fn()
-
-        Xu_fn = pyro.random_module(self.Xu.name, self.Xu, self.Xu_prior)
-        Xu = Xu_fn().inducing_points
+        kernel = self.kernel.set_mode("model")
+        likelihood = self.likelihood.set_mode("model")
+        self.set_mode("model")
+        Xu = self.get_param("Xu")
 
         Kuu = kernel(Xu) + self.jitter.expand(self.num_inducing).diag()
         Kuf = kernel(Xu, self.X)
@@ -71,32 +68,13 @@ class SparseVariationalGP(nn.Module):
         Kfdiag = Kffdiag - Qffdiag
 
         f = dist.Normal(mf, Kfdiag).sample()
-        self.likelihood(f, obs=self.y)
+        likelihood(f, obs=self.y)
 
     def guide(self):
-        # TODO: refactor/remove from here
-        kernel_guide_prior = {}
-        for p in self.kernel_prior:
-            p_MAP_name = pyro.param_with_module_name(self.kernel.name, p) + "_MAP"
-            # init params by their prior means
-            p_MAP = pyro.param(p_MAP_name, Variable(self.kernel_prior[p].torch_dist.mean.data.clone(),
-                                                    requires_grad=True))
-            kernel_guide_prior[p] = dist.Delta(p_MAP)
-
-        kernel_fn = pyro.random_module(self.kernel.name, self.kernel, kernel_guide_prior)
-        kernel = kernel_fn()
-
-        Xu_guide_prior = {}
-        for p in self.Xu_prior:
-            p_MAP_name = pyro.param_with_module_name(self.Xu.name, p) + "_MAP"
-            # init params by their prior means
-            p_MAP = pyro.param(p_MAP_name, Variable(self.Xu_prior[p].torch_dist.mean.data.clone(),
-                                                    requires_grad=True))
-            Xu_guide_prior[p] = dist.Delta(p_MAP)
-
-        Xu_fn = pyro.random_module(self.Xu.name, self.Xu, Xu_guide_prior)
-        Xu = Xu_fn().inducing_points
-        # util here
+        kernel = self.kernel.set_mode("guide")
+        likelihood = self.likelihood.set_mode("guide")
+        self.set_mode("guide")
+        Xu = self.get_param("Xu")
 
         # define variational parameters
         mu_0 = Variable(Xu.data.new(self.num_inducing).zero_(), requires_grad=True)
@@ -107,32 +85,33 @@ class SparseVariationalGP(nn.Module):
         Lu = transform_to(constraints.lower_cholesky)(unconstrained_Lu)
 
         pyro.sample("u", dist.MultivariateNormal(loc=mu, scale_tril=Lu))
-        return kernel, Xu, mu, Lu
+        return kernel, likelihood, Xu, mu, Lu
 
     def forward(self, Xnew, full_cov=False):
         """
-        Compute the parameters of `f* ~ N(f*_loc, f*_cov)` according to
-        `p(f*,u|y) = p(f*|u).p(u|y) ~ p(f*|u).q(u)`, then marginalize out variable `u`.
+        Compute the parameters of ``p(f*|Xnew) ~ N(loc, cov)`` according to
+        ``p(f*,u|y) = p(f*|u).p(u|y) ~ p(f*|u).q(u)``, then marginalize out variable ``u``.
 
         :param torch.autograd.Variable Xnew: A 2D tensor.
-        :param bool full_cov: Predict full covariance matrix of f or just its diagonal.
-        :return: loc and covariance matrix of p(f*|Xnew).
-        :rtype: torch.autograd.Variable and torch.autograd.Variable
+        :param bool full_cov: Predict full covariance matrix or just its diagonal.
+        :return: loc, covariance matrix of ``p(f*|Xnew)``, and the likelihood.
+        :rtype: torch.autograd.Variable, torch.autograd.Variable, and
+            pyro.contrib.gp.likelihoods.Likelihood
         """
         if Xnew.dim() == 2 and self.X.size(1) != Xnew.size(1):
             assert ValueError("Train data and test data should have the same feature sizes.")
         if Xnew.dim() == 1:
             Xnew = Xnew.unsqueeze(1)
 
-        kernel, Xu, mu, Lu = self.guide()
+        kernel, likelihood, Xu, mu, Lu = self.guide()
 
         # W := inv(Luu) @ Kus; V := inv(Luu) @ Lu
-        # f_loc = Ksu @ inv(Kuu) @ mu = W.T @ inv(Luu) @ mu
-        # f_cov = Kss - Ksu @ inv(Kuu) @ Kus + Ksu @ inv(Kuu) @ S @ inv(Kuu) @ Kus
-        #       = Kss - W.T @ W + W.T @ V @ V.T @ W
-        #       =: Kss - Qss + K
+        # loc = Ksu @ inv(Kuu) @ mu = W.T @ inv(Luu) @ mu
+        # cov = Kss - Ksu @ inv(Kuu) @ Kus + Ksu @ inv(Kuu) @ S @ inv(Kuu) @ Kus
+        #     = Kss - W.T @ W + W.T @ V @ V.T @ W
+        #     =: Kss - Qss + K
 
-        Kuu = kernel(Xu) + self.jitter.expand(self.num_inducing)
+        Kuu = kernel(Xu) + self.jitter.expand(self.num_inducing).diag()
         Kus = kernel(Xu, Xnew)
         Luu = Kuu.potrf(upper=False)
 
@@ -144,7 +123,7 @@ class SparseVariationalGP(nn.Module):
         V = Luuinv_pack[:, -self.num_inducing:]
         Vt_W = V.t().matmul(W)
 
-        fs_loc = W.t().matmul(Luuinv_mu)
+        loc = W.t().matmul(Luuinv_mu)
 
         if full_cov:
             Kss = kernel(Xnew)
@@ -152,11 +131,11 @@ class SparseVariationalGP(nn.Module):
             Qss = W.t().matmul(W)
             # K = Ksu @ inv(Kuu) @ S @ inv(Kuu) @ Kus = W.T @ V @ V.T @ W
             K = Vt_W.t().matmul(Vt_W)
-            fs_cov = Kss - Qss + K
+            cov = Kss - Qss + K
         else:
             Kssdiag = kernel(Xnew, diag=True)
             Qssdiag = (W ** 2).sum(dim=0)
             Kdiag = (Vt_W ** 2).sum(dim=0)
-            fs_cov = Kssdiag - Qssdiag + Kdiag
+            cov = Kssdiag - Qssdiag + Kdiag
 
-        return fs_loc, fs_cov
+        return loc, cov, likelihood

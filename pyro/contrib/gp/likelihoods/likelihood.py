@@ -1,9 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
-import torch.nn as nn
+from pyro.contrib.gp import Parameterized
 
 
-class Likelihood(nn.Module):
+class Likelihood(Parameterized):
     """
     Base class for likelihoods used in Gaussian Process.
 
@@ -13,7 +13,7 @@ class Likelihood(nn.Module):
 
     def __init__(self):
         super(Likelihood, self).__init__()
-        self.set_name("likelihood")
+        self._name = "likelihood"
 
     def forward(self, f, obs=None):
         """
