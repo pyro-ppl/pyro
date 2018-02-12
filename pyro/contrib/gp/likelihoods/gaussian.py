@@ -18,6 +18,7 @@ class Gaussian(Likelihood):
     """
 
     def __init__(self, variance=None):
+        super(Gaussian, self).__init__()
         if variance is None:
             variance = torch.ones(1)
         self.variance = Parameter(variance)

@@ -56,7 +56,9 @@ class VariationalGP(nn.Module):
         unconstrained_Lf = pyro.param("unconstrained_f_tril", unconstrained_Lf_0)
         Lf = transform_to(constraints.lower_cholesky)(unconstrained_Lf)
 
-        pyro.sample("f", dist.MultivariateNormal(loc=mf, scale_tril=Lf))
+        # TODO: use scale_tril=Lf
+        Kf = Lf.t().matmul(Lf) + self.jitter.expand(self.num_data).diag()
+        pyro.sample("f", dist.MultivariateNormal(loc=mf, covariance_matrix=Kf))
         return kernel, likelihood, mf, Lf
 
     def forward(self, Xnew, full_cov=False):

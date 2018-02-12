@@ -53,7 +53,8 @@ class SparseVariationalGP(Model):
         Luu = Kuu.potrf(upper=False)
 
         zero_loc = Variable(Xu.data.new([0])).expand(self.num_inducing)
-        u = pyro.sample("u", dist.MultivariateNormal(loc=zero_loc, scale_tril=Luu))
+        # TODO: use scale_tril=Luu
+        u = pyro.sample("u", dist.MultivariateNormal(loc=zero_loc, covariance_matrix=Kuu))
 
         # p(f|u) ~ N(f|mf, Kf)
         # mf = Kfu @ inv(Kuu) @ u; Kf = Kff - Kfu @ inv(Kuu) @ Kuf
@@ -84,7 +85,9 @@ class SparseVariationalGP(Model):
         unconstrained_Lu = pyro.param("unconstrained_u_tril", unconstrained_Lu_0)
         Lu = transform_to(constraints.lower_cholesky)(unconstrained_Lu)
 
-        pyro.sample("u", dist.MultivariateNormal(loc=mu, scale_tril=Lu))
+        # TODO: use scale_tril=Lu
+        Ku = Lu.t().matmul(Lu) + self.jitter.expand(self.num_inducing).diag()
+        pyro.sample("u", dist.MultivariateNormal(loc=mu, covariance_matrix=Ku))
         return kernel, likelihood, Xu, mu, Lu
 
     def forward(self, Xnew, full_cov=False):
