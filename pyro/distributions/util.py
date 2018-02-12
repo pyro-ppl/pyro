@@ -207,7 +207,7 @@ def torch_sign(value):
     Like ``torch.sign()`` but also works for numbers.
     """
     if isinstance(value, numbers.Number):
-        return 1 if value > 0 else -1 if value < 0 else 0
+        return (value > 0) - (value < 0)
     return torch.sign(value)
 
 
