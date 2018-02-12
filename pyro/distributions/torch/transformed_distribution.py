@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 import torch
 
-from pyro.distributions import RandomPrimitive
 from pyro.distributions.torch_wrapper import TorchDistribution
 from pyro.distributions.util import copy_docs_from
 
@@ -20,8 +19,6 @@ class TransformedDistribution(TorchDistribution):
     stateful = True  # often true because transforms may cache intermediate results
 
     def __init__(self, base_dist, transforms, *args, **kwargs):
-        if isinstance(base_dist, RandomPrimitive):
-            raise ValueError('`base_dist` cannot be a RandomPrimitive instance.')
         torch_dist = torch.distributions.TransformedDistribution(base_dist, transforms)
         super(TransformedDistribution, self).__init__(torch_dist, *args, **kwargs)
 

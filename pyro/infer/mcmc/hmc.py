@@ -93,7 +93,7 @@ class HMC(TraceKernel):
         energy_proposal = self._energy(z_new, r_new)
         energy_current = self._energy(z, r)
         delta_energy = energy_proposal - energy_current
-        rand = pyro.sample('rand_t='.format(self._t), dist.uniform, a=ng_zeros(1), b=ng_ones(1))
+        rand = pyro.sample('rand_t='.format(self._t), dist.Uniform(ng_zeros(1), ng_ones(1)))
         if rand.log().data[0] < -delta_energy.data[0]:
             self._accept_cnt += 1
             z = z_new
