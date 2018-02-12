@@ -89,7 +89,7 @@ def scale_tensor(tensor, scale):
     """
     Safely scale a tensor without increasing its ``.size()``.
     """
-    if scale is 1:
+    if is_identically_zero(tensor) or is_identically_one(scale):
         return tensor
     result = tensor * scale
     if not isinstance(result, numbers.Number) and result.shape != tensor.shape:
