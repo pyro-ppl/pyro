@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import functools
 
-import util
+from pyro.poutine import util
 
 # poutines
 from .block_poutine import BlockPoutine

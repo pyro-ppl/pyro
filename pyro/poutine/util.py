@@ -62,8 +62,7 @@ def enum_extend(trace, msg, num_samples=None):
         num_samples = -1
 
     # Batched .enumerate_support() assumes batched values are independent.
-    dist_shape = msg["fn"].shape()
-    shape = broadcast_shape(dist_shape, msg["fn"].batch_shape)
+    shape = msg["fn"].shape()
     event_dim = msg['fn'].event_dim
     batch_dims = len(shape) - event_dim
     batch_shape = shape[:batch_dims]
