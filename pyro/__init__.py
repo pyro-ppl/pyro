@@ -101,7 +101,7 @@ def observe(name, fn, obs, *args, **kwargs):
     return sample(name, fn, *args, **kwargs)
 
 
-class _Subsample(Distribution):
+class _Subsample(Distribution, torch.distributions.Distribution):
     """
     Randomly select a subsample of a range of indices.
 
@@ -118,11 +118,13 @@ class _Subsample(Distribution):
         self.subsample_size = subsample_size
         self.use_cuda = torch.Tensor.is_cuda if use_cuda is None else use_cuda
 
-    def sample(self, sample_shape=None):
+    def sample(self, sample_shape=torch.Size()):
         """
         :returns: a random subsample of `range(size)`
         :rtype: torch.autograd.Variable of torch.LongTensor
         """
+        if sample_shape:
+            raise NotImplementedError
         subsample_size = self.subsample_size
         if subsample_size is None or subsample_size > self.size:
             subsample_size = self.size
