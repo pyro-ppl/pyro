@@ -53,3 +53,9 @@ class Delta(Distribution):
         :rtype: torch.autograd.Variable.
         """
         return Variable(self.v.data.unsqueeze(0))
+
+    def analytic_mean(self):
+        return self.v
+
+    def analytic_var(self):
+        return torch.zeros_like(self.v)

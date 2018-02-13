@@ -15,7 +15,7 @@ import torch
 from torch.autograd import Variable
 
 import pyro
-from pyro.distributions.torch import bernoulli
+from pyro.distributions import Bernoulli
 from pyro.infer import Marginal, Search
 
 
@@ -25,7 +25,7 @@ def location(preference):
     In this example, we assume that Alice and Bob share a prior preference
     for one location over another, reflected in the value of preference below.
     """
-    return pyro.sample("loc", bernoulli, preference)
+    return pyro.sample("loc", Bernoulli(preference))
 
 
 def alice(preference, depth):

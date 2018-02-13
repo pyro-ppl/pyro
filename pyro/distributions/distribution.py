@@ -69,3 +69,9 @@ class Distribution(object):
             # XXX should the user be able to control inclusion of the entropy term?
             # See Roeder, Wu, Duvenaud (2017) "Sticking the Landing" https://arxiv.org/abs/1703.09194
             return ScoreParts(log_pdf=log_pdf, score_function=log_pdf, entropy_term=0)
+
+    def analytic_mean(self):
+        return self.mean
+
+    def analytic_var(self):
+        return self.variance
