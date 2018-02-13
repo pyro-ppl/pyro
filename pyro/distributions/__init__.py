@@ -17,23 +17,11 @@ from __future__ import absolute_import, division, print_function
 from pyro.distributions.delta import Delta
 from pyro.distributions.distribution import Distribution
 from pyro.distributions.rejector import Rejector
-from pyro.distributions.torch.bernoulli import Bernoulli
-from pyro.distributions.torch.beta import Beta
-from pyro.distributions.torch.binomial import Binomial
-from pyro.distributions.torch.categorical import Categorical
-from pyro.distributions.torch.cauchy import Cauchy
-from pyro.distributions.torch.dirichlet import Dirichlet
-from pyro.distributions.torch.exponential import Exponential
-from pyro.distributions.torch.gamma import Gamma
+from pyro.distributions.torch import (Bernoulli, Beta, Binomial, Categorical, Cauchy, Dirichlet, Exponential, Gamma,
+                                      LogNormal, Multinomial, Normal, OneHotCategorical, Poisson,
+                                      TransformedDistribution, Uniform)
 from pyro.distributions.torch.iaf import InverseAutoregressiveFlow
-from pyro.distributions.torch.log_normal import LogNormal
-from pyro.distributions.torch.multinomial import Multinomial
 from pyro.distributions.torch.multivariate_normal import MultivariateNormal
-from pyro.distributions.torch.normal import Normal
-from pyro.distributions.torch.one_hot_categorical import OneHotCategorical
-from pyro.distributions.torch.poisson import Poisson
 from pyro.distributions.torch.sparse_multivariate_normal import SparseMultivariateNormal
-from pyro.distributions.torch.transformed_distribution import TransformedDistribution
-from pyro.distributions.torch.uniform import Uniform
 
 # flake8: noqa

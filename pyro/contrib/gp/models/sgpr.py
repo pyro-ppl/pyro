@@ -93,7 +93,7 @@ class SparseGPRegression(nn.Module):
         for p in self.kernel_prior:
             p_MAP_name = pyro.param_with_module_name(self.kernel.name, p) + "_MAP"
             # init params by their prior means
-            p_MAP = pyro.param(p_MAP_name, Variable(self.kernel_prior[p].torch_dist.mean.data.clone(),
+            p_MAP = pyro.param(p_MAP_name, Variable(self.kernel_prior[p].mean.data.clone(),
                                                     requires_grad=True))
             kernel_guide_prior[p] = dist.Delta(p_MAP)
 
@@ -104,7 +104,7 @@ class SparseGPRegression(nn.Module):
         for p in self.Xu_prior:
             p_MAP_name = pyro.param_with_module_name(self.Xu.name, p) + "_MAP"
             # init params by their prior means
-            p_MAP = pyro.param(p_MAP_name, Variable(self.Xu_prior[p].torch_dist.mean.data.clone(),
+            p_MAP = pyro.param(p_MAP_name, Variable(self.Xu_prior[p].mean.data.clone(),
                                                     requires_grad=True))
             Xu_guide_prior[p] = dist.Delta(p_MAP)
 

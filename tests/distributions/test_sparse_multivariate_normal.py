@@ -17,7 +17,7 @@ def test_scale_tril():
     mvn = MultivariateNormal(loc, cov)
     sparse_mvn = SparseMultivariateNormal(loc, D, W)
 
-    assert_equal(mvn.torch_dist.scale_tril, sparse_mvn.torch_dist.scale_tril)
+    assert_equal(mvn.scale_tril, sparse_mvn.scale_tril)
 
 
 def test_log_prob():
@@ -42,4 +42,4 @@ def test_variance():
     mvn = MultivariateNormal(loc, cov)
     sparse_mvn = SparseMultivariateNormal(loc, D, W)
 
-    assert_equal(mvn.torch_dist.variance, sparse_mvn.torch_dist.variance)
+    assert_equal(mvn.variance, sparse_mvn.variance)

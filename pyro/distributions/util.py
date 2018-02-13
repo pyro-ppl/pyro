@@ -13,8 +13,9 @@ def copy_docs_from(source_class, full_text=False):
     """
 
     def decorator(destin_class):
-        if not destin_class.__doc__:
-            destin_class.__doc__ = source_class.__doc__
+        # This works only in python 3.3+:
+        # if not destin_class.__doc__:
+        #     destin_class.__doc__ = source_class.__doc__
         for name in dir(destin_class):
             if name.startswith('_'):
                 continue
