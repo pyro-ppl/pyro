@@ -251,22 +251,6 @@ def apply_stack(initial_msg):
     return None
 
 
-class NonlocalExit(Exception):
-    """
-    Exception for exiting nonlocally from poutine execution.
-
-    Used by poutine.EscapePoutine to return site information.
-    """
-    def __init__(self, site, *args, **kwargs):
-        """
-        :param site: message at a pyro site
-
-        constructor.  Just stores the input site.
-        """
-        super(NonlocalExit, self).__init__(*args, **kwargs)
-        self.site = site
-
-
 def enum_extend(trace, msg, num_samples=None):
     """
     :param trace: a partial trace

@@ -12,7 +12,8 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions import Bernoulli, Normal
-from pyro.util import NonlocalExit, all_escape, discrete_escape, ng_ones, ng_zeros
+from pyro.util import all_escape, discrete_escape, ng_ones, ng_zeros
+from pyro.poutine import NonlocalExit
 from six.moves.queue import Queue
 from tests.common import assert_equal
 
