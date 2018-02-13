@@ -1,10 +1,13 @@
 from __future__ import absolute_import, division, print_function
 
+import contextlib
+
+
 # the global pyro stack
 _PYRO_STACK = []
 
 
-class Messenger(object):
+class Messenger(contextlib.ContextDecorator):
     """
     Class of transformers for messages passed during inference.
     Most inference operations are implemented in subclasses of this.
