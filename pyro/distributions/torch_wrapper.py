@@ -59,5 +59,11 @@ class TorchDistribution(Distribution):
     def enumerate_support(self):
         return self.torch_dist.enumerate_support()
 
+    def analytic_mean(self):
+        return self.torch_dist.mean
+
+    def analytic_var(self):
+        return self.torch_dist.variance
+
     def _validate_log_prob_arg(self, value):
         self.torch_dist._validate_log_prob_arg(value)
