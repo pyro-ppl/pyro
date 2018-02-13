@@ -15,9 +15,8 @@
 from __future__ import absolute_import, division, print_function
 
 from pyro.distributions.delta import Delta
-from pyro.distributions.distribution import Distribution
+from pyro.distributions.distribution import Distribution, Reshape
 from pyro.distributions.rejector import Rejector
-from pyro.distributions.reshape import Reshape
 from pyro.distributions.torch import (Bernoulli, Beta, Binomial, Categorical, Cauchy, Dirichlet, Exponential, Gamma,
                                       LogNormal, Multinomial, Normal, OneHotCategorical, Poisson,
                                       TransformedDistribution, Uniform)

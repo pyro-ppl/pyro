@@ -601,8 +601,8 @@ class RaoBlackwellizationTests(TestCase):
                     pyro.sample("z_%d_%d" % (i, k),
                                 fakes.NonreparameterizedNormal(ng_zeros(4 - i), ng_ones(4 - i)))
                 pyro.sample("obs_%d" % i,
-                            dist.Reshape(dist.Normal(mu_latent, torch.pow(self.lam, -0.5)),
-                                         extra_event_dims=1),
+                            dist.Normal(mu_latent, torch.pow(self.lam, -0.5))
+                                .reshape(extra_event_dims=1),
                             obs=_x)
                 for k in range(n_superfluous_top, n_superfluous_top + n_superfluous_bottom):
                     pyro.sample("z_%d_%d" % (i, k),
