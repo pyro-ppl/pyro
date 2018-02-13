@@ -1,9 +1,3 @@
-TransformedDistribution
------------------------
-.. autoclass:: pyro.distributions.torch.transformed_distribution.TransformedDistribution
-    :members:
-    :undoc-members:
-    :show-inheritance:
 
 InverseAutoRegressiveFlow
 -------------------------
