@@ -8,15 +8,15 @@ from pyro.distributions.util import sum_rightmost
 
 
 class Reshape(Distribution, torch.distributions.Distribution):
-    def __init__(self, base_dist, sample_shape=torch.Size(), extra_event_dim=0):
+    def __init__(self, base_dist, sample_shape=torch.Size(), extra_event_dims=0):
         sample_shape = torch.Size(sample_shape)
         self.base_dist = base_dist
         self.sample_shape = sample_shape
-        self.extra_event_dim = extra_event_dim
+        self.extra_event_dims = extra_event_dims
         shape = sample_shape + base_dist.batch_shape + base_dist.event_shape
-        batch_dim = len(shape) - extra_event_dim - len(base_dist.event_shape)
+        batch_dim = len(shape) - extra_event_dims - len(base_dist.event_shape)
         batch_shape, event_shape = shape[:batch_dim], shape[batch_dim:]
-        torch.distributions.Distribution.__init__(self, batch_shape, event_shape)
+        super(Reshape, self).__init__(batch_shape, event_shape)
 
     @property
     def has_rsample(self):
@@ -32,14 +32,14 @@ class Reshape(Distribution, torch.distributions.Distribution):
     def rsample(self, sample_shape=torch.Size()):
         return self.base_dist.rsample(self.sample_shape + sample_shape)
 
-    def log_pob(self, value):
-        return sum_rightmost(self.base_dist.log_prob(value), self.extra_event_dim)
+    def log_prob(self, value):
+        return sum_rightmost(self.base_dist.log_prob(value), self.extra_event_dims)
 
     def score_parts(self, value):
         log_pdf, score_function, entropy_term = self.base_dist.score_parts(value)
-        log_pdf = sum_rightmost(log_pdf, self.extra_event_dim)
-        score_function = sum_rightmost(score_function, self.extra_event_dim)
-        entropy_term = sum_rightmost(entropy_term, self.extra_event_dim)
+        log_pdf = sum_rightmost(log_pdf, self.extra_event_dims)
+        score_function = sum_rightmost(score_function, self.extra_event_dims)
+        entropy_term = sum_rightmost(entropy_term, self.extra_event_dims)
         return ScoreParts(log_pdf, score_function, entropy_term)
 
     def enumerate_support(self):
