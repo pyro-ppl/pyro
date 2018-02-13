@@ -10,7 +10,6 @@ from torch.autograd import Variable
 
 import pyro
 import pyro.distributions as dist
-from pyro.distributions.util import torch_ones_like, torch_zeros_like
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.mcmc import MCMC
 from tests.common import assert_equal
@@ -26,8 +25,8 @@ class GaussianChain(object):
         self.dim = dim
         self.chain_len = chain_len
         self.num_obs = num_obs
-        self.mu_0 = Variable(torch_zeros_like(torch.Tensor(self.dim)), requires_grad=True)
-        self.lambda_prec = Variable(torch_ones_like(torch.Tensor(self.dim)))
+        self.mu_0 = Variable(torch.zeros_like(torch.Tensor(self.dim)), requires_grad=True)
+        self.lambda_prec = Variable(torch.ones_like(torch.Tensor(self.dim)))
 
     def model(self, data):
         mu = pyro.param('mu_0', self.mu_0)
@@ -39,7 +38,7 @@ class GaussianChain(object):
 
     @property
     def data(self):
-        return Variable(torch_ones_like(torch.Tensor(self.num_obs, self.dim)))
+        return Variable(torch.ones_like(torch.Tensor(self.num_obs, self.dim)))
 
     def id_fn(self):
         return 'dim={}_chain-len={}_num_obs={}'.format(self.dim, self.chain_len, self.num_obs)
@@ -140,8 +139,8 @@ def test_hmc_conjugate_gaussian(fixture,
         param_name = 'mu_' + str(i)
         latent_mu = torch.mean(torch.stack(post_trace[param_name]), 0)
         latent_std = torch.std(torch.stack(post_trace[param_name]), 0)
-        expected_mean = Variable(torch_ones_like(torch.Tensor(fixture.dim)) * expected_means[i - 1])
-        expected_std = 1 / torch.sqrt(Variable(torch_ones_like(torch.Tensor(fixture.dim)) * expected_precs[i - 1]))
+        expected_mean = Variable(torch.ones_like(torch.Tensor(fixture.dim)) * expected_means[i - 1])
+        expected_std = 1 / torch.sqrt(Variable(torch.ones_like(torch.Tensor(fixture.dim)) * expected_precs[i - 1]))
 
         # Actual vs expected posterior means for the latents
         logger.info('Posterior mean (actual) - {}'.format(param_name))
