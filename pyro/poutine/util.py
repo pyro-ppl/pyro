@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-from pyro.distributions.util import broadcast_shape
 from .poutine import _PYRO_STACK
 
 
