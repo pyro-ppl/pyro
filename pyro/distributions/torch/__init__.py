@@ -83,8 +83,7 @@ class Poisson(Distribution, torch.distributions.Poisson):
 
 
 class TransformedDistribution(Distribution, torch.distributions.TransformedDistribution):
-    def __init__(self, base_dist, transforms):
-        super(TransformedDistribution, self).__init__(base_dist, transforms)
+    pass
 
 
 class Uniform(Distribution, torch.distributions.Uniform):

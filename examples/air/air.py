@@ -127,7 +127,8 @@ class AIR(nn.Module):
 
         # Sample presence indicators.
         z_pres = pyro.sample('z_pres_{}'.format(t),
-                             dist.Bernoulli(z_pres_prior_p(t) * prev.z_pres, extra_event_dims=1))
+                             dist.Reshape(dist.Bernoulli(z_pres_prior_p(t) * prev.z_pres),
+                                          extra_event_dims=1))
 
         # If zero is sampled for a data point, then no more objects
         # will be added to its output image. We can't
@@ -138,15 +139,15 @@ class AIR(nn.Module):
 
             # Sample attention window position.
             z_where = pyro.sample('z_where_{}'.format(t),
-                                  dist.Normal(self.z_where_mu_prior.expand(n, self.z_where_size),
-                                              self.z_where_sigma_prior.expand(n, self.z_where_size),
-                                              extra_event_dims=1))
+                                  dist.Reshape(dist.Normal(self.z_where_mu_prior.expand(n, self.z_where_size),
+                                                           self.z_where_sigma_prior.expand(n, self.z_where_size)),
+                                               extra_event_dims=1))
 
             # Sample latent code for contents of the attention window.
             z_what = pyro.sample('z_what_{}'.format(t),
-                                 dist.Normal(self.ng_zeros([n, self.z_what_size]),
-                                             self.ng_ones([n, self.z_what_size]),
-                                             extra_event_dims=1))
+                                 dist.Reshape(dist.Normal(self.ng_zeros([n, self.z_what_size]),
+                                                          self.ng_ones([n, self.z_what_size])),
+                                              extra_event_dims=1))
 
         # Map latent code to pixel space.
         y_att = self.decode(z_what)
@@ -168,9 +169,9 @@ class AIR(nn.Module):
             n = batch.size(0)
             (z_where, z_pres), x = self.prior(n, **kwargs)
             pyro.sample('obs',
-                        dist.Normal(x.view(n, -1),
-                                    (self.likelihood_sd * self.ng_ones(1)).expand(n, self.x_size ** 2),
-                                    extra_event_dims=1),
+                        dist.Reshape(dist.Normal(x.view(n, -1),
+                                                 (self.likelihood_sd * self.ng_ones(1)).expand(n, self.x_size ** 2)),
+                                     extra_event_dims=1),
                         obs=batch.view(n, -1))
 
     def guide(self, data, batch_size, **kwargs):
@@ -232,14 +233,14 @@ class AIR(nn.Module):
 
         # Sample presence.
         z_pres = pyro.sample('z_pres_{}'.format(t),
-                             dist.Bernoulli(z_pres_p * prev.z_pres, extra_event_dims=1),
+                             dist.Reshape(dist.Bernoulli(z_pres_p * prev.z_pres), extra_event_dims=1),
                              infer=dict(baseline=dict(baseline_value=bl_value.squeeze(-1))))
 
         with poutine.scale(None, z_pres.squeeze(-1) if self.use_masking else 1):
             z_where = pyro.sample('z_where_{}'.format(t),
-                                  dist.Normal(z_where_mu + self.z_where_mu_prior,
-                                              z_where_sigma * self.z_where_sigma_prior,
-                                              extra_event_dims=1))
+                                  dist.Reshape(dist.Normal(z_where_mu + self.z_where_mu_prior,
+                                                           z_where_sigma * self.z_where_sigma_prior),
+                                               extra_event_dims=1))
 
             # Figure 2 of [1] shows x_att depending on z_where and h,
             # rather than z_where and x as here, but I think this is
@@ -250,9 +251,8 @@ class AIR(nn.Module):
             z_what_mu, z_what_sigma = self.encode(x_att)
 
             z_what = pyro.sample('z_what_{}'.format(t),
-                                 dist.Normal(z_what_mu,
-                                             z_what_sigma,
-                                             extra_event_dims=1))
+                                 dist.Reshape(dist.Normal(z_what_mu, z_what_sigma),
+                                              extra_event_dims=1))
         return GuideState(h=h, c=c, bl_h=bl_h, bl_c=bl_c, z_pres=z_pres, z_where=z_where, z_what=z_what)
 
     def baseline_step(self, prev, inputs):

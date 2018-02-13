@@ -39,12 +39,12 @@ class Rejector(Distribution, torch.distributions.Distribution):
 
     def rsample(self, sample_shape=torch.Size()):
         # Implements parallel batched accept-reject sampling.
-        x = self.propose.rsample(sample_shape) if sample_shape else self.propose()
+        x = self.propose(sample_shape) if sample_shape else self.propose()
         log_prob_accept = self.log_prob_accept(x)
         probs = torch.exp(log_prob_accept).clamp_(0.0, 1.0)
         done = torch.bernoulli(probs).byte()
         while not done.all():
-            proposed_x = self.propose.rsample(sample_shape) if sample_shape else self.propose()
+            proposed_x = self.propose(sample_shape) if sample_shape else self.propose()
             log_prob_accept = self.log_prob_accept(proposed_x)
             prob_accept = torch.exp(log_prob_accept).clamp_(0.0, 1.0)
             accept = torch.bernoulli(prob_accept).byte() & ~done

@@ -16,15 +16,18 @@ class Distribution(object):
     def enumerable(self):
         return self.has_enumerate_support
 
-    def __call__(self):
+    def __call__(self, sample_shape=torch.Size()):
         """
         Samples a random value. This is reparameterized whenever possible.
 
+        :param sample_shape: the size of the iid batch to be drawn from the
+            distribution.
+        :type sample_shape: torch.Size
         :return: A random value or batch of random values (if parameters are
             batched). The shape of the result should be `self.shape()`.
         :rtype: torch.autograd.Variable
         """
-        return self.rsample() if self.has_rsample else self.sample()
+        return self.rsample(sample_shape) if self.has_rsample else self.sample(sample_shape)
 
     @property
     def event_dim(self):
