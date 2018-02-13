@@ -4,11 +4,12 @@ import numbers
 import warnings
 
 import numpy as np
+import torch
 from torch.autograd import Variable
 
 import pyro
 import pyro.poutine as poutine
-from pyro.distributions.util import is_identically_zero, torch_zeros_like
+from pyro.distributions.util import is_identically_zero
 from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.util import torch_backward, torch_data_sum, torch_sum
 from pyro.poutine.util import prune_subsample_sites
@@ -118,7 +119,7 @@ class Trace_ELBO(object):
             # drop terms of weight zero to avoid nans
             if isinstance(weight, numbers.Number):
                 if weight == 0.0:
-                    elbo_particle = torch_zeros_like(elbo_particle)
+                    elbo_particle = torch.zeros_like(elbo_particle)
             else:
                 elbo_particle[weight == 0] = 0.0
 
@@ -176,8 +177,8 @@ class Trace_ELBO(object):
             # drop terms of weight zero to avoid nans
             if isinstance(weight, numbers.Number):
                 if weight == 0.0:
-                    elbo_particle = torch_zeros_like(elbo_particle)
-                    surrogate_elbo_particle = torch_zeros_like(surrogate_elbo_particle)
+                    elbo_particle = torch.zeros_like(elbo_particle)
+                    surrogate_elbo_particle = torch.zeros_like(surrogate_elbo_particle)
             else:
                 weight_eq_zero = (weight == 0)
                 elbo_particle[weight_eq_zero] = 0.0
