@@ -2,8 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import functools
 
-import pyro.util
-from .util import NonlocalExit
+import util
 
 # poutines
 from .block_poutine import BlockPoutine
@@ -194,10 +193,10 @@ def queue(fn, queue, max_tries=None,
         max_tries = int(1e6)
 
     if extend_fn is None:
-        extend_fn = pyro.util.enum_extend
+        extend_fn = util.enum_extend
 
     if escape_fn is None:
-        escape_fn = pyro.util.discrete_escape
+        escape_fn = util.discrete_escape
 
     if num_samples is None:
         num_samples = -1
@@ -213,7 +212,7 @@ def queue(fn, queue, max_tries=None,
                 ftr = trace(escape(replay(fn, next_trace),
                                    functools.partial(escape_fn, next_trace)))
                 return ftr(*args, **kwargs)
-            except NonlocalExit as site_container:
+            except util.NonlocalExit as site_container:
                 site_container.reset_stack()
                 for tr in extend_fn(ftr.trace.copy(), site_container.site,
                                     num_samples=num_samples):
