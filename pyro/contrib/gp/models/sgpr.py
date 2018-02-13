@@ -64,6 +64,7 @@ class SparseGPRegression(Model):
 
     def model(self):
         self.set_mode("model")
+
         kernel = self.kernel
         noise = self.get_param("noise")
         Xu = self.get_param("Xu")
@@ -94,6 +95,7 @@ class SparseGPRegression(Model):
 
     def guide(self):
         self.set_mode("guide")
+
         kernel = self.kernel
         noise = self.get_param("noise")
         Xu = self.get_param("Xu")
