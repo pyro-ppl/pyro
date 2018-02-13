@@ -39,8 +39,9 @@ class GPRegression(Model):
         self.set_constraint("noise", constraints.positive)
 
     def model(self):
-        kernel = self.kernel.set_mode("model")
         self.set_mode("model")
+
+        kernel = self.kernel
         noise = self.get_param("noise")
 
         K = kernel(self.X) + noise.expand(self.num_data).diag()
@@ -48,8 +49,9 @@ class GPRegression(Model):
         pyro.sample("y", dist.MultivariateNormal(zero_loc, K), obs=self.y)
 
     def guide(self):
-        kernel = self.kernel.set_mode("guide")
         self.set_mode("guide")
+
+        kernel = self.kernel
         noise = self.get_param("noise")
 
         return kernel, noise
@@ -65,7 +67,7 @@ class GPRegression(Model):
         :rtype: torch.autograd.Variable and torch.autograd.Variable
         """
         if Xnew.dim() == 2 and self.X.size(1) != Xnew.size(1):
-            assert ValueError("Train data and test data should have the same feature sizes.")
+            raise ValueError("Train data and test data should have the same feature sizes.")
         if Xnew.dim() == 1:
             Xnew = Xnew.unsqueeze(1)
 

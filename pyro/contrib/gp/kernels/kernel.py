@@ -12,14 +12,13 @@ class Kernel(Parameterized):
     """
 
     def __init__(self, input_dim, active_dims=None, name=None):
-        super(Kernel, self).__init__()
+        super(Kernel, self).__init__(name)
         if active_dims is None:
             active_dims = slice(input_dim)
         elif input_dim != len(active_dims):
             raise ValueError("Input size and the length of active dimensionals should be equal.")
         self.input_dim = input_dim
         self.active_dims = active_dims
-        self._name = name
 
     def forward(self, X, Z=None, diag=False):
         """
