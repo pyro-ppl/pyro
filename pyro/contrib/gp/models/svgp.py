@@ -43,9 +43,10 @@ class SparseVariationalGP(Model):
         self.jitter = Variable(self.X.data.new([jitter]))
 
     def model(self):
-        kernel = self.kernel.set_mode("model")
-        likelihood = self.likelihood.set_mode("model")
         self.set_mode("model")
+
+        kernel = self.kernel
+        likelihood = self.likelihood
         Xu = self.get_param("Xu")
 
         Kuu = kernel(Xu) + self.jitter.expand(self.num_inducing).diag()
@@ -72,9 +73,10 @@ class SparseVariationalGP(Model):
         likelihood(f, obs=self.y)
 
     def guide(self):
-        kernel = self.kernel.set_mode("guide")
-        likelihood = self.likelihood.set_mode("guide")
         self.set_mode("guide")
+
+        kernel = self.kernel
+        likelihood = self.likelihood
         Xu = self.get_param("Xu")
 
         # define variational parameters
@@ -102,7 +104,7 @@ class SparseVariationalGP(Model):
             pyro.contrib.gp.likelihoods.Likelihood
         """
         if Xnew.dim() == 2 and self.X.size(1) != Xnew.size(1):
-            assert ValueError("Train data and test data should have the same feature sizes.")
+            raise ValueError("Train data and test data should have the same feature sizes.")
         if Xnew.dim() == 1:
             Xnew = Xnew.unsqueeze(1)
 

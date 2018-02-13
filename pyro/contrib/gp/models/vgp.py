@@ -73,7 +73,7 @@ class VariationalGP(nn.Module):
             pyro.contrib.gp.likelihoods.Likelihood
         """
         if Xnew.dim() == 2 and self.X.size(1) != Xnew.size(1):
-            assert ValueError("Train data and test data should have the same feature sizes.")
+            raise ValueError("Train data and test data should have the same feature sizes.")
         if Xnew.dim() == 1:
             Xnew = Xnew.unsqueeze(1)
 

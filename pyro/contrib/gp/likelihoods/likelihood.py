@@ -12,8 +12,7 @@ class Likelihood(Parameterized):
     """
 
     def __init__(self):
-        super(Likelihood, self).__init__()
-        self._name = "likelihood"
+        super(Likelihood, self).__init__(name="likelihood")
 
     def forward(self, f, obs=None):
         """
