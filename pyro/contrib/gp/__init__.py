@@ -18,20 +18,22 @@ class Parameterized(nn.Module):
     ``.double()``, ``.cuda(device=0)``,...
     See `torch.nn.Module
     <http://pytorch.org/docs/master/nn.html#torch.nn.Module>`_ for more information.
+
+    :param str name: Name of this module.
     """
 
-    def __init__(self):
+    def __init__(self, name=None):
         super(Parameterized, self).__init__()
         self._priors = {}
         self._constraints = {}
-        self._name = None
-        self._registered_params = {}
         self._fixed_params = {}
+        self._registered_params = {}
+
+        self.name = name
 
     def set_prior(self, param, prior):
         """
-        Sets a prior to a parameter. Use `set_prior(param, None)` to remove the prior distribution of
-        the parameter.
+        Sets a prior to a parameter.
 
         :param str param: Name of a parameter.
         :param pyro.distributions.Distribution prior: A prior distribution for random variable ``param``.
@@ -40,8 +42,7 @@ class Parameterized(nn.Module):
 
     def set_constraint(self, param, constraint):
         """
-        Sets a constraint to a parameter. Use `set_constraint(param, None)` to remove the constraint of
-        the parameter.
+        Sets a constraint to a parameter.
 
         :param str param: Name of a parameter.
         :param torch.distributions.constraints.Constraint constraint: A Pytorch constraint.
@@ -51,17 +52,32 @@ class Parameterized(nn.Module):
         """
         self._constraints[param] = constraint
 
+    def fix_param(self, param, value=None):
+        """
+        Fixes a parameter to a specic value. If ``value=None``, fixes the parameter to the
+        default value.
+
+        :param str param: Name of a parameter.
+        :param torch.autograd.Variable value: A tensor to be fixed to ``param``.
+        """
+        if value is None:
+            value = getattr(self, param).detach()
+        self._fixed_params[param] = value
+
     def set_mode(self, mode):
         """
-        Sets mode for the module to be able to use its parameters in stochastic functions.
+        Sets ``mode`` for the module to be able to use its parameters in stochastic functions.
+        It also sets ``mode`` for submodules which belong to ``Parameterized`` class.
 
         :param str mode: Either "model" or "guide".
         """
         if mode not in ["model", "guide"]:
             raise ValueError("Mode should be either 'model' or 'guide', but got {}.".format(mode))
+        for module in self.children():
+            if isinstance(module, Parameterized):
+                module.set_mode(mode)
         for param in self._parameters:
             self._register_param(param, mode)
-        return self
 
     def get_param(self, param):
         """
@@ -75,26 +91,6 @@ class Parameterized(nn.Module):
         else:
             return self._registered_params[param]
 
-    def fix_param(self, param, value=None):
-        """
-        Fixes a parameter to a specic value. If ``value=None``, fixes the parameter to the
-        default value.
-
-        :param str param: Name of a parameter.
-        :param torch.Tensor value: A tensor to be fixed to ``param``.
-        """
-        if value is None:
-            value = getattr(self, param).data
-        self._fixed_params[param] = Variable(value)
-
-    def unfix_param(self, param):
-        """
-        Unfixes a parameter.
-
-        :param str param: Name of a parameter.
-        """
-        self._fixed_params.pop(param, None)
-
     def _register_param(self, param, mode="model"):
         """
         Registers a parameter to Pyro. It can be seen as a wrapper for `pyro.param()` and
@@ -106,14 +102,14 @@ class Parameterized(nn.Module):
         if param in self._fixed_params:
             self._registered_params[param] = self._fixed_params[param]
             return
-        prior = self._priors[param] if param in self._priors else None
-        if self._name is None:
+        prior = self._priors.get(param)
+        if self.name is None:
             param_name = param
         else:
-            param_name = pyro.param_with_module_name(self._name, param)
+            param_name = pyro.param_with_module_name(self.name, param)
 
         if prior is None:
-            constraint = self._constraints[param] if param in self._constraints else None
+            constraint = self._constraints.get(param)
             default_value = getattr(self, param)
             if constraint is None:
                 p = pyro.param(param_name, default_value)

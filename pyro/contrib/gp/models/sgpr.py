@@ -63,8 +63,9 @@ class SparseGPRegression(Model):
         self.jitter = Variable(self.X.data.new([jitter]))
 
     def model(self):
-        kernel = self.kernel.set_mode("model")
         self.set_mode("model")
+
+        kernel = self.kernel
         noise = self.get_param("noise")
         Xu = self.get_param("Xu")
 
@@ -93,8 +94,9 @@ class SparseGPRegression(Model):
         pyro.sample("y", dist.SparseMultivariateNormal(zero_loc, D, W, trace_term), obs=self.y)
 
     def guide(self):
-        kernel = self.kernel.set_mode("guide")
         self.set_mode("guide")
+
+        kernel = self.kernel
         noise = self.get_param("noise")
         Xu = self.get_param("Xu")
 
@@ -111,7 +113,7 @@ class SparseGPRegression(Model):
         :rtype: torch.autograd.Variable and torch.autograd.Variable
         """
         if Xnew.dim() == 2 and self.X.size(1) != Xnew.size(1):
-            assert ValueError("Train data and test data should have the same feature sizes.")
+            raise ValueError("Train data and test data should have the same feature sizes.")
         if Xnew.dim() == 1:
             Xnew = Xnew.unsqueeze(1)
 
