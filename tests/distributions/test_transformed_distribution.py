@@ -9,7 +9,6 @@ from torch.distributions import AffineTransform, ExpTransform, ComposeTransform
 import pyro.distributions as dist
 from pyro.distributions import LogNormal
 from pyro.distributions import TransformedDistribution
-from pyro.distributions.util import torch_ones_like, torch_zeros_like
 from tests.common import assert_equal
 from tests.distributions.dist_fixture import Fixture
 
@@ -64,8 +63,8 @@ def test_mean_and_var(lognormal):
     dist_params = lognormal.get_dist_params(0)
     mu_lognorm = dist_params['mu']
     sigma_lognorm = dist_params['sigma']
-    mu_z = torch_zeros_like(mu_lognorm)
-    sigma_z = torch_ones_like(sigma_lognorm)
+    mu_z = torch.zeros_like(mu_lognorm)
+    sigma_z = torch.ones_like(sigma_lognorm)
     normal_dist = dist.Normal(mu_z, sigma_z)
     trans_dist = get_transformed_dist(normal_dist, mu_lognorm, sigma_lognorm)
     torch_samples = trans_dist.sample(sample_shape=torch.Size((lognormal.get_num_samples(0),)))
@@ -83,8 +82,8 @@ def test_log_pdf(lognormal):
     dist_params = lognormal.get_dist_params(0)
     mu_lognorm = dist_params['mu']
     sigma_lognorm = dist_params['sigma']
-    mu_z = torch_zeros_like(mu_lognorm)
-    sigma_z = torch_ones_like(sigma_lognorm)
+    mu_z = torch.zeros_like(mu_lognorm)
+    sigma_z = torch.ones_like(sigma_lognorm)
     normal_dist = dist.Normal(mu_z, sigma_z)
     trans_dist = get_transformed_dist(normal_dist, mu_lognorm, sigma_lognorm)
     test_data = lognormal.get_test_data(0)
@@ -101,8 +100,8 @@ def test_log_prob(lognormal):
     dist_params = lognormal.get_dist_params(0)
     mu_lognorm = dist_params['mu']
     sigma_lognorm = dist_params['sigma']
-    mu_z = torch_zeros_like(mu_lognorm)
-    sigma_z = torch_ones_like(sigma_lognorm)
+    mu_z = torch.zeros_like(mu_lognorm)
+    sigma_z = torch.ones_like(sigma_lognorm)
     normal_dist = dist.Normal(mu_z, sigma_z)
     trans_dist = get_transformed_dist(normal_dist, mu_lognorm, sigma_lognorm)
     test_data = lognormal.get_test_data(0)

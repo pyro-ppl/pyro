@@ -109,7 +109,7 @@ class SSVAE(nn.Module):
             # sample the handwriting style from the constant prior distribution
             prior_mu = Variable(torch.zeros([batch_size, self.z_dim]))
             prior_sigma = Variable(torch.ones([batch_size, self.z_dim]))
-            zs = pyro.sample("z", dist.Normal(prior_mu, prior_sigma, extra_event_dims=1))
+            zs = pyro.sample("z", dist.Normal(prior_mu, prior_sigma).reshape(extra_event_dims=1))
 
             # if the label y (which digit to write) is supervised, sample from the
             # constant prior, otherwise, observe the value (i.e. score it against the constant prior)
@@ -124,7 +124,7 @@ class SSVAE(nn.Module):
             # parametrized distribution p(x|y,z) = bernoulli(decoder(y,z))
             # where `decoder` is a neural network
             mu = self.decoder.forward([zs, ys])
-            pyro.sample("x", dist.Bernoulli(mu, extra_event_dims=1), obs=xs)
+            pyro.sample("x", dist.Bernoulli(mu).reshape(extra_event_dims=1), obs=xs)
 
     def guide(self, xs, ys=None):
         """
@@ -151,7 +151,7 @@ class SSVAE(nn.Module):
             # sample (and score) the latent handwriting-style with the variational
             # distribution q(z|x,y) = normal(mu(x,y),sigma(x,y))
             mu, sigma = self.encoder_z.forward([xs, ys])
-            pyro.sample("z", dist.Normal(mu, sigma, extra_event_dims=1))
+            pyro.sample("z", dist.Normal(mu, sigma).reshape(extra_event_dims=1))
 
     def classifier(self, xs):
         """
@@ -201,11 +201,11 @@ class SSVAE(nn.Module):
         # sample the handwriting style from the constant prior distribution
         prior_mu = Variable(torch.zeros([batch_size, self.z_dim]))
         prior_sigma = Variable(torch.ones([batch_size, self.z_dim]))
-        zs = pyro.sample("z", dist.Normal(prior_mu, prior_sigma, extra_event_dims=1))
+        zs = pyro.sample("z", dist.Normal(prior_mu, prior_sigma).reshape(extra_event_dims=1))
 
         # sample an image using the decoder
         mu = self.decoder.forward([zs, ys])
-        xs = pyro.sample("sample", dist.Bernoulli(mu, extra_event_dims=1))
+        xs = pyro.sample("sample", dist.Bernoulli(mu).reshape(extra_event_dims=1))
         return xs, mu
 
 

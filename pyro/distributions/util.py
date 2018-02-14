@@ -13,8 +13,9 @@ def copy_docs_from(source_class, full_text=False):
     """
 
     def decorator(destin_class):
-        if not destin_class.__doc__:
-            destin_class.__doc__ = source_class.__doc__
+        # This works only in python 3.3+:
+        # if not destin_class.__doc__:
+        #     destin_class.__doc__ = source_class.__doc__
         for name in dir(destin_class):
             if name.startswith('_'):
                 continue
@@ -85,6 +86,18 @@ def broadcast_shape(*shapes, **kwargs):
     return tuple(reversed(reversed_shape))
 
 
+def sum_rightmost(value, dim):
+    """
+    Sum out ``dim`` many rightmost dimensions of a given tensor.
+
+    :param torch.autograd.Variable value: A tensor of ``.dim()`` at least ``dim``.
+    :param int dim: The number of rightmost dims to sum out.
+    """
+    if dim == 0 or isinstance(value, numbers.Number):
+        return value
+    return value.contiguous().view(value.shape[:-dim] + (-1,)).sum(-1)
+
+
 def scale_tensor(tensor, scale):
     """
     Safely scale a tensor without increasing its ``.size()``.
@@ -96,80 +109,6 @@ def scale_tensor(tensor, scale):
         raise ValueError("Broadcasting error: scale is incompatible with tensor: "
                          "{} vs {}".format(scale.shape, tensor.shape))
     return result
-
-
-def log_gamma(xx):
-    gamma_coeff = [
-        76.18009172947146,
-        -86.50532032941677,
-        24.01409824083091,
-        -1.231739572450155,
-        0.1208650973866179e-2,
-        -0.5395239384953e-5,
-    ]
-    magic1 = 1.000000000190015
-    magic2 = 2.5066282746310005
-    x = xx - 1.0
-    t = x + 5.5
-    t = t - (x + 0.5) * torch.log(t)
-    ser = torch_ones_like(x) * magic1
-    for c in gamma_coeff:
-        x = x + 1.0
-        ser = ser + torch.pow(x / c, -1)
-    return torch.log(ser * magic2) - t
-
-
-def log_beta(t):
-    """
-    Computes log Beta function.
-
-    :param t:
-    :type t: torch.autograd.Variable of dimension 1 or 2
-    :rtype: torch.autograd.Variable of float (if t.dim() == 1) or torch.Tensor (if t.dim() == 2)
-    """
-    assert t.dim() in (1, 2)
-    if t.dim() == 1:
-        numer = torch.sum(log_gamma(t))
-        denom = log_gamma(torch.sum(t))
-    else:
-        numer = torch.sum(log_gamma(t), 1)
-        denom = log_gamma(torch.sum(t, 1))
-    return numer - denom
-
-
-def move_to_same_host_as(source, destin):
-    """
-    Returns source or a copy of `source` such that `source.is_cuda == `destin.is_cuda`.
-    """
-    return source.cuda(destin.get_device()) if destin.is_cuda else source.cpu()
-
-
-def torch_zeros_like(x):
-    """
-    Polyfill for `torch.zeros_like()`.
-    """
-    # Work around https://github.com/pytorch/pytorch/issues/2906
-    if isinstance(x, Variable):
-        return Variable(torch_zeros_like(x.data))
-    # Support Pytorch before https://github.com/pytorch/pytorch/pull/2489
-    try:
-        return torch.zeros_like(x)
-    except AttributeError:
-        return torch.zeros(x.size()).type_as(x)
-
-
-def torch_ones_like(x):
-    """
-    Polyfill for `torch.ones_like()`.
-    """
-    # Work around https://github.com/pytorch/pytorch/issues/2906
-    if isinstance(x, Variable):
-        return Variable(torch_ones_like(x.data))
-    # Support Pytorch before https://github.com/pytorch/pytorch/pull/2489
-    try:
-        return torch.ones_like(x)
-    except AttributeError:
-        return torch.ones(x.size()).type_as(x)
 
 
 def torch_eye(n, m=None, out=None):
@@ -226,12 +165,7 @@ def softmax(x, dim=-1):
     trans_size = trans_input.size()
 
     input_2d = trans_input.contiguous().view(-1, trans_size[-1])
-
-    try:
-        soft_max_2d = F.softmax(input_2d, 1)
-    except TypeError:
-        # Support older pytorch 0.2 release.
-        soft_max_2d = F.softmax(input_2d)
+    soft_max_2d = F.softmax(input_2d, 1)
 
     soft_max_nd = soft_max_2d.view(*trans_size)
     return soft_max_nd.transpose(dim, len(input_size) - 1)
