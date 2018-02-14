@@ -13,8 +13,9 @@ def copy_docs_from(source_class, full_text=False):
     """
 
     def decorator(destin_class):
-        if not destin_class.__doc__:
-            destin_class.__doc__ = source_class.__doc__
+        # This works only in python 3.3+:
+        # if not destin_class.__doc__:
+        #     destin_class.__doc__ = source_class.__doc__
         for name in dir(destin_class):
             if name.startswith('_'):
                 continue
@@ -83,6 +84,18 @@ def broadcast_shape(*shapes, **kwargs):
                 raise ValueError('shape mismatch: objects cannot be broadcast to a single shape: {}'.format(
                     ' vs '.join(map(str, shapes))))
     return tuple(reversed(reversed_shape))
+
+
+def sum_rightmost(value, dim):
+    """
+    Sum out ``dim`` many rightmost dimensions of a given tensor.
+
+    :param torch.autograd.Variable value: A tensor of ``.dim()`` at least ``dim``.
+    :param int dim: The number of rightmost dims to sum out.
+    """
+    if dim == 0 or isinstance(value, numbers.Number):
+        return value
+    return value.contiguous().view(value.shape[:-dim] + (-1,)).sum(-1)
 
 
 def scale_tensor(tensor, scale):

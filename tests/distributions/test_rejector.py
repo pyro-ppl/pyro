@@ -18,7 +18,7 @@ SIZES = list(map(torch.Size, [[], [1], [2], [3], [1, 1], [1, 2], [2, 3, 4]]))
 def test_rejection_standard_gamma_sample_shape(sample_shape, batch_shape):
     alphas = Variable(torch.ones(batch_shape))
     dist = RejectionStandardGamma(alphas)
-    x = dist.sample(sample_shape)
+    x = dist.rsample(sample_shape)
     assert x.shape == sample_shape + batch_shape
 
 
@@ -28,12 +28,12 @@ def test_rejection_exponential_sample_shape(sample_shape, batch_shape):
     rates = Variable(torch.ones(batch_shape))
     factors = Variable(torch.ones(batch_shape)) * 0.5
     dist = RejectionExponential(rates, factors)
-    x = dist.sample(sample_shape)
+    x = dist.rsample(sample_shape)
     assert x.shape == sample_shape + batch_shape
 
 
 def compute_elbo_grad(model, guide, variables):
-    x = guide.sample()
+    x = guide.rsample()
     model_log_pdf = model.log_prob(x)
     guide_log_pdf, score_function, entropy_term = guide.score_parts(x)
     log_r = model_log_pdf - guide_log_pdf
@@ -50,10 +50,10 @@ def test_rejector(rate, factor):
 
     dist1 = Exponential(rates)
     dist2 = RejectionExponential(rates, factors)  # implemented using Rejector
-    x1 = dist1.sample()
-    x2 = dist2.sample()
-    assert_equal(x1.mean(), x2.mean(), prec=0.02, msg='bug in .sample()')
-    assert_equal(x1.std(), x2.std(), prec=0.02, msg='bug in .sample()')
+    x1 = dist1.rsample()
+    x2 = dist2.rsample()
+    assert_equal(x1.mean(), x2.mean(), prec=0.02, msg='bug in .rsample()')
+    assert_equal(x1.std(), x2.std(), prec=0.02, msg='bug in .rsample()')
     assert_equal(dist1.log_prob(x1), dist2.log_prob(x1), msg='bug in .log_prob()')
 
 
@@ -146,7 +146,7 @@ def test_shape_augmented_beta(alpha, beta):
     alphas = Variable(torch.Tensor([alpha]).expand(num_samples, 1), requires_grad=True)
     betas = Variable(torch.Tensor([beta]).expand(num_samples, 1), requires_grad=True)
     dist = ShapeAugmentedBeta(alphas, betas)  # implemented using Rejector
-    z = dist.sample()
+    z = dist.rsample()
     cost = z.sum()
     (cost + cost.detach() * dist.score_parts(z)[1]).backward()
     mean_alpha_grad = alphas.grad.data.mean()

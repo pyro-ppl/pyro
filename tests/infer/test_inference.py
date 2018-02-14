@@ -175,7 +175,6 @@ class PoissonGammaTests(TestCase):
         self.log_beta_n = torch.log(self.beta_n)
 
     def test_elbo_reparameterized(self):
-        assert dist.Gamma.reparameterized
         self.do_elbo_test(True, 10000)
 
     def test_elbo_nonreparameterized(self):
@@ -234,7 +233,6 @@ class ExponentialGammaTests(TestCase):
         self.log_beta_n = torch.log(self.beta_n)
 
     def test_elbo_reparameterized(self):
-        assert dist.Gamma.reparameterized
         self.do_elbo_test(dist.Gamma, 5000)
 
     def test_elbo_rsvi(self):
@@ -293,7 +291,6 @@ class BernoulliBetaTests(TestCase):
         self.log_beta_n = torch.log(self.beta_n)
 
     def test_elbo_reparameterized(self):
-        assert dist.Beta.reparameterized
         self.do_elbo_test(True, 10000)
 
     def test_elbo_nonreparameterized(self):

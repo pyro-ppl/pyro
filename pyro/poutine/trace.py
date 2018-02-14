@@ -7,7 +7,6 @@ import networkx
 import numpy as np
 from torch.autograd import Variable
 
-from pyro.distributions.torch_wrapper import TorchDistribution
 from pyro.distributions.util import scale_tensor
 
 
@@ -83,12 +82,8 @@ class Trace(networkx.DiGraph):
                     site_log_p = site["log_pdf"]
                 except KeyError:
                     args, kwargs = site["args"], site["kwargs"]
-                    if isinstance(site["fn"], TorchDistribution):
-                        site_log_p = site["fn"].log_prob(site["value"])
-                    else:
-                        site_log_p = site["fn"].log_prob(site["value"], *args, **kwargs)
-                    site_log_p = scale_tensor(site_log_p, site["scale"])
-                    site_log_p = site_log_p.sum()
+                    site_log_p = site["fn"].log_prob(site["value"], *args, **kwargs)
+                    site_log_p = scale_tensor(site_log_p, site["scale"]).sum()
                     site["log_pdf"] = site_log_p
                     _warn_if_nan(name, site_log_p)
                 log_p += site_log_p
@@ -108,10 +103,7 @@ class Trace(networkx.DiGraph):
                     site_log_p = site["batch_log_pdf"]
                 except KeyError:
                     args, kwargs = site["args"], site["kwargs"]
-                    if isinstance(site["fn"], TorchDistribution):
-                        site_log_p = site["fn"].log_prob(site["value"])
-                    else:
-                        site_log_p = site["fn"].log_prob(site["value"], *args, **kwargs)
+                    site_log_p = site["fn"].log_prob(site["value"], *args, **kwargs)
                     site_log_p = scale_tensor(site_log_p, site["scale"])
                     site["batch_log_pdf"] = site_log_p
                     site["log_pdf"] = site_log_p.sum()
@@ -132,10 +124,7 @@ class Trace(networkx.DiGraph):
                     site["batch_log_pdf"]
                 except KeyError:
                     args, kwargs = site["args"], site["kwargs"]
-                    if isinstance(site["fn"], TorchDistribution):
-                        site_log_p = site["fn"].log_prob(site["value"])
-                    else:
-                        site_log_p = site["fn"].log_prob(site["value"], *args, **kwargs)
+                    site_log_p = site["fn"].log_prob(site["value"], *args, **kwargs)
                     site_log_p = scale_tensor(site_log_p, site["scale"])
                     site["batch_log_pdf"] = site_log_p
                     site["log_pdf"] = site_log_p.sum()
@@ -149,10 +138,7 @@ class Trace(networkx.DiGraph):
             if site["type"] == "sample" and "score_parts" not in site:
                 # Note that ScoreParts overloads the multiplication operator
                 # to correctly scale each of its three parts.
-                if isinstance(site["fn"], TorchDistribution):
-                    value = site["fn"].score_parts(site["value"]) * site["scale"]
-                else:
-                    value = site["fn"].score_parts(site["value"], *site["args"], **site["kwargs"]) * site["scale"]
+                value = site["fn"].score_parts(site["value"], *site["args"], **site["kwargs"]) * site["scale"]
                 site["score_parts"] = value
                 site["batch_log_pdf"] = value[0]
                 site["log_pdf"] = value[0].sum()
