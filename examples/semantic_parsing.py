@@ -358,7 +358,7 @@ def speaker(world):
 
 
 def rsa_listener(utterance, qud):
-    world = world_prior(2, lambda w: True)
+    world = world_prior(2, meaning(utterance))
     S = Marginal(BestFirstSearch(speaker, num_samples=100))
     pyro.observe("listener_constraint", S, utterance, world)
     return qud(world)
