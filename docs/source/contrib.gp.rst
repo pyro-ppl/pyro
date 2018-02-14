@@ -27,7 +27,19 @@ Kernels
 Models
 ------
 
+.. automodule:: pyro.contrib.gp.models.model
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
+
 .. automodule:: pyro.contrib.gp.models.gpr
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
+    
+.. automodule:: pyro.contrib.gp.models.sgpr
     :members:
     :undoc-members:
     :show-inheritance:
