@@ -20,10 +20,11 @@ Abstract Distribution
 TorchDistribution
 -----------------
 
-.. automodule:: pyro.distributions.distribution
+.. automodule:: pyro.distributions.torch_distribution
     :members:
     :undoc-members:
     :show-inheritance:
+    :member-order: bysource
 
 Delta
 -----
