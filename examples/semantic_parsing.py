@@ -75,7 +75,7 @@ class BestFirstSearch(TracePosterior):
 
 
 def factor(name, value):
-    d = dist.Bernoulli(torch.sigmoid(value))  # XXX not right?
+    d = dist.Bernoulli(logits=value)
     pyro.sample(name, d, obs=Variable(torch.ones(value.size())))
 
 
