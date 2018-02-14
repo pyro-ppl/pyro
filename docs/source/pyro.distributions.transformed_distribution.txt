@@ -1,7 +1,0 @@
-
-InverseAutoRegressiveFlow
--------------------------
-.. autoclass:: pyro.distributions.torch.iaf.InverseAutoregressiveFlow
-    :members:
-    :undoc-members:
-    :show-inheritance:

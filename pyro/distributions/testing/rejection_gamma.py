@@ -58,7 +58,6 @@ class RejectionStandardGamma(Rejector):
 
 @copy_docs_from(Gamma)
 class RejectionGamma(Gamma):
-    stateful = True
     reparameterized = True
 
     def __init__(self, alpha, beta):
@@ -84,7 +83,6 @@ class ShapeAugmentedGamma(Gamma):
     This implements the shape augmentation trick of
     Naesseth, Ruiz, Linderman, Blei (2017) https://arxiv.org/abs/1610.05683
     """
-    stateful = True
     reparameterized = True
 
     def __init__(self, alpha, beta, boost=1):

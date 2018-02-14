@@ -12,11 +12,9 @@ class TorchDistributionMixin(Distribution):
     Mixin to provide Pyro compatibility for PyTorch distributions.
 
     This is mainly useful for wrapping existing PyTorch distributions for
-    use in Pyro.
-
-    Derived classes must first inherit from
-    :class:`torch.distributions.Distribution`
-    then inherit from :class:`TorchDistributionMixin`.
+    use in Pyro.  Derived classes must first inherit from
+    :class:`torch.distributions.Distribution` and then inherit from
+    :class:`TorchDistributionMixin`.
     """
     @property
     def reparameterized(self):
@@ -51,8 +49,9 @@ class TorchDistributionMixin(Distribution):
         """
         The tensor shape of samples from this distribution.
 
-        Samples are of shape :code:`d.shape(sample_shape) == sample_shape +
-        d.batch_shape() + d.event_shape()`.
+        Samples are of shape::
+
+          d.shape(sample_shape) == sample_shape + d.batch_shape + d.event_shape
 
         :param sample_shape: the size of the iid batch to be drawn from the
             distribution.
@@ -86,6 +85,55 @@ class TorchDistributionMixin(Distribution):
 class TorchDistribution(torch.distributions.Distribution, TorchDistributionMixin):
     """
     Base class for PyTorch-compatible distributions with Pyro support.
+
+    This should be the base class for almost all new Pyro distributions.
+
+    .. note::
+
+        Parameters and data should be of type `torch.autograd.Variable` and all
+        methods return type `torch.autograd.Variable` unless otherwise noted.
+
+    **Tensor Shapes**:
+
+    TorchDistributions provide a method ``.shape()`` for the tensor shape of samples::
+
+      x = d.sample(sample_shape)
+      assert x.shape == d.shape(sample_shape)
+
+    Pyro follows the same distribution shape semantics as PyTorch. It distinguishes
+    between three different roles for tensor shapes of samples:
+
+    - *sample shape* corresponds to the shape of the iid samples drawn from the distribution.
+      This is taken as an argument by the distribution's `sample` method.
+    - *batch shape* corresponds to non-identical (independent) parameterizations of
+      the distribution, inferred from the distribution's parameter shapes. This is
+      fixed for a distribution instance.
+    - *event shape* corresponds to the event dimensions of the distribution, which
+      is fixed for a distribution class. These are collapsed when we try to score
+      a sample from the distribution via `d.log_prob(x)`.
+
+    These shapes are related by the equation::
+
+      assert d.shape(sample_shape, *args, **kwargs) == sample_shape +
+                                                       d.batch_shape(*args, **kwargs) +
+                                                       d.event_shape(*args, **kwargs)
+
+    Distributions provide a vectorized ``.log_prob()`` method that evaluates
+    the log probability density of each event in a batch independently,
+    returning a tensor of shape ``sample_shape + d.batch_shape``::
+
+      x = d.sample(sample_shape)
+      assert x.size() == d.shape(sample_shape)
+      log_p = d.log_prob(x)
+      assert log_p.shape == sample_shape + d.batch_shape
+
+    **Implementing New Distributions**:
+
+    Derived classes must implement the following methods: ``.rsample()``
+    (or ``.sample()`` if ``.has_rsample == True``),
+    ``.log_prob()``, ``.batch_shape``, and ``.event_shape``.
+    Discrete classes may also implement the ``.enumerate_support()`` method to improve
+    gradient estimates and set ``.has_enumerate_support = True``.
     """
     pass
 

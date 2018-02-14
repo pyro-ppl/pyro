@@ -1,25 +1,81 @@
 from __future__ import absolute_import, division, print_function
 
+from abc import ABCMeta, abstractmethod
+
+from six import add_metaclass
+
 from pyro.distributions.score_parts import ScoreParts
 
 
+@add_metaclass(ABCMeta)
 class Distribution(object):
     """
-    Abstract base class for Pyro probability distributions.
+    Base class for parameterized probability distributions.
+
+    Distributions in Pyro are stochastic function objects with ``.sample()`` and
+    ``.log_prob()`` methods. Distribution are stochastic functions with fixed
+    parameters::
+
+      d = dist.Bernoulli(param)
+      x = d()                                # Draws a random sample.
+      p = d.log_prob(x)                      # Evaluates log probability of x.
+
+    **Implementing New Distributions**:
+
+    Derived classes must implement the following methods: ``.sample()``,
+    ``.log_prob()``, ``.batch_shape()``, and ``.event_shape()``.
+    Discrete classes may also implement the ``.enumerate_support()`` method to improve
+    gradient estimates and set ``.enumerable = True``.
+
+    **Examples**:
+
+    Take a look at the `examples <http://pyro.ai/examples>`_ to see how they interact
+    with inference algorithms.
     """
     reparameterized = False
     enumerable = False
 
-    def sample(self, *args, **kwargs):
-        raise NotImplementedError
-
     def __call__(self, *args, **kwargs):
+        """
+        Samples a random value (just an alias for `.sample(*args, **kwargs)`).
+
+        For tensor distributions, the returned Variable should have the same `.size()` as the
+        parameters.
+
+        :return: A random value.
+        :rtype: torch.autograd.Variable
+        """
         return self.sample(*args, **kwargs)
 
-    def log_prob(self, x, *args, **kwargs):
+    @abstractmethod
+    def sample(self, *args, **kwargs):
+        """
+        Samples a random value.
+
+        For tensor distributions, the returned Variable should have the same `.size()` as the
+        parameters, unless otherwise noted.
+
+        :param sample_shape: the size of the iid batch to be drawn from the
+            distribution.
+        :type sample_shape: torch.Size
+        :return: A random value or batch of random values (if parameters are
+            batched). The shape of the result should be `self.size()`.
+        :rtype: torch.autograd.Variable
+        """
         raise NotImplementedError
 
-    def enumerate_support(self, *args, **kwargs):
+    @abstractmethod
+    def log_prob(self, x, *args, **kwargs):
+        """
+        Evaluates log probability densities for each of a batch of samples.
+
+        :param torch.autograd.Variable x: A single value or a batch of values
+            batched along axis 0.
+        :return: log probability densities as a one-dimensional
+            `torch.autograd.Variable` with same batch size as value and params.
+            The shape of the result should be `self.batch_size()`.
+        :rtype: torch.autograd.Variable
+        """
         raise NotImplementedError
 
     def score_parts(self, x, *args, **kwargs):
@@ -42,3 +98,17 @@ class Distribution(object):
             # XXX should the user be able to control inclusion of the entropy term?
             # See Roeder, Wu, Duvenaud (2017) "Sticking the Landing" https://arxiv.org/abs/1703.09194
             return ScoreParts(log_pdf=log_pdf, score_function=log_pdf, entropy_term=0)
+
+    def enumerate_support(self):
+        """
+        Returns a representation of the parametrized distribution's support,
+        along the first dimension. This is implemented only by discrete
+        distributions.
+
+        Note that this returns support values of all the batched RVs in
+        lock-step, rather than the full cartesian product.
+
+        :return: An iterator over the distribution's discrete support.
+        :rtype: iterator
+        """
+        raise NotImplementedError("Support not implemented for {}".format(type(self)))
