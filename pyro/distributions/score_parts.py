@@ -2,6 +2,8 @@ from __future__ import absolute_import, division, print_function
 
 from collections import namedtuple
 
+from pyro.distributions.util import is_identically_one, scale_tensor, torch_sign
+
 
 class ScoreParts(namedtuple('ScoreParts', ['log_pdf', 'score_function', 'entropy_term'])):
     """
@@ -13,7 +15,11 @@ class ScoreParts(namedtuple('ScoreParts', ['log_pdf', 'score_function', 'entropy
         Scale appropriate terms of a gradient estimator by a data multiplicity factor.
         Note that the `score_function` term should not be scaled.
         """
-        log_pdf, score_function, entropy_term = self
-        return ScoreParts(log_pdf * scale, score_function, entropy_term * scale)
+        if is_identically_one(scale):
+            return self
+        log_pdf = scale_tensor(self.log_pdf, scale)
+        score_function = scale_tensor(self.score_function, torch_sign(scale))
+        entropy_term = scale_tensor(self.entropy_term, scale)
+        return ScoreParts(log_pdf, score_function, entropy_term)
 
     __rmul__ = __mul__

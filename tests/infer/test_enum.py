@@ -80,11 +80,11 @@ def test_iter_discrete_traces_nan(enum_discrete, trace_graph):
 
     def model():
         p = Variable(torch.Tensor([0.0, 0.5, 1.0]))
-        pyro.sample("z", dist.Bernoulli(p, extra_event_dims=1))
+        pyro.sample("z", dist.Bernoulli(p).reshape(extra_event_dims=1))
 
     def guide():
         p = pyro.param("p", Variable(torch.Tensor([0.0, 0.5, 1.0]), requires_grad=True))
-        pyro.sample("z", dist.Bernoulli(p, extra_event_dims=1))
+        pyro.sample("z", dist.Bernoulli(p).reshape(extra_event_dims=1))
 
     Elbo = TraceGraph_ELBO if trace_graph else Trace_ELBO
     elbo = Elbo(enum_discrete=enum_discrete)

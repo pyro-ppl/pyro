@@ -5,14 +5,6 @@ import numbers
 import torch
 
 
-def is_identically_zero(x):
-    """
-    Check if argument is exactly zero (works for for a ``torch.autograd.Variable``, but also works
-    with numbers.
-    """
-    return isinstance(x, numbers.Number) and x == 0
-
-
 def torch_data_sum(x):
     """
     Like ``x.data.sum()`` for a ``torch.autograd.Variable``, but also works

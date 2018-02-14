@@ -152,5 +152,5 @@ class TracePosterior(object):
         logits -= util.log_sum_exp(logits)
         if not isinstance(logits, torch.autograd.Variable):
             logits = Variable(logits)
-        ix = dist.categorical(logits=logits)
+        ix = dist.Categorical(logits=logits).sample()
         return traces[ix.data[0]]
