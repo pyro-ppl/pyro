@@ -1,11 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
 import torch
-from pyro.distributions.distribution import Distribution
+
 from pyro.distributions.score_parts import ScoreParts
+from pyro.distributions.torch_distribution import TorchDistribution
 
 
-class Rejector(Distribution, torch.distributions.Distribution):
+class Rejector(TorchDistribution):
     """
     Rejection sampled distribution given an acceptance rate function.
 

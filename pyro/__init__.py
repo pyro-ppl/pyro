@@ -101,7 +101,7 @@ def observe(name, fn, obs, *args, **kwargs):
     return sample(name, fn, *args, **kwargs)
 
 
-class _Subsample(Distribution, torch.distributions.Distribution):
+class _Subsample(Distribution):
     """
     Randomly select a subsample of a range of indices.
 

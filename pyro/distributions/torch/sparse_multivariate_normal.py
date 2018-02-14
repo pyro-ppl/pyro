@@ -7,11 +7,11 @@ from torch.autograd import Variable
 from torch.distributions import constraints
 from torch.distributions.utils import lazy_property
 
-from pyro.distributions.distribution import Distribution
+from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import matrix_triangular_solve_compat
 
 
-class SparseMultivariateNormal(Distribution, torch.distributions.Distribution):
+class SparseMultivariateNormal(TorchDistribution):
     """
     Sparse Multivariate Normal distribution.
 

@@ -6,7 +6,7 @@ import torch
 from torch.distributions import constraints
 from torch.distributions.utils import lazy_property
 
-from pyro.distributions.distribution import Distribution
+from pyro.distributions.torch_distribution import TorchDistribution
 
 
 def _matrix_inverse_compat(matrix, matrix_chol):
@@ -20,7 +20,7 @@ def _matrix_inverse_compat(matrix, matrix_chol):
 
 
 # TODO Move this upstream to PyTorch.
-class MultivariateNormal(Distribution, torch.distributions.Distribution):
+class MultivariateNormal(TorchDistribution):
     """Multivariate normal (Gaussian) distribution.
 
     A distribution over vectors in which all the elements have a joint Gaussian

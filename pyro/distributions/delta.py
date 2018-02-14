@@ -3,11 +3,11 @@ from __future__ import absolute_import, division, print_function
 import torch
 from torch.autograd import Variable
 
-from pyro.distributions.distribution import Distribution
+from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import broadcast_shape
 
 
-class Delta(Distribution, torch.distributions.Distribution):
+class Delta(TorchDistribution):
     """
     Degenerate discrete distribution (a single point).
 
