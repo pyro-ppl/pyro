@@ -25,7 +25,7 @@ class SparseVariationalGP(VariationalGP):
     :param torch.autograd.Variable y: A 1D tensor of outputs for training.
     :param pyro.contrib.gp.kernels.Kernel kernel: A Pyro kernel object.
     :param torch.Tensor Xu: Initial values for inducing points, which are parameters
-        of sparse model.
+        of our model.
     :param pyro.contrib.gp.likelihoods.Likelihood likelihood: A likelihood module.
     :param float jitter: An additional jitter to help stablize Cholesky decomposition.
     """
