@@ -503,3 +503,18 @@ def test_enum_discrete_global_local_error():
             pyro.sample("y", dist.Bernoulli(p).reshape(sample_shape=[len(ind)]))
 
     assert_error(model, guide, enum_discrete=True)
+
+
+def test_enum_discrete_parallel_ok():
+
+    def model():
+        p = Variable(torch.Tensor([0.5]))
+        x = pyro.sample("x", dist.Bernoulli(p))
+        assert x.shape == torch.Shape([2]) + p.shape
+
+    def guide():
+        p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
+        x = pyro.sample("x", dist.Bernoulli(p), infer={'enumerate': 'parallel'})
+        assert x.shape == torch.Shape([2]) + p.shape
+
+    assert_ok(model, guide, enum_discrete=True)

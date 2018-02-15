@@ -12,6 +12,7 @@ import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.util import torch_backward, torch_data_sum, torch_sum
+from pyro.poutine.enumerate_poutine import EnumeratePoutine
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match
 
@@ -48,14 +49,22 @@ class Trace_ELBO(object):
     """
     def __init__(self,
                  num_particles=1,
-                 enum_discrete=False):
+                 enum_discrete=False,
+                 max_iarange_nesting=0):
         """
-        :param num_particles: the number of particles/samples used to form the ELBO (gradient) estimators
-        :param bool enum_discrete: whether to sum over discrete latent variables, rather than sample them
+        :param num_particles: The number of particles/samples used to form the
+            ELBO (gradient) estimators.
+        :param bool enum_discrete: Whether to sum over discrete latent
+            variables, rather than sample them.
+        :param int max_iarange_nesting: optional bound on max number of nested
+            :func:`pyro.iarange` contexts. This is ignored unless
+            ``enum_discrete == True`` and any site sample sets
+            ``infer={"enumerate": "parallel"}``.
         """
         super(Trace_ELBO, self).__init__()
         self.num_particles = num_particles
         self.enum_discrete = enum_discrete
+        self.max_iarange_nesting = max_iarange_nesting
 
     def _get_traces(self, model, guide, *args, **kwargs):
         """
@@ -65,7 +74,9 @@ class Trace_ELBO(object):
 
         for i in range(self.num_particles):
             if self.enum_discrete:
-                # This iterates over a bag of traces, for each particle.
+                # This enables parallel enumeration.
+                guide = EnumeratePoutine(guide, first_available_dim=self.max_iarange_nesting)
+                # This iterates over a bag of traces, one trace per particle.
                 for scale, guide_trace in iter_discrete_traces("flat", guide, *args, **kwargs):
                     model_trace = poutine.trace(poutine.replay(model, guide_trace),
                                                 graph_type="flat").get_trace(*args, **kwargs)

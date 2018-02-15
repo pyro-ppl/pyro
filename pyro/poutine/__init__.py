@@ -7,6 +7,7 @@ from pyro import util
 # poutines
 from .block_poutine import BlockPoutine
 from .condition_poutine import ConditionPoutine
+from .enumerate_poutine import EnumeratePoutine  # noqa: F401
 from .escape_poutine import EscapePoutine
 from .indep_poutine import IndepMessenger  # noqa: F401
 from .lift_poutine import LiftPoutine

@@ -11,8 +11,15 @@ from pyro.poutine.trace import Trace
 from six.moves.queue import LifoQueue
 
 
-def site_is_discrete(name, site):
-    return getattr(site["fn"], "enumerable", False)
+def _iter_discrete_filter(name, site):
+    return ((msg["type"] == "sample") and
+        (not msg["is_observed"]) and
+        getattr(msg["fn"], "enumerable", False) and
+        (msg["infer"].get("enumerate", "sequential") == "sequential"))
+
+
+def _iter_discrete_escape(trace, msg):
+    return _iter_discrete_filter(msg["name"], msg) and (msg["name"] not in trace))
 
 
 def iter_discrete_traces(graph_type, fn, *args, **kwargs):
