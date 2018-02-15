@@ -98,6 +98,31 @@ def sum_rightmost(value, dim):
     return value.contiguous().view(value.shape[:-dim] + (-1,)).sum(-1)
 
 
+def sum_leftmost(x, dim):
+    """
+    Sum all but a certain number of rightmost dimensions of a given tensor ``x``.
+
+    If ``dim`` is 0, no dimensions are summed out.
+    If ``dim`` is -1, all but the rightmost dimension is summed out.
+    If ``dim`` is -2, all but the two rightmost dimensions are summed out.
+    etc.
+
+    Example
+    ```
+    x = torch.ones(2,3,4)
+    assert sum_leftmost(x, -2).shape == (3, 4)
+    assert sum_leftmost(x, -1).shape == (4,)
+    ```
+
+    :param torch.autograd.Variable x: A tensor
+    :param int dim: Specifies the number of dims to sum out (a non-positive integer)
+    """
+    assert(dim <= 0), "dim must be less than or equal to zero"
+    if dim == 0:
+        return x
+    return x.contiguous().view(-1, *x.shape[dim:]).sum(0)
+
+
 def scale_tensor(tensor, scale):
     """
     Safely scale a tensor without increasing its ``.size()``.
