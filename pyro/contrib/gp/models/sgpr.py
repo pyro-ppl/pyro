@@ -32,7 +32,8 @@ class SparseGPRegression(Model):
     :param torch.autograd.Variable X: A 1D or 2D tensor of inputs.
     :param torch.autograd.Variable y: A 1D tensor of outputs for training.
     :param pyro.contrib.gp.kernels.Kernel kernel: A Pyro kernel object.
-    :param torch.Tensor Xu: An inducing-point parameter.
+    :param torch.Tensor Xu: Initial values for inducing points, which are parameters
+        of our model.
     :param torch.Tensor noise: An optional noise tensor.
     :param str approx: One of approximation methods: "DTC", "FITC", and "VFE" (default).
     :param float jitter: An additional jitter to help stablize Cholesky decomposition.
