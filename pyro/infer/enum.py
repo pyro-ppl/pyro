@@ -33,7 +33,8 @@ def iter_discrete_traces(graph_type, fn, *args, **kwargs):
     q_fn = poutine.queue(fn, queue=queue)
     while not queue.empty():
         q_fn = poutine.queue(fn, queue=queue)
-        full_trace = poutine.trace(q_fn).get_trace(*args, **kwargs)
+        full_trace = poutine.trace(
+            q_fn, graph_type=graph_type).get_trace(*args, **kwargs)
 
         # Scale trace by probability of discrete choices.
         log_pdf = full_trace.batch_log_pdf(site_filter=site_is_discrete)
