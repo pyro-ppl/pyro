@@ -61,7 +61,8 @@ class SparseVariationalGP(VariationalGP):
         Qffdiag = (Luuinv_Kuf ** 2).sum(dim=0)
         Kfdiag = Kffdiag - Qffdiag
 
-        f = dist.Normal(mf, Kfdiag).sample()
+        # get 1 sample for f
+        f = dist.Normal(mf, Kfdiag)()
         likelihood(f, obs=self.y)
 
     def guide(self):
