@@ -41,6 +41,7 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
     topo_sort_guide_nodes = list(reversed(list(networkx.topological_sort(guide_trace))))
     topo_sort_guide_nodes = [x for x in topo_sort_guide_nodes
                              if guide_trace.nodes[x]["type"] == "sample"]
+    print("topo", topo_sort_guide_nodes)
     downstream_guide_cost_nodes = {}
     downstream_costs = {}
 
