@@ -8,6 +8,7 @@ import torch
 from torch.autograd import Variable
 
 from pyro.distributions.omt_mvn import OMTMultivariateNormal
+from pyro.distributions import MultivariateNormal
 
 from tests.common import assert_equal
 
@@ -40,3 +41,16 @@ def test_mean(sample_shape, L21, omega1, omega2, L11=0.5, L22=0.8):
     assert(mu.grad.size() == mu.size())
     assert(off_diag.grad.size() == off_diag.size())
     assert_equal(analytic, computed_grad, prec=0.005, msg='bad cholesky grad for OMTMultivariateNormal')
+
+
+def test_log_prob():
+    loc = Variable(torch.Tensor([2, 1, 1, 2, 2]))
+    D = Variable(torch.Tensor([1, 2, 3, 1, 3]))
+    W = Variable(torch.Tensor([[1, -1, 2, 2, 4], [2, 1, 1, 2, 6]]))
+    x = Variable(torch.Tensor([2, 3, 4, 1, 7]))
+    L = D.diag() + torch.tril(W.t().matmul(W))
+    cov = torch.mm(L, L.t())
+
+    mvn = MultivariateNormal(loc, cov)
+    omt_mvn = OMTMultivariateNormal(loc, L)
+    assert_equal(mvn.log_prob(x), omt_mvn.log_prob(x))
