@@ -28,3 +28,12 @@ class Model(Parameterized):
         Implements prediction step.
         """
         raise NotImplementedError
+
+    def _check_Xnew_shape(self, Xnew, X):
+        """
+        Checks the correction of the shape of new data.
+        """
+        if Xnew.dim() != X.dim():
+            raise ValueError("Train data and test data should have the same number of dimensions.")
+        if Xnew.dim() == 2 and X.size(1) != Xnew.size(1):
+            raise ValueError("Train data and test data should have the same feature sizes.")

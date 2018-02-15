@@ -29,8 +29,8 @@ class SparseGPRegression(Model):
     [2] `Variational learning of inducing variables in sparse Gaussian processes`,
     Michalis Titsias
 
-    :param torch.autograd.Variable X: A tensor of inputs.
-    :param torch.autograd.Variable y: A tensor of outputs for training.
+    :param torch.autograd.Variable X: A 1D or 2D tensor of inputs.
+    :param torch.autograd.Variable y: A 1D tensor of outputs for training.
     :param pyro.contrib.gp.kernels.Kernel kernel: A Pyro kernel object.
     :param torch.Tensor Xu: An inducing-point parameter.
     :param torch.Tensor noise: An optional noise tensor.
@@ -106,16 +106,13 @@ class SparseGPRegression(Model):
         """
         Computes the parameters of ``p(y*|Xnew) ~ N(loc, cov)`` w.r.t. the new input ``Xnew``.
 
-        :param torch.autograd.Variable Xnew: A 2D tensor.
+        :param torch.autograd.Variable Xnew: A 1D or 2D tensor.
         :param bool full_cov: Predicts full covariance matrix or just its diagonal.
         :param bool noiseless: Includes noise in the prediction or not.
         :return: loc and covariance matrix of ``p(y*|Xnew)``.
         :rtype: torch.autograd.Variable and torch.autograd.Variable
         """
-        if Xnew.dim() == 2 and self.X.size(1) != Xnew.size(1):
-            raise ValueError("Train data and test data should have the same feature sizes.")
-        if Xnew.dim() == 1:
-            Xnew = Xnew.unsqueeze(1)
+        self._check_Xnew_shape(Xnew, self.X)
 
         kernel, noise, Xu = self.guide()
 

@@ -9,10 +9,10 @@ import pyro
 import pyro.distributions as dist
 from pyro.distributions.util import matrix_triangular_solve_compat
 
-from .model import Model
+from .vgp import VariationalGP
 
 
-class SparseVariationalGP(Model):
+class SparseVariationalGP(VariationalGP):
     """
     Sparse Variational Gaussian Process module.
 
@@ -21,26 +21,18 @@ class SparseVariationalGP(Model):
     [1] `Scalable variational Gaussian process classification`,
     James Hensman, Alexander G. de G. Matthews, Zoubin Ghahramani
 
-    :param torch.autograd.Variable X: A tensor of inputs.
-    :param torch.autograd.Variable y: A tensor of outputs for training.
+    :param torch.autograd.Variable X: A 1D or 2D tensor of inputs.
+    :param torch.autograd.Variable y: A 1D tensor of outputs for training.
     :param pyro.contrib.gp.kernels.Kernel kernel: A Pyro kernel object.
     :param torch.Tensor Xu: An inducing-point parameter.
     :param pyro.contrib.gp.likelihoods.Likelihood likelihood: A likelihood module.
     :param float jitter: An additional jitter to help stablize Cholesky decomposition.
     """
     def __init__(self, X, y, kernel, Xu, likelihood, jitter=1e-6):
-        super(SparseVariationalGP, self).__init__()
-        self.X = X
-        self.y = y
-        self.kernel = kernel
-        self.num_data = self.X.size(0)
+        super(SparseVariationalGP, self).__init__(X, y, kernel, likelihood, jitter)
 
         self.Xu = Parameter(Xu)
         self.num_inducing = self.Xu.size(0)
-
-        self.likelihood = likelihood
-
-        self.jitter = Variable(self.X.data.new([jitter]))
 
     def model(self):
         self.set_mode("model")
@@ -94,7 +86,7 @@ class SparseVariationalGP(Model):
 
     def forward(self, Xnew, full_cov=False):
         """
-        Compute the parameters of ``p(f*|Xnew) ~ N(loc, cov)`` according to
+        Computes the parameters of ``p(f*|Xnew) ~ N(loc, cov)`` according to
         ``p(f*,u|y) = p(f*|u).p(u|y) ~ p(f*|u).q(u)``, then marginalize out variable ``u``.
 
         :param torch.autograd.Variable Xnew: A 2D tensor.
@@ -103,44 +95,10 @@ class SparseVariationalGP(Model):
         :rtype: torch.autograd.Variable, torch.autograd.Variable, and
             pyro.contrib.gp.likelihoods.Likelihood
         """
-        if Xnew.dim() == 2 and self.X.size(1) != Xnew.size(1):
-            raise ValueError("Train data and test data should have the same feature sizes.")
-        if Xnew.dim() == 1:
-            Xnew = Xnew.unsqueeze(1)
+        self._check_Xnew_shape(Xnew, self.X)
 
         kernel, likelihood, Xu, mu, Lu = self.guide()
 
-        # W := inv(Luu) @ Kus; V := inv(Luu) @ Lu
-        # loc = Ksu @ inv(Kuu) @ mu = W.T @ inv(Luu) @ mu
-        # cov = Kss - Ksu @ inv(Kuu) @ Kus + Ksu @ inv(Kuu) @ S @ inv(Kuu) @ Kus
-        #     = Kss - W.T @ W + W.T @ V @ V.T @ W
-        #     =: Kss - Qss + K
-
-        Kuu = kernel(Xu) + self.jitter.expand(self.num_inducing).diag()
-        Kus = kernel(Xu, Xnew)
-        Luu = Kuu.potrf(upper=False)
-
-        # combine all tril-solvers to one place
-        pack = torch.cat((mu.unsqueeze(1), Kus, Lu), dim=1)
-        Luuinv_pack = matrix_triangular_solve_compat(pack, Luu, upper=False)
-        Luuinv_mu = Luuinv_pack[:, 0]
-        W = Luuinv_pack[:, 1:-self.num_inducing]
-        V = Luuinv_pack[:, -self.num_inducing:]
-        Vt_W = V.t().matmul(W)
-
-        loc = W.t().matmul(Luuinv_mu)
-
-        if full_cov:
-            Kss = kernel(Xnew)
-            # Qss = Ksu @ inv(Kuu) @ Kus = W.T @ W
-            Qss = W.t().matmul(W)
-            # K = Ksu @ inv(Kuu) @ S @ inv(Kuu) @ Kus = W.T @ V @ V.T @ W
-            K = Vt_W.t().matmul(Vt_W)
-            cov = Kss - Qss + K
-        else:
-            Kssdiag = kernel(Xnew, diag=True)
-            Qssdiag = (W ** 2).sum(dim=0)
-            Kdiag = (Vt_W ** 2).sum(dim=0)
-            cov = Kssdiag - Qssdiag + Kdiag
+        loc, cov = self._predict_f(Xnew, Xu, kernel, mu, Lu, full_cov)
 
         return loc, cov, likelihood

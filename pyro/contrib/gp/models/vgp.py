@@ -3,27 +3,28 @@ from __future__ import absolute_import, division, print_function
 import torch
 from torch.autograd import Variable
 from torch.distributions import constraints, transform_to
-import torch.nn as nn
 
 import pyro
 import pyro.distributions as dist
 from pyro.distributions.util import matrix_triangular_solve_compat
 
+from .model import Model
 
-class VariationalGP(nn.Module):
+
+class VariationalGP(Model):
     """
     Variational Gaussian Process module.
 
     This model can be seen as a special version of SparseVariationalGP model
     with ``Xu = X``.
 
-    :param torch.autograd.Variable X: A tensor of inputs.
-    :param torch.autograd.Variable y: A tensor of outputs for training.
+    :param torch.autograd.Variable X: A 1D or 2D tensor of inputs.
+    :param torch.autograd.Variable y: A 1D tensor of outputs for training.
     :param pyro.contrib.gp.kernels.Kernel kernel: A Pyro kernel object.
     :param pyro.contrib.gp.likelihoods.Likelihood likelihood: A likelihood module.
     :param float jitter: An additional jitter to help stablize Cholesky decomposition.
     """
-    def __init__(self, X, y, kernel, likelihood, kernel_prior=None, jitter=1e-6):
+    def __init__(self, X, y, kernel, likelihood, jitter=1e-6):
         super(VariationalGP, self).__init__()
         self.X = X
         self.y = y
@@ -35,8 +36,10 @@ class VariationalGP(nn.Module):
         self.jitter = Variable(self.X.data.new([jitter]))
 
     def model(self):
-        kernel = self.kernel.set_mode("model")
-        likelihood = self.likelihood.set_mode("model")
+        self.set_mode("model")
+
+        kernel = self.kernel
+        likelihood = self.likelihood
 
         zero_loc = Variable(self.X.data.new([0])).expand(self.num_data)
         Kff = kernel(self.X) + self.jitter.expand(self.num_data).diag()
@@ -45,8 +48,10 @@ class VariationalGP(nn.Module):
         likelihood(f, obs=self.y)
 
     def guide(self):
-        kernel = self.kernel.set_mode("guide")
-        likelihood = self.likelihood.set_mode("guide")
+        self.set_mode("guide")
+
+        kernel = self.kernel
+        likelihood = self.likelihood
 
         # define variational parameters
         mf_0 = Variable(self.X.new(self.num_data).zero_(), requires_grad=True)
@@ -63,40 +68,55 @@ class VariationalGP(nn.Module):
 
     def forward(self, Xnew, full_cov=False):
         """
-        Compute the parameters of ``p(f*|Xnew) ~ N(loc, cov)`` according to
+        Computes the parameters of ``p(f*|Xnew) ~ N(loc, cov)`` according to
         ``p(f*,f|y) = p(f*|f).p(f|y) ~ p(f*|f).q(f)``, then marginalize out variable ``f``.
 
-        :param torch.autograd.Variable Xnew: A 2D tensor.
+        :param torch.autograd.Variable Xnew: A 1D or 2D tensor.
         :param bool full_cov: Predict full covariance matrix or just its diagonal.
         :return: loc, covariance matrix of ``p(f*|Xnew)``, and the likelihood.
         :rtype: torch.autograd.Variable, torch.autograd.Variable, and
             pyro.contrib.gp.likelihoods.Likelihood
         """
-        if Xnew.dim() == 2 and self.X.size(1) != Xnew.size(1):
-            raise ValueError("Train data and test data should have the same feature sizes.")
-        if Xnew.dim() == 1:
-            Xnew = Xnew.unsqueeze(1)
+        self._check_Xnew_shape(Xnew, self.X)
 
         kernel, likelihood, mf, Lf = self.guide()
 
-        # see `SparseVariationalGP` module for the derivation
+        loc, cov = self._predict_f(Xnew, self.X, kernel, mf, Lf, full_cov)
 
-        Kff = kernel(self.X) + self.jitter.expand(self.num_data)
-        Kfs = kernel(self.X, Xnew)
+        return loc, cov, likelihood
+
+    def _predict_f(self, Xnew, X, kernel, mf, Lf, full_cov=False):
+        """
+        Computes the parameters of ``p(f*|Xnew) ~ N(loc, cov)`` according to
+        ``p(f*,f|y) = p(f*|f).p(f|y) ~ p(f*|f).q(f)``, then marginalize out variable ``f``.
+        Here ``q(f)`` is parameterized by ``q(f) ~ N(mf, Lf)``.
+        """
+        num_data = X.size(0)
+
+        # W := inv(Lff) @ Kfs; V := inv(Lff) @ Lf
+        # loc = Ksf @ inv(Kff) @ mf = W.T @ inv(Lff) @ mf
+        # cov = Kss - Ksf @ inv(Kff) @ Kfs + Ksf @ inv(Kff) @ S @ inv(Kff) @ Kfs
+        #     = Kss - W.T @ W + W.T @ V @ V.T @ W
+        #     =: Kss - Qss + K
+
+        Kff = kernel(X) + self.jitter.expand(num_data)
+        Kfs = kernel(X, Xnew)
         Lff = Kff.potrf(upper=False)
 
         pack = torch.cat((mf.unsqueeze(1), Kfs, Lf), dim=1)
         Lffinv_pack = matrix_triangular_solve_compat(pack, Lff, upper=False)
         Lffinv_mf = Lffinv_pack[:, 0]
-        W = Lffinv_pack[:, 1:-self.num_data]
-        V = Lffinv_pack[:, -self.num_data:]
+        W = Lffinv_pack[:, 1:-num_data]
+        V = Lffinv_pack[:, -num_data:]
         Vt_W = V.t().matmul(W)
 
         loc = W.t().matmul(Lffinv_mf)
 
         if full_cov:
             Kss = kernel(Xnew)
+            # Qss = Ksf @ inv(Kff) @ Kfs = W.T @ W
             Qss = W.t().matmul(W)
+            # K = Ksf @ inv(Kff) @ S @ inv(Kff) @ Kfs = W.T @ V @ V.T @ W
             K = Vt_W.t().matmul(Vt_W)
             cov = Kss - Qss + K
         else:
@@ -105,4 +125,4 @@ class VariationalGP(nn.Module):
             Kdiag = (Vt_W ** 2).sum(dim=0)
             cov = Kssdiag - Qssdiag + Kdiag
 
-        return loc, cov, likelihood
+        return loc, cov
