@@ -505,17 +505,42 @@ def test_enum_discrete_global_local_error():
     assert_error(model, guide, enum_discrete=True)
 
 
-def test_enum_discrete_parallel_ok():
+@pytest.mark.parametrize('max_iarange_nesting', [0, 1, 2])
+def test_enum_discrete_parallel_ok(max_iarange_nesting):
+    iarange_shape = torch.Size([1] * max_iarange_nesting)
 
     def model():
         p = Variable(torch.Tensor([0.5]))
         x = pyro.sample("x", dist.Bernoulli(p).reshape(extra_event_dims=1))
-        assert x.shape == torch.Size([2]) + p.shape
+        assert x.shape == torch.Size([2]) + iarange_shape + p.shape
 
     def guide():
         p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
         x = pyro.sample("x", dist.Bernoulli(p).reshape(extra_event_dims=1),
                         infer={'enumerate': 'parallel'})
-        assert x.shape == torch.Size([2]) + p.shape
+        assert x.shape == torch.Size([2]) + iarange_shape + p.shape
 
-    assert_ok(model, guide, enum_discrete=True)
+    assert_ok(model, guide, enum_discrete=True, max_iarange_nesting=max_iarange_nesting)
+
+
+@pytest.mark.parametrize('max_iarange_nesting', [0, 1, 2])
+def test_enum_discrete_parallel_nested_ok(max_iarange_nesting):
+    iarange_shape = torch.Size([1] * max_iarange_nesting)
+
+    def model():
+        p2 = Variable(torch.ones(2) / 2)
+        p3 = Variable(torch.ones(3) / 3)
+        x2 = pyro.sample("x2", dist.Categorical(p2).reshape(extra_event_dims=1))
+        x3 = pyro.sample("x3", dist.Categorical(p3).reshape(extra_event_dims=1))
+        assert x2.shape == torch.Size([2]) + iarange_shape + p2.shape
+        assert x3.shape == torch.Size([3, 2]) + iarange_shape + p3.shape
+
+    def guide():
+        p2 = Variable(torch.ones(2) / 2, requires_grad=True)
+        p3 = Variable(torch.ones(3) / 3, requires_grad=True)
+        x2 = pyro.sample("x2", dist.Categorical(p2).reshape(extra_event_dims=1))
+        x3 = pyro.sample("x3", dist.Categorical(p3).reshape(extra_event_dims=1))
+        assert x2.shape == torch.Size([2]) + iarange_shape + p2.shape
+        assert x3.shape == torch.Size([3, 2]) + iarange_shape + p3.shape
+
+    assert_ok(model, guide, enum_discrete=True, max_iarange_nesting=max_iarange_nesting)
