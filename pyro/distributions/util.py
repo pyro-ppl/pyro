@@ -102,6 +102,8 @@ def sum_leftmost(x, dim):
     """
     Sum all but a certain number of rightmost dimensions of a given tensor ``x``.
 
+    If ``dim`` is 2, the leftmost two dimensions are summed out.
+    If ``dim`` is 1, the leftmost dimension is summed out.
     If ``dim`` is 0, no dimensions are summed out.
     If ``dim`` is -1, all but the rightmost dimension is summed out.
     If ``dim`` is -2, all but the two rightmost dimensions are summed out.
@@ -110,14 +112,15 @@ def sum_leftmost(x, dim):
     Example
     ```
     x = torch.ones(2,3,4)
-    assert sum_leftmost(x, -2).shape == (3, 4)
+    assert sum_leftmost(x, 1).shape == (3, 4)
     assert sum_leftmost(x, -1).shape == (4,)
     ```
 
     :param torch.autograd.Variable x: A tensor
-    :param int dim: Specifies the number of dims to sum out (a non-positive integer)
+    :param int dim: Specifies the number of dims to sum out
     """
-    assert(dim <= 0), "dim must be less than or equal to zero"
+    if dim < 0:
+        dim += x.dim()
     if dim == 0:
         return x
     return x.contiguous().view(-1, *x.shape[dim:]).sum(0)
