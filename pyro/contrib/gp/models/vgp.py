@@ -99,7 +99,7 @@ class VariationalGP(Model):
         #     = Kss - W.T @ W + W.T @ V @ V.T @ W
         #     =: Kss - Qss + K
 
-        Kff = kernel(X) + self.jitter.expand(num_data)
+        Kff = kernel(X) + self.jitter.expand(num_data).diag()
         Kfs = kernel(X, Xnew)
         Lff = Kff.potrf(upper=False)
 
