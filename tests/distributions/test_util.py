@@ -77,7 +77,7 @@ def test_broadcast_shape_strict_error(shapes):
 
 
 def test_sum_leftmost():
-    x = torch.ones(2,3,4)
+    x = torch.ones(2, 3, 4)
     assert sum_leftmost(x, 0).shape == (2, 3, 4)
     assert sum_leftmost(x, 1).shape == (3, 4)
     assert sum_leftmost(x, 2).shape == (4,)
