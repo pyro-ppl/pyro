@@ -10,6 +10,7 @@ from torch.autograd import Variable
 import pyro
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
+from pyro.infer.elbo import ELBO
 from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.util import torch_backward, torch_data_sum, torch_sum
 from pyro.poutine.enumerate_poutine import EnumeratePoutine
@@ -43,29 +44,10 @@ def check_enum_discrete_can_run(model_trace, guide_trace):
                                for shape, (source, name) in sorted(shapes.items())])))
 
 
-class Trace_ELBO(object):
+class Trace_ELBO(ELBO):
     """
     A trace implementation of ELBO-based SVI
     """
-    def __init__(self,
-                 num_particles=1,
-                 enum_discrete=False,
-                 max_iarange_nesting=0):
-        """
-        :param num_particles: The number of particles/samples used to form the
-            ELBO (gradient) estimators.
-        :param bool enum_discrete: Whether to sum over discrete latent
-            variables, rather than sample them.
-        :param int max_iarange_nesting: optional bound on max number of nested
-            :func:`pyro.iarange` contexts. This is ignored unless
-            ``enum_discrete == True`` and any site sample sets
-            ``infer={"enumerate": "parallel"}``.
-        """
-        super(Trace_ELBO, self).__init__()
-        self.num_particles = num_particles
-        self.enum_discrete = enum_discrete
-        self.max_iarange_nesting = max_iarange_nesting
-
     def _get_traces(self, model, guide, *args, **kwargs):
         """
         runs the guide and runs the model against the guide with
