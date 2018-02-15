@@ -509,12 +509,13 @@ def test_enum_discrete_parallel_ok():
 
     def model():
         p = Variable(torch.Tensor([0.5]))
-        x = pyro.sample("x", dist.Bernoulli(p))
-        assert x.shape == torch.Shape([2]) + p.shape
+        x = pyro.sample("x", dist.Bernoulli(p).reshape(extra_event_dims=1))
+        assert x.shape == torch.Size([2]) + p.shape
 
     def guide():
         p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
-        x = pyro.sample("x", dist.Bernoulli(p), infer={'enumerate': 'parallel'})
-        assert x.shape == torch.Shape([2]) + p.shape
+        x = pyro.sample("x", dist.Bernoulli(p).reshape(extra_event_dims=1),
+                        infer={'enumerate': 'parallel'})
+        assert x.shape == torch.Size([2]) + p.shape
 
     assert_ok(model, guide, enum_discrete=True)

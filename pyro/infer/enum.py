@@ -10,15 +10,15 @@ from pyro.poutine.trace import Trace
 from six.moves.queue import LifoQueue
 
 
-def _iter_discrete_filter(name, site):
+def _iter_discrete_filter(name, msg):
     return ((msg["type"] == "sample") and
-        (not msg["is_observed"]) and
-        getattr(msg["fn"], "enumerable", False) and
-        (msg["infer"].get("enumerate", "sequential") == "sequential"))
+            (not msg["is_observed"]) and
+            getattr(msg["fn"], "enumerable", False) and
+            (msg["infer"].get("enumerate", "sequential") == "sequential"))
 
 
 def _iter_discrete_escape(trace, msg):
-    return _iter_discrete_filter(msg["name"], msg) and (msg["name"] not in trace))
+    return _iter_discrete_filter(msg["name"], msg) and (msg["name"] not in trace)
 
 
 def iter_discrete_traces(graph_type, fn, *args, **kwargs):
@@ -39,12 +39,11 @@ def iter_discrete_traces(graph_type, fn, *args, **kwargs):
     queue.put(Trace())
     q_fn = poutine.queue(fn, queue=queue)
     while not queue.empty():
-        q_fn = poutine.queue(fn, queue=queue)
-        full_trace = poutine.trace(
-            q_fn, graph_type=graph_type).get_trace(*args, **kwargs)
+        q_fn = poutine.queue(fn, queue=queue, escape_fn=_iter_discrete_escape)
+        full_trace = poutine.trace(q_fn, graph_type=graph_type).get_trace(*args, **kwargs)
 
         # Scale trace by probability of discrete choices.
-        log_pdf = full_trace.batch_log_pdf(site_filter=site_is_discrete)
+        log_pdf = full_trace.batch_log_pdf(site_filter=_iter_discrete_filter)
         if isinstance(log_pdf, Variable):
             scale = torch.exp(log_pdf.detach())
         else:
