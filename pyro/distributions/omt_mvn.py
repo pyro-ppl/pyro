@@ -4,7 +4,6 @@ import torch
 from torch.autograd import Function
 from torch.autograd.function import once_differentiable
 from torch.distributions import constraints
-from torch.distributions.utils import lazy_property
 
 from pyro.distributions.torch.multivariate_normal import MultivariateNormal
 
@@ -26,18 +25,11 @@ class OMTMultivariateNormal(MultivariateNormal):
     reparameterized = True
 
     def __init__(self, loc, scale_tril):
-        self.loc = loc
-        self.scale_tril = scale_tril
         assert(len(loc.size()) == 1), "OMTMultivariateNormal loc must be 1-dimensional"
         assert(len(scale_tril.size()) == 2), "OMTMultivariateNormal scale_tril must be 2-dimensional"
-
-    @property
-    def variance(self):
-        return self.covariance_matrix.diag()
-
-    @lazy_property
-    def covariance_matrix(self):
-        return torch.mm(self.scale_tril, self.scale_tril.t())
+        covariance_matrix = torch.mm(scale_tril, scale_tril.t())
+        super(OMTMultivariateNormal, self).__init__(loc, covariance_matrix)
+        self.scale_tril = scale_tril
 
     def rsample(self, sample_shape=torch.Size()):
         return _OMTMVNSample.apply(self.loc, self.scale_tril, sample_shape + self.loc.shape)
