@@ -4,19 +4,16 @@ import numbers
 import warnings
 
 import numpy as np
+import torch
 from torch.autograd import Variable
 
 import pyro
 import pyro.poutine as poutine
-from pyro.distributions.util import torch_zeros_like
+from pyro.distributions.util import is_identically_zero
 from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.util import torch_backward, torch_data_sum, torch_sum
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match
-
-
-def is_identically_zero(x):
-    return isinstance(x, numbers.Number) and x == 0
 
 
 def check_enum_discrete_can_run(model_trace, guide_trace):
@@ -122,7 +119,7 @@ class Trace_ELBO(object):
             # drop terms of weight zero to avoid nans
             if isinstance(weight, numbers.Number):
                 if weight == 0.0:
-                    elbo_particle = torch_zeros_like(elbo_particle)
+                    elbo_particle = torch.zeros_like(elbo_particle)
             else:
                 elbo_particle[weight == 0] = 0.0
 
@@ -148,7 +145,7 @@ class Trace_ELBO(object):
             surrogate_elbo_particle = weight * 0
             batched = (self.enum_discrete and isinstance(weight, Variable) and weight.size(0) > 1)
             # compute elbo and surrogate elbo
-            if (self.enum_discrete and isinstance(weight, Variable) and weight.size(0) > 1):
+            if batched:
                 log_pdf = "batch_log_pdf"
             else:
                 log_pdf = "log_pdf"
@@ -180,8 +177,8 @@ class Trace_ELBO(object):
             # drop terms of weight zero to avoid nans
             if isinstance(weight, numbers.Number):
                 if weight == 0.0:
-                    elbo_particle = torch_zeros_like(elbo_particle)
-                    surrogate_elbo_particle = torch_zeros_like(surrogate_elbo_particle)
+                    elbo_particle = torch.zeros_like(elbo_particle)
+                    surrogate_elbo_particle = torch.zeros_like(surrogate_elbo_particle)
             else:
                 weight_eq_zero = (weight == 0)
                 elbo_particle[weight_eq_zero] = 0.0

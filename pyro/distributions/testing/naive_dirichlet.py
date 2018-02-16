@@ -2,9 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import torch
 
-from pyro.distributions.torch.beta import Beta
-from pyro.distributions.torch.dirichlet import Dirichlet
-from pyro.distributions.torch.gamma import Gamma
+from pyro.distributions.torch import Beta, Dirichlet, Gamma
 from pyro.distributions.util import copy_docs_from
 
 
@@ -20,8 +18,8 @@ class NaiveDirichlet(Dirichlet):
         super(NaiveDirichlet, self).__init__(alpha)
         self._gamma = Gamma(alpha, torch.ones_like(alpha))
 
-    def sample(self, sample_shape=torch.Size()):
-        gammas = self._gamma.sample(sample_shape)
+    def rsample(self, sample_shape=torch.Size()):
+        gammas = self._gamma.rsample(sample_shape)
         return gammas / gammas.sum(-1, True)
 
 
@@ -38,7 +36,7 @@ class NaiveBeta(Beta):
         alpha_beta = torch.stack([alpha, beta], -1)
         self._gamma = Gamma(alpha_beta, torch.ones_like(alpha_beta))
 
-    def sample(self, sample_shape=torch.Size()):
-        gammas = self._gamma.sample(sample_shape)
+    def rsample(self, sample_shape=torch.Size()):
+        gammas = self._gamma.rsample(sample_shape)
         probs = gammas / gammas.sum(-1, True)
         return probs[..., 0]

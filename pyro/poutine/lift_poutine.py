@@ -46,7 +46,7 @@ class LiftMessenger(Messenger):
                 if isinstance(msg['fn'], Distribution):
                     msg["args"] = ()
                     msg["kwargs"] = {}
-                    msg["baseline"] = {}
+                    msg["infer"] = {}
             else:
                 return None
         elif isinstance(self.prior, Distribution):
@@ -54,7 +54,7 @@ class LiftMessenger(Messenger):
             msg["fn"] = self.prior
             msg["args"] = ()
             msg["kwargs"] = {}
-            msg["baseline"] = {}
+            msg["infer"] = {}
         elif callable(self.prior):
             if not isinstance(self.prior, Distribution):
                 # prior is a stochastic fn. block sample

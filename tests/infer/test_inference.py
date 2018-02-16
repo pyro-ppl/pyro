@@ -175,7 +175,6 @@ class PoissonGammaTests(TestCase):
         self.log_beta_n = torch.log(self.beta_n)
 
     def test_elbo_reparameterized(self):
-        assert dist.Gamma.reparameterized
         self.do_elbo_test(True, 10000)
 
     def test_elbo_nonreparameterized(self):
@@ -234,16 +233,16 @@ class ExponentialGammaTests(TestCase):
         self.log_beta_n = torch.log(self.beta_n)
 
     def test_elbo_reparameterized(self):
-        assert dist.Gamma.reparameterized
         self.do_elbo_test(dist.Gamma, 5000)
 
     def test_elbo_rsvi(self):
         self.do_elbo_test(ShapeAugmentedGamma, 5000)
+        self.do_elbo_test(ShapeAugmentedGamma, 5000, True)
 
     def test_elbo_nonreparameterized(self):
         self.do_elbo_test(fakes.NonreparameterizedGamma, 10000)
 
-    def do_elbo_test(self, gamma_dist, n_steps):
+    def do_elbo_test(self, gamma_dist, n_steps, trace_graph=False):
         pyro.clear_param_store()
 
         def model():
@@ -263,7 +262,7 @@ class ExponentialGammaTests(TestCase):
             pyro.sample("lambda_latent", gamma_dist(alpha_q, beta_q))
 
         adam = optim.Adam({"lr": .0003, "betas": (0.97, 0.999)})
-        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
+        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=trace_graph)
 
         for k in range(n_steps):
             svi.step()
@@ -292,7 +291,6 @@ class BernoulliBetaTests(TestCase):
         self.log_beta_n = torch.log(self.beta_n)
 
     def test_elbo_reparameterized(self):
-        assert dist.Beta.reparameterized
         self.do_elbo_test(True, 10000)
 
     def test_elbo_nonreparameterized(self):

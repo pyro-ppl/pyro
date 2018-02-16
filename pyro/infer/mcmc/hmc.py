@@ -6,7 +6,6 @@ import torch
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.distributions.util import torch_ones_like, torch_zeros_like
 from pyro.infer.mcmc.trace_kernel import TraceKernel
 from pyro.ops.integrator import velocity_verlet
 from pyro.util import ng_ones, ng_zeros
@@ -72,8 +71,8 @@ class HMC(TraceKernel):
         self._prototype_trace = poutine.trace(self.model).get_trace(*args, **kwargs)
         # momenta distribution - currently standard normal
         for name, node in self._prototype_trace.iter_stochastic_nodes():
-            r_mu = torch_zeros_like(node['value'])
-            r_sigma = torch_ones_like(node['value'])
+            r_mu = torch.zeros_like(node['value'])
+            r_sigma = torch.ones_like(node['value'])
             self._r_dist[name] = dist.Normal(mu=r_mu, sigma=r_sigma)
         for name, node in self._prototype_trace.iter_stochastic_nodes():
             if not node['fn'].reparameterized:
@@ -93,7 +92,7 @@ class HMC(TraceKernel):
         energy_proposal = self._energy(z_new, r_new)
         energy_current = self._energy(z, r)
         delta_energy = energy_proposal - energy_current
-        rand = pyro.sample('rand_t='.format(self._t), dist.uniform, a=ng_zeros(1), b=ng_ones(1))
+        rand = pyro.sample('rand_t='.format(self._t), dist.Uniform(ng_zeros(1), ng_ones(1)))
         if rand.log().data[0] < -delta_energy.data[0]:
             self._accept_cnt += 1
             z = z_new

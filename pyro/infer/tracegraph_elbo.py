@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import warnings
-from collections import namedtuple
 
 import networkx
 import numpy as np
@@ -9,19 +8,18 @@ import torch
 
 import pyro
 import pyro.poutine as poutine
+from pyro.distributions.util import is_identically_zero
 from pyro.infer.util import torch_backward, torch_data_sum
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, detach_iterable, ng_zeros
 
-CostNode = namedtuple("CostNode", ["cost", "nonzero_expectation"])
-
 
 def _get_baseline_options(site):
     """
-    Extracts baseline options from ``site["baseline"]``.
+    Extracts baseline options from ``site["infer"]["baseline"]``.
     """
     # XXX default for baseline_beta currently set here
-    options_dict = site["baseline"].copy()
+    options_dict = site["infer"].get("baseline", {}).copy()
     options_tuple = (options_dict.pop('nn_baseline', None),
                      options_dict.pop('nn_baseline_input', None),
                      options_dict.pop('use_decaying_avg_baseline', False),
@@ -94,30 +92,27 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
 
 
 def _compute_elbo_reparam(model_trace, guide_trace, non_reparam_nodes):
-    # prepare a list of all the cost nodes, each of which is +- log_pdf
-    cost_nodes = []
+    elbo = 0.0
+    surrogate_elbo = 0.0
     for name, model_site in model_trace.nodes.items():
         if model_site["type"] == "sample":
             if model_site["is_observed"]:
-                cost_nodes.append(CostNode(model_site["log_pdf"], True))
+                elbo += model_site["log_pdf"]
+                surrogate_elbo += model_site["log_pdf"]
             else:
-                # cost node from model sample
-                cost_nodes.append(CostNode(model_site["log_pdf"], True))
-                # cost node from guide sample
+                # deal with log p(z|...) term
+                elbo += model_site["log_pdf"]
+                surrogate_elbo += model_site["log_pdf"]
+                # deal with log q(z|...) term, if present
                 guide_site = guide_trace.nodes[name]
-                zero_expectation = name in non_reparam_nodes
-                cost_nodes.append(CostNode(-guide_site["log_pdf"], not zero_expectation))
+                elbo -= guide_site["log_pdf"]
+                entropy_term = guide_site["score_parts"].entropy_term
+                if not is_identically_zero(entropy_term):
+                    surrogate_elbo -= entropy_term.sum()
 
-    # compute the elbo; if all stochastic nodes are reparameterizable, we're done
-    # this bit is never differentiated: it's here for getting an estimate of the elbo itself
-    elbo = torch_data_sum(sum(c.cost for c in cost_nodes))
+    # elbo is never differentiated, surragate_elbo is
 
-    # compute the surrogate elbo, removing terms whose gradient is zero
-    # this is the bit that's actually differentiated
-    # XXX should the user be able to control if these terms are included?
-    surrogate_elbo = sum(c.cost for c in cost_nodes if c.nonzero_expectation)
-
-    return elbo, surrogate_elbo
+    return torch_data_sum(elbo), surrogate_elbo
 
 
 def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
@@ -156,13 +151,15 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
             # accumulate baseline loss
             baseline_loss += torch.pow(downstream_cost.detach() - baseline, 2.0).sum()
 
-        guide_log_pdf = guide_site[log_pdf_key] / guide_site["scale"]  # not scaled by subsampling
+        score_function_term = guide_site["score_parts"].score_function
+        if log_pdf_key == 'log_pdf':
+            score_function_term = score_function_term.sum()
         if use_nn_baseline or use_decaying_avg_baseline or use_baseline_value:
             if downstream_cost.size() != baseline.size():
                 raise ValueError("Expected baseline at site {} to be {} instead got {}".format(
                     node, downstream_cost.size(), baseline.size()))
             downstream_cost = downstream_cost - baseline
-        surrogate_elbo += (guide_log_pdf * downstream_cost.detach()).sum()
+        surrogate_elbo += (score_function_term * downstream_cost.detach()).sum()
 
     return surrogate_elbo, baseline_loss
 
@@ -274,11 +271,9 @@ class TraceGraph_ELBO(object):
         model_vec_md_nodes = model_vec_md_info['nodes'] if do_vec_rb else set()
 
         # have the trace compute all the individual (batch) log pdf terms
-        # so that they are available below
-        guide_trace.compute_batch_log_pdf(site_filter=lambda name, site: name in guide_vec_md_nodes)
-        guide_trace.log_pdf()
-        model_trace.compute_batch_log_pdf(site_filter=lambda name, site: name in model_vec_md_nodes)
-        model_trace.log_pdf()
+        # and score function terms (if present) so that they are available below
+        model_trace.compute_batch_log_pdf()
+        guide_trace.compute_score_parts()
 
         # compute elbo for reparameterized nodes
         non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)

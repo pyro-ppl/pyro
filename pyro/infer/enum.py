@@ -1,12 +1,11 @@
 from __future__ import absolute_import, division, print_function
 
-import functools
 import math
 
 import torch
 from torch.autograd import Variable
 
-from pyro import poutine, util
+from pyro import poutine
 from pyro.poutine.trace import Trace
 from six.moves.queue import LifoQueue
 
@@ -31,17 +30,11 @@ def iter_discrete_traces(graph_type, fn, *args, **kwargs):
     """
     queue = LifoQueue()
     queue.put(Trace())
+    q_fn = poutine.queue(fn, queue=queue)
     while not queue.empty():
-        partial_trace = queue.get()
-        escape_fn = functools.partial(util.discrete_escape, partial_trace)
-        traced_fn = poutine.trace(poutine.escape(poutine.replay(fn, partial_trace), escape_fn),
-                                  graph_type=graph_type)
-        try:
-            full_trace = traced_fn.get_trace(*args, **kwargs)
-        except util.NonlocalExit as e:
-            for extended_trace in util.enum_extend(traced_fn.trace.copy(), e.site):
-                queue.put(extended_trace)
-            continue
+        q_fn = poutine.queue(fn, queue=queue)
+        full_trace = poutine.trace(
+            q_fn, graph_type=graph_type).get_trace(*args, **kwargs)
 
         # Scale trace by probability of discrete choices.
         log_pdf = full_trace.batch_log_pdf(site_filter=site_is_discrete)
