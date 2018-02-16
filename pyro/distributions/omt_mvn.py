@@ -88,3 +88,63 @@ class _OMTMVNSample(Function):
         L_grad = torch.tril(diff_L_ab)
 
         return loc_grad, L_grad, None
+
+
+class OTCVMultivariateNormal(MultivariateNormal):
+    """Multivariate normal (Gaussian) distribution with optimal transport-inspired control variates.
+
+    A distribution over vectors in which all the elements have a joint Gaussian
+    density.
+
+    :param torch.autograd.Variable loc: Mean.
+    :param torch.autograd.Variable scale_tril: Cholesky of Covariance matrix.
+    :param torch.autograd.Variable A: antisymmetric tensor controlling the control variate
+    """
+    params = {"loc": constraints.real, "scale_tril": constraints.lower_triangular}
+
+    def __init__(self, loc, scale_tril, A):
+        assert(loc.dim() == 1), "OMTMultivariateNormal loc must be 1-dimensional"
+        assert(scale_tril.dim() == 2), "OMTMultivariateNormal scale_tril must be 2-dimensional"
+        covariance_matrix = torch.mm(scale_tril, scale_tril.t())
+        super(OTCVMultivariateNormal, self).__init__(loc, covariance_matrix)
+        self.scale_tril = scale_tril
+        self.A = A
+
+    def rsample(self, sample_shape=torch.Size()):
+        return _OTCVMVNSample.apply(self.loc, self.scale_tril, self.A, sample_shape + self.loc.shape)
+
+
+class _OTCVMVNSample(Function):
+    @staticmethod
+    def forward(ctx, loc, scale_tril, A, shape):
+        ctx.white = loc.new(shape).normal_()
+        ctx.z = torch.matmul(ctx.white, scale_tril.t())
+        ctx.save_for_backward(scale_tril)
+        ctx.A = A
+        return loc + ctx.z
+
+    @staticmethod
+    @once_differentiable
+    def backward(ctx, grad_output):
+        L, = ctx.saved_tensors
+        z = ctx.z
+        epsilon = ctx.white
+        A = ctx.A
+
+        dim = L.size(0)
+        g = grad_output
+        loc_grad = sum_leftmost(grad_output, -1)
+
+        epsilon_jb = epsilon.unsqueeze(-2)
+        g_ja = g.unsqueeze(-1)
+        diff_L_ab = sum_leftmost(g_ja * epsilon_jb, -2)
+
+        LA = torch.mm(L, A)
+        eps_A = torch.matmul(epsilon, A)
+        g_LA = torch.matmul(g, LA)
+        product = sum_leftmost(eps_A.unsqueeze(-2) * g_LA.unsqueeze(-1), -2)
+        diff_L_ab += product - product.t()
+
+        L_grad = torch.tril(diff_L_ab)
+
+        return loc_grad, L_grad, None, None

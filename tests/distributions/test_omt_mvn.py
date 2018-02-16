@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from torch.autograd import Variable
 
-from pyro.distributions.omt_mvn import OMTMultivariateNormal
+from pyro.distributions.omt_mvn import OMTMultivariateNormal, OTCVMultivariateNormal
 from pyro.distributions import MultivariateNormal
 
 from tests.common import assert_equal
@@ -25,23 +25,32 @@ def analytic_grad(L11=1.0, L22=1.0, L21=1.0, omega1=1.0, omega2=1.0):
 @pytest.mark.parametrize('omega1', [0.5, 0.9])
 @pytest.mark.parametrize('omega2', [0.3, 0.7])
 @pytest.mark.parametrize('sample_shape', [torch.Size([1000, 1000]), torch.Size([100000])])
-def test_mean(sample_shape, L21, omega1, omega2, L11=0.5, L22=0.8):
+#@pytest.mark.parametrize('dist', [OMTMultivariateNormal, OTCVMultivariateNormal])
+@pytest.mark.parametrize('mvn_dist', [OTCVMultivariateNormal])
+def test_mean(mvn_dist, sample_shape, L21, omega1, omega2, L11=0.5, L22=0.8):
     omega = Variable(torch.Tensor([omega1, omega2]))
     mu = Variable(torch.zeros(2), requires_grad=True)
     off_diag = Variable(L21 * torch.ones(2, 2), requires_grad=True)
-
     L = Variable(torch.diag(torch.Tensor([L11, L22]))) + torch.tril(off_diag, -1)
-    dist = OMTMultivariateNormal(mu, L)
+
+    if mvn_dist==OMTMultivariateNormal:
+        dist = mvn_dist(mu, L)
+    else:
+        A = 3.2 * torch.randn(2, 2)
+        #A = Variable(A - A.t())
+        print("A", A)
+        dist = mvn_dist(mu, L, A)
     z = dist.rsample(sample_shape)
-    obj = torch.cos((omega*z).sum(-1)).mean()
-    obj.backward()
+    torch.cos((omega*z).sum(-1)).mean().backward()
 
     computed_grad = off_diag.grad.data.numpy()[1, 0]
     analytic = analytic_grad(L11=L11, L22=L22, L21=L21, omega1=omega1, omega2=omega2)
+    print("comp, an", computed_grad, analytic)
     assert(mu.grad.size() == mu.size())
     assert(off_diag.grad.size() == off_diag.size())
     assert_equal(analytic, computed_grad, prec=0.005, msg='bad cholesky grad for OMTMultivariateNormal')
 
+test_mean(OTCVMultivariateNormal, torch.Size([2000, 2000]), 0.5, 1.0, 0.7)
 
 def test_log_prob():
     loc = Variable(torch.Tensor([2, 1, 1, 2, 2]))
