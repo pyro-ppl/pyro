@@ -8,6 +8,7 @@ import torch
 import pyro
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
+from pyro.infer.elbo import ELBO
 from pyro.infer.util import torch_backward, torch_data_sum
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, detach_iterable, ng_zeros, is_nan
@@ -163,7 +164,7 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
     return surrogate_elbo, baseline_loss
 
 
-class TraceGraph_ELBO(object):
+class TraceGraph_ELBO(ELBO):
     """
     A TraceGraph implementation of ELBO-based SVI. The gradient estimator
     is constructed along the lines of reference [1] specialized to the case
@@ -180,14 +181,6 @@ class TraceGraph_ELBO(object):
     [2] `Neural Variational Inference and Learning in Belief Networks`
         Andriy Mnih, Karol Gregor
     """
-    def __init__(self, num_particles=1, enum_discrete=False):
-        """
-        :param num_particles: the number of particles (samples) used to form the estimator
-        :param bool enum_discrete: whether to sum over discrete latent variables, rather than sample them
-        """
-        super(TraceGraph_ELBO, self).__init__()
-        self.num_particles = num_particles
-        self.enum_discrete = enum_discrete
 
     def _get_traces(self, model, guide, *args, **kwargs):
         """
