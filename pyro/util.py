@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import functools
+import numbers
 import warnings
 
 import graphviz
@@ -179,6 +180,26 @@ def ng_zeros(*args, **kwargs):
     retype = kwargs.pop('type_as', None)
     p_tensor = torch.zeros(*args, **kwargs)
     return Variable(p_tensor if retype is None else p_tensor.type_as(retype), requires_grad=False)
+
+
+def is_nan(x):
+    """
+    A convenient function to check if a Tensor contains all nan; also works with numbers
+    and torch.autograd.Variable
+    """
+    if isinstance(x, numbers.Number):
+        return x != x
+    return (x != x).all()
+
+
+def is_inf(x):
+    """
+    A convenient function to check if a Tensor contains all inf; also works with numbers
+    and torch.autograd.Variable
+    """
+    if isinstance(x, numbers.Number):
+        return x == float('inf')
+    return (x == float('inf')).all()
 
 
 def log_sum_exp(vecs):

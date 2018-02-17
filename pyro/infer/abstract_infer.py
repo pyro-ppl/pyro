@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import numpy as np
 import torch
 from torch.autograd import Variable
 
@@ -19,7 +18,7 @@ def _eq(x, y):
         if set(x.keys()) != set(y.keys()):
             return False
         return all(_eq(x_val, y[key]) for key, x_val in x.items())
-    elif isinstance(x, (np.ndarray, torch.Tensor)):
+    elif torch.is_tensor(x):
         return (x == y).all()
     elif isinstance(x, torch.autograd.Variable):
         return (x.data == y.data).all()
