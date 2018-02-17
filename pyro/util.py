@@ -189,7 +189,7 @@ def is_nan(x):
     """
     if isinstance(x, numbers.Number):
         return x != x
-    return all(x != x)
+    return (x != x).all()
 
 
 def is_inf(x):
@@ -199,7 +199,7 @@ def is_inf(x):
     """
     if isinstance(x, numbers.Number):
         return x == float('inf')
-    return all(x == float('inf'))
+    return (x == float('inf')).all()
 
 
 def log_sum_exp(vecs):
