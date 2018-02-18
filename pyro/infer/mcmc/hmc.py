@@ -12,7 +12,7 @@ from pyro.util import ng_ones, ng_zeros, is_nan, is_inf
 
 class HMC(TraceKernel):
     """
-    Simple Hamiltonian Monte Carlo kernel, where `step_size` and `num_steps`
+    Simple Hamiltonian Monte Carlo kernel, where ``step_size`` and ``num_steps``
     need to be explicitly specified by the user.
 
     **Reference**
