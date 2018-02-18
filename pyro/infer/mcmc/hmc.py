@@ -40,8 +40,7 @@ class HMC(TraceKernel):
         for name, value in z.items():
             z_trace.nodes[name]['value'] = value
         trace_poutine = poutine.trace(poutine.replay(self.model, trace=z_trace))
-        trace_poutine(*self._args, **self._kwargs)
-        return trace_poutine.trace
+        return trace_poutine.get_trace(*self._args, **self._kwargs)
 
     def _potential_energy(self, z):
         return -self._get_trace(z).log_pdf()
@@ -55,7 +54,7 @@ class HMC(TraceKernel):
         self._r_dist = {}
         self._args = None
         self._kwargs = None
-        self._accept_cnt = None
+        self._accept_cnt = 0
         self._prototype_trace = None
 
     def _validate_trace(self, trace):
@@ -70,7 +69,6 @@ class HMC(TraceKernel):
         return self._prototype_trace
 
     def setup(self, *args, **kwargs):
-        self._accept_cnt = 0
         self._args = args
         self._kwargs = kwargs
         # set the trace prototype to inter-convert between trace object
@@ -101,5 +99,5 @@ class HMC(TraceKernel):
         self._t += 1
         return self._get_trace(z)
 
-    def diagnostics(self, time_step):
-        return 'Acceptance rate: {}'.format(self._accept_cnt / time_step)
+    def diagnostics(self):
+        return 'Acceptance rate: {}'.format(self._accept_cnt / self._t)
