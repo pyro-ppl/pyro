@@ -23,7 +23,9 @@ Pyro is a flexible, scalable deep probabilistic programming library built on PyT
 Pyro is in an alpha release.  It is developed and used by [Uber AI Labs](http://uber.ai).
 For more information, check out our [blog post](http://eng.uber.com/pyro).
 
-## Installing Pyro stable release
+## Installing
+
+### Installing a stable Pyro release
 
 First install [PyTorch](http://pytorch.org/).
 
@@ -47,7 +49,7 @@ git checkout master  # master is pinned to the latest release
 pip install .
 ```
 
-## Installing Pyro dev branch
+### Installing Pyro dev branch
 
 For recent features you can install Pyro from source.
 
