@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from .trace_elbo import Trace_ELBO
 from .tracegraph_elbo import TraceGraph_ELBO
+from .reparam_elbo import Reparam_ELBO
 
 
 class ELBO(object):
@@ -34,11 +35,14 @@ class ELBO(object):
     def __init__(self,
                  num_particles=1,
                  trace_graph=False,
-                 enum_discrete=False):
+                 enum_discrete=False,
+                 local_reparam=False):
         super(ELBO, self).__init__()
         self.num_particles = num_particles
         self.trace_graph = trace_graph
-        if self.trace_graph:
+        if local_reparam:
+            self.which_elbo = Reparam_ELBO(num_particles=num_particles, enum_discrete=enum_discrete)
+        elif self.trace_graph:
             self.which_elbo = TraceGraph_ELBO(num_particles=num_particles, enum_discrete=enum_discrete)
         else:
             self.which_elbo = Trace_ELBO(num_particles=num_particles, enum_discrete=enum_discrete)
