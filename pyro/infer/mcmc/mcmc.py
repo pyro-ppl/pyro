@@ -28,9 +28,6 @@ class MCMC(TracePosterior):
         self.kernel = kernel
         self.warmup_steps = warmup_steps
         self.num_samples = num_samples
-        if warmup_steps >= num_samples:
-            raise ValueError('Number of warmup iterations - {} >= Number of MCMC samples - {}'
-                             .format(warmup_steps, num_samples))
         self.logger = logging.getLogger(__name__)
         super(MCMC, self).__init__()
 
