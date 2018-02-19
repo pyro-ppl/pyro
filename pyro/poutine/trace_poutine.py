@@ -129,13 +129,13 @@ class TraceMessenger(Messenger):
                 get_vectorized_map_data_info(self.trace)
         return super(TraceMessenger, self).__exit__(*args, **kwargs)
 
-    def get_trace(self, *args, **kwargs):
+    def get_trace(self):
         """
         :returns: data structure
         :rtype: pyro.poutine.Trace
 
         Helper method for a very common use case.
-        Calls this poutine and returns its trace instead of the function's return value.
+        Returns a shallow copy of ``self.trace``.
         """
         return self.trace.copy()
 

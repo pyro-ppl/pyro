@@ -12,7 +12,7 @@ from pyro.util import ng_ones, ng_zeros, is_nan, is_inf
 
 class HMC(TraceKernel):
     """
-    Simple Hamiltonian Monte Carlo kernel, where `step_size` and `num_steps`
+    Simple Hamiltonian Monte Carlo kernel, where ``step_size`` and ``num_steps``
     need to be explicitly specified by the user.
 
     **Reference**
@@ -55,7 +55,7 @@ class HMC(TraceKernel):
         self._r_dist = {}
         self._args = None
         self._kwargs = None
-        self._accept_cnt = None
+        self._accept_cnt = 0
         self._prototype_trace = None
 
     def _validate_trace(self, trace):
@@ -70,7 +70,6 @@ class HMC(TraceKernel):
         return self._prototype_trace
 
     def setup(self, *args, **kwargs):
-        self._accept_cnt = 0
         self._args = args
         self._kwargs = kwargs
         # set the trace prototype to inter-convert between trace object
@@ -88,7 +87,7 @@ class HMC(TraceKernel):
 
     def sample(self, trace):
         z = {name: node['value'] for name, node in trace.iter_stochastic_nodes()}
-        r = {name: pyro.sample('r_{}_t={}'.format(name, self._t), self._r_dist[name]) for name in z}
+        r = {name: pyro.sample('r_{}_t={}'.format(name, self._t), self._r_dist[name]) for name in sorted(z)}
         z_new, r_new = velocity_verlet(z, r, self._potential_energy, self.step_size, self.num_steps)
         # apply Metropolis correction
         energy_proposal = self._energy(z_new, r_new)
@@ -101,5 +100,5 @@ class HMC(TraceKernel):
         self._t += 1
         return self._get_trace(z)
 
-    def diagnostics(self, time_step):
-        return 'Acceptance rate: {}'.format(self._accept_cnt / time_step)
+    def diagnostics(self):
+        return 'Acceptance rate: {}'.format(self._accept_cnt / self._t)

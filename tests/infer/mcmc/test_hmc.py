@@ -106,8 +106,9 @@ TEST_CASES = [
         expected_precs=[1.11, 0.63, 0.48, 0.42, 0.4, 0.42, 0.48, 0.63, 1.11],
         mean_tol=0.08,
         std_tol=0.08,
-    ), marks=pytest.mark.skipif('CI' in os.environ and os.environ['CI'] == 'true',
-                                reason='Slow test - skip on CI'))
+    ), marks=[pytest.mark.xfail(reason="flaky"),
+              pytest.mark.skipif('CI' in os.environ and os.environ['CI'] == 'true',
+                                 reason='Slow test - skip on CI')])
 ]
 
 TEST_IDS = [t[0].id_fn() if type(t).__name__ == 'TestExample'
