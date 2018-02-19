@@ -2,8 +2,11 @@ from __future__ import absolute_import, division, print_function
 
 from collections import namedtuple
 
+import torch
+
 import pyro
 import pyro.distributions as dist
+from pyro.infer.util import torch_data_sum
 from pyro.ops.integrator import velocity_verlet
 from pyro.util import ng_ones, ng_zeros
 
@@ -35,8 +38,13 @@ class NUTS(HMC):
         self._dE_max = 1000
 
     def _is_turning(self, z_left, r_left, z_right, r_right):
+        nodes = sorted(z_left)
+        z_left = torch.stack([z_left[name] for name in nodes])
+        r_left = torch.stack([r_left[name] for name in nodes])
+        z_right = torch.stack([z_right[name] for name in nodes])
+        r_right = torch.stack([r_right[name] for name in nodes])
         dz = z_right - z_left
-        return (dz.dot(r_left) < 0).all() or (dz.dot(r_right) < 0).all()
+        return (torch_data_sum(dz * r_left) < 0) or (torch_data_sum(dz * r_right) < 0)
 
     def _build_basetree(self, z, r, log_slice):
         z_new, r_new = velocity_verlet(z, r, self._potential_energy, self.step_size)
@@ -64,8 +72,8 @@ class NUTS(HMC):
         other_half_tree = self._build_tree(z, r, log_slice, direction, tree_depth-1)
 
         tree_size = half_tree.size + other_half_tree.size
-        prob_other = other_half_tree.size / tree_size
-        rand = int(dist.Bernoulli(probs=ng_ones(1) * prob_other)().data[0])
+        prob_other = other_half_tree.size / tree_size if tree_size != 0 else 1
+        rand = int(dist.Bernoulli(ps=ng_ones(1) * prob_other)().data[0])
         z_proposal = other_half_tree.z_proposal if rand == 1 else half_tree.z_proposal
 
         if direction == 1:
@@ -86,8 +94,8 @@ class NUTS(HMC):
 
     def sample(self, trace):
         z = {name: node['value'] for name, node in trace.iter_stochastic_nodes()}
-        r = {name: pyro.sample('r_{}_t={}'.format(name, self._t), self._r_dist[name]) for name in z}
-        slice_var = dist.Uniform(ng_zeros(1), self._energy(z, r))()
+        r = {name: pyro.sample('r_{}_t={}'.format(name, self._t), self._r_dist[name]) for name in sorted(z)}
+        slice_var = dist.Uniform(ng_zeros(1), torch.exp(-self._energy(z, r)))()
         log_slice = slice_var.log()
         z_left = z_right = z
         r_left = r_right = r
@@ -98,7 +106,7 @@ class NUTS(HMC):
 
         while not (turning or diverging):
             direction = pyro.sample("direction_t={}_depth={}".format(self._t, tree_depth),
-                                    dist.Bernoulli(probs=ng_ones(1) * 0.5))
+                                    dist.Bernoulli(ps=ng_ones(1) * 0.5))
             direction = int(direction.data[0])
             if direction == 1:
                 tree = self._build_tree(z_left, r_left, log_slice, direction, tree_depth)
