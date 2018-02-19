@@ -12,7 +12,7 @@ from pyro.util import ng_ones, ng_zeros, is_nan, is_inf
 
 class HMC(TraceKernel):
     """
-    Simple Hamiltonian Monte Carlo kernel, where `step_size` and `num_steps`
+    Simple Hamiltonian Monte Carlo kernel, where ``step_size`` and ``num_steps``
     need to be explicitly specified by the user.
 
     **Reference**
@@ -40,7 +40,8 @@ class HMC(TraceKernel):
         for name, value in z.items():
             z_trace.nodes[name]['value'] = value
         trace_poutine = poutine.trace(poutine.replay(self.model, trace=z_trace))
-        return trace_poutine.get_trace(*self._args, **self._kwargs)
+        trace_poutine(*self._args, **self._kwargs)
+        return trace_poutine.trace
 
     def _potential_energy(self, z):
         return -self._get_trace(z).log_pdf()
