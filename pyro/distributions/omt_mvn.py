@@ -64,7 +64,6 @@ class _OMTMVNSample(Function):
 
         Sigma_inv = torch.mm(R_inv, R_inv.t())
         V, D, _ = torch.svd(Sigma_inv + jitter)
-        Vt = V.t()
         D_outer = D.unsqueeze(-1) + D.unsqueeze(0)
 
         expand_tuple = tuple([-1] * (z.dim() - 1) + [dim, dim])
@@ -72,7 +71,7 @@ class _OMTMVNSample(Function):
         g_tilde = identity * torch.matmul(g, V).unsqueeze(-1).expand(*expand_tuple)
 
         Y = sum_leftmost(torch.matmul(z_tilde, torch.matmul(1.0 / D_outer, g_tilde)), -2)
-        Y = torch.mm(V, torch.mm(Y, Vt))
+        Y = torch.mm(V, torch.mm(Y, V.t()))
         Y = Y + Y.t()
 
         Tr_xi_Y = torch.mm(torch.mm(Sigma_inv, Y), R_inv) - torch.mm(Y, torch.mm(Sigma_inv, R_inv))
