@@ -42,7 +42,8 @@ def test_mean_gradient(sample_shape, L21, omega1, L11, L22=0.8, L33=0.9, omega2=
     assert(mu.grad.size() == mu.size())
     assert(torch.triu(off_diag.grad, 1).sum() == 0.0)
     assert_equal(analytic, computed_grad, prec=0.015,
-                 msg='bad cholesky grad for OMTMultivariateNormal (expected %.5f, got %.5f)' % (analytic, computed_grad))
+                 msg='bad cholesky grad for OMTMultivariateNormal (expected %.5f, got %.5f)' %
+                 (analytic, computed_grad))
 
 
 def test_log_prob():
