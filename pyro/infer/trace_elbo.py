@@ -3,17 +3,17 @@ from __future__ import absolute_import, division, print_function
 import numbers
 import warnings
 
-import numpy as np
 import torch
 from torch.autograd import Variable
 
 import pyro
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
+from pyro.infer.elbo import ELBO
 from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.util import torch_backward, torch_data_sum, torch_sum
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_match
+from pyro.util import check_model_guide_match, is_nan
 
 
 def check_enum_discrete_can_run(model_trace, guide_trace):
@@ -42,20 +42,10 @@ def check_enum_discrete_can_run(model_trace, guide_trace):
                                for shape, (source, name) in sorted(shapes.items())])))
 
 
-class Trace_ELBO(object):
+class Trace_ELBO(ELBO):
     """
     A trace implementation of ELBO-based SVI
     """
-    def __init__(self,
-                 num_particles=1,
-                 enum_discrete=False):
-        """
-        :param num_particles: the number of particles/samples used to form the ELBO (gradient) estimators
-        :param bool enum_discrete: whether to sum over discrete latent variables, rather than sample them
-        """
-        super(Trace_ELBO, self).__init__()
-        self.num_particles = num_particles
-        self.enum_discrete = enum_discrete
 
     def _get_traces(self, model, guide, *args, **kwargs):
         """
@@ -126,7 +116,7 @@ class Trace_ELBO(object):
             elbo += torch_data_sum(weight * elbo_particle)
 
         loss = -elbo
-        if np.isnan(loss):
+        if is_nan(loss):
             warnings.warn('Encountered NAN loss')
         return loss
 
@@ -199,6 +189,6 @@ class Trace_ELBO(object):
                 pyro.get_param_store().mark_params_active(trainable_params)
 
         loss = -elbo
-        if np.isnan(loss):
+        if is_nan(loss):
             warnings.warn('Encountered NAN loss')
         return loss
