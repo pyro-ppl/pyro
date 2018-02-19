@@ -23,7 +23,9 @@ Pyro is a flexible, scalable deep probabilistic programming library built on PyT
 Pyro is in an alpha release.  It is developed and used by [Uber AI Labs](http://uber.ai).
 For more information, check out our [blog post](http://eng.uber.com/pyro).
 
-## Installation
+## Installing
+
+### Installing a stable Pyro release
 
 First install [PyTorch](http://pytorch.org/).
 
@@ -43,13 +45,29 @@ pip3 install pyro-ppl
 ```sh
 git clone git@github.com:uber/pyro.git
 cd pyro
+git checkout master  # master is pinned to the latest release
 pip install .
 ```
 
-Note that to use Pyro's `dev` branch, you will need to build PyTorch's master branch. 
-Refer to the [README](https://github.com/pytorch/pytorch/blob/master/README.md) for more details
-on how to build PyTorch from source. Otherwise, to use the latest version of Pyro that 
-is compatible with PyTorch release, use the `master` branch of Pyro.
+### Installing Pyro dev branch
+
+For recent features you can install Pyro from source.
+
+First install a recent PyTorch, currently PyTorch commit `ca5071d07`.
+```sh
+git clone git@github.com:pytorch/pytorch
+cd pytorch
+git checkout ca5071d07
+```
+Then build PyTorch following instructions in the PyTorch
+[README](https://github.com/pytorch/pytorch/blob/master/README.md).
+
+Finally install Pyro
+```sh
+git clone git@github.com:uber/pyro.git
+cd pyro
+pip install .
+```
 
 ## Running Pyro from a Docker Container
 

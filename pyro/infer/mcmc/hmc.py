@@ -40,7 +40,8 @@ class HMC(TraceKernel):
         for name, value in z.items():
             z_trace.nodes[name]['value'] = value
         trace_poutine = poutine.trace(poutine.replay(self.model, trace=z_trace))
-        return trace_poutine.get_trace(*self._args, **self._kwargs)
+        trace_poutine(*self._args, **self._kwargs)
+        return trace_poutine.trace
 
     def _potential_energy(self, z):
         return -self._get_trace(z).log_pdf()
