@@ -10,6 +10,7 @@ import pyro
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.util import torch_backward, torch_data_sum
+from pyro.distributions.util import sum_leftmost, sum_rightmost
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, detach_iterable, ng_zeros
 
@@ -30,9 +31,25 @@ def _get_baseline_options(site):
     return options_tuple
 
 
+def ones_on_right(x):
+    n = 0
+    for d in reversed(x.size()):
+        if d==1:
+            n += 1
+        else:
+            return n
+    return 0
+
+
+def unsqueeze_on_right(x, dim):
+    for _ in range(dim):
+        x = x.unsqueeze(-1)
+    return x
+
+
 def _compute_downstream_costs(model_trace, guide_trace,  #
                               model_vec_md_nodes, guide_vec_md_nodes,  #
-                              non_reparam_nodes):
+                              non_reparam_nodes, include_nodes=False):
     # recursively compute downstream cost nodes for all sample sites in model and guide
     # (even though ultimately just need for non-reparameterizable sample sites)
     # 1. downstream costs used for rao-blackwellization
@@ -41,54 +58,54 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
     topo_sort_guide_nodes = list(reversed(list(networkx.topological_sort(guide_trace))))
     topo_sort_guide_nodes = [x for x in topo_sort_guide_nodes
                              if guide_trace.nodes[x]["type"] == "sample"]
-    print("topo", topo_sort_guide_nodes)
     downstream_guide_cost_nodes = {}
     downstream_costs = {}
 
     for node in topo_sort_guide_nodes:
-        node_log_pdf_key = 'batch_log_pdf' if node in guide_vec_md_nodes else 'log_pdf'
-        downstream_costs[node] = model_trace.nodes[node][node_log_pdf_key] - \
-            guide_trace.nodes[node][node_log_pdf_key]
+        downstream_costs[node] = model_trace.nodes[node]['batch_log_pdf'] - guide_trace.nodes[node]['batch_log_pdf']
         nodes_included_in_sum = set([node])
         downstream_guide_cost_nodes[node] = set([node])
+        # XXX make more efficient by ordering children appropriately
         for child in guide_trace.successors(node):
             child_cost_nodes = downstream_guide_cost_nodes[child]
             downstream_guide_cost_nodes[node].update(child_cost_nodes)
             if nodes_included_in_sum.isdisjoint(child_cost_nodes):  # avoid duplicates
-                if node_log_pdf_key == 'log_pdf':
-                    downstream_costs[node] += downstream_costs[child].sum()
-                else:
-                    downstream_costs[node] += downstream_costs[child]
+                downstream_costs[node] = downstream_costs[node] + downstream_costs[child]
                 nodes_included_in_sum.update(child_cost_nodes)
         missing_downstream_costs = downstream_guide_cost_nodes[node] - nodes_included_in_sum
         # include terms we missed because we had to avoid duplicates
         for missing_node in missing_downstream_costs:
-            mn_log_pdf_key = 'batch_log_pdf' if missing_node in guide_vec_md_nodes else 'log_pdf'
-            if node_log_pdf_key == 'log_pdf':
-                downstream_costs[node] += (model_trace.nodes[missing_node][mn_log_pdf_key] -
-                                           guide_trace.nodes[missing_node][mn_log_pdf_key]).sum()
-            else:
-                downstream_costs[node] += model_trace.nodes[missing_node][mn_log_pdf_key] - \
-                                          guide_trace.nodes[missing_node][mn_log_pdf_key]
+            downstream_costs[node] = downstream_costs[node] + model_trace.nodes[missing_node]['batch_log_pdf'] - \
+                                      guide_trace.nodes[missing_node]['batch_log_pdf']
 
     # finish assembling complete downstream costs
     # (the above computation may be missing terms from model)
     # XXX can we cache some of the sums over children_in_model to make things more efficient?
-    for site in non_reparam_nodes:
+    for site in topo_sort_guide_nodes:
+    #for site in non_reparam_nodes:
         children_in_model = set()
         for node in downstream_guide_cost_nodes[site]:
             children_in_model.update(model_trace.successors(node))
         # remove terms accounted for above
         children_in_model.difference_update(downstream_guide_cost_nodes[site])
         for child in children_in_model:
-            child_log_pdf_key = 'batch_log_pdf' if child in model_vec_md_nodes else 'log_pdf'
-            site_log_pdf_key = 'batch_log_pdf' if site in guide_vec_md_nodes else 'log_pdf'
             assert (model_trace.nodes[child]["type"] == "sample")
-            if site_log_pdf_key == 'log_pdf':
-                downstream_costs[site] += model_trace.nodes[child][child_log_pdf_key].sum()
-            else:
-                downstream_costs[site] += model_trace.nodes[child][child_log_pdf_key]
+            downstream_costs[site] = downstream_costs[site] + model_trace.nodes[child]['batch_log_pdf']
+            downstream_guide_cost_nodes[site].update([child])
 
+    # sum out any parts of downstream costs that need summing out and make
+    # sure that downstream costs have the right size
+    for k in downstream_costs:
+        #print(">", k, "dc", downstream_costs[k].size(), "blp", guide_trace.nodes[k]['batch_log_pdf'].size())
+        downstream_costs[k] = sum_leftmost(downstream_costs[k], -guide_trace.nodes[k]['batch_log_pdf'].dim())
+        #print("> >", k, "dc_sumlefmost", downstream_costs[k].size())
+        oor = ones_on_right(guide_trace.nodes[k]['batch_log_pdf'])
+        downstream_costs[k] = sum_rightmost(downstream_costs[k], oor)
+        downstream_costs[k] = unsqueeze_on_right(downstream_costs[k], oor)
+        #print("> > >", k, "dc_sr", downstream_costs[k].size())
+
+    if include_nodes:
+        return downstream_costs, downstream_guide_cost_nodes
     return downstream_costs
 
 
