@@ -69,14 +69,18 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
     #    print("stack[%s]" % k, stacks[k])
 
     def compatible_branches(x, y):
-        compatible = True
-        #print('xstack', stacks[x], 'ystack', stacks[y])
+        #compatible = True
+        n_compatible =0
+        n_max = min(len(stacks[x]), len(stacks[y]))
         for xframe, yframe in zip(stacks[x], stacks[y]):
-            if xframe.name != yframe.name:
-                compatible = False
-                break
-        #print("xy", x, y, compatible)
-        return compatible
+            if xframe.name == yframe.name:
+            #if xframe.name != yframe.name:
+                n_compatible += 1
+                #compatible = False
+                # break
+        empty = torch.zeros(0)
+        print("xy", x, y, n_compatible, n_max, downstream_costs.get(x, empty).size(), downstream_costs.get(y, empty).size())
+        return n_compatible
 
     for node in topo_sort_guide_nodes:
         downstream_costs[node] = model_trace.nodes[node]['batch_log_pdf'] - guide_trace.nodes[node]['batch_log_pdf']
