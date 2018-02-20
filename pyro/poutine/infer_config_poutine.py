@@ -7,7 +7,7 @@ class InferConfigMessenger(Messenger):
     """
     Modifies contents of the infer kwarg at sample sites
     """
-    def __init__(self, config_fn=None):
+    def __init__(self, config_fn):
         """
         :param config_fn: a callable taking a site and returning an infer dict
 
@@ -27,12 +27,20 @@ class InferConfigMessenger(Messenger):
         Otherwise, implements default sampling behavior
         with no additional effects.
         """
-        if self.config_fn is not None:
-            msg["infer"] = msg.get("infer", {})
-            msg["infer"].update(self.config_fn(msg))
+        msg["infer"].setdefault("enumerate", {}).update(self.config_fn(msg))
         return None
 
     def _pyro_param(self, msg):
+        """
+        :param msg: current message at a trace site.
+
+        If self.config_fn is not None, calls self.config_fn on msg
+        and stores the result in msg["infer"].
+
+        Otherwise, implements default param behavior
+        with no additional effects.
+        """
+        msg["infer"].setdefault("enumerate", {}).update(self.config_fn(msg))
         return None
 
 
@@ -40,7 +48,7 @@ class InferConfigPoutine(Poutine):
     """
     Modifies contents of the infer kwarg at sample sites
     """
-    def __init__(self, fn, config_fn=None):
+    def __init__(self, fn, config_fn):
         """
         :param fn: a stochastic function (callable containing pyro primitive calls)
         :param config_fn: a callable taking a site and returning an infer dict

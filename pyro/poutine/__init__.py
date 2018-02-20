@@ -129,11 +129,11 @@ def infer_config(fn, config_fn):
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param config_fn: a callable taking a site and returning an infer dict
 
-    Alias for InferConfigPoutine constructor.
+    Alias for :class:`~pyro.poutine.infer_config_poutine.InferConfigPoutine` constructor.
 
     Given a callable that contains Pyro primitive calls
     and a callable taking a trace site and returning a dictionary,
-    set the value of the infer kwarg at a sample site to config_fn(site)
+    updates the value of the infer kwarg at a sample site to config_fn(site)
     """
     return InferConfigPoutine(fn, config_fn)
 
