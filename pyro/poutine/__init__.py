@@ -9,6 +9,7 @@ from .block_poutine import BlockPoutine
 from .condition_poutine import ConditionPoutine
 from .escape_poutine import EscapePoutine
 from .indep_poutine import IndepMessenger  # noqa: F401
+from .infer_config_poutine import InferPoutine
 from .lift_poutine import LiftPoutine
 from .poutine import _PYRO_STACK, Poutine  # noqa: F401
 from .replay_poutine import ReplayPoutine
@@ -121,6 +122,13 @@ def condition(fn, data):
     with those values
     """
     return ConditionPoutine(fn, data=data)
+
+
+def infer_config(fn, config_fn):
+    """
+    XXX
+    """
+    return InferConfigPoutine(fn, config_fn)
 
 
 def indep(name, vectorized):
