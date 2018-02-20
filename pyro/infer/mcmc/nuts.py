@@ -129,7 +129,7 @@ class NUTS(HMC):
             if int(is_other_half_tree.data[0]) == 1:
                 z_proposal = other_half_tree.z_proposal
 
-        # leaves of the full tree is determined by the direction
+        # leaves of the full tree are determined by the direction
         if direction == 1:
             z_left = half_tree.z_left
             r_left = half_tree.r_left
