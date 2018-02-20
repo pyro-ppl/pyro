@@ -90,40 +90,58 @@ def sum_rightmost(value, dim):
     """
     Sum out ``dim`` many rightmost dimensions of a given tensor.
 
+    If ``dim`` is 0, no dimensions are summed out.
+    If ``dim`` is ``float('inf')``, then all dimensions are summed out.
+    If ``dim`` is 1, the leftmost 1 dimension is summed out.
+    If ``dim`` is 2, the leftmost two dimensions are summed out.
+    If ``dim`` is -1, all but the rightmost 1 dimension is summed out.
+    If ``dim`` is -2, all but the rightmost 2 dimensions are summed out.
+    etc.
+
     :param torch.autograd.Variable value: A tensor of ``.dim()`` at least ``dim``.
     :param int dim: The number of rightmost dims to sum out.
     """
-    if dim == 0 or isinstance(value, numbers.Number):
+    if isinstance(value, numbers.Number):
         return value
+    if dim < 0:
+        dim += value.dim()
+    if dim == 0:
+        return value
+    if dim >= value.dim():
+        return value.sum()
     return value.contiguous().view(value.shape[:-dim] + (-1,)).sum(-1)
 
 
-def sum_leftmost(x, dim):
+def sum_leftmost(value, dim):
     """
-    Sum all but a certain number of rightmost dimensions of a given tensor ``x``.
+    Sum out ``dim`` many leftmost dimensions of a given tensor.
 
-    If ``dim`` is 2, the leftmost two dimensions are summed out.
-    If ``dim`` is 1, the leftmost dimension is summed out.
     If ``dim`` is 0, no dimensions are summed out.
-    If ``dim`` is -1, all but the rightmost dimension is summed out.
-    If ``dim`` is -2, all but the two rightmost dimensions are summed out.
+    If ``dim`` is ``float('inf')``, then all dimensions are summed out.
+    If ``dim`` is 1, the leftmost 1 dimension is summed out.
+    If ``dim`` is 2, the leftmost two dimensions are summed out.
+    If ``dim`` is -1, all but the rightmost 1 dimension is summed out.
+    If ``dim`` is -2, all but the rightmost 2 dimensions are summed out.
     etc.
 
-    Example
-    ```
-    x = torch.ones(2,3,4)
-    assert sum_leftmost(x, 1).shape == (3, 4)
-    assert sum_leftmost(x, -1).shape == (4,)
-    ```
+    Example::
 
-    :param torch.autograd.Variable x: A tensor
+        x = torch.ones(2, 3, 4)
+        assert sum_leftmost(x, 1).shape == (3, 4)
+        assert sum_leftmost(x, -1).shape == (4,)
+
+    :param torch.autograd.Variable value: A tensor
     :param int dim: Specifies the number of dims to sum out
     """
+    if isinstance(value, numbers.Number):
+        return value
     if dim < 0:
-        dim += x.dim()
+        dim += value.dim()
     if dim == 0:
-        return x
-    return x.contiguous().view(-1, *x.shape[dim:]).sum(0)
+        return value
+    if dim >= value.dim():
+        return value.sum()
+    return value.contiguous().view(-1, *value.shape[dim:]).sum(0)
 
 
 def scale_tensor(tensor, scale):

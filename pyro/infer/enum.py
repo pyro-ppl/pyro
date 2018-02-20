@@ -14,8 +14,7 @@ from pyro.poutine.trace import Trace
 def _iter_discrete_filter(name, msg):
     return ((msg["type"] == "sample") and
             (not msg["is_observed"]) and
-            getattr(msg["fn"], "enumerable", False) and
-            (msg["infer"].get("enumerate", "sequential") == "sequential"))
+            (msg["infer"].get("enumerate") == "sequential"))
 
 
 def _iter_discrete_escape(trace, msg):
