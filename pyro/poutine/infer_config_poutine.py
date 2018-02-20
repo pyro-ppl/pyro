@@ -20,7 +20,6 @@ class InferConfigMessenger(Messenger):
     def _pyro_sample(self, msg):
         """
         :param msg: current message at a trace site.
-        :returns: a sample from the stochastic function at the site.
 
         If self.config_fn is not None, calls self.config_fn on msg
         and stores the result in msg["infer"].
@@ -29,7 +28,8 @@ class InferConfigMessenger(Messenger):
         with no additional effects.
         """
         if self.config_fn is not None:
-            msg["infer"] = self.config_fn(msg)
+            msg["infer"] = msg.get("infer", {})
+            msg["infer"].update(self.config_fn(msg))
         return None
 
     def _pyro_param(self, msg):
