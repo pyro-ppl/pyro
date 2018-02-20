@@ -17,6 +17,8 @@ def model(include_obs=True):
     p0 = Variable(torch.Tensor([0.25 + 0.25 * include_obs]), requires_grad=True)
     pyro.sample("a1", dist.Bernoulli(p0))
     pyro.sample("a2", dist.Normal(p0, p0))
+    with pyro.iarange("iarange_outer2", 2, 2) as ind_outer:
+        pyro.sample("b0", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_outer), 1]))
     with pyro.iarange("iarange_outer", 2, 2) as ind_outer:
         pyro.sample("b1", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_outer), 1]))
         pyro.sample("b2", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_outer), 1]))

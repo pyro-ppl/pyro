@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import warnings
 
+from operator import itemgetter
 import networkx
 import numpy as np
 import torch
@@ -58,23 +59,43 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
     topo_sort_guide_nodes = list(reversed(list(networkx.topological_sort(guide_trace))))
     topo_sort_guide_nodes = [x for x in topo_sort_guide_nodes
                              if guide_trace.nodes[x]["type"] == "sample"]
+    ordered_guide_nodes_dict = dict(list(zip(topo_sort_guide_nodes, list(range(len(topo_sort_guide_nodes))))))
+
     downstream_guide_cost_nodes = {}
     downstream_costs = {}
+
+    stacks = model_trace.graph["vectorized_map_data_info"]['vec_md_stacks']
+    #for k in stacks:
+    #    print("stack[%s]" % k, stacks[k])
+
+    def compatible_branches(x, y):
+        compatible = True
+        #print('xstack', stacks[x], 'ystack', stacks[y])
+        for xframe, yframe in zip(stacks[x], stacks[y]):
+            if xframe.name != yframe.name:
+                compatible = False
+                break
+        #print("xy", x, y, compatible)
+        return compatible
 
     for node in topo_sort_guide_nodes:
         downstream_costs[node] = model_trace.nodes[node]['batch_log_pdf'] - guide_trace.nodes[node]['batch_log_pdf']
         nodes_included_in_sum = set([node])
         downstream_guide_cost_nodes[node] = set([node])
-        # XXX make more efficient by ordering children appropriately
-        for child in guide_trace.successors(node):
+        # make more efficient by ordering children appropriately (higher children first)
+        children = [(k, -ordered_guide_nodes_dict[k]) for k in guide_trace.successors(node)]
+        sorted_children = sorted(children, key=itemgetter(1))
+        for child, _ in sorted_children:
             child_cost_nodes = downstream_guide_cost_nodes[child]
             downstream_guide_cost_nodes[node].update(child_cost_nodes)
             if nodes_included_in_sum.isdisjoint(child_cost_nodes):  # avoid duplicates
+                compatible_branches(node, child)
                 downstream_costs[node] = downstream_costs[node] + downstream_costs[child]
                 nodes_included_in_sum.update(child_cost_nodes)
         missing_downstream_costs = downstream_guide_cost_nodes[node] - nodes_included_in_sum
         # include terms we missed because we had to avoid duplicates
         for missing_node in missing_downstream_costs:
+            compatible_branches(node, missing_node)
             downstream_costs[node] = downstream_costs[node] + model_trace.nodes[missing_node]['batch_log_pdf'] - \
                                       guide_trace.nodes[missing_node]['batch_log_pdf']
 
@@ -91,6 +112,7 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
         for child in children_in_model:
             assert (model_trace.nodes[child]["type"] == "sample")
             downstream_costs[site] = downstream_costs[site] + model_trace.nodes[child]['batch_log_pdf']
+            compatible_branches(site, child)
             downstream_guide_cost_nodes[site].update([child])
 
     # sum out any parts of downstream costs that need summing out and make
