@@ -8,7 +8,7 @@ from torch.autograd import Variable
 
 import pyro
 import pyro.poutine as poutine
-from pyro.distributions.util import is_identically_zero
+from pyro.distributions.util import is_identically_zero, sum_rightmost
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.util import torch_backward, torch_data_sum, torch_sum
@@ -68,8 +68,16 @@ class Trace_ELBO(ELBO):
                     model_trace = prune_subsample_sites(model_trace)
                     check_enum_discrete_can_run(model_trace, guide_trace)
 
+                    log_r = 0
+                    model_trace.compute_batch_log_pdf()
+                    for site in model_trace.nodes.values():
+                        if site["type"] == "sample":
+                            log_r += sum_rightmost(site["batch_log_pdf"], self.max_iarange_nesting)
                     guide_trace.compute_score_parts()
-                    log_r = model_trace.batch_log_pdf() - guide_trace.batch_log_pdf()
+                    for site in guide_trace.nodes.values():
+                        if site["type"] == "sample":
+                            log_r -= sum_rightmost(site["batch_log_pdf"], self.max_iarange_nesting)
+
                     weight = scale / self.num_particles
                     yield weight, model_trace, guide_trace, log_r
                 continue
@@ -136,15 +144,15 @@ class Trace_ELBO(ELBO):
         for weight, model_trace, guide_trace, log_r in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = weight * 0
             surrogate_elbo_particle = weight * 0
-            batched = (self.enum_discrete and isinstance(weight, Variable) and weight.size(0) > 1)
+            enum_discrete = (self.enum_discrete and isinstance(weight, Variable) and weight.size(0) > 1)
             # compute elbo and surrogate elbo
-            if batched:
-                log_pdf = "batch_log_pdf"
-            else:
-                log_pdf = "log_pdf"
             for name, model_site in model_trace.nodes.items():
                 if model_site["type"] == "sample":
-                    model_log_pdf = model_site[log_pdf]
+                    if enum_discrete:
+                        model_log_pdf = sum_rightmost(model_site["batch_log_pdf"], self.max_iarange_nesting)
+                    else:
+                        model_log_pdf = model_site["log_pdf"].sum()
+
                     if model_site["is_observed"]:
                         elbo_particle += model_log_pdf
                         surrogate_elbo_particle += model_log_pdf
@@ -152,18 +160,22 @@ class Trace_ELBO(ELBO):
                         guide_site = guide_trace.nodes[name]
                         guide_log_pdf, score_function_term, entropy_term = guide_site["score_parts"]
 
-                        if not batched:
+                        if enum_discrete:
+                            guide_log_pdf = sum_rightmost(guide_log_pdf, self.max_iarange_nesting)
+                        else:
                             guide_log_pdf = guide_log_pdf.sum()
                         elbo_particle += model_log_pdf - guide_log_pdf
                         surrogate_elbo_particle += model_log_pdf
 
                         if not is_identically_zero(entropy_term):
-                            if not batched:
+                            if enum_discrete:
+                                entropy_term = sum_rightmost(entropy_term, self.max_iarange_nesting)
+                            else:
                                 entropy_term = entropy_term.sum()
                             surrogate_elbo_particle -= entropy_term
 
                         if not is_identically_zero(score_function_term):
-                            if not batched:
+                            if not enum_discrete:
                                 score_function_term = score_function_term.sum()
                             surrogate_elbo_particle += log_r.detach() * score_function_term
 

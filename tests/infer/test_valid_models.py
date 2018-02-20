@@ -535,12 +535,39 @@ def test_enum_discrete_parallel_nested_ok(max_iarange_nesting):
         assert x2.shape == torch.Size([2]) + iarange_shape + p2.shape
         assert x3.shape == torch.Size([3, 2]) + iarange_shape + p3.shape
 
-    def guide():
-        p2 = Variable(torch.ones(2) / 2, requires_grad=True)
-        p3 = Variable(torch.ones(3) / 3, requires_grad=True)
-        x2 = pyro.sample("x2", dist.Categorical(p2).reshape(extra_event_dims=1))
-        x3 = pyro.sample("x3", dist.Categorical(p3).reshape(extra_event_dims=1))
-        assert x2.shape == torch.Size([2]) + iarange_shape + p2.shape
-        assert x3.shape == torch.Size([3, 2]) + iarange_shape + p3.shape
+    assert_ok(model, model, enum_discrete=True, max_iarange_nesting=max_iarange_nesting)
 
-    assert_ok(model, guide, enum_discrete=True, max_iarange_nesting=max_iarange_nesting)
+
+def test_enum_discrete_parallel_iarange_ok():
+    enum_discrete = "defined below"
+
+    def model():
+        p2 = Variable(torch.ones(2) / 2)
+        p34 = Variable(torch.ones(3, 4) / 4)
+        p536 = Variable(torch.ones(5, 3, 6) / 6)
+
+        x2 = pyro.sample("x2", dist.Categorical(p2),
+                         infer={"enumerate": "parallel"})
+        with pyro.iarange("iarange", 3):
+            x34 = pyro.sample("x34", dist.Categorical(p34),
+                              infer={"enumerate": "parallel"})
+            with pyro.iarange("iarange", 5):
+                x536 = pyro.sample("x536", dist.Categorical(p536),
+                                   infer={"enumerate": "parallel"})
+
+        if not enum_discrete:
+            # All dimensions are iarange dimensions.
+            assert x2.shape == torch.Size([     1])  # noqa: E201
+            assert x34.shape == torch.Size([    3])  # noqa: E201
+            assert x536.shape == torch.Size([5, 3])  # noqa: E201
+        else:
+            # Meaning of dimensions:    [ enum dims | iarange dims ]
+            assert x2.shape == torch.Size([        2, 1, 1])  # noqa: E201
+            assert x34.shape == torch.Size([    4, 1, 1, 3])  # noqa: E201
+            assert x536.shape == torch.Size([6, 1, 1, 5, 3])  # noqa: E201
+
+    enum_discrete = False
+    assert_ok(model, model, enum_discrete=False, max_iarange_nesting=2)
+
+    enum_discrete = True
+    assert_ok(model, model, enum_discrete=True, max_iarange_nesting=2)

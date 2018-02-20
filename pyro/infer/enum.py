@@ -3,11 +3,12 @@ from __future__ import absolute_import, division, print_function
 import math
 
 import torch
+from six.moves.queue import LifoQueue
 from torch.autograd import Variable
 
 from pyro import poutine
+from pyro.distributions.util import sum_rightmost
 from pyro.poutine.trace import Trace
-from six.moves.queue import LifoQueue
 
 
 def _iter_discrete_filter(name, msg):
@@ -21,7 +22,7 @@ def _iter_discrete_escape(trace, msg):
     return _iter_discrete_filter(msg["name"], msg) and (msg["name"] not in trace)
 
 
-def iter_discrete_traces(graph_type, fn, *args, **kwargs):
+def iter_discrete_traces(graph_type, max_iarange_nesting, fn, *args, **kwargs):
     """
     Iterate over all discrete choices of a stochastic function.
 
@@ -43,9 +44,14 @@ def iter_discrete_traces(graph_type, fn, *args, **kwargs):
         full_trace = poutine.trace(q_fn, graph_type=graph_type).get_trace(*args, **kwargs)
 
         # Scale trace by probability of discrete choices.
-        log_pdf = full_trace.batch_log_pdf(site_filter=_iter_discrete_filter)
+        log_pdf = 0
+        full_trace.compute_batch_log_pdf(site_filter=_iter_discrete_filter)
+        for name, site in full_trace.nodes.items():
+            if _iter_discrete_filter(name, site):
+                log_pdf += sum_rightmost(site["batch_log_pdf"], max_iarange_nesting)
         if isinstance(log_pdf, Variable):
             scale = torch.exp(log_pdf.detach())
         else:
             scale = math.exp(log_pdf)
+
         yield scale, full_trace
