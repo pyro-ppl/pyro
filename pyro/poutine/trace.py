@@ -4,18 +4,18 @@ import collections
 import warnings
 
 import networkx
-import numpy as np
 from torch.autograd import Variable
 
 from pyro.distributions.util import scale_tensor
+from pyro.util import is_nan, is_inf
 
 
 def _warn_if_nan(name, value):
     if isinstance(value, Variable):
         value = value.data[0]
-    if np.isnan(value):
+    if is_nan(value):
         warnings.warn("Encountered NAN log_pdf at site '{}'".format(name))
-    if np.isinf(value) and value > 0:
+    if is_inf(value) and value > 0:
         warnings.warn("Encountered +inf log_pdf at site '{}'".format(name))
     # Note that -inf log_pdf is fine: it is merely a zero-probability event.
 

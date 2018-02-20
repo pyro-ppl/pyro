@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import numpy as np
 import torch
 
 import pyro
@@ -8,12 +7,12 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer.mcmc.trace_kernel import TraceKernel
 from pyro.ops.integrator import velocity_verlet
-from pyro.util import ng_ones, ng_zeros
+from pyro.util import ng_ones, ng_zeros, is_nan, is_inf
 
 
 class HMC(TraceKernel):
     """
-    Simple Hamiltonian Monte Carlo kernel, where `step_size` and `num_steps`
+    Simple Hamiltonian Monte Carlo kernel, where ``step_size`` and ``num_steps``
     need to be explicitly specified by the user.
 
     **Reference**
@@ -51,19 +50,26 @@ class HMC(TraceKernel):
         kinetic_energy = 0.5 * torch.sum(torch.stack([r[name]**2 for name in r]))
         return kinetic_energy + self._potential_energy(z)
 
-    def initial_trace(self):
-        return poutine.trace(self.model).get_trace(*self._args, **self._kwargs)
-
     def _reset(self):
         self._t = 0
         self._r_dist = {}
         self._args = None
         self._kwargs = None
-        self._accept_cnt = None
+        self._accept_cnt = 0
         self._prototype_trace = None
 
+    def _validate_trace(self, trace):
+        for name, node in trace.iter_stochastic_nodes():
+            if not node['fn'].reparameterized:
+                raise ValueError('Found non-reparameterized node in the model at site: {}'.format(name))
+        trace_log_pdf = trace.log_pdf()
+        if is_nan(trace_log_pdf) or is_inf(trace_log_pdf):
+            raise ValueError('Model specification incorrect - trace log pdf is NaN, Inf or 0.')
+
+    def initial_trace(self):
+        return self._prototype_trace
+
     def setup(self, *args, **kwargs):
-        self._accept_cnt = 0
         self._args = args
         self._kwargs = kwargs
         # set the trace prototype to inter-convert between trace object
@@ -74,19 +80,14 @@ class HMC(TraceKernel):
             r_mu = torch.zeros_like(node['value'])
             r_sigma = torch.ones_like(node['value'])
             self._r_dist[name] = dist.Normal(mu=r_mu, sigma=r_sigma)
-        for name, node in self._prototype_trace.iter_stochastic_nodes():
-            if not node['fn'].reparameterized:
-                raise ValueError('Found non-reparameterized node in the model at site: {}'.format(name))
-        prototype_trace_log_pdf = self._prototype_trace.log_pdf().data[0]
-        if np.isnan(prototype_trace_log_pdf) or np.isinf(prototype_trace_log_pdf):
-            raise ValueError('Model specification incorrect - trace log pdf is NaN, Inf or 0.')
+        self._validate_trace(self._prototype_trace)
 
     def cleanup(self):
         self._reset()
 
     def sample(self, trace):
         z = {name: node['value'] for name, node in trace.iter_stochastic_nodes()}
-        r = {name: pyro.sample('r_{}_t={}'.format(name, self._t), self._r_dist[name]) for name in z}
+        r = {name: pyro.sample('r_{}_t={}'.format(name, self._t), self._r_dist[name]) for name in sorted(z)}
         z_new, r_new = velocity_verlet(z, r, self._potential_energy, self.step_size, self.num_steps)
         # apply Metropolis correction
         energy_proposal = self._energy(z_new, r_new)
@@ -99,5 +100,5 @@ class HMC(TraceKernel):
         self._t += 1
         return self._get_trace(z)
 
-    def diagnostics(self, time_step):
-        return 'Acceptance rate: {}'.format(self._accept_cnt / time_step)
+    def diagnostics(self):
+        return 'Acceptance rate: {}'.format(self._accept_cnt / self._t)

@@ -40,6 +40,13 @@ MultivariateNormal
     :undoc-members:
     :show-inheritance:
 
+OMTMultivariateNormal
+------------------
+.. automodule:: pyro.distributions.omt_mvn
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 SparseMultivariateNormal
 ------------------------
 .. automodule:: pyro.distributions.torch.sparse_multivariate_normal

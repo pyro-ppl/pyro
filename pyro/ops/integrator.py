@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 from torch.autograd import Variable, grad
 
 
-def velocity_verlet(z, r, potential_fn, step_size, num_steps):
+def velocity_verlet(z, r, potential_fn, step_size, num_steps=1):
     """
     Second order symplectic integrator that uses the velocity verlet algorithm.
 

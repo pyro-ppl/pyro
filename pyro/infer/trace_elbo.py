@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 import numbers
 import warnings
 
-import numpy as np
 import torch
 from torch.autograd import Variable
 
@@ -15,7 +14,7 @@ from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.util import torch_backward, torch_data_sum, torch_sum
 from pyro.poutine.enumerate_poutine import EnumeratePoutine
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_match
+from pyro.util import check_model_guide_match, is_nan
 
 
 def check_enum_discrete_can_run(model_trace, guide_trace):
@@ -48,6 +47,7 @@ class Trace_ELBO(ELBO):
     """
     A trace implementation of ELBO-based SVI
     """
+
     def _get_traces(self, model, guide, *args, **kwargs):
         """
         runs the guide and runs the model against the guide with
@@ -119,7 +119,7 @@ class Trace_ELBO(ELBO):
             elbo += torch_data_sum(weight * elbo_particle)
 
         loss = -elbo
-        if np.isnan(loss):
+        if is_nan(loss):
             warnings.warn('Encountered NAN loss')
         return loss
 
@@ -192,6 +192,6 @@ class Trace_ELBO(ELBO):
                 pyro.get_param_store().mark_params_active(trainable_params)
 
         loss = -elbo
-        if np.isnan(loss):
+        if is_nan(loss):
             warnings.warn('Encountered NAN loss')
         return loss
