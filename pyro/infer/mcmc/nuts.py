@@ -123,7 +123,7 @@ class NUTS(HMC):
         #     we choose the proposal from the first half
         #     (any is fine, because the probability of picking it at the end is 0!).
         if tree_size != 0:
-            other_half_tree_prob = other_half_tree.size / tree_size if tree_size != 0 else 0.5
+            other_half_tree_prob = other_half_tree.size / tree_size
             is_other_half_tree = pyro.sample("is_other_halftree",
                                              dist.Bernoulli(ps=ng_ones(1) * other_half_tree_prob))
             if int(is_other_half_tree.data[0]) == 1:
