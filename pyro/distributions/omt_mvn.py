@@ -44,7 +44,7 @@ class _OMTMVNSample(Function):
     @staticmethod
     @once_differentiable
     def backward(ctx, grad_output):
-        jitter = 1.0e-12  # do i really need this?
+        jitter = 1.0e-8  # do i really need this?
         L, = ctx.saved_tensors
         z = ctx.z
         epsilon = ctx.white
@@ -53,38 +53,29 @@ class _OMTMVNSample(Function):
         g = grad_output
         loc_grad = sum_leftmost(grad_output, -1)
 
-        z_ja = z.unsqueeze(-1)
-        g_transpose = torch.transpose(g, 0, -1)
-        g_ij = g_transpose.contiguous().view(dim, -1)
-        L_inv_bi_g_ji = torch.trtrs(g_ij, L, upper=False)[0].view(g_transpose.size())
-        L_inv_bi_g_ji = torch.transpose(L_inv_bi_g_ji, 0, -1).unsqueeze(-2)
-        diff_L_ab = 0.5 * sum_leftmost(L_inv_bi_g_ji * z_ja, -2)
+        identity = torch.eye(dim).type_as(g)
+        R_inv = torch.trtrs(identity, L.t(), transpose=False, upper=True)[0]
 
+        z_ja = z.unsqueeze(-1)
+        g_R_inv = torch.matmul(g, R_inv).unsqueeze(-2)
         epsilon_jb = epsilon.unsqueeze(-2)
         g_ja = g.unsqueeze(-1)
-        diff_L_ab += 0.5 * sum_leftmost(g_ja * epsilon_jb, -2)
+        diff_L_ab = 0.5 * sum_leftmost(g_ja * epsilon_jb + g_R_inv * z_ja, -2)
 
-        identity = torch.eye(dim).type_as(g)
-        R_inv = torch.trtrs(identity, L, transpose=True, upper=False)[0]
         Sigma_inv = torch.mm(R_inv, R_inv.t())
-        V, D, Vt = torch.svd(Sigma_inv + jitter)
-        D_outer = D.unsqueeze(-1) + D.unsqueeze(0) + jitter
+        V, D, _ = torch.svd(Sigma_inv + jitter)
+        D_outer = D.unsqueeze(-1) + D.unsqueeze(0)
 
-        # XXX can i do this expansion more cleanly?
-        jdim = len(z.size()) - 1
-        expand_tuple = tuple([-1]*jdim + [dim, dim])
-        z_tilde = identity * torch.matmul(z, Vt).unsqueeze(-1).expand(*expand_tuple)
-        g_tilde = identity * torch.matmul(g, Vt).unsqueeze(-1).expand(*expand_tuple)
+        expand_tuple = tuple([-1] * (z.dim() - 1) + [dim, dim])
+        z_tilde = identity * torch.matmul(z, V).unsqueeze(-1).expand(*expand_tuple)
+        g_tilde = identity * torch.matmul(g, V).unsqueeze(-1).expand(*expand_tuple)
 
-        Y = torch.matmul(z_tilde, torch.matmul(1.0 / D_outer, g_tilde))
-        Y = sum_leftmost(Y, -2)
-        Y_tilde = torch.mm(V, torch.mm(Y, Vt))
-        Y_tilde_symm = Y_tilde + torch.transpose(Y_tilde, 0, 1)
+        Y = sum_leftmost(torch.matmul(z_tilde, torch.matmul(1.0 / D_outer, g_tilde)), -2)
+        Y = torch.mm(V, torch.mm(Y, V.t()))
+        Y = Y + Y.t()
 
-        Tr_xi_1_Y = 0.5 * torch.mm(Sigma_inv, Y_tilde_symm)
-        Tr_xi_1_Y = torch.mm(Tr_xi_1_Y, R_inv)
-        Tr_xi_2_Y = -0.5 * torch.mm(torch.mm(Y_tilde_symm, Sigma_inv), R_inv)
-        diff_L_ab += Tr_xi_1_Y + Tr_xi_2_Y
+        Tr_xi_Y = torch.mm(torch.mm(Sigma_inv, Y), R_inv) - torch.mm(Y, torch.mm(Sigma_inv, R_inv))
+        diff_L_ab += 0.5 * Tr_xi_Y
         L_grad = torch.tril(diff_L_ab)
 
         return loc_grad, L_grad, None
