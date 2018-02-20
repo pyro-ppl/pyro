@@ -97,6 +97,19 @@ def sum_rightmost(value, dim):
         return value
     return value.contiguous().view(value.shape[:-dim] + (-1,)).sum(-1)
 
+def sum_rightmost_keep(value, dim):
+    """
+    Sum out ``dim`` many rightmost dimensions of a given tensor and keepdim all the way through.
+
+    :param torch.autograd.Variable value: A tensor of ``.dim()`` at least ``dim``.
+    :param int dim: The number of rightmost dims to sum out.
+    """
+    if dim == 0 or isinstance(value, numbers.Number):
+        return value
+    for d in range(dim):
+        value = value.sum(-1 - d, keepdim=True)
+    return value
+
 
 def sum_leftmost(x, dim):
     """

@@ -11,7 +11,7 @@ import pyro
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.util import torch_backward, torch_data_sum
-from pyro.distributions.util import sum_leftmost, sum_rightmost
+from pyro.distributions.util import sum_leftmost, sum_rightmost, sum_rightmost_keep
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, detach_iterable, ng_zeros
 
@@ -79,8 +79,23 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
                 #compatible = False
                 # break
         empty = torch.zeros(0)
-        print("xy", x, y, n_compatible, n_max, downstream_costs.get(x, empty).size(), downstream_costs.get(y, empty).size())
-        return n_compatible
+        #print("xy", x, y, n_compatible, n_max, downstream_costs.get(x, empty).size(), downstream_costs.get(y, empty).size())
+        return n_compatible, n_max
+
+    def add(dest, source, dest_node, source_node):
+        n_compatible, n_max = compatible_branches(source_node, dest_node)
+        if n_compatible == n_max:
+            print("comp dest, source", dest_node, source_node, dest.size(), source.size())
+            return dest + source
+        else:
+            delta = source.dim() - n_compatible
+            print("incompatible dest, source", dest_node, source_node, n_max, n_compatible, "delta", delta)
+            result1 = dest
+            result2 = sum_rightmost_keep(source, delta)
+            print("result sizes:", result1.size(), result2.size())
+            result = dest + sum_rightmost_keep(source, delta)
+            print("result sizes:", result1.size(), result2.size(), " ==> ", result.size())
+            return result
 
     for node in topo_sort_guide_nodes:
         downstream_costs[node] = model_trace.nodes[node]['batch_log_pdf'] - guide_trace.nodes[node]['batch_log_pdf']
@@ -93,15 +108,37 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
             child_cost_nodes = downstream_guide_cost_nodes[child]
             downstream_guide_cost_nodes[node].update(child_cost_nodes)
             if nodes_included_in_sum.isdisjoint(child_cost_nodes):  # avoid duplicates
-                compatible_branches(node, child)
-                downstream_costs[node] = downstream_costs[node] + downstream_costs[child]
+                #compatible_branches(node, child)
+                #downstream_costs[node] = downstream_costs[node] + downstream_costs[child]
+                print('node, child', node, child, 'dc_child', downstream_costs[child].size(), 'node_size', guide_trace.nodes[node]['batch_log_pdf'].size())
+                downstream_costs[node] = add(downstream_costs[node], downstream_costs[child], node, child)
                 nodes_included_in_sum.update(child_cost_nodes)
         missing_downstream_costs = downstream_guide_cost_nodes[node] - nodes_included_in_sum
         # include terms we missed because we had to avoid duplicates
         for missing_node in missing_downstream_costs:
-            compatible_branches(node, missing_node)
-            downstream_costs[node] = downstream_costs[node] + model_trace.nodes[missing_node]['batch_log_pdf'] - \
-                                      guide_trace.nodes[missing_node]['batch_log_pdf']
+            #compatible_branches(node, missing_node)
+            #downstream_costs[node] = downstream_costs[node] + model_trace.nodes[missing_node]['batch_log_pdf'] - \
+            #                          guide_trace.nodes[missing_node]['batch_log_pdf']
+            print('node, missing', node, missing_node, 'missing_size', model_trace.nodes[missing_node]['batch_log_pdf'].size(),
+                    'node_size', guide_trace.nodes[node]['batch_log_pdf'].size())
+            downstream_costs[node] = add(downstream_costs[node],
+                                         model_trace.nodes[missing_node]['batch_log_pdf'] - \
+                                         guide_trace.nodes[missing_node]['batch_log_pdf'],
+                                         node, missing_node)
+
+    def sumout():
+        # sum out any parts of downstream costs that need summing out and make
+        # sure that downstream costs have the right size
+        for k in downstream_costs:
+            #print(">", k, "dc", downstream_costs[k].size(), "blp", guide_trace.nodes[k]['batch_log_pdf'].size())
+            downstream_costs[k] = sum_leftmost(downstream_costs[k], -guide_trace.nodes[k]['batch_log_pdf'].dim())
+            #print("> >", k, "dc_sumlefmost", downstream_costs[k].size())
+            oor = ones_on_right(guide_trace.nodes[k]['batch_log_pdf'])
+            downstream_costs[k] = sum_rightmost(downstream_costs[k], oor)
+            downstream_costs[k] = unsqueeze_on_right(downstream_costs[k], oor)
+            #print("> > >", k, "dc_sr", downstream_costs[k].size())
+
+    sumout()
 
     # finish assembling complete downstream costs
     # (the above computation may be missing terms from model)
@@ -115,20 +152,14 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
         children_in_model.difference_update(downstream_guide_cost_nodes[site])
         for child in children_in_model:
             assert (model_trace.nodes[child]["type"] == "sample")
-            downstream_costs[site] = downstream_costs[site] + model_trace.nodes[child]['batch_log_pdf']
-            compatible_branches(site, child)
+            print('site, child', site, child, 'child_size', model_trace.nodes[child]['batch_log_pdf'].size(),
+                    'node_size', downstream_costs[site].size())
+            downstream_costs[site] = add(downstream_costs[site], model_trace.nodes[child]['batch_log_pdf'], site, child)
+            #downstream_costs[site] = downstream_costs[site] + model_trace.nodes[child]['batch_log_pdf']
+            #compatible_branches(site, child)
             downstream_guide_cost_nodes[site].update([child])
 
-    # sum out any parts of downstream costs that need summing out and make
-    # sure that downstream costs have the right size
-    for k in downstream_costs:
-        #print(">", k, "dc", downstream_costs[k].size(), "blp", guide_trace.nodes[k]['batch_log_pdf'].size())
-        downstream_costs[k] = sum_leftmost(downstream_costs[k], -guide_trace.nodes[k]['batch_log_pdf'].dim())
-        #print("> >", k, "dc_sumlefmost", downstream_costs[k].size())
-        oor = ones_on_right(guide_trace.nodes[k]['batch_log_pdf'])
-        downstream_costs[k] = sum_rightmost(downstream_costs[k], oor)
-        downstream_costs[k] = unsqueeze_on_right(downstream_costs[k], oor)
-        #print("> > >", k, "dc_sr", downstream_costs[k].size())
+    sumout()
 
     if include_nodes:
         return downstream_costs, downstream_guide_cost_nodes
