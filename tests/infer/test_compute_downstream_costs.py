@@ -13,8 +13,13 @@ from tests.common import assert_equal
 
 import sys
 
-def model(include_obs=True):
-    p0 = Variable(torch.Tensor([0.25 + 0.25 * include_obs]), requires_grad=True)
+    with pyro.iarange("iarange_outer0", 5, 5) as ind_outer:
+        f()
+        with pyro.iarange("iarange_outer", 2, 2) as ind_outer:
+            g()
+
+def model_old(include_obs=True):
+    p0 = Variable(torch.Tensor([0.25 + 0.55 * include_obs]), requires_grad=True)
     pyro.sample("a1", dist.Bernoulli(p0))
     pyro.sample("a2", dist.Normal(p0, p0))
     with pyro.iarange("iarange_outer0", 5, 5) as ind_outer:
@@ -31,6 +36,27 @@ def model(include_obs=True):
             c2 = pyro.sample("c2", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_outer), len(ind_inner)]))
             c3 = pyro.sample("c3", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_inner)]))
             c4 = pyro.sample("c4", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_outer), len(ind_inner)]))
+            if include_obs:
+                pyro.sample("obs", dist.Bernoulli(c1 * c2), obs=Variable(torch.ones(c2.size())))
+
+def model(include_obs=True):
+    p0 = Variable(torch.Tensor([0.25 + 0.55 * include_obs]), requires_grad=True)
+    pyro.sample("a1", dist.Bernoulli(p0))
+    pyro.sample("a2", dist.Normal(p0, p0))
+    with pyro.iarange("iarange_single", 5, 5) as ind_outer:
+        pyro.sample("b0", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_single)]))
+    with pyro.iarange("iarange_outer", 2, 2) as ind_outer:
+        pyro.sample("b1", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_outer)]))
+        pyro.sample("b2", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_outer)]))
+        with pyro.iarange("iarange_inner0", 3, 3) as ind_inner:
+            c0 = pyro.sample("c0", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_inner), 1]))
+            c00 = pyro.sample("c00", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_inner), len(ind_outer)]))
+            c000 = pyro.sample("c000", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_inner), 1]))
+        with pyro.iarange("iarange_inner", 4, 4) as ind_inner:
+            c1 = pyro.sample("c1", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_inner), 1]))
+            c2 = pyro.sample("c2", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_inner), len(ind_outer)]))
+            c3 = pyro.sample("c3", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_inner), 1]))
+            c4 = pyro.sample("c4", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_inner), len(ind_outer)]))
             if include_obs:
                 pyro.sample("obs", dist.Bernoulli(c1 * c2), obs=Variable(torch.ones(c2.size())))
 
@@ -69,6 +95,11 @@ def test_compute_downstream_costs():
 
     for k in dc:
         print('dc[%s]' % k, dc[k].size(), dc_nodes[k])
+
+    print("guide trace:", guide_trace.nodes['c4'])
+    print("guide fn:", guide_trace.nodes['c4']['fn'].base_dist.probs)
+    print("model trace:", model_trace.nodes['c4'])
+    print("model fn:", model_trace.nodes['c4']['fn'].base_dist.probs)
 
     #print("downstreamcost nodes", dc_nodes)
     expected_nodes = {'b1': {'b1', 'c3', 'c1', 'b2', 'c2', 'c4'}, 'c3': {'c3', 'c4'}, 'c1': {'c3', 'c1', 'c2', 'c4'},
