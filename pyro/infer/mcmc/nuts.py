@@ -70,11 +70,10 @@ class NUTS(HMC):
         self._dE_max = 1000
 
     def _is_turning(self, z_left, r_left, z_right, r_right):
-        nodes = sorted(z_left)
-        z_left = torch.stack([z_left[name] for name in nodes])
-        r_left = torch.stack([r_left[name] for name in nodes])
-        z_right = torch.stack([z_right[name] for name in nodes])
-        r_right = torch.stack([r_right[name] for name in nodes])
+        z_left = torch.stack([z_left[name] for name in self._r_dist])
+        r_left = torch.stack([r_left[name] for name in self._r_dist])
+        z_right = torch.stack([z_right[name] for name in self._r_dist])
+        r_right = torch.stack([r_right[name] for name in self._r_dist])
         dz = z_right - z_left
         return (torch_data_sum(dz * r_left) < 0) or (torch_data_sum(dz * r_right) < 0)
 
@@ -152,7 +151,7 @@ class NUTS(HMC):
 
     def sample(self, trace):
         z = {name: node["value"] for name, node in trace.iter_stochastic_nodes()}
-        r = {name: pyro.sample("r_{}_t={}".format(name, self._t), self._r_dist[name]) for name in sorted(z)}
+        r = {name: pyro.sample("r_{}_t={}".format(name, self._t), self._r_dist[name]) for name in self._r_dist}
 
         # Ideally, following a symplectic integrator trajectory, the energy is constant.
         # In that case, we can sample the proposal uniformly, and there is no need to use "slice".
@@ -172,7 +171,6 @@ class NUTS(HMC):
 
         z_left = z_right = z
         r_left = r_right = r
-        tree_depth = 0
         tree_size = 1
         is_accepted = False
 

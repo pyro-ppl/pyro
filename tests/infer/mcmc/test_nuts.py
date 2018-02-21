@@ -20,7 +20,7 @@ logger = logging.getLogger('pyro')
 logger.setLevel(logging.INFO)
 
 TEST_CASES[0] = TEST_CASES[0]._replace(mean_tol=0.04, std_tol=0.04)
-TEST_CASES[1] = TEST_CASES[1]._replace(mean_tol=0.03, std_tol=0.03)
+TEST_CASES[1] = TEST_CASES[1]._replace(mean_tol=0.04, std_tol=0.04)
 
 
 @pytest.mark.parametrize(
