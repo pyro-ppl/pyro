@@ -49,8 +49,12 @@ class EnumerateMessenger(Messenger):
 
 class EnumeratePoutine(Poutine):
     """
-    Enumerates in parallel over discrete sample sites marked
+    Enumerates in parallel over discrete sample sites that are configured with
     ``infer={"enumerate": "parallel"}``.
+
+    :param int first_available_dim: The first tensor dimension (counting
+        from the right) that is available for parallel enumeration. This
+        dimension and all dimensions left may be used internally by Pyro.
     """
     def __init__(self, fn, first_available_dim=0):
         """

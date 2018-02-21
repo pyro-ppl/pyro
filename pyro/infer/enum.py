@@ -61,10 +61,10 @@ def _enumerate_discrete(default):
     def config_fn(site):
         if site["type"] != "sample" or site["is_observed"]:
             return {}
-        if not site["fn"].get("enumerable", False):
+        if not getattr(site["fn"], "enumerable", False):
             return {}
         if "enumerate" in site["infer"]:
-            return {}  # do not override existing config
+            return {}  # do not overwrite existing config
         return {"enumerate": default}
 
     return config_fn
@@ -90,10 +90,13 @@ def enumerate_discrete(guide=None, default="sequential"):
 
     :param callable guide: a pyro model that will be used as a guide in
         :class:`~pyro.infer.svi.SVI`.
-    :param str default: either "sequential" or "parallel".
+    :param str default: one of "sequential", "parallel", or None.
     :return: an annotated guide
     :rtype: callable
     """
+    if default not in ["sequential", "parallel", None]:
+        raise ValueError("Invalid default value. Expected 'sequential', 'parallel', or None, but got {}".format(
+            repr(default)))
     # Support usage as a decorator:
     if guide is None:
         return lambda guide: enumerate_discrete(guide, default=default)

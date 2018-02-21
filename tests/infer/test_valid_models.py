@@ -516,11 +516,11 @@ def test_enum_discrete_parallel_ok(max_iarange_nesting):
 
     def guide():
         p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
-        x = pyro.sample("x", dist.Bernoulli(p).reshape(extra_event_dims=1),
-                        infer={'enumerate': 'parallel'})
+        x = pyro.sample("x", dist.Bernoulli(p).reshape(extra_event_dims=1))
         assert x.shape == torch.Size([2]) + iarange_shape + p.shape
 
-    assert_ok(model, enumerate_discrete(guide), max_iarange_nesting=max_iarange_nesting)
+    assert_ok(model, enumerate_discrete(guide, "parallel"),
+              max_iarange_nesting=max_iarange_nesting)
 
 
 @pytest.mark.parametrize('max_iarange_nesting', [0, 1, 2])
@@ -530,12 +530,12 @@ def test_enum_discrete_parallel_nested_ok(max_iarange_nesting):
     def model():
         p2 = Variable(torch.ones(2) / 2)
         p3 = Variable(torch.ones(3) / 3)
-        x2 = pyro.sample("x2", dist.Categorical(p2).reshape(extra_event_dims=1))
-        x3 = pyro.sample("x3", dist.Categorical(p3).reshape(extra_event_dims=1))
+        x2 = pyro.sample("x2", dist.OneHotCategorical(p2).reshape(extra_event_dims=1))
+        x3 = pyro.sample("x3", dist.OneHotCategorical(p3).reshape(extra_event_dims=1))
         assert x2.shape == torch.Size([2]) + iarange_shape + p2.shape
-        assert x3.shape == torch.Size([3, 2]) + iarange_shape + p3.shape
+        assert x3.shape == torch.Size([3, 1]) + iarange_shape + p3.shape
 
-    assert_ok(model, enumerate_discrete(model), max_iarange_nesting=max_iarange_nesting)
+    assert_ok(model, enumerate_discrete(model, "parallel"), max_iarange_nesting=max_iarange_nesting)
 
 
 def test_enum_discrete_parallel_iarange_ok():
@@ -546,14 +546,11 @@ def test_enum_discrete_parallel_iarange_ok():
         p34 = Variable(torch.ones(3, 4) / 4)
         p536 = Variable(torch.ones(5, 3, 6) / 6)
 
-        x2 = pyro.sample("x2", dist.Categorical(p2),
-                         infer={"enumerate": "parallel"})
+        x2 = pyro.sample("x2", dist.Categorical(p2))
         with pyro.iarange("iarange", 3):
-            x34 = pyro.sample("x34", dist.Categorical(p34),
-                              infer={"enumerate": "parallel"})
+            x34 = pyro.sample("x34", dist.Categorical(p34))
             with pyro.iarange("iarange", 5):
-                x536 = pyro.sample("x536", dist.Categorical(p536),
-                                   infer={"enumerate": "parallel"})
+                x536 = pyro.sample("x536", dist.Categorical(p536))
 
         if not enum_discrete:
             # All dimensions are iarange dimensions.
@@ -570,4 +567,4 @@ def test_enum_discrete_parallel_iarange_ok():
     assert_ok(model, model, max_iarange_nesting=2)
 
     enum_discrete = True
-    assert_ok(model, enumerate_discrete(model), max_iarange_nesting=2)
+    assert_ok(model, enumerate_discrete(model, "parallel"), max_iarange_nesting=2)

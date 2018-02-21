@@ -4,7 +4,7 @@ import pyro
 from torch.autograd import Variable
 import pyro.distributions as dist
 from utils.mnist_cached import MNISTCached, setup_data_loaders
-from pyro.infer import SVI
+from pyro.infer import SVI, enumerate_discrete
 from pyro.optim import Adam
 from pyro.nn import ClippedSoftmax, ClippedSigmoid
 from utils.custom_mlp import MLP, Exp
@@ -318,9 +318,10 @@ def run_inference_ss_vae(args):
     adam_params = {"lr": args.learning_rate, "betas": (args.beta_1, 0.999)}
     optimizer = Adam(adam_params)
 
-    # set up the loss(es) for inference setting the enum_discrete parameter builds the loss as a sum
+    # set up the loss(es) for inference. wrapping the guide in enumerate_discrete builds the loss as a sum
     # by enumerating each class label for the sampled discrete categorical distribution in the model
-    loss_basic = SVI(ss_vae.model, ss_vae.guide, optimizer, loss="ELBO", enum_discrete=args.enum_discrete)
+    guide = enumerate_discrete(ss_vae.guide, args.enum_discrete)
+    loss_basic = SVI(ss_vae.model, guide, optimizer, loss="ELBO")
 
     # build a list of all losses considered
     losses = [loss_basic]
@@ -410,7 +411,7 @@ if __name__ == "__main__":
                         help="whether to use the auxiliary loss from NIPS 14 paper (Kingma et al)")
     parser.add_argument('-alm', '--aux-loss-multiplier', default=300, type=float,
                         help="the multiplier to use with the auxiliary loss")
-    parser.add_argument('-enum', '--enum-discrete', action="store_true",
+    parser.add_argument('-enum', '--enum-discrete', default=None,
                         help="whether to enumerate the discrete support of the categorical distribution"
                              "while computing the ELBO loss")
     parser.add_argument('-sup', '--sup-num', default=3000,
