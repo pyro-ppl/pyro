@@ -97,6 +97,7 @@ def test_compute_downstream_costs(include_inner_1):
 
     #for k in dc:
     #    print('dc[%s]' % k, dc[k].size(), dc_nodes[k])
+    #    print('[%s]' % k, guide_trace.nodes[k]['batch_log_pdf'].size())
 
     #print("guide trace:", guide_trace.nodes['c4'])
     #print("guide fn:", guide_trace.nodes['c4']['fn'].base_dist.probs)

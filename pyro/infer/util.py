@@ -3,7 +3,9 @@ from __future__ import absolute_import, division, print_function
 import numbers
 
 import torch
+from torch.autograd import Variable
 
+from pyro.distributions.util import sum_leftmost
 
 def torch_data_sum(x):
     """
@@ -32,3 +34,64 @@ def torch_backward(x):
     """
     if isinstance(x, torch.autograd.Variable):
         x.backward()
+
+
+def unmatched_dimensions(x, y):
+    assert x.dim() == y.dim()
+    result = []
+    for k in range(x.dim()):
+        if x.size(k) > y.size(k):
+            result.append(k)
+    return result
+
+
+def sum_reduce(x, dims):
+    for d in dims:
+        x = x.sum(d, keepdim=True)
+    return x
+
+
+class MultiViewTensor(dict):
+    """
+    A container for Variables with different shapes. Used in TraceGraph_ELBO
+    to simplify downstream cost computation logic.
+
+    Example::
+
+        downstream_cost = MultiViewTensor()
+	downstream_cost.add(self.cost)
+	for node in downstream_nodes:
+	    summed = node.downstream_cost.sum_leftmost(dims)
+	    downstream_cost.add(summed)
+    """
+    def add(self, term):
+        if isinstance(term, Variable):
+            if term.shape in self:
+                self[term.shape] += term
+            else:
+                self[term.shape] = term
+        else:
+            for shape, value in term.items():
+                if shape in self:
+                    self[shape] += value
+                else:
+                    self[shape] = value
+
+    def sum_leftmost(self, dim):
+        assert dim <= 0
+        result = MultiViewTensor()
+        for shape, term in self.items():
+            result.add(sum_leftmost(term, dim))
+        return result
+
+    def contract_to(self, target):
+        """Opposite of broadcast."""
+        result = 0
+        for tensor in self.values():
+            mysum = sum_reduce(tensor, unmatched_dimensions(tensor, target)).expand_as(target)
+            result += mysum
+        #assert self == {} or tensor.shape == shape
+        return result
+
+    def __repr__(self):
+        return '%s(%s)' % (type(self).__name__, " ".join([str(k) for k in self.keys()]))
