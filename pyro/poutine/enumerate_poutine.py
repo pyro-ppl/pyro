@@ -6,8 +6,7 @@ from .poutine import Messenger, Poutine
 def _iter_discrete_filter(name, msg):
     return ((msg["type"] == "sample") and
             (not msg["is_observed"]) and
-            getattr(msg["fn"], "enumerable", False) and
-            (msg["infer"].get("enumerate", "sequential") == "parallel"))
+            (msg["infer"].get("enumerate") == "parallel"))
 
 
 class EnumerateMessenger(Messenger):
@@ -19,7 +18,7 @@ class EnumerateMessenger(Messenger):
         from the right) that is available for parallel enumeration. This
         dimension and all dimensions left may be used internally by Pyro.
     """
-    def __init__(self, first_available_dim=0):
+    def __init__(self, first_available_dim):
         super(EnumerateMessenger, self).__init__()
         self.next_available_dim = first_available_dim
 
@@ -35,6 +34,8 @@ class EnumerateMessenger(Messenger):
             event_dim = len(msg["fn"].event_shape)
             actual_dim = value.dim() - event_dim - 1
             target_dim = self.next_available_dim
+            if target_dim == float('inf'):
+                raise ValueError("max_iarange_nesting must be set to a finite value for parallel enumeration")
             self.next_available_dim += 1
             if actual_dim > target_dim:
                 raise ValueError("Expected enumerated value to have dim at most {} but got shape {}".format(
@@ -56,7 +57,7 @@ class EnumeratePoutine(Poutine):
         from the right) that is available for parallel enumeration. This
         dimension and all dimensions left may be used internally by Pyro.
     """
-    def __init__(self, fn, first_available_dim=0):
+    def __init__(self, fn, first_available_dim):
         """
         :param fn: A stochastic function (callable containing pyro primitive
             calls).

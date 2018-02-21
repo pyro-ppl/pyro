@@ -321,7 +321,7 @@ def run_inference_ss_vae(args):
     # set up the loss(es) for inference. wrapping the guide in enumerate_discrete builds the loss as a sum
     # by enumerating each class label for the sampled discrete categorical distribution in the model
     guide = enumerate_discrete(ss_vae.guide, args.enum_discrete)
-    loss_basic = SVI(ss_vae.model, guide, optimizer, loss="ELBO")
+    loss_basic = SVI(ss_vae.model, guide, optimizer, loss="ELBO", max_iarange_nesting=1)
 
     # build a list of all losses considered
     losses = [loss_basic]
