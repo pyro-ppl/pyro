@@ -25,7 +25,7 @@ Kernels
     :member-order: bysource
     
 Likelihoods
--------
+-----------
 
 .. automodule:: pyro.contrib.gp.likelihoods.likelihood
     :members:
