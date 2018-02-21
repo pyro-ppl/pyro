@@ -7,6 +7,8 @@ from torch.autograd import Variable
 
 from pyro.distributions.torch_distribution import TorchDistributionMixin
 
+__all__ = []  # Constructed below.
+
 # These distributions require custom wrapping.
 # TODO rename parameters so these can be imported automatically.
 
@@ -98,6 +100,8 @@ for _name, _Dist in torch.distributions.__dict__.items():
         continue
     if _Dist is torch.distributions.Distribution:
         continue
+
+    __all__.append(_name)
     if _name in dir():
         continue
 
