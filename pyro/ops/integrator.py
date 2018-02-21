@@ -17,7 +17,7 @@ def velocity_verlet(z, r, potential_fn, step_size, num_steps=1, z_grads=None):
         momenta ``r``.
     :param float step_size: step size for each time step iteration.
     :param int num_steps: number of discrete time steps over which to integrate.
-    :param torch.Tensor grads: optional gradients of potential energy at ``z``.
+    :param torch.Tensor z_grads: optional gradients of potential energy at current ``z``.
     :return tuple (z_next, r_next): final position and momenta, having same types as (z, r).
     """
     z_next = {key: val.data.clone() for key, val in z.items()}
