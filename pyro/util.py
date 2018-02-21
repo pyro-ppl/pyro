@@ -202,16 +202,9 @@ def is_inf(x):
     return (x == float('inf')).all()
 
 
-def log_sum_exp(vecs):
-    n = len(vecs.size())
-    if n == 1:
-        vecs = vecs.view(1, -1)
-    _, idx = torch.max(vecs, 1)
-    max_score = torch.index_select(vecs, 1, idx.view(-1))
-    ret = max_score + torch.log(torch.sum(torch.exp(vecs - max_score.expand_as(vecs))))
-    if n == 1:
-        return ret.view(-1)
-    return ret
+def log_sum_exp(tensor):
+    max_val = tensor.max(dim=-1)[0]
+    return max_val + (tensor - max_val).exp().sum(dim=-1).log()
 
 
 def zero_grads(tensors):

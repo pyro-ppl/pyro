@@ -83,6 +83,12 @@ class Trace_ELBO(ELBO):
             weight = 1.0 / self.num_particles
             yield weight, model_trace, guide_trace, log_r
 
+    def _is_batched(self, weight):
+        return self.enum_discrete and \
+               isinstance(weight, Variable) and \
+               weight.dim() > 0 and \
+               weight.size(0) > 1
+
     def loss(self, model, guide, *args, **kwargs):
         """
         :returns: returns an estimate of the ELBO
@@ -94,7 +100,7 @@ class Trace_ELBO(ELBO):
         for weight, model_trace, guide_trace, log_r in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = weight * 0
 
-            if (self.enum_discrete and isinstance(weight, Variable) and weight.size(0) > 1):
+            if self._is_batched(weight):
                 log_pdf = "batch_log_pdf"
             else:
                 log_pdf = "log_pdf"
@@ -133,7 +139,7 @@ class Trace_ELBO(ELBO):
         for weight, model_trace, guide_trace, log_r in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = weight * 0
             surrogate_elbo_particle = weight * 0
-            batched = (self.enum_discrete and isinstance(weight, Variable) and weight.size(0) > 1)
+            batched = self._is_batched(weight)
             # compute elbo and surrogate elbo
             if batched:
                 log_pdf = "batch_log_pdf"
