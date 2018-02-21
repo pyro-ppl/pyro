@@ -29,10 +29,8 @@ class ELBO(object):
 
     def __init__(self,
                  num_particles=1,
-                 enum_discrete=False,
                  max_iarange_nesting=float('inf')):
         self.num_particles = num_particles
-        self.enum_discrete = enum_discrete
         self.max_iarange_nesting = max_iarange_nesting
 
     @staticmethod

@@ -54,3 +54,48 @@ def iter_discrete_traces(graph_type, max_iarange_nesting, fn, *args, **kwargs):
             scale = math.exp(log_pdf)
 
         yield scale, full_trace
+
+
+def _enumerate_discrete(default):
+
+    def config_fn(site):
+        if site["type"] != "sample" or site["is_observed"]:
+            return {}
+        if not site["fn"].get("enumerable", False):
+            return {}
+        if "enumerate" in site["infer"]:
+            return {}  # do not override existing config
+        return {"enumerate": default}
+
+    return config_fn
+
+
+def enumerate_discrete(guide=None, default="sequential"):
+    """
+    Configures each enumerable site a guide to enumerate with given method,
+    ``site["infer"]["enumerate"] = default``. This can be used as either a
+    function::
+
+        guide = enumerate_discrete(guide)
+
+    or as a decorator::
+
+        @enumerate_discrete
+        def guide1(*args, **kwargs):
+            ...
+
+        @enumerate_discrete(default="parallel")
+        def guide2(*args, **kwargs):
+            ...
+
+    :param callable guide: a pyro model that will be used as a guide in
+        :class:`~pyro.infer.svi.SVI`.
+    :param str default: either "sequential" or "parallel".
+    :return: an annotated guide
+    :rtype: callable
+    """
+    # Support usage as a decorator:
+    if guide is None:
+        return lambda guide: enumerate_discrete(guide, default=default)
+
+    return poutine.infer_config(guide, _enumerate_discrete(default))
