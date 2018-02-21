@@ -41,7 +41,7 @@ MultivariateNormal
     :show-inheritance:
 
 OMTMultivariateNormal
-------------------
+---------------------
 .. automodule:: pyro.distributions.omt_mvn
     :members:
     :undoc-members:
