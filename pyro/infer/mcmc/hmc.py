@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+from collections import OrderedDict
+
 import torch
 
 import pyro
@@ -52,7 +54,7 @@ class HMC(TraceKernel):
 
     def _reset(self):
         self._t = 0
-        self._r_dist = {}
+        self._r_dist = OrderedDict()
         self._args = None
         self._kwargs = None
         self._accept_cnt = 0
@@ -76,7 +78,8 @@ class HMC(TraceKernel):
         # and dict object used by the integrator
         self._prototype_trace = poutine.trace(self.model).get_trace(*args, **kwargs)
         # momenta distribution - currently standard normal
-        for name, node in self._prototype_trace.iter_stochastic_nodes():
+        for name, node in sorted(self._prototype_trace.iter_stochastic_nodes(),
+                                 key=lambda x: x[0]):
             r_mu = torch.zeros_like(node['value'])
             r_sigma = torch.ones_like(node['value'])
             self._r_dist[name] = dist.Normal(mu=r_mu, sigma=r_sigma)
@@ -87,7 +90,7 @@ class HMC(TraceKernel):
 
     def sample(self, trace):
         z = {name: node['value'] for name, node in trace.iter_stochastic_nodes()}
-        r = {name: pyro.sample('r_{}_t={}'.format(name, self._t), self._r_dist[name]) for name in sorted(z)}
+        r = {name: pyro.sample('r_{}_t={}'.format(name, self._t), self._r_dist[name]) for name in self._r_dist}
         z_new, r_new = velocity_verlet(z, r, self._potential_energy, self.step_size, self.num_steps)
         # apply Metropolis correction
         energy_proposal = self._energy(z_new, r_new)

@@ -10,3 +10,11 @@ HMC
     :members:
     :undoc-members:
     :show-inheritance:
+    
+NUTS
+----
+
+.. automodule:: pyro.infer.mcmc.nuts
+    :members:
+    :undoc-members:
+    :show-inheritance:
