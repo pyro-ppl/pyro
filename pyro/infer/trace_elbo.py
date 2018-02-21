@@ -26,46 +26,31 @@ class Trace_ELBO(ELBO):
         runs the guide and runs the model against the guide with
         the result packaged as a trace generator
         """
+        # enable parallel enumeration
+        guide = EnumeratePoutine(guide, first_available_dim=self.max_iarange_nesting)
 
         for i in range(self.num_particles):
-            if self.enum_discrete:
-                # This enables parallel enumeration.
-                guide = EnumeratePoutine(guide, first_available_dim=self.max_iarange_nesting)
-                # This iterates over a bag of traces, one trace per particle.
-                for scale, guide_trace in iter_discrete_traces("flat", self.max_iarange_nesting,
-                                                               guide, *args, **kwargs):
-                    model_trace = poutine.trace(poutine.replay(model, guide_trace),
-                                                graph_type="flat").get_trace(*args, **kwargs)
+            # iterate over a bag of traces, one trace per particle
+            for scale, guide_trace in iter_discrete_traces("flat", self.max_iarange_nesting, guide, *args, **kwargs):
+                model_trace = poutine.trace(poutine.replay(model, guide_trace),
+                                            graph_type="flat").get_trace(*args, **kwargs)
 
-                    check_model_guide_match(model_trace, guide_trace)
-                    guide_trace = prune_subsample_sites(guide_trace)
-                    model_trace = prune_subsample_sites(model_trace)
+                check_model_guide_match(model_trace, guide_trace)
+                guide_trace = prune_subsample_sites(guide_trace)
+                model_trace = prune_subsample_sites(model_trace)
 
-                    log_r = 0
-                    model_trace.compute_batch_log_pdf()
-                    for site in model_trace.nodes.values():
-                        if site["type"] == "sample":
-                            log_r += sum_rightmost(site["batch_log_pdf"], self.max_iarange_nesting)
-                    guide_trace.compute_score_parts()
-                    for site in guide_trace.nodes.values():
-                        if site["type"] == "sample":
-                            log_r -= sum_rightmost(site["batch_log_pdf"], self.max_iarange_nesting)
+                log_r = 0
+                model_trace.compute_batch_log_pdf()
+                for site in model_trace.nodes.values():
+                    if site["type"] == "sample":
+                        log_r = log_r + sum_rightmost(site["batch_log_pdf"], self.max_iarange_nesting)
+                guide_trace.compute_score_parts()
+                for site in guide_trace.nodes.values():
+                    if site["type"] == "sample":
+                        log_r = log_r - sum_rightmost(site["batch_log_pdf"], self.max_iarange_nesting)
 
-                    weight = scale / self.num_particles
-                    yield weight, model_trace, guide_trace, log_r
-                continue
-
-            guide_trace = poutine.trace(guide).get_trace(*args, **kwargs)
-            model_trace = poutine.trace(poutine.replay(model, guide_trace)).get_trace(*args, **kwargs)
-
-            check_model_guide_match(model_trace, guide_trace)
-            guide_trace = prune_subsample_sites(guide_trace)
-            model_trace = prune_subsample_sites(model_trace)
-
-            guide_trace.compute_score_parts()
-            log_r = model_trace.log_pdf() - guide_trace.log_pdf()
-            weight = 1.0 / self.num_particles
-            yield weight, model_trace, guide_trace, log_r
+                weight = scale / self.num_particles
+                yield weight, model_trace, guide_trace, log_r
 
     def loss(self, model, guide, *args, **kwargs):
         """
@@ -81,11 +66,11 @@ class Trace_ELBO(ELBO):
                 if model_site["type"] == "sample":
                     model_log_pdf = sum_rightmost(model_site["batch_log_pdf"], self.max_iarange_nesting)
                     if model_site["is_observed"]:
-                        elbo_particle += model_log_pdf
+                        elbo_particle = elbo_particle + model_log_pdf
                     else:
                         guide_site = guide_trace.nodes[name]
                         guide_log_pdf = sum_rightmost(guide_site["batch_log_pdf"], self.max_iarange_nesting)
-                        elbo_particle += model_log_pdf - guide_log_pdf
+                        elbo_particle = elbo_particle + model_log_pdf - guide_log_pdf
 
             # drop terms of weight zero to avoid nans
             if isinstance(weight, numbers.Number):
@@ -119,15 +104,15 @@ class Trace_ELBO(ELBO):
                 if model_site["type"] == "sample":
                     model_log_pdf = sum_rightmost(model_site["batch_log_pdf"], self.max_iarange_nesting)
                     if model_site["is_observed"]:
-                        elbo_particle += model_log_pdf
-                        surrogate_elbo_particle += model_log_pdf
+                        elbo_particle = elbo_particle + model_log_pdf
+                        surrogate_elbo_particle = surrogate_elbo_particle + model_log_pdf
                     else:
                         guide_site = guide_trace.nodes[name]
                         guide_log_pdf, score_function_term, entropy_term = guide_site["score_parts"]
 
                         guide_log_pdf = sum_rightmost(guide_log_pdf, self.max_iarange_nesting)
-                        elbo_particle += model_log_pdf - guide_log_pdf
-                        surrogate_elbo_particle += model_log_pdf
+                        elbo_particle = elbo_particle + model_log_pdf - guide_log_pdf
+                        surrogate_elbo_particle = surrogate_elbo_particle + model_log_pdf
 
                         if not is_identically_zero(entropy_term):
                             entropy_term = sum_rightmost(entropy_term, self.max_iarange_nesting)
@@ -135,7 +120,7 @@ class Trace_ELBO(ELBO):
 
                         if not is_identically_zero(score_function_term):
                             score_function_term = sum_rightmost(score_function_term, self.max_iarange_nesting)
-                            surrogate_elbo_particle += log_r.detach() * score_function_term
+                            surrogate_elbo_particle = surrogate_elbo_particle + log_r.detach() * score_function_term
 
             # drop terms of weight zero to avoid nans
             if isinstance(weight, numbers.Number):

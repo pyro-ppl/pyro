@@ -14,8 +14,8 @@ class ELBO(object):
     :param bool enum_discrete: Whether to sum over discrete latent variables,
         rather than sample them.
     :param int max_iarange_nesting: optional bound on max number of nested
-        :func:`pyro.iarange` contexts. This is ignored unless
-        ``enum_discrete == True`` and any site sample sets
+        :func:`pyro.iarange` contexts. This is only required to enumerate over
+        sample sites in parallel, e.g. if a site sets
         ``infer={"enumerate": "parallel"}``.
 
     References
