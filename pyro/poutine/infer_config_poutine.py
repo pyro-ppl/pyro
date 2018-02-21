@@ -27,7 +27,8 @@ class InferConfigMessenger(Messenger):
         Otherwise, implements default sampling behavior
         with no additional effects.
         """
-        msg["infer"].setdefault("enumerate", {}).update(self.config_fn(msg))
+        msg["infer"].setdefault("enumerate", {})
+        msg["infer"].update(self.config_fn(msg))
         return None
 
     def _pyro_param(self, msg):
@@ -40,7 +41,7 @@ class InferConfigMessenger(Messenger):
         Otherwise, implements default param behavior
         with no additional effects.
         """
-        msg["infer"].setdefault("enumerate", {}).update(self.config_fn(msg))
+        msg["infer"].update(self.config_fn(msg))
         return None
 
 

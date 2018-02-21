@@ -327,6 +327,7 @@ def param(name, *args, **kwargs):
             "name": name,
             "args": args,
             "kwargs": kwargs,
+            "infer": {},
             "scale": 1.0,
             "cond_indep_stack": [],
             "value": None,
