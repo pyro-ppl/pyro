@@ -140,7 +140,7 @@ class NUTS(HMC):
             z_left_grads = half_tree.z_left_grads
             z_right = other_half_tree.z_right
             r_right = other_half_tree.r_right
-            z_right_grads = half_tree.z_right_grads
+            z_right_grads = other_half_tree.z_right_grads
         else:
             z_left = other_half_tree.z_left
             r_left = other_half_tree.r_left
