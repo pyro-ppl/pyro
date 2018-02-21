@@ -618,5 +618,5 @@ class InferConfigPoutineTests(TestCase):
         tr = poutine.trace(cfg_model).get_trace()
 
         assert tr.nodes["a"]["infer"] == {"enumerate": "parallel", "blah": True}
-        assert tr.nodes["b"]["infer"] == {"enumerate": {}, "blah": True}
+        assert tr.nodes["b"]["infer"] == {"blah": True}
         assert tr.nodes["p"]["infer"] == {}

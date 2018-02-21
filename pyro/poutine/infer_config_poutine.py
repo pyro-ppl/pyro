@@ -27,7 +27,6 @@ class InferConfigMessenger(Messenger):
         Otherwise, implements default sampling behavior
         with no additional effects.
         """
-        msg["infer"].setdefault("enumerate", {})
         msg["infer"].update(self.config_fn(msg))
         return None
 
