@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 from torch.autograd import Variable, grad
 
 
-def velocity_verlet(z, r, potential_fn, step_size, num_steps=1):
+def velocity_verlet(z, r, potential_fn, step_size, num_steps=1, z_grads=None):
     """
     Second order symplectic integrator that uses the velocity verlet algorithm.
 
@@ -17,11 +17,12 @@ def velocity_verlet(z, r, potential_fn, step_size, num_steps=1):
         momenta ``r``.
     :param float step_size: step size for each time step iteration.
     :param int num_steps: number of discrete time steps over which to integrate.
+    :param torch.Tensor grads: optional gradients of potential energy at ``z``.
     :return tuple (z_next, r_next): final position and momenta, having same types as (z, r).
     """
     z_next = {key: val.data.clone() for key, val in z.items()}
     r_next = {key: val.data.clone() for key, val in r.items()}
-    grads = _grad(potential_fn, z_next)
+    grads = _grad(potential_fn, z_next) if z_grads is None else z_grads
 
     for _ in range(num_steps):
         for site_name in z_next:
@@ -35,7 +36,7 @@ def velocity_verlet(z, r, potential_fn, step_size, num_steps=1):
             r_next[site_name] = r_next[site_name] + 0.5 * step_size * (-grads[site_name])
     z_next = {key: Variable(val) for key, val in z_next.items()}
     r_next = {key: Variable(val) for key, val in r_next.items()}
-    return z_next, r_next
+    return z_next, r_next, grads
 
 
 def _grad(potential_fn, z):
