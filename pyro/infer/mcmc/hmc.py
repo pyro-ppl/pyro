@@ -78,7 +78,8 @@ class HMC(TraceKernel):
         # and dict object used by the integrator
         self._prototype_trace = poutine.trace(self.model).get_trace(*args, **kwargs)
         # momenta distribution - currently standard normal
-        for name, node in self._prototype_trace.iter_stochastic_nodes():
+        for name, node in sorted(self._prototype_trace.iter_stochastic_nodes(),
+                                 key=lambda x: x[0]):
             r_mu = torch.zeros_like(node['value'])
             r_sigma = torch.ones_like(node['value'])
             self._r_dist[name] = dist.Normal(mu=r_mu, sigma=r_sigma)
