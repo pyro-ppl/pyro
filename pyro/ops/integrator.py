@@ -22,7 +22,7 @@ def velocity_verlet(z, r, potential_fn, step_size, num_steps=1):
     """
     z_next = {key: val.data.clone() for key, val in z.items()}
     r_next = {key: val.data.clone() for key, val in r.items()}
-    grads = _grad(potential_fn, z_next)
+    grads, _ = _grad(potential_fn, z_next)
 
     for _ in range(num_steps):
         for site_name in z_next:
@@ -30,7 +30,7 @@ def velocity_verlet(z, r, potential_fn, step_size, num_steps=1):
             r_next[site_name] = r_next[site_name] + 0.5 * step_size * (-grads[site_name])
             # z(n+1)
             z_next[site_name] = z_next[site_name] + step_size * r_next[site_name]
-        grads = _grad(potential_fn, z_next)
+        grads, _ = _grad(potential_fn, z_next)
         for site_name in r_next:
             # r(n+1)
             r_next[site_name] = r_next[site_name] + 0.5 * step_size * (-grads[site_name])
