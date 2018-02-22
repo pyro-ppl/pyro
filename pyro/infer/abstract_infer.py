@@ -58,14 +58,11 @@ class Histogram(dist.Distribution):
                 # Value has already been seen.
                 logits[ix] = util.log_sum_exp(torch.stack([logits[ix], logit]))
 
-        logits = torch.stack(logits).squeeze()
+        logits = torch.stack(logits).contiguous().view(-1)
         logits -= util.log_sum_exp(logits)
         if not isinstance(logits, torch.autograd.Variable):
             logits = Variable(logits)
         logits = logits - util.log_sum_exp(logits)
-        # Categorical distribution must have at least one event dimension
-        if logits.dim() == 0:
-            logits = logits.unsqueeze(-1)
         d = dist.Categorical(logits=logits)
         return d, values
 
