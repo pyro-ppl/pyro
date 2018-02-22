@@ -18,7 +18,7 @@ def count_objects_of_type(type_):
     return sum(1 for obj in gc.get_objects() if isinstance(obj, type_))
 
 
-def test_trace_memory():
+def test_trace():
     n = 11
     data = Variable(torch.zeros(n))
 
@@ -30,38 +30,59 @@ def test_trace_memory():
     counts = []
     gc.collect()
     gc.collect()
+    expected = count_objects_of_type(Trace)
     for _ in range(10):
         poutine.trace(model)(data)
         counts.append(count_objects_of_type(Trace))
 
-    assert set(counts) == set([0]), counts
+    assert set(counts) == set([expected]), counts
 
 
-def test_networkx_copy_memory():
+class Foo(dict):
+    pass
+
+
+def test_dict_copy():
+    counts = []
+    gc.collect()
+    gc.collect()
+    f = Foo()
+    for _ in range(10):
+        f.copy()
+        counts.append(count_objects_of_type(Foo))
+
+    assert set(counts) == set([1]), counts
+
+
+def test_networkx_copy():
     counts = []
     gc.collect()
     gc.collect()
     g = nx.DiGraph()
+    expected = count_objects_of_type(nx.DiGraph)
     for _ in range(10):
-        g.copy()
+        h = g.fresh_copy()
+        h.__dict__.clear()
+        del h
         counts.append(count_objects_of_type(nx.DiGraph))
 
-    assert set(counts) == set([1]), counts
+    assert set(counts) == set([expected]), counts
 
 
-def test_copy_memory():
+def test_copy():
     counts = []
     gc.collect()
     gc.collect()
     tr = Trace()
+    expected = count_objects_of_type(Trace)
     for _ in range(10):
         tr.copy()
         counts.append(count_objects_of_type(Trace))
 
-    assert set(counts) == set([1]), counts
+    assert set(counts) == set([expected]), counts
 
 
-def test_trace_copy_memory():
+def test_trace_copy():
     n = 11
     data = Variable(torch.zeros(n))
 
@@ -73,12 +94,12 @@ def test_trace_copy_memory():
     counts = []
     gc.collect()
     gc.collect()
+    expected = count_objects_of_type(Trace)
     for _ in range(10):
-        tr = poutine.trace(model).get_trace(data)
-        tr.copy()
+        poutine.trace(model).get_trace(data).copy()
         counts.append(count_objects_of_type(Trace))
 
-    assert set(counts) == set([0]), counts
+    assert set(counts) == set([expected]), counts
 
 
 def trace_replay(model, guide, *args):
@@ -86,7 +107,7 @@ def trace_replay(model, guide, *args):
     poutine.trace(poutine.replay(model, guide_trace)).get_trace(*args)
 
 
-def test_trace_replay_memory():
+def test_trace_replay():
     n = 11
     data = Variable(torch.zeros(n))
 
@@ -101,14 +122,15 @@ def test_trace_replay_memory():
     counts = []
     gc.collect()
     gc.collect()
+    expected = count_objects_of_type(Trace)
     for _ in range(10):
         trace_replay(model, guide, data)
         counts.append(count_objects_of_type(Trace))
 
-    assert set(counts) == set([0]), counts
+    assert set(counts) == set([expected]), counts
 
 
-def test_svi_memory():
+def test_svi():
     n = 11
     data = Variable(torch.zeros(n))
 
@@ -126,8 +148,9 @@ def test_svi_memory():
     counts = []
     gc.collect()
     gc.collect()
+    expected = count_objects_of_type(Trace)
     for _ in range(10):
         inference.step(data)
         counts.append(count_objects_of_type(Trace))
 
-    assert set(counts) == set([0]), counts
+    assert set(counts) == set([expected]), counts
