@@ -7,7 +7,7 @@ import torch
 import pyro
 import pyro.distributions as dist
 from pyro.infer.util import torch_data_sum
-from pyro.ops.integrator import velocity_verlet
+from pyro.ops.integrator import single_step_velocity_verlet
 from pyro.util import ng_ones, ng_zeros
 
 from .hmc import HMC
@@ -80,7 +80,7 @@ class NUTS(HMC):
 
     def _build_basetree(self, z, r, z_grads, log_slice, direction):
         step_size = self.step_size if direction == 1 else -self.step_size
-        z_new, r_new, z_grads, potential_energy = velocity_verlet(
+        z_new, r_new, z_grads, potential_energy = single_step_velocity_verlet(
             z, r, self._potential_energy, step_size, z_grads=z_grads)
         energy = potential_energy + self._kinetic_energy(r_new)
         dE = (log_slice + energy).data[0]

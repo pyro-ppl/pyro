@@ -109,7 +109,7 @@ TEST_CASES = [
     ), marks=[pytest.mark.xfail(reason="flaky"),
               pytest.mark.skipif('CI' in os.environ and os.environ['CI'] == 'true',
                                  reason='Slow test - skip on CI')])
-][3:]
+][:2]
 
 TEST_IDS = [t[0].id_fn() if type(t).__name__ == 'TestExample'
             else t[0][0].id_fn() for t in TEST_CASES]

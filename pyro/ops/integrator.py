@@ -49,7 +49,7 @@ def single_step_velocity_verlet(z, r, potential_fn, step_size, z_grads=None):
     """
     z_next = {key: val.data.clone() for key, val in z.items()}
     r_next = {key: val.data.clone() for key, val in r.items()}
-    grads = _grad(potential_fn, z_next) if z_grads is None else z_grads
+    grads = _grad(potential_fn, z_next)[0] if z_grads is None else z_grads
 
     for site_name in z_next:
         r_next[site_name] = r_next[site_name] + 0.5 * step_size * (-grads[site_name])
