@@ -18,8 +18,6 @@ def _log_prob_shape(dist, x_size=torch.Size()):
     expected_shape = broadcast_shape(dist.shape(), x_size, strict=True)
     if event_dims > 0:
         expected_shape = expected_shape[:-event_dims]
-    if not expected_shape:
-        expected_shape = (1,)
     return expected_shape
 
 # Distribution tests - all distributions

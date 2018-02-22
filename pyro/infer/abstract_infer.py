@@ -56,14 +56,13 @@ class Histogram(dist.Distribution):
                 logits.append(logit)
             else:
                 # Value has already been seen.
-                logits[ix] = util.log_sum_exp(torch.stack([logits[ix], logit]).squeeze())
+                logits[ix] = util.log_sum_exp(torch.stack([logits[ix], logit]))
 
-        logits = torch.stack(logits).squeeze()
+        logits = torch.stack(logits).contiguous().view(-1)
         logits -= util.log_sum_exp(logits)
         if not isinstance(logits, torch.autograd.Variable):
             logits = Variable(logits)
         logits = logits - util.log_sum_exp(logits)
-
         d = dist.Categorical(logits=logits)
         return d, values
 
