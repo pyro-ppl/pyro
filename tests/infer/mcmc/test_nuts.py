@@ -22,6 +22,10 @@ logger.setLevel(logging.INFO)
 TEST_CASES[0] = TEST_CASES[0]._replace(mean_tol=0.04, std_tol=0.04)
 TEST_CASES[1] = TEST_CASES[1]._replace(mean_tol=0.04, std_tol=0.04)
 
+# TODO: re-enable once https://github.com/uber/pyro/issues/799 is resolved, with lower number of samples
+TEST_CASES[2] = TEST_CASES[2]._replace(marks=[pytest.mark.skip(reason="Slow test using NUTS.")])
+TEST_CASES[3] = TEST_CASES[3]._replace(marks=[pytest.mark.skip(reason="Slow test using NUTS.")])
+
 
 @pytest.mark.parametrize(
     'fixture, num_samples, warmup_steps, hmc_params, expected_means, expected_precs, mean_tol, std_tol',

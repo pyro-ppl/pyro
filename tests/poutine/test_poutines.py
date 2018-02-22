@@ -592,3 +592,31 @@ class EscapePoutineTests(TestCase):
                 assert False
             except NonlocalExit:
                 assert "x" not in tem.trace
+
+
+class InferConfigPoutineTests(TestCase):
+    def setUp(self):
+        def model():
+            pyro.param("p", Variable(torch.zeros(1), requires_grad=True))
+            pyro.sample("a", Bernoulli(Variable(torch.Tensor([0.5]))),
+                        infer={"enumerate": "parallel"})
+            pyro.sample("b", Bernoulli(Variable(torch.Tensor([0.5]))))
+
+        self.model = model
+
+        def config_fn(site):
+            if site["type"] == "sample":
+                return {"blah": True}
+            else:
+                return {}
+
+        self.config_fn = config_fn
+
+    def test_infer_config_sample(self):
+        cfg_model = poutine.infer_config(self.model, self.config_fn)
+
+        tr = poutine.trace(cfg_model).get_trace()
+
+        assert tr.nodes["a"]["infer"] == {"enumerate": "parallel", "blah": True}
+        assert tr.nodes["b"]["infer"] == {"blah": True}
+        assert tr.nodes["p"]["infer"] == {}
