@@ -104,11 +104,11 @@ class QuarticOscillator(object):
 @pytest.mark.parametrize('example', TEST_EXAMPLES, ids=EXAMPLE_IDS)
 def test_trajectory(example):
     model, args = example
-    q_f, p_f, _ = velocity_verlet(args.q_i,
-                                  args.p_i,
-                                  model.potential_fn,
-                                  args.step_size,
-                                  args.num_steps)
+    q_f, p_f = velocity_verlet(args.q_i,
+                               args.p_i,
+                               model.potential_fn,
+                               args.step_size,
+                               args.num_steps)
     logger.info("initial q: {}".format(args.q_i))
     logger.info("final q: {}".format(q_f))
     assert_equal(q_f, args.q_f, args.prec)
@@ -118,11 +118,11 @@ def test_trajectory(example):
 @pytest.mark.parametrize('example', TEST_EXAMPLES, ids=EXAMPLE_IDS)
 def test_energy_conservation(example):
     model, args = example
-    q_f, p_f, _ = velocity_verlet(args.q_i,
-                                  args.p_i,
-                                  model.potential_fn,
-                                  args.step_size,
-                                  args.num_steps)
+    q_f, p_f = velocity_verlet(args.q_i,
+                               args.p_i,
+                               model.potential_fn,
+                               args.step_size,
+                               args.num_steps)
     energy_initial = model.energy(args.q_i, args.p_i)
     energy_final = model.energy(q_f, p_f)
     logger.info("initial energy: {}".format(energy_initial.data[0]))
@@ -133,15 +133,15 @@ def test_energy_conservation(example):
 @pytest.mark.parametrize('example', TEST_EXAMPLES, ids=EXAMPLE_IDS)
 def test_time_reversibility(example):
     model, args = example
-    q_forward, p_forward, _ = velocity_verlet(args.q_i,
-                                              args.p_i,
-                                              model.potential_fn,
-                                              args.step_size,
-                                              args.num_steps)
+    q_forward, p_forward = velocity_verlet(args.q_i,
+                                           args.p_i,
+                                           model.potential_fn,
+                                           args.step_size,
+                                           args.num_steps)
     p_reverse = {key: -val for key, val in p_forward.items()}
-    q_f, p_f, _ = velocity_verlet(q_forward,
-                                  p_reverse,
-                                  model.potential_fn,
-                                  args.step_size,
-                                  args.num_steps)
+    q_f, p_f = velocity_verlet(q_forward,
+                               p_reverse,
+                               model.potential_fn,
+                               args.step_size,
+                               args.num_steps)
     assert_equal(q_f, args.q_i, 1e-5)

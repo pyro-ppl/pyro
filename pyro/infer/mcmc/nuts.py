@@ -80,9 +80,10 @@ class NUTS(HMC):
 
     def _build_basetree(self, z, r, z_grads, log_slice, direction):
         step_size = self.step_size if direction == 1 else -self.step_size
-        z_new, r_new, z_grads = velocity_verlet(z, r, self._potential_energy,
-                                                step_size, z_grads=z_grads)
-        dE = (log_slice + self._energy(z_new, r_new)).data[0]
+        z_new, r_new, z_grads, potential_energy = velocity_verlet(
+            z, r, self._potential_energy, step_size, z_grads=z_grads)
+        energy = potential_energy + self._kinetic_energy(r_new)
+        dE = (log_slice + energy).data[0]
 
         # As a part of the slice sampling process (see below), along the trajectory
         #     we eliminate states which p(z, r) < u, or dE < 0.
