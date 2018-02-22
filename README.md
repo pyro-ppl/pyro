@@ -53,7 +53,7 @@ pip install .
 
 For recent features you can install Pyro from source.
 
-First install a recent PyTorch, currently PyTorch commit `ca5071d07`.
+First install a recent PyTorch, currently PyTorch commit `853dba8`.
 ```sh
 git clone git@github.com:pytorch/pytorch
 cd pytorch
