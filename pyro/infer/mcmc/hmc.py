@@ -44,7 +44,7 @@ class HMC(TraceKernel):
         trace_poutine = poutine.trace(poutine.replay(self.model, trace=z_trace))
         trace_poutine(*self._args, **self._kwargs)
         return trace_poutine.trace
-    
+
     def _kinetic_energy(self, r):
         return 0.5 * torch.sum(torch.stack([r[name]**2 for name in r]))
 

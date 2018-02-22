@@ -43,7 +43,7 @@ def single_step_velocity_verlet(z, r, potential_fn, step_size, z_grads=None):
     """
     A special case of ``velocity_verlet`` integrator where ``num_steps=1``. It is particular
     helpful for NUTS kernel.
-    
+
     :return tuple (z_next, r_next, z_grads, potential_energy): next position and momenta,
         together with the potential energy and its gradient w.r.t. ``z_next``.
     """
