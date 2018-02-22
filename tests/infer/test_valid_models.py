@@ -9,7 +9,7 @@ from torch.autograd import Variable
 
 import pyro
 import pyro.distributions as dist
-from pyro.infer import SVI, enumerate_discrete
+from pyro.infer import SVI, config_enumerate
 from pyro.optim import Adam
 
 logger = logging.getLogger(__name__)
@@ -408,7 +408,7 @@ def test_enum_discrete_single_ok():
         p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
         pyro.sample("x", dist.Bernoulli(p))
 
-    assert_ok(model, enumerate_discrete(guide))
+    assert_ok(model, config_enumerate(guide))
 
 
 def test_enum_discrete_single_single_ok():
@@ -423,7 +423,7 @@ def test_enum_discrete_single_single_ok():
         pyro.sample("x", dist.Bernoulli(p))
         pyro.sample("y", dist.Bernoulli(p))
 
-    assert_ok(model, enumerate_discrete(guide))
+    assert_ok(model, config_enumerate(guide))
 
 
 def test_enum_discrete_irange_single_ok():
@@ -438,7 +438,7 @@ def test_enum_discrete_irange_single_ok():
         for i in pyro.irange("irange", 10, 5):
             pyro.sample("x_{}".format(i), dist.Bernoulli(p))
 
-    assert_ok(model, enumerate_discrete(guide))
+    assert_ok(model, config_enumerate(guide))
 
 
 def test_iarange_enum_discrete_batch_ok():
@@ -453,7 +453,7 @@ def test_iarange_enum_discrete_batch_ok():
         with pyro.iarange("iarange", 10, 5) as ind:
             pyro.sample("x", dist.Bernoulli(p).reshape(sample_shape=[len(ind)]))
 
-    assert_ok(model, enumerate_discrete(guide))
+    assert_ok(model, config_enumerate(guide))
 
 
 def test_iarange_enum_discrete_no_discrete_vars_ok():
@@ -470,7 +470,7 @@ def test_iarange_enum_discrete_no_discrete_vars_ok():
         with pyro.iarange("iarange", 10, 5) as ind:
             pyro.sample("x", dist.Normal(mu, sigma).reshape(sample_shape=[len(ind)]))
 
-    assert_ok(model, enumerate_discrete(guide))
+    assert_ok(model, config_enumerate(guide))
 
 
 @pytest.mark.xfail
@@ -484,7 +484,7 @@ def test_no_iarange_enum_discrete_batch_error():
         p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
         pyro.sample("x", dist.Bernoulli(p).reshape(sample_shape=[5]))
 
-    assert_error(model, enumerate_discrete(guide))
+    assert_error(model, config_enumerate(guide))
 
 
 @pytest.mark.xfail(reason="torch.distributions.Bernoulli is too permissive")
@@ -502,7 +502,7 @@ def test_enum_discrete_global_local_error():
         with pyro.iarange("iarange", 10, 5) as ind:
             pyro.sample("y", dist.Bernoulli(p).reshape(sample_shape=[len(ind)]))
 
-    assert_error(model, enumerate_discrete(guide))
+    assert_error(model, config_enumerate(guide))
 
 
 @pytest.mark.parametrize('max_iarange_nesting', [0, 1, 2])
@@ -519,7 +519,7 @@ def test_enum_discrete_parallel_ok(max_iarange_nesting):
         x = pyro.sample("x", dist.Bernoulli(p).reshape(extra_event_dims=1))
         assert x.shape == torch.Size([2]) + iarange_shape + p.shape
 
-    assert_ok(model, enumerate_discrete(guide, "parallel"),
+    assert_ok(model, config_enumerate(guide, "parallel"),
               max_iarange_nesting=max_iarange_nesting)
 
 
@@ -535,7 +535,7 @@ def test_enum_discrete_parallel_nested_ok(max_iarange_nesting):
         assert x2.shape == torch.Size([2]) + iarange_shape + p2.shape
         assert x3.shape == torch.Size([3, 1]) + iarange_shape + p3.shape
 
-    assert_ok(model, enumerate_discrete(model, "parallel"), max_iarange_nesting=max_iarange_nesting)
+    assert_ok(model, config_enumerate(model, "parallel"), max_iarange_nesting=max_iarange_nesting)
 
 
 def test_enum_discrete_parallel_iarange_ok():
@@ -567,4 +567,4 @@ def test_enum_discrete_parallel_iarange_ok():
     assert_ok(model, model, max_iarange_nesting=2)
 
     enum_discrete = True
-    assert_ok(model, enumerate_discrete(model, "parallel"), max_iarange_nesting=2)
+    assert_ok(model, config_enumerate(model, "parallel"), max_iarange_nesting=2)

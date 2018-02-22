@@ -56,7 +56,7 @@ def iter_discrete_traces(graph_type, max_iarange_nesting, fn, *args, **kwargs):
         yield scale, full_trace
 
 
-def _enumerate_discrete(default):
+def _config_enumerate(default):
 
     def config_fn(site):
         if site["type"] != "sample" or site["is_observed"]:
@@ -70,21 +70,21 @@ def _enumerate_discrete(default):
     return config_fn
 
 
-def enumerate_discrete(guide=None, default="sequential"):
+def config_enumerate(guide=None, default="sequential"):
     """
     Configures each enumerable site a guide to enumerate with given method,
     ``site["infer"]["enumerate"] = default``. This can be used as either a
     function::
 
-        guide = enumerate_discrete(guide)
+        guide = config_enumerate(guide)
 
     or as a decorator::
 
-        @enumerate_discrete
+        @config_enumerate
         def guide1(*args, **kwargs):
             ...
 
-        @enumerate_discrete(default="parallel")
+        @config_enumerate(default="parallel")
         def guide2(*args, **kwargs):
             ...
 
@@ -99,6 +99,6 @@ def enumerate_discrete(guide=None, default="sequential"):
             repr(default)))
     # Support usage as a decorator:
     if guide is None:
-        return lambda guide: enumerate_discrete(guide, default=default)
+        return lambda guide: config_enumerate(guide, default=default)
 
-    return poutine.infer_config(guide, _enumerate_discrete(default))
+    return poutine.infer_config(guide, _config_enumerate(default))

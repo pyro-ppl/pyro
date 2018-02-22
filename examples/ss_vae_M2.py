@@ -4,7 +4,7 @@ import pyro
 from torch.autograd import Variable
 import pyro.distributions as dist
 from utils.mnist_cached import MNISTCached, setup_data_loaders
-from pyro.infer import SVI, enumerate_discrete
+from pyro.infer import SVI, config_enumerate
 from pyro.optim import Adam
 from pyro.nn import ClippedSoftmax, ClippedSigmoid
 from utils.custom_mlp import MLP, Exp
@@ -318,9 +318,9 @@ def run_inference_ss_vae(args):
     adam_params = {"lr": args.learning_rate, "betas": (args.beta_1, 0.999)}
     optimizer = Adam(adam_params)
 
-    # set up the loss(es) for inference. wrapping the guide in enumerate_discrete builds the loss as a sum
+    # set up the loss(es) for inference. wrapping the guide in config_enumerate builds the loss as a sum
     # by enumerating each class label for the sampled discrete categorical distribution in the model
-    guide = enumerate_discrete(ss_vae.guide, args.enum_discrete)
+    guide = config_enumerate(ss_vae.guide, args.enum_discrete)
     loss_basic = SVI(ss_vae.model, guide, optimizer, loss="ELBO", max_iarange_nesting=1)
 
     # build a list of all losses considered

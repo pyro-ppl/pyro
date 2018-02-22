@@ -11,7 +11,7 @@ from torch.autograd import Variable
 import pyro
 import pyro.distributions as dist
 import pyro.optim
-from pyro.infer import SVI, enumerate_discrete
+from pyro.infer import SVI, config_enumerate
 from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.trace_elbo import Trace_ELBO
 from pyro.infer.tracegraph_elbo import TraceGraph_ELBO
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 def test_iter_discrete_traces_scalar(graph_type):
     pyro.clear_param_store()
 
-    @enumerate_discrete
+    @config_enumerate
     def model():
         p = pyro.param("p", Variable(torch.Tensor([0.05])))
         ps = pyro.param("ps", Variable(torch.Tensor([0.1, 0.2, 0.3, 0.4])))
@@ -50,7 +50,7 @@ def test_iter_discrete_traces_scalar(graph_type):
 def test_iter_discrete_traces_vector(graph_type):
     pyro.clear_param_store()
 
-    @enumerate_discrete
+    @config_enumerate
     def model():
         p = pyro.param("p", Variable(torch.Tensor([[0.05], [0.15]])))
         ps = pyro.param("ps", Variable(torch.Tensor([[0.1, 0.2, 0.3, 0.4],
@@ -88,7 +88,7 @@ def test_iter_discrete_traces_nan(enum_discrete, trace_graph):
         p = pyro.param("p", Variable(torch.Tensor([0.0, 0.5, 1.0]), requires_grad=True))
         pyro.sample("z", dist.Bernoulli(p).reshape(extra_event_dims=1))
 
-    guide = enumerate_discrete(guide, default=enum_discrete)
+    guide = config_enumerate(guide, default=enum_discrete)
     Elbo = TraceGraph_ELBO if trace_graph else Trace_ELBO
     elbo = Elbo(max_iarange_nesting=0)
     with xfail_if_not_implemented():
@@ -128,7 +128,7 @@ def gmm_guide(data, verbose=False):
 def test_gmm_iter_discrete_traces(model, data_size, graph_type):
     pyro.clear_param_store()
     data = Variable(torch.arange(0, data_size))
-    model = enumerate_discrete(model)
+    model = config_enumerate(model)
     traces = list(iter_discrete_traces(graph_type, 0, model, data=data, verbose=True))
     # This non-vectorized version is exponential in data_size:
     assert len(traces) == 2**data_size
@@ -163,7 +163,7 @@ def gmm_batch_guide(data):
 def test_gmm_batch_iter_discrete_traces(model, data_size, graph_type):
     pyro.clear_param_store()
     data = Variable(torch.arange(0, data_size))
-    model = enumerate_discrete(model)
+    model = config_enumerate(model)
     traces = list(iter_discrete_traces(graph_type, 1, model, data=data))
     # This vectorized version is independent of data_size:
     assert len(traces) == 2
@@ -179,7 +179,7 @@ def test_svi_step_smoke(model, guide, enum_discrete, trace_graph):
     pyro.clear_param_store()
     data = Variable(torch.Tensor([0, 1, 9]))
 
-    guide = enumerate_discrete(guide, default=enum_discrete)
+    guide = config_enumerate(guide, default=enum_discrete)
     optimizer = pyro.optim.Adam({"lr": .001})
     inference = SVI(model, guide, optimizer, loss="ELBO",
                     trace_graph=trace_graph, max_iarange_nesting=1)
@@ -226,7 +226,7 @@ def test_bern_elbo_gradient(enum_discrete, trace_graph):
     elbo = Elbo(num_particles=(1 if enum_discrete else num_particles),
                 max_iarange_nesting=1)  # TODO change to 0 when we have scalar support
     with xfail_if_not_implemented():
-        elbo.loss_and_grads(model, enumerate_discrete(guide, default=enum_discrete))
+        elbo.loss_and_grads(model, config_enumerate(guide, default=enum_discrete))
     params = sorted(pyro.get_param_store().get_all_param_names())
     assert params, "no params found"
     actual_grads = {name: pyro.param(name).grad.clone() for name in params}
@@ -259,7 +259,7 @@ def test_gmm_elbo_gradient(model, guide, enum_discrete, trace_graph):
     Elbo = TraceGraph_ELBO if trace_graph else Trace_ELBO
     elbo = Elbo(num_particles=(1 if enum_discrete else num_particles), max_iarange_nesting=1)
     with xfail_if_not_implemented():
-        elbo.loss_and_grads(model, enumerate_discrete(guide, default=enum_discrete), data)
+        elbo.loss_and_grads(model, config_enumerate(guide, default=enum_discrete), data)
     params = sorted(pyro.get_param_store().get_all_param_names())
     assert params, "no params found"
     actual_grads = {name: pyro.param(name).grad.clone() for name in params}
