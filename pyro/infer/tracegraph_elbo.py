@@ -10,7 +10,7 @@ import torch
 import pyro
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
-from pyro.infer.util import torch_backward, torch_data_sum
+from pyro.infer.util import torch_backward, torch_data_sum, MultiViewTensor
 from pyro.distributions.util import sum_leftmost, sum_rightmost, sum_rightmost_keep, sum_leftmost_keep
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, detach_iterable, ng_zeros

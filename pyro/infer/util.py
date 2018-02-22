@@ -36,19 +36,27 @@ def torch_backward(x):
         x.backward()
 
 
-def unmatched_dimensions(x, y):
-    assert x.dim() == y.dim()
-    result = []
-    for k in range(x.dim()):
-        if x.size(k) > y.size(k):
-            result.append(k)
-    return result
+#def unmatched_dimensions(x, y):
+#    assert x.dim() == y.dim()
+#    result = []
+#    for k in range(x.dim()):
+#        if x.size(k) > y.size(k):
+#            result.append(k)
+#    return result
 
 
-def sum_reduce(x, dims):
-    for d in dims:
-        x = x.sum(d, keepdim=True)
-    return x
+#def sum_reduce(x, dims):
+# for d in dims:
+#        x = x.sum(d, keepdim=True)
+#    return x
+
+def reduce_to_target(source, target):
+    if source.dim() > target.dim():
+        raise ValueError
+    for k in range(1, 1 + source.dim()):
+        if source.size(-k) > target.size(-k):
+            source = source.sum(-k, keepdim=True)
+    return source
 
 
 class MultiViewTensor(dict):
@@ -64,6 +72,11 @@ class MultiViewTensor(dict):
 	    summed = node.downstream_cost.sum_leftmost(dims)
 	    downstream_cost.add(summed)
     """
+    def __init__(self, value=None):
+        if value is not None:
+            if isinstance(value, Variable):
+                self[value.shape] = value
+
     def add(self, term):
         if isinstance(term, Variable):
             if term.shape in self:
@@ -88,9 +101,8 @@ class MultiViewTensor(dict):
         """Opposite of broadcast."""
         result = 0
         for tensor in self.values():
-            mysum = sum_reduce(tensor, unmatched_dimensions(tensor, target)).expand_as(target)
-            result += mysum
-        #assert self == {} or tensor.shape == shape
+            #mysum = sum_reduce(tensor, unmatched_dimensions(tensor, target)).expand_as(target)
+            result += reduce_to_target(tensor, target).expand_as(target)
         return result
 
     def __repr__(self):
