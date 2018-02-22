@@ -7,13 +7,14 @@ import torch
 import pyro
 import pyro.distributions as dist
 from pyro.infer.util import torch_data_sum
-from pyro.ops.integrator import velocity_verlet
+from pyro.ops.integrator import single_step_velocity_verlet
 from pyro.util import ng_ones, ng_zeros
 
 from .hmc import HMC
 
 
-_TreeInfo = namedtuple("TreeInfo", ["z_left", "r_left", "z_right", "r_right",
+_TreeInfo = namedtuple("TreeInfo", ["z_left", "r_left", "z_left_grads",
+                                    "z_right", "r_right", "z_right_grads",
                                     "z_proposal", "size", "turning", "diverging"])
 
 
@@ -77,10 +78,12 @@ class NUTS(HMC):
         dz = z_right - z_left
         return (torch_data_sum(dz * r_left) < 0) or (torch_data_sum(dz * r_right) < 0)
 
-    def _build_basetree(self, z, r, log_slice, direction):
+    def _build_basetree(self, z, r, z_grads, log_slice, direction):
         step_size = self.step_size if direction == 1 else -self.step_size
-        z_new, r_new = velocity_verlet(z, r, self._potential_energy, step_size)
-        dE = (log_slice + self._energy(z_new, r_new)).data[0]
+        z_new, r_new, z_grads, potential_energy = single_step_velocity_verlet(
+            z, r, self._potential_energy, step_size, z_grads=z_grads)
+        energy = potential_energy + self._kinetic_energy(r_new)
+        dE = (log_slice + energy).data[0]
 
         # As a part of the slice sampling process (see below), along the trajectory
         #     we eliminate states which p(z, r) < u, or dE < 0.
@@ -88,14 +91,15 @@ class NUTS(HMC):
         #     the size of binary tree might not equal to 2^tree_depth.
         tree_size = 1 if dE <= 0 else 0
         diverging = dE >= self._dE_max
-        return _TreeInfo(z_new, r_new, z_new, r_new, z_new, tree_size, False, diverging)
+        return _TreeInfo(z_new, r_new, z_grads, z_new, r_new, z_grads,
+                         z_new, tree_size, False, diverging)
 
-    def _build_tree(self, z, r, log_slice, direction, tree_depth):
+    def _build_tree(self, z, r, z_grads, log_slice, direction, tree_depth):
         if tree_depth == 0:
-            return self._build_basetree(z, r, log_slice, direction)
+            return self._build_basetree(z, r, z_grads, log_slice, direction)
 
         # build the first half of tree
-        half_tree = self._build_tree(z, r, log_slice, direction, tree_depth-1)
+        half_tree = self._build_tree(z, r, z_grads, log_slice, direction, tree_depth-1)
         z_proposal = half_tree.z_proposal
 
         # Check conditions to stop doubling. If we meet that condition,
@@ -108,10 +112,12 @@ class NUTS(HMC):
         if direction == 1:
             z = half_tree.z_right
             r = half_tree.r_right
+            z_grads = half_tree.z_right_grads
         else:  # otherwise, start from the left leaf of the first half
             z = half_tree.z_left
             r = half_tree.r_left
-        other_half_tree = self._build_tree(z, r, log_slice, direction, tree_depth-1)
+            z_grads = half_tree.z_left_grads
+        other_half_tree = self._build_tree(z, r, z_grads, log_slice, direction, tree_depth-1)
 
         tree_size = half_tree.size + other_half_tree.size
 
@@ -132,13 +138,17 @@ class NUTS(HMC):
         if direction == 1:
             z_left = half_tree.z_left
             r_left = half_tree.r_left
+            z_left_grads = half_tree.z_left_grads
             z_right = other_half_tree.z_right
             r_right = other_half_tree.r_right
+            z_right_grads = other_half_tree.z_right_grads
         else:
             z_left = other_half_tree.z_left
             r_left = other_half_tree.r_left
+            z_left_grads = other_half_tree.z_left_grads
             z_right = half_tree.z_right
             r_right = half_tree.r_right
+            z_right_grads = half_tree.z_right_grads
 
         # We already check if first half tree is turning. Now, we check
         #     if the other half tree or full tree are turning.
@@ -147,7 +157,8 @@ class NUTS(HMC):
         # The divergence is checked by the second half tree (the first half is already checked).
         diverging = other_half_tree.diverging
 
-        return _TreeInfo(z_left, r_left, z_right, r_right, z_proposal, tree_size, turning, diverging)
+        return _TreeInfo(z_left, r_left, z_left_grads, z_right, r_right, z_right_grads,
+                         z_proposal, tree_size, turning, diverging)
 
     def sample(self, trace):
         z = {name: node["value"] for name, node in trace.iter_stochastic_nodes()}
@@ -171,6 +182,7 @@ class NUTS(HMC):
 
         z_left = z_right = z
         r_left = r_right = r
+        z_left_grads = z_right_grads = None
         tree_size = 1
         is_accepted = False
 
@@ -180,14 +192,18 @@ class NUTS(HMC):
                                     dist.Bernoulli(ps=ng_ones(1) * 0.5))
             direction = int(direction.data[0])
             if direction == 1:  # go to the right, start from the right leaf of current tree
-                new_tree = self._build_tree(z_right, r_right, log_slice, direction, tree_depth)
+                new_tree = self._build_tree(z_right, r_right, z_right_grads,
+                                            log_slice, direction, tree_depth)
                 # update leaf for the next doubling process
                 z_right = new_tree.z_right
                 r_right = new_tree.r_right
+                z_right_grads = new_tree.z_right_grads
             else:  # go the the left, start from the left leaf of current tree
-                new_tree = self._build_tree(z_left, r_left, log_slice, direction, tree_depth)
+                new_tree = self._build_tree(z_left, r_left, z_left_grads,
+                                            log_slice, direction, tree_depth)
                 z_left = new_tree.z_left
                 r_left = new_tree.r_left
+                z_left_grads = new_tree.z_left_grads
 
             if new_tree.turning or new_tree.diverging:  # stop doubling
                 break
