@@ -57,7 +57,7 @@ First install a recent PyTorch, currently PyTorch commit `853dba8`.
 ```sh
 git clone git@github.com:pytorch/pytorch
 cd pytorch
-git checkout ca5071d07
+git checkout [commit hash above]
 ```
 Then build PyTorch following instructions in the PyTorch
 [README](https://github.com/pytorch/pytorch/blob/master/README.md).
