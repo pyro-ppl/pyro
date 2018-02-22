@@ -17,7 +17,6 @@ def velocity_verlet(z, r, potential_fn, step_size, num_steps=1):
         momenta ``r``.
     :param float step_size: step size for each time step iteration.
     :param int num_steps: number of discrete time steps over which to integrate.
-    :param torch.Tensor z_grads: optional gradients of potential energy at current ``z``.
     :return tuple (z_next, r_next): final position and momenta, having same types as (z, r).
     """
     z_next = {key: val.data.clone() for key, val in z.items()}
@@ -44,6 +43,7 @@ def single_step_velocity_verlet(z, r, potential_fn, step_size, z_grads=None):
     A special case of ``velocity_verlet`` integrator where ``num_steps=1``. It is particular
     helpful for NUTS kernel.
 
+    :param torch.Tensor z_grads: optional gradients of potential energy at current ``z``.
     :return tuple (z_next, r_next, z_grads, potential_energy): next position and momenta,
         together with the potential energy and its gradient w.r.t. ``z_next``.
     """
