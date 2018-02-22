@@ -155,7 +155,8 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
         if log_pdf_key == 'log_pdf':
             score_function_term = score_function_term.sum()
         if use_nn_baseline or use_decaying_avg_baseline or use_baseline_value:
-            if downstream_cost.dim() != 0 and downstream_cost.size() != baseline.size():
+            if (downstream_cost.dim() == 0 and baseline.dim() > 1) or \
+               (downstream_cost.dim() > 0 and downstream_cost.size() != baseline.size()):
                 raise ValueError("Expected baseline at site {} to be {} instead got {}".format(
                     node, downstream_cost.size(), baseline.size()))
             downstream_cost = downstream_cost - baseline
