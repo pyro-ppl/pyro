@@ -31,7 +31,7 @@ def get_vectorized_map_data_info(trace):
         if node["type"] in ("sample", "param"):
             stack = tuple(node["cond_indep_stack"])
             vec_mds = [x for x in stack if x.vectorized]
-            stack_dict[name] = stack#vec_mds
+            stack_dict[name] = vec_mds
             # check for nested vectorized map datas
             if len(vec_mds) > 1:
                 vectorized_map_data_info['rao-blackwellization-condition'] = False

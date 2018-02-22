@@ -10,8 +10,9 @@ import torch
 import pyro
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
-from pyro.infer.util import torch_backward, torch_data_sum, MultiViewTensor
-from pyro.distributions.util import sum_leftmost, sum_rightmost, sum_rightmost_keep, sum_leftmost_keep
+from pyro.infer.util import torch_backward, torch_data_sum
+from pyro.infer.util import MultiViewTensor as MVT
+from pyro.distributions.util import sum_leftmost
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, detach_iterable, ng_zeros
 
@@ -32,22 +33,6 @@ def _get_baseline_options(site):
     return options_tuple
 
 
-def ones_on_right(x):
-    n = 0
-    for d in reversed(x.size()):
-        if d==1:
-            n += 1
-        else:
-            return n
-    return 0
-
-
-def unsqueeze_on_right(x, dim):
-    for _ in range(dim):
-        x = x.unsqueeze(-1)
-    return x
-
-
 def _compute_downstream_costs(model_trace, guide_trace,  #
                               model_vec_md_nodes, guide_vec_md_nodes,  #
                               non_reparam_nodes, include_nodes=False):
@@ -63,70 +48,18 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
 
     downstream_guide_cost_nodes = {}
     downstream_costs = {}
-
     stacks = model_trace.graph["vectorized_map_data_info"]['vec_md_stacks']
-    #for k in stacks:
-    #    print("stack[%s]" % k, stacks[k])
 
-    def compatible_branches(x, y):
-        #compatible = True
+    def n_compatible_indices(source_node, dest_node):
         n_compatible = 0
-        #n_min = min(len(stacks[x]), len(stacks[y]))
-        #n_max = max(len(stacks[x]), len(stacks[y]))
-        n_x = len(stacks[x])
-        n_y = len(stacks[y])
-        for xframe, yframe in zip(stacks[x], stacks[y]):
+        for xframe, yframe in zip(stacks[source_node], stacks[dest_node]):
             if xframe.name == yframe.name:
-            #if xframe.name != yframe.name:
                 n_compatible += 1
-                #compatible = False
-                # break
-        #empty = torch.zeros(0)
-        #n_incompatible = n_max - n_compatible
-        #print("xy", x, y, n_compatible, n_max, downstream_costs.get(x, empty).size(), downstream_costs.get(y, empty).size())
-        return n_compatible, n_x, n_y #n_incompatible
-        #return n_compatible, n_max, n_min #n_incompatible
-
-    def get_bc_penalty(source, dest):
-        source_dim = source.dim()
-        bc_penalty = float(np.prod(dest.size()[-source_dim:])) / float(np.prod(source.size()))
-        return bc_penalty
-
-    def add(dest, source, dest_node, source_node):
-        #if dest_node == 'c4':
-        #    print("adding %s to c4" % source_node)
-        #print('[%d]' % id(source), source.t().data.numpy())
-        n_compatible, n_source, n_dest = compatible_branches(source_node, dest_node)
-        #n_compatible, n_incompatible = compatible_branches(source_node, dest_node)
-        if False:
-        #if n_incompatible == 0:
-            print("dest, source", dest_node, source_node, "n_comp", n_compatible, n_max, n_min) #dest.size(), source.size())
-            #print("comp dest, source", dest_node, source_node, "n_comp", n_compatible) #dest.size(), source.size())
-            return dest
-        else:
-            to_sum = model_trace.nodes[source_node]['batch_log_pdf'].dim() - n_compatible
-            to_sum = n_source - n_compatible
-            print("incompatible dest, source", dest_node, source_node, "n_comp", n_compatible, "tosum", to_sum)
-            result1 = dest
-            result2 = sum_leftmost(source, to_sum)
-            #bc_penalty = float(np.prod(dest.size())) / float(np.prod(result2.size()))
-            #oor = ones_on_right(model_trace.nodes[dest_node]['batch_log_pdf'])
-            #result2 = sum_rightmost_keep(result2, oor)
-            bc_penalty = get_bc_penalty(result2, dest)
-            print("result sizes:", result1.size(), result2.size(), "to sum", to_sum, "bcpen", bc_penalty)#, "oor", oor)
-            result = bc_penalty * result1 + result2
-            print("result sizes:", result1.size(), result2.size(), " ==> ", result.size())
-            print()
-            return result
-
-    def get_dc_size(node):
-        if node in downstream_costs:
-            return downstream_costs[node].size()
-        else:
-            return 'NoSize'
+        return n_compatible + 1
 
     for node in topo_sort_guide_nodes:
-        downstream_costs[node] = model_trace.nodes[node]['batch_log_pdf'] - guide_trace.nodes[node]['batch_log_pdf']
+        downstream_costs[node] = MVT(model_trace.nodes[node]['batch_log_pdf'] -
+                                     guide_trace.nodes[node]['batch_log_pdf'])
         nodes_included_in_sum = set([node])
         downstream_guide_cost_nodes[node] = set([node])
         # make more efficient by ordering children appropriately (higher children first)
@@ -136,47 +69,22 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
             child_cost_nodes = downstream_guide_cost_nodes[child]
             downstream_guide_cost_nodes[node].update(child_cost_nodes)
             if nodes_included_in_sum.isdisjoint(child_cost_nodes):  # avoid duplicates
-                #compatible_branches(node, child)
-                #downstream_costs[node] = downstream_costs[node] + downstream_costs[child]
-                print('\n[add #1] dest = %s source = %s' % (node, child), '\ndest_dc_size =   ', get_dc_size(node),
-                      '\nsource_dc_size = ', get_dc_size(child), '\ndest_node_size = ', guide_trace.nodes[node]['batch_log_pdf'].size())
-                downstream_costs[node] = add(downstream_costs[node], downstream_costs[child], node, child)
-                downstream_costs[node] = sum_leftmost(downstream_costs[node], -guide_trace.nodes[node]['batch_log_pdf'].dim())
+                dims_to_keep = n_compatible_indices(node, child)
+                summed_child = downstream_costs[child].sum_leftmost(-dims_to_keep)
+                downstream_costs[node].add(summed_child)
                 nodes_included_in_sum.update(child_cost_nodes)
         missing_downstream_costs = downstream_guide_cost_nodes[node] - nodes_included_in_sum
         # include terms we missed because we had to avoid duplicates
         for missing_node in missing_downstream_costs:
-            #compatible_branches(node, missing_node)
-            #downstream_costs[node] = downstream_costs[node] + model_trace.nodes[missing_node]['batch_log_pdf'] - \
-            #                          guide_trace.nodes[missing_node]['batch_log_pdf']
-            print('[add #2] dest = %s source = %s\n' % (node, missing_node), 'dest_dc_size = ', get_dc_size(node),
-                  '\nsource_dc_size = ', get_dc_size(missing_node), '\ndest_node_size', guide_trace.nodes[node]['batch_log_pdf'].size())
-            downstream_costs[node] = add(downstream_costs[node],
-                                         model_trace.nodes[missing_node]['batch_log_pdf'] - \
-                                         guide_trace.nodes[missing_node]['batch_log_pdf'],
-                                         node, missing_node)
-
-    def sumout():
-        # sum out any parts of downstream costs that need summing out and make
-        # sure that downstream costs have the right size
-        for k in downstream_costs:
-            #print(">", k, "dc", downstream_costs[k].size(), "blp", guide_trace.nodes[k]['batch_log_pdf'].size())
-            #downstream_costs[k] = sum_leftmost(downstream_costs[k], -guide_trace.nodes[k]['batch_log_pdf'].dim())
-            #print("> >", k, "dc_sumlefmost", downstream_costs[k].size())
-            oor = ones_on_right(guide_trace.nodes[k]['batch_log_pdf'])
-            presize = downstream_costs[k].size()
-            downstream_costs[k] = sum_rightmost_keep(downstream_costs[k], oor)
-            print("sumout node %s" % k, presize, "===>", downstream_costs[k].size())
-            #downstream_costs[k] = unsqueeze_on_right(downstream_costs[k], oor)
-            #print("> > >", k, "dc_sr", downstream_costs[k].size())
-
-    #sumout()
+            dims_to_keep = n_compatible_indices(node, missing_node)
+            missing_term = model_trace.nodes[missing_node]['batch_log_pdf'] - \
+                guide_trace.nodes[missing_node]['batch_log_pdf']
+            summed_missing_term = sum_leftmost(missing_term, -dims_to_keep)
+            downstream_costs[node].add(summed_missing_term)
 
     # finish assembling complete downstream costs
     # (the above computation may be missing terms from model)
-    # XXX can we cache some of the sums over children_in_model to make things more efficient?
-    for site in topo_sort_guide_nodes:
-    #for site in non_reparam_nodes:
+    for site in non_reparam_nodes:
         children_in_model = set()
         for node in downstream_guide_cost_nodes[site]:
             children_in_model.update(model_trace.successors(node))
@@ -184,14 +92,13 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
         children_in_model.difference_update(downstream_guide_cost_nodes[site])
         for child in children_in_model:
             assert (model_trace.nodes[child]["type"] == "sample")
-            print('[add #3] dest = %s source = %s\n' % (site, child), 'dest_dc_size = ', get_dc_size(site),
-                  'source_dc_size = ', get_dc_size(child), 'dest_node_size', guide_trace.nodes[site]['batch_log_pdf'].size())
-            downstream_costs[site] = add(downstream_costs[site], model_trace.nodes[child]['batch_log_pdf'], site, child)
-            #downstream_costs[site] = downstream_costs[site] + model_trace.nodes[child]['batch_log_pdf']
-            #compatible_branches(site, child)
+            dims_to_keep = n_compatible_indices(site, child)
+            summed_child = sum_leftmost(model_trace.nodes[child]['batch_log_pdf'], -dims_to_keep)
+            downstream_costs[site].add(summed_child)
             downstream_guide_cost_nodes[site].update([child])
 
-    sumout()
+    for k in topo_sort_guide_nodes:
+        downstream_costs[k] = downstream_costs[k].contract_to(guide_trace.nodes[k]['batch_log_pdf'])
 
     if include_nodes:
         return downstream_costs, downstream_guide_cost_nodes

@@ -7,6 +7,7 @@ from torch.autograd import Variable
 
 from pyro.distributions.util import sum_leftmost
 
+
 def torch_data_sum(x):
     """
     Like ``x.data.sum()`` for a ``torch.autograd.Variable``, but also works
@@ -36,20 +37,6 @@ def torch_backward(x):
         x.backward()
 
 
-#def unmatched_dimensions(x, y):
-#    assert x.dim() == y.dim()
-#    result = []
-#    for k in range(x.dim()):
-#        if x.size(k) > y.size(k):
-#            result.append(k)
-#    return result
-
-
-#def sum_reduce(x, dims):
-# for d in dims:
-#        x = x.sum(d, keepdim=True)
-#    return x
-
 def reduce_to_target(source, target):
     if source.dim() > target.dim():
         raise ValueError
@@ -67,10 +54,10 @@ class MultiViewTensor(dict):
     Example::
 
         downstream_cost = MultiViewTensor()
-	downstream_cost.add(self.cost)
-	for node in downstream_nodes:
-	    summed = node.downstream_cost.sum_leftmost(dims)
-	    downstream_cost.add(summed)
+        downstream_cost.add(self.cost)
+        for node in downstream_nodes:
+            summed = node.downstream_cost.sum_leftmost(dims)
+            downstream_cost.add(summed)
     """
     def __init__(self, value=None):
         if value is not None:
@@ -82,7 +69,8 @@ class MultiViewTensor(dict):
             if term.shape in self:
                 self[term.shape] += term
             else:
-                self[term.shape] = term
+                # XXX NOTE CLONE
+                self[term.shape] = term.clone()
         else:
             for shape, value in term.items():
                 if shape in self:
@@ -94,16 +82,15 @@ class MultiViewTensor(dict):
         assert dim <= 0
         result = MultiViewTensor()
         for shape, term in self.items():
-            result.add(sum_leftmost(term, dim))
+            result.add(sum_leftmost(term, -min(-dim, term.dim())))
         return result
 
     def contract_to(self, target):
         """Opposite of broadcast."""
         result = 0
         for tensor in self.values():
-            #mysum = sum_reduce(tensor, unmatched_dimensions(tensor, target)).expand_as(target)
             result += reduce_to_target(tensor, target).expand_as(target)
         return result
 
     def __repr__(self):
-        return '%s(%s)' % (type(self).__name__, " ".join([str(k) for k in self.keys()]))
+        return '%s(%s)' % (type(self).__name__, ", ".join([str(k) for k in self.keys()]))

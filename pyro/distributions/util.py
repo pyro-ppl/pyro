@@ -97,6 +97,7 @@ def sum_rightmost(value, dim):
         return value
     return value.contiguous().view(value.shape[:-dim] + (-1,)).sum(-1)
 
+
 def sum_rightmost_keep(value, dim):
     """
     Sum out ``dim`` many rightmost dimensions of a given tensor and keepdim all the way through.
