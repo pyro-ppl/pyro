@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import gc
 
+import networkx as nx
 import torch
 from torch.autograd import Variable
 
@@ -34,6 +35,30 @@ def test_trace_memory():
         counts.append(count_objects_of_type(Trace))
 
     assert set(counts) == set([0]), counts
+
+
+def test_networkx_copy_memory():
+    counts = []
+    gc.collect()
+    gc.collect()
+    g = nx.DiGraph()
+    for _ in range(10):
+        g.copy()
+        counts.append(count_objects_of_type(nx.DiGraph))
+
+    assert set(counts) == set([1]), counts
+
+
+def test_copy_memory():
+    counts = []
+    gc.collect()
+    gc.collect()
+    tr = Trace()
+    for _ in range(10):
+        tr.copy()
+        counts.append(count_objects_of_type(Trace))
+
+    assert set(counts) == set([1]), counts
 
 
 def test_trace_copy_memory():
