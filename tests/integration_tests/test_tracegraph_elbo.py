@@ -128,7 +128,7 @@ class NormalNormalNormalTests(TestCase):
                           use_decaying_avg_baseline=True)
 
     def test_elbo_nonreparameterized_nn_baseline(self):
-        self.do_elbo_test(False, True, 12000, 0.04, 0.0015, use_nn_baseline=True,
+        self.do_elbo_test(False, True, 12000, 0.05, 0.0015, use_nn_baseline=True,
                           use_decaying_avg_baseline=False)
 
     def do_elbo_test(self, repa1, repa2, n_steps, prec, lr, use_nn_baseline, use_decaying_avg_baseline):
@@ -145,7 +145,7 @@ class NormalNormalNormalTests(TestCase):
                 def __init__(self, dim_input, dim_h):
                     super(VanillaBaselineNN, self).__init__()
                     self.lin1 = nn.Linear(dim_input, dim_h)
-                    self.lin2 = nn.Linear(dim_h, 1)
+                    self.lin2 = nn.Linear(dim_h, 2)
                     self.sigmoid = nn.Sigmoid()
 
                 def forward(self, x):
@@ -187,12 +187,6 @@ class NormalNormalNormalTests(TestCase):
                                                  use_decaying_avg_baseline=use_decaying_avg_baseline)))
 
             return mu_latent
-
-        # optim = Optimize(model, guide,
-        #                 torch.optim.Adam, {"lr": lr, "betas": (0.97, 0.999)},
-        #                 loss="ELBO", trace_graph=True,
-        #                 auxiliary_optim_constructor=torch.optim.Adam,
-        #                 auxiliary_optim_args={"lr": 5.0 * lr, "betas": (0.90, 0.999)})
 
         adam = optim.Adam({"lr": .0015, "betas": (0.97, 0.999)})
         svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
@@ -618,7 +612,7 @@ class RaoBlackwellizationTests(TestCase):
 
             return mu_latent
 
-        pt_mu_baseline = torch.nn.Linear(1, 1)
+        pt_mu_baseline = torch.nn.Linear(1, 2)
         pt_superfluous_baselines = []
         for k in range(n_superfluous_top + n_superfluous_bottom):
             pt_superfluous_baselines.extend([torch.nn.Linear(2, 4), torch.nn.Linear(2, 3),
@@ -628,7 +622,7 @@ class RaoBlackwellizationTests(TestCase):
             mu_q = pyro.param("mu_q", Variable(self.analytic_mu_n.data + 0.094 * torch.ones(2),
                                                requires_grad=True))
             log_sig_q = pyro.param("log_sig_q", Variable(
-                                   self.analytic_log_sig_n.data - 0.11 * torch.ones(2), requires_grad=True))
+                                   self.analytic_log_sig_n.data - 0.07 * torch.ones(2), requires_grad=True))
             sig_q = torch.exp(log_sig_q)
             trivial_baseline = pyro.module("mu_baseline", pt_mu_baseline, tags="baseline")
             baseline_value = trivial_baseline(ng_ones(1))
