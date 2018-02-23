@@ -1,7 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
-import logging
 from collections import defaultdict
+import logging
+import os
 
 import pytest
 import torch
@@ -13,7 +14,7 @@ from pyro.infer.mcmc.nuts import NUTS
 from pyro.infer.mcmc.mcmc import MCMC
 from tests.common import assert_equal
 
-from .test_hmc import rmse, TEST_CASES, TEST_IDS
+from .test_hmc import rmse, T, TEST_CASES, TEST_IDS
 
 logging.basicConfig(format='%(levelname)s %(message)s')
 logger = logging.getLogger('pyro')
@@ -21,10 +22,11 @@ logger.setLevel(logging.INFO)
 
 TEST_CASES[0] = TEST_CASES[0]._replace(mean_tol=0.04, std_tol=0.04)
 TEST_CASES[1] = TEST_CASES[1]._replace(mean_tol=0.04, std_tol=0.04)
-
-# TODO: re-enable once https://github.com/uber/pyro/issues/799 is resolved, with lower number of samples
-TEST_CASES[2] = TEST_CASES[2]._replace(marks=[pytest.mark.skip(reason="Slow test using NUTS.")])
-TEST_CASES[3] = TEST_CASES[3]._replace(marks=[pytest.mark.skip(reason="Slow test using NUTS.")])
+T2 = T(*TEST_CASES[2].values)._replace(num_samples=600, warmup_steps=100)
+TEST_CASES[2] = pytest.param(*T2, marks=pytest.mark.skipif(
+    'CI' in os.environ and os.environ['CI'] == 'true', reason='Slow test - skip on CI'))
+T3 = T(*TEST_CASES[3].values)._replace(num_samples=700, warmup_steps=100)
+TEST_CASES[3] = T3
 
 
 @pytest.mark.parametrize(
