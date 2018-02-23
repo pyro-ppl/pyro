@@ -1,0 +1,2 @@
+class Brownian:
+    pass
