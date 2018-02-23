@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import math
+
 import numpy as np
 
 import pytest
@@ -15,18 +17,18 @@ from tests.common import assert_equal
 
 
 def big_model_guide(include_obs=True, include_single=False, include_inner_1=False, flip_c23=False):
-    p0 = Variable(torch.Tensor([np.exp(-0.25)]), requires_grad=True)
-    p1 = Variable(torch.Tensor([np.exp(-0.35)]), requires_grad=True)
-    p2 = Variable(torch.Tensor([np.exp(-0.70)]), requires_grad=True)
-    #p2 = variable(math.exp(-0.70), requires_grad=True)
+    p0 = variable(math.exp(-0.20), requires_grad=True)
+    p1 = variable(math.exp(-0.33), requires_grad=True)
+    p2 = variable(math.exp(-0.70), requires_grad=True)
     pyro.sample("a1", dist.Bernoulli(p0))
     if include_single:
-        with pyro.iarange("iarange_single", 5, 5) as ind_single:
-            pyro.sample("b0", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_single)]))
-    with pyro.iarange("iarange_outer", 2, 2) as ind_outer:
+        with pyro.iarange("iarange_single", 5) as ind_single:
+            b0 = pyro.sample("b0", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_single)]))
+            assert b0.shape == (5,)
+    with pyro.iarange("iarange_outer", 2) as ind_outer:
         pyro.sample("b1", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_outer)]))
         if include_inner_1:
-            with pyro.iarange("iarange_inner_1", 3, 3) as ind_inner:
+            with pyro.iarange("iarange_inner_1", 3) as ind_inner:
                 pyro.sample("c1", dist.Bernoulli(p1).reshape(sample_shape=[len(ind_inner), 1]))
                 if flip_c23 and not include_obs:
                     pyro.sample("c3", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_inner), 1]))
@@ -34,9 +36,10 @@ def big_model_guide(include_obs=True, include_single=False, include_inner_1=Fals
                 else:
                     pyro.sample("c2", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_inner), len(ind_outer)]))
                     pyro.sample("c3", dist.Bernoulli(p2).reshape(sample_shape=[len(ind_inner), 1]))
-        with pyro.iarange("iarange_inner_2", 4, 4) as ind_inner:
+        with pyro.iarange("iarange_inner_2", 4) as ind_inner:
             pyro.sample("d1", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_inner), 1]))
             d2 = pyro.sample("d2", dist.Bernoulli(p2).reshape(sample_shape=[len(ind_inner), len(ind_outer)]))
+            assert d2.shape == (4, 2)
             if include_obs:
                 pyro.sample("obs", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_inner), len(ind_outer)]),
                             obs=Variable(torch.ones(d2.size())))
@@ -146,18 +149,19 @@ def test_compute_downstream_costs_big_model_guide_pair(include_inner_1, include_
 
 
 def diamond_model():
-    p0 = Variable(torch.Tensor([np.exp(-0.70)]), requires_grad=True)
-    p1 = Variable(torch.Tensor([np.exp(-0.15)]), requires_grad=True)
+    p0 = variable(math.exp(-0.20), requires_grad=True)
+    p1 = variable(math.exp(-0.33), requires_grad=True)
     pyro.sample("a1", dist.Bernoulli(p0))
     pyro.sample("c1", dist.Bernoulli(p1))
     for i in pyro.irange("irange", 2):
-        pyro.sample("b{}".format(i), dist.Bernoulli(p0 * p1))
-    pyro.sample("obs", dist.Bernoulli(p0), obs=Variable(torch.ones(1)))
+        b_i = pyro.sample("b{}".format(i), dist.Bernoulli(p0 * p1))
+        assert b_i.shape == ()
+    pyro.sample("obs", dist.Bernoulli(p0), obs=variable(1.0))
 
 
 def diamond_guide():
-    p0 = Variable(torch.Tensor([np.exp(-0.25)]), requires_grad=True)
-    p1 = Variable(torch.Tensor([np.exp(-0.55)]), requires_grad=True)
+    p0 = variable(math.exp(-0.70), requires_grad=True)
+    p1 = variable(math.exp(-0.43), requires_grad=True)
     pyro.sample("a1", dist.Bernoulli(p0))
     for i in pyro.irange("irange", 2):
         pyro.sample("b{}".format(i), dist.Bernoulli(p1))
@@ -213,16 +217,17 @@ def test_compute_downstream_costs_duplicates():
 
 
 def nested_model_guide(include_obs=True):
-    p0 = Variable(torch.Tensor([np.exp(-0.70)]), requires_grad=True)
-    p1 = Variable(torch.Tensor([np.exp(-0.15)]), requires_grad=True)
+    p0 = variable(math.exp(-0.20), requires_grad=True)
+    p1 = variable(math.exp(-0.33), requires_grad=True)
     pyro.sample("a1", dist.Bernoulli(p0 * p1))
     for i in pyro.irange("irange", 2):
         pyro.sample("b{}".format(i), dist.Bernoulli(p0))
-        with pyro.iarange("iarange", 3 + i, 3 + i) as ind:
+        with pyro.iarange("iarange", 3 + i) as ind:
             c_i = pyro.sample("c{}".format(i), dist.Bernoulli(p1).reshape(sample_shape=[len(ind)]))
+            assert c_i.shape == (3 + i,)
             if include_obs:
-                pyro.sample("obs{}".format(i), dist.Bernoulli(c_i), obs=Variable(torch.ones(c_i.size())))
-                #pyro.sample("obs{}".format(i), dist.Bernoulli(c_i).reshape(sample_shape=[len(ind)]), obs=Variable(torch.ones(c_i.size())))
+                obs_i = pyro.sample("obs{}".format(i), dist.Bernoulli(c_i), obs=Variable(torch.ones(c_i.size())))
+                assert obs_i.shape == (3 + i,)
 
 
 def test_compute_downstream_costs_iarange_in_irange():
