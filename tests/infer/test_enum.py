@@ -108,7 +108,7 @@ def gmm_model(data, verbose=False):
     for i in pyro.irange("data", len(data)):
         z = pyro.sample("z_{}".format(i), dist.Bernoulli(p))
         assert z.shape[-1:] == (1,)
-        z = z.long().data[0]
+        z = z.long()
         if verbose:
             logger.debug("M{} z_{} = {}".format("  " * i, i, z))
         pyro.observe("x_{}".format(i), dist.Normal(mus[z], sigma), data[i])
@@ -119,7 +119,7 @@ def gmm_guide(data, verbose=False):
         p = pyro.param("p_{}".format(i), Variable(torch.Tensor([0.6]), requires_grad=True))
         z = pyro.sample("z_{}".format(i), dist.Bernoulli(p))
         assert z.shape[-1:] == (1,)
-        z = z.long().data[0]
+        z = z.long()
         if verbose:
             logger.debug("G{} z_{} = {}".format("  " * i, i, z))
 
@@ -259,6 +259,7 @@ def test_bern_bern_elbo_gradient(enum_discrete, trace_graph):
     ]))
 
 
+# TODO @pytest.mark.parametrize()
 @pytest.mark.parametrize("trace_graph", [False, True], ids=["dense", "flat"])
 def test_mixed_elbo_gradient(trace_graph):
     pyro.clear_param_store()
@@ -289,6 +290,8 @@ def test_mixed_elbo_gradient(trace_graph):
         "\nexpected = {}".format(expected_grad.data.cpu().numpy()),
         "\n  actual = {}".format(actual_grad.data.cpu().numpy()),
     ]))
+
+# TODO enumerate over categoricals of different shape
 
 
 def finite_difference(eval_loss, delta=0.1):
