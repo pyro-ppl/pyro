@@ -6,7 +6,8 @@ import math
 
 import pytest
 import torch
-from torch.autograd import Variable
+from torch.autograd import Variable, grad, variable
+from torch.distributions import kl_divergence
 
 import pyro
 import pyro.distributions as dist
@@ -26,7 +27,7 @@ def test_iter_discrete_traces_scalar(graph_type):
 
     @config_enumerate
     def model():
-        p = pyro.param("p", Variable(torch.Tensor([0.05])))
+        p = pyro.param("p", variable(0.05))
         ps = pyro.param("ps", Variable(torch.Tensor([0.1, 0.2, 0.3, 0.4])))
         x = pyro.sample("x", dist.Bernoulli(p))
         y = pyro.sample("y", dist.Categorical(ps))
@@ -187,6 +188,76 @@ def test_svi_step_smoke(model, guide, enum_discrete, trace_graph):
         inference.step(data)
 
 
+@pytest.mark.parametrize("enum_discrete", [None, "sequential", "parallel"])
+@pytest.mark.parametrize("trace_graph", [False, True], ids=["dense", "flat"])
+def test_bern_elbo_gradient(enum_discrete, trace_graph):
+    pyro.clear_param_store()
+    if not enum_discrete:
+        num_particles = 100  # Monte Carlo sample
+    elif trace_graph:
+        num_particles = 100  # TraceGraph_ELBO silently ignores enumration
+    else:
+        num_particles = 1  # a single particle should be exact
+
+    def model():
+        pyro.sample("z", dist.Bernoulli(0.25))
+
+    def guide():
+        q = pyro.param("q", variable(0.5, requires_grad=True))
+        pyro.sample("z", dist.Bernoulli(q))
+
+    logger.info("Computing gradients using surrogate loss")
+    Elbo = TraceGraph_ELBO if trace_graph else Trace_ELBO
+    elbo = Elbo(num_particles=num_particles, max_iarange_nesting=0)
+    elbo.loss_and_grads(model, config_enumerate(guide, default=enum_discrete))
+    actual_grad = pyro.param('q').grad
+
+    logger.info("Computing analytic gradients")
+    q = variable(0.5, requires_grad=True)
+    expected_grad = grad(kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.25)), [q])[0]
+
+    assert_equal(actual_grad, expected_grad, prec=0.1, msg="".join([
+        "\nexpected = {}".format(expected_grad.data.cpu().numpy()),
+        "\n  actual = {}".format(actual_grad.data.cpu().numpy()),
+    ]))
+
+
+@pytest.mark.parametrize("enum_discrete", [None, "sequential", "parallel"])
+@pytest.mark.parametrize("trace_graph", [False, True], ids=["dense", "flat"])
+def test_bern_bern_elbo_gradient(enum_discrete, trace_graph):
+    pyro.clear_param_store()
+    if not enum_discrete:
+        num_particles = 500  # Monte Carlo sample
+    elif trace_graph:
+        num_particles = 500  # TraceGraph_ELBO silently ignores enumeration
+    else:
+        num_particles = 1  # a single particle should be exact
+
+    def model():
+        pyro.sample("y", dist.Bernoulli(0.25))
+        pyro.sample("z", dist.Bernoulli(0.25))
+
+    def guide():
+        q = pyro.param("q", variable(0.5, requires_grad=True))
+        pyro.sample("z", dist.Bernoulli(q))
+        pyro.sample("y", dist.Bernoulli(q))
+
+    logger.info("Computing gradients using surrogate loss")
+    Elbo = TraceGraph_ELBO if trace_graph else Trace_ELBO
+    elbo = Elbo(num_particles=num_particles, max_iarange_nesting=0)
+    elbo.loss_and_grads(model, config_enumerate(guide, default=enum_discrete))
+    actual_grad = pyro.param('q').grad
+
+    logger.info("Computing analytic gradients")
+    q = variable(0.5, requires_grad=True)
+    expected_grad = 2 * grad(kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.25)), [q])[0]
+
+    assert_equal(actual_grad, expected_grad, prec=0.1, msg="".join([
+        "\nexpected = {}".format(expected_grad.data.cpu().numpy()),
+        "\n  actual = {}".format(actual_grad.data.cpu().numpy()),
+    ]))
+
+
 def finite_difference(eval_loss, delta=0.1):
     """
     Computes finite-difference approximation of all parameters.
@@ -207,43 +278,6 @@ def finite_difference(eval_loss, delta=0.1):
     return grads
 
 
-@pytest.mark.parametrize("enum_discrete", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("trace_graph", [False, True], ids=["dense", "flat"])
-def test_bern_elbo_gradient(enum_discrete, trace_graph):
-    pyro.clear_param_store()
-    num_particles = 2000
-
-    def model():
-        p = Variable(torch.Tensor([0.25]))
-        pyro.sample("z", dist.Bernoulli(p))
-
-    def guide():
-        p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
-        pyro.sample("z", dist.Bernoulli(p))
-
-    logger.info("Computing gradients using surrogate loss")
-    Elbo = TraceGraph_ELBO if trace_graph else Trace_ELBO
-    elbo = Elbo(num_particles=(1 if enum_discrete else num_particles),
-                max_iarange_nesting=1)  # TODO change to 0 when we have scalar support
-    with xfail_if_not_implemented():
-        elbo.loss_and_grads(model, config_enumerate(guide, default=enum_discrete))
-    params = sorted(pyro.get_param_store().get_all_param_names())
-    assert params, "no params found"
-    actual_grads = {name: pyro.param(name).grad.clone() for name in params}
-
-    logger.info("Computing gradients using finite difference")
-    elbo = Trace_ELBO(num_particles=num_particles)
-    expected_grads = finite_difference(lambda: elbo.loss(model, guide), delta=0.2)
-
-    for name in params:
-        logger.info("\n".join([
-            "{} {}".format(name, "-" * 30),
-            "expected = {}".format(expected_grads[name].data.cpu().numpy()),
-            "  actual = {}".format(actual_grads[name].data.cpu().numpy()),
-        ]))
-    assert_equal(actual_grads, expected_grads, prec=0.1)
-
-
 @pytest.mark.parametrize("model,guide", [
     (gmm_model, gmm_guide),
     (gmm_batch_model, gmm_batch_guide),
@@ -252,20 +286,25 @@ def test_bern_elbo_gradient(enum_discrete, trace_graph):
 @pytest.mark.parametrize("trace_graph", [False, True], ids=["dense", "flat"])
 def test_gmm_elbo_gradient(model, guide, enum_discrete, trace_graph):
     pyro.clear_param_store()
-    num_particles = 4000
     data = Variable(torch.Tensor([-1, 1]))
+    diff_particles = 4000
+    if not enum_discrete:
+        elbo_particles = 1000  # Monte Carlo sample
+    elif trace_graph:
+        elbo_particles = 1000  # TraceGraph_ELBO silently ignores enumeration
+    else:
+        elbo_particles = 1  # a single particle should be exact
 
     logger.info("Computing gradients using surrogate loss")
     Elbo = TraceGraph_ELBO if trace_graph else Trace_ELBO
-    elbo = Elbo(num_particles=(1 if enum_discrete else num_particles), max_iarange_nesting=1)
-    with xfail_if_not_implemented():
-        elbo.loss_and_grads(model, config_enumerate(guide, default=enum_discrete), data)
+    elbo = Elbo(num_particles=elbo_particles, max_iarange_nesting=1)
+    elbo.loss_and_grads(model, config_enumerate(guide, default=enum_discrete), data)
     params = sorted(pyro.get_param_store().get_all_param_names())
     assert params, "no params found"
     actual_grads = {name: pyro.param(name).grad.clone() for name in params}
 
     logger.info("Computing gradients using finite difference")
-    elbo = Trace_ELBO(num_particles=num_particles, max_iarange_nesting=1)
+    elbo = Trace_ELBO(num_particles=diff_particles, max_iarange_nesting=1)
     expected_grads = finite_difference(lambda: elbo.loss(model, guide, data))
 
     for name in params:

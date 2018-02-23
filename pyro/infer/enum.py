@@ -14,11 +14,14 @@ from pyro.poutine.trace import Trace
 def _iter_discrete_filter(name, msg):
     return ((msg["type"] == "sample") and
             (not msg["is_observed"]) and
-            (msg["infer"].get("enumerate") == "sequential"))
+            (msg["infer"].get("enumerate")))  # either sequential or parallel
 
 
 def _iter_discrete_escape(trace, msg):
-    return _iter_discrete_filter(msg["name"], msg) and (msg["name"] not in trace)
+    return ((msg["type"] == "sample") and
+            (not msg["is_observed"]) and
+            (msg["infer"].get("enumerate") == "sequential") and  # only sequential
+            (msg["name"] not in trace))
 
 
 def iter_discrete_traces(graph_type, max_iarange_nesting, fn, *args, **kwargs):
@@ -47,7 +50,7 @@ def iter_discrete_traces(graph_type, max_iarange_nesting, fn, *args, **kwargs):
         full_trace.compute_batch_log_pdf(site_filter=_iter_discrete_filter)
         for name, site in full_trace.nodes.items():
             if _iter_discrete_filter(name, site):
-                log_pdf += sum_rightmost(site["batch_log_pdf"], max_iarange_nesting)
+                log_pdf = log_pdf + sum_rightmost(site["batch_log_pdf"], max_iarange_nesting)
         if isinstance(log_pdf, Variable):
             scale = torch.exp(log_pdf.detach())
         else:
