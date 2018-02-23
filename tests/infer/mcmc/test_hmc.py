@@ -1,9 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
-import logging
 from collections import defaultdict, namedtuple
-
+import logging
 import os
+
 import pytest
 import torch
 from torch.autograd import Variable
@@ -98,8 +98,8 @@ TEST_CASES = [
                                  reason='Slow test - skip on CI')]),
     pytest.param(*T(
         GaussianChain(dim=5, chain_len=9, num_obs=1),
-        num_samples=3000,
-        warmup_steps=500,
+        num_samples=1200,
+        warmup_steps=100,
         hmc_params={'step_size': 0.3,
                     'num_steps': 8},
         expected_means=[0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90],
