@@ -259,6 +259,38 @@ def test_bern_bern_elbo_gradient(enum_discrete, trace_graph):
     ]))
 
 
+@pytest.mark.parametrize("trace_graph", [False, True], ids=["dense", "flat"])
+def test_mixed_elbo_gradient(trace_graph):
+    pyro.clear_param_store()
+
+    def model():
+        pyro.sample("x1", dist.Bernoulli(0.1))
+        pyro.sample("x2", dist.Bernoulli(0.2))
+        pyro.sample("x3", dist.Bernoulli(0.3))
+
+    def guide():
+        p = pyro.param("p", variable(0.5, requires_grad=True))
+        pyro.sample("x1", dist.Bernoulli(p), infer={"enumerate": "parallel"})
+        pyro.sample("x2", dist.Bernoulli(p), infer={"enumerate": "sequential"})
+        pyro.sample("x3", dist.Bernoulli(p), infer={"enumerate": None})
+
+    logger.info("Computing gradients using surrogate loss")
+    Elbo = TraceGraph_ELBO if trace_graph else Trace_ELBO
+    elbo = Elbo(num_particles=500, max_iarange_nesting=0)
+    elbo.loss_and_grads(model, guide)
+    actual_grad = pyro.param('p').grad
+
+    logger.info("Computing analytic gradients")
+    p = variable(0.5, requires_grad=True)
+    kl = sum(kl_divergence(dist.Bernoulli(p), dist.Bernoulli(p0)) for p0 in [0.1, 0.2, 0.3])
+    expected_grad = grad(kl, [p])[0]
+
+    assert_equal(actual_grad, expected_grad, prec=0.1, msg="".join([
+        "\nexpected = {}".format(expected_grad.data.cpu().numpy()),
+        "\n  actual = {}".format(actual_grad.data.cpu().numpy()),
+    ]))
+
+
 def finite_difference(eval_loss, delta=0.1):
     """
     Computes finite-difference approximation of all parameters.
