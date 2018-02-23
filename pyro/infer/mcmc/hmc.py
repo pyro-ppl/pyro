@@ -45,12 +45,14 @@ class HMC(TraceKernel):
         trace_poutine(*self._args, **self._kwargs)
         return trace_poutine.trace
 
+    def _kinetic_energy(self, r):
+        return 0.5 * torch.sum(torch.stack([r[name]**2 for name in r]))
+
     def _potential_energy(self, z):
         return -self._get_trace(z).log_pdf()
 
     def _energy(self, z, r):
-        kinetic_energy = 0.5 * torch.sum(torch.stack([r[name]**2 for name in r]))
-        return kinetic_energy + self._potential_energy(z)
+        return self._kinetic_energy(r) + self._potential_energy(z)
 
     def _reset(self):
         self._t = 0

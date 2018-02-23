@@ -20,12 +20,14 @@ def _warn_if_nan(name, value):
     # Note that -inf log_pdf is fine: it is merely a zero-probability event.
 
 
-class Trace(networkx.DiGraph):
+class DiGraph(networkx.DiGraph):
+    node_dict_factory = collections.OrderedDict
+
+
+class Trace(object):
     """
     Execution trace data structure
     """
-
-    node_dict_factory = collections.OrderedDict
 
     def __init__(self, *args, **kwargs):
         """
@@ -34,11 +36,58 @@ class Trace(networkx.DiGraph):
         Constructor. Currently identical to networkx.``DiGraph(\*args, \**kwargs)``,
         except for storing the graph_type attribute
         """
+        self._graph = DiGraph(*args, **kwargs)
         graph_type = kwargs.pop("graph_type", "flat")
         assert graph_type in ("flat", "dense"), \
             "{} not a valid graph type".format(graph_type)
         self.graph_type = graph_type
         super(Trace, self).__init__(*args, **kwargs)
+
+    def __del__(self):
+        # Work around cyclic reference bugs in networkx.DiGraph
+        # See https://github.com/uber/pyro/issues/798
+        self._graph.__dict__.clear()
+
+    @property
+    def nodes(self):
+        return self._graph.nodes
+
+    @property
+    def edges(self):
+        return self._graph.edges
+
+    @property
+    def graph(self):
+        return self._graph.graph
+
+    @property
+    def remove_node(self):
+        return self._graph.remove_node
+
+    @property
+    def add_edge(self):
+        return self._graph.add_edge
+
+    @property
+    def is_directed(self):
+        return self._graph.is_directed
+
+    @property
+    def in_degree(self):
+        return self._graph.in_degree
+
+    @property
+    def successors(self):
+        return self._graph.successors
+
+    def __contains__(self, site_name):
+        return site_name in self._graph
+
+    def __iter__(self):
+        return iter(self._graph)
+
+    def __len__(self):
+        return len(self._graph)
 
     def add_node(self, site_name, *args, **kwargs):
         """
@@ -56,7 +105,7 @@ class Trace(networkx.DiGraph):
                 "site {} already in trace".format(site_name)
 
         # XXX should copy in case site gets mutated, or dont bother?
-        super(Trace, self).add_node(site_name, *args, **kwargs.copy())
+        self._graph.add_node(site_name, *args, **kwargs)
 
     def copy(self):
         """
@@ -64,7 +113,10 @@ class Trace(networkx.DiGraph):
         Identical to super(Trace, self).copy(), but preserves the type
         and the self.graph_type attribute
         """
-        return Trace(super(Trace, self).copy(), graph_type=self.graph_type)
+        trace = Trace()
+        trace._graph = self._graph.copy()
+        trace.graph_type = self.graph_type
+        return trace
 
     def log_pdf(self, site_filter=lambda name, site: True):
         """
