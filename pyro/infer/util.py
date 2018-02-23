@@ -67,14 +67,14 @@ class MultiViewTensor(dict):
     def add(self, term):
         if isinstance(term, Variable):
             if term.shape in self:
-                self[term.shape] += term
+                self[term.shape] = self[term.shape] + term
             else:
                 # XXX NOTE CLONE
-                self[term.shape] = term.clone()
+                self[term.shape] = term #.clone()
         else:
             for shape, value in term.items():
                 if shape in self:
-                    self[shape] += value
+                    self[shape] = self[shape] + value
                 else:
                     self[shape] = value
 

@@ -18,6 +18,7 @@ def big_model_guide(include_obs=True, include_single=False, include_inner_1=Fals
     p0 = Variable(torch.Tensor([np.exp(-0.25)]), requires_grad=True)
     p1 = Variable(torch.Tensor([np.exp(-0.35)]), requires_grad=True)
     p2 = Variable(torch.Tensor([np.exp(-0.70)]), requires_grad=True)
+    #p2 = variable(math.exp(-0.70), requires_grad=True)
     pyro.sample("a1", dist.Bernoulli(p0))
     if include_single:
         with pyro.iarange("iarange_single", 5, 5) as ind_single:
@@ -217,10 +218,11 @@ def nested_model_guide(include_obs=True):
     pyro.sample("a1", dist.Bernoulli(p0 * p1))
     for i in pyro.irange("irange", 2):
         pyro.sample("b{}".format(i), dist.Bernoulli(p0))
-        with pyro.iarange("iarange", 3, 3) as ind:
+        with pyro.iarange("iarange", 3 + i, 3 + i) as ind:
             c_i = pyro.sample("c{}".format(i), dist.Bernoulli(p1).reshape(sample_shape=[len(ind)]))
             if include_obs:
-                pyro.sample("obs{}".format(i), dist.Bernoulli(c_i).reshape(sample_shape=[len(ind)]), obs=Variable(torch.ones(c_i.size())))
+                pyro.sample("obs{}".format(i), dist.Bernoulli(c_i), obs=Variable(torch.ones(c_i.size())))
+                #pyro.sample("obs{}".format(i), dist.Bernoulli(c_i).reshape(sample_shape=[len(ind)]), obs=Variable(torch.ones(c_i.size())))
 
 
 def test_compute_downstream_costs_iarange_in_irange():
