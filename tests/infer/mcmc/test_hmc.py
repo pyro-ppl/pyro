@@ -98,8 +98,8 @@ TEST_CASES = [
                                  reason='Slow test - skip on CI')]),
     pytest.param(*T(
         GaussianChain(dim=5, chain_len=9, num_obs=1),
-        num_samples=1200,
-        warmup_steps=100,
+        num_samples=3000,
+        warmup_steps=500,
         hmc_params={'step_size': 0.3,
                     'num_steps': 8},
         expected_means=[0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90],
