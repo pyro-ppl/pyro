@@ -63,7 +63,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'Pyro Tutorials'
-copyright = u'2017, Uber AI Labs'
+copyright = u'2018, Uber AI Labs'
 author = u'Uber AI Labs'
 
 # The version info for the project you're documenting, acts as replacement for
