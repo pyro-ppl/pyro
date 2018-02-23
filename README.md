@@ -7,6 +7,7 @@
 
 [![Build Status](https://travis-ci.org/uber/pyro.svg?branch=master)](https://travis-ci.org/uber/pyro)
 [![Latest Version](https://badge.fury.io/py/pyro-ppl.svg)](https://pypi.python.org/pypi/pyro-ppl)
+[![Documentation Status](https://readthedocs.org/projects/pyro-ppl/badge/?version=dev)](http://pyro-ppl.readthedocs.io/en/stable/?badge=dev)
 
 
 [Getting Started](http://pyro.ai/examples) |
