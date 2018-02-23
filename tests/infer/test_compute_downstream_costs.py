@@ -209,3 +209,53 @@ def test_compute_downstream_costs_duplicates():
 
     for k in dc:
         assert(guide_trace.nodes[k]['batch_log_pdf'].size() == dc[k].size())
+
+
+def nested_model_guide(include_obs=True):
+    p0 = Variable(torch.Tensor([np.exp(-0.70)]), requires_grad=True)
+    p1 = Variable(torch.Tensor([np.exp(-0.15)]), requires_grad=True)
+    pyro.sample("a1", dist.Bernoulli(p0 * p1))
+    for i in pyro.irange("irange", 2):
+        pyro.sample("b{}".format(i), dist.Bernoulli(p0))
+        with pyro.iarange("iarange", 3, 3) as ind:
+            c_i = pyro.sample("c{}".format(i), dist.Bernoulli(p1).reshape(sample_shape=[len(ind)]))
+            if include_obs:
+                pyro.sample("obs{}".format(i), dist.Bernoulli(c_i).reshape(sample_shape=[len(ind)]), obs=Variable(torch.ones(c_i.size())))
+
+
+def test_compute_downstream_costs_iarange_in_irange():
+    guide_trace = poutine.trace(nested_model_guide,
+                                graph_type="dense").get_trace(include_obs=False)
+    model_trace = poutine.trace(poutine.replay(nested_model_guide, guide_trace),
+                                graph_type="dense").get_trace(include_obs=True)
+
+    guide_trace = prune_subsample_sites(guide_trace)
+    model_trace = prune_subsample_sites(model_trace)
+    model_trace.compute_batch_log_pdf()
+    guide_trace.compute_batch_log_pdf()
+
+    guide_vec_md_info = guide_trace.graph["vectorized_map_data_info"]
+    model_vec_md_info = model_trace.graph["vectorized_map_data_info"]
+    guide_vec_md_condition = guide_vec_md_info['rao-blackwellization-condition']
+    model_vec_md_condition = model_vec_md_info['rao-blackwellization-condition']
+    do_vec_rb = guide_vec_md_condition and model_vec_md_condition
+    guide_vec_md_nodes = guide_vec_md_info['nodes'] if do_vec_rb else set()
+    model_vec_md_nodes = model_vec_md_info['nodes'] if do_vec_rb else set()
+    non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
+
+    dc, dc_nodes = _compute_downstream_costs(model_trace, guide_trace,
+                                             model_vec_md_nodes, guide_vec_md_nodes,
+                                             non_reparam_nodes, include_nodes=True)
+
+    expected_c1 = (model_trace.nodes['c1']['batch_log_pdf'] - guide_trace.nodes['c1']['batch_log_pdf'])
+    expected_c1 += model_trace.nodes['obs1']['batch_log_pdf']
+
+    expected_b1 = (model_trace.nodes['b1']['batch_log_pdf'] - guide_trace.nodes['b1']['batch_log_pdf'])
+    expected_b1 += (model_trace.nodes['c1']['batch_log_pdf'] - guide_trace.nodes['c1']['batch_log_pdf']).sum(0)
+    expected_b1 += model_trace.nodes['obs1']['batch_log_pdf'].sum(0)
+
+    assert_equal(expected_c1, dc['c1'], prec=1.0e-6)
+    assert_equal(expected_b1, dc['b1'], prec=1.0e-6)
+
+    for k in dc:
+        assert(guide_trace.nodes[k]['batch_log_pdf'].size() == dc[k].size())
