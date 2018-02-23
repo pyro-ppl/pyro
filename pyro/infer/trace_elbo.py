@@ -13,7 +13,7 @@ from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.util import torch_backward, torch_data_sum, torch_sum
 from pyro.poutine.enumerate_poutine import EnumeratePoutine
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_match, is_nan
+from pyro.util import check_model_guide_match, check_site_shape, is_nan
 
 
 class Trace_ELBO(ELBO):
@@ -43,10 +43,12 @@ class Trace_ELBO(ELBO):
                 model_trace.compute_batch_log_pdf()
                 for site in model_trace.nodes.values():
                     if site["type"] == "sample":
+                        check_site_shape(site, self.max_iarange_nesting)
                         log_r = log_r + sum_rightmost(site["batch_log_pdf"], self.max_iarange_nesting)
                 guide_trace.compute_score_parts()
                 for site in guide_trace.nodes.values():
                     if site["type"] == "sample":
+                        check_site_shape(site, self.max_iarange_nesting)
                         log_r = log_r - sum_rightmost(site["batch_log_pdf"], self.max_iarange_nesting)
 
                 weight = scale / self.num_particles

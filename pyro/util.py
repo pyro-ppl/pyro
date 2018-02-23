@@ -6,15 +6,15 @@ import warnings
 
 import graphviz
 import numpy as np
-
 import torch
-from pyro.params import _PYRO_PARAM_STORE
+from six.moves import zip_longest
+from torch.autograd import Variable
+from torch.nn import Parameter
 
+from pyro.params import _PYRO_PARAM_STORE
 from pyro.poutine.poutine import _PYRO_STACK
 from pyro.poutine.util import site_is_subsample
 from pyro.shim import is_volatile
-from torch.autograd import Variable
-from torch.nn import Parameter
 
 
 def validate_message(msg):
@@ -352,6 +352,28 @@ def check_model_guide_match(model_trace, guide_trace):
                      if type(site["fn"]).__name__ == "_Subsample")
     if not (guide_vars <= model_vars):
         warnings.warn("Found iarange statements in guide but not model: {}".format(guide_vars - model_vars))
+
+
+def check_site_shape(site, max_iarange_nesting):
+    actual_shape = site["batch_log_pdf"].shape
+    expected_shape = [f.size for f in reversed(site["cond_indep_stack"]) if f.vectorized]
+
+    # Check for iarange stack overflow.
+    if len(expected_shape) > max_iarange_nesting:
+        raise ValueError('\n'.join([
+            'iarange stack overflow at site "{}"'.format(site["name"]),
+            'Try increasing max_iarange_nesting to at least {}'.format(len(expected_shape))]))
+
+    # Check for incorrect iarange placement.
+    for actual_size, expected_size in zip_longest(actual_shape, expected_shape, fillvalue=1):
+        if expected_size != -1 and actual_size not in (1, expected_size):
+            raise ValueError('\n'.join([
+                'Invalid log_prob shape at site "{}"'.format(site["name"]),
+                'Expected shape compatible with {}, actual {}'.format(expected_shape, actual_shape),
+                'Try .reshape()ing the distribution or .permute()ing data dimensions.']))
+
+    # Check parallel dimensions left of max_iarange_nesting.
+    # TODO
 
 
 def deep_getattr(obj, name):
