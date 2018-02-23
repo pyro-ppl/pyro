@@ -56,7 +56,7 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
             if xframe.name == yframe.name:
                 n_compatible += 1
         # XXX TODO remove +1 once we have proper scalar support
-        return n_compatible + 1
+        return n_compatible #+ 1
 
     for node in topo_sort_guide_nodes:
         downstream_costs[node] = MVT(model_trace.nodes[node]['batch_log_pdf'] -
