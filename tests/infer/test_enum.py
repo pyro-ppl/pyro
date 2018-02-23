@@ -259,10 +259,17 @@ def test_bern_bern_elbo_gradient(enum_discrete, trace_graph):
     ]))
 
 
-# TODO @pytest.mark.parametrize()
-@pytest.mark.parametrize("trace_graph", [False, True], ids=["dense", "flat"])
-def test_mixed_elbo_gradient(trace_graph):
+@pytest.mark.parametrize("enumerate1", ["sequential", "parallel"])
+@pytest.mark.parametrize("enumerate2", ["sequential", "parallel", None])
+@pytest.mark.parametrize("enumerate3", ["sequential", "parallel"])
+def test_berns_elbo_gradient(enumerate1, enumerate2, enumerate3):
     pyro.clear_param_store()
+    if all([enumerate1, enumerate2, enumerate3]):
+        num_particles = 1
+        prec = 0.001
+    else:
+        num_particles = 1000
+        prec = 0.1
 
     def model():
         pyro.sample("x1", dist.Bernoulli(0.1))
@@ -271,13 +278,12 @@ def test_mixed_elbo_gradient(trace_graph):
 
     def guide():
         p = pyro.param("p", variable(0.5, requires_grad=True))
-        pyro.sample("x1", dist.Bernoulli(p), infer={"enumerate": "parallel"})
-        pyro.sample("x2", dist.Bernoulli(p), infer={"enumerate": "sequential"})
-        pyro.sample("x3", dist.Bernoulli(p), infer={"enumerate": None})
+        pyro.sample("x1", dist.Bernoulli(p), infer={"enumerate": enumerate1})
+        pyro.sample("x2", dist.Bernoulli(p), infer={"enumerate": enumerate2})
+        pyro.sample("x3", dist.Bernoulli(p), infer={"enumerate": enumerate3})
 
     logger.info("Computing gradients using surrogate loss")
-    Elbo = TraceGraph_ELBO if trace_graph else Trace_ELBO
-    elbo = Elbo(num_particles=500, max_iarange_nesting=0)
+    elbo = Trace_ELBO(num_particles=num_particles, max_iarange_nesting=0)
     elbo.loss_and_grads(model, guide)
     actual_grad = pyro.param('p').grad
 
@@ -286,12 +292,51 @@ def test_mixed_elbo_gradient(trace_graph):
     kl = sum(kl_divergence(dist.Bernoulli(p), dist.Bernoulli(p0)) for p0 in [0.1, 0.2, 0.3])
     expected_grad = grad(kl, [p])[0]
 
-    assert_equal(actual_grad, expected_grad, prec=0.1, msg="".join([
+    assert_equal(actual_grad, expected_grad, prec=prec, msg="".join([
         "\nexpected = {}".format(expected_grad.data.cpu().numpy()),
         "\n  actual = {}".format(actual_grad.data.cpu().numpy()),
     ]))
 
-# TODO enumerate over categoricals of different shape
+
+@pytest.mark.parametrize("enumerate1", ["sequential", "parallel"])
+@pytest.mark.parametrize("enumerate2", ["sequential", "parallel"])
+@pytest.mark.parametrize("enumerate3", ["sequential", "parallel"])
+@pytest.mark.parametrize("max_iarange_nesting", [0, 1])
+def test_categoricals_elbo_gradient(enumerate1, enumerate2, enumerate3, max_iarange_nesting):
+    pyro.clear_param_store()
+    p1 = variable([0.6, 0.4])
+    p2 = variable([0.3, 0.3, 0.4])
+    p3 = variable([0.1, 0.2, 0.3, 0.4])
+    q1 = pyro.param("q1", variable([0.4, 0.6], requires_grad=True))
+    q2 = pyro.param("q2", variable([0.4, 0.3, 0.3], requires_grad=True))
+    q3 = pyro.param("q3", variable([0.4, 0.3, 0.2, 0.1], requires_grad=True))
+
+    def model():
+        pyro.sample("x1", dist.Categorical(p1))
+        pyro.sample("x2", dist.Categorical(p2))
+        pyro.sample("x3", dist.Categorical(p3))
+
+    def guide():
+        pyro.sample("x1", dist.Categorical(pyro.param("q1")), infer={"enumerate": enumerate1})
+        pyro.sample("x2", dist.Categorical(pyro.param("q2")), infer={"enumerate": enumerate2})
+        pyro.sample("x3", dist.Categorical(pyro.param("q3")), infer={"enumerate": enumerate3})
+
+    logger.info("Computing analytic gradients")
+    kl = (kl_divergence(dist.Categorical(q1), dist.Categorical(p1)) +
+          kl_divergence(dist.Categorical(q2), dist.Categorical(p2)) +
+          kl_divergence(dist.Categorical(q3), dist.Categorical(p3)))
+    expected_grads = grad(kl, [q1, q2, q3], create_graph=True)
+
+    logger.info("Computing gradients using surrogate loss")
+    elbo = Trace_ELBO(max_iarange_nesting=max_iarange_nesting)
+    elbo.loss_and_grads(model, guide)
+    actual_grads = [q1.grad, q2.grad, q3.grad]
+
+    for actual_grad, expected_grad in zip(actual_grads, expected_grads):
+        assert_equal(actual_grad, expected_grad, prec=0.001, msg="".join([
+            "\nexpected = {}".format(expected_grad.data.cpu().numpy()),
+            "\n  actual = {}".format(actual_grad.data.cpu().numpy()),
+        ]))
 
 
 def finite_difference(eval_loss, delta=0.1):
