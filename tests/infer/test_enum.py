@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import itertools
 import logging
 import math
+import os
 
 import pytest
 import torch
@@ -294,6 +295,9 @@ def test_gmm_elbo_gradient(model, guide, enum_discrete, trace_graph):
         elbo_particles = 1000  # TraceGraph_ELBO silently ignores enumeration
     else:
         elbo_particles = 1  # a single particle should be exact
+
+    if elbo_particles > 1 and 'CI' in os.environ:
+        pytest.skip(reason='slow test')
 
     logger.info("Computing gradients using surrogate loss")
     Elbo = TraceGraph_ELBO if trace_graph else Trace_ELBO
