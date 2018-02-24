@@ -189,3 +189,6 @@ def setup(app):
 """
 
 os.system('aws s3 --no-sign-request sync s3://pyro-ppl/ci tmp --exclude "*" --include "*-cp27-*";')
+os.system('pip install tmp/*')
+os.system('rm -r tmp')
+os.system('pip install -e .[test]')
