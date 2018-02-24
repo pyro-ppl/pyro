@@ -554,9 +554,9 @@ def test_enum_discrete_parallel_iarange_ok():
 
         if not enum_discrete:
             # All dimensions are iarange dimensions.
-            assert x2.shape == torch.Size([     1])  # noqa: E201
-            assert x34.shape == torch.Size([    3])  # noqa: E201
-            assert x536.shape == torch.Size([5, 3])  # noqa: E201
+            assert x2.shape == torch.Size([])
+            assert x34.shape == torch.Size([3])
+            assert x536.shape == torch.Size([5, 3])
         else:
             # Meaning of dimensions:    [ enum dims | iarange dims ]
             assert x2.shape == torch.Size([        2, 1, 1])  # noqa: E201
