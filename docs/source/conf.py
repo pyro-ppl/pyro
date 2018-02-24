@@ -1,4 +1,7 @@
 import sphinx_rtd_theme
+import re
+import os
+import sys
 
 # import pkg_resources
 
@@ -20,9 +23,7 @@ import sphinx_rtd_theme
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
-# import os
-# import sys
-# sys.path.insert(0, os.path.abspath('.'))
+sys.path.insert(0, os.path.abspath('../..'))
 
 # -- General configuration ------------------------------------------------
 
@@ -181,3 +182,10 @@ def skip(app, what, name, obj, skip, options):
 def setup(app):
     app.connect("autodoc-skip-member", skip)
 """
+
+# awful hack to get rtd builder to install pytorch
+os.system('pip install awscli')
+os.system('aws s3 --no-sign-request sync s3://pyro-ppl/ci tmp --exclude "*" --include "*-cp27-*";')
+os.system('pip install tmp/*')
+os.system('rm -r tmp')
+os.system('pip install -e .[test]')
