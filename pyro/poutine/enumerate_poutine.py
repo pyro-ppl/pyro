@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 from .poutine import Messenger, Poutine
 
 
-def _iter_discrete_filter(name, msg):
+def _iter_discrete_filter(msg):
     return ((msg["type"] == "sample") and
             (not msg["is_observed"]) and
             (msg["infer"].get("enumerate") == "parallel"))
@@ -27,7 +27,7 @@ class EnumerateMessenger(Messenger):
         :param msg: current message at a trace site.
         :returns: a sample from the stochastic function at the site.
         """
-        if not msg["done"] and _iter_discrete_filter(msg["name"], msg):
+        if not msg["done"] and _iter_discrete_filter(msg):
             value = msg["fn"].enumerate_support()
 
             # Ensure enumeration happens at an available tensor dimension.
