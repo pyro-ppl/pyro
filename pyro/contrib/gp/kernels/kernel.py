@@ -37,7 +37,7 @@ class Kernel(Parameterized):
         """
         raise NotImplementedError
 
-    def _slice_X(self, X):
+    def _slice_input(self, X):
         """
         Slices X according to `self.active_dims`. If X is 1 dimensional then returns
             a 2D tensor of size `N x 1`.

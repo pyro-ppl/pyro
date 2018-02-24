@@ -10,8 +10,12 @@ from .kernel import Kernel
 
 class Isotropy(Kernel):
     """
-    Base kernel for a family of isotropic covariance functions which is a function of
-    the distance ``r=|x-z|``.
+    Base kernel for a family of isotropic covariance functions which is a
+    function of the distance ``r=|x-z|``.
+
+    By default, the parameter ``lengthscale`` has size 1. To use the
+    anisotropic version (different lengthscale for each dimension),
+    make sure that lengthscale has size equal to ``input_dim``.
 
     :param torch.Tensor variance: Variance parameter of this kernel.
     :param torch.Tensor lengthscale: Length scale parameter of this kernel.
@@ -19,24 +23,25 @@ class Isotropy(Kernel):
 
     def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None, name=None):
         super(Isotropy, self).__init__(input_dim, active_dims, name)
+
         if variance is None:
             variance = torch.ones(1)
         self.variance = Parameter(variance)
+        self.set_constraint("variance", constraints.positive)
+
         if lengthscale is None:
             lengthscale = torch.ones(1)
-        lengthscale = lengthscale.expand(self.input_dim).clone()
         self.lengthscale = Parameter(lengthscale)
-        self.set_constraint("variance", constraints.positive)
         self.set_constraint("lengthscale", constraints.positive)
 
     def _square_scaled_dist(self, X, Z=None):
         """
-        Returns `||(X-Z)/lengthscale||^2`.
+        Returns ``||(X-Z)/lengthscale||^2``.
         """
         if Z is None:
-            return Variable(X.new(X.size(0), X.size(0)).zeros_())
-        X = self._slice_X(X)
-        Z = self._slice_X(Z)
+            return Variable(X.new(X.size(0), X.size(0)).zero_())
+        X = self._slice_input(X)
+        Z = self._slice_input(Z)
         if X.size(1) != Z.size(1):
             raise ValueError("Inputs must have the same number of features.")
 
@@ -62,8 +67,7 @@ class RBF(Isotropy):
     Implementation of Radial Basis Function kernel: ``exp(-0.5 * r^2 / l^2)``.
     """
 
-    def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None,
-                 name="RBF"):
+    def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None, name="RBF"):
         super(RBF, self).__init__(input_dim, variance, lengthscale, active_dims, name)
 
     def forward(self, X, Z=None, diag=False):
@@ -95,6 +99,7 @@ class RationalQuadratic(Isotropy):
     def __init__(self, input_dim, variance=None, lengthscale=None, scale_mixture=None, active_dims=None,
                  name="RationalQuadratic"):
         super(RationalQuadratic, self).__init__(input_dim, variance, lengthscale, active_dims, name)
+
         if scale_mixture is None:
             scale_mixture = torch.ones(1)
         self.scale_mixture = Parameter(scale_mixture)
@@ -115,8 +120,7 @@ class Exponential(Isotropy):
     Implementation of Exponential kernel: `exp(-r/l)`.
     """
 
-    def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None,
-                 name="Exponential"):
+    def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None, name="Exponential"):
         super(Matern12, self).__init__(input_dim, variance, lengthscale, active_dims, name)
 
     def forward(self, X, Z=None, diag=False):
@@ -133,8 +137,7 @@ class Matern12(Exponential):
     """
     Another name of Exponential kernel.
     """
-    def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None,
-                 name="Matern12"):
+    def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None, name="Matern12"):
         super(Matern12, self).__init__(input_dim, variance, lengthscale, active_dims, name)
 
 
@@ -143,8 +146,7 @@ class Matern32(Isotropy):
     Implementation of Matern32 kernel: ``(1 + sqrt(3) * r/l) * exp(-sqrt(3) * r/l)``.
     """
 
-    def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None,
-                 name="Matern32"):
+    def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None, name="Matern32"):
         super(Matern32, self).__init__(input_dim, variance, lengthscale, active_dims, name)
 
     def forward(self, X, Z=None, diag=False):
@@ -163,8 +165,7 @@ class Matern52(Isotropy):
     Implementation of Matern52 kernel: ``(1 + sqrt(5) * r/l + 5/3 * r^2 / l^2) * exp(-sqrt(5) * r/l)``.
     """
 
-    def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None,
-                 name="Matern52"):
+    def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None, name="Matern52"):
         super(Matern52, self).__init__(input_dim, variance, lengthscale, active_dims, name)
 
     def forward(self, X, Z=None, diag=False):
@@ -176,22 +177,3 @@ class Matern52(Isotropy):
         r = r2.sqrt()
         sqrt5_r = 5**0.5 * r
         return variance * (1 + sqrt5_r + (5/3) * r2) * torch.exp(-sqrt5_r)
-
-
-class Cosine(Isotropy):
-    """
-    Implementation of Cosine kernel: ``cos(r)``.
-    """
-
-    def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None,
-                 name="Cosine"):
-        super(Cosine, self).__init__(input_dim, variance, lengthscale, active_dims, name)
-
-    def forward(self, X, Z=None, diag=False):
-        if diag:
-            return self._diag(X)
-
-        variance = self.get_param("variance")
-        r2 = self._square_scaled_dist(X, Z)
-        r = r2.sqrt()
-        return variance * torch.cos(r)

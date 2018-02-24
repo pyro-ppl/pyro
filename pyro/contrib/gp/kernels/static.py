@@ -17,6 +17,7 @@ class Constant(Kernel):
 
     def __init__(self, input_dim, variance=None, active_dims=None, name="Constant"):
         super(Constant, self).__init__(input_dim, active_dims, name)
+
         if variance is None:
             variance = torch.ones(1)
         self.variance = Parameter(variance)
@@ -26,6 +27,7 @@ class Constant(Kernel):
         variance = self.get_param("variance")
         if diag:
             return variance.expand(X.size(0))
+    
         if Z is None:
             Z = X
         return variance.expand(X.size(0), Z.size(0))
@@ -57,7 +59,8 @@ class WhiteNoise(Kernel):
         variance = self.get_param("variance")
         if diag:
             return variance.expand(X.size(0))
+
         if Z is None:
             return variance.expand(X.size(0)).diag()
         else:
-            return Variable(X.new(X.size(0), Z.size(0)).zeros_())
+            return Variable(X.new(X.size(0), Z.size(0)).zero_())
