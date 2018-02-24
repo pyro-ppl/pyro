@@ -39,7 +39,7 @@ class Isotropy(Kernel):
         Returns ``||(X-Z)/lengthscale||^2``.
         """
         if Z is None:
-            return Variable(X.data.new(X.size(0), X.size(0)).zero_())
+            Z = X
         X = self._slice_input(X)
         Z = self._slice_input(Z)
         if X.size(1) != Z.size(1):
