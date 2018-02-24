@@ -3,12 +3,11 @@ from __future__ import absolute_import, division, print_function
 import math
 
 import torch
-from torch.autograd import Variable
 from torch.distributions import constraints
 from torch.nn import Parameter
 
 from .kernel import Kernel
-from .isotropy import Isotropy
+from .isotropic import Isotropy
 
 
 class Cosine(Isotropy):
@@ -34,12 +33,12 @@ class SineSquaredExponential(Kernel):
     Implementation of Sine Squared Exponential kernel (Periodic kernel):
     ``k(x, z) = exp(-2 * sin^2(pi * (x-z) / p) / l^2)``, where ``p`` is
     period parameter.
-    
+
     References:
 
     [1] `Introduction to Gaussian processes`,
     David J.C. MacKay
-    
+
     :param torch.Tensor variance: Variance parameter of this kernel.
     :param torch.Tensor lengthscale: Length scale parameter of this kernel.
     :param torch.Tensor period: Period parameter of this kernel.
@@ -91,4 +90,4 @@ class Periodic(SineSquaredExponential):
 
     def __init__(self, input_dim, variance=None, lengthscale=None,  period=None, active_dims=None,
                  name="Periodic"):
-        super(Periodic, self).__init__(input_dim, variance, lengthscale,  period,active_dims, name)
+        super(Periodic, self).__init__(input_dim, variance, lengthscale, period, active_dims, name)

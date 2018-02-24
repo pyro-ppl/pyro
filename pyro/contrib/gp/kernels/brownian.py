@@ -1,5 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
+import torch
+from torch.autograd import Variable
+
 from .kernel import Kernel
 
 
@@ -30,4 +33,4 @@ class Brownian(Kernel):
             Z = X
         return torch.where(X.sign() == Z.t().sign(),
                            torch.min(X.abs(), Z.t().abs()),
-                           X.new(X.size(0), Z.size(0)).zero_())
+                           Variable(X.data.new(X.size(0), Z.size(0)).zero_()))

@@ -27,7 +27,7 @@ class Constant(Kernel):
         variance = self.get_param("variance")
         if diag:
             return variance.expand(X.size(0))
-    
+
         if Z is None:
             Z = X
         return variance.expand(X.size(0), Z.size(0))
@@ -63,4 +63,4 @@ class WhiteNoise(Kernel):
         if Z is None:
             return variance.expand(X.size(0)).diag()
         else:
-            return Variable(X.new(X.size(0), Z.size(0)).zero_())
+            return Variable(X.data.new(X.size(0), Z.size(0)).zero_())
