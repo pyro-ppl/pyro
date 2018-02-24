@@ -92,10 +92,10 @@ def sum_rightmost(value, dim):
 
     If ``dim`` is 0, no dimensions are summed out.
     If ``dim`` is ``float('inf')``, then all dimensions are summed out.
-    If ``dim`` is 1, the leftmost 1 dimension is summed out.
-    If ``dim`` is 2, the leftmost two dimensions are summed out.
-    If ``dim`` is -1, all but the rightmost 1 dimension is summed out.
-    If ``dim`` is -2, all but the rightmost 2 dimensions are summed out.
+    If ``dim`` is 1, the rightmost 1 dimension is summed out.
+    If ``dim`` is 2, the rightmost two dimensions are summed out.
+    If ``dim`` is -1, all but the leftmost 1 dimension is summed out.
+    If ``dim`` is -2, all but the leftmost 2 dimensions are summed out.
     etc.
 
     :param torch.autograd.Variable value: A tensor of ``.dim()`` at least ``dim``.
