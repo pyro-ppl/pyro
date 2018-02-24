@@ -361,7 +361,7 @@ def check_site_shape(site, max_iarange_nesting):
 
     # Ignore dimensions left of max_iarange_nesting.
     if max_iarange_nesting < len(actual_shape):
-        actual_shape = actual_shape[-max_iarange_nesting:]
+        actual_shape = actual_shape[len(actual_shape) - max_iarange_nesting:]
 
     # Check for incorrect iarange placement on the right of max_iarange_nesting.
     for actual_size, expected_size in zip_longest(reversed(actual_shape), reversed(expected_shape), fillvalue=1):

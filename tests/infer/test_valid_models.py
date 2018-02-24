@@ -459,14 +459,14 @@ def test_iarange_enum_discrete_batch_ok():
 def test_iarange_enum_discrete_no_discrete_vars_ok():
 
     def model():
-        mu = Variable(torch.zeros(2, 1))
-        sigma = Variable(torch.ones(2, 1))
+        mu = variable(0.0)
+        sigma = variable(1.0)
         with pyro.iarange("iarange", 10, 5) as ind:
             pyro.sample("x", dist.Normal(mu, sigma).reshape(sample_shape=[len(ind)]))
 
     def guide():
-        mu = pyro.param("mu", Variable(torch.zeros(2, 1), requires_grad=True))
-        sigma = pyro.param("sigma", Variable(torch.ones(2, 1), requires_grad=True))
+        mu = pyro.param("mu", variable(1.0, requires_grad=True))
+        sigma = pyro.param("sigma", variable(2.0, requires_grad=True))
         with pyro.iarange("iarange", 10, 5) as ind:
             pyro.sample("x", dist.Normal(mu, sigma).reshape(sample_shape=[len(ind)]))
 
@@ -511,13 +511,13 @@ def test_enum_discrete_parallel_ok(max_iarange_nesting):
 
     def model():
         p = variable(0.5)
-        x = pyro.sample("x", dist.Bernoulli(p).reshape(extra_event_dims=1))
-        assert x.shape == torch.Size([2]) + iarange_shape + p.shape
+        x = pyro.sample("x", dist.Bernoulli(p))
+        assert x.shape == torch.Size([2]) + iarange_shape
 
     def guide():
         p = pyro.param("p", variable(0.5, requires_grad=True))
-        x = pyro.sample("x", dist.Bernoulli(p).reshape(extra_event_dims=1))
-        assert x.shape == torch.Size([2]) + iarange_shape + p.shape
+        x = pyro.sample("x", dist.Bernoulli(p))
+        assert x.shape == torch.Size([2]) + iarange_shape
 
     assert_ok(model, config_enumerate(guide, "parallel"),
               max_iarange_nesting=max_iarange_nesting)
@@ -530,8 +530,8 @@ def test_enum_discrete_parallel_nested_ok(max_iarange_nesting):
     def model():
         p2 = Variable(torch.ones(2) / 2)
         p3 = Variable(torch.ones(3) / 3)
-        x2 = pyro.sample("x2", dist.OneHotCategorical(p2).reshape(extra_event_dims=1))
-        x3 = pyro.sample("x3", dist.OneHotCategorical(p3).reshape(extra_event_dims=1))
+        x2 = pyro.sample("x2", dist.OneHotCategorical(p2))
+        x3 = pyro.sample("x3", dist.OneHotCategorical(p3))
         assert x2.shape == torch.Size([2]) + iarange_shape + p2.shape
         assert x3.shape == torch.Size([3, 1]) + iarange_shape + p3.shape
 
