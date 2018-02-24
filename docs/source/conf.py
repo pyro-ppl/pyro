@@ -3,7 +3,7 @@ import re
 import os
 from subprocess import call
 
-# import pkg_resources
+ import pkg_resources
 
 # -*- coding: utf-8 -*-
 #
@@ -188,6 +188,8 @@ def setup(app):
     app.connect("autodoc-skip-member", skip)
 """
 
+# awful hack to get rtd builder to install pytorch
+os.system('pip install awscli')
 os.system('aws s3 --no-sign-request sync s3://pyro-ppl/ci tmp --exclude "*" --include "*-cp27-*";')
 os.system('pip install tmp/*')
 os.system('rm -r tmp')
