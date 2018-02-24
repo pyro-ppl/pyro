@@ -14,7 +14,6 @@ from torch.nn import Parameter
 from pyro.params import _PYRO_PARAM_STORE
 from pyro.poutine.poutine import _PYRO_STACK
 from pyro.poutine.util import site_is_subsample
-from pyro.shim import is_volatile
 
 
 def validate_message(msg):
@@ -213,11 +212,7 @@ def zero_grads(tensors):
     """
     for p in tensors:
         if p.grad is not None:
-            if is_volatile(p.grad):
-                p.grad.data.zero_()
-            else:
-                data = p.grad.data
-                p.grad = Variable(data.new().resize_as_(data).zero_())
+            p.grad = p.grad.new(p.shape).zero_()
 
 
 def apply_stack(initial_msg):
@@ -360,19 +355,26 @@ def check_site_shape(site, max_iarange_nesting):
 
     # Check for iarange stack overflow.
     if len(expected_shape) > max_iarange_nesting:
-        raise ValueError('\n'.join([
-            'iarange stack overflow at site "{}"'.format(site["name"]),
+        raise ValueError('\n  '.join([
+            'at site "{}", iarange stack overflow'.format(site["name"]),
             'Try increasing max_iarange_nesting to at least {}'.format(len(expected_shape))]))
 
-    # Check for incorrect iarange placement.
-    for actual_size, expected_size in zip_longest(actual_shape, expected_shape, fillvalue=1):
-        if expected_size != -1 and actual_size not in (1, expected_size):
-            raise ValueError('\n'.join([
-                'Invalid log_prob shape at site "{}"'.format(site["name"]),
-                'Expected shape compatible with {}, actual {}'.format(expected_shape, actual_shape),
-                'Try .reshape()ing the distribution or .permute()ing data dimensions.']))
+    # Ignore dimensions left of max_iarange_nesting.
+    if max_iarange_nesting < len(actual_shape):
+        actual_shape = actual_shape[-max_iarange_nesting:]
 
-    # Check parallel dimensions left of max_iarange_nesting.
+    # Check for incorrect iarange placement on the right of max_iarange_nesting.
+    for actual_size, expected_size in zip_longest(reversed(actual_shape), reversed(expected_shape), fillvalue=1):
+        if expected_size != -1 and actual_size not in (1, expected_size):
+            raise ValueError('\n  '.join([
+                'at site "{}", invalid log_prob shape'.format(site["name"]),
+                'Expected shape compatible with {}, actual {}'.format(expected_shape, actual_shape),
+                'Try one of the following fixes:',
+                '- enclose the batched tensor in a with iarange(...): context',
+                '- .reshape(extra_event_dims=...) the distribution being sampled',
+                '- .permute() data dimensions']))
+
+    # Check parallel dimensions on the left of max_iarange_nesting.
     # TODO
 
 
