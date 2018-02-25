@@ -81,7 +81,7 @@ class MultiViewTensor(dict):
         assert dim <= 0
         result = MultiViewTensor()
         for shape, term in self.items():
-            if dim==0:
+            if dim == 0:
                 result.add(term.sum())
             elif -dim > term.dim():
                 result.add(term)

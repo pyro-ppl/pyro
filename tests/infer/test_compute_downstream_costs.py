@@ -23,8 +23,8 @@ def big_model_guide(include_obs=True, include_single=False, include_inner_1=Fals
         with pyro.iarange("iarange_triple1", 6) as ind_triple1:
             with pyro.iarange("iarange_triple2", 7) as ind_triple2:
                 with pyro.iarange("iarange_triple3", 9) as ind_triple3:
-                    z0 = pyro.sample("z0", dist.Bernoulli(p2).reshape(sample_shape=[len(ind_triple1),
-                                     len(ind_triple2), len(ind_triple3)]))
+                    pyro.sample("z0", dist.Bernoulli(p2).reshape(sample_shape=[len(ind_triple1),
+                                len(ind_triple2), len(ind_triple3)]))
     pyro.sample("a1", dist.Bernoulli(p0))
     if include_single:
         with pyro.iarange("iarange_single", 5) as ind_single:

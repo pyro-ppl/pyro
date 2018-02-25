@@ -4,18 +4,18 @@ import warnings
 
 from operator import itemgetter
 import networkx
+import numpy as np
 import torch
 from torch.autograd import variable
 
 import pyro
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
-from pyro.infer.elbo import ELBO
 from pyro.infer.util import torch_backward, torch_data_sum
 from pyro.infer.util import MultiViewTensor as MVT
 from pyro.distributions.util import sum_leftmost
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_match, detach_iterable, ng_zeros, is_nan
+from pyro.util import check_model_guide_match, detach_iterable, ng_zeros
 
 
 def _get_baseline_options(site):
@@ -59,11 +59,16 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
         return n_compatible
 
     printhappy = False
-    #printhappy = True
+    all_nodes = [x for x in model_trace.nodes
+                 if model_trace.nodes[x]["type"] == "sample"]
+
+    for node in all_nodes:
+        if printhappy:
+            print("model blpdf %s" % node, model_trace.nodes[node]['batch_log_pdf'].shape)
+            if node in guide_trace.nodes:
+                print("guide blpdf %s" % node, guide_trace.nodes[node]['batch_log_pdf'].shape)
 
     for node in topo_sort_guide_nodes:
-        if printhappy:
-            print("blpdf %s" % node, model_trace.nodes[node]['batch_log_pdf'].shape)
         downstream_costs[node] = MVT(model_trace.nodes[node]['batch_log_pdf'] -
                                      guide_trace.nodes[node]['batch_log_pdf'])
         nodes_included_in_sum = set([node])
@@ -75,7 +80,6 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
             child_cost_nodes = downstream_guide_cost_nodes[child]
             downstream_guide_cost_nodes[node].update(child_cost_nodes)
             if nodes_included_in_sum.isdisjoint(child_cost_nodes):  # avoid duplicates
-                #dims_to_sum = child.dim() - n_compatible_indices(node, child)
                 dims_to_keep = n_compatible_indices(node, child)
                 summed_child = downstream_costs[child].sum_leftmost(-dims_to_keep)
                 if printhappy:
@@ -111,7 +115,7 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
                 summed_child = sum_leftmost(model_trace.nodes[child]['batch_log_pdf'], -dims_to_keep)
             if printhappy:
                 print("site/child = ", site, child, "dimstokeep", dims_to_keep, "summedchild", summed_child.shape,
-                    model_trace.nodes[child]['batch_log_pdf'].shape)
+                      model_trace.nodes[child]['batch_log_pdf'].shape)
             downstream_costs[site].add(summed_child)
             downstream_guide_cost_nodes[site].update([child])
 
@@ -171,18 +175,19 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
         assert(not (use_nn_baseline and use_baseline_value)), \
             "cannot use baseline_value and nn_baseline simultaneously"
         if use_decaying_avg_baseline:
-            avg_downstream_cost_old = pyro.param("__baseline_avg_downstream_cost_" + node,
-                                                 ng_zeros(downstream_cost.size()), tags="__tracegraph_elbo_internal_tag")
-            avg_downstream_cost_new = (1 - baseline_beta) * downstream_cost + \
+            dc_shape = downstream_cost.shape
+            if len(dc_shape) > 0:
+                avg_downstream_cost_old = pyro.param("__baseline_avg_downstream_cost_" + node,
+                                                     ng_zeros(dc_shape), tags="__tracegraph_elbo_internal_tag")
+            else:
+                avg_downstream_cost_old = pyro.param("__baseline_avg_downstream_cost_" + node,
+                                                     variable(0.0), tags="__tracegraph_elbo_internal_tag")
+            avg_downstream_cost_new = (1 - baseline_beta) * downstream_cost.detach() + \
                 baseline_beta * avg_downstream_cost_old
-            avg_downstream_cost_old.copy_(avg_downstream_cost_new)  # XXX copy_() ?
-            #avg_downstream_cost_old.data = avg_downstream_cost_new.data  # XXX copy_() ?
+            avg_downstream_cost_old.copy_(avg_downstream_cost_new)  # XXX s this copy_() what we want?
             baseline += avg_downstream_cost_old
-            #print("decay", avg_downstream_cost_old.shape)
         if use_nn_baseline:
             # block nn_baseline_input gradients except in baseline loss
-            #print("nnbaseline", nn_baseline(detach_iterable(nn_baseline_input)).shape)
-            #print("dc", downstream_cost.shape)
             baseline += nn_baseline(detach_iterable(nn_baseline_input))
         elif use_baseline_value:
             # it's on the user to make sure baseline_value tape only points to baseline params
@@ -195,8 +200,7 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
         if log_pdf_key == 'log_pdf':
             score_function_term = score_function_term.sum()
         if use_nn_baseline or use_decaying_avg_baseline or use_baseline_value:
-            if (downstream_cost.dim() == 0 and baseline.dim() > 1) or \
-               (downstream_cost.dim() > 0 and downstream_cost.size() != baseline.size()):
+            if downstream_cost.size() != baseline.size():
                 raise ValueError("Expected baseline at site {} to be {} instead got {}".format(
                     node, downstream_cost.size(), baseline.size()))
             downstream_cost = downstream_cost - baseline
@@ -205,7 +209,7 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
     return surrogate_elbo, baseline_loss
 
 
-class TraceGraph_ELBO(ELBO):
+class TraceGraph_ELBO(object):
     """
     A TraceGraph implementation of ELBO-based SVI. The gradient estimator
     is constructed along the lines of reference [1] specialized to the case
@@ -222,6 +226,14 @@ class TraceGraph_ELBO(ELBO):
     [2] `Neural Variational Inference and Learning in Belief Networks`
         Andriy Mnih, Karol Gregor
     """
+    def __init__(self, num_particles=1, enum_discrete=False):
+        """
+        :param num_particles: the number of particles (samples) used to form the estimator
+        :param bool enum_discrete: whether to sum over discrete latent variables, rather than sample them
+        """
+        super(TraceGraph_ELBO, self).__init__()
+        self.num_particles = num_particles
+        self.enum_discrete = enum_discrete
 
     def _get_traces(self, model, guide, *args, **kwargs):
         """
@@ -230,6 +242,9 @@ class TraceGraph_ELBO(ELBO):
         """
 
         for i in range(self.num_particles):
+            if self.enum_discrete:
+                raise NotImplementedError("https://github.com/uber/pyro/issues/220")
+
             guide_trace = poutine.trace(guide,
                                         graph_type="dense").get_trace(*args, **kwargs)
             model_trace = poutine.trace(poutine.replay(model, guide_trace),
@@ -266,7 +281,7 @@ class TraceGraph_ELBO(ELBO):
             elbo += torch_data_sum(weight * elbo_particle)
 
         loss = -elbo
-        if is_nan(loss):
+        if np.isnan(loss):
             warnings.warn('Encountered NAN loss')
         return loss
 
@@ -288,15 +303,10 @@ class TraceGraph_ELBO(ELBO):
         # get info regarding rao-blackwellization of vectorized map_data
         guide_vec_md_info = guide_trace.graph["vectorized_map_data_info"]
         model_vec_md_info = model_trace.graph["vectorized_map_data_info"]
-        guide_vec_md_condition = guide_vec_md_info['rao-blackwellization-condition']
-        model_vec_md_condition = model_vec_md_info['rao-blackwellization-condition']
-        do_vec_rb = guide_vec_md_condition and model_vec_md_condition
-        if not do_vec_rb:
-            warnings.warn(
-                "Unable to do fully-vectorized Rao-Blackwellization in TraceGraph_ELBO. "
-                "Falling back to higher-variance gradient estimator. "
-                "Try to avoid these issues in your model and guide:\n{}".format("\n".join(
-                    guide_vec_md_info["warnings"] | model_vec_md_info["warnings"])))
+        # guide_vec_md_condition = guide_vec_md_info['rao-blackwellization-condition']
+        # model_vec_md_condition = model_vec_md_info['rao-blackwellization-condition']
+        # do_vec_rb = guide_vec_md_condition and model_vec_md_condition
+        do_vec_rb = True
         guide_vec_md_nodes = guide_vec_md_info['nodes'] if do_vec_rb else set()
         model_vec_md_nodes = model_vec_md_info['nodes'] if do_vec_rb else set()
 
@@ -330,6 +340,6 @@ class TraceGraph_ELBO(ELBO):
             pyro.get_param_store().mark_params_active(trainable_params)
 
         loss = -elbo
-        if is_nan(loss):
+        if np.isnan(loss):
             warnings.warn('Encountered NAN loss')
         return weight * loss
