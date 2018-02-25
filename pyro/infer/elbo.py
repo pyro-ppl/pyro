@@ -13,6 +13,10 @@ class ELBO(object):
         (gradient) estimators.
     :param bool enum_discrete: Whether to sum over discrete latent variables,
         rather than sample them.
+    :param int max_iarange_nesting: optional bound on max number of nested
+        :func:`pyro.iarange` contexts. This is only required to enumerate over
+        sample sites in parallel, e.g. if a site sets
+        ``infer={"enumerate": "parallel"}``.
 
     References
 
@@ -25,9 +29,9 @@ class ELBO(object):
 
     def __init__(self,
                  num_particles=1,
-                 enum_discrete=False):
+                 max_iarange_nesting=float('inf')):
         self.num_particles = num_particles
-        self.enum_discrete = enum_discrete
+        self.max_iarange_nesting = max_iarange_nesting
 
     @staticmethod
     def make(trace_graph=False, **kwargs):

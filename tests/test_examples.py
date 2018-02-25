@@ -33,9 +33,12 @@ def discover_examples():
             # TODO: May be worth whitelisting the set of arguments to test
             # for each example.
             CPU_EXAMPLES.append((example, args))
-            for flag in ['--enum-discrete', '--aux-loss']:
-                if flag in text:
-                    CPU_EXAMPLES.append((example, args + [flag]))
+            if '--aux-loss' in text:
+                CPU_EXAMPLES.append((example, args + ['--aux-loss']))
+            if '--enum-discrete' in text:
+                CPU_EXAMPLES.append((example, args + ['--enum-discrete=sequential']))
+                # TODO fix examples to work with --enum-discrete=parallel
+                # CPU_EXAMPLES.append((example, args + ['--enum-discrete=parallel']))
             if '--num-iafs' in text:
                 CPU_EXAMPLES.append((example, args + ['--num-iafs=1']))
             if '--cuda' in text:

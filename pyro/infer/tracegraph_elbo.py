@@ -190,9 +190,6 @@ class TraceGraph_ELBO(ELBO):
         """
 
         for i in range(self.num_particles):
-            if self.enum_discrete:
-                raise NotImplementedError("https://github.com/uber/pyro/issues/220")
-
             guide_trace = poutine.trace(guide,
                                         graph_type="dense").get_trace(*args, **kwargs)
             model_trace = poutine.trace(poutine.replay(model, guide_trace),
