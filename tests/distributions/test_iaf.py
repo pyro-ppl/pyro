@@ -7,7 +7,7 @@ import pytest
 import torch
 from torch.autograd import Variable
 
-from pyro.distributions.torch.iaf import InverseAutoregressiveFlow
+from pyro.distributions.iaf import InverseAutoregressiveFlow
 from pyro.nn import AutoRegressiveNN
 
 pytestmark = pytest.mark.init(rng_seed=123)

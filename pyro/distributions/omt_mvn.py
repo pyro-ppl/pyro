@@ -5,7 +5,7 @@ from torch.autograd import Function, variable
 from torch.autograd.function import once_differentiable
 from torch.distributions import constraints
 
-from pyro.distributions.torch.multivariate_normal import MultivariateNormal
+from pyro.distributions.multivariate_normal import MultivariateNormal
 from pyro.distributions.util import sum_leftmost
 
 
