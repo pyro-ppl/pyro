@@ -248,8 +248,7 @@ def nested_model_guide(include_obs=True, dim1=11, dim2=7):
                 assert obs_i.shape == (dim2 + i,)
 
 
-@pytest.mark.parametrize("dim1", [2])
-#@pytest.mark.parametrize("dim1", [2, 5, 9])
+@pytest.mark.parametrize("dim1", [2, 5, 9])
 def test_compute_downstream_costs_iarange_in_irange(dim1):
     guide_trace = poutine.trace(nested_model_guide,
                                 graph_type="dense").get_trace(include_obs=False, dim1=dim1)
