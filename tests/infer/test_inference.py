@@ -28,6 +28,7 @@ def param_abs_error(name, target):
     return torch.sum(torch.abs(target - pyro.param(name))).data.cpu().numpy()[0]
 
 
+@pytest.mark.stage("integration", "integration_batch_1")
 class NormalNormalTests(TestCase):
 
     def setUp(self):
@@ -217,6 +218,7 @@ class PoissonGammaTests(TestCase):
         assert_equal(0.0, beta_error, prec=0.08)
 
 
+@pytest.mark.stage("integration", "integration_batch_1")
 class ExponentialGammaTests(TestCase):
     def setUp(self):
         # exponential-gamma model
@@ -273,6 +275,7 @@ class ExponentialGammaTests(TestCase):
         assert_equal(0.0, beta_error, prec=0.08)
 
 
+@pytest.mark.stage("integration", "integration_batch_2")
 class BernoulliBetaTests(TestCase):
     def setUp(self):
         # bernoulli-beta model
