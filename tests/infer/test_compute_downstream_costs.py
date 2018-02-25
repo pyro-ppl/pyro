@@ -2,11 +2,9 @@ from __future__ import absolute_import, division, print_function
 
 import math
 
-import numpy as np
-
 import pytest
 import torch
-from torch.autograd import Variable
+from torch.autograd import Variable, variable
 
 import pyro
 import pyro.poutine as poutine
@@ -136,6 +134,7 @@ def test_compute_downstream_costs_big_model_guide_pair(include_inner_1, include_
 
     if include_single:
         assert_equal(expected_b0, dc['b0'], prec=1.0e-6)
+        assert dc['b0'].size() == (5,)
     if include_inner_1:
         assert_equal(expected_c1, dc['c1'], prec=1.0e-6)
         assert_equal(expected_c2, dc['c2'], prec=1.0e-6)
@@ -144,11 +143,14 @@ def test_compute_downstream_costs_big_model_guide_pair(include_inner_1, include_
     assert_equal(expected_d1, dc['d1'], prec=1.0e-6)
     assert_equal(expected_b1, dc['b1'], prec=1.0e-6)
 
+    assert dc['b1'].size() == (2,)
+    assert dc['d2'].size() == (4, 2)
+
     for k in dc:
         assert(guide_trace.nodes[k]['batch_log_pdf'].size() == dc[k].size())
 
 
-def diamond_model():
+def diamond_model(dim):
     p0 = variable(math.exp(-0.20), requires_grad=True)
     p1 = variable(math.exp(-0.33), requires_grad=True)
     pyro.sample("a1", dist.Bernoulli(p0))
@@ -159,20 +161,21 @@ def diamond_model():
     pyro.sample("obs", dist.Bernoulli(p0), obs=variable(1.0))
 
 
-def diamond_guide():
+def diamond_guide(dim):
     p0 = variable(math.exp(-0.70), requires_grad=True)
     p1 = variable(math.exp(-0.43), requires_grad=True)
     pyro.sample("a1", dist.Bernoulli(p0))
-    for i in pyro.irange("irange", 2):
+    for i in pyro.irange("irange", dim):
         pyro.sample("b{}".format(i), dist.Bernoulli(p1))
     pyro.sample("c1", dist.Bernoulli(p0))
 
 
-def test_compute_downstream_costs_duplicates():
+@pytest.mark.parametrize("dim", [2, 3, 7, 11])
+def test_compute_downstream_costs_duplicates(dim):
     guide_trace = poutine.trace(diamond_guide,
-                                graph_type="dense").get_trace()
+                                graph_type="dense").get_trace(dim=dim)
     model_trace = poutine.trace(poutine.replay(diamond_model, guide_trace),
-                                graph_type="dense").get_trace()
+                                graph_type="dense").get_trace(dim=dim)
 
     guide_trace = prune_subsample_sites(guide_trace)
     model_trace = prune_subsample_sites(model_trace)
@@ -193,19 +196,21 @@ def test_compute_downstream_costs_duplicates():
                                              non_reparam_nodes, include_nodes=True)
 
     expected_a1 = (model_trace.nodes['a1']['batch_log_pdf'] - guide_trace.nodes['a1']['batch_log_pdf'])
-    expected_a1 += (model_trace.nodes['b1']['batch_log_pdf'] - guide_trace.nodes['b1']['batch_log_pdf'])
-    expected_a1 += (model_trace.nodes['b0']['batch_log_pdf'] - guide_trace.nodes['b0']['batch_log_pdf'])
+    for d in range(dim):
+        expected_a1 += model_trace.nodes['b{}'.format(d)]['batch_log_pdf']
+        expected_a1 -= guide_trace.nodes['b{}'.format(d)]['batch_log_pdf']
     expected_a1 += (model_trace.nodes['c1']['batch_log_pdf'] - guide_trace.nodes['c1']['batch_log_pdf'])
     expected_a1 += model_trace.nodes['obs']['batch_log_pdf']
 
-    expected_b1 = (model_trace.nodes['b1']['batch_log_pdf'] - guide_trace.nodes['b1']['batch_log_pdf'])
+    expected_b1 = - guide_trace.nodes['b1']['batch_log_pdf']
+    for d in range(dim):
+        expected_b1 += model_trace.nodes['b{}'.format(d)]['batch_log_pdf']
     expected_b1 += (model_trace.nodes['c1']['batch_log_pdf'] - guide_trace.nodes['c1']['batch_log_pdf'])
-    expected_b1 += model_trace.nodes['b0']['batch_log_pdf']
     expected_b1 += model_trace.nodes['obs']['batch_log_pdf']
 
     expected_c1 = (model_trace.nodes['c1']['batch_log_pdf'] - guide_trace.nodes['c1']['batch_log_pdf'])
-    expected_c1 += model_trace.nodes['b0']['batch_log_pdf']
-    expected_c1 += model_trace.nodes['b1']['batch_log_pdf']
+    for d in range(dim):
+        expected_c1 += model_trace.nodes['b{}'.format(d)]['batch_log_pdf']
     expected_c1 += model_trace.nodes['obs']['batch_log_pdf']
 
     assert_equal(expected_a1, dc['a1'], prec=1.0e-6)
@@ -216,25 +221,26 @@ def test_compute_downstream_costs_duplicates():
         assert(guide_trace.nodes[k]['batch_log_pdf'].size() == dc[k].size())
 
 
-def nested_model_guide(include_obs=True):
-    p0 = variable(math.exp(-0.20), requires_grad=True)
-    p1 = variable(math.exp(-0.33), requires_grad=True)
+def nested_model_guide(include_obs=True, dim1=11, dim2=7):
+    p0 = variable(math.exp(-0.40 - include_obs * 0.2), requires_grad=True)
+    p1 = variable(math.exp(-0.33 - include_obs * 0.1), requires_grad=True)
     pyro.sample("a1", dist.Bernoulli(p0 * p1))
-    for i in pyro.irange("irange", 2):
+    for i in pyro.irange("irange", dim1):
         pyro.sample("b{}".format(i), dist.Bernoulli(p0))
-        with pyro.iarange("iarange", 3 + i) as ind:
+        with pyro.iarange("iarange", dim2 + i) as ind:
             c_i = pyro.sample("c{}".format(i), dist.Bernoulli(p1).reshape(sample_shape=[len(ind)]))
-            assert c_i.shape == (3 + i,)
+            assert c_i.shape == (dim2 + i,)
             if include_obs:
                 obs_i = pyro.sample("obs{}".format(i), dist.Bernoulli(c_i), obs=Variable(torch.ones(c_i.size())))
-                assert obs_i.shape == (3 + i,)
+                assert obs_i.shape == (dim2 + i,)
 
 
-def test_compute_downstream_costs_iarange_in_irange():
+@pytest.mark.parametrize("dim1", [2, 5, 9])
+def test_compute_downstream_costs_iarange_in_irange(dim1):
     guide_trace = poutine.trace(nested_model_guide,
-                                graph_type="dense").get_trace(include_obs=False)
+                                graph_type="dense").get_trace(include_obs=False, dim1=dim1)
     model_trace = poutine.trace(poutine.replay(nested_model_guide, guide_trace),
-                                graph_type="dense").get_trace(include_obs=True)
+                                graph_type="dense").get_trace(include_obs=True, dim1=dim1)
 
     guide_trace = prune_subsample_sites(guide_trace)
     model_trace = prune_subsample_sites(model_trace)
@@ -258,11 +264,20 @@ def test_compute_downstream_costs_iarange_in_irange():
     expected_c1 += model_trace.nodes['obs1']['batch_log_pdf']
 
     expected_b1 = (model_trace.nodes['b1']['batch_log_pdf'] - guide_trace.nodes['b1']['batch_log_pdf'])
-    expected_b1 += (model_trace.nodes['c1']['batch_log_pdf'] - guide_trace.nodes['c1']['batch_log_pdf']).sum(0)
-    expected_b1 += model_trace.nodes['obs1']['batch_log_pdf'].sum(0)
+    expected_b1 += (model_trace.nodes['c1']['batch_log_pdf'] - guide_trace.nodes['c1']['batch_log_pdf']).sum()
+    expected_b1 += model_trace.nodes['obs1']['batch_log_pdf'].sum()
+
+    expected_c0 = (model_trace.nodes['c0']['batch_log_pdf'] - guide_trace.nodes['c0']['batch_log_pdf'])
+    expected_c0 += model_trace.nodes['obs0']['batch_log_pdf']
+
+    expected_b0 = (model_trace.nodes['b0']['batch_log_pdf'] - guide_trace.nodes['b0']['batch_log_pdf'])
+    expected_b0 += (model_trace.nodes['c0']['batch_log_pdf'] - guide_trace.nodes['c0']['batch_log_pdf']).sum()
+    expected_b0 += model_trace.nodes['obs0']['batch_log_pdf'].sum()
 
     assert_equal(expected_c1, dc['c1'], prec=1.0e-6)
     assert_equal(expected_b1, dc['b1'], prec=1.0e-6)
+    assert_equal(expected_c0, dc['c0'], prec=1.0e-6)
+    assert_equal(expected_b0, dc['b0'], prec=1.0e-6)
 
     for k in dc:
         assert(guide_trace.nodes[k]['batch_log_pdf'].size() == dc[k].size())

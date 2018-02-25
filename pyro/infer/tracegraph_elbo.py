@@ -6,6 +6,7 @@ from operator import itemgetter
 import networkx
 import numpy as np
 import torch
+from torch.autograd import variable
 
 import pyro
 import pyro.poutine as poutine
@@ -55,8 +56,10 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
         for xframe, yframe in zip(stacks[source_node], stacks[dest_node]):
             if xframe.name == yframe.name:
                 n_compatible += 1
-        # XXX TODO remove +1 once we have proper scalar support
-        return n_compatible #+ 1
+        return n_compatible
+
+    printhappy = False
+    #printhappy = True
 
     for node in topo_sort_guide_nodes:
         downstream_costs[node] = MVT(model_trace.nodes[node]['batch_log_pdf'] -
@@ -70,8 +73,11 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
             child_cost_nodes = downstream_guide_cost_nodes[child]
             downstream_guide_cost_nodes[node].update(child_cost_nodes)
             if nodes_included_in_sum.isdisjoint(child_cost_nodes):  # avoid duplicates
+                #dims_to_sum = child.dim() - n_compatible_indices(node, child)
                 dims_to_keep = n_compatible_indices(node, child)
                 summed_child = downstream_costs[child].sum_leftmost(-dims_to_keep)
+                if printhappy:
+                    print("node/child = ", node, child, "dimstokeep", dims_to_keep, "summedchild", summed_child)
                 downstream_costs[node].add(summed_child)
                 nodes_included_in_sum.update(child_cost_nodes)
         missing_downstream_costs = downstream_guide_cost_nodes[node] - nodes_included_in_sum
@@ -80,7 +86,10 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
             dims_to_keep = n_compatible_indices(node, missing_node)
             missing_term = model_trace.nodes[missing_node]['batch_log_pdf'] - \
                 guide_trace.nodes[missing_node]['batch_log_pdf']
-            summed_missing_term = sum_leftmost(missing_term, -dims_to_keep)
+            if dims_to_keep == 0:
+                summed_missing_term = missing_term.sum()
+            else:
+                summed_missing_term = sum_leftmost(missing_term, -dims_to_keep)
             downstream_costs[node].add(summed_missing_term)
 
     # finish assembling complete downstream costs
@@ -94,12 +103,22 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
         for child in children_in_model:
             assert (model_trace.nodes[child]["type"] == "sample")
             dims_to_keep = n_compatible_indices(site, child)
-            summed_child = sum_leftmost(model_trace.nodes[child]['batch_log_pdf'], -dims_to_keep)
+            if dims_to_keep == 0:
+                summed_child = model_trace.nodes[child]['batch_log_pdf'].sum()
+            else:
+                summed_child = sum_leftmost(model_trace.nodes[child]['batch_log_pdf'], -dims_to_keep)
+            if printhappy:
+                print("site/child = ", site, child, "dimstokeep", dims_to_keep, "summedchild", summed_child.shape,
+                    model_trace.nodes[child]['batch_log_pdf'].shape)
             downstream_costs[site].add(summed_child)
             downstream_guide_cost_nodes[site].update([child])
 
     for k in topo_sort_guide_nodes:
+        if printhappy:
+            print("pre_downstream_costs[%s]" % k, downstream_costs[k])
         downstream_costs[k] = downstream_costs[k].contract_to(guide_trace.nodes[k]['batch_log_pdf'])
+        if printhappy:
+            print("post_downstream_costs[%s]" % k, downstream_costs[k].shape)
 
     if include_nodes:
         return downstream_costs, downstream_guide_cost_nodes
@@ -151,11 +170,18 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
             "cannot use baseline_value and nn_baseline simultaneously"
         if use_decaying_avg_baseline:
             avg_downstream_cost_old = pyro.param("__baseline_avg_downstream_cost_" + node,
-                                                 ng_zeros(1), tags="__tracegraph_elbo_internal_tag")
-            avg_downstream_cost_new = (1 - baseline_beta) * downstream_cost + \
+                                                 variable(0.0), tags="__tracegraph_elbo_internal_tag")
+            print("old", avg_downstream_cost_old)
+            print("dc", downstream_cost)
+            avg_downstream_cost_new = (1 - baseline_beta) * downstream_cost.mean() + \
                 baseline_beta * avg_downstream_cost_old
+            print("new", avg_downstream_cost_new)
+            print("old2", avg_downstream_cost_old)
             avg_downstream_cost_old.data = avg_downstream_cost_new.data  # XXX copy_() ?
+            print("old3", avg_downstream_cost_old)
             baseline += avg_downstream_cost_old
+            print("old4", avg_downstream_cost_old)
+            print("baseline", baseline)
         if use_nn_baseline:
             # block nn_baseline_input gradients except in baseline loss
             baseline += nn_baseline(detach_iterable(nn_baseline_input))

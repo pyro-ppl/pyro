@@ -69,8 +69,7 @@ class MultiViewTensor(dict):
             if term.shape in self:
                 self[term.shape] = self[term.shape] + term
             else:
-                # XXX NOTE CLONE
-                self[term.shape] = term #.clone()
+                self[term.shape] = term
         else:
             for shape, value in term.items():
                 if shape in self:
@@ -82,7 +81,12 @@ class MultiViewTensor(dict):
         assert dim <= 0
         result = MultiViewTensor()
         for shape, term in self.items():
-            result.add(sum_leftmost(term, -min(-dim, term.dim())))
+            if dim==0:
+                result.add(term.sum())
+            elif -dim > term.dim():
+                result.add(term)
+            else:
+                result.add(sum_leftmost(term, dim))
         return result
 
     def contract_to(self, target):
