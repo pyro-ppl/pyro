@@ -485,24 +485,6 @@ def test_no_iarange_enum_discrete_batch_error():
     assert_error(model, config_enumerate(guide))
 
 
-@pytest.mark.xfail(reason="torch.distributions.Bernoulli is too permissive")
-def test_enum_discrete_global_local_error():
-
-    def model():
-        p = variable(0.5)
-        pyro.sample("x", dist.Bernoulli(p))
-        with pyro.iarange("iarange", 10, 5) as ind:
-            pyro.sample("y", dist.Bernoulli(p).reshape(sample_shape=[len(ind)]))
-
-    def guide():
-        p = pyro.param("p", variable(0.5, requires_grad=True))
-        pyro.sample("x", dist.Bernoulli(p))
-        with pyro.iarange("iarange", 10, 5) as ind:
-            pyro.sample("y", dist.Bernoulli(p).reshape(sample_shape=[len(ind)]))
-
-    assert_error(model, config_enumerate(guide))
-
-
 @pytest.mark.parametrize('max_iarange_nesting', [0, 1, 2])
 def test_enum_discrete_parallel_ok(max_iarange_nesting):
     iarange_shape = torch.Size([1] * max_iarange_nesting)
