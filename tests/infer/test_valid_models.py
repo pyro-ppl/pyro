@@ -382,7 +382,6 @@ def test_three_indep_iarange_at_different_depths_ok():
     assert_ok(model, guide, trace_graph=True)
 
 
-@pytest.mark.xfail(reason="error is not caught")
 def test_iarange_wrong_size_error():
 
     def model():
@@ -473,7 +472,6 @@ def test_iarange_enum_discrete_no_discrete_vars_ok():
     assert_ok(model, config_enumerate(guide))
 
 
-@pytest.mark.xfail
 def test_no_iarange_enum_discrete_batch_error():
 
     def model():

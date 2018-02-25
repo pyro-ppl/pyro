@@ -1,9 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
-import logging
 from collections import defaultdict, namedtuple
-
+import logging
 import os
+
 import pytest
 import torch
 from torch.autograd import Variable
