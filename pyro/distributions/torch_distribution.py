@@ -150,6 +150,9 @@ class Reshape(TorchDistribution):
     """
     def __init__(self, base_dist, sample_shape=torch.Size(), extra_event_dims=0):
         sample_shape = torch.Size(sample_shape)
+        if extra_event_dims > len(sample_shape + base_dist.batch_shape):
+            raise ValueError('Expected extra_event_dims <= len(sample_shape + base_dist.batch_shape), '
+                             'actual {} vs {}'.format(extra_event_dims, len(sample_shape + base_dist.batch_shape)))
         self.base_dist = base_dist
         self.sample_shape = sample_shape
         self.extra_event_dims = extra_event_dims
