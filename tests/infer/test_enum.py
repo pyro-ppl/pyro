@@ -15,7 +15,7 @@ from pyro.infer import SVI, config_enumerate
 from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.trace_elbo import Trace_ELBO
 from pyro.infer.tracegraph_elbo import TraceGraph_ELBO
-from tests.common import assert_equal, xfail_if_not_implemented
+from tests.common import assert_equal
 
 logger = logging.getLogger(__name__)
 
@@ -45,33 +45,33 @@ def test_iter_discrete_traces_scalar(graph_type):
         assert_equal(scale, expected_scale)
 
 
-@pytest.mark.xfail(reason="https://github.com/uber/pyro/issues/220")
 @pytest.mark.parametrize("graph_type", ["flat", "dense"])
 def test_iter_discrete_traces_vector(graph_type):
     pyro.clear_param_store()
 
     @config_enumerate
     def model():
-        p = pyro.param("p", Variable(torch.Tensor([[0.05], [0.15]])))
+        p = pyro.param("p", Variable(torch.Tensor([0.05, 0.15])))
         ps = pyro.param("ps", Variable(torch.Tensor([[0.1, 0.2, 0.3, 0.4],
                                                      [0.4, 0.3, 0.2, 0.1]])))
-        x = pyro.sample("x", dist.Bernoulli(p))
-        y = pyro.sample("y", dist.Categorical(ps))
-        assert x.size() == (2, 1)
-        assert y.size() == (2, 1)
+        with pyro.iarange("iarange", 2):
+            x = pyro.sample("x", dist.Bernoulli(p))
+            y = pyro.sample("y", dist.Categorical(ps))
+        assert x.size() == (2,)
+        assert y.size() == (2,)
         return dict(x=x, y=y)
 
-    traces = list(iter_discrete_traces(graph_type, 0, model))
+    traces = list(iter_discrete_traces(graph_type, 1, model))
 
-    p = pyro.param("p").data
-    ps = pyro.param("ps").data
+    p = pyro.param("p")
+    ps = pyro.param("ps")
     assert len(traces) == 2 * ps.size(-1)
 
     for scale, trace in traces:
-        x = trace.nodes["x"]["value"].data.squeeze().long()[0]
-        y = trace.nodes["y"]["value"].data.squeeze().long()[0]
-        expected_scale = torch.exp(dist.Bernoulli(p).log_pdf(x) * dist.Categorical(ps).log_pdf(y))
-        expected_scale = expected_scale.data.view(-1)[0]
+        x = trace.nodes["x"]["value"]
+        y = trace.nodes["y"]["value"]
+        log_prob = dist.Bernoulli(p).log_prob(x).sum() + dist.Categorical(ps).log_prob(y).sum()
+        expected_scale = torch.exp(log_prob)
         assert_equal(scale, expected_scale)
 
 
@@ -91,11 +91,10 @@ def test_iter_discrete_traces_nan(enum_discrete, trace_graph):
     guide = config_enumerate(guide, default=enum_discrete)
     Elbo = TraceGraph_ELBO if trace_graph else Trace_ELBO
     elbo = Elbo(max_iarange_nesting=0)
-    with xfail_if_not_implemented():
-        loss = elbo.loss(model, guide)
-        assert isinstance(loss, float) and not math.isnan(loss), loss
-        loss = elbo.loss_and_grads(model, guide)
-        assert isinstance(loss, float) and not math.isnan(loss), loss
+    loss = elbo.loss(model, guide)
+    assert isinstance(loss, float) and not math.isnan(loss), loss
+    loss = elbo.loss_and_grads(model, guide)
+    assert isinstance(loss, float) and not math.isnan(loss), loss
 
 
 # A simple Gaussian mixture model, with no vectorization.
@@ -183,8 +182,7 @@ def test_svi_step_smoke(model, guide, enum_discrete, trace_graph):
     optimizer = pyro.optim.Adam({"lr": .001})
     inference = SVI(model, guide, optimizer, loss="ELBO",
                     trace_graph=trace_graph, max_iarange_nesting=1)
-    with xfail_if_not_implemented():
-        inference.step(data)
+    inference.step(data)
 
 
 @pytest.mark.parametrize("enum_discrete", [None, "sequential", "parallel"])

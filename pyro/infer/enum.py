@@ -40,9 +40,8 @@ def iter_discrete_traces(graph_type, max_iarange_nesting, fn, *args, **kwargs):
     """
     queue = LifoQueue()
     queue.put(Trace())
-    q_fn = poutine.queue(fn, queue=queue)
+    q_fn = poutine.queue(fn, queue=queue, escape_fn=_iter_discrete_escape)
     while not queue.empty():
-        q_fn = poutine.queue(fn, queue=queue, escape_fn=_iter_discrete_escape)
         full_trace = poutine.trace(q_fn, graph_type=graph_type).get_trace(*args, **kwargs)
 
         # Scale trace by probability of discrete choices.
@@ -90,6 +89,8 @@ def config_enumerate(guide=None, default="sequential"):
         @config_enumerate(default="parallel")
         def guide2(*args, **kwargs):
             ...
+
+    This does not overwrite existing annotations ``infer={"enumerate": ...}``.
 
     :param callable guide: a pyro model that will be used as a guide in
         :class:`~pyro.infer.svi.SVI`.
