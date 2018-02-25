@@ -167,10 +167,10 @@ class Reshape(TorchDistribution):
         return self.base_dist.has_enumerate_support
 
     def sample(self, sample_shape=torch.Size()):
-        return self.base_dist.sample(self.sample_shape + sample_shape)
+        return self.base_dist.sample(sample_shape + self.sample_shape)
 
     def rsample(self, sample_shape=torch.Size()):
-        return self.base_dist.rsample(self.sample_shape + sample_shape)
+        return self.base_dist.rsample(sample_shape + self.sample_shape)
 
     def log_prob(self, value):
         return sum_rightmost(self.base_dist.log_prob(value), self.extra_event_dims)
@@ -194,8 +194,8 @@ class Reshape(TorchDistribution):
 
     @property
     def mean(self):
-        return self.base_dist.mean
+        return self.base_dist.mean.expand(self.batch_shape + self.event_shape)
 
     @property
     def variance(self):
-        return self.base_dist.variance
+        return self.base_dist.variance.expand(self.batch_shape + self.event_shape)
