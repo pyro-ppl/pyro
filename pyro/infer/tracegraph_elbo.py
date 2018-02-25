@@ -4,18 +4,18 @@ import warnings
 
 from operator import itemgetter
 import networkx
-import numpy as np
 import torch
 from torch.autograd import variable
 
 import pyro
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
+from pyro.infer.elbo import ELBO
 from pyro.infer.util import torch_backward, torch_data_sum
 from pyro.infer.util import MultiViewTensor as MVT
 from pyro.distributions.util import sum_leftmost
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_match, detach_iterable, ng_zeros
+from pyro.util import check_model_guide_match, detach_iterable, ng_zeros, is_nan
 
 
 def _get_baseline_options(site):
@@ -195,7 +195,8 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
         if log_pdf_key == 'log_pdf':
             score_function_term = score_function_term.sum()
         if use_nn_baseline or use_decaying_avg_baseline or use_baseline_value:
-            if downstream_cost.size() != baseline.size():
+            if (downstream_cost.dim() == 0 and baseline.dim() > 1) or \
+               (downstream_cost.dim() > 0 and downstream_cost.size() != baseline.size()):
                 raise ValueError("Expected baseline at site {} to be {} instead got {}".format(
                     node, downstream_cost.size(), baseline.size()))
             downstream_cost = downstream_cost - baseline
@@ -204,7 +205,7 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
     return surrogate_elbo, baseline_loss
 
 
-class TraceGraph_ELBO(object):
+class TraceGraph_ELBO(ELBO):
     """
     A TraceGraph implementation of ELBO-based SVI. The gradient estimator
     is constructed along the lines of reference [1] specialized to the case
@@ -221,14 +222,6 @@ class TraceGraph_ELBO(object):
     [2] `Neural Variational Inference and Learning in Belief Networks`
         Andriy Mnih, Karol Gregor
     """
-    def __init__(self, num_particles=1, enum_discrete=False):
-        """
-        :param num_particles: the number of particles (samples) used to form the estimator
-        :param bool enum_discrete: whether to sum over discrete latent variables, rather than sample them
-        """
-        super(TraceGraph_ELBO, self).__init__()
-        self.num_particles = num_particles
-        self.enum_discrete = enum_discrete
 
     def _get_traces(self, model, guide, *args, **kwargs):
         """
@@ -237,9 +230,6 @@ class TraceGraph_ELBO(object):
         """
 
         for i in range(self.num_particles):
-            if self.enum_discrete:
-                raise NotImplementedError("https://github.com/uber/pyro/issues/220")
-
             guide_trace = poutine.trace(guide,
                                         graph_type="dense").get_trace(*args, **kwargs)
             model_trace = poutine.trace(poutine.replay(model, guide_trace),
@@ -276,7 +266,7 @@ class TraceGraph_ELBO(object):
             elbo += torch_data_sum(weight * elbo_particle)
 
         loss = -elbo
-        if np.isnan(loss):
+        if is_nan(loss):
             warnings.warn('Encountered NAN loss')
         return loss
 
@@ -340,6 +330,6 @@ class TraceGraph_ELBO(object):
             pyro.get_param_store().mark_params_active(trainable_params)
 
         loss = -elbo
-        if np.isnan(loss):
+        if is_nan(loss):
             warnings.warn('Encountered NAN loss')
         return weight * loss

@@ -7,6 +7,11 @@ from torch.autograd import Variable
 
 from pyro.distributions.torch_distribution import TorchDistributionMixin
 
+__all__ = []  # Constructed below.
+
+# These distributions require custom wrapping.
+# TODO rename parameters so these can be imported automatically.
+
 
 class Bernoulli(torch.distributions.Bernoulli, TorchDistributionMixin):
     def __init__(self, ps=None, logits=None):
@@ -82,10 +87,27 @@ class Poisson(torch.distributions.Poisson, TorchDistributionMixin):
         super(Poisson, self).__init__(lam)
 
 
-class TransformedDistribution(torch.distributions.TransformedDistribution, TorchDistributionMixin):
-    pass
-
-
 class Uniform(torch.distributions.Uniform, TorchDistributionMixin):
     def __init__(self, a, b):
         super(Uniform, self).__init__(a, b)
+
+
+# Programmatically load all remaining distributions.
+for _name, _Dist in torch.distributions.__dict__.items():
+    if not isinstance(_Dist, type):
+        continue
+    if not issubclass(_Dist, torch.distributions.Distribution):
+        continue
+    if _Dist is torch.distributions.Distribution:
+        continue
+
+    __all__.append(_name)
+    if _name in dir():
+        continue
+
+    class _PyroDist(_Dist, TorchDistributionMixin):
+        pass
+
+    _PyroDist.__name__ = _name
+    locals()[_name] = _PyroDist
+    del _PyroDist, _name, _Dist

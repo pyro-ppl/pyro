@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import numpy as np
 import torch
 from torch.autograd import Variable
 
@@ -19,7 +18,7 @@ def _eq(x, y):
         if set(x.keys()) != set(y.keys()):
             return False
         return all(_eq(x_val, y[key]) for key, x_val in x.items())
-    elif isinstance(x, (np.ndarray, torch.Tensor)):
+    elif torch.is_tensor(x):
         return (x == y).all()
     elif isinstance(x, torch.autograd.Variable):
         return (x.data == y.data).all()
@@ -57,14 +56,13 @@ class Histogram(dist.Distribution):
                 logits.append(logit)
             else:
                 # Value has already been seen.
-                logits[ix] = util.log_sum_exp(torch.stack([logits[ix], logit]).squeeze())
+                logits[ix] = util.log_sum_exp(torch.stack([logits[ix], logit]))
 
-        logits = torch.stack(logits).squeeze()
+        logits = torch.stack(logits).contiguous().view(-1)
         logits -= util.log_sum_exp(logits)
         if not isinstance(logits, torch.autograd.Variable):
             logits = Variable(logits)
         logits = logits - util.log_sum_exp(logits)
-
         d = dist.Categorical(logits=logits)
         return d, values
 

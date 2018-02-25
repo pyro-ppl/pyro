@@ -2,13 +2,15 @@ from __future__ import absolute_import, division, print_function
 
 import functools
 
-from pyro import util
+from pyro.poutine import util
 
 # poutines
 from .block_poutine import BlockPoutine
 from .condition_poutine import ConditionPoutine
+from .enumerate_poutine import EnumeratePoutine  # noqa: F401
 from .escape_poutine import EscapePoutine
 from .indep_poutine import IndepMessenger  # noqa: F401
+from .infer_config_poutine import InferConfigPoutine
 from .lift_poutine import LiftPoutine
 from .poutine import _PYRO_STACK, Poutine  # noqa: F401
 from .replay_poutine import ReplayPoutine
@@ -123,6 +125,20 @@ def condition(fn, data):
     return ConditionPoutine(fn, data=data)
 
 
+def infer_config(fn, config_fn):
+    """
+    :param fn: a stochastic function (callable containing pyro primitive calls)
+    :param config_fn: a callable taking a site and returning an infer dict
+
+    Alias for :class:`~pyro.poutine.infer_config_poutine.InferConfigPoutine` constructor.
+
+    Given a callable that contains Pyro primitive calls
+    and a callable taking a trace site and returning a dictionary,
+    updates the value of the infer kwarg at a sample site to config_fn(site)
+    """
+    return InferConfigPoutine(fn, config_fn)
+
+
 def indep(name, vectorized):
     """
     :param str name: a name for subsample sites
@@ -193,11 +209,9 @@ def queue(fn, queue, max_tries=None,
         max_tries = int(1e6)
 
     if extend_fn is None:
-        # XXX should be util.enum_extend
         extend_fn = util.enum_extend
 
     if escape_fn is None:
-        # XXX should be util.discrete_escape
         escape_fn = util.discrete_escape
 
     if num_samples is None:
@@ -215,8 +229,7 @@ def queue(fn, queue, max_tries=None,
                                    functools.partial(escape_fn, next_trace)))
                 return ftr(*args, **kwargs)
             except util.NonlocalExit as site_container:
-                for frame in _PYRO_STACK:
-                    frame._reset()
+                site_container.reset_stack()
                 for tr in extend_fn(ftr.trace.copy(), site_container.site,
                                     num_samples=num_samples):
                     queue.put(tr)

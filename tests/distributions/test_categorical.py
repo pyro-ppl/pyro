@@ -87,8 +87,6 @@ def test_sample_dims(dim, ps):
     ps = modify_params_using_dims(ps, dim)
     sample = dist.Categorical(ps).sample()
     expected_shape = dist.Categorical(ps).shape()
-    if not expected_shape:
-        expected_shape = torch.Size((1,))
     assert_equal(sample.size(), expected_shape)
 
 

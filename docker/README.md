@@ -20,7 +20,7 @@ options are as follows:
     master branch or any other arbitrary branch specified by `pytorch_branch` and 
     `pyro_branch`.
  2. **CPU / CUDA:** `make build` or `make build-gpu` can be used to specify whether the CPU
-    or the CUDA image is to be built. For building the CUDA image, *nvida-docker* is 
+    or the CUDA image is to be built. For building the CUDA image, *nvidia-docker* is 
     required. 
  3. **Python Version:** Python version can be specified via the argument `python_version`. 
  
@@ -46,12 +46,12 @@ docker image (specially for building PyTorch from source).
 
 ### Running the Docker container
 
-Once the image is built, the docker container can be started via `docker run`, or 
-`docker run-gpu`. By default this starts a *bash* shell. One could start an *ipython* 
-shell instead by running `docker run cmd=ipython`. The image to be used can be 
+Once the image is built, the docker container can be started via `make run`, or 
+`make run-gpu`. By default this starts a *bash* shell. One could start an *ipython* 
+shell instead by running `make run cmd=ipython`. The image to be used can be 
 specified via the argument `img`. 
 
-To run a *jupyter notebook* use `docker notebook`, or `docker notebook-gpu`. This will 
+To run a *jupyter notebook* use `make notebook`, or `make notebook-gpu`. This will 
 start a jupyter notebook server which can be accessed from the browser using the link 
 mentioned in the terminal. 
 
