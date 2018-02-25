@@ -2,6 +2,8 @@ from __future__ import absolute_import, division, print_function
 
 import torch
 from torch.autograd import Variable
+from torch.distributions import constraints
+from torch.nn import Parameter
 
 from .kernel import Kernel
 
@@ -24,13 +26,25 @@ class Brownian(Kernel):
             raise ValueError("Input dimensional for Brownian kernel must be 1.")
         super(Brownian, self).__init__(input_dim, active_dims, name)
 
+        if variance is None:
+            variance = torch.ones(1)
+        self.variance = Parameter(variance)
+        self.set_constraint("variance", constraints.positive)
+
     def forward(self, X, Z=None, diag=False):
         variance = self.get_param("variance")
-        if diag:
-            return variance * X.abs().unsqueeze(1)
 
         if Z is None:
             Z = X
-        return torch.where(X.sign() == Z.t().sign(),
-                           torch.min(X.abs(), Z.t().abs()),
+        X = self._slice_input(X)
+        if diag:
+            return variance * X.abs().squeeze(1)
+
+        Z = self._slice_input(Z)
+        if X.size(1) != Z.size(1):
+            raise ValueError("Inputs must have the same number of features.")
+
+        Zt = Z.t()
+        return torch.where(X.sign() == Zt.sign(),
+                           variance * torch.min(X.abs(), Zt.abs()),
                            Variable(X.data.new(X.size(0), Z.size(0)).zero_()))

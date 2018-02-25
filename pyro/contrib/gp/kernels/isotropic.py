@@ -93,6 +93,7 @@ class RationalQuadratic(Isotropy):
     Implementation of Rational Quadratic kernel: ``(1 + 0.5 * r^2 / alpha l^2)^(-alpha)``.
 
     :param torch.Tensor scale_mixture: Scale mixture (alpha) parameter of this kernel.
+        Should have size 1.
     """
 
     def __init__(self, input_dim, variance=None, lengthscale=None, scale_mixture=None, active_dims=None,
@@ -120,7 +121,7 @@ class Exponential(Isotropy):
     """
 
     def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None, name="Exponential"):
-        super(Matern12, self).__init__(input_dim, variance, lengthscale, active_dims, name)
+        super(Exponential, self).__init__(input_dim, variance, lengthscale, active_dims, name)
 
     def forward(self, X, Z=None, diag=False):
         if diag:

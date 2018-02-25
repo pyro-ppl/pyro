@@ -43,6 +43,9 @@ class Linear(DotProduct):
     """
     Implementation of Linear kernel. Doing Gaussian Process Regression with linear kernel
     is equivalent to Linear Regression.
+
+    Note that here we implement the homogeneous version. To use the inhomogeneous version,
+    consider using Polynomial kernel with `degree=1` or making a combination with a Bias kernel.
     """
 
     def __init__(self, input_dim, variance=None, active_dims=None, name="Linear"):
@@ -57,12 +60,12 @@ class Polynomial(DotProduct):
     """
     Implementation of Polynomial kernel: ``k(x, z) = (bias + x.z)^d``.
 
-    :param torch.Tensor bias: Bias parameter for this kernel.
+    :param torch.Tensor bias: Bias parameter for this kernel. Should be positive.
     :param int degree: Degree of this polynomial.
     """
 
     def __init__(self, input_dim, variance=None, bias=None, degree=1, active_dims=None, name="Linear"):
-        super(Linear, self).__init__(input_dim, variance, active_dims, name)
+        super(Polynomial, self).__init__(input_dim, variance, active_dims, name)
 
         if bias is None:
             bias = torch.ones(1)
