@@ -90,6 +90,8 @@ def config_enumerate(guide=None, default="sequential"):
         def guide2(*args, **kwargs):
             ...
 
+    This does not overwrite existing annotations ``infer={"enumerate": ...}``.
+
     :param callable guide: a pyro model that will be used as a guide in
         :class:`~pyro.infer.svi.SVI`.
     :param str default: one of "sequential", "parallel", or None.
