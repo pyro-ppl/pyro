@@ -55,11 +55,11 @@ class NormalNormalTests(TestCase):
             self.mu0 * (self.lam0 / self.analytic_lam_n)
 
     def test_elbo_reparameterized(self):
-        self.do_elbo_test(True, 1000)
+        self.do_elbo_test(True, 1500)
 
     @pytest.mark.init(rng_seed=0)
     def test_elbo_nonreparameterized(self):
-        self.do_elbo_test(False, 7000)
+        self.do_elbo_test(False, 3000)
 
     def do_elbo_test(self, reparameterized, n_steps):
         logger.info(" - - - - - DO NORMALNORMAL ELBO TEST  [reparameterized = %s] - - - - - " % reparameterized)
@@ -80,9 +80,8 @@ class NormalNormalTests(TestCase):
                                    self.analytic_log_sig_n.data - 0.29 * torch.ones(2),
                                    requires_grad=True))
             sig_q = torch.exp(log_sig_q)
-            mu_latent = pyro.sample("mu_latent", Normal(mu_q, sig_q).reshape(extra_event_dims=1))#,
-                                # TODO FIX decaying_avg
-                                    #infer=dict(baseline=dict(use_decaying_avg_baseline=True)))
+            mu_latent = pyro.sample("mu_latent", Normal(mu_q, sig_q).reshape(extra_event_dims=1),
+                                infer=dict(baseline=dict(use_decaying_avg_baseline=True)))
             return mu_latent
 
         adam = optim.Adam({"lr": .0015, "betas": (0.97, 0.999)})
@@ -96,8 +95,8 @@ class NormalNormalTests(TestCase):
             if k % 250 == 0:
                 logger.debug("mu error, log(sigma) error:  %.4f, %.4f" % (mu_error, log_sig_error))
 
-        assert_equal(0.0, mu_error, prec=0.05)
-        assert_equal(0.0, log_sig_error, prec=0.05)
+        assert_equal(0.0, mu_error, prec=0.02)
+        assert_equal(0.0, log_sig_error, prec=0.02)
 
 
 class NormalNormalNormalTests(TestCase):
@@ -120,12 +119,10 @@ class NormalNormalNormalTests(TestCase):
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, True, 5000, 0.02, 0.002, False, False)
 
-    @pytest.mark.skip('Fix after fix decaying avg')
     def test_elbo_nonreparameterized_both_baselines(self):
         self.do_elbo_test(False, False, 15000, 0.05, 0.001, use_nn_baseline=True,
                           use_decaying_avg_baseline=True)
 
-    @pytest.mark.skip('Fix after fix decaying avg')
     def test_elbo_nonreparameterized_decaying_baseline(self):
         self.do_elbo_test(True, False, 12000, 0.04, 0.0015, use_nn_baseline=False,
                           use_decaying_avg_baseline=True)
@@ -160,10 +157,11 @@ class NormalNormalNormalTests(TestCase):
             mu_prime_baseline = None
 
         def model():
-            mu_latent_prime = pyro.sample("mu_latent_prime", Normal1(self.mu0, torch.pow(self.lam0, -0.5)))
-            mu_latent = pyro.sample("mu_latent", Normal2(mu_latent_prime, torch.pow(self.lam0, -0.5)))
-            pyro.sample("obs", dist.Normal(mu_latent, torch.pow(self.lam, -0.5)),
-                        obs=self.data)
+            with pyro.iarange("iarange", 2):
+                mu_latent_prime = pyro.sample("mu_latent_prime", Normal1(self.mu0, torch.pow(self.lam0, -0.5)))
+                mu_latent = pyro.sample("mu_latent", Normal2(mu_latent_prime, torch.pow(self.lam0, -0.5)))
+                pyro.sample("obs", dist.Normal(mu_latent, torch.pow(self.lam, -0.5)),
+                            obs=self.data)
             return mu_latent
 
         # note that the exact posterior is not mean field!
@@ -181,11 +179,12 @@ class NormalNormalNormalTests(TestCase):
                                          Variable(-0.5 * torch.log(1.2 * self.lam0.data),
                                                   requires_grad=True))
             sig_q, sig_q_prime = torch.exp(log_sig_q), torch.exp(log_sig_q_prime)
-            mu_latent = pyro.sample("mu_latent", Normal2(mu_q, sig_q),
-                                    infer=dict(baseline=dict(use_decaying_avg_baseline=use_decaying_avg_baseline)))
-            pyro.sample("mu_latent_prime",
-                        Normal1(kappa_q.expand_as(mu_latent) * mu_latent + mu_q_prime, sig_q_prime),
-                        infer=dict(baseline=dict(nn_baseline=mu_prime_baseline,
+            with pyro.iarange("iarange", 2):
+                mu_latent = pyro.sample("mu_latent", Normal2(mu_q, sig_q),
+                                        infer=dict(baseline=dict(use_decaying_avg_baseline=use_decaying_avg_baseline)))
+                pyro.sample("mu_latent_prime",
+                            Normal1(kappa_q.expand_as(mu_latent) * mu_latent + mu_q_prime, sig_q_prime),
+                            infer=dict(baseline=dict(nn_baseline=mu_prime_baseline,
                                                  nn_baseline_input=mu_latent,
                                                  use_decaying_avg_baseline=use_decaying_avg_baseline)))
 

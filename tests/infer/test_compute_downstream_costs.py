@@ -14,10 +14,17 @@ from pyro.poutine.util import prune_subsample_sites
 from tests.common import assert_equal
 
 
-def big_model_guide(include_obs=True, include_single=False, include_inner_1=False, flip_c23=False):
+def big_model_guide(include_obs=True, include_single=False, include_inner_1=False, flip_c23=False,
+                    include_triple=False):
     p0 = variable(math.exp(-0.20), requires_grad=True)
     p1 = variable(math.exp(-0.33), requires_grad=True)
     p2 = variable(math.exp(-0.70), requires_grad=True)
+    if include_triple:
+        with pyro.iarange("iarange_triple1", 6) as ind_triple1:
+            with pyro.iarange("iarange_triple2", 7) as ind_triple2:
+                with pyro.iarange("iarange_triple3", 9) as ind_triple3:
+                    z0 = pyro.sample("z0", dist.Bernoulli(p2).reshape(sample_shape=[len(ind_triple1),
+                                     len(ind_triple2), len(ind_triple3)]))
     pyro.sample("a1", dist.Bernoulli(p0))
     if include_single:
         with pyro.iarange("iarange_single", 5) as ind_single:
@@ -46,13 +53,16 @@ def big_model_guide(include_obs=True, include_single=False, include_inner_1=Fals
 @pytest.mark.parametrize("include_inner_1", [True, False])
 @pytest.mark.parametrize("include_single", [True, False])
 @pytest.mark.parametrize("flip_c23", [True, False])
-def test_compute_downstream_costs_big_model_guide_pair(include_inner_1, include_single, flip_c23):
+@pytest.mark.parametrize("include_triple", [True, False])
+def test_compute_downstream_costs_big_model_guide_pair(include_inner_1, include_single, flip_c23, include_triple):
     guide_trace = poutine.trace(big_model_guide,
                                 graph_type="dense").get_trace(include_obs=False, include_inner_1=include_inner_1,
-                                                              include_single=include_single, flip_c23=flip_c23)
+                                                              include_single=include_single, flip_c23=flip_c23,
+                                                              include_triple=include_triple)
     model_trace = poutine.trace(poutine.replay(big_model_guide, guide_trace),
                                 graph_type="dense").get_trace(include_obs=True, include_inner_1=include_inner_1,
-                                                              include_single=include_single, flip_c23=flip_c23)
+                                                              include_single=include_single, flip_c23=flip_c23,
+                                                              include_triple=include_triple)
 
     guide_trace = prune_subsample_sites(guide_trace)
     model_trace = prune_subsample_sites(model_trace)
@@ -78,7 +88,7 @@ def test_compute_downstream_costs_big_model_guide_pair(include_inner_1, include_
                                  'b1': {'obs', 'b1', 'd1', 'd2', 'c3', 'c1', 'c2'},
                                  'c1': {'d1', 'c1', 'obs', 'd2', 'c3', 'c2'},
                                  'c2': {'obs', 'd1', 'c3', 'd2', 'c2'}}
-    if include_inner_1 and include_single and not flip_c23:
+    if not include_triple and include_inner_1 and include_single and not flip_c23:
         assert(dc_nodes == expected_nodes_full_model)
 
     expected_b1 = (model_trace.nodes['b1']['batch_log_pdf'] - guide_trace.nodes['b1']['batch_log_pdf'])
@@ -132,6 +142,9 @@ def test_compute_downstream_costs_big_model_guide_pair(include_inner_1, include_
     expected_d2 = (model_trace.nodes['d2']['batch_log_pdf'] - guide_trace.nodes['d2']['batch_log_pdf'])
     expected_d2 += model_trace.nodes['obs']['batch_log_pdf']
 
+    if include_triple:
+        expected_z0 = dc['a1'] + model_trace.nodes['z0']['batch_log_pdf'] - guide_trace.nodes['z0']['batch_log_pdf']
+        assert_equal(expected_z0, dc['z0'], prec=1.0e-6)
     if include_single:
         assert_equal(expected_b0, dc['b0'], prec=1.0e-6)
         assert dc['b0'].size() == (5,)

@@ -62,6 +62,8 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
     #printhappy = True
 
     for node in topo_sort_guide_nodes:
+        if printhappy:
+            print("blpdf %s" % node, model_trace.nodes[node]['batch_log_pdf'].shape)
         downstream_costs[node] = MVT(model_trace.nodes[node]['batch_log_pdf'] -
                                      guide_trace.nodes[node]['batch_log_pdf'])
         nodes_included_in_sum = set([node])
@@ -170,20 +172,17 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
             "cannot use baseline_value and nn_baseline simultaneously"
         if use_decaying_avg_baseline:
             avg_downstream_cost_old = pyro.param("__baseline_avg_downstream_cost_" + node,
-                                                 variable(0.0), tags="__tracegraph_elbo_internal_tag")
-            print("old", avg_downstream_cost_old)
-            print("dc", downstream_cost)
-            avg_downstream_cost_new = (1 - baseline_beta) * downstream_cost.mean() + \
+                                                 ng_zeros(downstream_cost.size()), tags="__tracegraph_elbo_internal_tag")
+            avg_downstream_cost_new = (1 - baseline_beta) * downstream_cost + \
                 baseline_beta * avg_downstream_cost_old
-            print("new", avg_downstream_cost_new)
-            print("old2", avg_downstream_cost_old)
-            avg_downstream_cost_old.data = avg_downstream_cost_new.data  # XXX copy_() ?
-            print("old3", avg_downstream_cost_old)
+            avg_downstream_cost_old.copy_(avg_downstream_cost_new)  # XXX copy_() ?
+            #avg_downstream_cost_old.data = avg_downstream_cost_new.data  # XXX copy_() ?
             baseline += avg_downstream_cost_old
-            print("old4", avg_downstream_cost_old)
-            print("baseline", baseline)
+            #print("decay", avg_downstream_cost_old.shape)
         if use_nn_baseline:
             # block nn_baseline_input gradients except in baseline loss
+            #print("nnbaseline", nn_baseline(detach_iterable(nn_baseline_input)).shape)
+            #print("dc", downstream_cost.shape)
             baseline += nn_baseline(detach_iterable(nn_baseline_input))
         elif use_baseline_value:
             # it's on the user to make sure baseline_value tape only points to baseline params
