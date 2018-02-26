@@ -275,64 +275,6 @@ class BernoulliBetaTests(TestCase):
         assert_equal(0.0, beta_error, prec=0.04)
 
 
-class PoissonGammaTests(TestCase):
-    def setUp(self):
-        # poisson-gamma model
-        # gamma prior hyperparameter
-        self.alpha0 = variable(1.0)
-        # gamma prior hyperparameter
-        self.beta0 = variable(1.0)
-        self.data = variable([1.0, 2.0, 3.0])
-        sum_data = self.data.sum()
-        self.alpha_n = self.alpha0 + sum_data  # posterior alpha
-        self.beta_n = self.beta0 + len(self.data)  # posterior beta
-        self.log_alpha_n = torch.log(self.alpha_n)
-        self.log_beta_n = torch.log(self.beta_n)
-
-    def test_elbo_reparameterized(self):
-        self.do_elbo_test(True, 8000, 0.95, 0.0007)
-
-    def test_elbo_nonreparameterized(self):
-        self.do_elbo_test(False, 8000, 0.95, 0.0007)
-
-    def do_elbo_test(self, reparameterized, n_steps, beta1, lr):
-        logger.info(" - - - - - DO POISSON-GAMMA ELBO TEST [repa = %s] - - - - - " % reparameterized)
-        pyro.clear_param_store()
-        Gamma = dist.Gamma if reparameterized else fakes.NonreparameterizedGamma
-
-        def model():
-            lambda_latent = pyro.sample("lambda_latent", Gamma(self.alpha0, self.beta0))
-            with pyro.iarange("data", len(self.data)):
-                pyro.sample("obs", dist.Poisson(lambda_latent), obs=self.data)
-            return lambda_latent
-
-        def guide():
-            alpha_q_log = pyro.param(
-                "alpha_q_log",
-                variable(self.log_alpha_n + 0.17, requires_grad=True))
-            beta_q_log = pyro.param(
-                "beta_q_log",
-                variable(self.log_beta_n - 0.143, requires_grad=True))
-            alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
-            pyro.sample("lambda_latent", Gamma(alpha_q, beta_q),
-                        infer=dict(baseline=dict(use_decaying_avg_baseline=True)))
-            with pyro.iarange("data", len(self.data)):
-                pass
-
-        adam = optim.Adam({"lr": lr, "betas": (beta1, 0.999)})
-        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
-
-        for k in range(n_steps):
-            svi.step()
-            alpha_error = param_abs_error("alpha_q_log", self.log_alpha_n)
-            beta_error = param_abs_error("beta_q_log", self.log_beta_n)
-            if k % 500 == 0:
-                logger.debug("alpha_q_log_error, beta_q_log_error: %.4f, %.4f" % (alpha_error, beta_error))
-
-        assert_equal(0.0, alpha_error, prec=0.08)
-        assert_equal(0.0, beta_error, prec=0.08)
-
-
 class ExponentialGammaTests(TestCase):
     def setUp(self):
         # exponential-gamma model
