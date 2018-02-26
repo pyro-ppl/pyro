@@ -278,7 +278,7 @@ def test_irange_in_guide_not_model_error(trace_graph, subsample_size):
     assert_error(model, guide, trace_graph=trace_graph)
 
 
-@pytest.mark.skip('TODO FIX ME')
+@pytest.mark.xfail(reason="RaoBlackwellization checks in trace_poutine need to be fixed to catch this")
 def test_iarange_irange_warning():
 
     def model():
@@ -314,7 +314,6 @@ def test_irange_iarange_ok(trace_graph):
     assert_ok(model, guide, trace_graph=trace_graph)
 
 
-@pytest.mark.xfail(reason="https://github.com/uber/pyro/issues/370")
 @pytest.mark.parametrize('trace_graph', [False, True])
 def test_nested_iarange_iarange_ok(trace_graph):
 
@@ -390,7 +389,6 @@ def test_nested_iarange_iarange_dim_error_4(trace_graph):
     assert_error(model, model, trace_graph=trace_graph)
 
 
-@pytest.mark.xfail(reason="https://github.com/uber/pyro/issues/370")
 @pytest.mark.parametrize('trace_graph', [False, True])
 def test_nonnested_iarange_iarange_ok(trace_graph):
 

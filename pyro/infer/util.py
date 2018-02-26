@@ -47,7 +47,6 @@ def reduce_to_target(source, target):
     for k in range(1, 1 + source.dim()):
         if source.size(-k) > target.size(-k):
             source = source.sum(-k, keepdim=True)
-            # XXX make this more efficient
     return source
 
 

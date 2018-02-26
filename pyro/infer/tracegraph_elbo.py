@@ -1,8 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
 import warnings
-
 from operator import itemgetter
+
 import networkx
 import numpy as np
 import torch
@@ -10,10 +10,10 @@ from torch.autograd import variable
 
 import pyro
 import pyro.poutine as poutine
-from pyro.infer import ELBO
 from pyro.distributions.util import is_identically_zero
-from pyro.infer.util import torch_backward, torch_data_sum
+from pyro.infer import ELBO
 from pyro.infer.util import MultiViewTensor as MVT
+from pyro.infer.util import torch_backward, torch_data_sum
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, detach_iterable
 
@@ -45,7 +45,7 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
     topo_sort_guide_nodes = list(reversed(list(networkx.topological_sort(guide_trace))))
     topo_sort_guide_nodes = [x for x in topo_sort_guide_nodes
                              if guide_trace.nodes[x]["type"] == "sample"]
-    ordered_guide_nodes_dict = dict(list(zip(topo_sort_guide_nodes, list(range(len(topo_sort_guide_nodes))))))
+    ordered_guide_nodes_dict = {n: i for i, n in enumerate(topo_sort_guide_nodes)}
 
     downstream_guide_cost_nodes = {}
     downstream_costs = {}
@@ -57,16 +57,6 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
             if xframe.name == yframe.name:
                 n_compatible += 1
         return n_compatible
-
-    printhappy = False
-    all_nodes = [x for x in model_trace.nodes
-                 if model_trace.nodes[x]["type"] == "sample"]
-
-    for node in all_nodes:
-        if printhappy:
-            print("model blpdf %s" % node, model_trace.nodes[node]['batch_log_pdf'].shape)
-            if node in guide_trace.nodes:
-                print("guide blpdf %s" % node, guide_trace.nodes[node]['batch_log_pdf'].shape)
 
     for node in topo_sort_guide_nodes:
         downstream_costs[node] = MVT(model_trace.nodes[node]['batch_log_pdf'] -
@@ -82,8 +72,6 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
             if nodes_included_in_sum.isdisjoint(child_cost_nodes):  # avoid duplicates
                 dims_to_keep = n_compatible_indices(node, child)
                 summed_child = downstream_costs[child].sum_leftmost_all_but(dims_to_keep)
-                if printhappy:
-                    print("node/child = ", node, child, "dimstokeep", dims_to_keep, "summedchild", summed_child)
                 downstream_costs[node].add(summed_child)
                 # XXX nodes_included_in_sum logic could be more fine-grained, possibly leading
                 # to speed-ups in case there are many duplicates
@@ -109,18 +97,11 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
             assert (model_trace.nodes[child]["type"] == "sample")
             dims_to_keep = n_compatible_indices(site, child)
             summed_child = MVT(model_trace.nodes[child]['batch_log_pdf']).sum_leftmost_all_but(dims_to_keep)
-            if printhappy:
-                print("site/child = ", site, child, "dimstokeep", dims_to_keep, "summedchild", summed_child.shape,
-                      model_trace.nodes[child]['batch_log_pdf'].shape)
             downstream_costs[site].add(summed_child)
             downstream_guide_cost_nodes[site].update([child])
 
     for k in topo_sort_guide_nodes:
-        if printhappy:
-            print("pre_downstream_costs[%s]" % k, downstream_costs[k])
         downstream_costs[k] = downstream_costs[k].contract_to(guide_trace.nodes[k]['batch_log_pdf'])
-        if printhappy:
-            print("post_downstream_costs[%s]" % k, downstream_costs[k].shape)
 
     return downstream_costs, downstream_guide_cost_nodes
 
@@ -144,7 +125,7 @@ def _compute_elbo_reparam(model_trace, guide_trace, non_reparam_nodes):
                 if not is_identically_zero(entropy_term):
                     surrogate_elbo -= entropy_term.sum()
 
-    # elbo is never differentiated, surragate_elbo is
+    # elbo is never differentiated, surrogate_elbo is
 
     return torch_data_sum(elbo), surrogate_elbo
 
@@ -281,14 +262,8 @@ class TraceGraph_ELBO(ELBO):
 
     def _loss_and_grads_particle(self, weight, model_trace, guide_trace):
         # get info regarding rao-blackwellization of vectorized map_data
-        guide_vec_md_info = guide_trace.graph["vectorized_map_data_info"]
-        model_vec_md_info = model_trace.graph["vectorized_map_data_info"]
-        # guide_vec_md_condition = guide_vec_md_info['rao-blackwellization-condition']
-        # model_vec_md_condition = model_vec_md_info['rao-blackwellization-condition']
-        # do_vec_rb = guide_vec_md_condition and model_vec_md_condition
-        do_vec_rb = True
-        guide_vec_md_nodes = guide_vec_md_info['nodes'] if do_vec_rb else set()
-        model_vec_md_nodes = model_vec_md_info['nodes'] if do_vec_rb else set()
+        guide_vec_md_nodes = guide_trace.graph["vectorized_map_data_info"]['nodes']
+        model_vec_md_nodes = model_trace.graph["vectorized_map_data_info"]['nodes']
 
         # have the trace compute all the individual (batch) log pdf terms
         # and score function terms (if present) so that they are available below
