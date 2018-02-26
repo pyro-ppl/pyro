@@ -186,9 +186,10 @@ def setup(app):
     app.connect("autodoc-skip-member", skip)
 """
 
-# awful hack to get rtd builder to install pytorch
-os.system('pip install awscli')
-os.system('aws s3 --no-sign-request sync s3://pyro-ppl/ci tmp --exclude "*" --include "*-cp27-*";')
-os.system('pip install tmp/*')
-os.system('rm -r tmp')
-os.system('pip install -e .')
+# @jpchen's hack to get rtd builder to install pytorch
+if 'READTHEDOCS' in os.environ:
+    os.system('pip install awscli')
+    os.system('aws s3 --no-sign-request sync s3://pyro-ppl/ci tmp --exclude "*" --include "*-cp27-*";')
+    os.system('pip install tmp/*')
+    os.system('rm -r tmp')
+    os.system('pip install -e .')
