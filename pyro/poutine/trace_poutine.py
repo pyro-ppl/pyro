@@ -72,14 +72,13 @@ def get_vectorized_map_data_info(trace):
     vectorized_map_data_info['vec_md_stacks'] = stack_dict
 
     # construct data structure consumed by tracegraph_kl_qp
-    if True or vectorized_map_data_info['rao-blackwellization-condition']:
-        vectorized_map_data_info['nodes'] = set()
-        for name, node in nodes.items():
-            if site_is_subsample(node):
-                continue
-            if node["type"] in ("sample", "param"):
-                if any(x.vectorized for x in node["cond_indep_stack"]):
-                    vectorized_map_data_info['nodes'].add(name)
+    vectorized_map_data_info['nodes'] = set()
+    for name, node in nodes.items():
+        if site_is_subsample(node):
+            continue
+        if node["type"] in ("sample", "param"):
+            if any(x.vectorized for x in node["cond_indep_stack"]):
+                vectorized_map_data_info['nodes'].add(name)
 
     return vectorized_map_data_info
 
