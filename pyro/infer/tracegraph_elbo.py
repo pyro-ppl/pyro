@@ -14,9 +14,8 @@ from pyro.infer import ELBO
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.util import torch_backward, torch_data_sum
 from pyro.infer.util import MultiViewTensor as MVT
-from pyro.distributions.util import sum_leftmost
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_match, detach_iterable, ng_zeros
+from pyro.util import check_model_guide_match, detach_iterable
 
 
 def _get_baseline_options(site):
@@ -37,7 +36,7 @@ def _get_baseline_options(site):
 
 def _compute_downstream_costs(model_trace, guide_trace,  #
                               model_vec_md_nodes, guide_vec_md_nodes,  #
-                              non_reparam_nodes, include_nodes=False):
+                              non_reparam_nodes):
     # recursively compute downstream cost nodes for all sample sites in model and guide
     # (even though ultimately just need for non-reparameterizable sample sites)
     # 1. downstream costs used for rao-blackwellization
@@ -82,21 +81,20 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
             downstream_guide_cost_nodes[node].update(child_cost_nodes)
             if nodes_included_in_sum.isdisjoint(child_cost_nodes):  # avoid duplicates
                 dims_to_keep = n_compatible_indices(node, child)
-                summed_child = downstream_costs[child].sum_leftmost(-dims_to_keep)
+                summed_child = downstream_costs[child].sum_leftmost_all_but(dims_to_keep)
                 if printhappy:
                     print("node/child = ", node, child, "dimstokeep", dims_to_keep, "summedchild", summed_child)
                 downstream_costs[node].add(summed_child)
+                # XXX nodes_included_in_sum logic could be more fine-grained, possibly leading
+                # to speed-ups in case there are many duplicates
                 nodes_included_in_sum.update(child_cost_nodes)
         missing_downstream_costs = downstream_guide_cost_nodes[node] - nodes_included_in_sum
         # include terms we missed because we had to avoid duplicates
         for missing_node in missing_downstream_costs:
+            missing_term = MVT(model_trace.nodes[missing_node]['batch_log_pdf'] -
+                               guide_trace.nodes[missing_node]['batch_log_pdf'])
             dims_to_keep = n_compatible_indices(node, missing_node)
-            missing_term = model_trace.nodes[missing_node]['batch_log_pdf'] - \
-                guide_trace.nodes[missing_node]['batch_log_pdf']
-            if dims_to_keep == 0:
-                summed_missing_term = missing_term.sum()
-            else:
-                summed_missing_term = sum_leftmost(missing_term, -dims_to_keep)
+            summed_missing_term = missing_term.sum_leftmost_all_but(dims_to_keep)
             downstream_costs[node].add(summed_missing_term)
 
     # finish assembling complete downstream costs
@@ -110,10 +108,7 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
         for child in children_in_model:
             assert (model_trace.nodes[child]["type"] == "sample")
             dims_to_keep = n_compatible_indices(site, child)
-            if dims_to_keep == 0:
-                summed_child = model_trace.nodes[child]['batch_log_pdf'].sum()
-            else:
-                summed_child = sum_leftmost(model_trace.nodes[child]['batch_log_pdf'], -dims_to_keep)
+            summed_child = MVT(model_trace.nodes[child]['batch_log_pdf']).sum_leftmost_all_but(dims_to_keep)
             if printhappy:
                 print("site/child = ", site, child, "dimstokeep", dims_to_keep, "summedchild", summed_child.shape,
                       model_trace.nodes[child]['batch_log_pdf'].shape)
@@ -127,9 +122,7 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
         if printhappy:
             print("post_downstream_costs[%s]" % k, downstream_costs[k].shape)
 
-    if include_nodes:
-        return downstream_costs, downstream_guide_cost_nodes
-    return downstream_costs
+    return downstream_costs, downstream_guide_cost_nodes
 
 
 def _compute_elbo_reparam(model_trace, guide_trace, non_reparam_nodes):
@@ -177,12 +170,9 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
             "cannot use baseline_value and nn_baseline simultaneously"
         if use_decaying_avg_baseline:
             dc_shape = downstream_cost.shape
-            if len(dc_shape) > 0:
-                avg_downstream_cost_old = pyro.param("__baseline_avg_downstream_cost_" + node,
-                                                     ng_zeros(dc_shape), tags="__tracegraph_elbo_internal_tag")
-            else:
-                avg_downstream_cost_old = pyro.param("__baseline_avg_downstream_cost_" + node,
-                                                     variable(0.0), tags="__tracegraph_elbo_internal_tag")
+            avg_downstream_cost_old = pyro.param("__baseline_avg_downstream_cost_" + node,
+                                                 variable(0.0).expand(dc_shape).clone(),
+                                                 tags="__tracegraph_elbo_internal_tag")
             avg_downstream_cost_new = (1 - baseline_beta) * downstream_cost.detach() + \
                 baseline_beta * avg_downstream_cost_old
             avg_downstream_cost_old.copy_(avg_downstream_cost_new)  # XXX is this copy_() what we want?
@@ -312,7 +302,7 @@ class TraceGraph_ELBO(ELBO):
         # the following computations are only necessary if we have non-reparameterizable nodes
         baseline_loss = 0.0
         if non_reparam_nodes:
-            downstream_costs = _compute_downstream_costs(
+            downstream_costs, _ = _compute_downstream_costs(
                     model_trace, guide_trace,  model_vec_md_nodes, guide_vec_md_nodes, non_reparam_nodes)
             surrogate_elbo_term, baseline_loss = _compute_elbo_non_reparam(
                     guide_trace, guide_vec_md_nodes, non_reparam_nodes, downstream_costs)

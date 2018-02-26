@@ -38,6 +38,10 @@ def torch_backward(x):
 
 
 def reduce_to_target(source, target):
+    """
+    Sums out any dimensions in source that are of size > 1 in source but of size 1 in target.
+    This preserves source.dim().
+    """
     if source.dim() > target.dim():
         raise ValueError
     for k in range(1, 1 + source.dim()):
@@ -66,6 +70,9 @@ class MultiViewTensor(dict):
                 self[value.shape] = value
 
     def add(self, term):
+        """
+        Add tensor to collection of tensors stored in MultiViewTensor; key by shape
+        """
         if isinstance(term, Variable):
             if term.shape in self:
                 self[term.shape] = self[term.shape] + term
@@ -78,23 +85,26 @@ class MultiViewTensor(dict):
                 else:
                     self[shape] = value
 
-    def sum_leftmost(self, dim):
-        assert dim <= 0
+    def sum_leftmost_all_but(self, dim):
+        """
+        This behaves like sum_leftmost(term, -dim) except for dim=0 where everything is summed out
+        """
+        assert dim >= 0
         result = MultiViewTensor()
         for shape, term in self.items():
             if dim == 0:
                 result.add(term.sum())
-            elif -dim > term.dim():
+            elif dim > term.dim():
                 result.add(term)
             else:
-                result.add(sum_leftmost(term, dim))
+                result.add(sum_leftmost(term, -dim))
         return result
 
     def contract_to(self, target):
         """Opposite of broadcast."""
         result = 0
         for tensor in self.values():
-            result += reduce_to_target(tensor, target).expand_as(target)
+            result += reduce_to_target(tensor, target)
         return result
 
     def __repr__(self):

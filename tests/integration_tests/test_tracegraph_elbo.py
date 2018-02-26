@@ -228,9 +228,8 @@ class BernoulliBetaTests(TestCase):
         self.log_alpha_n = torch.log(self.alpha_n)
         self.log_beta_n = torch.log(self.beta_n)
 
-    @pytest.mark.xfail(reason='poorly-tuned Adam params?')
     def test_elbo_reparameterized(self):
-        self.do_elbo_test(True, 3000, 0.95, 0.0007)
+        self.do_elbo_test(True, 3000, 0.92, 0.0007)
 
     def test_elbo_nonreparameterized(self):
         self.do_elbo_test(False, 3000, 0.95, 0.0007)
@@ -267,68 +266,6 @@ class BernoulliBetaTests(TestCase):
 
         assert_equal(0.0, alpha_error, prec=0.03)
         assert_equal(0.0, beta_error, prec=0.04)
-
-
-@pytest.mark.skip('Reinstate once poisson is migrated to PyTorch - https://github.com/uber/pyro/issues/699')
-class PoissonGammaTests(TestCase):
-    def setUp(self):
-        # poisson-gamma model
-        # gamma prior hyperparameter
-        self.alpha0 = Variable(torch.Tensor([1.0]))
-        # gamma prior hyperparameter
-        self.beta0 = Variable(torch.Tensor([1.0]))
-        self.data = Variable(torch.Tensor([[1.0], [2.0], [3.0]]))
-        sum_data = self.data.sum(0)
-        self.alpha_n = self.alpha0 + sum_data  # posterior alpha
-        self.beta_n = self.beta0 + len(self.data)  # posterior beta
-        self.log_alpha_n = torch.log(self.alpha_n)
-        self.log_beta_n = torch.log(self.beta_n)
-
-    def test_elbo_reparameterized(self):
-        self.do_elbo_test(True, 8000, 0.95, 0.0007)
-
-    def test_elbo_nonreparameterized(self):
-        self.do_elbo_test(False, 8000, 0.95, 0.0007)
-
-    def do_elbo_test(self, reparameterized, n_steps, beta1, lr):
-        logger.info(" - - - - - DO POISSON-GAMMA ELBO TEST [repa = %s] - - - - - " % reparameterized)
-        pyro.clear_param_store()
-        Gamma = dist.Gamma if reparameterized else fakes.NonreparameterizedGamma
-
-        def model():
-            lambda_latent = pyro.sample("lambda_latent", Gamma(self.alpha0, self.beta0))
-            pyro.sample("obs", dist.Poisson(lambda_latent), obs=self.data)
-            return lambda_latent
-
-        def guide():
-            alpha_q_log = pyro.param(
-                "alpha_q_log",
-                Variable(
-                    self.log_alpha_n.data +
-                    0.17,
-                    requires_grad=True))
-            beta_q_log = pyro.param(
-                "beta_q_log",
-                Variable(
-                    self.log_beta_n.data -
-                    0.143,
-                    requires_grad=True))
-            alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
-            pyro.sample("lambda_latent", Gamma(alpha_q, beta_q),
-                        infer=dict(baseline=dict(use_decaying_avg_baseline=True)))
-
-        adam = optim.Adam({"lr": lr, "betas": (beta1, 0.999)})
-        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
-
-        for k in range(n_steps):
-            svi.step()
-            alpha_error = param_abs_error("alpha_q_log", self.log_alpha_n)
-            beta_error = param_abs_error("beta_q_log", self.log_beta_n)
-            if k % 500 == 0:
-                logger.debug("alpha_q_log_error, beta_q_log_error: %.4f, %.4f" % (alpha_error, beta_error))
-
-        assert_equal(0.0, alpha_error, prec=0.08)
-        assert_equal(0.0, beta_error, prec=0.08)
 
 
 class ExponentialGammaTests(TestCase):
@@ -581,7 +518,7 @@ class RaoBlackwellizationTests(TestCase):
     # inside of a list map_data with superfluous random variables to complexify the
     # graph structure and introduce additional baselines
     def test_vectorized_map_data_in_elbo_with_superfluous_rvs(self):
-        self._test_vectorized_map_data_in_elbo(n_superfluous_top=2, n_superfluous_bottom=2, n_steps=6000)
+        self._test_vectorized_map_data_in_elbo(n_superfluous_top=1, n_superfluous_bottom=1, n_steps=5000)
 
     def _test_vectorized_map_data_in_elbo(self, n_superfluous_top, n_superfluous_bottom, n_steps):
         pyro.clear_param_store()
@@ -595,7 +532,7 @@ class RaoBlackwellizationTests(TestCase):
         def model():
             mu_latent = pyro.sample("mu_latent",
                                     fakes.NonreparameterizedNormal(self.mu0, torch.pow(self.lam0, -0.5))
-                                        .reshape(extra_event_dims=1))
+                                         .reshape(extra_event_dims=1))
 
             for i in pyro.irange("outer", 3):
                 x_i = self.data_as_list[i]
@@ -604,8 +541,8 @@ class RaoBlackwellizationTests(TestCase):
                         z_i_k = pyro.sample("z_%d_%d" % (i, k),
                                             fakes.NonreparameterizedNormal(0, 1).reshape(sample_shape=[4 - i]))
                         assert z_i_k.shape == (4 - i,)
-                    obs_i = pyro.sample("obs_%d" % i, dist.Normal(mu_latent, torch.pow(self.lam, -0.5)).reshape(extra_event_dims=1),
-                                        obs=x_i)
+                    obs_i = pyro.sample("obs_%d" % i, dist.Normal(mu_latent, torch.pow(self.lam, -0.5))
+                                                          .reshape(extra_event_dims=1), obs=x_i)
                     assert obs_i.shape == (4 - i, 2)
                     for k in range(n_superfluous_top, n_superfluous_top + n_superfluous_bottom):
                         z_i_k = pyro.sample("z_%d_%d" % (i, k),
@@ -639,8 +576,8 @@ class RaoBlackwellizationTests(TestCase):
                         mean_i = pyro.param("mean_%d_%d" % (i, k),
                                             Variable(0.5 * torch.ones(4 - i), requires_grad=True))
                         z_i_k = pyro.sample("z_%d_%d" % (i, k),
-                                    fakes.NonreparameterizedNormal(mean_i, 1),
-                                    infer=dict(baseline=dict(baseline_value=baseline_value)))
+                                            fakes.NonreparameterizedNormal(mean_i, 1),
+                                            infer=dict(baseline=dict(baseline_value=baseline_value)))
                         assert z_i_k.shape == (4 - i,)
 
         def per_param_callable(module_name, param_name, tags):
@@ -651,17 +588,6 @@ class RaoBlackwellizationTests(TestCase):
 
         adam = optim.Adam(per_param_callable)
         svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
-
-        guide_trace = pyro.poutine.trace(guide, graph_type="dense").get_trace()
-        model_trace = pyro.poutine.trace(pyro.poutine.replay(model, guide_trace),
-                                         graph_type="dense").get_trace()
-        if 0:
-            print('guide')
-            for k in guide_trace.nodes:
-                print("[%s]" % k, guide_trace.nodes[k])
-            print('\nmodel')
-            for k in model_trace.nodes:
-                print("[%s]" % k, model_trace.nodes[k])
 
         for step in range(n_steps):
             svi.step()
@@ -678,7 +604,7 @@ class RaoBlackwellizationTests(TestCase):
                     superfluous_error = torch.max(torch.max(mean_0_error, mean_1_error), mean_2_error)
                     superfluous_errors.append(superfluous_error.data.cpu().numpy()[0])
 
-            if step % 250 == 0:
+            if step % 500 == 0:
                 logger.debug("mu error, log(sigma) error:  %.4f, %.4f" % (mu_error, log_sig_error))
                 if n_superfluous_top > 0 or n_superfluous_bottom > 0:
                     logger.debug("superfluous error: %.4f" % np.max(superfluous_errors))

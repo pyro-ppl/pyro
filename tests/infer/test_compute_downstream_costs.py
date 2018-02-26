@@ -80,7 +80,7 @@ def test_compute_downstream_costs_big_model_guide_pair(include_inner_1, include_
 
     dc, dc_nodes = _compute_downstream_costs(model_trace, guide_trace,
                                              model_vec_md_nodes, guide_vec_md_nodes,
-                                             non_reparam_nodes, include_nodes=True)
+                                             non_reparam_nodes)
 
     expected_nodes_full_model = {'a1': {'c2', 'a1', 'd1', 'c1', 'obs', 'b1', 'd2', 'c3', 'b0'}, 'd2': {'obs', 'd2'},
                                  'd1': {'obs', 'd1', 'd2'}, 'c3': {'d2', 'obs', 'd1', 'c3'},
@@ -206,7 +206,7 @@ def test_compute_downstream_costs_duplicates(dim):
 
     dc, dc_nodes = _compute_downstream_costs(model_trace, guide_trace,
                                              model_vec_md_nodes, guide_vec_md_nodes,
-                                             non_reparam_nodes, include_nodes=True)
+                                             non_reparam_nodes)
 
     expected_a1 = (model_trace.nodes['a1']['batch_log_pdf'] - guide_trace.nodes['a1']['batch_log_pdf'])
     for d in range(dim):
@@ -271,7 +271,7 @@ def test_compute_downstream_costs_iarange_in_irange(dim1):
 
     dc, dc_nodes = _compute_downstream_costs(model_trace, guide_trace,
                                              model_vec_md_nodes, guide_vec_md_nodes,
-                                             non_reparam_nodes, include_nodes=True)
+                                             non_reparam_nodes)
 
     expected_c1 = (model_trace.nodes['c1']['batch_log_pdf'] - guide_trace.nodes['c1']['batch_log_pdf'])
     expected_c1 += model_trace.nodes['obs1']['batch_log_pdf']
