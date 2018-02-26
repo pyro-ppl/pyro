@@ -104,7 +104,7 @@ class MultiViewTensor(dict):
         """Opposite of broadcast."""
         result = 0
         for tensor in self.values():
-            result += reduce_to_target(tensor, target)
+            result = result + reduce_to_target(tensor, target)
         return result
 
     def __repr__(self):
