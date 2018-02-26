@@ -107,7 +107,7 @@ def gmm_model(data, verbose=False):
         assert z.shape[-1:] == (1,)
         z = z.long()
         if verbose:
-            logger.debug("M{} z_{} = {}".format("  " * i, i, z))
+            logger.debug("M{} z_{} = {}".format("  " * i, i, z.numpy()))
         pyro.observe("x_{}".format(i), dist.Normal(mus[z], sigma), data[i])
 
 
@@ -118,7 +118,7 @@ def gmm_guide(data, verbose=False):
         assert z.shape[-1:] == (1,)
         z = z.long()
         if verbose:
-            logger.debug("G{} z_{} = {}".format("  " * i, i, z))
+            logger.debug("G{} z_{} = {}".format("  " * i, i, z.numpy()))
 
 
 @pytest.mark.parametrize("data_size", [1, 2, 3])
