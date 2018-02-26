@@ -224,7 +224,7 @@ class MaskedDistribution(TorchDistribution):
     """
     def __init__(self, base_dist, mask):
         if broadcast_shape(mask.shape, base_dist.batch_shape) != base_dist.batch_shape:
-            raise ValueError("Expectewd mask.shape to be broadcastable to base_dist.batch_shape, "
+            raise ValueError("Expected mask.shape to be broadcastable to base_dist.batch_shape, "
                              "actual {} vs {}".format(mask.shape, base_dist.batch_shape))
         self.base_dist = base_dist
         self._mask = mask
