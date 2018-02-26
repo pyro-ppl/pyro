@@ -632,7 +632,7 @@ class RaoBlackwellizationTests(TestCase):
             trivial_baseline = pyro.module("mu_baseline", pt_mu_baseline, tags="baseline")
             baseline_value = trivial_baseline(ng_ones(1))
             mu_latent = pyro.sample("mu_latent",
-                                    fakes.NonreparameterizedNormal(mu_q, sig_q)
+                                    fakes.NonreparameterizedNormal(mu_q, sig_q),
                                     infer=dict(baseline=dict(baseline_value=baseline_value)))
 
             def obs_inner(i, _i, _x):
