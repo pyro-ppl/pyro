@@ -580,7 +580,6 @@ class RaoBlackwellizationTests(TestCase):
     # this tests rao-blackwellization and baselines for a vectorized map_data
     # inside of a list map_data with superfluous random variables to complexify the
     # graph structure and introduce additional baselines
-    @pytest.mark.skip('Fix me, bad semantics?')
     def test_vectorized_map_data_in_elbo_with_superfluous_rvs(self):
         self._test_vectorized_map_data_in_elbo(n_superfluous_top=2, n_superfluous_bottom=2, n_steps=6000)
 
@@ -590,39 +589,30 @@ class RaoBlackwellizationTests(TestCase):
         for _out in range(self.n_outer):
             for _in in range(self.n_inner):
                 self.data_tensor[3 * _out + _in, :] = self.data[_out][_in]
+        self.data_as_list = [self.data_tensor[0:4, :], self.data_tensor[4:7, :],
+                             self.data_tensor[7:9, :]]
 
         def model():
             mu_latent = pyro.sample("mu_latent",
-                                    fakes.NonreparameterizedNormal(self.mu0,
-                                                                   torch.pow(self.lam0,
-                                                                             -0.5)).reshape(extra_event_dims=1))
+                                    fakes.NonreparameterizedNormal(self.mu0, torch.pow(self.lam0, -0.5))
+                                        .reshape(extra_event_dims=1))
 
-            def obs_inner(i, _i, _x):
-                with pyro.iarange("inner", _x.size(0)):
+            for i in pyro.irange("outer", 3):
+                x_i = self.data_as_list[i]
+                with pyro.iarange("inner_%d" % i, x_i.size(0)):
                     for k in range(n_superfluous_top):
-                        pyro.sample("z_%d_%d" % (i, k),
-                                    fakes.NonreparameterizedNormal(ng_zeros(4 - i),
-                                                                   ng_ones(4 - i)).reshape(extra_event_dims=1))
-                    pyro.sample("obs_%d" % i,
-                                dist.Normal(mu_latent, torch.pow(self.lam, -0.5))
-                                    .reshape(extra_event_dims=1),
-                                obs=_x)
+                        z_i_k = pyro.sample("z_%d_%d" % (i, k),
+                                            fakes.NonreparameterizedNormal(0, 1).reshape(sample_shape=[4 - i]))
+                        assert z_i_k.shape == (4 - i,)
+                    obs_i = pyro.sample("obs_%d" % i, dist.Normal(mu_latent, torch.pow(self.lam, -0.5)).reshape(extra_event_dims=1),
+                                        obs=x_i)
+                    assert obs_i.shape == (4 - i, 2)
                     for k in range(n_superfluous_top, n_superfluous_top + n_superfluous_bottom):
-                        pyro.sample("z_%d_%d" % (i, k),
-                                    fakes.NonreparameterizedNormal(ng_zeros(4 - i),
-                                                                   ng_ones(4 - i)).reshape(extra_event_dims=1))
+                        z_i_k = pyro.sample("z_%d_%d" % (i, k),
+                                            fakes.NonreparameterizedNormal(0, 1).reshape(sample_shape=[4 - i]))
+                        assert z_i_k.shape == (4 - i,)
 
-            def obs_outer(i, x):
-                pyro.map_data("map_obs_inner_%d" % i, x, lambda _i, _x:
-                              obs_inner(i, _i, _x), batch_size=4 - i)
-
-            pyro.map_data("map_obs_outer", [self.data_tensor[0:4, :], self.data_tensor[4:7, :],
-                                            self.data_tensor[7:9, :]],
-                          lambda i, x: obs_outer(i, x), batch_size=3)
-
-            return mu_latent
-
-        pt_mu_baseline = torch.nn.Linear(1, 2)
+        pt_mu_baseline = torch.nn.Linear(1, 1)
         pt_superfluous_baselines = []
         for k in range(n_superfluous_top + n_superfluous_bottom):
             pt_superfluous_baselines.extend([torch.nn.Linear(2, 4), torch.nn.Linear(2, 3),
@@ -635,32 +625,23 @@ class RaoBlackwellizationTests(TestCase):
                                    self.analytic_log_sig_n.data - 0.07 * torch.ones(2), requires_grad=True))
             sig_q = torch.exp(log_sig_q)
             trivial_baseline = pyro.module("mu_baseline", pt_mu_baseline, tags="baseline")
-            baseline_value = trivial_baseline(ng_ones(1))
+            baseline_value = trivial_baseline(ng_ones(1)).squeeze()
             mu_latent = pyro.sample("mu_latent",
                                     fakes.NonreparameterizedNormal(mu_q, sig_q).reshape(extra_event_dims=1),
                                     infer=dict(baseline=dict(baseline_value=baseline_value)))
 
-            def obs_inner(i, _i, _x):
-                with pyro.iarange("inner", _x.size(0)):
+            for i in pyro.irange("outer", 3):
+                with pyro.iarange("inner_%d" % i, 4 - i):
                     for k in range(n_superfluous_top + n_superfluous_bottom):
                         z_baseline = pyro.module("z_baseline_%d_%d" % (i, k),
                                                  pt_superfluous_baselines[3 * k + i], tags="baseline")
                         baseline_value = z_baseline(mu_latent.detach())
                         mean_i = pyro.param("mean_%d_%d" % (i, k),
                                             Variable(0.5 * torch.ones(4 - i), requires_grad=True))
-                        pyro.sample("z_%d_%d" % (i, k),
-                                    fakes.NonreparameterizedNormal(mean_i, ng_ones(4 - i)).reshape(extra_event_dims=1),
+                        z_i_k = pyro.sample("z_%d_%d" % (i, k),
+                                    fakes.NonreparameterizedNormal(mean_i, 1),
                                     infer=dict(baseline=dict(baseline_value=baseline_value)))
-
-            def obs_outer(i, x):
-                pyro.map_data("map_obs_inner_%d" % i, x, lambda _i, _x:
-                              obs_inner(i, _i, _x), batch_size=4 - i)
-
-            pyro.map_data("map_obs_outer", [self.data_tensor[0:4, :], self.data_tensor[4:7, :],
-                                            self.data_tensor[7:9, :]],
-                          lambda i, x: obs_outer(i, x), batch_size=3)
-
-            return mu_latent
+                        assert z_i_k.shape == (4 - i,)
 
         def per_param_callable(module_name, param_name, tags):
             if 'baseline' in tags:
@@ -697,7 +678,7 @@ class RaoBlackwellizationTests(TestCase):
                     superfluous_error = torch.max(torch.max(mean_0_error, mean_1_error), mean_2_error)
                     superfluous_errors.append(superfluous_error.data.cpu().numpy()[0])
 
-            if step % 500 == 0:
+            if step % 250 == 0:
                 logger.debug("mu error, log(sigma) error:  %.4f, %.4f" % (mu_error, log_sig_error))
                 if n_superfluous_top > 0 or n_superfluous_bottom > 0:
                     logger.debug("superfluous error: %.4f" % np.max(superfluous_errors))
