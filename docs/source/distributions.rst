@@ -9,6 +9,14 @@ Distributions
 Primitive Distributions
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
+PyTorch Distributions
+---------------------
+
+.. automodule:: pyro.distributions.torch
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Abstract Distribution
 ---------------------
 
@@ -35,7 +43,7 @@ Delta
 
 MultivariateNormal
 ------------------
-.. automodule:: pyro.distributions.torch.multivariate_normal
+.. automodule:: pyro.distributions.multivariate_normal
     :members:
     :undoc-members:
     :show-inheritance:
@@ -49,15 +57,7 @@ OMTMultivariateNormal
 
 SparseMultivariateNormal
 ------------------------
-.. automodule:: pyro.distributions.torch.sparse_multivariate_normal
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-PyTorch Distributions
----------------------
-
-.. automodule:: pyro.distributions.torch
+.. automodule:: pyro.distributions.sparse_multivariate_normal
     :members:
     :undoc-members:
     :show-inheritance:
@@ -67,7 +67,7 @@ Transformed Distributions
 
 InverseAutoRegressiveFlow
 -------------------------
-.. autoclass:: pyro.distributions.torch.iaf.InverseAutoregressiveFlow
+.. autoclass:: pyro.distributions.iaf.InverseAutoregressiveFlow
     :members:
     :undoc-members:
     :show-inheritance:
