@@ -193,16 +193,21 @@ class DMM(nn.Module):
             # first compute the parameters of the diagonal gaussian distribution p(z_t | z_{t-1})
             z_mu, z_sigma = self.trans(z_prev)
             # then sample z_t according to dist.Normal(z_mu, z_sigma)
-            with poutine.scale(None, annealing_factor * mini_batch_mask[:, t - 1:t]):
-                z_t = pyro.sample("z_%d" % t, dist.Normal(z_mu, z_sigma))
+            with pyro.iarange("z_minibatch_%d" % t, self.z_0.size(-1)):
+                with pyro.iarange("z_iarange_%d" % t, len(mini_batch)):
+                    with poutine.scale(None, annealing_factor * mini_batch_mask[:, t - 1:t]):
+                        z_t = pyro.sample("z_%d" % t, dist.Normal(z_mu, z_sigma))
 
             # compute the probabilities that parameterize the bernoulli likelihood
             emission_probs_t = self.emitter(z_t)
             # the next statement instructs pyro to observe x_t according to the
             # bernoulli distribution p(x_t|z_t)
-            with poutine.scale(None, mini_batch_mask[:, t - 1:t]):
-                pyro.sample("obs_x_%d" % t, dist.Bernoulli(emission_probs_t),
-                            obs=mini_batch[:, t - 1, :])
+            with pyro.iarange("note_%d" % t, mini_batch.size(-1)):
+                with pyro.iarange("x_minibatch_%d" % t, len(mini_batch)):
+                    with poutine.scale(None, mini_batch_mask[:, t - 1:t]):
+                        pyro.sample("obs_x_%d" % t,
+                                    dist.Bernoulli(emission_probs_t),
+                                    obs=mini_batch[:, t - 1, :])
             # the latent sampled at this time step will be conditioned upon
             # in the next time step so keep track of it
             z_prev = z_t
@@ -239,10 +244,13 @@ class DMM(nn.Module):
                 z_dist = TransformedDistribution(dist.Normal(z_mu, z_sigma), self.iafs)
             else:
                 z_dist = dist.Normal(z_mu, z_sigma)
+            z_dist = z_dist.reshape(sample_shape=[self.z_0.size(-1), len(mini_batch)])
 
             # sample z_t from the distribution z_dist
-            with pyro.poutine.scale(None, annealing_factor * mini_batch_mask[:, t - 1:t]):
-                z_t = pyro.sample("z_%d" % t, z_dist)
+            with pyro.iarange("z_minibatch_%d" % t, self.z_0.size(-1)):
+                with pyro.iarange("z_iarange_%d" % t, len(mini_batch)):
+                    with pyro.poutine.scale(None, annealing_factor * mini_batch_mask[:, t - 1:t]):
+                        z_t = pyro.sample("z_%d" % t, z_dist)
             # the latent sampled at this time step will be conditioned upon in the next time step
             # so keep track of it
             z_prev = z_t
