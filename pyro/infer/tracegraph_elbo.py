@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 import warnings
 
-import networkx
 import torch
 
 import pyro
@@ -38,7 +37,7 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
     # 1. downstream costs used for rao-blackwellization
     # 2. model observe sites (as well as terms that arise from the model and guide having different
     # dependency structures) are taken care of via 'children_in_model' below
-    topo_sort_guide_nodes = list(reversed(list(networkx.topological_sort(guide_trace))))
+    topo_sort_guide_nodes = list(reversed(list(guide_trace.topological_sort())))
     topo_sort_guide_nodes = [x for x in topo_sort_guide_nodes
                              if guide_trace.nodes[x]["type"] == "sample"]
     downstream_guide_cost_nodes = {}
