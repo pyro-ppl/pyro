@@ -232,7 +232,7 @@ class DMM(nn.Module):
         # reverse the time-ordering in the hidden state and un-pack it
         rnn_output = poly.pad_and_reverse(rnn_output, mini_batch_seq_lengths)
         # set z_prev = z_q_0 to setup the recursive conditioning in q(z_t |...)
-        z_prev = self.z_q_0
+        z_prev = self.z_q_0.expand(mini_batch.size(0), self.z_q_0.size(0))
 
         # sample the latents z one time step at a time
         for t in range(1, T_max + 1):
@@ -246,13 +246,15 @@ class DMM(nn.Module):
                 z_dist = TransformedDistribution(dist.Normal(z_mu, z_sigma), self.iafs)
             else:
                 z_dist = dist.Normal(z_mu, z_sigma)
-            z_dist = z_dist.reshape(sample_shape=[self.z_0.size(-1), len(mini_batch)])
+            assert z_dist.event_shape == ()
+            assert z_dist.batch_shape == (len(mini_batch), self.z_q_0.size(0))
 
             # sample z_t from the distribution z_dist
-            with pyro.iarange("z_minibatch_%d" % t, self.z_0.size(-1)):
-                with pyro.iarange("z_iarange_%d" % t, len(mini_batch)):
-                    with pyro.poutine.scale(None, annealing_factor * mini_batch_mask[:, t - 1:t]):
-                        z_t = pyro.sample("z_%d" % t, z_dist)
+            with pyro.iarange("z_minibatch_%d" % t, len(mini_batch)):
+                with pyro.poutine.scale(None, annealing_factor):
+                    z_t = pyro.sample("z_%d" % t,
+                                      z_dist.mask(mini_batch_mask[:, t - 1:t])
+                                            .reshape(extra_event_dims=1))
             # the latent sampled at this time step will be conditioned upon in the next time step
             # so keep track of it
             z_prev = z_t
