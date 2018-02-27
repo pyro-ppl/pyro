@@ -74,7 +74,7 @@ class Histogram(dist.Distribution):
         if sample_shape:
             raise ValueError("Arbitrary `sample_shape` not supported by Histogram class.")
         d, values = self._dist_and_values(*args, **kwargs)
-        ix = d.sample().data[0]
+        ix = d.sample()
         return values[ix]
 
     __call__ = sample
@@ -151,4 +151,4 @@ class TracePosterior(object):
         if not isinstance(logits, torch.autograd.Variable):
             logits = Variable(logits)
         ix = dist.Categorical(logits=logits).sample()
-        return traces[ix.data[0]]
+        return traces[ix]

@@ -4,7 +4,7 @@ import torch
 
 from pyro.distributions.distribution import Distribution
 from pyro.distributions.score_parts import ScoreParts
-from pyro.distributions.util import sum_rightmost
+from pyro.distributions.util import broadcast_shape, sum_rightmost
 
 
 class TorchDistributionMixin(Distribution):
@@ -71,9 +71,20 @@ class TorchDistributionMixin(Distribution):
         :param int extra_event_dims: The number of extra event dimensions that
             will be considered dependent.
         :return: A reshaped copy of this distribution.
-        :rtype: :class:`Reshape`
+        :rtype: :class:`ReshapedDistribution`
         """
-        return Reshape(self, sample_shape, extra_event_dims)
+        return ReshapedDistribution(self, sample_shape, extra_event_dims)
+
+    def mask(self, mask):
+        """
+        Masks a distribution by a zero-one tensor that is broadcastable to the
+        distributions ``batch_shape``.
+
+        :param Variable mask: A zero-one valued float tensor.
+        :return: A masked copy of this distribution.
+        :rtype: :class:`MaskedDistribution`
+        """
+        return MaskedDistribution(self, mask)
 
     def analytic_mean(self):
         return self.mean
@@ -138,7 +149,7 @@ class TorchDistribution(torch.distributions.Distribution, TorchDistributionMixin
     pass
 
 
-class Reshape(TorchDistribution):
+class ReshapedDistribution(TorchDistribution):
     """
     Reshapes a distribution by adding ``sample_shape`` to its total shape
     and adding ``extra_event_dims`` to its ``event_shape``.
@@ -150,13 +161,16 @@ class Reshape(TorchDistribution):
     """
     def __init__(self, base_dist, sample_shape=torch.Size(), extra_event_dims=0):
         sample_shape = torch.Size(sample_shape)
+        if extra_event_dims > len(sample_shape + base_dist.batch_shape):
+            raise ValueError('Expected extra_event_dims <= len(sample_shape + base_dist.batch_shape), '
+                             'actual {} vs {}'.format(extra_event_dims, len(sample_shape + base_dist.batch_shape)))
         self.base_dist = base_dist
         self.sample_shape = sample_shape
         self.extra_event_dims = extra_event_dims
         shape = sample_shape + base_dist.batch_shape + base_dist.event_shape
         batch_dim = len(shape) - extra_event_dims - len(base_dist.event_shape)
         batch_shape, event_shape = shape[:batch_dim], shape[batch_dim:]
-        super(Reshape, self).__init__(batch_shape, event_shape)
+        super(ReshapedDistribution, self).__init__(batch_shape, event_shape)
 
     @property
     def has_rsample(self):
@@ -167,10 +181,10 @@ class Reshape(TorchDistribution):
         return self.base_dist.has_enumerate_support
 
     def sample(self, sample_shape=torch.Size()):
-        return self.base_dist.sample(self.sample_shape + sample_shape)
+        return self.base_dist.sample(sample_shape + self.sample_shape)
 
     def rsample(self, sample_shape=torch.Size()):
-        return self.base_dist.rsample(self.sample_shape + sample_shape)
+        return self.base_dist.rsample(sample_shape + self.sample_shape)
 
     def log_prob(self, value):
         return sum_rightmost(self.base_dist.log_prob(value), self.extra_event_dims)
@@ -191,6 +205,53 @@ class Reshape(TorchDistribution):
         samples = samples.view(enum_shape + (1,) * len(self.sample_shape) + base_shape)
         samples = samples.expand(enum_shape + self.sample_shape + base_shape)
         return samples
+
+    @property
+    def mean(self):
+        return self.base_dist.mean.expand(self.batch_shape + self.event_shape)
+
+    @property
+    def variance(self):
+        return self.base_dist.variance.expand(self.batch_shape + self.event_shape)
+
+
+class MaskedDistribution(TorchDistribution):
+    """
+    Masks a distribution by a zero-one tensor that is broadcastable to the
+    distributions ``batch_shape``.
+
+    :param Variable mask: A zero-one valued float tensor.
+    """
+    def __init__(self, base_dist, mask):
+        if broadcast_shape(mask.shape, base_dist.batch_shape) != base_dist.batch_shape:
+            raise ValueError("Expected mask.shape to be broadcastable to base_dist.batch_shape, "
+                             "actual {} vs {}".format(mask.shape, base_dist.batch_shape))
+        self.base_dist = base_dist
+        self._mask = mask
+        super(MaskedDistribution, self).__init__(base_dist.batch_shape, base_dist.event_shape)
+
+    @property
+    def has_rsample(self):
+        return self.base_dist.has_rsample
+
+    @property
+    def has_enumerate_support(self):
+        return self.base_dist.has_enumerate_support
+
+    def sample(self, sample_shape=torch.Size()):
+        return self.base_dist.sample(sample_shape)
+
+    def rsample(self, sample_shape=torch.Size()):
+        return self.base_dist.rsample(sample_shape)
+
+    def log_prob(self, value):
+        return self.base_dist.log_prob(value) * self._mask
+
+    def score_parts(self, value):
+        return self.base_dist.score_parts(value) * self._mask
+
+    def enumerate_support(self):
+        return self.base_dist.enumerate_support()
 
     @property
     def mean(self):

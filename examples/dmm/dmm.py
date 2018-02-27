@@ -193,16 +193,19 @@ class DMM(nn.Module):
             # first compute the parameters of the diagonal gaussian distribution p(z_t | z_{t-1})
             z_mu, z_sigma = self.trans(z_prev)
             # then sample z_t according to dist.Normal(z_mu, z_sigma)
-            with poutine.scale(None, annealing_factor * mini_batch_mask[:, t - 1:t]):
-                z_t = pyro.sample("z_%d" % t, dist.Normal(z_mu, z_sigma))
+            with poutine.scale(None, annealing_factor):
+                z_t = pyro.sample("z_%d" % t,
+                                  dist.Normal(z_mu, z_sigma)
+                                      .mask(mini_batch_mask[:, t - 1:t]))
 
             # compute the probabilities that parameterize the bernoulli likelihood
             emission_probs_t = self.emitter(z_t)
             # the next statement instructs pyro to observe x_t according to the
             # bernoulli distribution p(x_t|z_t)
-            with poutine.scale(None, mini_batch_mask[:, t - 1:t]):
-                pyro.sample("obs_x_%d" % t, dist.Bernoulli(emission_probs_t),
-                            obs=mini_batch[:, t - 1, :])
+            pyro.sample("obs_x_%d" % t,
+                        dist.Bernoulli(emission_probs_t)
+                            .mask(mini_batch_mask[:, t - 1:t]),
+                        obs=mini_batch[:, t - 1, :])
             # the latent sampled at this time step will be conditioned upon
             # in the next time step so keep track of it
             z_prev = z_t
@@ -264,7 +267,7 @@ def main(args):
     val_seq_lengths = data['valid']['sequence_lengths']
     val_data_sequences = data['valid']['sequences']
     N_train_data = len(training_seq_lengths)
-    N_train_time_slices = np.sum(training_seq_lengths)
+    N_train_time_slices = float(np.sum(training_seq_lengths))
     N_mini_batches = int(N_train_data / args.mini_batch_size +
                          int(N_train_data % args.mini_batch_size > 0))
 

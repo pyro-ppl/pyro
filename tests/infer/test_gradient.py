@@ -49,7 +49,7 @@ def test_subsample_gradient(trace_graph, reparameterized, subsample):
                     trace_graph=trace_graph, num_particles=num_particles)
     inference.loss_and_grads(model, guide)
     params = dict(pyro.get_param_store().named_parameters())
-    actual_grads = {name: param.grad.data.cpu().numpy() for name, param in params.items()}
+    actual_grads = {name: param.grad.detach().cpu().numpy() for name, param in params.items()}
 
     expected_grads = {'mu': np.array([0.5, -2.0]), 'sigma': np.array([2.0])}
     for name in sorted(params):

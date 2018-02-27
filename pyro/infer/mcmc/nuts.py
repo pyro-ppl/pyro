@@ -83,7 +83,7 @@ class NUTS(HMC):
         z_new, r_new, z_grads, potential_energy = single_step_velocity_verlet(
             z, r, self._potential_energy, step_size, z_grads=z_grads)
         energy = potential_energy + self._kinetic_energy(r_new)
-        dE = (log_slice + energy).data[0]
+        dE = log_slice + energy
 
         # As a part of the slice sampling process (see below), along the trajectory
         #     we eliminate states which p(z, r) < u, or dE < 0.
@@ -131,7 +131,7 @@ class NUTS(HMC):
             other_half_tree_prob = other_half_tree.size / tree_size
             is_other_half_tree = pyro.sample("is_other_halftree",
                                              dist.Bernoulli(ps=ng_ones(1) * other_half_tree_prob))
-            if int(is_other_half_tree.data[0]) == 1:
+            if int(is_other_half_tree.item()) == 1:
                 z_proposal = other_half_tree.z_proposal
 
         # leaves of the full tree are determined by the direction
@@ -190,7 +190,7 @@ class NUTS(HMC):
         for tree_depth in range(self.max_tree_depth + 1):
             direction = pyro.sample("direction_t={}_treedepth={}".format(self._t, tree_depth),
                                     dist.Bernoulli(ps=ng_ones(1) * 0.5))
-            direction = int(direction.data[0])
+            direction = int(direction.item())
             if direction == 1:  # go to the right, start from the right leaf of current tree
                 new_tree = self._build_tree(z_right, r_right, z_right_grads,
                                             log_slice, direction, tree_depth)
@@ -210,7 +210,7 @@ class NUTS(HMC):
 
             accepted_prob = pyro.sample("acceptedprob_t={}_treedepth={}".format(self._t, tree_depth),
                                         dist.Uniform(ng_zeros(1), ng_ones(1)))
-            if accepted_prob.data[0] < new_tree.size / tree_size:
+            if accepted_prob < new_tree.size / tree_size:
                 is_accepted = True
                 z = new_tree.z_proposal
 

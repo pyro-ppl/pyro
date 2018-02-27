@@ -12,7 +12,7 @@ from pyro.util import is_nan, is_inf
 
 def _warn_if_nan(name, value):
     if isinstance(value, Variable):
-        value = value.data[0]
+        value = value.item()
     if is_nan(value):
         warnings.warn("Encountered NAN log_pdf at site '{}'".format(name))
     if is_inf(value) and value > 0:
@@ -139,29 +139,6 @@ class Trace(object):
                     site["log_pdf"] = site_log_p
                     _warn_if_nan(name, site_log_p)
                 log_p += site_log_p
-        return log_p
-
-    # XXX This only makes sense when all tensors have compatible shape.
-    def batch_log_pdf(self, site_filter=lambda name, site: True):
-        """
-        Compute the batched local and overall log-probabilities of the trace.
-
-        The local computation is memoized, and also stores the local `.log_pdf()`.
-        """
-        log_p = 0.0
-        for name, site in self.nodes.items():
-            if site["type"] == "sample" and site_filter(name, site):
-                try:
-                    site_log_p = site["batch_log_pdf"]
-                except KeyError:
-                    args, kwargs = site["args"], site["kwargs"]
-                    site_log_p = site["fn"].log_prob(site["value"], *args, **kwargs)
-                    site_log_p = scale_tensor(site_log_p, site["scale"])
-                    site["batch_log_pdf"] = site_log_p
-                    site["log_pdf"] = site_log_p.sum()
-                    _warn_if_nan(name, site["log_pdf"])
-                # Here log_p may be broadcast to a larger tensor:
-                log_p = log_p + site_log_p
         return log_p
 
     def compute_batch_log_pdf(self, site_filter=lambda name, site: True):

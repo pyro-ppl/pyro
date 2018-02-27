@@ -83,5 +83,5 @@ def test_kernel_forward(kernel, X, Z, K_sum):
     assert K.dim() == 2
     assert K.size(0) == 2
     assert K.size(1) == (3 if Z is not None else 2)
-    assert_equal(K.data.sum(), K_sum)
+    assert_equal(K.sum().item(), K_sum)
     assert_equal(kernel(X).diag(), kernel(X, diag=True))

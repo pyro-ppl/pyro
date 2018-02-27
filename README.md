@@ -5,8 +5,9 @@
 
 ----------------------------------------------------------------
 
-[![Build Status](https://travis-ci.org/uber/pyro.svg?branch=master)](https://travis-ci.org/uber/pyro)
+[![Build Status](https://travis-ci.org/uber/pyro.svg?branch=dev)](https://travis-ci.org/uber/pyro)
 [![Latest Version](https://badge.fury.io/py/pyro-ppl.svg)](https://pypi.python.org/pypi/pyro-ppl)
+[![Documentation Status](https://readthedocs.org/projects/pyro-ppl/badge/?version=dev)](http://pyro-ppl.readthedocs.io/en/stable/?badge=dev)
 
 
 [Getting Started](http://pyro.ai/examples) |
@@ -53,7 +54,7 @@ pip install .
 
 For recent features you can install Pyro from source.
 
-First install a recent PyTorch, currently PyTorch commit `853dba8`.
+First install a recent PyTorch, currently PyTorch commit `05269b5`.
 ```sh
 git clone git@github.com:pytorch/pytorch
 cd pytorch

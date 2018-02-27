@@ -10,7 +10,7 @@ from tests.common import assert_equal, xfail_if_not_implemented
 
 
 def _unwrap_variable(x):
-    return x.data.cpu().numpy()
+    return x.detach().cpu().numpy()
 
 
 def _log_prob_shape(dist, x_size=torch.Size()):
