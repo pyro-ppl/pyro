@@ -267,7 +267,7 @@ def main(args):
     val_seq_lengths = data['valid']['sequence_lengths']
     val_data_sequences = data['valid']['sequences']
     N_train_data = len(training_seq_lengths)
-    N_train_time_slices = np.sum(training_seq_lengths)
+    N_train_time_slices = float(np.sum(training_seq_lengths))
     N_mini_batches = int(N_train_data / args.mini_batch_size +
                          int(N_train_data % args.mini_batch_size > 0))
 
