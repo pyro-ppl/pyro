@@ -414,3 +414,43 @@ def test_non_mean_field_bern_bern_elbo_gradient(enum_discrete, pi1, pi2):
         "\nexpected = {}".format(expected_grad_q2.data.cpu().numpy()),
         "\n  actual = {}".format(actual_grad_q2.data.cpu().numpy()),
     ]))
+
+
+@pytest.mark.parametrize("outer_dim", [1, 2])
+@pytest.mark.parametrize("inner_dim", [1, 3])
+@pytest.mark.parametrize("enum_discrete", [None, "sequential", "parallel"])
+def test_nested_iarange_elbo_gradient(outer_dim, inner_dim, enum_discrete):
+    pyro.clear_param_store()
+    if not enum_discrete:
+        num_particles = 1000  # Monte Carlo sample
+    else:
+        num_particles = 1  # a single particle should be exact
+
+    def model():
+        pyro.sample("x", dist.Bernoulli(0.25))
+        with pyro.iarange("outer", outer_dim):
+            pyro.sample("y", dist.Bernoulli(0.25).reshape(sample_shape=[outer_dim]))
+            with pyro.iarange("inner", inner_dim):
+                pyro.sample("z", dist.Bernoulli(0.25).reshape(sample_shape=[inner_dim, 1]))
+
+    def guide():
+        q = pyro.param("q", variable(0.5, requires_grad=True))
+        pyro.sample("x", dist.Bernoulli(q))
+        with pyro.iarange("outer", outer_dim):
+            pyro.sample("y", dist.Bernoulli(1 - q).reshape(sample_shape=[outer_dim]))
+            with pyro.iarange("inner", inner_dim):
+                pyro.sample("z", dist.Bernoulli(q).reshape(sample_shape=[inner_dim, 1]))
+
+    logger.info("Computing gradients using surrogate loss")
+    elbo = Trace_ELBO(num_particles=num_particles, max_iarange_nesting=1)
+    elbo.loss_and_grads(model, config_enumerate(guide, default=enum_discrete))
+    actual_grad = pyro.param('q').grad
+
+    logger.info("Computing analytic gradients")
+    q = variable(0.5, requires_grad=True)
+    expected_grad = (1 - outer_dim + inner_dim) * grad(kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.25)), [q])[0]
+
+    assert_equal(actual_grad, expected_grad, prec=0.1, msg="".join([
+        "\nexpected = {}".format(expected_grad.data.cpu().numpy()),
+        "\n  actual = {}".format(actual_grad.data.cpu().numpy()),
+    ]))
