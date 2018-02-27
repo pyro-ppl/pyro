@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import gc
 
 import networkx as nx
+import pytest
 import torch
 from torch.autograd import Variable
 
@@ -12,6 +13,9 @@ from pyro import poutine
 from pyro.infer.svi import SVI
 from pyro.optim import Adam
 from pyro.poutine.trace import Trace
+
+
+pytestmark = pytest.mark.stage('unit')
 
 
 def count_objects_of_type(type_):

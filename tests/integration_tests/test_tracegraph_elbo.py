@@ -55,13 +55,13 @@ class NormalNormalTests(TestCase):
             self.mu0 * (self.lam0 / self.analytic_lam_n)
 
     def test_elbo_reparameterized(self):
-        self.do_elbo_test(True, 1000)
+        self.do_elbo_test(True, 1500, 0.02)
 
     @pytest.mark.init(rng_seed=0)
     def test_elbo_nonreparameterized(self):
-        self.do_elbo_test(False, 5000)
+        self.do_elbo_test(False, 5000, 0.05)
 
-    def do_elbo_test(self, reparameterized, n_steps):
+    def do_elbo_test(self, reparameterized, n_steps, prec):
         logger.info(" - - - - - DO NORMALNORMAL ELBO TEST  [reparameterized = %s] - - - - - " % reparameterized)
         pyro.clear_param_store()
         Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
@@ -81,8 +81,7 @@ class NormalNormalTests(TestCase):
                                    variable(self.analytic_log_sig_n.expand(2) - 0.29, requires_grad=True))
             sig_q = torch.exp(log_sig_q)
             with pyro.iarange("iarange", 2):
-                mu_latent = pyro.sample("mu_latent", Normal(mu_q, sig_q),
-                                        infer=dict(baseline=dict(use_decaying_avg_baseline=True)))
+                mu_latent = pyro.sample("mu_latent", Normal(mu_q, sig_q))
             return mu_latent
 
         adam = optim.Adam({"lr": .0015, "betas": (0.97, 0.999)})
@@ -96,8 +95,8 @@ class NormalNormalTests(TestCase):
             if k % 250 == 0:
                 logger.debug("mu error, log(sigma) error:  %.4f, %.4f" % (mu_error, log_sig_error))
 
-        assert_equal(0.0, mu_error, prec=0.03)
-        assert_equal(0.0, log_sig_error, prec=0.03)
+        assert_equal(0.0, mu_error, prec=prec)
+        assert_equal(0.0, log_sig_error, prec=prec)
 
 
 class NormalNormalNormalTests(TestCase):
@@ -118,18 +117,18 @@ class NormalNormalNormalTests(TestCase):
             self.mu0 * (self.lam0 / self.analytic_lam_n)
 
     def test_elbo_reparameterized(self):
-        self.do_elbo_test(True, True, 5000, 0.02, 0.002, False, False)
+        self.do_elbo_test(True, True, 3000, 0.02, 0.002, False, False)
 
     def test_elbo_nonreparameterized_both_baselines(self):
-        self.do_elbo_test(False, False, 15000, 0.05, 0.001, use_nn_baseline=True,
+        self.do_elbo_test(False, False, 3000, 0.04, 0.001, use_nn_baseline=True,
                           use_decaying_avg_baseline=True)
 
     def test_elbo_nonreparameterized_decaying_baseline(self):
-        self.do_elbo_test(True, False, 12000, 0.04, 0.0015, use_nn_baseline=False,
+        self.do_elbo_test(True, False, 4000, 0.04, 0.0015, use_nn_baseline=False,
                           use_decaying_avg_baseline=True)
 
     def test_elbo_nonreparameterized_nn_baseline(self):
-        self.do_elbo_test(False, True, 12000, 0.04, 0.0015, use_nn_baseline=True,
+        self.do_elbo_test(False, True, 4000, 0.04, 0.0015, use_nn_baseline=True,
                           use_decaying_avg_baseline=False)
 
     def do_elbo_test(self, repa1, repa2, n_steps, prec, lr, use_nn_baseline, use_decaying_avg_baseline):
@@ -146,7 +145,7 @@ class NormalNormalNormalTests(TestCase):
                 def __init__(self, dim_input, dim_h):
                     super(VanillaBaselineNN, self).__init__()
                     self.lin1 = nn.Linear(dim_input, dim_h)
-                    self.lin2 = nn.Linear(dim_h, 1)
+                    self.lin2 = nn.Linear(dim_h, 2)
                     self.sigmoid = nn.Sigmoid()
 
                 def forward(self, x):
@@ -231,9 +230,8 @@ class BernoulliBetaTests(TestCase):
         self.log_alpha_n = torch.log(self.alpha_n)
         self.log_beta_n = torch.log(self.beta_n)
 
-    @pytest.mark.xfail(reason='poorly-tuned Adam params?')
     def test_elbo_reparameterized(self):
-        self.do_elbo_test(True, 3000, 0.95, 0.0007)
+        self.do_elbo_test(True, 3000, 0.92, 0.0007)
 
     def test_elbo_nonreparameterized(self):
         self.do_elbo_test(False, 3000, 0.95, 0.0007)
@@ -289,9 +287,8 @@ class ExponentialGammaTests(TestCase):
         self.log_alpha_n = torch.log(self.alpha_n)
         self.log_beta_n = torch.log(self.beta_n)
 
-    @pytest.mark.xfail(reason='poorly-tuned Adam params?')
     def test_elbo_reparameterized(self):
-        self.do_elbo_test(True, 8000, 0.95, 0.0007)
+        self.do_elbo_test(True, 8000, 0.90, 0.0007)
 
     def test_elbo_nonreparameterized(self):
         self.do_elbo_test(False, 8000, 0.95, 0.0007)
@@ -330,8 +327,8 @@ class ExponentialGammaTests(TestCase):
             if k % 500 == 0:
                 logger.debug("alpha_error, beta_error: %.4f, %.4f" % (alpha_error, beta_error))
 
-        assert_equal(0.0, alpha_error, prec=0.03)
-        assert_equal(0.0, beta_error, prec=0.03)
+        assert_equal(0.0, alpha_error, prec=0.04)
+        assert_equal(0.0, beta_error, prec=0.04)
 
 
 class LogNormalNormalGuide(nn.Module):
@@ -467,7 +464,9 @@ class RaoBlackwellizationTests(TestCase):
 
         def model():
             mu_latent = pyro.sample("mu_latent",
-                                    fakes.NonreparameterizedNormal(self.mu0, torch.pow(self.lam0, -0.5)))
+                                    fakes.NonreparameterizedNormal(self.mu0,
+                                                                   torch.pow(self.lam0,
+                                                                             -0.5)).reshape(extra_event_dims=1))
 
             def obs_outer(i, x):
                 pyro.map_data("map_obs_inner_%d" % i, x, lambda _i, _x:
@@ -488,7 +487,8 @@ class RaoBlackwellizationTests(TestCase):
             log_sig_q = pyro.param("log_sig_q",
                                    variable(self.analytic_log_sig_n.expand(2) - 0.27, requires_grad=True))
             sig_q = torch.exp(log_sig_q)
-            mu_latent = pyro.sample("mu_latent", fakes.NonreparameterizedNormal(mu_q, sig_q),
+            mu_latent = pyro.sample("mu_latent", fakes.NonreparameterizedNormal(mu_q,
+                                                                                sig_q).reshape(extra_event_dims=1),
                                     infer=dict(baseline=dict(use_decaying_avg_baseline=True)))
 
             def obs_outer(i, x):
@@ -525,7 +525,7 @@ class RaoBlackwellizationTests(TestCase):
     # inside of a list map_data with superfluous random variables to complexify the
     # graph structure and introduce additional baselines
     def test_vectorized_map_data_in_elbo_with_superfluous_rvs(self):
-        self._test_vectorized_map_data_in_elbo(n_superfluous_top=2, n_superfluous_bottom=2, n_steps=6000)
+        self._test_vectorized_map_data_in_elbo(n_superfluous_top=1, n_superfluous_bottom=1, n_steps=5000)
 
     def _test_vectorized_map_data_in_elbo(self, n_superfluous_top, n_superfluous_bottom, n_steps):
         pyro.clear_param_store()
@@ -533,32 +533,28 @@ class RaoBlackwellizationTests(TestCase):
         for _out in range(self.n_outer):
             for _in in range(self.n_inner):
                 self.data_tensor[3 * _out + _in, :] = self.data[_out][_in]
+        self.data_as_list = [self.data_tensor[0:4, :], self.data_tensor[4:7, :],
+                             self.data_tensor[7:9, :]]
 
         def model():
             mu_latent = pyro.sample("mu_latent",
-                                    fakes.NonreparameterizedNormal(self.mu0, torch.pow(self.lam0, -0.5)))
+                                    fakes.NonreparameterizedNormal(self.mu0, torch.pow(self.lam0, -0.5))
+                                         .reshape(extra_event_dims=1))
 
-            def obs_inner(i, _i, _x):
-                for k in range(n_superfluous_top):
-                    pyro.sample("z_%d_%d" % (i, k),
-                                fakes.NonreparameterizedNormal(ng_zeros(4 - i), ng_ones(4 - i)))
-                pyro.sample("obs_%d" % i,
-                            dist.Normal(mu_latent, torch.pow(self.lam, -0.5))
-                                .reshape(extra_event_dims=1),
-                            obs=_x)
-                for k in range(n_superfluous_top, n_superfluous_top + n_superfluous_bottom):
-                    pyro.sample("z_%d_%d" % (i, k),
-                                fakes.NonreparameterizedNormal(ng_zeros(4 - i), ng_ones(4 - i)))
-
-            def obs_outer(i, x):
-                pyro.map_data("map_obs_inner_%d" % i, x, lambda _i, _x:
-                              obs_inner(i, _i, _x), batch_size=4 - i)
-
-            pyro.map_data("map_obs_outer", [self.data_tensor[0:4, :], self.data_tensor[4:7, :],
-                                            self.data_tensor[7:9, :]],
-                          lambda i, x: obs_outer(i, x), batch_size=3)
-
-            return mu_latent
+            for i in pyro.irange("outer", 3):
+                x_i = self.data_as_list[i]
+                with pyro.iarange("inner_%d" % i, x_i.size(0)):
+                    for k in range(n_superfluous_top):
+                        z_i_k = pyro.sample("z_%d_%d" % (i, k),
+                                            fakes.NonreparameterizedNormal(0, 1).reshape(sample_shape=[4 - i]))
+                        assert z_i_k.shape == (4 - i,)
+                    obs_i = pyro.sample("obs_%d" % i, dist.Normal(mu_latent, torch.pow(self.lam, -0.5))
+                                                          .reshape(extra_event_dims=1), obs=x_i)
+                    assert obs_i.shape == (4 - i, 2)
+                    for k in range(n_superfluous_top, n_superfluous_top + n_superfluous_bottom):
+                        z_i_k = pyro.sample("z_%d_%d" % (i, k),
+                                            fakes.NonreparameterizedNormal(0, 1).reshape(sample_shape=[4 - i]))
+                        assert z_i_k.shape == (4 - i,)
 
         pt_mu_baseline = torch.nn.Linear(1, 1)
         pt_superfluous_baselines = []
@@ -569,34 +565,26 @@ class RaoBlackwellizationTests(TestCase):
         def guide():
             mu_q = pyro.param("mu_q", variable(self.analytic_mu_n.expand(2) + 0.094, requires_grad=True))
             log_sig_q = pyro.param("log_sig_q",
-                                   variable(self.analytic_log_sig_n.expand(2) - 0.11, requires_grad=True))
+                                   variable(self.analytic_log_sig_n.expand(2) - 0.07, requires_grad=True))
             sig_q = torch.exp(log_sig_q)
             trivial_baseline = pyro.module("mu_baseline", pt_mu_baseline, tags="baseline")
-            baseline_value = trivial_baseline(ng_ones(1))
+            baseline_value = trivial_baseline(ng_ones(1)).squeeze()
             mu_latent = pyro.sample("mu_latent",
-                                    fakes.NonreparameterizedNormal(mu_q, sig_q),
+                                    fakes.NonreparameterizedNormal(mu_q, sig_q).reshape(extra_event_dims=1),
                                     infer=dict(baseline=dict(baseline_value=baseline_value)))
 
-            def obs_inner(i, _i, _x):
-                for k in range(n_superfluous_top + n_superfluous_bottom):
-                    z_baseline = pyro.module("z_baseline_%d_%d" % (i, k),
-                                             pt_superfluous_baselines[3 * k + i], tags="baseline")
-                    baseline_value = z_baseline(mu_latent.detach())
-                    mean_i = pyro.param("mean_%d_%d" % (i, k),
-                                        Variable(0.5 * torch.ones(4 - i), requires_grad=True))
-                    pyro.sample("z_%d_%d" % (i, k),
-                                fakes.NonreparameterizedNormal(mean_i, ng_ones(4 - i)),
-                                infer=dict(baseline=dict(baseline_value=baseline_value)))
-
-            def obs_outer(i, x):
-                pyro.map_data("map_obs_inner_%d" % i, x, lambda _i, _x:
-                              obs_inner(i, _i, _x), batch_size=4 - i)
-
-            pyro.map_data("map_obs_outer", [self.data_tensor[0:4, :], self.data_tensor[4:7, :],
-                                            self.data_tensor[7:9, :]],
-                          lambda i, x: obs_outer(i, x), batch_size=3)
-
-            return mu_latent
+            for i in pyro.irange("outer", 3):
+                with pyro.iarange("inner_%d" % i, 4 - i):
+                    for k in range(n_superfluous_top + n_superfluous_bottom):
+                        z_baseline = pyro.module("z_baseline_%d_%d" % (i, k),
+                                                 pt_superfluous_baselines[3 * k + i], tags="baseline")
+                        baseline_value = z_baseline(mu_latent.detach())
+                        mean_i = pyro.param("mean_%d_%d" % (i, k),
+                                            Variable(0.5 * torch.ones(4 - i), requires_grad=True))
+                        z_i_k = pyro.sample("z_%d_%d" % (i, k),
+                                            fakes.NonreparameterizedNormal(mean_i, 1),
+                                            infer=dict(baseline=dict(baseline_value=baseline_value)))
+                        assert z_i_k.shape == (4 - i,)
 
         def per_param_callable(module_name, param_name, tags):
             if 'baseline' in tags:
