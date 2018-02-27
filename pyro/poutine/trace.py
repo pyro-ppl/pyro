@@ -21,12 +21,14 @@ def _warn_if_nan(name, value):
 
 class Trace(object):
     """
-    TODO docs
+    Execution trace data structure.
     """
 
     def __init__(self, graph_type=None):
         """
-        TODO docs, args
+        :param string graph_type: string specifying the kind of trace graph to construct
+
+        Constructor. Stores graph_type attribute and creates data dictionaries.
         """
         if graph_type is None:
             graph_type = "flat"
@@ -51,6 +53,12 @@ class Trace(object):
         return iter(self.edges[node])
 
     def add_node(self, site_name, **kwargs):
+        """
+        :param string site_name: the name of the site to be added
+
+        Adds a site with metadata in the kwargs to the trace.
+        Raises an error when attempting to add a duplicate sample node.
+        """
         # XXX should do more validation than this
         if kwargs["type"] != "param":
             assert site_name not in self, \
@@ -59,10 +67,22 @@ class Trace(object):
         self.edges[site_name] = {}
 
     def remove_node(self, site_name):
+        """
+        :param string site_name: the name of the site to be removed
+
+        Deletes node site_name and any edges it belongs to.
+        """
         self.nodes.pop(site_name, None)
         self.edges.pop(site_name, None)
 
     def add_edge(self, node_from, node_to, **kwargs):
+        """
+        :param string node_from: the name of the parent site
+        :param string node_to: the name of the child site
+
+        Adds an edge with optional metadata to the trace.
+        Both sites must already be in the trace.
+        """
         assert node_from in self, \
             "node_from {} not in trace".format(node_from)
         assert node_to in self, \
@@ -72,6 +92,9 @@ class Trace(object):
         self.edges[node_from][node_to] = dict(**kwargs)
 
     def copy(self):
+        """
+        Makes a shallow copy of self with nodes and edges preserved.
+        """
         new_trace = Trace(graph_type=self.graph_type)
         new_trace.graph.update(self.graph.copy())
         new_trace.nodes.update(self.nodes.copy())
@@ -79,11 +102,17 @@ class Trace(object):
         return new_trace
 
     def iter_edges(self):
+        """
+        Iterates (parent, child) pairs corresponding to edges in the trace.
+        """
         for node_from in self.edges:
             for node_to in self.edges[node_from]:
                 yield (node_from, node_to)
 
     def topological_sort(self):
+        """
+        Computes topological ordering of sites in the trace.
+        """
         indegree_map = {node: 0 for node in self.nodes}
         for node_from, node_to in self.iter_edges():
             indegree_map[node_to] += 1
