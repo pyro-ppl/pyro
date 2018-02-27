@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 import gc
 
-import networkx as nx
 import pytest
 import torch
 from torch.autograd import Variable
@@ -56,21 +55,6 @@ def test_dict_copy():
         counts.append(count_objects_of_type(Foo))
 
     assert set(counts) == set([1]), counts
-
-
-def test_networkx_copy():
-    counts = []
-    gc.collect()
-    gc.collect()
-    g = nx.DiGraph()
-    expected = count_objects_of_type(nx.DiGraph)
-    for _ in range(10):
-        h = g.fresh_copy()
-        h.__dict__.clear()
-        del h
-        counts.append(count_objects_of_type(nx.DiGraph))
-
-    assert set(counts) == set([expected]), counts
 
 
 def test_copy():
