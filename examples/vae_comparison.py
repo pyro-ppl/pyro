@@ -166,7 +166,7 @@ class PytorchVAEImpl(VAE):
         if self.mode == TRAIN:
             loss.backward()
             self.optimizer.step()
-        return loss.data[0]
+        return loss.item()
 
     def initialize_optimizer(self, lr=1e-3):
         model_params = itertools.chain(self.vae_encoder.parameters(), self.vae_decoder.parameters())

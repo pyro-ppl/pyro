@@ -12,7 +12,7 @@ from pyro.util import is_nan, is_inf
 
 def _warn_if_nan(name, value):
     if isinstance(value, Variable):
-        value = value.data[0]
+        value = value.item()
     if is_nan(value):
         warnings.warn("Encountered NAN log_pdf at site '{}'".format(name))
     if is_inf(value) and value > 0:

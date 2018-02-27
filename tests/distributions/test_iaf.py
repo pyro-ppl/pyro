@@ -75,7 +75,7 @@ class AutoRegressiveNNTests(TestCase):
                     epsilon_vector = torch.zeros(1, input_dim)
                     epsilon_vector[0, j] = self.epsilon
                     delta = (arn(x + Variable(epsilon_vector)) - arn(x)) / self.epsilon
-                    jacobian[j, k] = float(delta[0, k + output_index * input_dim].data.cpu().numpy()[0])
+                    jacobian[j, k] = float(delta[0, k + output_index * input_dim])
 
             permutation = arn.get_permutation()
             permuted_jacobian = jacobian.clone()

@@ -70,12 +70,12 @@ def test_exponential_elbo(rate, factor):
 
     grads = []
     for guide in [guide1, guide2]:
-        grads.append(compute_elbo_grad(model, guide, [rates])[0].data)
+        grads.append(compute_elbo_grad(model, guide, [rates])[0])
     expected, actual = grads
     assert_equal(actual.mean(), expected.mean(), prec=0.05, msg='bad grad for rate')
 
-    actual = compute_elbo_grad(model, guide2, [factors])[0].data
-    assert_equal(actual.mean(), 0.0, prec=0.05, msg='bad grad for factor')
+    actual = compute_elbo_grad(model, guide2, [factors])[0]
+    assert_equal(actual.mean().item(), 0.0, prec=0.05, msg='bad grad for factor')
 
 
 @pytest.mark.parametrize('alpha', [1.0, 2.0, 5.0])
@@ -149,8 +149,8 @@ def test_shape_augmented_beta(alpha, beta):
     z = dist.rsample()
     cost = z.sum()
     (cost + cost.detach() * dist.score_parts(z)[1]).backward()
-    mean_alpha_grad = alphas.grad.data.mean()
-    mean_beta_grad = betas.grad.data.mean()
+    mean_alpha_grad = alphas.grad.data.mean().item()
+    mean_beta_grad = betas.grad.data.mean().item()
     expected_alpha_grad = beta / (alpha + beta) ** 2
     expected_beta_grad = -alpha / (alpha + beta) ** 2
     assert_equal(mean_alpha_grad, expected_alpha_grad, prec=0.01, msg='bad grad for alpha')

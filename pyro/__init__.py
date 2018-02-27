@@ -279,7 +279,9 @@ def irange(name, size, subsample_size=None, subsample=None, use_cuda=None):
             for i in subsample:
                 indep_context.next_context()
                 with indep_context:
-                    yield i
+                    # convert to python numeric type as functions like torch.ones(*args)
+                    # do not work with dim 0 torch.Tensor instances.
+                    yield i.item()
 
 
 def map_data(name, data, fn, batch_size=None, batch_dim=0, use_cuda=None):

@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 def param_mse(name, target):
-    return torch.sum(torch.pow(target - pyro.param(name), 2.0)).data.cpu().numpy()[0]
+    return torch.sum(torch.pow(target - pyro.param(name), 2.0)).data.cpu().item()
 
 
 @pytest.mark.stage("integration", "integration_batch_1")

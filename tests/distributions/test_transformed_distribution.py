@@ -72,7 +72,7 @@ def test_mean_and_var(lognormal):
     torch_std = torch.std(torch_samples, 0)
     analytic_mean = lognormal.pyro_dist(**dist_params).analytic_mean()
     analytic_std = lognormal.pyro_dist(**dist_params).analytic_var() ** 0.5
-    precision = analytic_mean.max().data[0] * 0.05
+    precision = analytic_mean.max().item() * 0.05
     assert_equal(torch_mean, analytic_mean, prec=precision)
     assert_equal(torch_std, analytic_std, prec=precision)
 
@@ -87,11 +87,11 @@ def test_log_pdf(lognormal):
     normal_dist = dist.Normal(mu_z, sigma_z)
     trans_dist = get_transformed_dist(normal_dist, mu_lognorm, sigma_lognorm)
     test_data = lognormal.get_test_data(0)
-    log_px_torch = trans_dist.log_prob(test_data).sum().data[0]
+    log_px_torch = trans_dist.log_prob(test_data).sum().item()
     log_px_np = sp.lognorm.logpdf(
         test_data.data.cpu().numpy(),
         sigma_lognorm.data.cpu().numpy(),
-        scale=np.exp(mu_lognorm.data.cpu().numpy())).sum()
+        scale=np.exp(mu_lognorm)).sum()
     assert_equal(log_px_torch, log_px_np, prec=1e-4)
 
 
