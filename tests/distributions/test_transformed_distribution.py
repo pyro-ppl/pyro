@@ -45,7 +45,7 @@ EXAMPLES = list(map(make_lognormal, [
 
 
 def unwrap_variable(x):
-    return x.data.cpu().numpy()
+    return x.detach().cpu().numpy()
 
 
 def AffineExp(affine_b, affine_a):
@@ -89,8 +89,8 @@ def test_log_pdf(lognormal):
     test_data = lognormal.get_test_data(0)
     log_px_torch = trans_dist.log_prob(test_data).sum().item()
     log_px_np = sp.lognorm.logpdf(
-        test_data.data.cpu().numpy(),
-        sigma_lognorm.data.cpu().numpy(),
+        test_data.detach().cpu().numpy(),
+        sigma_lognorm.detach().cpu().numpy(),
         scale=np.exp(mu_lognorm)).sum()
     assert_equal(log_px_torch, log_px_np, prec=1e-4)
 
@@ -105,11 +105,11 @@ def test_log_prob(lognormal):
     normal_dist = dist.Normal(mu_z, sigma_z)
     trans_dist = get_transformed_dist(normal_dist, mu_lognorm, sigma_lognorm)
     test_data = lognormal.get_test_data(0)
-    log_px_torch = trans_dist.log_prob(test_data).data.cpu().numpy()
+    log_px_torch = trans_dist.log_prob(test_data).detach().cpu().numpy()
     log_px_np = sp.lognorm.logpdf(
-        test_data.data.cpu().numpy(),
-        sigma_lognorm.data.cpu().numpy(),
-        scale=np.exp(mu_lognorm.data.cpu().numpy()))
+        test_data.detach().cpu().numpy(),
+        sigma_lognorm.detach().cpu().numpy(),
+        scale=np.exp(mu_lognorm.detach().cpu().numpy()))
     assert_equal(log_px_torch, log_px_np, prec=1e-4)
 
 

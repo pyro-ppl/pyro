@@ -134,7 +134,7 @@ class VAE(object):
                 n = min(x.size(0), 8)
                 comparison = torch.cat([x[:n],
                                         recon_x.view(self.args.batch_size, 1, 28, 28)[:n]])
-                save_image(comparison.data.cpu(),
+                save_image(comparison.detach().cpu(),
                            os.path.join(OUTPUT_DIR, 'reconstruction_' + str(epoch) + '.png'),
                            nrow=n)
 

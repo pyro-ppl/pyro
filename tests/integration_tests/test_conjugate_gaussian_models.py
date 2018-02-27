@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 def param_mse(name, target):
-    return torch.sum(torch.pow(target - pyro.param(name), 2.0)).data.cpu().item()
+    return torch.sum(torch.pow(target - pyro.param(name), 2.0)).detach().cpu().item()
 
 
 @pytest.mark.stage("integration", "integration_batch_1")
@@ -107,7 +107,7 @@ class GaussianChainTests(TestCase):
                     (self.N, reparameterized, n_repa_nodes, self.N))
         if self.N < 0:
             def array_to_string(y):
-                return str(map(lambda x: "%.3f" % x.data.cpu().numpy()[0], y))
+                return str(map(lambda x: "%.3f" % x.detach().cpu().numpy()[0], y))
 
             logger.debug("lambdas: " + array_to_string(self.lambdas))
             logger.debug("target_mus: " + array_to_string(self.target_mus[1:]))

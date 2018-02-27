@@ -62,14 +62,14 @@ def test_nuts_conjugate_gaussian(fixture,
         logger.info(latent_mu)
         logger.info('Posterior mean (expected) - {}'.format(param_name))
         logger.info(expected_mean)
-        assert_equal(rmse(latent_mu, expected_mean), 0.0, prec=mean_tol)
+        assert_equal(rmse(latent_mu, expected_mean).item(), 0.0, prec=mean_tol)
 
         # Actual vs expected posterior precisions for the latents
         logger.info('Posterior std (actual) - {}'.format(param_name))
         logger.info(latent_std)
         logger.info('Posterior std (expected) - {}'.format(param_name))
         logger.info(expected_std)
-        assert_equal(rmse(latent_std, expected_std), 0.0, prec=std_tol)
+        assert_equal(rmse(latent_std, expected_std).item(), 0.0, prec=std_tol)
 
 
 def test_logistic_regression():

@@ -40,7 +40,7 @@ class TestDelta(TestCase):
         assert dist.Delta(self.v).log_prob(self.batch_test_data_3).size() == (4, 1)
 
     def test_mean_and_var(self):
-        torch_samples = [dist.Delta(self.v).sample().data.cpu().numpy()
+        torch_samples = [dist.Delta(self.v).sample().detach().cpu().numpy()
                          for _ in range(self.n_samples)]
         torch_mean = np.mean(torch_samples)
         torch_var = np.var(torch_samples)

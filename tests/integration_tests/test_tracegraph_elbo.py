@@ -602,7 +602,7 @@ class RaoBlackwellizationTests(TestCase):
                     mean_1_error = torch.sum(torch.pow(pyro.param("mean_1_%d" % k), 2.0))
                     mean_2_error = torch.sum(torch.pow(pyro.param("mean_2_%d" % k), 2.0))
                     superfluous_error = torch.max(torch.max(mean_0_error, mean_1_error), mean_2_error)
-                    superfluous_errors.append(superfluous_error.data.cpu().numpy())
+                    superfluous_errors.append(superfluous_error.detach().cpu().numpy())
 
             if step % 500 == 0:
                 logger.debug("mu error, log(sigma) error:  %.4f, %.4f" % (mu_error, log_sig_error))

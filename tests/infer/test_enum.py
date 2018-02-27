@@ -214,8 +214,8 @@ def test_bern_elbo_gradient(enum_discrete, trace_graph):
     expected_grad = grad(kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.25)), [q])[0]
 
     assert_equal(actual_grad, expected_grad, prec=0.1, msg="".join([
-        "\nexpected = {}".format(expected_grad.data.cpu().numpy()),
-        "\n  actual = {}".format(actual_grad.data.cpu().numpy()),
+        "\nexpected = {}".format(expected_grad.detach().cpu().numpy()),
+        "\n  actual = {}".format(actual_grad.detach().cpu().numpy()),
     ]))
 
 
@@ -250,8 +250,8 @@ def test_bern_bern_elbo_gradient(enum_discrete, trace_graph):
     expected_grad = 2 * grad(kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.25)), [q])[0]
 
     assert_equal(actual_grad, expected_grad, prec=0.1, msg="".join([
-        "\nexpected = {}".format(expected_grad.data.cpu().numpy()),
-        "\n  actual = {}".format(actual_grad.data.cpu().numpy()),
+        "\nexpected = {}".format(expected_grad.detach().cpu().numpy()),
+        "\n  actual = {}".format(actual_grad.detach().cpu().numpy()),
     ]))
 
 
@@ -289,8 +289,8 @@ def test_berns_elbo_gradient(enumerate1, enumerate2, enumerate3):
     expected_grad = grad(kl, [p])[0]
 
     assert_equal(actual_grad, expected_grad, prec=prec, msg="".join([
-        "\nexpected = {}".format(expected_grad.data.cpu().numpy()),
-        "\n  actual = {}".format(actual_grad.data.cpu().numpy()),
+        "\nexpected = {}".format(expected_grad.detach().cpu().numpy()),
+        "\n  actual = {}".format(actual_grad.detach().cpu().numpy()),
     ]))
 
 
@@ -330,6 +330,6 @@ def test_categoricals_elbo_gradient(enumerate1, enumerate2, enumerate3, max_iara
 
     for actual_grad, expected_grad in zip(actual_grads, expected_grads):
         assert_equal(actual_grad, expected_grad, prec=0.001, msg="".join([
-            "\nexpected = {}".format(expected_grad.data.cpu().numpy()),
-            "\n  actual = {}".format(actual_grad.data.cpu().numpy()),
+            "\nexpected = {}".format(expected_grad.detach().cpu().numpy()),
+            "\n  actual = {}".format(actual_grad.detach().cpu().numpy()),
         ]))
