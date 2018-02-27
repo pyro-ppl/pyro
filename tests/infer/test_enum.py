@@ -368,3 +368,49 @@ def test_iarange_elbo_gradient(iarange_dim, enum_discrete):
         "\nexpected = {}".format(expected_grad.data.cpu().numpy()),
         "\n  actual = {}".format(actual_grad.data.cpu().numpy()),
     ]))
+
+
+@pytest.mark.parametrize("enum_discrete", [None, "sequential", "parallel"])
+@pytest.mark.parametrize("pi1", [0.33, 0.43])
+@pytest.mark.parametrize("pi2", [0.55, 0.27])
+def test_non_mean_field_bern_bern_elbo_gradient(enum_discrete, pi1, pi2):
+    pyro.clear_param_store()
+    if not enum_discrete:
+        num_particles = 1000  # Monte Carlo sample
+    else:
+        num_particles = 1  # a single particle should be exact
+
+    def model():
+        y = pyro.sample("y", dist.Bernoulli(0.33))
+        pyro.sample("z", dist.Bernoulli(0.55 * y + 0.10))
+
+    def guide():
+        q1 = pyro.param("q1", variable(pi1, requires_grad=True))
+        q2 = pyro.param("q2", variable(pi2, requires_grad=True))
+        y = pyro.sample("y", dist.Bernoulli(q1))
+        pyro.sample("z", dist.Bernoulli(q2 * y + 0.10))
+
+    logger.info("Computing gradients using surrogate loss")
+    elbo = Trace_ELBO(num_particles=num_particles, max_iarange_nesting=0)
+    elbo.loss_and_grads(model, config_enumerate(guide, default=enum_discrete))
+    actual_grad_q1 = pyro.param('q1').grad
+    actual_grad_q2 = pyro.param('q2').grad
+
+    logger.info("Computing analytic gradients")
+    q1 = variable(pi1, requires_grad=True)
+    q2 = variable(pi2, requires_grad=True)
+    elbo = kl_divergence(dist.Bernoulli(q1), dist.Bernoulli(0.33))
+    elbo = elbo + q1 * kl_divergence(dist.Bernoulli(q2 + 0.10), dist.Bernoulli(0.65))
+    elbo = elbo + (1.0 - q1) * kl_divergence(dist.Bernoulli(0.10), dist.Bernoulli(0.10))
+    expected_grad_q1, expected_grad_q2 = grad(elbo, [q1, q2])
+
+    prec = 0.03 if enum_discrete is None else 0.001
+
+    assert_equal(actual_grad_q1, expected_grad_q1, prec=prec, msg="{q1}".join([
+        "\nexpected = {}".format(expected_grad_q1.data.cpu().numpy()),
+        "\n  actual = {}".format(actual_grad_q1.data.cpu().numpy()),
+    ]))
+    assert_equal(actual_grad_q2, expected_grad_q2, prec=prec, msg="{q2}".join([
+        "\nexpected = {}".format(expected_grad_q2.data.cpu().numpy()),
+        "\n  actual = {}".format(actual_grad_q2.data.cpu().numpy()),
+    ]))
