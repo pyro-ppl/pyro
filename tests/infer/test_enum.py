@@ -414,3 +414,109 @@ def test_non_mean_field_bern_bern_elbo_gradient(enum_discrete, pi1, pi2):
         "\nexpected = {}".format(expected_grad_q2.data.cpu().numpy()),
         "\n  actual = {}".format(actual_grad_q2.data.cpu().numpy()),
     ]))
+
+
+@pytest.mark.xfail(reason="Expensive; suggestion: run during large refactors")
+@pytest.mark.parametrize("enum_discrete", [None, "sequential", "parallel"])
+@pytest.mark.parametrize("pi1", [0.33, 0.44])
+@pytest.mark.parametrize("pi2", [0.55, 0.39])
+@pytest.mark.parametrize("pi3", [0.22, 0.29])
+def test_non_mean_field_bern_normal_elbo_gradient(enum_discrete, pi1, pi2, pi3, include_z=True):
+    pyro.clear_param_store()
+    if enum_discrete is None:
+        num_particles = 3000
+    else:
+        num_particles = 1000
+
+    def model():
+        q3 = pyro.param("q3", variable(pi3, requires_grad=True))
+        y = pyro.sample("y", dist.Bernoulli(q3))
+        if include_z:
+            pyro.sample("z", dist.Normal(0.55 * y + q3, 1.0))
+
+    def guide():
+        q1 = pyro.param("q1", variable(pi1, requires_grad=True))
+        q2 = pyro.param("q2", variable(pi2, requires_grad=True))
+        y = pyro.sample("y", dist.Bernoulli(q1), infer={"enumerate": enum_discrete})
+        if include_z:
+            pyro.sample("z", dist.Normal(q2 * y + 0.10, 1.0))
+
+    logger.info("Computing gradients using surrogate loss")
+    elbo = Trace_ELBO(num_particles=num_particles, max_iarange_nesting=0)
+    elbo.loss_and_grads(model, guide)
+    actual_grad_q1 = pyro.param('q1').grad
+    if include_z:
+        actual_grad_q2 = pyro.param('q2').grad
+    actual_grad_q3 = pyro.param('q3').grad
+
+    logger.info("Computing analytic gradients")
+    q1 = variable(pi1, requires_grad=True)
+    q2 = variable(pi2, requires_grad=True)
+    q3 = variable(pi3, requires_grad=True)
+    elbo = kl_divergence(dist.Bernoulli(q1), dist.Bernoulli(q3))
+    if include_z:
+        elbo = elbo + q1 * kl_divergence(dist.Normal(q2 + 0.10, 1.0), dist.Normal(q3 + 0.55, 1.0))
+        elbo = elbo + (1.0 - q1) * kl_divergence(dist.Normal(0.10, 1.0), dist.Normal(q3, 1.0))
+        expected_grad_q1, expected_grad_q2, expected_grad_q3 = grad(elbo, [q1, q2, q3])
+    else:
+        expected_grad_q1, expected_grad_q3 = grad(elbo, [q1, q3])
+
+    prec = 0.04 if enum_discrete is None else 0.02
+
+    assert_equal(actual_grad_q1, expected_grad_q1, prec=prec, msg="{q1}".join([
+        "\nexpected = {}".format(expected_grad_q1.data.cpu().numpy()),
+        "\n  actual = {}".format(actual_grad_q1.data.cpu().numpy()),
+    ]))
+    if include_z:
+        assert_equal(actual_grad_q2, expected_grad_q2, prec=prec, msg="{q2}".join([
+            "\nexpected = {}".format(expected_grad_q2.data.cpu().numpy()),
+            "\n  actual = {}".format(actual_grad_q2.data.cpu().numpy()),
+        ]))
+    assert_equal(actual_grad_q3, expected_grad_q3, prec=prec, msg="{q3}".join([
+        "\nexpected = {}".format(expected_grad_q3.data.cpu().numpy()),
+        "\n  actual = {}".format(actual_grad_q3.data.cpu().numpy()),
+    ]))
+
+
+# this test uses the non-enumerated MC estimator as ground truth
+@pytest.mark.xfail(reason="Expensive; suggestion: run during large refactors")
+@pytest.mark.parametrize("pi1", [0.33, 0.41])
+@pytest.mark.parametrize("pi2", [0.44, 0.17])
+@pytest.mark.parametrize("pi3", [0.22, 0.29])
+def test_non_mean_field_normal_bern_elbo_gradient(pi1, pi2, pi3):
+
+    def model():
+        q3 = pyro.param("q3", variable(pi3, requires_grad=True))
+        q4 = pyro.param("q4", variable(0.5 * (pi1 + pi2), requires_grad=True))
+        z = pyro.sample("z", dist.Normal(q3, 1.0))
+        zz = torch.exp(z) / (1.0 + torch.exp(z))
+        pyro.sample("y", dist.Bernoulli(q4 * zz))
+
+    def guide():
+        q1 = pyro.param("q1", variable(pi1, requires_grad=True))
+        q2 = pyro.param("q2", variable(pi2, requires_grad=True))
+        z = pyro.sample("z", dist.Normal(q2, 1.0))
+        zz = torch.exp(z) / (1.0 + torch.exp(z))
+        pyro.sample("y", dist.Bernoulli(q1 * zz))
+
+    qs = ['q1', 'q2', 'q3', 'q4']
+    results = {}
+
+    for ed, num_particles in zip([None, 'parallel', 'sequential'], [30000, 20000, 20000]):
+        pyro.clear_param_store()
+        elbo = Trace_ELBO(num_particles=num_particles, max_iarange_nesting=0)
+        elbo.loss_and_grads(model, config_enumerate(guide, default=ed))
+        results[str(ed)] = {}
+        for q in qs:
+            results[str(ed)]['actual_grad_%s' % q] = pyro.param(q).grad.data.cpu().numpy()
+
+    prec = 0.03
+    for ed in ['parallel', 'sequential']:
+        print('\n*** %s ***' % ed)
+        for q in qs:
+            print("[%s] actual: " % q, results[ed]['actual_grad_%s' % q])
+
+            msg = "{}".format(q).join(["\nexpected (MC estimate) = {}".format(results['None']['actual_grad_%s' % q]),
+                                      "\n  actual ({} estimate)= {}".format(ed, results[ed]['actual_grad_%s' % q])])
+            assert_equal(results[ed]['actual_grad_%s' % q], results['None']['actual_grad_%s' % q],
+                         prec=prec, msg=msg)
