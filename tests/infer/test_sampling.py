@@ -80,7 +80,7 @@ class SearchTest(HMMSamplingTestCase):
 
         tr_latents = set()
         for tr, _ in posterior._traces():
-            tr_latents.add(tuple([tr.nodes[name]["value"].view(-1).data[0]
+            tr_latents.add(tuple([tr.nodes[name]["value"].view(-1).item()
                                   for name in tr.nodes.keys()
                                   if tr.nodes[name]["type"] == "sample" and
                                   not tr.nodes[name]["is_observed"]]))
@@ -94,7 +94,7 @@ class SearchTest(HMMSamplingTestCase):
 
         tr_rets = []
         for v in values:
-            tr_rets.append(v.view(-1).data[0])
+            tr_rets.append(v.view(-1).item())
 
         assert len(tr_rets) == 4
         for i in range(4):
@@ -110,8 +110,8 @@ class ImportanceTest(NormalNormalSamplingTestCase):
         posterior_samples = [marginal() for i in range(1000)]
         posterior_mean = torch.mean(torch.cat(posterior_samples))
         posterior_stddev = torch.std(torch.cat(posterior_samples), 0)
-        assert_equal(0, torch.norm(posterior_mean - self.mu_mean).data[0], prec=0.01)
-        assert_equal(0, torch.norm(posterior_stddev - self.mu_stddev).data[0], prec=0.1)
+        assert_equal(0, torch.norm(posterior_mean - self.mu_mean).item(), prec=0.01)
+        assert_equal(0, torch.norm(posterior_stddev - self.mu_stddev).item(), prec=0.1)
 
     @pytest.mark.init(rng_seed=0)
     def test_importance_prior(self):
@@ -120,5 +120,5 @@ class ImportanceTest(NormalNormalSamplingTestCase):
         posterior_samples = [marginal() for i in range(1000)]
         posterior_mean = torch.mean(torch.cat(posterior_samples))
         posterior_stddev = torch.std(torch.cat(posterior_samples), 0)
-        assert_equal(0, torch.norm(posterior_mean - self.mu_mean).data[0], prec=0.01)
-        assert_equal(0, torch.norm(posterior_stddev - self.mu_stddev).data[0], prec=0.1)
+        assert_equal(0, torch.norm(posterior_mean - self.mu_mean).item(), prec=0.01)
+        assert_equal(0, torch.norm(posterior_stddev - self.mu_stddev).item(), prec=0.1)

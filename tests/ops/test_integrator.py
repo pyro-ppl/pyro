@@ -125,8 +125,8 @@ def test_energy_conservation(example):
                                args.num_steps)
     energy_initial = model.energy(args.q_i, args.p_i)
     energy_final = model.energy(q_f, p_f)
-    logger.info("initial energy: {}".format(energy_initial.data[0]))
-    logger.info("final energy: {}".format(energy_final.data[0]))
+    logger.info("initial energy: {}".format(energy_initial.item()))
+    logger.info("final energy: {}".format(energy_final.item()))
     assert_equal(energy_final, energy_initial)
 
 

@@ -65,7 +65,7 @@ def main(args):
 
     print('Parameters:')
     for name in sorted(pyro.get_param_store().get_all_param_names()):
-        print('{} = {}'.format(name, pyro.param(name).data.cpu().numpy()))
+        print('{} = {}'.format(name, pyro.param(name).detach().cpu().numpy()))
 
 
 if __name__ == '__main__':

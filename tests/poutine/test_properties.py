@@ -90,7 +90,7 @@ tr_bernoulli_normal.add_node("bern_0", type="sample", is_observed=False, value=n
                 do={'data': {'bern_0': ng_ones(1)}})
 def bernoulli_normal_model():
     bern_0 = pyro.sample('bern_0', dist.Bernoulli(ng_zeros(1) * 1e-2))
-    mu = ng_ones(1) if bern_0.data[0] else -ng_ones(1)
+    mu = ng_ones(1) if bern_0.item() else -ng_ones(1)
     normal_0 = ng_ones(1)
     pyro.sample('normal_0', dist.Normal(mu, ng_ones(1) * 1e-2),
                 obs=normal_0)

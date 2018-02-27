@@ -197,9 +197,14 @@ class ReshapedDistribution(TorchDistribution):
         return ScoreParts(log_pdf, score_function, entropy_term)
 
     def enumerate_support(self):
+        if self.extra_event_dims:
+            raise NotImplementedError("Pyro does not enumerate over cartesian products")
+
         samples = self.base_dist.enumerate_support()
         if not self.sample_shape:
             return samples
+
+        # Shift enumeration dim to correct location.
         enum_shape, base_shape = samples.shape[:1], samples.shape[1:]
         samples = samples.contiguous()
         samples = samples.view(enum_shape + (1,) * len(self.sample_shape) + base_shape)
