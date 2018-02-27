@@ -102,4 +102,4 @@ def test_batch_log_dims(dim, ps):
     ps = modify_params_using_dims(ps, dim)
     support = dist.OneHotCategorical(ps).enumerate_support()
     log_prob = dist.OneHotCategorical(ps).log_prob(support)
-    assert_equal(log_prob.data.cpu().numpy(), expected_log_pdf)
+    assert_equal(log_prob.detach().cpu().numpy(), expected_log_pdf)

@@ -191,9 +191,9 @@ def main(args):
                         for index in reco_indices:
                             test_img = x[index, :]
                             reco_img = vae.reconstruct_img(test_img)
-                            vis.image(test_img.contiguous().view(28, 28).data.cpu().numpy(),
+                            vis.image(test_img.contiguous().view(28, 28).detach().cpu().numpy(),
                                       opts={'caption': 'test image'})
-                            vis.image(reco_img.contiguous().view(28, 28).data.cpu().numpy(),
+                            vis.image(reco_img.contiguous().view(28, 28).detach().cpu().numpy(),
                                       opts={'caption': 'reconstructed image'})
 
             # report test diagnostics

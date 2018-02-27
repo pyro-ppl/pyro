@@ -26,7 +26,7 @@ def test_clipped_softmax(Tensor):
     logger.info("softmax_ps = {}".format(softmax_ps))
     assert (softmax_ps.data >= epsilon).all()
     assert (softmax_ps.data <= 1 - epsilon).all()
-    assert_equal(softmax_ps.data.sum(), 1.0)
+    assert_equal(softmax_ps.sum().item(), 1.0)
 
 
 @pytest.mark.parametrize('Tensor', [torch.FloatTensor, torch.DoubleTensor])
@@ -41,5 +41,5 @@ def test_clipped_sigmoid(Tensor):
     sigmoid_ps = clipped_sigmoid(ps)
     logger.info("epsilon = {}".format(epsilon))
     logger.info("sigmoid_ps = {}".format(sigmoid_ps))
-    assert (sigmoid_ps.data >= epsilon).all()
-    assert (sigmoid_ps.data <= 1 - epsilon).all()
+    assert (sigmoid_ps >= epsilon).all()
+    assert (sigmoid_ps <= 1 - epsilon).all()

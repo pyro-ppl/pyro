@@ -35,7 +35,7 @@ def draw_one(imgarr, z_arr):
     # Note that this clipping makes the visualisation somewhat
     # misleading, as it incorrectly suggests objects occlude one
     # another.
-    clipped = np.clip(imgarr.data.cpu().numpy(), 0, 1)
+    clipped = np.clip(imgarr.detach().cpu().numpy(), 0, 1)
     img = arr2img(clipped).convert('RGB')
     draw = ImageDraw.Draw(img)
     for k, z in enumerate(z_arr):

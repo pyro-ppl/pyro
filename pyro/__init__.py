@@ -267,18 +267,18 @@ def irange(name, size, subsample_size=None, subsample=None, use_cuda=None):
     See `SVI Part II <http://pyro.ai/examples/svi_part_ii.html>`_ for an extended discussion.
     """
     size, subsample_size, subsample = _subsample(name, size, subsample_size, subsample, use_cuda)
-    if isinstance(subsample, Variable):
-        subsample = subsample.data
     if not am_i_wrapped():
         for i in subsample:
-            yield i
+            yield i.item() if isinstance(i, Variable) else i
     else:
         indep_context = poutine.indep(name, vectorized=False, size=subsample_size)
         with poutine.scale(None, size / subsample_size):
             for i in subsample:
                 indep_context.next_context()
                 with indep_context:
-                    yield i
+                    # convert to python numeric type as functions like torch.ones(*args)
+                    # do not work with dim 0 torch.Tensor instances.
+                    yield i.item() if isinstance(i, Variable) else i
 
 
 def map_data(name, data, fn, batch_size=None, batch_dim=0, use_cuda=None):

@@ -112,7 +112,7 @@ def test_elbo_mapdata(batch_size, map_type):
                 2.0))
 
         if k % 500 == 0:
-            logger.debug("errors - {}, {}".format(mu_error.data.cpu().numpy()[0], log_sig_error.data.cpu().numpy()[0]))
+            logger.debug("errors - {}, {}".format(mu_error, log_sig_error))
 
-    assert_equal(Variable(torch.zeros(1)), mu_error, prec=0.05)
-    assert_equal(Variable(torch.zeros(1)), log_sig_error, prec=0.06)
+    assert_equal(mu_error.item(), 0, prec=0.05)
+    assert_equal(log_sig_error.item(), 0, prec=0.06)
