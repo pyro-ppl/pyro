@@ -278,6 +278,7 @@ def test_irange_in_guide_not_model_error(trace_graph, subsample_size):
     assert_error(model, guide, trace_graph=trace_graph)
 
 
+@pytest.mark.xfail(reason="RaoBlackwellization checks in trace_poutine need to be fixed to catch this")
 def test_iarange_irange_warning():
 
     def model():
@@ -313,40 +314,92 @@ def test_irange_iarange_ok(trace_graph):
     assert_ok(model, guide, trace_graph=trace_graph)
 
 
-def test_nested_iarange_iarange_warning():
+@pytest.mark.parametrize('trace_graph', [False, True])
+def test_nested_iarange_iarange_ok(trace_graph):
 
     def model():
-        p = Variable(torch.Tensor([0.5]))
-        with pyro.iarange("iarange_0", 10, 5) as ind1:
-            with pyro.iarange("iarange_1", 10, 5) as ind2:
-                pyro.sample("x", dist.Bernoulli(p).reshape(sample_shape=[len(ind1) * len(ind2)]))
+        p = Variable(torch.Tensor([0.5]), requires_grad=True)
+        with pyro.iarange("iarange_outer", 10, 5) as ind_outer:
+            pyro.sample("w", dist.Bernoulli(p).reshape(sample_shape=[len(ind_outer), 1]))
+            with pyro.iarange("iarange_inner", 11, 6) as ind_inner:
+                pyro.sample("x", dist.Bernoulli(p).reshape(sample_shape=[1, 1]))  # broadcasting is ok
+                pyro.sample("y", dist.Bernoulli(p).reshape(sample_shape=[len(ind_inner)]))
+                pyro.sample("z", dist.Bernoulli(p).reshape(sample_shape=[len(ind_outer), len(ind_inner)]))
 
-    def guide():
-        p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
-        with pyro.iarange("iarange_0", 10, 5) as ind1:
-            with pyro.iarange("iarange_1", 10, 5) as ind2:
-                pyro.sample("x", dist.Bernoulli(p).reshape(sample_shape=[len(ind1) * len(ind2)]))
-
-    assert_warning(model, guide, trace_graph=True)
+    assert_ok(model, model, trace_graph=trace_graph)
 
 
-def test_nonnested_iarange_iarange_warning():
+@pytest.mark.xfail(reason="https://github.com/uber/pyro/issues/370")
+@pytest.mark.parametrize('trace_graph', [False, True])
+def test_nested_iarange_iarange_dim_error_1(trace_graph):
 
     def model():
-        p = Variable(torch.Tensor([0.5]))
+        p = Variable(torch.Tensor([0.5]), requires_grad=True)
+        with pyro.iarange("iarange_outer", 10, 5) as ind_outer:
+            pyro.sample("x", dist.Bernoulli(p).reshape(sample_shape=[len(ind_outer)]))  # error here
+            with pyro.iarange("iarange_inner", 11, 6) as ind_inner:
+                pyro.sample("y", dist.Bernoulli(p).reshape(sample_shape=[len(ind_inner)]))
+                pyro.sample("z", dist.Bernoulli(p).reshape(sample_shape=[len(ind_outer), len(ind_inner)]))
+
+    assert_error(model, model, trace_graph=trace_graph)
+
+
+@pytest.mark.xfail(reason="https://github.com/uber/pyro/issues/370")
+@pytest.mark.parametrize('trace_graph', [False, True])
+def test_nested_iarange_iarange_dim_error_2(trace_graph):
+
+    def model():
+        p = Variable(torch.Tensor([0.5]), requires_grad=True)
+        with pyro.iarange("iarange_outer", 10, 5) as ind_outer:
+            pyro.sample("x", dist.Bernoulli(p).reshape(sample_shape=[len(ind_outer), 1]))
+            with pyro.iarange("iarange_inner", 11, 6) as ind_inner:
+                pyro.sample("y", dist.Bernoulli(p).reshape(sample_shape=[len(ind_outer)]))  # error here
+                pyro.sample("z", dist.Bernoulli(p).reshape(sample_shape=[len(ind_outer), len(ind_inner)]))
+
+    assert_error(model, model, trace_graph=trace_graph)
+
+
+@pytest.mark.xfail(reason="https://github.com/uber/pyro/issues/370")
+@pytest.mark.parametrize('trace_graph', [False, True])
+def test_nested_iarange_iarange_dim_error_3(trace_graph):
+
+    def model():
+        p = Variable(torch.Tensor([0.5]), requires_grad=True)
+        with pyro.iarange("iarange_outer", 10, 5) as ind_outer:
+            pyro.sample("x", dist.Bernoulli(p).reshape(sample_shape=[len(ind_outer), 1]))
+            with pyro.iarange("iarange_inner", 11, 6) as ind_inner:
+                pyro.sample("y", dist.Bernoulli(p).reshape(sample_shape=[len(ind_inner)]))
+                pyro.sample("z", dist.Bernoulli(p).reshape(sample_shape=[len(ind_inner), 1]))  # error here
+
+    assert_error(model, model, trace_graph=trace_graph)
+
+
+@pytest.mark.xfail(reason="https://github.com/uber/pyro/issues/370")
+@pytest.mark.parametrize('trace_graph', [False, True])
+def test_nested_iarange_iarange_dim_error_4(trace_graph):
+
+    def model():
+        p = Variable(torch.Tensor([0.5]), requires_grad=True)
+        with pyro.iarange("iarange_outer", 10, 5) as ind_outer:
+            pyro.sample("x", dist.Bernoulli(p).reshape(sample_shape=[len(ind_outer), 1]))
+            with pyro.iarange("iarange_inner", 11, 6) as ind_inner:
+                pyro.sample("y", dist.Bernoulli(p).reshape(sample_shape=[len(ind_inner)]))
+                pyro.sample("z", dist.Bernoulli(p).reshape(sample_shape=[len(ind_outer), len(ind_outer)]))  # error here
+
+    assert_error(model, model, trace_graph=trace_graph)
+
+
+@pytest.mark.parametrize('trace_graph', [False, True])
+def test_nonnested_iarange_iarange_ok(trace_graph):
+
+    def model():
+        p = Variable(torch.Tensor([0.5]), requires_grad=True)
         with pyro.iarange("iarange_0", 10, 5) as ind1:
             pyro.sample("x0", dist.Bernoulli(p).reshape(sample_shape=[len(ind1)]))
-        with pyro.iarange("iarange_1", 10, 5) as ind2:
+        with pyro.iarange("iarange_1", 11, 6) as ind2:
             pyro.sample("x1", dist.Bernoulli(p).reshape(sample_shape=[len(ind2)]))
 
-    def guide():
-        p = pyro.param("p", Variable(torch.Tensor([0.5]), requires_grad=True))
-        with pyro.iarange("iarange_0", 10, 5) as ind1:
-            pyro.sample("x0", dist.Bernoulli(p).reshape(sample_shape=[len(ind1)]))
-        with pyro.iarange("iarange_1", 10, 5) as ind2:
-            pyro.sample("x1", dist.Bernoulli(p).reshape(sample_shape=[len(ind2)]))
-
-    assert_warning(model, guide, trace_graph=True)
+    assert_ok(model, model, trace_graph=trace_graph)
 
 
 def test_three_indep_iarange_at_different_depths_ok():

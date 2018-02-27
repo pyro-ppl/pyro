@@ -15,6 +15,7 @@ def get_vectorized_map_data_info(trace):
 
     vectorized_map_data_info = {'rao-blackwellization-condition': True, 'warnings': set()}
     vec_md_stacks = set()
+    stack_dict = {}
 
     for name, node in nodes.items():
         if site_is_subsample(node):
@@ -22,6 +23,15 @@ def get_vectorized_map_data_info(trace):
         if node["type"] in ("sample", "param"):
             stack = tuple(node["cond_indep_stack"])
             vec_mds = [x for x in stack if x.vectorized]
+            stack_dict[name] = vec_mds
+
+    for name, node in nodes.items():
+        if site_is_subsample(node):
+            continue
+        if node["type"] in ("sample", "param"):
+            stack = tuple(node["cond_indep_stack"])
+            vec_mds = [x for x in stack if x.vectorized]
+            stack_dict[name] = vec_mds
             # check for nested vectorized map datas
             if len(vec_mds) > 1:
                 vectorized_map_data_info['rao-blackwellization-condition'] = False
@@ -58,15 +68,17 @@ def get_vectorized_map_data_info(trace):
                     vectorized_map_data_info['warnings'].add('there exist dependent iaranges')
                     break
 
+    vec_md_stacks = list(vec_md_stacks)
+    vectorized_map_data_info['vec_md_stacks'] = stack_dict
+
     # construct data structure consumed by tracegraph_kl_qp
-    if vectorized_map_data_info['rao-blackwellization-condition']:
-        vectorized_map_data_info['nodes'] = set()
-        for name, node in nodes.items():
-            if site_is_subsample(node):
-                continue
-            if node["type"] in ("sample", "param"):
-                if any(x.vectorized for x in node["cond_indep_stack"]):
-                    vectorized_map_data_info['nodes'].add(name)
+    vectorized_map_data_info['nodes'] = set()
+    for name, node in nodes.items():
+        if site_is_subsample(node):
+            continue
+        if node["type"] in ("sample", "param"):
+            if any(x.vectorized for x in node["cond_indep_stack"]):
+                vectorized_map_data_info['nodes'].add(name)
 
     return vectorized_map_data_info
 
