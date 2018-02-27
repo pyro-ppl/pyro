@@ -64,7 +64,7 @@ class Polynomial(DotProduct):
     :param int degree: Degree of this polynomial.
     """
 
-    def __init__(self, input_dim, variance=None, bias=None, degree=1, active_dims=None, name="Linear"):
+    def __init__(self, input_dim, variance=None, bias=None, degree=1, active_dims=None, name="Polynomial"):
         super(Polynomial, self).__init__(input_dim, variance, active_dims, name)
 
         if bias is None:

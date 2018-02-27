@@ -7,6 +7,14 @@ from torch.nn import Parameter
 from .kernel import Kernel
 
 
+def _torch_sqrt(x, eps=1e-18):
+    """
+    A convenient function to avoid the NaN gradient issue of ``torch.sqrt`` at 0.
+    """
+    # Ref: https://github.com/pytorch/pytorch/issues/2421
+    return (x + eps).sqrt()
+
+
 class Isotropy(Kernel):
     """
     Base kernel for a family of isotropic covariance functions which is a
@@ -52,6 +60,12 @@ class Isotropy(Kernel):
         XZ = scaled_X.matmul(scaled_Z.t())
         r2 = X2 - 2 * XZ + Z2.t()
         return r2
+
+    def _scaled_dist(self, X, Z=None):
+        """
+        Returns ``||(X-Z)/lengthscale||``.
+        """
+        return _torch_sqrt(self._square_scaled_dist(X, Z))
 
     def _diag(self, X):
         """
@@ -128,8 +142,7 @@ class Exponential(Isotropy):
             return self._diag(X)
 
         variance = self.get_param("variance")
-        r2 = self._square_scaled_dist(X, Z)
-        r = r2.sqrt()
+        r = self._scaled_dist(X, Z)
         return variance * torch.exp(-r)
 
 
@@ -154,8 +167,7 @@ class Matern32(Isotropy):
             return self._diag(X)
 
         variance = self.get_param("variance")
-        r2 = self._square_scaled_dist(X, Z)
-        r = r2.sqrt()
+        r = self._scaled_dist(X, Z)
         sqrt3_r = 3**0.5 * r
         return variance * (1 + sqrt3_r) * torch.exp(-sqrt3_r)
 
@@ -174,6 +186,6 @@ class Matern52(Isotropy):
 
         variance = self.get_param("variance")
         r2 = self._square_scaled_dist(X, Z)
-        r = r2.sqrt()
+        r = _torch_sqrt(r2)
         sqrt5_r = 5**0.5 * r
         return variance * (1 + sqrt5_r + (5/3) * r2) * torch.exp(-sqrt5_r)

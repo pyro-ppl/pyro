@@ -23,8 +23,7 @@ class Cosine(Isotropy):
             return self._diag(X)
 
         variance = self.get_param("variance")
-        r2 = self._square_scaled_dist(X, Z)
-        r = r2.sqrt()
+        r = self._scaled_dist(X, Z)
         return variance * torch.cos(r)
 
 
