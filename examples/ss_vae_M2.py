@@ -276,7 +276,7 @@ def get_accuracy(data_loader, classifier_fn, batch_size):
     for pred, act in zip(predictions, actuals):
         for i in range(pred.size(0)):
             v = torch.sum(pred[i] == act[i])
-            accurate_preds += (v.data[0] == 10)
+            accurate_preds += (v.item() == 10)
 
     # calculate the accuracy between 0 and 1
     accuracy = (accurate_preds * 1.0) / (len(predictions) * batch_size)

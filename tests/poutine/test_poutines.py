@@ -19,7 +19,7 @@ from tests.common import assert_equal
 
 
 def eq(x, y, prec=1e-10):
-    return (torch.norm(x - y).data[0] < prec)
+    return (torch.norm(x - y).item() < prec)
 
 
 # XXX name is a bit silly
@@ -249,7 +249,7 @@ class QueuePoutineDiscreteTest(TestCase):
 
         tr_latents = []
         for tr in trs:
-            tr_latents.append(tuple([int(tr.nodes[name]["value"].view(-1).data[0]) for name in tr
+            tr_latents.append(tuple([int(tr.nodes[name]["value"].view(-1).item()) for name in tr
                                      if tr.nodes[name]["type"] == "sample" and
                                      not tr.nodes[name]["is_observed"]]))
 
@@ -412,7 +412,7 @@ class QueuePoutineMixedTest(TestCase):
         assert len(trs) == 2
 
         values = [
-            {name: tr.nodes[name]['value'].view(-1).data[0] for name in tr.nodes.keys()
+            {name: tr.nodes[name]['value'].view(-1).item() for name in tr.nodes.keys()
              if tr.nodes[name]['type'] == 'sample'}
             for tr in trs
         ]

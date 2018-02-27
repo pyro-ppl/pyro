@@ -34,14 +34,14 @@ def test_iter_discrete_traces_scalar(graph_type):
 
     traces = list(iter_discrete_traces(graph_type, 0, model))
 
-    p = pyro.param("p").data
-    ps = pyro.param("ps").data
+    p = pyro.param("p")
+    ps = pyro.param("ps")
     assert len(traces) == 2 * len(ps)
 
     for scale, trace in traces:
-        x = trace.nodes["x"]["value"].data.long().view(-1)[0]
-        y = trace.nodes["y"]["value"].data.long().view(-1)[0]
-        expected_scale = Variable(torch.Tensor([[1 - p[0], p[0]][x] * ps[y]]))
+        x = trace.nodes["x"]["value"].long()
+        y = trace.nodes["y"]["value"].long()
+        expected_scale = [1 - p, p][x] * ps[y]
         assert_equal(scale, expected_scale)
 
 
@@ -91,10 +91,10 @@ def test_iter_discrete_traces_nan(enum_discrete, trace_graph):
     guide = config_enumerate(guide, default=enum_discrete)
     Elbo = TraceGraph_ELBO if trace_graph else Trace_ELBO
     elbo = Elbo(max_iarange_nesting=0)
-    loss = elbo.loss(model, guide)
-    assert isinstance(loss, float) and not math.isnan(loss), loss
+    loss = elbo.loss(model, guide).item()
+    assert not math.isnan(loss), loss
     loss = elbo.loss_and_grads(model, guide)
-    assert isinstance(loss, float) and not math.isnan(loss), loss
+    assert not math.isnan(loss), loss
 
 
 # A simple Gaussian mixture model, with no vectorization.
@@ -214,8 +214,8 @@ def test_bern_elbo_gradient(enum_discrete, trace_graph):
     expected_grad = grad(kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.25)), [q])[0]
 
     assert_equal(actual_grad, expected_grad, prec=0.1, msg="".join([
-        "\nexpected = {}".format(expected_grad.data.cpu().numpy()),
-        "\n  actual = {}".format(actual_grad.data.cpu().numpy()),
+        "\nexpected = {}".format(expected_grad.detach().cpu().numpy()),
+        "\n  actual = {}".format(actual_grad.detach().cpu().numpy()),
     ]))
 
 
@@ -250,8 +250,8 @@ def test_bern_bern_elbo_gradient(enum_discrete, trace_graph):
     expected_grad = 2 * grad(kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.25)), [q])[0]
 
     assert_equal(actual_grad, expected_grad, prec=0.1, msg="".join([
-        "\nexpected = {}".format(expected_grad.data.cpu().numpy()),
-        "\n  actual = {}".format(actual_grad.data.cpu().numpy()),
+        "\nexpected = {}".format(expected_grad.detach().cpu().numpy()),
+        "\n  actual = {}".format(actual_grad.detach().cpu().numpy()),
     ]))
 
 
@@ -289,8 +289,8 @@ def test_berns_elbo_gradient(enumerate1, enumerate2, enumerate3):
     expected_grad = grad(kl, [p])[0]
 
     assert_equal(actual_grad, expected_grad, prec=prec, msg="".join([
-        "\nexpected = {}".format(expected_grad.data.cpu().numpy()),
-        "\n  actual = {}".format(actual_grad.data.cpu().numpy()),
+        "\nexpected = {}".format(expected_grad.detach().cpu().numpy()),
+        "\n  actual = {}".format(actual_grad.detach().cpu().numpy()),
     ]))
 
 
@@ -330,8 +330,8 @@ def test_categoricals_elbo_gradient(enumerate1, enumerate2, enumerate3, max_iara
 
     for actual_grad, expected_grad in zip(actual_grads, expected_grads):
         assert_equal(actual_grad, expected_grad, prec=0.001, msg="".join([
-            "\nexpected = {}".format(expected_grad.data.cpu().numpy()),
-            "\n  actual = {}".format(actual_grad.data.cpu().numpy()),
+            "\nexpected = {}".format(expected_grad.detach().cpu().numpy()),
+            "\n  actual = {}".format(actual_grad.detach().cpu().numpy()),
         ]))
 
 
