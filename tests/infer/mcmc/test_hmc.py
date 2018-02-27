@@ -148,14 +148,14 @@ def test_hmc_conjugate_gaussian(fixture,
         logger.info(latent_mu)
         logger.info('Posterior mean (expected) - {}'.format(param_name))
         logger.info(expected_mean)
-        assert_equal(rmse(latent_mu, expected_mean).data[0], 0.0, prec=mean_tol)
+        assert_equal(rmse(latent_mu, expected_mean).item(), 0.0, prec=mean_tol)
 
         # Actual vs expected posterior precisions for the latents
         logger.info('Posterior std (actual) - {}'.format(param_name))
         logger.info(latent_std)
         logger.info('Posterior std (expected) - {}'.format(param_name))
         logger.info(expected_std)
-        assert_equal(rmse(latent_std, expected_std).data[0], 0.0, prec=std_tol)
+        assert_equal(rmse(latent_std, expected_std).item(), 0.0, prec=std_tol)
 
 
 def test_logistic_regression():
@@ -176,4 +176,4 @@ def test_logistic_regression():
     for trace, _ in mcmc_run._traces(data):
         posterior.append(trace.nodes['beta']['value'])
     posterior_mean = torch.mean(torch.stack(posterior), 0)
-    assert_equal(rmse(true_coefs, posterior_mean).data[0], 0.0, prec=0.05)
+    assert_equal(rmse(true_coefs, posterior_mean).item(), 0.0, prec=0.05)

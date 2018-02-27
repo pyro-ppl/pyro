@@ -16,7 +16,7 @@ def test_forward_rbf():
     assert K.dim() == 2
     assert K.size(0) == 2
     assert K.size(1) == 2
-    assert_equal(K.data.sum(), 0.30531)
+    assert_equal(K.sum().item(), 0.30531)
 
 
 def test_Kdiag():

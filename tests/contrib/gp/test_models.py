@@ -26,7 +26,7 @@ def test_forward_gpr():
     assert cov.size(0) == 2
     assert cov.size(1) == 2
     assert_equal(loc, y)
-    assert_equal(cov.data.abs().sum(), 0)
+    assert_equal(cov.abs().sum().item(), 0)
 
 
 def test_forward_sgpr():
@@ -48,7 +48,7 @@ def test_forward_sgpr():
     assert cov.size(0) == 2
     assert cov.size(1) == 2
     assert_equal(loc, y)
-    assert_equal(cov.data.abs().sum(), 0)
+    assert_equal(cov.abs().sum().item(), 0)
 
 
 def test_forward_sgpr_vs_gpr():

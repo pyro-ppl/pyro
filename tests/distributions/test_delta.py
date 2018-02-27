@@ -26,21 +26,21 @@ class TestDelta(TestCase):
         self.n_samples = 10
 
     def test_log_pdf(self):
-        log_px_torch = dist.Delta(self.v).log_prob(self.test_data).sum().data[0]
-        assert_equal(log_px_torch, 0)
+        log_px_torch = dist.Delta(self.v).log_prob(self.test_data).sum()
+        assert_equal(log_px_torch.item(), 0)
 
     def test_batch_log_prob(self):
         log_px_torch = dist.Delta(self.vs_expanded).log_prob(self.batch_test_data_1).data
-        assert_equal(torch.sum(log_px_torch), 0)
+        assert_equal(log_px_torch.sum().item(), 0)
         log_px_torch = dist.Delta(self.vs_expanded).log_prob(self.batch_test_data_2).data
-        assert_equal(torch.sum(log_px_torch), float('-inf'))
+        assert_equal(log_px_torch.sum().item(), float('-inf'))
 
     def test_batch_log_prob_shape(self):
         assert dist.Delta(self.vs).log_prob(self.batch_test_data_3).size() == (4, 1)
         assert dist.Delta(self.v).log_prob(self.batch_test_data_3).size() == (4, 1)
 
     def test_mean_and_var(self):
-        torch_samples = [dist.Delta(self.v).sample().data.cpu().numpy()
+        torch_samples = [dist.Delta(self.v).sample().detach().cpu().numpy()
                          for _ in range(self.n_samples)]
         torch_mean = np.mean(torch_samples)
         torch_var = np.var(torch_samples)
