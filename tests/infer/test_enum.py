@@ -364,7 +364,7 @@ def test_iarange_elbo_gradient(iarange_dim, enum_discrete):
     q = variable(0.5, requires_grad=True)
     expected_grad = (1 + iarange_dim) * grad(kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.25)), [q])[0]
 
-    assert_equal(actual_grad, expected_grad, prec=0.05, msg="".join([
+    assert_equal(actual_grad, expected_grad, prec=0.1, msg="".join([
         "\nexpected = {}".format(expected_grad.data.cpu().numpy()),
         "\n  actual = {}".format(actual_grad.data.cpu().numpy()),
     ]))
