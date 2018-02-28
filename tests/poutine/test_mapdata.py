@@ -9,7 +9,7 @@ from torch.autograd import Variable
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from tests.common import requires_cuda
+from tests.common import requires_cuda, assert_equal
 
 logger = logging.getLogger(__name__)
 
@@ -245,3 +245,20 @@ def test_model_guide_mismatch(behavior, model_size, guide_size, model):
     else:
         with pytest.raises(ValueError):
             poutine.replay(model, model.trace)(model_size)
+
+
+def test_topological_sort():
+    tr = poutine.Trace()
+
+    tr.add_node("a")
+    tr.add_node("b")
+    tr.add_node("c")
+    tr.add_edge("a", "b")
+    tr.add_edge("a", "c")
+    tr.add_edge("b", "c")
+    assert_equal(tuple(tr.topological_sort()), ("a", "b", "c"))
+
+    tr.add_edge("c", "b")
+    tr.remove_edge("b", "c")
+
+    assert_equal(tuple(tr.topological_sort()), ("a", "c", "b"))

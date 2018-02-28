@@ -24,14 +24,12 @@ class Trace(object):
     Execution trace data structure.
     """
 
-    def __init__(self, graph_type=None):
+    def __init__(self, graph_type="flat"):
         """
         :param string graph_type: string specifying the kind of trace graph to construct
 
         Constructor. Stores graph_type attribute and creates data dictionaries.
         """
-        if graph_type is None:
-            graph_type = "flat"
         assert graph_type in ("flat", "dense"), \
             "{} not a valid graph type".format(graph_type)
         self.graph_type = graph_type
@@ -108,6 +106,22 @@ class Trace(object):
             "edge from {} to {} already exists".format(node_from, node_to)
         self.edges[node_from][node_to] = dict(**kwargs)
 
+    def remove_edge(self, node_from, node_to):
+        """
+        :param string node_from: the name of the parent site
+        :param string node_to: the name of the child site
+
+        Removes an edge from the trace.
+        Both sites must already be in the trace
+        """
+        assert node_from in self, \
+            "node_from {} not in trace".format(node_from)
+        assert node_to in self, \
+            "node_to {} not in trace".format(node_to)
+        assert node_to in self.edges[node_from], \
+            "edge from {} to {} must exist".format(node_from, node_to)
+        del self.edges[node_from][node_to]
+
     def copy(self):
         """
         Makes a shallow copy of self with nodes and edges preserved.
@@ -122,15 +136,17 @@ class Trace(object):
         """
         Iterates (parent, child) pairs corresponding to edges in the trace.
         """
-        for node_from in self.edges:
-            for node_to in self.edges[node_from]:
+        for node_from, edge_dict in self.edges.items():
+            for node_to in edge_dict:
                 yield (node_from, node_to)
 
     def topological_sort(self):
         """
         Computes topological ordering of sites in the trace.
         """
-        indegree_map = {node: 0 for node in self.nodes}
+        indegree_map = collections.OrderedDict()
+        for node in self.nodes:
+            indegree_map[node] = 0
         for node_from, node_to in self.iter_edges():
             indegree_map[node_to] += 1
         zero_indegree = [node for node in indegree_map if indegree_map[node] == 0]
