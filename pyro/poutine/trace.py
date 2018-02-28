@@ -19,18 +19,40 @@ def _warn_if_nan(name, value):
     # Note that -inf log_pdf is fine: it is merely a zero-probability event.
 
 
-def map_trace(fn, trace):
+def topological_sort(trace):
+    """
+    Computes topological ordering of sites in the trace.
+    """
+    indegree_map = {node: 0 for node in trace.nodes}
+    for node_from, node_to in trace.iter_edges():
+        indegree_map[node_to] += 1
+    zero_indegree = [node for node in indegree_map if indegree_map[node] == 0]
+    while len(zero_indegree) > 0:
+        node = zero_indegree.pop()
+        for child in trace.edges[node]:
+            indegree_map[child] -= 1
+            if indegree_map[child] == 0:
+                zero_indegree.append(child)
+                del indegree_map[child]
+        yield node
+
+
+def map_trace(fn, nodes):
+    if isinstance(nodes, Trace):
+        nodes = nodes.nodes
     ret = collections.OrderedDict()
-    for name in trace.nodes:
-        ret[name] = fn(trace.nodes[name])
+    for name in nodes:
+        ret[name] = fn(nodes[name])
     return ret
 
 
-def filter_trace(fn, trace):
+def filter_trace(fn, nodes):
+    if isinstance(nodes, Trace):
+        nodes = nodes.nodes
     ret = collections.OrderedDict()
-    for name in trace.nodes:
-        if fn(trace.nodes[name]):
-            ret[name] = trace.nodes[name]
+    for name in nodes:
+        if fn(nodes[name]):
+            ret[name] = nodes[name]
     return ret
 
 
@@ -98,6 +120,12 @@ def is_reparameterized(site):
         getattr(site["fn"], "reparameterized", False)
 
 
+def is_non_reparameterized(site):
+    return site["type"] == "sample" and \
+        not site["is_observed"] and \
+        not getattr(site["fn"], "reparameterized", False)
+
+
 class Trace(object):
     """
     Execution trace data structure.
@@ -122,11 +150,8 @@ class Trace(object):
     def __contains__(self, x):
         return x in self.nodes
 
-    def __setitem__(self, name, value):
-        self.nodes[name] = value
-
     def __getitem__(self, name):
-        return self.nodes[name]
+        return self.edges[name]
 
     def __len__(self):
         return len(self.nodes)
@@ -212,23 +237,9 @@ class Trace(object):
                 yield (node_from, node_to)
 
     def topological_sort(self):
-        """
-        Computes topological ordering of sites in the trace.
-        """
-        indegree_map = {node: 0 for node in self.nodes}
-        for node_from, node_to in self.iter_edges():
-            indegree_map[node_to] += 1
-        zero_indegree = [node for node in indegree_map if indegree_map[node] == 0]
-        while len(zero_indegree) > 0:
-            node = zero_indegree.pop()
-            for child in self.edges[node]:
-                indegree_map[child] -= 1
-                if indegree_map[child] == 0:
-                    zero_indegree.append(child)
-                    del indegree_map[child]
-            yield node
+        return topological_sort(self)
 
-    def log_pdf(self, site_filter=lambda name, site: True):
+    def log_pdf(self, site_filter=lambda site: True):
         """
         Compute the local and overall log-probabilities of the trace.
 
@@ -238,68 +249,37 @@ class Trace(object):
         :rtype: torch.autograd.Variable
         """
         log_p = 0.0
-        for name, site in self.nodes.items():
-            if site["type"] == "sample" and site_filter(name, site):
-                try:
-                    site_log_p = site["log_pdf"]
-                except KeyError:
-                    args, kwargs = site["args"], site["kwargs"]
-                    site_log_p = site["fn"].log_prob(site["value"], *args, **kwargs)
-                    site_log_p = scale_tensor(site_log_p, site["scale"]).sum()
-                    site["log_pdf"] = site_log_p
-                    _warn_if_nan(name, site_log_p)
-                log_p += site_log_p
+        for name in map_trace(log_pdf, filter_trace(site_filter, self)):
+            log_p += self.nodes[name]["log_pdf"]
         return log_p
 
-    def compute_batch_log_pdf(self, site_filter=lambda name, site: True):
+    def compute_batch_log_pdf(self, site_filter=lambda site: True):
         """
         Compute the batched local log-probabilities at each site of the trace.
 
         The local computation is memoized, and also stores the local `.log_pdf()`.
         """
-        for name, site in self.nodes.items():
-            if site["type"] == "sample" and site_filter(name, site):
-                try:
-                    site["batch_log_pdf"]
-                except KeyError:
-                    args, kwargs = site["args"], site["kwargs"]
-                    site_log_p = site["fn"].log_prob(site["value"], *args, **kwargs)
-                    site_log_p = scale_tensor(site_log_p, site["scale"])
-                    site["batch_log_pdf"] = site_log_p
-                    site["log_pdf"] = site_log_p.sum()
-                    _warn_if_nan(name, site["log_pdf"])
+        map_trace(batch_log_pdf, self)
 
     def compute_score_parts(self):
         """
         Compute the batched local score parts at each site of the trace.
         """
-        for name, site in self.nodes.items():
-            if site["type"] == "sample" and "score_parts" not in site:
-                # Note that ScoreParts overloads the multiplication operator
-                # to correctly scale each of its three parts.
-                value = site["fn"].score_parts(site["value"], *site["args"], **site["kwargs"]) * site["scale"]
-                site["score_parts"] = value
-                site["batch_log_pdf"] = value[0]
-                site["log_pdf"] = value[0].sum()
-                _warn_if_nan(name, site["log_pdf"])
+        map_trace(score_parts, self)
 
     @property
     def observation_nodes(self):
         """
         Gets a list of names of observe sites
         """
-        return [name for name, node in self.nodes.items()
-                if node["type"] == "sample" and
-                node["is_observed"]]
+        return filter_trace(is_observed, self)
 
     @property
     def stochastic_nodes(self):
         """
         Gets a list of names of sample sites
         """
-        return [name for name, node in self.nodes.items()
-                if node["type"] == "sample" and
-                not node["is_observed"]]
+        return filter_trace(is_sample, self)
 
     @property
     def reparameterized_nodes(self):
@@ -307,10 +287,7 @@ class Trace(object):
         Gets a list of names of sample sites whose stochastic functions
         are reparameterizable primitive distributions
         """
-        return [name for name, node in self.nodes.items()
-                if node["type"] == "sample" and
-                not node["is_observed"] and
-                getattr(node["fn"], "reparameterized", False)]
+        return filter_trace(is_reparameterized, self)
 
     @property
     def nonreparam_stochastic_nodes(self):
@@ -318,12 +295,11 @@ class Trace(object):
         Gets a list of names of sample sites whose stochastic functions
         are not reparameterizable primitive distributions
         """
-        return list(set(self.stochastic_nodes) - set(self.reparameterized_nodes))
+        return filter_trace(is_non_reparameterized, self)
 
     def iter_stochastic_nodes(self):
         """
         Returns an iterator over stochastic nodes in the trace.
         """
-        for name, node in self.nodes.items():
-            if node["type"] == "sample" and not node["is_observed"]:
-                yield name, node
+        for name, node in filter_trace(is_sample, self):
+            yield name, node

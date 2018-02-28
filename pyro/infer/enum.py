@@ -11,7 +11,7 @@ from pyro.distributions.util import sum_rightmost
 from pyro.poutine.trace import Trace
 
 
-def _iter_discrete_filter(name, msg):
+def _iter_discrete_filter(msg):
     return ((msg["type"] == "sample") and
             (not msg["is_observed"]) and
             (msg["infer"].get("enumerate")))  # either sequential or parallel
