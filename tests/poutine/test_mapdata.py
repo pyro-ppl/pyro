@@ -250,9 +250,10 @@ def test_model_guide_mismatch(behavior, model_size, guide_size, model):
 def test_topological_sort():
     tr = poutine.Trace()
 
-    tr.add_node("a")
-    tr.add_node("b")
-    tr.add_node("c")
+    tr.add_node("a", type="sample")
+    tr.add_node("b", type="sample")
+    tr.add_node("c", type="sample")
+
     tr.add_edge("a", "b")
     tr.add_edge("a", "c")
     tr.add_edge("b", "c")
