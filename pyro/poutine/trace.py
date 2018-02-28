@@ -39,7 +39,10 @@ def topological_sort(trace):
 
 def map_trace(fn, nodes):
     if isinstance(nodes, Trace):
+        # if we pass in a Trace, iterate over nodes
+        # to make things compositional
         nodes = nodes.nodes
+    # return an OrderedDict to preserve input order
     ret = collections.OrderedDict()
     for name, node in nodes.items():
         ret[name] = fn(node)
@@ -48,6 +51,8 @@ def map_trace(fn, nodes):
 
 def fold_trace(fn, initial_state, nodes):
     if isinstance(nodes, Trace):
+        # if we pass in a Trace, iterate over nodes
+        # to make things compositional
         nodes = nodes.nodes
     state = initial_state
     for name, node in nodes.items():
@@ -57,7 +62,10 @@ def fold_trace(fn, initial_state, nodes):
 
 def filter_trace(fn, nodes):
     if isinstance(nodes, Trace):
+        # if we pass in a Trace, iterate over nodes
+        # to make things compositional
         nodes = nodes.nodes
+    # return an OrderedDict to preserve input order
     ret = collections.OrderedDict()
     for name, node in nodes.items():
         if fn(node):
@@ -280,7 +288,7 @@ class Trace(object):
 
         The local computation is memoized, and also stores the local `.log_pdf()`.
         """
-        map_trace(batch_log_pdf, self)
+        map_trace(batch_log_pdf, filter_trace(site_filter, self))
 
     def compute_score_parts(self):
         """
@@ -322,5 +330,4 @@ class Trace(object):
         """
         Returns an iterator over stochastic nodes in the trace.
         """
-        for name, node in filter_trace(is_sample, self):
-            yield name, node
+        return filter_trace(is_sample, self).items()
