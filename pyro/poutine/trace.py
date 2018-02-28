@@ -49,8 +49,25 @@ class Trace(object):
     def __iter__(self):
         return iter(self.nodes)
 
-    def successors(self, node):
-        return iter(self.edges[node])
+    def successors(self, site_name):
+        """
+        :param string site_name: name of site to get successors of
+
+        Returns an iterator over site names whose parent is site_name
+        """
+        return iter(self.edges[site_name])
+
+    def descendants(self, site_name):
+        """
+        :param string site_name: name of site to get descendants of
+
+        Returns a list of all sites downstream of site_name
+        """
+        desc = set()
+        for succ in self.edges[site_name]:
+            desc.add(succ)
+            desc.union(set(self.descendants(site_name)))
+        return list(desc)
 
     def add_node(self, site_name, **kwargs):
         """
