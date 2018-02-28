@@ -39,7 +39,6 @@ setup(
         'numpy>=1.7',
         'cloudpickle>=0.3.1',
         'graphviz>=0.8',
-        'networkx>=2.0.0',
         'observations>=0.1.4',
         'torch',
         'six>=1.10.0',
@@ -56,6 +55,7 @@ setup(
             'pytest-cov',
             'nbval',
             'scipy>=0.19.0',
+            'networkx>=2.0.0',
             # examples/tutorials
             'matplotlib',
             'visdom',

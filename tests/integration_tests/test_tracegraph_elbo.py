@@ -496,10 +496,10 @@ class RaoBlackwellizationTests(TestCase):
         guide_trace = pyro.poutine.trace(guide, graph_type="dense").get_trace()
         model_trace = pyro.poutine.trace(pyro.poutine.replay(model, guide_trace),
                                          graph_type="dense").get_trace()
-        assert len(model_trace.edges()) == 27
-        assert len(model_trace.nodes()) == 16
-        assert len(guide_trace.edges()) == 0
-        assert len(guide_trace.nodes()) == 9
+        assert len(list(model_trace.iter_edges())) == 27
+        assert len(model_trace.nodes) == 16
+        assert len(list(guide_trace.iter_edges())) == 0
+        assert len(guide_trace.nodes) == 9
 
         adam = optim.Adam({"lr": 0.0008, "betas": (0.96, 0.999)})
         svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)

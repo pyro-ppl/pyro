@@ -458,8 +458,8 @@ class IndirectLambdaPoutineTests(TestCase):
     def test_graph_structure(self):
         tracegraph = poutine.trace(self.model, graph_type="dense").get_trace()
         # Ignore structure on map_* nodes.
-        actual_nodes = set(n for n in tracegraph.nodes() if not n.startswith("map_"))
-        actual_edges = set((n1, n2) for n1, n2 in tracegraph.edges
+        actual_nodes = set(n for n in tracegraph.nodes if not n.startswith("map_"))
+        actual_edges = set((n1, n2) for n1, n2 in tracegraph.iter_edges()
                            if not n1.startswith("map_") if not n2.startswith("map_"))
         assert actual_nodes == self.expected_nodes
         assert actual_edges == self.expected_edges
