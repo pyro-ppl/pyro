@@ -2,8 +2,10 @@ from __future__ import absolute_import, division, print_function
 
 import numpy as np
 import pytest
+import torch
+from torch.autograd import Variable
 
-from pyro.distributions.util import broadcast_shape
+from pyro.distributions.util import broadcast_shape, sum_leftmost, sum_rightmost
 
 
 @pytest.mark.parametrize('shapes', [
@@ -72,3 +74,23 @@ def test_broadcast_shape_strict(shapes):
 def test_broadcast_shape_strict_error(shapes):
     with pytest.raises(ValueError):
         broadcast_shape(*shapes, strict=True)
+
+
+def test_sum_rightmost():
+    x = Variable(torch.ones(2, 3, 4))
+    assert sum_rightmost(x, 0).shape == (2, 3, 4)
+    assert sum_rightmost(x, 1).shape == (2, 3)
+    assert sum_rightmost(x, 2).shape == (2,)
+    assert sum_rightmost(x, -1).shape == (2,)
+    assert sum_rightmost(x, -2).shape == (2, 3)
+    assert sum_rightmost(x, float('inf')).shape == ()
+
+
+def test_sum_leftmost():
+    x = Variable(torch.ones(2, 3, 4))
+    assert sum_leftmost(x, 0).shape == (2, 3, 4)
+    assert sum_leftmost(x, 1).shape == (3, 4)
+    assert sum_leftmost(x, 2).shape == (4,)
+    assert sum_leftmost(x, -1).shape == (4,)
+    assert sum_leftmost(x, -2).shape == (3, 4)
+    assert sum_leftmost(x, float('inf')).shape == ()

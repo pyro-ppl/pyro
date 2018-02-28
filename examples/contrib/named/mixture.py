@@ -33,8 +33,8 @@ def model(data, k):
 
 
 def local_model(latent, ps, mus, sigmas, obs=None):
-    i = latent.id.sample_(dist.categorical, softmax(ps))
-    return latent.x.sample_(dist.normal, mus[i], sigmas[i], obs=obs)
+    i = latent.id.sample_(dist.Categorical(softmax(ps)))
+    return latent.x.sample_(dist.Normal(mus[i], sigmas[i]), obs=obs)
 
 
 def guide(data, k):
@@ -48,7 +48,7 @@ def guide(data, k):
 def local_guide(latent, k):
     # The local guide simply guesses category assignments.
     latent.ps.param_(Variable(torch.ones(k) / k, requires_grad=True))
-    latent.id.sample_(dist.categorical, softmax(latent.ps))
+    latent.id.sample_(dist.Categorical(softmax(latent.ps)))
 
 
 def main(args):
@@ -65,7 +65,7 @@ def main(args):
 
     print('Parameters:')
     for name in sorted(pyro.get_param_store().get_all_param_names()):
-        print('{} = {}'.format(name, pyro.param(name).data.cpu().numpy()))
+        print('{} = {}'.format(name, pyro.param(name).detach().cpu().numpy()))
 
 
 if __name__ == '__main__':

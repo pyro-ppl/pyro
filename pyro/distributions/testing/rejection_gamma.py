@@ -4,10 +4,7 @@ import torch
 
 from pyro.distributions.rejector import Rejector
 from pyro.distributions.score_parts import ScoreParts
-from pyro.distributions.torch.beta import Beta
-from pyro.distributions.torch.dirichlet import Dirichlet
-from pyro.distributions.torch.gamma import Gamma
-from pyro.distributions.torch.normal import Normal
+from pyro.distributions.torch import Beta, Dirichlet, Gamma, Normal
 from pyro.distributions.util import copy_docs_from
 
 
@@ -61,7 +58,6 @@ class RejectionStandardGamma(Rejector):
 
 @copy_docs_from(Gamma)
 class RejectionGamma(Gamma):
-    stateful = True
     reparameterized = True
 
     def __init__(self, alpha, beta):
@@ -69,8 +65,8 @@ class RejectionGamma(Gamma):
         self._standard_gamma = RejectionStandardGamma(alpha)
         self.beta = beta
 
-    def sample(self, sample_shape=torch.Size()):
-        return self._standard_gamma.sample(sample_shape) / self.beta
+    def rsample(self, sample_shape=torch.Size()):
+        return self._standard_gamma.rsample(sample_shape) / self.beta
 
     def log_prob(self, x):
         return self._standard_gamma.log_prob(x * self.beta) + torch.log(self.beta)
@@ -87,7 +83,6 @@ class ShapeAugmentedGamma(Gamma):
     This implements the shape augmentation trick of
     Naesseth, Ruiz, Linderman, Blei (2017) https://arxiv.org/abs/1610.05683
     """
-    stateful = True
     reparameterized = True
 
     def __init__(self, alpha, beta, boost=1):
@@ -99,8 +94,8 @@ class ShapeAugmentedGamma(Gamma):
         self._rejection_gamma = RejectionGamma(alpha + boost, beta)
         self._unboost_x_cache = None, None
 
-    def sample(self, sample_shape=torch.Size()):
-        x = self._rejection_gamma.sample(sample_shape)
+    def rsample(self, sample_shape=torch.Size()):
+        x = self._rejection_gamma.rsample(sample_shape)
         boosted_x = x.clone()
         for i in range(self._boost):
             boosted_x *= (1 - x.new(x.shape).uniform_()) ** (1 / (i + self.alpha))
@@ -129,8 +124,8 @@ class ShapeAugmentedDirichlet(Dirichlet):
         super(ShapeAugmentedDirichlet, self).__init__(alpha)
         self._gamma = ShapeAugmentedGamma(alpha, torch.ones_like(alpha), boost)
 
-    def sample(self, sample_shape=torch.Size()):
-        gammas = self._gamma.sample(sample_shape)
+    def rsample(self, sample_shape=torch.Size()):
+        gammas = self._gamma.rsample(sample_shape)
         return gammas / gammas.sum(-1, True)
 
 
@@ -147,7 +142,7 @@ class ShapeAugmentedBeta(Beta):
         alpha_beta = torch.stack([alpha, beta], -1)
         self._gamma = ShapeAugmentedGamma(alpha_beta, torch.ones_like(alpha_beta), boost)
 
-    def sample(self, sample_shape=torch.Size()):
-        gammas = self._gamma.sample(sample_shape)
+    def rsample(self, sample_shape=torch.Size()):
+        gammas = self._gamma.rsample(sample_shape)
         probs = gammas / gammas.sum(-1, True)
         return probs[..., 0]

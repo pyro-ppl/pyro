@@ -12,13 +12,14 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions import Bernoulli, Normal
-from pyro.util import NonlocalExit, all_escape, discrete_escape, ng_ones, ng_zeros
+from pyro.poutine.util import all_escape, discrete_escape, NonlocalExit
+from pyro.util import ng_ones, ng_zeros
 from six.moves.queue import Queue
 from tests.common import assert_equal
 
 
 def eq(x, y, prec=1e-10):
-    return (torch.norm(x - y).data[0] < prec)
+    return (torch.norm(x - y).item() < prec)
 
 
 # XXX name is a bit silly
@@ -185,6 +186,16 @@ class BlockPoutineTests(NormalNormalNormalPoutineTestCase):
                 assert name not in model_trace
                 assert name not in guide_trace
 
+    def test_block_tutorial_case(self):
+        model_trace = poutine.trace(self.model).get_trace()
+        guide_trace = poutine.trace(
+            poutine.block(self.guide, hide_types=["observe"])).get_trace()
+
+        assert "latent1" in model_trace
+        assert "latent1" in guide_trace
+        assert "obs" in model_trace
+        assert "obs" not in guide_trace
+
 
 class QueuePoutineDiscreteTest(TestCase):
 
@@ -238,7 +249,7 @@ class QueuePoutineDiscreteTest(TestCase):
 
         tr_latents = []
         for tr in trs:
-            tr_latents.append(tuple([int(tr.nodes[name]["value"].view(-1).data[0]) for name in tr
+            tr_latents.append(tuple([int(tr.nodes[name]["value"].view(-1).item()) for name in tr
                                      if tr.nodes[name]["type"] == "sample" and
                                      not tr.nodes[name]["is_observed"]]))
 
@@ -401,7 +412,7 @@ class QueuePoutineMixedTest(TestCase):
         assert len(trs) == 2
 
         values = [
-            {name: tr.nodes[name]['value'].view(-1).data[0] for name in tr.nodes.keys()
+            {name: tr.nodes[name]['value'].view(-1).item() for name in tr.nodes.keys()
              if tr.nodes[name]['type'] == 'sample'}
             for tr in trs
         ]
@@ -422,14 +433,14 @@ class IndirectLambdaPoutineTests(TestCase):
     def setUp(self):
 
         def model(batch_size_outer=2, batch_size_inner=2):
-            mu_latent = pyro.sample("mu_latent", dist.normal, ng_zeros(1), ng_ones(1))
+            mu_latent = pyro.sample("mu_latent", dist.Normal(ng_zeros(1), ng_ones(1)))
 
             def outer(i, x):
                 pyro.map_data("map_inner_%d" % i, x, lambda _i, _x:
                               inner(i, _i, _x), batch_size=batch_size_inner)
 
             def inner(i, _i, _x):
-                pyro.sample("z_%d_%d" % (i, _i), dist.normal, mu_latent + _x, ng_ones(1))
+                pyro.sample("z_%d_%d" % (i, _i), dist.Normal(mu_latent + _x, ng_ones(1)))
 
             pyro.map_data("map_outer", [[ng_ones(1)] * 2] * 2, lambda i, x:
                           outer(i, x), batch_size=batch_size_outer)
@@ -581,3 +592,31 @@ class EscapePoutineTests(TestCase):
                 assert False
             except NonlocalExit:
                 assert "x" not in tem.trace
+
+
+class InferConfigPoutineTests(TestCase):
+    def setUp(self):
+        def model():
+            pyro.param("p", Variable(torch.zeros(1), requires_grad=True))
+            pyro.sample("a", Bernoulli(Variable(torch.Tensor([0.5]))),
+                        infer={"enumerate": "parallel"})
+            pyro.sample("b", Bernoulli(Variable(torch.Tensor([0.5]))))
+
+        self.model = model
+
+        def config_fn(site):
+            if site["type"] == "sample":
+                return {"blah": True}
+            else:
+                return {}
+
+        self.config_fn = config_fn
+
+    def test_infer_config_sample(self):
+        cfg_model = poutine.infer_config(self.model, self.config_fn)
+
+        tr = poutine.trace(cfg_model).get_trace()
+
+        assert tr.nodes["a"]["infer"] == {"enumerate": "parallel", "blah": True}
+        assert tr.nodes["b"]["infer"] == {"blah": True}
+        assert tr.nodes["p"]["infer"] == {}

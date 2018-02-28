@@ -28,13 +28,13 @@ def test_subsample_gradient(trace_graph, reparameterized, subsample):
     subsample_size = 1 if subsample else len(data)
     num_particles = 5000
     precision = 0.333
-    normal = dist.normal if reparameterized else fakes.nonreparameterized_normal
+    Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
 
     def model():
         with pyro.iarange("data", len(data), subsample_size) as ind:
             x = data[ind]
-            z = pyro.sample("z", normal, ng_zeros(len(x)), ng_ones(len(x)))
-            pyro.sample("x", normal, z, ng_ones(len(x)), obs=x)
+            z = pyro.sample("z", Normal(ng_zeros(len(x)), ng_ones(len(x))))
+            pyro.sample("x", Normal(z, ng_ones(len(x))), obs=x)
 
     def guide():
         mu = pyro.param("mu", lambda: Variable(torch.zeros(len(data)), requires_grad=True))
@@ -42,14 +42,14 @@ def test_subsample_gradient(trace_graph, reparameterized, subsample):
         with pyro.iarange("data", len(data), subsample_size) as ind:
             mu = mu[ind]
             sigma = sigma.expand(subsample_size)
-            pyro.sample("z", normal, mu, sigma)
+            pyro.sample("z", Normal(mu, sigma))
 
     optim = Adam({"lr": 0.1})
     inference = SVI(model, guide, optim, loss="ELBO",
                     trace_graph=trace_graph, num_particles=num_particles)
     inference.loss_and_grads(model, guide)
     params = dict(pyro.get_param_store().named_parameters())
-    actual_grads = {name: param.grad.data.cpu().numpy() for name, param in params.items()}
+    actual_grads = {name: param.grad.detach().cpu().numpy() for name, param in params.items()}
 
     expected_grads = {'mu': np.array([0.5, -2.0]), 'sigma': np.array([2.0])}
     for name in sorted(params):

@@ -25,7 +25,7 @@ class Fixture(object):
                  expected_support=None,
                  test_data_indices=None,
                  batch_data_indices=None):
-        self.pyro_dist, self.pyro_dist_class = pyro_dist
+        self.pyro_dist = pyro_dist
         self.scipy_dist = scipy_dist
         self.dist_params, self.test_data = self._extract_fixture_data(examples)
         self.scipy_arg_fn = scipy_arg_fn
@@ -58,7 +58,7 @@ class Fixture(object):
         return len(self.test_data)
 
     def get_samples(self, num_samples, **dist_params):
-        return self.pyro_dist_class(**dist_params).sample(sample_shape=torch.Size((num_samples,)))
+        return self.pyro_dist(**dist_params).sample(sample_shape=torch.Size((num_samples,)))
 
     def get_test_data(self, idx, wrap_tensor=True):
         if not wrap_tensor:
@@ -75,7 +75,7 @@ class Fixture(object):
             logits = Variable(torch.Tensor(dist_params.pop('logits')))
             is_multidimensional = self.get_test_distribution_name() != 'Bernoulli'
             ps, _ = get_probs_and_logits(logits=logits, is_multidimensional=is_multidimensional)
-            dist_params['ps'] = list(ps.data.cpu().numpy())
+            dist_params['ps'] = list(ps.detach().cpu().numpy())
         return dist_params
 
     def get_scipy_logpdf(self, idx):
@@ -98,7 +98,7 @@ class Fixture(object):
         dist_params = self._convert_logits_to_ps(dist_params)
         test_data = self.get_test_data(idx, wrap_tensor=False)
         test_data_wrapped = self.get_test_data(idx)
-        shape = broadcast_shape(self.pyro_dist_class(**dist_params_wrapped).shape(), test_data_wrapped.size())
+        shape = broadcast_shape(self.pyro_dist(**dist_params_wrapped).shape(), test_data_wrapped.size())
         batch_log_pdf = []
         for i in range(len(test_data)):
             batch_params = {}
@@ -143,7 +143,7 @@ class Fixture(object):
         return max(min_samples, min_computed_samples)
 
     def get_test_distribution_name(self):
-        return self.pyro_dist_class.__name__
+        return self.pyro_dist.__name__
 
 
 def tensor_wrap(*args, **kwargs):

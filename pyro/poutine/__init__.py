@@ -2,17 +2,19 @@ from __future__ import absolute_import, division, print_function
 
 import functools
 
-from pyro import util
+from pyro.poutine import util
 
 # poutines
 from .block_poutine import BlockPoutine
 from .condition_poutine import ConditionPoutine
+from .enumerate_poutine import EnumeratePoutine  # noqa: F401
 from .escape_poutine import EscapePoutine
-from .indep_poutine import IndepPoutine  # noqa: F401
+from .indep_poutine import IndepMessenger  # noqa: F401
+from .infer_config_poutine import InferConfigPoutine
 from .lift_poutine import LiftPoutine
 from .poutine import _PYRO_STACK, Poutine  # noqa: F401
 from .replay_poutine import ReplayPoutine
-from .scale_poutine import ScalePoutine
+from .scale_poutine import ScaleMessenger
 from .trace import Trace  # noqa: F401
 from .trace_poutine import TracePoutine
 
@@ -123,35 +125,45 @@ def condition(fn, data):
     return ConditionPoutine(fn, data=data)
 
 
-def indep(fn, name, vectorized):
+def infer_config(fn, config_fn):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
+    :param config_fn: a callable taking a site and returning an infer dict
+
+    Alias for :class:`~pyro.poutine.infer_config_poutine.InferConfigPoutine` constructor.
+
+    Given a callable that contains Pyro primitive calls
+    and a callable taking a trace site and returning a dictionary,
+    updates the value of the infer kwarg at a sample site to config_fn(site)
+    """
+    return InferConfigPoutine(fn, config_fn)
+
+
+def indep(name, vectorized):
+    """
     :param str name: a name for subsample sites
     :param bool vectorized: True for ``iarange``, False for ``irange``
-    :returns: stochastic function wrapped in an IndepPoutine
-    :rtype: pyro.poutine.IndepPoutine
+    :rtype: pyro.poutine.IndepMessenger
 
-    Alias for IndepPoutine constructor.
+    Alias for IndepMessenger constructor.
 
     Used internally by ``iarange`` and ``irange``.
     """
-    return IndepPoutine(fn, name=name, vectorized=vectorized)
+    return IndepMessenger(name=name, vectorized=vectorized)
 
 
-def scale(fn, scale):
+def scale(null, scale):
     """
-    :param fn: a stochastic function (callable containing pyro primitive calls)
     :param scale: a positive scaling factor
-    :returns: stochastic function wrapped in a ScalePoutine
-    :rtype: pyro.poutine.ScalePoutine
+    :rtype: pyro.poutine.ScaleMessenger
 
-    Alias for ScalePoutine constructor.
+    Alias for ScaleMessenger constructor.
 
     Given a stochastic function with some sample statements and a positive
     scale factor, scale the score of all sample and observe sites in the
     function.
     """
-    return ScalePoutine(fn, scale=scale)
+    return ScaleMessenger(scale=scale)
 
 
 #########################################
@@ -197,11 +209,9 @@ def queue(fn, queue, max_tries=None,
         max_tries = int(1e6)
 
     if extend_fn is None:
-        # XXX should be util.enum_extend
         extend_fn = util.enum_extend
 
     if escape_fn is None:
-        # XXX should be util.discrete_escape
         escape_fn = util.discrete_escape
 
     if num_samples is None:
@@ -219,8 +229,7 @@ def queue(fn, queue, max_tries=None,
                                    functools.partial(escape_fn, next_trace)))
                 return ftr(*args, **kwargs)
             except util.NonlocalExit as site_container:
-                for frame in _PYRO_STACK:
-                    frame._reset()
+                site_container.reset_stack()
                 for tr in extend_fn(ftr.trace.copy(), site_container.site,
                                     num_samples=num_samples):
                     queue.put(tr)

@@ -124,16 +124,6 @@ def is_iterable(obj):
         return False
 
 
-def _unwrap_variables(x, y):
-    if isinstance(x, Variable) and isinstance(y, Variable):
-        return x.data, y.data
-    elif isinstance(x, Variable) or isinstance(y, Variable):
-        raise AssertionError(
-            "cannot compare {} and {}".format(
-                type(x), type(y)))
-    return x, y
-
-
 def assert_tensors_equal(a, b, prec=1e-5, msg=''):
     assert a.size() == b.size(), msg
     if prec == 0:
@@ -148,7 +138,7 @@ def assert_tensors_equal(a, b, prec=1e-5, msg=''):
         diff[nan_mask] = 0
         if diff.is_signed():
             diff = diff.abs()
-        max_err = diff.max()
+        max_err = diff.max().item()
         assert max_err < prec, msg
 
 
@@ -180,8 +170,6 @@ def _safe_coalesce(t):
 # TODO Split this into assert_equal() and assert_close() or assert_almost_equal().
 # TODO Use atol and rtol instead of prec
 def assert_equal(x, y, prec=1e-5, msg=''):
-    x, y = _unwrap_variables(x, y)
-
     if torch.is_tensor(x) and torch.is_tensor(y):
         assert_equal(x.is_sparse, y.is_sparse, prec, msg)
         if x.is_sparse:

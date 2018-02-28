@@ -1,16 +1,15 @@
 from __future__ import absolute_import, division, print_function
 
-import logging
 from collections import defaultdict, namedtuple
-
+import logging
 import os
+
 import pytest
 import torch
 from torch.autograd import Variable
 
 import pyro
 import pyro.distributions as dist
-from pyro.distributions.util import torch_ones_like, torch_zeros_like
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.mcmc import MCMC
 from tests.common import assert_equal
@@ -26,19 +25,20 @@ class GaussianChain(object):
         self.dim = dim
         self.chain_len = chain_len
         self.num_obs = num_obs
-        self.mu_0 = Variable(torch_zeros_like(torch.Tensor(self.dim)), requires_grad=True)
-        self.lambda_prec = Variable(torch_ones_like(torch.Tensor(self.dim)))
+        self.mu_0 = Variable(torch.zeros_like(torch.Tensor(self.dim)), requires_grad=True)
+        self.lambda_prec = Variable(torch.ones_like(torch.Tensor(self.dim)))
 
     def model(self, data):
         mu = pyro.param('mu_0', self.mu_0)
         lambda_prec = self.lambda_prec
         for i in range(1, self.chain_len + 1):
-            mu = pyro.sample('mu_{}'.format(i), dist.Normal(mu=mu, sigma=Variable(lambda_prec.data)))
-        pyro.sample('obs', dist.Normal(mu=mu, sigma=Variable(lambda_prec.data)), obs=data)
+            mu = pyro.sample('mu_{}'.format(i),
+                             dist.Normal(mu=mu, sigma=Variable(lambda_prec.data)))
+        pyro.sample('obs', dist.Normal(mu, Variable(lambda_prec.data)), obs=data)
 
     @property
     def data(self):
-        return Variable(torch_ones_like(torch.Tensor(self.num_obs, self.dim)))
+        return Variable(torch.ones_like(torch.Tensor(self.num_obs, self.dim)))
 
     def id_fn(self):
         return 'dim={}_chain-len={}_num_obs={}'.format(self.dim, self.chain_len, self.num_obs)
@@ -106,8 +106,9 @@ TEST_CASES = [
         expected_precs=[1.11, 0.63, 0.48, 0.42, 0.4, 0.42, 0.48, 0.63, 1.11],
         mean_tol=0.08,
         std_tol=0.08,
-    ), marks=pytest.mark.skipif('CI' in os.environ and os.environ['CI'] == 'true',
-                                reason='Slow test - skip on CI'))
+    ), marks=[pytest.mark.xfail(reason="flaky"),
+              pytest.mark.skipif('CI' in os.environ and os.environ['CI'] == 'true',
+                                 reason='Slow test - skip on CI')])
 ]
 
 TEST_IDS = [t[0].id_fn() if type(t).__name__ == 'TestExample'
@@ -139,22 +140,22 @@ def test_hmc_conjugate_gaussian(fixture,
         param_name = 'mu_' + str(i)
         latent_mu = torch.mean(torch.stack(post_trace[param_name]), 0)
         latent_std = torch.std(torch.stack(post_trace[param_name]), 0)
-        expected_mean = Variable(torch_ones_like(torch.Tensor(fixture.dim)) * expected_means[i - 1])
-        expected_std = 1 / torch.sqrt(Variable(torch_ones_like(torch.Tensor(fixture.dim)) * expected_precs[i - 1]))
+        expected_mean = Variable(torch.ones_like(torch.Tensor(fixture.dim)) * expected_means[i - 1])
+        expected_std = 1 / torch.sqrt(Variable(torch.ones_like(torch.Tensor(fixture.dim)) * expected_precs[i - 1]))
 
         # Actual vs expected posterior means for the latents
         logger.info('Posterior mean (actual) - {}'.format(param_name))
         logger.info(latent_mu)
         logger.info('Posterior mean (expected) - {}'.format(param_name))
         logger.info(expected_mean)
-        assert_equal(rmse(latent_mu, expected_mean).data[0], 0.0, prec=mean_tol)
+        assert_equal(rmse(latent_mu, expected_mean).item(), 0.0, prec=mean_tol)
 
         # Actual vs expected posterior precisions for the latents
         logger.info('Posterior std (actual) - {}'.format(param_name))
         logger.info(latent_std)
         logger.info('Posterior std (expected) - {}'.format(param_name))
         logger.info(expected_std)
-        assert_equal(rmse(latent_std, expected_std).data[0], 0.0, prec=std_tol)
+        assert_equal(rmse(latent_std, expected_std).item(), 0.0, prec=std_tol)
 
 
 def test_logistic_regression():
@@ -165,7 +166,7 @@ def test_logistic_regression():
 
     def model(data):
         coefs_mean = Variable(torch.zeros(dim), requires_grad=True)
-        coefs = pyro.sample('beta', dist.Normal(mu=coefs_mean, sigma=Variable(torch.ones(dim))))
+        coefs = pyro.sample('beta', dist.Normal(coefs_mean, Variable(torch.ones(dim))))
         y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
         return y
 
@@ -175,7 +176,7 @@ def test_logistic_regression():
     for trace, _ in mcmc_run._traces(data):
         posterior.append(trace.nodes['beta']['value'])
     posterior_mean = torch.mean(torch.stack(posterior), 0)
-    assert_equal(rmse(true_coefs, posterior_mean).data[0], 0.0, prec=0.05)
+    assert_equal(rmse(true_coefs, posterior_mean).item(), 0.0, prec=0.05)
 
 
 def test_bernoulli_beta():

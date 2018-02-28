@@ -14,7 +14,7 @@ import pyro.poutine as poutine
 from pyro.distributions.distribution import Distribution
 from pyro.params import _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, param_with_module_name
 from pyro.poutine import _PYRO_STACK, condition, do  # noqa: F401
-from pyro.util import apply_stack, deep_getattr, get_tensor_data, ones, set_rng_seed, zeros  # noqa: F401
+from pyro.util import apply_stack, deep_getattr, get_tensor_data, ones, set_rng_seed, zeros, am_i_wrapped  # noqa: F401
 
 __version__ = '0.1.2'
 
@@ -47,15 +47,15 @@ def sample(name, fn, *args, **kwargs):
     :param fn: distribution class or function
     :param obs: observed datum (optional; should only be used in context of
         inference) optionally specified in kwargs
-    :param dict baseline: Optional dictionary of baseline parameters specified
+    :param dict infer: Optional dictionary of inference parameters specified
         in kwargs. See inference documentation for details.
     :returns: sample
     """
     obs = kwargs.pop("obs", None)
-    baseline = kwargs.pop("baseline", {})
+    infer = kwargs.pop("infer", {})
     # check if stack is empty
     # if stack empty, default behavior (defined here)
-    if len(_PYRO_STACK) == 0:
+    if not am_i_wrapped():
         if obs is not None:
             warnings.warn("trying to observe a value outside of inference at " + name,
                           RuntimeWarning)
@@ -72,19 +72,20 @@ def sample(name, fn, *args, **kwargs):
             "args": args,
             "kwargs": kwargs,
             "value": None,
-            "baseline": baseline,
+            "infer": infer,
             "scale": 1.0,
             "cond_indep_stack": [],
             "done": False,
             "stop": False,
+            "continuation": None
         }
         # handle observation
         if obs is not None:
             msg["value"] = obs
             msg["is_observed"] = True
         # apply the stack and return its return value
-        out_msg = apply_stack(msg)
-        return out_msg["value"]
+        apply_stack(msg)
+        return msg["value"]
 
 
 def observe(name, fn, obs, *args, **kwargs):
@@ -117,11 +118,13 @@ class _Subsample(Distribution):
         self.subsample_size = subsample_size
         self.use_cuda = torch.Tensor.is_cuda if use_cuda is None else use_cuda
 
-    def sample(self, sample_shape=None):
+    def sample(self, sample_shape=torch.Size()):
         """
         :returns: a random subsample of `range(size)`
         :rtype: torch.autograd.Variable of torch.LongTensor
         """
+        if sample_shape:
+            raise NotImplementedError
         subsample_size = self.subsample_size
         if subsample_size is None or subsample_size > self.size:
             subsample_size = self.size
@@ -149,7 +152,7 @@ def _subsample(name, size=None, subsample_size=None, subsample=None, use_cuda=No
         subsample_size = 1
     elif subsample is None:
         names = [name]
-        names += [str(f.counter) for f in _PYRO_STACK if isinstance(f, poutine.IndepPoutine)]
+        names += [str(f.counter) for f in _PYRO_STACK if isinstance(f, poutine.IndepMessenger)]
         subsample = sample("_".join(names), _Subsample(size, subsample_size, use_cuda))
 
     if subsample_size is None:
@@ -230,11 +233,11 @@ def iarange(name, size=None, subsample_size=None, subsample=None, use_cuda=None)
     extended discussion.
     """
     subsample, scale = _subsample(name, size, subsample_size, subsample, use_cuda)
-    if len(_PYRO_STACK) == 0:
+    if not am_i_wrapped():
         yield subsample
     else:
         with poutine.scale(None, scale):
-            with poutine.indep(None, name, vectorized=True):
+            with poutine.indep(name, vectorized=True):
                 yield subsample
 
 
@@ -265,17 +268,18 @@ def irange(name, size, subsample_size=None, subsample=None, use_cuda=None):
     See `SVI Part II <http://pyro.ai/examples/svi_part_ii.html>`_ for an extended discussion.
     """
     subsample, scale = _subsample(name, size, subsample_size, subsample, use_cuda)
-    if isinstance(subsample, Variable):
-        subsample = subsample.data
-    if len(_PYRO_STACK) == 0:
+    if not am_i_wrapped():
         for i in subsample:
-            yield i
+            yield i.item() if isinstance(i, Variable) else i
     else:
-        indep_context = poutine.indep(None, name, vectorized=False)
+        indep_context = poutine.indep(name, vectorized=False)
         with poutine.scale(None, scale):
             for i in subsample:
+                indep_context.next_context()
                 with indep_context:
-                    yield i
+                    # convert to python numeric type as functions like torch.ones(*args)
+                    # do not work with dim 0 torch.Tensor instances.
+                    yield i.item() if isinstance(i, Variable) else i
 
 
 def map_data(name, data, fn, batch_size=None, batch_dim=0, use_cuda=None):
@@ -315,7 +319,7 @@ def param(name, *args, **kwargs):
     :param name: name of parameter
     :returns: parameter
     """
-    if len(_PYRO_STACK) == 0:
+    if not am_i_wrapped():
         return _PYRO_PARAM_STORE.get_param(name, *args, **kwargs)
     else:
         msg = {
@@ -323,15 +327,17 @@ def param(name, *args, **kwargs):
             "name": name,
             "args": args,
             "kwargs": kwargs,
+            "infer": {},
             "scale": 1.0,
             "cond_indep_stack": [],
             "value": None,
             "done": False,
             "stop": False,
+            "continuation": None
         }
         # apply the stack and return its return value
-        out_msg = apply_stack(msg)
-        return out_msg["value"]
+        apply_stack(msg)
+        return msg["value"]
 
 
 def module(name, nn_module, tags="default", update_module_params=False):

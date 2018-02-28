@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import numbers
+
 import torch
 import torch.nn.functional as F
 from torch.autograd import Variable
@@ -11,8 +13,9 @@ def copy_docs_from(source_class, full_text=False):
     """
 
     def decorator(destin_class):
-        if not destin_class.__doc__:
-            destin_class.__doc__ = source_class.__doc__
+        # This works only in python 3.3+:
+        # if not destin_class.__doc__:
+        #     destin_class.__doc__ = source_class.__doc__
         for name in dir(destin_class):
             if name.startswith('_'):
                 continue
@@ -24,10 +27,8 @@ def copy_docs_from(source_class, full_text=False):
                 if full_text or source_doc.startswith('See '):
                     destin_doc = source_doc
                 else:
-                    attr_name = source_attr.fget.__name__ if isinstance(source_attr, property) \
-                        else source_attr.__name__
                     destin_doc = 'See :meth:`{}.{}.{}`'.format(
-                        source_class.__module__, source_class.__name__, attr_name)
+                        source_class.__module__, source_class.__name__, name)
                 if isinstance(destin_attr, property):
                     # Set docs for object properties.
                     # Since __doc__ is read-only, we need to reset the property
@@ -42,6 +43,22 @@ def copy_docs_from(source_class, full_text=False):
         return destin_class
 
     return decorator
+
+
+def is_identically_zero(x):
+    """
+    Check if argument is exactly the number zero. True for the number zero;
+    false for other numbers; false for ``torch.autograd.Variable``s.
+    """
+    return isinstance(x, numbers.Number) and x == 0
+
+
+def is_identically_one(x):
+    """
+    Check if argument is exactly the number one. True for the number one;
+    false for other numbers; false for ``torch.autograd.Variable``s.
+    """
+    return isinstance(x, numbers.Number) and x == 1
 
 
 def broadcast_shape(*shapes, **kwargs):
@@ -69,78 +86,75 @@ def broadcast_shape(*shapes, **kwargs):
     return tuple(reversed(reversed_shape))
 
 
-def log_gamma(xx):
-    gamma_coeff = [
-        76.18009172947146,
-        -86.50532032941677,
-        24.01409824083091,
-        -1.231739572450155,
-        0.1208650973866179e-2,
-        -0.5395239384953e-5,
-    ]
-    magic1 = 1.000000000190015
-    magic2 = 2.5066282746310005
-    x = xx - 1.0
-    t = x + 5.5
-    t = t - (x + 0.5) * torch.log(t)
-    ser = torch_ones_like(x) * magic1
-    for c in gamma_coeff:
-        x = x + 1.0
-        ser = ser + torch.pow(x / c, -1)
-    return torch.log(ser * magic2) - t
-
-
-def log_beta(t):
+def sum_rightmost(value, dim):
     """
-    Computes log Beta function.
+    Sum out ``dim`` many rightmost dimensions of a given tensor.
 
-    :param t:
-    :type t: torch.autograd.Variable of dimension 1 or 2
-    :rtype: torch.autograd.Variable of float (if t.dim() == 1) or torch.Tensor (if t.dim() == 2)
-    """
-    assert t.dim() in (1, 2)
-    if t.dim() == 1:
-        numer = torch.sum(log_gamma(t))
-        denom = log_gamma(torch.sum(t))
-    else:
-        numer = torch.sum(log_gamma(t), 1)
-        denom = log_gamma(torch.sum(t, 1))
-    return numer - denom
+    If ``dim`` is 0, no dimensions are summed out.
+    If ``dim`` is ``float('inf')``, then all dimensions are summed out.
+    If ``dim`` is 1, the rightmost 1 dimension is summed out.
+    If ``dim`` is 2, the rightmost two dimensions are summed out.
+    If ``dim`` is -1, all but the leftmost 1 dimension is summed out.
+    If ``dim`` is -2, all but the leftmost 2 dimensions are summed out.
+    etc.
 
-
-def move_to_same_host_as(source, destin):
+    :param torch.autograd.Variable value: A tensor of ``.dim()`` at least ``dim``.
+    :param int dim: The number of rightmost dims to sum out.
     """
-    Returns source or a copy of `source` such that `source.is_cuda == `destin.is_cuda`.
-    """
-    return source.cuda(destin.get_device()) if destin.is_cuda else source.cpu()
-
-
-def torch_zeros_like(x):
-    """
-    Polyfill for `torch.zeros_like()`.
-    """
-    # Work around https://github.com/pytorch/pytorch/issues/2906
-    if isinstance(x, Variable):
-        return Variable(torch_zeros_like(x.data))
-    # Support Pytorch before https://github.com/pytorch/pytorch/pull/2489
-    try:
-        return torch.zeros_like(x)
-    except AttributeError:
-        return torch.zeros(x.size()).type_as(x)
+    if isinstance(value, numbers.Number):
+        return value
+    if dim < 0:
+        dim += value.dim()
+    if dim == 0:
+        return value
+    if dim >= value.dim():
+        return value.sum()
+    return value.contiguous().view(value.shape[:-dim] + (-1,)).sum(-1)
 
 
-def torch_ones_like(x):
+def sum_leftmost(value, dim):
     """
-    Polyfill for `torch.ones_like()`.
+    Sum out ``dim`` many leftmost dimensions of a given tensor.
+
+    If ``dim`` is 0, no dimensions are summed out.
+    If ``dim`` is ``float('inf')``, then all dimensions are summed out.
+    If ``dim`` is 1, the leftmost 1 dimension is summed out.
+    If ``dim`` is 2, the leftmost two dimensions are summed out.
+    If ``dim`` is -1, all but the rightmost 1 dimension is summed out.
+    If ``dim`` is -2, all but the rightmost 2 dimensions are summed out.
+    etc.
+
+    Example::
+
+        x = torch.ones(2, 3, 4)
+        assert sum_leftmost(x, 1).shape == (3, 4)
+        assert sum_leftmost(x, -1).shape == (4,)
+
+    :param torch.autograd.Variable value: A tensor
+    :param int dim: Specifies the number of dims to sum out
     """
-    # Work around https://github.com/pytorch/pytorch/issues/2906
-    if isinstance(x, Variable):
-        return Variable(torch_ones_like(x.data))
-    # Support Pytorch before https://github.com/pytorch/pytorch/pull/2489
-    try:
-        return torch.ones_like(x)
-    except AttributeError:
-        return torch.ones(x.size()).type_as(x)
+    if isinstance(value, numbers.Number):
+        return value
+    if dim < 0:
+        dim += value.dim()
+    if dim == 0:
+        return value
+    if dim >= value.dim():
+        return value.sum()
+    return value.contiguous().view(-1, *value.shape[dim:]).sum(0)
+
+
+def scale_tensor(tensor, scale):
+    """
+    Safely scale a tensor without increasing its ``.size()``.
+    """
+    if is_identically_zero(tensor) or is_identically_one(scale):
+        return tensor
+    result = tensor * scale
+    if not isinstance(result, numbers.Number) and result.shape != tensor.shape:
+        raise ValueError("Broadcasting error: scale is incompatible with tensor: "
+                         "{} vs {}".format(scale.shape, tensor.shape))
+    return result
 
 
 def torch_eye(n, m=None, out=None):
@@ -173,6 +187,15 @@ def torch_multinomial(input, num_samples, replacement=False):
         return torch.multinomial(input, num_samples, replacement)
 
 
+def torch_sign(value):
+    """
+    Like ``torch.sign()`` but also works for numbers.
+    """
+    if isinstance(value, numbers.Number):
+        return (value > 0) - (value < 0)
+    return torch.sign(value)
+
+
 def softmax(x, dim=-1):
     """
     TODO: change to use the default pyTorch implementation when available
@@ -188,12 +211,7 @@ def softmax(x, dim=-1):
     trans_size = trans_input.size()
 
     input_2d = trans_input.contiguous().view(-1, trans_size[-1])
-
-    try:
-        soft_max_2d = F.softmax(input_2d, 1)
-    except TypeError:
-        # Support older pytorch 0.2 release.
-        soft_max_2d = F.softmax(input_2d)
+    soft_max_2d = F.softmax(input_2d, 1)
 
     soft_max_nd = soft_max_2d.view(*trans_size)
     return soft_max_nd.transpose(dim, len(input_size) - 1)

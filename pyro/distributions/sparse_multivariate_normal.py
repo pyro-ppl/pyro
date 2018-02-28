@@ -7,11 +7,31 @@ from torch.autograd import Variable
 from torch.distributions import constraints
 from torch.distributions.utils import lazy_property
 
-from pyro.distributions.torch_wrapper import TorchDistribution
-from pyro.distributions.util import copy_docs_from, matrix_triangular_solve_compat
+from pyro.distributions.torch_distribution import TorchDistribution
+from pyro.distributions.util import matrix_triangular_solve_compat
 
 
-class TorchSparseMultivariateNormal(torch.distributions.Distribution):
+class SparseMultivariateNormal(TorchDistribution):
+    """
+    Sparse Multivariate Normal distribution.
+
+    Implements fast computation for log probability of Multivariate Normal distribution
+    when the covariance matrix has the form::
+
+        covariance_matrix = D + W.T @ W.
+
+    Here D is a diagonal vector and ``W`` is a matrix of size ``M x N``. The
+    computation will be beneficial when ``M << N``.
+
+    :param torch.autograd.Variable loc: Mean.
+        Must be in 1 dimensional of size N.
+    :param torch.autograd.Variable D_term: D term of covariance matrix.
+        Must be in 1 dimensional of size N.
+    :param torch.autograd.Variable W_term: W term of covariance matrix.
+        Must be in 2 dimensional of size M x N.
+    :param float trace_term: A optional term to be added into Mahalabonis term
+        according to p(y) = N(y|loc, cov).exp(-1/2 * trace_term).
+    """
     params = {"loc": constraints.real, "covariance_matrix_D_term": constraints.positive,
               "scale_tril": constraints.lower_triangular}
     support = constraints.real
@@ -32,7 +52,7 @@ class TorchSparseMultivariateNormal(torch.distributions.Distribution):
         self.trace_term = trace_term if trace_term is not None else 0
 
         batch_shape, event_shape = loc.shape[:-1], loc.shape[-1:]
-        super(TorchSparseMultivariateNormal, self).__init__(batch_shape, event_shape)
+        super(SparseMultivariateNormal, self).__init__(batch_shape, event_shape)
 
     @property
     def mean(self):
@@ -70,8 +90,9 @@ class TorchSparseMultivariateNormal(torch.distributions.Distribution):
     def _compute_logdet_and_mahalanobis(self, D, W, y, trace_term=0):
         """
         Calculates log determinant and (squared) Mahalanobis term of covariance
-        matrix (D + Wt.W), where D is a diagonal matrix, based on the
-        "Woodbury matrix identity" and "matrix determinant lemma":
+        matrix ``(D + Wt.W)``, where ``D`` is a diagonal matrix, based on the
+        "Woodbury matrix identity" and "matrix determinant lemma"::
+
             inv(D + Wt.W) = inv(D) - inv(D).Wt.inv(I + W.inv(D).Wt).W.inv(D)
             log|D + Wt.W| = log|Id + Wt.inv(D).W| + log|D|
         """
@@ -95,30 +116,3 @@ class TorchSparseMultivariateNormal(torch.distributions.Distribution):
         mahalanobis_squared = mahalanobis1 - mahalanobis2 + trace_term
 
         return logdet, mahalanobis_squared
-
-
-@copy_docs_from(TorchDistribution)
-class SparseMultivariateNormal(TorchDistribution):
-    """
-    Sparse Multivariate Normal distribution.
-
-    Implements fast computation for log probability of Multivariate Normal distribution
-    when the covariance matrix has the form:
-        covariance_matrix = D + W.T @ W.
-    Here D is a diagonal vector and W is a matrix of size M x N. The computation will be
-    beneficial when M << N.
-
-    :param torch.autograd.Variable loc: Mean.
-        Must be in 1 dimensional of size N.
-    :param torch.autograd.Variable D_term: D term of covariance matrix.
-        Must be in 1 dimensional of size N.
-    :param torch.autograd.Variable W_term: W term of covariance matrix.
-        Must be in 2 dimensional of size M x N.
-    :param float trace_term: A optional term to be added into Mahalabonis term
-        according to p(y) = N(y|loc, cov).exp(-1/2 * trace_term).
-    """
-    reparameterized = True
-
-    def __init__(self, loc, D_term, W_term, trace_term=None, *args, **kwargs):
-        torch_dist = TorchSparseMultivariateNormal(loc, D_term, W_term, trace_term)
-        super(SparseMultivariateNormal, self).__init__(torch_dist, *args, **kwargs)

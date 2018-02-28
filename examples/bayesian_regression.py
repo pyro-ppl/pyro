@@ -65,10 +65,10 @@ def model(data):
         x_data = data[:, :-1]
         y_data = data[:, -1]
         # run the regressor forward conditioned on inputs
-        prediction_mean = lifted_reg_model(x_data).squeeze()
+        prediction_mean = lifted_reg_model(x_data)
         pyro.sample("obs",
                     Normal(prediction_mean, Variable(torch.ones(data.size(0))).type_as(data)),
-                    obs=y_data.squeeze())
+                    obs=y_data)
 
 
 def guide(data):

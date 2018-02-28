@@ -4,7 +4,7 @@ import pyro
 from torch.autograd import Variable
 import pyro.distributions as dist
 from utils.mnist_cached import MNISTCached, setup_data_loaders
-from pyro.infer import SVI
+from pyro.infer import SVI, config_enumerate
 from pyro.optim import Adam
 from pyro.nn import ClippedSoftmax, ClippedSigmoid
 from utils.custom_mlp import MLP, Exp
@@ -109,22 +109,22 @@ class SSVAE(nn.Module):
             # sample the handwriting style from the constant prior distribution
             prior_mu = Variable(torch.zeros([batch_size, self.z_dim]))
             prior_sigma = Variable(torch.ones([batch_size, self.z_dim]))
-            zs = pyro.sample("z", dist.normal, prior_mu, prior_sigma, extra_event_dims=1)
+            zs = pyro.sample("z", dist.Normal(prior_mu, prior_sigma).reshape(extra_event_dims=1))
 
             # if the label y (which digit to write) is supervised, sample from the
             # constant prior, otherwise, observe the value (i.e. score it against the constant prior)
             alpha_prior = Variable(torch.ones([batch_size, self.output_size]) / (1.0 * self.output_size))
             if ys is None:
-                ys = pyro.sample("y", dist.one_hot_categorical, alpha_prior)
+                ys = pyro.sample("y", dist.OneHotCategorical(alpha_prior))
             else:
-                pyro.sample("y", dist.one_hot_categorical, alpha_prior, obs=ys)
+                pyro.sample("y", dist.OneHotCategorical(alpha_prior), obs=ys)
 
             # finally, score the image (x) using the handwriting style (z) and
             # the class label y (which digit to write) against the
             # parametrized distribution p(x|y,z) = bernoulli(decoder(y,z))
             # where `decoder` is a neural network
             mu = self.decoder.forward([zs, ys])
-            pyro.sample("x", dist.bernoulli, mu, extra_event_dims=1, obs=xs)
+            pyro.sample("x", dist.Bernoulli(mu).reshape(extra_event_dims=1), obs=xs)
 
     def guide(self, xs, ys=None):
         """
@@ -146,12 +146,12 @@ class SSVAE(nn.Module):
             # q(y|x) = categorical(alpha(x))
             if ys is None:
                 alpha = self.encoder_y.forward(xs)
-                ys = pyro.sample("y", dist.one_hot_categorical, alpha)
+                ys = pyro.sample("y", dist.OneHotCategorical(alpha))
 
             # sample (and score) the latent handwriting-style with the variational
             # distribution q(z|x,y) = normal(mu(x,y),sigma(x,y))
             mu, sigma = self.encoder_z.forward([xs, ys])
-            pyro.sample("z", dist.normal, mu, sigma, extra_event_dims=1)
+            pyro.sample("z", dist.Normal(mu, sigma).reshape(extra_event_dims=1))
 
     def classifier(self, xs):
         """
@@ -189,7 +189,7 @@ class SSVAE(nn.Module):
             if ys is not None:
                 alpha = self.encoder_y.forward(xs)
                 with pyro.poutine.scale(None, self.aux_loss_multiplier):
-                    pyro.sample("y_aux", dist.one_hot_categorical, alpha, obs=ys)
+                    pyro.sample("y_aux", dist.OneHotCategorical(alpha), obs=ys)
 
     def guide_classify(self, xs, ys=None):
         """
@@ -201,11 +201,11 @@ class SSVAE(nn.Module):
         # sample the handwriting style from the constant prior distribution
         prior_mu = Variable(torch.zeros([batch_size, self.z_dim]))
         prior_sigma = Variable(torch.ones([batch_size, self.z_dim]))
-        zs = pyro.sample("z", dist.normal, prior_mu, prior_sigma, extra_event_dims=1)
+        zs = pyro.sample("z", dist.Normal(prior_mu, prior_sigma).reshape(extra_event_dims=1))
 
         # sample an image using the decoder
         mu = self.decoder.forward([zs, ys])
-        xs = pyro.sample("sample", dist.bernoulli, mu, extra_event_dims=1)
+        xs = pyro.sample("sample", dist.Bernoulli(mu).reshape(extra_event_dims=1))
         return xs, mu
 
 
@@ -276,7 +276,7 @@ def get_accuracy(data_loader, classifier_fn, batch_size):
     for pred, act in zip(predictions, actuals):
         for i in range(pred.size(0)):
             v = torch.sum(pred[i] == act[i])
-            accurate_preds += (v.data[0] == 10)
+            accurate_preds += (v.item() == 10)
 
     # calculate the accuracy between 0 and 1
     accuracy = (accurate_preds * 1.0) / (len(predictions) * batch_size)
@@ -318,9 +318,10 @@ def run_inference_ss_vae(args):
     adam_params = {"lr": args.learning_rate, "betas": (args.beta_1, 0.999)}
     optimizer = Adam(adam_params)
 
-    # set up the loss(es) for inference setting the enum_discrete parameter builds the loss as a sum
+    # set up the loss(es) for inference. wrapping the guide in config_enumerate builds the loss as a sum
     # by enumerating each class label for the sampled discrete categorical distribution in the model
-    loss_basic = SVI(ss_vae.model, ss_vae.guide, optimizer, loss="ELBO", enum_discrete=args.enum_discrete)
+    guide = config_enumerate(ss_vae.guide, args.enum_discrete)
+    loss_basic = SVI(ss_vae.model, guide, optimizer, loss="ELBO", max_iarange_nesting=1)
 
     # build a list of all losses considered
     losses = [loss_basic]
@@ -410,7 +411,7 @@ if __name__ == "__main__":
                         help="whether to use the auxiliary loss from NIPS 14 paper (Kingma et al)")
     parser.add_argument('-alm', '--aux-loss-multiplier', default=300, type=float,
                         help="the multiplier to use with the auxiliary loss")
-    parser.add_argument('-enum', '--enum-discrete', action="store_true",
+    parser.add_argument('-enum', '--enum-discrete', default=None,
                         help="whether to enumerate the discrete support of the categorical distribution"
                              "while computing the ELBO loss")
     parser.add_argument('-sup', '--sup-num', default=3000,

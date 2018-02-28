@@ -28,7 +28,6 @@ class SVI(object):
                  optim,
                  loss,
                  loss_and_grads=None,
-                 *args,
                  **kwargs):
         self.model = model
         self.guide = guide
@@ -38,7 +37,7 @@ class SVI(object):
             assert loss in ["ELBO"], "The only built-in loss currently supported by SVI is ELBO"
 
             if loss == "ELBO":
-                self.ELBO = ELBO(*args, **kwargs)
+                self.ELBO = ELBO.make(**kwargs)
                 self.loss = self.ELBO.loss
                 self.loss_and_grads = self.ELBO.loss_and_grads
             else:
@@ -55,7 +54,7 @@ class SVI(object):
                 self._loss = copy.copy(loss)
 
                 def new_loss(model, guide, *args, **kwargs):
-                    return self._loss(model, guide, *args, **kwargs).data[0]
+                    return self._loss(model, guide, *args, **kwargs).item()
 
                 self.loss = new_loss
 

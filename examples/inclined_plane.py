@@ -38,10 +38,10 @@ def simulate(mu, length=2.0, phi=np.pi / 6.0, dt=0.005, noise_sigma=None):
     acceleration = Variable(torch.Tensor([little_g * np.sin(phi)])) - \
         Variable(torch.Tensor([little_g * np.cos(phi)])) * mu
 
-    if acceleration.data[0] <= 0.0:             # the box doesn't slide if the friction is too large
+    if acceleration.item() <= 0.0:             # the box doesn't slide if the friction is too large
         return Variable(torch.Tensor([1.0e5]))  # return a very large time instead of infinity
 
-    while displacement.data[0] < length:  # otherwise slide to the end of the inclined plane
+    while displacement.item() < length:  # otherwise slide to the end of the inclined plane
         displacement += velocity * dt
         velocity += acceleration * dt
         T += dt
@@ -67,7 +67,7 @@ N_obs = 20
 torch.manual_seed(2)
 observed_data = torch.cat([simulate(Variable(torch.Tensor([mu0])), noise_sigma=time_measurement_sigma)
                            for _ in range(N_obs)])
-observed_mean = np.mean([T.data[0] for T in observed_data])
+observed_mean = np.mean([T.item() for T in observed_data])
 
 
 # define model with uniform prior on mu and gaussian noise on the descent time
@@ -100,8 +100,8 @@ def main(args):
     posterior_std_dev = torch.std(torch.cat(posterior_samples), 0)
 
     # report results
-    inferred_mu = posterior_mean.data[0]
-    inferred_mu_uncertainty = posterior_std_dev.data[0]
+    inferred_mu = posterior_mean.item()
+    inferred_mu_uncertainty = posterior_std_dev.item()
     print("the coefficient of friction inferred by pyro is %.3f +- %.3f" %
           (inferred_mu, inferred_mu_uncertainty))
 
@@ -111,9 +111,9 @@ def main(args):
     # but will be systematically off from the third number
     print("the mean observed descent time in the dataset is: %.4f seconds" % observed_mean)
     print("the (forward) simulated descent time for the inferred (mean) mu is: %.4f seconds" %
-          simulate(posterior_mean).data[0])
+          simulate(posterior_mean).item())
     print(("disregarding measurement noise, elementary calculus gives the descent time\n" +
-           "for the inferred (mean) mu as: %.4f seconds") % analytic_T(posterior_mean.data[0]))
+           "for the inferred (mean) mu as: %.4f seconds") % analytic_T(posterior_mean.item()))
 
     """
     ################## EXERCISE ###################

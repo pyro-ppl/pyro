@@ -15,6 +15,7 @@ from torch.autograd import Variable
 
 import pyro
 import pyro.distributions as dist
+import pyro.poutine as poutine
 from modules import Identity, Encoder, Decoder, MLP, Predict
 from pyro.util import ng_zeros, ng_ones, zeros
 
@@ -126,31 +127,27 @@ class AIR(nn.Module):
 
         # Sample presence indicators.
         z_pres = pyro.sample('z_pres_{}'.format(t),
-                             dist.bernoulli,
-                             z_pres_prior_p(t) * prev.z_pres,
-                             extra_event_dims=1)
+                             dist.Bernoulli(z_pres_prior_p(t) * prev.z_pres)
+                                 .reshape(extra_event_dims=1))
 
         # If zero is sampled for a data point, then no more objects
         # will be added to its output image. We can't
         # straight-forwardly avoid generating further objects, so
         # instead we zero out the log_pdf of future choices.
-        sample_mask = z_pres.squeeze(-1) if self.use_masking else None
+        sample_mask = z_pres.squeeze(-1) if self.use_masking else 1
+        with poutine.scale(None, sample_mask):
 
-        # Sample attention window position.
-        z_where = pyro.sample('z_where_{}'.format(t),
-                              dist.normal,
-                              self.z_where_mu_prior.expand(n, self.z_where_size),
-                              self.z_where_sigma_prior.expand(n, self.z_where_size),
-                              log_pdf_mask=sample_mask,
-                              extra_event_dims=1)
+            # Sample attention window position.
+            z_where = pyro.sample('z_where_{}'.format(t),
+                                  dist.Normal(self.z_where_mu_prior.expand(n, self.z_where_size),
+                                              self.z_where_sigma_prior.expand(n, self.z_where_size))
+                                      .reshape(extra_event_dims=1))
 
-        # Sample latent code for contents of the attention window.
-        z_what = pyro.sample('z_what_{}'.format(t),
-                             dist.normal,
-                             self.ng_zeros([n, self.z_what_size]),
-                             self.ng_ones([n, self.z_what_size]),
-                             log_pdf_mask=sample_mask,
-                             extra_event_dims=1)
+            # Sample latent code for contents of the attention window.
+            z_what = pyro.sample('z_what_{}'.format(t),
+                                 dist.Normal(self.ng_zeros([n, self.z_what_size]),
+                                             self.ng_ones([n, self.z_what_size]))
+                                     .reshape(extra_event_dims=1))
 
         # Map latent code to pixel space.
         y_att = self.decode(z_what)
@@ -172,10 +169,9 @@ class AIR(nn.Module):
             n = batch.size(0)
             (z_where, z_pres), x = self.prior(n, **kwargs)
             pyro.sample('obs',
-                        dist.normal,
-                        x.view(n, -1),
-                        (self.likelihood_sd * self.ng_ones(1)).expand(n, self.x_size ** 2),
-                        extra_event_dims=1,
+                        dist.Normal(x.view(n, -1),
+                                    (self.likelihood_sd * self.ng_ones(1)).expand(n, self.x_size ** 2))
+                            .reshape(extra_event_dims=1),
                         obs=batch.view(n, -1))
 
     def guide(self, data, batch_size, **kwargs):
@@ -237,33 +233,26 @@ class AIR(nn.Module):
 
         # Sample presence.
         z_pres = pyro.sample('z_pres_{}'.format(t),
-                             dist.bernoulli,
-                             z_pres_p * prev.z_pres,
-                             baseline=dict(baseline_value=bl_value.squeeze(-1)),
-                             extra_event_dims=1)
+                             dist.Bernoulli(z_pres_p * prev.z_pres).reshape(extra_event_dims=1),
+                             infer=dict(baseline=dict(baseline_value=bl_value.squeeze(-1))))
 
-        log_pdf_mask = z_pres.squeeze(-1) if self.use_masking else None
-        z_where = pyro.sample('z_where_{}'.format(t),
-                              dist.normal,
-                              z_where_mu + self.z_where_mu_prior,
-                              z_where_sigma * self.z_where_sigma_prior,
-                              log_pdf_mask=log_pdf_mask,
-                              extra_event_dims=1)
+        with poutine.scale(None, z_pres.squeeze(-1) if self.use_masking else 1):
+            z_where = pyro.sample('z_where_{}'.format(t),
+                                  dist.Normal(z_where_mu + self.z_where_mu_prior,
+                                              z_where_sigma * self.z_where_sigma_prior)
+                                      .reshape(extra_event_dims=1))
 
-        # Figure 2 of [1] shows x_att depending on z_where and h,
-        # rather than z_where and x as here, but I think this is
-        # correct.
-        x_att = image_to_window(z_where, self.window_size, self.x_size, inputs['raw'])
+            # Figure 2 of [1] shows x_att depending on z_where and h,
+            # rather than z_where and x as here, but I think this is
+            # correct.
+            x_att = image_to_window(z_where, self.window_size, self.x_size, inputs['raw'])
 
-        # Encode attention windows.
-        z_what_mu, z_what_sigma = self.encode(x_att)
+            # Encode attention windows.
+            z_what_mu, z_what_sigma = self.encode(x_att)
 
-        z_what = pyro.sample('z_what_{}'.format(t),
-                             dist.normal,
-                             z_what_mu,
-                             z_what_sigma,
-                             log_pdf_mask=log_pdf_mask,
-                             extra_event_dims=1)
+            z_what = pyro.sample('z_what_{}'.format(t),
+                                 dist.Normal(z_what_mu, z_what_sigma)
+                                     .reshape(extra_event_dims=1))
         return GuideState(h=h, c=c, bl_h=bl_h, bl_c=bl_c, z_pres=z_pres, z_where=z_where, z_what=z_what)
 
     def baseline_step(self, prev, inputs):

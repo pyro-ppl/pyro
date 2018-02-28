@@ -3,12 +3,11 @@ from __future__ import absolute_import, division, print_function
 import torch
 from torch.autograd import Variable
 
-from pyro.distributions.distribution import Distribution
-from pyro.distributions.util import copy_docs_from, broadcast_shape
+from pyro.distributions.torch_distribution import TorchDistribution
+from pyro.distributions.util import broadcast_shape
 
 
-@copy_docs_from(Distribution)
-class Delta(Distribution):
+class Delta(TorchDistribution):
     """
     Degenerate discrete distribution (a single point).
 
@@ -18,7 +17,9 @@ class Delta(Distribution):
 
     :param torch.autograd.Variable v: The single support element.
     """
-    enumerable = True
+    has_rsample = True
+    has_enumerate_support = True
+    event_shape = torch.Size()
 
     def __init__(self, v, *args, **kwargs):
         self.v = v
@@ -30,11 +31,7 @@ class Delta(Distribution):
     def batch_shape(self):
         return self.v.size()
 
-    @property
-    def event_shape(self):
-        return torch.Size()
-
-    def sample(self, sample_shape=torch.Size()):
+    def rsample(self, sample_shape=torch.Size()):
         shape = sample_shape + self.v.size()
         return self.v.expand(shape)
 
@@ -53,3 +50,11 @@ class Delta(Distribution):
         :rtype: torch.autograd.Variable.
         """
         return Variable(self.v.data.unsqueeze(0))
+
+    @property
+    def mean(self):
+        return self.v
+
+    @property
+    def variance(self):
+        return torch.zeros_like(self.v)
