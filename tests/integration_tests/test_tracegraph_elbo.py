@@ -432,7 +432,7 @@ class LogNormalNormalTests(TestCase):
         assert_equal(0.0, tau_error, prec=0.05)
 
 
-@pytest.mark.xfail("stale; needs to be rewritten using irange, iarange")
+@pytest.mark.xfail(reason="stale; needs to be rewritten using irange, iarange")
 @pytest.mark.init(rng_seed=0)
 @pytest.mark.stage("integration", "integration_batch_1")
 class RaoBlackwellizationTests(TestCase):
