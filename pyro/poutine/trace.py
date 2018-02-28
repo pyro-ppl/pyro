@@ -19,6 +19,85 @@ def _warn_if_nan(name, value):
     # Note that -inf log_pdf is fine: it is merely a zero-probability event.
 
 
+def map_trace(fn, trace):
+    ret = collections.OrderedDict()
+    for name in trace.nodes:
+        ret[name] = fn(trace.nodes[name])
+    return ret
+
+
+def filter_trace(fn, trace):
+    ret = collections.OrderedDict()
+    for name in trace.nodes:
+        if fn(trace.nodes[name]):
+            ret[name] = trace.nodes[name]
+    return ret
+
+
+def log_pdf(site):
+    try:
+        site_log_p = site["log_pdf"]
+    except KeyError:
+        args, kwargs = site["args"], site["kwargs"]
+        site_log_p = site["fn"].log_prob(site["value"], *args, **kwargs)
+        site_log_p = scale_tensor(site_log_p, site["scale"]).sum()
+        site["log_pdf"] = site_log_p
+        _warn_if_nan(site["name"], site_log_p)
+    return site["log_pdf"]
+
+
+def batch_log_pdf(site):
+    try:
+        site["batch_log_pdf"]
+    except KeyError:
+        args, kwargs = site["args"], site["kwargs"]
+        site_log_p = site["fn"].log_prob(site["value"], *args, **kwargs)
+        site_log_p = scale_tensor(site_log_p, site["scale"])
+        site["batch_log_pdf"] = site_log_p
+        site["log_pdf"] = site_log_p.sum()
+        _warn_if_nan(site["name"], site["log_pdf"])
+    return site["batch_log_pdf"]
+
+
+def score_parts(site):
+    try:
+        site["score_parts"]
+    except KeyError:
+        # Note that ScoreParts overloads the multiplication operator
+        # to correctly scale each of its three parts.
+        value = site["fn"].score_parts(site["value"], *site["args"], **site["kwargs"]) * site["scale"]
+        site["score_parts"] = value
+        site["batch_log_pdf"] = value[0]
+        site["log_pdf"] = value[0].sum()
+        _warn_if_nan(site["name"], site["log_pdf"])
+    return site["score_parts"]
+
+
+def is_observed(site):
+    return site["type"] == "sample" and \
+        site["is_observed"]
+
+
+def is_sample(site):
+    return site["type"] == "sample" and \
+        not site["is_observed"]
+
+
+def is_param(site):
+    return site["type"] == "param"
+
+
+def is_subsample(site):
+    return site["type"] == "sample" and \
+        type(site["fn"]).__name__ == "_Subsample"
+
+
+def is_reparameterized(site):
+    return site["type"] == "sample" and \
+        not site["is_observed"] and \
+        getattr(site["fn"], "reparameterized", False)
+
+
 class Trace(object):
     """
     Execution trace data structure.
@@ -42,6 +121,12 @@ class Trace(object):
 
     def __contains__(self, x):
         return x in self.nodes
+
+    def __setitem__(self, name, value):
+        self.nodes[name] = value
+
+    def __getitem__(self, name):
+        return self.nodes[name]
 
     def __len__(self):
         return len(self.nodes)
