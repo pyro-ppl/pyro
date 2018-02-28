@@ -18,7 +18,7 @@ class RejectionStandardGamma(Rejector):
         if alpha.data.min() < 1:
             raise NotImplementedError('alpha < 1 is not supported')
         self.alpha = alpha
-        self._standard_gamma = Gamma(alpha, torch.empty_like(alpha).fill_(1).expand_as(alpha))
+        self._standard_gamma = Gamma(alpha, alpha.new([1]).squeeze().expand_as(alpha))
         # The following are Marsaglia & Tsang's variable names.
         self._d = self.alpha - 1.0 / 3.0
         self._c = 1.0 / torch.sqrt(9.0 * self._d)

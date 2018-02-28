@@ -374,8 +374,7 @@ def check_site_shape(site, max_iarange_nesting):
                 '- .reshape(extra_event_dims=...) the distribution being sampled',
                 '- .permute() data dimensions']))
 
-    # Check parallel dimensions on the left of max_iarange_nesting.
-    # TODO
+    # TODO Check parallel dimensions on the left of max_iarange_nesting.
 
 
 def deep_getattr(obj, name):
