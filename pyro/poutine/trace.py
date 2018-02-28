@@ -216,6 +216,9 @@ class Trace(object):
         """
         self.nodes.pop(site_name, None)
         self.edges.pop(site_name, None)
+        for node_from, edges in self.edges.items():
+            if site_name in edges:
+                del edges[site_name]
 
     def add_edge(self, node_from, node_to, **kwargs):
         """
