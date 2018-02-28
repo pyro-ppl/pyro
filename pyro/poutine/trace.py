@@ -112,12 +112,16 @@ def score_parts(site):
     return site["score_parts"]
 
 
+def is_sample(site):
+    return site["type"] == "sample"
+
+
 def is_observed(site):
     return site["type"] == "sample" and \
         site["is_observed"]
 
 
-def is_sample(site):
+def is_latent(site):
     return site["type"] == "sample" and \
         not site["is_observed"]
 
@@ -283,7 +287,8 @@ class Trace(object):
         :rtype: torch.autograd.Variable
         """
         return fold_trace(lambda log_p, msg: log_p + log_pdf(msg),
-                          0.0, filter_trace(site_filter, self))
+                          0.0, filter_trace(site_filter,
+                                            filter_trace(is_sample, self)))
 
     def compute_batch_log_pdf(self, site_filter=lambda site: True):
         """
@@ -291,13 +296,15 @@ class Trace(object):
 
         The local computation is memoized, and also stores the local `.log_pdf()`.
         """
-        map_trace(batch_log_pdf, filter_trace(site_filter, self))
+        map_trace(batch_log_pdf,
+                  filter_trace(site_filter,
+                               filter_trace(is_sample, self)))
 
     def compute_score_parts(self):
         """
         Compute the batched local score parts at each site of the trace.
         """
-        map_trace(score_parts, self)
+        map_trace(score_parts, filter_trace(is_sample, self))
 
     @property
     def observation_nodes(self):
@@ -311,7 +318,7 @@ class Trace(object):
         """
         Gets a list of names of sample sites
         """
-        return filter_trace(is_sample, self)
+        return filter_trace(is_latent, self)
 
     @property
     def reparameterized_nodes(self):
@@ -333,4 +340,4 @@ class Trace(object):
         """
         Returns an iterator over stochastic nodes in the trace.
         """
-        return filter_trace(is_sample, self).items()
+        return filter_trace(is_latent, self).items()
