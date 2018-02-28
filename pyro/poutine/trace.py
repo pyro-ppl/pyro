@@ -41,18 +41,27 @@ def map_trace(fn, nodes):
     if isinstance(nodes, Trace):
         nodes = nodes.nodes
     ret = collections.OrderedDict()
-    for name in nodes:
-        ret[name] = fn(nodes[name])
+    for name, node in nodes.items():
+        ret[name] = fn(node)
     return ret
+
+
+def fold_trace(fn, initial_state, nodes):
+    if isinstance(nodes, Trace):
+        nodes = nodes.nodes
+    state = initial_state
+    for name, node in nodes.items():
+        state = fn(state, node)
+    return state
 
 
 def filter_trace(fn, nodes):
     if isinstance(nodes, Trace):
         nodes = nodes.nodes
     ret = collections.OrderedDict()
-    for name in nodes:
-        if fn(nodes[name]):
-            ret[name] = nodes[name]
+    for name, node in nodes.items():
+        if fn(node):
+            ret[name] = node
     return ret
 
 
@@ -253,7 +262,6 @@ class Trace(object):
     def topological_sort(self):
         return topological_sort(self)
 
-
     def log_pdf(self, site_filter=lambda site: True):
         """
         Compute the local and overall log-probabilities of the trace.
@@ -263,10 +271,8 @@ class Trace(object):
         :returns: total log probability.
         :rtype: torch.autograd.Variable
         """
-        log_p = 0.0
-        for name in map_trace(log_pdf, filter_trace(site_filter, self)):
-            log_p += self.nodes[name]["log_pdf"]
-        return log_p
+        return fold_trace(lambda log_p, msg: log_p + log_pdf(msg),
+                          0.0, filter_trace(site_filter, self))
 
     def compute_batch_log_pdf(self, site_filter=lambda site: True):
         """
