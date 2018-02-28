@@ -186,16 +186,16 @@ class PyroVAEImpl(VAE):
     def model(self, data):
         decoder = pyro.module('decoder', self.vae_decoder)
         z_mean, z_std = ng_zeros([data.size(0), 20]), ng_ones([data.size(0), 20])
-        z = pyro.sample('latent', Normal(z_mean, z_std))
+        z = pyro.sample('latent', Normal(z_mean, z_std).reshape(extra_event_dims=2))
         img = decoder.forward(z)
         pyro.sample('obs',
-                    Bernoulli(img),
+                    Bernoulli(img).reshape(extra_event_dims=2),
                     obs=data.view(-1, 784))
 
     def guide(self, data):
         encoder = pyro.module('encoder', self.vae_encoder)
         z_mean, z_var = encoder.forward(data)
-        pyro.sample('latent', Normal(z_mean, z_var.sqrt()))
+        pyro.sample('latent', Normal(z_mean, z_var.sqrt()).reshape(extra_event_dims=2))
 
     def compute_loss_and_gradient(self, x):
         if self.mode == TRAIN:
@@ -249,7 +249,7 @@ if __name__ == '__main__':
     parser.add_argument('-n', '--num-epochs', nargs='?', default=10, type=int)
     parser.add_argument('--batch_size', nargs='?', default=128, type=int)
     parser.add_argument('--rng_seed', nargs='?', default=0, type=int)
-    parser.add_argument('--impl', nargs='?', default='pyro', type=str)
+    parser.add_argument('--impl', nargs='?', default='pytorch', type=str)
     parser.add_argument('--skip_eval', action='store_true')
     parser.set_defaults(skip_eval=False)
     args = parser.parse_args()
