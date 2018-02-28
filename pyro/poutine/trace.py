@@ -66,7 +66,7 @@ class Trace(object):
         desc = set()
         for succ in self.edges[site_name]:
             desc.add(succ)
-            desc.union(set(self.descendants(site_name)))
+            desc = desc.union(set(self.descendants(succ)))
         return list(desc)
 
     def add_node(self, site_name, **kwargs):
