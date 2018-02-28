@@ -263,3 +263,22 @@ def test_topological_sort():
     tr.remove_edge("b", "c")
 
     assert_equal(tuple(tr.topological_sort()), ("a", "c", "b"))
+
+
+def test_descendants():
+    tr = poutine.Trace()
+
+    tr.add_node("a", type="sample")
+    tr.add_node("b", type="sample")
+    tr.add_node("c", type="sample")
+
+    tr.add_edge("a", "b")
+    tr.add_edge("a", "c")
+    tr.add_edge("b", "c")
+    assert_equal(set(tr.descendants("a")), set(("b", "c")))
+    assert_equal(set(tr.descendants("b")), set(("c",)))
+
+    tr.add_edge("c", "b")
+    tr.remove_edge("b", "c")
+
+    assert_equal(set(tr.descendants("c")), set(("b",)))
