@@ -8,7 +8,11 @@ class Kernel(Parameterized):
     Base class for kernels used in Gaussian Process.
 
     Every inherited class should implement the forward pass which
-    take inputs X, X2 and return their covariance matrix.
+    take inputs X, Z and return their covariance matrix.
+
+    :param int input_dim: Dimension of inputs for this kernel.
+    :param list active_dims: List of dimensions of the input which the kernel acts on.
+    :param str name: Name of the kernel.
     """
 
     def __init__(self, input_dim, active_dims=None, name=None):
@@ -33,17 +37,7 @@ class Kernel(Parameterized):
         """
         raise NotImplementedError
 
-    def Kdiag(self, X):
-        """
-        Calculates the diagonal part of covariance matrix on active dimensionals.
-
-        :param torch.autograd.Variable X: A 2D tensor of size `N x input_dim`.
-        :return: Diagonal part of covariance matrix K(X, X).
-        :rtype: torch.autograd.Variable
-        """
-        raise NotImplementedError
-
-    def _slice_X(self, X):
+    def _slice_input(self, X):
         """
         Slices X according to `self.active_dims`. If X is 1 dimensional then returns
             a 2D tensor of size `N x 1`.
