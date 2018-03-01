@@ -4,7 +4,7 @@ from collections import namedtuple
 
 from .poutine import Messenger
 
-CondIndepStackFrame = namedtuple("CondIndepStackFrame", ["name", "counter", "vectorized"])
+CondIndepStackFrame = namedtuple("CondIndepStackFrame", ["name", "counter", "vectorized", "size"])
 
 
 class IndepMessenger(Messenger):
@@ -14,7 +14,7 @@ class IndepMessenger(Messenger):
     a ``cond_indep_stack`` at each sample/observe site for consumption by
     ``TracePoutine``.
     """
-    def __init__(self, name, vectorized):
+    def __init__(self, name, vectorized, size):
         """
         Constructor: basically default, but store a counter to keep track of
         which ``irange`` branch we're in.
@@ -23,6 +23,7 @@ class IndepMessenger(Messenger):
         self.name = name
         self.counter = 0
         self.vectorized = vectorized
+        self.size = size
 
     def next_context(self):
         """
@@ -31,5 +32,5 @@ class IndepMessenger(Messenger):
         self.counter += 1
 
     def _process_message(self, msg):
-        msg["cond_indep_stack"].insert(0, CondIndepStackFrame(self.name, self.counter, self.vectorized))
+        msg["cond_indep_stack"].insert(0, CondIndepStackFrame(self.name, self.counter, self.vectorized, self.size))
         return None

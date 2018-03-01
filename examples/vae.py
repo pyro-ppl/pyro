@@ -87,25 +87,27 @@ class VAE(nn.Module):
     def model(self, x):
         # register PyTorch module `decoder` with Pyro
         pyro.module("decoder", self.decoder)
-        # setup hyperparameters for prior p(z)
-        # the type_as ensures we get cuda Tensors if x is on gpu
-        z_mu = ng_zeros([x.size(0), self.z_dim], type_as=x.data)
-        z_sigma = ng_ones([x.size(0), self.z_dim], type_as=x.data)
-        # sample from prior (value will be sampled by guide when computing the ELBO)
-        z = pyro.sample("latent", dist.Normal(z_mu, z_sigma))
-        # decode the latent code z
-        mu_img = self.decoder.forward(z)
-        # score against actual images
-        pyro.sample("obs", dist.Bernoulli(mu_img), obs=x.view(-1, 784))
+        with pyro.iarange("data", x.size(0)):
+            # setup hyperparameters for prior p(z)
+            # the type_as ensures we get cuda Tensors if x is on gpu
+            z_mu = ng_zeros([x.size(0), self.z_dim], type_as=x.data)
+            z_sigma = ng_ones([x.size(0), self.z_dim], type_as=x.data)
+            # sample from prior (value will be sampled by guide when computing the ELBO)
+            z = pyro.sample("latent", dist.Normal(z_mu, z_sigma).reshape(extra_event_dims=1))
+            # decode the latent code z
+            mu_img = self.decoder.forward(z)
+            # score against actual images
+            pyro.sample("obs", dist.Bernoulli(mu_img).reshape(extra_event_dims=1), obs=x.view(-1, 784))
 
     # define the guide (i.e. variational distribution) q(z|x)
     def guide(self, x):
         # register PyTorch module `encoder` with Pyro
         pyro.module("encoder", self.encoder)
-        # use the encoder to get the parameters used to define q(z|x)
-        z_mu, z_sigma = self.encoder.forward(x)
-        # sample the latent code z
-        pyro.sample("latent", dist.Normal(z_mu, z_sigma))
+        with pyro.iarange("data", x.size(0)):
+            # use the encoder to get the parameters used to define q(z|x)
+            z_mu, z_sigma = self.encoder.forward(x)
+            # sample the latent code z
+            pyro.sample("latent", dist.Normal(z_mu, z_sigma).reshape(extra_event_dims=1))
 
     # define a helper function for reconstructing images
     def reconstruct_img(self, x):

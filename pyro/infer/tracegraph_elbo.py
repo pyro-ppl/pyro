@@ -15,7 +15,7 @@ from pyro.infer import ELBO
 from pyro.infer.util import MultiViewTensor as MVT
 from pyro.infer.util import torch_backward, torch_data_sum
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_match, detach_iterable
+from pyro.util import check_model_guide_match, check_site_shape, detach_iterable
 
 
 def _get_baseline_options(site):
@@ -268,7 +268,13 @@ class TraceGraph_ELBO(ELBO):
         # have the trace compute all the individual (batch) log pdf terms
         # and score function terms (if present) so that they are available below
         model_trace.compute_batch_log_pdf()
+        for site in model_trace.nodes.values():
+            if site["type"] == "sample":
+                check_site_shape(site, self.max_iarange_nesting)
         guide_trace.compute_score_parts()
+        for site in guide_trace.nodes.values():
+            if site["type"] == "sample":
+                check_site_shape(site, self.max_iarange_nesting)
 
         # compute elbo for reparameterized nodes
         non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)

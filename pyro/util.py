@@ -6,15 +6,14 @@ import warnings
 
 import graphviz
 import numpy as np
-
 import torch
-from pyro.params import _PYRO_PARAM_STORE
-
-from pyro.poutine.poutine import _PYRO_STACK
-from pyro.poutine.util import site_is_subsample
-from pyro.shim import is_volatile
+from six.moves import zip_longest
 from torch.autograd import Variable
 from torch.nn import Parameter
+
+from pyro.params import _PYRO_PARAM_STORE
+from pyro.poutine.poutine import _PYRO_STACK
+from pyro.poutine.util import site_is_subsample
 
 
 def validate_message(msg):
@@ -213,11 +212,7 @@ def zero_grads(tensors):
     """
     for p in tensors:
         if p.grad is not None:
-            if is_volatile(p.grad):
-                p.grad.data.zero_()
-            else:
-                data = p.grad.data
-                p.grad = Variable(data.new().resize_as_(data).zero_())
+            p.grad = p.grad.new(p.shape).zero_()
 
 
 def apply_stack(initial_msg):
@@ -352,6 +347,34 @@ def check_model_guide_match(model_trace, guide_trace):
                      if type(site["fn"]).__name__ == "_Subsample")
     if not (guide_vars <= model_vars):
         warnings.warn("Found iarange statements in guide but not model: {}".format(guide_vars - model_vars))
+
+
+def check_site_shape(site, max_iarange_nesting):
+    actual_shape = site["batch_log_pdf"].shape
+    expected_shape = [f.size for f in reversed(site["cond_indep_stack"]) if f.vectorized]
+
+    # Check for iarange stack overflow.
+    if len(expected_shape) > max_iarange_nesting:
+        raise ValueError('\n  '.join([
+            'at site "{}", iarange stack overflow'.format(site["name"]),
+            'Try increasing max_iarange_nesting to at least {}'.format(len(expected_shape))]))
+
+    # Ignore dimensions left of max_iarange_nesting.
+    if max_iarange_nesting < len(actual_shape):
+        actual_shape = actual_shape[len(actual_shape) - max_iarange_nesting:]
+
+    # Check for incorrect iarange placement on the right of max_iarange_nesting.
+    for actual_size, expected_size in zip_longest(reversed(actual_shape), reversed(expected_shape), fillvalue=1):
+        if expected_size != -1 and actual_size not in (1, expected_size):
+            raise ValueError('\n  '.join([
+                'at site "{}", invalid log_prob shape'.format(site["name"]),
+                'Expected shape compatible with {}, actual {}'.format(expected_shape, actual_shape),
+                'Try one of the following fixes:',
+                '- enclose the batched tensor in a with iarange(...): context',
+                '- .reshape(extra_event_dims=...) the distribution being sampled',
+                '- .permute() data dimensions']))
+
+    # TODO Check parallel dimensions on the left of max_iarange_nesting.
 
 
 def deep_getattr(obj, name):
