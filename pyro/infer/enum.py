@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 from six.moves.queue import LifoQueue
 
 from pyro import poutine
-from pyro.distributions.util import is_identically_one
+from pyro.distributions.util import is_identically_zero
 from pyro.infer.util import reduce_to_shape
 from pyro.poutine.trace import Trace
 
@@ -35,22 +35,23 @@ def iter_discrete_traces(graph_type, max_iarange_nesting, fn, *args, **kwargs):
     while not queue.empty():
         full_trace = poutine.trace(q_fn, graph_type=graph_type).get_trace(*args, **kwargs)
 
-        # Scale sites by cumulative probability of discrete choices.
-        log_pdf = 0
-        scale = 1
+        # Compute total log probability of trace.
+        log_prob = 0
         for name, site in full_trace.nodes.items():
-            if site["type"] == "sample":
-                # find sample sites that are enumerated either sequentially or in parallel
-                if not site["is_observed"] and site["infer"].get("enumerate"):
-                    log_pdf = log_pdf + site["fn"].log_prob(site["value"]).detach()
-                    scale = log_pdf.exp()
+            # find sample sites that are enumerated either sequentially or in parallel
+            if site["type"] == "sample" and not site["is_observed"] and site["infer"].get("enumerate"):
+                log_prob = log_prob + site["fn"].log_prob(site["value"]).detach()
 
-                if not is_identically_one(scale):
+        # Scale sites by probability of discrete choices.
+        if not is_identically_zero(log_prob):
+            prob = log_prob.exp()
+            for name, site in full_trace.nodes.items():
+                if site["type"] == "sample":
                     shape = site["value"].shape
                     event_shape = getattr(site["fn"], "event_shape", shape)
                     if event_shape:
                         shape = shape[:-len(event_shape)]
-                    site["scale"] = site["scale"] * reduce_to_shape(scale, shape)
+                    site["scale"] = site["scale"] * reduce_to_shape(prob, shape)
 
         yield full_trace
 

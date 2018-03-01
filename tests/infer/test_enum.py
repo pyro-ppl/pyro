@@ -32,7 +32,7 @@ def test_iter_discrete_traces_order(depth, graph_type):
     traces = list(iter_discrete_traces(graph_type, 0, model, depth))
 
     assert len(traces) == 2 ** depth
-    for scale, trace in traces:
+    for trace in traces:
         sites = [name for name, site in trace.nodes.items() if site["type"] == "sample"]
         assert sites == ["x{}".format(i) for i in range(depth)]
 
@@ -268,34 +268,38 @@ def test_parallel_bern_elbo_gradient(enum_discrete, trace_graph):
     ]))
 
 
-@pytest.mark.parametrize("enum_discrete", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("trace_graph", [False, True], ids=["Trace_ELBO", "TraceGraph_ELBO"])
+# @pytest.mark.parametrize("enum_discrete", [None, "sequential", "parallel"])
+# @pytest.mark.parametrize("trace_graph", [False, True], ids=["Trace_ELBO", "TraceGraph_ELBO"])
+@pytest.mark.parametrize("enum_discrete", ["sequential", "parallel"])
+@pytest.mark.parametrize("trace_graph", [False], ids=["Trace_ELBO"])
 def test_bern_bern_elbo_gradient(enum_discrete, trace_graph):
     pyro.clear_param_store()
-    num_particles = 1000
+    # num_particles = 10000
+    num_particles = 1
+    q = pyro.param("q", variable(0.4, requires_grad=True))
 
     def model():
         with pyro.iarange("particles", num_particles):
-            pyro.sample("y", dist.Bernoulli(0.25).reshape([num_particles]))
-            pyro.sample("z", dist.Bernoulli(0.25).reshape([num_particles]))
+            pyro.sample("x", dist.Bernoulli(0.2).reshape([num_particles]))
+            pyro.sample("y", dist.Bernoulli(0.6).reshape([num_particles]))
 
     def guide():
-        q = pyro.param("q", variable(0.5, requires_grad=True))
         with pyro.iarange("particles", num_particles):
-            pyro.sample("z", dist.Bernoulli(q).reshape([num_particles]))
-            pyro.sample("y", dist.Bernoulli(q).reshape([num_particles]))
+            pyro.sample("x", dist.Bernoulli(pyro.param("q")).reshape([num_particles]))
+            pyro.sample("y", dist.Bernoulli(pyro.param("q")).reshape([num_particles]))
 
     logger.info("Computing gradients using surrogate loss")
     Elbo = TraceGraph_ELBO if trace_graph else Trace_ELBO
     elbo = Elbo(max_iarange_nesting=1)
     elbo.loss_and_grads(model, config_enumerate(guide, default=enum_discrete))
-    actual_grad = pyro.param('q').grad / num_particles
+    actual_grad = q.grad / num_particles
 
     logger.info("Computing analytic gradients")
-    q = variable(0.5, requires_grad=True)
-    expected_grad = 2 * grad(kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.25)), [q])[0]
+    kl = (kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.2)) +
+          kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.6)))
+    expected_grad = grad(kl, [q])[0]
 
-    assert_equal(actual_grad, expected_grad, prec=0.1, msg="".join([
+    assert_equal(actual_grad, expected_grad, prec=0.05, msg="".join([
         "\nexpected = {}".format(expected_grad.detach().cpu().numpy()),
         "\n  actual = {}".format(actual_grad.detach().cpu().numpy()),
     ]))
