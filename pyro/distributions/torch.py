@@ -126,5 +126,5 @@ __doc__ = '\n\n'.join([
     ----------------------------------------------------------------
     .. autoclass:: {0}
     '''.format(_name)
-    for _name in __all__
+    for _name in sorted(__all__)
 ])
