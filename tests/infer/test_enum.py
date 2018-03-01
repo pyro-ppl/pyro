@@ -348,9 +348,10 @@ def test_categoricals_elbo_gradient(enumerate1, enumerate2, enumerate3, max_iara
         ]))
 
 
+@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
+@pytest.mark.parametrize("enumerate2", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("iarange_dim", [1, 2])
-@pytest.mark.parametrize("enum_discrete", [None, "sequential", "parallel"])
-def test_iarange_elbo_gradient(iarange_dim, enum_discrete):
+def test_iarange_elbo_gradient(iarange_dim, enumerate1, enumerate2):
     pyro.clear_param_store()
     num_particles = 1000
 
@@ -363,18 +364,21 @@ def test_iarange_elbo_gradient(iarange_dim, enum_discrete):
     def guide():
         q = pyro.param("q", variable(0.5, requires_grad=True))
         with pyro.iarange("particles", num_particles):
-            pyro.sample("y", dist.Bernoulli(q).reshape([num_particles]))
+            pyro.sample("y", dist.Bernoulli(q).reshape([num_particles]),
+                        infer={"enumerate": enumerate1})
             with pyro.iarange("iarange", iarange_dim):
-                pyro.sample("z", dist.Bernoulli(q).reshape([iarange_dim, num_particles]))
+                pyro.sample("z", dist.Bernoulli(q).reshape([iarange_dim, num_particles]),
+                            infer={"enumerate": enumerate2})
 
     logger.info("Computing gradients using surrogate loss")
     elbo = Trace_ELBO(max_iarange_nesting=2)
-    elbo.loss_and_grads(model, config_enumerate(guide, default=enum_discrete))
+    elbo.loss_and_grads(model, guide)
     actual_grad = pyro.param('q').grad / num_particles
 
     logger.info("Computing analytic gradients")
     q = variable(0.5, requires_grad=True)
-    expected_grad = (1 + iarange_dim) * grad(kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.25)), [q])[0]
+    kl = kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.25))
+    expected_grad = (1 + iarange_dim) * grad(kl, [q])[0]
 
     assert_equal(actual_grad, expected_grad, prec=0.1, msg="\n".join([
         "expected = {}".format(expected_grad.detach().cpu().numpy()),
@@ -414,7 +418,8 @@ def test_nested_iarange_elbo_gradient(outer_dim, inner_dim, enum_discrete):
 
     logger.info("Computing analytic gradients")
     q = variable(0.5, requires_grad=True)
-    expected_grad = (1 - outer_dim + inner_dim) * grad(kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.25)), [q])[0]
+    kl = kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.25))
+    expected_grad = (1 - outer_dim + inner_dim) * grad(kl, [q])[0]
 
     assert_equal(actual_grad, expected_grad, prec=0.1, msg="".join([
         "expected = {}".format(expected_grad.data.cpu().numpy()),
