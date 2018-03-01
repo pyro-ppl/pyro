@@ -27,7 +27,7 @@ def test_iter_discrete_traces_scalar(graph_type):
     @config_enumerate
     def model():
         p = pyro.param("p", variable(0.05))
-        ps = pyro.param("ps", Variable(torch.Tensor([0.1, 0.2, 0.3, 0.4])))
+        ps = pyro.param("ps", variable([0.1, 0.2, 0.3, 0.4]))
         x = pyro.sample("x", dist.Bernoulli(p))
         y = pyro.sample("y", dist.Categorical(ps))
         return dict(x=x, y=y)
@@ -51,9 +51,9 @@ def test_iter_discrete_traces_vector(graph_type):
 
     @config_enumerate
     def model():
-        p = pyro.param("p", Variable(torch.Tensor([0.05, 0.15])))
-        ps = pyro.param("ps", Variable(torch.Tensor([[0.1, 0.2, 0.3, 0.4],
-                                                     [0.4, 0.3, 0.2, 0.1]])))
+        p = pyro.param("p", variable([0.05, 0.15]))
+        ps = pyro.param("ps", variable([[0.1, 0.2, 0.3, 0.4],
+                                        [0.4, 0.3, 0.2, 0.1]]))
         with pyro.iarange("iarange", 2):
             x = pyro.sample("x", dist.Bernoulli(p))
             y = pyro.sample("y", dist.Categorical(ps))
@@ -82,17 +82,19 @@ def test_iter_discrete_traces_nan(enum_discrete, trace_graph):
     pyro.clear_param_store()
 
     def model():
-        p = Variable(torch.Tensor([0.0, 0.5, 1.0]))
-        pyro.sample("z", dist.Bernoulli(p).reshape(extra_event_dims=1))
+        p = variable([0.0, 0.5, 1.0])
+        with pyro.iarange("batch", 3):
+            pyro.sample("z", dist.Bernoulli(p))
 
     def guide():
-        p = pyro.param("p", Variable(torch.Tensor([0.0, 0.5, 1.0]), requires_grad=True))
-        pyro.sample("z", dist.Bernoulli(p).reshape(extra_event_dims=1))
+        p = pyro.param("p", variable([0.0, 0.5, 1.0], requires_grad=True))
+        with pyro.iarange("batch", 3):
+            pyro.sample("z", dist.Bernoulli(p))
 
     guide = config_enumerate(guide, default=enum_discrete)
     Elbo = TraceGraph_ELBO if trace_graph else Trace_ELBO
-    elbo = Elbo(max_iarange_nesting=0)
-    loss = elbo.loss(model, guide).item()
+    elbo = Elbo(max_iarange_nesting=1)
+    loss = elbo.loss(model, guide)
     assert not math.isnan(loss), loss
     loss = elbo.loss_and_grads(model, guide)
     assert not math.isnan(loss), loss
@@ -100,12 +102,11 @@ def test_iter_discrete_traces_nan(enum_discrete, trace_graph):
 
 # A simple Gaussian mixture model, with no vectorization.
 def gmm_model(data, verbose=False):
-    p = pyro.param("p", Variable(torch.Tensor([0.3]), requires_grad=True))
-    sigma = pyro.param("sigma", Variable(torch.Tensor([1.0]), requires_grad=True))
+    p = pyro.param("p", variable(0.3, requires_grad=True))
+    sigma = pyro.param("sigma", variable(1.0, requires_grad=True))
     mus = Variable(torch.Tensor([-1, 1]))
     for i in pyro.irange("data", len(data)):
         z = pyro.sample("z_{}".format(i), dist.Bernoulli(p))
-        assert z.shape[-1:] == (1,)
         z = z.long()
         if verbose:
             logger.debug("M{} z_{} = {}".format("  " * i, i, z.numpy()))
@@ -114,9 +115,8 @@ def gmm_model(data, verbose=False):
 
 def gmm_guide(data, verbose=False):
     for i in pyro.irange("data", len(data)):
-        p = pyro.param("p_{}".format(i), Variable(torch.Tensor([0.6]), requires_grad=True))
+        p = pyro.param("p_{}".format(i), variable(0.6, requires_grad=True))
         z = pyro.sample("z_{}".format(i), dist.Bernoulli(p))
-        assert z.shape[-1:] == (1,)
         z = z.long()
         if verbose:
             logger.debug("G{} z_{} = {}".format("  " * i, i, z.numpy()))

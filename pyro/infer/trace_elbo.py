@@ -59,7 +59,7 @@ class Trace_ELBO(ELBO):
         """
         elbo = 0.0
 
-        for weight, model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+        for model_trace, guide_trace, log_r in self._get_traces(model, guide, *args, **kwargs):
             for site in model_trace.nodes.values():
                 if site["type"] == "sample":
                     elbo += site["batch_log_pdf"].detach()
@@ -67,7 +67,7 @@ class Trace_ELBO(ELBO):
                 if site["type"] == "sample":
                     elbo -= site["batch_log_pdf"].detach()
 
-        loss = -(weight * elbo).sum().item()
+        loss = -elbo.sum().item()
         if math.isnan(loss):
             warnings.warn('Encountered NAN loss')
         return loss
@@ -89,14 +89,14 @@ class Trace_ELBO(ELBO):
             for name, model_site in model_trace.nodes.items():
                 if model_site["type"] == "sample":
                     if model_site["is_observed"]:
-                        elbo_particle += model["log_pdf"].item()
-                        surrogate_elbo_particle = surrogate_elbo_particle + model["log_pdf"]
+                        elbo_particle += model_site["log_pdf"].item()
+                        surrogate_elbo_particle = surrogate_elbo_particle + model_site["log_pdf"]
                     else:
                         guide_site = guide_trace.nodes[name]
                         guide_log_pdf, score_function_term, entropy_term = guide_site["score_parts"]
 
-                        elbo_particle += model["log_pdf"].item() - guide["log_pdf"].item()
-                        surrogate_elbo_particle = surrogate_elbo_particle + model["log_pdf"]
+                        elbo_particle += model_site["log_pdf"].item() - guide_site["log_pdf"].item()
+                        surrogate_elbo_particle = surrogate_elbo_particle + model_site["log_pdf"]
 
                         if not is_identically_zero(entropy_term):
                             surrogate_elbo_particle = surrogate_elbo_particle - entropy_term.sum()

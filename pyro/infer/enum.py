@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import torch
 from six.moves.queue import LifoQueue
 
 from pyro import poutine
@@ -36,14 +35,14 @@ def iter_discrete_traces(graph_type, max_iarange_nesting, fn, *args, **kwargs):
         full_trace = poutine.trace(q_fn, graph_type=graph_type).get_trace(*args, **kwargs)
 
         # Scale sites by cumulative probability of discrete choices.
-        with torch.no_grad():
-            log_pdf = 0
-            scale = 1
-            for name, site in full_trace.nodes.items():
-                if site["type"] == "sample" and not site["is_observed"]:
-                    if site["infer"].get("enumerate"):  # either sequential or parallel
-                        log_pdf = log_pdf + site["fn"].log_prob(site["value"])
-                        scale = log_pdf.exp()
+        log_pdf = 0
+        scale = 1
+        for name, site in full_trace.nodes.items():
+            if site["type"] == "sample":
+                # find sample sites that are enumerated either sequentially or in parallel
+                if not site["is_observed"] and site["infer"].get("enumerate"):
+                    log_pdf = log_pdf + site["fn"].log_prob(site["value"]).detach()
+                    scale = log_pdf.exp()
                 if not is_identically_one(scale):
                     site["scale"] = site["scale"] * scale
         yield full_trace
