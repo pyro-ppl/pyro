@@ -170,10 +170,12 @@ class Combination(Kernel):
                 subkernels1 = OrderedDict({kern1.name: kern1})
             for name, kernel in subkernels1.items():
                 if name in self._subkernels:
-                    raise KeyError("Detect two subkernels with the same name '{}'. "
-                                   "Consider to change the default name of these subkernels "
-                                   "to distinguish them.".format(name))
-                self._subkernels[name] = kernel
+                    if self._subkernels[name] is not kernel:
+                        raise KeyError("Detect two different subkernels with the same name '{}'. "
+                                       "Consider to change the default name of these subkernels "
+                                       "to distinguish them.".format(name))
+                else:
+                    self._subkernels[name] = kernel
 
 
 class Sum(Combination):
