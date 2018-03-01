@@ -484,7 +484,7 @@ def test_non_mean_field_bern_bern_elbo_gradient(enum_discrete, pi1, pi2):
     ]))
 
 
-@pytest.mark.xfail(reason="Expensive; suggestion: run during large refactors")
+@pytest.mark.skip(reason="Expensive; suggestion: run during large refactors")
 @pytest.mark.parametrize("enum_discrete", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("pi1", [0.33, 0.44])
 @pytest.mark.parametrize("pi2", [0.55, 0.39])
@@ -547,7 +547,7 @@ def test_non_mean_field_bern_normal_elbo_gradient(enum_discrete, pi1, pi2, pi3, 
 
 
 # this test uses the non-enumerated MC estimator as ground truth
-@pytest.mark.xfail(reason="Expensive; suggestion: run during large refactors")
+@pytest.mark.skip(reason="Expensive; suggestion: run during large refactors")
 @pytest.mark.parametrize("pi1", [0.33, 0.41])
 @pytest.mark.parametrize("pi2", [0.44, 0.17])
 @pytest.mark.parametrize("pi3", [0.22, 0.29])

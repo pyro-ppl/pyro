@@ -48,6 +48,17 @@ def reduce_to_target(source, target):
     return source
 
 
+def reduce_to_shape(source, shape):
+    """
+    Sums out any dimensions in source that are of size > 1 in source but of size 1 in target.
+    This preserves source.dim().
+    """
+    for k in range(1, 1 + source.dim()):
+        if k > len(shape) or source.size(-k) > shape[-k]:
+            source = source.sum(-k, keepdim=True)
+    return source
+
+
 class MultiViewTensor(dict):
     """
     A container for Variables with different shapes. Used in TraceGraph_ELBO

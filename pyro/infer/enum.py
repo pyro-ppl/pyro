@@ -4,6 +4,7 @@ from six.moves.queue import LifoQueue
 
 from pyro import poutine
 from pyro.distributions.util import is_identically_one
+from pyro.infer.util import reduce_to_shape
 from pyro.poutine.trace import Trace
 
 
@@ -43,8 +44,14 @@ def iter_discrete_traces(graph_type, max_iarange_nesting, fn, *args, **kwargs):
                 if not site["is_observed"] and site["infer"].get("enumerate"):
                     log_pdf = log_pdf + site["fn"].log_prob(site["value"]).detach()
                     scale = log_pdf.exp()
+
                 if not is_identically_one(scale):
-                    site["scale"] = site["scale"] * scale
+                    shape = site["value"].shape
+                    event_shape = getattr(site["fn"], "event_shape", shape)
+                    if event_shape:
+                        shape = shape[:-len(event_shape)]
+                    site["scale"] = site["scale"] * reduce_to_shape(scale, shape)
+
         yield full_trace
 
 
