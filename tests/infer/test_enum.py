@@ -20,7 +20,24 @@ from tests.common import assert_equal
 logger = logging.getLogger(__name__)
 
 
-@pytest.mark.parametrize("graph_type", ["dense", "flat"])
+@pytest.mark.parametrize("depth", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("graph_type", ["flat", "dense"])
+def test_iter_discrete_traces_order(depth, graph_type):
+
+    @config_enumerate
+    def model(depth):
+        for i in range(depth):
+            pyro.sample("x{}".format(i), dist.Bernoulli(0.5))
+
+    traces = list(iter_discrete_traces(graph_type, 0, model, depth))
+
+    assert len(traces) == 2 ** depth
+    for scale, trace in traces:
+        sites = [name for name, site in trace.nodes.items() if site["type"] == "sample"]
+        assert sites == ["x{}".format(i) for i in range(depth)]
+
+
+@pytest.mark.parametrize("graph_type", ["flat", "dense"])
 def test_iter_discrete_traces_scalar(graph_type):
     pyro.clear_param_store()
 
@@ -45,7 +62,7 @@ def test_iter_discrete_traces_scalar(graph_type):
         assert_equal(trace.nodes["y"]["scale"], [1 - p, p][x] * ps[y])
 
 
-@pytest.mark.parametrize("graph_type", ["dense", "flat"])
+@pytest.mark.parametrize("graph_type", ["flat", "dense"])
 def test_iter_discrete_traces_vector(graph_type):
     pyro.clear_param_store()
 
@@ -123,7 +140,7 @@ def gmm_guide(data, verbose=False):
 
 
 @pytest.mark.parametrize("data_size", [1, 2, 3])
-@pytest.mark.parametrize("graph_type", ["dense", "flat"])
+@pytest.mark.parametrize("graph_type", ["flat", "dense"])
 @pytest.mark.parametrize("model", [gmm_model, gmm_guide])
 def test_gmm_iter_discrete_traces(model, data_size, graph_type):
     pyro.clear_param_store()
@@ -158,7 +175,7 @@ def gmm_batch_guide(data):
 
 
 @pytest.mark.parametrize("data_size", [1, 2, 3])
-@pytest.mark.parametrize("graph_type", ["dense", "flat"])
+@pytest.mark.parametrize("graph_type", ["flat", "dense"])
 @pytest.mark.parametrize("model", [gmm_batch_model, gmm_batch_guide])
 def test_gmm_batch_iter_discrete_traces(model, data_size, graph_type):
     pyro.clear_param_store()

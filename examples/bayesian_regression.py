@@ -27,7 +27,9 @@ def build_linear_dataset(N, p, noise_std=0.01):
     y = np.matmul(X, w) + np.repeat(1, N) + np.random.normal(0, noise_std, size=N)
     y = y.reshape(N, 1)
     X, y = Variable(torch.Tensor(X)), Variable(torch.Tensor(y))
-    return torch.cat((X, y), 1)
+    data = torch.cat((X, y), 1)
+    assert data.shape == (N, p + 1)
+    return data
 
 
 # NN with one linear layer
@@ -65,9 +67,8 @@ def model(data):
         x_data = data[:, :-1]
         y_data = data[:, -1]
         # run the regressor forward conditioned on inputs
-        prediction_mean = lifted_reg_model(x_data)
-        pyro.sample("obs",
-                    Normal(prediction_mean, Variable(torch.ones(data.size(0))).type_as(data)),
+        prediction_mean = lifted_reg_model(x_data).squeeze(-1)
+        pyro.sample("obs", Normal(prediction_mean, 1),
                     obs=y_data)
 
 

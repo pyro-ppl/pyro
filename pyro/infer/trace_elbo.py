@@ -11,7 +11,7 @@ from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.util import MultiViewTensor
 from pyro.poutine.enumerate_poutine import EnumeratePoutine
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_match, is_nan
+from pyro.util import check_model_guide_match, check_site_shape, is_nan
 
 
 class Trace_ELBO(ELBO):
@@ -43,9 +43,11 @@ class Trace_ELBO(ELBO):
                 log_r = MultiViewTensor()
                 for site in model_trace.nodes.values():
                     if site["type"] == "sample":
+                        check_site_shape(site, self.max_iarange_nesting)
                         log_r.add(site["batch_log_pdf"].detach())
                 for site in guide_trace.nodes.values():
                     if site["type"] == "sample":
+                        check_site_shape(site, self.max_iarange_nesting)
                         log_r.add(-site["batch_log_pdf"].detach())
 
                 yield model_trace, guide_trace, log_r
