@@ -1,20 +1,11 @@
 from __future__ import absolute_import, division, print_function
 
-import math
-
 import torch
 from six.moves.queue import LifoQueue
-from torch.autograd import Variable
 
 from pyro import poutine
-from pyro.distributions.util import sum_rightmost
+from pyro.distributions.util import is_identically_one
 from pyro.poutine.trace import Trace
-
-
-def _iter_discrete_filter(name, msg):
-    return ((msg["type"] == "sample") and
-            (not msg["is_observed"]) and
-            (msg["infer"].get("enumerate")))  # either sequential or parallel
 
 
 def _iter_discrete_escape(trace, msg):
@@ -36,7 +27,7 @@ def iter_discrete_traces(graph_type, max_iarange_nesting, fn, *args, **kwargs):
 
     :param str graph_type: The type of the graph, e.g. "flat" or "dense".
     :param callable fn: A stochastic function.
-    :returns: An iterator over (scale, trace) pairs.
+    :returns: An iterator over scaled traces.
     """
     queue = LifoQueue()
     queue.put(Trace())
@@ -44,18 +35,18 @@ def iter_discrete_traces(graph_type, max_iarange_nesting, fn, *args, **kwargs):
     while not queue.empty():
         full_trace = poutine.trace(q_fn, graph_type=graph_type).get_trace(*args, **kwargs)
 
-        # Scale trace by probability of discrete choices.
-        log_pdf = 0
-        full_trace.compute_batch_log_pdf(site_filter=_iter_discrete_filter)
-        for name, site in full_trace.nodes.items():
-            if _iter_discrete_filter(name, site):
-                log_pdf = log_pdf + sum_rightmost(site["batch_log_pdf"], max_iarange_nesting)
-        if isinstance(log_pdf, Variable):
-            scale = torch.exp(log_pdf.detach())
-        else:
-            scale = math.exp(log_pdf)
-
-        yield scale, full_trace
+        # Scale sites by cumulative probability of discrete choices.
+        with torch.no_grad():
+            log_pdf = 0
+            scale = 1
+            for name, site in full_trace.nodes.items():
+                if site["type"] == "sample" and not site["is_observed"]:
+                    if site["infer"].get("enumerate"):  # either sequential or parallel
+                        log_pdf = log_pdf + site["fn"].log_prob(site["value"])
+                        scale = log_pdf.exp()
+                if not is_identically_one(scale):
+                    site["scale"] = site["scale"] * scale
+        yield full_trace
 
 
 def _config_enumerate(default):

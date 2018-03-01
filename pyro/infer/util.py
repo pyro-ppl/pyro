@@ -42,10 +42,8 @@ def reduce_to_target(source, target):
     Sums out any dimensions in source that are of size > 1 in source but of size 1 in target.
     This preserves source.dim().
     """
-    if source.dim() > target.dim():
-        raise ValueError
     for k in range(1, 1 + source.dim()):
-        if source.size(-k) > target.size(-k):
+        if k > target.dim() or source.size(-k) > target.size(-k):
             source = source.sum(-k, keepdim=True)
     return source
 
