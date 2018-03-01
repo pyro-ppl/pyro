@@ -31,7 +31,7 @@ class Kernel(Parameterized):
     def __init__(self, input_dim, active_dims=None, name=None):
         super(Kernel, self).__init__(name)
         if active_dims is None:
-            active_dims = slice(input_dim)
+            active_dims = list(range(input_dim))
         elif input_dim != len(active_dims):
             raise ValueError("Input size and the length of active dimensionals should be equal.")
         self.input_dim = input_dim
@@ -135,14 +135,14 @@ class Combination(Kernel):
     :param pyro.contrib.gp.kernels.Kernel or numbers.Number kernel1: Second kernel to combine.
     """
 
-    def __init__(self, kernel0, kernel1, name=None):
-        if not (isinstance(kernel0, Kernel) and
-                (isinstance(kernel1, Kernel) or isinstance(kernel1, numbers.Number))):
+    def __init__(self, kern0, kern1, name=None):
+        if not (isinstance(kern0, Kernel) and
+                (isinstance(kern1, Kernel) or isinstance(kern1, numbers.Number))):
             raise TypeError("Sub-kernels of a combined kernel must be a Kernel instance or a number.")
 
-        active_dims = set(kernel0.active_dims)
-        if isinstance(kernel1, Kernel):
-            active_dims1 = set(kernel1.active_dims)
+        active_dims = set(kern0.active_dims)
+        if isinstance(kern1, Kernel):
+            active_dims1 = set(kern1.active_dims)
             if active_dims == active_dims1:  # on the same active_dims
                 pass
             elif len(active_dims & active_dims1) == 0:  # on disjoint active_dims
@@ -155,19 +155,19 @@ class Combination(Kernel):
         input_dim = len(active_dims)
         super(Combination, self).__init__(input_dim, active_dims, name)
 
-        self.kernel0 = kernel0
-        self.kernel1 = kernel1
+        self.kern0 = kern0
+        self.kern1 = kern1
 
-        if kernel0._subkernels:
-            self._subkernels.update(kernel0._subkernels)
+        if kern0._subkernels:
+            self._subkernels.update(kern0._subkernels)
         else:
-            self._subkernels[kernel0.name] = kernel0
+            self._subkernels[kern0.name] = kern0
 
-        if isinstance(kernel1, Kernel):
-            if kernel1._subkernels:
-                subkernels1 = kernel1._subkernels
+        if isinstance(kern1, Kernel):
+            if kern1._subkernels:
+                subkernels1 = kern1._subkernels
             else:
-                subkernels1 = OrderedDict({kernel1.name: kernel1})
+                subkernels1 = OrderedDict({kern1.name: kern1})
             for name, kernel in subkernels1.items():
                 if name in self._subkernels:
                     raise KeyError("Detect two subkernels with the same name '{}'. "
@@ -183,10 +183,10 @@ class Sum(Combination):
     """
 
     def forward(self, X, Z=None, diag=False):
-        if isinstance(self._kernel1, Kernel):
-            return self.kernel0(X, Z, diag) + self.kernel1(X, Z, diag)
+        if isinstance(self.kern1, Kernel):
+            return self.kern0(X, Z, diag) + self.kern1(X, Z, diag)
         else:  # constant
-            return self.kernel0(X, Z, diag) + self.kernel1
+            return self.kern0(X, Z, diag) + self.kern1
 
 
 class Product(Combination):
@@ -196,10 +196,10 @@ class Product(Combination):
     """
 
     def forward(self, X, Z=None, diag=False):
-        if isinstance(self._kernel1, Kernel):
-            return self.kernel0(X, Z, diag) * self.kernel1(X, Z, diag)
+        if isinstance(self.kern1, Kernel):
+            return self.kern0(X, Z, diag) * self.kern1(X, Z, diag)
         else:  # constant
-            return self.kernel0(X, Z, diag) * self.kernel1
+            return self.kern0(X, Z, diag) * self.kern1
 
 
 class Deriving(Kernel):
@@ -210,15 +210,15 @@ class Deriving(Kernel):
     :param pyro.contrib.gp.kernels.Kernel kernel: The original kernel.
     """
 
-    def __init__(self, kernel, name=None):
-        super(Deriving, self).__init__(kernel.input_dim, kernel.active_dims, name)
+    def __init__(self, kern, name=None):
+        super(Deriving, self).__init__(kern.input_dim, kern.active_dims, name)
 
-        self.kernel = kernel
+        self.kern = kern
 
-        if kernel._subkernels:
-            self._subkernels.update(kernel._subkernels)
+        if kern._subkernels:
+            self._subkernels.update(kern._subkernels)
         else:
-            self._subkernels[kernel.name] = kernel
+            self._subkernels[kern.name] = kern
 
 
 def _Horner_evaluate(x, coef):
@@ -244,8 +244,8 @@ class Warping(Deriving):
         These coefficients must be non-negative.
     """
 
-    def __init__(self, kernel, iwarping_fn, owarping_coef, name=None):
-        super(Deriving, self).__init__(kernel.input_dim, kernel.active_dims, name)
+    def __init__(self, kern, iwarping_fn, owarping_coef, name=None):
+        super(Warping, self).__init__(kern, name)
 
         self.iwarping_fn = iwarping_fn
 
@@ -259,11 +259,11 @@ class Warping(Deriving):
 
     def forward(self, X, Z=None, diag=False):
         if self.iwarping_fn is None:
-            K_iwarp = self.kernel(X, Z, diag)
+            K_iwarp = self.kern(X, Z, diag)
         elif Z is None:
-            K_iwarp = self.kernel(self.iwarping_fn(X), None, diag)
+            K_iwarp = self.kern(self.iwarping_fn(X), None, diag)
         else:
-            K_iwarp = self.kernel(self.iwarping_fn(X), self.iwarping_fn(Z), diag)
+            K_iwarp = self.kern(self.iwarping_fn(X), self.iwarping_fn(Z), diag)
 
         if self.owarping_coef is None:
             return K_iwarp
@@ -277,7 +277,7 @@ class Exponent(Deriving):
     """
 
     def forward(self, X, Z=None, diag=False):
-        return self.kernel(X, Z, diag).exp()
+        return self.kern(X, Z, diag).exp()
 
 
 class VerticalScaling(Deriving):
@@ -288,16 +288,16 @@ class VerticalScaling(Deriving):
     :param vscaling_fn: The vertical scaling function, must be callable.
     """
 
-    def __init__(self, kernel, vscaling_fn, name=None):
-        super(Deriving, self).__init__(kernel.input_dim, kernel.active_dims, name)
+    def __init__(self, kern, vscaling_fn, name=None):
+        super(VerticalScaling, self).__init__(kern, name)
 
         self.vscaling_fn = vscaling_fn
 
     def forward(self, X, Z=None, diag=False):
         if diag:
-            return self.vscaling_fn(X) * self.kernel(X, Z, diag) * self.vscaling_fn(X)
+            return self.vscaling_fn(X) * self.kern(X, Z, diag) * self.vscaling_fn(X)
         elif Z is None:
             vscaled_X = self.vscaling_fn(X).unsqueeze(1)
-            return vscaled_X * self.kernel(X, Z, diag) * vscaled_X.t()
+            return vscaled_X * self.kern(X, Z, diag) * vscaled_X.t()
         else:
-            return self.vscaling_fn(X).unsqueeze(1) * self.kernel(X, Z, diag) * self.vscaling_fn(Z).unsqueeze(0)
+            return self.vscaling_fn(X).unsqueeze(1) * self.kern(X, Z, diag) * self.vscaling_fn(Z).unsqueeze(0)
