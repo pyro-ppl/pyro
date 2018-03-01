@@ -23,6 +23,9 @@ def _warn_if_nan(name, value):
 class DiGraph(networkx.DiGraph):
     node_dict_factory = collections.OrderedDict
 
+    def fresh_copy(self):
+        return DiGraph()
+
 
 class Trace(object):
     """
