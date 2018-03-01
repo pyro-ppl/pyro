@@ -5,9 +5,8 @@ import numbers
 import torch
 from torch.autograd import Variable
 
+from pyro.distributions.distribution import Distribution
 from pyro.distributions.torch_distribution import TorchDistributionMixin
-
-__all__ = []  # Constructed below.
 
 # These distributions require custom wrapping.
 # TODO rename parameters so these can be imported automatically.
@@ -93,6 +92,7 @@ class Uniform(torch.distributions.Uniform, TorchDistributionMixin):
 
 
 # Programmatically load all remaining distributions.
+__all__ = []
 for _name, _Dist in torch.distributions.__dict__.items():
     if not isinstance(_Dist, type):
         continue
@@ -101,13 +101,31 @@ for _name, _Dist in torch.distributions.__dict__.items():
     if _Dist is torch.distributions.Distribution:
         continue
 
+    try:
+        _PyroDist = locals()[_name]
+    except KeyError:
+
+        class _PyroDist(_Dist, TorchDistributionMixin):
+            pass
+
+        _PyroDist.__name__ = _name
+        locals()[_name] = _PyroDist
+
+    _PyroDist.__doc__ = '''
+    Wraps :class:`torch.distributions.{}` with
+    :class:`~pyro.distributions.torch_distribution.TorchDistributionMixin`.
+    '''.format(_Dist.__name__)
+
     __all__.append(_name)
-    if _name in dir():
-        continue
 
-    class _PyroDist(_Dist, TorchDistributionMixin):
-        pass
 
-    _PyroDist.__name__ = _name
-    locals()[_name] = _PyroDist
-    del _PyroDist, _name, _Dist
+# Create sphinx documentation.
+__doc__ = '\n\n'.join([
+
+    '''
+    {0}
+    ----------------------------------------------------------------
+    .. autoclass:: {0}
+    '''.format(_name)
+    for _name in __all__
+])
