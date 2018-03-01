@@ -123,9 +123,9 @@ class VAE(nn.Module):
         # sample the handwriting style from the constant prior distribution
         prior_mu = Variable(torch.zeros([batch_size, self.z_dim]))
         prior_sigma = Variable(torch.ones([batch_size, self.z_dim]))
-        zs = pyro.sample("z", dist.Normal(prior_mu, prior_sigma).reshape(extra_event_dims=2))
+        zs = pyro.sample("z", dist.Normal(prior_mu, prior_sigma))
         mu = self.decoder.forward(zs)
-        xs = pyro.sample("sample", dist.Bernoulli(mu).reshape(extra_event_dims=2))
+        xs = pyro.sample("sample", dist.Bernoulli(mu))
         return xs, mu
 
 
