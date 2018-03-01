@@ -5,7 +5,6 @@ import numbers
 import torch
 from torch.autograd import Variable
 
-from pyro.distributions.distribution import Distribution
 from pyro.distributions.torch_distribution import TorchDistributionMixin
 
 # These distributions require custom wrapping.

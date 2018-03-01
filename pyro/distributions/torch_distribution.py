@@ -36,7 +36,7 @@ class TorchDistributionMixin(Distribution):
     def __call__(self, sample_shape=torch.Size()):
         """
         Samples a random value.
-        
+
         This is reparameterized whenever possible, calling
         :meth:`~torch.distributions.Distribution.rsample` for reparameterized
         distributions and :meth:`~torch.distributions.Distribution.sample` for
