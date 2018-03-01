@@ -58,8 +58,9 @@ def test_iter_discrete_traces_scalar(graph_type):
     for trace in traces:
         x = trace.nodes["x"]["value"].long()
         y = trace.nodes["y"]["value"].long()
-        assert_equal(trace.nodes["x"]["scale"], [1 - p, p][x])
-        assert_equal(trace.nodes["y"]["scale"], [1 - p, p][x] * ps[y])
+        expected_scale = [1 - p, p][x] * ps[y]
+        assert_equal(trace.nodes["x"]["scale"], expected_scale)
+        assert_equal(trace.nodes["y"]["scale"], expected_scale)
 
 
 @pytest.mark.parametrize("graph_type", ["flat", "dense"])
@@ -87,10 +88,10 @@ def test_iter_discrete_traces_vector(graph_type):
     for trace in traces:
         x = trace.nodes["x"]["value"]
         y = trace.nodes["y"]["value"]
-        log_prob_x = dist.Bernoulli(p).log_prob(x)
-        log_prob_y = dist.Categorical(ps).log_prob(y)
-        assert_equal(trace.nodes["x"]["scale"], log_prob_x.exp())
-        assert_equal(trace.nodes["y"]["scale"], (log_prob_x + log_prob_y).exp())
+        expected_scale = (dist.Bernoulli(p).log_prob(x) +
+                          dist.Categorical(ps).log_prob(y)).exp()
+        assert_equal(trace.nodes["x"]["scale"], expected_scale)
+        assert_equal(trace.nodes["y"]["scale"], expected_scale)
 
 
 @pytest.mark.parametrize("enum_discrete", [None, "sequential", "parallel"])
@@ -207,86 +208,17 @@ def test_svi_step_smoke(model, guide, enum_discrete, trace_graph):
 @pytest.mark.parametrize("trace_graph", [False, True], ids=["Trace_ELBO", "TraceGraph_ELBO"])
 def test_bern_elbo_gradient(enum_discrete, trace_graph):
     pyro.clear_param_store()
-    if not enum_discrete:
-        num_particles = 100  # Monte Carlo sample
-    elif trace_graph:
-        num_particles = 100  # TraceGraph_ELBO silently ignores enumration
-    else:
-        num_particles = 1  # a single particle should be exact
-
-    def model():
-        pyro.sample("z", dist.Bernoulli(0.25))
-
-    def guide():
-        q = pyro.param("q", variable(0.5, requires_grad=True))
-        pyro.sample("z", dist.Bernoulli(q))
-
-    logger.info("Computing gradients using surrogate loss")
-    Elbo = TraceGraph_ELBO if trace_graph else Trace_ELBO
-    elbo = Elbo(num_particles=num_particles, max_iarange_nesting=0)
-    elbo.loss_and_grads(model, config_enumerate(guide, default=enum_discrete))
-    actual_grad = pyro.param('q').grad
-
-    logger.info("Computing analytic gradients")
-    q = variable(0.5, requires_grad=True)
-    expected_grad = grad(kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.25)), [q])[0]
-
-    assert_equal(actual_grad, expected_grad, prec=0.1, msg="".join([
-        "\nexpected = {}".format(expected_grad.detach().cpu().numpy()),
-        "\n  actual = {}".format(actual_grad.detach().cpu().numpy()),
-    ]))
-
-
-@pytest.mark.parametrize("enum_discrete", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("trace_graph", [False, True], ids=["Trace_ELBO", "TraceGraph_ELBO"])
-def test_parallel_bern_elbo_gradient(enum_discrete, trace_graph):
-    pyro.clear_param_store()
     num_particles = 1000
+    q = pyro.param("q", variable(0.5, requires_grad=True))
 
     def model():
         with pyro.iarange("particles", num_particles):
             pyro.sample("z", dist.Bernoulli(0.25).reshape([num_particles]))
 
     def guide():
-        q = pyro.param("q", variable(0.5, requires_grad=True))
+        q = pyro.param("q")
         with pyro.iarange("particles", num_particles):
             pyro.sample("z", dist.Bernoulli(q).reshape([num_particles]))
-
-    logger.info("Computing gradients using surrogate loss")
-    Elbo = TraceGraph_ELBO if trace_graph else Trace_ELBO
-    elbo = Elbo(max_iarange_nesting=1)
-    elbo.loss_and_grads(model, config_enumerate(guide, default=enum_discrete))
-    actual_grad = pyro.param('q').grad / num_particles
-
-    logger.info("Computing analytic gradients")
-    q = variable(0.5, requires_grad=True)
-    expected_grad = grad(kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.25)), [q])[0]
-
-    assert_equal(actual_grad, expected_grad, prec=0.1, msg="".join([
-        "\nexpected = {}".format(expected_grad.detach().cpu().numpy()),
-        "\n  actual = {}".format(actual_grad.detach().cpu().numpy()),
-    ]))
-
-
-# @pytest.mark.parametrize("enum_discrete", [None, "sequential", "parallel"])
-# @pytest.mark.parametrize("trace_graph", [False, True], ids=["Trace_ELBO", "TraceGraph_ELBO"])
-@pytest.mark.parametrize("enum_discrete", ["sequential", "parallel"])
-@pytest.mark.parametrize("trace_graph", [False], ids=["Trace_ELBO"])
-def test_bern_bern_elbo_gradient(enum_discrete, trace_graph):
-    pyro.clear_param_store()
-    # num_particles = 10000
-    num_particles = 1
-    q = pyro.param("q", variable(0.4, requires_grad=True))
-
-    def model():
-        with pyro.iarange("particles", num_particles):
-            pyro.sample("x", dist.Bernoulli(0.2).reshape([num_particles]))
-            pyro.sample("y", dist.Bernoulli(0.6).reshape([num_particles]))
-
-    def guide():
-        with pyro.iarange("particles", num_particles):
-            pyro.sample("x", dist.Bernoulli(pyro.param("q")).reshape([num_particles]))
-            pyro.sample("y", dist.Bernoulli(pyro.param("q")).reshape([num_particles]))
 
     logger.info("Computing gradients using surrogate loss")
     Elbo = TraceGraph_ELBO if trace_graph else Trace_ELBO
@@ -295,13 +227,46 @@ def test_bern_bern_elbo_gradient(enum_discrete, trace_graph):
     actual_grad = q.grad / num_particles
 
     logger.info("Computing analytic gradients")
-    kl = (kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.2)) +
-          kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.6)))
+    kl = kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.25))
     expected_grad = grad(kl, [q])[0]
 
-    assert_equal(actual_grad, expected_grad, prec=0.05, msg="".join([
-        "\nexpected = {}".format(expected_grad.detach().cpu().numpy()),
-        "\n  actual = {}".format(actual_grad.detach().cpu().numpy()),
+    assert_equal(actual_grad, expected_grad, prec=0.1, msg="\n".join([
+        "expected = {}".format(expected_grad.detach().cpu().numpy()),
+        "  actual = {}".format(actual_grad.detach().cpu().numpy()),
+    ]))
+
+
+@pytest.mark.parametrize("enumerate1", ["sequential", "parallel", None])
+@pytest.mark.parametrize("enumerate2", ["sequential", "parallel", None])
+def test_bern_bern_elbo_gradient(enumerate1, enumerate2):
+    pyro.clear_param_store()
+    num_particles = 1000
+    prec = 0.001 if enumerate1 and enumerate2 else 0.1
+    q = pyro.param("q", variable(0.6, requires_grad=True))
+
+    def model():
+        with pyro.iarange("particles", num_particles):
+            pyro.sample("x1", dist.Bernoulli(0.2).reshape([num_particles]))
+            pyro.sample("x2", dist.Bernoulli(0.3).reshape([num_particles]))
+
+    def guide():
+        q = pyro.param("q")
+        with pyro.iarange("particles", num_particles):
+            pyro.sample("x1", dist.Bernoulli(q).reshape([num_particles]), infer={"enumerate": enumerate1})
+            pyro.sample("x2", dist.Bernoulli(q).reshape([num_particles]), infer={"enumerate": enumerate2})
+
+    logger.info("Computing gradients using surrogate loss")
+    elbo = Trace_ELBO(max_iarange_nesting=1)
+    elbo.loss_and_grads(model, guide)
+    actual_grad = q.grad / num_particles
+
+    logger.info("Computing analytic gradients")
+    kl = sum(kl_divergence(dist.Bernoulli(q), dist.Bernoulli(p)) for p in [0.2, 0.3])
+    expected_grad = grad(kl, [q])[0]
+
+    assert_equal(actual_grad, expected_grad, prec=prec, msg="\n".join([
+        "expected = {}".format(expected_grad.detach().cpu().numpy()),
+        "  actual = {}".format(actual_grad.detach().cpu().numpy()),
     ]))
 
 
@@ -310,37 +275,35 @@ def test_bern_bern_elbo_gradient(enum_discrete, trace_graph):
 @pytest.mark.parametrize("enumerate3", ["sequential", "parallel"])
 def test_berns_elbo_gradient(enumerate1, enumerate2, enumerate3):
     pyro.clear_param_store()
-    if all([enumerate1, enumerate2, enumerate3]):
-        num_particles = 1
-        prec = 0.001
-    else:
-        num_particles = 1000
-        prec = 0.1
+    num_particles = 1000
+    prec = 0.001 if all([enumerate1, enumerate2, enumerate3]) else 0.1
+    q = pyro.param("q", variable(0.6, requires_grad=True))
 
     def model():
-        pyro.sample("x1", dist.Bernoulli(0.1))
-        pyro.sample("x2", dist.Bernoulli(0.2))
-        pyro.sample("x3", dist.Bernoulli(0.3))
+        with pyro.iarange("particles", num_particles):
+            pyro.sample("x1", dist.Bernoulli(0.1).reshape([num_particles]))
+            pyro.sample("x2", dist.Bernoulli(0.2).reshape([num_particles]))
+            pyro.sample("x3", dist.Bernoulli(0.3).reshape([num_particles]))
 
     def guide():
-        p = pyro.param("p", variable(0.5, requires_grad=True))
-        pyro.sample("x1", dist.Bernoulli(p), infer={"enumerate": enumerate1})
-        pyro.sample("x2", dist.Bernoulli(p), infer={"enumerate": enumerate2})
-        pyro.sample("x3", dist.Bernoulli(p), infer={"enumerate": enumerate3})
+        q = pyro.param("q")
+        with pyro.iarange("particles", num_particles):
+            pyro.sample("x1", dist.Bernoulli(q).reshape([num_particles]), infer={"enumerate": enumerate1})
+            pyro.sample("x2", dist.Bernoulli(q).reshape([num_particles]), infer={"enumerate": enumerate2})
+            pyro.sample("x3", dist.Bernoulli(q).reshape([num_particles]), infer={"enumerate": enumerate3})
 
     logger.info("Computing gradients using surrogate loss")
-    elbo = Trace_ELBO(num_particles=num_particles, max_iarange_nesting=0)
+    elbo = Trace_ELBO(max_iarange_nesting=1)
     elbo.loss_and_grads(model, guide)
-    actual_grad = pyro.param('p').grad
+    actual_grad = q.grad / num_particles
 
     logger.info("Computing analytic gradients")
-    p = variable(0.5, requires_grad=True)
-    kl = sum(kl_divergence(dist.Bernoulli(p), dist.Bernoulli(p0)) for p0 in [0.1, 0.2, 0.3])
-    expected_grad = grad(kl, [p])[0]
+    kl = sum(kl_divergence(dist.Bernoulli(q), dist.Bernoulli(p)) for p in [0.1, 0.2, 0.3])
+    expected_grad = grad(kl, [q])[0]
 
-    assert_equal(actual_grad, expected_grad, prec=prec, msg="".join([
-        "\nexpected = {}".format(expected_grad.detach().cpu().numpy()),
-        "\n  actual = {}".format(actual_grad.detach().cpu().numpy()),
+    assert_equal(actual_grad, expected_grad, prec=prec, msg="\n".join([
+        "expected = {}".format(expected_grad.detach().cpu().numpy()),
+        "  actual = {}".format(actual_grad.detach().cpu().numpy()),
     ]))
 
 
@@ -379,9 +342,9 @@ def test_categoricals_elbo_gradient(enumerate1, enumerate2, enumerate3, max_iara
     actual_grads = [q1.grad, q2.grad, q3.grad]
 
     for actual_grad, expected_grad in zip(actual_grads, expected_grads):
-        assert_equal(actual_grad, expected_grad, prec=0.001, msg="".join([
-            "\nexpected = {}".format(expected_grad.detach().cpu().numpy()),
-            "\n  actual = {}".format(actual_grad.detach().cpu().numpy()),
+        assert_equal(actual_grad, expected_grad, prec=0.001, msg="\n".join([
+            "expected = {}".format(expected_grad.detach().cpu().numpy()),
+            "  actual = {}".format(actual_grad.detach().cpu().numpy()),
         ]))
 
 
@@ -413,9 +376,9 @@ def test_iarange_elbo_gradient(iarange_dim, enum_discrete):
     q = variable(0.5, requires_grad=True)
     expected_grad = (1 + iarange_dim) * grad(kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.25)), [q])[0]
 
-    assert_equal(actual_grad, expected_grad, prec=0.1, msg="".join([
-        "\nexpected = {}".format(expected_grad.data.cpu().numpy()),
-        "\n  actual = {}".format(actual_grad.data.cpu().numpy()),
+    assert_equal(actual_grad, expected_grad, prec=0.1, msg="\n".join([
+        "expected = {}".format(expected_grad.detach().cpu().numpy()),
+        "  actual = {}".format(actual_grad.detach().cpu().numpy()),
     ]))
 
 
@@ -424,38 +387,38 @@ def test_iarange_elbo_gradient(iarange_dim, enum_discrete):
 @pytest.mark.parametrize("enum_discrete", [None, "sequential", "parallel"])
 def test_nested_iarange_elbo_gradient(outer_dim, inner_dim, enum_discrete):
     pyro.clear_param_store()
-    if not enum_discrete:
-        num_particles = 1000  # Monte Carlo sample
-    else:
-        num_particles = 1  # a single particle should be exact
+    num_particles = 10000
+    q = pyro.param("q", variable(0.5, requires_grad=True))
 
     def model():
-        pyro.sample("x", dist.Bernoulli(0.25))
-        with pyro.iarange("outer", outer_dim):
-            pyro.sample("y", dist.Bernoulli(0.25).reshape(sample_shape=[outer_dim]))
-            with pyro.iarange("inner", inner_dim):
-                pyro.sample("z", dist.Bernoulli(0.25).reshape(sample_shape=[inner_dim, 1]))
+        with pyro.iarange("particles", num_particles):
+            pyro.sample("x", dist.Bernoulli(0.25).reshape([num_particles]))
+            with pyro.iarange("outer", outer_dim):
+                pyro.sample("y", dist.Bernoulli(0.25).reshape([outer_dim, num_particles]))
+                with pyro.iarange("inner", inner_dim):
+                    pyro.sample("z", dist.Bernoulli(0.25).reshape([inner_dim, 1, num_particles]))
 
     def guide():
-        q = pyro.param("q", variable(0.5, requires_grad=True))
-        pyro.sample("x", dist.Bernoulli(q))
-        with pyro.iarange("outer", outer_dim):
-            pyro.sample("y", dist.Bernoulli(1 - q).reshape(sample_shape=[outer_dim]))
-            with pyro.iarange("inner", inner_dim):
-                pyro.sample("z", dist.Bernoulli(q).reshape(sample_shape=[inner_dim, 1]))
+        q = pyro.param("q")
+        with pyro.iarange("particles", num_particles):
+            pyro.sample("x", dist.Bernoulli(q).reshape([num_particles]))
+            with pyro.iarange("outer", outer_dim):
+                pyro.sample("y", dist.Bernoulli(1 - q).reshape(sample_shape=[outer_dim, num_particles]))
+                with pyro.iarange("inner", inner_dim):
+                    pyro.sample("z", dist.Bernoulli(q).reshape(sample_shape=[inner_dim, 1, num_particles]))
 
     logger.info("Computing gradients using surrogate loss")
-    elbo = Trace_ELBO(num_particles=num_particles, max_iarange_nesting=1)
+    elbo = Trace_ELBO(max_iarange_nesting=3)
     elbo.loss_and_grads(model, config_enumerate(guide, default=enum_discrete))
-    actual_grad = pyro.param('q').grad
+    actual_grad = q.grad / num_particles
 
     logger.info("Computing analytic gradients")
     q = variable(0.5, requires_grad=True)
     expected_grad = (1 - outer_dim + inner_dim) * grad(kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.25)), [q])[0]
 
     assert_equal(actual_grad, expected_grad, prec=0.1, msg="".join([
-        "\nexpected = {}".format(expected_grad.data.cpu().numpy()),
-        "\n  actual = {}".format(actual_grad.data.cpu().numpy()),
+        "expected = {}".format(expected_grad.data.cpu().numpy()),
+        "  actual = {}".format(actual_grad.data.cpu().numpy()),
     ]))
 
 
@@ -464,26 +427,25 @@ def test_nested_iarange_elbo_gradient(outer_dim, inner_dim, enum_discrete):
 @pytest.mark.parametrize("pi2", [0.55, 0.27])
 def test_non_mean_field_bern_bern_elbo_gradient(enum_discrete, pi1, pi2):
     pyro.clear_param_store()
-    if not enum_discrete:
-        num_particles = 1000  # Monte Carlo sample
-    else:
-        num_particles = 1  # a single particle should be exact
+    num_particles = 10000
 
     def model():
-        y = pyro.sample("y", dist.Bernoulli(0.33))
-        pyro.sample("z", dist.Bernoulli(0.55 * y + 0.10))
+        with pyro.iarange("particles", num_particles):
+            y = pyro.sample("y", dist.Bernoulli(0.33).reshape([num_particles]))
+            pyro.sample("z", dist.Bernoulli(0.55 * y + 0.10))
 
     def guide():
         q1 = pyro.param("q1", variable(pi1, requires_grad=True))
         q2 = pyro.param("q2", variable(pi2, requires_grad=True))
-        y = pyro.sample("y", dist.Bernoulli(q1))
-        pyro.sample("z", dist.Bernoulli(q2 * y + 0.10))
+        with pyro.iarange("particles", num_particles):
+            y = pyro.sample("y", dist.Bernoulli(q1).reshape([num_particles]))
+            pyro.sample("z", dist.Bernoulli(q2 * y + 0.10))
 
     logger.info("Computing gradients using surrogate loss")
-    elbo = Trace_ELBO(num_particles=num_particles, max_iarange_nesting=0)
+    elbo = Trace_ELBO(max_iarange_nesting=1)
     elbo.loss_and_grads(model, config_enumerate(guide, default=enum_discrete))
-    actual_grad_q1 = pyro.param('q1').grad
-    actual_grad_q2 = pyro.param('q2').grad
+    actual_grad_q1 = pyro.param('q1').grad / num_particles
+    actual_grad_q2 = pyro.param('q2').grad / num_particles
 
     logger.info("Computing analytic gradients")
     q1 = variable(pi1, requires_grad=True)
@@ -495,48 +457,46 @@ def test_non_mean_field_bern_bern_elbo_gradient(enum_discrete, pi1, pi2):
 
     prec = 0.03 if enum_discrete is None else 0.001
 
-    assert_equal(actual_grad_q1, expected_grad_q1, prec=prec, msg="{q1}".join([
-        "\nexpected = {}".format(expected_grad_q1.data.cpu().numpy()),
-        "\n  actual = {}".format(actual_grad_q1.data.cpu().numpy()),
+    assert_equal(actual_grad_q1, expected_grad_q1, prec=prec, msg="\n".join([
+        "q1 expected = {}".format(expected_grad_q1.data.cpu().numpy()),
+        "q1  actual = {}".format(actual_grad_q1.data.cpu().numpy()),
     ]))
-    assert_equal(actual_grad_q2, expected_grad_q2, prec=prec, msg="{q2}".join([
-        "\nexpected = {}".format(expected_grad_q2.data.cpu().numpy()),
-        "\n  actual = {}".format(actual_grad_q2.data.cpu().numpy()),
+    assert_equal(actual_grad_q2, expected_grad_q2, prec=prec, msg="\n".join([
+        "q2 expected = {}".format(expected_grad_q2.data.cpu().numpy()),
+        "q2   actual = {}".format(actual_grad_q2.data.cpu().numpy()),
     ]))
 
 
-@pytest.mark.skip(reason="Expensive; suggestion: run during large refactors")
 @pytest.mark.parametrize("enum_discrete", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("pi1", [0.33, 0.44])
 @pytest.mark.parametrize("pi2", [0.55, 0.39])
 @pytest.mark.parametrize("pi3", [0.22, 0.29])
 def test_non_mean_field_bern_normal_elbo_gradient(enum_discrete, pi1, pi2, pi3, include_z=True):
     pyro.clear_param_store()
-    if enum_discrete is None:
-        num_particles = 3000
-    else:
-        num_particles = 1000
+    num_particles = 10000
 
     def model():
-        q3 = pyro.param("q3", variable(pi3, requires_grad=True))
-        y = pyro.sample("y", dist.Bernoulli(q3))
-        if include_z:
-            pyro.sample("z", dist.Normal(0.55 * y + q3, 1.0))
+        with pyro.iarange("particles", num_particles):
+            q3 = pyro.param("q3", variable(pi3, requires_grad=True))
+            y = pyro.sample("y", dist.Bernoulli(q3).reshape([num_particles]))
+            if include_z:
+                pyro.sample("z", dist.Normal(0.55 * y + q3, 1.0))
 
     def guide():
         q1 = pyro.param("q1", variable(pi1, requires_grad=True))
         q2 = pyro.param("q2", variable(pi2, requires_grad=True))
-        y = pyro.sample("y", dist.Bernoulli(q1), infer={"enumerate": enum_discrete})
-        if include_z:
-            pyro.sample("z", dist.Normal(q2 * y + 0.10, 1.0))
+        with pyro.iarange("particles", num_particles):
+            y = pyro.sample("y", dist.Bernoulli(q1).reshape([num_particles]), infer={"enumerate": enum_discrete})
+            if include_z:
+                pyro.sample("z", dist.Normal(q2 * y + 0.10, 1.0))
 
     logger.info("Computing gradients using surrogate loss")
-    elbo = Trace_ELBO(num_particles=num_particles, max_iarange_nesting=0)
+    elbo = Trace_ELBO(max_iarange_nesting=1)
     elbo.loss_and_grads(model, guide)
-    actual_grad_q1 = pyro.param('q1').grad
+    actual_grad_q1 = pyro.param('q1').grad / num_particles
     if include_z:
-        actual_grad_q2 = pyro.param('q2').grad
-    actual_grad_q3 = pyro.param('q3').grad
+        actual_grad_q2 = pyro.param('q2').grad / num_particles
+    actual_grad_q3 = pyro.param('q3').grad / num_particles
 
     logger.info("Computing analytic gradients")
     q1 = variable(pi1, requires_grad=True)
@@ -552,60 +512,60 @@ def test_non_mean_field_bern_normal_elbo_gradient(enum_discrete, pi1, pi2, pi3, 
 
     prec = 0.04 if enum_discrete is None else 0.02
 
-    assert_equal(actual_grad_q1, expected_grad_q1, prec=prec, msg="{q1}".join([
-        "\nexpected = {}".format(expected_grad_q1.data.cpu().numpy()),
-        "\n  actual = {}".format(actual_grad_q1.data.cpu().numpy()),
+    assert_equal(actual_grad_q1, expected_grad_q1, prec=prec, msg="\n".join([
+        "q1 expected = {}".format(expected_grad_q1.data.cpu().numpy()),
+        "q1   actual = {}".format(actual_grad_q1.data.cpu().numpy()),
     ]))
     if include_z:
-        assert_equal(actual_grad_q2, expected_grad_q2, prec=prec, msg="{q2}".join([
-            "\nexpected = {}".format(expected_grad_q2.data.cpu().numpy()),
-            "\n  actual = {}".format(actual_grad_q2.data.cpu().numpy()),
+        assert_equal(actual_grad_q2, expected_grad_q2, prec=prec, msg="\n".join([
+            "q2 expected = {}".format(expected_grad_q2.data.cpu().numpy()),
+            "q2   actual = {}".format(actual_grad_q2.data.cpu().numpy()),
         ]))
-    assert_equal(actual_grad_q3, expected_grad_q3, prec=prec, msg="{q3}".join([
-        "\nexpected = {}".format(expected_grad_q3.data.cpu().numpy()),
-        "\n  actual = {}".format(actual_grad_q3.data.cpu().numpy()),
+    assert_equal(actual_grad_q3, expected_grad_q3, prec=prec, msg="\n".join([
+        "q3 expected = {}".format(expected_grad_q3.data.cpu().numpy()),
+        "q3   actual = {}".format(actual_grad_q3.data.cpu().numpy()),
     ]))
 
 
-# this test uses the non-enumerated MC estimator as ground truth
-@pytest.mark.skip(reason="Expensive; suggestion: run during large refactors")
 @pytest.mark.parametrize("pi1", [0.33, 0.41])
 @pytest.mark.parametrize("pi2", [0.44, 0.17])
 @pytest.mark.parametrize("pi3", [0.22, 0.29])
 def test_non_mean_field_normal_bern_elbo_gradient(pi1, pi2, pi3):
 
-    def model():
-        q3 = pyro.param("q3", variable(pi3, requires_grad=True))
-        q4 = pyro.param("q4", variable(0.5 * (pi1 + pi2), requires_grad=True))
-        z = pyro.sample("z", dist.Normal(q3, 1.0))
-        zz = torch.exp(z) / (1.0 + torch.exp(z))
-        pyro.sample("y", dist.Bernoulli(q4 * zz))
+    def model(num_particles):
+        with pyro.iarange("particles", num_particles):
+            q3 = pyro.param("q3", variable(pi3, requires_grad=True))
+            q4 = pyro.param("q4", variable(0.5 * (pi1 + pi2), requires_grad=True))
+            z = pyro.sample("z", dist.Normal(q3, 1.0).reshape([num_particles]))
+            zz = torch.exp(z) / (1.0 + torch.exp(z))
+            pyro.sample("y", dist.Bernoulli(q4 * zz))
 
-    def guide():
+    def guide(num_particles):
         q1 = pyro.param("q1", variable(pi1, requires_grad=True))
         q2 = pyro.param("q2", variable(pi2, requires_grad=True))
-        z = pyro.sample("z", dist.Normal(q2, 1.0))
-        zz = torch.exp(z) / (1.0 + torch.exp(z))
-        pyro.sample("y", dist.Bernoulli(q1 * zz))
+        with pyro.iarange("particles", num_particles):
+            z = pyro.sample("z", dist.Normal(q2, 1.0).reshape([num_particles]))
+            zz = torch.exp(z) / (1.0 + torch.exp(z))
+            pyro.sample("y", dist.Bernoulli(q1 * zz))
 
     qs = ['q1', 'q2', 'q3', 'q4']
     results = {}
 
     for ed, num_particles in zip([None, 'parallel', 'sequential'], [30000, 20000, 20000]):
         pyro.clear_param_store()
-        elbo = Trace_ELBO(num_particles=num_particles, max_iarange_nesting=0)
-        elbo.loss_and_grads(model, config_enumerate(guide, default=ed))
+        elbo = Trace_ELBO(max_iarange_nesting=1)
+        elbo.loss_and_grads(model, config_enumerate(guide, default=ed), num_particles)
         results[str(ed)] = {}
         for q in qs:
-            results[str(ed)]['actual_grad_%s' % q] = pyro.param(q).grad.data.cpu().numpy()
+            results[str(ed)]['actual_grad_%s' % q] = pyro.param(q).grad.detach().cpu().numpy() / num_particles
 
     prec = 0.03
     for ed in ['parallel', 'sequential']:
-        print('\n*** %s ***' % ed)
+        logger.info('\n*** {} ***'.format(ed))
         for q in qs:
-            print("[%s] actual: " % q, results[ed]['actual_grad_%s' % q])
-
-            msg = "{}".format(q).join(["\nexpected (MC estimate) = {}".format(results['None']['actual_grad_%s' % q]),
-                                      "\n  actual ({} estimate)= {}".format(ed, results[ed]['actual_grad_%s' % q])])
-            assert_equal(results[ed]['actual_grad_%s' % q], results['None']['actual_grad_%s' % q],
-                         prec=prec, msg=msg)
+            logger.info("[{}] actual: {}".format(q, results[ed]['actual_grad_%s' % q]))
+            assert_equal(results[ed]['actual_grad_%s' % q], results['None']['actual_grad_%s' % q], prec=prec,
+                         msg="\n".join([
+                             "expected (MC estimate) = {}".format(results['None']['actual_grad_%s' % q]),
+                             "  actual ({} estimate) = {}".format(ed, results[ed]['actual_grad_%s' % q]),
+                         ]))

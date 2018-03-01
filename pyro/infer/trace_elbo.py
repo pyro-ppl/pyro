@@ -104,7 +104,7 @@ class Trace_ELBO(ELBO):
                             surrogate_elbo_particle = surrogate_elbo_particle - entropy_term.sum()
 
                         if not is_identically_zero(score_function_term):
-                            score_function = log_r.contract_to(score_function_term) * score_function_term
+                            score_function = log_r.contract_as(score_function_term) * score_function_term
                             surrogate_elbo_particle = surrogate_elbo_particle + score_function.sum()
 
             elbo += elbo_particle / self.num_particles

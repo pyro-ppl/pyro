@@ -39,19 +39,21 @@ def torch_backward(x):
 
 def reduce_to_target(source, target):
     """
-    Sums out any dimensions in source that are of size > 1 in source but of size 1 in target.
-    This preserves source.dim().
+    Sums out any dimensions in source that are of size > 1 in source but of
+    size 1 in target.
     """
+    while source.dim() > target.dim():
+        source = source.sum(0)
     for k in range(1, 1 + source.dim()):
-        if k > target.dim() or source.size(-k) > target.size(-k):
+        if source.size(-k) > target.size(-k):
             source = source.sum(-k, keepdim=True)
     return source
 
 
 def reduce_to_shape(source, shape):
     """
-    Sums out any dimensions in source that are of size > 1 in source but of size 1 in target.
-    This preserves source.dim().
+    Sums out any dimensions in source that are of size > 1 in source but of
+    size 1 in target.
     """
     while source.dim() > len(shape):
         source = source.sum(0)
@@ -63,8 +65,10 @@ def reduce_to_shape(source, shape):
 
 class MultiViewTensor(dict):
     """
-    A container for Variables with different shapes. Used in TraceGraph_ELBO
-    to simplify downstream cost computation logic.
+    A container for Variables with different shapes.
+
+    Used in :class:`~pyro.infer.tracegraph_elbo.TraceGraph_ELBO` to simplify
+    downstream cost computation logic.
 
     Example::
 
@@ -81,7 +85,8 @@ class MultiViewTensor(dict):
 
     def add(self, term):
         """
-        Add tensor to collection of tensors stored in MultiViewTensor; key by shape
+        Add tensor to collection of tensors stored in MultiViewTensor.
+        key by shape.
         """
         if isinstance(term, Variable):
             if term.shape in self:
@@ -97,7 +102,8 @@ class MultiViewTensor(dict):
 
     def sum_leftmost_all_but(self, dim):
         """
-        This behaves like sum_leftmost(term, -dim) except for dim=0 where everything is summed out
+        This behaves like ``sum_leftmost(term, -dim)`` except for dim=0 where
+        everything is summed out.
         """
         assert dim >= 0
         result = MultiViewTensor()
@@ -110,12 +116,17 @@ class MultiViewTensor(dict):
                 result.add(sum_leftmost(term, -dim))
         return result
 
-    def contract_to(self, target):
-        """Opposite of broadcast."""
-        result = 0
-        for tensor in self.values():
-            result = result + reduce_to_target(tensor, target)
-        return result
+    def contract_as(self, target):
+        """Opposite of :meth:`torch.Tensor.expand_as`."""
+        if not self:
+            return 0
+        return sum(reduce_to_target(x, target) for x in self.values())
+
+    def contract(self, shape):
+        """Opposite of  :meth:`torch.Tensor.expand`."""
+        if not self:
+            return 0
+        return sum(reduce_to_shape(x, shape) for x in self.values())
 
     def __repr__(self):
         return '%s(%s)' % (type(self).__name__, ", ".join([str(k) for k in self.keys()]))
