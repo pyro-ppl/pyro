@@ -172,7 +172,10 @@ texinfo_documents = [
 ]
 
 # Example configuration for intersphinx: refer to the Python standard library.
-intersphinx_mapping = {'https://docs.python.org/': None}
+intersphinx_mapping = {
+    'python': ('https://docs.python.org/3/', None),
+    'torch': ('http://pytorch.org/docs/master/', None),
+}
 
 # document class constructors (__init__ methods):
 """ comment out this functionality for now;
