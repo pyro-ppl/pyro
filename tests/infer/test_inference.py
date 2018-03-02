@@ -160,7 +160,6 @@ class TestFixedModelGuide(TestCase):
 
 
 @pytest.mark.stage("integration", "integration_batch_2")
-@pytest.mark.skip('Slow test - use only for debugging')
 class PoissonGammaTests(TestCase):
     def setUp(self):
         # poisson-gamma model
