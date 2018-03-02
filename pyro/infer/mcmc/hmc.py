@@ -66,9 +66,6 @@ class HMC(TraceKernel):
         self._transforms = {}
 
     def _validate_trace(self, trace):
-        for name, node in trace.iter_stochastic_nodes():
-            if not node['fn'].reparameterized:
-                raise ValueError('Found non-reparameterized node in the model at site: {}'.format(name))
         trace_log_pdf = trace.log_pdf()
         if is_nan(trace_log_pdf) or is_inf(trace_log_pdf):
             raise ValueError('Model specification incorrect - trace log pdf is NaN, Inf or 0.')
@@ -90,9 +87,6 @@ class HMC(TraceKernel):
             self._r_dist[name] = dist.Normal(mu=r_mu, sigma=r_sigma)
             if node['fn'].support is not constraints.real:
                 self._transforms[name] = biject_to(node['fn'].support).inv
-        prototype_trace_log_pdf = self._prototype_trace.log_pdf().data[0]
-        if math.isnan(prototype_trace_log_pdf) or math.isinf(prototype_trace_log_pdf):
-            raise ValueError('Model specification incorrect - trace log pdf is NaN, Inf or 0.')
         self._validate_trace(self._prototype_trace)
 
     def cleanup(self):
@@ -101,14 +95,17 @@ class HMC(TraceKernel):
     def sample(self, trace):
         z = {name: node['value'] for name, node in trace.iter_stochastic_nodes()}
         r = {name: pyro.sample('r_{}_t={}'.format(name, self._t), self._r_dist[name]) for name in z}
+        print(z, r)
         z_new, r_new = velocity_verlet(z, r,
                                        self._potential_energy,
                                        self.step_size,
                                        self.num_steps,
                                        self._transforms)
+        print('z', z_new, 'r', r_new)
         # apply Metropolis correction
         energy_proposal = self._energy(z_new, r_new)
         energy_current = self._energy(z, r)
+        print('energy', energy_proposal, energy_current)
         delta_energy = energy_proposal - energy_current
         rand = pyro.sample('rand_t='.format(self._t), dist.Uniform(ng_zeros(1), ng_ones(1)))
         if rand.log() < -delta_energy:

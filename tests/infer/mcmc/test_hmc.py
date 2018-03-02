@@ -4,14 +4,18 @@ from collections import defaultdict, namedtuple
 import logging
 import os
 
+import numpy as np
 import pytest
 import torch
-from torch.autograd import Variable
+from torch.autograd import Variable, variable
+from torch.distributions import biject_to
 
 import pyro
 import pyro.distributions as dist
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.mcmc import MCMC
+from pyro.ops.integrator import velocity_verlet
+from pyro import poutine
 from tests.common import assert_equal
 
 logging.basicConfig(format='%(levelname)s %(message)s')
@@ -179,16 +183,67 @@ def test_logistic_regression():
     assert_equal(rmse(true_coefs, posterior_mean).item(), 0.0, prec=0.05)
 
 
+def test_constrained_model_energy_conservation():
+    def model():
+        alpha = pyro.param('alpha', variable(1.1, requires_grad=True))
+        beta = pyro.param('beta', variable(1.1, requires_grad=True))
+        p_latent = pyro.sample('p_latent', dist.Beta(alpha, beta))
+        pyro.observe('obs', dist.Bernoulli(p_latent), obs=variable([1, 1]))
+        return p_latent
+
+    def potential_fn(z):
+        trace = poutine.trace(poutine.condition(model, z)).get_trace()
+        return -trace.log_pdf()
+
+    def energy(z, r):
+        return potential_fn(z) + torch.sum(torch.stack([r[name]**2 for name in r]))
+
+    transforms = {'p_latent': biject_to(dist.Beta.support).inv}
+    z = {'p_latent': variable(0.2)}
+    r = {'p_latent': variable(0.7)}
+    max_delta = 0.0
+    deltas = []
+    for n in range(100, 2000, 100):
+        z_new, r_new = velocity_verlet(z, r, potential_fn, step_size=0.1, num_steps=n, transforms=transforms)
+        energy_old = energy(z, r)
+        energy_new = energy(z_new, r_new)
+        delta = abs(energy_new - energy_old)
+        deltas.append(delta.item())
+        max_delta = max(max_delta, delta)
+    assert max_delta < 4.0
+    # the errors should not diverge as num_steps increases
+    assert abs(np.corrcoef(range(100, 2000, 100), deltas)[0][1]) < 0.05
+
+
 def test_bernoulli_beta():
     def model(data):
         alpha = pyro.param('alpha', Variable(torch.Tensor([1.1, 1.1]), requires_grad=True))
         beta = pyro.param('beta', Variable(torch.Tensor([1.1, 1.1]), requires_grad=True))
         p_latent = pyro.sample("p_latent", dist.Beta(alpha, beta))
-        pyro.observe("obs", dist.bernoulli, data, p_latent)
+        pyro.observe("obs", dist.Bernoulli(p_latent), data)
         return p_latent
 
-    hmc_kernel = HMC(model, step_size=0.075, num_steps=3)
-    mcmc_run = MCMC(hmc_kernel, num_samples=800, warmup_steps=200)
+    hmc_kernel = HMC(model, step_size=0.02, num_steps=3)
+    mcmc_run = MCMC(hmc_kernel, num_samples=800, warmup_steps=500)
+    posterior = []
+    true_probs = Variable(torch.Tensor([0.9, 0.1]))
+    data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
+    for trace, _ in mcmc_run._traces(data):
+        posterior.append(trace.nodes['p_latent']['value'])
+    posterior_mean = torch.mean(torch.stack(posterior), 0)
+    assert_equal(posterior_mean.data, true_probs.data, prec=0.01)
+
+
+def test_bernoulli_beta():
+    def model(data):
+        alpha = pyro.param('alpha', Variable(torch.Tensor([1.1, 1.1]), requires_grad=True))
+        beta = pyro.param('beta', Variable(torch.Tensor([1.1, 1.1]), requires_grad=True))
+        p_latent = pyro.sample("p_latent", dist.Beta(alpha, beta))
+        pyro.observe("obs", dist.Bernoulli(p_latent), data)
+        return p_latent
+
+    hmc_kernel = HMC(model, step_size=0.02, num_steps=3)
+    mcmc_run = MCMC(hmc_kernel, num_samples=800, warmup_steps=500)
     posterior = []
     true_probs = Variable(torch.Tensor([0.9, 0.1]))
     data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))

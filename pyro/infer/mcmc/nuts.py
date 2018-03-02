@@ -81,7 +81,7 @@ class NUTS(HMC):
     def _build_basetree(self, z, r, z_grads, log_slice, direction):
         step_size = self.step_size if direction == 1 else -self.step_size
         z_new, r_new, z_grads, potential_energy = single_step_velocity_verlet(
-            z, r, self._potential_energy, step_size, z_grads=z_grads)
+            z, r, self._potential_energy, step_size, z_grads=z_grads, transforms=self._transforms)
         energy = potential_energy + self._kinetic_energy(r_new)
         dE = log_slice + energy
 
