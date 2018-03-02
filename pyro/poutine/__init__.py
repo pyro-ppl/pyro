@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import functools
+from six.moves import xrange
 
 from pyro.poutine import util
 
@@ -220,7 +221,7 @@ def queue(fn, queue, max_tries=None,
 
     def _fn(*args, **kwargs):
 
-        for i in range(max_tries):
+        for i in xrange(max_tries):
             assert not queue.empty(), \
                 "trying to get() from an empty queue will deadlock"
 
