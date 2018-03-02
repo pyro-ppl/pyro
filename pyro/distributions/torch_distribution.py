@@ -18,15 +18,29 @@ class TorchDistributionMixin(Distribution):
     """
     @property
     def reparameterized(self):
+        """
+        :return: Whether this distribution is reparameterized, i.e. whether
+            this distribution implements :meth:`rsample`.
+        :rtype: bool
+        """
         return self.has_rsample
 
     @property
     def enumerable(self):
+        """
+        :return: Whether this distribution implements :meth:`enumerate_support`
+        :rtype: bool
+        """
         return self.has_enumerate_support
 
     def __call__(self, sample_shape=torch.Size()):
         """
-        Samples a random value. This is reparameterized whenever possible.
+        Samples a random value.
+
+        This is reparameterized whenever possible, calling
+        :meth:`~torch.distributions.Distribution.rsample` for reparameterized
+        distributions and :meth:`~torch.distributions.Distribution.sample` for
+        non-reparameterized distributions.
 
         :param sample_shape: the size of the iid batch to be drawn from the
             distribution.
@@ -223,7 +237,7 @@ class ReshapedDistribution(TorchDistribution):
 class MaskedDistribution(TorchDistribution):
     """
     Masks a distribution by a zero-one tensor that is broadcastable to the
-    distributions ``batch_shape``.
+    distribution's ``batch_shape``.
 
     :param Variable mask: A zero-one valued float tensor.
     """

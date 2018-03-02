@@ -6,16 +6,22 @@ Distributions
    :maxdepth: 2
    :caption: Contents:
 
-Primitive Distributions
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
 PyTorch Distributions
----------------------
+~~~~~~~~~~~~~~~~~~~~~
+
+Most distributions in Pyro are thin wrappers around PyTorch distributions.
+For details on the PyTorch distribution interface, see
+:class:`torch.distributions.Distribution`.
+For differences between the Pyro and PyTorch interfaces, see
+:class:`pyro.distributions.torch_distribution.TorchDistributionMixin`.
 
 .. automodule:: pyro.distributions.torch
     :members:
     :undoc-members:
-    :show-inheritance:
+    :special-members: __call__
+
+Primitive Distributions
+~~~~~~~~~~~~~~~~~~~~~~~
 
 Abstract Distribution
 ---------------------
@@ -23,6 +29,7 @@ Abstract Distribution
 .. automodule:: pyro.distributions.distribution
     :members:
     :undoc-members:
+    :special-members: __call__
     :show-inheritance:
 
 TorchDistribution
@@ -31,6 +38,7 @@ TorchDistribution
 .. automodule:: pyro.distributions.torch_distribution
     :members:
     :undoc-members:
+    :special-members: __call__
     :show-inheritance:
     :member-order: bysource
 
