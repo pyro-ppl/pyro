@@ -13,9 +13,6 @@ class Kernel(Parameterized):
     Every inherited class should implement a :meth:`forward` pass which
     takes inputs :math:`X`, :math:`Z` and returns their covariance matrix.
 
-    To construct a new kernel from the old ones, we can use methods
-    :meth:`add`, :meth:`mul`, :meth:`exp`, :meth:`warp`, :meth:`vertical_scale`.
-
     References:
 
     [1] `Gaussian Processes for Machine Learning`,
@@ -78,65 +75,65 @@ class Kernel(Parameterized):
     #
     # def __rmul__(self, other):
     #     return self.mul(other)
-
-    def add(self, other, name=None):
-        """
-        Creates a new kernel which acts like a sum/direct sum of ``self`` and ``other``.
-
-        :param Kernel other: A kernel to be added.
-        :param str name: An optional name for the derived kernel.
-        :returns: A Sum kernel.
-        :rtype: Sum
-        """
-        return Sum(self, other, name)
-
-    def mul(self, other, name=None):
-        """
-        Creates a new kernel which acts like a product/tensor product of ``self`` and ``other``.
-
-        :param Kernel other: A kernel to be multiplied.
-        :param str name: An optional name for the derived kernel.
-        :returns: A Product kernel.
-        :rtype: Product
-        """
-        return Product(self, other, name)
-
-    def exp(self, name=None):
-        """
-        Creates a new kernel according to :math:`k_{new}(x, z) = \exp(k(x, z))`.
-
-        :param str name: An optional name for the derived kernel.
-        :returns: An Exponent kernel.
-        :rtype: Exponent
-        """
-        return Exponent(self, name)
-
-    def vertical_scale(self, vscaling_fn, name=None):
-        """
-        Creates a new kernel according to :math:`k_{new}(x, z) = f(x)k(x, z)f(z)`,
-        where :math:`f` is a vertical scaling function ``vscaling_fn``.
-
-        :param callable vscaling_fn: A vertical scaling function.
-        :param str name: An optional name for the derived kernel.
-        :returns: A vertical scaled kernel.
-        :rtype: VerticalScaling
-        """
-        return VerticalScaling(self, vscaling_fn, name)
-
-    def warp(self, iwarping_fn=None, owarping_coef=None, name=None):
-        """
-        Creates a new kernel according to :math:`k_{new}(x, z) = q(k(f(x), f(z)))`,
-        where :math:`f` is a input warping function ``iwarping_fn`` and :math:`q` is a polynomial
-        with non-negative coefficients ``owarping_coef``.
-
-        :param callable iwarping_fn: A input warping function, must be callable.
-        :param list owarping_coef: A list of coefficients of the output warping polynomial.
-            These coefficients must be non-negative.
-        :param str name: An optional name for the derived kernel.
-        :returns: A warped kernel.
-        :rtype: Warping
-        """
-        return Warping(self, iwarping_fn, owarping_coef, name)
+    #
+    # def add(self, other, name=None):
+    #     """
+    #     Creates a new kernel which acts like a sum/direct sum of ``self`` and ``other``.
+    #
+    #     :param Kernel other: A kernel to be added.
+    #     :param str name: An optional name for the derived kernel.
+    #     :returns: A Sum kernel.
+    #     :rtype: Sum
+    #     """
+    #     return Sum(self, other, name)
+    #
+    # def mul(self, other, name=None):
+    #     """
+    #     Creates a new kernel which acts like a product/tensor product of ``self`` and ``other``.
+    #
+    #     :param Kernel other: A kernel to be multiplied.
+    #     :param str name: An optional name for the derived kernel.
+    #     :returns: A Product kernel.
+    #     :rtype: Product
+    #     """
+    #     return Product(self, other, name)
+    #
+    # def exp(self, name=None):
+    #     """
+    #     Creates a new kernel according to :math:`k_{new}(x, z) = \exp(k(x, z))`.
+    #
+    #     :param str name: An optional name for the derived kernel.
+    #     :returns: An Exponent kernel.
+    #     :rtype: Exponent
+    #     """
+    #     return Exponent(self, name)
+    #
+    # def vertical_scale(self, vscaling_fn, name=None):
+    #     """
+    #     Creates a new kernel according to :math:`k_{new}(x, z) = f(x)k(x, z)f(z)`,
+    #     where :math:`f` is a vertical scaling function ``vscaling_fn``.
+    #
+    #     :param callable vscaling_fn: A vertical scaling function.
+    #     :param str name: An optional name for the derived kernel.
+    #     :returns: A vertical scaled kernel.
+    #     :rtype: VerticalScaling
+    #     """
+    #     return VerticalScaling(self, vscaling_fn, name)
+    #
+    # def warp(self, iwarping_fn=None, owarping_coef=None, name=None):
+    #     """
+    #     Creates a new kernel according to :math:`k_{new}(x, z) = q(k(f(x), f(z)))`,
+    #     where :math:`f` is a input warping function ``iwarping_fn`` and :math:`q` is a polynomial
+    #     with non-negative coefficients ``owarping_coef``.
+    #
+    #     :param callable iwarping_fn: A input warping function, must be callable.
+    #     :param list owarping_coef: A list of coefficients of the output warping polynomial.
+    #         These coefficients must be non-negative.
+    #     :param str name: An optional name for the derived kernel.
+    #     :returns: A warped kernel.
+    #     :rtype: Warping
+    #     """
+    #     return Warping(self, iwarping_fn, owarping_coef, name)
 
     def get_subkernel(self, name):
         """
