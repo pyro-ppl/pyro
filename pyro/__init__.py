@@ -148,8 +148,8 @@ def _subsample(name, size=None, subsample_size=None, subsample=None, use_cuda=No
     if size is None:
         assert subsample_size is None
         assert subsample is None
-        size = 1
-        subsample_size = 1
+        size = -1  # This is PyTorch convention for "arbitrary size"
+        subsample_size = -1
     elif subsample is None:
         names = [name]
         names += [str(f.counter) for f in _PYRO_STACK if isinstance(f, poutine.IndepMessenger)]
@@ -162,8 +162,7 @@ def _subsample(name, size=None, subsample_size=None, subsample=None, use_cuda=No
             subsample_size, len(subsample)) +
             " Did you accidentally use different subsample_size in the model and guide?")
 
-    scale = size / subsample_size
-    return subsample, scale
+    return size, subsample_size, subsample
 
 
 @contextlib.contextmanager
@@ -232,12 +231,12 @@ def iarange(name, size=None, subsample_size=None, subsample=None, use_cuda=None)
     See `SVI Part II <http://pyro.ai/examples/svi_part_ii.html>`_ for an
     extended discussion.
     """
-    subsample, scale = _subsample(name, size, subsample_size, subsample, use_cuda)
+    size, subsample_size, subsample = _subsample(name, size, subsample_size, subsample, use_cuda)
     if not am_i_wrapped():
         yield subsample
     else:
-        with poutine.scale(None, scale):
-            with poutine.indep(name, vectorized=True):
+        with poutine.scale(None, size / subsample_size):
+            with poutine.indep(name, vectorized=True, size=subsample_size):
                 yield subsample
 
 
@@ -267,13 +266,13 @@ def irange(name, size, subsample_size=None, subsample=None, use_cuda=None):
 
     See `SVI Part II <http://pyro.ai/examples/svi_part_ii.html>`_ for an extended discussion.
     """
-    subsample, scale = _subsample(name, size, subsample_size, subsample, use_cuda)
+    size, subsample_size, subsample = _subsample(name, size, subsample_size, subsample, use_cuda)
     if not am_i_wrapped():
         for i in subsample:
             yield i.item() if isinstance(i, Variable) else i
     else:
-        indep_context = poutine.indep(name, vectorized=False)
-        with poutine.scale(None, scale):
+        indep_context = poutine.indep(name, vectorized=False, size=subsample_size)
+        with poutine.scale(None, size / subsample_size):
             for i in subsample:
                 indep_context.next_context()
                 with indep_context:
