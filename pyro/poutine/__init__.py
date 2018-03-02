@@ -2,8 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 import functools
 
-from six.moves import xrange
-
 from pyro.poutine import util
 
 # poutines
@@ -191,12 +189,10 @@ def do(fn, data):
                         hide=list(data.keys()))
 
 
-def queue(fn, queue, max_tries=int(1e6),
-          extend_fn=None, escape_fn=None, num_samples=-1):
+def queue(fn, queue, extend_fn=None, escape_fn=None, num_samples=-1):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param queue: a queue data structure like multiprocessing.Queue to hold partial traces
-    :param max_tries: maximum number of attempts to compute a single complete trace
     :param extend_fn: function (possibly stochastic) that takes a partial trace and a site
     and returns a list of extended traces
     :param escape_fn: function (possibly stochastic) that takes a partial trace and a site
@@ -216,10 +212,8 @@ def queue(fn, queue, max_tries=int(1e6),
 
     def _fn(*args, **kwargs):
 
-        for i in xrange(max_tries):
-            assert not queue.empty(), \
-                "trying to get() from an empty queue will deadlock"
-
+        while True:
+            assert not queue.empty(), "trying to get() from an empty queue will deadlock"
             next_trace = queue.get()
             try:
                 ftr = trace(escape(replay(fn, next_trace),
@@ -230,7 +224,5 @@ def queue(fn, queue, max_tries=int(1e6),
                 for tr in extend_fn(ftr.trace.copy(), site_container.site,
                                     num_samples=num_samples):
                     queue.put(tr)
-
-        raise ValueError("max tries ({}) exceeded".format(str(max_tries)))
 
     return _fn
