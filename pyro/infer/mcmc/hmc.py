@@ -94,17 +94,14 @@ class HMC(TraceKernel):
     def sample(self, trace):
         z = {name: node['value'] for name, node in trace.iter_stochastic_nodes()}
         r = {name: pyro.sample('r_{}_t={}'.format(name, self._t), self._r_dist[name]) for name in z}
-        print(z, r)
         z_new, r_new = velocity_verlet(z, r,
                                        self._potential_energy,
                                        self.step_size,
                                        self.num_steps,
                                        self._transforms)
-        print('z', z_new, 'r', r_new)
         # apply Metropolis correction
         energy_proposal = self._energy(z_new, r_new)
         energy_current = self._energy(z, r)
-        print('energy', energy_proposal, energy_current)
         delta_energy = energy_proposal - energy_current
         rand = pyro.sample('rand_t='.format(self._t), dist.Uniform(ng_zeros(1), ng_ones(1)))
         if rand.log() < -delta_energy:
