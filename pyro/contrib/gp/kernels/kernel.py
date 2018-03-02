@@ -13,8 +13,7 @@ class Kernel(Parameterized):
     Every inherited class should implement a :meth:`forward` pass which
     takes inputs :math:`X`, :math:`Z` and returns their covariance matrix.
 
-    To construct a new kernel from the old ones, we can use Python operators
-    :math:`+` or :math:`*` with another kernel/constant. Or we can use methods
+    To construct a new kernel from the old ones, we can use methods
     :meth:`add`, :meth:`mul`, :meth:`exp`, :meth:`warp`, :meth:`vertical_scale`.
 
     References:
@@ -68,17 +67,17 @@ class Kernel(Parameterized):
         else:
             raise ValueError("Input X must be either 1 or 2 dimensional.")
 
-    def __add__(self, other):
-        return self.add(other)
-
-    def __mul__(self, other):
-        return self.mul(other)
-
-    def __radd__(self, other):
-        return self.add(other)
-
-    def __rmul__(self, other):
-        return self.mul(other)
+    # def __add__(self, other):
+    #     return self.add(other)
+    #
+    # def __mul__(self, other):
+    #     return self.mul(other)
+    #
+    # def __radd__(self, other):
+    #     return self.add(other)
+    #
+    # def __rmul__(self, other):
+    #     return self.mul(other)
 
     def add(self, other, name=None):
         """
@@ -89,7 +88,7 @@ class Kernel(Parameterized):
         :returns: A Sum kernel.
         :rtype: Sum
         """
-        return Sum(self, other, None)
+        return Sum(self, other, name)
 
     def mul(self, other, name=None):
         """
@@ -110,7 +109,7 @@ class Kernel(Parameterized):
         :returns: An Exponent kernel.
         :rtype: Exponent
         """
-        return Exponent(self, name=name)
+        return Exponent(self, name)
 
     def vertical_scale(self, vscaling_fn, name=None):
         """
@@ -122,7 +121,7 @@ class Kernel(Parameterized):
         :returns: A vertical scaled kernel.
         :rtype: VerticalScaling
         """
-        return VerticalScaling(self, vscaling_fn, name=name)
+        return VerticalScaling(self, vscaling_fn, name)
 
     def warp(self, iwarping_fn=None, owarping_coef=None, name=None):
         """
