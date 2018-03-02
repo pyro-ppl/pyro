@@ -88,12 +88,13 @@ class SparseVariationalGP(VariationalGP):
 
     def forward(self, Xnew, full_cov=False):
         """
-        Computes the parameters of ``p(f*|Xnew) ~ N(loc, cov)`` according to
-        ``p(f*,u|y) = p(f*|u).p(u|y) ~ p(f*|u).q(u)``, then marginalize out variable ``u``.
+        Computes the parameters of :math:`p(f^*|Xnew) \sim N(\\text{loc}, \\text{cov})`
+        according to :math:`p(f^*,u|y) = p(f^*|u)p(u|y) \sim p(f^*|u)q(u)`,
+        then marginalize out variable :math:`u`.
 
         :param torch.autograd.Variable Xnew: A 2D tensor.
         :param bool full_cov: Predict full covariance matrix or just its diagonal.
-        :return: loc, covariance matrix of ``p(f*|Xnew)``, and the likelihood.
+        :return: loc, covariance matrix of :math:`p(f^*|Xnew)`, and the likelihood.
         :rtype: torch.autograd.Variable, torch.autograd.Variable, and
             pyro.contrib.gp.likelihoods.Likelihood
         """

@@ -67,7 +67,7 @@ class Parameterized(nn.Module):
     def set_mode(self, mode):
         """
         Sets ``mode`` for the module to be able to use its parameters in stochastic functions.
-        It also sets ``mode`` for submodules which belong to ``Parameterized`` class.
+        It also sets ``mode`` for submodules which belong to :class:`Parameterized` class.
 
         :param str mode: Either "model" or "guide".
         """
@@ -93,8 +93,8 @@ class Parameterized(nn.Module):
 
     def _register_param(self, param, mode="model"):
         """
-        Registers a parameter to Pyro. It can be seen as a wrapper for `pyro.param()` and
-        `pyro.sample()` calls.
+        Registers a parameter to Pyro. It can be seen as a wrapper for ``pyro.param()`` and
+        ``pyro.sample()`` calls.
 
         :param str param: Name of a parameter.
         :param str mode: Either "model" or "guide".

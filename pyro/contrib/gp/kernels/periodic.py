@@ -12,7 +12,7 @@ from .isotropic import Isotropy
 
 class Cosine(Isotropy):
     """
-    Implementation of Cosine kernel: ``cos(r)``.
+    Implementation of Cosine kernel :math:`\cos(r)`.
     """
 
     def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None, name="Cosine"):
@@ -27,11 +27,11 @@ class Cosine(Isotropy):
         return variance * torch.cos(r)
 
 
-class SineSquaredExponential(Kernel):
+class ExpSineSquared(Kernel):
     """
-    Implementation of Sine Squared Exponential kernel (Periodic kernel):
-    ``k(x, z) = exp(-2 * sin^2(pi * (x-z) / p) / l^2)``, where ``p`` is
-    period parameter.
+    Implementation of ExpSineSquared kernel (Periodic kernel)
+    :math:`k(x, z) = \exp\\left(-2 \\times \\frac{\sin^2(\pi (x-z) / p)}{l^2}\\right)`,
+    where :math:`p` is ``period`` parameter.
 
     References:
 
@@ -43,8 +43,8 @@ class SineSquaredExponential(Kernel):
     :param torch.Tensor period: Period parameter of this kernel.
     """
     def __init__(self, input_dim, variance=None, lengthscale=None, period=None, active_dims=None,
-                 name="SineSquaredExponential"):
-        super(SineSquaredExponential, self).__init__(input_dim, active_dims, name)
+                 name="ExpSineSquared"):
+        super(ExpSineSquared, self).__init__(input_dim, active_dims, name)
 
         if variance is None:
             variance = torch.ones(1)
@@ -82,9 +82,9 @@ class SineSquaredExponential(Kernel):
         return variance * torch.exp(-2 * (scaled_sin ** 2).sum(-1))
 
 
-class Periodic(SineSquaredExponential):
+class Periodic(ExpSineSquared):
     """
-    Periodic is another name for Sine Squared Exponential kernel.
+    Periodic is another name for :class:`ExpSineSquared` kernel.
     """
 
     def __init__(self, input_dim, variance=None, lengthscale=None,  period=None, active_dims=None,

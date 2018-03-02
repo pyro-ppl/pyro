@@ -11,7 +11,7 @@ from .kernel import Kernel
 class Brownian(Kernel):
     """
     This kernel correponds to a two-sided Brownion motion (Wiener process):
-    ``k(x, z) = min(|x|,|z|)`` if ``x.z >= 0`` and ``k(x, z) = 0`` otherwise.
+    :math:`k(x, z) = \min(|x|,|z|)` if :math:`x\cdot z \ge 0` and :math:`k(x, z) = 0` otherwise.
 
     Note that the input dimension of this kernel must be 1.
 

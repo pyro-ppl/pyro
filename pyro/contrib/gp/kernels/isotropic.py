@@ -18,11 +18,11 @@ def _torch_sqrt(x, eps=1e-18):
 class Isotropy(Kernel):
     """
     Base kernel for a family of isotropic covariance functions which is a
-    function of the distance ``r=|x-z|``.
+    function of the distance :math:`r:=|x-z|`.
 
     By default, the parameter ``lengthscale`` has size 1. To use the
     anisotropic version (different lengthscale for each dimension),
-    make sure that lengthscale has size equal to ``input_dim``.
+    make sure that ``lengthscale`` has size equal to ``input_dim``.
 
     :param torch.Tensor variance: Variance parameter of this kernel.
     :param torch.Tensor lengthscale: Length scale parameter of this kernel.
@@ -43,7 +43,7 @@ class Isotropy(Kernel):
 
     def _square_scaled_dist(self, X, Z=None):
         """
-        Returns ``||(X-Z)/lengthscale||^2``.
+        Returns :math:`\|\frac{(X-Z)}{\text{lengthscale}}\|^2`.
         """
         if Z is None:
             Z = X
@@ -63,7 +63,7 @@ class Isotropy(Kernel):
 
     def _scaled_dist(self, X, Z=None):
         """
-        Returns ``||(X-Z)/lengthscale||``.
+        Returns :math:`\|\frac{(X-Z)}{\text{lengthscale}}\|`.
         """
         return _torch_sqrt(self._square_scaled_dist(X, Z))
 
@@ -77,7 +77,7 @@ class Isotropy(Kernel):
 
 class RBF(Isotropy):
     """
-    Implementation of Radial Basis Function kernel: ``exp(-0.5 * r^2 / l^2)``.
+    Implementation of Radial Basis Function kernel :math:`\exp\\left(-0.5 \\times \\frac{r^2}{l^2}\\right)`.
     """
 
     def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None, name="RBF"):
@@ -94,7 +94,7 @@ class RBF(Isotropy):
 
 class SquaredExponential(RBF):
     """
-    Squared Exponential is another name for RBF kernel.
+    SquaredExponential is another name for :class:`RBF` kernel.
     """
 
     def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None,
@@ -104,9 +104,10 @@ class SquaredExponential(RBF):
 
 class RationalQuadratic(Isotropy):
     """
-    Implementation of Rational Quadratic kernel: ``(1 + 0.5 * r^2 / alpha l^2)^(-alpha)``.
+    Implementation of RationalQuadratic kernel
+    :math:`\\left(1 + 0.5 \\times \\frac{r^2}{\\alpha l^2}\\right)^{-\\alpha}`.
 
-    :param torch.Tensor scale_mixture: Scale mixture (alpha) parameter of this kernel.
+    :param torch.Tensor scale_mixture: Scale mixture (:math:`\\alpha`) parameter of this kernel.
         Should have size 1.
     """
 
@@ -131,7 +132,7 @@ class RationalQuadratic(Isotropy):
 
 class Exponential(Isotropy):
     """
-    Implementation of Exponential kernel: `exp(-r/l)`.
+    Implementation of Exponential kernel :math:`\exp\\left(-\\frac{r}{l}\\right)`.
     """
 
     def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None, name="Exponential"):
@@ -156,7 +157,8 @@ class Matern12(Exponential):
 
 class Matern32(Isotropy):
     """
-    Implementation of Matern32 kernel: ``(1 + sqrt(3) * r/l) * exp(-sqrt(3) * r/l)``.
+    Implementation of Matern32 kernel
+    :math:`\\left(1 + \\sqrt{3} \\times \\frac{r}{l}\\right) \exp\\left(-\sqrt{3} \\times \\frac{r}{l}\\right)`.
     """
 
     def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None, name="Matern32"):
@@ -174,7 +176,9 @@ class Matern32(Isotropy):
 
 class Matern52(Isotropy):
     """
-    Implementation of Matern52 kernel: ``(1 + sqrt(5) * r/l + 5/3 * r^2 / l^2) * exp(-sqrt(5) * r/l)``.
+    Implementation of Matern52 kernel
+    :math:`\\left(1 + \\sqrt{5} \\times \\frac{r}{l} + \\frac{5}{3} \\times \\frac{r^2}{l^2}\\right)
+    \exp\\left(-\sqrt{5} \\times \\frac{r}{l}\\right)`.
     """
 
     def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None, name="Matern52"):

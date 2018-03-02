@@ -10,13 +10,12 @@ class Kernel(Parameterized):
     """
     Base class for kernels used in Gaussian Process.
 
-    Every inherited class should implement the forward pass which
-    take inputs X, Z and return their covariance matrix.
+    Every inherited class should implement a :meth:`forward` pass which
+    takes inputs :math:`X`, :math:`Z` and returns their covariance matrix.
 
     To construct a new kernel from the old ones, we can use Python operators
-    `+` or `*` with another kernel/constant. Or we can use methods `.add(...)`,
-    `.mul(...)`, `.exp(...)`, `.warp(...)`, `.vertical_scale(...)`. See the
-    documentation of these methods for more information.
+    :math:`+` or :math:`*` with another kernel/constant. Or we can use methods
+    :meth:`add`, :meth:`mul`, :meth:`exp`, :meth:`warp`, :meth:`vertical_scale`.
 
     References:
 
@@ -44,22 +43,22 @@ class Kernel(Parameterized):
         """
         Calculates covariance matrix of inputs on active dimensionals.
 
-        :param torch.autograd.Variable X: A 2D tensor of size `N x input_dim`.
-        :param torch.autograd.Variable Z: An optional 2D tensor of size `M x input_dim`.
+        :param torch.autograd.Variable X: A 2D tensor of size :math:`N \\times input\_dim`.
+        :param torch.autograd.Variable Z: An optional 2D tensor of size :math:`M \\times input\_dim`.
         :param bool diag: A flag to decide if we want to return a full covariance matrix
             or just its diagonal part.
-        :return: Covariance matrix of X and Z with size `N x M`.
+        :return: Covariance matrix of :math:`X` and :math:`Z` with size :math:`N \\times M`.
         :rtype: torch.autograd.Variable
         """
         raise NotImplementedError
 
     def _slice_input(self, X):
         """
-        Slices X according to `self.active_dims`. If X is 1 dimensional then returns
-            a 2D tensor of size `N x 1`.
+        Slices :math:`X` according to ``self.active_dims``. If :math:`X` is 1 dimensional then returns
+            a 2D tensor of size :math:`N \times 1`.
 
         :param torch.autograd.Variable X: A 1D or 2D tensor.
-        :return: A 2D slice of X.
+        :return: A 2D slice of :math:`X`.
         :rtype: torch.autograd.Variable
         """
         if X.dim() == 2:
@@ -83,43 +82,70 @@ class Kernel(Parameterized):
 
     def add(self, other, name=None):
         """
-        Returns a new kernel which acts like a sum/direct sum of ``self`` and ``other``.
+        Creates a new kernel which acts like a sum/direct sum of ``self`` and ``other``.
+
+        :param Kernel other: A kernel to be added.
+        :param str name: An optional name for the derived kernel.
+        :returns: A Sum kernel.
+        :rtype: Sum
         """
         return Sum(self, other, None)
 
     def mul(self, other, name=None):
         """
-        Returns a new kernel which acts like a product/tensor product of ``self`` and ``other``.
+        Creates a new kernel which acts like a product/tensor product of ``self`` and ``other``.
+
+        :param Kernel other: A kernel to be multiplied.
+        :param str name: An optional name for the derived kernel.
+        :returns: A Product kernel.
+        :rtype: Product
         """
         return Product(self, other, name)
 
     def exp(self, name=None):
         """
-        Creates a new kernel, which is an instance of Exponent kernel, according to:
-        ``k_new(x, z) = exp(k(x, z))``.
+        Creates a new kernel according to :math:`k_{new}(x, z) = \exp(k(x, z))`.
+
+        :param str name: An optional name for the derived kernel.
+        :returns: An Exponent kernel.
+        :rtype: Exponent
         """
         return Exponent(self, name=name)
 
     def vertical_scale(self, vscaling_fn, name=None):
         """
-        Creates a new kernel, which is an instance of VerticalScaling kernel, according to:
-        ``k_new(x, z) = f(x)k(x, z)f(z)``,
-        where ``f := vscaling_fn`` is a vertical scaling function.
+        Creates a new kernel according to :math:`k_{new}(x, z) = f(x)k(x, z)f(z)`,
+        where :math:`f` is a vertical scaling function ``vscaling_fn``.
+
+        :param callable vscaling_fn: A vertical scaling function.
+        :param str name: An optional name for the derived kernel.
+        :returns: A vertical scaled kernel.
+        :rtype: VerticalScaling
         """
         return VerticalScaling(self, vscaling_fn, name=name)
 
     def warp(self, iwarping_fn=None, owarping_coef=None, name=None):
         """
-        Creates a new kernel, which is an instance of Warping kernel, according to:
-        ``k_new(x, z) = q(k(f(x), f(z)))``,
-        where ``f := iwarping_fn`` is a input warping function, and ``q`` is a polynomial
+        Creates a new kernel according to :math:`k_{new}(x, z) = q(k(f(x), f(z)))`,
+        where :math:`f` is a input warping function ``iwarping_fn`` and :math:`q` is a polynomial
         with non-negative coefficients ``owarping_coef``.
+
+        :param callable iwarping_fn: A input warping function, must be callable.
+        :param list owarping_coef: A list of coefficients of the output warping polynomial.
+            These coefficients must be non-negative.
+        :param str name: An optional name for the derived kernel.
+        :returns: A warped kernel.
+        :rtype: Warping
         """
         return Warping(self, iwarping_fn, owarping_coef, name)
 
     def get_subkernel(self, name):
         """
         Returns the subkernel corresponding to ``name``.
+
+        :param str name: Name of the subkernel.
+        :returns: A subkernel.
+        :rtype: Kernel
         """
         if name in self._subkernels:
             return self._subkernels[name]
@@ -129,16 +155,18 @@ class Kernel(Parameterized):
 
 class Combination(Kernel):
     """
-    Base class for Sum and Product kernels.
+    Base class for Combination kernels.
 
-    :param pyro.contrib.gp.kernels.Kernel kernel0: First kernel to combine.
-    :param pyro.contrib.gp.kernels.Kernel or numbers.Number kernel1: Second kernel to combine.
+    :param Kernel kern0: First kernel to combine.
+    :param kern1: Second kernel to combine.
+    :type kern1: Kernel or numbers.Number
     """
 
     def __init__(self, kern0, kern1, name=None):
-        if not (isinstance(kern0, Kernel) and
-                (isinstance(kern1, Kernel) or isinstance(kern1, numbers.Number))):
-            raise TypeError("Sub-kernels of a combined kernel must be a Kernel instance or a number.")
+        if not isinstance(kern0, Kernel):
+            raise TypeError("The first component of a combined kernel must be a Kernel instance.")
+        if not (isinstance(kern1, Kernel) or isinstance(kern1, numbers.Number)):
+            raise TypeError("The second component of a combined kernel must be a Kernel instance or a number.")
 
         active_dims = set(kern0.active_dims)
         if isinstance(kern1, Kernel):
@@ -204,16 +232,16 @@ class Product(Combination):
             return self.kern0(X, Z, diag) * self.kern1
 
 
-class Deriving(Kernel):
+class Transforming(Kernel):
     """
     Base class for kernels derived from a kernel by some transforms such as: warping,
     exponent, vertical scaling.
 
-    :param pyro.contrib.gp.kernels.Kernel kernel: The original kernel.
+    :param Kernel kern: The original kernel.
     """
 
     def __init__(self, kern, name=None):
-        super(Deriving, self).__init__(kern.input_dim, kern.active_dims, name)
+        super(Transforming, self).__init__(kern.input_dim, kern.active_dims, name)
 
         self.kern = kern
 
@@ -223,9 +251,41 @@ class Deriving(Kernel):
             self._subkernels[kern.name] = kern
 
 
+class Exponent(Transforming):
+    """
+    Creates a new kernel according to :math:`k_{new}(x, z) = \exp(k(x, z))`.
+    """
+
+    def forward(self, X, Z=None, diag=False):
+        return self.kern(X, Z, diag).exp()
+
+
+class VerticalScaling(Transforming):
+    """
+    Creates a new kernel according to :math:`k_{new}(x, z) = f(x)k(x, z)f(z)`,
+    where :math:`f` is a vertical scaling function ``vscaling_fn``.
+
+    :param callable vscaling_fn: A vertical scaling function, must be callable.
+    """
+
+    def __init__(self, kern, vscaling_fn, name=None):
+        super(VerticalScaling, self).__init__(kern, name)
+
+        self.vscaling_fn = vscaling_fn
+
+    def forward(self, X, Z=None, diag=False):
+        if diag:
+            return self.vscaling_fn(X) * self.kern(X, Z, diag) * self.vscaling_fn(X)
+        elif Z is None:
+            vscaled_X = self.vscaling_fn(X).unsqueeze(1)
+            return vscaled_X * self.kern(X, Z, diag) * vscaled_X.t()
+        else:
+            return self.vscaling_fn(X).unsqueeze(1) * self.kern(X, Z, diag) * self.vscaling_fn(Z).unsqueeze(0)
+
+
 def _Horner_evaluate(x, coef):
     """
-    Evaluates the value of a polynomial accoridng to Horner's method.
+    Evaluates the value of a polynomial according to Horner's method.
     """
     # https://en.wikipedia.org/wiki/Horner%27s_method
     n = len(coef) - 1
@@ -235,13 +295,13 @@ def _Horner_evaluate(x, coef):
     return b
 
 
-class Warping(Deriving):
+class Warping(Transforming):
     """
-    Creates a new kernel according to ``k_new(x, z) = q(k(f(x), f(z)))``,
-    where ``f := iwarping_fn`` is a input warping function, and ``q`` is a polynomial
+    Creates a new kernel according to :math:`k_{new}(x, z) = q(k(f(x), f(z)))`,
+    where :math:`f` is a input warping function ``iwarping_fn`` and :math:`q` is a polynomial
     with non-negative coefficients ``owarping_coef``.
 
-    :param iwarping_fn: The input warping function, must be callable.
+    :param callable iwarping_fn: A input warping function, must be callable.
     :param list owarping_coef: A list of coefficients of the output warping polynomial.
         These coefficients must be non-negative.
     """
@@ -271,35 +331,3 @@ class Warping(Deriving):
             return K_iwarp
         else:
             return _Horner_evaluate(K_iwarp, self.owarping_coef)
-
-
-class Exponent(Deriving):
-    """
-    Creates a new kernel according to ``k_new(x, z) = exp(k(x, z))``.
-    """
-
-    def forward(self, X, Z=None, diag=False):
-        return self.kern(X, Z, diag).exp()
-
-
-class VerticalScaling(Deriving):
-    """
-    Creates a new kernel according to ``k_new(x, z) = f(x)k(x, z)f(z)``,
-    where ``f := vscaling_fn`` is a vertical scaling function.
-
-    :param vscaling_fn: The vertical scaling function, must be callable.
-    """
-
-    def __init__(self, kern, vscaling_fn, name=None):
-        super(VerticalScaling, self).__init__(kern, name)
-
-        self.vscaling_fn = vscaling_fn
-
-    def forward(self, X, Z=None, diag=False):
-        if diag:
-            return self.vscaling_fn(X) * self.kern(X, Z, diag) * self.vscaling_fn(X)
-        elif Z is None:
-            vscaled_X = self.vscaling_fn(X).unsqueeze(1)
-            return vscaled_X * self.kern(X, Z, diag) * vscaled_X.t()
-        else:
-            return self.vscaling_fn(X).unsqueeze(1) * self.kern(X, Z, diag) * self.vscaling_fn(Z).unsqueeze(0)

@@ -9,7 +9,7 @@ from .kernel import Kernel
 
 class DotProduct(Kernel):
     """
-    Base kernel for Linear and Polonomial kernels.
+    Base kernel for kernels which depends only on :math:`x\cdot z`.
 
     :param torch.Tensor variance: Variance parameter which plays the role of scaling.
     """
@@ -24,7 +24,7 @@ class DotProduct(Kernel):
 
     def _dot_product(self, X, Z=None, diag=False):
         """
-        Returns ``X.Z``.
+        Returns :math:`X\cdot Z`.
         """
         if Z is None:
             Z = X
@@ -45,7 +45,8 @@ class Linear(DotProduct):
     is equivalent to Linear Regression.
 
     Note that here we implement the homogeneous version. To use the inhomogeneous version,
-    consider using Polynomial kernel with `degree=1` or making a combination with a Bias kernel.
+    consider using :class:`Polynomial` kernel with ``degree=1`` or making
+    a combination with a :class:`.Bias` kernel.
     """
 
     def __init__(self, input_dim, variance=None, active_dims=None, name="Linear"):
@@ -58,7 +59,7 @@ class Linear(DotProduct):
 
 class Polynomial(DotProduct):
     """
-    Implementation of Polynomial kernel: ``k(x, z) = (bias + x.z)^d``.
+    Implementation of Polynomial kernel :math:`k(x, z) = (\\text{bias} + x\cdot z)^d`.
 
     :param torch.Tensor bias: Bias parameter for this kernel. Should be positive.
     :param int degree: Degree of this polynomial.

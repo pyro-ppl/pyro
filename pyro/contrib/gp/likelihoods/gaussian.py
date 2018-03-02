@@ -14,7 +14,7 @@ class Gaussian(Likelihood):
     """
     Implementation of Gaussian likelihood.
 
-    :param torch.Tensor variance: Dimension of inputs for this kernel.
+    :param torch.Tensor variance: Variance parameter.
     """
 
     def __init__(self, variance=None):
