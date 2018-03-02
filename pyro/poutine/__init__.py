@@ -2,6 +2,8 @@ from __future__ import absolute_import, division, print_function
 
 import functools
 
+from six.moves import xrange
+
 from pyro.poutine import util
 
 # poutines
@@ -189,8 +191,8 @@ def do(fn, data):
                         hide=list(data.keys()))
 
 
-def queue(fn, queue, max_tries=None,
-          extend_fn=None, escape_fn=None, num_samples=None):
+def queue(fn, queue, max_tries=int(1e6),
+          extend_fn=None, escape_fn=None, num_samples=-1):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param queue: a queue data structure like multiprocessing.Queue to hold partial traces
@@ -206,21 +208,15 @@ def queue(fn, queue, max_tries=None,
     return a return value from a complete trace in the queue
     """
 
-    if max_tries is None:
-        max_tries = int(1e6)
-
     if extend_fn is None:
         extend_fn = util.enum_extend
 
     if escape_fn is None:
         escape_fn = util.discrete_escape
 
-    if num_samples is None:
-        num_samples = -1
-
     def _fn(*args, **kwargs):
 
-        for i in range(max_tries):
+        for i in xrange(max_tries):
             assert not queue.empty(), \
                 "trying to get() from an empty queue will deadlock"
 
