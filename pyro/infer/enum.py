@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import functools
+
 from six.moves.queue import LifoQueue
 
 from pyro import poutine
@@ -21,18 +23,33 @@ def iter_discrete_traces(graph_type, max_iarange_nesting, fn, *args, **kwargs):
     When sampling continuous random variables, this behaves like `fn`.
     When sampling discrete random variables, this iterates over all choices.
 
-    This yields `(scale, trace)` pairs, where `scale` is the probability of the
-    discrete choices made in the `trace`.
+    This yields traces scaled by the probability of the discrete choices made
+    in the `trace`.
 
     :param str graph_type: The type of the graph, e.g. "flat" or "dense".
     :param callable fn: A stochastic function.
     :returns: An iterator over scaled traces.
     """
     queue = LifoQueue()
-    queue.put(Trace())
-    q_fn = poutine.queue(fn, queue=queue, escape_fn=_iter_discrete_escape)
+    enum_stack = ()
+    partial_trace = Trace()
+    queue.put((enum_stack, partial_trace))
     while not queue.empty():
-        full_trace = poutine.trace(q_fn, graph_type=graph_type).get_trace(*args, **kwargs)
+        enum_stack, partial_trace = queue.get()
+        traced_fn = poutine.trace(poutine.escape(poutine.replay(fn, partial_trace),
+                                                 functools.partial(_iter_discrete_escape, partial_trace)),
+                                  graph_type=graph_type)
+        try:
+            full_trace = traced_fn.get_trace(*args, **kwargs)
+        except poutine.util.NonlocalExit as e:
+            e.reset_stack()
+            for i, value in enumerate(e.site["fn"].enumerate_support()):
+                site = e.site.copy()
+                site["value"] = value
+                extended_trace = partial_trace.copy()
+                extended_trace.add_node(site["name"], **site)
+                queue.put((enum_stack + (i,), extended_trace))
+            continue
 
         # Compute total log probability of trace.
         log_prob = MultiViewTensor()  # is this right?
