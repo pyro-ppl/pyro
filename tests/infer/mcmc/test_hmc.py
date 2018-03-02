@@ -217,8 +217,8 @@ def test_constrained_model_energy_conservation():
 
 def test_bernoulli_beta():
     def model(data):
-        alpha = pyro.param('alpha', variable([1.1, 1.1]), requires_grad=True)
-        beta = pyro.param('beta', variable([1.1, 1.1]), requires_grad=True)
+        alpha = pyro.param('alpha', variable([1.1, 1.1], requires_grad=True))
+        beta = pyro.param('beta', variable([1.1, 1.1], requires_grad=True))
         p_latent = pyro.sample('p_latent', dist.Beta(alpha, beta))
         pyro.observe('obs', dist.Bernoulli(p_latent), data)
         return p_latent
