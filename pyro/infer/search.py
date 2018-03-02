@@ -12,7 +12,7 @@ class Search(TracePosterior):
     :param callable model: Probabilistic model defined as a function.
     :param int max_tries: The maximum number of times to try completing a trace from the queue.
     """
-    def __init__(self, model, max_tries=1e6):
+    def __init__(self, model, max_tries=int(1e6)):
         """
         Constructor. Default `max_tries` to something sensible - 1e6.
 
@@ -35,8 +35,13 @@ class Search(TracePosterior):
         self.queue = Queue()
         self.queue.put(poutine.Trace())
 
-        p = poutine.trace(
-            poutine.queue(self.model, queue=self.queue, max_tries=self.max_tries))
+        p = poutine.trace(poutine.queue(self.model, queue=self.queue))
+
+        tries = 0
         while not self.queue.empty():
+            tries += 1
+            if tries >= self.max_tries:
+                raise ValueError("max tries ({}) exceeded".format(self.max_tries))
+
             tr = p.get_trace(*args, **kwargs)
             yield (tr, tr.log_pdf())

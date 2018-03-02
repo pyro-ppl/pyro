@@ -189,12 +189,10 @@ def do(fn, data):
                         hide=list(data.keys()))
 
 
-def queue(fn, queue, max_tries=None,
-          extend_fn=None, escape_fn=None, num_samples=None):
+def queue(fn, queue, extend_fn=None, escape_fn=None, num_samples=None):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param queue: a queue data structure like multiprocessing.Queue to hold partial traces
-    :param max_tries: maximum number of attempts to compute a single complete trace
     :param extend_fn: function (possibly stochastic) that takes a partial trace and a site
     and returns a list of extended traces
     :param escape_fn: function (possibly stochastic) that takes a partial trace and a site
@@ -205,9 +203,6 @@ def queue(fn, queue, max_tries=None,
     Given a stochastic function and a queue,
     return a return value from a complete trace in the queue
     """
-
-    if max_tries is None:
-        max_tries = int(1e6)
 
     if extend_fn is None:
         extend_fn = util.enum_extend
@@ -220,10 +215,8 @@ def queue(fn, queue, max_tries=None,
 
     def _fn(*args, **kwargs):
 
-        for i in range(max_tries):
-            assert not queue.empty(), \
-                "trying to get() from an empty queue will deadlock"
-
+        while True:
+            assert not queue.empty(), "trying to get() from an empty queue will deadlock"
             next_trace = queue.get()
             try:
                 ftr = trace(escape(replay(fn, next_trace),
@@ -234,7 +227,5 @@ def queue(fn, queue, max_tries=None,
                 for tr in extend_fn(ftr.trace.copy(), site_container.site,
                                     num_samples=num_samples):
                     queue.put(tr)
-
-        raise ValueError("max tries ({}) exceeded".format(str(max_tries)))
 
     return _fn
