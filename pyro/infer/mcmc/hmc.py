@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 from collections import OrderedDict
 
-import math
 import torch
 from torch.distributions import biject_to, constraints
 
