@@ -189,7 +189,7 @@ def do(fn, data):
                         hide=list(data.keys()))
 
 
-def queue(fn, queue, extend_fn=None, escape_fn=None, num_samples=-1):
+def queue(fn, queue, extend_fn=None, escape_fn=None, num_samples=None):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param queue: a queue data structure like multiprocessing.Queue to hold partial traces
@@ -209,6 +209,9 @@ def queue(fn, queue, extend_fn=None, escape_fn=None, num_samples=-1):
 
     if escape_fn is None:
         escape_fn = util.discrete_escape
+
+    if num_samples is None:
+        num_samples = -1
 
     def _fn(*args, **kwargs):
 

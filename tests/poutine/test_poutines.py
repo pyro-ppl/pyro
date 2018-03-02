@@ -255,11 +255,6 @@ class QueuePoutineDiscreteTest(TestCase):
 
         assert true_latents == set(tr_latents)
 
-    def test_queue_max_tries(self):
-        f = poutine.queue(self.model, queue=self.queue, max_tries=3)
-        with pytest.raises(ValueError):
-            f()
-
 
 class Model(nn.Module):
     def __init__(self):
