@@ -29,12 +29,13 @@ def test_iter_discrete_traces_order(depth, graph_type):
         for i in range(depth):
             pyro.sample("x{}".format(i), dist.Bernoulli(0.5))
 
-    traces = list(iter_discrete_traces(graph_type, 0, model, depth))
+    trace_pairs = list(iter_discrete_traces(graph_type, model, model, depth))
 
-    assert len(traces) == 2 ** depth
-    for trace in traces:
-        sites = [name for name, site in trace.nodes.items() if site["type"] == "sample"]
-        assert sites == ["x{}".format(i) for i in range(depth)]
+    assert len(trace_pairs) == 2 ** depth
+    for traces in trace_pairs:
+        for trace in traces:
+            sites = [name for name, site in trace.nodes.items() if site["type"] == "sample"]
+            assert sites == ["x{}".format(i) for i in range(depth)]
 
 
 @pytest.mark.parametrize("graph_type", ["flat", "dense"])
@@ -49,19 +50,19 @@ def test_iter_discrete_traces_scalar(graph_type):
         y = pyro.sample("y", dist.Categorical(ps))
         return dict(x=x, y=y)
 
-    traces = list(iter_discrete_traces(graph_type, 0, model))
+    trace_pairs = list(iter_discrete_traces(graph_type, model, model))
 
     p = pyro.param("p")
     ps = pyro.param("ps")
-    assert len(traces) == 2 * len(ps)
+    assert len(trace_pairs) == 2 * len(ps)
 
-    for trace in traces:
-        x = trace.nodes["x"]["value"].long()
-        y = trace.nodes["y"]["value"].long()
-        expected_scale = [1 - p, p][x] * ps[y]
-        if trace.nodes["x"]["infer"]["enum_scale"] is not 0:
-            assert_equal(trace.nodes["x"]["infer"]["enum_scale"], [1 - p, p][x])
-        assert_equal(trace.nodes["y"]["infer"]["enum_scale"], [1 - p, p][x] * ps[y])
+    for traces in trace_pairs:
+        for trace in traces:
+            x = trace.nodes["x"]["value"].long()
+            y = trace.nodes["y"]["value"].long()
+            if trace.nodes["x"]["scale"] is not 0:
+                assert_equal(trace.nodes["x"]["scale"], [1 - p, p][x])
+            assert_equal(trace.nodes["y"]["scale"], [1 - p, p][x] * ps[y])
 
 
 @pytest.mark.parametrize("graph_type", ["flat", "dense"])
@@ -80,20 +81,21 @@ def test_iter_discrete_traces_vector(graph_type):
         assert y.size() == (2,)
         return dict(x=x, y=y)
 
-    traces = list(iter_discrete_traces(graph_type, 1, model))
+    trace_pairs = list(iter_discrete_traces(graph_type, model, model))
 
     p = pyro.param("p")
     ps = pyro.param("ps")
-    assert len(traces) == 2 * ps.size(-1)
+    assert len(trace_pairs) == 2 * ps.size(-1)
 
-    for trace in traces:
-        x = trace.nodes["x"]["value"]
-        y = trace.nodes["y"]["value"]
-        scale_x = dist.Bernoulli(p).log_prob(x).exp()
-        scale_y = dist.Categorical(ps).log_prob(y).exp()
-        if trace.nodes["x"]["infer"]["enum_scale"] is not 0:
-            assert_equal(trace.nodes["x"]["infer"]["enum_scale"], scale_x)
-        assert_equal(trace.nodes["y"]["infer"]["enum_scale"], scale_x * scale_y)
+    for traces in trace_pairs:
+        for trace in traces:
+            x = trace.nodes["x"]["value"]
+            y = trace.nodes["y"]["value"]
+            scale_x = dist.Bernoulli(p).log_prob(x).exp()
+            scale_y = dist.Categorical(ps).log_prob(y).exp()
+            if trace.nodes["x"]["scale"] is not 0:
+                assert_equal(trace.nodes["x"]["scale"], scale_x)
+            assert_equal(trace.nodes["y"]["scale"], scale_x * scale_y)
 
 
 @pytest.mark.parametrize("enum_discrete", [None, "sequential", "parallel"])
@@ -144,12 +146,12 @@ def gmm_guide(data, verbose=False):
 
 @pytest.mark.parametrize("data_size", [1, 2, 3])
 @pytest.mark.parametrize("graph_type", ["flat", "dense"])
-@pytest.mark.parametrize("model", [gmm_model, gmm_guide])
-def test_gmm_iter_discrete_traces(model, data_size, graph_type):
+def test_gmm_iter_discrete_traces(data_size, graph_type):
     pyro.clear_param_store()
     data = Variable(torch.arange(0, data_size))
-    model = config_enumerate(model)
-    traces = list(iter_discrete_traces(graph_type, 0, model, data=data, verbose=True))
+    model = gmm_model
+    guide = config_enumerate(gmm_guide)
+    traces = list(iter_discrete_traces(graph_type, model, guide, data=data, verbose=True))
     # This non-vectorized version is exponential in data_size:
     assert len(traces) == 2**data_size
 
@@ -184,7 +186,7 @@ def test_gmm_batch_iter_discrete_traces(model, data_size, graph_type):
     pyro.clear_param_store()
     data = Variable(torch.arange(0, data_size))
     model = config_enumerate(model)
-    traces = list(iter_discrete_traces(graph_type, 1, model, data=data))
+    traces = list(iter_discrete_traces(graph_type, model, model, data=data))
     # This vectorized version is independent of data_size:
     assert len(traces) == 2
 
@@ -350,21 +352,23 @@ def test_categoricals_elbo_gradient(enumerate1, enumerate2, enumerate3, max_iara
         ]))
 
 
-@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("enumerate2", [None, "sequential", "parallel"])
+@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("iarange_dim", [1, 2])
 def test_iarange_elbo_gradient(iarange_dim, enumerate1, enumerate2):
     pyro.clear_param_store()
-    num_particles = 1000
+    num_particles = 10000
+    p = 0.3
+    q = pyro.param("q", variable(0.6, requires_grad=True))
 
     def model():
         with pyro.iarange("particles", num_particles):
-            pyro.sample("y", dist.Bernoulli(0.25).reshape([num_particles]))
+            pyro.sample("y", dist.Bernoulli(p).reshape([num_particles]))
             with pyro.iarange("iarange", iarange_dim):
-                pyro.sample("z", dist.Bernoulli(0.25).reshape([iarange_dim, num_particles]))
+                pyro.sample("z", dist.Bernoulli(p).reshape([iarange_dim, num_particles]))
 
     def guide():
-        q = pyro.param("q", variable(0.5, requires_grad=True))
+        q = pyro.param("q")
         with pyro.iarange("particles", num_particles):
             pyro.sample("y", dist.Bernoulli(q).reshape([num_particles]),
                         infer={"enumerate": enumerate1})
@@ -374,17 +378,21 @@ def test_iarange_elbo_gradient(iarange_dim, enumerate1, enumerate2):
 
     logger.info("Computing gradients using surrogate loss")
     elbo = Trace_ELBO(max_iarange_nesting=2)
-    elbo.loss_and_grads(model, guide)
+    actual_loss = elbo.loss_and_grads(model, guide) / num_particles
     actual_grad = pyro.param('q').grad / num_particles
 
     logger.info("Computing analytic gradients")
-    q = variable(0.5, requires_grad=True)
-    kl = kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.25))
-    expected_grad = (1 + iarange_dim) * grad(kl, [q])[0]
+    kl = (1 + iarange_dim) * kl_divergence(dist.Bernoulli(q), dist.Bernoulli(p))
+    expected_grad = grad(kl, [q])[0]
+    expected_loss = kl.item()
 
-    assert_equal(actual_grad, expected_grad, prec=0.1, msg="\n".join([
-        "expected = {}".format(expected_grad.detach().cpu().numpy()),
-        "  actual = {}".format(actual_grad.detach().cpu().numpy()),
+    assert_equal(actual_loss, expected_loss, prec=0.1, msg="".join([
+        "\nexpected loss = {}".format(expected_loss),
+        "\n  actual loss = {}".format(actual_loss),
+    ]))
+    assert_equal(actual_grad, expected_grad, prec=0.1, msg="".join([
+        "\nexpected grad = {}".format(expected_grad.detach().cpu().numpy()),
+        "\n  actual grad = {}".format(actual_grad.detach().cpu().numpy()),
     ]))
 
 

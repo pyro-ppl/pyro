@@ -48,7 +48,7 @@ def _iter_discrete_queue(graph_type, fn, *args, **kwargs):
                 queue.put(item)
 
 
-def iter_discrete_traces(graph_type, max_iarange_nesting, fn, *args, **kwargs):
+def iter_discrete_traces(graph_type, model, guide, *args, **kwargs):
     """
     Iterate over all discrete choices of a stochastic function.
 
@@ -60,33 +60,40 @@ def iter_discrete_traces(graph_type, max_iarange_nesting, fn, *args, **kwargs):
 
     :param str graph_type: The type of the graph, e.g. "flat" or "dense".
     :param callable fn: A stochastic function.
-    :returns: An iterator over scaled traces.
+    :returns: An iterator over (model, guide) pairs of weighted traces.
     """
-    already_counted = set()
-    for trace in _iter_discrete_queue(graph_type, fn, *args, **kwargs):
-        log_prob = 0
-        scale = None
+    already_counted = set()  # avoid double-counting across traces
+    for guide_trace in _iter_discrete_queue(graph_type, guide, *args, **kwargs):
+        model_trace = poutine.trace(poutine.replay(model, guide_trace),
+                                    graph_type=graph_type).get_trace(*args, **kwargs)
+
+        # Scale traces by cumulative weight of all discrete choices made so far.
         enum_stack = ()
-        for name, site in trace.nodes.items():
-            if site["type"] != "sample":
+        log_prob = 0
+        weight = 1
+        for name, model_site in model_trace.nodes.items():
+            if model_site["type"] != "sample":
                 continue
+            if "enum_stack" in model_site["infer"]:
+                enum_stack = model_site["infer"]["enum_stack"]
+                log_prob = log_prob + model_site["infer"]["enum_log_prob"]
+                weight = log_prob.exp()
 
-            if "enum_log_prob" in site["infer"]:
-                log_prob = log_prob + site["infer"]["enum_log_prob"]
-                scale = log_prob.exp()
-
-            if scale is None:
-                continue
+            sites = [model_site]
+            if name in guide_trace.nodes:
+                sites.append(guide_trace.nodes[name])
 
             # Avoid double counting in sequential enumeration.
-            enum_stack = site["infer"].get("enum_stack", enum_stack)
             if (name, enum_stack) in already_counted:
-                site["infer"]["enum_scale"] = 0
+                for site in sites:
+                    site["scale"] = 0
             else:
                 already_counted.add((name, enum_stack))
-                site["infer"]["enum_scale"] = scale
+                if weight is not 1:
+                    for site in sites:
+                        site["scale"] = site["scale"] * weight
 
-        yield trace
+        yield model_trace, guide_trace
 
 
 def _config_enumerate(default):

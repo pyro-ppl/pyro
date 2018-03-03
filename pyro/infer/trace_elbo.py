@@ -4,7 +4,6 @@ import math
 import warnings
 
 import pyro
-import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import iter_discrete_traces
@@ -29,18 +28,10 @@ class Trace_ELBO(ELBO):
 
         for i in range(self.num_particles):
             # This iterates over a bag of traces, for each particle.
-            for guide_trace in iter_discrete_traces("flat", self.max_iarange_nesting, guide, *args, **kwargs):
-                model_trace = poutine.trace(poutine.replay(model, guide_trace),
-                                            graph_type="flat").get_trace(*args, **kwargs)
-
+            for model_trace, guide_trace in iter_discrete_traces("flat", model, guide, *args, **kwargs):
                 check_model_guide_match(model_trace, guide_trace)
                 guide_trace = prune_subsample_sites(guide_trace)
                 model_trace = prune_subsample_sites(model_trace)
-
-                for trace in (model_trace, guide_trace):
-                    for site in trace.nodes.values():
-                        if site["type"] == "sample" and "enum_scale" in site["infer"]:
-                            site["scale"] = site["scale"] * site["infer"]["enum_scale"]
 
                 model_trace.compute_batch_log_pdf()
                 guide_trace.compute_score_parts()
@@ -94,7 +85,7 @@ class Trace_ELBO(ELBO):
             surrogate_elbo_particle = 0
             # compute elbo and surrogate elbo
             for name, model_site in model_trace.nodes.items():
-                if model_site["type"] == "sample":
+                if model_site["type"] == "sample" and not is_identically_zero(model_site["scale"]):
                     if model_site["is_observed"]:
                         elbo_particle += model_site["log_pdf"].item()
                         surrogate_elbo_particle = surrogate_elbo_particle + model_site["log_pdf"]
