@@ -93,7 +93,7 @@ class SearchTest(HMMSamplingTestCase):
         d, values = marginal._dist_and_values()
 
         tr_rets = []
-        for v in values:
+        for v in values.values():
             tr_rets.append(v.view(-1).item())
 
         assert len(tr_rets) == 4

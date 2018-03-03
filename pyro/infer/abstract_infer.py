@@ -1,40 +1,13 @@
 from __future__ import absolute_import, division, print_function
 
+from collections import OrderedDict
+
 import torch
 from torch.autograd import Variable
 
 import pyro.distributions as dist
 import pyro.poutine as poutine
 import pyro.util as util
-
-
-def _eq(x, y):
-    """
-    Equality comparison for nested data structures with tensors.
-    """
-    if type(x) is not type(y):
-        return False
-    elif isinstance(x, dict):
-        if set(x.keys()) != set(y.keys()):
-            return False
-        return all(_eq(x_val, y[key]) for key, x_val in x.items())
-    elif torch.is_tensor(x):
-        return (x == y).all()
-    elif isinstance(x, torch.autograd.Variable):
-        return (x.data == y.data).all()
-    else:
-        return x == y
-
-
-def _index(seq, value):
-    """
-    Find position of ``value`` in ``seq`` using ``_eq`` to test equality.
-    Returns ``-1`` if ``value`` is not in ``seq``.
-    """
-    for i, x in enumerate(seq):
-        if _eq(x, value):
-            return i
-    return -1
 
 
 class Histogram(dist.Distribution):
@@ -47,24 +20,26 @@ class Histogram(dist.Distribution):
     @util.memoize
     def _dist_and_values(self, *args, **kwargs):
         # XXX currently this whole object is very inefficient
-        values, logits = [], []
+        values_map, logits = OrderedDict(), OrderedDict()
         for value, logit in self._gen_weighted_samples(*args, **kwargs):
-            ix = _index(values, value)
-            if ix == -1:
-                # Value is new.
-                values.append(value)
-                logits.append(logit)
+            if torch.is_tensor(value):
+                value_hash = hash(value.cpu().contiguous().numpy().tobytes())
             else:
+                value_hash = hash(value)
+            if value_hash in logits:
                 # Value has already been seen.
-                logits[ix] = util.log_sum_exp(torch.stack([logits[ix], logit]))
+                logits[value_hash] = util.log_sum_exp(torch.stack([logits[value_hash], logit]))
+            else:
+                logits[value_hash] = logit
+                values_map[value_hash] = value
 
-        logits = torch.stack(logits).contiguous().view(-1)
+        logits = torch.stack(list(logits.values())).contiguous().view(-1)
         logits -= util.log_sum_exp(logits)
         if not isinstance(logits, torch.autograd.Variable):
             logits = Variable(logits)
         logits = logits - util.log_sum_exp(logits)
         d = dist.Categorical(logits=logits)
-        return d, values
+        return d, values_map
 
     def _gen_weighted_samples(self, *args, **kwargs):
         raise NotImplementedError("_gen_weighted_samples is abstract method")
@@ -73,20 +48,23 @@ class Histogram(dist.Distribution):
         sample_shape = kwargs.pop("sample_shape", None)
         if sample_shape:
             raise ValueError("Arbitrary `sample_shape` not supported by Histogram class.")
-        d, values = self._dist_and_values(*args, **kwargs)
+        d, values_map = self._dist_and_values(*args, **kwargs)
         ix = d.sample()
-        return values[ix]
+        return list(values_map.values())[ix]
 
     __call__ = sample
 
     def log_prob(self, val, *args, **kwargs):
-        d, values = self._dist_and_values(*args, **kwargs)
-        ix = _index(values, val)
-        return d.log_prob(Variable(torch.Tensor([ix])))
+        d, values_map = self._dist_and_values(*args, **kwargs)
+        if torch.is_tensor(val):
+            value_hash = hash(val.cpu().contiguous().numpy().tobytes())
+        else:
+            value_hash = hash(val)
+        return d.log_prob(Variable(torch.Tensor([values_map.keys().index(value_hash)])))
 
     def enumerate_support(self, *args, **kwargs):
-        d, values = self._dist_and_values(*args, **kwargs)
-        return values[:]
+        d, values_map = self._dist_and_values(*args, **kwargs)
+        return list(values_map.values())[:]
 
 
 class Marginal(Histogram):
