@@ -59,8 +59,9 @@ def test_iter_discrete_traces_scalar(graph_type):
         x = trace.nodes["x"]["value"].long()
         y = trace.nodes["y"]["value"].long()
         expected_scale = [1 - p, p][x] * ps[y]
-        assert_equal(trace.nodes["x"]["scale"], expected_scale)
-        assert_equal(trace.nodes["y"]["scale"], expected_scale)
+        if trace.nodes["x"]["infer"]["enum_scale"] is not 0:
+            assert_equal(trace.nodes["x"]["infer"]["enum_scale"], [1 - p, p][x])
+        assert_equal(trace.nodes["y"]["infer"]["enum_scale"], [1 - p, p][x] * ps[y])
 
 
 @pytest.mark.parametrize("graph_type", ["flat", "dense"])
@@ -88,10 +89,11 @@ def test_iter_discrete_traces_vector(graph_type):
     for trace in traces:
         x = trace.nodes["x"]["value"]
         y = trace.nodes["y"]["value"]
-        expected_scale = (dist.Bernoulli(p).log_prob(x) +
-                          dist.Categorical(ps).log_prob(y)).exp()
-        assert_equal(trace.nodes["x"]["scale"], expected_scale)
-        assert_equal(trace.nodes["y"]["scale"], expected_scale)
+        scale_x = dist.Bernoulli(p).log_prob(x).exp()
+        scale_y = dist.Categorical(ps).log_prob(y).exp()
+        if trace.nodes["x"]["infer"]["enum_scale"] is not 0:
+            assert_equal(trace.nodes["x"]["infer"]["enum_scale"], scale_x)
+        assert_equal(trace.nodes["y"]["infer"]["enum_scale"], scale_x * scale_y)
 
 
 @pytest.mark.parametrize("enum_discrete", [None, "sequential", "parallel"])
@@ -348,11 +350,8 @@ def test_categoricals_elbo_gradient(enumerate1, enumerate2, enumerate3, max_iara
         ]))
 
 
-# @pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
-# @pytest.mark.parametrize("enumerate2", [None, "sequential", "parallel"])
-# @pytest.mark.parametrize("iarange_dim", [1, 2])
-@pytest.mark.parametrize("enumerate1", ["sequential"])
-@pytest.mark.parametrize("enumerate2", ["sequential"])
+@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
+@pytest.mark.parametrize("enumerate2", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("iarange_dim", [1, 2])
 def test_iarange_elbo_gradient(iarange_dim, enumerate1, enumerate2):
     pyro.clear_param_store()
