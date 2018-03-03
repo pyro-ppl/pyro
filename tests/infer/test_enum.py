@@ -348,8 +348,11 @@ def test_categoricals_elbo_gradient(enumerate1, enumerate2, enumerate3, max_iara
         ]))
 
 
-@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("enumerate2", [None, "sequential", "parallel"])
+# @pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
+# @pytest.mark.parametrize("enumerate2", [None, "sequential", "parallel"])
+# @pytest.mark.parametrize("iarange_dim", [1, 2])
+@pytest.mark.parametrize("enumerate1", ["sequential"])
+@pytest.mark.parametrize("enumerate2", ["sequential"])
 @pytest.mark.parametrize("iarange_dim", [1, 2])
 def test_iarange_elbo_gradient(iarange_dim, enumerate1, enumerate2):
     pyro.clear_param_store()

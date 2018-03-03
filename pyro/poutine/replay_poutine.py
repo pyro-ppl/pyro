@@ -42,6 +42,7 @@ class ReplayMessenger(Messenger):
                 msg["done"] = True
                 msg["value"] = guide_site["value"]
                 msg["scale"] = guide_site["scale"]
+                msg["infer"].update(guide_site["infer"])
 
         return super(ReplayMessenger, self)._process_message(msg)
 

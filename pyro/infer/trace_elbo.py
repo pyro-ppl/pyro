@@ -37,6 +37,11 @@ class Trace_ELBO(ELBO):
                 guide_trace = prune_subsample_sites(guide_trace)
                 model_trace = prune_subsample_sites(model_trace)
 
+                for trace in (model_trace, guide_trace):
+                    for site in trace.nodes.values():
+                        if site["type"] == "sample" and "enum_scale" in site["infer"]:
+                            site["scale"] = site["scale"] * site["infer"]["enum_scale"]
+
                 model_trace.compute_batch_log_pdf()
                 guide_trace.compute_score_parts()
 
@@ -109,15 +114,17 @@ class Trace_ELBO(ELBO):
 
             elbo += elbo_particle / self.num_particles
 
-            if not is_identically_zero(surrogate_elbo_particle):
-                trainable_params = set(site["value"]
-                                       for trace in (model_trace, guide_trace)
-                                       for site in trace.nodes.values()
-                                       if site["type"] == "param")
-                if trainable_params:
-                    surrogate_loss_particle = -surrogate_elbo_particle / self.num_particles
-                    surrogate_loss_particle.backward()
-                    pyro.get_param_store().mark_params_active(trainable_params)
+            if is_identically_zero(surrogate_elbo_particle) or not surrogate_elbo_particle.requires_grad:
+                continue
+            trainable_params = set(site["value"]
+                                   for trace in (model_trace, guide_trace)
+                                   for site in trace.nodes.values()
+                                   if site["type"] == "param")
+            if not trainable_params:
+                continue
+            surrogate_loss_particle = -surrogate_elbo_particle / self.num_particles
+            surrogate_loss_particle.backward()
+            pyro.get_param_store().mark_params_active(trainable_params)
 
         loss = -elbo
         if is_nan(loss):
