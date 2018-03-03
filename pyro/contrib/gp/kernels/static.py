@@ -35,7 +35,7 @@ class Constant(Kernel):
 
 class Bias(Constant):
     """
-    Another name of Constant kernel.
+    Another name of :class:`Constant` kernel.
     """
     def __init__(self, input_dim, variance=None, active_dims=None, name="Bias"):
         super(Bias, self).__init__(input_dim, variance, active_dims, name)
@@ -43,7 +43,7 @@ class Bias(Constant):
 
 class WhiteNoise(Kernel):
     """
-    Implementation of White Noise kernel.
+    Implementation of WhiteNoise kernel.
 
     :param torch.Tensor variance: Variance parameter of this kernel.
     """
