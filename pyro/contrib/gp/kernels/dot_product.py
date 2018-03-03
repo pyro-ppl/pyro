@@ -58,8 +58,8 @@ class Linear(DotProduct):
 
 
 class Polynomial(DotProduct):
-    """
-    Implementation of Polynomial kernel :math:`k(x, z) = (\\text{bias} + x\cdot z)^d`.
+    r"""
+    Implementation of Polynomial kernel :math:`k(x, z) = (\text{bias} + x\cdot z)^d`.
 
     :param torch.Tensor bias: Bias parameter for this kernel. Should be positive.
     :param int degree: Degree of this polynomial.

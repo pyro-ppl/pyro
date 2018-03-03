@@ -28,9 +28,9 @@ class Cosine(Isotropy):
 
 
 class ExpSineSquared(Kernel):
-    """
+    r"""
     Implementation of ExpSineSquared kernel (Periodic kernel)
-    :math:`k(x, z) = \exp\\left(-2 \\times \\frac{\sin^2(\pi (x-z) / p)}{l^2}\\right)`,
+    :math:`k(x, z) = \exp\left(-2 \times \frac{\sin^2(\pi (x-z) / p)}{l^2}\right)`,
     where :math:`p` is ``period`` parameter.
 
     References:

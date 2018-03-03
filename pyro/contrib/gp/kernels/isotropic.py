@@ -42,7 +42,7 @@ class Isotropy(Kernel):
         self.set_constraint("lengthscale", constraints.positive)
 
     def _square_scaled_dist(self, X, Z=None):
-        """
+        r"""
         Returns :math:`\|\frac{(X-Z)}{\text{lengthscale}}\|^2`.
         """
         if Z is None:
@@ -62,7 +62,7 @@ class Isotropy(Kernel):
         return r2
 
     def _scaled_dist(self, X, Z=None):
-        """
+        r"""
         Returns :math:`\|\frac{(X-Z)}{\text{lengthscale}}\|`.
         """
         return _torch_sqrt(self._square_scaled_dist(X, Z))
@@ -76,8 +76,8 @@ class Isotropy(Kernel):
 
 
 class RBF(Isotropy):
-    """
-    Implementation of Radial Basis Function kernel :math:`\exp\\left(-0.5 \\times \\frac{r^2}{l^2}\\right)`.
+    r"""
+    Implementation of Radial Basis Function kernel :math:`\exp\left(-0.5 \times \frac{r^2}{l^2}\right)`.
     """
 
     def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None, name="RBF"):
@@ -103,11 +103,11 @@ class SquaredExponential(RBF):
 
 
 class RationalQuadratic(Isotropy):
-    """
+    r"""
     Implementation of RationalQuadratic kernel
-    :math:`\\left(1 + 0.5 \\times \\frac{r^2}{\\alpha l^2}\\right)^{-\\alpha}`.
+    :math:`\left(1 + 0.5 \times \frac{r^2}{\alpha l^2}\right)^{-\alpha}`.
 
-    :param torch.Tensor scale_mixture: Scale mixture (:math:`\\alpha`) parameter of this kernel.
+    :param torch.Tensor scale_mixture: Scale mixture (:math:`\alpha`) parameter of this kernel.
         Should have size 1.
     """
 
@@ -131,8 +131,8 @@ class RationalQuadratic(Isotropy):
 
 
 class Exponential(Isotropy):
-    """
-    Implementation of Exponential kernel :math:`\exp\\left(-\\frac{r}{l}\\right)`.
+    r"""
+    Implementation of Exponential kernel :math:`\exp\left(-\frac{r}{l}\right)`.
     """
 
     def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None, name="Exponential"):
@@ -156,9 +156,9 @@ class Matern12(Exponential):
 
 
 class Matern32(Isotropy):
-    """
+    r"""
     Implementation of Matern32 kernel
-    :math:`\\left(1 + \\sqrt{3} \\times \\frac{r}{l}\\right) \exp\\left(-\sqrt{3} \\times \\frac{r}{l}\\right)`.
+    :math:`\left(1 + \sqrt{3} \times \frac{r}{l}\right) \exp\left(-\sqrt{3} \times \frac{r}{l}\right)`.
     """
 
     def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None, name="Matern32"):
@@ -175,10 +175,10 @@ class Matern32(Isotropy):
 
 
 class Matern52(Isotropy):
-    """
+    r"""
     Implementation of Matern52 kernel
-    :math:`\\left(1 + \\sqrt{5} \\times \\frac{r}{l} + \\frac{5}{3} \\times \\frac{r^2}{l^2}\\right)
-    \exp\\left(-\sqrt{5} \\times \\frac{r}{l}\\right)`.
+    :math:`\left(1 + \sqrt{5} \times \frac{r}{l} + \frac{5}{3} \times \frac{r^2}{l^2}\right)
+    \exp\left(-\sqrt{5} \times \frac{r}{l}\right)`.
     """
 
     def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None, name="Matern52"):
