@@ -487,7 +487,6 @@ def test_nested_iarange_elbo_gradient(quantity, outer_dim, inner_dim, enum_discr
         ]))
 
 
-
 @pytest.mark.parametrize("enum_discrete", [
     None,
     "sequential",
