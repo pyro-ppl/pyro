@@ -234,9 +234,9 @@ def test_bern_elbo_gradient(enum_discrete, trace_graph):
     kl = kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.25))
     expected_grad = grad(kl, [q])[0]
 
-    assert_equal(actual_grad, expected_grad, prec=0.1, msg="\n".join([
-        "expected = {}".format(expected_grad.detach().cpu().numpy()),
-        "  actual = {}".format(actual_grad.detach().cpu().numpy()),
+    assert_equal(actual_grad, expected_grad, prec=0.1, msg="".join([
+        "\nexpected = {}".format(expected_grad.detach().cpu().numpy()),
+        "\n  actual = {}".format(actual_grad.detach().cpu().numpy()),
     ]))
 
 
@@ -276,9 +276,9 @@ def test_bern_bern_elbo_gradient(enumerate1, enumerate2):
     kl = sum(kl_divergence(dist.Bernoulli(q), dist.Bernoulli(p)) for p in [0.2, 0.3])
     expected_grad = grad(kl, [q])[0]
 
-    assert_equal(actual_grad, expected_grad, prec=prec, msg="\n".join([
-        "expected = {}".format(expected_grad.detach().cpu().numpy()),
-        "  actual = {}".format(actual_grad.detach().cpu().numpy()),
+    assert_equal(actual_grad, expected_grad, prec=prec, msg="".join([
+        "\nexpected = {}".format(expected_grad.detach().cpu().numpy()),
+        "\n  actual = {}".format(actual_grad.detach().cpu().numpy()),
     ]))
 
 
@@ -323,9 +323,9 @@ def test_berns_elbo_gradient(enumerate1, enumerate2, enumerate3):
     kl = sum(kl_divergence(dist.Bernoulli(q), dist.Bernoulli(p)) for p in [0.1, 0.2, 0.3])
     expected_grad = grad(kl, [q])[0]
 
-    assert_equal(actual_grad, expected_grad, prec=prec, msg="\n".join([
-        "expected = {}".format(expected_grad.detach().cpu().numpy()),
-        "  actual = {}".format(actual_grad.detach().cpu().numpy()),
+    assert_equal(actual_grad, expected_grad, prec=prec, msg="".join([
+        "\nexpected = {}".format(expected_grad.detach().cpu().numpy()),
+        "\n  actual = {}".format(actual_grad.detach().cpu().numpy()),
     ]))
 
 
@@ -373,9 +373,9 @@ def test_categoricals_elbo_gradient(enumerate1, enumerate2, enumerate3, max_iara
     actual_grads = [q1.grad, q2.grad, q3.grad]
 
     for actual_grad, expected_grad in zip(actual_grads, expected_grads):
-        assert_equal(actual_grad, expected_grad, prec=0.001, msg="\n".join([
-            "expected = {}".format(expected_grad.detach().cpu().numpy()),
-            "  actual = {}".format(actual_grad.detach().cpu().numpy()),
+        assert_equal(actual_grad, expected_grad, prec=0.001, msg="".join([
+            "\nexpected = {}".format(expected_grad.detach().cpu().numpy()),
+            "\n  actual = {}".format(actual_grad.detach().cpu().numpy()),
         ]))
 
 
@@ -432,6 +432,7 @@ def test_iarange_elbo(quantity, iarange_dim, enumerate1, enumerate2):
         ]))
 
 
+@pytest.mark.parametrize("quantity", ["loss", "grad"])
 @pytest.mark.parametrize("outer_dim", [
     1,
     xfail_param(2, reason='not using MultiViewTensor in broadcasted var inside iarange'),
@@ -442,11 +443,12 @@ def test_iarange_elbo(quantity, iarange_dim, enumerate1, enumerate2):
     "sequential",
     xfail_param("parallel", reason='https://github.com/uber/pyro/issues/846'),
 ])
-def test_nested_iarange_elbo_gradient(outer_dim, inner_dim, enum_discrete):
+def test_nested_iarange_elbo_gradient(quantity, outer_dim, inner_dim, enum_discrete):
     pyro.clear_param_store()
     num_particles = 10000
-    p = 0.25
-    q = pyro.param("q", variable(0.5, requires_grad=True))
+    p = 0.3
+    q = pyro.param("q", variable(0.6, requires_grad=True))
+    kl = (1 + outer_dim + inner_dim) * kl_divergence(dist.Bernoulli(q), dist.Bernoulli(p))
 
     def model():
         with pyro.iarange("particles", num_particles):
@@ -456,28 +458,34 @@ def test_nested_iarange_elbo_gradient(outer_dim, inner_dim, enum_discrete):
                 with pyro.iarange("inner", inner_dim):
                     pyro.sample("z", dist.Bernoulli(p).reshape([inner_dim, 1, num_particles]))
 
+    @config_enumerate(default=enum_discrete)
     def guide():
         q = pyro.param("q")
         with pyro.iarange("particles", num_particles):
             pyro.sample("x", dist.Bernoulli(q).reshape([num_particles]))
             with pyro.iarange("outer", outer_dim):
-                pyro.sample("y", dist.Bernoulli(1 - q).reshape(sample_shape=[outer_dim, num_particles]))
+                pyro.sample("y", dist.Bernoulli(q).reshape(sample_shape=[outer_dim, num_particles]))
                 with pyro.iarange("inner", inner_dim):
                     pyro.sample("z", dist.Bernoulli(q).reshape(sample_shape=[inner_dim, 1, num_particles]))
 
-    logger.info("Computing gradients using surrogate loss")
     elbo = Trace_ELBO(max_iarange_nesting=3)
-    elbo.loss_and_grads(model, config_enumerate(guide, default=enum_discrete))
-    actual_grad = q.grad / num_particles
 
-    logger.info("Computing analytic gradients")
-    kl = (1 - outer_dim + inner_dim) * kl_divergence(dist.Bernoulli(q), dist.Bernoulli(p))
-    expected_grad = grad(kl, [q])[0]
+    if quantity == "loss":
+        actual = elbo.loss(model, guide) / num_particles
+        expected = kl.item()
+        assert_equal(actual, expected, prec=0.1, msg="".join([
+            "\nexpected = {}".format(expected),
+            "\n  actual = {}".format(actual),
+        ]))
+    else:
+        elbo.loss_and_grads(model, guide)
+        actual = pyro.param('q').grad / num_particles
+        expected = grad(kl, [q])[0]
+        assert_equal(actual, expected, prec=0.1, msg="".join([
+            "\nexpected = {}".format(expected.detach().cpu().numpy()),
+            "\n  actual = {}".format(actual.detach().cpu().numpy()),
+        ]))
 
-    assert_equal(actual_grad, expected_grad, prec=0.1, msg="".join([
-        "expected = {}".format(expected_grad.data.cpu().numpy()),
-        "  actual = {}".format(actual_grad.data.cpu().numpy()),
-    ]))
 
 
 @pytest.mark.parametrize("enum_discrete", [
@@ -519,13 +527,13 @@ def test_non_mean_field_bern_bern_elbo_gradient(enum_discrete, pi1, pi2):
 
     prec = 0.03 if enum_discrete is None else 0.001
 
-    assert_equal(actual_grad_q1, expected_grad_q1, prec=prec, msg="\n".join([
-        "q1 expected = {}".format(expected_grad_q1.data.cpu().numpy()),
-        "q1  actual = {}".format(actual_grad_q1.data.cpu().numpy()),
+    assert_equal(actual_grad_q1, expected_grad_q1, prec=prec, msg="".join([
+        "\nq1 expected = {}".format(expected_grad_q1.data.cpu().numpy()),
+        "\nq1  actual = {}".format(actual_grad_q1.data.cpu().numpy()),
     ]))
-    assert_equal(actual_grad_q2, expected_grad_q2, prec=prec, msg="\n".join([
-        "q2 expected = {}".format(expected_grad_q2.data.cpu().numpy()),
-        "q2   actual = {}".format(actual_grad_q2.data.cpu().numpy()),
+    assert_equal(actual_grad_q2, expected_grad_q2, prec=prec, msg="".join([
+        "\nq2 expected = {}".format(expected_grad_q2.data.cpu().numpy()),
+        "\nq2   actual = {}".format(actual_grad_q2.data.cpu().numpy()),
     ]))
 
 
@@ -578,18 +586,18 @@ def test_non_mean_field_bern_normal_elbo_gradient(enum_discrete, pi1, pi2, pi3, 
 
     prec = 0.04 if enum_discrete is None else 0.02
 
-    assert_equal(actual_grad_q1, expected_grad_q1, prec=prec, msg="\n".join([
-        "q1 expected = {}".format(expected_grad_q1.data.cpu().numpy()),
-        "q1   actual = {}".format(actual_grad_q1.data.cpu().numpy()),
+    assert_equal(actual_grad_q1, expected_grad_q1, prec=prec, msg="".join([
+        "\nq1 expected = {}".format(expected_grad_q1.data.cpu().numpy()),
+        "\nq1   actual = {}".format(actual_grad_q1.data.cpu().numpy()),
     ]))
     if include_z:
-        assert_equal(actual_grad_q2, expected_grad_q2, prec=prec, msg="\n".join([
-            "q2 expected = {}".format(expected_grad_q2.data.cpu().numpy()),
-            "q2   actual = {}".format(actual_grad_q2.data.cpu().numpy()),
+        assert_equal(actual_grad_q2, expected_grad_q2, prec=prec, msg="".join([
+            "\nq2 expected = {}".format(expected_grad_q2.data.cpu().numpy()),
+            "\nq2   actual = {}".format(actual_grad_q2.data.cpu().numpy()),
         ]))
-    assert_equal(actual_grad_q3, expected_grad_q3, prec=prec, msg="\n".join([
-        "q3 expected = {}".format(expected_grad_q3.data.cpu().numpy()),
-        "q3   actual = {}".format(actual_grad_q3.data.cpu().numpy()),
+    assert_equal(actual_grad_q3, expected_grad_q3, prec=prec, msg="".join([
+        "\nq3 expected = {}".format(expected_grad_q3.data.cpu().numpy()),
+        "\nq3   actual = {}".format(actual_grad_q3.data.cpu().numpy()),
     ]))
 
 
@@ -632,7 +640,7 @@ def test_non_mean_field_normal_bern_elbo_gradient(pi1, pi2, pi3):
         for q in qs:
             logger.info("[{}] actual: {}".format(q, results[ed]['actual_grad_%s' % q]))
             assert_equal(results[ed]['actual_grad_%s' % q], results['None']['actual_grad_%s' % q], prec=prec,
-                         msg="\n".join([
-                             "expected (MC estimate) = {}".format(results['None']['actual_grad_%s' % q]),
-                             "  actual ({} estimate) = {}".format(ed, results[ed]['actual_grad_%s' % q]),
+                         msg="".join([
+                             "\nexpected (MC estimate) = {}".format(results['None']['actual_grad_%s' % q]),
+                             "\n  actual ({} estimate) = {}".format(ed, results[ed]['actual_grad_%s' % q]),
                          ]))
