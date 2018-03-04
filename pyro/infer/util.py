@@ -173,11 +173,11 @@ class TensorTree(object):
             self.get_upstream(key2)
 
         # Then delete this and all upstream keys.
-        del self._terms[key]
+        self._terms.pop(key, None)
         self._upstream[key] = None
         while key:
             key = key[:-1]
-            del self._terms[key]
+            self._terms.pop(key, None)
             self._upstream[key] = None
 
     def exp(self):

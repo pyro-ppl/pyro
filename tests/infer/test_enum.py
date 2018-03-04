@@ -352,14 +352,16 @@ def test_categoricals_elbo_gradient(enumerate1, enumerate2, enumerate3, max_iara
         ]))
 
 
+@pytest.mark.parametrize("quantity", ["loss", "grad"])
 @pytest.mark.parametrize("enumerate2", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("iarange_dim", [1, 2])
-def test_iarange_elbo_gradient(iarange_dim, enumerate1, enumerate2):
+def test_iarange_elbo(quantity, iarange_dim, enumerate1, enumerate2):
     pyro.clear_param_store()
     num_particles = 10000
     p = 0.3
     q = pyro.param("q", variable(0.6, requires_grad=True))
+    kl = (1 + iarange_dim) * kl_divergence(dist.Bernoulli(q), dist.Bernoulli(p))
 
     def model():
         with pyro.iarange("particles", num_particles):
@@ -376,24 +378,23 @@ def test_iarange_elbo_gradient(iarange_dim, enumerate1, enumerate2):
                 pyro.sample("z", dist.Bernoulli(q).reshape([iarange_dim, num_particles]),
                             infer={"enumerate": enumerate2})
 
-    logger.info("Computing gradients using surrogate loss")
     elbo = Trace_ELBO(max_iarange_nesting=2)
-    actual_loss = elbo.loss_and_grads(model, guide) / num_particles
-    actual_grad = pyro.param('q').grad / num_particles
 
-    logger.info("Computing analytic gradients")
-    kl = (1 + iarange_dim) * kl_divergence(dist.Bernoulli(q), dist.Bernoulli(p))
-    expected_grad = grad(kl, [q])[0]
-    expected_loss = kl.item()
-
-    assert_equal(actual_loss, expected_loss, prec=0.1, msg="".join([
-        "\nexpected loss = {}".format(expected_loss),
-        "\n  actual loss = {}".format(actual_loss),
-    ]))
-    assert_equal(actual_grad, expected_grad, prec=0.1, msg="".join([
-        "\nexpected grad = {}".format(expected_grad.detach().cpu().numpy()),
-        "\n  actual grad = {}".format(actual_grad.detach().cpu().numpy()),
-    ]))
+    if quantity == "loss":
+        actual = elbo.loss(model, guide) / num_particles
+        expected = kl.item()
+        assert_equal(actual, expected, prec=0.1, msg="".join([
+            "\nexpected = {}".format(expected),
+            "\n  actual = {}".format(actual),
+        ]))
+    else:
+        elbo.loss_and_grads(model, guide)
+        actual = pyro.param('q').grad / num_particles
+        expected = grad(kl, [q])[0]
+        assert_equal(actual, expected, prec=0.1, msg="".join([
+            "\nexpected = {}".format(expected.detach().cpu().numpy()),
+            "\n  actual = {}".format(actual.detach().cpu().numpy()),
+        ]))
 
 
 @pytest.mark.parametrize("outer_dim", [1, 2])

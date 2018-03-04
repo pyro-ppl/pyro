@@ -79,8 +79,8 @@ def iter_discrete_traces(graph_type, fn, *args, **kwargs):
                     to_prune.add(cond_indep_stack)
                 else:
                     already_counted.add(context)
-            for cond_indep_stack in to_prune:
-                log_probs.prune(cond_indep_stack)
+        for cond_indep_stack in to_prune:
+            log_probs.prune_upstream(cond_indep_stack)
 
         weights = log_probs.exp()
         yield weights, trace
