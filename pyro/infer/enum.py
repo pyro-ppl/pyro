@@ -81,12 +81,10 @@ def iter_discrete_traces(graph_type, fn, *args, **kwargs):
         weights = log_probs.exp()
         for context in enum_stacks.items():
             if context in already_counted:
-                print('DEBUG pruning {}'.format(context[0]))
                 weights.prune(context[0])
             else:
                 already_counted.add(context)
 
-        print('DEBUG weights = {}'.format(weights._upstream))
         yield weights, trace
 
 

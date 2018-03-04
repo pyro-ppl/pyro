@@ -41,7 +41,6 @@ class ReplayMessenger(Messenger):
                 guide_site = self.guide_trace.nodes[self.sites[msg["name"]]]
                 msg["done"] = True
                 msg["value"] = guide_site["value"]
-                msg["scale"] = guide_site["scale"]
                 msg["infer"].update(guide_site["infer"])
 
         return super(ReplayMessenger, self)._process_message(msg)
