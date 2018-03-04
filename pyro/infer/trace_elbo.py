@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import numbers
 import warnings
 
 import pyro
@@ -67,7 +68,9 @@ class Trace_ELBO(ELBO):
         elbo = 0.0
         # grab a trace from the generator
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
-            log_r = (model_trace.log_pdf() - guide_trace.log_pdf()).detach()
+            log_r = (model_trace.log_pdf() - guide_trace.log_pdf())
+            if not isinstance(log_r, numbers.Number):
+                log_r = log_r.detach()
 
             elbo_particle = 0
             surrogate_elbo_particle = 0
