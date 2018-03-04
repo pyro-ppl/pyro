@@ -61,28 +61,32 @@ def iter_discrete_traces(graph_type, fn, *args, **kwargs):
 
     :param str graph_type: The type of the graph, e.g. "flat" or "dense".
     :param callable fn: A stochastic function.
-    :returns: An iterator over (log_prob, trace) pairs.
+    :returns: An iterator over (weights, trace) pairs, where weights is a
+        :class:`~pyro.infer.util.TensorTree` object.
     """
     already_counted = set()  # to avoid double counting
     for trace in _iter_discrete_queue(graph_type, fn, *args, **kwargs):
         # Collect log_probs for each iarange stack.
         log_probs = TensorTree()
-        to_prune = set()
+        enum_stacks = {}
+        if not already_counted:
+            log_probs.add((), 0)
         for name, site in trace.nodes.items():
             if site["type"] == "sample" and "enum_stack" in site["infer"]:
                 cond_indep_stack = tuple(site["cond_indep_stack"])
                 log_probs.add(cond_indep_stack, site["infer"]["enum_log_prob"])
+                enum_stacks[cond_indep_stack] = site["infer"]["enum_stack"]
 
-                # Avoid double counting.
-                context = cond_indep_stack, site["infer"]["enum_stack"]
-                if context in already_counted:
-                    to_prune.add(cond_indep_stack)
-                else:
-                    already_counted.add(context)
-        for cond_indep_stack in to_prune:
-            log_probs.prune_upstream(cond_indep_stack)
-
+        # Avoid double-counting across traces.
         weights = log_probs.exp()
+        for context in enum_stacks.items():
+            if context in already_counted:
+                print('DEBUG pruning {}'.format(context[0]))
+                weights.prune(context[0])
+            else:
+                already_counted.add(context)
+
+        print('DEBUG weights = {}'.format(weights._upstream))
         yield weights, trace
 
 

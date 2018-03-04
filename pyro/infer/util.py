@@ -1,11 +1,22 @@
 from __future__ import absolute_import, division, print_function
 
+import math
 import numbers
 
 import torch
 from torch.autograd import Variable
 
 from pyro.distributions.util import sum_leftmost
+
+
+def torch_exp(x):
+    """
+    Like ``x.exp()`` for a ``torch.autograd.Variable``, but also accepts
+    numbers.
+    """
+    if isinstance(x, numbers.Number):
+        return math.exp(x)
+    return x.exp()
 
 
 def torch_data_sum(x):
@@ -136,13 +147,11 @@ class TensorTree(object):
     def __init__(self):
         self._terms = {}
         self._upstream = {}
-        self._frozen = False
 
     def add(self, key, value):
         """
         Adds a term at one node.
         """
-        assert not self._frozen, 'Cannot call TensorTree.add() after .get_upstream()'
         if key in self._terms:
             self._terms[key] = self._terms[key] + value
         else:
@@ -155,7 +164,6 @@ class TensorTree(object):
         try:
             return self._upstream[key]
         except KeyError:
-            self._frozen = True
             result = self._terms.get(key)
             if key:
                 upstream = self.get_upstream(key[:-1])
@@ -164,34 +172,17 @@ class TensorTree(object):
             self._upstream[key] = result
             return result
 
-    def prune_upstream(self, key):
-        """
-        Prunes a key and all upstream keys.
-        """
-        # First save upstream costs
-        for key2 in self._terms:
-            self.get_upstream(key2)
-
-        # Then delete this and all upstream keys.
-        self._terms.pop(key, None)
-        self._upstream[key] = None
-        while key:
-            key = key[:-1]
-            self._terms.pop(key, None)
-            self._upstream[key] = None
-
     def exp(self):
-        # First save upstream costs
-        for key2 in self._terms:
-            self.get_upstream(key2)
+        # First populate self._upstream
+        for key in self._terms:
+            self.get_upstream(key)
 
-        # Then create an exponentiated copy of _upstream.
+        # Then exponentiate _only_ the supporting terms of self._upstream.
+        # This restriction is required for .prune() to work correctly.
         result = TensorTree()
-        if self._upstream:
-            for key, term in self._upstream.items():
-                result._upstream[key] = None if term is None else term.exp()
-        else:
-            result._upstream[()] = 1
-        result._frozen = True
-
+        result._upstream = {key: torch_exp(self._upstream[key]) for key in self._terms}
         return result
+
+    def prune(self, key):
+        self._upstream.pop(key, None)
+        self._terms.pop(key, None)

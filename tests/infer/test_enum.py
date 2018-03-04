@@ -15,7 +15,7 @@ from pyro.infer import SVI, config_enumerate
 from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.trace_elbo import Trace_ELBO
 from pyro.infer.tracegraph_elbo import TraceGraph_ELBO
-from tests.common import assert_equal
+from tests.common import assert_equal, xfail_param
 
 logger = logging.getLogger(__name__)
 
@@ -29,13 +29,12 @@ def test_iter_discrete_traces_order(depth, graph_type):
         for i in range(depth):
             pyro.sample("x{}".format(i), dist.Bernoulli(0.5))
 
-    trace_pairs = list(iter_discrete_traces(graph_type, model, model, depth))
+    traces = list(iter_discrete_traces(graph_type, model, depth))
 
-    assert len(trace_pairs) == 2 ** depth
-    for traces in trace_pairs:
-        for trace in traces:
-            sites = [name for name, site in trace.nodes.items() if site["type"] == "sample"]
-            assert sites == ["x{}".format(i) for i in range(depth)]
+    assert len(traces) == 2 ** depth
+    for weights, trace in traces:
+        sites = [name for name, site in trace.nodes.items() if site["type"] == "sample"]
+        assert sites == ["x{}".format(i) for i in range(depth)]
 
 
 @pytest.mark.parametrize("graph_type", ["flat", "dense"])
@@ -50,19 +49,18 @@ def test_iter_discrete_traces_scalar(graph_type):
         y = pyro.sample("y", dist.Categorical(ps))
         return dict(x=x, y=y)
 
-    trace_pairs = list(iter_discrete_traces(graph_type, model, model))
+    traces = list(iter_discrete_traces(graph_type, model))
 
     p = pyro.param("p")
     ps = pyro.param("ps")
-    assert len(trace_pairs) == 2 * len(ps)
+    assert len(traces) == 2 * len(ps)
 
-    for traces in trace_pairs:
-        for trace in traces:
-            x = trace.nodes["x"]["value"].long()
-            y = trace.nodes["y"]["value"].long()
-            if trace.nodes["x"]["scale"] is not 0:
-                assert_equal(trace.nodes["x"]["scale"], [1 - p, p][x])
-            assert_equal(trace.nodes["y"]["scale"], [1 - p, p][x] * ps[y])
+    for weights, trace in traces:
+        x = trace.nodes["x"]["value"].long()
+        y = trace.nodes["y"]["value"].long()
+        expected_weight = [1 - p, p][x] * ps[y]
+        actual_weight = weights.get_upstream(tuple(trace.nodes["x"]["cond_indep_stack"]))
+        assert_equal(actual_weight, expected_weight)
 
 
 @pytest.mark.parametrize("graph_type", ["flat", "dense"])
@@ -81,21 +79,19 @@ def test_iter_discrete_traces_vector(graph_type):
         assert y.size() == (2,)
         return dict(x=x, y=y)
 
-    trace_pairs = list(iter_discrete_traces(graph_type, model, model))
+    traces = list(iter_discrete_traces(graph_type, model))
 
     p = pyro.param("p")
     ps = pyro.param("ps")
-    assert len(trace_pairs) == 2 * ps.size(-1)
+    assert len(traces) == 2 * ps.size(-1)
 
-    for traces in trace_pairs:
-        for trace in traces:
-            x = trace.nodes["x"]["value"]
-            y = trace.nodes["y"]["value"]
-            scale_x = dist.Bernoulli(p).log_prob(x).exp()
-            scale_y = dist.Categorical(ps).log_prob(y).exp()
-            if trace.nodes["x"]["scale"] is not 0:
-                assert_equal(trace.nodes["x"]["scale"], scale_x)
-            assert_equal(trace.nodes["y"]["scale"], scale_x * scale_y)
+    for weights, trace in traces:
+        x = trace.nodes["x"]["value"]
+        y = trace.nodes["y"]["value"]
+        expected_weight = (dist.Bernoulli(p).log_prob(x) +
+                           dist.Categorical(ps).log_prob(y)).exp()
+        actual_weight = weights.get_upstream(tuple(trace.nodes["x"]["cond_indep_stack"]))
+        assert_equal(actual_weight, expected_weight)
 
 
 @pytest.mark.parametrize("enum_discrete", [None, "sequential", "parallel"])
@@ -146,12 +142,12 @@ def gmm_guide(data, verbose=False):
 
 @pytest.mark.parametrize("data_size", [1, 2, 3])
 @pytest.mark.parametrize("graph_type", ["flat", "dense"])
-def test_gmm_iter_discrete_traces(data_size, graph_type):
+@pytest.mark.parametrize("model", [gmm_model, gmm_guide])
+def test_gmm_iter_discrete_traces(data_size, graph_type, model):
     pyro.clear_param_store()
     data = Variable(torch.arange(0, data_size))
-    model = gmm_model
-    guide = config_enumerate(gmm_guide)
-    traces = list(iter_discrete_traces(graph_type, model, guide, data=data, verbose=True))
+    model = config_enumerate(model)
+    traces = list(iter_discrete_traces(graph_type, model, data=data, verbose=True))
     # This non-vectorized version is exponential in data_size:
     assert len(traces) == 2**data_size
 
@@ -186,7 +182,7 @@ def test_gmm_batch_iter_discrete_traces(model, data_size, graph_type):
     pyro.clear_param_store()
     data = Variable(torch.arange(0, data_size))
     model = config_enumerate(model)
-    traces = list(iter_discrete_traces(graph_type, model, model, data=data))
+    traces = list(iter_discrete_traces(graph_type, model, data=data))
     # This vectorized version is independent of data_size:
     assert len(traces) == 2
 
@@ -208,8 +204,12 @@ def test_svi_step_smoke(model, guide, enum_discrete, trace_graph):
     inference.step(data)
 
 
-@pytest.mark.parametrize("enum_discrete", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("trace_graph", [False, True], ids=["Trace_ELBO", "TraceGraph_ELBO"])
+@pytest.mark.parametrize("enum_discrete", [
+    None,
+    "sequential",
+    xfail_param("parallel", reason='https://github.com/uber/pyro/issues/846'),
+])
 def test_bern_elbo_gradient(enum_discrete, trace_graph):
     pyro.clear_param_store()
     num_particles = 1000
@@ -240,8 +240,16 @@ def test_bern_elbo_gradient(enum_discrete, trace_graph):
     ]))
 
 
-@pytest.mark.parametrize("enumerate1", ["sequential", "parallel", None])
-@pytest.mark.parametrize("enumerate2", ["sequential", "parallel", None])
+@pytest.mark.parametrize("enumerate1", [
+    None,
+    "sequential",
+    xfail_param("parallel", reason='https://github.com/uber/pyro/issues/846'),
+])
+@pytest.mark.parametrize("enumerate2", [
+    None,
+    "sequential",
+    xfail_param("parallel", reason='https://github.com/uber/pyro/issues/846'),
+])
 def test_bern_bern_elbo_gradient(enumerate1, enumerate2):
     pyro.clear_param_store()
     num_particles = 1000
@@ -274,9 +282,19 @@ def test_bern_bern_elbo_gradient(enumerate1, enumerate2):
     ]))
 
 
-@pytest.mark.parametrize("enumerate1", ["sequential", "parallel"])
-@pytest.mark.parametrize("enumerate2", ["sequential", "parallel", None])
-@pytest.mark.parametrize("enumerate3", ["sequential", "parallel"])
+@pytest.mark.parametrize("enumerate1", [
+    "sequential",
+    xfail_param("parallel", reason='https://github.com/uber/pyro/issues/846'),
+])
+@pytest.mark.parametrize("enumerate2", [
+    "sequential",
+    xfail_param("parallel", reason='https://github.com/uber/pyro/issues/846'),
+    None,
+])
+@pytest.mark.parametrize("enumerate3", [
+    "sequential",
+    xfail_param("parallel", reason='https://github.com/uber/pyro/issues/846'),
+])
 def test_berns_elbo_gradient(enumerate1, enumerate2, enumerate3):
     pyro.clear_param_store()
     num_particles = 1000
@@ -311,10 +329,19 @@ def test_berns_elbo_gradient(enumerate1, enumerate2, enumerate3):
     ]))
 
 
-@pytest.mark.parametrize("enumerate1", ["sequential", "parallel"])
-@pytest.mark.parametrize("enumerate2", ["sequential", "parallel"])
-@pytest.mark.parametrize("enumerate3", ["sequential", "parallel"])
 @pytest.mark.parametrize("max_iarange_nesting", [0, 1])
+@pytest.mark.parametrize("enumerate1", [
+    "sequential",
+    xfail_param("parallel", reason='https://github.com/uber/pyro/issues/846'),
+])
+@pytest.mark.parametrize("enumerate2", [
+    "sequential",
+    xfail_param("parallel", reason='https://github.com/uber/pyro/issues/846'),
+])
+@pytest.mark.parametrize("enumerate3", [
+    "sequential",
+    xfail_param("parallel", reason='https://github.com/uber/pyro/issues/846'),
+])
 def test_categoricals_elbo_gradient(enumerate1, enumerate2, enumerate3, max_iarange_nesting):
     pyro.clear_param_store()
     p1 = variable([0.6, 0.4])
@@ -353,8 +380,16 @@ def test_categoricals_elbo_gradient(enumerate1, enumerate2, enumerate3, max_iara
 
 
 @pytest.mark.parametrize("quantity", ["loss", "grad"])
-@pytest.mark.parametrize("enumerate2", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
+@pytest.mark.parametrize("enumerate2", [
+    None,
+    "sequential",
+    xfail_param("parallel", reason='https://github.com/uber/pyro/issues/846'),
+])
+@pytest.mark.parametrize("enumerate1", [
+    None,
+    "sequential",
+    xfail_param("parallel", reason='https://github.com/uber/pyro/issues/846'),
+])
 @pytest.mark.parametrize("iarange_dim", [1, 2])
 def test_iarange_elbo(quantity, iarange_dim, enumerate1, enumerate2):
     pyro.clear_param_store()
@@ -397,21 +432,29 @@ def test_iarange_elbo(quantity, iarange_dim, enumerate1, enumerate2):
         ]))
 
 
-@pytest.mark.parametrize("outer_dim", [1, 2])
+@pytest.mark.parametrize("outer_dim", [
+    1,
+    xfail_param(2, reason='not using MultiViewTensor in broadcasted var inside iarange'),
+])
 @pytest.mark.parametrize("inner_dim", [1, 3])
-@pytest.mark.parametrize("enum_discrete", [None, "sequential", "parallel"])
+@pytest.mark.parametrize("enum_discrete", [
+    None,
+    "sequential",
+    xfail_param("parallel", reason='https://github.com/uber/pyro/issues/846'),
+])
 def test_nested_iarange_elbo_gradient(outer_dim, inner_dim, enum_discrete):
     pyro.clear_param_store()
     num_particles = 10000
+    p = 0.25
     q = pyro.param("q", variable(0.5, requires_grad=True))
 
     def model():
         with pyro.iarange("particles", num_particles):
-            pyro.sample("x", dist.Bernoulli(0.25).reshape([num_particles]))
+            pyro.sample("x", dist.Bernoulli(p).reshape([num_particles]))
             with pyro.iarange("outer", outer_dim):
-                pyro.sample("y", dist.Bernoulli(0.25).reshape([outer_dim, num_particles]))
+                pyro.sample("y", dist.Bernoulli(p).reshape([outer_dim, num_particles]))
                 with pyro.iarange("inner", inner_dim):
-                    pyro.sample("z", dist.Bernoulli(0.25).reshape([inner_dim, 1, num_particles]))
+                    pyro.sample("z", dist.Bernoulli(p).reshape([inner_dim, 1, num_particles]))
 
     def guide():
         q = pyro.param("q")
@@ -428,9 +471,8 @@ def test_nested_iarange_elbo_gradient(outer_dim, inner_dim, enum_discrete):
     actual_grad = q.grad / num_particles
 
     logger.info("Computing analytic gradients")
-    q = variable(0.5, requires_grad=True)
-    kl = kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.25))
-    expected_grad = (1 - outer_dim + inner_dim) * grad(kl, [q])[0]
+    kl = (1 - outer_dim + inner_dim) * kl_divergence(dist.Bernoulli(q), dist.Bernoulli(p))
+    expected_grad = grad(kl, [q])[0]
 
     assert_equal(actual_grad, expected_grad, prec=0.1, msg="".join([
         "expected = {}".format(expected_grad.data.cpu().numpy()),
@@ -438,7 +480,11 @@ def test_nested_iarange_elbo_gradient(outer_dim, inner_dim, enum_discrete):
     ]))
 
 
-@pytest.mark.parametrize("enum_discrete", [None, "sequential", "parallel"])
+@pytest.mark.parametrize("enum_discrete", [
+    None,
+    "sequential",
+    xfail_param("parallel", reason='https://github.com/uber/pyro/issues/846'),
+])
 @pytest.mark.parametrize("pi1", [0.33, 0.43])
 @pytest.mark.parametrize("pi2", [0.55, 0.27])
 def test_non_mean_field_bern_bern_elbo_gradient(enum_discrete, pi1, pi2):
@@ -483,7 +529,11 @@ def test_non_mean_field_bern_bern_elbo_gradient(enum_discrete, pi1, pi2):
     ]))
 
 
-@pytest.mark.parametrize("enum_discrete", [None, "sequential", "parallel"])
+@pytest.mark.parametrize("enum_discrete", [
+    None,
+    "sequential",
+    xfail_param("parallel", reason='https://github.com/uber/pyro/issues/846'),
+])
 @pytest.mark.parametrize("pi1", [0.33, 0.44])
 @pytest.mark.parametrize("pi2", [0.55, 0.39])
 @pytest.mark.parametrize("pi3", [0.22, 0.29])
@@ -543,6 +593,7 @@ def test_non_mean_field_bern_normal_elbo_gradient(enum_discrete, pi1, pi2, pi3, 
     ]))
 
 
+@pytest.mark.xfail(reason='https://github.com/uber/pyro/issues/846')
 @pytest.mark.parametrize("pi1", [0.33, 0.41])
 @pytest.mark.parametrize("pi2", [0.44, 0.17])
 @pytest.mark.parametrize("pi3", [0.22, 0.29])
