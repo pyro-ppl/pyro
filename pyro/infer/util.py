@@ -130,3 +130,68 @@ class MultiViewTensor(dict):
 
     def __repr__(self):
         return '%s(%s)' % (type(self).__name__, ", ".join([str(k) for k in self.keys()]))
+
+
+class TensorTree(object):
+    def __init__(self):
+        self._terms = {}
+        self._upstream = {}
+        self._frozen = False
+
+    def add(self, key, value):
+        """
+        Adds a term at one node.
+        """
+        assert not self._frozen, 'Cannot call TensorTree.add() after .get_upstream()'
+        if key in self._terms:
+            self._terms[key] = self._terms[key] + value
+        else:
+            self._terms[key] = value
+
+    def get_upstream(self, key):
+        """
+        Returns upstream sum or None. None denotes zero.
+        """
+        try:
+            return self._upstream[key]
+        except KeyError:
+            self._frozen = True
+            result = self._terms.get(key)
+            if key:
+                upstream = self.get_upstream(key[:-1])
+                if upstream is not None:
+                    result = upstream if result is None else result + upstream
+            self._upstream[key] = result
+            return result
+
+    def prune_upstream(self, key):
+        """
+        Prunes a key and all upstream keys.
+        """
+        # First save upstream costs
+        for key2 in self._terms:
+            self.get_upstream(key2)
+
+        # Then delete this and all upstream keys.
+        del self._terms[key]
+        self._upstream[key] = None
+        while key:
+            key = key[:-1]
+            del self._terms[key]
+            self._upstream[key] = None
+
+    def exp(self):
+        # First save upstream costs
+        for key2 in self._terms:
+            self.get_upstream(key2)
+
+        # Then create an exponentiated copy of _upstream.
+        result = TensorTree()
+        if self._upstream:
+            for key, term in self._upstream.items():
+                result._upstream[key] = None if term is None else term.exp()
+        else:
+            result._upstream[()] = 1
+        result._frozen = True
+
+        return result

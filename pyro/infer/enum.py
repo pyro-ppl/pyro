@@ -5,6 +5,7 @@ import functools
 from six.moves.queue import LifoQueue
 
 from pyro import poutine
+from pyro.infer.util import TensorTree
 from pyro.poutine.trace import Trace
 
 
@@ -48,7 +49,7 @@ def _iter_discrete_queue(graph_type, fn, *args, **kwargs):
                 queue.put(item)
 
 
-def iter_discrete_traces(graph_type, model, guide, *args, **kwargs):
+def iter_discrete_traces(graph_type, fn, *args, **kwargs):
     """
     Iterate over all discrete choices of a stochastic function.
 
@@ -60,40 +61,29 @@ def iter_discrete_traces(graph_type, model, guide, *args, **kwargs):
 
     :param str graph_type: The type of the graph, e.g. "flat" or "dense".
     :param callable fn: A stochastic function.
-    :returns: An iterator over (model, guide) pairs of weighted traces.
+    :returns: An iterator over (log_prob, trace) pairs.
     """
-    already_counted = set()  # avoid double-counting across traces
-    for guide_trace in _iter_discrete_queue(graph_type, guide, *args, **kwargs):
-        model_trace = poutine.trace(poutine.replay(model, guide_trace),
-                                    graph_type=graph_type).get_trace(*args, **kwargs)
+    already_counted = set()  # to avoid double counting
+    for trace in _iter_discrete_queue(graph_type, fn, *args, **kwargs):
+        # Collect log_probs for each iarange stack.
+        log_probs = TensorTree()
+        to_prune = set()
+        for name, site in trace.nodes.items():
+            if site["type"] == "sample" and "enum_stack" in site["infer"]:
+                cond_indep_stack = tuple(site["cond_indep_stack"])
+                log_probs.add(cond_indep_stack, site["infer"]["enum_log_prob"])
 
-        # Scale traces by cumulative weight of all discrete choices made so far.
-        enum_stack = ()
-        log_prob = 0
-        weight = 1
-        for name, model_site in model_trace.nodes.items():
-            if model_site["type"] != "sample":
-                continue
-            if "enum_stack" in model_site["infer"]:
-                enum_stack = model_site["infer"]["enum_stack"]
-                log_prob = log_prob + model_site["infer"]["enum_log_prob"]
-                weight = log_prob.exp()
+                # Avoid double counting.
+                context = cond_indep_stack, site["infer"]["enum_stack"]
+                if context in already_counted:
+                    to_prune.add(cond_indep_stack)
+                else:
+                    already_counted.add(context)
+            for cond_indep_stack in to_prune:
+                log_probs.prune(cond_indep_stack)
 
-            sites = [model_site]
-            if name in guide_trace.nodes:
-                sites.append(guide_trace.nodes[name])
-
-            # Avoid double counting in sequential enumeration.
-            if (name, enum_stack) in already_counted:
-                for site in sites:
-                    site["scale"] = 0
-            else:
-                already_counted.add((name, enum_stack))
-                if weight is not 1:
-                    for site in sites:
-                        site["scale"] = site["scale"] * weight
-
-        yield model_trace, guide_trace
+        weights = log_probs.exp()
+        yield weights, trace
 
 
 def _config_enumerate(default):
