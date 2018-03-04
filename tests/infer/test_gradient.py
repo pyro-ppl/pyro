@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 
 @pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
 @pytest.mark.parametrize("subsample", [False, True], ids=["full", "subsample"])
-@pytest.mark.parametrize("trace_graph", [False, True], ids=["Trace", "TraceGraph"])
-def test_subsample_gradient(trace_graph, reparameterized, subsample):
+@pytest.mark.parametrize("impl", ["Trace", "TraceGraph", "TraceEnum"])
+def test_subsample_gradient(impl, reparameterized, subsample):
     pyro.clear_param_store()
     data = Variable(torch.Tensor([-0.5, 2.0]))
     subsample_size = 1 if subsample else len(data)
@@ -46,7 +46,9 @@ def test_subsample_gradient(trace_graph, reparameterized, subsample):
 
     optim = Adam({"lr": 0.1})
     inference = SVI(model, guide, optim, loss="ELBO",
-                    trace_graph=trace_graph, num_particles=num_particles)
+                    trace_graph=(impl == "TraceGraph"),
+                    enum_discrete=(impl == "TraceEnum"),
+                    num_particles=num_particles)
     inference.loss_and_grads(model, guide)
     params = dict(pyro.get_param_store().named_parameters())
     actual_grads = {name: param.grad.detach().cpu().numpy() for name, param in params.items()}

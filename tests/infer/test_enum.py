@@ -13,8 +13,7 @@ import pyro.distributions as dist
 import pyro.optim
 from pyro.infer import SVI, config_enumerate
 from pyro.infer.enum import iter_discrete_traces
-from pyro.infer.trace_elbo import Trace_ELBO
-from pyro.infer.tracegraph_elbo import TraceGraph_ELBO
+from pyro.infer.traceenum_elbo import TraceEnum_ELBO
 from tests.common import assert_equal
 
 logger = logging.getLogger(__name__)
@@ -93,8 +92,7 @@ def test_iter_discrete_traces_vector(graph_type):
 
 
 @pytest.mark.parametrize("enum_discrete", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("trace_graph", [False, True], ids=["dense", "flat"])
-def test_iter_discrete_traces_nan(enum_discrete, trace_graph):
+def test_iter_discrete_traces_nan(enum_discrete):
     pyro.clear_param_store()
 
     def model():
@@ -106,8 +104,7 @@ def test_iter_discrete_traces_nan(enum_discrete, trace_graph):
         pyro.sample("z", dist.Bernoulli(p).reshape(extra_event_dims=1))
 
     guide = config_enumerate(guide, default=enum_discrete)
-    Elbo = TraceGraph_ELBO if trace_graph else Trace_ELBO
-    elbo = Elbo(max_iarange_nesting=0)
+    elbo = TraceEnum_ELBO(max_iarange_nesting=0)
     loss = elbo.loss(model, guide).item()
     assert not math.isnan(loss), loss
     loss = elbo.loss_and_grads(model, guide)
@@ -185,31 +182,27 @@ def test_gmm_batch_iter_discrete_traces(model, data_size, graph_type):
     assert len(traces) == 2
 
 
-@pytest.mark.parametrize("trace_graph", [False, True], ids=["dense", "flat"])
 @pytest.mark.parametrize("model,guide", [
     (gmm_model, gmm_guide),
     (gmm_batch_model, gmm_batch_guide),
 ], ids=["single", "batch"])
-@pytest.mark.parametrize("enum_discrete", [None, "sequential", "parallel"])
-def test_svi_step_smoke(model, guide, enum_discrete, trace_graph):
+@pytest.mark.parametrize("enumerate_default", [None, "sequential", "parallel"])
+def test_svi_step_smoke(model, guide, enumerate_default):
     pyro.clear_param_store()
     data = Variable(torch.Tensor([0, 1, 9]))
 
-    guide = config_enumerate(guide, default=enum_discrete)
+    guide = config_enumerate(guide, default=enumerate_default)
     optimizer = pyro.optim.Adam({"lr": .001})
     inference = SVI(model, guide, optimizer, loss="ELBO",
-                    trace_graph=trace_graph, max_iarange_nesting=1)
+                    enum_discrete=True, max_iarange_nesting=1)
     inference.step(data)
 
 
 @pytest.mark.parametrize("enum_discrete", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("trace_graph", [False, True], ids=["dense", "flat"])
-def test_bern_elbo_gradient(enum_discrete, trace_graph):
+def test_bern_elbo_gradient(enum_discrete):
     pyro.clear_param_store()
     if not enum_discrete:
         num_particles = 100  # Monte Carlo sample
-    elif trace_graph:
-        num_particles = 100  # TraceGraph_ELBO silently ignores enumration
     else:
         num_particles = 1  # a single particle should be exact
 
@@ -221,8 +214,7 @@ def test_bern_elbo_gradient(enum_discrete, trace_graph):
         pyro.sample("z", dist.Bernoulli(q))
 
     logger.info("Computing gradients using surrogate loss")
-    Elbo = TraceGraph_ELBO if trace_graph else Trace_ELBO
-    elbo = Elbo(num_particles=num_particles, max_iarange_nesting=0)
+    elbo = TraceEnum_ELBO(num_particles=num_particles, max_iarange_nesting=0)
     elbo.loss_and_grads(model, config_enumerate(guide, default=enum_discrete))
     actual_grad = pyro.param('q').grad
 
@@ -237,13 +229,10 @@ def test_bern_elbo_gradient(enum_discrete, trace_graph):
 
 
 @pytest.mark.parametrize("enum_discrete", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("trace_graph", [False, True], ids=["dense", "flat"])
-def test_bern_bern_elbo_gradient(enum_discrete, trace_graph):
+def test_bern_bern_elbo_gradient(enum_discrete):
     pyro.clear_param_store()
     if not enum_discrete:
         num_particles = 500  # Monte Carlo sample
-    elif trace_graph:
-        num_particles = 500  # TraceGraph_ELBO silently ignores enumeration
     else:
         num_particles = 1  # a single particle should be exact
 
@@ -257,8 +246,7 @@ def test_bern_bern_elbo_gradient(enum_discrete, trace_graph):
         pyro.sample("y", dist.Bernoulli(q))
 
     logger.info("Computing gradients using surrogate loss")
-    Elbo = TraceGraph_ELBO if trace_graph else Trace_ELBO
-    elbo = Elbo(num_particles=num_particles, max_iarange_nesting=0)
+    elbo = TraceEnum_ELBO(num_particles=num_particles, max_iarange_nesting=0)
     elbo.loss_and_grads(model, config_enumerate(guide, default=enum_discrete))
     actual_grad = pyro.param('q').grad
 
@@ -296,7 +284,7 @@ def test_berns_elbo_gradient(enumerate1, enumerate2, enumerate3):
         pyro.sample("x3", dist.Bernoulli(p), infer={"enumerate": enumerate3})
 
     logger.info("Computing gradients using surrogate loss")
-    elbo = Trace_ELBO(num_particles=num_particles, max_iarange_nesting=0)
+    elbo = TraceEnum_ELBO(num_particles=num_particles, max_iarange_nesting=0)
     elbo.loss_and_grads(model, guide)
     actual_grad = pyro.param('p').grad
 
@@ -341,7 +329,7 @@ def test_categoricals_elbo_gradient(enumerate1, enumerate2, enumerate3, max_iara
     expected_grads = grad(kl, [q1, q2, q3], create_graph=True)
 
     logger.info("Computing gradients using surrogate loss")
-    elbo = Trace_ELBO(max_iarange_nesting=max_iarange_nesting)
+    elbo = TraceEnum_ELBO(max_iarange_nesting=max_iarange_nesting)
     elbo.loss_and_grads(model, guide)
     actual_grads = [q1.grad, q2.grad, q3.grad]
 
