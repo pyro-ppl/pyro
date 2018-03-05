@@ -37,12 +37,12 @@ class HMC(TraceKernel):
         ``torch.distributions.constraint_registry``.
     """
 
-    def __init__(self, model, step_size=0.5, num_steps=3, transforms={}):
+    def __init__(self, model, step_size=0.5, num_steps=3, transforms=None):
         self.model = model
         self.step_size = step_size
         self.num_steps = num_steps
-        self.transforms = transforms
-        self._automatic_transform_enabled = True if not self.transforms else False
+        self.transforms = {} if transforms is None else transforms
+        self._automatic_transform_enabled = True if transforms is None else False
         self._reset()
         super(HMC, self).__init__()
 
