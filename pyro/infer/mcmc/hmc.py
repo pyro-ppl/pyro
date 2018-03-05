@@ -49,8 +49,14 @@ class HMC(TraceKernel):
     def _kinetic_energy(self, r):
         return 0.5 * torch.sum(torch.stack([r[name]**2 for name in r]))
 
-    def _potential_energy(self, z):
-        return -self._get_trace(z).log_pdf()
+    def _unconstrained_potential_energy(self, u):
+        z = u.copy()
+        for name, transform in self._transforms.items():
+            z[name] = transform.inv(u[name])
+        potential_energy = -self._get_trace(z).log_pdf()
+        for name, transform in self._transforms.items():
+            potential_energy += transform.log_abs_det_jacobian(z[name], u[name]).sum()
+        return potential_energy
 
     def _energy(self, z, r):
         return self._kinetic_energy(r) + self._potential_energy(z)

@@ -59,10 +59,10 @@ def single_step_velocity_verlet(z, r, potential_fn, step_size, z_grads=None, tra
 def _grad(potential_fn, z):
     z = {k: Variable(v, requires_grad=True) for k, v in z.items()}
     z_keys, z_nodes = zip(*z.items())
-    unconstrained_potential, model_potential = potential_fn(z)
+    unconstrained_potential = potential_fn(z)
     grads = grad(unconstrained_potential, z_nodes)
     grads = [v.data for v in grads]
-    return dict(zip(z_keys, grads)), model_potential
+    return dict(zip(z_keys, grads)), unconstrained_potential
 
 
 def _unconstrained_potential_fn(potential_fn, transforms={}):
