@@ -17,9 +17,6 @@ def velocity_verlet(z, r, potential_fn, step_size, num_steps):
         momenta ``r``.
     :param float step_size: step size for each time step iteration.
     :param int num_steps: number of discrete time steps over which to integrate.
-    :param dict transforms: Optional dictionary that specifies a transform
-        for a sample site with constrained support to unconstrained space. The
-        transform should be invertible, and implement `log_abs_det_jacobian`.
     :return tuple (z_next, r_next): final position and momenta, having same types as (z, r).
     """
     z_next = z.copy()

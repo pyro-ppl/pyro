@@ -163,7 +163,7 @@ class NUTS(HMC):
     def sample(self, trace):
         z = {name: node["value"] for name, node in trace.iter_stochastic_nodes()}
         # automatically transform `z` to unconstrained space, if needed.
-        for name, transform in self._transforms.items():
+        for name, transform in self.transforms.items():
             z[name] = transform(z[name])
         r = {name: pyro.sample("r_{}_t={}".format(name, self._t), self._r_dist[name]) for name in self._r_dist}
 

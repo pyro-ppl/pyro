@@ -29,12 +29,20 @@ class HMC(TraceKernel):
     :param int num_steps: The number of discrete steps over which to simulate
         Hamiltonian dynamics. The state at the end of the trajectory is
         returned as the proposal.
+    :param dict transforms: Optional dictionary that specifies a transform
+        for a sample site with constrained support to unconstrained space. The
+        transform should be invertible, and implement `log_abs_det_jacobian`.
+        If not specified and the model has sites with constrained support,
+        automatic transformations will be applied, as specified in
+        ``torch.distributions.constraint_registry``.
     """
 
-    def __init__(self, model, step_size=0.5, num_steps=3):
+    def __init__(self, model, step_size=0.5, num_steps=3, transforms={}):
         self.model = model
         self.step_size = step_size
         self.num_steps = num_steps
+        self.transforms = transforms
+        self._automatic_transform_enabled = True if not self.transforms else False
         self._reset()
         super(HMC, self).__init__()
 
@@ -42,7 +50,7 @@ class HMC(TraceKernel):
         # Since the model is specified in the constrained space, transform the
         # unconstrained R.V.s `z` to the constrained space.
         z_constrained = z.copy()
-        for name, transform in self._transforms.items():
+        for name, transform in self.transforms.items():
             z_constrained[name] = transform.inv(z_constrained[name])
         z_trace = self._prototype_trace
         for name, value in z_constrained.items():
@@ -58,7 +66,7 @@ class HMC(TraceKernel):
         trace, z_constrained = self._get_trace(z)
         potential_energy = -trace.log_pdf()
         # adjust by the jacobian for this transformation.
-        for name, transform in self._transforms.items():
+        for name, transform in self.transforms.items():
             potential_energy += transform.log_abs_det_jacobian(z[name], z_constrained[name]).sum()
         return potential_energy
 
@@ -72,7 +80,6 @@ class HMC(TraceKernel):
         self._kwargs = None
         self._accept_cnt = 0
         self._prototype_trace = None
-        self._transforms = {}
 
     def _validate_trace(self, trace):
         trace_log_pdf = trace.log_pdf()
@@ -94,8 +101,8 @@ class HMC(TraceKernel):
             r_mu = torch.zeros_like(node['value'])
             r_sigma = torch.ones_like(node['value'])
             self._r_dist[name] = dist.Normal(mu=r_mu, sigma=r_sigma)
-            if node['fn'].support is not constraints.real:
-                self._transforms[name] = biject_to(node['fn'].support).inv
+            if node['fn'].support is not constraints.real and self._automatic_transform_enabled:
+                self.transforms[name] = biject_to(node['fn'].support).inv
         self._validate_trace(self._prototype_trace)
 
     def cleanup(self):
@@ -104,7 +111,7 @@ class HMC(TraceKernel):
     def sample(self, trace):
         z = {name: node['value'] for name, node in trace.iter_stochastic_nodes()}
         # automatically transform `z` to unconstrained space, if needed.
-        for name, transform in self._transforms.items():
+        for name, transform in self.transforms.items():
             z[name] = transform(z[name])
         r = {name: pyro.sample('r_{}_t={}'.format(name, self._t), self._r_dist[name])
              for name in self._r_dist}
