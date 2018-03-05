@@ -162,11 +162,10 @@ class NUTS(HMC):
 
     def sample(self, trace):
         z = {name: node["value"] for name, node in trace.iter_stochastic_nodes()}
-        r = {name: pyro.sample("r_{}_t={}".format(name, self._t), self._r_dist[name]) for name in self._r_dist}
-
-        # transform z to unconstrained space based on the specified transforms
+        # automatically transform `z` to unconstrained space, if needed.
         for name, transform in self._transforms.items():
             z[name] = transform(z[name])
+        r = {name: pyro.sample("r_{}_t={}".format(name, self._t), self._r_dist[name]) for name in self._r_dist}
 
         # Ideally, following a symplectic integrator trajectory, the energy is constant.
         # In that case, we can sample the proposal uniformly, and there is no need to use "slice".
@@ -226,4 +225,5 @@ class NUTS(HMC):
         if is_accepted:
             self._accept_cnt += 1
         self._t += 1
+        # get trace with the constrained values for `z`.
         return self._get_trace(z)[0]

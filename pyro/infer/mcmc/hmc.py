@@ -57,6 +57,7 @@ class HMC(TraceKernel):
     def _unconstrained_potential_energy(self, z):
         trace, z_constrained = self._get_trace(z)
         potential_energy = -trace.log_pdf()
+        # adjust by the jacobian for this transformation.
         for name, transform in self._transforms.items():
             potential_energy += transform.log_abs_det_jacobian(z[name], z_constrained[name]).sum()
         return potential_energy
@@ -102,7 +103,7 @@ class HMC(TraceKernel):
 
     def sample(self, trace):
         z = {name: node['value'] for name, node in trace.iter_stochastic_nodes()}
-        # automatically transform z to unconstrained space.
+        # automatically transform `z` to unconstrained space, if needed.
         for name, transform in self._transforms.items():
             z[name] = transform(z[name])
         r = {name: pyro.sample('r_{}_t={}'.format(name, self._t), self._r_dist[name])
@@ -111,7 +112,7 @@ class HMC(TraceKernel):
                                        self._unconstrained_potential_energy,
                                        self.step_size,
                                        self.num_steps)
-        # apply Metropolis correction
+        # apply Metropolis correction.
         energy_proposal = self._energy(z_new, r_new)
         energy_current = self._energy(z, r)
         delta_energy = energy_proposal - energy_current
@@ -121,7 +122,7 @@ class HMC(TraceKernel):
             z = z_new
         self._t += 1
 
-        # get trace with the constrained values for `z`
+        # get trace with the constrained values for `z`.
         return self._get_trace(z)[0]
 
     def diagnostics(self):
