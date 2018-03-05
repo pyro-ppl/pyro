@@ -34,7 +34,7 @@ class HMC(TraceKernel):
         transform should be invertible, and implement `log_abs_det_jacobian`.
         If not specified and the model has sites with constrained support,
         automatic transformations will be applied, as specified in
-        ``torch.distributions.constraint_registry``.
+        :mod:`torch.distributions.constraint_registry`.
     """
 
     def __init__(self, model, step_size=0.5, num_steps=3, transforms=None):
