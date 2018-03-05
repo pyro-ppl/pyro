@@ -89,7 +89,6 @@ class TraceEnum_ELBO(ELBO):
                 weight = weights.get_upstream(cond_indep_stack)
                 if weight is None:
                     continue
-                print('DEBUG {} weight = {}'.format(name, weight))
 
                 model_log_pdf = model_site["batch_log_pdf"]
                 if model_site["is_observed"]:
@@ -97,7 +96,6 @@ class TraceEnum_ELBO(ELBO):
                 else:
                     guide_log_pdf = guide_trace.nodes[name]["batch_log_pdf"]
                     log_r = model_log_pdf - guide_log_pdf
-                    print('DEBUG {} log_r = {}'.format(name, log_r))
                     elbo_particle += (log_r * weight).sum().item()
 
             elbo += elbo_particle / self.num_particles

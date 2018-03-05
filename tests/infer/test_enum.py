@@ -93,8 +93,8 @@ def test_iter_discrete_traces_vector(graph_type):
         assert_equal(actual_weight, expected_weight)
 
 
-@pytest.mark.parametrize("enum_discrete", [None, "sequential", "parallel"])
-def test_iter_discrete_traces_nan(enum_discrete):
+@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
+def test_iter_discrete_traces_nan(enumerate1):
     pyro.clear_param_store()
 
     def model():
@@ -102,12 +102,12 @@ def test_iter_discrete_traces_nan(enum_discrete):
         with pyro.iarange("batch", 3):
             pyro.sample("z", dist.Bernoulli(p))
 
+    @config_enumerate(default=enumerate1)
     def guide():
         p = pyro.param("p", variable([0.0, 0.5, 1.0], requires_grad=True))
         with pyro.iarange("batch", 3):
             pyro.sample("z", dist.Bernoulli(p))
 
-    guide = config_enumerate(guide, default=enum_discrete)
     elbo = TraceEnum_ELBO(max_iarange_nesting=1)
     loss = elbo.loss(model, guide)
     assert not math.isnan(loss), loss
@@ -200,82 +200,49 @@ def test_svi_step_smoke(model, guide, enumerate1):
     inference.step(data)
 
 
+@pytest.mark.parametrize("quantity", ["loss", "grad"])
 @pytest.mark.parametrize("enumerate1", [
     None,
     "sequential",
     xfail_param("parallel", reason='https://github.com/uber/pyro/issues/846'),
 ])
-def test_bern_elbo_gradient(enumerate1):
+def test_bern_elbo(quantity, enumerate1):
     pyro.clear_param_store()
     num_particles = 1000
+    prec = 0.001 if enumerate1 else 0.1
     q = pyro.param("q", variable(0.5, requires_grad=True))
+    kl = kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.25))
 
     def model():
         with pyro.iarange("particles", num_particles):
             pyro.sample("z", dist.Bernoulli(0.25).reshape([num_particles]))
 
+    @config_enumerate(default=enumerate1)
     def guide():
         q = pyro.param("q")
         with pyro.iarange("particles", num_particles):
             pyro.sample("z", dist.Bernoulli(q).reshape([num_particles]))
 
-    logger.info("Computing gradients using surrogate loss")
     elbo = TraceEnum_ELBO(max_iarange_nesting=1)
-    elbo.loss_and_grads(model, config_enumerate(guide, default=enumerate1))
-    actual_grad = q.grad / num_particles
 
-    logger.info("Computing analytic gradients")
-    kl = kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.25))
-    expected_grad = grad(kl, [q])[0]
-
-    assert_equal(actual_grad, expected_grad, prec=0.1, msg="".join([
-        "\nexpected = {}".format(expected_grad.detach().cpu().numpy()),
-        "\n  actual = {}".format(actual_grad.detach().cpu().numpy()),
-    ]))
-
-
-@pytest.mark.parametrize("enumerate1", [
-    None,
-    "sequential",
-    xfail_param("parallel", reason='https://github.com/uber/pyro/issues/846'),
-])
-@pytest.mark.parametrize("enumerate2", [
-    None,
-    "sequential",
-    xfail_param("parallel", reason='https://github.com/uber/pyro/issues/846'),
-])
-def test_bern_bern_elbo_gradient(enumerate1, enumerate2):
-    pyro.clear_param_store()
-    num_particles = 1000
-    prec = 0.001 if enumerate1 and enumerate2 else 0.1
-    q = pyro.param("q", variable(0.6, requires_grad=True))
-
-    def model():
-        with pyro.iarange("particles", num_particles):
-            pyro.sample("x1", dist.Bernoulli(0.2).reshape([num_particles]))
-            pyro.sample("x2", dist.Bernoulli(0.3).reshape([num_particles]))
-
-    def guide():
-        q = pyro.param("q")
-        with pyro.iarange("particles", num_particles):
-            pyro.sample("x1", dist.Bernoulli(q).reshape([num_particles]), infer={"enumerate": enumerate1})
-            pyro.sample("x2", dist.Bernoulli(q).reshape([num_particles]), infer={"enumerate": enumerate2})
-
-    logger.info("Computing gradients using surrogate loss")
-    elbo = TraceEnum_ELBO(max_iarange_nesting=1)
-    elbo.loss_and_grads(model, guide)
-    actual_grad = q.grad / num_particles
-
-    logger.info("Computing analytic gradients")
-    kl = sum(kl_divergence(dist.Bernoulli(q), dist.Bernoulli(p)) for p in [0.2, 0.3])
-    expected_grad = grad(kl, [q])[0]
-
-    assert_equal(actual_grad, expected_grad, prec=prec, msg="".join([
-        "\nexpected = {}".format(expected_grad.detach().cpu().numpy()),
-        "\n  actual = {}".format(actual_grad.detach().cpu().numpy()),
-    ]))
+    if quantity == "loss":
+        actual = elbo.loss(model, guide) / num_particles
+        expected = kl.item()
+        assert_equal(actual, expected, prec=prec, msg="".join([
+            "\nexpected = {}".format(expected),
+            "\n  actual = {}".format(actual),
+        ]))
+    else:
+        elbo.loss_and_grads(model, guide)
+        actual = q.grad / num_particles
+        expected = grad(kl, [q])[0]
+        assert_equal(actual, expected, prec=prec, msg="".join([
+            "\nexpected = {}".format(expected.detach().cpu().numpy()),
+            "\n  actual = {}".format(actual.detach().cpu().numpy()),
+        ]))
 
 
+@pytest.mark.parametrize("quantity", ["loss", "grad"])
 @pytest.mark.parametrize("enumerate1", [
     "sequential",
     xfail_param("parallel", reason='https://github.com/uber/pyro/issues/846'),
@@ -289,11 +256,12 @@ def test_bern_bern_elbo_gradient(enumerate1, enumerate2):
     "sequential",
     xfail_param("parallel", reason='https://github.com/uber/pyro/issues/846'),
 ])
-def test_berns_elbo_gradient(enumerate1, enumerate2, enumerate3):
+def test_berns_elbo(quantity, enumerate1, enumerate2, enumerate3):
     pyro.clear_param_store()
     num_particles = 1000
     prec = 0.001 if all([enumerate1, enumerate2, enumerate3]) else 0.1
     q = pyro.param("q", variable(0.6, requires_grad=True))
+    kl = sum(kl_divergence(dist.Bernoulli(q), dist.Bernoulli(p)) for p in [0.1, 0.2, 0.3])
 
     def model():
         with pyro.iarange("particles", num_particles):
@@ -308,21 +276,26 @@ def test_berns_elbo_gradient(enumerate1, enumerate2, enumerate3):
             pyro.sample("x2", dist.Bernoulli(q).reshape([num_particles]), infer={"enumerate": enumerate2})
             pyro.sample("x3", dist.Bernoulli(q).reshape([num_particles]), infer={"enumerate": enumerate3})
 
-    logger.info("Computing gradients using surrogate loss")
     elbo = TraceEnum_ELBO(max_iarange_nesting=1)
-    elbo.loss_and_grads(model, guide)
-    actual_grad = q.grad / num_particles
 
-    logger.info("Computing analytic gradients")
-    kl = sum(kl_divergence(dist.Bernoulli(q), dist.Bernoulli(p)) for p in [0.1, 0.2, 0.3])
-    expected_grad = grad(kl, [q])[0]
+    if quantity == "loss":
+        actual = elbo.loss(model, guide) / num_particles
+        expected = kl.item()
+        assert_equal(actual, expected, prec=prec, msg="".join([
+            "\nexpected = {}".format(expected),
+            "\n  actual = {}".format(actual),
+        ]))
+    else:
+        elbo.loss_and_grads(model, guide)
+        actual = q.grad / num_particles
+        expected = grad(kl, [q])[0]
+        assert_equal(actual, expected, prec=prec, msg="".join([
+            "\nexpected = {}".format(expected.detach().cpu().numpy()),
+            "\n  actual = {}".format(actual.detach().cpu().numpy()),
+        ]))
 
-    assert_equal(actual_grad, expected_grad, prec=prec, msg="".join([
-        "\nexpected = {}".format(expected_grad.detach().cpu().numpy()),
-        "\n  actual = {}".format(actual_grad.detach().cpu().numpy()),
-    ]))
 
-
+@pytest.mark.parametrize("quantity", ["loss", "grad"])
 @pytest.mark.parametrize("max_iarange_nesting", [0, 1])
 @pytest.mark.parametrize("enumerate1", [
     "sequential",
@@ -336,7 +309,7 @@ def test_berns_elbo_gradient(enumerate1, enumerate2, enumerate3):
     "sequential",
     xfail_param("parallel", reason='https://github.com/uber/pyro/issues/846'),
 ])
-def test_categoricals_elbo_gradient(enumerate1, enumerate2, enumerate3, max_iarange_nesting):
+def test_categoricals_elbo(quantity, enumerate1, enumerate2, enumerate3, max_iarange_nesting):
     pyro.clear_param_store()
     p1 = variable([0.6, 0.4])
     p2 = variable([0.3, 0.3, 0.4])
@@ -344,6 +317,9 @@ def test_categoricals_elbo_gradient(enumerate1, enumerate2, enumerate3, max_iara
     q1 = pyro.param("q1", variable([0.4, 0.6], requires_grad=True))
     q2 = pyro.param("q2", variable([0.4, 0.3, 0.3], requires_grad=True))
     q3 = pyro.param("q3", variable([0.4, 0.3, 0.2, 0.1], requires_grad=True))
+    kl = (kl_divergence(dist.Categorical(q1), dist.Categorical(p1)) +
+          kl_divergence(dist.Categorical(q2), dist.Categorical(p2)) +
+          kl_divergence(dist.Categorical(q3), dist.Categorical(p3)))
 
     def model():
         pyro.sample("x1", dist.Categorical(p1))
@@ -355,22 +331,24 @@ def test_categoricals_elbo_gradient(enumerate1, enumerate2, enumerate3, max_iara
         pyro.sample("x2", dist.Categorical(pyro.param("q2")), infer={"enumerate": enumerate2})
         pyro.sample("x3", dist.Categorical(pyro.param("q3")), infer={"enumerate": enumerate3})
 
-    logger.info("Computing analytic gradients")
-    kl = (kl_divergence(dist.Categorical(q1), dist.Categorical(p1)) +
-          kl_divergence(dist.Categorical(q2), dist.Categorical(p2)) +
-          kl_divergence(dist.Categorical(q3), dist.Categorical(p3)))
-    expected_grads = grad(kl, [q1, q2, q3], create_graph=True)
-
-    logger.info("Computing gradients using surrogate loss")
     elbo = TraceEnum_ELBO(max_iarange_nesting=max_iarange_nesting)
-    elbo.loss_and_grads(model, guide)
-    actual_grads = [q1.grad, q2.grad, q3.grad]
 
-    for actual_grad, expected_grad in zip(actual_grads, expected_grads):
-        assert_equal(actual_grad, expected_grad, prec=0.001, msg="".join([
-            "\nexpected = {}".format(expected_grad.detach().cpu().numpy()),
-            "\n  actual = {}".format(actual_grad.detach().cpu().numpy()),
+    if quantity == "loss":
+        actual = elbo.loss(model, guide)
+        expected = kl.item()
+        assert_equal(actual, expected, prec=0.001, msg="".join([
+            "\nexpected = {}".format(expected),
+            "\n  actual = {}".format(actual),
         ]))
+    else:
+        elbo.loss_and_grads(model, guide)
+        actual = [q1.grad, q2.grad, q3.grad]
+        expected = grad(kl, [q1, q2, q3])
+        for actual_grad, expected_grad in zip(actual, expected):
+            assert_equal(actual_grad, expected_grad, prec=0.001, msg="".join([
+                "\nexpected = {}".format(expected_grad.detach().cpu().numpy()),
+                "\n  actual = {}".format(actual_grad.detach().cpu().numpy()),
+            ]))
 
 
 @pytest.mark.parametrize("quantity", ["loss", "grad"])
@@ -431,13 +409,21 @@ def test_iarange_elbo(quantity, iarange_dim, enumerate1, enumerate2):
     1,
     xfail_param(2, reason='not using MultiViewTensor in broadcasted var inside iarange'),
 ])
-@pytest.mark.parametrize("inner_dim", [1, 3])
-@pytest.mark.parametrize("enum_discrete", [
+@pytest.mark.parametrize("inner_dim", [3])
+@pytest.mark.parametrize("enumerate1", [
+    "sequential",
+    xfail_param("parallel", reason='https://github.com/uber/pyro/issues/846'),
+])
+@pytest.mark.parametrize("enumerate2", [
     None,
     "sequential",
     xfail_param("parallel", reason='https://github.com/uber/pyro/issues/846'),
 ])
-def test_nested_iarange_elbo_gradient(quantity, outer_dim, inner_dim, enum_discrete):
+@pytest.mark.parametrize("enumerate3", [
+    "sequential",
+    xfail_param("parallel", reason='https://github.com/uber/pyro/issues/846'),
+])
+def test_iarange_iarange_elbo(quantity, outer_dim, inner_dim, enumerate1, enumerate2, enumerate3):
     pyro.clear_param_store()
     num_particles = 10000
     p = 0.3
@@ -452,15 +438,17 @@ def test_nested_iarange_elbo_gradient(quantity, outer_dim, inner_dim, enum_discr
                 with pyro.iarange("inner", inner_dim):
                     pyro.sample("z", dist.Bernoulli(p).reshape([inner_dim, 1, num_particles]))
 
-    @config_enumerate(default=enum_discrete)
     def guide():
         q = pyro.param("q")
         with pyro.iarange("particles", num_particles):
-            pyro.sample("x", dist.Bernoulli(q).reshape([num_particles]))
+            pyro.sample("x", dist.Bernoulli(q).reshape([num_particles]),
+                        infer={"enumerate": enumerate1})
             with pyro.iarange("outer", outer_dim):
-                pyro.sample("y", dist.Bernoulli(q).reshape(sample_shape=[outer_dim, num_particles]))
+                pyro.sample("y", dist.Bernoulli(q).reshape(sample_shape=[outer_dim, num_particles]),
+                            infer={"enumerate": enumerate2})
                 with pyro.iarange("inner", inner_dim):
-                    pyro.sample("z", dist.Bernoulli(q).reshape(sample_shape=[inner_dim, 1, num_particles]))
+                    pyro.sample("z", dist.Bernoulli(q).reshape(sample_shape=[inner_dim, 1, num_particles]),
+                                infer={"enumerate": enumerate3})
 
     elbo = TraceEnum_ELBO(max_iarange_nesting=3)
 

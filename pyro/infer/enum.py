@@ -70,7 +70,7 @@ def iter_discrete_traces(graph_type, fn, *args, **kwargs):
         log_probs = TensorTree()
         enum_stacks = {}
         if not already_counted:
-            log_probs.add((), 0)
+            log_probs.add((), 0)  # ensures globals are counted exactly once
         for name, site in trace.nodes.items():
             if site["type"] == "sample" and "enum_stack" in site["infer"]:
                 cond_indep_stack = tuple(site["cond_indep_stack"])
