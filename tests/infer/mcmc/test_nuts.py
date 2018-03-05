@@ -126,7 +126,6 @@ def test_normal_gamma():
     true_std = variable([0.5, 2])
     data = dist.Normal(3, true_std).sample(sample_shape=(torch.Size((2000,))))
     for trace, _ in mcmc_run._traces(data):
-        print(trace.nodes['p_latent']['value'])
         posterior.append(trace.nodes['p_latent']['value'])
     posterior_mean = torch.mean(torch.stack(posterior), 0)
     assert_equal(posterior_mean, true_std, prec=0.02)
