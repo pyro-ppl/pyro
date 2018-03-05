@@ -68,7 +68,7 @@ class Trace_ELBO(ELBO):
         elbo = 0.0
         # grab a trace from the generator
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
-            log_r = (model_trace.log_pdf() - guide_trace.log_pdf())
+            log_r = model_trace.log_pdf() - guide_trace.log_pdf()
             if not isinstance(log_r, numbers.Number):
                 log_r = log_r.detach()
 

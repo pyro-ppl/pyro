@@ -21,7 +21,7 @@ class TraceEnum_ELBO(ELBO):
     A trace implementation of ELBO-based SVI that supports enumeration
     over discrete sample sites.
 
-    This implementation makes restricts the dependency
+    This implementation makes strong restrictions on the dependency
     structure of the ``model`` and ``guide``:
     Across :func:`~pyro.irange` and :func:`~pyro.iarange` blocks,
     both dependency graphs should follow a tree structure. That is,
