@@ -114,6 +114,7 @@ class ImportanceTest(NormalNormalSamplingTestCase):
         assert_equal(0, torch.norm(posterior_stddev - self.mu_stddev).item(), prec=0.1)
 
     @pytest.mark.init(rng_seed=0)
+    @pytest.mark.skip(reason='Slow test - use only for debugging')
     def test_importance_prior(self):
         posterior = pyro.infer.Importance(self.model, guide=None, num_samples=10000)
         marginal = pyro.infer.Marginal(posterior)
