@@ -67,7 +67,7 @@ class HMC(TraceKernel):
         potential_energy = -trace.log_pdf()
         # adjust by the jacobian for this transformation.
         for name, transform in self.transforms.items():
-            potential_energy += transform.log_abs_det_jacobian(z[name], z_constrained[name]).sum()
+            potential_energy += transform.log_abs_det_jacobian(z_constrained[name], z[name]).sum()
         return potential_energy
 
     def _energy(self, z, r):
