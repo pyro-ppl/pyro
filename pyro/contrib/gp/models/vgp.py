@@ -16,7 +16,7 @@ class VariationalGP(Model):
     Variational Gaussian Process module.
 
     This model can be seen as a special version of SparseVariationalGP model
-    with ``Xu = X``.
+    with :math:`Xu = X`.
 
     :param torch.autograd.Variable X: A 1D or 2D tensor of inputs.
     :param torch.autograd.Variable y: A 1D tensor of outputs for training.
@@ -68,12 +68,13 @@ class VariationalGP(Model):
 
     def forward(self, Xnew, full_cov=False):
         """
-        Computes the parameters of ``p(f*|Xnew) ~ N(loc, cov)`` according to
-        ``p(f*,f|y) = p(f*|f).p(f|y) ~ p(f*|f).q(f)``, then marginalize out variable ``f``.
+        Computes the parameters of :math:`p(f^*|Xnew) \sim N(\\text{loc}, \\text{cov})`
+        according to :math:`p(f^*,f|y) = p(f^*|f)p(f|y) \sim p(f^*|f)q(f)`,
+        then marginalize out variable :math:`f`.
 
         :param torch.autograd.Variable Xnew: A 1D or 2D tensor.
         :param bool full_cov: Predict full covariance matrix or just its diagonal.
-        :return: loc, covariance matrix of ``p(f*|Xnew)``, and the likelihood.
+        :return: loc, covariance matrix of :math:`p(f^*|Xnew)`, and the likelihood.
         :rtype: torch.autograd.Variable, torch.autograd.Variable, and
             pyro.contrib.gp.likelihoods.Likelihood
         """
@@ -87,9 +88,10 @@ class VariationalGP(Model):
 
     def _predict_f(self, Xnew, X, kernel, mf, Lf, full_cov=False):
         """
-        Computes the parameters of ``p(f*|Xnew) ~ N(loc, cov)`` according to
-        ``p(f*,f|y) = p(f*|f).p(f|y) ~ p(f*|f).q(f)``, then marginalize out variable ``f``.
-        Here ``q(f)`` is parameterized by ``q(f) ~ N(mf, Lf)``.
+        Computes the parameters of :math:`p(f^*|Xnew) \sim N(\\text{loc}, \\text{cov})`
+        according to :math:`p(f^*,f|y) = p(f^*|f)p(f|y) \sim p(f^*|f)q(f)`,
+        then marginalize out variable :math:`f`.
+        Here :math:`q(f)` is parameterized by :math:`q(f) \sim N(mf, Lf)`.
         """
         num_data = X.size(0)
 

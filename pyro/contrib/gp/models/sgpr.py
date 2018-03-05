@@ -105,12 +105,13 @@ class SparseGPRegression(Model):
 
     def forward(self, Xnew, full_cov=False, noiseless=True):
         """
-        Computes the parameters of ``p(y*|Xnew) ~ N(loc, cov)`` w.r.t. the new input ``Xnew``.
+        Computes the parameters of :math:`p(y^*|Xnew) \sim N(\\text{loc}, \\text{cov})`
+        w.r.t. the new input :math:`Xnew`.
 
         :param torch.autograd.Variable Xnew: A 1D or 2D tensor.
         :param bool full_cov: Predicts full covariance matrix or just its diagonal.
         :param bool noiseless: Includes noise in the prediction or not.
-        :return: loc and covariance matrix of ``p(y*|Xnew)``.
+        :return: loc and covariance matrix of :math:`p(y^*|Xnew)`.
         :rtype: torch.autograd.Variable and torch.autograd.Variable
         """
         self._check_Xnew_shape(Xnew, self.X)

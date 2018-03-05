@@ -13,13 +13,13 @@ class Model(Parameterized):
 
     def model(self):
         """
-        A ``model`` stochastic method.
+        A "model" stochastic method.
         """
         raise NotImplementedError
 
     def guide(self):
         """
-        A ``guide`` stochastic method.
+        A "guide" stochastic method.
         """
         raise NotImplementedError
 

@@ -50,8 +50,10 @@ def assert_warning(model, guide, **kwargs):
             logger.info(warning)
 
 
-@pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
-def test_nonempty_model_empty_guide_ok(trace_graph):
+@pytest.mark.parametrize("trace_graph,enum_discrete",
+                         [(False, False), (True, False), (False, True)],
+                         ids=["Trace", "TraceGraph", "TraceEnum"])
+def test_nonempty_model_empty_guide_ok(trace_graph, enum_discrete):
 
     def model():
         mu = Variable(torch.Tensor([0, 0]))
@@ -61,11 +63,13 @@ def test_nonempty_model_empty_guide_ok(trace_graph):
     def guide():
         pass
 
-    assert_ok(model, guide, trace_graph=trace_graph)
+    assert_ok(model, guide, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
 
-@pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
-def test_empty_model_empty_guide_ok(trace_graph):
+@pytest.mark.parametrize("trace_graph,enum_discrete",
+                         [(False, False), (True, False), (False, True)],
+                         ids=["Trace", "TraceGraph", "TraceEnum"])
+def test_empty_model_empty_guide_ok(trace_graph, enum_discrete):
 
     def model():
         pass
@@ -73,11 +77,13 @@ def test_empty_model_empty_guide_ok(trace_graph):
     def guide():
         pass
 
-    assert_ok(model, guide, trace_graph=trace_graph)
+    assert_ok(model, guide, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
 
-@pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
-def test_variable_clash_in_model_error(trace_graph):
+@pytest.mark.parametrize("trace_graph,enum_discrete",
+                         [(False, False), (True, False), (False, True)],
+                         ids=["Trace", "TraceGraph", "TraceEnum"])
+def test_variable_clash_in_model_error(trace_graph, enum_discrete):
 
     def model():
         p = variable(0.5)
@@ -88,11 +94,13 @@ def test_variable_clash_in_model_error(trace_graph):
         p = pyro.param("p", variable(0.5, requires_grad=True))
         pyro.sample("x", dist.Bernoulli(p))
 
-    assert_error(model, guide, trace_graph=trace_graph)
+    assert_error(model, guide, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
 
-@pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
-def test_model_guide_dim_mismatch_error(trace_graph):
+@pytest.mark.parametrize("trace_graph,enum_discrete",
+                         [(False, False), (True, False), (False, True)],
+                         ids=["Trace", "TraceGraph", "TraceEnum"])
+def test_model_guide_dim_mismatch_error(trace_graph, enum_discrete):
 
     def model():
         mu = Variable(torch.zeros(2))
@@ -104,11 +112,13 @@ def test_model_guide_dim_mismatch_error(trace_graph):
         sigma = pyro.param("sigma", Variable(torch.zeros(2, 1), requires_grad=True))
         pyro.sample("x", dist.Normal(mu, sigma))
 
-    assert_error(model, guide, trace_graph=trace_graph)
+    assert_error(model, guide, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
 
-@pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
-def test_model_guide_shape_mismatch_error(trace_graph):
+@pytest.mark.parametrize("trace_graph,enum_discrete",
+                         [(False, False), (True, False), (False, True)],
+                         ids=["Trace", "TraceGraph", "TraceEnum"])
+def test_model_guide_shape_mismatch_error(trace_graph, enum_discrete):
 
     def model():
         mu = Variable(torch.zeros(1, 2))
@@ -120,11 +130,13 @@ def test_model_guide_shape_mismatch_error(trace_graph):
         sigma = pyro.param("sigma", Variable(torch.zeros(2, 1), requires_grad=True))
         pyro.sample("x", dist.Normal(mu, sigma))
 
-    assert_error(model, guide, trace_graph=trace_graph)
+    assert_error(model, guide, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
 
-@pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
-def test_variable_clash_in_guide_error(trace_graph):
+@pytest.mark.parametrize("trace_graph,enum_discrete",
+                         [(False, False), (True, False), (False, True)],
+                         ids=["Trace", "TraceGraph", "TraceEnum"])
+def test_variable_clash_in_guide_error(trace_graph, enum_discrete):
 
     def model():
         p = variable(0.5)
@@ -135,12 +147,14 @@ def test_variable_clash_in_guide_error(trace_graph):
         pyro.sample("x", dist.Bernoulli(p))
         pyro.sample("x", dist.Bernoulli(p))  # Should error here.
 
-    assert_error(model, guide, trace_graph=trace_graph)
+    assert_error(model, guide, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
 
 @pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
-@pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
-def test_irange_ok(trace_graph, subsample_size):
+@pytest.mark.parametrize("trace_graph,enum_discrete",
+                         [(False, False), (True, False), (False, True)],
+                         ids=["Trace", "TraceGraph", "TraceEnum"])
+def test_irange_ok(subsample_size, trace_graph, enum_discrete):
 
     def model():
         p = variable(0.5)
@@ -152,11 +166,13 @@ def test_irange_ok(trace_graph, subsample_size):
         for i in pyro.irange("irange", 10, subsample_size):
             pyro.sample("x_{}".format(i), dist.Bernoulli(p))
 
-    assert_ok(model, guide, trace_graph=trace_graph)
+    assert_ok(model, guide, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
 
-@pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
-def test_irange_variable_clash_error(trace_graph):
+@pytest.mark.parametrize("trace_graph,enum_discrete",
+                         [(False, False), (True, False), (False, True)],
+                         ids=["Trace", "TraceGraph", "TraceEnum"])
+def test_irange_variable_clash_error(trace_graph, enum_discrete):
 
     def model():
         p = variable(0.5)
@@ -170,12 +186,14 @@ def test_irange_variable_clash_error(trace_graph):
             # Each loop iteration should give the sample site a different name.
             pyro.sample("x", dist.Bernoulli(p))
 
-    assert_error(model, guide, trace_graph=trace_graph)
+    assert_error(model, guide, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
 
 @pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
-@pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
-def test_iarange_ok(trace_graph, subsample_size):
+@pytest.mark.parametrize("trace_graph,enum_discrete",
+                         [(False, False), (True, False), (False, True)],
+                         ids=["Trace", "TraceGraph", "TraceEnum"])
+def test_iarange_ok(subsample_size, trace_graph, enum_discrete):
 
     def model():
         p = variable(0.5)
@@ -187,11 +205,13 @@ def test_iarange_ok(trace_graph, subsample_size):
         with pyro.iarange("iarange", 10, subsample_size) as ind:
             pyro.sample("x", dist.Bernoulli(p).reshape(sample_shape=[len(ind)]))
 
-    assert_ok(model, guide, trace_graph=trace_graph)
+    assert_ok(model, guide, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
 
-@pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
-def test_iarange_no_size_ok(trace_graph):
+@pytest.mark.parametrize("trace_graph,enum_discrete",
+                         [(False, False), (True, False), (False, True)],
+                         ids=["Trace", "TraceGraph", "TraceEnum"])
+def test_iarange_no_size_ok(trace_graph, enum_discrete):
 
     def model():
         p = variable(0.5)
@@ -203,12 +223,14 @@ def test_iarange_no_size_ok(trace_graph):
         with pyro.iarange("iarange"):
             pyro.sample("x", dist.Bernoulli(p).reshape(sample_shape=[10]))
 
-    assert_ok(model, guide, trace_graph=trace_graph)
+    assert_ok(model, guide, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
 
 @pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
-@pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
-def test_irange_irange_ok(trace_graph, subsample_size):
+@pytest.mark.parametrize("trace_graph,enum_discrete",
+                         [(False, False), (True, False), (False, True)],
+                         ids=["Trace", "TraceGraph", "TraceEnum"])
+def test_irange_irange_ok(subsample_size, trace_graph, enum_discrete):
 
     def model():
         p = variable(0.5)
@@ -222,12 +244,14 @@ def test_irange_irange_ok(trace_graph, subsample_size):
             for j in pyro.irange("irange_1", 10, subsample_size):
                 pyro.sample("x_{}_{}".format(i, j), dist.Bernoulli(p))
 
-    assert_ok(model, guide, trace_graph=trace_graph)
+    assert_ok(model, guide, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
 
 @pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
-@pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
-def test_irange_irange_swap_error(trace_graph, subsample_size):
+@pytest.mark.parametrize("trace_graph,enum_discrete",
+                         [(False, False), (True, False), (False, True)],
+                         ids=["Trace", "TraceGraph", "TraceEnum"])
+def test_irange_irange_swap_error(subsample_size, trace_graph, enum_discrete):
 
     def model():
         p = variable(0.5)
@@ -241,12 +265,14 @@ def test_irange_irange_swap_error(trace_graph, subsample_size):
             for i in pyro.irange("irange_0", 10, subsample_size):
                 pyro.sample("x_{}_{}".format(i, j), dist.Bernoulli(p))
 
-    assert_error(model, guide, trace_graph=trace_graph)
+    assert_error(model, guide, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
 
 @pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
-@pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
-def test_irange_in_model_not_guide_ok(trace_graph, subsample_size):
+@pytest.mark.parametrize("trace_graph,enum_discrete",
+                         [(False, False), (True, False), (False, True)],
+                         ids=["Trace", "TraceGraph", "TraceEnum"])
+def test_irange_in_model_not_guide_ok(subsample_size, trace_graph, enum_discrete):
 
     def model():
         p = variable(0.5)
@@ -258,12 +284,14 @@ def test_irange_in_model_not_guide_ok(trace_graph, subsample_size):
         p = pyro.param("p", variable(0.5, requires_grad=True))
         pyro.sample("x", dist.Bernoulli(p))
 
-    assert_ok(model, guide, trace_graph=trace_graph)
+    assert_ok(model, guide, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
 
 @pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
-@pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
-def test_irange_in_guide_not_model_error(trace_graph, subsample_size):
+@pytest.mark.parametrize("trace_graph,enum_discrete",
+                         [(False, False), (True, False), (False, True)],
+                         ids=["Trace", "TraceGraph", "TraceEnum"])
+def test_irange_in_guide_not_model_error(subsample_size, trace_graph, enum_discrete):
 
     def model():
         p = variable(0.5)
@@ -275,7 +303,7 @@ def test_irange_in_guide_not_model_error(trace_graph, subsample_size):
             pass
         pyro.sample("x", dist.Bernoulli(p))
 
-    assert_error(model, guide, trace_graph=trace_graph)
+    assert_error(model, guide, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
 
 @pytest.mark.xfail(reason="RaoBlackwellization checks in trace_poutine need to be fixed to catch this")
@@ -296,8 +324,10 @@ def test_iarange_irange_warning():
     assert_warning(model, guide, trace_graph=True)
 
 
-@pytest.mark.parametrize("trace_graph", [False, True], ids=["trace", "tracegraph"])
-def test_irange_iarange_ok(trace_graph):
+@pytest.mark.parametrize("trace_graph,enum_discrete",
+                         [(False, False), (True, False), (False, True)],
+                         ids=["Trace", "TraceGraph", "TraceEnum"])
+def test_irange_iarange_ok(trace_graph, enum_discrete):
 
     def model():
         p = variable(0.5)
@@ -311,11 +341,13 @@ def test_irange_iarange_ok(trace_graph):
             with pyro.iarange("iarange", 10, 5) as ind:
                 pyro.sample("x_{}".format(i), dist.Bernoulli(p).reshape(sample_shape=[len(ind)]))
 
-    assert_ok(model, guide, trace_graph=trace_graph)
+    assert_ok(model, guide, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
 
-@pytest.mark.parametrize('trace_graph', [False, True])
-def test_nested_iarange_iarange_ok(trace_graph):
+@pytest.mark.parametrize("trace_graph,enum_discrete",
+                         [(False, False), (True, False), (False, True)],
+                         ids=["Trace", "TraceGraph", "TraceEnum"])
+def test_nested_iarange_iarange_ok(trace_graph, enum_discrete):
 
     def model():
         p = variable(0.5, requires_grad=True)
@@ -326,11 +358,13 @@ def test_nested_iarange_iarange_ok(trace_graph):
                 pyro.sample("y", dist.Bernoulli(p).reshape(sample_shape=[1, len(ind_outer)]))
                 pyro.sample("z", dist.Bernoulli(p).reshape(sample_shape=[len(ind_inner), len(ind_outer)]))
 
-    assert_ok(model, model, trace_graph=trace_graph)
+    assert_ok(model, model, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
 
-@pytest.mark.parametrize('trace_graph', [False, True])
-def test_nested_iarange_iarange_dim_error_1(trace_graph):
+@pytest.mark.parametrize("trace_graph,enum_discrete",
+                         [(False, False), (True, False), (False, True)],
+                         ids=["Trace", "TraceGraph", "TraceEnum"])
+def test_nested_iarange_iarange_dim_error_1(trace_graph, enum_discrete):
 
     def model():
         p = Variable(torch.Tensor([0.5]), requires_grad=True)
@@ -340,11 +374,13 @@ def test_nested_iarange_iarange_dim_error_1(trace_graph):
                 pyro.sample("y", dist.Bernoulli(p).reshape(sample_shape=[len(ind_inner)]))
                 pyro.sample("z", dist.Bernoulli(p).reshape(sample_shape=[len(ind_outer), len(ind_inner)]))
 
-    assert_error(model, model, trace_graph=trace_graph)
+    assert_error(model, model, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
 
-@pytest.mark.parametrize('trace_graph', [False, True])
-def test_nested_iarange_iarange_dim_error_2(trace_graph):
+@pytest.mark.parametrize("trace_graph,enum_discrete",
+                         [(False, False), (True, False), (False, True)],
+                         ids=["Trace", "TraceGraph", "TraceEnum"])
+def test_nested_iarange_iarange_dim_error_2(trace_graph, enum_discrete):
 
     def model():
         p = Variable(torch.Tensor([0.5]), requires_grad=True)
@@ -354,11 +390,13 @@ def test_nested_iarange_iarange_dim_error_2(trace_graph):
                 pyro.sample("y", dist.Bernoulli(p).reshape(sample_shape=[len(ind_outer)]))  # error here
                 pyro.sample("z", dist.Bernoulli(p).reshape(sample_shape=[len(ind_outer), len(ind_inner)]))
 
-    assert_error(model, model, trace_graph=trace_graph)
+    assert_error(model, model, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
 
-@pytest.mark.parametrize('trace_graph', [False, True])
-def test_nested_iarange_iarange_dim_error_3(trace_graph):
+@pytest.mark.parametrize("trace_graph,enum_discrete",
+                         [(False, False), (True, False), (False, True)],
+                         ids=["Trace", "TraceGraph", "TraceEnum"])
+def test_nested_iarange_iarange_dim_error_3(trace_graph, enum_discrete):
 
     def model():
         p = Variable(torch.Tensor([0.5]), requires_grad=True)
@@ -368,11 +406,13 @@ def test_nested_iarange_iarange_dim_error_3(trace_graph):
                 pyro.sample("y", dist.Bernoulli(p).reshape(sample_shape=[len(ind_inner)]))
                 pyro.sample("z", dist.Bernoulli(p).reshape(sample_shape=[len(ind_inner), 1]))  # error here
 
-    assert_error(model, model, trace_graph=trace_graph)
+    assert_error(model, model, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
 
-@pytest.mark.parametrize('trace_graph', [False, True])
-def test_nested_iarange_iarange_dim_error_4(trace_graph):
+@pytest.mark.parametrize("trace_graph,enum_discrete",
+                         [(False, False), (True, False), (False, True)],
+                         ids=["Trace", "TraceGraph", "TraceEnum"])
+def test_nested_iarange_iarange_dim_error_4(trace_graph, enum_discrete):
 
     def model():
         p = Variable(torch.Tensor([0.5]), requires_grad=True)
@@ -382,11 +422,13 @@ def test_nested_iarange_iarange_dim_error_4(trace_graph):
                 pyro.sample("y", dist.Bernoulli(p).reshape(sample_shape=[len(ind_inner)]))
                 pyro.sample("z", dist.Bernoulli(p).reshape(sample_shape=[len(ind_outer), len(ind_outer)]))  # error here
 
-    assert_error(model, model, trace_graph=trace_graph)
+    assert_error(model, model, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
 
-@pytest.mark.parametrize('trace_graph', [False, True])
-def test_nonnested_iarange_iarange_ok(trace_graph):
+@pytest.mark.parametrize("trace_graph,enum_discrete",
+                         [(False, False), (True, False), (False, True)],
+                         ids=["Trace", "TraceGraph", "TraceEnum"])
+def test_nonnested_iarange_iarange_ok(trace_graph, enum_discrete):
 
     def model():
         p = variable(0.5, requires_grad=True)
@@ -395,7 +437,7 @@ def test_nonnested_iarange_iarange_ok(trace_graph):
         with pyro.iarange("iarange_1", 11, 6) as ind2:
             pyro.sample("x1", dist.Bernoulli(p).reshape(sample_shape=[len(ind2)]))
 
-    assert_ok(model, model, trace_graph=trace_graph)
+    assert_ok(model, model, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
 
 def test_three_indep_iarange_at_different_depths_ok():
@@ -456,7 +498,7 @@ def test_enum_discrete_single_ok():
         p = pyro.param("p", variable(0.5, requires_grad=True))
         pyro.sample("x", dist.Bernoulli(p))
 
-    assert_ok(model, config_enumerate(guide))
+    assert_ok(model, config_enumerate(guide), enum_discrete=True)
 
 
 def test_enum_discrete_single_single_ok():
@@ -471,7 +513,7 @@ def test_enum_discrete_single_single_ok():
         pyro.sample("x", dist.Bernoulli(p))
         pyro.sample("y", dist.Bernoulli(p))
 
-    assert_ok(model, config_enumerate(guide))
+    assert_ok(model, config_enumerate(guide), enum_discrete=True)
 
 
 def test_enum_discrete_irange_single_ok():
@@ -486,7 +528,7 @@ def test_enum_discrete_irange_single_ok():
         for i in pyro.irange("irange", 10, 5):
             pyro.sample("x_{}".format(i), dist.Bernoulli(p))
 
-    assert_ok(model, config_enumerate(guide))
+    assert_ok(model, config_enumerate(guide), enum_discrete=True)
 
 
 def test_iarange_enum_discrete_batch_ok():
@@ -501,7 +543,7 @@ def test_iarange_enum_discrete_batch_ok():
         with pyro.iarange("iarange", 10, 5) as ind:
             pyro.sample("x", dist.Bernoulli(p).reshape(sample_shape=[len(ind)]))
 
-    assert_ok(model, config_enumerate(guide))
+    assert_ok(model, config_enumerate(guide), enum_discrete=True)
 
 
 def test_iarange_enum_discrete_no_discrete_vars_ok():
@@ -518,7 +560,7 @@ def test_iarange_enum_discrete_no_discrete_vars_ok():
         with pyro.iarange("iarange", 10, 5) as ind:
             pyro.sample("x", dist.Normal(mu, sigma).reshape(sample_shape=[len(ind)]))
 
-    assert_ok(model, config_enumerate(guide))
+    assert_ok(model, config_enumerate(guide), enum_discrete=True)
 
 
 def test_no_iarange_enum_discrete_batch_error():
@@ -531,7 +573,7 @@ def test_no_iarange_enum_discrete_batch_error():
         p = pyro.param("p", variable(0.5, requires_grad=True))
         pyro.sample("x", dist.Bernoulli(p).reshape(sample_shape=[5]))
 
-    assert_error(model, config_enumerate(guide))
+    assert_error(model, config_enumerate(guide), enum_discrete=True)
 
 
 @pytest.mark.parametrize('max_iarange_nesting', [0, 1, 2])
@@ -548,7 +590,7 @@ def test_enum_discrete_parallel_ok(max_iarange_nesting):
         x = pyro.sample("x", dist.Bernoulli(p))
         assert x.shape == torch.Size([2]) + iarange_shape
 
-    assert_ok(model, config_enumerate(guide, "parallel"),
+    assert_ok(model, config_enumerate(guide, "parallel"), enum_discrete=True,
               max_iarange_nesting=max_iarange_nesting)
 
 
@@ -564,7 +606,8 @@ def test_enum_discrete_parallel_nested_ok(max_iarange_nesting):
         assert x2.shape == torch.Size([2]) + iarange_shape + p2.shape
         assert x3.shape == torch.Size([3, 1]) + iarange_shape + p3.shape
 
-    assert_ok(model, config_enumerate(model, "parallel"), max_iarange_nesting=max_iarange_nesting)
+    assert_ok(model, config_enumerate(model, "parallel"), enum_discrete=True,
+              max_iarange_nesting=max_iarange_nesting)
 
 
 def test_enum_discrete_parallel_iarange_ok():
@@ -593,7 +636,8 @@ def test_enum_discrete_parallel_iarange_ok():
             assert x536.shape == torch.Size([6, 1, 1, 5, 3])  # noqa: E201
 
     enum_discrete = False
-    assert_ok(model, model, max_iarange_nesting=2)
+    assert_ok(model, model, enum_discrete=True, max_iarange_nesting=2)
 
     enum_discrete = True
-    assert_ok(model, config_enumerate(model, "parallel"), max_iarange_nesting=2)
+    assert_ok(model, config_enumerate(model, "parallel"), enum_discrete=True,
+              max_iarange_nesting=2)

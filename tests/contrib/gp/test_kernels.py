@@ -6,9 +6,9 @@ import pytest
 import torch
 from torch.autograd import Variable
 
-from pyro.contrib.gp.kernels import (Bias, Brownian, Cosine, Linear, Matern12, Matern32,
-                                     Matern52, Periodic, Polynomial, RationalQuadratic,
-                                     SquaredExponential, WhiteNoise)
+from pyro.contrib.gp.kernels import (Bias, Brownian, Cosine, Exponent, Linear, Matern12, Matern32,
+                                     Matern52, Periodic, Polynomial, Product, RationalQuadratic,
+                                     SquaredExponential, Sum, VerticalScaling, Warping, WhiteNoise)
 from tests.common import assert_equal
 
 T = namedtuple("TestKernelForward", ["kernel", "X", "Z", "K_sum"])
@@ -85,3 +85,56 @@ def test_kernel_forward(kernel, X, Z, K_sum):
     assert K.size(1) == (3 if Z is not None else 2)
     assert_equal(K.sum().item(), K_sum)
     assert_equal(kernel(X).diag(), kernel(X, diag=True))
+
+
+def test_combination():
+    k0 = TEST_CASES[0][0]
+    k5 = TEST_CASES[5][0]   # TEST_CASES[1] is Brownian, only work for 1D
+    k2 = TEST_CASES[2][0]
+    k3 = TEST_CASES[3][0]
+    k4 = TEST_CASES[4][0]
+
+    k = Sum(Product(Product(Sum(Sum(k0, k5), k2), 2), k3), Sum(k4, 1))
+
+    K = 2 * (k0(X, Z) + k5(X, Z) + k2(X, Z)) * k3(X, Z) + (k4(X, Z) + 1)
+
+    assert_equal(K.data, k(X, Z).data)
+
+    # test get_subkernel
+    assert k.get_subkernel(k5.name) is k5
+
+    # test if error is catched if active_dims are not separated
+    k6 = Matern12(2, variance, lengthscale[0], active_dims=[0, 1])
+    k7 = Matern32(2, variance, lengthscale[0], active_dims=[1, 2])
+    try:
+        Sum(k6, k7)
+    except ValueError:
+        pass
+    else:
+        raise ValueError("Cannot catch ValueError for kernel combination.")
+
+
+def test_deriving():
+    k = TEST_CASES[6][0]
+
+    def vscaling_fn(x):
+        return x.sum(dim=1)
+
+    def iwarping_fn(x):
+        return x**2
+
+    owarping_coef = [2, 0, 1, 3, 0]
+
+    K = k(X, Z)
+    K_iwarp = k(iwarping_fn(X), iwarping_fn(Z))
+    K_owarp = 2 + K ** 2 + 3 * K ** 3
+    K_vscale = vscaling_fn(X).unsqueeze(1) * K * vscaling_fn(Z).unsqueeze(0)
+
+    assert_equal(K_iwarp.data, Warping(k, iwarping_fn=iwarping_fn)(X, Z).data)
+    assert_equal(K_owarp.data, Warping(k, owarping_coef=owarping_coef)(X, Z).data)
+    assert_equal(K_vscale.data, VerticalScaling(k, vscaling_fn=vscaling_fn)(X, Z).data)
+    assert_equal(K.exp().data, Exponent(k)(X, Z).data)
+
+    # test get_subkernel
+    k1 = Sum(Warping(k, iwarping_fn=iwarping_fn), TEST_CASES[7][0])
+    assert k1.get_subkernel(k.name) is k
