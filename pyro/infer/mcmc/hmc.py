@@ -39,27 +39,30 @@ class HMC(TraceKernel):
         super(HMC, self).__init__()
 
     def _get_trace(self, z):
+        # Since the model is specified in the constrained space, transform the
+        # unconstrained R.V.s `z` to the constrained space.
+        z_constrained = z.copy()
+        for name, transform in self._transforms.items():
+            z_constrained[name] = transform.inv(z_constrained[name])
         z_trace = self._prototype_trace
-        for name, value in z.items():
+        for name, value in z_constrained.items():
             z_trace.nodes[name]['value'] = value
         trace_poutine = poutine.trace(poutine.replay(self.model, trace=z_trace))
         trace_poutine(*self._args, **self._kwargs)
-        return trace_poutine.trace
+        return trace_poutine.trace, z_constrained
 
     def _kinetic_energy(self, r):
         return 0.5 * torch.sum(torch.stack([r[name]**2 for name in r]))
 
-    def _unconstrained_potential_energy(self, u):
-        z = u.copy()
+    def _unconstrained_potential_energy(self, z):
+        trace, z_constrained = self._get_trace(z)
+        potential_energy = -trace.log_pdf()
         for name, transform in self._transforms.items():
-            z[name] = transform.inv(u[name])
-        potential_energy = -self._get_trace(z).log_pdf()
-        for name, transform in self._transforms.items():
-            potential_energy += transform.log_abs_det_jacobian(z[name], u[name]).sum()
+            potential_energy += transform.log_abs_det_jacobian(z[name], z_constrained[name]).sum()
         return potential_energy
 
     def _energy(self, z, r):
-        return self._kinetic_energy(r) + self._potential_energy(z)
+        return self._kinetic_energy(r) + self._unconstrained_potential_energy(z)
 
     def _reset(self):
         self._t = 0
@@ -99,13 +102,15 @@ class HMC(TraceKernel):
 
     def sample(self, trace):
         z = {name: node['value'] for name, node in trace.iter_stochastic_nodes()}
+        # automatically transform z to unconstrained space.
+        for name, transform in self._transforms.items():
+            z[name] = transform(z[name])
         r = {name: pyro.sample('r_{}_t={}'.format(name, self._t), self._r_dist[name])
              for name in self._r_dist}
         z_new, r_new = velocity_verlet(z, r,
-                                       self._potential_energy,
+                                       self._unconstrained_potential_energy,
                                        self.step_size,
-                                       self.num_steps,
-                                       self._transforms)
+                                       self.num_steps)
         # apply Metropolis correction
         energy_proposal = self._energy(z_new, r_new)
         energy_current = self._energy(z, r)
@@ -115,7 +120,9 @@ class HMC(TraceKernel):
             self._accept_cnt += 1
             z = z_new
         self._t += 1
-        return self._get_trace(z)
+
+        # get trace with the constrained values for `z`
+        return self._get_trace(z)[0]
 
     def diagnostics(self):
         return 'Acceptance rate: {}'.format(self._accept_cnt / self._t)

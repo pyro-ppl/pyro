@@ -81,7 +81,7 @@ class NUTS(HMC):
     def _build_basetree(self, z, r, z_grads, log_slice, direction):
         step_size = self.step_size if direction == 1 else -self.step_size
         z_new, r_new, z_grads, potential_energy = single_step_velocity_verlet(
-            z, r, self._potential_energy, step_size, z_grads=z_grads, transforms=self._transforms)
+            z, r, self._unconstrained_potential_energy, step_size, z_grads=z_grads)
         energy = potential_energy + self._kinetic_energy(r_new)
         dE = log_slice + energy
 
@@ -164,6 +164,10 @@ class NUTS(HMC):
         z = {name: node["value"] for name, node in trace.iter_stochastic_nodes()}
         r = {name: pyro.sample("r_{}_t={}".format(name, self._t), self._r_dist[name]) for name in self._r_dist}
 
+        # transform z to unconstrained space based on the specified transforms
+        for name, transform in self._transforms.items():
+            z[name] = transform(z[name])
+
         # Ideally, following a symplectic integrator trajectory, the energy is constant.
         # In that case, we can sample the proposal uniformly, and there is no need to use "slice".
         # However, it is not the case for real situation: there are errors during the computation.
@@ -222,4 +226,4 @@ class NUTS(HMC):
         if is_accepted:
             self._accept_cnt += 1
         self._t += 1
-        return self._get_trace(z)
+        return self._get_trace(z)[0]
