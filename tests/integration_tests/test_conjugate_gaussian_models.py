@@ -9,7 +9,7 @@ import networkx
 import numpy as np
 import pytest
 import torch
-from torch.autograd import Variable
+from torch.autograd import Variable, variable
 
 import pyro
 import pyro.distributions as dist
@@ -30,13 +30,9 @@ class GaussianChain(TestCase):
 
     def setUp(self):
         self.mu0 = Variable(torch.Tensor([0.2]))
-        self.data = []
-        self.data.append(Variable(torch.Tensor([-0.1])))
-        self.data.append(Variable(torch.Tensor([0.03])))
-        self.data.append(Variable(torch.Tensor([0.20])))
-        self.data.append(Variable(torch.Tensor([0.10])))
-        self.n_data = Variable(torch.Tensor([len(self.data)]))
-        self.sum_data = self.data[0] + self.data[1] + self.data[2] + self.data[3]
+        self.data = Variable(torch.Tensor([-0.1, 0.03, 0.20, 0.10]))
+        self.n_data = self.data.size(0)
+        self.sum_data = self.data.sum()
 
     def setup_chain(self, N):
         self.N = N  # number of latent variables in the chain
@@ -51,7 +47,7 @@ class GaussianChain(TestCase):
         for k in range(1, self.N):
             lambda_k = self.lambdas[k] + self.lambda_tilde_posts[k - 1]
             self.lambda_posts.append(lambda_k)
-        lambda_N_post = (self.n_data.expand_as(self.lambdas[N]) * self.lambdas[N]) +\
+        lambda_N_post = (self.n_data * variable(1.0).expand_as(self.lambdas[N]) * self.lambdas[N]) +\
             self.lambda_tilde_posts[N - 1]
         self.lambda_posts.append(lambda_N_post)
         self.target_kappas = [None]
@@ -79,9 +75,9 @@ class GaussianChain(TestCase):
             next_mean = mu_latent
 
         mu_N = next_mean
-        for i, x in enumerate(self.data):
-            pyro.sample("obs_%d" % i, dist.Normal(mu_N, torch.pow(self.lambdas[self.N], -0.5)),
-                        obs=x)
+        with pyro.iarange("data", self.data.size(0)):
+            pyro.sample("obs", dist.Normal(mu_N.expand_as(self.data),
+                                           torch.pow(self.lambdas[self.N], -0.5).expand_as(self.data)), obs=self.data)
         return mu_N
 
     def guide(self, reparameterized, difficulty=0.0):
@@ -95,11 +91,11 @@ class GaussianChain(TestCase):
                                             difficulty * (0.1 * torch.randn(1) - 0.53),
                                             requires_grad=True))
             sig_q = torch.exp(log_sig_q)
-            kappa_q = None if k == self.N \
-                else pyro.param("kappa_q_%d" % k,
-                                Variable(self.target_kappas[k].data +
-                                         difficulty * (0.1 * torch.randn(1) - 0.53),
-                                         requires_grad=True))
+            kappa_q = None
+            if k != self.N:
+                kappa_q = pyro.param("kappa_q_%d" % k, Variable(self.target_kappas[k].data +
+                                                                difficulty * (0.1 * torch.randn(1) - 0.53),
+                                                                requires_grad=True))
             mean_function = mu_q if k == self.N else kappa_q * previous_sample + mu_q
             node_flagged = True if self.which_nodes_reparam[k - 1] == 1.0 else False
             Normal = dist.Normal if reparameterized or node_flagged else fakes.NonreparameterizedNormal
@@ -449,7 +445,10 @@ class GaussianPyramidTests(TestCase):
 
         # check graph structure is as expected but only for N=2
         if self.N == 2:
-            guide_trace = pyro.poutine.trace(self.guide, graph_type="dense").get_trace()
+            guide_trace = pyro.poutine.trace(self.guide,
+                                             graph_type="dense").get_trace(reparameterized=reparameterized,
+                                                                           model_permutation=model_permutation,
+                                                                           difficulty=difficulty)
             expected_nodes = set(['log_sig_1R', 'kappa_1_1L', '_INPUT', 'constant_term_mu_latent_1R', '_RETURN',
                                   'mu_latent_1R', 'mu_latent_1', 'constant_term_mu_latent_1', 'mu_latent_1L',
                                   'constant_term_mu_latent_1L', 'log_sig_1L', 'kappa_1_1R', 'kappa_1R_1L', 'log_sig_1'])
