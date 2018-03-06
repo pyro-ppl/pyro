@@ -8,14 +8,14 @@ import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import iter_discrete_traces
-from pyro.infer.util import TensorTree
+from pyro.infer.util import TreeSum
 from pyro.poutine.enumerate_poutine import EnumeratePoutine
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, check_site_shape, is_nan
 
 
 def _compute_upstream_grads(trace):
-    upstream_grads = TensorTree()
+    upstream_grads = TreeSum()
 
     for site in trace.nodes.values():
         if site["type"] != "sample":
@@ -23,8 +23,7 @@ def _compute_upstream_grads(trace):
         score_function_term = site["score_parts"].score_function
         if is_identically_zero(score_function_term):
             continue
-        cond_indep_stack = tuple(site["cond_indep_stack"])
-        upstream_grads.add(cond_indep_stack, score_function_term)
+        upstream_grads.add(site["cond_indep_stack"], score_function_term)
 
     return upstream_grads
 
@@ -85,7 +84,7 @@ class TraceEnum_ELBO(ELBO):
                     continue
 
                 # grab weights introduced by enumeration
-                cond_indep_stack = tuple(model_site["cond_indep_stack"])
+                cond_indep_stack = model_site["cond_indep_stack"]
                 weight = weights.get_upstream(cond_indep_stack)
                 if weight is None:
                     continue
@@ -125,8 +124,9 @@ class TraceEnum_ELBO(ELBO):
                     continue
 
                 # grab weights introduced by enumeration
-                cond_indep_stack = tuple(model_site["cond_indep_stack"])
+                cond_indep_stack = model_site["cond_indep_stack"]
                 weight = weights.get_upstream(cond_indep_stack)
+                print('DEBUG {} weight = {}'.format(name, weight))
                 if weight is None:
                     continue
 

@@ -143,15 +143,28 @@ class MultiViewTensor(dict):
         return '%s(%s)' % (type(self).__name__, ", ".join([str(k) for k in self.keys()]))
 
 
-class TensorTree(object):
+class TreeSum(object):
+    """
+    Data structure to compute cumulative costs along paths in a tree.
+    Typically keys are ``cond_indep_stack``s.
+    """
     def __init__(self):
         self._terms = {}
         self._upstream = {}
+        self._frozen = False
+
+    def copy(self):
+        result = TreeSum()
+        result._terms = self._terms.copy()
+        result._upstream = self._upstream.copy()
+        result._frozen = self._frozen
+        return result
 
     def add(self, key, value):
         """
         Adds a term at one node.
         """
+        assert not self._frozen, 'Cannot call TreeSum.add() after .get_upstream()'
         if key in self._terms:
             self._terms[key] = self._terms[key] + value
         else:
@@ -168,21 +181,30 @@ class TensorTree(object):
             if key:
                 upstream = self.get_upstream(key[:-1])
                 if upstream is not None:
-                    result = upstream if result is None else result + upstream
+                    result = upstream if result is None else upstream + result
             self._upstream[key] = result
+            self._frozen = True
             return result
 
-    def exp(self):
-        # First populate self._upstream
+    def _freeze(self):
         for key in self._terms:
             self.get_upstream(key)
+        self._frozen = True
 
-        # Then exponentiate _only_ the supporting terms of self._upstream.
+    def items(self):
+        self._freeze()
+        return self._upstream.items()
+
+    def exp(self):
+        self._freeze()
+        # Exponentiate _only_ the supporting terms of self._upstream.
         # This restriction is required for .prune() to work correctly.
-        result = TensorTree()
+        result = TreeSum()
         result._upstream = {key: torch_exp(self._upstream[key]) for key in self._terms}
+        result._frozen = True
         return result
 
     def prune(self, key):
+        assert self._frozen, 'Cannot call TreeSum.prune() before freezing'
         self._upstream.pop(key, None)
         self._terms.pop(key, None)

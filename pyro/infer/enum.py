@@ -5,8 +5,14 @@ import functools
 from six.moves.queue import LifoQueue
 
 from pyro import poutine
-from pyro.infer.util import TensorTree
+from pyro.infer.util import TreeSum
 from pyro.poutine.trace import Trace
+
+
+def _iter_discrete_filter(msg):
+    return ((msg["type"] == "sample") and
+            (not msg["is_observed"]) and
+            msg["infer"].get("enumerate"))  # sequential or parallel
 
 
 def _iter_discrete_escape(trace, msg):
@@ -16,36 +22,34 @@ def _iter_discrete_escape(trace, msg):
             (msg["name"] not in trace))
 
 
-def _iter_discrete_extend(trace, site, enum_stack):
+def _iter_discrete_extend(trace, site, enum_tree):
     values = site["fn"].enumerate_support()
     log_probs = site["fn"].log_prob(values).detach()
     for i, (value, log_prob) in enumerate(zip(values, log_probs)):
-        extended_enum_stack = enum_stack + (i,)
         extended_site = site.copy()
         extended_site["value"] = value
-        extended_site["infer"] = site["infer"].copy()
-        extended_site["infer"]["enum_stack"] = extended_enum_stack
-        extended_site["infer"]["enum_log_prob"] = log_prob
         extended_trace = trace.copy()
         extended_trace.add_node(site["name"], **extended_site)
-        yield extended_enum_stack, extended_trace
+        extended_enum_tree = enum_tree.copy()
+        extended_enum_tree.add(site["cond_indep_stack"], (i,))
+        yield extended_trace, extended_enum_tree
 
 
 def _iter_discrete_queue(graph_type, fn, *args, **kwargs):
     queue = LifoQueue()
-    enum_stack = ()
     partial_trace = Trace()
-    queue.put((enum_stack, partial_trace))
+    enum_tree = TreeSum()
+    queue.put((partial_trace, enum_tree))
     while not queue.empty():
-        enum_stack, partial_trace = queue.get()
+        partial_trace, enum_tree = queue.get()
         traced_fn = poutine.trace(poutine.escape(poutine.replay(fn, partial_trace),
                                                  functools.partial(_iter_discrete_escape, partial_trace)),
                                   graph_type=graph_type)
         try:
-            yield traced_fn.get_trace(*args, **kwargs)
+            yield traced_fn.get_trace(*args, **kwargs), enum_tree
         except poutine.util.NonlocalExit as e:
             e.reset_stack()
-            for item in _iter_discrete_extend(traced_fn.trace, e.site, enum_stack):
+            for item in _iter_discrete_extend(traced_fn.trace, e.site, enum_tree):
                 queue.put(item)
 
 
@@ -62,26 +66,26 @@ def iter_discrete_traces(graph_type, fn, *args, **kwargs):
     :param str graph_type: The type of the graph, e.g. "flat" or "dense".
     :param callable fn: A stochastic function.
     :returns: An iterator over (weights, trace) pairs, where weights is a
-        :class:`~pyro.infer.util.TensorTree` object.
+        :class:`~pyro.infer.util.TreeSum` object.
     """
     already_counted = set()  # to avoid double counting
-    for trace in _iter_discrete_queue(graph_type, fn, *args, **kwargs):
+    for trace, enum_tree in _iter_discrete_queue(graph_type, fn, *args, **kwargs):
         # Collect log_probs for each iarange stack.
-        log_probs = TensorTree()
-        enum_stacks = {}
+        log_probs = TreeSum()
         if not already_counted:
             log_probs.add((), 0)  # ensures globals are counted exactly once
         for name, site in trace.nodes.items():
-            if site["type"] == "sample" and "enum_stack" in site["infer"]:
-                cond_indep_stack = tuple(site["cond_indep_stack"])
-                log_probs.add(cond_indep_stack, site["infer"]["enum_log_prob"])
-                enum_stacks[cond_indep_stack] = site["infer"]["enum_stack"]
+            if _iter_discrete_filter(site):
+                cond_indep_stack = site["cond_indep_stack"]
+                log_prob = site["fn"].log_prob(site["value"]).detach()
+                log_probs.add(cond_indep_stack, log_prob)
 
         # Avoid double-counting across traces.
         weights = log_probs.exp()
-        for context in enum_stacks.items():
+        for context in enum_tree.items():
             if context in already_counted:
-                weights.prune(context[0])
+                cond_indep_stack, _ = context
+                weights.prune(cond_indep_stack)
             else:
                 already_counted.add(context)
 
