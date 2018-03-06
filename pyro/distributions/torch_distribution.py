@@ -50,7 +50,7 @@ class TorchDistributionMixin(Distribution):
         :type sample_shape: torch.Size
         :return: A random value or batch of random values (if parameters are
             batched). The shape of the result should be `self.shape()`.
-        :rtype: torch.autograd.Variable
+        :rtype: torch.Tensor
         """
         return self.rsample(sample_shape) if self.has_rsample else self.sample(sample_shape)
 
@@ -98,7 +98,7 @@ class TorchDistributionMixin(Distribution):
         Masks a distribution by a zero-one tensor that is broadcastable to the
         distributions :attr:`~torch.distributions.distribution.Distribution.batch_shape`.
 
-        :param Variable mask: A zero-one valued float tensor.
+        :param torch.Tensor mask: A zero-one valued float tensor.
         :return: A masked copy of this distribution.
         :rtype: :class:`MaskedDistribution`
         """
@@ -119,8 +119,8 @@ class TorchDistribution(torch.distributions.Distribution, TorchDistributionMixin
 
     .. note::
 
-        Parameters and data should be of type :class:`~torch.autograd.Variable`
-        and all methods return type :class:`~torch.autograd.Variable` unless
+        Parameters and data should be of type :class:`~torch.Tensor`
+        and all methods return type :class:`~torch.Tensor` unless
         otherwise noted.
 
     **Tensor Shapes**:
@@ -252,7 +252,7 @@ class MaskedDistribution(TorchDistribution):
     Masks a distribution by a zero-one tensor that is broadcastable to the
     distribution's :attr:`~torch.distributions.distribution.Distribution.batch_shape`.
 
-    :param Variable mask: A zero-one valued float tensor.
+    :param torch.Tensor mask: A zero-one valued float tensor.
     """
     def __init__(self, base_dist, mask):
         if broadcast_shape(mask.shape, base_dist.batch_shape) != base_dist.batch_shape:

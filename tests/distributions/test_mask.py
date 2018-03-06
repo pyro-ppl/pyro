@@ -2,16 +2,16 @@ from __future__ import absolute_import, division, print_function
 
 import pytest
 import torch
-from torch.autograd import Variable, variable
+from torch import tensor
 
 from pyro.distributions.torch import Bernoulli
 from tests.common import assert_equal
 
 
 def checker_mask(shape):
-    mask = variable(0)
+    mask = tensor(0)
     for size in shape:
-        mask = mask.unsqueeze(-1) + Variable(torch.arange(size))
+        mask = mask.unsqueeze(-1) + torch.arange(size)
     return mask.fmod(2)
 
 

@@ -6,7 +6,6 @@ import numpy as np
 import pytest
 import scipy.stats as sp
 import torch
-from torch.autograd import Variable
 
 import pyro.distributions as dist
 from tests.common import assert_equal
@@ -19,22 +18,22 @@ class TestCategorical(TestCase):
 
     def setUp(self):
         n = 1
-        self.ps = Variable(torch.Tensor([0.1, 0.6, 0.3]))
-        self.batch_ps = Variable(torch.Tensor([[0.1, 0.6, 0.3], [0.2, 0.4, 0.4]]))
-        self.n = Variable(torch.Tensor([n]))
-        self.test_data = Variable(torch.Tensor([2]))
+        self.ps = torch.tensor([0.1, 0.6, 0.3])
+        self.batch_ps = torch.tensor([[0.1, 0.6, 0.3], [0.2, 0.4, 0.4]])
+        self.n = torch.tensor([n])
+        self.test_data = torch.tensor([2])
         self.analytic_mean = n * self.ps
-        one = Variable(torch.ones(3))
+        one = torch.ones(3)
         self.analytic_var = n * torch.mul(self.ps, one.sub(self.ps))
 
         # Discrete Distribution
-        self.d_ps = Variable(torch.Tensor([[0.2, 0.3, 0.5], [0.1, 0.1, 0.8]]))
-        self.d_test_data = Variable(torch.Tensor([[0], [5]]))
+        self.d_ps = torch.tensor([[0.2, 0.3, 0.5], [0.1, 0.1, 0.8]])
+        self.d_test_data = torch.tensor([[0], [5]])
 
         self.n_samples = 50000
 
-        self.support_non_vec = torch.Tensor([0, 1, 2])
-        self.support = torch.Tensor([[0, 0], [1, 1], [2, 2]])
+        self.support_non_vec = torch.tensor([0, 1, 2])
+        self.support = torch.tensor([[0, 0], [1, 1], [2, 2]])
 
     def test_log_pdf(self):
         log_px_torch = dist.Categorical(self.ps).log_prob(self.test_data).sum().item()
@@ -74,7 +73,7 @@ def ps(request):
 
 
 def modify_params_using_dims(ps, dim):
-    return Variable(torch.Tensor(wrap_nested(ps, dim-1)))
+    return torch.tensor(wrap_nested(ps, dim-1))
 
 
 def test_support_dims(dim, ps):

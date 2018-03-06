@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 import numbers
 
 import torch
-from torch.autograd import Variable
 
 from pyro.distributions.torch_distribution import TorchDistributionMixin
 
@@ -60,12 +59,10 @@ class LogNormal(torch.distributions.LogNormal, TorchDistributionMixin):
 
 class Multinomial(torch.distributions.Multinomial, TorchDistributionMixin):
     def __init__(self, ps, n=1):
-        if isinstance(n, Variable):
-            n = n.data
         if not isinstance(n, numbers.Number):
             if n.max() != n.min():
                 raise NotImplementedError('inhomogeneous n is not supported')
-            n = n.view(-1)[0]
+            n = n.data.view(-1)[0]
         n = int(n)
         super(Multinomial, self).__init__(n, probs=ps)
 

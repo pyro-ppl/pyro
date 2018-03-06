@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 import math
 
 import torch
-from torch.autograd import Variable
 from torch.distributions import constraints
 from torch.distributions.utils import lazy_property
 
@@ -23,11 +22,11 @@ class SparseMultivariateNormal(TorchDistribution):
     Here D is a diagonal vector and ``W`` is a matrix of size ``M x N``. The
     computation will be beneficial when ``M << N``.
 
-    :param torch.autograd.Variable loc: Mean.
+    :param torch.Tensor loc: Mean.
         Must be in 1 dimensional of size N.
-    :param torch.autograd.Variable D_term: D term of covariance matrix.
+    :param torch.Tensor D_term: D term of covariance matrix.
         Must be in 1 dimensional of size N.
-    :param torch.autograd.Variable W_term: W term of covariance matrix.
+    :param torch.Tensor W_term: W term of covariance matrix.
         Must be in 2 dimensional of size M x N.
     :param float trace_term: A optional term to be added into Mahalabonis term
         according to p(y) = N(y|loc, cov).exp(-1/2 * trace_term).
@@ -71,7 +70,7 @@ class SparseMultivariateNormal(TorchDistribution):
         A = self.covariance_matrix_W_term / Dsqrt
         At_A = A.t().matmul(A)
         N = A.size(1)
-        Id = Variable(torch.eye(N, N, out=A.data.new(N, N)))
+        Id = torch.eye(N, N, out=A.data.new(N, N))
         K = Id + At_A
         L = K.potrf(upper=False)
         return Dsqrt.unsqueeze(1) * L
@@ -98,7 +97,7 @@ class SparseMultivariateNormal(TorchDistribution):
         """
         W_Dinv = W / D
         M = W.size(0)
-        Id = torch.eye(M, M, out=Variable(W.data.new(M, M)))
+        Id = torch.eye(M, M, out=torch.tensor(W.data.new(M, M)))
         K = Id + W_Dinv.matmul(W.t())
         L = K.potrf(upper=False)
         if y.dim() == 1:

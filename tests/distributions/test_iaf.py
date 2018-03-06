@@ -5,7 +5,6 @@ from unittest import TestCase
 import numpy as np
 import pytest
 import torch
-from torch.autograd import Variable
 
 from pyro.distributions.iaf import InverseAutoregressiveFlow
 from pyro.nn import AutoRegressiveNN
@@ -24,7 +23,7 @@ class InverseAutoregressiveFlowTests(TestCase):
         def nonzero(x):
             return torch.sign(torch.abs(x))
 
-        x = Variable(torch.randn(1, input_dim))
+        x = torch.randn(1, input_dim)
         iaf_x = iaf(x)
         analytic_ldt = iaf.log_abs_det_jacobian(x, iaf_x).data.sum()
 
@@ -32,7 +31,7 @@ class InverseAutoregressiveFlowTests(TestCase):
             for k in range(input_dim):
                 epsilon_vector = torch.zeros(1, input_dim)
                 epsilon_vector[0, j] = self.epsilon
-                iaf_x_eps = iaf(x + Variable(epsilon_vector))
+                iaf_x_eps = iaf(x + epsilon_vector)
                 delta = (iaf_x_eps - iaf_x) / self.epsilon
                 jacobian[j, k] = float(delta[0, k].data.sum())
 
@@ -71,10 +70,10 @@ class AutoRegressiveNNTests(TestCase):
         for output_index in range(multiplier):
             for j in range(input_dim):
                 for k in range(input_dim):
-                    x = Variable(torch.randn(1, input_dim))
+                    x = torch.randn(1, input_dim)
                     epsilon_vector = torch.zeros(1, input_dim)
                     epsilon_vector[0, j] = self.epsilon
-                    delta = (arn(x + Variable(epsilon_vector)) - arn(x)) / self.epsilon
+                    delta = (arn(x + epsilon_vector) - arn(x)) / self.epsilon
                     jacobian[j, k] = float(delta[0, k + output_index * input_dim])
 
             permutation = arn.get_permutation()
