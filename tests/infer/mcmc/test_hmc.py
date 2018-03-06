@@ -177,7 +177,7 @@ def test_logistic_regression():
         posterior.append(trace.nodes['beta']['value'])
     posterior_mean = torch.mean(torch.stack(posterior), 0)
     assert_equal(rmse(true_coefs, posterior_mean).item(), 0.0, prec=0.05)
-    
+
 
 def test_bernoulli_beta():
     def model(data):
@@ -258,7 +258,7 @@ def test_logistic_regression_with_dual_averaging():
     posterior_mean = torch.mean(torch.stack(posterior), 0)
     assert_equal(rmse(true_coefs, posterior_mean).item(), 0.0, prec=0.05)
 
-    
+
 def test_bernoulli_beta_with_dual_averaging():
     def model(data):
         alpha = pyro.param('alpha', variable([1.1, 1.1], requires_grad=True))
