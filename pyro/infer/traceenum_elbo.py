@@ -88,13 +88,10 @@ class TraceEnum_ELBO(ELBO):
                 if weight is None:
                     continue
 
-                model_log_pdf = model_site["batch_log_pdf"]
-                if model_site["is_observed"]:
-                    elbo_particle += (model_log_pdf * weight).sum().item()
-                else:
-                    guide_log_pdf = guide_trace.nodes[name]["batch_log_pdf"]
-                    log_r = model_log_pdf - guide_log_pdf
-                    elbo_particle += (log_r * weight).sum().item()
+                log_r = model_site["batch_log_pdf"]
+                if not model_site["is_observed"]:
+                    log_r = log_r - guide_trace.nodes[name]["batch_log_pdf"]
+                elbo_particle += (log_r * weight).sum().item()
 
             elbo += elbo_particle / self.num_particles
 
@@ -125,29 +122,25 @@ class TraceEnum_ELBO(ELBO):
                 # grab weights introduced by enumeration
                 cond_indep_stack = model_site["cond_indep_stack"]
                 weight = weights.get_upstream(cond_indep_stack)
-                print('DEBUG {} weight = {}'.format(name, weight))
                 if weight is None:
                     continue
 
                 model_log_pdf = model_site["batch_log_pdf"]
-                if model_site["is_observed"]:
-                    model_log_pdf_sum = (model_site["batch_log_pdf"] * weight).sum()
-                    elbo_particle += model_log_pdf_sum.item()
-                    surrogate_elbo_particle = surrogate_elbo_particle + model_log_pdf_sum
-                else:
-                    guide_log_pdf, _, entropy_term = guide_trace.nodes[name]["score_parts"]
-                    score_function_term = upstream_grads.get_upstream(cond_indep_stack)
-                    log_r = model_log_pdf - guide_log_pdf
-                    surrogate_elbo_site = model_log_pdf
+                log_r = model_log_pdf
+                surrogate_elbo_site = model_log_pdf
+                score_function_term = upstream_grads.get_upstream(cond_indep_stack)
 
+                if not model_site["is_observed"]:
+                    guide_log_pdf, _, entropy_term = guide_trace.nodes[name]["score_parts"]
+                    log_r = log_r - guide_log_pdf
                     if not is_identically_zero(entropy_term):
                         surrogate_elbo_site = surrogate_elbo_site - entropy_term
 
-                    if score_function_term is not None:
-                        surrogate_elbo_site = surrogate_elbo_site + log_r.detach() * score_function_term
+                if score_function_term is not None:
+                    surrogate_elbo_site = surrogate_elbo_site + log_r.detach() * score_function_term
 
-                    elbo_particle += (log_r * weight).sum().item()
-                    surrogate_elbo_particle = surrogate_elbo_particle + (surrogate_elbo_site * weight).sum()
+                elbo_particle += (log_r * weight).sum().item()
+                surrogate_elbo_particle = surrogate_elbo_particle + (surrogate_elbo_site * weight).sum()
 
             elbo += elbo_particle / self.num_particles
 
