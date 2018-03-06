@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import math
 import warnings
 
 import pyro
@@ -59,10 +58,10 @@ class TraceEnum_ELBO(ELBO):
                 model_trace = prune_subsample_sites(model_trace)
 
                 model_trace.compute_batch_log_pdf()
-                guide_trace.compute_score_parts()
                 for site in model_trace.nodes.values():
                     if site["type"] == "sample":
                         check_site_shape(site, self.max_iarange_nesting)
+                guide_trace.compute_score_parts()
                 for site in guide_trace.nodes.values():
                     if site["type"] == "sample":
                         check_site_shape(site, self.max_iarange_nesting)
@@ -100,7 +99,7 @@ class TraceEnum_ELBO(ELBO):
             elbo += elbo_particle / self.num_particles
 
         loss = -elbo
-        if math.isnan(loss):
+        if is_nan(loss):
             warnings.warn('Encountered NAN loss')
         return loss
 
