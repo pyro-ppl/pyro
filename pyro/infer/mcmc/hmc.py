@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from collections import OrderedDict
+import math
 
 import torch
 
@@ -8,7 +9,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer.mcmc.trace_kernel import TraceKernel
-from pyro.ops.integrator import velocity_verlet
+from pyro.ops.integrator import velocity_verlet, single_step_velocity_verlet
 from pyro.util import ng_ones, ng_zeros, is_nan, is_inf
 
 
@@ -56,10 +57,15 @@ class HMC(TraceKernel):
 
     def _reset(self):
         self._t = 0
+        self._accept_cnt = 0
+        self._step_size_adapted = self.step_size if self.step_size is not None else 1
+        self._trajectory_length = (self._step_size_adapted * self.num_steps
+                                   if self.num_steps is not None else 2 * math.pi)
+        self._target_accept_logprob = math.log(0.8)
+
         self._r_dist = OrderedDict()
         self._args = None
         self._kwargs = None
-        self._accept_cnt = 0
         self._prototype_trace = None
 
     def _validate_trace(self, trace):
@@ -69,6 +75,28 @@ class HMC(TraceKernel):
         trace_log_pdf = trace.log_pdf()
         if is_nan(trace_log_pdf) or is_inf(trace_log_pdf):
             raise ValueError('Model specification incorrect - trace log pdf is NaN, Inf or 0.')
+
+    def _make_reasonable_stepsize(self, z):
+        r = {name: pyro.sample("r_{}_t={}".format(name, self._t), self._r_dist[name]) for name in self._r_dist}
+        energy_current = self._energy(z, r)
+        z_new, r_new, z_grads, potential_energy = single_step_velocity_verlet(
+            z, r, self._potential_energy, self._step_size_adapted)
+        energy_new = potential_energy + self._kinetic_energy(r_new)
+        delta_energy = energy_new - energy_current
+        # This target_accept_logprob is 0.5 in NUTS paper, 0.8 in Stan and is
+        # different to the target_accept_logprob for Dual Averaging algorithm.
+        # We need to discuss which one is better.
+        target_accept_logprob = self._target_accept_logprob
+        direction = 1 if target_accept_logprob < -delta_energy else -1
+        step_size_scale = 2 ** direction
+        direction_new = direction
+        # keep scale step_size until accept_logprob crosses its target
+        while direction_new == direction:
+            self._step_size_adapted = step_size_scale * self._step_size_adapted
+            z_new, r_new, z_grads, potential_energy = single_step_velocity_verlet(
+                z_new, r_new, self._potential_energy, self._step_size_adapted)
+            energy_new = potential_energy + self._kinetic_energy(r_new)
+            direction_new = 1 if target_accept_logprob < -delta_energy else -1
 
     def initial_trace(self):
         return self._prototype_trace
