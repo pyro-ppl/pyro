@@ -175,7 +175,7 @@ def scale_tensor(tensor, scale):
 
 def torch_eye(n, m=None, out=None):
     """
-    Like :func:`torch.eye()`, but works with cuda tensors.
+    Like :func:`torch.eye`, but works with cuda tensors.
     """
     if m is None:
         m = n
