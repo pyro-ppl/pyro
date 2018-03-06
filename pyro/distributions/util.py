@@ -48,7 +48,7 @@ def copy_docs_from(source_class, full_text=False):
 def is_identically_zero(x):
     """
     Check if argument is exactly the number zero. True for the number zero;
-    false for other numbers; false for ``torch.autograd.Variable``s.
+    false for other numbers; false for :class:`~torch.autograd.Variable`s.
     """
     return isinstance(x, numbers.Number) and x == 0
 
@@ -56,7 +56,7 @@ def is_identically_zero(x):
 def is_identically_one(x):
     """
     Check if argument is exactly the number one. True for the number one;
-    false for other numbers; false for ``torch.autograd.Variable``s.
+    false for other numbers; false for :class:`~torch.autograd.Variable`s.
     """
     return isinstance(x, numbers.Number) and x == 1
 
@@ -175,7 +175,7 @@ def scale_tensor(tensor, scale):
 
 def torch_eye(n, m=None, out=None):
     """
-    Like `torch.eye()`, but works with cuda tensors.
+    Like :func:`torch.eye()`, but works with cuda tensors.
     """
     if m is None:
         m = n
@@ -194,7 +194,7 @@ def torch_eye(n, m=None, out=None):
 
 def torch_multinomial(input, num_samples, replacement=False):
     """
-    Like `torch.multinomial()` but works with cuda tensors.
+    Like :func:`torch.multinomial` but works with cuda tensors.
     Does not support keyword argument `out`.
     """
     if input.is_cuda:
@@ -205,7 +205,7 @@ def torch_multinomial(input, num_samples, replacement=False):
 
 def torch_sign(value):
     """
-    Like ``torch.sign()`` but also works for numbers.
+    Like :func:`torch.sign`` but also works for numbers.
     """
     if isinstance(value, numbers.Number):
         return (value > 0) - (value < 0)

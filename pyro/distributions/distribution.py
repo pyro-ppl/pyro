@@ -72,8 +72,8 @@ class Distribution(object):
         :param torch.autograd.Variable x: A single value or a batch of values
             batched along axis 0.
         :return: log probability densities as a one-dimensional
-            `torch.autograd.Variable` with same batch size as value and params.
-            The shape of the result should be `self.batch_size()`.
+            :class:`~torch.autograd.Variable` with same batch size as value and
+            params. The shape of the result should be ``self.batch_size``.
         :rtype: torch.autograd.Variable
         """
         raise NotImplementedError

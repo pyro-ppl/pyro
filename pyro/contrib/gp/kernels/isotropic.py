@@ -9,7 +9,8 @@ from .kernel import Kernel
 
 def _torch_sqrt(x, eps=1e-18):
     """
-    A convenient function to avoid the NaN gradient issue of ``torch.sqrt`` at 0.
+    A convenient function to avoid the NaN gradient issue of :func:`torch.sqrt`
+    at 0.
     """
     # Ref: https://github.com/pytorch/pytorch/issues/2421
     return (x + eps).sqrt()

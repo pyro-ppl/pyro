@@ -170,18 +170,18 @@ def iarange(name, size=None, subsample_size=None, subsample=None, use_cuda=None)
     """
     Context manager for conditionally independent ranges of variables.
 
-    ``iarange`` is similar to ``torch.arange`` in that it yields an array
-    of indices by which other tensors can be indexed. ``iarange`` differs from
-    ``torch.arange`` in that it also informs inference algorithms that the
-    variables being indexed are conditionally independent. To do this,
-    ``iarange`` is a provided as context manager rather than a function, and
-    users must guarantee that all computation within an ``iarange`` context
-    is conditionally independent::
+    :func:`iarange` is similar to :func:`torch.arange` in that it yields an
+    array of indices by which other tensors can be indexed. :func:`iarange`
+    differs from :func:`torch.arange` in that it also informs inference
+    algorithms that the variables being indexed are conditionally independent.
+    To do this, :func:`iarange` is a provided as context manager rather than a
+    function, and users must guarantee that all computation within an
+    :func:`iarange` context is conditionally independent::
 
         with iarange("name", size) as ind:
             # ...do conditionally independent stuff with ind...
 
-    Additionally, ``iarange`` can take advantage of the conditional
+    Additionally, :func:`iarange` can take advantage of the conditional
     independence assumptions by subsampling the indices and informing inference
     algorithms to scale various computed values. This is typically used to
     subsample minibatches of data::

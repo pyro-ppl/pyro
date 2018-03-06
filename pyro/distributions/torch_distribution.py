@@ -13,7 +13,7 @@ class TorchDistributionMixin(Distribution):
 
     This is mainly useful for wrapping existing PyTorch distributions for
     use in Pyro.  Derived classes must first inherit from
-    :class:`torch.distributions.Distribution` and then inherit from
+    :class:`torch.distributions.distribution.Distribution` and then inherit from
     :class:`TorchDistributionMixin`.
     """
     @property
@@ -38,8 +38,9 @@ class TorchDistributionMixin(Distribution):
         Samples a random value.
 
         This is reparameterized whenever possible, calling
-        :meth:`~torch.distributions.Distribution.rsample` for reparameterized
-        distributions and :meth:`~torch.distributions.Distribution.sample` for
+        :meth:`~torch.distributions.distribution.Distribution.rsample` for
+        reparameterized distributions and
+        :meth:`~torch.distributions.distribution.Distribution.sample` for
         non-reparameterized distributions.
 
         :param sample_shape: the size of the iid batch to be drawn from the
@@ -115,8 +116,9 @@ class TorchDistribution(torch.distributions.Distribution, TorchDistributionMixin
 
     .. note::
 
-        Parameters and data should be of type `torch.autograd.Variable` and all
-        methods return type `torch.autograd.Variable` unless otherwise noted.
+        Parameters and data should be of type :class:`~torch.autograd.Variable`
+        and all methods return type :class:`~torch.autograd.Variable` unless
+        otherwise noted.
 
     **Tensor Shapes**:
 

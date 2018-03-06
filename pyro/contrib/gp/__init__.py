@@ -13,11 +13,10 @@ class Parameterized(nn.Module):
     Parameterized class.
 
     This is a base class for other classes in Gaussian Process.
-    By default, a parameter will be a ``torch.nn.Parameter`` containing ``torch.FloatTensor``.
+    By default, a parameter will be a :class:`torch.nn.Parameter` containing :class:`torch.FloatTensor`.
     To cast them to the correct data type or GPU device, we can call methods such as
     ``.double()``, ``.cuda(device=0)``,...
-    See `torch.nn.Module
-    <http://pytorch.org/docs/master/nn.html#torch.nn.Module>`_ for more information.
+    See :class:`torch.nn.Module` for more information.
 
     :param str name: Name of this module.
     """
@@ -36,7 +35,8 @@ class Parameterized(nn.Module):
         Sets a prior to a parameter.
 
         :param str param: Name of a parameter.
-        :param pyro.distributions.Distribution prior: A prior distribution for random variable ``param``.
+        :param pyro.distributions.distribution.Distribution prior: A prior
+            distribution for random variable ``param``.
         """
         self._priors[param] = prior
 
@@ -46,9 +46,7 @@ class Parameterized(nn.Module):
 
         :param str param: Name of a parameter.
         :param torch.distributions.constraints.Constraint constraint: A Pytorch constraint.
-            See `Pytorch's docs
-            <http://pytorch.org/docs/master/distributions.html#module-torch.distributions.constraints>`_
-            for a list of constraints.
+            See :mod:`torch.distributions.constraints` for a list of constraints.
         """
         self._constraints[param] = constraint
 

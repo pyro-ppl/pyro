@@ -8,9 +8,9 @@ def velocity_verlet(z, r, potential_fn, step_size, num_steps=1):
     Second order symplectic integrator that uses the velocity verlet algorithm.
 
     :param dict z: dictionary of sample site names and their current values
-        (type ``torch.autograd.Variable``).
+        (type :class:`~torch.autograd.Variable`).
     :param dict r: dictionary of sample site names and corresponding momenta
-        (type ``torch.autograd.Variable``).
+        (type :class:`~torch.autograd.Variable`).
     :param callable potential_fn: function that returns potential energy given z
         for each sample site. The negative gradient of the function with respect
         to ``z`` determines the rate of change of the corresponding sites'
