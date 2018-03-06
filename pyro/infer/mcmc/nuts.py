@@ -162,6 +162,9 @@ class NUTS(HMC):
 
     def sample(self, trace):
         z = {name: node["value"] for name, node in trace.iter_stochastic_nodes()}
+        # automatically transform `z` to unconstrained space, if needed.
+        for name, transform in self.transforms.items():
+            z[name] = transform(z[name])
         r = {name: pyro.sample("r_{}_t={}".format(name, self._t), self._r_dist[name]) for name in self._r_dist}
 
         # Ideally, following a symplectic integrator trajectory, the energy is constant.
@@ -222,4 +225,7 @@ class NUTS(HMC):
         if is_accepted:
             self._accept_cnt += 1
         self._t += 1
+        # get trace with the constrained values for `z`.
+        for name, transform in self.transforms.items():
+            z[name] = transform.inv(z[name])
         return self._get_trace(z)
