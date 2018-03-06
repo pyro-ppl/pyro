@@ -129,6 +129,8 @@ if __name__ == "__main__":
                         help="model name to match against model id, partial match (e.g. *NAME*) is acceptable.")
     parser.add_argument("-b", "--suffix", default="current_branch",
                         help="suffix to append to the cprofile output dump.")
+    parser.add_argument("-d", "--benchmark_dir", default=PROF_DIR,
+                        help="directory to save profiling benchmarks.")
     args = parser.parse_args()
     search_regexp = [re.compile(".*" + m + ".*") for m in args.models]
     profile_ids = []
@@ -144,6 +146,6 @@ if __name__ == "__main__":
         pr = cProfile.Profile()
         fn = profile_fn(test_model)
         pr.runctx("fn()", globals(), locals())
-        profile_file = os.path.join(PROF_DIR, test_model.model_id + "#" + args.suffix + ".prof")
+        profile_file = os.path.join(args.benchmark_dir, test_model.model_id + "#" + args.suffix + ".prof")
         pr.dump_stats(profile_file)
         print("Results in - {}".format(profile_file))

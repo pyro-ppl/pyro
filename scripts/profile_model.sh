@@ -1,44 +1,40 @@
 #!/usr/bin/env bash
-set -x
+
+set -xe
+
+function _cleanup() {
+    [[ ${#DIRSTACK[@]} -gt 1 ]] && popd
+    [[ -d ${REF_TMP_DIR} ]] && rm -rf ${REF_TMP_DIR}
+}
+
+trap _cleanup EXIT
+
+# Reference is with respect to the `dev` branch, by default.
+REF_HEAD=${1:-dev}
+REF_COMMIT=$(git rev-parse --short HEAD)
+BENCHMARK_FILE=tests/perf/test_benchmark.py
+BENCHMARK_DIR=$( cd $(dirname "$0")/../.benchmarks ; pwd -P )
+REF_TMP_DIR=.tmp_test_dir
 
 CURRENT_HEAD=$(git rev-parse --abbrev-ref HEAD)
 CURRENT_COMMIT=$(git rev-parse --short HEAD)
 # If the current state is detached head, store current commit info instead.
 if [ ${CURRENT_HEAD} = 'HEAD' ]; then
-    git checkout -b tmp
     CURRENT_HEAD=$(git rev-parse HEAD)
 fi
-# Reference is with respect to the `dev` branch.
-REF_HEAD=${1:-dev}
-REF_COMMIT=$(git rev-parse --short HEAD)
-BENCHMARK_FILE=tests/perf/test_benchmark.py
-IS_BENCHMARK_FILE_IN_DEV=1
-REF_EXIT_CODE=0
-IS_DIRTY=0
 
-# If uncommitted changes exist, stash these and set a flag.
-git diff-index --quiet HEAD -- || IS_DIRTY=1
-git stash
-git checkout ${REF_HEAD}
+# clone the repo into the temporary directory and run benchmark tests
+git clone -b ${REF_HEAD} --single-branch https://github.com/uber/pyro.git ${REF_TMP_DIR}
+pushd ${REF_TMP_DIR}
 
 # Skip if benchmark utils are not on `dev` branch.
 if [ -e ${BENCHMARK_FILE} ]; then
-    python tests/perf/test_benchmark.py --models "${@:2}" --suffix ${REF_HEAD}${REF_COMMIT}
-    REF_EXIT_CODE=$?
-else
-    IS_BENCHMARK_FILE_IN_DEV=0
+    python tests/perf/test_benchmark.py --models "${@:2}" --suffix ${REF_HEAD}${REF_COMMIT} \
+        --benchmark_dir ${BENCHMARK_DIR} || echo "ERR: Failed on branch upstream/${REF_HEAD}."
 fi
 
-# Check out the initial git state and pop stash to get uncommitted changes back
-git checkout ${CURRENT_HEAD}
-if [ ${IS_DIRTY} = 1 ]; then
-    git stash pop
-fi
-
-if [ ${REF_EXIT_CODE} != 0 ]; then
-    echo 'Failure on reference branch.'
-    exit 1
-fi
+# cd back into the current repo to run comparison benchmarks
+popd
 
 # Run profiling on current commit
 python tests/perf/test_benchmark.py --models "${@:2}" --suffix ${CURRENT_HEAD}${CURRENT_COMMIT}
