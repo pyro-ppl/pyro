@@ -6,7 +6,7 @@ import os
 
 import pytest
 import torch
-from torch.autograd import Variable
+from torch.autograd import Variable, variable
 
 import pyro
 import pyro.distributions as dist
@@ -91,3 +91,41 @@ def test_logistic_regression():
         posterior.append(trace.nodes['beta']['value'])
     posterior_mean = torch.mean(torch.stack(posterior), 0)
     assert_equal(rmse(true_coefs, posterior_mean).item(), 0.0, prec=0.05)
+
+
+def test_bernoulli_beta():
+    def model(data):
+        alpha = pyro.param('alpha', Variable(torch.Tensor([1.1, 1.1]), requires_grad=True))
+        beta = pyro.param('beta', Variable(torch.Tensor([1.1, 1.1]), requires_grad=True))
+        p_latent = pyro.sample("p_latent", dist.Beta(alpha, beta))
+        pyro.observe("obs", dist.Bernoulli(p_latent), data)
+        return p_latent
+
+    nuts_kernel = NUTS(model, step_size=0.02)
+    mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100)
+    posterior = []
+    true_probs = Variable(torch.Tensor([0.9, 0.1]))
+    data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
+    for trace, _ in mcmc_run._traces(data):
+        posterior.append(trace.nodes['p_latent']['value'])
+    posterior_mean = torch.mean(torch.stack(posterior), 0)
+    assert_equal(posterior_mean.data, true_probs.data, prec=0.01)
+
+
+def test_normal_gamma():
+    def model(data):
+        rate = pyro.param('rate', variable([1.0, 1.0], requires_grad=True))
+        concentration = pyro.param('conc', variable([1.0, 1.0], requires_grad=True))
+        p_latent = pyro.sample('p_latent', dist.Gamma(rate, concentration))
+        pyro.observe("obs", dist.Normal(3, p_latent), data)
+        return p_latent
+
+    nuts_kernel = NUTS(model, step_size=0.01)
+    mcmc_run = MCMC(nuts_kernel, num_samples=200, warmup_steps=100)
+    posterior = []
+    true_std = variable([0.5, 2])
+    data = dist.Normal(3, true_std).sample(sample_shape=(torch.Size((2000,))))
+    for trace, _ in mcmc_run._traces(data):
+        posterior.append(trace.nodes['p_latent']['value'])
+    posterior_mean = torch.mean(torch.stack(posterior), 0)
+    assert_equal(posterior_mean, true_std, prec=0.02)

@@ -4,6 +4,7 @@ from collections import OrderedDict
 import math
 
 import torch
+from torch.distributions import biject_to, constraints
 
 import pyro
 import pyro.distributions as dist
@@ -19,9 +20,10 @@ class HMC(TraceKernel):
     Simple Hamiltonian Monte Carlo kernel, where ``step_size`` and ``num_steps``
     need to be explicitly specified by the user.
 
-    **Reference**
-    "MCMC Using Hamiltonian Dynamics", R Neal. `pdf <https://arxiv.org/pdf/1206.1901.pdf>`_
+    References
 
+    [1] `MCMC Using Hamiltonian Dynamics`,
+    Radford M. Neal
 
     :param model: python callable containing pyro primitives.
     :param float step_size: determines the size of a single step taken by the
@@ -30,12 +32,20 @@ class HMC(TraceKernel):
     :param int num_steps: The number of discrete steps over which to simulate
         Hamiltonian dynamics. The state at the end of the trajectory is
         returned as the proposal.
+    :param dict transforms: Optional dictionary that specifies a transform
+        for a sample site with constrained support to unconstrained space. The
+        transform should be invertible, and implement `log_abs_det_jacobian`.
+        If not specified and the model has sites with constrained support,
+        automatic transformations will be applied, as specified in
+        :mod:`torch.distributions.constraint_registry`.
     """
 
-    def __init__(self, model, step_size=0.5, num_steps=3):
+    def __init__(self, model, step_size=0.5, num_steps=3, transforms=None):
         self.model = model
         self.step_size = step_size
         self.num_steps = num_steps
+        self.transforms = {} if transforms is None else transforms
+        self._automatic_transform_enabled = True if transforms is None else False
         self._reset()
         super(HMC, self).__init__()
 
@@ -51,7 +61,17 @@ class HMC(TraceKernel):
         return 0.5 * torch.sum(torch.stack([r[name]**2 for name in r]))
 
     def _potential_energy(self, z):
-        return -self._get_trace(z).log_pdf()
+        # Since the model is specified in the constrained space, transform the
+        # unconstrained R.V.s `z` to the constrained space.
+        z_constrained = z.copy()
+        for name, transform in self.transforms.items():
+            z_constrained[name] = transform.inv(z_constrained[name])
+        trace = self._get_trace(z_constrained)
+        potential_energy = -trace.log_pdf()
+        # adjust by the jacobian for this transformation.
+        for name, transform in self.transforms.items():
+            potential_energy += transform.log_abs_det_jacobian(z_constrained[name], z[name]).sum()
+        return potential_energy
 
     def _energy(self, z, r):
         return self._kinetic_energy(r) + self._potential_energy(z)
@@ -108,6 +128,11 @@ class HMC(TraceKernel):
             direction_new = 1 if target_accept_logprob < -delta_energy else -1
         return step_size
 
+    def _validate_trace(self, trace):
+        trace_log_pdf = trace.log_pdf()
+        if is_nan(trace_log_pdf) or is_inf(trace_log_pdf):
+            raise ValueError('Model specification incorrect - trace log pdf is NaN, Inf or 0.')
+
     def initial_trace(self):
         return self._prototype_trace
 
@@ -123,10 +148,9 @@ class HMC(TraceKernel):
             r_mu = torch.zeros_like(node['value'])
             r_sigma = torch.ones_like(node['value'])
             self._r_dist[name] = dist.Normal(mu=r_mu, sigma=r_sigma)
-
-        trace_log_pdf = trace.log_pdf()
-        if is_nan(trace_log_pdf) or is_inf(trace_log_pdf):
-            raise ValueError('Model specification incorrect - trace log pdf is NaN, Inf or 0.')
+        if node['fn'].support is not constraints.real and self._automatic_transform_enabled:
+            self.transforms[name] = biject_to(node['fn'].support).inv
+        self._validate_trace(self._prototype_trace)
 
         if self._adapted:
             z = {name: node['value'] for name, node in trace.iter_stochastic_nodes()}
@@ -139,6 +163,9 @@ class HMC(TraceKernel):
 
     def sample(self, trace):
         z = {name: node['value'] for name, node in trace.iter_stochastic_nodes()}
+        # automatically transform `z` to unconstrained space, if needed.
+        for name, transform in self.transforms.items():
+            z[name] = transform(z[name])
         r = {name: pyro.sample('r_{}_t={}'.format(name, self._t), self._r_dist[name])
              for name in self._r_dist}
         if self._adapted:
@@ -152,7 +179,7 @@ class HMC(TraceKernel):
                                        self._potential_energy,
                                        step_size,
                                        num_steps)
-        # apply Metropolis correction
+        # apply Metropolis correction.
         energy_proposal = self._energy(z_new, r_new)
         energy_current = self._energy(z, r)
         delta_energy = energy_proposal - energy_current
@@ -172,6 +199,10 @@ class HMC(TraceKernel):
                 _, log_step_size_avg = self._adapted_scheme.get_state()
                 self._adapted_step_size = math.exp(log_step_size_avg)
         self._t += 1
+
+        # get trace with the constrained values for `z`.
+        for name, transform in self.transforms.items():
+            z[name] = transform.inv(z[name])
         return self._get_trace(z)
 
     def diagnostics(self):
