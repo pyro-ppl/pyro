@@ -197,7 +197,7 @@ class NUTS(HMC):
         # For another version of NUTS which uses multinomial sampling instead of slice sampling, see
         #     `A Conceptual Introduction to Hamiltonian Monte Carlo` by Michael Betancourt.
         slice_var = pyro.sample("slicevar_t={}".format(self._t),
-                                dist.Uniform(ng_zeros(1), torch.exp(-self._energy(z, r))))
+                                dist.Uniform(ng_zeros(1), torch.exp(-energy_current)))
         log_slice = slice_var.log()
 
         z_left = z_right = z
@@ -240,7 +240,7 @@ class NUTS(HMC):
                 tree_size += new_tree.size
 
         if self._adapted:
-            accept_prob = new_tree.sum_accept_probs / new_tree.num_proposals
+            accept_prob = new_tree.sum_accept_probs.item() / new_tree.num_proposals
             self._adapt_step_size(accept_prob)
 
         if accepted:

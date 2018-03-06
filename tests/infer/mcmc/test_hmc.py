@@ -177,7 +177,7 @@ def test_logistic_regression():
         posterior.append(trace.nodes['beta']['value'])
     posterior_mean = torch.mean(torch.stack(posterior), 0)
     assert_equal(rmse(true_coefs, posterior_mean).item(), 0.0, prec=0.05)
-
+    
 
 def test_bernoulli_beta():
     def model(data):
@@ -234,3 +234,69 @@ def test_categorical_dirichlet():
         posterior.append(trace.nodes['p_latent']['value'])
     posterior_mean = torch.mean(torch.stack(posterior), 0)
     assert_equal(posterior_mean, true_probs, prec=0.02)
+
+
+def test_logistic_regression_with_dual_averaging():
+    dim = 3
+    true_coefs = Variable(torch.arange(1, dim+1))
+    data = Variable(torch.randn(2000, dim))
+    labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
+
+    def model(data):
+        coefs_mean = Variable(torch.zeros(dim), requires_grad=True)
+        coefs = pyro.sample('beta', dist.Normal(coefs_mean, Variable(torch.ones(dim))))
+        y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
+        return y
+
+    hmc_kernel = HMC(model, step_size=None)
+    hmc_kernel._adapted = True
+    hmc_kernel._trajectory_length = 1
+    mcmc_run = MCMC(hmc_kernel, num_samples=500, warmup_steps=100)
+    posterior = []
+    for trace, _ in mcmc_run._traces(data):
+        posterior.append(trace.nodes['beta']['value'])
+    posterior_mean = torch.mean(torch.stack(posterior), 0)
+    assert_equal(rmse(true_coefs, posterior_mean).item(), 0.0, prec=0.05)
+
+    
+def test_bernoulli_beta_with_dual_averaging():
+    def model(data):
+        alpha = pyro.param('alpha', variable([1.1, 1.1], requires_grad=True))
+        beta = pyro.param('beta', variable([1.1, 1.1], requires_grad=True))
+        p_latent = pyro.sample('p_latent', dist.Beta(alpha, beta))
+        pyro.observe('obs', dist.Bernoulli(p_latent), data)
+        return p_latent
+
+    hmc_kernel = HMC(model, step_size=None)
+    hmc_kernel._adapted = True
+    hmc_kernel._trajectory_length = 1
+    mcmc_run = MCMC(hmc_kernel, num_samples=800, warmup_steps=500)
+    posterior = []
+    true_probs = variable([0.9, 0.1])
+    data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
+    for trace, _ in mcmc_run._traces(data):
+        posterior.append(trace.nodes['p_latent']['value'])
+    posterior_mean = torch.mean(torch.stack(posterior), 0)
+    assert_equal(posterior_mean, true_probs, prec=0.01)
+
+
+@pytest.mark.xfail(reason='the model is sensible to NaN log_pdf')
+def test_normal_gamma_with_dual_averaging():
+    def model(data):
+        rate = pyro.param('rate', variable([1.0, 1.0], requires_grad=True))
+        concentration = pyro.param('conc', variable([1.0, 1.0], requires_grad=True))
+        p_latent = pyro.sample('p_latent', dist.Gamma(rate, concentration))
+        pyro.observe("obs", dist.Normal(3, p_latent), data)
+        return p_latent
+
+    hmc_kernel = HMC(model, step_size=None)
+    hmc_kernel._adapted = True
+    hmc_kernel._trajectory_length = 1
+    mcmc_run = MCMC(hmc_kernel, num_samples=200, warmup_steps=100)
+    posterior = []
+    true_std = variable([0.5, 2])
+    data = dist.Normal(3, true_std).sample(sample_shape=(torch.Size((2000,))))
+    for trace, _ in mcmc_run._traces(data):
+        posterior.append(trace.nodes['p_latent']['value'])
+    posterior_mean = torch.mean(torch.stack(posterior), 0)
+    assert_equal(posterior_mean, true_std, prec=0.02)

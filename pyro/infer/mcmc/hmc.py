@@ -139,7 +139,7 @@ class HMC(TraceKernel):
     def _validate_trace(self, trace):
         trace_log_pdf = trace.log_pdf()
         if is_nan(trace_log_pdf) or is_inf(trace_log_pdf):
-            raise ValueError("Model specification incorrect - trace log pdf is NaN, Inf.")
+            raise ValueError("Model specification incorrect - trace log pdf is NaN or Inf.")
 
     def initial_trace(self):
         return self._prototype_trace
@@ -158,13 +158,13 @@ class HMC(TraceKernel):
             self._r_dist[name] = dist.Normal(mu=r_mu, sigma=r_sigma)
         if node["fn"].support is not constraints.real and self._automatic_transform_enabled:
             self.transforms[name] = biject_to(node["fn"].support).inv
-        self._validate_trace(self._prototype_trace)
+        self._validate_trace(trace)
 
         if self._adapted:
             z = {name: node["value"] for name, node in trace.iter_stochastic_nodes()}
             for name, transform in self.transforms.items():
                 z[name] = transform(z[name])
-            self._adapted_step_size = self.find_reasonable_stepsize(z)
+            self._adapted_step_size = self._find_reasonable_step_size(z)
             mu = math.log(10 * self._adapted_step_size)
             self._adapted_scheme = DualAveraging(mu, self._t0, self._kappa, self._gamma)
 
@@ -209,4 +209,5 @@ class HMC(TraceKernel):
         return self._get_trace(z)
 
     def diagnostics(self):
-        return "Acceptance rate: {}".format(self._accept_cnt / self._t)
+        return "Step size: {:.06f} | Acceptance rate: {:.06f}".format(
+            self._adapted_step_size, self._accept_cnt / self._t)
