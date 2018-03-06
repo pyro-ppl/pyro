@@ -81,7 +81,7 @@ class NUTS(HMC):
     def _build_basetree(self, z, r, z_grads, log_slice, direction):
         step_size = self.step_size if direction == 1 else -self.step_size
         z_new, r_new, z_grads, potential_energy = single_step_velocity_verlet(
-            z, r, self._unconstrained_potential_energy, step_size, z_grads=z_grads)
+            z, r, self._potential_energy, step_size, z_grads=z_grads)
         energy = potential_energy + self._kinetic_energy(r_new)
         dE = log_slice + energy
 
@@ -226,4 +226,6 @@ class NUTS(HMC):
             self._accept_cnt += 1
         self._t += 1
         # get trace with the constrained values for `z`.
-        return self._get_trace(z)[0]
+        for name, transform in self.transforms.items():
+            z[name] = transform.inv(z[name])
+        return self._get_trace(z)
