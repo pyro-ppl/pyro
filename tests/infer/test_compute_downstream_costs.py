@@ -65,13 +65,16 @@ def _brute_force_compute_downstream_costs(model_trace, guide_trace,  #
 
 
 def big_model_guide(include_obs=True, include_single=False, include_inner_1=False, flip_c23=False,
-                    include_triple=False):
+                    include_triple=False, include_z1=False):
     p0 = variable(math.exp(-0.20), requires_grad=True)
     p1 = variable(math.exp(-0.33), requires_grad=True)
     p2 = variable(math.exp(-0.70), requires_grad=True)
     if include_triple:
         with pyro.iarange("iarange_triple1", 6) as ind_triple1:
             with pyro.iarange("iarange_triple2", 7) as ind_triple2:
+                if include_z1:
+                    pyro.sample("z1", dist.Bernoulli(p2).reshape(sample_shape=[
+                                len(ind_triple2), len(ind_triple1)]))
                 with pyro.iarange("iarange_triple3", 9) as ind_triple3:
                     pyro.sample("z0", dist.Bernoulli(p2).reshape(sample_shape=[len(ind_triple3),
                                 len(ind_triple2), len(ind_triple1)]))
@@ -104,15 +107,17 @@ def big_model_guide(include_obs=True, include_single=False, include_inner_1=Fals
 @pytest.mark.parametrize("include_single", [True, False])
 @pytest.mark.parametrize("flip_c23", [True, False])
 @pytest.mark.parametrize("include_triple", [True, False])
-def test_compute_downstream_costs_big_model_guide_pair(include_inner_1, include_single, flip_c23, include_triple):
+@pytest.mark.parametrize("include_z1", [True, False])
+def test_compute_downstream_costs_big_model_guide_pair(include_inner_1, include_single, flip_c23,
+                                                       include_triple, include_z1):
     guide_trace = poutine.trace(big_model_guide,
                                 graph_type="dense").get_trace(include_obs=False, include_inner_1=include_inner_1,
                                                               include_single=include_single, flip_c23=flip_c23,
-                                                              include_triple=include_triple)
+                                                              include_triple=include_triple, include_z1=include_z1)
     model_trace = poutine.trace(poutine.replay(big_model_guide, guide_trace),
                                 graph_type="dense").get_trace(include_obs=True, include_inner_1=include_inner_1,
                                                               include_single=include_single, flip_c23=flip_c23,
-                                                              include_triple=include_triple)
+                                                              include_triple=include_triple, include_z1=include_z1)
 
     guide_trace = prune_subsample_sites(guide_trace)
     model_trace = prune_subsample_sites(model_trace)
