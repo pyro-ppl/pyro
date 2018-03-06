@@ -21,7 +21,7 @@ def get_vectorized_map_data_info(trace):
         if site_is_subsample(node):
             continue
         if node["type"] in ("sample", "param"):
-            stack = tuple(node["cond_indep_stack"])
+            stack = node["cond_indep_stack"]
             vec_mds = [x for x in stack if x.vectorized]
             stack_dict[name] = vec_mds
 
@@ -29,7 +29,7 @@ def get_vectorized_map_data_info(trace):
         if site_is_subsample(node):
             continue
         if node["type"] in ("sample", "param"):
-            stack = tuple(node["cond_indep_stack"])
+            stack = node["cond_indep_stack"]
             vec_mds = [x for x in stack if x.vectorized]
             stack_dict[name] = vec_mds
             # check for nested vectorized map datas
