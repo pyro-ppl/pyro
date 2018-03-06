@@ -1,19 +1,30 @@
 from __future__ import absolute_import, division, print_function
 
-import numbers
 import warnings
-
-import torch
 
 import pyro
 import pyro.poutine as poutine
-from pyro.distributions.util import is_identically_zero, sum_rightmost
+from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import iter_discrete_traces
-from pyro.infer.util import torch_data_sum, torch_sum
+from pyro.infer.util import TreeSum
 from pyro.poutine.enumerate_poutine import EnumeratePoutine
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, check_site_shape, is_nan
+
+
+def _compute_upstream_grads(trace):
+    upstream_grads = TreeSum()
+
+    for site in trace.nodes.values():
+        if site["type"] != "sample":
+            continue
+        score_function_term = site["score_parts"].score_function
+        if is_identically_zero(score_function_term):
+            continue
+        upstream_grads.add(site["cond_indep_stack"], score_function_term)
+
+    return upstream_grads
 
 
 class TraceEnum_ELBO(ELBO):
@@ -38,7 +49,7 @@ class TraceEnum_ELBO(ELBO):
 
         for i in range(self.num_particles):
             # iterate over a bag of traces, one trace per particle
-            for scale, guide_trace in iter_discrete_traces("flat", self.max_iarange_nesting, guide, *args, **kwargs):
+            for weights, guide_trace in iter_discrete_traces("flat", guide, *args, **kwargs):
                 model_trace = poutine.trace(poutine.replay(model, guide_trace),
                                             graph_type="flat").get_trace(*args, **kwargs)
 
@@ -46,20 +57,16 @@ class TraceEnum_ELBO(ELBO):
                 guide_trace = prune_subsample_sites(guide_trace)
                 model_trace = prune_subsample_sites(model_trace)
 
-                log_r = 0
                 model_trace.compute_batch_log_pdf()
                 for site in model_trace.nodes.values():
                     if site["type"] == "sample":
                         check_site_shape(site, self.max_iarange_nesting)
-                        log_r = log_r + sum_rightmost(site["batch_log_pdf"], self.max_iarange_nesting)
                 guide_trace.compute_score_parts()
                 for site in guide_trace.nodes.values():
                     if site["type"] == "sample":
                         check_site_shape(site, self.max_iarange_nesting)
-                        log_r = log_r - sum_rightmost(site["batch_log_pdf"], self.max_iarange_nesting)
 
-                weight = scale / self.num_particles
-                yield weight, model_trace, guide_trace, log_r
+                yield weights, model_trace, guide_trace
 
     def loss(self, model, guide, *args, **kwargs):
         """
@@ -69,26 +76,24 @@ class TraceEnum_ELBO(ELBO):
         Evaluates the ELBO with an estimator that uses num_particles many samples/particles.
         """
         elbo = 0.0
-        for weight, model_trace, guide_trace, log_r in self._get_traces(model, guide, *args, **kwargs):
-            elbo_particle = weight * 0
+        for weights, model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+            elbo_particle = 0
             for name, model_site in model_trace.nodes.items():
-                if model_site["type"] == "sample":
-                    model_log_pdf = sum_rightmost(model_site["batch_log_pdf"], self.max_iarange_nesting)
-                    if model_site["is_observed"]:
-                        elbo_particle = elbo_particle + model_log_pdf
-                    else:
-                        guide_site = guide_trace.nodes[name]
-                        guide_log_pdf = sum_rightmost(guide_site["batch_log_pdf"], self.max_iarange_nesting)
-                        elbo_particle = elbo_particle + model_log_pdf - guide_log_pdf
+                if model_site["type"] != "sample":
+                    continue
 
-            # drop terms of weight zero to avoid nans
-            if isinstance(weight, numbers.Number):
-                if weight == 0.0:
-                    elbo_particle = torch.zeros_like(elbo_particle)
-            else:
-                elbo_particle[weight == 0] = 0.0
+                # grab weights introduced by enumeration
+                cond_indep_stack = model_site["cond_indep_stack"]
+                weight = weights.get_upstream(cond_indep_stack)
+                if weight is None:
+                    continue
 
-            elbo += torch_data_sum(weight * elbo_particle)
+                log_r = model_site["batch_log_pdf"]
+                if not model_site["is_observed"]:
+                    log_r = log_r - guide_trace.nodes[name]["batch_log_pdf"]
+                elbo_particle += (log_r * weight).sum().item()
+
+            elbo += elbo_particle / self.num_particles
 
         loss = -elbo
         if is_nan(loss):
@@ -105,53 +110,47 @@ class TraceEnum_ELBO(ELBO):
         """
         elbo = 0.0
         # grab a trace from the generator
-        for weight, model_trace, guide_trace, log_r in self._get_traces(model, guide, *args, **kwargs):
-            elbo_particle = weight * 0
-            surrogate_elbo_particle = weight * 0
+        for weights, model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+            upstream_grads = _compute_upstream_grads(guide_trace)
+            elbo_particle = 0
+            surrogate_elbo_particle = 0
             # compute elbo and surrogate elbo
             for name, model_site in model_trace.nodes.items():
-                if model_site["type"] == "sample":
-                    model_log_pdf = sum_rightmost(model_site["batch_log_pdf"], self.max_iarange_nesting)
-                    if model_site["is_observed"]:
-                        elbo_particle = elbo_particle + model_log_pdf
-                        surrogate_elbo_particle = surrogate_elbo_particle + model_log_pdf
-                    else:
-                        guide_site = guide_trace.nodes[name]
-                        guide_log_pdf, score_function_term, entropy_term = guide_site["score_parts"]
+                if model_site["type"] != "sample":
+                    continue
 
-                        guide_log_pdf = sum_rightmost(guide_log_pdf, self.max_iarange_nesting)
-                        elbo_particle = elbo_particle + model_log_pdf - guide_log_pdf
-                        surrogate_elbo_particle = surrogate_elbo_particle + model_log_pdf
+                # grab weights introduced by enumeration
+                cond_indep_stack = model_site["cond_indep_stack"]
+                weight = weights.get_upstream(cond_indep_stack)
+                if weight is None:
+                    continue
 
-                        if not is_identically_zero(entropy_term):
-                            entropy_term = sum_rightmost(entropy_term, self.max_iarange_nesting)
-                            surrogate_elbo_particle -= entropy_term
+                model_log_pdf = model_site["batch_log_pdf"]
+                log_r = model_log_pdf
+                surrogate_elbo_site = model_log_pdf
+                score_function_term = upstream_grads.get_upstream(cond_indep_stack)
 
-                        if not is_identically_zero(score_function_term):
-                            score_function_term = sum_rightmost(score_function_term, self.max_iarange_nesting)
-                            surrogate_elbo_particle = surrogate_elbo_particle + log_r.detach() * score_function_term
+                if not model_site["is_observed"]:
+                    guide_log_pdf, _, entropy_term = guide_trace.nodes[name]["score_parts"]
+                    log_r = log_r - guide_log_pdf
+                    if not is_identically_zero(entropy_term):
+                        surrogate_elbo_site = surrogate_elbo_site - entropy_term
 
-            # drop terms of weight zero to avoid nans
-            if isinstance(weight, numbers.Number):
-                if weight == 0.0:
-                    elbo_particle = torch.zeros_like(elbo_particle)
-                    surrogate_elbo_particle = torch.zeros_like(surrogate_elbo_particle)
-            else:
-                weight_eq_zero = (weight == 0)
-                elbo_particle[weight_eq_zero] = 0.0
-                surrogate_elbo_particle[weight_eq_zero] = 0.0
+                if score_function_term is not None:
+                    surrogate_elbo_site = surrogate_elbo_site + log_r.detach() * score_function_term
 
-            elbo += torch_data_sum(weight * elbo_particle)
-            surrogate_elbo_particle = torch_sum(weight * surrogate_elbo_particle)
+                elbo_particle += (log_r * weight).sum().item()
+                surrogate_elbo_particle = surrogate_elbo_particle + (surrogate_elbo_site * weight).sum()
 
-            # collect parameters to train from model and guide
+            elbo += elbo_particle / self.num_particles
+
             trainable_params = set(site["value"]
                                    for trace in (model_trace, guide_trace)
                                    for site in trace.nodes.values()
                                    if site["type"] == "param")
 
             if trainable_params and getattr(surrogate_elbo_particle, 'requires_grad', False):
-                surrogate_loss_particle = -surrogate_elbo_particle
+                surrogate_loss_particle = -surrogate_elbo_particle / self.num_particles
                 surrogate_loss_particle.backward()
                 pyro.get_param_store().mark_params_active(trainable_params)
 

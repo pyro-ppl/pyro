@@ -118,6 +118,7 @@ class Trace(object):
         """
         trace = Trace()
         trace._graph = self._graph.copy()
+        trace._graph.__class__ = DiGraph
         trace.graph_type = self.graph_type
         return trace
 
