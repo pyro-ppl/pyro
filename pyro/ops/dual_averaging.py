@@ -53,14 +53,14 @@ class DualAveraging(object):
         # According to formula (3.4) of [1], we have
         #     x_t = argmin{ g_avg . x + mu_t . |x - x0|^2 },
         # where mu_t := beta_t / t, beta_t := (gamma/2) * sqrt(t)
-        x_t = self.x0 - (self._t ** 0.5) / self.gamma * self._g_avg
+        self._x_t = self.x0 - (self._t ** 0.5) / self.gamma * self._g_avg
         # weight for the new x_t
         weight_t = self._t ** (-self.kappa)
-        self._x_avg = (1 - weight_t) * self._x_avg + weight_t * x_t
+        self._x_avg = (1 - weight_t) * self._x_avg + weight_t * self._x_t
 
     def get_state(self):
         r"""
-        Returns the avarage of :math:`\left\{x_t\right\}` in primal space
-        and the avarage of :math:`\left\{g_t\right\}` in dual space.
+        Returns the latest :math:`x_t` and average of
+        :math:`\left\{x_i\right\}_{i=1}^t` in primal space.
         """
-        return self._x_avg, self._g_avg
+        return self._x_t, self._x_avg

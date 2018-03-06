@@ -9,6 +9,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer.mcmc.trace_kernel import TraceKernel
+from pyro.ops.dual_averaging import DualAveraging
 from pyro.ops.integrator import velocity_verlet, single_step_velocity_verlet
 from pyro.util import ng_ones, ng_zeros, is_nan, is_inf
 
@@ -58,45 +59,54 @@ class HMC(TraceKernel):
     def _reset(self):
         self._t = 0
         self._accept_cnt = 0
-        self._step_size_adapted = self.step_size if self.step_size is not None else 1
-        self._trajectory_length = (self._step_size_adapted * self.num_steps
-                                   if self.num_steps is not None else 2 * math.pi)
-        self._target_accept_logprob = math.log(0.8)
+        # TODO: move these parameters to self.defaults dict or self.config dict of init method
+        self._target_accept_prob = 0.8  # from Stan
+        self._adapted_step_size = self.step_size if self.step_size is not None else 1
+        if self.step_size is not None and self.num_steps is not None:
+            self._trajectory_length = self.step_size * self.num_steps
+        else:
+            self._trajectory_length = 2 * math.pi  # from Stan
+        self._t0 = 10
+        self._kappa = 0.75
+        self._gamma = 0.05
+        self._adapted = True
+        self._warmup = True
 
         self._r_dist = OrderedDict()
         self._args = None
         self._kwargs = None
         self._prototype_trace = None
+        self._adapted_scheme = None
 
-    def _validate_trace(self, trace):
-        for name, node in trace.iter_stochastic_nodes():
-            if not node['fn'].reparameterized:
-                raise ValueError('Found non-reparameterized node in the model at site: {}'.format(name))
-        trace_log_pdf = trace.log_pdf()
-        if is_nan(trace_log_pdf) or is_inf(trace_log_pdf):
-            raise ValueError('Model specification incorrect - trace log pdf is NaN, Inf or 0.')
+    def _find_reasonable_stepsize(self, z):
+        step_size = self._adapted_step_size
+        # This target_accept_prob is 0.5 in NUTS paper, is 0.8 in Stan, and
+        # is different to the target_accept_prob for Dual Averaging scheme.
+        # We need to discuss which one is better.
+        target_accept_logprob = math.log(self._target_accept_prob)
 
-    def _make_reasonable_stepsize(self, z):
-        r = {name: pyro.sample("r_{}_t={}".format(name, self._t), self._r_dist[name]) for name in self._r_dist}
+        r = {name: pyro.sample("r_{}_t={}".format(name, self._t), self._r_dist[name])
+             for name in self._r_dist}
         energy_current = self._energy(z, r)
         z_new, r_new, z_grads, potential_energy = single_step_velocity_verlet(
-            z, r, self._potential_energy, self._step_size_adapted)
+            z, r, self._potential_energy, step_size)
         energy_new = potential_energy + self._kinetic_energy(r_new)
         delta_energy = energy_new - energy_current
-        # This target_accept_logprob is 0.5 in NUTS paper, 0.8 in Stan and is
-        # different to the target_accept_logprob for Dual Averaging algorithm.
-        # We need to discuss which one is better.
-        target_accept_logprob = self._target_accept_logprob
         direction = 1 if target_accept_logprob < -delta_energy else -1
+        # if accept_prob:=exp(-delta_energy) is small, then we have to
+        # decrease step_size; otherwise, increase step_size
         step_size_scale = 2 ** direction
         direction_new = direction
-        # keep scale step_size until accept_logprob crosses its target
+        # keep scale step_size until accept_prob crosses its target
+        # TODO: make thresholds for too small step_size or too large step_size
         while direction_new == direction:
-            self._step_size_adapted = step_size_scale * self._step_size_adapted
+            step_size = step_size_scale * step_size
             z_new, r_new, z_grads, potential_energy = single_step_velocity_verlet(
-                z_new, r_new, self._potential_energy, self._step_size_adapted)
+                z, r, self._potential_energy, step_size)
             energy_new = potential_energy + self._kinetic_energy(r_new)
+            delta_energy = energy_new - energy_current
             direction_new = 1 if target_accept_logprob < -delta_energy else -1
+        return step_size
 
     def initial_trace(self):
         return self._prototype_trace
@@ -106,30 +116,61 @@ class HMC(TraceKernel):
         self._kwargs = kwargs
         # set the trace prototype to inter-convert between trace object
         # and dict object used by the integrator
-        self._prototype_trace = poutine.trace(self.model).get_trace(*args, **kwargs)
+        trace = poutine.trace(self.model).get_trace(*args, **kwargs)
+        self._prototype_trace = trace
         # momenta distribution - currently standard normal
-        for name, node in sorted(self._prototype_trace.iter_stochastic_nodes(),
-                                 key=lambda x: x[0]):
+        for name, node in sorted(trace.iter_stochastic_nodes(), key=lambda x: x[0]):
             r_mu = torch.zeros_like(node['value'])
             r_sigma = torch.ones_like(node['value'])
             self._r_dist[name] = dist.Normal(mu=r_mu, sigma=r_sigma)
-        self._validate_trace(self._prototype_trace)
+
+        trace_log_pdf = trace.log_pdf()
+        if is_nan(trace_log_pdf) or is_inf(trace_log_pdf):
+            raise ValueError('Model specification incorrect - trace log pdf is NaN, Inf or 0.')
+
+        if self._adapted:
+            z = {name: node['value'] for name, node in trace.iter_stochastic_nodes()}
+            self._adapted_step_size = self.find_reasonable_stepsize(z)
+            mu = math.log(10 * self._adapted_step_size)
+            self._adapted_scheme = DualAveraging(mu, self._t0, self._kappa, self._gamma)
 
     def cleanup(self):
         self._reset()
 
     def sample(self, trace):
         z = {name: node['value'] for name, node in trace.iter_stochastic_nodes()}
-        r = {name: pyro.sample('r_{}_t={}'.format(name, self._t), self._r_dist[name]) for name in self._r_dist}
-        z_new, r_new = velocity_verlet(z, r, self._potential_energy, self.step_size, self.num_steps)
+        r = {name: pyro.sample('r_{}_t={}'.format(name, self._t), self._r_dist[name])
+             for name in self._r_dist}
+        if self._adapted:
+            # TODO: randomize step_size a bit at begining of each trajectory
+            step_size = self._adapted_step_size
+            num_steps = int(self._trajectory_length / self._adapted_step_size)
+        else:
+            step_size = self.step_size
+            num_steps = self.num_steps
+        z_new, r_new = velocity_verlet(z, r,
+                                       self._potential_energy,
+                                       step_size,
+                                       num_steps)
         # apply Metropolis correction
         energy_proposal = self._energy(z_new, r_new)
         energy_current = self._energy(z, r)
         delta_energy = energy_proposal - energy_current
+        accept_prob = (-delta_energy).exp().clamp(max=1)
         rand = pyro.sample('rand_t='.format(self._t), dist.Uniform(ng_zeros(1), ng_ones(1)))
-        if rand.log() < -delta_energy:
+        if rand < accept_prob:
             self._accept_cnt += 1
             z = z_new
+        if self._adapted:
+            if self._warmup:
+                # calculate the statistics for Dual Averaging scheme
+                H = self._target_accept_prob - accept_prob
+                self._adapted_scheme.step(H.item())
+                log_step_size, _ = self._adapted_scheme.get_state()
+                self._adapted_step_size = math.exp(log_step_size)
+            else:
+                _, log_step_size_avg = self._adapted_scheme.get_state()
+                self._adapted_step_size = math.exp(log_step_size_avg)
         self._t += 1
         return self._get_trace(z)
 
