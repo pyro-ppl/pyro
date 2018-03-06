@@ -43,9 +43,9 @@ class DualAveraging(object):
 
     def step(self, g):
         """
-        Updates states of the scheme given a new subgradient/statistics ``g``.
+        Updates states of the scheme given a new statistic (subgradient) ``g``.
 
-        :param float g: New statistics calculated during an MCMC trajectory.
+        :param float g: A statistic calculated during an MCMC trajectory.
         """
         self._t += 1
         # g_avg = (g_1 + ... + g_t) / t

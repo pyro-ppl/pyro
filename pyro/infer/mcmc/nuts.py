@@ -13,9 +13,14 @@ from pyro.util import ng_ones, ng_zeros
 from .hmc import HMC
 
 
+# sum_accept_probs and num_proposals are used to calculate
+# the statistic accept_prob for Dual Averaging scheme;
+# z_left_grads and z_right_grads are kept to avoid recalculating
+# grads at left and right leaves
 _TreeInfo = namedtuple("TreeInfo", ["z_left", "r_left", "z_left_grads",
                                     "z_right", "r_right", "z_right_grads",
-                                    "z_proposal", "size", "turning", "diverging"])
+                                    "z_proposal", "size", "turning", "diverging",
+                                    "sum_accept_probs", "num_proposals"])
 
 
 class NUTS(HMC):
@@ -52,23 +57,24 @@ class NUTS(HMC):
             posterior.append(trace.nodes['beta']['value'])
     """
 
-    def __init__(self, model, step_size=1, max_tree_depth=10):
-        # The default values for step_size and max_tree_depth are selected as in Stan
-        #     https://github.com/stan-dev/pystan/blob/develop/pystan/misc.py.
+    def __init__(self, model, step_size=1):
         super(NUTS, self).__init__(model, step_size, num_steps=None)
-        self.max_tree_depth = max_tree_depth
-        self._reset()
 
-        # There are two conditions to stop doubling process:
+        # TODO: move these parameters to config/defaults
+        # Link to default parameters from Stan:
+        #     https://github.com/stan-dev/pystan/blob/develop/pystan/misc.py.
+        self._max_tree_depth = 10  # from Stan
+        # There are three conditions to stop doubling process:
+        #     + Tree is becoming too big.
         #     + The trajectory is making a U-turn.
         #     + The probability of the states becoming negligible: p(z, r) << u,
         # here u is the "slice" variable introduced at the `self.sample(...)` method.
-        # Denote E_p = -log p(z, r), E_u = -log u, the second condition is equivalent to
-        #     dE := E_p - E_u >= some constant =: dE_max.
+        # Denote E_p = -log p(z, r), E_u = -log u, the third condition is equivalent to
+        #     sliced_energy := E_p - E_u >= some constant =: max_sliced_energy.
         # This also suggests the notion "diverging" in the implemenation:
         #     when the energy E_p diverges from E_u too much, we stop doubling.
         # Here, as suggested in [1], we set dE_max = 1000.
-        self._dE_max = 1000
+        self._max_sliced_energy = 1000
 
     def _is_turning(self, z_left, r_left, z_right, r_right):
         z_left = torch.stack([z_left[name] for name in self._r_dist])
@@ -78,32 +84,38 @@ class NUTS(HMC):
         dz = z_right - z_left
         return (torch_data_sum(dz * r_left) < 0) or (torch_data_sum(dz * r_right) < 0)
 
-    def _build_basetree(self, z, r, z_grads, log_slice, direction):
-        step_size = self.step_size if direction == 1 else -self.step_size
+    def _build_basetree(self, z, r, z_grads, log_slice, direction, energy_current):
+        if self._adapted:
+            step_size = self._adapted_step_size if direction == 1 else -self._adapted_step_size
+        else:
+            step_size = self.step_size if direction == 1 else -self.step_size
         z_new, r_new, z_grads, potential_energy = single_step_velocity_verlet(
             z, r, self._potential_energy, step_size, z_grads=z_grads)
-        energy = potential_energy + self._kinetic_energy(r_new)
-        dE = log_slice + energy
+        energy_new = potential_energy + self._kinetic_energy(r_new)
+        sliced_energy = energy_new + log_slice
 
         # As a part of the slice sampling process (see below), along the trajectory
-        #     we eliminate states which p(z, r) < u, or dE < 0.
+        #     we eliminate states which p(z, r) < u, or dE > 0.
         # Due to this elimination (and stop doubling conditions),
         #     the size of binary tree might not equal to 2^tree_depth.
-        tree_size = 1 if dE <= 0 else 0
-        diverging = dE >= self._dE_max
+        tree_size = 1 if sliced_energy <= 0 else 0
+        diverging = sliced_energy >= self._max_sliced_energy
+        delta_energy = energy_new - energy_current
+        accept_prob = (-delta_energy).exp().clamp(max=1)
         return _TreeInfo(z_new, r_new, z_grads, z_new, r_new, z_grads,
-                         z_new, tree_size, False, diverging)
+                         z_new, tree_size, False, diverging, accept_prob, 1)
 
-    def _build_tree(self, z, r, z_grads, log_slice, direction, tree_depth):
+    def _build_tree(self, z, r, z_grads, log_slice, direction, tree_depth, energy_current):
         if tree_depth == 0:
-            return self._build_basetree(z, r, z_grads, log_slice, direction)
+            return self._build_basetree(z, r, z_grads, log_slice, direction, energy_current)
 
         # build the first half of tree
-        half_tree = self._build_tree(z, r, z_grads, log_slice, direction, tree_depth-1)
+        half_tree = self._build_tree(z, r, z_grads, log_slice,
+                                     direction, tree_depth-1, energy_current)
         z_proposal = half_tree.z_proposal
 
         # Check conditions to stop doubling. If we meet that condition,
-        #     there is no need to build the other tree
+        #     there is no need to build the other tree.
         if half_tree.turning or half_tree.diverging:
             return half_tree
 
@@ -117,9 +129,12 @@ class NUTS(HMC):
             z = half_tree.z_left
             r = half_tree.r_left
             z_grads = half_tree.z_left_grads
-        other_half_tree = self._build_tree(z, r, z_grads, log_slice, direction, tree_depth-1)
+        other_half_tree = self._build_tree(z, r, z_grads, log_slice,
+                                           direction, tree_depth-1, energy_current)
 
         tree_size = half_tree.size + other_half_tree.size
+        sum_accept_probs = half_tree.sum_accept_probs + other_half_tree.sum_accept_probs
+        num_proposals = half_tree.num_proposals + other_half_tree.num_proposals
 
         # Under the slice sampling process, a proposal for z is uniformly picked.
         # The probability of that proposal belongs to which half of tree
@@ -157,15 +172,17 @@ class NUTS(HMC):
         # The divergence is checked by the second half tree (the first half is already checked).
         diverging = other_half_tree.diverging
 
-        return _TreeInfo(z_left, r_left, z_left_grads, z_right, r_right, z_right_grads,
-                         z_proposal, tree_size, turning, diverging)
+        return _TreeInfo(z_left, r_left, z_left_grads, z_right, r_right, z_right_grads, z_proposal,
+                         tree_size, turning, diverging, sum_accept_probs, num_proposals)
 
     def sample(self, trace):
         z = {name: node["value"] for name, node in trace.iter_stochastic_nodes()}
         # automatically transform `z` to unconstrained space, if needed.
         for name, transform in self.transforms.items():
             z[name] = transform(z[name])
-        r = {name: pyro.sample("r_{}_t={}".format(name, self._t), self._r_dist[name]) for name in self._r_dist}
+        r = {name: pyro.sample("r_{}_t={}".format(name, self._t), self._r_dist[name])
+             for name in self._r_dist}
+        energy_current = self._energy(z, r)
 
         # Ideally, following a symplectic integrator trajectory, the energy is constant.
         # In that case, we can sample the proposal uniformly, and there is no need to use "slice".
@@ -187,23 +204,23 @@ class NUTS(HMC):
         r_left = r_right = r
         z_left_grads = z_right_grads = None
         tree_size = 1
-        is_accepted = False
+        accepted = False
 
         # doubling process, stop when turning or diverging
-        for tree_depth in range(self.max_tree_depth + 1):
+        for tree_depth in range(self._max_tree_depth + 1):
             direction = pyro.sample("direction_t={}_treedepth={}".format(self._t, tree_depth),
                                     dist.Bernoulli(ps=ng_ones(1) * 0.5))
             direction = int(direction.item())
             if direction == 1:  # go to the right, start from the right leaf of current tree
-                new_tree = self._build_tree(z_right, r_right, z_right_grads,
-                                            log_slice, direction, tree_depth)
+                new_tree = self._build_tree(z_right, r_right, z_right_grads, log_slice,
+                                            direction, tree_depth, energy_current)
                 # update leaf for the next doubling process
                 z_right = new_tree.z_right
                 r_right = new_tree.r_right
                 z_right_grads = new_tree.z_right_grads
             else:  # go the the left, start from the left leaf of current tree
-                new_tree = self._build_tree(z_left, r_left, z_left_grads,
-                                            log_slice, direction, tree_depth)
+                new_tree = self._build_tree(z_left, r_left, z_left_grads, log_slice,
+                                            direction, tree_depth, energy_current)
                 z_left = new_tree.z_left
                 r_left = new_tree.r_left
                 z_left_grads = new_tree.z_left_grads
@@ -211,10 +228,10 @@ class NUTS(HMC):
             if new_tree.turning or new_tree.diverging:  # stop doubling
                 break
 
-            accepted_prob = pyro.sample("acceptedprob_t={}_treedepth={}".format(self._t, tree_depth),
-                                        dist.Uniform(ng_zeros(1), ng_ones(1)))
-            if accepted_prob < new_tree.size / tree_size:
-                is_accepted = True
+            rand = pyro.sample("rand_t={}_treedepth={}".format(self._t, tree_depth),
+                               dist.Uniform(ng_zeros(1), ng_ones(1)))
+            if rand < new_tree.size / tree_size:
+                accepted = True
                 z = new_tree.z_proposal
 
             if self._is_turning(z_left, r_left, z_right, r_right):  # stop doubling
@@ -222,7 +239,11 @@ class NUTS(HMC):
             else:  # update tree_size
                 tree_size += new_tree.size
 
-        if is_accepted:
+        if self._adapted:
+            accept_prob = new_tree.sum_accept_probs / new_tree.num_proposals
+            self._adapt_step_size(accept_prob)
+
+        if accepted:
             self._accept_cnt += 1
         self._t += 1
         # get trace with the constrained values for `z`.

@@ -52,7 +52,7 @@ class HMC(TraceKernel):
     def _get_trace(self, z):
         z_trace = self._prototype_trace
         for name, value in z.items():
-            z_trace.nodes[name]['value'] = value
+            z_trace.nodes[name]["value"] = value
         trace_poutine = poutine.trace(poutine.replay(self.model, trace=z_trace))
         trace_poutine(*self._args, **self._kwargs)
         return trace_poutine.trace
@@ -82,14 +82,11 @@ class HMC(TraceKernel):
         # TODO: move these parameters to self.defaults dict or self.config dict of init method
         self._target_accept_prob = 0.8  # from Stan
         self._adapted_step_size = self.step_size if self.step_size is not None else 1
-        if self.step_size is not None and self.num_steps is not None:
-            self._trajectory_length = self.step_size * self.num_steps
-        else:
-            self._trajectory_length = 2 * math.pi  # from Stan
+        self._trajectory_length = 2 * math.pi  # from Stan
         self._t0 = 10
         self._kappa = 0.75
         self._gamma = 0.05
-        self._adapted = True
+        self._adapted = False
         self._warmup = True
 
         self._r_dist = OrderedDict()
@@ -98,14 +95,14 @@ class HMC(TraceKernel):
         self._prototype_trace = None
         self._adapted_scheme = None
 
-    def _find_reasonable_stepsize(self, z):
+    def _find_reasonable_step_size(self, z):
         step_size = self._adapted_step_size
         # This target_accept_prob is 0.5 in NUTS paper, is 0.8 in Stan, and
         # is different to the target_accept_prob for Dual Averaging scheme.
         # We need to discuss which one is better.
         target_accept_logprob = math.log(self._target_accept_prob)
 
-        r = {name: pyro.sample("r_{}_t={}".format(name, self._t), self._r_dist[name])
+        r = {name: pyro.sample("r_{}_presample".format(name), self._r_dist[name])
              for name in self._r_dist}
         energy_current = self._energy(z, r)
         z_new, r_new, z_grads, potential_energy = single_step_velocity_verlet(
@@ -128,10 +125,21 @@ class HMC(TraceKernel):
             direction_new = 1 if target_accept_logprob < -delta_energy else -1
         return step_size
 
+    def _adapt_step_size(self, accept_prob):
+        if self._warmup:
+            # calculate the statistics for Dual Averaging scheme
+            H = self._target_accept_prob - accept_prob
+            self._adapted_scheme.step(H)
+            log_step_size, _ = self._adapted_scheme.get_state()
+            self._adapted_step_size = math.exp(log_step_size)
+        else:
+            _, log_step_size_avg = self._adapted_scheme.get_state()
+            self._adapted_step_size = math.exp(log_step_size_avg)
+
     def _validate_trace(self, trace):
         trace_log_pdf = trace.log_pdf()
         if is_nan(trace_log_pdf) or is_inf(trace_log_pdf):
-            raise ValueError('Model specification incorrect - trace log pdf is NaN, Inf or 0.')
+            raise ValueError("Model specification incorrect - trace log pdf is NaN, Inf.")
 
     def initial_trace(self):
         return self._prototype_trace
@@ -145,15 +153,17 @@ class HMC(TraceKernel):
         self._prototype_trace = trace
         # momenta distribution - currently standard normal
         for name, node in sorted(trace.iter_stochastic_nodes(), key=lambda x: x[0]):
-            r_mu = torch.zeros_like(node['value'])
-            r_sigma = torch.ones_like(node['value'])
+            r_mu = torch.zeros_like(node["value"])
+            r_sigma = torch.ones_like(node["value"])
             self._r_dist[name] = dist.Normal(mu=r_mu, sigma=r_sigma)
-        if node['fn'].support is not constraints.real and self._automatic_transform_enabled:
-            self.transforms[name] = biject_to(node['fn'].support).inv
+        if node["fn"].support is not constraints.real and self._automatic_transform_enabled:
+            self.transforms[name] = biject_to(node["fn"].support).inv
         self._validate_trace(self._prototype_trace)
 
         if self._adapted:
-            z = {name: node['value'] for name, node in trace.iter_stochastic_nodes()}
+            z = {name: node["value"] for name, node in trace.iter_stochastic_nodes()}
+            for name, transform in self.transforms.items():
+                z[name] = transform(z[name])
             self._adapted_step_size = self.find_reasonable_stepsize(z)
             mu = math.log(10 * self._adapted_step_size)
             self._adapted_scheme = DualAveraging(mu, self._t0, self._kappa, self._gamma)
@@ -162,14 +172,14 @@ class HMC(TraceKernel):
         self._reset()
 
     def sample(self, trace):
-        z = {name: node['value'] for name, node in trace.iter_stochastic_nodes()}
+        z = {name: node["value"] for name, node in trace.iter_stochastic_nodes()}
         # automatically transform `z` to unconstrained space, if needed.
         for name, transform in self.transforms.items():
             z[name] = transform(z[name])
-        r = {name: pyro.sample('r_{}_t={}'.format(name, self._t), self._r_dist[name])
+        r = {name: pyro.sample("r_{}_t={}".format(name, self._t), self._r_dist[name])
              for name in self._r_dist}
+
         if self._adapted:
-            # TODO: randomize step_size a bit at begining of each trajectory
             step_size = self._adapted_step_size
             num_steps = int(self._trajectory_length / self._adapted_step_size)
         else:
@@ -183,27 +193,20 @@ class HMC(TraceKernel):
         energy_proposal = self._energy(z_new, r_new)
         energy_current = self._energy(z, r)
         delta_energy = energy_proposal - energy_current
-        accept_prob = (-delta_energy).exp().clamp(max=1)
-        rand = pyro.sample('rand_t='.format(self._t), dist.Uniform(ng_zeros(1), ng_ones(1)))
-        if rand < accept_prob:
+        rand = pyro.sample("rand_t={}".format(self._t), dist.Uniform(ng_zeros(1), ng_ones(1)))
+        if rand < (-delta_energy).exp():
             self._accept_cnt += 1
             z = z_new
-        if self._adapted:
-            if self._warmup:
-                # calculate the statistics for Dual Averaging scheme
-                H = self._target_accept_prob - accept_prob
-                self._adapted_scheme.step(H.item())
-                log_step_size, _ = self._adapted_scheme.get_state()
-                self._adapted_step_size = math.exp(log_step_size)
-            else:
-                _, log_step_size_avg = self._adapted_scheme.get_state()
-                self._adapted_step_size = math.exp(log_step_size_avg)
-        self._t += 1
 
+        if self._adapted:
+            accept_prob = (-delta_energy).exp().clamp(max=1).item()
+            self._adapt_step_size(accept_prob)
+
+        self._t += 1
         # get trace with the constrained values for `z`.
         for name, transform in self.transforms.items():
             z[name] = transform.inv(z[name])
         return self._get_trace(z)
 
     def diagnostics(self):
-        return 'Acceptance rate: {}'.format(self._accept_cnt / self._t)
+        return "Acceptance rate: {}".format(self._accept_cnt / self._t)
