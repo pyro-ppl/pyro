@@ -74,7 +74,7 @@ def sample(name, fn, *args, **kwargs):
             "value": None,
             "infer": infer,
             "scale": 1.0,
-            "cond_indep_stack": [],
+            "cond_indep_stack": (),
             "done": False,
             "stop": False,
             "continuation": None
@@ -328,7 +328,7 @@ def param(name, *args, **kwargs):
             "kwargs": kwargs,
             "infer": {},
             "scale": 1.0,
-            "cond_indep_stack": [],
+            "cond_indep_stack": (),
             "value": None,
             "done": False,
             "stop": False,
