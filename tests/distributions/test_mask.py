@@ -39,9 +39,10 @@ def test_mask(batch_dim, event_dim, mask_dim):
     # Check values.
     assert_equal(dist.mean, base_dist.mean)
     assert_equal(dist.variance, base_dist.variance)
-    assert_equal(dist.enumerate_support(), base_dist.enumerate_support())
     assert_equal(dist.log_prob(sample), base_dist.log_prob(sample) * mask)
     assert_equal(dist.score_parts(sample), base_dist.score_parts(sample) * mask, prec=0)
+    if not dist.event_shape:
+        assert_equal(dist.enumerate_support(), base_dist.enumerate_support())
 
 
 @pytest.mark.parametrize('batch_shape,mask_shape', [

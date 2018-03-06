@@ -59,7 +59,7 @@ def _brute_force_compute_downstream_costs(model_trace, guide_trace,  #
             downstream_guide_cost_nodes[site].update([child])
 
     for k in downstream_costs:
-        downstream_costs[k] = downstream_costs[k].contract_to(guide_trace.nodes[k]['batch_log_pdf'])
+        downstream_costs[k] = downstream_costs[k].contract_as(guide_trace.nodes[k]['batch_log_pdf'])
 
     return downstream_costs, downstream_guide_cost_nodes
 

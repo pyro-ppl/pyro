@@ -29,6 +29,10 @@ RESOURCE_DIR = os.path.join(TESTS_DIR, 'resources')
 EXAMPLES_DIR = os.path.join(os.path.dirname(TESTS_DIR), 'examples')
 
 
+def xfail_param(*args, **kwargs):
+    return pytest.param(*args, marks=[pytest.mark.xfail(**kwargs)])
+
+
 def suppress_warnings(fn):
     def wrapper(*args, **kwargs):
         with warnings.catch_warnings():

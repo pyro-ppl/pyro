@@ -57,7 +57,13 @@ def test_reshape(sample_dim, extra_event_dims):
     assert dist.mean.shape == shape
     assert dist.variance.shape == shape
     assert dist.log_prob(sample).shape == shape[:sample_dim + batch_dim - extra_event_dims]
-    assert dist.enumerate_support().shape == torch.Size((2,)) + shape
+
+    # Check enumerate support.
+    if dist.event_shape:
+        with pytest.raises(NotImplementedError):
+            dist.enumerate_support()
+    else:
+        assert dist.enumerate_support().shape == torch.Size((2,)) + shape
 
 
 @pytest.mark.parametrize('sample_dim,extra_event_dims',
@@ -81,7 +87,13 @@ def test_reshape_reshape(sample_dim, extra_event_dims):
     assert dist.mean.shape == shape
     assert dist.variance.shape == shape
     assert dist.log_prob(sample).shape == shape[:sample_dim + batch_dim - extra_event_dims]
-    assert dist.enumerate_support().shape == torch.Size((2,)) + shape
+
+    # Check enumerate support.
+    if dist.event_shape:
+        with pytest.raises(NotImplementedError):
+            dist.enumerate_support()
+    else:
+        assert dist.enumerate_support().shape == torch.Size((2,)) + shape
 
 
 @pytest.mark.parametrize('sample_dim', [0, 1, 2])
