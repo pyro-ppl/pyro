@@ -351,7 +351,24 @@ def check_model_guide_match(model_trace, guide_trace):
 
 def check_site_shape(site, max_iarange_nesting):
     actual_shape = site["batch_log_pdf"].shape
-    expected_shape = [f.size for f in reversed(site["cond_indep_stack"]) if f.vectorized]
+
+    # Compute expected shape.
+    expected_shape = []
+    for f in site["cond_indep_stack"]:
+        if f.dim is None:
+            continue  # irange
+        elif f.dim == 'auto':
+            # Automatically use the rightmost available dimension.
+            expected_shape.insert(0, f.size)
+        else:
+            # Use the specified dimension, which counts from the right.
+            assert f.dim < 0
+            if len(expected_shape) < -f.dim:
+                expected_shape = [None] * (-f.dim - len(expected_shape)) + expected_shape
+            if expected_shape[f.dim] is not None:
+                raise ValueError('at site "{}", iarange("") dim collision, '.format(site["name"], f.name),
+                                 'try setting dim arg in other iaranges.')
+            expected_shape[f.dim] = f.size
 
     # Check for iarange stack overflow.
     if len(expected_shape) > max_iarange_nesting:
