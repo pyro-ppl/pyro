@@ -36,6 +36,7 @@ setup(
     author='Uber AI Labs',
     author_email='pyro@uber.com',
     install_requires=[
+        'graphviz>=0.8',
         'networkx>=2.0.0',
         'torch',
         'six>=1.10.0',
@@ -46,7 +47,6 @@ setup(
             'matplotlib>=1.3',
             'visdom>=0.1.4',
             'pillow',
-            'graphviz>=0.8',
         ],
         'test': [
             'pytest',

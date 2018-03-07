@@ -5,8 +5,9 @@ import numbers
 import random
 import warnings
 
-import torch
+import graphviz
 from six.moves import zip_longest
+import torch
 from torch.autograd import Variable
 from torch.nn import Parameter
 
@@ -280,12 +281,6 @@ def save_visualization(trace, graph_output):
     trace = pyro.poutine.trace(model, graph_type="dense").get_trace()
     save_visualization(trace, 'output')
     """
-    try:
-        import graphviz
-    except ImportError:
-        raise ImportError("Cannot import graphviz package. "
-                          "Install graphviz (version >= 0.8) to use this function.")
-
     g = graphviz.Digraph()
 
     for label, node in trace.nodes.items():
