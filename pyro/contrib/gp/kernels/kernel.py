@@ -42,12 +42,12 @@ class Kernel(Parameterized):
         """
         Calculates covariance matrix of inputs on active dimensionals.
 
-        :param torch.autograd.Variable X: A 2D tensor of size :math:`N \\times input\_dim`.
-        :param torch.autograd.Variable Z: An optional 2D tensor of size :math:`M \\times input\_dim`.
+        :param torch.Tensor X: A 2D tensor of size :math:`N \\times input\_dim`.
+        :param torch.Tensor Z: An optional 2D tensor of size :math:`M \\times input\_dim`.
         :param bool diag: A flag to decide if we want to return a full covariance matrix
             or just its diagonal part.
         :return: Covariance matrix of :math:`X` and :math:`Z` with size :math:`N \\times M`.
-        :rtype: torch.autograd.Variable
+        :rtype: torch.Tensor
         """
         raise NotImplementedError
 
@@ -56,9 +56,9 @@ class Kernel(Parameterized):
         Slices :math:`X` according to ``self.active_dims``. If :math:`X` is 1 dimensional then returns
             a 2D tensor of size :math:`N \times 1`.
 
-        :param torch.autograd.Variable X: A 1D or 2D tensor.
+        :param torch.Tensor X: A 1D or 2D tensor.
         :return: A 2D slice of :math:`X`.
-        :rtype: torch.autograd.Variable
+        :rtype: torch.Tensor
         """
         if X.dim() == 2:
             return X[:, self.active_dims]

@@ -4,7 +4,6 @@ from collections import namedtuple
 
 import pytest
 import torch
-from torch.autograd import Variable
 
 from pyro.contrib.gp.kernels import (Bias, Brownian, Cosine, Exponent, Linear, Matern12, Matern32,
                                      Matern52, Periodic, Polynomial, Product, RationalQuadratic,
@@ -15,8 +14,8 @@ T = namedtuple("TestKernelForward", ["kernel", "X", "Z", "K_sum"])
 
 variance = torch.Tensor([3])
 lengthscale = torch.Tensor([2, 1, 2])
-X = Variable(torch.Tensor([[1, 0, 1], [2, 1, 3]]))
-Z = Variable(torch.Tensor([[4, 5, 6], [3, 1, 7], [3, 1, 2]]))
+X = torch.tensor([[1, 0, 1], [2, 1, 3]])
+Z = torch.tensor([[4, 5, 6], [3, 1, 7], [3, 1, 2]])
 
 TEST_CASES = [
     T(

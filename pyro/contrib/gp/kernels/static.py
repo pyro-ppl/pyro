@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import torch
-from torch.autograd import Variable
 from torch.distributions import constraints
 from torch.nn import Parameter
 
@@ -63,4 +62,4 @@ class WhiteNoise(Kernel):
         if Z is None:
             return variance.expand(X.size(0)).diag()
         else:
-            return Variable(X.data.new(X.size(0), Z.size(0)).zero_())
+            return X.data.new(X.size(0), Z.size(0)).zero_()
