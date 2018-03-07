@@ -36,7 +36,6 @@ setup(
     author='Uber AI Labs',
     author_email='pyro@uber.com',
     install_requires=[
-        'cloudpickle>=0.3.1',
         'networkx>=2.0.0',
         'torch',
         'six>=1.10.0',

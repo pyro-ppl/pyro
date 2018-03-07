@@ -135,7 +135,7 @@ def set_rng_seed(rng_seed):
         torch.cuda.manual_seed_all(rng_seed)
     random.seed(rng_seed)
     try:
-        import numpy
+        import numpy as np
 
         np.random.seed(rng_seed)
     except ImportError:
