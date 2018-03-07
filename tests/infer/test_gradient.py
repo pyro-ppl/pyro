@@ -39,7 +39,7 @@ def test_subsample_gradient(trace_graph, enum_discrete, reparameterized, subsamp
 
     def guide():
         mu = pyro.param("mu", lambda: variable(torch.zeros(len(data)), requires_grad=True))
-        sigma = pyro.param("sigma", lambda: variable(torch.ones(1), requires_grad=True))
+        sigma = pyro.param("sigma", lambda: variable([1.0], requires_grad=True))
         with pyro.iarange("data", len(data), subsample_size) as ind:
             pyro.sample("z", Normal(mu[ind], sigma))
 
@@ -54,5 +54,5 @@ def test_subsample_gradient(trace_graph, enum_discrete, reparameterized, subsamp
     expected_grads = {'mu': np.array([0.5, -2.0]), 'sigma': np.array([2.0])}
     for name in sorted(params):
         logger.info('expected {} = {}'.format(name, expected_grads[name]))
-    logger.info('actual   {} = {}'.format(name, actual_grads[name]))
-    assert_equal(actual_grads, expected_grads, prec=precision)
+        logger.info('actual   {} = {}'.format(name, actual_grads[name]))
+        assert_equal(actual_grads, expected_grads, prec=precision)
