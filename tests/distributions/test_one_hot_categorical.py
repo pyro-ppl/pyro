@@ -5,7 +5,6 @@ from unittest import TestCase
 import numpy as np
 import pytest
 import torch
-from torch.autograd import Variable
 
 import pyro.distributions as dist
 from tests.common import assert_equal
@@ -18,30 +17,30 @@ class TestOneHotCategorical(TestCase):
 
     def setUp(self):
         n = 1
-        self.ps = Variable(torch.Tensor([0.1, 0.6, 0.3]))
-        self.batch_ps = Variable(torch.Tensor([[0.1, 0.6, 0.3], [0.2, 0.4, 0.4]]))
-        self.n = Variable(torch.Tensor([n]))
-        self.test_data = Variable(torch.Tensor([0, 1, 0]))
-        self.test_data_nhot = Variable(torch.Tensor([2]))
+        self.ps = torch.tensor([0.1, 0.6, 0.3])
+        self.batch_ps = torch.tensor([[0.1, 0.6, 0.3], [0.2, 0.4, 0.4]])
+        self.n = torch.tensor([n])
+        self.test_data = torch.tensor([0, 1, 0])
+        self.test_data_nhot = torch.tensor([2])
         self.analytic_mean = n * self.ps
-        one = Variable(torch.ones(3))
+        one = torch.ones(3)
         self.analytic_var = n * torch.mul(self.ps, one.sub(self.ps))
 
         # Discrete Distribution
-        self.d_ps = Variable(torch.Tensor([[0.2, 0.3, 0.5], [0.1, 0.1, 0.8]]))
-        self.d_test_data = Variable(torch.Tensor([[0], [5]]))
+        self.d_ps = torch.tensor([[0.2, 0.3, 0.5], [0.1, 0.1, 0.8]])
+        self.d_test_data = torch.tensor([[0], [5]])
         self.d_v_test_data = [['a'], ['f']]
 
         self.n_samples = 50000
 
-        self.support_one_hot_non_vec = torch.Tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
-        self.support_one_hot = torch.Tensor([[[1, 0, 0], [1, 0, 0]],
+        self.support_one_hot_non_vec = torch.tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+        self.support_one_hot = torch.tensor([[[1, 0, 0], [1, 0, 0]],
                                              [[0, 1, 0], [0, 1, 0]],
                                              [[0, 0, 1], [0, 0, 1]]])
         self.support_non_vec = torch.LongTensor([[0], [1], [2]])
         self.support = torch.LongTensor([[[0], [0]], [[1], [1]], [[2], [2]]])
-        self.discrete_support_non_vec = torch.Tensor([[0], [1], [2]])
-        self.discrete_support = torch.Tensor([[[0], [3]], [[1], [4]], [[2], [5]]])
+        self.discrete_support_non_vec = torch.tensor([[0], [1], [2]])
+        self.discrete_support = torch.tensor([[[0], [3]], [[1], [4]], [[2], [5]]])
         self.discrete_arr_support_non_vec = [['a'], ['b'], ['c']]
         self.discrete_arr_support = [[['a'], ['d']], [['b'], ['e']], [['c'], ['f']]]
 
@@ -62,10 +61,7 @@ def wrap_nested(x, dim):
 
 def assert_correct_dimensions(sample, ps):
     ps_shape = list(ps.data.size())
-    if isinstance(sample, torch.autograd.Variable):
-        sample_shape = list(sample.data.size())
-    else:
-        sample_shape = list(sample.shape)
+    sample_shape = list(sample.shape)
     assert_equal(sample_shape, ps_shape)
 
 
@@ -80,7 +76,7 @@ def ps(request):
 
 
 def modify_params_using_dims(ps, dim):
-    return Variable(torch.Tensor(wrap_nested(ps, dim-1)))
+    return torch.tensor(wrap_nested(ps, dim-1))
 
 
 def test_support_dims(dim, ps):

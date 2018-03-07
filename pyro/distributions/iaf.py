@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
 from torch.distributions.transforms import Transform
 
 from pyro.distributions.util import copy_docs_from
@@ -58,7 +57,7 @@ class InverseAutoregressiveFlow(Transform):
         self.module = nn.Module()
         self.module.arn = AutoRegressiveNN(input_dim, hidden_dim, output_dim_multiplier=2, permutation=permutation)
         self.module.sigmoid = nn.Sigmoid()
-        self.module.sigmoid_bias = Variable(torch.Tensor([sigmoid_bias]))
+        self.module.sigmoid_bias = torch.tensor(sigmoid_bias)
         self._intermediates_cache = {}
         self.add_inverse_to_cache = True
 
@@ -74,7 +73,7 @@ class InverseAutoregressiveFlow(Transform):
     def _call(self, x):
         """
         :param x: the input into the bijection
-        :type x: torch.autograd.Variable
+        :type x: torch.Tensor
 
         Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
         sample from the base distribution (or the output of a previous flow)
@@ -82,7 +81,7 @@ class InverseAutoregressiveFlow(Transform):
         hidden = self.module.arn(x)
         sigma = self.module.sigmoid(hidden[:, 0:self.input_dim] + self.module.sigmoid_bias.type_as(hidden))
         mean = hidden[:, self.input_dim:]
-        y = sigma * x + (Variable(torch.ones(sigma.size())).type_as(sigma) - sigma) * mean
+        y = sigma * x + (torch.ones(sigma.size()).type_as(sigma) - sigma) * mean
         self._add_intermediate_to_cache(x, y, 'x')
         self._add_intermediate_to_cache(sigma, y, 'sigma')
         return y
@@ -90,7 +89,7 @@ class InverseAutoregressiveFlow(Transform):
     def _inverse(self, y):
         """
         :param y: the output of the bijection
-        :type y: torch.autograd.Variable
+        :type y: torch.Tensor
 
         Inverts y => x. As noted above, this implementation is incapable of inverting arbitrary values
         `y`; rather it assumes `y` is the result of a previously computed application of the bijector

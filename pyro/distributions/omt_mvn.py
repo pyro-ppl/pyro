@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import torch
-from torch.autograd import Function, variable
+from torch.autograd import Function
 from torch.autograd.function import once_differentiable
 from torch.distributions import constraints
 
@@ -17,8 +17,8 @@ class OMTMultivariateNormal(MultivariateNormal):
     A distribution over vectors in which all the elements have a joint Gaussian
     density.
 
-    :param torch.autograd.Variable loc: Mean.
-    :param torch.autograd.Variable scale_tril: Cholesky of Covariance matrix.
+    :param torch.Tensor loc: Mean.
+    :param torch.Tensor scale_tril: Cholesky of Covariance matrix.
     """
     params = {"loc": constraints.real, "scale_tril": constraints.lower_triangular}
 
@@ -53,7 +53,7 @@ class _OMTMVNSample(Function):
         g = grad_output
         loc_grad = sum_leftmost(grad_output, -1)
 
-        identity = torch.eye(dim, out=variable(g.new(dim, dim)))
+        identity = torch.eye(dim, out=torch.tensor(g.new(dim, dim)))
         R_inv = torch.trtrs(identity, L.t(), transpose=False, upper=True)[0]
 
         z_ja = z.unsqueeze(-1)
