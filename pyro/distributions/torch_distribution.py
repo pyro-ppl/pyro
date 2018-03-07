@@ -11,10 +11,12 @@ class TorchDistributionMixin(Distribution):
     """
     Mixin to provide Pyro compatibility for PyTorch distributions.
 
+    You should instead use `TorchDistribution` for new distribution classes.
+
     This is mainly useful for wrapping existing PyTorch distributions for
     use in Pyro.  Derived classes must first inherit from
-    :class:`torch.distributions.Distribution` and then inherit from
-    :class:`TorchDistributionMixin`.
+    :class:`torch.distributions.distribution.Distribution` and then inherit
+    from :class:`TorchDistributionMixin`.
     """
     @property
     def reparameterized(self):
@@ -38,8 +40,9 @@ class TorchDistributionMixin(Distribution):
         Samples a random value.
 
         This is reparameterized whenever possible, calling
-        :meth:`~torch.distributions.Distribution.rsample` for reparameterized
-        distributions and :meth:`~torch.distributions.Distribution.sample` for
+        :meth:`~torch.distributions.distribution.Distribution.rsample` for
+        reparameterized distributions and
+        :meth:`~torch.distributions.distribution.Distribution.sample` for
         non-reparameterized distributions.
 
         :param sample_shape: the size of the iid batch to be drawn from the
@@ -78,7 +81,8 @@ class TorchDistributionMixin(Distribution):
     def reshape(self, sample_shape=torch.Size(), extra_event_dims=0):
         """
         Reshapes a distribution by adding ``sample_shape`` to its total shape
-        and adding ``extra_event_dims`` to its ``event_shape``.
+        and adding ``extra_event_dims`` to its
+        :attr:`~torch.distributions.distribution.Distribution.event_shape`.
 
         :param torch.Size sample_shape: The size of the iid batch to be drawn
             from the distribution.
@@ -92,7 +96,7 @@ class TorchDistributionMixin(Distribution):
     def mask(self, mask):
         """
         Masks a distribution by a zero-one tensor that is broadcastable to the
-        distributions ``batch_shape``.
+        distributions :attr:`~torch.distributions.distribution.Distribution.batch_shape`.
 
         :param Variable mask: A zero-one valued float tensor.
         :return: A masked copy of this distribution.
@@ -115,8 +119,9 @@ class TorchDistribution(torch.distributions.Distribution, TorchDistributionMixin
 
     .. note::
 
-        Parameters and data should be of type `torch.autograd.Variable` and all
-        methods return type `torch.autograd.Variable` unless otherwise noted.
+        Parameters and data should be of type :class:`~torch.autograd.Variable`
+        and all methods return type :class:`~torch.autograd.Variable` unless
+        otherwise noted.
 
     **Tensor Shapes**:
 
@@ -139,13 +144,13 @@ class TorchDistribution(torch.distributions.Distribution, TorchDistributionMixin
 
     These shapes are related by the equation::
 
-      assert d.shape(sample_shape, *args, **kwargs) == sample_shape +
-                                                       d.batch_shape(*args, **kwargs) +
-                                                       d.event_shape(*args, **kwargs)
+      assert d.shape(sample_shape) == sample_shape + d.batch_shape + d.event_shape
 
-    Distributions provide a vectorized ``.log_prob()`` method that evaluates
-    the log probability density of each event in a batch independently,
-    returning a tensor of shape ``sample_shape + d.batch_shape``::
+    Distributions provide a vectorized
+    :meth`~torch.distributions.distribution.Distribution.log_prob` method that
+    evaluates the log probability density of each event in a batch
+    independently, returning a tensor of shape
+    ``sample_shape + d.batch_shape``::
 
       x = d.sample(sample_shape)
       assert x.size() == d.shape(sample_shape)
@@ -154,11 +159,18 @@ class TorchDistribution(torch.distributions.Distribution, TorchDistributionMixin
 
     **Implementing New Distributions**:
 
-    Derived classes must implement the following methods: ``.rsample()``
-    (or ``.sample()`` if ``.has_rsample == True``),
-    ``.log_prob()``, ``.batch_shape``, and ``.event_shape``.
-    Discrete classes may also implement the ``.enumerate_support()`` method to improve
-    gradient estimates and set ``.has_enumerate_support = True``.
+    Derived classes must implement the methods
+    :meth:`~torch.distributions.distribution.Distribution.sample`
+    (or :meth:`~torch.distributions.distribution.Distribution.rsample` if
+    ``.has_rsample == True``) and
+    :meth:`~torch.distributions.distribution.Distribution.log_prob`, and must
+    implement the properties
+    :attr:`~torch.distributions.distribution.Distribution.batch_shape`,
+    and :attr:`~torch.distributions.distribution.Distribution.event_shape`.
+    Discrete classes may also implement the
+    :meth:`~torch.distributions.distribution.Distribution.enumerate_support`
+    method to improve gradient estimates and set
+    ``.has_enumerate_support = True``.
     """
     pass
 
@@ -166,7 +178,8 @@ class TorchDistribution(torch.distributions.Distribution, TorchDistributionMixin
 class ReshapedDistribution(TorchDistribution):
     """
     Reshapes a distribution by adding ``sample_shape`` to its total shape
-    and adding ``extra_event_dims`` to its ``event_shape``.
+    and adding ``extra_event_dims`` to its
+    :attr:`~torch.distributions.distribution.Distribution.event_shape`.
 
     :param torch.Size sample_shape: The size of the iid batch to be drawn from
         the distribution.
@@ -237,7 +250,7 @@ class ReshapedDistribution(TorchDistribution):
 class MaskedDistribution(TorchDistribution):
     """
     Masks a distribution by a zero-one tensor that is broadcastable to the
-    distribution's ``batch_shape``.
+    distribution's :attr:`~torch.distributions.distribution.Distribution.batch_shape`.
 
     :param Variable mask: A zero-one valued float tensor.
     """

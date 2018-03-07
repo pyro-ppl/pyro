@@ -11,9 +11,9 @@ PyTorch Distributions
 
 Most distributions in Pyro are thin wrappers around PyTorch distributions.
 For details on the PyTorch distribution interface, see
-:class:`torch.distributions.Distribution`.
+:class:`torch.distributions.distribution.Distribution`.
 For differences between the Pyro and PyTorch interfaces, see
-:class:`pyro.distributions.torch_distribution.TorchDistributionMixin`.
+:class:`~pyro.distributions.torch_distribution.TorchDistributionMixin`.
 
 .. automodule:: pyro.distributions.torch
     :members:
