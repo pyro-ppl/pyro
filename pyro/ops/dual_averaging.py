@@ -33,7 +33,7 @@ class DualAveraging(object):
         that stabilizes the initial steps of the scheme.
     :param float kappa: A free parameter introduced in :math:`[2]`
         that controls the weights of steps of the scheme.
-        For a small ``kappa``, the scheme will quickly forget states 
+        For a small ``kappa``, the scheme will quickly forget states
         from early steps. This should be a number in :math:`(0.5, 1]`.
     :param float gamma: A free parameter which controls the speed
         of the convergence of the scheme.
