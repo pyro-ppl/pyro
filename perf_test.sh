@@ -42,5 +42,5 @@ fi
 if [ ${IS_BENCHMARK_FILE_IN_DEV} = 1 ]; then
     pytest -vx tests/perf/test_benchmark.py --benchmark-compare --benchmark-compare-fail=min:10%
 else
-    pytest -vx tests/perf/test_benchmark.py --benchmark-verbose
+    pytest -vx tests/perf/test_benchmark.py
 fi
