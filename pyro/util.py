@@ -5,7 +5,6 @@ import numbers
 import warnings
 
 import graphviz
-import numpy as np
 import torch
 from six.moves import zip_longest
 from torch.autograd import Variable
@@ -128,13 +127,12 @@ def memoize(fn):
 
 def set_rng_seed(rng_seed):
     """
-    Sets seeds of torch, numpy, and torch.cuda (if available).
+    Sets seeds of torch and torch.cuda (if available).
     :param int rng_seed: The seed value.
     """
     torch.manual_seed(rng_seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(rng_seed)
-    np.random.seed(rng_seed)
 
 
 def ones(*args, **kwargs):

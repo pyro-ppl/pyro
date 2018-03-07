@@ -4,7 +4,6 @@ import warnings
 from operator import itemgetter
 
 import networkx
-import numpy as np
 import torch
 from torch.autograd import variable
 
@@ -15,7 +14,7 @@ from pyro.infer import ELBO
 from pyro.infer.util import MultiViewTensor as MVT
 from pyro.infer.util import torch_backward, torch_data_sum
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_match, check_site_shape, detach_iterable
+from pyro.util import check_model_guide_match, check_site_shape, detach_iterable, is_nan
 
 
 def _get_baseline_options(site):
@@ -242,7 +241,7 @@ class TraceGraph_ELBO(ELBO):
             elbo += torch_data_sum(weight * elbo_particle)
 
         loss = -elbo
-        if np.isnan(loss):
+        if is_nan(loss):
             warnings.warn('Encountered NAN loss')
         return loss
 
@@ -301,6 +300,6 @@ class TraceGraph_ELBO(ELBO):
             pyro.get_param_store().mark_params_active(trainable_params)
 
         loss = -elbo
-        if np.isnan(loss):
+        if is_nan(loss):
             warnings.warn('Encountered NAN loss')
         return weight * loss
