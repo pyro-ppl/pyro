@@ -143,8 +143,7 @@ def test_logistic_regression_with_dual_averaging():
         y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
         return y
 
-    nuts_kernel = NUTS(model, step_size=None)
-    nuts_kernel._adapted = True
+    nuts_kernel = NUTS(model, adapt_step_size=True)
     mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100)
     posterior = []
     for trace, _ in mcmc_run._traces(data):
@@ -162,8 +161,7 @@ def test_bernoulli_beta_with_dual_averaging():
         pyro.observe("obs", dist.Bernoulli(p_latent), data)
         return p_latent
 
-    nuts_kernel = NUTS(model, step_size=None)
-    nuts_kernel._adapted = True
+    nuts_kernel = NUTS(model, adapt_step_size=True)
     mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100)
     posterior = []
     true_probs = Variable(torch.Tensor([0.9, 0.1]))

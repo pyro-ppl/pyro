@@ -142,7 +142,7 @@ class HMC(TraceKernel):
         self._adapted_scheme.step(H)
         log_step_size, _ = self._adapted_scheme.get_state()
         self.step_size = math.exp(log_step_size)
-        self.num_steps = int(self.trajectory_length / self.step_size)
+        self.num_steps = max(1, int(self.trajectory_length / self.step_size))
 
     def _validate_trace(self, trace):
         trace_log_pdf = trace.log_pdf()
@@ -173,7 +173,7 @@ class HMC(TraceKernel):
             for name, transform in self.transforms.items():
                 z[name] = transform(z[name])
             self.step_size = self._find_reasonable_step_size(z)
-            self.num_steps = int(self.trajectory_length / self.step_size)
+            self.num_steps = max(1, int(self.trajectory_length / self.step_size))
             # make prox-center for Dual Averaging scheme
             mu = math.log(10 * self.step_size)
             self._adapted_scheme = DualAveraging(prox_center=mu)
@@ -183,7 +183,7 @@ class HMC(TraceKernel):
             self.adapt_step_size = False
             _, log_step_size_avg = self._adapted_scheme.get_state()
             self.step_size = math.exp(log_step_size_avg)
-            self.num_steps = int(self.trajectory_length / self.step_size)
+            self.num_steps = max(1, int(self.trajectory_length / self.step_size))
 
     def cleanup(self):
         self._reset()
@@ -220,5 +220,5 @@ class HMC(TraceKernel):
         return self._get_trace(z)
 
     def diagnostics(self):
-        return "Step size: {:.06f} | Acceptance rate: {:.06f}".format(
-            self._adapted_step_size, self._accept_cnt / self._t)
+        return "Step size: {:.6f} | Acceptance rate: {:.6f}".format(
+            self.step_size, self._accept_cnt / self._t)

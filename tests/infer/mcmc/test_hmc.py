@@ -248,9 +248,7 @@ def test_logistic_regression_with_dual_averaging():
         y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
         return y
 
-    hmc_kernel = HMC(model, step_size=None)
-    hmc_kernel._adapted = True
-    hmc_kernel._trajectory_length = 1
+    hmc_kernel = HMC(model, trajectory_length=1, adapt_step_size=True)
     mcmc_run = MCMC(hmc_kernel, num_samples=500, warmup_steps=100)
     posterior = []
     for trace, _ in mcmc_run._traces(data):
@@ -267,9 +265,7 @@ def test_bernoulli_beta_with_dual_averaging():
         pyro.observe('obs', dist.Bernoulli(p_latent), data)
         return p_latent
 
-    hmc_kernel = HMC(model, step_size=None)
-    hmc_kernel._adapted = True
-    hmc_kernel._trajectory_length = 1
+    hmc_kernel = HMC(model, trajectory_length=1, adapt_step_size=True)
     mcmc_run = MCMC(hmc_kernel, num_samples=800, warmup_steps=500)
     posterior = []
     true_probs = variable([0.9, 0.1])
@@ -289,9 +285,7 @@ def test_normal_gamma_with_dual_averaging():
         pyro.observe("obs", dist.Normal(3, p_latent), data)
         return p_latent
 
-    hmc_kernel = HMC(model, step_size=None)
-    hmc_kernel._adapted = True
-    hmc_kernel._trajectory_length = 1
+    hmc_kernel = HMC(model, trajectory_length=1, adapt_step_size=True)
     mcmc_run = MCMC(hmc_kernel, num_samples=200, warmup_steps=100)
     posterior = []
     true_std = variable([0.5, 2])
