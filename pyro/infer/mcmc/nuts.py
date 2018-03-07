@@ -32,11 +32,18 @@ class NUTS(HMC):
     [1] `The No-U-turn sampler: adaptively setting path lengths in Hamiltonian Monte Carlo`,
     Matthew D. Hoffman, and Andrew Gelman
 
-    :param model: python callable containing pyro primitives.
-    :param float step_size: determines the size of a single step taken by the
+    :param model: Python callable containing pyro primitives.
+    :param float step_size: Determines the size of a single step taken by the
         verlet integrator while computing the trajectory using Hamiltonian
-        dynamics.
-    :param int max_tree_depth: maximum depth of binary tree during No-U-turn sampling.
+        dynamics. If not specified, it will be set to 1.
+    :param bool adapt_step_size: A flag to decide if we want to adapt step_size
+        during warm-up phase using Dual Averaging scheme.
+    :param dict transforms: Optional dictionary that specifies a transform
+        for a sample site with constrained support to unconstrained space. The
+        transform should be invertible, and implement `log_abs_det_jacobian`.
+        If not specified and the model has sites with constrained support,
+        automatic transformations will be applied, as specified in
+        :mod:`torch.distributions.constraint_registry`.
 
     Example::
 
@@ -57,8 +64,9 @@ class NUTS(HMC):
             posterior.append(trace.nodes['beta']['value'])
     """
 
-    def __init__(self, model, step_size=1):
-        super(NUTS, self).__init__(model, step_size, num_steps=None)
+    def __init__(self, model, step_size=None, adapt_step_size=False, transforms=None):
+        super(NUTS, self).__init__(model, step_size, adapt_step_size=adapt_step_size,
+                                   transforms=transforms)
 
         # TODO: move these parameters to config/defaults
         # Link to default parameters from Stan:
@@ -85,10 +93,7 @@ class NUTS(HMC):
         return (torch_data_sum(dz * r_left) < 0) or (torch_data_sum(dz * r_right) < 0)
 
     def _build_basetree(self, z, r, z_grads, log_slice, direction, energy_current):
-        if self._adapted:
-            step_size = self._adapted_step_size if direction == 1 else -self._adapted_step_size
-        else:
-            step_size = self.step_size if direction == 1 else -self.step_size
+        step_size = self.step_size if direction == 1 else -self.step_size
         z_new, r_new, z_grads, potential_energy = single_step_velocity_verlet(
             z, r, self._potential_energy, step_size, z_grads=z_grads)
         energy_new = potential_energy + self._kinetic_energy(r_new)
@@ -239,7 +244,7 @@ class NUTS(HMC):
             else:  # update tree_size
                 tree_size += new_tree.size
 
-        if self._adapted:
+        if self.adapt_step_size:
             accept_prob = new_tree.sum_accept_probs.item() / new_tree.num_proposals
             self._adapt_step_size(accept_prob)
 

@@ -45,7 +45,7 @@ class MCMC(TracePosterior):
                     self.logger.info(diagnostic_info)
             if t <= self.warmup_steps:
                 if t == self.warmup_steps:
-                    self.kernel._warmup = False
+                    self.kernel.end_warmup()
                 continue
             yield (trace, Variable(torch.Tensor([1.0])))
         self.kernel.cleanup()
