@@ -12,8 +12,8 @@ class Distribution(object):
     """
     Base class for parameterized probability distributions.
 
-    Distributions in Pyro are stochastic function objects with ``.sample()`` and
-    ``.log_prob()`` methods. Distribution are stochastic functions with fixed
+    Distributions in Pyro are stochastic function objects with :meth:`sample` and
+    :meth:`log_prob` methods. Distribution are stochastic functions with fixed
     parameters::
 
       d = dist.Bernoulli(param)
@@ -22,10 +22,8 @@ class Distribution(object):
 
     **Implementing New Distributions**:
 
-    Derived classes must implement the following methods: ``.sample()``,
-    ``.log_prob()``, ``.batch_shape()``, and ``.event_shape()``.
-    Discrete classes may also implement the ``.enumerate_support()`` method to improve
-    gradient estimates and set ``.enumerable = True``.
+    Derived classes must implement the methods: :meth:`sample`,
+    :meth:`log_prob`.
 
     **Examples**:
 
@@ -37,9 +35,9 @@ class Distribution(object):
 
     def __call__(self, *args, **kwargs):
         """
-        Samples a random value (just an alias for `.sample(*args, **kwargs)`).
+        Samples a random value (just an alias for ``.sample(*args, **kwargs)``).
 
-        For tensor distributions, the returned Variable should have the same `.size()` as the
+        For tensor distributions, the returned Variable should have the same ``.size()`` as the
         parameters.
 
         :return: A random value.
@@ -52,14 +50,14 @@ class Distribution(object):
         """
         Samples a random value.
 
-        For tensor distributions, the returned Variable should have the same `.size()` as the
+        For tensor distributions, the returned Variable should have the same ``.size()`` as the
         parameters, unless otherwise noted.
 
         :param sample_shape: the size of the iid batch to be drawn from the
             distribution.
         :type sample_shape: torch.Size
         :return: A random value or batch of random values (if parameters are
-            batched). The shape of the result should be `self.size()`.
+            batched). The shape of the result should be ``self.size()``.
         :rtype: torch.autograd.Variable
         """
         raise NotImplementedError
@@ -72,8 +70,8 @@ class Distribution(object):
         :param torch.autograd.Variable x: A single value or a batch of values
             batched along axis 0.
         :return: log probability densities as a one-dimensional
-            `torch.autograd.Variable` with same batch size as value and params.
-            The shape of the result should be `self.batch_size()`.
+            :class:`~torch.autograd.Variable` with same batch size as value and
+            params. The shape of the result should be ``self.batch_size``.
         :rtype: torch.autograd.Variable
         """
         raise NotImplementedError

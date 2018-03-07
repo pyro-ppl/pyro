@@ -111,9 +111,9 @@ for _name, _Dist in torch.distributions.__dict__.items():
         locals()[_name] = _PyroDist
 
     _PyroDist.__doc__ = '''
-    Wraps :class:`torch.distributions.{}` with
+    Wraps :class:`{}.{}` with
     :class:`~pyro.distributions.torch_distribution.TorchDistributionMixin`.
-    '''.format(_Dist.__name__)
+    '''.format(_Dist.__module__, _Dist.__name__)
 
     __all__.append(_name)
 
