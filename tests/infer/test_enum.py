@@ -427,7 +427,7 @@ def test_elbo_iarange_iarange(outer_dim, inner_dim, enumerate1, enumerate2, enum
             context2 = pyro.iarange("inner", inner_dim, dim=-3)
             pyro.sample("w", d.reshape([num_particles]))
             with context1:
-                pyro.sample("x", d.reshape([1, outer_dim, num_particles]))
+                pyro.sample("x", d.reshape([outer_dim, num_particles]))
             with context2:
                 pyro.sample("y", d.reshape([inner_dim, 1, num_particles]))
             with context1, context2:
@@ -440,7 +440,7 @@ def test_elbo_iarange_iarange(outer_dim, inner_dim, enumerate1, enumerate2, enum
             context2 = pyro.iarange("inner", inner_dim, dim=-3)
             pyro.sample("w", d.reshape([num_particles]), infer={"enumerate": enumerate1})
             with context1:
-                pyro.sample("x", d.reshape([1, outer_dim, num_particles]), infer={"enumerate": enumerate2})
+                pyro.sample("x", d.reshape([outer_dim, num_particles]), infer={"enumerate": enumerate2})
             with context2:
                 pyro.sample("y", d.reshape([inner_dim, 1, num_particles]), infer={"enumerate": enumerate3})
             with context1, context2:
@@ -465,14 +465,11 @@ def test_elbo_iarange_iarange(outer_dim, inner_dim, enumerate1, enumerate2, enum
     ]))
 
 
-@pytest.mark.parametrize("enumerate3", [None, "sequential", xfail_parallel])
-@pytest.mark.parametrize("enumerate2", [None, "sequential", xfail_parallel])
-@pytest.mark.parametrize("enumerate1", [None, "sequential", xfail_parallel])
+@pytest.mark.parametrize("enumerate3", [None, "sequential", "parallel"])
+@pytest.mark.parametrize("enumerate2", [None, "sequential", "parallel"])
+@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("inner_dim", [2])
-@pytest.mark.parametrize("outer_dim", [
-    1,
-    xfail_param(3, reason='not using MultiViewTensor in broadcasted var inside iarange'),
-])
+@pytest.mark.parametrize("outer_dim", [3])
 def test_elbo_iarange_irange(outer_dim, inner_dim, enumerate1, enumerate2, enumerate3):
     pyro.clear_param_store()
     num_particles = 10000
@@ -485,7 +482,7 @@ def test_elbo_iarange_irange(outer_dim, inner_dim, enumerate1, enumerate2, enume
             with pyro.iarange("outer", outer_dim):
                 pyro.sample("y", dist.Bernoulli(p).reshape([outer_dim, num_particles]))
                 for i in pyro.irange("inner", inner_dim):
-                    pyro.sample("z_{}".format(i), dist.Bernoulli(p).reshape([num_particles]))
+                    pyro.sample("z_{}".format(i), dist.Bernoulli(p).reshape([outer_dim, num_particles]))
 
     def guide():
         q = pyro.param("q")

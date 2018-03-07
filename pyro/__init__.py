@@ -208,7 +208,8 @@ class iarange(object):
     :type subsample: Anything supporting `len()`.
     :param int dim: An optional dimension to use for this independence index.
         If specified, ``dim`` should be negative, i.e. should index from the
-        right. If not specified, ``dim = -(1 + num_enclosing_iaranges)``.
+        right. If not specified, ``dim`` is set to the rightmost dim that is
+        left of all enclosing ``iarange`` contexts.
     :param bool use_cuda: Optional bool specifying whether to use cuda tensors
         for `subsample` and `log_pdf`. Defaults to `torch.Tensor.is_cuda`.
     :return: A reusabe context manager yielding a single 1-dimensional
