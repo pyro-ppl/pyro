@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import functools
 import numbers
+import random
 import warnings
 
 import graphviz
@@ -133,6 +134,13 @@ def set_rng_seed(rng_seed):
     torch.manual_seed(rng_seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(rng_seed)
+    random.seed(rng_seed)
+    try:
+        import numpy
+
+        np.random.seed(rng_seed)
+    except ImportError:
+        pass
 
 
 def ones(*args, **kwargs):
@@ -182,7 +190,6 @@ def ng_zeros(*args, **kwargs):
 def is_nan(x):
     """
     A convenient function to check if a Tensor contains all nan; also works with numbers
-    and torch.autograd.Variable
     """
     if isinstance(x, numbers.Number):
         return x != x
@@ -192,7 +199,6 @@ def is_nan(x):
 def is_inf(x):
     """
     A convenient function to check if a Tensor contains all inf; also works with numbers
-    and torch.autograd.Variable
     """
     if isinstance(x, numbers.Number):
         return x == float('inf')
