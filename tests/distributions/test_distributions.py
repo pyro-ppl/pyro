@@ -8,10 +8,6 @@ from pyro.distributions.util import broadcast_shape
 from tests.common import assert_equal, xfail_if_not_implemented
 
 
-def _unwrap_variable(x):
-    return x.detach().cpu().numpy()
-
-
 def _log_prob_shape(dist, x_size=torch.Size()):
     event_dims = len(dist.event_shape)
     expected_shape = broadcast_shape(dist.shape(), x_size, strict=True)
@@ -29,7 +25,7 @@ def test_batch_log_prob(dist):
         dist_params = dist.get_dist_params(idx)
         d = dist.pyro_dist(**dist_params)
         test_data = dist.get_test_data(idx)
-        log_prob_sum_pyro = _unwrap_variable(d.log_prob(test_data)).sum()
+        log_prob_sum_pyro = d.log_prob(test_data).sum().item()
         log_prob_sum_np = np.sum(dist.get_scipy_batch_logpdf(-1))
         assert_equal(log_prob_sum_pyro, log_prob_sum_np)
 

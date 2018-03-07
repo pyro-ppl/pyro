@@ -61,10 +61,7 @@ def wrap_nested(x, dim):
 
 def assert_correct_dimensions(sample, ps):
     ps_shape = list(ps.data.size())
-    if isinstance(sample, torch.autograd.Variable):
-        sample_shape = list(sample.data.size())
-    else:
-        sample_shape = list(sample.shape)
+    sample_shape = list(sample.shape)
     assert_equal(sample_shape, ps_shape)
 
 
