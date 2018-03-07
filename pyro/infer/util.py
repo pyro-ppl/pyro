@@ -29,16 +29,6 @@ def torch_data_sum(x):
     return x.sum().item()
 
 
-def torch_sum(x):
-    """
-    Like ``x.sum()`` for a :class:`~torch.Tensor`, but also works with
-    numbers.
-    """
-    if isinstance(x, numbers.Number):
-        return x
-    return x.sum()
-
-
 def torch_backward(x):
     """
     Like ``x.backward()`` for a :class:`~torch.Tensor`, but also accepts
