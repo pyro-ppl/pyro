@@ -6,14 +6,13 @@ import numpy as np
 import pytest
 import torch
 import torch.optim
-from torch.autograd import Variable
+from torch.autograd import variable
 
 import pyro
 import pyro.distributions as dist
 from pyro.distributions.testing import fakes
 from pyro.infer import SVI
 from pyro.optim import Adam
-from pyro.util import ng_ones, ng_zeros
 from tests.common import assert_equal
 
 logger = logging.getLogger(__name__)
@@ -26,7 +25,7 @@ logger = logging.getLogger(__name__)
                          ids=["Trace", "TraceGraph", "TraceEnum"])
 def test_subsample_gradient(trace_graph, enum_discrete, reparameterized, subsample):
     pyro.clear_param_store()
-    data = Variable(torch.Tensor([-0.5, 2.0]))
+    data = variable([-0.5, 2.0])
     subsample_size = 1 if subsample else len(data)
     num_particles = 5000
     precision = 0.333
@@ -35,16 +34,14 @@ def test_subsample_gradient(trace_graph, enum_discrete, reparameterized, subsamp
     def model():
         with pyro.iarange("data", len(data), subsample_size) as ind:
             x = data[ind]
-            z = pyro.sample("z", Normal(ng_zeros(len(x)), ng_ones(len(x))))
-            pyro.sample("x", Normal(z, ng_ones(len(x))), obs=x)
+            z = pyro.sample("z", Normal(0, 1).reshape(x.shape))
+            pyro.sample("x", Normal(z, 1), obs=x)
 
     def guide():
-        mu = pyro.param("mu", lambda: Variable(torch.zeros(len(data)), requires_grad=True))
-        sigma = pyro.param("sigma", lambda: Variable(torch.ones(1), requires_grad=True))
+        mu = pyro.param("mu", lambda: variable(torch.zeros(len(data)), requires_grad=True))
+        sigma = pyro.param("sigma", lambda: variable(torch.ones(1), requires_grad=True))
         with pyro.iarange("data", len(data), subsample_size) as ind:
-            mu = mu[ind]
-            sigma = sigma.expand(subsample_size)
-            pyro.sample("z", Normal(mu, sigma))
+            pyro.sample("z", Normal(mu[ind], sigma))
 
     optim = Adam({"lr": 0.1})
     inference = SVI(model, guide, optim, loss="ELBO",
@@ -57,5 +54,5 @@ def test_subsample_gradient(trace_graph, enum_discrete, reparameterized, subsamp
     expected_grads = {'mu': np.array([0.5, -2.0]), 'sigma': np.array([2.0])}
     for name in sorted(params):
         logger.info('expected {} = {}'.format(name, expected_grads[name]))
-        logger.info('actual   {} = {}'.format(name, actual_grads[name]))
+    logger.info('actual   {} = {}'.format(name, actual_grads[name]))
     assert_equal(actual_grads, expected_grads, prec=precision)
