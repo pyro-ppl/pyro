@@ -54,10 +54,10 @@ class HMC(TraceKernel):
         if trajectory_length is not None:
             self.trajectory_length = trajectory_length
         elif num_steps is not None:
-            self.trajectory_length = self.step_size * self.num_steps
+            self.trajectory_length = self.step_size * num_steps
         else:
             self.trajectory_length = 2 * math.pi  # from Stan
-        self.num_steps = int(self.trajectory_length / self.step_size)
+        self.num_steps = max(1, int(self.trajectory_length / self.step_size))
         self.adapt_step_size = adapt_step_size
         self._target_accept_prob = 0.8  # from Stan
 
@@ -137,7 +137,7 @@ class HMC(TraceKernel):
         return step_size
 
     def _adapt_step_size(self, accept_prob):
-        # calculate the statistics for Dual Averaging scheme
+        # calculate a statistic for Dual Averaging scheme
         H = self._target_accept_prob - accept_prob
         self._adapted_scheme.step(H)
         log_step_size, _ = self._adapted_scheme.get_state()

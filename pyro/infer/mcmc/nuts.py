@@ -68,9 +68,6 @@ class NUTS(HMC):
         super(NUTS, self).__init__(model, step_size, adapt_step_size=adapt_step_size,
                                    transforms=transforms)
 
-        # TODO: move these parameters to config/defaults
-        # Link to default parameters from Stan:
-        #     https://github.com/stan-dev/pystan/blob/develop/pystan/misc.py.
         self._max_tree_depth = 10  # from Stan
         # There are three conditions to stop doubling process:
         #     + Tree is becoming too big.
