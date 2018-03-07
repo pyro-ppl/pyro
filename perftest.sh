@@ -3,7 +3,7 @@ set -x
 
 CURRENT_HEAD=$(git rev-parse --abbrev-ref HEAD)
 # If the current state is detached head, store current commit info instead.
-if [ CURRENT_HEAD = 'HEAD' ]; then
+if [ ${CURRENT_HEAD} = 'HEAD' ]; then
     git checkout -b tmp
     CURRENT_HEAD=$(git rev-parse HEAD)
 fi
