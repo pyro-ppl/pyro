@@ -60,7 +60,7 @@ setup(
             'pytest-cov',
             'scipy>=0.19.0',
         ],
-        'profile': ['prettytable', 'pytest-benchmark'],
+        'profile': ['prettytable', 'pytest-benchmark', 'snakeviz'],
         'dev': [
             'torchvision',
             'flake8',
