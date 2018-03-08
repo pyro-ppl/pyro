@@ -40,7 +40,7 @@ fi
 
 # Run benchmark comparison - fails if the min run time is 10% less than on the ref branch.
 if [ ${IS_BENCHMARK_FILE_IN_DEV} = 1 ]; then
-    pytest -vx tests/perf/test_benchmark.py --benchmark-compare --benchmark-compare-fail=min:10%
+    pytest -vx tests/perf/test_benchmark.py --benchmark-compare --benchmark-compare-fail=min:10% --name=short
 else
     pytest -vx tests/perf/test_benchmark.py
 fi
