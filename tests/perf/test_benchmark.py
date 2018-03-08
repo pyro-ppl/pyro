@@ -122,7 +122,7 @@ if __name__ == "__main__":
     parser.add_argument("-m", "--models", nargs="*")
     parser.add_argument("-b", "--suffix", default="current_branch")
     args = parser.parse_args()
-    search_regexp = [re.compile(m) for m in args.models]
+    search_regexp = [re.compile(".*" + m + ".*") for m in args.models]
     profile_ids = []
     for r in search_regexp:
         profile_ids.append(filter(r.match, MODEL_IDS))

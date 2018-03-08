@@ -43,6 +43,7 @@ fi
 # Run profiling on current commit
 python tests/perf/test_benchmark.py --models "${@:2}" --suffix ${CURRENT_HEAD}${CURRENT_COMMIT}
 
+set +x
 
 for filename in .benchmarks/*.prof; do
     for model in "${@:2}"; do
