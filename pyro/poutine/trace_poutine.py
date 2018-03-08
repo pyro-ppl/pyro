@@ -137,8 +137,7 @@ class TraceMessenger(Messenger):
         """
         if self.graph_type == "dense":
             identify_dense_edges(self.trace)
-            self.trace.graph["vectorized_map_data_info"] = \
-                get_vectorized_map_data_info(self.trace)
+        self.trace.graph["vectorized_map_data_info"] = get_vectorized_map_data_info(self.trace)
         return super(TraceMessenger, self).__exit__(*args, **kwargs)
 
     def get_trace(self):

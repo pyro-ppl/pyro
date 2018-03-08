@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import numbers
 import warnings
 
 import pyro
@@ -9,6 +8,25 @@ from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, check_site_shape, is_nan
+from pyro.infer.util import MultiViewTensor, n_compatible_indices
+
+
+def compute_site_log_r(model_trace, guide_trace, target_site, target_shape):
+    log_r = MultiViewTensor()
+    stacks = model_trace.graph["vectorized_map_data_info"]['vec_md_stacks']
+    for name, model_site in model_trace.nodes.items():
+        if model_site["type"] == "sample":
+            log_r_term = model_site["batch_log_pdf"]
+            if not model_site["is_observed"]:
+                guide_site = guide_trace.nodes[name]
+                guide_log_pdf, _, _ = guide_site["score_parts"]
+                log_r_term -= guide_log_pdf
+            log_r_term = MultiViewTensor(log_r_term.detach())
+            dims_to_keep = n_compatible_indices(stacks, name, target_site)
+            summed_log_r_term = log_r_term.sum_leftmost_all_but(dims_to_keep)
+            log_r.add(summed_log_r_term)
+
+    return log_r.contract(target_shape)
 
 
 class Trace_ELBO(ELBO):
@@ -68,12 +86,9 @@ class Trace_ELBO(ELBO):
         elbo = 0.0
         # grab a trace from the generator
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
-            log_r = model_trace.log_pdf() - guide_trace.log_pdf()
-            if not isinstance(log_r, numbers.Number):
-                log_r = log_r.detach()
-
             elbo_particle = 0
             surrogate_elbo_particle = 0
+
             # compute elbo and surrogate elbo
             for name, model_site in model_trace.nodes.items():
                 if model_site["type"] == "sample":
@@ -92,7 +107,8 @@ class Trace_ELBO(ELBO):
                             surrogate_elbo_particle -= entropy_term.sum()
 
                         if not is_identically_zero(score_function_term):
-                            surrogate_elbo_particle = surrogate_elbo_particle + log_r * score_function_term.sum()
+                            log_r_site = compute_site_log_r(model_trace, guide_trace, name, guide_log_pdf.shape)
+                            surrogate_elbo_particle = surrogate_elbo_particle + (log_r_site * score_function_term).sum()
 
             elbo += elbo_particle / self.num_particles
 

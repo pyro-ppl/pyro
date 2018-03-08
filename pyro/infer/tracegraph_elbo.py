@@ -13,7 +13,7 @@ import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer import ELBO
 from pyro.infer.util import MultiViewTensor as MVT
-from pyro.infer.util import torch_backward, torch_data_sum
+from pyro.infer.util import torch_backward, torch_data_sum, n_compatible_indices
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, check_site_shape, detach_iterable
 
@@ -51,13 +51,6 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
     downstream_costs = {}
     stacks = model_trace.graph["vectorized_map_data_info"]['vec_md_stacks']
 
-    def n_compatible_indices(dest_node, source_node):
-        n_compatible = 0
-        for xframe, yframe in zip(stacks[source_node], stacks[dest_node]):
-            if xframe.name == yframe.name:
-                n_compatible += 1
-        return n_compatible
-
     for node in topo_sort_guide_nodes:
         downstream_costs[node] = MVT(model_trace.nodes[node]['batch_log_pdf'] -
                                      guide_trace.nodes[node]['batch_log_pdf'])
@@ -70,7 +63,7 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
             child_cost_nodes = downstream_guide_cost_nodes[child]
             downstream_guide_cost_nodes[node].update(child_cost_nodes)
             if nodes_included_in_sum.isdisjoint(child_cost_nodes):  # avoid duplicates
-                dims_to_keep = n_compatible_indices(node, child)
+                dims_to_keep = n_compatible_indices(stacks, node, child)
                 summed_child = downstream_costs[child].sum_leftmost_all_but(dims_to_keep)
                 downstream_costs[node].add(summed_child)
                 # XXX nodes_included_in_sum logic could be more fine-grained, possibly leading
@@ -81,7 +74,7 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
         for missing_node in missing_downstream_costs:
             missing_term = MVT(model_trace.nodes[missing_node]['batch_log_pdf'] -
                                guide_trace.nodes[missing_node]['batch_log_pdf'])
-            dims_to_keep = n_compatible_indices(node, missing_node)
+            dims_to_keep = n_compatible_indices(stacks, node, missing_node)
             summed_missing_term = missing_term.sum_leftmost_all_but(dims_to_keep)
             downstream_costs[node].add(summed_missing_term)
 
@@ -95,7 +88,7 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
         children_in_model.difference_update(downstream_guide_cost_nodes[site])
         for child in children_in_model:
             assert (model_trace.nodes[child]["type"] == "sample")
-            dims_to_keep = n_compatible_indices(site, child)
+            dims_to_keep = n_compatible_indices(stacks, site, child)
             summed_child = MVT(model_trace.nodes[child]['batch_log_pdf']).sum_leftmost_all_but(dims_to_keep)
             downstream_costs[site].add(summed_child)
             downstream_guide_cost_nodes[site].update([child])
