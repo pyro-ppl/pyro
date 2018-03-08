@@ -118,9 +118,14 @@ def profile_fn(test_model):
 
 
 if __name__ == "__main__":
+    """
+    This script is invoked to run cProfile on one of the models specified above.
+    """
     parser = argparse.ArgumentParser(description="Profiling different Pyro models.")
-    parser.add_argument("-m", "--models", nargs="*")
-    parser.add_argument("-b", "--suffix", default="current_branch")
+    parser.add_argument("-m", "--models", nargs="*",
+                        help="model name to match against model id, partial match (e.g. *NAME*) is acceptable.")
+    parser.add_argument("-b", "--suffix", default="current_branch",
+                        help="suffix to append to the cprofile output dump.")
     args = parser.parse_args()
     search_regexp = [re.compile(".*" + m + ".*") for m in args.models]
     profile_ids = []
