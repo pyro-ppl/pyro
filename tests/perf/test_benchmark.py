@@ -28,30 +28,18 @@ TEST_MODELS = []
 MODEL_IDS = []
 
 
-def model_id(test_model):
-    def serialize(value):
-        if isinstance(value, (numbers.Number, str)):
-            return str(value)
-        if hasattr(value, '__name__'):
-            return value.__name__
-        return None
-
-    argstring = "_".join([str(k) + "=" + serialize(v) for k, v in test_model.model_args.items()
-                          if serialize(v) is not None])
-    return test_model.model.__name__ + "::" + argstring
-
-
 def register_model(**model_kwargs):
     def register_fn(model):
+        model_id = model_kwargs.pop("id")
         test_model = Model(model, model_kwargs)
         TEST_MODELS.append(test_model)
-        MODEL_IDS.append(model_id(test_model))
+        MODEL_IDS.append(model_id)
         return model
     return register_fn
 
 
-@register_model(reparameterized=True)
-@register_model(reparameterized=False)
+@register_model(reparameterized=True, id='PoissonGamma::reparam=True')
+@register_model(reparameterized=False, id='PoissonGamma::reparam=False')
 def poisson_gamma_model(reparameterized):
     alpha0 = torch.tensor(1.0)
     beta0 = torch.tensor(1.0)
@@ -94,8 +82,8 @@ def poisson_gamma_model(reparameterized):
         svi.step()
 
 
-@register_model(kernel=NUTS, step_size=0.02)
-@register_model(kernel=HMC, step_size=0.02, num_steps=3)
+@register_model(kernel=NUTS, step_size=0.02, id='BernoulliBeta::NUTS')
+@register_model(kernel=HMC, step_size=0.02, num_steps=3, id='BernoulliBeta::HMC')
 def bernoulli_beta_hmc(**kwargs):
     def model(data):
         alpha = pyro.param('alpha', torch.tensor([1.1, 1.1], requires_grad=True))

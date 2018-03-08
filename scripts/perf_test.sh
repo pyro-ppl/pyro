@@ -2,7 +2,7 @@
 set -x
 
 CURRENT_HEAD=$(git rev-parse --abbrev-ref HEAD)
-# If the current state is detached head, store current commit info instead.
+# If the current state is detached head (e.g. travis), store current commit info instead.
 if [ ${CURRENT_HEAD} = 'HEAD' ]; then
     git checkout -b tmp
     CURRENT_HEAD=$(git rev-parse HEAD)
@@ -40,7 +40,7 @@ fi
 
 # Run benchmark comparison - fails if the min run time is 10% less than on the ref branch.
 if [ ${IS_BENCHMARK_FILE_IN_DEV} = 1 ]; then
-    pytest -vx tests/perf/test_benchmark.py --benchmark-compare --benchmark-compare-fail=min:10% --name=short
+    pytest -vx tests/perf/test_benchmark.py --benchmark-compare --benchmark-compare-fail=min:10% --benchmark-name=short
 else
     pytest -vx tests/perf/test_benchmark.py
 fi
