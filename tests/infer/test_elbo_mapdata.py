@@ -41,6 +41,7 @@ def test_elbo_mapdata(batch_size, map_type):
     add_data_point(0.09, 0.41)
     add_data_point(-0.04, 0.17)
 
+    data = torch.stack(data)
     n_data = Variable(torch.Tensor([len(data)]))
     analytic_lam_n = lam0 + n_data.expand_as(lam) * lam
     analytic_log_sig_n = -0.5 * torch.log(analytic_lam_n)
@@ -55,20 +56,13 @@ def test_elbo_mapdata(batch_size, map_type):
         mu_latent = pyro.sample("mu_latent",
                                 dist.Normal(mu0, torch.pow(lam0, -0.5)).reshape(extra_event_dims=1))
         if map_type == "irange":
-            pyro.map_data("aaa", data,
-                          lambda i, x: pyro.sample("obs_%d" % i,
-                                                   dist.Normal(mu_latent, torch.pow(lam, -0.5))
-                                                       .reshape(extra_event_dims=1),
-                                                   obs=x),
-                          batch_size=batch_size)
+            for i in pyro.irange("aaa", len(data), batch_size):
+                pyro.sample("obs_%d" % i, dist.Normal(mu_latent, torch.pow(lam, -0.5)) .reshape(extra_event_dims=1),
+                            obs=data[i]),
         elif map_type == "iarange":
-            tdata = torch.cat([xi.view(1, -1) for xi in data], 0)
-            pyro.map_data("aaa", tdata,
-                          lambda i, x: pyro.sample("obs",
-                                                   dist.Normal(mu_latent, torch.pow(lam, -0.5))
-                                                       .reshape(extra_event_dims=1),
-                                                   obs=x),
-                          batch_size=batch_size)
+            with pyro.iarange("aaa", len(data), batch_size) as ind:
+                pyro.sample("obs", dist.Normal(mu_latent, torch.pow(lam, -0.5)) .reshape(extra_event_dims=1),
+                            obs=data[ind]),
         else:
             for i, x in enumerate(data):
                 pyro.observe('obs_%d' % i,
@@ -86,11 +80,12 @@ def test_elbo_mapdata(batch_size, map_type):
         sig_q = torch.exp(log_sig_q)
         pyro.sample("mu_latent", dist.Normal(mu_q, sig_q).reshape(extra_event_dims=1))
         if map_type == "irange" or map_type is None:
-            pyro.map_data("aaa", data, lambda i, x: None, batch_size=batch_size)
+            for i in pyro.irange("aaa", len(data), batch_size):
+                pass
         elif map_type == "iarange":
-            tdata = torch.cat([xi.view(1, -1) for xi in data], 0)
-            # dummy map_data to do subsampling for observe
-            pyro.map_data("aaa", tdata, lambda i, x: None, batch_size=batch_size)
+            # dummy iarange to do subsampling for observe
+            with pyro.iarange("aaa", len(data), batch_size):
+                pass
         else:
             pass
 

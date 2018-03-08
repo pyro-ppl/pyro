@@ -261,7 +261,7 @@ class TraceGraph_ELBO(ELBO):
         return loss
 
     def _loss_and_grads_particle(self, weight, model_trace, guide_trace):
-        # get info regarding rao-blackwellization of vectorized map_data
+        # get info regarding rao-blackwellization of iarange
         guide_iarange_nodes = guide_trace.graph["iarange_info"]['nodes']
         model_iarange_nodes = model_trace.graph["iarange_info"]['nodes']
 
