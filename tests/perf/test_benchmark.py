@@ -112,7 +112,7 @@ if not os.path.exists(PROF_DIR):
     min_rounds=5,
     disable_gc=True,
 )
-def test_benchmarks(benchmark, model, model_args):
+def test_benchmark(benchmark, model, model_args):
     benchmark(model, **model_args)
 
 

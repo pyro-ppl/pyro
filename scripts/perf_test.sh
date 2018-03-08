@@ -21,7 +21,7 @@ git checkout ${REF_HEAD}
 
 # Skip if benchmark utils are not on `dev` branch.
 if [ -e ${BENCHMARK_FILE} ]; then
-    pytest -vs tests/perf/test_benchmark.py --benchmark-save=dev --benchmark-save=${REF_HEAD}
+    pytest -vs tests/perf/test_benchmark.py --benchmark-save=${REF_HEAD} --benchmark-name=short
     REF_EXIT_CODE=$?
 else
     IS_BENCHMARK_FILE_IN_DEV=0
@@ -40,7 +40,8 @@ fi
 
 # Run benchmark comparison - fails if the min run time is 10% less than on the ref branch.
 if [ ${IS_BENCHMARK_FILE_IN_DEV} = 1 ]; then
-    pytest -vx tests/perf/test_benchmark.py --benchmark-compare --benchmark-compare-fail=min:10% --benchmark-name=short
+    pytest -vx tests/perf/test_benchmark.py --benchmark-compare --benchmark-compare-fail=min:10% \
+        --benchmark-name=short --benchmark-columns=min,median,max
 else
     pytest -vx tests/perf/test_benchmark.py
 fi
