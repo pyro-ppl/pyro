@@ -45,8 +45,10 @@ python tests/perf/test_benchmark.py --models "${@:2}" --suffix ${CURRENT_HEAD}${
 
 
 for filename in .benchmarks/*.prof; do
-    # Open the two profiles in snakeviz
-    if [[ "${filename}" =~ .*${CURRENT_COMMIT}.prof|.*${REF_COMMIT}.prof ]]; then
-        snakeviz ${filename} &>/dev/null &
-    fi
+    for model in "${@:2}"; do
+        # Open the two profiles in snakeviz
+        if [[ "${filename}" =~ .*${model}.*(${CURRENT_COMMIT}.prof|${REF_COMMIT}).prof ]]; then
+            snakeviz ${filename} &>/dev/null &
+        fi
+    done
 done

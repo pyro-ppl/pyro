@@ -1,3 +1,4 @@
+SHELL := /bin/bash
 .PHONY: all install docs lint format test integration-test clean FORCE
 
 all: docs test
@@ -23,6 +24,8 @@ format: FORCE
 
 perf-test: FORCE
 	bash scripts/perf_test.sh ${ref}
+
+profile: ref=dev
 
 profile: FORCE
 	bash scripts/profile_model.sh ${ref} ${models}
