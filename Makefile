@@ -1,4 +1,3 @@
-SHELL := /bin/bash
 .PHONY: all install docs lint format test integration-test clean FORCE
 
 all: docs test
