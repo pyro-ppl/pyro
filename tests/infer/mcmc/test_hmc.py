@@ -276,7 +276,7 @@ def test_bernoulli_beta_with_dual_averaging():
     assert_equal(posterior_mean, true_probs, prec=0.01)
 
 
-@pytest.mark.xfail(reason='the model is sensible to NaN log_pdf')
+@pytest.mark.xfail(reason='the model is sensitive to NaN log_pdf')
 def test_normal_gamma_with_dual_averaging():
     def model(data):
         rate = pyro.param('rate', variable([1.0, 1.0], requires_grad=True))

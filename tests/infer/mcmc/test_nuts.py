@@ -152,7 +152,7 @@ def test_logistic_regression_with_dual_averaging():
     assert_equal(rmse(true_coefs, posterior_mean).item(), 0.0, prec=0.05)
 
 
-@pytest.mark.xfail(reason='the model is sensible to NaN log_pdf')
+@pytest.mark.xfail(reason='the model is sensitive to NaN log_pdf')
 def test_bernoulli_beta_with_dual_averaging():
     def model(data):
         alpha = pyro.param('alpha', Variable(torch.Tensor([1.1, 1.1]), requires_grad=True))
