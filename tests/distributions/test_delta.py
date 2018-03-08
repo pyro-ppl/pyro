@@ -4,7 +4,6 @@ from unittest import TestCase
 
 import numpy as np
 import torch
-from torch.autograd import Variable
 
 import pyro.distributions as dist
 from tests.common import assert_equal
@@ -12,13 +11,13 @@ from tests.common import assert_equal
 
 class TestDelta(TestCase):
     def setUp(self):
-        self.v = Variable(torch.Tensor([3]))
-        self.vs = Variable(torch.Tensor([[0], [1], [2], [3]]))
+        self.v = torch.tensor([3])
+        self.vs = torch.tensor([[0], [1], [2], [3]])
         self.vs_expanded = self.vs.expand(4, 3)
-        self.test_data = Variable(torch.Tensor([[3], [3], [3]]))
-        self.batch_test_data_1 = Variable(torch.arange(0, 4).unsqueeze(1).expand(4, 3))
-        self.batch_test_data_2 = Variable(torch.arange(4, 8).unsqueeze(1).expand(4, 3))
-        self.batch_test_data_3 = Variable(torch.Tensor([[3], [3], [3], [3]]))
+        self.test_data = torch.tensor([[3], [3], [3]])
+        self.batch_test_data_1 = torch.arange(0, 4).unsqueeze(1).expand(4, 3)
+        self.batch_test_data_2 = torch.arange(4, 8).unsqueeze(1).expand(4, 3)
+        self.batch_test_data_3 = torch.Tensor([[3], [3], [3], [3]])
         self.expected_support = [[[0], [1], [2], [3]]]
         self.expected_support_non_vec = [[3]]
         self.analytic_mean = 3
@@ -52,5 +51,5 @@ class TestDelta(TestCase):
         actual_support_non_vec = dist.Delta(self.v).enumerate_support()
         assert len(actual_support) == 1
         assert len(actual_support_non_vec) == 1
-        assert_equal(actual_support.data, torch.Tensor(self.expected_support))
-        assert_equal(actual_support_non_vec.data, torch.Tensor(self.expected_support_non_vec))
+        assert_equal(actual_support.data, torch.tensor(self.expected_support))
+        assert_equal(actual_support_non_vec.data, torch.tensor(self.expected_support_non_vec))

@@ -129,3 +129,44 @@ def test_normal_gamma():
         posterior.append(trace.nodes['p_latent']['value'])
     posterior_mean = torch.mean(torch.stack(posterior), 0)
     assert_equal(posterior_mean, true_std, prec=0.02)
+
+
+def test_logistic_regression_with_dual_averaging():
+    dim = 3
+    true_coefs = Variable(torch.arange(1, dim+1))
+    data = Variable(torch.randn(2000, dim))
+    labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
+
+    def model(data):
+        coefs_mean = Variable(torch.zeros(dim), requires_grad=True)
+        coefs = pyro.sample('beta', dist.Normal(coefs_mean, Variable(torch.ones(dim))))
+        y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
+        return y
+
+    nuts_kernel = NUTS(model, adapt_step_size=True)
+    mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100)
+    posterior = []
+    for trace, _ in mcmc_run._traces(data):
+        posterior.append(trace.nodes['beta']['value'])
+    posterior_mean = torch.mean(torch.stack(posterior), 0)
+    assert_equal(rmse(true_coefs, posterior_mean).item(), 0.0, prec=0.05)
+
+
+@pytest.mark.xfail(reason='the model is sensitive to NaN log_pdf')
+def test_bernoulli_beta_with_dual_averaging():
+    def model(data):
+        alpha = pyro.param('alpha', Variable(torch.Tensor([1.1, 1.1]), requires_grad=True))
+        beta = pyro.param('beta', Variable(torch.Tensor([1.1, 1.1]), requires_grad=True))
+        p_latent = pyro.sample("p_latent", dist.Beta(alpha, beta))
+        pyro.observe("obs", dist.Bernoulli(p_latent), data)
+        return p_latent
+
+    nuts_kernel = NUTS(model, adapt_step_size=True)
+    mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100)
+    posterior = []
+    true_probs = Variable(torch.Tensor([0.9, 0.1]))
+    data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
+    for trace, _ in mcmc_run._traces(data):
+        posterior.append(trace.nodes['p_latent']['value'])
+    posterior_mean = torch.mean(torch.stack(posterior), 0)
+    assert_equal(posterior_mean.data, true_probs.data, prec=0.01)

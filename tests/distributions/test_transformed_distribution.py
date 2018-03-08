@@ -44,10 +44,6 @@ EXAMPLES = list(map(make_lognormal, [
 ]))
 
 
-def unwrap_variable(x):
-    return x.detach().cpu().numpy()
-
-
 def AffineExp(affine_b, affine_a):
     affine_transform = AffineTransform(loc=affine_a, scale=affine_b)
     exp_transform = ExpTransform()

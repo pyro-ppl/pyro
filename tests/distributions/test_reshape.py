@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 import pytest
 import torch
-from torch.autograd import Variable
 
 from pyro.distributions.torch import Bernoulli
 
@@ -46,7 +45,7 @@ def test_reshape(sample_dim, extra_event_dims):
     shape = sample_shape + batch_shape + event_shape
 
     # Construct a base dist of desired starting shape.
-    dist0 = Bernoulli(Variable(0.5 * torch.ones(batch_shape)))
+    dist0 = Bernoulli(0.5 * torch.ones(batch_shape))
     assert dist0.event_shape == event_shape
     assert dist0.batch_shape == batch_shape
 
@@ -75,7 +74,7 @@ def test_reshape_reshape(sample_dim, extra_event_dims):
     shape = sample_shape + batch_shape + event_shape
 
     # Construct a base dist of desired starting shape.
-    dist0 = Bernoulli(Variable(0.5 * torch.ones(event_shape)))
+    dist0 = Bernoulli(0.5 * torch.ones(event_shape))
     dist1 = dist0.reshape(sample_shape=batch_shape, extra_event_dims=2)
     assert dist1.event_shape == event_shape
     assert dist1.batch_shape == batch_shape

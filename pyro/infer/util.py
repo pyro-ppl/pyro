@@ -11,7 +11,7 @@ from pyro.distributions.util import sum_leftmost
 
 def torch_exp(x):
     """
-    Like ``x.exp()`` for a :class:`~torch.autograd.Variable`, but also accepts
+    Like ``x.exp()`` for a :class:`~torch.Tensor`, but also accepts
     numbers.
     """
     if isinstance(x, numbers.Number):
@@ -21,27 +21,17 @@ def torch_exp(x):
 
 def torch_data_sum(x):
     """
-    Like ``x.data.sum()`` for a :class:`~torch.autograd.Variable`, but also works
+    Like ``x.sum().item()`` for a :class:`~torch.Tensor`, but also works
     with numbers.
     """
     if isinstance(x, numbers.Number):
         return x
-    return x.data.sum()
-
-
-def torch_sum(x):
-    """
-    Like ``x.sum()`` for a :class:`~torch.autograd.Variable`, but also works with
-    numbers.
-    """
-    if isinstance(x, numbers.Number):
-        return x
-    return x.sum()
+    return x.sum().item()
 
 
 def torch_backward(x):
     """
-    Like ``x.backward()`` for a :class:`~torch.autograd.Variable`, but also accepts
+    Like ``x.backward()`` for a :class:`~torch.Tensor`, but also accepts
     numbers (a no-op if given a number).
     """
     if isinstance(x, torch.autograd.Variable):

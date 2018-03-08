@@ -307,33 +307,6 @@ def irange(name, size, subsample_size=None, subsample=None, use_cuda=None):
                     yield i.item() if isinstance(i, Variable) else i
 
 
-def map_data(name, data, fn, batch_size=None, batch_dim=0, use_cuda=None):
-    """
-    Data subsampling with the important property that all the data are conditionally independent.
-
-    With default values of `batch_size` and `batch_dim`, `map_data` behaves like `map`.
-    More precisely, `map_data('foo', data, fn)` is equivalent to `[fn(i, x) for i, x in enumerate(data)]`.
-
-    :param str name: named argument
-    :param data: data to subsample
-    :param callable fn: a function taking `(index, datum)` pairs, where `dataum = data[index]`
-    :param int batch_size: number of samples per batch, or zero for the entire dataset
-    :param int batch_dim: dimension to subsample for tensor inputs
-    :param bool use_cuda: Optional bool specifying whether to use cuda tensors
-        for `log_pdf`. Defaults to `torch.Tensor.is_cuda`.
-    :return: a list of values returned by `fn`
-    """
-
-    use_cuda = use_cuda or getattr(data, 'is_cuda', None)
-    if isinstance(data, (torch.Tensor, Variable)):
-        size = data.size(batch_dim)
-        with iarange(name, size, batch_size, use_cuda=use_cuda) as batch:
-            return fn(batch, data.index_select(batch_dim, batch))
-    else:
-        size = len(data)
-        return [fn(i, data[i]) for i in irange(name, size, batch_size, use_cuda=use_cuda)]
-
-
 # XXX this should have the same call signature as torch.Tensor constructors
 def param(name, *args, **kwargs):
     """

@@ -4,7 +4,6 @@ import numbers
 
 import torch
 import torch.nn.functional as F
-from torch.autograd import Variable
 
 
 def copy_docs_from(source_class, full_text=False):
@@ -48,7 +47,7 @@ def copy_docs_from(source_class, full_text=False):
 def is_identically_zero(x):
     """
     Check if argument is exactly the number zero. True for the number zero;
-    false for other numbers; false for :class:`~torch.autograd.Variable`s.
+    false for other numbers; false for :class:`~torch.Tensor`s.
     """
     return isinstance(x, numbers.Number) and x == 0
 
@@ -56,7 +55,7 @@ def is_identically_zero(x):
 def is_identically_one(x):
     """
     Check if argument is exactly the number one. True for the number one;
-    false for other numbers; false for :class:`~torch.autograd.Variable`s.
+    false for other numbers; false for :class:`~torch.Tensor`s.
     """
     return isinstance(x, numbers.Number) and x == 1
 
@@ -98,7 +97,7 @@ def sum_rightmost(value, dim):
     If ``dim`` is -2, all but the leftmost 2 dimensions are summed out.
     etc.
 
-    :param torch.autograd.Variable value: A tensor of ``.dim()`` at least ``dim``.
+    :param torch.Tensor value: A tensor of ``.dim()`` at least ``dim``.
     :param int dim: The number of rightmost dims to sum out.
     """
     if isinstance(value, numbers.Number):
@@ -130,7 +129,7 @@ def sum_leftmost(value, dim):
         assert sum_leftmost(x, 1).shape == (3, 4)
         assert sum_leftmost(x, -1).shape == (4,)
 
-    :param torch.autograd.Variable value: A tensor
+    :param torch.Tensor value: A tensor
     :param int dim: Specifies the number of dims to sum out
     """
     if isinstance(value, numbers.Number):
@@ -235,8 +234,6 @@ def softmax(x, dim=-1):
 
 def _get_clamping_buffer(tensor):
     clamp_eps = 1e-6
-    if isinstance(tensor, Variable):
-        tensor = tensor.data
     if isinstance(tensor, (torch.DoubleTensor, torch.cuda.DoubleTensor)):
         clamp_eps = 1e-15
     return clamp_eps

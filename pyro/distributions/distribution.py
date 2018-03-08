@@ -37,11 +37,11 @@ class Distribution(object):
         """
         Samples a random value (just an alias for ``.sample(*args, **kwargs)``).
 
-        For tensor distributions, the returned Variable should have the same ``.size()`` as the
+        For tensor distributions, the returned tensor should have the same ``.size()`` as the
         parameters.
 
         :return: A random value.
-        :rtype: torch.autograd.Variable
+        :rtype: torch.Tensor
         """
         return self.sample(*args, **kwargs)
 
@@ -50,7 +50,7 @@ class Distribution(object):
         """
         Samples a random value.
 
-        For tensor distributions, the returned Variable should have the same ``.size()`` as the
+        For tensor distributions, the returned tensor should have the same ``.size()`` as the
         parameters, unless otherwise noted.
 
         :param sample_shape: the size of the iid batch to be drawn from the
@@ -58,7 +58,7 @@ class Distribution(object):
         :type sample_shape: torch.Size
         :return: A random value or batch of random values (if parameters are
             batched). The shape of the result should be ``self.size()``.
-        :rtype: torch.autograd.Variable
+        :rtype: torch.Tensor
         """
         raise NotImplementedError
 
@@ -67,12 +67,12 @@ class Distribution(object):
         """
         Evaluates log probability densities for each of a batch of samples.
 
-        :param torch.autograd.Variable x: A single value or a batch of values
+        :param torch.Tensor x: A single value or a batch of values
             batched along axis 0.
         :return: log probability densities as a one-dimensional
-            :class:`~torch.autograd.Variable` with same batch size as value and
+            :class:`~torch.Tensor` with same batch size as value and
             params. The shape of the result should be ``self.batch_size``.
-        :rtype: torch.autograd.Variable
+        :rtype: torch.Tensor
         """
         raise NotImplementedError
 
@@ -85,7 +85,7 @@ class Distribution(object):
         distributions should override this method to compute correct
         `.score_function` and `.entropy_term` parts.
 
-        :param torch.autograd.Variable x: A single value or batch of values.
+        :param torch.Tensor x: A single value or batch of values.
         :return: A `ScoreParts` object containing parts of the ELBO estimator.
         :rtype: ScoreParts
         """

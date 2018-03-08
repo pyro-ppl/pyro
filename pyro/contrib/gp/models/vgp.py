@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import torch
-from torch.autograd import Variable
 from torch.distributions import constraints, transform_to
 
 import pyro
@@ -18,8 +17,8 @@ class VariationalGP(Model):
     This model can be seen as a special version of SparseVariationalGP model
     with :math:`Xu = X`.
 
-    :param torch.autograd.Variable X: A 1D or 2D tensor of inputs.
-    :param torch.autograd.Variable y: A 1D tensor of outputs for training.
+    :param torch.Tensor X: A 1D or 2D tensor of inputs.
+    :param torch.Tensor y: A 1D tensor of outputs for training.
     :param pyro.contrib.gp.kernels.Kernel kernel: A Pyro kernel object.
     :param pyro.contrib.gp.likelihoods.Likelihood likelihood: A likelihood module.
     :param float jitter: An additional jitter to help stablize Cholesky decomposition.
@@ -33,7 +32,7 @@ class VariationalGP(Model):
 
         self.num_data = self.X.size(0)
 
-        self.jitter = Variable(self.X.data.new([jitter]))
+        self.jitter = self.X.data.new([jitter])
 
     def model(self):
         self.set_mode("model")
@@ -41,7 +40,7 @@ class VariationalGP(Model):
         kernel = self.kernel
         likelihood = self.likelihood
 
-        zero_loc = Variable(self.X.data.new([0])).expand(self.num_data)
+        zero_loc = self.X.data.new([0]).expand(self.num_data)
         Kff = kernel(self.X) + self.jitter.expand(self.num_data).diag()
 
         f = pyro.sample("f", dist.MultivariateNormal(zero_loc, Kff))
@@ -54,10 +53,10 @@ class VariationalGP(Model):
         likelihood = self.likelihood
 
         # define variational parameters
-        mf_0 = Variable(self.X.new(self.num_data).zero_(), requires_grad=True)
+        mf_0 = torch.tensor(self.X.new(self.num_data).zero_(), requires_grad=True)
         mf = pyro.param("f_loc", mf_0)
-        unconstrained_Lf_0 = Variable(self.X.data.new(self.num_data, self.num_data).zero_(),
-                                      requires_grad=True)
+        unconstrained_Lf_0 = torch.tensor(self.X.data.new(self.num_data, self.num_data).zero_(),
+                                          requires_grad=True)
         unconstrained_Lf = pyro.param("unconstrained_f_tril", unconstrained_Lf_0)
         Lf = transform_to(constraints.lower_cholesky)(unconstrained_Lf)
 
@@ -72,10 +71,10 @@ class VariationalGP(Model):
         according to :math:`p(f^*,f|y) = p(f^*|f)p(f|y) \sim p(f^*|f)q(f)`,
         then marginalize out variable :math:`f`.
 
-        :param torch.autograd.Variable Xnew: A 1D or 2D tensor.
+        :param torch.Tensor Xnew: A 1D or 2D tensor.
         :param bool full_cov: Predict full covariance matrix or just its diagonal.
         :return: loc, covariance matrix of :math:`p(f^*|Xnew)`, and the likelihood.
-        :rtype: torch.autograd.Variable, torch.autograd.Variable, and
+        :rtype: torch.Tensor, torch.Tensor, and
             pyro.contrib.gp.likelihoods.Likelihood
         """
         self._check_Xnew_shape(Xnew, self.X)

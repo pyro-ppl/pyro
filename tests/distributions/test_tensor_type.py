@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 import pytest
 import scipy.stats as sp
 import torch
-from torch.autograd import Variable
 
 import pyro.distributions as dist
 from tests.common import assert_equal
@@ -11,7 +10,7 @@ from tests.common import assert_equal
 
 @pytest.fixture()
 def test_data():
-    return Variable(torch.DoubleTensor([0.4]))
+    return torch.DoubleTensor([0.4])
 
 
 @pytest.fixture()
@@ -19,7 +18,7 @@ def alpha():
     """
     alpha parameter for the Beta distribution.
     """
-    return Variable(torch.DoubleTensor([2.4]))
+    return torch.DoubleTensor([2.4])
 
 
 @pytest.fixture()
@@ -27,22 +26,22 @@ def beta():
     """
     beta parameter for the Beta distribution.
     """
-    return Variable(torch.DoubleTensor([3.7]))
+    return torch.DoubleTensor([3.7])
 
 
 @pytest.fixture()
 def float_test_data(test_data):
-    return Variable(torch.FloatTensor(test_data.detach().cpu().numpy()))
+    return torch.FloatTensor(test_data.detach().cpu().numpy())
 
 
 @pytest.fixture()
 def float_alpha(alpha):
-    return Variable(torch.FloatTensor(alpha.detach().cpu().numpy()))
+    return torch.FloatTensor(alpha.detach().cpu().numpy())
 
 
 @pytest.fixture()
 def float_beta(beta):
-    return Variable(torch.FloatTensor(beta.detach().cpu().numpy()))
+    return torch.FloatTensor(beta.detach().cpu().numpy())
 
 
 def test_double_type(test_data, alpha, beta):

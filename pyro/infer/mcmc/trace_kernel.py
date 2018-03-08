@@ -34,6 +34,12 @@ class TraceKernel(object):
         """
         return None
 
+    def end_warmup(self):
+        """
+        Optional method to tell kernel that warm-up phase has been finished.
+        """
+        pass
+
     @abstractmethod
     def initial_trace(self):
         """

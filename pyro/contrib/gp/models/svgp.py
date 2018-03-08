@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import torch
-from torch.autograd import Variable
 from torch.distributions import constraints, transform_to
 from torch.nn import Parameter
 
@@ -21,8 +20,8 @@ class SparseVariationalGP(VariationalGP):
     [1] `Scalable variational Gaussian process classification`,
     James Hensman, Alexander G. de G. Matthews, Zoubin Ghahramani
 
-    :param torch.autograd.Variable X: A 1D or 2D tensor of inputs.
-    :param torch.autograd.Variable y: A 1D tensor of outputs for training.
+    :param torch.Tensor X: A 1D or 2D tensor of inputs.
+    :param torch.Tensor y: A 1D tensor of outputs for training.
     :param pyro.contrib.gp.kernels.Kernel kernel: A Pyro kernel object.
     :param torch.Tensor Xu: Initial values for inducing points, which are parameters
         of our model.
@@ -46,7 +45,7 @@ class SparseVariationalGP(VariationalGP):
         Kuf = kernel(Xu, self.X)
         Luu = Kuu.potrf(upper=False)
 
-        zero_loc = Variable(Xu.data.new([0])).expand(self.num_inducing)
+        zero_loc = Xu.data.new([0]).expand(self.num_inducing)
         # TODO: use scale_tril=Luu
         u = pyro.sample("u", dist.MultivariateNormal(loc=zero_loc, covariance_matrix=Kuu))
 
@@ -74,10 +73,10 @@ class SparseVariationalGP(VariationalGP):
         Xu = self.get_param("Xu")
 
         # define variational parameters
-        mu_0 = Variable(Xu.data.new(self.num_inducing).zero_(), requires_grad=True)
+        mu_0 = torch.tensor(Xu.data.new(self.num_inducing).zero_(), requires_grad=True)
         mu = pyro.param("u_loc", mu_0)
-        unconstrained_Lu_0 = Variable(Xu.data.new(self.num_inducing, self.num_inducing).zero_(),
-                                      requires_grad=True)
+        unconstrained_Lu_0 = torch.tensor(Xu.data.new(self.num_inducing, self.num_inducing).zero_(),
+                                          requires_grad=True)
         unconstrained_Lu = pyro.param("unconstrained_u_tril", unconstrained_Lu_0)
         Lu = transform_to(constraints.lower_cholesky)(unconstrained_Lu)
 
@@ -92,10 +91,10 @@ class SparseVariationalGP(VariationalGP):
         according to :math:`p(f^*,u|y) = p(f^*|u)p(u|y) \sim p(f^*|u)q(u)`,
         then marginalize out variable :math:`u`.
 
-        :param torch.autograd.Variable Xnew: A 2D tensor.
+        :param torch.Tensor Xnew: A 2D tensor.
         :param bool full_cov: Predict full covariance matrix or just its diagonal.
         :return: loc, covariance matrix of :math:`p(f^*|Xnew)`, and the likelihood.
-        :rtype: torch.autograd.Variable, torch.autograd.Variable, and
+        :rtype: torch.Tensor, torch.Tensor, and
             pyro.contrib.gp.likelihoods.Likelihood
         """
         self._check_Xnew_shape(Xnew, self.X)

@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 import pytest
 import torch
-from torch.autograd import Variable
 
 from pyro.distributions.util import broadcast_shape, sum_leftmost, sum_rightmost
 
@@ -77,7 +76,7 @@ def test_broadcast_shape_strict_error(shapes):
 
 
 def test_sum_rightmost():
-    x = Variable(torch.ones(2, 3, 4))
+    x = torch.ones(2, 3, 4)
     assert sum_rightmost(x, 0).shape == (2, 3, 4)
     assert sum_rightmost(x, 1).shape == (2, 3)
     assert sum_rightmost(x, 2).shape == (2,)
@@ -87,7 +86,7 @@ def test_sum_rightmost():
 
 
 def test_sum_leftmost():
-    x = Variable(torch.ones(2, 3, 4))
+    x = torch.ones(2, 3, 4)
     assert sum_leftmost(x, 0).shape == (2, 3, 4)
     assert sum_leftmost(x, 1).shape == (3, 4)
     assert sum_leftmost(x, 2).shape == (4,)

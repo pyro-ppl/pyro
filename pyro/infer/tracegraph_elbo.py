@@ -4,7 +4,6 @@ import warnings
 from operator import itemgetter
 
 import networkx
-import numpy as np
 import torch
 from torch.autograd import variable
 
@@ -15,7 +14,7 @@ from pyro.infer import ELBO
 from pyro.infer.util import MultiViewTensor as MVT
 from pyro.infer.util import torch_backward, torch_data_sum
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_match, check_site_shape, detach_iterable
+from pyro.util import check_model_guide_match, check_site_shape, detach_iterable, is_nan
 
 
 def _get_baseline_options(site):
@@ -35,7 +34,7 @@ def _get_baseline_options(site):
 
 
 def _compute_downstream_costs(model_trace, guide_trace,  #
-                              model_vec_md_nodes, guide_vec_md_nodes,  #
+                              model_iarange_nodes, guide_iarange_nodes,  #
                               non_reparam_nodes):
     # recursively compute downstream cost nodes for all sample sites in model and guide
     # (even though ultimately just need for non-reparameterizable sample sites)
@@ -49,7 +48,7 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
 
     downstream_guide_cost_nodes = {}
     downstream_costs = {}
-    stacks = model_trace.graph["vectorized_map_data_info"]['vec_md_stacks']
+    stacks = model_trace.graph["iarange_info"]['iarange_stacks']
 
     def n_compatible_indices(dest_node, source_node):
         n_compatible = 0
@@ -130,7 +129,7 @@ def _compute_elbo_reparam(model_trace, guide_trace, non_reparam_nodes):
     return torch_data_sum(elbo), surrogate_elbo
 
 
-def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
+def _compute_elbo_non_reparam(guide_trace, guide_iarange_nodes,  #
                               non_reparam_nodes, downstream_costs):
     # construct all the reinforce-like terms.
     # we include only downstream costs to reduce variance
@@ -140,7 +139,7 @@ def _compute_elbo_non_reparam(guide_trace, guide_vec_md_nodes,  #
     baseline_loss = 0.0
     for node in non_reparam_nodes:
         guide_site = guide_trace.nodes[node]
-        log_pdf_key = 'batch_log_pdf' if node in guide_vec_md_nodes else 'log_pdf'
+        log_pdf_key = 'batch_log_pdf' if node in guide_iarange_nodes else 'log_pdf'
         downstream_cost = downstream_costs[node]
         baseline = 0.0
         (nn_baseline, nn_baseline_input, use_decaying_avg_baseline, baseline_beta,
@@ -242,7 +241,7 @@ class TraceGraph_ELBO(ELBO):
             elbo += torch_data_sum(weight * elbo_particle)
 
         loss = -elbo
-        if np.isnan(loss):
+        if is_nan(loss):
             warnings.warn('Encountered NAN loss')
         return loss
 
@@ -261,9 +260,9 @@ class TraceGraph_ELBO(ELBO):
         return loss
 
     def _loss_and_grads_particle(self, weight, model_trace, guide_trace):
-        # get info regarding rao-blackwellization of vectorized map_data
-        guide_vec_md_nodes = guide_trace.graph["vectorized_map_data_info"]['nodes']
-        model_vec_md_nodes = model_trace.graph["vectorized_map_data_info"]['nodes']
+        # get info regarding rao-blackwellization of iarange
+        guide_iarange_nodes = guide_trace.graph["iarange_info"]['nodes']
+        model_iarange_nodes = model_trace.graph["iarange_info"]['nodes']
 
         # have the trace compute all the individual (batch) log pdf terms
         # and score function terms (if present) so that they are available below
@@ -284,9 +283,9 @@ class TraceGraph_ELBO(ELBO):
         baseline_loss = 0.0
         if non_reparam_nodes:
             downstream_costs, _ = _compute_downstream_costs(
-                    model_trace, guide_trace,  model_vec_md_nodes, guide_vec_md_nodes, non_reparam_nodes)
+                    model_trace, guide_trace,  model_iarange_nodes, guide_iarange_nodes, non_reparam_nodes)
             surrogate_elbo_term, baseline_loss = _compute_elbo_non_reparam(
-                    guide_trace, guide_vec_md_nodes, non_reparam_nodes, downstream_costs)
+                    guide_trace, guide_iarange_nodes, non_reparam_nodes, downstream_costs)
             surrogate_elbo += surrogate_elbo_term
 
         # collect parameters to train from model and guide
@@ -301,6 +300,6 @@ class TraceGraph_ELBO(ELBO):
             pyro.get_param_store().mark_params_active(trainable_params)
 
         loss = -elbo
-        if np.isnan(loss):
+        if is_nan(loss):
             warnings.warn('Encountered NAN loss')
         return weight * loss

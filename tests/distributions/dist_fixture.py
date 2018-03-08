@@ -4,7 +4,6 @@ import math
 
 import numpy as np
 import torch
-from torch.autograd import Variable
 
 from pyro.distributions.util import get_probs_and_logits, broadcast_shape
 
@@ -72,7 +71,7 @@ class Fixture(object):
 
     def _convert_logits_to_ps(self, dist_params):
         if 'logits' in dist_params:
-            logits = Variable(torch.Tensor(dist_params.pop('logits')))
+            logits = torch.tensor(dist_params.pop('logits'))
             is_multidimensional = self.get_test_distribution_name() != 'Bernoulli'
             ps, _ = get_probs_and_logits(logits=logits, is_multidimensional=is_multidimensional)
             dist_params['ps'] = list(ps.detach().cpu().numpy())
@@ -149,11 +148,11 @@ class Fixture(object):
 def tensor_wrap(*args, **kwargs):
     tensor_list, tensor_map = [], {}
     for arg in args:
-        wrapped_arg = Variable(torch.Tensor(arg)) if isinstance(arg, list) else arg
+        wrapped_arg = torch.tensor(arg) if isinstance(arg, list) else arg
         tensor_list.append(wrapped_arg)
     for k in kwargs:
         kwarg = kwargs[k]
-        wrapped_kwarg = Variable(torch.Tensor(kwarg)) if isinstance(kwarg, list) else kwarg
+        wrapped_kwarg = torch.tensor(kwarg) if isinstance(kwarg, list) else kwarg
         tensor_map[k] = wrapped_kwarg
     if args and not kwargs:
         return tensor_list

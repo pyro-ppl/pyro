@@ -5,16 +5,16 @@ from .trace import Trace
 from .util import site_is_subsample
 
 
-def get_vectorized_map_data_info(trace):
+def get_iarange_info(trace):
     """
-    This determines whether the vectorized map_datas are rao-blackwellizable by
-    `TraceGraph_ELBO`. This also gathers information to be consumed by
-    downstream by `TraceGraph_ELBO`.
+    This determines whether the :class:`~pyro.iarange`s are rao-blackwellizable
+    by ``TraceGraph_ELBO``. This also gathers information to be consumed by
+    downstream by ``TraceGraph_ELBO``.
     """
     nodes = trace.nodes
 
-    vectorized_map_data_info = {'rao-blackwellization-condition': True, 'warnings': set()}
-    vec_md_stacks = set()
+    iarange_info = {'rao-blackwellization-condition': True, 'warnings': set()}
+    iarange_stacks = set()
     stack_dict = {}
 
     for name, node in nodes.items():
@@ -22,40 +22,40 @@ def get_vectorized_map_data_info(trace):
             continue
         if node["type"] in ("sample", "param"):
             stack = node["cond_indep_stack"]
-            vec_mds = [x for x in stack if x.vectorized]
-            stack_dict[name] = vec_mds
+            iarange_stack = [x for x in stack if x.vectorized]
+            stack_dict[name] = iarange_stack
 
     for name, node in nodes.items():
         if site_is_subsample(node):
             continue
         if node["type"] in ("sample", "param"):
             stack = node["cond_indep_stack"]
-            vec_mds = [x for x in stack if x.vectorized]
-            stack_dict[name] = vec_mds
-            # check for nested vectorized map datas
-            if len(vec_mds) > 1:
-                vectorized_map_data_info['rao-blackwellization-condition'] = False
-                vectorized_map_data_info['warnings'].add('nested iarange')
-            # check that vectorized map datas only found at innermost position
-            if vec_mds and not stack[-1].vectorized:
-                vectorized_map_data_info['rao-blackwellization-condition'] = False
-                vectorized_map_data_info['warnings'].add('non-leaf iarange')
-            # enforce that if there are multiple vectorized map_datas, they are all
-            # independent of one another because of enclosing list map_datas
+            iarange_stack = [x for x in stack if x.vectorized]
+            stack_dict[name] = iarange_stack
+            # check for nested iaranges
+            if len(iarange_stack) > 1:
+                iarange_info['rao-blackwellization-condition'] = False
+                iarange_info['warnings'].add('nested iarange')
+            # check that iaranges only found at innermost position
+            if iarange_stack and not stack[-1].vectorized:
+                iarange_info['rao-blackwellization-condition'] = False
+                iarange_info['warnings'].add('non-leaf iarange')
+            # enforce that if there are multiple iaranges, they are all
+            # independent of one another because of enclosing iranges
             # (step 1: collect the stacks)
-            if vec_mds:
-                vec_md_stacks.add(stack)
+            if iarange_stack:
+                iarange_stacks.add(stack)
             # bail, since condition false
-            if not vectorized_map_data_info['rao-blackwellization-condition']:
+            if not iarange_info['rao-blackwellization-condition']:
                 break
 
-    # enforce that if there are multiple vectorized map_datas, they are all
-    # independent of one another because of enclosing list map_datas
+    # enforce that if there are multiple iaranges, they are all
+    # independent of one another because of enclosing iranges
     # (step 2: explicitly check this)
-    if vectorized_map_data_info['rao-blackwellization-condition']:
-        vec_md_stacks = list(vec_md_stacks)
-        for i, stack_i in enumerate(vec_md_stacks):
-            for j, stack_j in enumerate(vec_md_stacks):
+    if iarange_info['rao-blackwellization-condition']:
+        iarange_stacks = list(iarange_stacks)
+        for i, stack_i in enumerate(iarange_stacks):
+            for j, stack_j in enumerate(iarange_stacks):
                 # only check unique pairs
                 if i <= j:
                     continue
@@ -64,23 +64,23 @@ def get_vectorized_map_data_info(trace):
                     if md_i.name == md_j.name and md_i.counter != md_j.counter:
                         ij_independent = True
                 if not ij_independent:
-                    vectorized_map_data_info['rao-blackwellization-condition'] = False
-                    vectorized_map_data_info['warnings'].add('there exist dependent iaranges')
+                    iarange_info['rao-blackwellization-condition'] = False
+                    iarange_info['warnings'].add('there exist dependent iaranges')
                     break
 
-    vec_md_stacks = list(vec_md_stacks)
-    vectorized_map_data_info['vec_md_stacks'] = stack_dict
+    iarange_stacks = list(iarange_stacks)
+    iarange_info['iarange_stacks'] = stack_dict
 
     # construct data structure consumed by tracegraph_kl_qp
-    vectorized_map_data_info['nodes'] = set()
+    iarange_info['nodes'] = set()
     for name, node in nodes.items():
         if site_is_subsample(node):
             continue
         if node["type"] in ("sample", "param"):
             if any(x.vectorized for x in node["cond_indep_stack"]):
-                vectorized_map_data_info['nodes'].add(name)
+                iarange_info['nodes'].add(name)
 
-    return vectorized_map_data_info
+    return iarange_info
 
 
 def identify_dense_edges(trace):
@@ -137,8 +137,7 @@ class TraceMessenger(Messenger):
         """
         if self.graph_type == "dense":
             identify_dense_edges(self.trace)
-            self.trace.graph["vectorized_map_data_info"] = \
-                get_vectorized_map_data_info(self.trace)
+            self.trace.graph["iarange_info"] = get_iarange_info(self.trace)
         return super(TraceMessenger, self).__exit__(*args, **kwargs)
 
     def get_trace(self):

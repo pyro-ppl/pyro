@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-import cloudpickle
+import torch
 
 import pyro
 from pyro.params import module_from_param_with_module_name, user_param_name
@@ -82,7 +82,7 @@ class PyroOptim(object):
         Save optimizer state to disk
         """
         with open(filename, "wb") as output_file:
-            output_file.write(cloudpickle.dumps(self.get_state()))
+            torch.save(self.get_state(), output_file)
 
     def load(self, filename):
         """
@@ -92,7 +92,7 @@ class PyroOptim(object):
         Load optimizer state from disk
         """
         with open(filename, "rb") as input_file:
-            state = cloudpickle.loads(input_file.read())
+            state = torch.load(input_file)
         self.set_state(state)
 
     # helper to fetch the optim args if callable (only used internally)
