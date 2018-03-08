@@ -124,12 +124,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
     search_regexp = [re.compile(".*" + m + ".*") for m in args.models]
     profile_ids = []
+    # run cProfile for all models if not specified
+    if not args.models:
+        to_profile = TEST_MODELS
     for r in search_regexp:
         profile_ids.append(filter(r.match, MODEL_IDS))
     profile_ids = set().union(*profile_ids)
     to_profile = [m for m in TEST_MODELS if m.model_id in profile_ids]
-    if not to_profile:
-        to_profile = TEST_MODELS
     for test_model in to_profile:
         print("Running model - {}".format(test_model.model_id))
         pr = cProfile.Profile()
