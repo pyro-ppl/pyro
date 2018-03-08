@@ -433,19 +433,11 @@ class IndirectLambdaPoutineTests(TestCase):
     def setUp(self):
 
         def model(batch_size_outer=2, batch_size_inner=2):
+            data = [[ng_ones(1)] * 2] * 2
             mu_latent = pyro.sample("mu_latent", dist.Normal(ng_zeros(1), ng_ones(1)))
-
-            def outer(i, x):
-                pyro.map_data("map_inner_%d" % i, x, lambda _i, _x:
-                              inner(i, _i, _x), batch_size=batch_size_inner)
-
-            def inner(i, _i, _x):
-                pyro.sample("z_%d_%d" % (i, _i), dist.Normal(mu_latent + _x, ng_ones(1)))
-
-            pyro.map_data("map_outer", [[ng_ones(1)] * 2] * 2, lambda i, x:
-                          outer(i, x), batch_size=batch_size_outer)
-
-            return mu_latent
+            for i in pyro.irange("irange_outer", 2, batch_size_outer):
+                for j in pyro.irange("irange_inner_%d" % i, 2, batch_size_inner):
+                    pyro.sample("z_%d_%d" % (i, j), dist.Normal(mu_latent + data[i][j], ng_ones(1)))
 
         self.model = model
         self.expected_nodes = set(["z_0_0", "z_0_1", "z_1_0", "z_1_1", "mu_latent",
@@ -457,10 +449,10 @@ class IndirectLambdaPoutineTests(TestCase):
 
     def test_graph_structure(self):
         tracegraph = poutine.trace(self.model, graph_type="dense").get_trace()
-        # Ignore structure on map_* nodes.
-        actual_nodes = set(n for n in tracegraph.nodes() if not n.startswith("map_"))
+        # Ignore structure on irange_* nodes.
+        actual_nodes = set(n for n in tracegraph.nodes() if not n.startswith("irange_"))
         actual_edges = set((n1, n2) for n1, n2 in tracegraph.edges
-                           if not n1.startswith("map_") if not n2.startswith("map_"))
+                           if not n1.startswith("irange_") if not n2.startswith("irange_"))
         assert actual_nodes == self.expected_nodes
         assert actual_edges == self.expected_edges
 
