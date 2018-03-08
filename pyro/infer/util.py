@@ -76,7 +76,7 @@ def reduce_to_shape(source, shape):
 
 def n_compatible_indices(stacks, dest_node, source_node):
     """
-    Clomputes out how many indices are compatible between two iaranges
+    Computes out how many indices are compatible between two iaranges
     """
     n_compatible = 0
     for xframe, yframe in zip(stacks[source_node], stacks[dest_node]):
