@@ -64,7 +64,7 @@ def test_subsample_gradient_parallelized(trace_graph, enum_discrete, reparameter
     for name in sorted(params):
         logger.info('expected {} = {}'.format(name, expected_grads[name]))
         logger.info('actual   {} = {}'.format(name, actual_grads[name]))
-        assert_equal(actual_grads, expected_grads, prec=precision)
+    assert_equal(actual_grads, expected_grads, prec=precision)
 
 
 @pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
@@ -104,4 +104,4 @@ def test_subsample_gradient(trace_graph, enum_discrete, reparameterized, subsamp
     for name in sorted(params):
         logger.info('expected {} = {}'.format(name, expected_grads[name]))
         logger.info('actual   {} = {}'.format(name, actual_grads[name]))
-        assert_equal(actual_grads, expected_grads, prec=precision)
+    assert_equal(actual_grads, expected_grads, prec=precision)
