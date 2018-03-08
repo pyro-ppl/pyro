@@ -432,7 +432,6 @@ class LogNormalNormalTests(TestCase):
         assert_equal(0.0, tau_error, prec=0.05)
 
 
-@pytest.mark.xfail(reason="stale; needs to be rewritten using irange, iarange")
 @pytest.mark.init(rng_seed=0)
 @pytest.mark.stage("integration", "integration_batch_1")
 class RaoBlackwellizationTests(TestCase):
@@ -458,8 +457,8 @@ class RaoBlackwellizationTests(TestCase):
         self.analytic_mu_n = self.sum_data * (self.lam / self.analytic_lam_n) +\
             self.mu0 * (self.lam0 / self.analytic_lam_n)
 
-    # this tests rao-blackwellization in elbo for nested list map_datas
-    def test_nested_list_map_data_in_elbo(self, n_steps=4000):
+    # this tests rao-blackwellization in elbo for nested iranges
+    def test_nested_irange_in_elbo(self, n_steps=4000):
         pyro.clear_param_store()
 
         def model():
@@ -467,38 +466,23 @@ class RaoBlackwellizationTests(TestCase):
                                     fakes.NonreparameterizedNormal(self.mu0,
                                                                    torch.pow(self.lam0,
                                                                              -0.5)).reshape(extra_event_dims=1))
-
-            def obs_outer(i, x):
-                pyro.map_data("map_obs_inner_%d" % i, x, lambda _i, _x:
-                              obs_inner(i, _i, _x), batch_size=3)
-
-            def obs_inner(i, _i, _x):
-                pyro.sample("obs_%d_%d" % (i, _i),
-                            dist.Normal(mu_latent, torch.pow(self.lam, -0.5)).reshape(extra_event_dims=1),
-                            obs=_x)
-
-            pyro.map_data("map_obs_outer", self.data, lambda i, x:
-                          obs_outer(i, x), batch_size=3)
-
-            return mu_latent
+            for i in pyro.irange("outer", self.n_outer):
+                for j in pyro.irange("inner", self.n_inner):
+                    pyro.sample("obs_%d_%d" % (i, j),
+                                dist.Normal(mu_latent, torch.pow(self.lam, -0.5)).reshape(extra_event_dims=1),
+                                obs=self.data[i][j])
 
         def guide():
             mu_q = pyro.param("mu_q", variable(self.analytic_mu_n.expand(2) + 0.234, requires_grad=True))
             log_sig_q = pyro.param("log_sig_q",
                                    variable(self.analytic_log_sig_n.expand(2) - 0.27, requires_grad=True))
             sig_q = torch.exp(log_sig_q)
-            mu_latent = pyro.sample("mu_latent", fakes.NonreparameterizedNormal(mu_q,
-                                                                                sig_q).reshape(extra_event_dims=1),
-                                    infer=dict(baseline=dict(use_decaying_avg_baseline=True)))
+            pyro.sample("mu_latent", fakes.NonreparameterizedNormal(mu_q, sig_q).reshape(extra_event_dims=1),
+                        infer=dict(baseline=dict(use_decaying_avg_baseline=True)))
 
-            def obs_outer(i, x):
-                pyro.map_data("map_obs_inner_%d" % i, x, lambda _i, _x:
-                              None, batch_size=3)
-
-            pyro.map_data("map_obs_outer", self.data, lambda i, x:
-                          obs_outer(i, x), batch_size=3)
-
-            return mu_latent
+            for i in pyro.irange("outer", self.n_outer):
+                for j in pyro.irange("inner", self.n_inner):
+                    pass
 
         guide_trace = pyro.poutine.trace(guide, graph_type="dense").get_trace()
         model_trace = pyro.poutine.trace(pyro.poutine.replay(model, guide_trace),
@@ -521,13 +505,13 @@ class RaoBlackwellizationTests(TestCase):
         assert_equal(0.0, mu_error, prec=0.04)
         assert_equal(0.0, log_sig_error, prec=0.04)
 
-    # this tests rao-blackwellization and baselines for a vectorized map_data
-    # inside of a list map_data with superfluous random variables to complexify the
+    # this tests rao-blackwellization and baselines for iarange
+    # inside of an irange with superfluous random variables to complexify the
     # graph structure and introduce additional baselines
-    def test_vectorized_map_data_in_elbo_with_superfluous_rvs(self):
-        self._test_vectorized_map_data_in_elbo(n_superfluous_top=1, n_superfluous_bottom=1, n_steps=5000)
+    def test_iarange_in_elbo_with_superfluous_rvs(self):
+        self._test_iarange_in_elbo(n_superfluous_top=1, n_superfluous_bottom=1, n_steps=5000)
 
-    def _test_vectorized_map_data_in_elbo(self, n_superfluous_top, n_superfluous_bottom, n_steps):
+    def _test_iarange_in_elbo(self, n_superfluous_top, n_superfluous_bottom, n_steps):
         pyro.clear_param_store()
         self.data_tensor = Variable(torch.zeros(9, 2))
         for _out in range(self.n_outer):
