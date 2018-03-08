@@ -164,6 +164,53 @@ def _subsample(name, size=None, subsample_size=None, subsample=None, use_cuda=No
     return size, subsample_size, subsample
 
 
+class _DimAllocator(object):
+    """
+    Dimension allocator for internal use by :class:`iarange`.
+
+    Note that dimensions are indexed from the right, e.g. -1, -2.
+    """
+    def __init__(self):
+        self._stack = []  # in reverse orientation of log_prob.shape
+
+    def allocate(self, name, dim):
+        """
+        Allocate a dimension to an :class:`iarange` with given name.
+        Dim should be either None for automatic allocation or a negative
+        integer for manual allocation.
+        """
+        if name in self._stack:
+            raise ValueError('duplicate iarange "{}"'.format(name))
+        if dim is None:
+            # Automatically allocate the rightmost dimension to the left of all existing dims.
+            self._stack.append(name)
+            dim = -len(self._stack)
+        elif dim >= 0:
+            raise ValueError('Expected dim < 0 to index from the right, actual {}'.format(dim))
+        else:
+            # Allocate the requested dimension.
+            while dim < -len(self._stack):
+                self._stack.append(None)
+            if self._stack[-1 - dim] is not None:
+                raise ValueError('\n'.join([
+                    'at iaranges "{}" and "{}", collide at dim={}'.format(name, self._stack[-1 - dim], dim),
+                    '\nTry moving the dim of one iarange to the left, e.g. dim={}'.format(dim - 1)]))
+            self._stack[-1 - dim] = name
+        return dim
+
+    def free(self, name, dim):
+        """
+        Free a dimension.
+        """
+        assert self._stack[-1 - dim] == name
+        self._stack[-1 - dim] = None
+        while self._stack and self._stack[-1] is None:
+            self._stack.pop()
+
+
+_DIM_ALLOCATOR = _DimAllocator()
+
+
 class iarange(object):
     """
     Context manager for conditionally independent ranges of variables.
@@ -244,18 +291,16 @@ class iarange(object):
     extended discussion.
     """
     def __init__(self, name, size=None, subsample_size=None, subsample=None, dim=None, use_cuda=None):
-        if dim is not None and dim >= 0:
-            raise ValueError('Expected dim < 0 to index from the right, actual {}'.format(dim))
         self.name = name
         self.dim = dim
         self.size, self.subsample_size, self.subsample = _subsample(name, size, subsample_size, subsample, use_cuda)
 
     def __enter__(self):
         self._wrapped = am_i_wrapped()
+        self.dim = _DIM_ALLOCATOR.allocate(self.name, self.dim)
         if self._wrapped:
-            dim = 'auto' if self.dim is None else self.dim
             self._scale_poutine = poutine.ScaleMessenger(self.size / self.subsample_size)
-            self._indep_poutine = poutine.IndepMessenger(self.name, size=self.subsample_size, dim=dim)
+            self._indep_poutine = poutine.IndepMessenger(self.name, size=self.subsample_size, dim=self.dim)
             self._scale_poutine.__enter__()
             self._indep_poutine.__enter__()
         return self.subsample
@@ -264,6 +309,7 @@ class iarange(object):
         if self._wrapped:
             self._indep_poutine.__exit__(exc_type, exc_value, traceback)
             self._scale_poutine.__exit__(exc_type, exc_value, traceback)
+        _DIM_ALLOCATOR.free(self.name, self.dim)
 
 
 def irange(name, size, subsample_size=None, subsample=None, use_cuda=None):

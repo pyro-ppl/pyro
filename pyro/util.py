@@ -357,13 +357,8 @@ def check_site_shape(site, max_iarange_nesting):
     # Compute expected shape.
     expected_shape = []
     for f in site["cond_indep_stack"]:
-        if f.dim is None:
-            continue  # irange
-        elif f.dim == 'auto':
-            # Automatically use the rightmost dim left of all enclosing iarange dims.
-            expected_shape.insert(0, f.size)
-        else:
-            # Use the specified dimension, which counts from the right.
+        if f.dim is not None:
+            # Use the specified iarange dimension, which counts from the right.
             assert f.dim < 0
             if len(expected_shape) < -f.dim:
                 expected_shape = [None] * (-f.dim - len(expected_shape)) + expected_shape
