@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import contextlib
 import copy
 import logging
 import warnings
@@ -165,23 +164,22 @@ def _subsample(name, size=None, subsample_size=None, subsample=None, use_cuda=No
     return size, subsample_size, subsample
 
 
-@contextlib.contextmanager
-def iarange(name, size=None, subsample_size=None, subsample=None, use_cuda=None):
+class iarange(object):
     """
     Context manager for conditionally independent ranges of variables.
 
-    :func:`iarange` is similar to :func:`torch.arange` in that it yields an
-    array of indices by which other tensors can be indexed. :func:`iarange`
+    :class:`iarange` is similar to :func:`torch.arange` in that it yields an
+    array of indices by which other tensors can be indexed. :class:`iarange`
     differs from :func:`torch.arange` in that it also informs inference
     algorithms that the variables being indexed are conditionally independent.
-    To do this, :func:`iarange` is a provided as context manager rather than a
+    To do this, :class:`iarange` is a provided as context manager rather than a
     function, and users must guarantee that all computation within an
-    :func:`iarange` context is conditionally independent::
+    :class:`iarange` context is conditionally independent::
 
         with iarange("name", size) as ind:
             # ...do conditionally independent stuff with ind...
 
-    Additionally, :func:`iarange` can take advantage of the conditional
+    Additionally, :class:`iarange` can take advantage of the conditional
     independence assumptions by subsampling the indices and informing inference
     algorithms to scale various computed values. This is typically used to
     subsample minibatches of data::
@@ -199,7 +197,7 @@ def iarange(name, size=None, subsample_size=None, subsample=None, use_cuda=None)
         independent within the context.
 
     :param str name: A unique name to help inference algorithms match
-        ``iarange`` sites between models and guides.
+        :class:`iarange` sites between models and guides.
     :param int size: Optional size of the collection being subsampled
         (like `stop` in builtin `range`).
     :param int subsample_size: Size of minibatches used in subsampling.
@@ -208,36 +206,64 @@ def iarange(name, size=None, subsample_size=None, subsample=None, use_cuda=None)
         schemes. If specified, then `subsample_size` will be set to
         `len(subsample)`.
     :type subsample: Anything supporting `len()`.
+    :param int dim: An optional dimension to use for this independence index.
+        If specified, ``dim`` should be negative, i.e. should index from the
+        right. If not specified, ``dim`` is set to the rightmost dim that is
+        left of all enclosing ``iarange`` contexts.
     :param bool use_cuda: Optional bool specifying whether to use cuda tensors
         for `subsample` and `log_pdf`. Defaults to `torch.Tensor.is_cuda`.
-    :return: A context manager yielding a single 1-dimensional `torch.Tensor`
-        of indices.
+    :return: A reusabe context manager yielding a single 1-dimensional
+        :class:`torch.Tensor` of indices.
 
     Examples::
 
         # This version simply declares independence:
         >>> with iarange('data'):
-                observe('obs', normal, data, mu, sigma)
+                sample('obs', Normal(mu, sigma), obs=data)
 
         # This version subsamples data in vectorized way:
         >>> with iarange('data', 100, subsample_size=10) as ind:
-                observe('obs', normal, data.index_select(0, ind), mu, sigma)
+                sample('obs', Normal(mu, sigma), obs=data[ind])
 
         # This wraps a user-defined subsampling method for use in pyro:
         >>> ind = my_custom_subsample
         >>> with iarange('data', 100, subsample=ind):
-                observe('obs', normal, data.index_select(0, ind), mu, sigma)
+                sample('obs', Normal(mu, sigma), obs=data[ind])
+
+        # This reuses two different independence contexts.
+        >>> x_axis = iarange('outer', 320, dim=-1)
+        >>> y_axis = iarange('outer', 200, dim=-2)
+        >>> with x_axis:
+                x_noise = sample("x_noise", Normal(mu, sigma).reshape([320]))
+        >>> with y_axis:
+                y_noise = sample("y_noise", Normal(mu, sigma).reshape([200, 1]))
+        >>> with x_axis, y_axis:
+                xy_noise = sample("xy_noise", Normal(mu, sigma).reshape([200, 320]))
 
     See `SVI Part II <http://pyro.ai/examples/svi_part_ii.html>`_ for an
     extended discussion.
     """
-    size, subsample_size, subsample = _subsample(name, size, subsample_size, subsample, use_cuda)
-    if not am_i_wrapped():
-        yield subsample
-    else:
-        with poutine.scale(None, size / subsample_size):
-            with poutine.indep(name, vectorized=True, size=subsample_size):
-                yield subsample
+    def __init__(self, name, size=None, subsample_size=None, subsample=None, dim=None, use_cuda=None):
+        if dim is not None and dim >= 0:
+            raise ValueError('Expected dim < 0 to index from the right, actual {}'.format(dim))
+        self.name = name
+        self.dim = dim
+        self.size, self.subsample_size, self.subsample = _subsample(name, size, subsample_size, subsample, use_cuda)
+
+    def __enter__(self):
+        self._wrapped = am_i_wrapped()
+        if self._wrapped:
+            dim = 'auto' if self.dim is None else self.dim
+            self._scale_poutine = poutine.ScaleMessenger(self.size / self.subsample_size)
+            self._indep_poutine = poutine.IndepMessenger(self.name, size=self.subsample_size, dim=dim)
+            self._scale_poutine.__enter__()
+            self._indep_poutine.__enter__()
+        return self.subsample
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if self._wrapped:
+            self._indep_poutine.__exit__(exc_type, exc_value, traceback)
+            self._scale_poutine.__exit__(exc_type, exc_value, traceback)
 
 
 def irange(name, size, subsample_size=None, subsample=None, use_cuda=None):
@@ -271,8 +297,8 @@ def irange(name, size, subsample_size=None, subsample=None, use_cuda=None):
         for i in subsample:
             yield i.item() if isinstance(i, Variable) else i
     else:
-        indep_context = poutine.indep(name, vectorized=False, size=subsample_size)
-        with poutine.scale(None, size / subsample_size):
+        indep_context = poutine.IndepMessenger(name, size=subsample_size)
+        with poutine.ScaleMessenger(size / subsample_size):
             for i in subsample:
                 indep_context.next_context()
                 with indep_context:

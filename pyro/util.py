@@ -352,8 +352,27 @@ def check_model_guide_match(model_trace, guide_trace):
 
 
 def check_site_shape(site, max_iarange_nesting):
-    actual_shape = site["batch_log_pdf"].shape
-    expected_shape = [f.size for f in reversed(site["cond_indep_stack"]) if f.vectorized]
+    actual_shape = list(site["batch_log_pdf"].shape)
+
+    # Compute expected shape.
+    expected_shape = []
+    for f in site["cond_indep_stack"]:
+        if f.dim is None:
+            continue  # irange
+        elif f.dim == 'auto':
+            # Automatically use the rightmost dim left of all enclosing iarange dims.
+            expected_shape.insert(0, f.size)
+        else:
+            # Use the specified dimension, which counts from the right.
+            assert f.dim < 0
+            if len(expected_shape) < -f.dim:
+                expected_shape = [None] * (-f.dim - len(expected_shape)) + expected_shape
+            if expected_shape[f.dim] is not None:
+                raise ValueError('\n  '.join([
+                    'at site "{}" within iarange("", dim={}), dim collision'.format(site["name"], f.name, f.dim),
+                    'Try setting dim arg in other iaranges.']))
+            expected_shape[f.dim] = f.size
+    expected_shape = [1 if e is None else e for e in expected_shape]
 
     # Check for iarange stack overflow.
     if len(expected_shape) > max_iarange_nesting:
@@ -367,10 +386,10 @@ def check_site_shape(site, max_iarange_nesting):
 
     # Check for incorrect iarange placement on the right of max_iarange_nesting.
     for actual_size, expected_size in zip_longest(reversed(actual_shape), reversed(expected_shape), fillvalue=1):
-        if expected_size != -1 and actual_size not in (1, expected_size):
+        if expected_size != -1 and expected_size != actual_size:
             raise ValueError('\n  '.join([
                 'at site "{}", invalid log_prob shape'.format(site["name"]),
-                'Expected shape compatible with {}, actual {}'.format(expected_shape, actual_shape),
+                'Expected {}, actual {}'.format(expected_shape, actual_shape),
                 'Try one of the following fixes:',
                 '- enclose the batched tensor in a with iarange(...): context',
                 '- .reshape(extra_event_dims=...) the distribution being sampled',
