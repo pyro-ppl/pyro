@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from collections import defaultdict
 
-import cloudpickle
+import torch
 
 
 class ParamStoreDict(object):
@@ -280,7 +280,7 @@ class ParamStoreDict(object):
         :type name: str
         """
         with open(filename, "wb") as output_file:
-            output_file.write(cloudpickle.dumps(self.get_state()))
+            torch.save(self.get_state(), output_file)
 
     def load(self, filename):
         """
@@ -290,5 +290,5 @@ class ParamStoreDict(object):
         :type name: str
         """
         with open(filename, "rb") as input_file:
-            state = cloudpickle.loads(input_file.read())
+            state = torch.load(input_file)
         self.set_state(state)

@@ -26,6 +26,17 @@ blacklist = ['Build Status', 'Latest Version', 'travis-ci.org', 'pypi.python.org
 long_description = '\n'.join(
     [line for line in long_description.split('\n') if not any(patt in line for patt in blacklist)])
 
+# examples/tutorials
+EXTRAS_REQUIRE = [
+    'jupyter>=1.0.0',
+    'matplotlib>=1.3',
+    'numpy>=1.7',
+    'observations>=0.1.4',
+    'pillow',
+    'torchvision',
+    'visdom>=0.1.4',
+]
+
 setup(
     name='pyro-ppl',
     version=version,
@@ -36,30 +47,18 @@ setup(
     author='Uber AI Labs',
     author_email='pyro@uber.com',
     install_requires=[
-        'numpy>=1.7',
-        'cloudpickle>=0.3.1',
         'graphviz>=0.8',
         'networkx>=2.0.0',
-        'observations>=0.1.4',
-        'torch',
         'six>=1.10.0',
+        'torch',
     ],
     extras_require={
-        'notebooks': ['jupyter>=1.0.0'],
-        'visualization': [
-            'matplotlib>=1.3',
-            'visdom>=0.1.4',
-            'pillow',
-        ],
-        'test': [
+        'extras': EXTRAS_REQUIRE,
+        'test': EXTRAS_REQUIRE + [
+            'nbval',
             'pytest',
             'pytest-cov',
-            'nbval',
             'scipy>=0.19.0',
-            # examples/tutorials
-            'matplotlib',
-            'visdom',
-            'torchvision',
         ],
         'profile': ['prettytable'],
         'dev': [

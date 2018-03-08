@@ -38,7 +38,7 @@ pip install pyro-ppl
 ```
 
 **Python 3.5:**
-```
+```sh
 pip3 install pyro-ppl
 ```
 
@@ -48,6 +48,11 @@ git clone git@github.com:uber/pyro.git
 cd pyro
 git checkout master  # master is pinned to the latest release
 pip install .
+```
+
+**Install with extra packages:**
+```sh
+pip install pyro-ppl[extras]  # for running examples/tutorials
 ```
 
 ### Installing Pyro dev branch
