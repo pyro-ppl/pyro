@@ -17,12 +17,12 @@ from tests.common import assert_equal
 
 
 def _brute_force_compute_downstream_costs(model_trace, guide_trace,  #
-                                          model_vec_md_nodes, guide_vec_md_nodes,  #
+                                          model_iarange_nodes, guide_iarange_nodes,  #
                                           non_reparam_nodes):
 
     guide_nodes = [x for x in guide_trace.nodes if guide_trace.nodes[x]["type"] == "sample"]
     downstream_costs, downstream_guide_cost_nodes = {}, {}
-    stacks = model_trace.graph["vectorized_map_data_info"]['vec_md_stacks']
+    stacks = model_trace.graph["iarange_info"]['iarange_stacks']
 
     def n_compatible_indices(dest_node, source_node):
         n_compatible = 0
@@ -124,21 +124,21 @@ def test_compute_downstream_costs_big_model_guide_pair(include_inner_1, include_
     model_trace.compute_batch_log_pdf()
     guide_trace.compute_batch_log_pdf()
 
-    guide_vec_md_info = guide_trace.graph["vectorized_map_data_info"]
-    model_vec_md_info = model_trace.graph["vectorized_map_data_info"]
-    guide_vec_md_condition = guide_vec_md_info['rao-blackwellization-condition']
-    model_vec_md_condition = model_vec_md_info['rao-blackwellization-condition']
-    do_vec_rb = guide_vec_md_condition and model_vec_md_condition
-    guide_vec_md_nodes = guide_vec_md_info['nodes'] if do_vec_rb else set()
-    model_vec_md_nodes = model_vec_md_info['nodes'] if do_vec_rb else set()
+    guide_iarange_info = guide_trace.graph["iarange_info"]
+    model_iarange_info = model_trace.graph["iarange_info"]
+    guide_iarange_condition = guide_iarange_info['rao-blackwellization-condition']
+    model_iarange_condition = model_iarange_info['rao-blackwellization-condition']
+    do_vec_rb = guide_iarange_condition and model_iarange_condition
+    guide_iarange_nodes = guide_iarange_info['nodes'] if do_vec_rb else set()
+    model_iarange_nodes = model_iarange_info['nodes'] if do_vec_rb else set()
     non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
 
     dc, dc_nodes = _compute_downstream_costs(model_trace, guide_trace,
-                                             model_vec_md_nodes, guide_vec_md_nodes,
+                                             model_iarange_nodes, guide_iarange_nodes,
                                              non_reparam_nodes)
 
     dc_brute, dc_nodes_brute = _brute_force_compute_downstream_costs(model_trace, guide_trace,
-                                                                     model_vec_md_nodes, guide_vec_md_nodes,
+                                                                     model_iarange_nodes, guide_iarange_nodes,
                                                                      non_reparam_nodes)
 
     assert dc_nodes == dc_nodes_brute
@@ -257,21 +257,21 @@ def test_compute_downstream_costs_duplicates(dim):
     model_trace.compute_batch_log_pdf()
     guide_trace.compute_batch_log_pdf()
 
-    guide_vec_md_info = guide_trace.graph["vectorized_map_data_info"]
-    model_vec_md_info = model_trace.graph["vectorized_map_data_info"]
-    guide_vec_md_condition = guide_vec_md_info['rao-blackwellization-condition']
-    model_vec_md_condition = model_vec_md_info['rao-blackwellization-condition']
-    do_vec_rb = guide_vec_md_condition and model_vec_md_condition
-    guide_vec_md_nodes = guide_vec_md_info['nodes'] if do_vec_rb else set()
-    model_vec_md_nodes = model_vec_md_info['nodes'] if do_vec_rb else set()
+    guide_iarange_info = guide_trace.graph["iarange_info"]
+    model_iarange_info = model_trace.graph["iarange_info"]
+    guide_iarange_condition = guide_iarange_info['rao-blackwellization-condition']
+    model_iarange_condition = model_iarange_info['rao-blackwellization-condition']
+    do_vec_rb = guide_iarange_condition and model_iarange_condition
+    guide_iarange_nodes = guide_iarange_info['nodes'] if do_vec_rb else set()
+    model_iarange_nodes = model_iarange_info['nodes'] if do_vec_rb else set()
     non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
 
     dc, dc_nodes = _compute_downstream_costs(model_trace, guide_trace,
-                                             model_vec_md_nodes, guide_vec_md_nodes,
+                                             model_iarange_nodes, guide_iarange_nodes,
                                              non_reparam_nodes)
 
     dc_brute, dc_nodes_brute = _brute_force_compute_downstream_costs(model_trace, guide_trace,
-                                                                     model_vec_md_nodes, guide_vec_md_nodes,
+                                                                     model_iarange_nodes, guide_iarange_nodes,
                                                                      non_reparam_nodes)
 
     assert dc_nodes == dc_nodes_brute
@@ -329,21 +329,21 @@ def test_compute_downstream_costs_iarange_in_irange(dim1):
     model_trace.compute_batch_log_pdf()
     guide_trace.compute_batch_log_pdf()
 
-    guide_vec_md_info = guide_trace.graph["vectorized_map_data_info"]
-    model_vec_md_info = model_trace.graph["vectorized_map_data_info"]
-    guide_vec_md_condition = guide_vec_md_info['rao-blackwellization-condition']
-    model_vec_md_condition = model_vec_md_info['rao-blackwellization-condition']
-    do_vec_rb = guide_vec_md_condition and model_vec_md_condition
-    guide_vec_md_nodes = guide_vec_md_info['nodes'] if do_vec_rb else set()
-    model_vec_md_nodes = model_vec_md_info['nodes'] if do_vec_rb else set()
+    guide_iarange_info = guide_trace.graph["iarange_info"]
+    model_iarange_info = model_trace.graph["iarange_info"]
+    guide_iarange_condition = guide_iarange_info['rao-blackwellization-condition']
+    model_iarange_condition = model_iarange_info['rao-blackwellization-condition']
+    do_vec_rb = guide_iarange_condition and model_iarange_condition
+    guide_iarange_nodes = guide_iarange_info['nodes'] if do_vec_rb else set()
+    model_iarange_nodes = model_iarange_info['nodes'] if do_vec_rb else set()
     non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
 
     dc, dc_nodes = _compute_downstream_costs(model_trace, guide_trace,
-                                             model_vec_md_nodes, guide_vec_md_nodes,
+                                             model_iarange_nodes, guide_iarange_nodes,
                                              non_reparam_nodes)
 
     dc_brute, dc_nodes_brute = _brute_force_compute_downstream_costs(model_trace, guide_trace,
-                                                                     model_vec_md_nodes, guide_vec_md_nodes,
+                                                                     model_iarange_nodes, guide_iarange_nodes,
                                                                      non_reparam_nodes)
 
     assert dc_nodes == dc_nodes_brute
@@ -400,21 +400,21 @@ def test_compute_downstream_costs_irange_in_iarange(dim1, dim2):
     model_trace.compute_batch_log_pdf()
     guide_trace.compute_batch_log_pdf()
 
-    guide_vec_md_info = guide_trace.graph["vectorized_map_data_info"]
-    model_vec_md_info = model_trace.graph["vectorized_map_data_info"]
-    guide_vec_md_condition = guide_vec_md_info['rao-blackwellization-condition']
-    model_vec_md_condition = model_vec_md_info['rao-blackwellization-condition']
-    do_vec_rb = guide_vec_md_condition and model_vec_md_condition
-    guide_vec_md_nodes = guide_vec_md_info['nodes'] if do_vec_rb else set()
-    model_vec_md_nodes = model_vec_md_info['nodes'] if do_vec_rb else set()
+    guide_iarange_info = guide_trace.graph["iarange_info"]
+    model_iarange_info = model_trace.graph["iarange_info"]
+    guide_iarange_condition = guide_iarange_info['rao-blackwellization-condition']
+    model_iarange_condition = model_iarange_info['rao-blackwellization-condition']
+    do_vec_rb = guide_iarange_condition and model_iarange_condition
+    guide_iarange_nodes = guide_iarange_info['nodes'] if do_vec_rb else set()
+    model_iarange_nodes = model_iarange_info['nodes'] if do_vec_rb else set()
     non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
 
     dc, dc_nodes = _compute_downstream_costs(model_trace, guide_trace,
-                                             model_vec_md_nodes, guide_vec_md_nodes,
+                                             model_iarange_nodes, guide_iarange_nodes,
                                              non_reparam_nodes)
 
     dc_brute, dc_nodes_brute = _brute_force_compute_downstream_costs(model_trace, guide_trace,
-                                                                     model_vec_md_nodes, guide_vec_md_nodes,
+                                                                     model_iarange_nodes, guide_iarange_nodes,
                                                                      non_reparam_nodes)
 
     assert dc_nodes == dc_nodes_brute
