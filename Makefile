@@ -22,7 +22,10 @@ format: FORCE
 	isort --recursive *.py pyro/ tests/ profiler/*.py docs/source/conf.py
 
 perf-test: FORCE
-	bash perf_test.sh
+	bash scripts/perf_test.sh ${ref}
+
+profile: FORCE
+	bash scripts/profile_model.sh ${ref} ${models}
 
 test: lint docs FORCE
 	pytest -vx -n auto --stage unit
