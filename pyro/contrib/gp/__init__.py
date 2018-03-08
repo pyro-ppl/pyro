@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from torch.autograd import Variable
+import torch
 import torch.nn as nn
 from torch.distributions import transform_to
 
@@ -56,7 +56,7 @@ class Parameterized(nn.Module):
         default value.
 
         :param str param: Name of a parameter.
-        :param torch.autograd.Variable value: A tensor to be fixed to ``param``.
+        :param torch.Tensor value: A tensor to be fixed to ``param``.
         """
         if value is None:
             value = getattr(self, param).detach()
@@ -114,7 +114,7 @@ class Parameterized(nn.Module):
             else:
                 # TODO: use `constraint_to` inside `pyro.param(...)` when available
                 unconstrained_param_name = param_name + "_unconstrained"
-                unconstrained_param_0 = Variable(
+                unconstrained_param_0 = torch.tensor(
                     transform_to(constraint).inv(default_value).data.clone(),
                     requires_grad=True)
                 p = transform_to(constraint)(pyro.param(unconstrained_param_name,
@@ -123,7 +123,7 @@ class Parameterized(nn.Module):
             p = pyro.sample(param_name, prior)
         else:  # prior != None and mode = "guide"
             MAP_param_name = param_name + "_MAP"
-            MAP_param_0 = Variable(prior.analytic_mean().data.clone(), requires_grad=True)
+            MAP_param_0 = torch.tensor(prior.analytic_mean().data.clone(), requires_grad=True)
             MAP_param = pyro.param(MAP_param_name, MAP_param_0)
             p = pyro.sample(param_name, dist.Delta(MAP_param))
 

@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import torch
-from torch.autograd import Variable
 from torch.distributions import constraints
 from torch.nn import Parameter
 
@@ -21,8 +20,8 @@ class GPRegression(Model):
     [1] `Gaussian Processes for Machine Learning`,
     Carl E. Rasmussen, Christopher K. I. Williams
 
-    :param torch.autograd.Variable X: A 1D or 2D tensor of inputs.
-    :param torch.autograd.Variable y: A 1D tensor of output data for training.
+    :param torch.Tensor X: A 1D or 2D tensor of inputs.
+    :param torch.Tensor y: A 1D tensor of output data for training.
     :param pyro.contrib.gp.kernels.Kernel kernel: A Pyro kernel object.
     :param torch.Tensor noise: An optional noise parameter.
     """
@@ -45,7 +44,7 @@ class GPRegression(Model):
         noise = self.get_param("noise")
 
         K = kernel(self.X) + noise.expand(self.num_data).diag()
-        zero_loc = Variable(K.data.new([0])).expand(self.num_data)
+        zero_loc = torch.tensor(K.data.new([0])).expand(self.num_data)
         pyro.sample("y", dist.MultivariateNormal(zero_loc, K), obs=self.y)
 
     def guide(self):
@@ -61,11 +60,11 @@ class GPRegression(Model):
         Computes the parameters of :math:`p(y^*|Xnew) \sim N(\\text{loc}, \\text{cov})`
         w.r.t. the new input :math:`Xnew`.
 
-        :param torch.autograd.Variable Xnew: A 1D or 2D tensor.
+        :param torch.Tensor Xnew: A 1D or 2D tensor.
         :param bool full_cov: Predicts full covariance matrix or just its diagonal.
         :param bool noiseless: Includes noise in the prediction or not.
         :return: loc and covariance matrix of :math:`p(y^*|Xnew)`.
-        :rtype: torch.autograd.Variable and torch.autograd.Variable
+        :rtype: torch.Tensor and torch.Tensor
         """
         self._check_Xnew_shape(Xnew, self.X)
 

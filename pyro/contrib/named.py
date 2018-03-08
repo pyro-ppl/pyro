@@ -36,8 +36,8 @@ statements. These named data structures even provide in-place methods that
 alias Pyro statements. For example::
 
     >>> state = named.Object("state")
-    >>> mu = state.mu.param_(Variable(torch.zeros(1), requires_grad=True))
-    >>> sigma = state.sigma.param_(Variable(torch.ones(1), requires_grad=True))
+    >>> mu = state.mu.param_(torch.zeros(1, requires_grad=True))
+    >>> sigma = state.sigma.param_(torch.ones(1, requires_grad=True))
     >>> z = state.z.sample_(dist.normal, mu, sigma)
     >>> state.x.observe_(dist.normal, z, mu, sigma)
 
@@ -61,7 +61,7 @@ class Object(object):
     Object to hold immutable latent state.
 
     This object can serve either as a container for nested latent state
-    or as a placeholder to be replaced by a Variable via a named.sample,
+    or as a placeholder to be replaced by a tensor via a named.sample,
     named.observe, or named.param statement. When used as a placeholder,
     Object objects take the place of strings in normal pyro.sample statements.
 
