@@ -13,7 +13,7 @@ from pyro.infer.util import MultiViewTensor, n_compatible_indices
 
 def compute_site_log_r(model_trace, guide_trace, target_site, target_shape):
     log_r = MultiViewTensor()
-    stacks = model_trace.graph["vectorized_map_data_info"]['vec_md_stacks']
+    stacks = model_trace.graph["iarange_info"]['iarange_stacks']
     for name, model_site in model_trace.nodes.items():
         if model_site["type"] == "sample":
             log_r_term = model_site["batch_log_pdf"]
