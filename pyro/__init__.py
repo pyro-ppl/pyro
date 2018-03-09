@@ -13,7 +13,8 @@ import pyro.poutine as poutine
 from pyro.distributions.distribution import Distribution
 from pyro.params import _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, param_with_module_name
 from pyro.poutine import _PYRO_STACK, condition, do  # noqa: F401
-from pyro.util import apply_stack, deep_getattr, get_tensor_data, ones, set_rng_seed, zeros, am_i_wrapped  # noqa: F401
+from pyro.poutine.indep_poutine import _DIM_ALLOCATOR
+from pyro.util import am_i_wrapped, apply_stack, deep_getattr, get_tensor_data, ones, set_rng_seed, zeros  # noqa: F401
 
 __version__ = '0.1.2'
 
@@ -162,53 +163,6 @@ def _subsample(name, size=None, subsample_size=None, subsample=None, use_cuda=No
             " Did you accidentally use different subsample_size in the model and guide?")
 
     return size, subsample_size, subsample
-
-
-class _DimAllocator(object):
-    """
-    Dimension allocator for internal use by :class:`iarange`.
-
-    Note that dimensions are indexed from the right, e.g. -1, -2.
-    """
-    def __init__(self):
-        self._stack = []  # in reverse orientation of log_prob.shape
-
-    def allocate(self, name, dim):
-        """
-        Allocate a dimension to an :class:`iarange` with given name.
-        Dim should be either None for automatic allocation or a negative
-        integer for manual allocation.
-        """
-        if name in self._stack:
-            raise ValueError('duplicate iarange "{}"'.format(name))
-        if dim is None:
-            # Automatically allocate the rightmost dimension to the left of all existing dims.
-            self._stack.append(name)
-            dim = -len(self._stack)
-        elif dim >= 0:
-            raise ValueError('Expected dim < 0 to index from the right, actual {}'.format(dim))
-        else:
-            # Allocate the requested dimension.
-            while dim < -len(self._stack):
-                self._stack.append(None)
-            if self._stack[-1 - dim] is not None:
-                raise ValueError('\n'.join([
-                    'at iaranges "{}" and "{}", collide at dim={}'.format(name, self._stack[-1 - dim], dim),
-                    '\nTry moving the dim of one iarange to the left, e.g. dim={}'.format(dim - 1)]))
-            self._stack[-1 - dim] = name
-        return dim
-
-    def free(self, name, dim):
-        """
-        Free a dimension.
-        """
-        assert self._stack[-1 - dim] == name
-        self._stack[-1 - dim] = None
-        while self._stack and self._stack[-1] is None:
-            self._stack.pop()
-
-
-_DIM_ALLOCATOR = _DimAllocator()
 
 
 class iarange(object):
