@@ -33,7 +33,6 @@ def _get_baseline_options(site):
 
 
 def _compute_downstream_costs(model_trace, guide_trace,  #
-                              model_iarange_nodes, guide_iarange_nodes,  #
                               non_reparam_nodes):
     # recursively compute downstream cost nodes for all sample sites in model and guide
     # (even though ultimately just need for non-reparameterizable sample sites)
@@ -117,8 +116,7 @@ def _compute_elbo_reparam(model_trace, guide_trace, non_reparam_nodes):
     return torch_data_sum(elbo), surrogate_elbo
 
 
-def _compute_elbo_non_reparam(guide_trace, guide_iarange_nodes,  #
-                              non_reparam_nodes, downstream_costs):
+def _compute_elbo_non_reparam(guide_trace, non_reparam_nodes, downstream_costs):
     # construct all the reinforce-like terms.
     # we include only downstream costs to reduce variance
     # optionally include baselines to further reduce variance
@@ -127,7 +125,6 @@ def _compute_elbo_non_reparam(guide_trace, guide_iarange_nodes,  #
     baseline_loss = 0.0
     for node in non_reparam_nodes:
         guide_site = guide_trace.nodes[node]
-        log_pdf_key = 'batch_log_pdf' if node in guide_iarange_nodes else 'log_pdf'
         downstream_cost = downstream_costs[node]
         baseline = 0.0
         (nn_baseline, nn_baseline_input, use_decaying_avg_baseline, baseline_beta,
@@ -156,8 +153,6 @@ def _compute_elbo_non_reparam(guide_trace, guide_iarange_nodes,  #
             baseline_loss += torch.pow(downstream_cost.detach() - baseline, 2.0).sum()
 
         score_function_term = guide_site["score_parts"].score_function
-        if log_pdf_key == 'log_pdf':
-            score_function_term = score_function_term.sum()
         if use_nn_baseline or use_decaying_avg_baseline or use_baseline_value:
             if downstream_cost.size() != baseline.size():
                 raise ValueError("Expected baseline at site {} to be {} instead got {}".format(
@@ -248,12 +243,6 @@ class TraceGraph_ELBO(ELBO):
         return loss
 
     def _loss_and_grads_particle(self, weight, model_trace, guide_trace):
-        # get info regarding rao-blackwellization of iarange
-        guide_iarange_nodes = set(name for name, site in guide_trace.iter_stochastic_nodes()
-                                  if any(f.vectorized for f in site["cond_indep_stack"]))
-        model_iarange_nodes = set(name for name, site in model_trace.iter_stochastic_nodes()
-                                  if any(f.vectorized for f in site["cond_indep_stack"]))
-
         # have the trace compute all the individual (batch) log pdf terms
         # and score function terms (if present) so that they are available below
         model_trace.compute_batch_log_pdf()
@@ -273,9 +262,9 @@ class TraceGraph_ELBO(ELBO):
         baseline_loss = 0.0
         if non_reparam_nodes:
             downstream_costs, _ = _compute_downstream_costs(
-                    model_trace, guide_trace,  model_iarange_nodes, guide_iarange_nodes, non_reparam_nodes)
+                    model_trace, guide_trace, non_reparam_nodes)
             surrogate_elbo_term, baseline_loss = _compute_elbo_non_reparam(
-                    guide_trace, guide_iarange_nodes, non_reparam_nodes, downstream_costs)
+                    guide_trace, non_reparam_nodes, downstream_costs)
             surrogate_elbo += surrogate_elbo_term
 
         # collect parameters to train from model and guide

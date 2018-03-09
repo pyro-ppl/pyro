@@ -17,7 +17,6 @@ from tests.common import assert_equal
 
 
 def _brute_force_compute_downstream_costs(model_trace, guide_trace,  #
-                                          model_iarange_nodes, guide_iarange_nodes,  #
                                           non_reparam_nodes):
 
     guide_nodes = [x for x in guide_trace.nodes if guide_trace.nodes[x]["type"] == "sample"]
@@ -116,19 +115,12 @@ def test_compute_downstream_costs_big_model_guide_pair(include_inner_1, include_
     model_trace = prune_subsample_sites(model_trace)
     model_trace.compute_batch_log_pdf()
     guide_trace.compute_batch_log_pdf()
-
-    guide_iarange_nodes = set(name for name, site in guide_trace.iter_stochastic_nodes()
-                              if any(f.vectorized for f in site["cond_indep_stack"]))
-    model_iarange_nodes = set(name for name, site in model_trace.iter_stochastic_nodes()
-                              if any(f.vectorized for f in site["cond_indep_stack"]))
     non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
 
     dc, dc_nodes = _compute_downstream_costs(model_trace, guide_trace,
-                                             model_iarange_nodes, guide_iarange_nodes,
                                              non_reparam_nodes)
 
     dc_brute, dc_nodes_brute = _brute_force_compute_downstream_costs(model_trace, guide_trace,
-                                                                     model_iarange_nodes, guide_iarange_nodes,
                                                                      non_reparam_nodes)
 
     assert dc_nodes == dc_nodes_brute
@@ -243,18 +235,11 @@ def test_compute_downstream_costs_duplicates(dim):
     model_trace.compute_batch_log_pdf()
     guide_trace.compute_batch_log_pdf()
 
-    guide_iarange_nodes = set(name for name, site in guide_trace.iter_stochastic_nodes()
-                              if any(f.vectorized for f in site["cond_indep_stack"]))
-    model_iarange_nodes = set(name for name, site in model_trace.iter_stochastic_nodes()
-                              if any(f.vectorized for f in site["cond_indep_stack"]))
     non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
 
     dc, dc_nodes = _compute_downstream_costs(model_trace, guide_trace,
-                                             model_iarange_nodes, guide_iarange_nodes,
                                              non_reparam_nodes)
-
     dc_brute, dc_nodes_brute = _brute_force_compute_downstream_costs(model_trace, guide_trace,
-                                                                     model_iarange_nodes, guide_iarange_nodes,
                                                                      non_reparam_nodes)
 
     assert dc_nodes == dc_nodes_brute
@@ -312,18 +297,11 @@ def test_compute_downstream_costs_iarange_in_irange(dim1):
     model_trace.compute_batch_log_pdf()
     guide_trace.compute_batch_log_pdf()
 
-    guide_iarange_nodes = set(name for name, site in guide_trace.iter_stochastic_nodes()
-                              if any(f.vectorized for f in site["cond_indep_stack"]))
-    model_iarange_nodes = set(name for name, site in model_trace.iter_stochastic_nodes()
-                              if any(f.vectorized for f in site["cond_indep_stack"]))
     non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
 
     dc, dc_nodes = _compute_downstream_costs(model_trace, guide_trace,
-                                             model_iarange_nodes, guide_iarange_nodes,
                                              non_reparam_nodes)
-
     dc_brute, dc_nodes_brute = _brute_force_compute_downstream_costs(model_trace, guide_trace,
-                                                                     model_iarange_nodes, guide_iarange_nodes,
                                                                      non_reparam_nodes)
 
     assert dc_nodes == dc_nodes_brute
@@ -380,19 +358,9 @@ def test_compute_downstream_costs_irange_in_iarange(dim1, dim2):
     model_trace.compute_batch_log_pdf()
     guide_trace.compute_batch_log_pdf()
 
-    guide_iarange_nodes = set(name for name, site in guide_trace.iter_stochastic_nodes()
-                              if any(f.vectorized for f in site["cond_indep_stack"]))
-    model_iarange_nodes = set(name for name, site in model_trace.iter_stochastic_nodes()
-                              if any(f.vectorized for f in site["cond_indep_stack"]))
     non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
-
-    dc, dc_nodes = _compute_downstream_costs(model_trace, guide_trace,
-                                             model_iarange_nodes, guide_iarange_nodes,
-                                             non_reparam_nodes)
-
-    dc_brute, dc_nodes_brute = _brute_force_compute_downstream_costs(model_trace, guide_trace,
-                                                                     model_iarange_nodes, guide_iarange_nodes,
-                                                                     non_reparam_nodes)
+    dc, dc_nodes = _compute_downstream_costs(model_trace, guide_trace, non_reparam_nodes)
+    dc_brute, dc_nodes_brute = _brute_force_compute_downstream_costs(model_trace, guide_trace, non_reparam_nodes)
 
     assert dc_nodes == dc_nodes_brute
 
@@ -446,20 +414,10 @@ def test_compute_downstream_costs_iarange_reuse(dim1, dim2):
     model_trace.compute_batch_log_pdf()
     guide_trace.compute_batch_log_pdf()
 
-    guide_iarange_nodes = set(name for name, site in guide_trace.iter_stochastic_nodes()
-                              if any(f.vectorized for f in site["cond_indep_stack"]))
-    model_iarange_nodes = set(name for name, site in model_trace.iter_stochastic_nodes()
-                              if any(f.vectorized for f in site["cond_indep_stack"]))
     non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
-
     dc, dc_nodes = _compute_downstream_costs(model_trace, guide_trace,
-                                             model_iarange_nodes, guide_iarange_nodes,
                                              non_reparam_nodes)
-
-    dc_brute, dc_nodes_brute = _brute_force_compute_downstream_costs(model_trace, guide_trace,
-                                                                     model_iarange_nodes, guide_iarange_nodes,
-                                                                     non_reparam_nodes)
-
+    dc_brute, dc_nodes_brute = _brute_force_compute_downstream_costs(model_trace, guide_trace, non_reparam_nodes)
     assert dc_nodes == dc_nodes_brute
 
     for k in dc:
