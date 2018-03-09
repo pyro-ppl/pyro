@@ -10,7 +10,7 @@ import torch.nn as nn
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.distributions import Bernoulli, Normal
+from pyro.distributions import Bernoulli, Categorical, Normal
 from pyro.poutine.util import all_escape, discrete_escape, NonlocalExit
 from six.moves.queue import Queue
 from tests.common import assert_equal
@@ -624,6 +624,7 @@ def test_enumerate_poutine(depth, first_available_dim):
 
     model = poutine.EnumeratePoutine(model, first_available_dim)
     model = poutine.trace(model)
+
     for i in range(num_particles):
         tr = model.get_trace()
         tr.compute_batch_log_pdf()
@@ -632,4 +633,39 @@ def test_enumerate_poutine(depth, first_available_dim):
         expected_shape = (2,) * depth
         if depth:
             expected_shape = expected_shape + (1,) * first_available_dim
+        assert actual_shape == expected_shape, 'error on iteration {}'.format(i)
+
+
+@pytest.mark.parametrize('first_available_dim', [0, 1, 2])
+@pytest.mark.parametrize('depth', [0, 1, 2])
+def test_replay_enumerate_poutine(depth, first_available_dim):
+    num_particles = 2
+    y_dist = Categorical(torch.tensor([0.5, 0.25, 0.25]))
+
+    def guide():
+        pyro.sample("y", y_dist, infer={"enumerate": "parallel"})
+
+    guide = poutine.EnumeratePoutine(guide, depth + first_available_dim)
+    guide = poutine.trace(guide)
+    guide_trace = guide.get_trace()
+
+    def model():
+        pyro.sample("x", Bernoulli(0.5))
+        for i in range(depth):
+            pyro.sample("a_{}".format(i), Bernoulli(0.5), infer={"enumerate": "parallel"})
+        pyro.sample("y", y_dist, infer={"enumerate": "parallel"})
+        for i in range(depth):
+            pyro.sample("b_{}".format(i), Bernoulli(0.5), infer={"enumerate": "parallel"})
+
+    model = poutine.EnumeratePoutine(model, first_available_dim)
+    model = poutine.replay(model, guide_trace)
+    model = poutine.trace(model)
+
+    for i in range(num_particles):
+        tr = model.get_trace()
+        assert tr.nodes["y"]["value"] is guide_trace.nodes["y"]["value"]
+        tr.compute_batch_log_pdf()
+        log_prob = sum(site["batch_log_pdf"] for name, site in tr.iter_stochastic_nodes())
+        actual_shape = log_prob.shape
+        expected_shape = (2,) * depth + (3,) + (2,) * depth + (1,) * first_available_dim
         assert actual_shape == expected_shape, 'error on iteration {}'.format(i)
