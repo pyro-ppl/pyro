@@ -467,7 +467,7 @@ class RaoBlackwellizationTests(TestCase):
                                                                    torch.pow(self.lam0,
                                                                              -0.5)).reshape(extra_event_dims=1))
             for i in pyro.irange("outer", self.n_outer):
-                for j in pyro.irange("inner", self.n_inner):
+                for j in pyro.irange("inner_%d" % i, self.n_inner):
                     pyro.sample("obs_%d_%d" % (i, j),
                                 dist.Normal(mu_latent, torch.pow(self.lam, -0.5)).reshape(extra_event_dims=1),
                                 obs=self.data[i][j])
@@ -481,7 +481,7 @@ class RaoBlackwellizationTests(TestCase):
                         infer=dict(baseline=dict(use_decaying_avg_baseline=True)))
 
             for i in pyro.irange("outer", self.n_outer):
-                for j in pyro.irange("inner", self.n_inner):
+                for j in pyro.irange("inner_%d" % i, self.n_inner):
                     pass
 
         guide_trace = pyro.poutine.trace(guide, graph_type="dense").get_trace()
