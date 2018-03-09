@@ -5,6 +5,8 @@ import numbers
 
 import torch
 
+from pyro.poutine.util import site_is_subsample
+
 
 def torch_exp(x):
     """
@@ -59,6 +61,18 @@ def reduce_to_shape(source, shape):
         if source.size(-k) > shape[-k]:
             source = source.sum(-k, keepdim=True)
     return source
+
+
+def get_iarange_stacks(trace):
+    """
+    This builds a dict mapping site name to a set of iarange stacks.  Each
+    iarange stack is a list of :class:`CondIndepStackFrame`s corresponding to
+    an :class:`iarange`.  This information is used by :class:`Trace_ELBO` and
+    :class:`TraceGraph_ELBO`.
+    """
+    return {name: [f for f in node["cond_indep_stack"] if f.vectorized]
+            for name, node in trace.nodes.items()
+            if node["type"] == "sample" and not site_is_subsample(node)}
 
 
 class MultiFrameTensor(dict):

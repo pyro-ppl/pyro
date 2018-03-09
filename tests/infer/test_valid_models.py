@@ -319,8 +319,10 @@ def test_iarange_broadcast_error(trace_graph, enum_discrete):
     assert_error(model, model, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
 
-@pytest.mark.xfail(reason="RaoBlackwellization checks in trace_poutine need to be fixed to catch this")
-def test_iarange_irange_warning():
+@pytest.mark.parametrize("trace_graph,enum_discrete",
+                         [(False, False), (True, False), (False, True)],
+                         ids=["Trace", "TraceGraph", "TraceEnum"])
+def test_iarange_irange_ok(trace_graph, enum_discrete):
 
     def model():
         p = variable(0.5)
@@ -334,7 +336,7 @@ def test_iarange_irange_warning():
             for i in pyro.irange("irange", 10, 5):
                 pyro.sample("x_{}".format(i), dist.Bernoulli(p).reshape(sample_shape=[len(ind)]))
 
-    assert_warning(model, guide, trace_graph=True)
+    assert_ok(model, model, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
 
 @pytest.mark.parametrize("trace_graph,enum_discrete",
