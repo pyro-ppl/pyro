@@ -50,13 +50,6 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
     downstream_costs = {}
     stacks = model_trace.graph["iarange_info"]['iarange_stacks']
 
-    def n_compatible_indices(dest_node, source_node):
-        n_compatible = 0
-        for xframe, yframe in zip(stacks[source_node], stacks[dest_node]):
-            if xframe.name == yframe.name:
-                n_compatible += 1
-        return n_compatible
-
     for node in topo_sort_guide_nodes:
         downstream_costs[node] = MultiFrameTensor((stacks[node],
                                                    model_trace.nodes[node]['batch_log_pdf'] -
@@ -95,7 +88,7 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
                                         model_trace.nodes[child]['batch_log_pdf']))
             downstream_guide_cost_nodes[site].update([child])
 
-    for k in topo_sort_guide_nodes:
+    for k in non_reparam_nodes:
         downstream_costs[k] = downstream_costs[k].sum_to(guide_trace.nodes[k]["cond_indep_stack"])
 
     return downstream_costs, downstream_guide_cost_nodes

@@ -137,7 +137,7 @@ class TraceMessenger(Messenger):
         """
         if self.graph_type == "dense":
             identify_dense_edges(self.trace)
-            self.trace.graph["iarange_info"] = get_iarange_info(self.trace)
+        self.trace.graph["iarange_info"] = get_iarange_info(self.trace)
         return super(TraceMessenger, self).__exit__(*args, **kwargs)
 
     def get_trace(self):
