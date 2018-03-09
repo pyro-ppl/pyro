@@ -262,7 +262,8 @@ class TraceGraph_ELBO(ELBO):
         baseline_loss = 0.0
         if non_reparam_nodes:
             downstream_costs, _ = _compute_downstream_costs(model_trace, guide_trace, non_reparam_nodes)
-            surrogate_elbo_term, baseline_loss = _compute_elbo_non_reparam(guide_trace, non_reparam_nodes, downstream_costs)
+            surrogate_elbo_term, baseline_loss = _compute_elbo_non_reparam(guide_trace,
+                                                                           non_reparam_nodes, downstream_costs)
             surrogate_elbo += surrogate_elbo_term
 
         # collect parameters to train from model and guide
