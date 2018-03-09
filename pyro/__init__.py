@@ -13,7 +13,8 @@ import pyro.poutine as poutine
 from pyro.distributions.distribution import Distribution
 from pyro.params import _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, param_with_module_name
 from pyro.poutine import _PYRO_STACK, condition, do  # noqa: F401
-from pyro.util import apply_stack, deep_getattr, get_tensor_data, ones, set_rng_seed, zeros, am_i_wrapped  # noqa: F401
+from pyro.poutine.indep_poutine import _DIM_ALLOCATOR
+from pyro.util import am_i_wrapped, apply_stack, deep_getattr, get_tensor_data, ones, set_rng_seed, zeros  # noqa: F401
 
 __version__ = '0.1.2'
 
