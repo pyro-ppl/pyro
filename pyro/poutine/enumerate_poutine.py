@@ -14,7 +14,12 @@ class EnumerateMessenger(Messenger):
     """
     def __init__(self, first_available_dim):
         super(EnumerateMessenger, self).__init__()
-        self.next_available_dim = first_available_dim
+        self.first_available_dim = first_available_dim
+        self.next_available_dim = None
+
+    def __enter__(self):
+        self.next_available_dim = self.first_available_dim
+        return super(EnumerateMessenger, self).__enter__()
 
     def _pyro_sample(self, msg):
         """
