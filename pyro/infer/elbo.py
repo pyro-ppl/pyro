@@ -32,7 +32,7 @@ class ELBO(object):
         self.max_iarange_nesting = max_iarange_nesting
 
     @staticmethod
-    def make(trace_graph=False, enum_discrete=False, **kwargs):
+    def make(trace_graph=False, enum_discrete=False, dice=False, **kwargs):
         """
         Factory to construct an ELBO implementation.
 
@@ -60,6 +60,9 @@ class ELBO(object):
         elif enum_discrete:
             from .traceenum_elbo import TraceEnum_ELBO
             return TraceEnum_ELBO(**kwargs)
+        elif dice:
+            from .dice_elbo import Dice_ELBO
+            return Dice_ELBO(**kwargs)
         else:
             from .trace_elbo import Trace_ELBO
             return Trace_ELBO(**kwargs)

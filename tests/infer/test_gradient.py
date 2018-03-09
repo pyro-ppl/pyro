@@ -20,10 +20,10 @@ logger = logging.getLogger(__name__)
 
 @pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
 @pytest.mark.parametrize("subsample", [False, True], ids=["full", "subsample"])
-@pytest.mark.parametrize("trace_graph,enum_discrete",
-                         [(False, False), (True, False), (False, True)],
-                         ids=["Trace", "TraceGraph", "TraceEnum"])
-def test_subsample_gradient_parallelized(trace_graph, enum_discrete, reparameterized, subsample):
+@pytest.mark.parametrize("trace_graph,enum_discrete,dice",
+                         [(False, False, False), (True, False, False), (False, True, False), (False, False, True)],
+                         ids=["Trace", "TraceGraph", "TraceEnum", "Dice"])
+def test_subsample_gradient_parallelized(trace_graph, enum_discrete, dice, reparameterized, subsample):
     pyro.clear_param_store()
     data = variable([-0.5, 2.0])
     subsample_size = 1 if subsample else len(data)
@@ -48,7 +48,7 @@ def test_subsample_gradient_parallelized(trace_graph, enum_discrete, reparameter
 
     optim = Adam({"lr": 0.1})
     inference = SVI(model, guide, optim, loss="ELBO",
-                    trace_graph=trace_graph, enum_discrete=enum_discrete,
+                    trace_graph=trace_graph, enum_discrete=enum_discrete, dice=dice,
                     num_particles=1)
     if subsample_size == 1:
         inference.loss_and_grads(model, guide, subsample=torch.LongTensor([0]))
