@@ -4,14 +4,14 @@ import collections
 import warnings
 
 import networkx
-from torch.autograd import Variable
+import torch
 
 from pyro.distributions.util import scale_tensor
 from pyro.util import is_nan, is_inf
 
 
 def _warn_if_nan(name, value):
-    if isinstance(value, Variable):
+    if torch.is_tensor(value):
         value = value.item()
     if is_nan(value):
         warnings.warn("Encountered NAN log_pdf at site '{}'".format(name))
@@ -129,7 +129,7 @@ class Trace(object):
         The local computation is memoized.
 
         :returns: total log probability.
-        :rtype: torch.autograd.Variable
+        :rtype: torch.Tensor
         """
         log_p = 0.0
         for name, site in self.nodes.items():
