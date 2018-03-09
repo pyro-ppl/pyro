@@ -11,7 +11,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer.tracegraph_elbo import _compute_downstream_costs
-from pyro.infer.util import MultiViewTensor
+from pyro.infer.util import MultiFrameTensor
 from pyro.poutine.util import prune_subsample_sites
 from tests.common import assert_equal
 
@@ -24,26 +24,19 @@ def _brute_force_compute_downstream_costs(model_trace, guide_trace,  #
     downstream_costs, downstream_guide_cost_nodes = {}, {}
     stacks = model_trace.graph["iarange_info"]['iarange_stacks']
 
-    def n_compatible_indices(dest_node, source_node):
-        n_compatible = 0
-        for xframe, yframe in zip(stacks[source_node], stacks[dest_node]):
-            if xframe.name == yframe.name:
-                n_compatible += 1
-        return n_compatible
-
     for node in guide_nodes:
-        downstream_costs[node] = MultiViewTensor(model_trace.nodes[node]['batch_log_pdf'] -
-                                                 guide_trace.nodes[node]['batch_log_pdf'])
+        downstream_costs[node] = MultiFrameTensor((stacks[node],
+                                                   model_trace.nodes[node]['batch_log_pdf'] -
+                                                   guide_trace.nodes[node]['batch_log_pdf']))
         downstream_guide_cost_nodes[node] = set([node])
 
         descendants = networkx.descendants(guide_trace._graph, node)
 
         for desc in descendants:
-            dims_to_keep = n_compatible_indices(node, desc)
-            desc_mvt = MultiViewTensor(model_trace.nodes[desc]['batch_log_pdf'] -
-                                       guide_trace.nodes[desc]['batch_log_pdf'])
-            summed_desc = desc_mvt.sum_leftmost_all_but(dims_to_keep)
-            downstream_costs[node].add(summed_desc)
+            desc_mft = MultiFrameTensor((stacks[desc],
+                                         model_trace.nodes[desc]['batch_log_pdf'] -
+                                         guide_trace.nodes[desc]['batch_log_pdf']))
+            downstream_costs[node].add(*desc_mft.items())
             downstream_guide_cost_nodes[node].update([desc])
 
     for site in non_reparam_nodes:
@@ -53,13 +46,13 @@ def _brute_force_compute_downstream_costs(model_trace, guide_trace,  #
         children_in_model.difference_update(downstream_guide_cost_nodes[site])
         for child in children_in_model:
             assert (model_trace.nodes[child]["type"] == "sample")
-            dims_to_keep = n_compatible_indices(site, child)
-            summed_child = MultiViewTensor(model_trace.nodes[child]['batch_log_pdf']).sum_leftmost_all_but(dims_to_keep)
-            downstream_costs[site].add(summed_child)
+            child_mft = MultiFrameTensor((stacks[child],
+                                          model_trace.nodes[child]['batch_log_pdf']))
+            downstream_costs[site].add(*child_mft.items())
             downstream_guide_cost_nodes[site].update([child])
 
     for k in downstream_costs:
-        downstream_costs[k] = downstream_costs[k].contract_as(guide_trace.nodes[k]['batch_log_pdf'])
+        downstream_costs[k] = downstream_costs[k].sum_to(guide_trace.nodes[k]["cond_indep_stack"])
 
     return downstream_costs, downstream_guide_cost_nodes
 
@@ -87,15 +80,15 @@ def big_model_guide(include_obs=True, include_single=False, include_inner_1=Fals
         pyro.sample("b1", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_outer)]))
         if include_inner_1:
             with pyro.iarange("iarange_inner_1", 3) as ind_inner:
-                pyro.sample("c1", dist.Bernoulli(p1).reshape(sample_shape=[len(ind_inner), 1]))
+                pyro.sample("c1", dist.Bernoulli(p1).reshape(sample_shape=[len(ind_inner), len(ind_outer)]))
                 if flip_c23 and not include_obs:
-                    pyro.sample("c3", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_inner), 1]))
+                    pyro.sample("c3", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_inner), len(ind_outer)]))
                     pyro.sample("c2", dist.Bernoulli(p1).reshape(sample_shape=[len(ind_inner), len(ind_outer)]))
                 else:
                     pyro.sample("c2", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_inner), len(ind_outer)]))
-                    pyro.sample("c3", dist.Bernoulli(p2).reshape(sample_shape=[len(ind_inner), 1]))
+                    pyro.sample("c3", dist.Bernoulli(p2).reshape(sample_shape=[len(ind_inner), len(ind_outer)]))
         with pyro.iarange("iarange_inner_2", 4) as ind_inner:
-            pyro.sample("d1", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_inner), 1]))
+            pyro.sample("d1", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_inner), len(ind_outer)]))
             d2 = pyro.sample("d2", dist.Bernoulli(p2).reshape(sample_shape=[len(ind_inner), len(ind_outer)]))
             assert d2.shape == (4, 2)
             if include_obs:
@@ -160,6 +153,7 @@ def test_compute_downstream_costs_big_model_guide_pair(include_inner_1, include_
         expected_b1 += (model_trace.nodes['c1']['batch_log_pdf'] - guide_trace.nodes['c1']['batch_log_pdf']).sum(0)
         expected_b1 += (model_trace.nodes['c2']['batch_log_pdf'] - guide_trace.nodes['c2']['batch_log_pdf']).sum(0)
         expected_b1 += (model_trace.nodes['c3']['batch_log_pdf'] - guide_trace.nodes['c3']['batch_log_pdf']).sum(0)
+    assert_equal(expected_b1, dc['b1'], prec=1.0e-6)
 
     if include_single:
         expected_b0 = (model_trace.nodes['b0']['batch_log_pdf'] - guide_trace.nodes['b0']['batch_log_pdf'])
@@ -171,34 +165,37 @@ def test_compute_downstream_costs_big_model_guide_pair(include_inner_1, include_
             expected_b0 += (model_trace.nodes['c1']['batch_log_pdf'] - guide_trace.nodes['c1']['batch_log_pdf']).sum()
             expected_b0 += (model_trace.nodes['c2']['batch_log_pdf'] - guide_trace.nodes['c2']['batch_log_pdf']).sum()
             expected_b0 += (model_trace.nodes['c3']['batch_log_pdf'] - guide_trace.nodes['c3']['batch_log_pdf']).sum()
+        assert_equal(expected_b0, dc['b0'], prec=1.0e-6)
+        assert dc['b0'].size() == (5,)
 
     if include_inner_1:
         expected_c3 = (model_trace.nodes['c3']['batch_log_pdf'] - guide_trace.nodes['c3']['batch_log_pdf'])
-        expected_c3 += (model_trace.nodes['d1']['batch_log_pdf'] - guide_trace.nodes['d1']['batch_log_pdf']).sum()
-        expected_c3 += (model_trace.nodes['d2']['batch_log_pdf'] - guide_trace.nodes['d2']['batch_log_pdf']).sum()
-        expected_c3 += model_trace.nodes['obs']['batch_log_pdf'].sum()
+        expected_c3 += (model_trace.nodes['d1']['batch_log_pdf'] - guide_trace.nodes['d1']['batch_log_pdf']).sum(0)
+        expected_c3 += (model_trace.nodes['d2']['batch_log_pdf'] - guide_trace.nodes['d2']['batch_log_pdf']).sum(0)
+        expected_c3 += model_trace.nodes['obs']['batch_log_pdf'].sum(0)
 
         expected_c2 = (model_trace.nodes['c2']['batch_log_pdf'] - guide_trace.nodes['c2']['batch_log_pdf'])
         expected_c2 += (model_trace.nodes['d1']['batch_log_pdf'] - guide_trace.nodes['d1']['batch_log_pdf']).sum(0)
         expected_c2 += (model_trace.nodes['d2']['batch_log_pdf'] - guide_trace.nodes['d2']['batch_log_pdf']).sum(0)
-        expected_c2 += model_trace.nodes['obs']['batch_log_pdf'].sum(0, keepdim=False)
+        expected_c2 += model_trace.nodes['obs']['batch_log_pdf'].sum(0)
 
         expected_c1 = (model_trace.nodes['c1']['batch_log_pdf'] - guide_trace.nodes['c1']['batch_log_pdf'])
 
         if flip_c23:
-            term = (model_trace.nodes['c2']['batch_log_pdf'] - guide_trace.nodes['c2']['batch_log_pdf'])
-            expected_c3 += term.sum(1, keepdim=True)
+            expected_c3 += model_trace.nodes['c2']['batch_log_pdf'] - guide_trace.nodes['c2']['batch_log_pdf']
             expected_c2 += model_trace.nodes['c3']['batch_log_pdf']
         else:
-            expected_c2 += (model_trace.nodes['c3']['batch_log_pdf'] - guide_trace.nodes['c3']['batch_log_pdf'])
-            term = (model_trace.nodes['c2']['batch_log_pdf'] - guide_trace.nodes['c2']['batch_log_pdf'])
-            expected_c1 += term.sum(1, keepdim=True)
+            expected_c2 += model_trace.nodes['c3']['batch_log_pdf'] - guide_trace.nodes['c3']['batch_log_pdf']
+            expected_c2 += model_trace.nodes['c2']['batch_log_pdf'] - guide_trace.nodes['c2']['batch_log_pdf']
         expected_c1 += expected_c3
 
+        assert_equal(expected_c1, dc['c1'], prec=1.0e-6)
+        assert_equal(expected_c2, dc['c2'], prec=1.0e-6)
+        assert_equal(expected_c3, dc['c3'], prec=1.0e-6)
+
     expected_d1 = model_trace.nodes['d1']['batch_log_pdf'] - guide_trace.nodes['d1']['batch_log_pdf']
-    term = (model_trace.nodes['d2']['batch_log_pdf'] - guide_trace.nodes['d2']['batch_log_pdf'])
-    expected_d1 += term.sum(1, keepdim=True)
-    expected_d1 += model_trace.nodes['obs']['batch_log_pdf'].sum(1, keepdim=True)
+    expected_d1 += model_trace.nodes['d2']['batch_log_pdf'] - guide_trace.nodes['d2']['batch_log_pdf']
+    expected_d1 += model_trace.nodes['obs']['batch_log_pdf']
 
     expected_d2 = (model_trace.nodes['d2']['batch_log_pdf'] - guide_trace.nodes['d2']['batch_log_pdf'])
     expected_d2 += model_trace.nodes['obs']['batch_log_pdf']
@@ -206,16 +203,8 @@ def test_compute_downstream_costs_big_model_guide_pair(include_inner_1, include_
     if include_triple:
         expected_z0 = dc['a1'] + model_trace.nodes['z0']['batch_log_pdf'] - guide_trace.nodes['z0']['batch_log_pdf']
         assert_equal(expected_z0, dc['z0'], prec=1.0e-6)
-    if include_single:
-        assert_equal(expected_b0, dc['b0'], prec=1.0e-6)
-        assert dc['b0'].size() == (5,)
-    if include_inner_1:
-        assert_equal(expected_c1, dc['c1'], prec=1.0e-6)
-        assert_equal(expected_c2, dc['c2'], prec=1.0e-6)
-        assert_equal(expected_c3, dc['c3'], prec=1.0e-6)
     assert_equal(expected_d2, dc['d2'], prec=1.0e-6)
     assert_equal(expected_d1, dc['d1'], prec=1.0e-6)
-    assert_equal(expected_b1, dc['b1'], prec=1.0e-6)
 
     assert dc['b1'].size() == (2,)
     assert dc['d2'].size() == (4, 2)
