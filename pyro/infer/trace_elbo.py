@@ -19,9 +19,7 @@ def compute_site_log_r(model_trace, guide_trace, target_site):
         if model_site["type"] == "sample":
             log_r_term = model_site["batch_log_pdf"]
             if not model_site["is_observed"]:
-                guide_site = guide_trace.nodes[name]
-                guide_log_pdf, _, _ = guide_site["score_parts"]
-                log_r_term -= guide_log_pdf
+                log_r_term = log_r_term - guide_trace.nodes[name]["batch_log_pdf"]
             log_r.add((stacks[name], log_r_term.detach()))
 
     return log_r.sum_to(guide_trace.nodes[target_site]["cond_indep_stack"])
