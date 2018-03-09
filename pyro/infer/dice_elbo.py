@@ -5,7 +5,7 @@ import torch
 import pyro
 import pyro.poutine as poutine
 from pyro.infer.elbo import ELBO
-from pyro.infer.util import MultiFrameTensor
+from pyro.infer.util import MultiFrameTensor, get_iarange_stacks
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match
 
@@ -15,7 +15,7 @@ def _magicbox_trace(model_trace, guide_trace, name):
     TODO docs
     """
     stop_name = name
-    stacks = model_trace.graph["iarange_info"]["iarange_stacks"]
+    stacks = get_iarange_stacks(model_trace)
     if model_trace.nodes[name]["is_observed"]:
         front = set()
         for name2, node in model_trace.nodes.items():

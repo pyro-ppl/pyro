@@ -67,12 +67,13 @@ def test_subsample_gradient(trace_graph, enum_discrete, reparameterized, subsamp
 
 
 @pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
-@pytest.mark.parametrize("trace_graph,enum_discrete", [
-    (False, False),
-    (True, False),
-    pytest.param(False, True, marks=pytest.mark.xfail(reason="https://github.com/uber/pyro/issues/846")),
-], ids=["Trace", "TraceGraph", "TraceEnum"])
-def test_iarange(trace_graph, enum_discrete, reparameterized):
+@pytest.mark.parametrize("trace_graph,enum_discrete,dice", [
+    (False, False, True),
+    (False, False, False),
+    (True, False, False),
+    pytest.param(False, True, False, marks=pytest.mark.xfail(reason="https://github.com/uber/pyro/issues/846")),
+], ids=["Dice", "Trace", "TraceGraph", "TraceEnum"])
+def test_iarange(trace_graph, enum_discrete, dice, reparameterized):
     pyro.clear_param_store()
     data = variable([-0.5, 2.0])
     num_particles = 20000
@@ -106,7 +107,7 @@ def test_iarange(trace_graph, enum_discrete, reparameterized):
 
     optim = Adam({"lr": 0.1})
     inference = SVI(model, guide, optim, loss="ELBO",
-                    trace_graph=trace_graph, enum_discrete=enum_discrete)
+                    trace_graph=trace_graph, enum_discrete=enum_discrete, dice=dice)
     inference.loss_and_grads(model, guide)
     params = dict(pyro.get_param_store().named_parameters())
     actual_grads = {name: param.grad.detach().cpu().numpy() / num_particles
