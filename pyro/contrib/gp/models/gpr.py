@@ -44,7 +44,7 @@ class GPRegression(Model):
         noise = self.get_param("noise")
 
         K = kernel(self.X) + noise.expand(self.num_data).diag()
-        zero_loc = torch.tensor(K.data.new([0])).expand(self.num_data)
+        zero_loc = torch.zeros_like(self.y)
         pyro.sample("y", dist.MultivariateNormal(zero_loc, K), obs=self.y)
 
     def guide(self):

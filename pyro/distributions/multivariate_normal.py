@@ -58,8 +58,9 @@ class MultivariateNormal(TorchDistribution):
 
     def log_prob(self, value):
         delta = value - self.loc
+        if len(delta.shape) == 1:
+            delta = delta.unsqueeze(-1)
         sigma_inverse = _matrix_inverse_compat(self.covariance_matrix, self.scale_tril)
-        normalization_const = ((0.5 * self.event_shape[-1]) * math.log(2 * math.pi) +
-                               self.scale_tril.diag().log().sum(-1))
-        mahalanobis_squared = (delta * torch.matmul(delta, sigma_inverse)).sum(-1)
+        normalization_const = (0.5 * self.event_shape[-1] * math.log(2 * math.pi) + self.scale_tril.diag().log().sum())
+        mahalanobis_squared = (delta.t() @ sigma_inverse @ delta).sum()
         return -(normalization_const + 0.5 * mahalanobis_squared)
