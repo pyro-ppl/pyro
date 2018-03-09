@@ -1,11 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
 import pytest
+import torch
 
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.util import ng_ones, ng_zeros, set_rng_seed
+from pyro.util import set_rng_seed
 from tests.common import assert_equal
 
 EXAMPLE_MODELS = []
@@ -52,47 +53,47 @@ def trivial_model():
 
 
 tr_normal = poutine.Trace()
-tr_normal.add_node("normal_0", type="sample", is_observed=False, value=ng_zeros(1))
+tr_normal.add_node("normal_0", type="sample", is_observed=False, value=torch.zeros(1))
 
 
 @register_model(replay={'trace': tr_normal},
                 block={'hide': ['normal_0']},
-                condition={'data': {'normal_0': ng_zeros(1)}},
-                do={'data': {'normal_0': ng_zeros(1)}})
+                condition={'data': {'normal_0': torch.zeros(1)}},
+                do={'data': {'normal_0': torch.zeros(1)}})
 def normal_model():
-    normal_0 = pyro.sample('normal_0', dist.Normal(ng_zeros(1), ng_ones(1)))
+    normal_0 = pyro.sample('normal_0', dist.Normal(torch.zeros(1), torch.ones(1)))
     return [normal_0]
 
 
 tr_normal_normal = poutine.Trace()
-tr_normal_normal.add_node("normal_0", type="sample", is_observed=False, value=ng_zeros(1))
+tr_normal_normal.add_node("normal_0", type="sample", is_observed=False, value=torch.zeros(1))
 
 
 @register_model(replay={'trace': tr_normal_normal},
                 block={'hide': ['normal_0']},
-                condition={'data': {'normal_0': ng_zeros(1)}},
-                do={'data': {'normal_0': ng_zeros(1)}})
+                condition={'data': {'normal_0': torch.zeros(1)}},
+                do={'data': {'normal_0': torch.zeros(1)}})
 def normal_normal_model():
-    normal_0 = pyro.sample('normal_0', dist.Normal(ng_zeros(1), ng_ones(1)))
-    normal_1 = ng_ones(1)
-    pyro.sample('normal_1', dist.Normal(normal_0, ng_ones(1)),
+    normal_0 = pyro.sample('normal_0', dist.Normal(torch.zeros(1), torch.ones(1)))
+    normal_1 = torch.ones(1)
+    pyro.sample('normal_1', dist.Normal(normal_0, torch.ones(1)),
                 obs=normal_1)
     return [normal_0, normal_1]
 
 
 tr_bernoulli_normal = poutine.Trace()
-tr_bernoulli_normal.add_node("bern_0", type="sample", is_observed=False, value=ng_ones(1))
+tr_bernoulli_normal.add_node("bern_0", type="sample", is_observed=False, value=torch.ones(1))
 
 
 @register_model(replay={'trace': tr_bernoulli_normal},
                 block={'hide': ['bern_0']},
-                condition={'data': {'bern_0': ng_ones(1)}},
-                do={'data': {'bern_0': ng_ones(1)}})
+                condition={'data': {'bern_0': torch.ones(1)}},
+                do={'data': {'bern_0': torch.ones(1)}})
 def bernoulli_normal_model():
-    bern_0 = pyro.sample('bern_0', dist.Bernoulli(ng_zeros(1) * 1e-2))
-    mu = ng_ones(1) if bern_0.item() else -ng_ones(1)
-    normal_0 = ng_ones(1)
-    pyro.sample('normal_0', dist.Normal(mu, ng_ones(1) * 1e-2),
+    bern_0 = pyro.sample('bern_0', dist.Bernoulli(torch.zeros(1) * 1e-2))
+    mu = torch.ones(1) if bern_0.item() else -torch.ones(1)
+    normal_0 = torch.ones(1)
+    pyro.sample('normal_0', dist.Normal(mu, torch.ones(1) * 1e-2),
                 obs=normal_0)
     return [bern_0, normal_0]
 
