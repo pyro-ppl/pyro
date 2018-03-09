@@ -13,7 +13,8 @@ import pyro.poutine as poutine
 from pyro.distributions.distribution import Distribution
 from pyro.params import _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, param_with_module_name
 from pyro.poutine import _PYRO_STACK, condition, do  # noqa: F401
-from pyro.util import apply_stack, deep_getattr, get_tensor_data, ones, set_rng_seed, zeros, am_i_wrapped  # noqa: F401
+from pyro.poutine.indep_poutine import _DIM_ALLOCATOR
+from pyro.util import am_i_wrapped, apply_stack, deep_getattr, get_tensor_data, ones, set_rng_seed, zeros  # noqa: F401
 
 __version__ = '0.1.2'
 
@@ -244,18 +245,16 @@ class iarange(object):
     extended discussion.
     """
     def __init__(self, name, size=None, subsample_size=None, subsample=None, dim=None, use_cuda=None):
-        if dim is not None and dim >= 0:
-            raise ValueError('Expected dim < 0 to index from the right, actual {}'.format(dim))
         self.name = name
         self.dim = dim
         self.size, self.subsample_size, self.subsample = _subsample(name, size, subsample_size, subsample, use_cuda)
 
     def __enter__(self):
         self._wrapped = am_i_wrapped()
+        self.dim = _DIM_ALLOCATOR.allocate(self.name, self.dim)
         if self._wrapped:
-            dim = 'auto' if self.dim is None else self.dim
             self._scale_poutine = poutine.ScaleMessenger(self.size / self.subsample_size)
-            self._indep_poutine = poutine.IndepMessenger(self.name, size=self.subsample_size, dim=dim)
+            self._indep_poutine = poutine.IndepMessenger(self.name, size=self.subsample_size, dim=self.dim)
             self._scale_poutine.__enter__()
             self._indep_poutine.__enter__()
         return self.subsample
@@ -264,6 +263,7 @@ class iarange(object):
         if self._wrapped:
             self._indep_poutine.__exit__(exc_type, exc_value, traceback)
             self._scale_poutine.__exit__(exc_type, exc_value, traceback)
+        _DIM_ALLOCATOR.free(self.name, self.dim)
 
 
 def irange(name, size, subsample_size=None, subsample=None, use_cuda=None):

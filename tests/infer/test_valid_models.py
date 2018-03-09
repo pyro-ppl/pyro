@@ -649,9 +649,9 @@ def test_enum_discrete_parallel_iarange_ok():
         p536 = Variable(torch.ones(5, 3, 6) / 6)
 
         x2 = pyro.sample("x2", dist.Categorical(p2))
-        with pyro.iarange("iarange", 3):
+        with pyro.iarange("outer", 3):
             x34 = pyro.sample("x34", dist.Categorical(p34))
-            with pyro.iarange("iarange", 5):
+            with pyro.iarange("inner", 5):
                 x536 = pyro.sample("x536", dist.Categorical(p536))
 
         if not enum_discrete:
