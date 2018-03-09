@@ -610,3 +610,26 @@ class InferConfigPoutineTests(TestCase):
         assert tr.nodes["a"]["infer"] == {"enumerate": "parallel", "blah": True}
         assert tr.nodes["b"]["infer"] == {"blah": True}
         assert tr.nodes["p"]["infer"] == {}
+
+
+@pytest.mark.parametrize('first_available_dim', [0, 1, 2])
+@pytest.mark.parametrize('depth', [0, 1, 2])
+def test_enumerate_poutine(depth, first_available_dim):
+    num_particles = 2
+
+    def model():
+        pyro.sample("x", Bernoulli(0.5))
+        for i in range(depth):
+            pyro.sample("a_{}".format(i), Bernoulli(0.5), infer={"enumerate": "parallel"})
+
+    model = poutine.EnumeratePoutine(model, first_available_dim)
+    model = poutine.trace(model)
+    for i in range(num_particles):
+        tr = model.get_trace()
+        tr.compute_batch_log_pdf()
+        log_prob = sum(site["batch_log_pdf"] for name, site in tr.iter_stochastic_nodes())
+        actual_shape = log_prob.shape
+        expected_shape = (2,) * depth
+        if depth:
+            expected_shape = expected_shape + (1,) * first_available_dim
+        assert actual_shape == expected_shape, 'error on iteration {}'.format(i)
