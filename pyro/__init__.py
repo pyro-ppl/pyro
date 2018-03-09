@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import copy
 import logging
+import numbers
 import warnings
 from collections import OrderedDict
 from inspect import isclass
@@ -151,9 +152,7 @@ def _subsample(name, size=None, subsample_size=None, subsample=None, use_cuda=No
         size = -1  # This is PyTorch convention for "arbitrary size"
         subsample_size = -1
     elif subsample is None:
-        names = [name]
-        names += [str(f.counter) for f in _PYRO_STACK if isinstance(f, poutine.IndepMessenger)]
-        subsample = sample("_".join(names), _Subsample(size, subsample_size, use_cuda))
+        subsample = sample(name, _Subsample(size, subsample_size, use_cuda))
 
     if subsample_size is None:
         subsample_size = len(subsample)
@@ -266,13 +265,13 @@ class iarange(object):
         _DIM_ALLOCATOR.free(self.name, self.dim)
 
 
-def irange(name, size, subsample_size=None, subsample=None, use_cuda=None):
+class irange(object):
     """
-    Non-vectorized version of ``iarange``. See ``iarange`` for details.
+    Non-vectorized version of :class:`iarange`. See :class:`iarange` for details.
 
     :param str name: A name that will be used for this site in a Trace.
     :param int size: The size of the collection being subsampled (like ``stop``
-        in builtin ``range``).
+        in builtin :func:`range`).
     :param int subsample_size: Size of minibatches used in subsampling.
         Defaults to ``size``.
     :param subsample: Optional custom subsample for user-defined subsampling
@@ -282,7 +281,7 @@ def irange(name, size, subsample_size=None, subsample=None, use_cuda=None):
     :param bool use_cuda: Optional bool specifying whether to use cuda tensors
         for internal ``log_pdf`` computations. Defaults to
         ``torch.Tensor.is_cuda``.
-    :return: A generator yielding a sequence of integers.
+    :return: A reusable iterator yielding a sequence of integers.
 
     Examples::
 
@@ -292,19 +291,23 @@ def irange(name, size, subsample_size=None, subsample=None, use_cuda=None):
 
     See `SVI Part II <http://pyro.ai/examples/svi_part_ii.html>`_ for an extended discussion.
     """
-    size, subsample_size, subsample = _subsample(name, size, subsample_size, subsample, use_cuda)
-    if not am_i_wrapped():
-        for i in subsample:
-            yield i.item() if isinstance(i, Variable) else i
-    else:
-        indep_context = poutine.IndepMessenger(name, size=subsample_size)
-        with poutine.ScaleMessenger(size / subsample_size):
-            for i in subsample:
-                indep_context.next_context()
-                with indep_context:
-                    # convert to python numeric type as functions like torch.ones(*args)
-                    # do not work with dim 0 torch.Tensor instances.
-                    yield i.item() if isinstance(i, Variable) else i
+    def __init__(self, name, size, subsample_size=None, subsample=None, use_cuda=None):
+        self.name = name
+        self.size, self.subsample_size, self.subsample = _subsample(name, size, subsample_size, subsample, use_cuda)
+
+    def __iter__(self):
+        if not am_i_wrapped():
+            for i in self.subsample:
+                yield i if isinstance(i, numbers.Number) else i.item()
+        else:
+            indep_context = poutine.IndepMessenger(self.name, size=self.subsample_size)
+            with poutine.ScaleMessenger(self.size / self.subsample_size):
+                for i in self.subsample:
+                    indep_context.next_context()
+                    with indep_context:
+                        # convert to python numeric type as functions like torch.ones(*args)
+                        # do not work with dim 0 torch.Tensor instances.
+                        yield i if isinstance(i, numbers.Number) else i.item()
 
 
 # XXX this should have the same call signature as torch.Tensor constructors

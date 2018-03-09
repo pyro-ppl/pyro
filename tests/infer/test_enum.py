@@ -528,9 +528,10 @@ def test_elbo_irange_iarange(outer_dim, inner_dim, enumerate1, enumerate2, enume
     def model():
         with pyro.iarange("particles", num_particles):
             pyro.sample("x", dist.Bernoulli(p).reshape([num_particles]))
+            inner_iarange = pyro.iarange("inner", inner_dim)
             for i in pyro.irange("outer", outer_dim):
                 pyro.sample("y_{}".format(i), dist.Bernoulli(p).reshape([num_particles]))
-                with pyro.iarange("inner", inner_dim):
+                with inner_iarange:
                     pyro.sample("z_{}".format(i), dist.Bernoulli(p).reshape([inner_dim, num_particles]))
 
     def guide():
@@ -538,10 +539,11 @@ def test_elbo_irange_iarange(outer_dim, inner_dim, enumerate1, enumerate2, enume
         with pyro.iarange("particles", num_particles):
             pyro.sample("x", dist.Bernoulli(q).reshape([num_particles]),
                         infer={"enumerate": enumerate1})
+            inner_iarange = pyro.iarange("inner", inner_dim)
             for i in pyro.irange("outer", outer_dim):
                 pyro.sample("y_{}".format(i), dist.Bernoulli(q).reshape([num_particles]),
                             infer={"enumerate": enumerate2})
-                with pyro.iarange("inner", inner_dim):
+                with inner_iarange:
                     pyro.sample("z_{}".format(i), dist.Bernoulli(q).reshape([inner_dim, num_particles]),
                                 infer={"enumerate": enumerate3})
 
@@ -577,9 +579,10 @@ def test_elbo_irange_irange(outer_dim, inner_dim, enumerate1, enumerate2, enumer
     def model():
         with pyro.iarange("particles", num_particles):
             pyro.sample("x", dist.Bernoulli(p).reshape([num_particles]))
+            inner_irange = pyro.irange("inner", outer_dim)
             for i in pyro.irange("outer", inner_dim):
                 pyro.sample("y_{}".format(i), dist.Bernoulli(p).reshape([num_particles]))
-                for j in pyro.irange("inner", outer_dim):
+                for j in inner_irange:
                     pyro.sample("z_{}_{}".format(i, j), dist.Bernoulli(p).reshape([num_particles]))
 
     def guide():
@@ -587,10 +590,11 @@ def test_elbo_irange_irange(outer_dim, inner_dim, enumerate1, enumerate2, enumer
         with pyro.iarange("particles", num_particles):
             pyro.sample("x", dist.Bernoulli(q).reshape([num_particles]),
                         infer={"enumerate": enumerate1})
+            inner_irange = pyro.irange("inner", inner_dim)
             for i in pyro.irange("outer", outer_dim):
                 pyro.sample("y_{}".format(i), dist.Bernoulli(q).reshape([num_particles]),
                             infer={"enumerate": enumerate2})
-                for j in pyro.irange("inner", inner_dim):
+                for j in inner_irange:
                     pyro.sample("z_{}_{}".format(i, j), dist.Bernoulli(q).reshape([num_particles]),
                                 infer={"enumerate": enumerate3})
 

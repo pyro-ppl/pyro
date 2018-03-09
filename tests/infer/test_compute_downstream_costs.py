@@ -298,7 +298,7 @@ def nested_model_guide(include_obs=True, dim1=11, dim2=7):
     pyro.sample("a1", dist.Bernoulli(p0 * p1))
     for i in pyro.irange("irange", dim1):
         pyro.sample("b{}".format(i), dist.Bernoulli(p0))
-        with pyro.iarange("iarange", dim2 + i) as ind:
+        with pyro.iarange("iarange_{}".format(i), dim2 + i) as ind:
             c_i = pyro.sample("c{}".format(i), dist.Bernoulli(p1).reshape(sample_shape=[len(ind)]))
             assert c_i.shape == (dim2 + i,)
             if include_obs:
