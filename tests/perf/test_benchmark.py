@@ -41,9 +41,11 @@ def register_model(**model_kwargs):
     return register_fn
 
 
-@register_model(reparameterized=True, id='PoissonGamma::reparam=True')
-@register_model(reparameterized=False, id='PoissonGamma::reparam=False')
-def poisson_gamma_model(reparameterized):
+@register_model(reparameterized=True, trace_graph=True, id='PoissonGamma::reparam=True_tracegraph=True')
+@register_model(reparameterized=True, trace_graph=False, id='PoissonGamma::reparam=True_tracegraph=False')
+@register_model(reparameterized=False, trace_graph=True, id='PoissonGamma::reparam=False_tracegraph=True')
+@register_model(reparameterized=False, trace_graph=False, id='PoissonGamma::reparam=False_tracegraph=False')
+def poisson_gamma_model(reparameterized, trace_graph):
     alpha0 = torch.tensor(1.0)
     beta0 = torch.tensor(1.0)
     data = torch.tensor([1.0, 2.0, 3.0])
@@ -80,13 +82,13 @@ def poisson_gamma_model(reparameterized):
         pyro.sample("lambda_latent", Gamma(alpha_q, beta_q))
 
     adam = optim.Adam({"lr": .0002, "betas": (0.97, 0.999)})
-    svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
-    for k in range(2000):
+    svi = SVI(model, guide, adam, loss="ELBO", trace_graph=trace_graph)
+    for k in range(3000):
         svi.step()
 
 
-@register_model(kernel=NUTS, step_size=0.02, id='BernoulliBeta::NUTS')
-@register_model(kernel=HMC, step_size=0.02, num_steps=3, id='BernoulliBeta::HMC')
+@register_model(kernel=NUTS, step_size=0.02, num_samples=300, id='BernoulliBeta::NUTS')
+@register_model(kernel=HMC, step_size=0.02, num_steps=3, num_samples=1000, id='BernoulliBeta::HMC')
 def bernoulli_beta_hmc(**kwargs):
     def model(data):
         alpha = pyro.param('alpha', torch.tensor([1.1, 1.1], requires_grad=True))
@@ -95,8 +97,9 @@ def bernoulli_beta_hmc(**kwargs):
         pyro.observe("obs", dist.Bernoulli(p_latent), data)
         return p_latent
     kernel = kwargs.pop('kernel')
+    num_samples = kwargs.pop('num_samples')
     mcmc_kernel = kernel(model, **kwargs)
-    mcmc_run = MCMC(mcmc_kernel, num_samples=500, warmup_steps=300)
+    mcmc_run = MCMC(mcmc_kernel, num_samples=num_samples, warmup_steps=100)
     posterior = []
     true_probs = torch.tensor([0.9, 0.1])
     data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))

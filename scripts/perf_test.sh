@@ -29,7 +29,8 @@ pushd ${REF_TMP_DIR}
 if [ -e ${BENCHMARK_FILE} ]; then
     pytest -vs tests/perf/test_benchmark.py --benchmark-save=${REF_HEAD} --benchmark-name=short \
         --benchmark-columns=min,median,max --benchmark-sort=name \
-        --benchmark-storage=file://../.benchmarks || echo "ERR: Failed on branch upstream/${REF_HEAD}."
+        --benchmark-storage=file://../.benchmarks || echo "ERR: Failed on branch upstream/${REF_HEAD}." \
+        --benchmark-timer timeit.default_timer
 fi
 
 # cd back into the current repo to run comparison benchmarks
@@ -37,9 +38,10 @@ popd
 
 # Run benchmark comparison - fails if the min run time is 10% less than on the ref branch.
 if [ ${IS_BENCHMARK_FILE_IN_DEV} = 1 ]; then
-    pytest -vx tests/perf/test_benchmark.py --benchmark-compare --benchmark-compare-fail=min:20% \
-        --benchmark-name=short --benchmark-columns=min,median,max --benchmark-sort=name
+    pytest -vx tests/perf/test_benchmark.py --benchmark-compare --benchmark-compare-fail=min:15% \
+        --benchmark-name=short --benchmark-columns=min,median,max --benchmark-sort=name \
+        --benchmark-timer timeit.default_timer
 else
     pytest -vx tests/perf/test_benchmark.py --benchmark-name=short --benchmark-columns=min,median,max \
-        --benchmark-sort=name
+        --benchmark-sort=name --benchmark-timer timeit.default_timer
 fi
