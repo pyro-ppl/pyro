@@ -81,7 +81,7 @@ def poisson_gamma_model(reparameterized):
 
     adam = optim.Adam({"lr": .0002, "betas": (0.97, 0.999)})
     svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
-    for k in range(1000):
+    for k in range(2000):
         svi.step()
 
 
@@ -96,7 +96,7 @@ def bernoulli_beta_hmc(**kwargs):
         return p_latent
     kernel = kwargs.pop('kernel')
     mcmc_kernel = kernel(model, **kwargs)
-    mcmc_run = MCMC(mcmc_kernel, num_samples=300, warmup_steps=50)
+    mcmc_run = MCMC(mcmc_kernel, num_samples=500, warmup_steps=300)
     posterior = []
     true_probs = torch.tensor([0.9, 0.1])
     data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
