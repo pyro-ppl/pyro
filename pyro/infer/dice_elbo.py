@@ -25,8 +25,7 @@ def _magicbox_trace(model_trace, guide_trace, name):
                 if name2 == name:
                     break
         for name2 in guide_trace.nodes:
-            if name2 in front:
-                front.discard(name2)
+            front.discard(name2)
             if len(front) == 0:
                 stop_name = name2
                 break
@@ -61,7 +60,6 @@ class Dice_ELBO(ELBO):
 
             model_trace.compute_batch_log_pdf()
             guide_trace.compute_batch_log_pdf()
-            guide_trace.compute_score_parts()
 
             yield model_trace, guide_trace
 
