@@ -4,7 +4,6 @@ import warnings
 from operator import itemgetter
 
 import networkx
-import numpy as np
 import torch
 from torch.autograd import variable
 
@@ -12,10 +11,10 @@ import pyro
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer import ELBO
-from pyro.infer.util import MultiViewTensor as MVT
-from pyro.infer.util import torch_backward, torch_data_sum, n_compatible_indices
+from pyro.infer.util import MultiFrameTensor
+from pyro.infer.util import torch_backward, torch_data_sum
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_match, check_site_shape, detach_iterable
+from pyro.util import check_model_guide_match, check_site_shape, detach_iterable, is_nan
 
 
 def _get_baseline_options(site):
@@ -52,8 +51,9 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
     stacks = model_trace.graph["iarange_info"]['iarange_stacks']
 
     for node in topo_sort_guide_nodes:
-        downstream_costs[node] = MVT(model_trace.nodes[node]['batch_log_pdf'] -
-                                     guide_trace.nodes[node]['batch_log_pdf'])
+        downstream_costs[node] = MultiFrameTensor((stacks[node],
+                                                   model_trace.nodes[node]['batch_log_pdf'] -
+                                                   guide_trace.nodes[node]['batch_log_pdf']))
         nodes_included_in_sum = set([node])
         downstream_guide_cost_nodes[node] = set([node])
         # make more efficient by ordering children appropriately (higher children first)
@@ -63,20 +63,16 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
             child_cost_nodes = downstream_guide_cost_nodes[child]
             downstream_guide_cost_nodes[node].update(child_cost_nodes)
             if nodes_included_in_sum.isdisjoint(child_cost_nodes):  # avoid duplicates
-                dims_to_keep = n_compatible_indices(stacks, node, child)
-                summed_child = downstream_costs[child].sum_leftmost_all_but(dims_to_keep)
-                downstream_costs[node].add(summed_child)
+                downstream_costs[node].add(*downstream_costs[child].items())
                 # XXX nodes_included_in_sum logic could be more fine-grained, possibly leading
                 # to speed-ups in case there are many duplicates
                 nodes_included_in_sum.update(child_cost_nodes)
         missing_downstream_costs = downstream_guide_cost_nodes[node] - nodes_included_in_sum
         # include terms we missed because we had to avoid duplicates
         for missing_node in missing_downstream_costs:
-            missing_term = MVT(model_trace.nodes[missing_node]['batch_log_pdf'] -
-                               guide_trace.nodes[missing_node]['batch_log_pdf'])
-            dims_to_keep = n_compatible_indices(stacks, node, missing_node)
-            summed_missing_term = missing_term.sum_leftmost_all_but(dims_to_keep)
-            downstream_costs[node].add(summed_missing_term)
+            downstream_costs[node].add((stacks[missing_node],
+                                        model_trace.nodes[missing_node]['batch_log_pdf'] -
+                                        guide_trace.nodes[missing_node]['batch_log_pdf']))
 
     # finish assembling complete downstream costs
     # (the above computation may be missing terms from model)
@@ -88,13 +84,12 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
         children_in_model.difference_update(downstream_guide_cost_nodes[site])
         for child in children_in_model:
             assert (model_trace.nodes[child]["type"] == "sample")
-            dims_to_keep = n_compatible_indices(stacks, site, child)
-            summed_child = MVT(model_trace.nodes[child]['batch_log_pdf']).sum_leftmost_all_but(dims_to_keep)
-            downstream_costs[site].add(summed_child)
+            downstream_costs[site].add((stacks[child],
+                                        model_trace.nodes[child]['batch_log_pdf']))
             downstream_guide_cost_nodes[site].update([child])
 
-    for k in topo_sort_guide_nodes:
-        downstream_costs[k] = downstream_costs[k].contract_as(guide_trace.nodes[k]['batch_log_pdf'])
+    for k in non_reparam_nodes:
+        downstream_costs[k] = downstream_costs[k].sum_to(guide_trace.nodes[k]["cond_indep_stack"])
 
     return downstream_costs, downstream_guide_cost_nodes
 
@@ -235,7 +230,7 @@ class TraceGraph_ELBO(ELBO):
             elbo += torch_data_sum(weight * elbo_particle)
 
         loss = -elbo
-        if np.isnan(loss):
+        if is_nan(loss):
             warnings.warn('Encountered NAN loss')
         return loss
 
@@ -294,6 +289,6 @@ class TraceGraph_ELBO(ELBO):
             pyro.get_param_store().mark_params_active(trainable_params)
 
         loss = -elbo
-        if np.isnan(loss):
+        if is_nan(loss):
             warnings.warn('Encountered NAN loss')
         return weight * loss
