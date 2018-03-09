@@ -6,23 +6,21 @@ import pyro
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
+from pyro.infer.util import MultiFrameTensor, get_iarange_stacks
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, check_site_shape, is_nan
-from pyro.infer.util import MultiFrameTensor
 
 
-# TODO cache some of these computations
-def compute_site_log_r(model_trace, guide_trace, target_site):
+def _compute_log_r(model_trace, guide_trace):
     log_r = MultiFrameTensor()
-    stacks = model_trace.graph["iarange_info"]['iarange_stacks']
+    stacks = get_iarange_stacks(model_trace)
     for name, model_site in model_trace.nodes.items():
         if model_site["type"] == "sample":
             log_r_term = model_site["batch_log_pdf"]
             if not model_site["is_observed"]:
                 log_r_term = log_r_term - guide_trace.nodes[name]["batch_log_pdf"]
             log_r.add((stacks[name], log_r_term.detach()))
-
-    return log_r.sum_to(guide_trace.nodes[target_site]["cond_indep_stack"])
+    return log_r
 
 
 class Trace_ELBO(ELBO):
@@ -84,6 +82,7 @@ class Trace_ELBO(ELBO):
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = 0
             surrogate_elbo_particle = 0
+            log_r = None
 
             # compute elbo and surrogate elbo
             for name, model_site in model_trace.nodes.items():
@@ -103,7 +102,9 @@ class Trace_ELBO(ELBO):
                             surrogate_elbo_particle -= entropy_term.sum()
 
                         if not is_identically_zero(score_function_term):
-                            log_r_site = compute_site_log_r(model_trace, guide_trace, name)
+                            if log_r is None:
+                                log_r = _compute_log_r(model_trace, guide_trace)
+                            log_r_site = log_r.sum_to(guide_site["cond_indep_stack"])
                             surrogate_elbo_particle = surrogate_elbo_particle + (log_r_site * score_function_term).sum()
 
             elbo += elbo_particle / self.num_particles

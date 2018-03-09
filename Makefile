@@ -21,6 +21,14 @@ format: FORCE
 	yapf -i *.py pyro/distributions/*.py profiler/*.py docs/source/conf.py
 	isort --recursive *.py pyro/ tests/ profiler/*.py docs/source/conf.py
 
+perf-test: FORCE
+	bash scripts/perf_test.sh ${ref}
+
+profile: ref=dev
+
+profile: FORCE
+	bash scripts/profile_model.sh ${ref} ${models}
+
 test: lint docs FORCE
 	pytest -vx -n auto --stage unit
 
