@@ -117,13 +117,10 @@ def test_compute_downstream_costs_big_model_guide_pair(include_inner_1, include_
     model_trace.compute_batch_log_pdf()
     guide_trace.compute_batch_log_pdf()
 
-    guide_iarange_info = guide_trace.graph["iarange_info"]
-    model_iarange_info = model_trace.graph["iarange_info"]
-    guide_iarange_condition = guide_iarange_info['rao-blackwellization-condition']
-    model_iarange_condition = model_iarange_info['rao-blackwellization-condition']
-    do_vec_rb = guide_iarange_condition and model_iarange_condition
-    guide_iarange_nodes = guide_iarange_info['nodes'] if do_vec_rb else set()
-    model_iarange_nodes = model_iarange_info['nodes'] if do_vec_rb else set()
+    guide_iarange_nodes = set(name for name, site in guide_trace.iter_stochastic_nodes()
+                              if any(f.vectorized for f in site["cond_indep_stack"]))
+    model_iarange_nodes = set(name for name, site in model_trace.iter_stochastic_nodes()
+                              if any(f.vectorized for f in site["cond_indep_stack"]))
     non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
 
     dc, dc_nodes = _compute_downstream_costs(model_trace, guide_trace,
@@ -246,13 +243,10 @@ def test_compute_downstream_costs_duplicates(dim):
     model_trace.compute_batch_log_pdf()
     guide_trace.compute_batch_log_pdf()
 
-    guide_iarange_info = guide_trace.graph["iarange_info"]
-    model_iarange_info = model_trace.graph["iarange_info"]
-    guide_iarange_condition = guide_iarange_info['rao-blackwellization-condition']
-    model_iarange_condition = model_iarange_info['rao-blackwellization-condition']
-    do_vec_rb = guide_iarange_condition and model_iarange_condition
-    guide_iarange_nodes = guide_iarange_info['nodes'] if do_vec_rb else set()
-    model_iarange_nodes = model_iarange_info['nodes'] if do_vec_rb else set()
+    guide_iarange_nodes = set(name for name, site in guide_trace.iter_stochastic_nodes()
+                              if any(f.vectorized for f in site["cond_indep_stack"]))
+    model_iarange_nodes = set(name for name, site in model_trace.iter_stochastic_nodes()
+                              if any(f.vectorized for f in site["cond_indep_stack"]))
     non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
 
     dc, dc_nodes = _compute_downstream_costs(model_trace, guide_trace,
@@ -318,13 +312,10 @@ def test_compute_downstream_costs_iarange_in_irange(dim1):
     model_trace.compute_batch_log_pdf()
     guide_trace.compute_batch_log_pdf()
 
-    guide_iarange_info = guide_trace.graph["iarange_info"]
-    model_iarange_info = model_trace.graph["iarange_info"]
-    guide_iarange_condition = guide_iarange_info['rao-blackwellization-condition']
-    model_iarange_condition = model_iarange_info['rao-blackwellization-condition']
-    do_vec_rb = guide_iarange_condition and model_iarange_condition
-    guide_iarange_nodes = guide_iarange_info['nodes'] if do_vec_rb else set()
-    model_iarange_nodes = model_iarange_info['nodes'] if do_vec_rb else set()
+    guide_iarange_nodes = set(name for name, site in guide_trace.iter_stochastic_nodes()
+                              if any(f.vectorized for f in site["cond_indep_stack"]))
+    model_iarange_nodes = set(name for name, site in model_trace.iter_stochastic_nodes()
+                              if any(f.vectorized for f in site["cond_indep_stack"]))
     non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
 
     dc, dc_nodes = _compute_downstream_costs(model_trace, guide_trace,
@@ -389,13 +380,10 @@ def test_compute_downstream_costs_irange_in_iarange(dim1, dim2):
     model_trace.compute_batch_log_pdf()
     guide_trace.compute_batch_log_pdf()
 
-    guide_iarange_info = guide_trace.graph["iarange_info"]
-    model_iarange_info = model_trace.graph["iarange_info"]
-    guide_iarange_condition = guide_iarange_info['rao-blackwellization-condition']
-    model_iarange_condition = model_iarange_info['rao-blackwellization-condition']
-    do_vec_rb = guide_iarange_condition and model_iarange_condition
-    guide_iarange_nodes = guide_iarange_info['nodes'] if do_vec_rb else set()
-    model_iarange_nodes = model_iarange_info['nodes'] if do_vec_rb else set()
+    guide_iarange_nodes = set(name for name, site in guide_trace.iter_stochastic_nodes()
+                              if any(f.vectorized for f in site["cond_indep_stack"]))
+    model_iarange_nodes = set(name for name, site in model_trace.iter_stochastic_nodes()
+                              if any(f.vectorized for f in site["cond_indep_stack"]))
     non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
 
     dc, dc_nodes = _compute_downstream_costs(model_trace, guide_trace,
@@ -426,3 +414,60 @@ def test_compute_downstream_costs_irange_in_iarange(dim1, dim2):
     expected_a1 = model_trace.nodes['a1']['batch_log_pdf'] - guide_trace.nodes['a1']['batch_log_pdf']
     expected_a1 += expected_c.sum()
     assert_equal(expected_a1, dc['a1'])
+
+
+def iarange_reuse_model_guide(include_obs=True, dim1=3, dim2=2):
+    p0 = variable(math.exp(-0.40 - include_obs * 0.2), requires_grad=True)
+    p1 = variable(math.exp(-0.33 - include_obs * 0.1), requires_grad=True)
+    pyro.sample("a1", dist.Bernoulli(p0 * p1))
+    my_iarange1 = pyro.iarange("iarange1", dim1)
+    my_iarange2 = pyro.iarange("iarange2", dim2)
+    with my_iarange1 as ind1:
+        with my_iarange2 as ind2:
+            pyro.sample("c1", dist.Bernoulli(p1).reshape(sample_shape=[len(ind2), len(ind1)]))
+    pyro.sample("b1", dist.Bernoulli(p0 * p1))
+    with my_iarange2 as ind2:
+        with my_iarange1 as ind1:
+            c2 = pyro.sample("c2", dist.Bernoulli(p1).reshape(sample_shape=[len(ind2), len(ind1)]))
+            if include_obs:
+                pyro.sample("obs", dist.Bernoulli(c2), obs=Variable(torch.ones(c2.size())))
+
+
+@pytest.mark.parametrize("dim1", [2, 5])
+@pytest.mark.parametrize("dim2", [3, 4])
+def test_compute_downstream_costs_iarange_reuse(dim1, dim2):
+    guide_trace = poutine.trace(iarange_reuse_model_guide,
+                                graph_type="dense").get_trace(include_obs=False, dim1=dim1, dim2=dim2)
+    model_trace = poutine.trace(poutine.replay(iarange_reuse_model_guide, guide_trace),
+                                graph_type="dense").get_trace(include_obs=True, dim1=dim1, dim2=dim2)
+
+    guide_trace = prune_subsample_sites(guide_trace)
+    model_trace = prune_subsample_sites(model_trace)
+    model_trace.compute_batch_log_pdf()
+    guide_trace.compute_batch_log_pdf()
+
+    guide_iarange_nodes = set(name for name, site in guide_trace.iter_stochastic_nodes()
+                              if any(f.vectorized for f in site["cond_indep_stack"]))
+    model_iarange_nodes = set(name for name, site in model_trace.iter_stochastic_nodes()
+                              if any(f.vectorized for f in site["cond_indep_stack"]))
+    non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
+
+    dc, dc_nodes = _compute_downstream_costs(model_trace, guide_trace,
+                                             model_iarange_nodes, guide_iarange_nodes,
+                                             non_reparam_nodes)
+
+    dc_brute, dc_nodes_brute = _brute_force_compute_downstream_costs(model_trace, guide_trace,
+                                                                     model_iarange_nodes, guide_iarange_nodes,
+                                                                     non_reparam_nodes)
+
+    assert dc_nodes == dc_nodes_brute
+
+    for k in dc:
+        assert(guide_trace.nodes[k]['batch_log_pdf'].size() == dc[k].size())
+        assert_equal(dc[k], dc_brute[k])
+
+    expected_c1 = model_trace.nodes['c1']['batch_log_pdf'] - guide_trace.nodes['c1']['batch_log_pdf']
+    expected_c1 += (model_trace.nodes['b1']['batch_log_pdf'] - guide_trace.nodes['b1']['batch_log_pdf']).sum()
+    expected_c1 += model_trace.nodes['c2']['batch_log_pdf'] - guide_trace.nodes['c2']['batch_log_pdf']
+    expected_c1 += model_trace.nodes['obs']['batch_log_pdf']
+    assert_equal(expected_c1, dc['c1'])
