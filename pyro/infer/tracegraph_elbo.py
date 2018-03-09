@@ -11,8 +11,7 @@ import pyro
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer import ELBO
-from pyro.infer.util import MultiFrameTensor
-from pyro.infer.util import torch_backward, torch_data_sum
+from pyro.infer.util import MultiFrameTensor, get_iarange_stacks, torch_backward, torch_data_sum
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, check_site_shape, detach_iterable, is_nan
 
@@ -48,7 +47,7 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
 
     downstream_guide_cost_nodes = {}
     downstream_costs = {}
-    stacks = model_trace.graph["iarange_info"]['iarange_stacks']
+    stacks = get_iarange_stacks(model_trace)
 
     for node in topo_sort_guide_nodes:
         downstream_costs[node] = MultiFrameTensor((stacks[node],
@@ -250,8 +249,10 @@ class TraceGraph_ELBO(ELBO):
 
     def _loss_and_grads_particle(self, weight, model_trace, guide_trace):
         # get info regarding rao-blackwellization of iarange
-        guide_iarange_nodes = guide_trace.graph["iarange_info"]['nodes']
-        model_iarange_nodes = model_trace.graph["iarange_info"]['nodes']
+        guide_iarange_nodes = set(name for name, site in guide_trace.iter_stochastic_nodes()
+                                  if any(f.vectorized for f in site["cond_indep_stack"]))
+        model_iarange_nodes = set(name for name, site in model_trace.iter_stochastic_nodes()
+                                  if any(f.vectorized for f in site["cond_indep_stack"]))
 
         # have the trace compute all the individual (batch) log pdf terms
         # and score function terms (if present) so that they are available below

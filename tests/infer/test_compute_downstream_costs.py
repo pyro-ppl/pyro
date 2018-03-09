@@ -11,7 +11,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer.tracegraph_elbo import _compute_downstream_costs
-from pyro.infer.util import MultiFrameTensor
+from pyro.infer.util import MultiFrameTensor, get_iarange_stacks
 from pyro.poutine.util import prune_subsample_sites
 from tests.common import assert_equal
 
@@ -22,7 +22,7 @@ def _brute_force_compute_downstream_costs(model_trace, guide_trace,  #
 
     guide_nodes = [x for x in guide_trace.nodes if guide_trace.nodes[x]["type"] == "sample"]
     downstream_costs, downstream_guide_cost_nodes = {}, {}
-    stacks = model_trace.graph["iarange_info"]['iarange_stacks']
+    stacks = get_iarange_stacks(model_trace)
 
     for node in guide_nodes:
         downstream_costs[node] = MultiFrameTensor((stacks[node],
@@ -51,7 +51,7 @@ def _brute_force_compute_downstream_costs(model_trace, guide_trace,  #
             downstream_costs[site].add(*child_mft.items())
             downstream_guide_cost_nodes[site].update([child])
 
-    for k in downstream_costs:
+    for k in non_reparam_nodes:
         downstream_costs[k] = downstream_costs[k].sum_to(guide_trace.nodes[k]["cond_indep_stack"])
 
     return downstream_costs, downstream_guide_cost_nodes
