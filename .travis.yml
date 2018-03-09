@@ -50,6 +50,7 @@ jobs:
               - pip install -e .[profile]
               - make perf-test
         - python: 3.5
+          if: type = cron
           env: STAGE=perf
           script:
               - pip install -e .[profile]
