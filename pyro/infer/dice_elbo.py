@@ -7,7 +7,7 @@ import pyro.poutine as poutine
 from pyro.infer.elbo import ELBO
 from pyro.infer.util import MultiFrameTensor, get_iarange_stacks
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_match
+from pyro.util import check_model_guide_match, check_site_shape
 
 
 def _magicbox_trace(model_trace, guide_trace, name):
@@ -15,7 +15,7 @@ def _magicbox_trace(model_trace, guide_trace, name):
     TODO docs
     """
     stop_name = name
-    stacks = get_iarange_stacks(model_trace)
+    # stacks = get_iarange_stacks(model_trace)
     if model_trace.nodes[name]["is_observed"]:
         front = set()
         for name2, node in model_trace.nodes.items():
@@ -35,13 +35,13 @@ def _magicbox_trace(model_trace, guide_trace, name):
         if node["type"] == "sample" and \
            not node["is_observed"] and \
            not getattr(node["fn"], "reparameterized", False):
-            log_prob_mft.add((stacks[name2], node["batch_log_pdf"]))
+            log_prob_mft.add((node["cond_indep_stack"], node["batch_log_pdf"] / node["scale"]))
         if name2 == stop_name:
             break
 
     s = log_prob_mft.sum_to(model_trace.nodes[name]["cond_indep_stack"])
     if s is None:
-        return torch.ones(1)
+        return torch.ones(torch.Size())
     else:
         return torch.exp(s - s.detach())
 
@@ -60,6 +60,13 @@ class Dice_ELBO(ELBO):
 
             model_trace.compute_batch_log_pdf()
             guide_trace.compute_batch_log_pdf()
+
+            for site in model_trace.nodes.values():
+                if site["type"] == "sample":
+                    check_site_shape(site, self.max_iarange_nesting)
+            for site in guide_trace.nodes.values():
+                if site["type"] == "sample":
+                    check_site_shape(site, self.max_iarange_nesting)
 
             yield model_trace, guide_trace
 
@@ -80,15 +87,11 @@ class Dice_ELBO(ELBO):
 
             for name, model_site in model_trace.nodes.items():
                 if model_site["type"] == "sample":
-                    model_term = model_site["batch_log_pdf"]
-                    if model_site["is_observed"]:
-                        mb_term = _magicbox_trace(model_trace, guide_trace, name)
-                        elbo_particle = elbo_particle + torch.sum(mb_term * model_term)
-                    else:
-                        mb_term = _magicbox_trace(model_trace, guide_trace, name)
-                        guide_term = guide_trace.nodes[name]["batch_log_pdf"] * -1
-                        elbo_particle = elbo_particle + torch.sum(mb_term * model_term)
-                        elbo_particle = elbo_particle + torch.sum(mb_term * guide_term)
+                    mb_term = _magicbox_trace(model_trace, guide_trace, name)
+                    site_cost = model_site["batch_log_pdf"]
+                    if not model_site["is_observed"]:
+                        site_cost = site_cost - guide_trace.nodes[name]["batch_log_pdf"]
+                    elbo_particle = elbo_particle + torch.sum(mb_term * site_cost)
             # collect parameters to train from model and guide
             trainable_params = set(site["value"]
                                    for trace in (model_trace, guide_trace)
@@ -98,7 +101,7 @@ class Dice_ELBO(ELBO):
             elbo = elbo + elbo_particle.detach() / self.num_particles
 
             if trainable_params:
-                (elbo_particle / self.num_particles).backward()
+                (-elbo_particle / self.num_particles).backward()
                 pyro.get_param_store().mark_params_active(trainable_params)
 
         return -elbo
