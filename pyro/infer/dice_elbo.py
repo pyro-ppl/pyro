@@ -1,21 +1,23 @@
 from __future__ import absolute_import, division, print_function
 
 import torch
+import warnings
 
 import pyro
 import pyro.poutine as poutine
 from pyro.infer.elbo import ELBO
 from pyro.infer.util import MultiFrameTensor, get_iarange_stacks
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_match, check_site_shape
+from pyro.util import check_model_guide_match, check_site_shape, is_nan
 
 
 def _magicbox_trace(model_trace, guide_trace, name):
     """
-    TODO docs
+    Computes the magicbox operator on an ELBO cost node
     """
+    # first, if the cost node is observed,
+    # find its most recent latent ancestor in guide_trace
     stop_name = name
-    # stacks = get_iarange_stacks(model_trace)
     if model_trace.nodes[name]["is_observed"]:
         front = set()
         for name2, node in model_trace.nodes.items():
@@ -30,17 +32,25 @@ def _magicbox_trace(model_trace, guide_trace, name):
                 stop_name = name2
                 break
 
-    log_prob_mft = MultiFrameTensor()
+    # now compute the sum of log-probs of all upstream non-reparameterized nodes
+    stacks = get_iarange_stacks(model_trace)
+    log_prob_mft = MultiFrameTensor()  # MultiFrameTensor is awesome!
     for name2, node in guide_trace.nodes.items():
         if node["type"] == "sample" and \
            not node["is_observed"] and \
            not getattr(node["fn"], "reparameterized", False):
-            log_prob_mft.add((node["cond_indep_stack"], node["batch_log_pdf"] / node["scale"]))
+            log_prob_mft.add((stacks[name2],
+                              # XXX hack to unscale gradient estimator
+                              node["batch_log_pdf"] / node["scale"]))
         if name2 == stop_name:
+            # anything after stop_name is downstream of this cost node
+            # because trace nodes are ordered
             break
 
+    # sum the multiframetensor to the cost node's indep stack
     s = log_prob_mft.sum_to(model_trace.nodes[name]["cond_indep_stack"])
     if s is None:
+        # there were no non-reparameterized nodes, so just return 1
         return torch.ones(torch.Size())
     else:
         return torch.exp(s - s.detach())
@@ -49,6 +59,8 @@ def _magicbox_trace(model_trace, guide_trace, name):
 class Dice_ELBO(ELBO):
 
     def _get_traces(self, model, guide, *args, **kwargs):
+
+        # identical to Trace_ELBO._get_traces
         for i in range(self.num_particles):
             guide_trace = poutine.trace(guide).get_trace(*args, **kwargs)
             model_trace = poutine.trace(poutine.replay(model, guide_trace)).get_trace(*args, **kwargs)
@@ -72,8 +84,7 @@ class Dice_ELBO(ELBO):
 
     def loss_and_grads(self, model, guide, *args, **kwargs):
         """
-        Algorithm:
-        Naive:
+        Algorithm (naive):
         For each cost node c:
           identify upstream nodes
           collect all independence contexts
@@ -98,14 +109,28 @@ class Dice_ELBO(ELBO):
                                    for site in trace.nodes.values()
                                    if site["type"] == "param")
 
-            elbo = elbo + elbo_particle.detach() / self.num_particles
+            elbo_particle = elbo_particle / self.num_particles
+            elbo = elbo + elbo_particle.item()
 
             if trainable_params:
-                (-elbo_particle / self.num_particles).backward()
+                (-elbo_particle).backward()
                 pyro.get_param_store().mark_params_active(trainable_params)
 
         return -elbo
 
     def loss(self, model, guide, *args, **kwargs):
-        _loss = self.loss(model, guide, *args, **kwargs)
-        return _loss
+        """
+        :returns: returns an estimate of the ELBO
+        :rtype: float
+
+        Evaluates the ELBO with an estimator that uses num_particles many samples/particles.
+        """
+        elbo = 0.0
+        for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+            elbo_particle = (model_trace.log_pdf() - guide_trace.log_pdf()).item()
+            elbo += elbo_particle / self.num_particles
+
+        loss = -elbo
+        if is_nan(loss):
+            warnings.warn('Encountered NAN loss')
+        return loss
