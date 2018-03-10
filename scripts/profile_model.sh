@@ -24,7 +24,7 @@ if [ ${CURRENT_HEAD} = 'HEAD' ]; then
 fi
 
 # clone the repo into the temporary directory and run benchmark tests
-git clone -b ${REF_HEAD} --single-branch https://github.com/uber/pyro.git ${REF_TMP_DIR}
+git clone -b ${REF_HEAD} --single-branch . ${REF_TMP_DIR}
 pushd ${REF_TMP_DIR}
 
 # Skip if benchmark utils are not on `dev` branch.
