@@ -192,9 +192,9 @@ class ParamStoreDict(object):
         :param param_name: parameter name
         :type param_name: str
         :param new_param: the paramater to be put into the ParamStore
-        :type new_param: torch.autograd.Variable
+        :type new_param: torch.Tensor
         :param old_param: the paramater to be removed from the ParamStore
-        :type new_param: torch.autograd.Variable
+        :type new_param: torch.Tensor
         """
         assert id(self._params[param_name]) == id(old_param)
         self._params[param_name] = new_param
@@ -210,11 +210,11 @@ class ParamStoreDict(object):
         :param name: parameter name
         :type name: str
         :param init_tensor: initial tensor
-        :type init_tensor: torch.autograd.Variable
+        :type init_tensor: torch.Tensor
         :param tags: the tag(s) to assign to the parameter
         :type tags: a string or iterable of strings
         :returns: parameter
-        :rtype: torch.autograd.Variable
+        :rtype: torch.Tensor
         """
         if name not in self._params:
             # if not create the init tensor through

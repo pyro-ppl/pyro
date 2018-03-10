@@ -5,7 +5,6 @@ from collections import namedtuple
 
 import pytest
 import torch
-from torch.autograd import Variable
 
 from pyro.ops.integrator import velocity_verlet
 from tests.common import assert_equal
@@ -18,10 +17,6 @@ EXAMPLE_IDS = []
 
 ModelArgs = namedtuple('model_args', ['step_size', 'num_steps', 'q_i', 'p_i', 'q_f', 'p_f', 'prec'])
 Example = namedtuple('test_case', ['model', 'args'])
-
-
-def tensor(arr):
-    return Variable(torch.Tensor(arr))
 
 
 def register_model(init_args):
@@ -41,10 +36,10 @@ def register_model(init_args):
     ModelArgs(
         step_size=0.01,
         num_steps=100,
-        q_i={'x': tensor([0.0])},
-        p_i={'x': tensor([1.0])},
-        q_f={'x': torch.sin(tensor([1.0]))},
-        p_f={'x': torch.cos(tensor([1.0]))},
+        q_i={'x': torch.tensor([0.0])},
+        p_i={'x': torch.tensor([1.0])},
+        q_f={'x': torch.sin(torch.tensor([1.0]))},
+        p_f={'x': torch.cos(torch.tensor([1.0]))},
         prec=1e-4
     )
 ])
@@ -62,10 +57,10 @@ class HarmonicOscillator(object):
     ModelArgs(
         step_size=0.01,
         num_steps=628,
-        q_i={'x': tensor([1.0]), 'y': tensor([0.0])},
-        p_i={'x': tensor([0.0]), 'y': tensor([1.0])},
-        q_f={'x': tensor([1.0]), 'y': tensor([0.0])},
-        p_f={'x': tensor([0.0]), 'y': tensor([1.0])},
+        q_i={'x': torch.tensor([1.0]), 'y': torch.tensor([0.0])},
+        p_i={'x': torch.tensor([0.0]), 'y': torch.tensor([1.0])},
+        q_f={'x': torch.tensor([1.0]), 'y': torch.tensor([0.0])},
+        p_f={'x': torch.tensor([0.0]), 'y': torch.tensor([1.0])},
         prec=5.0e-3
     )
 ])
@@ -84,10 +79,10 @@ class CircularPlanetaryMotion(object):
     ModelArgs(
         step_size=0.1,
         num_steps=1810,
-        q_i={'x': tensor([0.02])},
-        p_i={'x': tensor([0.0])},
-        q_f={'x': tensor([-0.02])},
-        p_f={'x': tensor([0.0])},
+        q_i={'x': torch.tensor([0.02])},
+        p_i={'x': torch.tensor([0.0])},
+        q_f={'x': torch.tensor([-0.02])},
+        p_f={'x': torch.tensor([0.0])},
         prec=1.0e-4
     )
 ])

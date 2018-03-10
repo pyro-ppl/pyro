@@ -7,7 +7,6 @@ import numpy as np
 import torch
 import torch.optim
 from torch import nn as nn
-from torch.autograd import Variable
 
 import pyro
 
@@ -23,8 +22,8 @@ class ParamStoreDictTests(TestCase):
     def test_save_and_load(self):
         lin = pyro.module("mymodule", self.linear_module)
         pyro.module("mymodule2", self.linear_module2)
-        x = Variable(torch.randn(1, 3))
-        myparam = pyro.param("myparam", Variable(1.234 * torch.ones(1), requires_grad=True))
+        x = torch.randn(1, 3)
+        myparam = pyro.param("myparam", torch.tensor(1.234 * torch.ones(1), requires_grad=True))
 
         cost = torch.sum(torch.pow(lin(x), 2.0)) * torch.pow(myparam, 4.0)
         cost.backward()
