@@ -43,14 +43,14 @@ jobs:
               - pip install -r docs/requirements.txt
               - make docs
         - stage: perf
-          #if: type = cron
+          if: type = cron
           python: 2.7
           env: STAGE=perf
           script:
               - pip install -e .[profile]
               - make perf-test
         - python: 3.5
-          #if: type = cron
+          if: type = cron
           env: STAGE=perf
           script:
               - pip install -e .[profile]
