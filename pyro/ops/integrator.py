@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import torch
-from torch.autograd import grad
+from torch.autograd import grad, Variable
 
 
 def velocity_verlet(z, r, potential_fn, step_size, num_steps=1):
@@ -60,7 +60,7 @@ def single_step_velocity_verlet(z, r, potential_fn, step_size, z_grads=None):
 
 
 def _grad(potential_fn, z):
-    z = {k: torch.tensor(v, requires_grad=True) for k, v in z.items()}
+    z = {k: Variable(v, requires_grad=True) for k, v in z.items()}
     z_keys, z_nodes = zip(*z.items())
     potential_energy = potential_fn(z)
     grads = grad(potential_energy, z_nodes)
