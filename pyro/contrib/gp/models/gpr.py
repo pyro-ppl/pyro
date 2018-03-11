@@ -20,8 +20,8 @@ class GPRegression(Model):
     [1] `Gaussian Processes for Machine Learning`,
     Carl E. Rasmussen, Christopher K. I. Williams
 
-    :param torch.Tensor X: A 1D or 2D tensor of inputs.
-    :param torch.Tensor y: A 1D tensor of output data for training.
+    :param torch.Tensor X: A 1D or 2D tensor of input data for training.
+    :param torch.Tensor y: A 1D or 2D tensor of output data for training.
     :param pyro.contrib.gp.kernels.Kernel kernel: A Pyro kernel object.
     :param torch.Tensor noise: An optional noise parameter.
     """
@@ -30,7 +30,6 @@ class GPRegression(Model):
         self.X = X
         self.y = y
         self.kernel = kernel
-        self.num_data = self.X.size(0)
 
         if noise is None:
             noise = self.X.data.new([1])
@@ -56,8 +55,8 @@ class GPRegression(Model):
         return kernel, noise
 
     def forward(self, Xnew, full_cov=False, noiseless=True):
-        """
-        Computes the parameters of :math:`p(y^*|Xnew) \sim N(\\text{loc}, \\text{cov})`
+        r"""
+        Computes the parameters of :math:`p(y^*|Xnew) \sim N(\text{loc}, \text{cov})`
         w.r.t. the new input :math:`Xnew`.
 
         :param torch.Tensor Xnew: A 1D or 2D tensor.
