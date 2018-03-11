@@ -3,7 +3,10 @@
 all: docs test
 
 install: FORCE
-	pip install -e .[notebooks,visualization,dev,profile]
+	pip install -e .[dev,profile]
+
+uninstall :FORCE
+	pip uninstall pyro-ppl
 
 docs: FORCE
 	$(MAKE) -C docs html
@@ -16,6 +19,7 @@ lint: FORCE
 
 scrub: FORCE
 	find tutorial -name "*.ipynb" | xargs python -m nbstripout --keep-output --keep-count
+	find tutorial -name "*.ipynb" | xargs python tutorial/source/cleannb.py
 
 format: FORCE
 	yapf -i *.py pyro/distributions/*.py profiler/*.py docs/source/conf.py
