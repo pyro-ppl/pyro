@@ -4,7 +4,6 @@ import logging
 
 import pytest
 import torch
-from torch.autograd import Variable
 
 import pyro
 import pyro.distributions as dist
@@ -15,15 +14,16 @@ logger = logging.getLogger(__name__)
 
 
 def test_nested_irange():
-    means = [Variable(torch.randn(2)) for i in range(8)]
+    means = [torch.randn(2) for i in range(8)]
     mean_batch_size = 2
-    stds = [Variable(torch.abs(torch.randn(2))) for i in range(6)]
+    stds = [torch.abs(torch.randn(2)) for i in range(6)]
     std_batch_size = 3
 
     def model(means, stds):
+        a_irange = pyro.irange("a", len(means), mean_batch_size)
+        b_irange = pyro.irange("b", len(stds), std_batch_size)
         return [[pyro.sample("x_{}{}".format(i, j), dist.Normal(means[i], stds[j]))
-                 for j in pyro.irange("b", len(stds), std_batch_size)]
-                for i in pyro.irange("a", len(means), mean_batch_size)]
+                 for j in b_irange] for i in a_irange]
 
     xs = model(means, stds)
     assert len(xs) == mean_batch_size
@@ -36,8 +36,8 @@ def test_nested_irange():
 
 
 def iarange_model(subsample_size):
-    mu = Variable(torch.zeros(20))
-    sigma = Variable(torch.ones(20))
+    mu = torch.zeros(20)
+    sigma = torch.ones(20)
     with pyro.iarange('iarange', 20, subsample_size) as batch:
         pyro.sample("x", dist.Normal(mu[batch], sigma[batch]))
         result = list(batch.data)
@@ -45,8 +45,8 @@ def iarange_model(subsample_size):
 
 
 def irange_model(subsample_size):
-    mu = Variable(torch.zeros(20))
-    sigma = Variable(torch.ones(20))
+    mu = torch.zeros(20)
+    sigma = torch.ones(20)
     result = []
     for i in pyro.irange('irange', 20, subsample_size):
         pyro.sample("x_{}".format(i), dist.Normal(mu[i], sigma[i]))
@@ -55,12 +55,13 @@ def irange_model(subsample_size):
 
 
 def nested_irange_model(subsample_size):
-    mu = Variable(torch.zeros(20))
-    sigma = Variable(torch.ones(20))
+    mu = torch.zeros(20)
+    sigma = torch.ones(20)
     result = []
+    inner_irange = pyro.irange("inner", 20, 5)
     for i in pyro.irange("outer", 20, subsample_size):
         result.append([])
-        for j in pyro.irange("inner", 20, 5):
+        for j in inner_irange:
             pyro.sample("x_{}_{}".format(i, j), dist.Normal(mu[i] + mu[j], sigma[i] + sigma[j]))
             result[-1].append(j)
     return result
@@ -117,15 +118,15 @@ def test_custom_subsample(model):
 
 
 def iarange_cuda_model(subsample_size):
-    mu = Variable(torch.zeros(20).cuda())
-    sigma = Variable(torch.ones(20).cuda())
+    mu = torch.zeros(20).cuda()
+    sigma = torch.ones(20).cuda()
     with pyro.iarange("data", 20, subsample_size, use_cuda=True) as batch:
         pyro.sample("x", dist.Normal(mu[batch], sigma[batch]))
 
 
 def irange_cuda_model(subsample_size):
-    mu = Variable(torch.zeros(20).cuda())
-    sigma = Variable(torch.ones(20).cuda())
+    mu = torch.zeros(20).cuda()
+    sigma = torch.ones(20).cuda()
     for i in pyro.irange("data", 20, subsample_size, use_cuda=True):
         pyro.sample("x_{}".format(i), dist.Normal(mu[i], sigma[i]))
 

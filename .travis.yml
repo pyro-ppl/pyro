@@ -42,7 +42,21 @@ jobs:
           script:
               - pip install -r docs/requirements.txt
               - make docs
-        - python: 2.7
+        - stage: perf
+          if: type = cron
+          python: 2.7
+          env: STAGE=perf
+          script:
+              - pip install -e .[profile]
+              - make perf-test
+        - python: 3.5
+          if: type = cron
+          env: STAGE=perf
+          script:
+              - pip install -e .[profile]
+              - make perf-test
+        - stage: profiler
+          python: 2.7
           env: STAGE=profiler
           script:
               - pip install -e .[profile]

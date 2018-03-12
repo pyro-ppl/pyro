@@ -140,20 +140,6 @@ def infer_config(fn, config_fn):
     return InferConfigPoutine(fn, config_fn)
 
 
-def indep(name, vectorized, size):
-    """
-    :param str name: a name for subsample sites
-    :param bool vectorized: True for ``iarange``, False for ``irange``
-    :param int size: Size of the subsampled batch, or -1 if unknown
-    :rtype: pyro.poutine.IndepMessenger
-
-    Alias for IndepMessenger constructor.
-
-    Used internally by ``iarange`` and ``irange``.
-    """
-    return IndepMessenger(name=name, vectorized=vectorized, size=size)
-
-
 def scale(null, scale):
     """
     :param scale: a positive scaling factor

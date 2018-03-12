@@ -11,7 +11,7 @@ class ScaleMessenger(Messenger):
     (e.g. in fraud detection where negatives vastly outnumber positives).
 
     :param scale: a positive scaling factor
-    :type scale: float or torch.autograd.Variable
+    :type scale: float or torch.Tensor
     """
     def __init__(self, scale):
         super(ScaleMessenger, self).__init__()

@@ -408,41 +408,46 @@ def test_elbo_irange(irange_dim, enumerate1, enumerate2):
     ]))
 
 
-@pytest.mark.parametrize("enumerate3", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("enumerate2", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("inner_dim", [3])
-@pytest.mark.parametrize("outer_dim", [
-    1,
-    xfail_param(2, reason='not using MultiViewTensor in broadcasted var inside iarange'),
-])
-def test_elbo_iarange_iarange(outer_dim, inner_dim, enumerate1, enumerate2, enumerate3):
+@pytest.mark.parametrize("enumerate4", [None, "sequential", xfail_parallel])
+@pytest.mark.parametrize("enumerate3", [None, "sequential", xfail_parallel])
+@pytest.mark.parametrize("enumerate2", [None, "sequential", xfail_parallel])
+@pytest.mark.parametrize("enumerate1", [None, "sequential", xfail_parallel])
+@pytest.mark.parametrize("inner_dim", [2])
+@pytest.mark.parametrize("outer_dim", [2])
+def test_elbo_iarange_iarange(outer_dim, inner_dim, enumerate1, enumerate2, enumerate3, enumerate4):
     pyro.clear_param_store()
     num_particles = 10000
     q = pyro.param("q", variable(0.75, requires_grad=True))
     p = 0.2693204236205713  # for which kl(Bernoulli(q), Bernoulli(p)) = 0.5
 
     def model():
+        d = dist.Bernoulli(p)
         with pyro.iarange("particles", num_particles):
-            pyro.sample("x", dist.Bernoulli(p).reshape([num_particles]))
-            with pyro.iarange("outer", outer_dim):
-                pyro.sample("y", dist.Bernoulli(p).reshape([outer_dim, num_particles]))
-                with pyro.iarange("inner", inner_dim):
-                    pyro.sample("z", dist.Bernoulli(p).reshape([inner_dim, 1, num_particles]))
+            context1 = pyro.iarange("outer", outer_dim, dim=-2)
+            context2 = pyro.iarange("inner", inner_dim, dim=-3)
+            pyro.sample("w", d.reshape([num_particles]))
+            with context1:
+                pyro.sample("x", d.reshape([outer_dim, num_particles]))
+            with context2:
+                pyro.sample("y", d.reshape([inner_dim, 1, num_particles]))
+            with context1, context2:
+                pyro.sample("z", d.reshape([inner_dim, outer_dim, num_particles]))
 
     def guide():
-        q = pyro.param("q")
+        d = dist.Bernoulli(pyro.param("q"))
         with pyro.iarange("particles", num_particles):
-            pyro.sample("x", dist.Bernoulli(q).reshape([num_particles]),
-                        infer={"enumerate": enumerate1})
-            with pyro.iarange("outer", outer_dim):
-                pyro.sample("y", dist.Bernoulli(q).reshape([outer_dim, num_particles]),
-                            infer={"enumerate": enumerate2})
-                with pyro.iarange("inner", inner_dim):
-                    pyro.sample("z", dist.Bernoulli(q).reshape([inner_dim, 1, num_particles]),
-                                infer={"enumerate": enumerate3})
+            context1 = pyro.iarange("outer", outer_dim, dim=-2)
+            context2 = pyro.iarange("inner", inner_dim, dim=-3)
+            pyro.sample("w", d.reshape([num_particles]), infer={"enumerate": enumerate1})
+            with context1:
+                pyro.sample("x", d.reshape([outer_dim, num_particles]), infer={"enumerate": enumerate2})
+            with context2:
+                pyro.sample("y", d.reshape([inner_dim, 1, num_particles]), infer={"enumerate": enumerate3})
+            with context1, context2:
+                pyro.sample("z", d.reshape([inner_dim, outer_dim, num_particles]), infer={"enumerate": enumerate4})
 
-    kl = (1 + outer_dim + inner_dim) * kl_divergence(dist.Bernoulli(q), dist.Bernoulli(p))
+    kl_node = kl_divergence(dist.Bernoulli(q), dist.Bernoulli(p))
+    kl = (1 + outer_dim + inner_dim + outer_dim * inner_dim) * kl_node
     expected_loss = kl.item()
     expected_grad = grad(kl, [q])[0]
 
@@ -464,10 +469,7 @@ def test_elbo_iarange_iarange(outer_dim, inner_dim, enumerate1, enumerate2, enum
 @pytest.mark.parametrize("enumerate2", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("inner_dim", [2])
-@pytest.mark.parametrize("outer_dim", [
-    1,
-    xfail_param(3, reason='not using MultiViewTensor in broadcasted var inside iarange'),
-])
+@pytest.mark.parametrize("outer_dim", [3])
 def test_elbo_iarange_irange(outer_dim, inner_dim, enumerate1, enumerate2, enumerate3):
     pyro.clear_param_store()
     num_particles = 10000
@@ -480,7 +482,7 @@ def test_elbo_iarange_irange(outer_dim, inner_dim, enumerate1, enumerate2, enume
             with pyro.iarange("outer", outer_dim):
                 pyro.sample("y", dist.Bernoulli(p).reshape([outer_dim, num_particles]))
                 for i in pyro.irange("inner", inner_dim):
-                    pyro.sample("z_{}".format(i), dist.Bernoulli(p).reshape([num_particles]))
+                    pyro.sample("z_{}".format(i), dist.Bernoulli(p).reshape([outer_dim, num_particles]))
 
     def guide():
         q = pyro.param("q")
@@ -491,10 +493,10 @@ def test_elbo_iarange_irange(outer_dim, inner_dim, enumerate1, enumerate2, enume
                 pyro.sample("y", dist.Bernoulli(q).reshape([outer_dim, num_particles]),
                             infer={"enumerate": enumerate2})
                 for i in pyro.irange("inner", inner_dim):
-                    pyro.sample("z_{}".format(i), dist.Bernoulli(q).reshape([num_particles]),
+                    pyro.sample("z_{}".format(i), dist.Bernoulli(q).reshape([outer_dim, num_particles]),
                                 infer={"enumerate": enumerate3})
 
-    kl = (1 + outer_dim + inner_dim) * kl_divergence(dist.Bernoulli(q), dist.Bernoulli(p))
+    kl = (1 + outer_dim * (1 + inner_dim)) * kl_divergence(dist.Bernoulli(q), dist.Bernoulli(p))
     expected_loss = kl.item()
     expected_grad = grad(kl, [q])[0]
 
@@ -526,9 +528,10 @@ def test_elbo_irange_iarange(outer_dim, inner_dim, enumerate1, enumerate2, enume
     def model():
         with pyro.iarange("particles", num_particles):
             pyro.sample("x", dist.Bernoulli(p).reshape([num_particles]))
+            inner_iarange = pyro.iarange("inner", inner_dim)
             for i in pyro.irange("outer", outer_dim):
                 pyro.sample("y_{}".format(i), dist.Bernoulli(p).reshape([num_particles]))
-                with pyro.iarange("inner", inner_dim):
+                with inner_iarange:
                     pyro.sample("z_{}".format(i), dist.Bernoulli(p).reshape([inner_dim, num_particles]))
 
     def guide():
@@ -536,10 +539,11 @@ def test_elbo_irange_iarange(outer_dim, inner_dim, enumerate1, enumerate2, enume
         with pyro.iarange("particles", num_particles):
             pyro.sample("x", dist.Bernoulli(q).reshape([num_particles]),
                         infer={"enumerate": enumerate1})
+            inner_iarange = pyro.iarange("inner", inner_dim)
             for i in pyro.irange("outer", outer_dim):
                 pyro.sample("y_{}".format(i), dist.Bernoulli(q).reshape([num_particles]),
                             infer={"enumerate": enumerate2})
-                with pyro.iarange("inner", inner_dim):
+                with inner_iarange:
                     pyro.sample("z_{}".format(i), dist.Bernoulli(q).reshape([inner_dim, num_particles]),
                                 infer={"enumerate": enumerate3})
 
@@ -575,9 +579,10 @@ def test_elbo_irange_irange(outer_dim, inner_dim, enumerate1, enumerate2, enumer
     def model():
         with pyro.iarange("particles", num_particles):
             pyro.sample("x", dist.Bernoulli(p).reshape([num_particles]))
+            inner_irange = pyro.irange("inner", outer_dim)
             for i in pyro.irange("outer", inner_dim):
                 pyro.sample("y_{}".format(i), dist.Bernoulli(p).reshape([num_particles]))
-                for j in pyro.irange("inner", outer_dim):
+                for j in inner_irange:
                     pyro.sample("z_{}_{}".format(i, j), dist.Bernoulli(p).reshape([num_particles]))
 
     def guide():
@@ -585,10 +590,11 @@ def test_elbo_irange_irange(outer_dim, inner_dim, enumerate1, enumerate2, enumer
         with pyro.iarange("particles", num_particles):
             pyro.sample("x", dist.Bernoulli(q).reshape([num_particles]),
                         infer={"enumerate": enumerate1})
+            inner_irange = pyro.irange("inner", inner_dim)
             for i in pyro.irange("outer", outer_dim):
                 pyro.sample("y_{}".format(i), dist.Bernoulli(q).reshape([num_particles]),
                             infer={"enumerate": enumerate2})
-                for j in pyro.irange("inner", inner_dim):
+                for j in inner_irange:
                     pyro.sample("z_{}_{}".format(i, j), dist.Bernoulli(q).reshape([num_particles]),
                                 infer={"enumerate": enumerate3})
 

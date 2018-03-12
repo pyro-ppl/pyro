@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from torch.autograd import Variable, grad
+from torch.autograd import grad, Variable
 
 
 def velocity_verlet(z, r, potential_fn, step_size, num_steps=1):
@@ -8,9 +8,9 @@ def velocity_verlet(z, r, potential_fn, step_size, num_steps=1):
     Second order symplectic integrator that uses the velocity verlet algorithm.
 
     :param dict z: dictionary of sample site names and their current values
-        (type :class:`~torch.autograd.Variable`).
+        (type :class:`~torch.Tensor`).
     :param dict r: dictionary of sample site names and corresponding momenta
-        (type :class:`~torch.autograd.Variable`).
+        (type :class:`~torch.Tensor`).
     :param callable potential_fn: function that returns potential energy given z
         for each sample site. The negative gradient of the function with respect
         to ``z`` determines the rate of change of the corresponding sites'
