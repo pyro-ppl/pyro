@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 from unittest import TestCase
 
 import torch
-from torch.autograd import Variable
 
 import pyro
 import pyro.optim as optim
@@ -15,11 +14,11 @@ class OptimTests(TestCase):
 
     def setUp(self):
         # normal-normal; known covariance
-        self.lam0 = Variable(torch.Tensor([0.1]))  # precision of prior
-        self.mu0 = Variable(torch.Tensor([0.5]))  # prior mean
+        self.lam0 = torch.tensor([0.1])  # precision of prior
+        self.mu0 = torch.tensor([0.5])  # prior mean
         # known precision of observation noise
-        self.lam = Variable(torch.Tensor([6.0]))
-        self.data = Variable(torch.Tensor([1.0]))  # a single observation
+        self.lam = torch.tensor([6.0])
+        self.data = torch.tensor([1.0])  # a single observation
 
     def test_per_param_optim(self):
         self.do_test_per_param_optim("mu_q", "log_sig_q")
@@ -39,12 +38,10 @@ class OptimTests(TestCase):
         def guide():
             mu_q = pyro.param(
                 "mu_q",
-                Variable(
-                    torch.zeros(1),
-                    requires_grad=True))
+                torch.zeros(1, requires_grad=True))
             log_sig_q = pyro.param(
-                "log_sig_q", Variable(
-                    torch.zeros(1), requires_grad=True))
+                "log_sig_q",
+                torch.zeros(1, requires_grad=True))
             sig_q = torch.exp(log_sig_q)
             pyro.sample("mu_latent", Normal(mu_q, sig_q))
 
