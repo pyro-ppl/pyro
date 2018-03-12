@@ -4,7 +4,6 @@ import numbers
 
 import torch
 import torch.nn.functional as F
-from torch.autograd import Variable
 
 
 def copy_docs_from(source_class, full_text=False):
@@ -48,7 +47,7 @@ def copy_docs_from(source_class, full_text=False):
 def is_identically_zero(x):
     """
     Check if argument is exactly the number zero. True for the number zero;
-    false for other numbers; false for ``torch.autograd.Variable``s.
+    false for other numbers; false for :class:`~torch.Tensor`s.
     """
     return isinstance(x, numbers.Number) and x == 0
 
@@ -56,7 +55,7 @@ def is_identically_zero(x):
 def is_identically_one(x):
     """
     Check if argument is exactly the number one. True for the number one;
-    false for other numbers; false for ``torch.autograd.Variable``s.
+    false for other numbers; false for :class:`~torch.Tensor`s.
     """
     return isinstance(x, numbers.Number) and x == 1
 
@@ -90,50 +89,84 @@ def sum_rightmost(value, dim):
     """
     Sum out ``dim`` many rightmost dimensions of a given tensor.
 
-    :param torch.autograd.Variable value: A tensor of ``.dim()`` at least ``dim``.
+    If ``dim`` is 0, no dimensions are summed out.
+    If ``dim`` is ``float('inf')``, then all dimensions are summed out.
+    If ``dim`` is 1, the rightmost 1 dimension is summed out.
+    If ``dim`` is 2, the rightmost two dimensions are summed out.
+    If ``dim`` is -1, all but the leftmost 1 dimension is summed out.
+    If ``dim`` is -2, all but the leftmost 2 dimensions are summed out.
+    etc.
+
+    :param torch.Tensor value: A tensor of ``.dim()`` at least ``dim``.
     :param int dim: The number of rightmost dims to sum out.
     """
-    if dim == 0 or isinstance(value, numbers.Number):
+    if isinstance(value, numbers.Number):
         return value
+    if dim < 0:
+        dim += value.dim()
+    if dim == 0:
+        return value
+    if dim >= value.dim():
+        return value.sum()
     return value.contiguous().view(value.shape[:-dim] + (-1,)).sum(-1)
 
 
-def sum_leftmost(x, dim):
+def sum_leftmost(value, dim):
     """
-    Sum all but a certain number of rightmost dimensions of a given tensor ``x``.
+    Sum out ``dim`` many leftmost dimensions of a given tensor.
 
-    If ``dim`` is 2, the leftmost two dimensions are summed out.
-    If ``dim`` is 1, the leftmost dimension is summed out.
     If ``dim`` is 0, no dimensions are summed out.
-    If ``dim`` is -1, all but the rightmost dimension is summed out.
-    If ``dim`` is -2, all but the two rightmost dimensions are summed out.
+    If ``dim`` is ``float('inf')``, then all dimensions are summed out.
+    If ``dim`` is 1, the leftmost 1 dimension is summed out.
+    If ``dim`` is 2, the leftmost two dimensions are summed out.
+    If ``dim`` is -1, all but the rightmost 1 dimension is summed out.
+    If ``dim`` is -2, all but the rightmost 2 dimensions are summed out.
     etc.
 
-    Example
-    ```
-    x = torch.ones(2,3,4)
-    assert sum_leftmost(x, 1).shape == (3, 4)
-    assert sum_leftmost(x, -1).shape == (4,)
-    ```
+    Example::
 
-    :param torch.autograd.Variable x: A tensor
+        x = torch.ones(2, 3, 4)
+        assert sum_leftmost(x, 1).shape == (3, 4)
+        assert sum_leftmost(x, -1).shape == (4,)
+
+    :param torch.Tensor value: A tensor
     :param int dim: Specifies the number of dims to sum out
     """
+    if isinstance(value, numbers.Number):
+        return value
     if dim < 0:
-        dim += x.dim()
+        dim += value.dim()
     if dim == 0:
-        return x
-    return x.contiguous().view(-1, *x.shape[dim:]).sum(0)
+        return value
+    if dim >= value.dim():
+        return value.sum()
+    return value.contiguous().view(-1, *value.shape[dim:]).sum(0)
 
 
 def scale_tensor(tensor, scale):
     """
     Safely scale a tensor without increasing its ``.size()``.
+    This avoids NANs by assuming ``inf * 0 = 0 * inf = 0``.
     """
-    if is_identically_zero(tensor) or is_identically_one(scale):
-        return tensor
+    if isinstance(tensor, numbers.Number):
+        if isinstance(scale, numbers.Number):
+            return tensor * scale
+        elif tensor == 0:
+            return torch.zeros_like(scale)
+        elif tensor == 1:
+            return scale
+        else:
+            return scale
+    if isinstance(scale, numbers.Number):
+        if scale == 0:
+            return torch.zeros_like(tensor)
+        elif scale == 1:
+            return tensor
+        else:
+            return tensor * scale
     result = tensor * scale
-    if not isinstance(result, numbers.Number) and result.shape != tensor.shape:
+    result[(scale == 0).expand_as(result)] = 0  # avoid NANs
+    if result.shape != tensor.shape:
         raise ValueError("Broadcasting error: scale is incompatible with tensor: "
                          "{} vs {}".format(scale.shape, tensor.shape))
     return result
@@ -141,7 +174,7 @@ def scale_tensor(tensor, scale):
 
 def torch_eye(n, m=None, out=None):
     """
-    Like `torch.eye()`, but works with cuda tensors.
+    Like :func:`torch.eye`, but works with cuda tensors.
     """
     if m is None:
         m = n
@@ -160,7 +193,7 @@ def torch_eye(n, m=None, out=None):
 
 def torch_multinomial(input, num_samples, replacement=False):
     """
-    Like `torch.multinomial()` but works with cuda tensors.
+    Like :func:`torch.multinomial` but works with cuda tensors.
     Does not support keyword argument `out`.
     """
     if input.is_cuda:
@@ -171,7 +204,7 @@ def torch_multinomial(input, num_samples, replacement=False):
 
 def torch_sign(value):
     """
-    Like ``torch.sign()`` but also works for numbers.
+    Like :func:`torch.sign`` but also works for numbers.
     """
     if isinstance(value, numbers.Number):
         return (value > 0) - (value < 0)
@@ -201,8 +234,6 @@ def softmax(x, dim=-1):
 
 def _get_clamping_buffer(tensor):
     clamp_eps = 1e-6
-    if isinstance(tensor, Variable):
-        tensor = tensor.data
     if isinstance(tensor, (torch.DoubleTensor, torch.cuda.DoubleTensor)):
         clamp_eps = 1e-15
     return clamp_eps

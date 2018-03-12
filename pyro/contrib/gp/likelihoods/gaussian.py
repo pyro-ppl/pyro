@@ -14,7 +14,7 @@ class Gaussian(Likelihood):
     """
     Implementation of Gaussian likelihood.
 
-    :param torch.Tensor variance: Dimension of inputs for this kernel.
+    :param torch.Tensor variance: Variance parameter.
     """
 
     def __init__(self, variance=None):
@@ -26,5 +26,6 @@ class Gaussian(Likelihood):
 
     def forward(self, f, obs=None):
         variance = self.get_param("variance").expand_as(f)
-
-        return pyro.sample("y", dist.Normal(f, variance), obs=obs)
+        event_dims = f.dim()
+        return pyro.sample("y", dist.Normal(f, variance).reshape(extra_event_dims=event_dims),
+                           obs=obs)

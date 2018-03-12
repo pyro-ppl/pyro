@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from torch.autograd import Variable
+import torch
 import torch.nn as nn
 from torch.distributions import transform_to
 
@@ -13,11 +13,10 @@ class Parameterized(nn.Module):
     Parameterized class.
 
     This is a base class for other classes in Gaussian Process.
-    By default, a parameter will be a ``torch.nn.Parameter`` containing ``torch.FloatTensor``.
+    By default, a parameter will be a :class:`torch.nn.Parameter` containing :class:`torch.FloatTensor`.
     To cast them to the correct data type or GPU device, we can call methods such as
     ``.double()``, ``.cuda(device=0)``,...
-    See `torch.nn.Module
-    <http://pytorch.org/docs/master/nn.html#torch.nn.Module>`_ for more information.
+    See :class:`torch.nn.Module` for more information.
 
     :param str name: Name of this module.
     """
@@ -36,7 +35,8 @@ class Parameterized(nn.Module):
         Sets a prior to a parameter.
 
         :param str param: Name of a parameter.
-        :param pyro.distributions.Distribution prior: A prior distribution for random variable ``param``.
+        :param pyro.distributions.distribution.Distribution prior: A prior
+            distribution for random variable ``param``.
         """
         self._priors[param] = prior
 
@@ -46,9 +46,7 @@ class Parameterized(nn.Module):
 
         :param str param: Name of a parameter.
         :param torch.distributions.constraints.Constraint constraint: A Pytorch constraint.
-            See `Pytorch's docs
-            <http://pytorch.org/docs/master/distributions.html#module-torch.distributions.constraints>`_
-            for a list of constraints.
+            See :mod:`torch.distributions.constraints` for a list of constraints.
         """
         self._constraints[param] = constraint
 
@@ -58,7 +56,7 @@ class Parameterized(nn.Module):
         default value.
 
         :param str param: Name of a parameter.
-        :param torch.autograd.Variable value: A tensor to be fixed to ``param``.
+        :param torch.Tensor value: A tensor to be fixed to ``param``.
         """
         if value is None:
             value = getattr(self, param).detach()
@@ -67,7 +65,7 @@ class Parameterized(nn.Module):
     def set_mode(self, mode):
         """
         Sets ``mode`` for the module to be able to use its parameters in stochastic functions.
-        It also sets ``mode`` for submodules which belong to ``Parameterized`` class.
+        It also sets ``mode`` for submodules which belong to :class:`Parameterized` class.
 
         :param str mode: Either "model" or "guide".
         """
@@ -93,8 +91,8 @@ class Parameterized(nn.Module):
 
     def _register_param(self, param, mode="model"):
         """
-        Registers a parameter to Pyro. It can be seen as a wrapper for `pyro.param()` and
-        `pyro.sample()` calls.
+        Registers a parameter to Pyro. It can be seen as a wrapper for ``pyro.param()`` and
+        ``pyro.sample()`` calls.
 
         :param str param: Name of a parameter.
         :param str mode: Either "model" or "guide".
@@ -116,7 +114,7 @@ class Parameterized(nn.Module):
             else:
                 # TODO: use `constraint_to` inside `pyro.param(...)` when available
                 unconstrained_param_name = param_name + "_unconstrained"
-                unconstrained_param_0 = Variable(
+                unconstrained_param_0 = torch.tensor(
                     transform_to(constraint).inv(default_value).data.clone(),
                     requires_grad=True)
                 p = transform_to(constraint)(pyro.param(unconstrained_param_name,
@@ -125,7 +123,7 @@ class Parameterized(nn.Module):
             p = pyro.sample(param_name, prior)
         else:  # prior != None and mode = "guide"
             MAP_param_name = param_name + "_MAP"
-            MAP_param_0 = Variable(prior.analytic_mean().data.clone(), requires_grad=True)
+            MAP_param_0 = torch.tensor(prior.analytic_mean().data.clone(), requires_grad=True)
             MAP_param = pyro.param(MAP_param_name, MAP_param_0)
             p = pyro.sample(param_name, dist.Delta(MAP_param))
 

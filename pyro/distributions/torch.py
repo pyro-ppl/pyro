@@ -3,9 +3,11 @@ from __future__ import absolute_import, division, print_function
 import numbers
 
 import torch
-from torch.autograd import Variable
 
 from pyro.distributions.torch_distribution import TorchDistributionMixin
+
+# These distributions require custom wrapping.
+# TODO rename parameters so these can be imported automatically.
 
 
 class Bernoulli(torch.distributions.Bernoulli, TorchDistributionMixin):
@@ -57,12 +59,10 @@ class LogNormal(torch.distributions.LogNormal, TorchDistributionMixin):
 
 class Multinomial(torch.distributions.Multinomial, TorchDistributionMixin):
     def __init__(self, ps, n=1):
-        if isinstance(n, Variable):
-            n = n.data
         if not isinstance(n, numbers.Number):
             if n.max() != n.min():
                 raise NotImplementedError('inhomogeneous n is not supported')
-            n = n.view(-1)[0]
+            n = n.data.view(-1)[0]
         n = int(n)
         super(Multinomial, self).__init__(n, probs=ps)
 
@@ -82,10 +82,46 @@ class Poisson(torch.distributions.Poisson, TorchDistributionMixin):
         super(Poisson, self).__init__(lam)
 
 
-class TransformedDistribution(torch.distributions.TransformedDistribution, TorchDistributionMixin):
-    pass
-
-
 class Uniform(torch.distributions.Uniform, TorchDistributionMixin):
     def __init__(self, a, b):
         super(Uniform, self).__init__(a, b)
+
+
+# Programmatically load all remaining distributions.
+__all__ = []
+for _name, _Dist in torch.distributions.__dict__.items():
+    if not isinstance(_Dist, type):
+        continue
+    if not issubclass(_Dist, torch.distributions.Distribution):
+        continue
+    if _Dist is torch.distributions.Distribution:
+        continue
+
+    try:
+        _PyroDist = locals()[_name]
+    except KeyError:
+
+        class _PyroDist(_Dist, TorchDistributionMixin):
+            pass
+
+        _PyroDist.__name__ = _name
+        locals()[_name] = _PyroDist
+
+    _PyroDist.__doc__ = '''
+    Wraps :class:`{}.{}` with
+    :class:`~pyro.distributions.torch_distribution.TorchDistributionMixin`.
+    '''.format(_Dist.__module__, _Dist.__name__)
+
+    __all__.append(_name)
+
+
+# Create sphinx documentation.
+__doc__ = '\n\n'.join([
+
+    '''
+    {0}
+    ----------------------------------------------------------------
+    .. autoclass:: {0}
+    '''.format(_name)
+    for _name in sorted(__all__)
+])

@@ -16,7 +16,6 @@ from examples.util import RESULTS_DIR
 from pyro.distributions import Normal, Bernoulli
 from pyro.infer import SVI
 from pyro.optim import Adam
-from pyro.shim import torch_no_grad
 from pyro.util import ng_zeros, ng_ones
 
 """
@@ -126,7 +125,7 @@ class VAE(object):
         self.set_train(is_train=False)
         test_loss = 0
         for i, (x, _) in enumerate(self.test_loader):
-            with torch_no_grad():
+            with torch.no_grad():
                 x = Variable(x)
                 recon_x = self.model_eval(x)[0]
                 test_loss += self.compute_loss_and_gradient(x)
@@ -134,7 +133,7 @@ class VAE(object):
                 n = min(x.size(0), 8)
                 comparison = torch.cat([x[:n],
                                         recon_x.view(self.args.batch_size, 1, 28, 28)[:n]])
-                save_image(comparison.data.cpu(),
+                save_image(comparison.detach().cpu(),
                            os.path.join(OUTPUT_DIR, 'reconstruction_' + str(epoch) + '.png'),
                            nrow=n)
 
@@ -166,7 +165,7 @@ class PytorchVAEImpl(VAE):
         if self.mode == TRAIN:
             loss.backward()
             self.optimizer.step()
-        return loss.data[0]
+        return loss.item()
 
     def initialize_optimizer(self, lr=1e-3):
         model_params = itertools.chain(self.vae_encoder.parameters(), self.vae_decoder.parameters())
@@ -187,16 +186,18 @@ class PyroVAEImpl(VAE):
     def model(self, data):
         decoder = pyro.module('decoder', self.vae_decoder)
         z_mean, z_std = ng_zeros([data.size(0), 20]), ng_ones([data.size(0), 20])
-        z = pyro.sample('latent', Normal(z_mean, z_std))
-        img = decoder.forward(z)
-        pyro.sample('obs',
-                    Bernoulli(img),
-                    obs=data.view(-1, 784))
+        with pyro.iarange('data', data.size(0)):
+            z = pyro.sample('latent', Normal(z_mean, z_std).reshape(extra_event_dims=1))
+            img = decoder.forward(z)
+            pyro.sample('obs',
+                        Bernoulli(img).reshape(extra_event_dims=1),
+                        obs=data.view(-1, 784))
 
     def guide(self, data):
         encoder = pyro.module('encoder', self.vae_encoder)
-        z_mean, z_var = encoder.forward(data)
-        pyro.sample('latent', Normal(z_mean, z_var.sqrt()))
+        with pyro.iarange('data', data.size(0)):
+            z_mean, z_var = encoder.forward(data)
+            pyro.sample('latent', Normal(z_mean, z_var.sqrt()).reshape(extra_event_dims=1))
 
     def compute_loss_and_gradient(self, x):
         if self.mode == TRAIN:

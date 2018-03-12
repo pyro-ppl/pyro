@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import torch
-from torch.autograd import Variable
 
 from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import broadcast_shape
@@ -15,7 +14,7 @@ class Delta(TorchDistribution):
     its support. Delta distribution parameterized by a random choice should not
     be used with MCMC based inference, as doing so produces incorrect results.
 
-    :param torch.autograd.Variable v: The single support element.
+    :param torch.Tensor v: The single support element.
     """
     has_rsample = True
     has_enumerate_support = True
@@ -23,8 +22,6 @@ class Delta(TorchDistribution):
 
     def __init__(self, v, *args, **kwargs):
         self.v = v
-        if not isinstance(self.v, Variable):
-            self.v = Variable(self.v)
         super(Delta, self).__init__(*args, **kwargs)
 
     @property
@@ -44,12 +41,12 @@ class Delta(TorchDistribution):
         """
         Returns the delta distribution's support, as a tensor along the first dimension.
 
-        :param v: torch variable where each element of the tensor represents the point at
+        :param v: torch tensor where each element of the tensor represents the point at
             which the delta distribution is concentrated.
-        :return: torch variable enumerating the support of the delta distribution.
-        :rtype: torch.autograd.Variable.
+        :return: torch tensor enumerating the support of the delta distribution.
+        :rtype: torch.Tensor.
         """
-        return Variable(self.v.data.unsqueeze(0))
+        return torch.tensor(self.v.data.unsqueeze(0))
 
     @property
     def mean(self):

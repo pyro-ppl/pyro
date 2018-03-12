@@ -1,5 +1,6 @@
 run_outputs*
 .DS_Store
+.benchmarks
 data
 examples/processed
 examples/results

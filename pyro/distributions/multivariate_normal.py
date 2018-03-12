@@ -26,8 +26,8 @@ class MultivariateNormal(TorchDistribution):
     A distribution over vectors in which all the elements have a joint Gaussian
     density.
 
-    :param torch.autograd.Variable loc: Mean.
-    :param torch.autograd.Variable covariance_matrix: Covariance matrix.
+    :param torch.Tensor loc: Mean.
+    :param torch.Tensor covariance_matrix: Covariance matrix.
         Must be symmetric and positive semidefinite.
     """
     params = {"loc": constraints.real, "scale_tril": constraints.lower_triangular}

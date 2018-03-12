@@ -5,7 +5,7 @@ from unittest import TestCase
 import pytest
 import torch
 from torch import nn as nn
-from torch.autograd import Variable
+from torch.autograd import Variable, variable
 from torch.nn import Parameter
 
 import pyro
@@ -21,13 +21,14 @@ from tests.distributions.test_transformed_distribution import AffineExp
 
 
 def param_mse(name, target):
-    return torch.sum(torch.pow(target - pyro.param(name), 2.0)).data.cpu().numpy()[0]
+    return torch.sum(torch.pow(target - pyro.param(name), 2.0)).item()
 
 
 def param_abs_error(name, target):
-    return torch.sum(torch.abs(target - pyro.param(name))).data.cpu().numpy()[0]
+    return torch.sum(torch.abs(target - pyro.param(name))).item()
 
 
+@pytest.mark.stage("integration", "integration_batch_1")
 class NormalNormalTests(TestCase):
 
     def setUp(self):
@@ -59,10 +60,12 @@ class NormalNormalTests(TestCase):
 
         def model():
             mu_latent = pyro.sample("mu_latent",
-                                    dist.Normal(self.mu0, torch.pow(self.lam0, -0.5)))
-            pyro.sample("obs",
-                        dist.Normal(mu_latent, torch.pow(self.lam, -0.5)),
-                        obs=self.data)
+                                    dist.Normal(self.mu0, torch.pow(self.lam0, -0.5))
+                                    .reshape(extra_event_dims=1))
+            with pyro.iarange('data', self.batch_size):
+                pyro.sample("obs",
+                            dist.Normal(mu_latent, torch.pow(self.lam, -0.5)).reshape(extra_event_dims=1),
+                            obs=self.data)
             return mu_latent
 
         def guide():
@@ -73,7 +76,7 @@ class NormalNormalTests(TestCase):
                                    requires_grad=True))
             sig_q = torch.exp(log_sig_q)
             Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
-            pyro.sample("mu_latent", Normal(mu_q, sig_q))
+            pyro.sample("mu_latent", Normal(mu_q, sig_q).reshape(extra_event_dims=1))
 
         adam = optim.Adam({"lr": .001})
         svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
@@ -157,20 +160,18 @@ class TestFixedModelGuide(TestCase):
 
 
 @pytest.mark.stage("integration", "integration_batch_2")
-@pytest.mark.skip("Reinstate once poisson is migrated to PyTorch - https://github.com/uber/pyro/issues/699")
 class PoissonGammaTests(TestCase):
     def setUp(self):
         # poisson-gamma model
         # gamma prior hyperparameter
-        self.alpha0 = Variable(torch.Tensor([1.0]))
+        self.alpha0 = variable(1.0)
         # gamma prior hyperparameter
-        self.beta0 = Variable(torch.Tensor([1.0]))
-        self.data = Variable(torch.Tensor([[1.0], [2.0], [3.0]]))
+        self.beta0 = variable(1.0)
+        self.data = variable([1.0, 2.0, 3.0])
         self.n_data = len(self.data)
         data_sum = self.data.sum(0)
         self.alpha_n = self.alpha0 + data_sum  # posterior alpha
-        self.beta_n = self.beta0 + \
-            Variable(torch.Tensor([self.n_data]))  # posterior beta
+        self.beta_n = self.beta0 + variable(self.n_data)  # posterior beta
         self.log_alpha_n = torch.log(self.alpha_n)
         self.log_beta_n = torch.log(self.beta_n)
 
@@ -186,7 +187,8 @@ class PoissonGammaTests(TestCase):
 
         def model():
             lambda_latent = pyro.sample("lambda_latent", Gamma(self.alpha0, self.beta0))
-            pyro.sample("obs", dist.Poisson(lambda_latent), obs=self.data)
+            with pyro.iarange("data", self.n_data):
+                pyro.sample("obs", dist.Poisson(lambda_latent), obs=self.data)
             return lambda_latent
 
         def guide():
@@ -217,17 +219,17 @@ class PoissonGammaTests(TestCase):
         assert_equal(0.0, beta_error, prec=0.08)
 
 
+@pytest.mark.stage("integration", "integration_batch_1")
 class ExponentialGammaTests(TestCase):
     def setUp(self):
         # exponential-gamma model
         # gamma prior hyperparameter
-        self.alpha0 = Variable(torch.Tensor([1.0]))
+        self.alpha0 = variable(1.0)
         # gamma prior hyperparameter
-        self.beta0 = Variable(torch.Tensor([1.0]))
+        self.beta0 = variable(1.0)
         self.n_data = 2
         self.data = Variable(torch.Tensor([3.0, 2.0]))  # two observations
-        self.alpha_n = self.alpha0 + \
-            Variable(torch.Tensor([self.n_data]))  # posterior alpha
+        self.alpha_n = self.alpha0 + variable(self.n_data)  # posterior alpha
         self.beta_n = self.beta0 + torch.sum(self.data)  # posterior beta
         self.log_alpha_n = torch.log(self.alpha_n)
         self.log_beta_n = torch.log(self.beta_n)
@@ -247,8 +249,8 @@ class ExponentialGammaTests(TestCase):
 
         def model():
             lambda_latent = pyro.sample("lambda_latent", gamma_dist(self.alpha0, self.beta0))
-            pyro.sample("obs0", dist.Exponential(lambda_latent), obs=self.data[0])
-            pyro.sample("obs1", dist.Exponential(lambda_latent), obs=self.data[1])
+            with pyro.iarange("data", self.n_data):
+                pyro.sample("obs", dist.Exponential(lambda_latent), obs=self.data)
             return lambda_latent
 
         def guide():
@@ -273,19 +275,19 @@ class ExponentialGammaTests(TestCase):
         assert_equal(0.0, beta_error, prec=0.08)
 
 
+@pytest.mark.stage("integration", "integration_batch_2")
 class BernoulliBetaTests(TestCase):
     def setUp(self):
         # bernoulli-beta model
         # beta prior hyperparameter
-        self.alpha0 = Variable(torch.Tensor([1.0]))
-        self.beta0 = Variable(torch.Tensor([1.0]))  # beta prior hyperparameter
-        self.data = Variable(torch.Tensor([[0.0], [1.0], [1.0], [1.0]]))
+        self.alpha0 = variable(1.0)
+        self.beta0 = variable(1.0)  # beta prior hyperparameter
+        self.data = variable([0.0, 1.0, 1.0, 1.0])
         self.n_data = len(self.data)
-        self.batch_size = None
-        data_sum = self.data.sum(0)
+        self.batch_size = 4
+        data_sum = self.data.sum()
         self.alpha_n = self.alpha0 + data_sum  # posterior alpha
-        self.beta_n = self.beta0 - data_sum + \
-            Variable(torch.Tensor([self.n_data]))
+        self.beta_n = self.beta0 - data_sum + variable(self.n_data)
         # posterior beta
         self.log_alpha_n = torch.log(self.alpha_n)
         self.log_beta_n = torch.log(self.beta_n)
@@ -302,7 +304,8 @@ class BernoulliBetaTests(TestCase):
 
         def model():
             p_latent = pyro.sample("p_latent", Beta(self.alpha0, self.beta0))
-            pyro.observe("obs", dist.Bernoulli(p_latent), obs=self.data)
+            with pyro.iarange("data", self.batch_size):
+                pyro.observe("obs", dist.Bernoulli(p_latent), obs=self.data)
             return p_latent
 
         def guide():
@@ -338,15 +341,14 @@ class LogNormalNormalTests(TestCase):
         # lognormal-normal model
         # putting some of the parameters inside of a torch module to
         # make sure that that functionality is ok (XXX: do this somewhere else in the future)
-        self.mu0 = Variable(torch.Tensor([1.0]))  # normal prior hyperparameter
+        self.mu0 = variable(1.0)  # normal prior hyperparameter
         # normal prior hyperparameter
-        self.tau0 = Variable(torch.Tensor([1.0]))
+        self.tau0 = variable(1.0)
         # known precision for observation likelihood
-        self.tau = Variable(torch.Tensor([2.5]))
+        self.tau = variable(2.5)
         self.n_data = 2
-        self.data = Variable(torch.Tensor([[1.5], [2.2]]))  # two observations
-        self.tau_n = self.tau0 + \
-            Variable(torch.Tensor([self.n_data])) * self.tau  # posterior tau
+        self.data = variable([1.5, 2.2])  # two observations
+        self.tau_n = self.tau0 + variable(self.n_data) * self.tau  # posterior tau
         mu_numerator = self.mu0 * self.tau0 + \
             self.tau * torch.sum(torch.log(self.data))
         self.mu_n = mu_numerator / self.tau_n  # posterior mu
@@ -368,8 +370,8 @@ class LogNormalNormalTests(TestCase):
             mu_latent = pyro.sample("mu_latent",
                                     dist.Normal(self.mu0, torch.pow(self.tau0, -0.5)))
             sigma = torch.pow(self.tau, -0.5)
-            pyro.observe("obs0", dist.LogNormal(mu_latent, sigma), obs=self.data[0])
-            pyro.observe("obs1", dist.LogNormal(mu_latent, sigma), obs=self.data[1])
+            with pyro.iarange("iarange", self.n_data):
+                pyro.observe("obs", dist.LogNormal(mu_latent, sigma), obs=self.data)
             return mu_latent
 
         def guide():
@@ -400,8 +402,8 @@ class LogNormalNormalTests(TestCase):
                                     dist.Normal(self.mu0, torch.pow(self.tau0, -0.5)))
             bijector = AffineExp(torch.pow(self.tau, -0.5), mu_latent)
             x_dist = TransformedDistribution(dist.Normal(zero, one), bijector)
-            pyro.observe("obs0", x_dist, self.data[0])
-            pyro.observe("obs1", x_dist, self.data[1])
+            with pyro.iarange("data", self.n_data):
+                pyro.observe("obs", x_dist, self.data)
             return mu_latent
 
         def guide():

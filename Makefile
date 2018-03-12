@@ -3,7 +3,10 @@
 all: docs test
 
 install: FORCE
-	pip install -e .[notebooks,visualization,dev,profile]
+	pip install -e .[dev,profile]
+
+uninstall :FORCE
+	pip uninstall pyro-ppl
 
 docs: FORCE
 	$(MAKE) -C docs html
@@ -16,10 +19,19 @@ lint: FORCE
 
 scrub: FORCE
 	find tutorial -name "*.ipynb" | xargs python -m nbstripout --keep-output --keep-count
+	find tutorial -name "*.ipynb" | xargs python tutorial/source/cleannb.py
 
 format: FORCE
 	yapf -i *.py pyro/distributions/*.py profiler/*.py docs/source/conf.py
 	isort --recursive *.py pyro/ tests/ profiler/*.py docs/source/conf.py
+
+perf-test: FORCE
+	bash scripts/perf_test.sh ${ref}
+
+profile: ref=dev
+
+profile: FORCE
+	bash scripts/profile_model.sh ${ref} ${models}
 
 test: lint docs FORCE
 	pytest -vx -n auto --stage unit

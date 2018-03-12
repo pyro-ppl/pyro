@@ -1,14 +1,17 @@
 from __future__ import absolute_import, division, print_function
 
 import functools
+from six.moves import xrange
 
 from pyro.poutine import util
 
 # poutines
 from .block_poutine import BlockPoutine
 from .condition_poutine import ConditionPoutine
+from .enumerate_poutine import EnumeratePoutine  # noqa: F401
 from .escape_poutine import EscapePoutine
 from .indep_poutine import IndepMessenger  # noqa: F401
+from .infer_config_poutine import InferConfigPoutine
 from .lift_poutine import LiftPoutine
 from .poutine import _PYRO_STACK, Poutine  # noqa: F401
 from .replay_poutine import ReplayPoutine
@@ -124,17 +127,18 @@ def condition(fn, data):
     return ConditionPoutine(fn, data=data)
 
 
-def indep(name, vectorized):
+def infer_config(fn, config_fn):
     """
-    :param str name: a name for subsample sites
-    :param bool vectorized: True for ``iarange``, False for ``irange``
-    :rtype: pyro.poutine.IndepMessenger
+    :param fn: a stochastic function (callable containing pyro primitive calls)
+    :param config_fn: a callable taking a site and returning an infer dict
 
-    Alias for IndepMessenger constructor.
+    Alias for :class:`~pyro.poutine.infer_config_poutine.InferConfigPoutine` constructor.
 
-    Used internally by ``iarange`` and ``irange``.
+    Given a callable that contains Pyro primitive calls
+    and a callable taking a trace site and returning a dictionary,
+    updates the value of the infer kwarg at a sample site to config_fn(site)
     """
-    return IndepMessenger(name=name, vectorized=vectorized)
+    return InferConfigPoutine(fn, config_fn)
 
 
 def scale(null, scale):
@@ -211,7 +215,7 @@ def queue(fn, queue, max_tries=None,
 
     def _fn(*args, **kwargs):
 
-        for i in range(max_tries):
+        for i in xrange(max_tries):
             assert not queue.empty(), \
                 "trying to get() from an empty queue will deadlock"
 

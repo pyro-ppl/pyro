@@ -1,19 +1,19 @@
 from __future__ import absolute_import, division, print_function
 
 import functools
+import numbers
+import random
 import warnings
 
 import graphviz
-import numpy as np
-
+from six.moves import zip_longest
 import torch
-from pyro.params import _PYRO_PARAM_STORE
-
-from pyro.poutine.poutine import _PYRO_STACK
-from pyro.poutine.util import site_is_subsample
-from pyro.shim import is_volatile
 from torch.autograd import Variable
 from torch.nn import Parameter
+
+from pyro.params import _PYRO_PARAM_STORE
+from pyro.poutine.poutine import _PYRO_STACK
+from pyro.poutine.util import site_is_subsample
 
 
 def validate_message(msg):
@@ -128,13 +128,17 @@ def memoize(fn):
 
 def set_rng_seed(rng_seed):
     """
-    Sets seeds of torch, numpy, and torch.cuda (if available).
+    Sets seeds of torch and torch.cuda (if available).
     :param int rng_seed: The seed value.
     """
     torch.manual_seed(rng_seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(rng_seed)
-    np.random.seed(rng_seed)
+    random.seed(rng_seed)
+    try:
+        import numpy as np
+
+        np.random.seed(rng_seed)
+    except ImportError:
+        pass
 
 
 def ones(*args, **kwargs):
@@ -181,16 +185,27 @@ def ng_zeros(*args, **kwargs):
     return Variable(p_tensor if retype is None else p_tensor.type_as(retype), requires_grad=False)
 
 
-def log_sum_exp(vecs):
-    n = len(vecs.size())
-    if n == 1:
-        vecs = vecs.view(1, -1)
-    _, idx = torch.max(vecs, 1)
-    max_score = torch.index_select(vecs, 1, idx.view(-1))
-    ret = max_score + torch.log(torch.sum(torch.exp(vecs - max_score.expand_as(vecs))))
-    if n == 1:
-        return ret.view(-1)
-    return ret
+def is_nan(x):
+    """
+    A convenient function to check if a Tensor contains all nan; also works with numbers
+    """
+    if isinstance(x, numbers.Number):
+        return x != x
+    return (x != x).all()
+
+
+def is_inf(x):
+    """
+    A convenient function to check if a Tensor contains all inf; also works with numbers
+    """
+    if isinstance(x, numbers.Number):
+        return x == float('inf')
+    return (x == float('inf')).all()
+
+
+def log_sum_exp(tensor):
+    max_val = tensor.max(dim=-1)[0]
+    return max_val + (tensor - max_val.unsqueeze(-1)).exp().sum(dim=-1).log()
 
 
 def zero_grads(tensors):
@@ -199,11 +214,7 @@ def zero_grads(tensors):
     """
     for p in tensors:
         if p.grad is not None:
-            if is_volatile(p.grad):
-                p.grad.data.zero_()
-            else:
-                data = p.grad.data
-                p.grad = Variable(data.new().resize_as_(data).zero_())
+            p.grad = p.grad.new(p.shape).zero_()
 
 
 def apply_stack(initial_msg):
@@ -338,6 +349,48 @@ def check_model_guide_match(model_trace, guide_trace):
                      if type(site["fn"]).__name__ == "_Subsample")
     if not (guide_vars <= model_vars):
         warnings.warn("Found iarange statements in guide but not model: {}".format(guide_vars - model_vars))
+
+
+def check_site_shape(site, max_iarange_nesting):
+    actual_shape = list(site["batch_log_pdf"].shape)
+
+    # Compute expected shape.
+    expected_shape = []
+    for f in site["cond_indep_stack"]:
+        if f.dim is not None:
+            # Use the specified iarange dimension, which counts from the right.
+            assert f.dim < 0
+            if len(expected_shape) < -f.dim:
+                expected_shape = [None] * (-f.dim - len(expected_shape)) + expected_shape
+            if expected_shape[f.dim] is not None:
+                raise ValueError('\n  '.join([
+                    'at site "{}" within iarange("", dim={}), dim collision'.format(site["name"], f.name, f.dim),
+                    'Try setting dim arg in other iaranges.']))
+            expected_shape[f.dim] = f.size
+    expected_shape = [1 if e is None else e for e in expected_shape]
+
+    # Check for iarange stack overflow.
+    if len(expected_shape) > max_iarange_nesting:
+        raise ValueError('\n  '.join([
+            'at site "{}", iarange stack overflow'.format(site["name"]),
+            'Try increasing max_iarange_nesting to at least {}'.format(len(expected_shape))]))
+
+    # Ignore dimensions left of max_iarange_nesting.
+    if max_iarange_nesting < len(actual_shape):
+        actual_shape = actual_shape[len(actual_shape) - max_iarange_nesting:]
+
+    # Check for incorrect iarange placement on the right of max_iarange_nesting.
+    for actual_size, expected_size in zip_longest(reversed(actual_shape), reversed(expected_shape), fillvalue=1):
+        if expected_size != -1 and expected_size != actual_size:
+            raise ValueError('\n  '.join([
+                'at site "{}", invalid log_prob shape'.format(site["name"]),
+                'Expected {}, actual {}'.format(expected_shape, actual_shape),
+                'Try one of the following fixes:',
+                '- enclose the batched tensor in a with iarange(...): context',
+                '- .reshape(extra_event_dims=...) the distribution being sampled',
+                '- .permute() data dimensions']))
+
+    # TODO Check parallel dimensions on the left of max_iarange_nesting.
 
 
 def deep_getattr(obj, name):

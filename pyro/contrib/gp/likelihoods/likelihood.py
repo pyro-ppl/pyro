@@ -8,7 +8,7 @@ class Likelihood(Parameterized):
     Base class for likelihoods used in Gaussian Process.
 
     Every inherited class should implement a forward pass which
-        takes an input `f` and returns a sample `y`.
+    takes an input :math:`f` and returns a sample :math:`y`.
     """
 
     def __init__(self):
@@ -16,10 +16,11 @@ class Likelihood(Parameterized):
 
     def forward(self, f, obs=None):
         """
-        Samples `y` given `f`.
+        Samples :math:`y` (``obs``) given :math:`f`.
 
-        :param torch.autograd.Variable f: A 1D tensor of size `N`.
-        :return: A 1D tensor of size `N`.
+        :param torch.autograd.Variable f: A 1D tensor of size :math:`N`.
+        :param torch.autograd.Variable obs: A 1D tensor of size :math:`N`.
+        :return: A 1D tensor of size :math:`N`.
         :rtype: torch.autograd.Variable
         """
         raise NotImplementedError

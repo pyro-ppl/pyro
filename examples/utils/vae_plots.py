@@ -80,9 +80,9 @@ def plot_tsne(z_mu, classes, name):
     import matplotlib.pyplot as plt
     from sklearn.manifold import TSNE
     model_tsne = TSNE(n_components=2, random_state=0)
-    z_states = z_mu.data.cpu().numpy()
+    z_states = z_mu.detach().cpu().numpy()
     z_embed = model_tsne.fit_transform(z_states)
-    classes = classes.data.cpu().numpy()
+    classes = classes.detach().cpu().numpy()
     fig666 = plt.figure()
     for ic in range(10):
         ind_vec = np.zeros_like(classes)
