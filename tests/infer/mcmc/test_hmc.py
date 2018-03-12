@@ -6,7 +6,6 @@ import os
 
 import pytest
 import torch
-from torch.autograd import Variable, variable
 
 import pyro
 import pyro.distributions as dist
@@ -25,20 +24,20 @@ class GaussianChain(object):
         self.dim = dim
         self.chain_len = chain_len
         self.num_obs = num_obs
-        self.mu_0 = Variable(torch.zeros_like(torch.Tensor(self.dim)), requires_grad=True)
-        self.lambda_prec = Variable(torch.ones_like(torch.Tensor(self.dim)))
+        self.mu_0 = torch.zeros_like(torch.tensor(self.dim))
+        self.lambda_prec = torch.ones_like(torch.Tensor(self.dim))
 
     def model(self, data):
         mu = pyro.param('mu_0', self.mu_0)
         lambda_prec = self.lambda_prec
         for i in range(1, self.chain_len + 1):
             mu = pyro.sample('mu_{}'.format(i),
-                             dist.Normal(mu=mu, sigma=Variable(lambda_prec.data)))
-        pyro.sample('obs', dist.Normal(mu, Variable(lambda_prec.data)), obs=data)
+                             dist.Normal(mu=mu, sigma=lambda_prec))
+        pyro.sample('obs', dist.Normal(mu, lambda_prec), obs=data)
 
     @property
     def data(self):
-        return Variable(torch.ones_like(torch.Tensor(self.num_obs, self.dim)))
+        return torch.ones_like(torch.Tensor(self.num_obs, self.dim))
 
     def id_fn(self):
         return 'dim={}_chain-len={}_num_obs={}'.format(self.dim, self.chain_len, self.num_obs)
@@ -140,8 +139,8 @@ def test_hmc_conjugate_gaussian(fixture,
         param_name = 'mu_' + str(i)
         latent_mu = torch.mean(torch.stack(post_trace[param_name]), 0)
         latent_std = torch.std(torch.stack(post_trace[param_name]), 0)
-        expected_mean = Variable(torch.ones_like(torch.Tensor(fixture.dim)) * expected_means[i - 1])
-        expected_std = 1 / torch.sqrt(Variable(torch.ones_like(torch.Tensor(fixture.dim)) * expected_precs[i - 1]))
+        expected_mean = torch.ones_like(torch.tensor(fixture.dim)) * expected_means[i - 1]
+        expected_std = 1 / torch.sqrt(torch.ones_like(torch.tensor(fixture.dim)) * expected_precs[i - 1])
 
         # Actual vs expected posterior means for the latents
         logger.info('Posterior mean (actual) - {}'.format(param_name))
@@ -160,13 +159,13 @@ def test_hmc_conjugate_gaussian(fixture,
 
 def test_logistic_regression():
     dim = 3
-    true_coefs = Variable(torch.arange(1, dim+1))
-    data = Variable(torch.randn(2000, dim))
+    true_coefs = torch.arange(1, dim+1)
+    data = torch.randn(2000, dim)
     labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
 
     def model(data):
-        coefs_mean = Variable(torch.zeros(dim), requires_grad=True)
-        coefs = pyro.sample('beta', dist.Normal(coefs_mean, Variable(torch.ones(dim))))
+        coefs_mean = torch.zeros(dim)
+        coefs = pyro.sample('beta', dist.Normal(coefs_mean, torch.ones(dim)))
         y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
         return y
 
@@ -181,8 +180,8 @@ def test_logistic_regression():
 
 def test_bernoulli_beta():
     def model(data):
-        alpha = pyro.param('alpha', variable([1.1, 1.1], requires_grad=True))
-        beta = pyro.param('beta', variable([1.1, 1.1], requires_grad=True))
+        alpha = pyro.param('alpha', torch.tensor([1.1, 1.1]))
+        beta = pyro.param('beta', torch.tensor([1.1, 1.1]))
         p_latent = pyro.sample('p_latent', dist.Beta(alpha, beta))
         pyro.observe('obs', dist.Bernoulli(p_latent), data)
         return p_latent
@@ -190,7 +189,7 @@ def test_bernoulli_beta():
     hmc_kernel = HMC(model, step_size=0.02, num_steps=3)
     mcmc_run = MCMC(hmc_kernel, num_samples=800, warmup_steps=500)
     posterior = []
-    true_probs = variable([0.9, 0.1])
+    true_probs = torch.tensor([0.9, 0.1])
     data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
     for trace, _ in mcmc_run._traces(data):
         posterior.append(trace.nodes['p_latent']['value'])
@@ -200,8 +199,8 @@ def test_bernoulli_beta():
 
 def test_normal_gamma():
     def model(data):
-        rate = pyro.param('rate', variable([1.0, 1.0], requires_grad=True))
-        concentration = pyro.param('conc', variable([1.0, 1.0], requires_grad=True))
+        rate = pyro.param('rate', torch.tensor([1.0, 1.0]))
+        concentration = pyro.param('conc', torch.tensor([1.0, 1.0]))
         p_latent = pyro.sample('p_latent', dist.Gamma(rate, concentration))
         pyro.observe("obs", dist.Normal(3, p_latent), data)
         return p_latent
@@ -209,7 +208,7 @@ def test_normal_gamma():
     hmc_kernel = HMC(model, step_size=0.01, num_steps=3)
     mcmc_run = MCMC(hmc_kernel, num_samples=200, warmup_steps=100)
     posterior = []
-    true_std = variable([0.5, 2])
+    true_std = torch.tensor([0.5, 2])
     data = dist.Normal(3, true_std).sample(sample_shape=(torch.Size((2000,))))
     for trace, _ in mcmc_run._traces(data):
         posterior.append(trace.nodes['p_latent']['value'])
@@ -220,7 +219,7 @@ def test_normal_gamma():
 @pytest.mark.xfail(reason='log_abs_det_jacobian not implemented for StickBreakingTransform')
 def test_categorical_dirichlet():
     def model(data):
-        concentration = pyro.param('conc', variable([1.0, 1.0, 1.0], requires_grad=True))
+        concentration = pyro.param('conc', torch.tensor([1.0, 1.0, 1.0]))
         p_latent = pyro.sample('p_latent', dist.Dirichlet(concentration))
         pyro.observe("obs", dist.Categorical(p_latent), data)
         return p_latent
@@ -228,7 +227,7 @@ def test_categorical_dirichlet():
     hmc_kernel = HMC(model, step_size=0.01, num_steps=3)
     mcmc_run = MCMC(hmc_kernel, num_samples=200, warmup_steps=100)
     posterior = []
-    true_probs = variable([0.1, 0.6, 0.3])
+    true_probs = torch.tensor([0.1, 0.6, 0.3])
     data = dist.Categorical(true_probs).sample(sample_shape=(torch.Size((2000,))))
     for trace, _ in mcmc_run._traces(data):
         posterior.append(trace.nodes['p_latent']['value'])
@@ -238,13 +237,13 @@ def test_categorical_dirichlet():
 
 def test_logistic_regression_with_dual_averaging():
     dim = 3
-    true_coefs = Variable(torch.arange(1, dim+1))
-    data = Variable(torch.randn(2000, dim))
+    true_coefs = torch.arange(1, dim+1)
+    data = torch.randn(2000, dim)
     labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
 
     def model(data):
-        coefs_mean = Variable(torch.zeros(dim), requires_grad=True)
-        coefs = pyro.sample('beta', dist.Normal(coefs_mean, Variable(torch.ones(dim))))
+        coefs_mean = torch.zeros(dim)
+        coefs = pyro.sample('beta', dist.Normal(coefs_mean, torch.ones(dim)))
         y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
         return y
 
@@ -259,8 +258,8 @@ def test_logistic_regression_with_dual_averaging():
 
 def test_bernoulli_beta_with_dual_averaging():
     def model(data):
-        alpha = pyro.param('alpha', variable([1.1, 1.1], requires_grad=True))
-        beta = pyro.param('beta', variable([1.1, 1.1], requires_grad=True))
+        alpha = pyro.param('alpha', torch.tensor([1.1, 1.1]))
+        beta = pyro.param('beta', torch.tensor([1.1, 1.1]))
         p_latent = pyro.sample('p_latent', dist.Beta(alpha, beta))
         pyro.observe('obs', dist.Bernoulli(p_latent), data)
         return p_latent
@@ -268,7 +267,7 @@ def test_bernoulli_beta_with_dual_averaging():
     hmc_kernel = HMC(model, trajectory_length=1, adapt_step_size=True)
     mcmc_run = MCMC(hmc_kernel, num_samples=800, warmup_steps=500)
     posterior = []
-    true_probs = variable([0.9, 0.1])
+    true_probs = torch.tensor([0.9, 0.1])
     data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
     for trace, _ in mcmc_run._traces(data):
         posterior.append(trace.nodes['p_latent']['value'])
@@ -279,8 +278,8 @@ def test_bernoulli_beta_with_dual_averaging():
 @pytest.mark.xfail(reason='the model is sensitive to NaN log_pdf')
 def test_normal_gamma_with_dual_averaging():
     def model(data):
-        rate = pyro.param('rate', variable([1.0, 1.0], requires_grad=True))
-        concentration = pyro.param('conc', variable([1.0, 1.0], requires_grad=True))
+        rate = pyro.param('rate', torch.tensor([1.0, 1.0]))
+        concentration = pyro.param('conc', torch.tensor([1.0, 1.0]))
         p_latent = pyro.sample('p_latent', dist.Gamma(rate, concentration))
         pyro.observe("obs", dist.Normal(3, p_latent), data)
         return p_latent
@@ -288,7 +287,7 @@ def test_normal_gamma_with_dual_averaging():
     hmc_kernel = HMC(model, trajectory_length=1, adapt_step_size=True)
     mcmc_run = MCMC(hmc_kernel, num_samples=200, warmup_steps=100)
     posterior = []
-    true_std = variable([0.5, 2])
+    true_std = torch.tensor([0.5, 2])
     data = dist.Normal(3, true_std).sample(sample_shape=(torch.Size((2000,))))
     for trace, _ in mcmc_run._traces(data):
         posterior.append(trace.nodes['p_latent']['value'])

@@ -59,9 +59,11 @@ def single_step_velocity_verlet(z, r, potential_fn, step_size, z_grads=None):
 
 
 def _grad(potential_fn, z):
-    z = {k: Variable(v, requires_grad=True) for k, v in z.items()}
     z_keys, z_nodes = zip(*z.items())
+    for node in z_nodes:
+        node.requires_grad = True
     potential_energy = potential_fn(z)
     grads = grad(potential_energy, z_nodes)
-    grads = [v.data for v in grads]
+    for node in z_nodes:
+        node.requires_grad = False
     return dict(zip(z_keys, grads)), potential_energy
