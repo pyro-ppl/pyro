@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from torch.autograd import grad, Variable
+from torch.autograd import grad
 
 
 def velocity_verlet(z, r, potential_fn, step_size, num_steps=1):
