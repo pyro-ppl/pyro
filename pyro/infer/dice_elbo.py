@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import networkx
 import torch
 import warnings
 
@@ -39,27 +40,22 @@ def _compute_global_mft(trace):
 
 def _compute_upstream_from_observe(model_trace, guide_trace, name):
     front = set()
-    for name2, node in model_trace.nodes.items():
-        if node["type"] == "sample" and \
-           not node["is_observed"]:
+    for name2 in model_trace._graph.predecessors(name):
+        if model_trace.nodes[name2]["type"] == "sample" and \
+           not model_trace.nodes[name2]["is_observed"]:
             front.add(name2)
-            if name2 == name:
-                break
-    for name2 in guide_trace.nodes:
-        front.discard(name2)
-        if len(front) == 0:
-            stop_name = name2
-            break
-    return set([stop_name])
+    return front
 
 
 def _compute_upstream_sample_sites(guide_trace, stop_names):
+    for name in list(stop_names):
+        stop_names.update(set(networkx.ancestors(guide_trace._graph, name)))
     for name, node in guide_trace.nodes.items():
+        stop_names.discard(name)
         if node["type"] == "sample" and \
            not node["is_observed"] and \
            not getattr(node["fn"], "reparameterized", False):
             yield name, node
-            stop_names.discard(name)
         if len(stop_names) == 0:
             break
 
@@ -125,8 +121,9 @@ class Dice_ELBO(ELBO):
 
         # identical to Trace_ELBO._get_traces
         for i in range(self.num_particles):
-            guide_trace = poutine.trace(guide).get_trace(*args, **kwargs)
-            model_trace = poutine.trace(poutine.replay(model, guide_trace)).get_trace(*args, **kwargs)
+            guide_trace = poutine.trace(guide, graph_type="dense").get_trace(*args, **kwargs)
+            model_trace = poutine.trace(poutine.replay(model, guide_trace),
+                                        graph_type="dense").get_trace(*args, **kwargs)
 
             check_model_guide_match(model_trace, guide_trace)
 
@@ -159,7 +156,7 @@ class Dice_ELBO(ELBO):
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = 0
 
-            trace_mft = _compute_global_mft(guide_trace)
+            trace_mft = None  # _compute_global_mft(guide_trace)
             # trace_mft2 = _compute_upstream_grads(guide_trace)
 
             for name, model_site in model_trace.nodes.items():
