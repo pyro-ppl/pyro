@@ -8,7 +8,6 @@ from collections import OrderedDict
 from inspect import isclass
 
 import torch
-from torch.autograd import Variable
 
 import pyro.poutine as poutine
 from pyro.distributions.distribution import Distribution
@@ -122,7 +121,7 @@ class _Subsample(Distribution):
     def sample(self, sample_shape=torch.Size()):
         """
         :returns: a random subsample of `range(size)`
-        :rtype: torch.autograd.Variable of torch.LongTensor
+        :rtype: torch.LongTensor
         """
         if sample_shape:
             raise NotImplementedError
@@ -130,15 +129,15 @@ class _Subsample(Distribution):
         if subsample_size is None or subsample_size > self.size:
             subsample_size = self.size
         if subsample_size == self.size:
-            result = Variable(torch.LongTensor(list(range(self.size))))
+            result = torch.LongTensor(list(range(self.size)))
         else:
-            result = Variable(torch.randperm(self.size)[:self.subsample_size])
+            result = torch.randperm(self.size)[:self.subsample_size]
         return result.cuda() if self.use_cuda else result
 
     def log_prob(self, x):
         # This is zero so that iarange can provide an unbiased estimate of
         # the non-subsampled log_prob.
-        result = Variable(torch.zeros(1))
+        result = torch.zeros(1)
         return result.cuda() if self.use_cuda else result
 
 

@@ -84,7 +84,7 @@ def am_i_wrapped():
 
 
 def detach_iterable(iterable):
-    if isinstance(torch.is_tensor(iterable)):
+    if torch.is_tensor(iterable):
         return iterable.detach()
     else:
         return [var.detach() for var in iterable]
