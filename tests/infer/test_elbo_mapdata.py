@@ -28,7 +28,7 @@ def test_elbo_mapdata(batch_size, map_type):
     sum_data = torch.zeros(2)
 
     def add_data_point(x, y):
-        data.append(torch.Tensor([x, y]))
+        data.append(torch.tensor([x, y]))
         sum_data.data.add_(data[-1].data)
 
     add_data_point(0.1, 0.21)
@@ -71,11 +71,10 @@ def test_elbo_mapdata(batch_size, map_type):
         return mu_latent
 
     def guide():
-        mu_q = pyro.param("mu_q", analytic_mu_n.data +
-                          torch.tensor([-0.18, 0.23]), requires_grad=True)
+        mu_q = pyro.param("mu_q", torch.tensor(
+            analytic_mu_n.data + torch.tensor([-0.18, 0.23]), requires_grad=True))
         log_sig_q = pyro.param("log_sig_q", torch.tensor(
-            analytic_log_sig_n.data - torch.tensor([-0.18, 0.23]),
-            requires_grad=True))
+            analytic_log_sig_n.data - torch.tensor([-0.18, 0.23]), requires_grad=True))
         sig_q = torch.exp(log_sig_q)
         pyro.sample("mu_latent", dist.Normal(mu_q, sig_q).reshape(extra_event_dims=1))
         if map_type == "irange" or map_type is None:
