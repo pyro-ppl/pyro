@@ -143,7 +143,6 @@ class SparseGPRegression(Model):
         L = K.potrf(upper=False)
 
         Ws = matrix_triangular_solve_compat(Kus, Luu, upper=False)
-        Linv_Ws = matrix_triangular_solve_compat(Ws, L, upper=False)
 
         # loc = Linv_Ws.T @ inv(L) @ W_Dinv @ y
         W_Dinv_y = W_Dinv.matmul(self.y)
