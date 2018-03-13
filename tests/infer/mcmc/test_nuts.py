@@ -53,8 +53,8 @@ def test_nuts_conjugate_gaussian(fixture,
         param_name = 'mu_' + str(i)
         latent_mu = torch.mean(torch.stack(post_trace[param_name]), 0)
         latent_std = torch.std(torch.stack(post_trace[param_name]), 0)
-        expected_mean = torch.ones_like(torch.tensor(fixture.dim)) * expected_means[i - 1]
-        expected_std = 1 / torch.sqrt(torch.ones_like(torch.tensor(fixture.dim)) * expected_precs[i - 1])
+        expected_mean = torch.ones(fixture.dim) * expected_means[i - 1]
+        expected_std = 1 / torch.sqrt(torch.ones(fixture.dim) * expected_precs[i - 1])
 
         # Actual vs expected posterior means for the latents
         logger.info('Posterior mean (actual) - {}'.format(param_name))
