@@ -99,13 +99,16 @@ def _magicbox_trace(model_trace, guide_trace, name, mft=None):
         return torch.exp(s - s.detach())
 
 
-def _magicbox_trace2(model_trace, guide_trace, name):
+def _magicbox_trace2(model_trace, guide_trace, name, mft=None):
     """
     Computes the magicbox operator on an ELBO cost node
     This version uses TreeSum instead of MultiFrameTensor
     """
     # now compute the of log-probs of all upstream non-reparameterized nodes
-    log_prob_mft = _compute_upstream_grads(guide_trace)
+    if mft is None:
+        log_prob_mft = _compute_upstream_grads(guide_trace)
+    else:
+        log_prob_mft = mft
 
     # sum to the cost node's indep stack
     s = log_prob_mft.get_upstream(model_trace.nodes[name]["cond_indep_stack"])
@@ -157,10 +160,14 @@ class Dice_ELBO(ELBO):
             elbo_particle = 0
 
             trace_mft = _compute_global_mft(guide_trace)
+            # trace_mft2 = _compute_upstream_grads(guide_trace)
+
             for name, model_site in model_trace.nodes.items():
                 if model_site["type"] == "sample":
                     mb_term = _magicbox_trace(model_trace, guide_trace, name,
                                               mft=trace_mft)
+                    # mb_term = _magicbox_trace2(model_trace, guide_trace, name,
+                    #                            mft=trace_mft)
                     site_cost = model_site["batch_log_pdf"]
                     if not model_site["is_observed"]:
                         site_cost = site_cost - guide_trace.nodes[name]["batch_log_pdf"]
