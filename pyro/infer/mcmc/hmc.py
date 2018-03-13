@@ -189,7 +189,7 @@ class HMC(TraceKernel):
         self._reset()
 
     def sample(self, trace):
-        z = {name: node["value"] for name, node in trace.iter_stochastic_nodes()}
+        z = {name: node["value"].data for name, node in trace.iter_stochastic_nodes()}
         # automatically transform `z` to unconstrained space, if needed.
         for name, transform in self.transforms.items():
             z[name] = transform(z[name])
