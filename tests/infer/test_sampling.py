@@ -59,7 +59,7 @@ class NormalNormalSamplingTestCase(TestCase):
         # data
         self.data = torch.zeros(50, 1)
         self.mu_mean = torch.zeros(1)
-        self.mu_stddev = torch.sqrt(torch.ones(1)) / 51.0
+        self.mu_stddev = torch.sqrt(torch.ones(1) / 51.0)
 
         # model and guide
         self.model = model
@@ -104,7 +104,7 @@ class ImportanceTest(NormalNormalSamplingTestCase):
 
     @pytest.mark.init(rng_seed=0)
     def test_importance_guide(self):
-        posterior = pyro.infer.Importance(self.model, guide=self.guide, num_samples=10000)
+        posterior = pyro.infer.Importance(self.model, guide=self.guide, num_samples=5000)
         marginal = pyro.infer.Marginal(posterior)
         posterior_samples = [marginal() for i in range(1000)]
         posterior_mean = torch.mean(torch.cat(posterior_samples))
