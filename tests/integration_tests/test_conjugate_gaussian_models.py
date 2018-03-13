@@ -9,7 +9,6 @@ import networkx
 import numpy as np
 import pytest
 import torch
-from torch.autograd import Variable, variable
 
 import pyro
 import pyro.distributions as dist
@@ -29,15 +28,15 @@ class GaussianChain(TestCase):
     # chain of normals with known covariances and latent means
 
     def setUp(self):
-        self.mu0 = Variable(torch.Tensor([0.2]))
-        self.data = Variable(torch.Tensor([-0.1, 0.03, 0.20, 0.10]))
+        self.mu0 = torch.tensor([0.2])
+        self.data = torch.tensor([-0.1, 0.03, 0.20, 0.10])
         self.n_data = self.data.size(0)
         self.sum_data = self.data.sum()
 
     def setup_chain(self, N):
         self.N = N  # number of latent variables in the chain
         lambdas = [1.5 * (k + 1) / N for k in range(N + 1)]
-        self.lambdas = list(map(lambda x: Variable(torch.Tensor([x])), lambdas))
+        self.lambdas = list(map(lambda x: torch.tensor([x]), lambdas))
         self.lambda_tilde_posts = [self.lambdas[0]]
         for k in range(1, self.N):
             lambda_tilde_k = (self.lambdas[k] * self.lambda_tilde_posts[k - 1]) /\
@@ -47,7 +46,7 @@ class GaussianChain(TestCase):
         for k in range(1, self.N):
             lambda_k = self.lambdas[k] + self.lambda_tilde_posts[k - 1]
             self.lambda_posts.append(lambda_k)
-        lambda_N_post = (self.n_data * variable(1.0).expand_as(self.lambdas[N]) * self.lambdas[N]) +\
+        lambda_N_post = (self.n_data * torch.tensor(1.0).expand_as(self.lambdas[N]) * self.lambdas[N]) +\
             self.lambda_tilde_posts[N - 1]
         self.lambda_posts.append(lambda_N_post)
         self.target_kappas = [None]
@@ -83,19 +82,19 @@ class GaussianChain(TestCase):
     def guide(self, reparameterized, difficulty=0.0):
         previous_sample = None
         for k in reversed(range(1, self.N + 1)):
-            mu_q = pyro.param("mu_q_%d" % k, Variable(self.target_mus[k].data +
-                                                      difficulty * (0.1 * torch.randn(1) - 0.53),
-                                                      requires_grad=True))
+            mu_q = pyro.param("mu_q_%d" % k, torch.tensor(self.target_mus[k].data +
+                                                          difficulty * (0.1 * torch.randn(1) - 0.53),
+                                                          requires_grad=True))
             log_sig_q = pyro.param("log_sig_q_%d" % k,
-                                   Variable(-0.5 * torch.log(self.lambda_posts[k]).data +
-                                            difficulty * (0.1 * torch.randn(1) - 0.53),
-                                            requires_grad=True))
+                                   torch.tensor(-0.5 * torch.log(self.lambda_posts[k]).data +
+                                                difficulty * (0.1 * torch.randn(1) - 0.53),
+                                                requires_grad=True))
             sig_q = torch.exp(log_sig_q)
             kappa_q = None
             if k != self.N:
-                kappa_q = pyro.param("kappa_q_%d" % k, Variable(self.target_kappas[k].data +
-                                                                difficulty * (0.1 * torch.randn(1) - 0.53),
-                                                                requires_grad=True))
+                kappa_q = pyro.param("kappa_q_%d" % k, torch.tensor(self.target_kappas[k].data +
+                                                                    difficulty * (0.1 * torch.randn(1) - 0.53),
+                                                                    requires_grad=True))
             mean_function = mu_q if k == self.N else kappa_q * previous_sample + mu_q
             node_flagged = True if self.which_nodes_reparam[k - 1] == 1.0 else False
             Normal = dist.Normal if reparameterized or node_flagged else fakes.NonreparameterizedNormal
@@ -188,14 +187,14 @@ class GaussianChainTests(GaussianChain):
 class GaussianPyramidTests(TestCase):
 
     def setUp(self):
-        self.mu0 = Variable(torch.Tensor([0.52]))
+        self.mu0 = torch.tensor([0.52])
 
     def setup_pyramid(self, N):
         # pyramid of normals with known covariances and latent means
         assert(N > 1)
         self.N = N  # number of layers in the pyramid
         lambdas = [1.1 * (k + 1) / N for k in range(N + 2)]
-        self.lambdas = list(map(lambda x: Variable(torch.Tensor([x])), lambdas))
+        self.lambdas = list(map(lambda x: torch.tensor([x]), lambdas))
         # generate data
         self.data = []
         self.N_data = 3
@@ -203,11 +202,11 @@ class GaussianPyramidTests(TestCase):
         for i in range(bottom_layer_size):
             data_i = []
             for k in range(self.N_data):
-                data_i.append(Variable(torch.Tensor([0.25]) +
-                                       (0.1 + 0.4 * (i + 1) / bottom_layer_size) * torch.randn(1)))
+                data_i.append(torch.tensor([0.25]) +
+                              (0.1 + 0.4 * (i + 1) / bottom_layer_size) * torch.randn(1))
             self.data.append(data_i)
         self.data_sums = [sum(self.data[i]) for i in range(bottom_layer_size)]
-        self.N_data = Variable(torch.Tensor([self.N_data]))
+        self.N_data = torch.tensor([self.N_data])
         self.q_dag = self.construct_q_dag()
         # compute the order in which guide samples are generated
         self.q_topo_sort = list(networkx.topological_sort(self.q_dag))
@@ -411,18 +410,18 @@ class GaussianPyramidTests(TestCase):
             deps = self.q_dag.predecessors(node)
             node_suffix = node[10:]
             log_sig_node = pyro.param("log_sig_" + node_suffix,
-                                      Variable(-0.5 * torch.log(self.target_lambdas[node_suffix]).data +
-                                               difficulty * (torch.Tensor([-0.3]) -
-                                                             0.3 * (torch.randn(1) ** 2)),
-                                               requires_grad=True))
+                                      torch.tensor(-0.5 * torch.log(self.target_lambdas[node_suffix]).data +
+                                                   difficulty * (torch.Tensor([-0.3]) -
+                                                                 0.3 * (torch.randn(1) ** 2)),
+                                                   requires_grad=True))
             mean_function_node = pyro.param("constant_term_" + node,
-                                            Variable(self.mu0.data +
-                                                     torch.Tensor([difficulty * i / n_nodes]),
-                                                     requires_grad=True))
+                                            torch.tensor(self.mu0.data +
+                                                         torch.Tensor([difficulty * i / n_nodes]),
+                                                         requires_grad=True))
             for dep in deps:
                 kappa_dep = pyro.param("kappa_" + node_suffix + '_' + dep[10:],
-                                       Variable(torch.Tensor([0.5 + difficulty * i / n_nodes]),
-                                                requires_grad=True))
+                                       torch.tensor(torch.Tensor([0.5 + difficulty * i / n_nodes]),
+                                                    requires_grad=True))
                 mean_function_node = mean_function_node + kappa_dep * latents_dict[dep]
             node_flagged = True if self.which_nodes_reparam[i] == 1.0 else False
             Normal = dist.Normal if reparameterized or node_flagged else fakes.NonreparameterizedNormal

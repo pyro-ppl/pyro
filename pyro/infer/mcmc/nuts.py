@@ -8,7 +8,6 @@ import pyro
 import pyro.distributions as dist
 from pyro.infer.util import torch_data_sum
 from pyro.ops.integrator import single_step_velocity_verlet
-from pyro.util import ng_ones, ng_zeros
 
 from .hmc import HMC
 
@@ -47,13 +46,13 @@ class NUTS(HMC):
 
     Example::
 
-        true_coefs = Variable(torch.arange(1, 4))
-        data = Variable(torch.randn(2000, 3))
+        true_coefs = torch.arange(1, 4)
+        data = torch.randn(2000, 3)
         labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
 
         def model(data):
-            coefs_mean = Variable(torch.zeros(dim), requires_grad=True)
-            coefs = pyro.sample('beta', dist.Normal(coefs_mean, Variable(torch.ones(3))))
+            coefs_mean = torch.zeros(dim, requires_grad=True)
+            coefs = pyro.sample('beta', dist.Normal(coefs_mean, torch.ones(3)))
             y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
             return y
 
@@ -147,7 +146,7 @@ class NUTS(HMC):
         if tree_size != 0:
             other_half_tree_prob = other_half_tree.size / tree_size
             is_other_half_tree = pyro.sample("is_other_halftree",
-                                             dist.Bernoulli(ps=ng_ones(1) * other_half_tree_prob))
+                                             dist.Bernoulli(ps=torch.ones(1) * other_half_tree_prob))
             if int(is_other_half_tree.item()) == 1:
                 z_proposal = other_half_tree.z_proposal
 
@@ -199,7 +198,7 @@ class NUTS(HMC):
         # For another version of NUTS which uses multinomial sampling instead of slice sampling, see
         #     `A Conceptual Introduction to Hamiltonian Monte Carlo` by Michael Betancourt.
         slice_var = pyro.sample("slicevar_t={}".format(self._t),
-                                dist.Uniform(ng_zeros(1), torch.exp(-energy_current)))
+                                dist.Uniform(torch.zeros(1), torch.exp(-energy_current)))
         log_slice = slice_var.log()
 
         z_left = z_right = z
@@ -211,7 +210,7 @@ class NUTS(HMC):
         # doubling process, stop when turning or diverging
         for tree_depth in range(self._max_tree_depth + 1):
             direction = pyro.sample("direction_t={}_treedepth={}".format(self._t, tree_depth),
-                                    dist.Bernoulli(ps=ng_ones(1) * 0.5))
+                                    dist.Bernoulli(ps=torch.ones(1) * 0.5))
             direction = int(direction.item())
             if direction == 1:  # go to the right, start from the right leaf of current tree
                 new_tree = self._build_tree(z_right, r_right, z_right_grads, log_slice,
@@ -231,7 +230,7 @@ class NUTS(HMC):
                 break
 
             rand = pyro.sample("rand_t={}_treedepth={}".format(self._t, tree_depth),
-                               dist.Uniform(ng_zeros(1), ng_ones(1)))
+                               dist.Uniform(torch.zeros(1), torch.ones(1)))
             if rand < new_tree.size / tree_size:
                 accepted = True
                 z = new_tree.z_proposal

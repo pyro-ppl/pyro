@@ -8,7 +8,6 @@ import warnings
 import graphviz
 from six.moves import zip_longest
 import torch
-from torch.autograd import Variable
 from torch.nn import Parameter
 
 from pyro.params import _PYRO_PARAM_STORE
@@ -85,7 +84,7 @@ def am_i_wrapped():
 
 
 def detach_iterable(iterable):
-    if isinstance(iterable, Variable):
+    if isinstance(torch.is_tensor(iterable)):
         return iterable.detach()
     else:
         return [var.detach() for var in iterable]
@@ -101,12 +100,6 @@ def _dict_to_tuple(d):
         return tuple([(k, _dict_to_tuple(d[k])) for k in sorted(d.keys())])
     else:
         return d
-
-
-def get_tensor_data(t):
-    if isinstance(t, Variable):
-        return t.data
-    return t
 
 
 def memoize(fn):
@@ -167,22 +160,22 @@ def ng_ones(*args, **kwargs):
     """
     :param torch.Tensor type_as: optional argument for tensor type
 
-    A convenience function for Variable(torch.ones(...), requires_grad=False)
+    A convenience function for torch.ones(..., requires_grad=False)
     """
     retype = kwargs.pop('type_as', None)
     p_tensor = torch.ones(*args, **kwargs)
-    return Variable(p_tensor if retype is None else p_tensor.type_as(retype), requires_grad=False)
+    return torch.tensor(p_tensor if retype is None else p_tensor.type_as(retype), requires_grad=False)
 
 
 def ng_zeros(*args, **kwargs):
     """
     :param torch.Tensor type_as: optional argument for tensor type
 
-    A convenience function for Variable(torch.ones(...), requires_grad=False)
+    A convenience function for torch.ones(..., requires_grad=False)
     """
     retype = kwargs.pop('type_as', None)
     p_tensor = torch.zeros(*args, **kwargs)
-    return Variable(p_tensor if retype is None else p_tensor.type_as(retype), requires_grad=False)
+    return torch.tensor(p_tensor if retype is None else p_tensor.type_as(retype), requires_grad=False)
 
 
 def is_nan(x):
