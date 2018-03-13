@@ -22,6 +22,7 @@ Welcome to Pyro Examples and Tutorials!
    ss-vae
    gmm
    gp
+   bo
 
 
 Indices and tables
