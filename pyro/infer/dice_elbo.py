@@ -24,6 +24,19 @@ def _compute_upstream_grads(trace):
     return upstream_grads
 
 
+def _compute_global_mft(trace):
+    upstream_grads = MultiFrameTensor()
+
+    for site in trace.nodes.values():
+        if site["type"] == "sample" and \
+           not site["is_observed"] and \
+           not getattr(site["fn"], "reparameterized", False):
+            upstream_grads.add((site["cond_indep_stack"],
+                                site["batch_log_pdf"] / site["scale"]))
+
+    return upstream_grads
+
+
 def _compute_upstream_from_observe(model_trace, guide_trace, name):
     front = set()
     for name2, node in model_trace.nodes.items():
@@ -51,7 +64,7 @@ def _compute_upstream_sample_sites(guide_trace, stop_names):
             break
 
 
-def _magicbox_trace(model_trace, guide_trace, name):
+def _magicbox_trace(model_trace, guide_trace, name, mft=None):
     """
     Computes the magicbox operator on an ELBO cost node
     """
@@ -65,14 +78,17 @@ def _magicbox_trace(model_trace, guide_trace, name):
 
     # now compute the sum of log-probs of all upstream non-reparameterized nodes
     stacks = get_iarange_stacks(model_trace)
-    log_prob_mft = MultiFrameTensor()  # MultiFrameTensor is awesome!
-    for name2, node in _compute_upstream_sample_sites(guide_trace, stop_names):
-        if node["type"] == "sample" and \
-           not node["is_observed"] and \
-           not getattr(node["fn"], "reparameterized", False):
-            log_prob_mft.add((stacks[name2],
-                              # XXX hack to unscale gradient estimator
-                              node["batch_log_pdf"] / node["scale"]))
+    if mft is None:
+        log_prob_mft = MultiFrameTensor()  # MultiFrameTensor is awesome!
+        for name2, node in _compute_upstream_sample_sites(guide_trace, stop_names):
+            if node["type"] == "sample" and \
+               not node["is_observed"] and \
+               not getattr(node["fn"], "reparameterized", False):
+                log_prob_mft.add((stacks[name2],
+                                  # XXX hack to unscale gradient estimator
+                                  node["batch_log_pdf"] / node["scale"]))
+    else:
+        log_prob_mft = mft
 
     # sum the multiframetensor to the cost node's indep stack
     s = log_prob_mft.sum_to(model_trace.nodes[name]["cond_indep_stack"])
@@ -140,9 +156,11 @@ class Dice_ELBO(ELBO):
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = 0
 
+            trace_mft = _compute_global_mft(guide_trace)
             for name, model_site in model_trace.nodes.items():
                 if model_site["type"] == "sample":
-                    mb_term = _magicbox_trace(model_trace, guide_trace, name)
+                    mb_term = _magicbox_trace(model_trace, guide_trace, name,
+                                              mft=trace_mft)
                     site_cost = model_site["batch_log_pdf"]
                     if not model_site["is_observed"]:
                         site_cost = site_cost - guide_trace.nodes[name]["batch_log_pdf"]
