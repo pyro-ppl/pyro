@@ -42,10 +42,11 @@ class GPRegression(Model):
         noise = self.get_param("noise")
 
         K = kernel(self.X) + noise.expand(self.X.size(0)).diag()
-        zero_loc = K.new([0]).expand(K.size(0))
         # correct event_shape for y
-        y = self.y.t() if self.y.dim() == 2 else self.y
-        pyro.sample("y", dist.MultivariateNormal(zero_loc, K), obs=y)
+        y_t = self.y.t() if self.y.dim() == 2 else self.y
+        zero_loc = y_t.new([0]).expand(y_t.size())
+        pyro.sample("y", dist.MultivariateNormal(zero_loc, K).reshape(
+            extra_event_dims=zero_loc.dim() - 1), obs=y_t)
 
     def guide(self):
         self.set_mode("guide")

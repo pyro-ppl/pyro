@@ -89,7 +89,8 @@ class SparseGPRegression(Model):
         # DTC: cov = Qff + noise, trace_term = 0
         # FITC: cov = Qff + diag(Kff - Qff) + noise, trace_term = 0
         # VFE: cov = Qff + noise, trace_term = tr(Kff - Qff) / noise
-        pyro.sample("y", dist.SparseMultivariateNormal(zero_loc, D, W, trace_term), obs=y_t)
+        pyro.sample("y", dist.SparseMultivariateNormal(zero_loc, D, W, trace_term).reshape(
+            extra_event_dims=zero_loc.dim() - 1), obs=y_t)
 
     def guide(self):
         self.set_mode("guide")

@@ -42,7 +42,8 @@ class VariationalGP(Model):
         zero_loc = y_t.new([0]).expand(y_t.size())
         Kff = kernel(self.X) + self.jitter.expand(self.X.size(0)).diag()
 
-        f = pyro.sample("f", dist.MultivariateNormal(zero_loc, Kff))
+        f = pyro.sample("f", dist.MultivariateNormal(zero_loc, Kff).reshape(
+            extra_event_dims=zero_loc.dim() - 1))
         likelihood(f, obs=y_t)
 
     def guide(self):
@@ -64,7 +65,8 @@ class VariationalGP(Model):
         Kf = Lf.t().matmul(Lf) + self.jitter.expand(Lf.size(0)).diag()
         # correct event_shape for mf
         mf_t = mf.t() if mf.dim() == 2 else mf
-        pyro.sample("f", dist.MultivariateNormal(loc=mf_t, covariance_matrix=Kf))
+        pyro.sample("f", dist.MultivariateNormal(loc=mf_t, covariance_matrix=Kf).reshape(
+            extra_event_dims=mf_t.dim() - 1))
         return kernel, likelihood, mf, Lf
 
     def forward(self, Xnew, full_cov=False):
