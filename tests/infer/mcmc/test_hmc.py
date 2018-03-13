@@ -28,7 +28,7 @@ class GaussianChain(object):
         self.lambda_prec = torch.ones(self.dim)
 
     def model(self, data):
-        mu = pyro.param('mu_0', self.mu_0)
+        mu = self.mu_0
         lambda_prec = self.lambda_prec
         for i in range(1, self.chain_len + 1):
             mu = pyro.sample('mu_{}'.format(i),
@@ -180,8 +180,8 @@ def test_logistic_regression():
 
 def test_bernoulli_beta():
     def model(data):
-        alpha = pyro.param('alpha', torch.tensor([1.1, 1.1]))
-        beta = pyro.param('beta', torch.tensor([1.1, 1.1]))
+        alpha = torch.tensor([1.1, 1.1])
+        beta = torch.tensor([1.1, 1.1])
         p_latent = pyro.sample('p_latent', dist.Beta(alpha, beta))
         pyro.observe('obs', dist.Bernoulli(p_latent), data)
         return p_latent
@@ -199,8 +199,8 @@ def test_bernoulli_beta():
 
 def test_normal_gamma():
     def model(data):
-        rate = pyro.param('rate', torch.tensor([1.0, 1.0]))
-        concentration = pyro.param('conc', torch.tensor([1.0, 1.0]))
+        rate = torch.tensor([1.0, 1.0])
+        concentration = torch.tensor([1.0, 1.0])
         p_latent = pyro.sample('p_latent', dist.Gamma(rate, concentration))
         pyro.observe("obs", dist.Normal(3, p_latent), data)
         return p_latent
@@ -219,7 +219,7 @@ def test_normal_gamma():
 @pytest.mark.xfail(reason='log_abs_det_jacobian not implemented for StickBreakingTransform')
 def test_categorical_dirichlet():
     def model(data):
-        concentration = pyro.param('conc', torch.tensor([1.0, 1.0, 1.0]))
+        concentration = torch.tensor([1.0, 1.0, 1.0])
         p_latent = pyro.sample('p_latent', dist.Dirichlet(concentration))
         pyro.observe("obs", dist.Categorical(p_latent), data)
         return p_latent
@@ -258,8 +258,8 @@ def test_logistic_regression_with_dual_averaging():
 
 def test_bernoulli_beta_with_dual_averaging():
     def model(data):
-        alpha = pyro.param('alpha', torch.tensor([1.1, 1.1]))
-        beta = pyro.param('beta', torch.tensor([1.1, 1.1]))
+        alpha = torch.tensor([1.1, 1.1])
+        beta = torch.tensor([1.1, 1.1])
         p_latent = pyro.sample('p_latent', dist.Beta(alpha, beta))
         pyro.observe('obs', dist.Bernoulli(p_latent), data)
         return p_latent
@@ -278,8 +278,8 @@ def test_bernoulli_beta_with_dual_averaging():
 @pytest.mark.xfail(reason='the model is sensitive to NaN log_pdf')
 def test_normal_gamma_with_dual_averaging():
     def model(data):
-        rate = pyro.param('rate', torch.tensor([1.0, 1.0]))
-        concentration = pyro.param('conc', torch.tensor([1.0, 1.0]))
+        rate = torch.tensor([1.0, 1.0])
+        concentration = torch.tensor([1.0, 1.0])
         p_latent = pyro.sample('p_latent', dist.Gamma(rate, concentration))
         pyro.observe("obs", dist.Normal(3, p_latent), data)
         return p_latent
