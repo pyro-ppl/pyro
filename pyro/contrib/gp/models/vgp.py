@@ -25,12 +25,9 @@ class VariationalGP(Model):
     """
     def __init__(self, X, y, kernel, likelihood, jitter=1e-6):
         super(VariationalGP, self).__init__()
-        self.X = X
-        self.y = y
+        self.set_data(X, y)
         self.kernel = kernel
         self.likelihood = likelihood
-
-        self.num_data = self.X.size(0)
 
         self.jitter = self.X.data.new([jitter])
 
@@ -40,11 +37,13 @@ class VariationalGP(Model):
         kernel = self.kernel
         likelihood = self.likelihood
 
-        zero_loc = self.X.data.new([0]).expand(self.num_data)
-        Kff = kernel(self.X) + self.jitter.expand(self.num_data).diag()
+        # correct event_shape for y
+        y_t = self.y.t() if self.y.dim() == 2 else self.y
+        zero_loc = y_t.new([0]).expand(y_t.size())
+        Kff = kernel(self.X) + self.jitter.expand(self.X.size(0)).diag()
 
         f = pyro.sample("f", dist.MultivariateNormal(zero_loc, Kff))
-        likelihood(f, obs=self.y)
+        likelihood(f, obs=y_t)
 
     def guide(self):
         self.set_mode("guide")
@@ -53,29 +52,33 @@ class VariationalGP(Model):
         likelihood = self.likelihood
 
         # define variational parameters
-        mf_0 = torch.tensor(self.X.new(self.num_data).zero_(), requires_grad=True)
+        mf_0 = torch.tensor(self.y.new(self.y.size()).zero_(),
+                            requires_grad=True)
         mf = pyro.param("f_loc", mf_0)
-        unconstrained_Lf_0 = torch.tensor(self.X.data.new(self.num_data, self.num_data).zero_(),
+        unconstrained_Lf_0 = torch.tensor(self.X.new(self.X.size(0), self.X.size(0)).zero_(),
                                           requires_grad=True)
         unconstrained_Lf = pyro.param("unconstrained_f_tril", unconstrained_Lf_0)
         Lf = transform_to(constraints.lower_cholesky)(unconstrained_Lf)
 
         # TODO: use scale_tril=Lf
-        Kf = Lf.t().matmul(Lf) + self.jitter.expand(self.num_data).diag()
-        pyro.sample("f", dist.MultivariateNormal(loc=mf, covariance_matrix=Kf))
+        Kf = Lf.t().matmul(Lf) + self.jitter.expand(Lf.size(0)).diag()
+        # correct event_shape for mf
+        mf_t = mf.t() if mf.dim() == 2 else mf
+        pyro.sample("f", dist.MultivariateNormal(loc=mf_t, covariance_matrix=Kf))
         return kernel, likelihood, mf, Lf
 
     def forward(self, Xnew, full_cov=False):
         """
         Computes the parameters of :math:`p(f^*|Xnew) \sim N(\\text{loc}, \\text{cov})`
-        according to :math:`p(f^*,f|y) = p(f^*|f)p(f|y) \sim p(f^*|f)q(f)`,
-        then marginalize out variable :math:`f`.
+        according to :math:`p(f^*,f|y) = p(f^*|f)p(f|y) \sim p(f^*|f)q(f)`, then
+        marginalize out variable :math:`f`. In case output data is a 2D tensor of shape
+        :math:`N \times D`, :math:`loc` is also a 2D tensor of shape :math:`N \times D`.
+        Covariance matrix :math:`cov` is always a 2D tensor of shape :math:`N \times N`.
 
         :param torch.Tensor Xnew: A 1D or 2D tensor.
         :param bool full_cov: Predict full covariance matrix or just its diagonal.
-        :return: loc, covariance matrix of :math:`p(f^*|Xnew)`, and the likelihood.
-        :rtype: torch.Tensor, torch.Tensor, and
-            pyro.contrib.gp.likelihoods.Likelihood
+        :return: loc and covariance matrix of :math:`p(f^*|Xnew)`
+        :rtype: torch.Tensor and torch.Tensor
         """
         self._check_Xnew_shape(Xnew, self.X)
 
@@ -83,7 +86,7 @@ class VariationalGP(Model):
 
         loc, cov = self._predict_f(Xnew, self.X, kernel, mf, Lf, full_cov)
 
-        return loc, cov, likelihood
+        return loc, cov
 
     def _predict_f(self, Xnew, X, kernel, mf, Lf, full_cov=False):
         """
@@ -92,23 +95,21 @@ class VariationalGP(Model):
         then marginalize out variable :math:`f`.
         Here :math:`q(f)` is parameterized by :math:`q(f) \sim N(mf, Lf)`.
         """
-        num_data = X.size(0)
-
         # W := inv(Lff) @ Kfs; V := inv(Lff) @ Lf
         # loc = Ksf @ inv(Kff) @ mf = W.T @ inv(Lff) @ mf
         # cov = Kss - Ksf @ inv(Kff) @ Kfs + Ksf @ inv(Kff) @ S @ inv(Kff) @ Kfs
         #     = Kss - W.T @ W + W.T @ V @ V.T @ W
         #     =: Kss - Qss + K
-
-        Kff = kernel(X) + self.jitter.expand(num_data).diag()
+        Kff = kernel(X) + self.jitter.expand(X.size(0)).diag()
         Kfs = kernel(X, Xnew)
         Lff = Kff.potrf(upper=False)
 
-        pack = torch.cat((mf.unsqueeze(1), Kfs, Lf), dim=1)
+        mf_temp = mf.unsqueeze(1) if mf.dim() == 1 else mf
+        pack = torch.cat((mf_temp, Kfs, Lf), dim=1)
         Lffinv_pack = matrix_triangular_solve_compat(pack, Lff, upper=False)
-        Lffinv_mf = Lffinv_pack[:, 0]
-        W = Lffinv_pack[:, 1:-num_data]
-        V = Lffinv_pack[:, -num_data:]
+        Lffinv_mf = Lffinv_pack[:, :mf_temp.size(1)].view(mf.size())
+        W = Lffinv_pack[:, mf_temp.size(1):-Lf.size(1)]
+        V = Lffinv_pack[:, -Lf.size(1):]
         Vt_W = V.t().matmul(W)
 
         loc = W.t().matmul(Lffinv_mf)

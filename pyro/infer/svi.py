@@ -69,7 +69,7 @@ class SVI(object):
     def __call__(self, *args, **kwargs):
         """
         :returns: estimate of the loss
-        :rtype:  float
+        :rtype: float
 
         Convenience method for doing a gradient step.
         """

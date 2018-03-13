@@ -23,7 +23,7 @@ class SparseMultivariateNormal(TorchDistribution):
     computation will be beneficial when ``M << N``.
 
     :param torch.Tensor loc: Mean.
-        Must be in 1 dimensional of size N.
+        Must be a 1D or 2D tensor with the last dimension of size N.
     :param torch.Tensor D_term: D term of covariance matrix.
         Must be in 1 dimensional of size N.
     :param torch.Tensor W_term: W term of covariance matrix.
@@ -37,13 +37,14 @@ class SparseMultivariateNormal(TorchDistribution):
     has_rsample = True
 
     def __init__(self, loc, D_term, W_term, trace_term=None):
-        if loc.size() != D_term.size():
+        if loc.size(-1) != D_term.size(0):
             raise ValueError("Expected loc.size() == D_term.size(), but got {} vs {}".format(
                 loc.size(), D_term.size()))
         if D_term.size(0) != W_term.size(1):
             raise ValueError("The dimension of D_term must match the second dimension of W_term.")
-        if loc.dim() != 1 or D_term.dim() != 1 or W_term.dim() != 2:
-            raise ValueError("Loc, D_term, W_term must be 1D, 1D, 2D tensors respectively.")
+        if D_term.dim() != 1 or W_term.dim() != 2 or loc.dim() > 2:
+            raise ValueError("D_term, W_term must be 1D, 2D tensors respectively and "
+                             "loc must be a 1D or 2D tensor.")
 
         self.loc = loc
         self.covariance_matrix_D_term = D_term
@@ -104,6 +105,9 @@ class SparseMultivariateNormal(TorchDistribution):
             W_Dinv_y = W_Dinv.matmul(y)
         elif y.dim() == 2:
             W_Dinv_y = W_Dinv.matmul(y.t())
+        else:
+            raise ValueError("This distribution does not support computing log_prob "
+                             "for a tensor with more than 2 dimensionals.")
         Linv_W_Dinv_y = matrix_triangular_solve_compat(W_Dinv_y, L, upper=False)
         if y.dim() == 2:
             Linv_W_Dinv_y = Linv_W_Dinv_y.t()

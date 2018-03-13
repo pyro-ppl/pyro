@@ -39,10 +39,8 @@ class SparseGPRegression(Model):
     """
     def __init__(self, X, y, kernel, Xu, noise=None, approx=None, jitter=1e-6):
         super(SparseGPRegression, self).__init__()
-        self.X = X
-        self.y = y
+        self.set_data(X, y)
         self.kernel = kernel
-
         self.Xu = Parameter(Xu)
 
         if noise is None:
@@ -73,7 +71,7 @@ class SparseGPRegression(Model):
         # W = inv(Luu) @ Kuf
         W = matrix_triangular_solve_compat(Kuf, Luu, upper=False)
 
-        D = noise.expand(self.X.size(0))
+        D = noise.expand(W.size(1))
         trace_term = 0
         if self.approx == "FITC" or self.approx == "VFE":
             Kffdiag = kernel(self.X, diag=True)
@@ -85,13 +83,13 @@ class SparseGPRegression(Model):
             else:  # approx = "VFE"
                 trace_term += (Kffdiag - Qffdiag).sum() / noise
 
-        zero_loc = D.new([0]).expand(self.X.size(0))
+        # correct event_shape for y
+        y_t = self.y.t() if self.y.dim() == 2 else self.y
+        zero_loc = y_t.new([0]).expand(y_t.size())
         # DTC: cov = Qff + noise, trace_term = 0
         # FITC: cov = Qff + diag(Kff - Qff) + noise, trace_term = 0
         # VFE: cov = Qff + noise, trace_term = tr(Kff - Qff) / noise
-        # we make the observation fit event_shape
-        y = self.y if self.y.dim() == 1 else self.y.t()
-        pyro.sample("y", dist.SparseMultivariateNormal(zero_loc, D, W, trace_term), obs=self.y)
+        pyro.sample("y", dist.SparseMultivariateNormal(zero_loc, D, W, trace_term), obs=y_t)
 
     def guide(self):
         self.set_mode("guide")
@@ -105,7 +103,9 @@ class SparseGPRegression(Model):
     def forward(self, Xnew, full_cov=False, noiseless=True):
         r"""
         Computes the parameters of :math:`p(y^*|Xnew) \sim N(\text{loc}, \text{cov})`
-        w.r.t. the new input :math:`Xnew`.
+        w.r.t. the new input :math:`Xnew`. In case output data is a 2D tensor of shape
+        :math:`N \times D`, :math:`loc` is also a 2D tensor of shape :math:`N \times D`.
+        Covariance matrix :math:`cov` is always a 2D tensor of shape :math:`N \times N`.
 
         :param torch.Tensor Xnew: A 1D or 2D tensor.
         :param bool full_cov: Predicts full covariance matrix or just its diagonal.
@@ -130,7 +130,7 @@ class SparseGPRegression(Model):
         #   = inv(Luu).T @ inv(L).T @ inv(L) @ inv(Luu)
 
         W = matrix_triangular_solve_compat(Kuf, Luu, upper=False)
-        D = noise.expand(self.X.size(0))
+        D = noise.expand(W.size(1))
         if self.approx == "FITC":
             Kffdiag = kernel(self.X, diag=True)
             Qffdiag = (W ** 2).sum(dim=0)
@@ -147,7 +147,11 @@ class SparseGPRegression(Model):
 
         # loc = Linv_Ws.T @ inv(L) @ W_Dinv @ y
         W_Dinv_y = W_Dinv.matmul(self.y)
-        Linv_W_Dinv_y = matrix_triangular_solve_compat(W_Dinv_y, L, upper=False)
+        W_Dinv_y_temp = W_Dinv_y.unsqueeze(1) if W_Dinv_y.dim() == 1 else W_Dinv_y
+        pack = torch.cat((W_Dinv_y_temp, Ws), dim=1)
+        Linv_pack = matrix_triangular_solve_compat(pack, L, upper=False)
+        Linv_W_Dinv_y = Linv_pack[:, :W_Dinv_y_temp.size(1)].view(W_Dinv_y.size())
+        Linv_Ws = Linv_pack[:, W_Dinv_y_temp.size(1):]
         loc = Linv_Ws.t().matmul(Linv_W_Dinv_y)
 
         # cov = Kss - Ws.T @ Ws + Linv_Ws.T @ Linv_Ws

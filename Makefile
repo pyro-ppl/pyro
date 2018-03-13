@@ -5,7 +5,7 @@ all: docs test
 install: FORCE
 	pip install -e .[dev,profile]
 
-uninstall :FORCE
+uninstall: FORCE
 	pip uninstall pyro-ppl
 
 docs: FORCE
