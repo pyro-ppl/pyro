@@ -6,9 +6,49 @@ import warnings
 import pyro
 import pyro.poutine as poutine
 from pyro.infer.elbo import ELBO
-from pyro.infer.util import MultiFrameTensor, get_iarange_stacks
+from pyro.infer.util import MultiFrameTensor, get_iarange_stacks, TreeSum
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, check_site_shape, is_nan
+
+
+def _compute_upstream_grads(trace):
+    upstream_grads = TreeSum()
+
+    for site in trace.nodes.values():
+        if site["type"] == "sample" and \
+           not site["is_observed"] and \
+           not getattr(site["fn"], "reparameterized", False):
+            upstream_grads.add(site["cond_indep_stack"],
+                               site["batch_log_pdf"] / site["scale"])
+
+    return upstream_grads
+
+
+def _compute_upstream_from_observe(model_trace, guide_trace, name):
+    front = set()
+    for name2, node in model_trace.nodes.items():
+        if node["type"] == "sample" and \
+           not node["is_observed"]:
+            front.add(name2)
+            if name2 == name:
+                break
+    for name2 in guide_trace.nodes:
+        front.discard(name2)
+        if len(front) == 0:
+            stop_name = name2
+            break
+    return set([stop_name])
+
+
+def _compute_upstream_sample_sites(guide_trace, stop_names):
+    for name, node in guide_trace.nodes.items():
+        if node["type"] == "sample" and \
+           not node["is_observed"] and \
+           not getattr(node["fn"], "reparameterized", False):
+            yield name, node
+            stop_names.discard(name)
+        if len(stop_names) == 0:
+            break
 
 
 def _magicbox_trace(model_trace, guide_trace, name):
@@ -17,38 +57,42 @@ def _magicbox_trace(model_trace, guide_trace, name):
     """
     # first, if the cost node is observed,
     # find its most recent latent ancestor in guide_trace
-    stop_name = name
+    # stop_name = name
     if model_trace.nodes[name]["is_observed"]:
-        front = set()
-        for name2, node in model_trace.nodes.items():
-            if node["type"] == "sample" and \
-               not node["is_observed"]:
-                front.add(name2)
-                if name2 == name:
-                    break
-        for name2 in guide_trace.nodes:
-            front.discard(name2)
-            if len(front) == 0:
-                stop_name = name2
-                break
+        stop_names = _compute_upstream_from_observe(model_trace, guide_trace, name)
+    else:
+        stop_names = set([name])
 
     # now compute the sum of log-probs of all upstream non-reparameterized nodes
     stacks = get_iarange_stacks(model_trace)
     log_prob_mft = MultiFrameTensor()  # MultiFrameTensor is awesome!
-    for name2, node in guide_trace.nodes.items():
+    for name2, node in _compute_upstream_sample_sites(guide_trace, stop_names):
         if node["type"] == "sample" and \
            not node["is_observed"] and \
            not getattr(node["fn"], "reparameterized", False):
             log_prob_mft.add((stacks[name2],
                               # XXX hack to unscale gradient estimator
                               node["batch_log_pdf"] / node["scale"]))
-        if name2 == stop_name:
-            # anything after stop_name is downstream of this cost node
-            # because trace nodes are ordered
-            break
 
     # sum the multiframetensor to the cost node's indep stack
     s = log_prob_mft.sum_to(model_trace.nodes[name]["cond_indep_stack"])
+    if s is None:
+        # there were no non-reparameterized nodes, so just return 1
+        return torch.ones(torch.Size())
+    else:
+        return torch.exp(s - s.detach())
+
+
+def _magicbox_trace2(model_trace, guide_trace, name):
+    """
+    Computes the magicbox operator on an ELBO cost node
+    This version uses TreeSum instead of MultiFrameTensor
+    """
+    # now compute the of log-probs of all upstream non-reparameterized nodes
+    log_prob_mft = _compute_upstream_grads(guide_trace)
+
+    # sum to the cost node's indep stack
+    s = log_prob_mft.get_upstream(model_trace.nodes[name]["cond_indep_stack"])
     if s is None:
         # there were no non-reparameterized nodes, so just return 1
         return torch.ones(torch.Size())
