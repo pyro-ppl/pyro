@@ -226,7 +226,7 @@ class ExponentialGammaTests(TestCase):
         # gamma prior hyperparameter
         self.beta0 = torch.tensor(1.0)
         self.n_data = 2
-        self.data = torch.tensor(torch.Tensor([3.0, 2.0]))  # two observations
+        self.data = torch.tensor([3.0, 2.0])  # two observations
         self.alpha_n = self.alpha0 + torch.tensor(self.n_data)  # posterior alpha
         self.beta_n = self.beta0 + torch.sum(self.data)  # posterior beta
         self.log_alpha_n = torch.log(self.alpha_n)

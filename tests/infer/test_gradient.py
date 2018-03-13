@@ -38,7 +38,7 @@ def test_subsample_gradient(trace_graph, enum_discrete, reparameterized, subsamp
                 pyro.sample("x", Normal(z, 1), obs=x)
 
     def guide(subsample):
-        mu = pyro.param("mu", lambda: torch.tensor(torch.zeros(len(data)), requires_grad=True))
+        mu = pyro.param("mu", lambda: torch.zeros(len(data), requires_grad=True))
         sigma = pyro.param("sigma", lambda: torch.tensor([1.0], requires_grad=True))
         with pyro.iarange("particles", num_particles):
             with pyro.iarange("data", len(data), subsample_size, subsample) as ind:
@@ -92,7 +92,7 @@ def test_iarange(trace_graph, enum_discrete, reparameterized):
         pyro.sample("nuisance_c", Normal(4, 5))
 
     def guide():
-        mu = pyro.param("mu", lambda: torch.tensor(torch.zeros(len(data)), requires_grad=True))
+        mu = pyro.param("mu", lambda: torch.zeros(len(data), requires_grad=True))
         sigma = pyro.param("sigma", lambda: torch.tensor([1.0], requires_grad=True))
         mus = mu.unsqueeze(-1).expand(-1, num_particles)
 
@@ -138,7 +138,7 @@ def test_subsample_gradient_sequential(trace_graph, enum_discrete, reparameteriz
             pyro.sample("x", Normal(z, 1), obs=x)
 
     def guide():
-        mu = pyro.param("mu", lambda: torch.tensor(torch.zeros(len(data)), requires_grad=True))
+        mu = pyro.param("mu", lambda: torch.zeros(len(data), requires_grad=True))
         sigma = pyro.param("sigma", lambda: torch.tensor([1.0], requires_grad=True))
         with pyro.iarange("data", len(data), subsample_size) as ind:
             pyro.sample("z", Normal(mu[ind], sigma))

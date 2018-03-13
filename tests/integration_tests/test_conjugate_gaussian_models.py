@@ -420,7 +420,7 @@ class GaussianPyramidTests(TestCase):
                                                          requires_grad=True))
             for dep in deps:
                 kappa_dep = pyro.param("kappa_" + node_suffix + '_' + dep[10:],
-                                       torch.tensor(torch.Tensor([0.5 + difficulty * i / n_nodes]),
+                                       torch.tensor([0.5 + difficulty * i / n_nodes],
                                                     requires_grad=True))
                 mean_function_node = mean_function_node + kappa_dep * latents_dict[dep]
             node_flagged = True if self.which_nodes_reparam[i] == 1.0 else False
