@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from pyro.contrib.gp import Parameterized
+from pyro.contrib.gp.util import Parameterized
 
 
 class Model(Parameterized):
