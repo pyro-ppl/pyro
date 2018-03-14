@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import torch
 from torch.distributions import transform_to
 import torch.nn as nn
+import torch.optim as optim
 
 import pyro
 import pyro.distributions as dist
@@ -128,3 +129,63 @@ class Parameterized(nn.Module):
             p = pyro.sample(param_name, dist.Delta(MAP_param))
 
         self._registered_params[param] = p
+
+
+class LowerConfidenceBound(nn.Module):
+    """
+    A simple implementation of Lower Confidence Bound acquisition function.
+    It is useful for doing Bayesian Optimization.
+    
+    :param
+    """
+    def __init__(self, model, constraint, num_restarts=5, num_steps=1000):
+        super(LowerConfidenceBound, self).__init__()
+        self.model = model
+        self.constraint = constraint
+        self.num_restarts = num_restarts
+        self.num_steps = num_steps
+        self._x0 = None
+        
+    def _get_init_point(self, random=True):
+        if not random and self._x0 is not None:
+            return self._x0
+        else:
+            return self.model.X.new(1).uniform_(self.constraint.lower_bound,
+                                                self.constraint.upper_bound)
+
+    def update_data(self, x, objective):
+        self._x0 = x
+        y = objective(x)
+        X = torch.cat([self.model.X, x])
+        y = torch.cat([self.model.y, y])
+        self.model.set_data(X, y)
+        self.model.optimize(optimizer=Adam({}))
+
+    def minimum(self):
+        candidates = []
+        values = []
+        for i in range(self.num_restarts):
+            unconstrained_x0 = transform_to(self.constraint).inv(self._get_init_point(random=(i!=0)))
+            unconstrained_x = torch.tensor(unconstrained_x0, requires_grad=True)
+            minimizer = optim.Adam([unconstrained_x], lr=1)
+
+            for j in range(self.num_steps):
+                minimizer.zero_grad()
+                x = transform_to(self.constraint)(unconstrained_x)
+                y = self(x)
+                y.backward()
+                if torch.isnan(unconstrained_x.grad):
+                    break
+                minimizer.step()
+            x = transform_to(self.constraint)(unconstrained_x)
+            y = self(x)
+            candidates.append(x.data)
+            values.append(y.data)
+
+        argmin = torch.min(torch.cat(values), dim=0)[1].item()
+        return candidates[argmin]
+
+    def forward(self, x):
+        loc, var = self.model(x, full_cov=False, noiseless=False)
+        sd = var.sqrt()
+        return loc - 2 * sd
