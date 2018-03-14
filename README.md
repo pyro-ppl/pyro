@@ -59,7 +59,7 @@ pip install pyro-ppl[extras]  # for running examples/tutorials
 
 For recent features you can install Pyro from source.
 
-First install a recent PyTorch, currently PyTorch commit `8327982`.
+First install a recent PyTorch, currently PyTorch commit `e40425f`.
 ```sh
 git clone git@github.com:pytorch/pytorch
 cd pytorch
