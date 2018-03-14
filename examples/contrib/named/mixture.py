@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 import argparse
 
 import torch
-from torch.autograd import Variable
 
 import pyro
 import pyro.distributions as dist
@@ -22,9 +21,9 @@ def model(data, k):
     latent = named.Object("latent")
 
     # Create parameters for a Gaussian mixture model.
-    latent.ps.param_(Variable(torch.ones(k) / k, requires_grad=True))
-    latent.mus.param_(Variable(torch.zeros(k), requires_grad=True))
-    latent.sigmas.param_(Variable(torch.ones(k), requires_grad=True))
+    latent.ps.param_(torch.tensor(torch.ones(k) / k, requires_grad=True))
+    latent.mus.param_(torch.zeros(k, requires_grad=True))
+    latent.sigmas.param_(torch.ones(k, requires_grad=True))
 
     # Observe all the data. We pass a local latent in to the local_model.
     latent.local = named.List()
@@ -47,14 +46,14 @@ def guide(data, k):
 
 def local_guide(latent, k):
     # The local guide simply guesses category assignments.
-    latent.ps.param_(Variable(torch.ones(k) / k, requires_grad=True))
+    latent.ps.param_(torch.tensor(torch.ones(k) / k, requires_grad=True))
     latent.id.sample_(dist.Categorical(softmax(latent.ps)))
 
 
 def main(args):
     optim = Adam({"lr": 0.1})
     inference = SVI(model, guide, optim, loss="ELBO")
-    data = Variable(torch.Tensor([0, 1, 2, 20, 30, 40]))
+    data = torch.tensor([0, 1, 2, 20, 30, 40])
     k = 2
 
     print('Step\tLoss')

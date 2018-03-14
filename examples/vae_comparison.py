@@ -6,7 +6,6 @@ from abc import ABCMeta, abstractmethod
 import torch
 import torch.nn as nn
 from six import add_metaclass
-from torch.autograd import Variable
 from torch.nn import functional
 from torchvision.utils import save_image
 
@@ -16,7 +15,6 @@ from examples.util import RESULTS_DIR
 from pyro.distributions import Normal, Bernoulli
 from pyro.infer import SVI
 from pyro.optim import Adam
-from pyro.util import ng_zeros, ng_ones
 
 """
 Comparison of VAE implementation in PyTorch and Pyro. This example can be
@@ -115,7 +113,6 @@ class VAE(object):
         self.set_train(is_train=True)
         train_loss = 0
         for batch_idx, (x, _) in enumerate(self.train_loader):
-            x = Variable(x)
             loss = self.compute_loss_and_gradient(x)
             train_loss += loss
         print('====> Epoch: {} \nTraining loss: {:.4f}'.format(
@@ -126,7 +123,6 @@ class VAE(object):
         test_loss = 0
         for i, (x, _) in enumerate(self.test_loader):
             with torch.no_grad():
-                x = Variable(x)
                 recon_x = self.model_eval(x)[0]
                 test_loss += self.compute_loss_and_gradient(x)
             if i == 0:
@@ -185,7 +181,7 @@ class PyroVAEImpl(VAE):
 
     def model(self, data):
         decoder = pyro.module('decoder', self.vae_decoder)
-        z_mean, z_std = ng_zeros([data.size(0), 20]), ng_ones([data.size(0), 20])
+        z_mean, z_std = torch.zeros([data.size(0), 20]), torch.ones([data.size(0), 20])
         with pyro.iarange('data', data.size(0)):
             z = pyro.sample('latent', Normal(z_mean, z_std).reshape(extra_event_dims=1))
             img = decoder.forward(z)

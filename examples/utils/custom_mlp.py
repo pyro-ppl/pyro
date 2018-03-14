@@ -31,7 +31,7 @@ class ConcatModule(nn.Module):
             input_args = input_args[0]
 
         # don't concat things that are just single objects
-        if torch.is_tensor(input_args) or isinstance(input_args, torch.autograd.Variable):
+        if torch.is_tensor(input_args):
             return input_args
         else:
             return torch.cat(input_args, dim=-1)
