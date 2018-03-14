@@ -16,7 +16,6 @@ from observations import multi_mnist
 import numpy as np
 
 import torch
-from torch.autograd import Variable
 
 import pyro
 import pyro.optim as optim
@@ -117,7 +116,7 @@ def load_data():
     (X_np, Y), _ = multi_mnist(inpath, max_digits=2, canvas_size=50, seed=42)
     X_np = X_np.astype(np.float32)
     X_np /= 255.0
-    X = Variable(torch.from_numpy(X_np))
+    X = torch.from_numpy(X_np)
     # Using FloatTensor to allow comparison with values sampled from
     # Bernoulli.
     counts = torch.FloatTensor([len(objs) for objs in Y])

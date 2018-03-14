@@ -4,8 +4,6 @@ import torch
 import torch.nn as nn
 from torch.nn.functional import normalize  # noqa: F401
 
-from torch.autograd import Variable
-
 import pyro
 from pyro.distributions import Normal, Bernoulli  # noqa: F401
 from pyro.infer import SVI
@@ -26,7 +24,7 @@ def build_linear_dataset(N, p, noise_std=0.01):
     # set b = 1
     y = np.matmul(X, w) + np.repeat(1, N) + np.random.normal(0, noise_std, size=N)
     y = y.reshape(N, 1)
-    X, y = Variable(torch.Tensor(X)), Variable(torch.Tensor(y))
+    X, y = torch.tensor(X), torch.tensor(y)
     data = torch.cat((X, y), 1)
     assert data.shape == (N, p + 1)
     return data
@@ -52,10 +50,10 @@ regression_model = RegressionModel(p)
 
 def model(data):
     # Create unit normal priors over the parameters
-    mu = Variable(torch.zeros(1, p)).type_as(data)
-    sigma = Variable(torch.ones(1, p)).type_as(data)
-    bias_mu = Variable(torch.zeros(1)).type_as(data)
-    bias_sigma = Variable(torch.ones(1)).type_as(data)
+    mu = torch.zeros(1, p).type_as(data)
+    sigma = torch.ones(1, p).type_as(data)
+    bias_mu = torch.zeros(1).type_as(data)
+    bias_sigma = torch.ones(1).type_as(data)
     w_prior, b_prior = Normal(mu, sigma), Normal(bias_mu, bias_sigma)
     priors = {'linear.weight': w_prior, 'linear.bias': b_prior}
     # lift module parameters to random variables sampled from the priors
@@ -73,10 +71,11 @@ def model(data):
 
 
 def guide(data):
-    w_mu = Variable(torch.randn(1, p).type_as(data.data), requires_grad=True)
-    w_log_sig = Variable((-3.0 * torch.ones(1, p) + 0.05 * torch.randn(1, p)).type_as(data.data), requires_grad=True)
-    b_mu = Variable(torch.randn(1).type_as(data.data), requires_grad=True)
-    b_log_sig = Variable((-3.0 * torch.ones(1) + 0.05 * torch.randn(1)).type_as(data.data), requires_grad=True)
+    w_mu = torch.randn(1, p, requires_grad=True).type_as(data)
+    w_log_sig = torch.tensor((-3.0 * torch.ones(1, p) + 0.05 * torch.randn(1, p)).type_as(data),
+                             requires_grad=True)
+    b_mu = torch.randn(1, requires_grad=True).type_as(data)
+    b_log_sig = torch.tensor((-3.0 * torch.ones(1) + 0.05 * torch.randn(1)).type_as(data.data), requires_grad=True)
     # register learnable params in the param store
     mw_param = pyro.param("guide_mean_weight", w_mu)
     sw_param = softplus(pyro.param("guide_log_sigma_weight", w_log_sig))

@@ -12,7 +12,6 @@ from __future__ import print_function
 
 import argparse
 import torch
-from torch.autograd import Variable
 
 import pyro
 from pyro.distributions import Bernoulli
@@ -57,7 +56,7 @@ def main(args):
     bob_decision = Marginal(Search(bob))
 
     # Here Alice and Bob slightly prefer one location over the other a priori
-    shared_preference = Variable(torch.Tensor([args.preference]))
+    shared_preference = torch.tensor([args.preference])
 
     bob_depth = args.depth
     num_samples = args.num_samples

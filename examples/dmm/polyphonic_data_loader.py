@@ -15,7 +15,6 @@ und Kognitive Systeme at Universitaet Karlsruhe.
 
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
 import numpy as np
 from observations import jsb_chorales
 from os.path import join, exists
@@ -73,8 +72,8 @@ def reverse_sequences_torch(mini_batch, seq_lengths):
     for b in range(mini_batch.size(0)):
         T = seq_lengths[b]
         time_slice = np.arange(T - 1, -1, -1)
-        time_slice = Variable(torch.cuda.LongTensor(time_slice)) if 'cuda' in mini_batch.data.type() \
-            else Variable(torch.LongTensor(time_slice))
+        time_slice = torch.cuda.LongTensor(time_slice) if 'cuda' in mini_batch.data.type() \
+            else torch.LongTensor(time_slice)
         reversed_sequence = torch.index_select(mini_batch[b, :, :], 0, time_slice)
         reversed_mini_batch[b, 0:T, :] = reversed_sequence
     return reversed_mini_batch
@@ -119,10 +118,10 @@ def get_mini_batch(mini_batch_indices, sequences, seq_lengths, cuda=False):
     # get mask for mini-batch
     mini_batch_mask = get_mini_batch_mask(mini_batch, sorted_seq_lengths)
 
-    # wrap in PyTorch Variables
-    mini_batch = Variable(torch.Tensor(mini_batch))
-    mini_batch_reversed = Variable(torch.Tensor(mini_batch_reversed))
-    mini_batch_mask = Variable(torch.Tensor(mini_batch_mask))
+    # wrap in PyTorch Tensors
+    mini_batch = torch.tensor(mini_batch)
+    mini_batch_reversed = torch.tensor(mini_batch_reversed)
+    mini_batch_mask = torch.tensor(mini_batch_mask)
 
     # cuda() here because need to cuda() before packing
     if cuda:

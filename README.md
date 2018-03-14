@@ -59,18 +59,22 @@ pip install pyro-ppl[extras]  # for running examples/tutorials
 
 For recent features you can install Pyro from source.
 
-First install a recent PyTorch, currently PyTorch commit `8327982`.
 ```sh
-git clone git@github.com:pytorch/pytorch
+git clone --recursive https://github.com/pytorch/pytorch
 cd pytorch
-git checkout [commit hash above]
+git checkout e40425f  # <---- a well-tested commit
 ```
 Then build PyTorch following instructions in the PyTorch
 [README](https://github.com/pytorch/pytorch/blob/master/README.md).
+Depending on your system, this may be as simple as
+```sh
+pip install ninja
+python setup.py install
+```
 
 Finally install Pyro
 ```sh
-git clone git@github.com:uber/pyro.git
+git clone https://github.com/uber/pyro
 cd pyro
 pip install .
 ```
