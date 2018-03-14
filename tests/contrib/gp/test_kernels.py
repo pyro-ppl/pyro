@@ -116,7 +116,7 @@ def test_active_dims_disjoint_ok():
     Sum(k1, k2)
 
 
-def test_deriving():
+def test_transforming():
     k = TEST_CASES[6][0]
 
     def vscaling_fn(x):
