@@ -5,3 +5,5 @@ from . import kernels
 from . import likelihoods
 from . import models
 from .util import Parameterized
+
+# flake8: noqa
