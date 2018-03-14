@@ -4,7 +4,6 @@ import argparse
 
 import numpy as np
 import torch
-from torch.autograd import Variable
 
 import pyro
 from pyro.distributions import Uniform, Normal
@@ -32,14 +31,14 @@ time_measurement_sigma = 0.02  # observation noise in seconds (known quantity)
 # in steps of size dt, and optionally includes measurement noise
 
 def simulate(mu, length=2.0, phi=np.pi / 6.0, dt=0.005, noise_sigma=None):
-    T = Variable(torch.zeros(1))
-    velocity = Variable(torch.zeros(1))
-    displacement = Variable(torch.zeros(1))
-    acceleration = Variable(torch.Tensor([little_g * np.sin(phi)])) - \
-        Variable(torch.Tensor([little_g * np.cos(phi)])) * mu
+    T = torch.zeros(1)
+    velocity = torch.zeros(1)
+    displacement = torch.zeros(1)
+    acceleration = torch.tensor([little_g * np.sin(phi)]) - \
+        torch.tensor([little_g * np.cos(phi)]) * mu
 
     if acceleration.item() <= 0.0:             # the box doesn't slide if the friction is too large
-        return Variable(torch.Tensor([1.0e5]))  # return a very large time instead of infinity
+        return torch.tensor([1.0e5])  # return a very large time instead of infinity
 
     while displacement.item() < length:  # otherwise slide to the end of the inclined plane
         displacement += velocity * dt
@@ -49,7 +48,7 @@ def simulate(mu, length=2.0, phi=np.pi / 6.0, dt=0.005, noise_sigma=None):
     if noise_sigma is None:
         return T
     else:
-        return T + Variable(noise_sigma * torch.randn(1))
+        return T + noise_sigma * torch.randn(1)
 
 
 # analytic formula that the simulator above is computing via
@@ -65,19 +64,19 @@ def analytic_T(mu, length=2.0, phi=np.pi / 6.0):
 print("generating simulated data using the true coefficient of friction %.3f" % mu0)
 N_obs = 20
 torch.manual_seed(2)
-observed_data = torch.cat([simulate(Variable(torch.Tensor([mu0])), noise_sigma=time_measurement_sigma)
+observed_data = torch.cat([simulate(torch.tensor([mu0]), noise_sigma=time_measurement_sigma)
                            for _ in range(N_obs)])
 observed_mean = np.mean([T.item() for T in observed_data])
 
 
 # define model with uniform prior on mu and gaussian noise on the descent time
 def model(observed_data):
-    mu_prior = Uniform(Variable(torch.zeros(1)), Variable(torch.ones(1)))
+    mu_prior = Uniform(torch.zeros(1), torch.ones(1))
     mu = pyro.sample("mu", mu_prior)
 
     def observe_T(T_obs, obs_name):
         T_simulated = simulate(mu)
-        T_obs_dist = Normal(T_simulated, Variable(torch.Tensor([time_measurement_sigma])))
+        T_obs_dist = Normal(T_simulated, torch.tensor([time_measurement_sigma]))
         pyro.observe(obs_name, T_obs_dist, T_obs)
 
     for i, T_obs in enumerate(observed_data):
