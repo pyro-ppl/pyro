@@ -4,7 +4,6 @@ import logging
 import math
 
 import torch
-from torch.autograd import Variable
 
 from pyro.infer import TracePosterior
 
@@ -47,5 +46,5 @@ class MCMC(TracePosterior):
                 if t == self.warmup_steps:
                     self.kernel.end_warmup()
                 continue
-            yield (trace, Variable(torch.Tensor([1.0])))
+            yield (trace, torch.tensor([1.0]))
         self.kernel.cleanup()

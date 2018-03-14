@@ -5,7 +5,6 @@ import gc
 import networkx as nx
 import pytest
 import torch
-from torch.autograd import Variable
 
 import pyro
 import pyro.distributions as dist
@@ -24,11 +23,11 @@ def count_objects_of_type(type_):
 
 def test_trace():
     n = 11
-    data = Variable(torch.zeros(n))
+    data = torch.zeros(n)
 
     def model(data):
-        loc = pyro.param('loc', Variable(torch.zeros(n), requires_grad=True))
-        scale = pyro.param('log_scale', Variable(torch.zeros(n), requires_grad=True)).exp()
+        loc = pyro.param('loc', torch.zeros(n, requires_grad=True))
+        scale = pyro.param('log_scale', torch.zeros(n, requires_grad=True)).exp()
         pyro.sample('obs', dist.Normal(loc, scale).reshape(extra_event_dims=1), obs=data)
 
     counts = []
@@ -88,11 +87,11 @@ def test_copy():
 
 def test_trace_copy():
     n = 11
-    data = Variable(torch.zeros(n))
+    data = torch.zeros(n)
 
     def model(data):
-        loc = pyro.param('loc', Variable(torch.zeros(n), requires_grad=True))
-        scale = pyro.param('log_scale', Variable(torch.zeros(n), requires_grad=True)).exp()
+        loc = pyro.param('loc', torch.zeros(n, requires_grad=True))
+        scale = pyro.param('log_scale', torch.zeros(n, requires_grad=True)).exp()
         pyro.sample('obs', dist.Normal(loc, scale).reshape(extra_event_dims=1), obs=data)
 
     counts = []
@@ -113,11 +112,11 @@ def trace_replay(model, guide, *args):
 
 def test_trace_replay():
     n = 11
-    data = Variable(torch.zeros(n))
+    data = torch.zeros(n)
 
     def model(data):
-        loc = pyro.param('loc', Variable(torch.zeros(n), requires_grad=True))
-        scale = pyro.param('log_scale', Variable(torch.zeros(n), requires_grad=True)).exp()
+        loc = pyro.param('loc', torch.zeros(n, requires_grad=True))
+        scale = pyro.param('log_scale', torch.zeros(n, requires_grad=True)).exp()
         pyro.sample('obs', dist.Normal(loc, scale).reshape(extra_event_dims=1), obs=data)
 
     def guide(data):
@@ -136,11 +135,11 @@ def test_trace_replay():
 
 def test_svi():
     n = 11
-    data = Variable(torch.zeros(n))
+    data = torch.zeros(n)
 
     def model(data):
-        loc = pyro.param('loc', Variable(torch.zeros(n), requires_grad=True))
-        scale = pyro.param('log_scale', Variable(torch.zeros(n), requires_grad=True)).exp()
+        loc = pyro.param('loc', torch.zeros(n, requires_grad=True))
+        scale = pyro.param('log_scale', torch.zeros(n, requires_grad=True)).exp()
         pyro.sample('obs', dist.Normal(loc, scale).reshape(extra_event_dims=1), obs=data)
 
     def guide(data):

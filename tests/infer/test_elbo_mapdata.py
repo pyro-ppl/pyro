@@ -4,7 +4,6 @@ import logging
 
 import pytest
 import torch
-from torch.autograd import Variable
 
 import pyro
 import pyro.distributions as dist
@@ -21,15 +20,15 @@ logger = logging.getLogger(__name__)
 @pytest.mark.parametrize("map_type", ["iarange", "irange", "range"])
 def test_elbo_mapdata(batch_size, map_type):
     # normal-normal: known covariance
-    lam0 = Variable(torch.Tensor([0.1, 0.1]))   # precision of prior
-    mu0 = Variable(torch.Tensor([0.0, 0.5]))   # prior mean
+    lam0 = torch.tensor([0.1, 0.1])   # precision of prior
+    mu0 = torch.tensor([0.0, 0.5])   # prior mean
     # known precision of observation noise
-    lam = Variable(torch.Tensor([6.0, 4.0]))
+    lam = torch.tensor([6.0, 4.0])
     data = []
-    sum_data = Variable(torch.zeros(2))
+    sum_data = torch.zeros(2)
 
     def add_data_point(x, y):
-        data.append(Variable(torch.Tensor([x, y])))
+        data.append(torch.tensor([x, y]))
         sum_data.data.add_(data[-1].data)
 
     add_data_point(0.1, 0.21)
@@ -42,7 +41,7 @@ def test_elbo_mapdata(batch_size, map_type):
     add_data_point(-0.04, 0.17)
 
     data = torch.stack(data)
-    n_data = Variable(torch.Tensor([len(data)]))
+    n_data = torch.tensor([len(data)])
     analytic_lam_n = lam0 + n_data.expand_as(lam) * lam
     analytic_log_sig_n = -0.5 * torch.log(analytic_lam_n)
     analytic_mu_n = sum_data * (lam / analytic_lam_n) +\
@@ -72,11 +71,10 @@ def test_elbo_mapdata(batch_size, map_type):
         return mu_latent
 
     def guide():
-        mu_q = pyro.param("mu_q", Variable(analytic_mu_n.data + torch.Tensor([-0.18, 0.23]),
-                                           requires_grad=True))
-        log_sig_q = pyro.param("log_sig_q", Variable(
-            analytic_log_sig_n.data - torch.Tensor([-0.18, 0.23]),
-            requires_grad=True))
+        mu_q = pyro.param("mu_q", torch.tensor(
+            analytic_mu_n.data + torch.tensor([-0.18, 0.23]), requires_grad=True))
+        log_sig_q = pyro.param("log_sig_q", torch.tensor(
+            analytic_log_sig_n.data - torch.tensor([-0.18, 0.23]), requires_grad=True))
         sig_q = torch.exp(log_sig_q)
         pyro.sample("mu_latent", dist.Normal(mu_q, sig_q).reshape(extra_event_dims=1))
         if map_type == "irange" or map_type is None:

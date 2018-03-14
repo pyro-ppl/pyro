@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import torch
-from torch.autograd import Variable
 from torch.distributions import constraints
 from torch.nn import Parameter
 
@@ -29,8 +28,8 @@ class SparseGPRegression(Model):
     [2] `Variational learning of inducing variables in sparse Gaussian processes`,
     Michalis Titsias
 
-    :param torch.autograd.Variable X: A 1D or 2D tensor of inputs.
-    :param torch.autograd.Variable y: A 1D tensor of outputs for training.
+    :param torch.Tensor X: A 1D or 2D tensor of inputs.
+    :param torch.Tensor y: A 1D tensor of outputs for training.
     :param pyro.contrib.gp.kernels.Kernel kernel: A Pyro kernel object.
     :param torch.Tensor Xu: Initial values for inducing points, which are parameters
         of our model.
@@ -61,7 +60,7 @@ class SparseGPRegression(Model):
             raise ValueError("The sparse approximation method should be one of 'DTC', "
                              "'FITC', 'VFE'.")
 
-        self.jitter = Variable(self.X.data.new([jitter]))
+        self.jitter = self.X.data.new([jitter])
 
     def model(self):
         self.set_mode("model")
@@ -88,7 +87,7 @@ class SparseGPRegression(Model):
             else:  # approx = "VFE"
                 trace_term += (Kffdiag - Qffdiag).sum() / noise
 
-        zero_loc = Variable(D.data.new([0])).expand(self.num_data)
+        zero_loc = D.data.new([0]).expand(self.num_data)
         # DTC: cov = Qff + noise, trace_term = 0
         # FITC: cov = Qff + diag(Kff - Qff) + noise, trace_term = 0
         # VFE: cov = Qff + noise, trace_term = tr(Kff - Qff) / noise
@@ -108,11 +107,11 @@ class SparseGPRegression(Model):
         Computes the parameters of :math:`p(y^*|Xnew) \sim N(\\text{loc}, \\text{cov})`
         w.r.t. the new input :math:`Xnew`.
 
-        :param torch.autograd.Variable Xnew: A 1D or 2D tensor.
+        :param torch.Tensor Xnew: A 1D or 2D tensor.
         :param bool full_cov: Predicts full covariance matrix or just its diagonal.
         :param bool noiseless: Includes noise in the prediction or not.
         :return: loc and covariance matrix of :math:`p(y^*|Xnew)`.
-        :rtype: torch.autograd.Variable and torch.autograd.Variable
+        :rtype: torch.Tensor and torch.Tensor
         """
         self._check_Xnew_shape(Xnew, self.X)
 
@@ -139,7 +138,7 @@ class SparseGPRegression(Model):
 
         W_Dinv = W / D
         M = W.size(0)
-        Id = torch.eye(M, M, out=Variable(W.data.new(M, M)))
+        Id = torch.eye(M, M, out=W.data.new(M, M))
         K = Id + W_Dinv.matmul(W.t())
         L = K.potrf(upper=False)
 
