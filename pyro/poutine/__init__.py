@@ -15,7 +15,7 @@ from .infer_config_poutine import InferConfigPoutine
 from .lift_poutine import LiftPoutine
 from .poutine import _PYRO_STACK, Poutine  # noqa: F401
 from .replay_poutine import ReplayPoutine
-from .scope_poutine import ScopePoutine
+from .scope_poutine import ScopeMessenger, ScopePoutine  # noqa: F401
 from .scale_poutine import ScaleMessenger
 from .trace import Trace  # noqa: F401
 from .trace_poutine import TracePoutine
