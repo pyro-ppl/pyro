@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 from collections import OrderedDict
 import numbers
 
-from pyro.contrib.gp import Parameterized
+from pyro.contrib.gp.util import Parameterized
 
 
 class Kernel(Parameterized):
