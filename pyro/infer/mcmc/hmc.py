@@ -12,7 +12,7 @@ import pyro.poutine as poutine
 from pyro.infer.mcmc.trace_kernel import TraceKernel
 from pyro.ops.dual_averaging import DualAveraging
 from pyro.ops.integrator import velocity_verlet, single_step_velocity_verlet
-from pyro.util import ng_ones, ng_zeros, is_nan, is_inf
+from pyro.util import is_nan, is_inf
 
 
 class HMC(TraceKernel):
@@ -189,7 +189,7 @@ class HMC(TraceKernel):
         self._reset()
 
     def sample(self, trace):
-        z = {name: node["value"] for name, node in trace.iter_stochastic_nodes()}
+        z = {name: node["value"].detach() for name, node in trace.iter_stochastic_nodes()}
         # automatically transform `z` to unconstrained space, if needed.
         for name, transform in self.transforms.items():
             z[name] = transform(z[name])
@@ -204,7 +204,7 @@ class HMC(TraceKernel):
         energy_proposal = self._energy(z_new, r_new)
         energy_current = self._energy(z, r)
         delta_energy = energy_proposal - energy_current
-        rand = pyro.sample("rand_t={}".format(self._t), dist.Uniform(ng_zeros(1), ng_ones(1)))
+        rand = pyro.sample("rand_t={}".format(self._t), dist.Uniform(torch.zeros(1), torch.ones(1)))
         if rand < (-delta_energy).exp():
             self._accept_cnt += 1
             z = z_new

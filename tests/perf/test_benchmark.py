@@ -91,8 +91,8 @@ def poisson_gamma_model(reparameterized, trace_graph):
 @register_model(kernel=HMC, step_size=0.02, num_steps=3, num_samples=1000, id='BernoulliBeta::HMC')
 def bernoulli_beta_hmc(**kwargs):
     def model(data):
-        alpha = pyro.param('alpha', torch.tensor([1.1, 1.1], requires_grad=True))
-        beta = pyro.param('beta', torch.tensor([1.1, 1.1], requires_grad=True))
+        alpha = pyro.param('alpha', torch.tensor([1.1, 1.1]))
+        beta = pyro.param('beta', torch.tensor([1.1, 1.1]))
         p_latent = pyro.sample("p_latent", dist.Beta(alpha, beta))
         pyro.observe("obs", dist.Bernoulli(p_latent), data)
         return p_latent

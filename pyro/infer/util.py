@@ -33,7 +33,7 @@ def torch_backward(x):
     Like ``x.backward()`` for a :class:`~torch.Tensor`, but also accepts
     numbers (a no-op if given a number).
     """
-    if isinstance(x, torch.autograd.Variable):
+    if torch.is_tensor(x):
         x.backward()
 
 

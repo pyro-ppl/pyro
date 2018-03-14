@@ -5,7 +5,6 @@ from operator import itemgetter
 
 import networkx
 import torch
-from torch.autograd import variable
 
 import pyro
 import pyro.poutine as poutine
@@ -136,7 +135,7 @@ def _compute_elbo_non_reparam(guide_trace, non_reparam_nodes, downstream_costs):
         if use_decaying_avg_baseline:
             dc_shape = downstream_cost.shape
             avg_downstream_cost_old = pyro.param("__baseline_avg_downstream_cost_" + node,
-                                                 variable(0.0).expand(dc_shape).clone(),
+                                                 torch.tensor(0.0).expand(dc_shape).clone(),
                                                  tags="__tracegraph_elbo_internal_tag")
             avg_downstream_cost_new = (1 - baseline_beta) * downstream_cost.detach() + \
                 baseline_beta * avg_downstream_cost_old

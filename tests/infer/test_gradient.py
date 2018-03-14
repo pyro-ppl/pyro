@@ -6,7 +6,6 @@ import numpy as np
 import pytest
 import torch
 import torch.optim
-from torch.autograd import variable
 
 import pyro
 import pyro.distributions as dist
@@ -25,7 +24,7 @@ logger = logging.getLogger(__name__)
                          ids=["Trace", "TraceGraph", "TraceEnum"])
 def test_subsample_gradient(trace_graph, enum_discrete, reparameterized, subsample):
     pyro.clear_param_store()
-    data = variable([-0.5, 2.0])
+    data = torch.tensor([-0.5, 2.0])
     subsample_size = 1 if subsample else len(data)
     num_particles = 20000
     precision = 0.05
@@ -39,8 +38,8 @@ def test_subsample_gradient(trace_graph, enum_discrete, reparameterized, subsamp
                 pyro.sample("x", Normal(z, 1), obs=x)
 
     def guide(subsample):
-        mu = pyro.param("mu", lambda: variable(torch.zeros(len(data)), requires_grad=True))
-        sigma = pyro.param("sigma", lambda: variable([1.0], requires_grad=True))
+        mu = pyro.param("mu", lambda: torch.zeros(len(data), requires_grad=True))
+        sigma = pyro.param("sigma", lambda: torch.tensor([1.0], requires_grad=True))
         with pyro.iarange("particles", num_particles):
             with pyro.iarange("data", len(data), subsample_size, subsample) as ind:
                 mu_ind = mu[ind].unsqueeze(-1).expand(-1, num_particles)
@@ -74,7 +73,7 @@ def test_subsample_gradient(trace_graph, enum_discrete, reparameterized, subsamp
 ], ids=["Trace", "TraceGraph", "TraceEnum"])
 def test_iarange(trace_graph, enum_discrete, reparameterized):
     pyro.clear_param_store()
-    data = variable([-0.5, 2.0])
+    data = torch.tensor([-0.5, 2.0])
     num_particles = 20000
     precision = 0.05
     Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
@@ -93,8 +92,8 @@ def test_iarange(trace_graph, enum_discrete, reparameterized):
         pyro.sample("nuisance_c", Normal(4, 5))
 
     def guide():
-        mu = pyro.param("mu", lambda: variable(torch.zeros(len(data)), requires_grad=True))
-        sigma = pyro.param("sigma", lambda: variable([1.0], requires_grad=True))
+        mu = pyro.param("mu", lambda: torch.zeros(len(data), requires_grad=True))
+        sigma = pyro.param("sigma", lambda: torch.tensor([1.0], requires_grad=True))
         mus = mu.unsqueeze(-1).expand(-1, num_particles)
 
         pyro.sample("nuisance_c", Normal(4, 5))
@@ -126,7 +125,7 @@ def test_iarange(trace_graph, enum_discrete, reparameterized):
                          ids=["Trace", "TraceGraph", "TraceEnum"])
 def test_subsample_gradient_sequential(trace_graph, enum_discrete, reparameterized, subsample):
     pyro.clear_param_store()
-    data = variable([-0.5, 2.0])
+    data = torch.tensor([-0.5, 2.0])
     subsample_size = 1 if subsample else len(data)
     num_particles = 5000
     precision = 0.333
@@ -139,8 +138,8 @@ def test_subsample_gradient_sequential(trace_graph, enum_discrete, reparameteriz
             pyro.sample("x", Normal(z, 1), obs=x)
 
     def guide():
-        mu = pyro.param("mu", lambda: variable(torch.zeros(len(data)), requires_grad=True))
-        sigma = pyro.param("sigma", lambda: variable([1.0], requires_grad=True))
+        mu = pyro.param("mu", lambda: torch.zeros(len(data), requires_grad=True))
+        sigma = pyro.param("sigma", lambda: torch.tensor([1.0], requires_grad=True))
         with pyro.iarange("data", len(data), subsample_size) as ind:
             pyro.sample("z", Normal(mu[ind], sigma))
 

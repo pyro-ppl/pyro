@@ -4,7 +4,6 @@ from unittest import TestCase
 
 import pytest
 import torch
-from torch.autograd import Variable
 
 import pyro
 import pyro.infer
@@ -18,10 +17,10 @@ class HMMSamplingTestCase(TestCase):
 
         # simple Gaussian-emission HMM
         def model():
-            p_latent = pyro.param("p1", Variable(torch.Tensor([[0.7], [0.3]])))
-            p_obs = pyro.param("p2", Variable(torch.Tensor([[0.9], [0.1]])))
+            p_latent = pyro.param("p1", torch.tensor([[0.7], [0.3]]))
+            p_obs = pyro.param("p2", torch.tensor([[0.9], [0.1]]))
 
-            latents = [Variable(torch.ones(1, 1))]
+            latents = [torch.ones(1, 1)]
             observes = []
             for t in range(self.model_steps):
 
@@ -47,20 +46,20 @@ class NormalNormalSamplingTestCase(TestCase):
         pyro.clear_param_store()
 
         def model():
-            mu = pyro.sample("mu", Normal(Variable(torch.zeros(1)),
-                                          Variable(torch.ones(1))))
-            xd = Normal(mu, Variable(torch.ones(1)))
+            mu = pyro.sample("mu", Normal(torch.zeros(1),
+                                          torch.ones(1)))
+            xd = Normal(mu, torch.ones(1))
             pyro.observe("xs", xd, self.data)
             return mu
 
         def guide():
-            return pyro.sample("mu", Normal(Variable(torch.zeros(1)),
-                                            Variable(torch.ones(1))))
+            return pyro.sample("mu", Normal(torch.zeros(1),
+                                            torch.ones(1)))
 
         # data
-        self.data = Variable(torch.zeros(50, 1))
-        self.mu_mean = Variable(torch.zeros(1))
-        self.mu_stddev = torch.sqrt(Variable(torch.ones(1)) / 51.0)
+        self.data = torch.zeros(50, 1)
+        self.mu_mean = torch.zeros(1)
+        self.mu_stddev = torch.sqrt(torch.ones(1) / 51.0)
 
         # model and guide
         self.model = model
@@ -105,7 +104,7 @@ class ImportanceTest(NormalNormalSamplingTestCase):
 
     @pytest.mark.init(rng_seed=0)
     def test_importance_guide(self):
-        posterior = pyro.infer.Importance(self.model, guide=self.guide, num_samples=10000)
+        posterior = pyro.infer.Importance(self.model, guide=self.guide, num_samples=5000)
         marginal = pyro.infer.Marginal(posterior)
         posterior_samples = [marginal() for i in range(1000)]
         posterior_mean = torch.mean(torch.cat(posterior_samples))

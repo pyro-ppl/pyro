@@ -8,14 +8,13 @@ from collections import OrderedDict
 from inspect import isclass
 
 import torch
-from torch.autograd import Variable
 
 import pyro.poutine as poutine
 from pyro.distributions.distribution import Distribution
 from pyro.params import _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, param_with_module_name
 from pyro.poutine import _PYRO_STACK, condition, do  # noqa: F401
 from pyro.poutine.indep_poutine import _DIM_ALLOCATOR
-from pyro.util import am_i_wrapped, apply_stack, deep_getattr, get_tensor_data, ones, set_rng_seed, zeros  # noqa: F401
+from pyro.util import am_i_wrapped, apply_stack, deep_getattr, ones, set_rng_seed, zeros  # noqa: F401
 
 __version__ = '0.1.2'
 
@@ -122,7 +121,7 @@ class _Subsample(Distribution):
     def sample(self, sample_shape=torch.Size()):
         """
         :returns: a random subsample of `range(size)`
-        :rtype: torch.autograd.Variable of torch.LongTensor
+        :rtype: torch.LongTensor
         """
         if sample_shape:
             raise NotImplementedError
@@ -130,15 +129,15 @@ class _Subsample(Distribution):
         if subsample_size is None or subsample_size > self.size:
             subsample_size = self.size
         if subsample_size == self.size:
-            result = Variable(torch.LongTensor(list(range(self.size))))
+            result = torch.LongTensor(list(range(self.size)))
         else:
-            result = Variable(torch.randperm(self.size)[:self.subsample_size])
+            result = torch.randperm(self.size)[:self.subsample_size]
         return result.cuda() if self.use_cuda else result
 
     def log_prob(self, x):
         # This is zero so that iarange can provide an unbiased estimate of
         # the non-subsampled log_prob.
-        result = Variable(torch.zeros(1))
+        result = torch.zeros(1)
         return result.cuda() if self.use_cuda else result
 
 
@@ -375,7 +374,7 @@ def module(name, nn_module, tags="default", update_module_params=False):
         full_param_name = param_with_module_name(name, param_name)
         returned_param = param(full_param_name, param_value, tags=tags)
 
-        if get_tensor_data(param_value)._cdata != get_tensor_data(returned_param)._cdata:
+        if param_value._cdata != returned_param._cdata:
             target_state_dict[param_name] = returned_param
 
     if target_state_dict and update_module_params:
