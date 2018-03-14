@@ -10,7 +10,7 @@ from pyro.contrib.gp.kernels import (Bias, Brownian, Cosine, Exponent, Linear, M
                                      SquaredExponential, Sum, VerticalScaling, Warping, WhiteNoise)
 from tests.common import assert_equal
 
-T = namedtuple("TestKernelForward", ["kernel", "X", "Z", "K_sum"])
+T = namedtuple("TestGPKernel", ["kernel", "X", "Z", "K_sum"])
 
 variance = torch.Tensor([3])
 lengthscale = torch.Tensor([2, 1, 2])
@@ -102,15 +102,18 @@ def test_combination():
     # test get_subkernel
     assert k.get_subkernel(k5.name) is k5
 
-    # test if error is catched if active_dims are not separated
-    k6 = Matern12(2, variance, lengthscale[0], active_dims=[0, 1])
-    k7 = Matern32(2, variance, lengthscale[0], active_dims=[1, 2])
-    try:
-        Sum(k6, k7)
-    except ValueError:
-        pass
-    else:
-        raise ValueError("Cannot catch ValueError for kernel combination.")
+
+def test_active_dims_overlap_error():
+    k1 = Matern12(2, variance, lengthscale[0], active_dims=[0, 1])
+    k2 = Matern32(2, variance, lengthscale[0], active_dims=[1, 2])
+    with pytest.raises(ValueError):
+        Sum(k1, k2)
+
+
+def test_active_dims_disjoint_ok():
+    k1 = Matern12(2, variance, lengthscale[0], active_dims=[0, 1])
+    k2 = Matern32(1, variance, lengthscale[0], active_dims=[2])
+    Sum(k1, k2)
 
 
 def test_deriving():

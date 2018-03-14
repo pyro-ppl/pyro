@@ -18,9 +18,9 @@ class Likelihood(Parameterized):
         """
         Samples :math:`y` (``obs``) given :math:`f`.
 
-        :param torch.autograd.Variable f: A 1D tensor of size :math:`N`.
-        :param torch.autograd.Variable obs: A 1D tensor of size :math:`N`.
+        :param torch.Tensor f: A 1D tensor of size :math:`N`.
+        :param torch.Tensor obs: A 1D tensor of size :math:`N`.
         :return: A 1D tensor of size :math:`N`.
-        :rtype: torch.autograd.Variable
+        :rtype: torch.Tensor
         """
         raise NotImplementedError
