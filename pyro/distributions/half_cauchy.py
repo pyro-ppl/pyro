@@ -24,7 +24,7 @@ class HalfCauchy(TransformedDistribution):
     def __init__(self, loc, scale):
         loc, scale = broadcast_all(loc, scale)
         base_dist = Cauchy(0, scale)
-        transforms = [AbsTransform(), AffineTransform(loc, 0)]
+        transforms = [AbsTransform(), AffineTransform(loc, 1)]
         super(HalfCauchy, self).__init__(base_dist, transforms)
 
     @property
