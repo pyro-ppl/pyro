@@ -10,7 +10,7 @@ from pyro.contrib.gp.kernels import (Bias, Brownian, Cosine, Exponent, Linear, M
                                      SquaredExponential, Sum, VerticalScaling, Warping, WhiteNoise)
 from tests.common import assert_equal
 
-T = namedtuple("TestKernelForward", ["kernel", "X", "Z", "K_sum"])
+T = namedtuple("TestGPKernel", ["kernel", "X", "Z", "K_sum"])
 
 variance = torch.Tensor([3])
 lengthscale = torch.Tensor([2, 1, 2])
