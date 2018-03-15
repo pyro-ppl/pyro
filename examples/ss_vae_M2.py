@@ -1,7 +1,6 @@
 
 import torch
 import pyro
-from torch.autograd import Variable
 import pyro.distributions as dist
 from utils.mnist_cached import MNISTCached, setup_data_loaders
 from pyro.infer import SVI, config_enumerate
@@ -107,13 +106,13 @@ class SSVAE(nn.Module):
         with pyro.iarange("independent"):
 
             # sample the handwriting style from the constant prior distribution
-            prior_mu = Variable(torch.zeros([batch_size, self.z_dim]))
-            prior_sigma = Variable(torch.ones([batch_size, self.z_dim]))
+            prior_mu = torch.zeros([batch_size, self.z_dim])
+            prior_sigma = torch.ones([batch_size, self.z_dim])
             zs = pyro.sample("z", dist.Normal(prior_mu, prior_sigma).reshape(extra_event_dims=1))
 
             # if the label y (which digit to write) is supervised, sample from the
             # constant prior, otherwise, observe the value (i.e. score it against the constant prior)
-            alpha_prior = Variable(torch.ones([batch_size, self.output_size]) / (1.0 * self.output_size))
+            alpha_prior = torch.ones([batch_size, self.output_size]) / (1.0 * self.output_size)
             if ys is None:
                 ys = pyro.sample("y", dist.OneHotCategorical(alpha_prior))
             else:
@@ -169,7 +168,7 @@ class SSVAE(nn.Module):
         res, ind = torch.topk(alpha, 1)
 
         # convert the digit(s) to one-hot tensor(s)
-        ys = Variable(torch.zeros(alpha.size()))
+        ys = torch.zeros(alpha.size())
         ys = ys.scatter_(1, ind, 1.0)
         return ys
 
@@ -199,8 +198,8 @@ class SSVAE(nn.Module):
 
     def model_sample(self, ys, batch_size=1):
         # sample the handwriting style from the constant prior distribution
-        prior_mu = Variable(torch.zeros([batch_size, self.z_dim]))
-        prior_sigma = Variable(torch.ones([batch_size, self.z_dim]))
+        prior_mu = torch.zeros([batch_size, self.z_dim])
+        prior_sigma = torch.ones([batch_size, self.z_dim])
         zs = pyro.sample("z", dist.Normal(prior_mu, prior_sigma).reshape(extra_event_dims=1))
 
         # sample an image using the decoder
@@ -242,7 +241,6 @@ def run_inference_for_epoch(data_loaders, losses, periodic_interval_batches):
             ctr_sup += 1
         else:
             (xs, ys) = next(unsup_iter)
-        xs, ys = Variable(xs), Variable(ys)
 
         # run the inference for each loss with supervised or un-supervised
         # data as arguments
@@ -267,7 +265,6 @@ def get_accuracy(data_loader, classifier_fn, batch_size):
     # use the appropriate data loader
     for (xs, ys) in data_loader:
         # use classification function to compute all predictions for each batch
-        xs, ys = Variable(xs), Variable(ys)
         predictions.append(classifier_fn(xs))
         actuals.append(ys)
 

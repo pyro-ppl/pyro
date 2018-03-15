@@ -11,7 +11,6 @@ from collections import namedtuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.autograd import Variable
 
 import pyro
 import pyro.distributions as dist
@@ -308,7 +307,7 @@ def expand_z_where(z_where):
     #             [0,s,y]]
     n = z_where.size(0)
     out = torch.cat((ng_zeros([1, 1]).type_as(z_where).expand(n, 1), z_where), 1)
-    ix = Variable(expansion_indices)
+    ix = expansion_indices
     if z_where.is_cuda:
         ix = ix.cuda()
     out = torch.index_select(out, 1, ix)

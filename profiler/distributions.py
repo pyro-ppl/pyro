@@ -11,7 +11,7 @@ from pyro.distributions import (Bernoulli, Beta, Categorical, Cauchy, Dirichlet,
 
 
 def T(arr):
-    return Variable(torch.Tensor(arr))
+    return Variable(torch.DoubleTensor(arr))
 
 
 TOOL = 'timeit'
