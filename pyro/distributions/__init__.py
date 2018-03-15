@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from pyro.distributions.delta import Delta
 from pyro.distributions.distribution import Distribution
+from pyro.distributions.half_cauchy import HalfCauchy
 from pyro.distributions.iaf import InverseAutoregressiveFlow
 from pyro.distributions.multivariate_normal import MultivariateNormal
 from pyro.distributions.omt_mvn import OMTMultivariateNormal
