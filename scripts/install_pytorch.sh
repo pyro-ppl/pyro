@@ -30,17 +30,17 @@ PYTORCH_LINUX_PY_35_WHL="torch-{WHL_VERSION}-cp35-cp36m-linux_x86_64"
 PYTORCH_LINUX_PY_36_WHL="torch-{WHL_VERSION}-cp36-cp36m-linux_x86_64"
 
 # Cloudfront path for the builds
-PYTORCH_OSX_PREFIX="https://d2fefpcigoriu7.cloudfront.net/pytorch-build/linux-cpu/"
-PYTORCH_LINUX_PREFIX="https://d2fefpcigoriu7.cloudfront.net/pytorch-build/mac-cpu/"
+PYTORCH_LINUX_PREFIX="https://d2fefpcigoriu7.cloudfront.net/pytorch-build/linux-cpu"
+PYTORCH_OSX_PREFIX="https://d2fefpcigoriu7.cloudfront.net/pytorch-build/mac-cpu"
 
 
 mkdir -p ${TMP_DIR}
 
 if [[ ${OS} == Darwin* ]]; then
-    WHL_PREFIX=PYTORCH_OSX_PREFIX
+    WHL_PREFIX=${PYTORCH_OSX_PREFIX}
     WHL_LOOKUP=PYTORCH_MAC_PY_${PYTHON_VERSION}_WHL
 elif [[ ${OS} == Linux* ]]; then
-    WHL_PREFIX=PYTORCH_LINUX_PREFIX
+    WHL_PREFIX=${PYTORCH_LINUX_PREFIX}
     WHL_LOOKUP=PYTORCH_LINUX_${PYTHON_VERSION}_WHL
 else
     echo "OS - ${OS} is not supported by the install script."
@@ -48,5 +48,5 @@ else
 fi
 
 # Download wheel and install
-wget -P tmp/ "${WHL_PREFIX}/{!WHL_LOOKUP}.whl"
+wget -P tmp/ "${WHL_PREFIX}/${!WHL_LOOKUP}.whl"
 pip install tmp/*
