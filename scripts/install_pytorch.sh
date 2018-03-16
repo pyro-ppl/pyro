@@ -17,7 +17,7 @@ PYTORCH_BUILD_COMMIT=e40425f
 
 
 # Detect OS and Python version numbers.
-OS=$(uname -s | cut -d " " -f1)
+OS=$(uname -s)
 PYTHON_VERSION=$(python -c 'import sys; version=sys.version_info[:3]; print("{0}{1}".format(*version))')
 
 # Lookup wheel names to download
@@ -36,14 +36,14 @@ PYTORCH_LINUX_PREFIX="https://d2fefpcigoriu7.cloudfront.net/pytorch-build/mac-cp
 
 mkdir -p ${TMP_DIR}
 
-if [[ ${OSTYPE} == Darwin* ]]; then
+if [[ ${OS} == Darwin* ]]; then
     WHL_PREFIX=PYTORCH_OSX_PREFIX
     WHL_LOOKUP=PYTORCH_MAC_PY_${PYTHON_VERSION}_WHL
-elif [[ ${OSTYPE} == Linux* ]]; then
+elif [[ ${OS} == Linux* ]]; then
     WHL_PREFIX=PYTORCH_LINUX_PREFIX
     WHL_LOOKUP=PYTORCH_LINUX_${PYTHON_VERSION}_WHL
 else
-    echo "OS - ${OS} current not supported."
+    echo "OS - ${OS} is not supported by the install script."
     exit 1
 fi
 
