@@ -172,9 +172,16 @@ class MultiFrameDice(object):
 
         self.log_denom = log_denom
         self.log_probs = log_probs
+        self.cache = {}
 
     def in_context(self, cond_indep_stack):
+        """
+        Returns a vectorized DiCE factor in a given :class:`~pyro.iarange` context.
+        """
         target_context = frozenset(f for f in cond_indep_stack if f.vectorized)
+        if target_context in self.cache:
+            return self.cache[target_context]
+
         log_prob = 0
         for context, term in self.log_denom.items():
             if not context <= target_context:
@@ -182,4 +189,7 @@ class MultiFrameDice(object):
         for context, term in self.log_probs.items():
             if context <= target_context:
                 log_prob = log_prob + term
-        return 1 if is_identically_zero(log_prob) else log_prob.exp()
+        result = 1 if is_identically_zero(log_prob) else log_prob.exp()
+
+        self.cache[target_context] = result
+        return result
