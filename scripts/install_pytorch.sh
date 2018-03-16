@@ -41,7 +41,7 @@ if [[ ${OS} == Darwin* ]]; then
     WHL_LOOKUP=PYTORCH_MAC_PY_${PYTHON_VERSION}_WHL
 elif [[ ${OS} == Linux* ]]; then
     WHL_PREFIX=${PYTORCH_LINUX_PREFIX}
-    WHL_LOOKUP=PYTORCH_LINUX_${PYTHON_VERSION}_WHL
+    WHL_LOOKUP=PYTORCH_LINUX_PY_${PYTHON_VERSION}_WHL
 else
     echo "OS - ${OS} is not supported by the install script."
     exit 1
