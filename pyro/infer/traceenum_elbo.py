@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import math
 import warnings
 
 import pyro
@@ -7,24 +8,63 @@ import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import iter_discrete_traces
-from pyro.infer.util import TreeSum
 from pyro.poutine.enumerate_poutine import EnumeratePoutine
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, check_site_shape, is_nan
 
 
-def _compute_upstream_grads(trace):
-    upstream_grads = TreeSum()
+def _dict_iadd(items, key, value):
+    if key in items:
+        items[key] = items[key] + value
+    else:
+        items[key] = value
 
-    for site in trace.nodes.values():
-        if site["type"] != "sample":
-            continue
-        score_function_term = site["score_parts"].score_function
-        if is_identically_zero(score_function_term):
-            continue
-        upstream_grads.add(site["cond_indep_stack"], score_function_term)
 
-    return upstream_grads
+class MultiFrameDice(object):
+    def __init__(self, trace):
+        log_denom = {}
+        log_probs = {}
+
+        for site in trace.nodes.values():
+            if site["type"] != "sample":
+                continue
+            log_prob = site['score_parts'].score_function  # not scaled by subsamling
+            if is_identically_zero(log_prob):
+                continue
+            context = frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
+            if site["infer"].get("enumerate"):
+                if "_enum_total" in site["infer"]:
+                    _dict_iadd(log_denom, context, math.log(site["infer"]["_enum_total"]))
+            else:
+                log_prob = log_prob - log_prob.detach()
+            _dict_iadd(log_probs, context, log_prob)
+
+        self.log_denom = log_denom
+        self.log_probs = log_probs
+
+    def in_context(self, cond_indep_stack):
+        target_context = frozenset(f for f in cond_indep_stack if f.vectorized)
+        log_prob = 0
+        for context, term in self.log_denom.items():
+            if not context <= target_context:
+                log_prob = log_prob - term
+        for context, term in self.log_probs.items():
+            if context <= target_context:
+                log_prob = log_prob + term
+        return log_prob.exp()
+
+
+def _compute_dice_elbo(model_trace, guide_trace):
+    dice = MultiFrameDice(guide_trace)
+    elbo = 0
+    for name, model_site in model_trace.nodes.items():
+        if model_site["type"] == "sample":
+            cost = model_site["batch_log_pdf"]
+            if not model_site["is_observed"]:
+                cost = cost - guide_trace.nodes[name]["batch_log_pdf"]
+            dice_prob = dice.in_context(model_site["cond_indep_stack"])
+            elbo = elbo + (dice_prob * cost).sum()
+    return elbo
 
 
 class TraceEnum_ELBO(ELBO):
@@ -48,8 +88,7 @@ class TraceEnum_ELBO(ELBO):
         guide = EnumeratePoutine(guide, first_available_dim=self.max_iarange_nesting)
 
         for i in range(self.num_particles):
-            # iterate over a bag of traces, one trace per particle
-            for weights, guide_trace in iter_discrete_traces("flat", guide, *args, **kwargs):
+            for guide_trace in iter_discrete_traces("flat", guide, *args, **kwargs):
                 model_trace = poutine.trace(poutine.replay(model, guide_trace),
                                             graph_type="flat").get_trace(*args, **kwargs)
 
@@ -66,7 +105,7 @@ class TraceEnum_ELBO(ELBO):
                     if site["type"] == "sample":
                         check_site_shape(site, self.max_iarange_nesting)
 
-                yield weights, model_trace, guide_trace
+                yield model_trace, guide_trace
 
     def loss(self, model, guide, *args, **kwargs):
         """
@@ -76,24 +115,12 @@ class TraceEnum_ELBO(ELBO):
         Evaluates the ELBO with an estimator that uses num_particles many samples/particles.
         """
         elbo = 0.0
-        for weights, model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
-            elbo_particle = 0
-            for name, model_site in model_trace.nodes.items():
-                if model_site["type"] != "sample":
-                    continue
+        for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+            elbo_particle = _compute_dice_elbo(model_trace, guide_trace)
+            if is_identically_zero(elbo_particle):
+                continue
 
-                # grab weights introduced by enumeration
-                cond_indep_stack = model_site["cond_indep_stack"]
-                weight = weights.get_upstream(cond_indep_stack)
-                if weight is None:
-                    continue
-
-                log_r = model_site["batch_log_pdf"]
-                if not model_site["is_observed"]:
-                    log_r = log_r - guide_trace.nodes[name]["batch_log_pdf"]
-                elbo_particle += (log_r * weight).sum().item()
-
-            elbo += elbo_particle / self.num_particles
+            elbo += elbo_particle.item() / self.num_particles
 
         loss = -elbo
         if is_nan(loss):
@@ -109,49 +136,22 @@ class TraceEnum_ELBO(ELBO):
         Performs backward on the latter. Num_particle many samples are used to form the estimators.
         """
         elbo = 0.0
-        # grab a trace from the generator
-        for weights, model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
-            upstream_grads = _compute_upstream_grads(guide_trace)
-            elbo_particle = 0
-            surrogate_elbo_particle = 0
-            # compute elbo and surrogate elbo
-            for name, model_site in model_trace.nodes.items():
-                if model_site["type"] != "sample":
-                    continue
+        for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+            elbo_particle = _compute_dice_elbo(model_trace, guide_trace)
+            if is_identically_zero(elbo_particle):
+                continue
 
-                # grab weights introduced by enumeration
-                cond_indep_stack = model_site["cond_indep_stack"]
-                weight = weights.get_upstream(cond_indep_stack)
-                if weight is None:
-                    continue
+            elbo += elbo_particle.item() / self.num_particles
 
-                model_log_pdf = model_site["batch_log_pdf"]
-                log_r = model_log_pdf
-                surrogate_elbo_site = model_log_pdf
-                score_function_term = upstream_grads.get_upstream(cond_indep_stack)
-
-                if not model_site["is_observed"]:
-                    guide_log_pdf, _, entropy_term = guide_trace.nodes[name]["score_parts"]
-                    log_r = log_r - guide_log_pdf
-                    if not is_identically_zero(entropy_term):
-                        surrogate_elbo_site = surrogate_elbo_site - entropy_term
-
-                if score_function_term is not None:
-                    surrogate_elbo_site = surrogate_elbo_site + log_r.detach() * score_function_term
-
-                elbo_particle += (log_r * weight).sum().item()
-                surrogate_elbo_particle = surrogate_elbo_particle + (surrogate_elbo_site * weight).sum()
-
-            elbo += elbo_particle / self.num_particles
-
+            # collect parameters to train from model and guide
             trainable_params = set(site["value"]
                                    for trace in (model_trace, guide_trace)
                                    for site in trace.nodes.values()
                                    if site["type"] == "param")
 
-            if trainable_params and getattr(surrogate_elbo_particle, 'requires_grad', False):
-                surrogate_loss_particle = -surrogate_elbo_particle / self.num_particles
-                surrogate_loss_particle.backward()
+            if trainable_params and elbo_particle.requires_grad:
+                loss_particle = -elbo_particle
+                (loss_particle / self.num_particles).backward()
                 pyro.get_param_store().mark_params_active(trainable_params)
 
         loss = -elbo
