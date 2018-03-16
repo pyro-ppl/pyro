@@ -184,11 +184,11 @@ class MultiFrameDice(object):
 
         log_prob = 0
         for context, term in self.log_denom.items():
-            if not context <= target_context:
-                log_prob = log_prob - term
+            if not context <= target_context:  # not downstream
+                log_prob = log_prob - term  # term = log(# times this context is counted)
         for context, term in self.log_probs.items():
-            if context <= target_context:
-                log_prob = log_prob + term
+            if context <= target_context:  # upstream
+                log_prob = log_prob + term  # term = log(dice weight of this context)
         result = 1 if is_identically_zero(log_prob) else log_prob.exp()
 
         self.cache[target_context] = result

@@ -22,6 +22,7 @@ def _compute_dice_elbo(model_trace, guide_trace):
             if not model_site["is_observed"]:
                 cost = cost - guide_trace.nodes[name]["batch_log_pdf"]
             dice_prob = dice.in_context(model_site["cond_indep_stack"])
+            # TODO use score_parts.entropy_term to "stick the landing"
             elbo = elbo + (dice_prob * cost).sum()
     return elbo
 
@@ -31,11 +32,14 @@ class TraceEnum_ELBO(ELBO):
     A trace implementation of ELBO-based SVI that supports enumeration
     over discrete sample sites.
 
-    This implementation makes strong restrictions on the dependency
-    structure of the ``model`` and ``guide``:
-    Across :func:`~pyro.irange` and :func:`~pyro.iarange` blocks,
-    both dependency graphs should follow a tree structure. That is,
-    no variable outside of a block can depend on a variable in the block.
+    To enumerate over a sample site, the ``guide``'s sample site must specify
+    either ``infer={'enumerate': 'sequential'}`` or
+    ``infer={'enumerate': 'parallel'}``. To configure all sites at once, use
+    :func:`~pyro.infer.enum.config_enumerate``.
+
+    This assumes restricted dependency structure on the model and guide:
+    variables outside of an :class:`~pyro.iarange` can never depend on
+    variables inside that :class:`~pyro.iarange`.
     """
 
     def _get_traces(self, model, guide, *args, **kwargs):
@@ -71,7 +75,7 @@ class TraceEnum_ELBO(ELBO):
         :returns: returns an estimate of the ELBO
         :rtype: float
 
-        Evaluates the ELBO with an estimator that uses num_particles many samples/particles.
+        Estimates the ELBO using ``num_particles`` many samples (particles).
         """
         elbo = 0.0
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
@@ -91,8 +95,8 @@ class TraceEnum_ELBO(ELBO):
         :returns: returns an estimate of the ELBO
         :rtype: float
 
-        Computes the ELBO as well as the surrogate ELBO that is used to form the gradient estimator.
-        Performs backward on the latter. Num_particle many samples are used to form the estimators.
+        Estimates the ELBO using ``num_particles`` many samples (particles).
+        Performs backward on the ELBO of each particle.
         """
         elbo = 0.0
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
