@@ -9,11 +9,18 @@ class ExpectedImprovement(AcquisitionFunction):
     def __init__(self, gp):
         self.gp = gp
 
-
     def __call__(self, x, xi=0.0):
         m, cov = self.gp(x, full_cov=True)
         std = cov.diag().sqrt()
         norm = Normal(torch.zeros_like(m), torch.ones_like(m))
-        z = (m - self.gp.y.max() - xi)/std
+        z = (m - self.y_max - xi)/std
         f = (z * norm.cdf(z) + torch.exp(norm.log_prob(z))) * std
         return f
+
+    def update(self):
+        self.y_max = self.gp.y.max()
+
+    @property
+    def support_batch(self):
+        return False
+        

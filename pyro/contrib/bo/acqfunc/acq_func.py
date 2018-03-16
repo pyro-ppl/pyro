@@ -16,4 +16,8 @@ class AcquisitionFunction:
         Called once by the Bayesian Optimization Module every time it get the next point to quire.
         """
         pass
+    
+    @property
+    def support_batch(self):
+        return False
         
