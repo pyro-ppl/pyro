@@ -25,9 +25,9 @@ WHL_VERSION=${PYTORCH_VERSION}%2B${PYTORCH_BUILD_COMMIT}
 PYTORCH_MAC_PY_27_WHL="torch-${WHL_VERSION}-cp27-cp27m-macosx_10_6_x86_64"
 PYTORCH_MAC_PY_35_WHL="torch-${WHL_VERSION}-cp35-cp35m-macosx_10_6_x86_64"
 PYTORCH_MAC_PY_36_WHL="torch-${WHL_VERSION}-cp36-cp36m-macosx_10_6_x86_64"
-PYTORCH_LINUX_PY_27_WHL="torch-{WHL_VERSION}-cp27-cp27mu-linux_x86_64"
-PYTORCH_LINUX_PY_35_WHL="torch-{WHL_VERSION}-cp35-cp36m-linux_x86_64"
-PYTORCH_LINUX_PY_36_WHL="torch-{WHL_VERSION}-cp36-cp36m-linux_x86_64"
+PYTORCH_LINUX_PY_27_WHL="torch-${WHL_VERSION}-cp27-cp27mu-linux_x86_64"
+PYTORCH_LINUX_PY_35_WHL="torch-${WHL_VERSION}-cp35-cp36m-linux_x86_64"
+PYTORCH_LINUX_PY_36_WHL="torch-${WHL_VERSION}-cp36-cp36m-linux_x86_64"
 
 # Cloudfront path for the builds
 PYTORCH_LINUX_PREFIX="https://d2fefpcigoriu7.cloudfront.net/pytorch-build/linux-cpu"
