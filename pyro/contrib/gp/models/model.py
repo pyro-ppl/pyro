@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from pyro.contrib.gp.util import Parameterized
 from pyro.infer import SVI
-from pyro.optim import PyroOptim
+from pyro.optim import Adam, PyroOptim
 
 
 class Model(Parameterized):
@@ -40,7 +40,7 @@ class Model(Parameterized):
         """
         raise NotImplementedError
 
-    def optimize(self, optimizer, num_steps=1000):
+    def optimize(self, optimizer=Adam({}), num_steps=1000):
         """
         A convenient method to optimize parameters for the Gaussian Process model
         using SVI.

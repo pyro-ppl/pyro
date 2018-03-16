@@ -9,10 +9,9 @@ from pyro.contrib.gp.kernels import RBF
 from pyro.contrib.gp.likelihoods import Gaussian
 from pyro.contrib.gp.models import (GPRegression, SparseGPRegression,
                                     VariationalGP, SparseVariationalGP)
-from pyro.optim import Adam
 from tests.common import assert_equal
 
-T = namedtuple("TestGPModel", ["model", "X", "y", "kernel", "likelihood"])
+T = namedtuple("TestGPModel", ["model_class", "X", "y", "kernel", "likelihood"])
 
 X = torch.tensor([[1, 5, 3], [4, 3, 7]])
 y1D = torch.tensor([2, 1])
@@ -60,12 +59,12 @@ TEST_IDS = [t[0].__name__ + "_y{}D".format(str(t[2].dim()))
             for t in TEST_CASES]
 
 
-@pytest.mark.parametrize("model, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
-def test_model_forward(model, X, y, kernel, likelihood):
-    if "Sparse" in model.__name__:
-        gp = model(X, y, kernel, X, likelihood)
+@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
+def test_model_forward(model_class, X, y, kernel, likelihood):
+    if model_class is SparseGPRegression or model_class is SparseVariationalGP:
+        gp = model_class(X, y, kernel, X, likelihood)
     else:
-        gp = model(X, y, kernel, likelihood)
+        gp = model_class(X, y, kernel, likelihood)
 
     # test shape
     Xnew = torch.tensor([[2, 3, 1]])
@@ -82,7 +81,7 @@ def test_model_forward(model, X, y, kernel, likelihood):
 
     # test trivial forward
     # for variational models, inferences depend on variational parameters, so skip
-    if "Variational" in model.__name__:
+    if model_class is VariationalGP or model_class is SparseVariationalGP:
         pass
     else:
         loc, cov = gp(X, full_cov=True)
@@ -90,11 +89,11 @@ def test_model_forward(model, X, y, kernel, likelihood):
         assert_equal(cov.abs().sum().item(), 0)
 
 
-@pytest.mark.parametrize("model, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
-def test_inference(model, X, y, kernel, likelihood):
-    if "Sparse" in model.__name__:
-        gp = model(X, y, kernel, X, likelihood)
+@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
+def test_inference(model_class, X, y, kernel, likelihood):
+    if model_class is SparseGPRegression or model_class is SparseVariationalGP:
+        gp = model_class(X, y, kernel, X, likelihood)
     else:
-        gp = model(X, y, kernel, likelihood)
+        gp = model_class(X, y, kernel, likelihood)
 
-    gp.optimize(num_steps=1, optimizer=Adam({}))
+    gp.optimize(num_steps=1)
