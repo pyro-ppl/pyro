@@ -24,7 +24,7 @@ PYTHON_VERSION=$(python -c 'import sys; version=sys.version_info[:3]; print("{0}
 WHL_VERSION=${PYTORCH_VERSION}%2B${PYTORCH_BUILD_COMMIT}
 PYTORCH_MAC_PY_27_WHL="torch-${WHL_VERSION}-cp27-cp27m-macosx_10_6_x86_64"
 PYTORCH_MAC_PY_35_WHL="torch-${WHL_VERSION}-cp35-cp35m-macosx_10_6_x86_64"
-PYTORCH_MAC_PY_36_WHL="torch-${WHL_VERSION}-cp36-cp36m-macosx_10_6_x86_64"
+PYTORCH_MAC_PY_36_WHL="torch-${WHL_VERSION}-cp36-cp36m-macosx_10_7_x86_64"
 PYTORCH_LINUX_PY_27_WHL="torch-${WHL_VERSION}-cp27-cp27mu-linux_x86_64"
 PYTORCH_LINUX_PY_35_WHL="torch-${WHL_VERSION}-cp35-cp35m-linux_x86_64"
 PYTORCH_LINUX_PY_36_WHL="torch-${WHL_VERSION}-cp36-cp36m-linux_x86_64"
