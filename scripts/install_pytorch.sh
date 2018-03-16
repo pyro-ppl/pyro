@@ -13,7 +13,7 @@ trap _cleanup EXIT
 
 # Adjust as per the version used in CI.
 PYTORCH_VERSION=0.4.0a0
-PYTORCH_BUILD_COMMIT=e40425f
+PYTORCH_BUILD_COMMIT=$(grep 'git checkout .* a well-tested commit' README.md | cut -f3 -d' ')
 
 
 # Detect OS and Python version numbers.
