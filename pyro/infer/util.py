@@ -5,6 +5,7 @@ import numbers
 
 import torch
 
+from pyro.distributions.util import is_identically_zero
 from pyro.poutine.util import site_is_subsample
 
 
@@ -122,3 +123,63 @@ class MultiFrameTensor(dict):
     def __repr__(self):
         return '%s(%s)' % (type(self).__name__, ",\n\t".join([
             '({}, ...)'.format(frames) for frames in self]))
+
+
+def _dict_iadd(items, key, value):
+    if key in items:
+        items[key] = items[key] + value
+    else:
+        items[key] = value
+
+
+class MultiFrameDice(object):
+    """
+    An implementation of the DiCE operator compatible with Pyro features.
+
+    This implementation correctly handles:
+    - scaled log-probability due to subsampling
+    - independence in different contexts due to iarange
+    - weights due to parallel and sequential enumeration
+
+    This assumes restricted dependency structure on the model and guide:
+    variables outside of an :class:`~pyro.iarange` can never depend on
+    variables inside that :class:`~pyro.iarange`.
+
+    Refereces:
+    [1] Jakob Foerster, Greg Farquhar, Maruan Al-Shedivat, Tim Rocktaeschel,
+        Eric P. Xing, Shimon Whiteson (2018)
+        "DiCE: The Infinitely Differentiable Monte-Carlo Estimator"
+        https://arxiv.org/abs/1802.05098
+    """
+    def __init__(self, guide_trace):
+        log_denom = {}  # avoids double-counting when sequentially enumerating
+        log_probs = {}  # accounts for upstream probabilties
+
+        for site in guide_trace.nodes.values():
+            if site["type"] != "sample":
+                continue
+            log_prob = site['score_parts'].score_function  # not scaled by subsampling
+            if is_identically_zero(log_prob):
+                continue
+            context = frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
+
+            if site["infer"].get("enumerate"):
+                if site["infer"]["enumerate"] == "sequential":
+                    _dict_iadd(log_denom, context, math.log(site["infer"]["_enum_total"]))
+            else:  # site was monte carlo sampled
+                log_prob = log_prob - log_prob.detach()
+            _dict_iadd(log_probs, context, log_prob)
+
+        self.log_denom = log_denom
+        self.log_probs = log_probs
+
+    def in_context(self, cond_indep_stack):
+        target_context = frozenset(f for f in cond_indep_stack if f.vectorized)
+        log_prob = 0
+        for context, term in self.log_denom.items():
+            if not context <= target_context:
+                log_prob = log_prob - term
+        for context, term in self.log_probs.items():
+            if context <= target_context:
+                log_prob = log_prob + term
+        return 1 if is_identically_zero(log_prob) else log_prob.exp()

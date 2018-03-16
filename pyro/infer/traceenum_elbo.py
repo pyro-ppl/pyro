@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import math
 import warnings
 
 import pyro
@@ -8,50 +7,10 @@ import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import iter_discrete_traces
+from pyro.infer.util import MultiFrameDice
 from pyro.poutine.enumerate_poutine import EnumeratePoutine
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, check_site_shape, is_nan
-
-
-def _dict_iadd(items, key, value):
-    if key in items:
-        items[key] = items[key] + value
-    else:
-        items[key] = value
-
-
-class MultiFrameDice(object):
-    def __init__(self, trace):
-        log_denom = {}
-        log_probs = {}
-
-        for site in trace.nodes.values():
-            if site["type"] != "sample":
-                continue
-            log_prob = site['score_parts'].score_function  # not scaled by subsamling
-            if is_identically_zero(log_prob):
-                continue
-            context = frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
-            if site["infer"].get("enumerate"):
-                if "_enum_total" in site["infer"]:
-                    _dict_iadd(log_denom, context, math.log(site["infer"]["_enum_total"]))
-            else:
-                log_prob = log_prob - log_prob.detach()
-            _dict_iadd(log_probs, context, log_prob)
-
-        self.log_denom = log_denom
-        self.log_probs = log_probs
-
-    def in_context(self, cond_indep_stack):
-        target_context = frozenset(f for f in cond_indep_stack if f.vectorized)
-        log_prob = 0
-        for context, term in self.log_denom.items():
-            if not context <= target_context:
-                log_prob = log_prob - term
-        for context, term in self.log_probs.items():
-            if context <= target_context:
-                log_prob = log_prob + term
-        return 1 if is_identically_zero(log_prob) else log_prob.exp()
 
 
 def _compute_dice_elbo(model_trace, guide_trace):
