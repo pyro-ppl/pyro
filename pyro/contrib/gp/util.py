@@ -3,11 +3,9 @@ from __future__ import absolute_import, division, print_function
 import torch
 from torch.distributions import transform_to
 import torch.nn as nn
-import torch.optim as optim
 
 import pyro
 import pyro.distributions as dist
-from pyro.optim import Adam
 
 
 class Parameterized(nn.Module):
