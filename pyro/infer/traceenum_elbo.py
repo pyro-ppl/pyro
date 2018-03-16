@@ -51,7 +51,7 @@ class MultiFrameDice(object):
         for context, term in self.log_probs.items():
             if context <= target_context:
                 log_prob = log_prob + term
-        return log_prob.exp()
+        return 1 if is_identically_zero(log_prob) else log_prob.exp()
 
 
 def _compute_dice_elbo(model_trace, guide_trace):

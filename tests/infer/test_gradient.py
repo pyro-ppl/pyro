@@ -26,7 +26,7 @@ def test_subsample_gradient(trace_graph, enum_discrete, reparameterized, subsamp
     pyro.clear_param_store()
     data = torch.tensor([-0.5, 2.0])
     subsample_size = 1 if subsample else len(data)
-    num_particles = 20000
+    num_particles = 50000
     precision = 0.05
     Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
 
@@ -66,11 +66,9 @@ def test_subsample_gradient(trace_graph, enum_discrete, reparameterized, subsamp
 
 
 @pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
-@pytest.mark.parametrize("trace_graph,enum_discrete", [
-    (False, False),
-    (True, False),
-    pytest.param(False, True, marks=pytest.mark.xfail(reason="https://github.com/uber/pyro/issues/846")),
-], ids=["Trace", "TraceGraph", "TraceEnum"])
+@pytest.mark.parametrize("trace_graph,enum_discrete",
+                         [(False, False), (True, False), (False, True)],
+                         ids=["Trace", "TraceGraph", "TraceEnum"])
 def test_iarange(trace_graph, enum_discrete, reparameterized):
     pyro.clear_param_store()
     data = torch.tensor([-0.5, 2.0])
