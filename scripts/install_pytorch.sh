@@ -17,7 +17,7 @@ PYTORCH_BUILD_COMMIT=e40425f
 
 
 # Detect OS and Python version numbers.
-OS=$(uname -s)
+OS=$(uname -s | cut -d " " -f1)
 PYTHON_VERSION=$(python -c 'import sys; version=sys.version_info[:3]; print("{0}{1}".format(*version))')
 
 # Lookup wheel names to download
