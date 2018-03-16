@@ -14,11 +14,9 @@ import pyro.optim
 from pyro.infer import SVI, config_enumerate
 from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.traceenum_elbo import TraceEnum_ELBO
-from tests.common import assert_equal, xfail_param
+from tests.common import assert_equal
 
 logger = logging.getLogger(__name__)
-
-xfail_parallel = xfail_param("parallel", reason='https://github.com/uber/pyro/issues/846')
 
 
 @pytest.mark.parametrize("depth", [1, 2, 3, 4, 5])
@@ -33,7 +31,7 @@ def test_iter_discrete_traces_order(depth, graph_type):
     traces = list(iter_discrete_traces(graph_type, model, depth))
 
     assert len(traces) == 2 ** depth
-    for weights, trace in traces:
+    for trace in traces:
         sites = [name for name, site in trace.nodes.items() if site["type"] == "sample"]
         assert sites == ["x{}".format(i) for i in range(depth)]
 
@@ -52,16 +50,8 @@ def test_iter_discrete_traces_scalar(graph_type):
 
     traces = list(iter_discrete_traces(graph_type, model))
 
-    p = pyro.param("p")
     ps = pyro.param("ps")
     assert len(traces) == 2 * len(ps)
-
-    for weights, trace in traces:
-        x = trace.nodes["x"]["value"].long()
-        y = trace.nodes["y"]["value"].long()
-        expected_weight = [1 - p, p][x] * ps[y]
-        actual_weight = weights.get_upstream(trace.nodes["x"]["cond_indep_stack"])
-        assert_equal(actual_weight, expected_weight)
 
 
 @pytest.mark.parametrize("graph_type", ["flat", "dense"])
@@ -82,17 +72,8 @@ def test_iter_discrete_traces_vector(graph_type):
 
     traces = list(iter_discrete_traces(graph_type, model))
 
-    p = pyro.param("p")
     ps = pyro.param("ps")
     assert len(traces) == 2 * ps.size(-1)
-
-    for weights, trace in traces:
-        x = trace.nodes["x"]["value"]
-        y = trace.nodes["y"]["value"]
-        expected_weight = (dist.Bernoulli(p).log_prob(x) +
-                           dist.Categorical(ps).log_prob(y)).exp()
-        actual_weight = weights.get_upstream(trace.nodes["x"]["cond_indep_stack"])
-        assert_equal(actual_weight, expected_weight)
 
 
 @pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
@@ -206,7 +187,7 @@ def test_svi_step_smoke(model, guide, enumerate1):
 @pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
 def test_elbo_bern(quantity, enumerate1):
     pyro.clear_param_store()
-    num_particles = 1000
+    num_particles = 1 if enumerate1 else 10000
     prec = 0.001 if enumerate1 else 0.1
     q = pyro.param("q", torch.tensor(0.5, requires_grad=True))
     kl = kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.25))
@@ -245,7 +226,7 @@ def test_elbo_bern(quantity, enumerate1):
 @pytest.mark.parametrize("enumerate3", [None, "sequential", "parallel"])
 def test_elbo_berns(enumerate1, enumerate2, enumerate3):
     pyro.clear_param_store()
-    num_particles = 10000
+    num_particles = 1 if all([enumerate1, enumerate2, enumerate3]) else 10000
     prec = 0.001 if all([enumerate1, enumerate2, enumerate3]) else 0.1
     q = pyro.param("q", torch.tensor(0.75, requires_grad=True))
 
@@ -329,7 +310,7 @@ def test_elbo_categoricals(enumerate1, enumerate2, enumerate3, max_iarange_nesti
 @pytest.mark.parametrize("iarange_dim", [1, 2])
 def test_elbo_iarange(iarange_dim, enumerate1, enumerate2):
     pyro.clear_param_store()
-    num_particles = 10000
+    num_particles = 1 if all([enumerate1, enumerate2]) else 10000
     q = pyro.param("q", torch.tensor(0.75, requires_grad=True))
     p = 0.2693204236205713  # for which kl(Bernoulli(q), Bernoulli(p)) = 0.5
 
@@ -371,7 +352,7 @@ def test_elbo_iarange(iarange_dim, enumerate1, enumerate2):
 @pytest.mark.parametrize("irange_dim", [1, 2])
 def test_elbo_irange(irange_dim, enumerate1, enumerate2):
     pyro.clear_param_store()
-    num_particles = 10000
+    num_particles = 1 if all([enumerate1, enumerate2]) else 10000
     q = pyro.param("q", torch.tensor(0.75, requires_grad=True))
     p = 0.2693204236205713  # for which kl(Bernoulli(q), Bernoulli(p)) = 0.5
 
@@ -408,15 +389,15 @@ def test_elbo_irange(irange_dim, enumerate1, enumerate2):
     ]))
 
 
-@pytest.mark.parametrize("enumerate4", [None, "sequential", xfail_parallel])
-@pytest.mark.parametrize("enumerate3", [None, "sequential", xfail_parallel])
-@pytest.mark.parametrize("enumerate2", [None, "sequential", xfail_parallel])
-@pytest.mark.parametrize("enumerate1", [None, "sequential", xfail_parallel])
+@pytest.mark.parametrize("enumerate4", [None, "sequential", "parallel"])
+@pytest.mark.parametrize("enumerate3", [None, "sequential", "parallel"])
+@pytest.mark.parametrize("enumerate2", [None, "sequential", "parallel"])
+@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("inner_dim", [2])
 @pytest.mark.parametrize("outer_dim", [2])
 def test_elbo_iarange_iarange(outer_dim, inner_dim, enumerate1, enumerate2, enumerate3, enumerate4):
     pyro.clear_param_store()
-    num_particles = 10000
+    num_particles = 1 if all([enumerate1, enumerate2, enumerate3, enumerate4]) else 50000
     q = pyro.param("q", torch.tensor(0.75, requires_grad=True))
     p = 0.2693204236205713  # for which kl(Bernoulli(q), Bernoulli(p)) = 0.5
 
@@ -472,7 +453,7 @@ def test_elbo_iarange_iarange(outer_dim, inner_dim, enumerate1, enumerate2, enum
 @pytest.mark.parametrize("outer_dim", [3])
 def test_elbo_iarange_irange(outer_dim, inner_dim, enumerate1, enumerate2, enumerate3):
     pyro.clear_param_store()
-    num_particles = 10000
+    num_particles = 1 if all([enumerate1, enumerate2, enumerate3]) else 50000
     q = pyro.param("q", torch.tensor(0.75, requires_grad=True))
     p = 0.2693204236205713  # for which kl(Bernoulli(q), Bernoulli(p)) = 0.5
 
@@ -514,14 +495,14 @@ def test_elbo_iarange_irange(outer_dim, inner_dim, enumerate1, enumerate2, enume
     ]))
 
 
-@pytest.mark.parametrize("enumerate3", [None, "sequential", xfail_parallel])
+@pytest.mark.parametrize("enumerate3", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("enumerate2", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("inner_dim", [2])
 @pytest.mark.parametrize("outer_dim", [2])
 def test_elbo_irange_iarange(outer_dim, inner_dim, enumerate1, enumerate2, enumerate3):
     pyro.clear_param_store()
-    num_particles = 10000
+    num_particles = 1 if all([enumerate1, enumerate2, enumerate3]) else 50000
     q = pyro.param("q", torch.tensor(0.75, requires_grad=True))
     p = 0.2693204236205713  # for which kl(Bernoulli(q), Bernoulli(p)) = 0.5
 
@@ -565,14 +546,14 @@ def test_elbo_irange_iarange(outer_dim, inner_dim, enumerate1, enumerate2, enume
     ]))
 
 
-@pytest.mark.parametrize("enumerate3", [None, "sequential", xfail_parallel])
+@pytest.mark.parametrize("enumerate3", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("enumerate2", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("inner_dim", [2])
 @pytest.mark.parametrize("outer_dim", [2])
 def test_elbo_irange_irange(outer_dim, inner_dim, enumerate1, enumerate2, enumerate3):
     pyro.clear_param_store()
-    num_particles = 10000
+    num_particles = 1 if all([enumerate1, enumerate2, enumerate3]) else 50000
     q = pyro.param("q", torch.tensor(0.75, requires_grad=True))
     p = 0.2693204236205713  # for which kl(Bernoulli(q), Bernoulli(p)) = 0.5
 
@@ -621,7 +602,7 @@ def test_elbo_irange_irange(outer_dim, inner_dim, enumerate1, enumerate2, enumer
 @pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
 def test_non_mean_field_bern_bern_elbo_gradient(enumerate1, pi1, pi2):
     pyro.clear_param_store()
-    num_particles = 10000
+    num_particles = 1 if enumerate1 else 20000
 
     def model():
         with pyro.iarange("particles", num_particles):
