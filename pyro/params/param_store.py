@@ -219,7 +219,7 @@ class ParamStoreDict(object):
         if name not in self._params:
             # if not create the init tensor through
             assert init_tensor is not None,\
-                "cannot initialize a parameter with None. Did you get the param name right?"
+                "cannot initialize a parameter '{}' with None. Did you get the param name right?".format(name)
 
             # a function
             if callable(init_tensor):
