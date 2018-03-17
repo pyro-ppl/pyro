@@ -1,7 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import functools
-
 from six.moves.queue import LifoQueue
 
 from pyro import poutine
@@ -15,14 +13,13 @@ def _iter_discrete_escape(trace, msg):
             (msg["name"] not in trace))
 
 
-def _iter_discrete_extend(trace, site):
+def _iter_discrete_extend(trace, site, **ignored):
     values = site["fn"].enumerate_support()
     for i, value in enumerate(values):
         extended_site = site.copy()
         extended_site["infer"] = site["infer"].copy()
         extended_site["infer"]["_enum_total"] = len(values)
         extended_site["value"] = value
-        extended_site["done"] = True
         extended_trace = trace.copy()
         extended_trace.add_node(site["name"], **extended_site)
         yield extended_trace
@@ -43,19 +40,12 @@ def iter_discrete_traces(graph_type, fn, *args, **kwargs):
     :returns: An iterator over traces pairs.
     """
     queue = LifoQueue()
-    partial_trace = Trace()
-    queue.put(partial_trace)
+    queue.put(Trace())
+    traced_fn = poutine.trace(
+        poutine.queue(fn, queue, escape_fn=_iter_discrete_escape, extend_fn=_iter_discrete_extend),
+        graph_type=graph_type)
     while not queue.empty():
-        partial_trace = queue.get()
-        traced_fn = poutine.trace(poutine.escape(poutine.replay(fn, partial_trace),
-                                                 functools.partial(_iter_discrete_escape, partial_trace)),
-                                  graph_type=graph_type)
-        try:
-            yield traced_fn.get_trace(*args, **kwargs)
-        except poutine.util.NonlocalExit as e:
-            e.reset_stack()
-            for extended_trace in _iter_discrete_extend(traced_fn.trace, e.site):
-                queue.put(extended_trace)
+        yield traced_fn.get_trace(*args, **kwargs)
 
 
 def _config_enumerate(default):
