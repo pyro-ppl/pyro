@@ -1,5 +1,4 @@
 import torch
-from torch.autograd import Variable
 # import numpy as np
 
 
@@ -10,7 +9,7 @@ def plot_conditional_samples_ssvae(ssvae, visdom_session):
     vis = visdom_session
     ys = {}
     for i in range(10):
-        ys[i] = Variable(torch.zeros(1, 10))
+        ys[i] = torch.zeros(1, 10)
         ys[i][0, i] = 1
 
     for i in range(10):
@@ -55,8 +54,8 @@ def mnist_test_tsne(vae=None, test_loader=None):
     This is used to generate a t-sne embedding of the vae
     """
     name = 'VAE'
-    data = Variable(test_loader.dataset.test_data.float())
-    mnist_labels = Variable(test_loader.dataset.test_labels)
+    data = test_loader.dataset.test_data.float()
+    mnist_labels = test_loader.dataset.test_labels
     z_mu, z_sigma = vae.encoder(data)
     plot_tsne(z_mu, mnist_labels, name)
 
@@ -67,8 +66,8 @@ def mnist_test_tsne_ssvae(name=None, ssvae=None, test_loader=None):
     """
     if name is None:
         name = 'SS-VAE'
-    data = Variable(test_loader.dataset.test_data.float())
-    mnist_labels = Variable(test_loader.dataset.test_labels)
+    data = test_loader.dataset.test_data.float()
+    mnist_labels = test_loader.dataset.test_labels
     z_mu, z_sigma = ssvae.encoder_z([data, mnist_labels])
     plot_tsne(z_mu, mnist_labels, name)
 

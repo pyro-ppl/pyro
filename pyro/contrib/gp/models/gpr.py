@@ -20,17 +20,15 @@ class GPRegression(Model):
     [1] `Gaussian Processes for Machine Learning`,
     Carl E. Rasmussen, Christopher K. I. Williams
 
-    :param torch.Tensor X: A 1D or 2D tensor of inputs.
-    :param torch.Tensor y: A 1D tensor of output data for training.
+    :param torch.Tensor X: A 1D or 2D tensor of input data for training.
+    :param torch.Tensor y: A 1D or 2D tensor of output data for training.
     :param pyro.contrib.gp.kernels.Kernel kernel: A Pyro kernel object.
     :param torch.Tensor noise: An optional noise parameter.
     """
     def __init__(self, X, y, kernel, noise=None):
         super(GPRegression, self).__init__()
-        self.X = X
-        self.y = y
+        self.set_data(X, y)
         self.kernel = kernel
-        self.num_data = self.X.size(0)
 
         if noise is None:
             noise = self.X.data.new([1])
@@ -43,9 +41,12 @@ class GPRegression(Model):
         kernel = self.kernel
         noise = self.get_param("noise")
 
-        K = kernel(self.X) + noise.expand(self.num_data).diag()
-        zero_loc = torch.tensor(K.data.new([0])).expand(self.num_data)
-        pyro.sample("y", dist.MultivariateNormal(zero_loc, K), obs=self.y)
+        K = kernel(self.X) + noise.expand(self.X.size(0)).diag()
+        # correct event_shape for y
+        y_t = self.y.t() if self.y.dim() == 2 else self.y
+        zero_loc = y_t.new([0]).expand(y_t.size())
+        pyro.sample("y", dist.MultivariateNormal(zero_loc, K).reshape(
+            extra_event_dims=zero_loc.dim() - 1), obs=y_t)
 
     def guide(self):
         self.set_mode("guide")
@@ -56,9 +57,11 @@ class GPRegression(Model):
         return kernel, noise
 
     def forward(self, Xnew, full_cov=False, noiseless=True):
-        """
-        Computes the parameters of :math:`p(y^*|Xnew) \sim N(\\text{loc}, \\text{cov})`
-        w.r.t. the new input :math:`Xnew`.
+        r"""
+        Computes the parameters of :math:`p(y^*|Xnew) \sim N(\text{loc}, \text{cov})`
+        w.r.t. the new input :math:`Xnew`. In case output data is a 2D tensor of shape
+        :math:`N \times D`, :math:`loc` is also a 2D tensor of shape :math:`N \times D`.
+        Covariance matrix :math:`cov` is always a 2D tensor of shape :math:`N \times N`.
 
         :param torch.Tensor Xnew: A 1D or 2D tensor.
         :param bool full_cov: Predicts full covariance matrix or just its diagonal.
@@ -71,15 +74,16 @@ class GPRegression(Model):
         kernel, noise = self.guide()
 
         Kff = kernel(self.X)
-        Kff = Kff + noise.expand(self.num_data).diag()
+        Kff = Kff + noise.expand(Kff.size(0)).diag()
         Kfs = kernel(self.X, Xnew)
         Lff = Kff.potrf(upper=False)
 
-        pack = torch.cat((self.y.unsqueeze(1), Kfs), dim=1)
+        y = self.y.unsqueeze(1) if self.y.dim() == 1 else self.y
+        pack = torch.cat((y, Kfs), dim=1)
         Lffinv_pack = matrix_triangular_solve_compat(pack, Lff, upper=False)
-        Lffinv_y = Lffinv_pack[:, 0]
+        Lffinv_y = Lffinv_pack[:, :y.size(1)].view(self.y.size())
         # W = inv(Lff) @ Kfs
-        W = Lffinv_pack[:, 1:]
+        W = Lffinv_pack[:, y.size(1):]
 
         # loc = Kfs.T @ inv(Kff) @ y
         loc = W.t().matmul(Lffinv_y)

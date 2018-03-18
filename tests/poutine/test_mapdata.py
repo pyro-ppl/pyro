@@ -20,9 +20,10 @@ def test_nested_irange():
     std_batch_size = 3
 
     def model(means, stds):
+        a_irange = pyro.irange("a", len(means), mean_batch_size)
+        b_irange = pyro.irange("b", len(stds), std_batch_size)
         return [[pyro.sample("x_{}{}".format(i, j), dist.Normal(means[i], stds[j]))
-                 for j in pyro.irange("b", len(stds), std_batch_size)]
-                for i in pyro.irange("a", len(means), mean_batch_size)]
+                 for j in b_irange] for i in a_irange]
 
     xs = model(means, stds)
     assert len(xs) == mean_batch_size
@@ -57,9 +58,10 @@ def nested_irange_model(subsample_size):
     mu = torch.zeros(20)
     sigma = torch.ones(20)
     result = []
+    inner_irange = pyro.irange("inner", 20, 5)
     for i in pyro.irange("outer", 20, subsample_size):
         result.append([])
-        for j in pyro.irange("inner", 20, 5):
+        for j in inner_irange:
             pyro.sample("x_{}_{}".format(i, j), dist.Normal(mu[i] + mu[j], sigma[i] + sigma[j]))
             result[-1].append(j)
     return result

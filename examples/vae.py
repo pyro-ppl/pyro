@@ -3,13 +3,11 @@ import numpy as np
 import torch
 import torch.nn as nn
 import visdom
-from torch.autograd import Variable
 
 import pyro
 import pyro.distributions as dist
 from pyro.infer import SVI
 from pyro.optim import Adam
-from pyro.util import ng_zeros, ng_ones
 from utils.vae_plots import plot_llk, mnist_test_tsne, plot_vae_samples
 from utils.mnist_cached import MNISTCached as MNIST
 from utils.mnist_cached import setup_data_loaders
@@ -90,8 +88,8 @@ class VAE(nn.Module):
         with pyro.iarange("data", x.size(0)):
             # setup hyperparameters for prior p(z)
             # the type_as ensures we get cuda Tensors if x is on gpu
-            z_mu = ng_zeros([x.size(0), self.z_dim], type_as=x.data)
-            z_sigma = ng_ones([x.size(0), self.z_dim], type_as=x.data)
+            z_mu = torch.zeros([x.size(0), self.z_dim]).type_as(x)
+            z_sigma = torch.ones([x.size(0), self.z_dim]).type_as(x)
             # sample from prior (value will be sampled by guide when computing the ELBO)
             z = pyro.sample("latent", dist.Normal(z_mu, z_sigma).reshape(extra_event_dims=1))
             # decode the latent code z
@@ -121,8 +119,8 @@ class VAE(nn.Module):
 
     def model_sample(self, batch_size=1):
         # sample the handwriting style from the constant prior distribution
-        prior_mu = Variable(torch.zeros([batch_size, self.z_dim]))
-        prior_sigma = Variable(torch.ones([batch_size, self.z_dim]))
+        prior_mu = torch.zeros([batch_size, self.z_dim])
+        prior_sigma = torch.ones([batch_size, self.z_dim])
         zs = pyro.sample("z", dist.Normal(prior_mu, prior_sigma))
         mu = self.decoder.forward(zs)
         xs = pyro.sample("sample", dist.Bernoulli(mu))
@@ -160,8 +158,6 @@ def main(args):
             # if on GPU put mini-batch into CUDA memory
             if args.cuda:
                 x = x.cuda()
-            # wrap the mini-batch in a PyTorch Variable
-            x = Variable(x)
             # do ELBO gradient and accumulate loss
             epoch_loss += svi.step(x)
 
@@ -179,8 +175,6 @@ def main(args):
                 # if on GPU put mini-batch into CUDA memory
                 if args.cuda:
                     x = x.cuda()
-                # wrap the mini-batch in a PyTorch Variable
-                x = Variable(x)
                 # compute ELBO estimate and accumulate loss
                 test_loss += svi.evaluate_loss(x)
 

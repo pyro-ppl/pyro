@@ -8,18 +8,28 @@ Welcome to Pyro Examples and Tutorials!
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
+   :caption: Introduction:
 
    intro_part_i
    intro_part_ii
    svi_part_i
    svi_part_ii
    svi_part_iii
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Examples:
+
    vae
    bayesian_regression
    dmm
    air
    ss-vae
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Contributed:
+
    gmm
    gp
 

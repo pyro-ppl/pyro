@@ -5,7 +5,7 @@ import math
 
 import pytest
 import torch
-from torch.autograd import Variable, grad, variable
+from torch.autograd import grad
 from torch.distributions import kl_divergence
 
 import pyro
@@ -14,11 +14,9 @@ import pyro.optim
 from pyro.infer import SVI, config_enumerate
 from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.traceenum_elbo import TraceEnum_ELBO
-from tests.common import assert_equal, xfail_param
+from tests.common import assert_equal
 
 logger = logging.getLogger(__name__)
-
-xfail_parallel = xfail_param("parallel", reason='https://github.com/uber/pyro/issues/846')
 
 
 @pytest.mark.parametrize("depth", [1, 2, 3, 4, 5])
@@ -33,7 +31,7 @@ def test_iter_discrete_traces_order(depth, graph_type):
     traces = list(iter_discrete_traces(graph_type, model, depth))
 
     assert len(traces) == 2 ** depth
-    for weights, trace in traces:
+    for trace in traces:
         sites = [name for name, site in trace.nodes.items() if site["type"] == "sample"]
         assert sites == ["x{}".format(i) for i in range(depth)]
 
@@ -44,24 +42,16 @@ def test_iter_discrete_traces_scalar(graph_type):
 
     @config_enumerate
     def model():
-        p = pyro.param("p", variable(0.05))
-        ps = pyro.param("ps", variable([0.1, 0.2, 0.3, 0.4]))
+        p = pyro.param("p", torch.tensor(0.05))
+        ps = pyro.param("ps", torch.tensor([0.1, 0.2, 0.3, 0.4]))
         x = pyro.sample("x", dist.Bernoulli(p))
         y = pyro.sample("y", dist.Categorical(ps))
         return dict(x=x, y=y)
 
     traces = list(iter_discrete_traces(graph_type, model))
 
-    p = pyro.param("p")
     ps = pyro.param("ps")
     assert len(traces) == 2 * len(ps)
-
-    for weights, trace in traces:
-        x = trace.nodes["x"]["value"].long()
-        y = trace.nodes["y"]["value"].long()
-        expected_weight = [1 - p, p][x] * ps[y]
-        actual_weight = weights.get_upstream(trace.nodes["x"]["cond_indep_stack"])
-        assert_equal(actual_weight, expected_weight)
 
 
 @pytest.mark.parametrize("graph_type", ["flat", "dense"])
@@ -70,9 +60,9 @@ def test_iter_discrete_traces_vector(graph_type):
 
     @config_enumerate
     def model():
-        p = pyro.param("p", variable([0.05, 0.15]))
-        ps = pyro.param("ps", variable([[0.1, 0.2, 0.3, 0.4],
-                                        [0.4, 0.3, 0.2, 0.1]]))
+        p = pyro.param("p", torch.tensor([0.05, 0.15]))
+        ps = pyro.param("ps", torch.tensor([[0.1, 0.2, 0.3, 0.4],
+                                           [0.4, 0.3, 0.2, 0.1]]))
         with pyro.iarange("iarange", 2):
             x = pyro.sample("x", dist.Bernoulli(p))
             y = pyro.sample("y", dist.Categorical(ps))
@@ -82,17 +72,8 @@ def test_iter_discrete_traces_vector(graph_type):
 
     traces = list(iter_discrete_traces(graph_type, model))
 
-    p = pyro.param("p")
     ps = pyro.param("ps")
     assert len(traces) == 2 * ps.size(-1)
-
-    for weights, trace in traces:
-        x = trace.nodes["x"]["value"]
-        y = trace.nodes["y"]["value"]
-        expected_weight = (dist.Bernoulli(p).log_prob(x) +
-                           dist.Categorical(ps).log_prob(y)).exp()
-        actual_weight = weights.get_upstream(trace.nodes["x"]["cond_indep_stack"])
-        assert_equal(actual_weight, expected_weight)
 
 
 @pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
@@ -100,13 +81,13 @@ def test_iter_discrete_traces_nan(enumerate1):
     pyro.clear_param_store()
 
     def model():
-        p = variable([0.0, 0.5, 1.0])
+        p = torch.tensor([0.0, 0.5, 1.0])
         with pyro.iarange("batch", 3):
             pyro.sample("z", dist.Bernoulli(p))
 
     @config_enumerate(default=enumerate1)
     def guide():
-        p = pyro.param("p", variable([0.0, 0.5, 1.0], requires_grad=True))
+        p = pyro.param("p", torch.tensor([0.0, 0.5, 1.0], requires_grad=True))
         with pyro.iarange("batch", 3):
             pyro.sample("z", dist.Bernoulli(p))
 
@@ -119,9 +100,9 @@ def test_iter_discrete_traces_nan(enumerate1):
 
 # A simple Gaussian mixture model, with no vectorization.
 def gmm_model(data, verbose=False):
-    p = pyro.param("p", variable(0.3, requires_grad=True))
-    sigma = pyro.param("sigma", variable(1.0, requires_grad=True))
-    mus = Variable(torch.Tensor([-1, 1]))
+    p = pyro.param("p", torch.tensor(0.3, requires_grad=True))
+    sigma = pyro.param("sigma", torch.tensor(1.0, requires_grad=True))
+    mus = torch.tensor([-1, 1])
     for i in pyro.irange("data", len(data)):
         z = pyro.sample("z_{}".format(i), dist.Bernoulli(p))
         z = z.long()
@@ -132,7 +113,7 @@ def gmm_model(data, verbose=False):
 
 def gmm_guide(data, verbose=False):
     for i in pyro.irange("data", len(data)):
-        p = pyro.param("p_{}".format(i), variable(0.6, requires_grad=True))
+        p = pyro.param("p_{}".format(i), torch.tensor(0.6, requires_grad=True))
         z = pyro.sample("z_{}".format(i), dist.Bernoulli(p))
         z = z.long()
         if verbose:
@@ -144,7 +125,7 @@ def gmm_guide(data, verbose=False):
 @pytest.mark.parametrize("model", [gmm_model, gmm_guide])
 def test_gmm_iter_discrete_traces(data_size, graph_type, model):
     pyro.clear_param_store()
-    data = Variable(torch.arange(0, data_size))
+    data = torch.arange(0, data_size)
     model = config_enumerate(model)
     traces = list(iter_discrete_traces(graph_type, model, data=data, verbose=True))
     # This non-vectorized version is exponential in data_size:
@@ -153,10 +134,10 @@ def test_gmm_iter_discrete_traces(data_size, graph_type, model):
 
 # A Gaussian mixture model, with vectorized batching.
 def gmm_batch_model(data):
-    p = pyro.param("p", Variable(torch.Tensor([0.3]), requires_grad=True))
+    p = pyro.param("p", torch.tensor([0.3], requires_grad=True))
     p = torch.cat([p, 1 - p])
-    sigma = pyro.param("sigma", Variable(torch.Tensor([1.0]), requires_grad=True))
-    mus = Variable(torch.Tensor([-1, 1]))
+    sigma = pyro.param("sigma", torch.tensor([1.0], requires_grad=True))
+    mus = torch.tensor([-1, 1])
     with pyro.iarange("data", len(data)) as batch:
         n = len(batch)
         z = pyro.sample("z", dist.OneHotCategorical(p).reshape([n]))
@@ -168,7 +149,7 @@ def gmm_batch_model(data):
 def gmm_batch_guide(data):
     with pyro.iarange("data", len(data)) as batch:
         n = len(batch)
-        ps = pyro.param("ps", Variable(torch.ones(n, 1) * 0.6, requires_grad=True))
+        ps = pyro.param("ps", torch.tensor(torch.ones(n, 1) * 0.6, requires_grad=True))
         ps = torch.cat([ps, 1 - ps], dim=1)
         z = pyro.sample("z", dist.OneHotCategorical(ps))
         assert z.shape[-2:] == (n, 2)
@@ -179,7 +160,7 @@ def gmm_batch_guide(data):
 @pytest.mark.parametrize("model", [gmm_batch_model, gmm_batch_guide])
 def test_gmm_batch_iter_discrete_traces(model, data_size, graph_type):
     pyro.clear_param_store()
-    data = Variable(torch.arange(0, data_size))
+    data = torch.arange(0, data_size)
     model = config_enumerate(model)
     traces = list(iter_discrete_traces(graph_type, model, data=data))
     # This vectorized version is independent of data_size:
@@ -193,7 +174,7 @@ def test_gmm_batch_iter_discrete_traces(model, data_size, graph_type):
 @pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
 def test_svi_step_smoke(model, guide, enumerate1):
     pyro.clear_param_store()
-    data = Variable(torch.Tensor([0, 1, 9]))
+    data = torch.tensor([0, 1, 9])
 
     guide = config_enumerate(guide, default=enumerate1)
     optimizer = pyro.optim.Adam({"lr": .001})
@@ -206,9 +187,9 @@ def test_svi_step_smoke(model, guide, enumerate1):
 @pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
 def test_elbo_bern(quantity, enumerate1):
     pyro.clear_param_store()
-    num_particles = 1000
+    num_particles = 1 if enumerate1 else 10000
     prec = 0.001 if enumerate1 else 0.1
-    q = pyro.param("q", variable(0.5, requires_grad=True))
+    q = pyro.param("q", torch.tensor(0.5, requires_grad=True))
     kl = kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.25))
 
     def model():
@@ -245,9 +226,9 @@ def test_elbo_bern(quantity, enumerate1):
 @pytest.mark.parametrize("enumerate3", [None, "sequential", "parallel"])
 def test_elbo_berns(enumerate1, enumerate2, enumerate3):
     pyro.clear_param_store()
-    num_particles = 10000
+    num_particles = 1 if all([enumerate1, enumerate2, enumerate3]) else 10000
     prec = 0.001 if all([enumerate1, enumerate2, enumerate3]) else 0.1
-    q = pyro.param("q", variable(0.75, requires_grad=True))
+    q = pyro.param("q", torch.tensor(0.75, requires_grad=True))
 
     def model():
         with pyro.iarange("particles", num_particles):
@@ -286,12 +267,12 @@ def test_elbo_berns(enumerate1, enumerate2, enumerate3):
 @pytest.mark.parametrize("enumerate3", ["sequential", "parallel"])
 def test_elbo_categoricals(enumerate1, enumerate2, enumerate3, max_iarange_nesting):
     pyro.clear_param_store()
-    p1 = variable([0.6, 0.4])
-    p2 = variable([0.3, 0.3, 0.4])
-    p3 = variable([0.1, 0.2, 0.3, 0.4])
-    q1 = pyro.param("q1", variable([0.4, 0.6], requires_grad=True))
-    q2 = pyro.param("q2", variable([0.4, 0.3, 0.3], requires_grad=True))
-    q3 = pyro.param("q3", variable([0.4, 0.3, 0.2, 0.1], requires_grad=True))
+    p1 = torch.tensor([0.6, 0.4])
+    p2 = torch.tensor([0.3, 0.3, 0.4])
+    p3 = torch.tensor([0.1, 0.2, 0.3, 0.4])
+    q1 = pyro.param("q1", torch.tensor([0.4, 0.6], requires_grad=True))
+    q2 = pyro.param("q2", torch.tensor([0.4, 0.3, 0.3], requires_grad=True))
+    q3 = pyro.param("q3", torch.tensor([0.4, 0.3, 0.2, 0.1], requires_grad=True))
 
     def model():
         pyro.sample("x1", dist.Categorical(p1))
@@ -329,8 +310,8 @@ def test_elbo_categoricals(enumerate1, enumerate2, enumerate3, max_iarange_nesti
 @pytest.mark.parametrize("iarange_dim", [1, 2])
 def test_elbo_iarange(iarange_dim, enumerate1, enumerate2):
     pyro.clear_param_store()
-    num_particles = 10000
-    q = pyro.param("q", variable(0.75, requires_grad=True))
+    num_particles = 1 if all([enumerate1, enumerate2]) else 10000
+    q = pyro.param("q", torch.tensor(0.75, requires_grad=True))
     p = 0.2693204236205713  # for which kl(Bernoulli(q), Bernoulli(p)) = 0.5
 
     def model():
@@ -371,8 +352,8 @@ def test_elbo_iarange(iarange_dim, enumerate1, enumerate2):
 @pytest.mark.parametrize("irange_dim", [1, 2])
 def test_elbo_irange(irange_dim, enumerate1, enumerate2):
     pyro.clear_param_store()
-    num_particles = 10000
-    q = pyro.param("q", variable(0.75, requires_grad=True))
+    num_particles = 1 if all([enumerate1, enumerate2]) else 10000
+    q = pyro.param("q", torch.tensor(0.75, requires_grad=True))
     p = 0.2693204236205713  # for which kl(Bernoulli(q), Bernoulli(p)) = 0.5
 
     def model():
@@ -408,16 +389,16 @@ def test_elbo_irange(irange_dim, enumerate1, enumerate2):
     ]))
 
 
-@pytest.mark.parametrize("enumerate4", [None, "sequential", xfail_parallel])
-@pytest.mark.parametrize("enumerate3", [None, "sequential", xfail_parallel])
-@pytest.mark.parametrize("enumerate2", [None, "sequential", xfail_parallel])
-@pytest.mark.parametrize("enumerate1", [None, "sequential", xfail_parallel])
+@pytest.mark.parametrize("enumerate4", [None, "sequential", "parallel"])
+@pytest.mark.parametrize("enumerate3", [None, "sequential", "parallel"])
+@pytest.mark.parametrize("enumerate2", [None, "sequential", "parallel"])
+@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("inner_dim", [2])
 @pytest.mark.parametrize("outer_dim", [2])
 def test_elbo_iarange_iarange(outer_dim, inner_dim, enumerate1, enumerate2, enumerate3, enumerate4):
     pyro.clear_param_store()
-    num_particles = 10000
-    q = pyro.param("q", variable(0.75, requires_grad=True))
+    num_particles = 1 if all([enumerate1, enumerate2, enumerate3, enumerate4]) else 50000
+    q = pyro.param("q", torch.tensor(0.75, requires_grad=True))
     p = 0.2693204236205713  # for which kl(Bernoulli(q), Bernoulli(p)) = 0.5
 
     def model():
@@ -472,8 +453,8 @@ def test_elbo_iarange_iarange(outer_dim, inner_dim, enumerate1, enumerate2, enum
 @pytest.mark.parametrize("outer_dim", [3])
 def test_elbo_iarange_irange(outer_dim, inner_dim, enumerate1, enumerate2, enumerate3):
     pyro.clear_param_store()
-    num_particles = 10000
-    q = pyro.param("q", variable(0.75, requires_grad=True))
+    num_particles = 1 if all([enumerate1, enumerate2, enumerate3]) else 50000
+    q = pyro.param("q", torch.tensor(0.75, requires_grad=True))
     p = 0.2693204236205713  # for which kl(Bernoulli(q), Bernoulli(p)) = 0.5
 
     def model():
@@ -514,23 +495,24 @@ def test_elbo_iarange_irange(outer_dim, inner_dim, enumerate1, enumerate2, enume
     ]))
 
 
-@pytest.mark.parametrize("enumerate3", [None, "sequential", xfail_parallel])
+@pytest.mark.parametrize("enumerate3", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("enumerate2", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("inner_dim", [2])
 @pytest.mark.parametrize("outer_dim", [2])
 def test_elbo_irange_iarange(outer_dim, inner_dim, enumerate1, enumerate2, enumerate3):
     pyro.clear_param_store()
-    num_particles = 10000
-    q = pyro.param("q", variable(0.75, requires_grad=True))
+    num_particles = 1 if all([enumerate1, enumerate2, enumerate3]) else 50000
+    q = pyro.param("q", torch.tensor(0.75, requires_grad=True))
     p = 0.2693204236205713  # for which kl(Bernoulli(q), Bernoulli(p)) = 0.5
 
     def model():
         with pyro.iarange("particles", num_particles):
             pyro.sample("x", dist.Bernoulli(p).reshape([num_particles]))
+            inner_iarange = pyro.iarange("inner", inner_dim)
             for i in pyro.irange("outer", outer_dim):
                 pyro.sample("y_{}".format(i), dist.Bernoulli(p).reshape([num_particles]))
-                with pyro.iarange("inner", inner_dim):
+                with inner_iarange:
                     pyro.sample("z_{}".format(i), dist.Bernoulli(p).reshape([inner_dim, num_particles]))
 
     def guide():
@@ -538,10 +520,11 @@ def test_elbo_irange_iarange(outer_dim, inner_dim, enumerate1, enumerate2, enume
         with pyro.iarange("particles", num_particles):
             pyro.sample("x", dist.Bernoulli(q).reshape([num_particles]),
                         infer={"enumerate": enumerate1})
+            inner_iarange = pyro.iarange("inner", inner_dim)
             for i in pyro.irange("outer", outer_dim):
                 pyro.sample("y_{}".format(i), dist.Bernoulli(q).reshape([num_particles]),
                             infer={"enumerate": enumerate2})
-                with pyro.iarange("inner", inner_dim):
+                with inner_iarange:
                     pyro.sample("z_{}".format(i), dist.Bernoulli(q).reshape([inner_dim, num_particles]),
                                 infer={"enumerate": enumerate3})
 
@@ -563,23 +546,24 @@ def test_elbo_irange_iarange(outer_dim, inner_dim, enumerate1, enumerate2, enume
     ]))
 
 
-@pytest.mark.parametrize("enumerate3", [None, "sequential", xfail_parallel])
+@pytest.mark.parametrize("enumerate3", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("enumerate2", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("inner_dim", [2])
 @pytest.mark.parametrize("outer_dim", [2])
 def test_elbo_irange_irange(outer_dim, inner_dim, enumerate1, enumerate2, enumerate3):
     pyro.clear_param_store()
-    num_particles = 10000
-    q = pyro.param("q", variable(0.75, requires_grad=True))
+    num_particles = 1 if all([enumerate1, enumerate2, enumerate3]) else 50000
+    q = pyro.param("q", torch.tensor(0.75, requires_grad=True))
     p = 0.2693204236205713  # for which kl(Bernoulli(q), Bernoulli(p)) = 0.5
 
     def model():
         with pyro.iarange("particles", num_particles):
             pyro.sample("x", dist.Bernoulli(p).reshape([num_particles]))
+            inner_irange = pyro.irange("inner", outer_dim)
             for i in pyro.irange("outer", inner_dim):
                 pyro.sample("y_{}".format(i), dist.Bernoulli(p).reshape([num_particles]))
-                for j in pyro.irange("inner", outer_dim):
+                for j in inner_irange:
                     pyro.sample("z_{}_{}".format(i, j), dist.Bernoulli(p).reshape([num_particles]))
 
     def guide():
@@ -587,10 +571,11 @@ def test_elbo_irange_irange(outer_dim, inner_dim, enumerate1, enumerate2, enumer
         with pyro.iarange("particles", num_particles):
             pyro.sample("x", dist.Bernoulli(q).reshape([num_particles]),
                         infer={"enumerate": enumerate1})
+            inner_irange = pyro.irange("inner", inner_dim)
             for i in pyro.irange("outer", outer_dim):
                 pyro.sample("y_{}".format(i), dist.Bernoulli(q).reshape([num_particles]),
                             infer={"enumerate": enumerate2})
-                for j in pyro.irange("inner", inner_dim):
+                for j in inner_irange:
                     pyro.sample("z_{}_{}".format(i, j), dist.Bernoulli(q).reshape([num_particles]),
                                 infer={"enumerate": enumerate3})
 
@@ -617,7 +602,7 @@ def test_elbo_irange_irange(outer_dim, inner_dim, enumerate1, enumerate2, enumer
 @pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
 def test_non_mean_field_bern_bern_elbo_gradient(enumerate1, pi1, pi2):
     pyro.clear_param_store()
-    num_particles = 10000
+    num_particles = 1 if enumerate1 else 20000
 
     def model():
         with pyro.iarange("particles", num_particles):
@@ -625,8 +610,8 @@ def test_non_mean_field_bern_bern_elbo_gradient(enumerate1, pi1, pi2):
             pyro.sample("z", dist.Bernoulli(0.55 * y + 0.10))
 
     def guide():
-        q1 = pyro.param("q1", variable(pi1, requires_grad=True))
-        q2 = pyro.param("q2", variable(pi2, requires_grad=True))
+        q1 = pyro.param("q1", torch.tensor(pi1, requires_grad=True))
+        q2 = pyro.param("q2", torch.tensor(pi2, requires_grad=True))
         with pyro.iarange("particles", num_particles):
             y = pyro.sample("y", dist.Bernoulli(q1).reshape([num_particles]))
             pyro.sample("z", dist.Bernoulli(q2 * y + 0.10))
@@ -638,8 +623,8 @@ def test_non_mean_field_bern_bern_elbo_gradient(enumerate1, pi1, pi2):
     actual_grad_q2 = pyro.param('q2').grad / num_particles
 
     logger.info("Computing analytic gradients")
-    q1 = variable(pi1, requires_grad=True)
-    q2 = variable(pi2, requires_grad=True)
+    q1 = torch.tensor(pi1, requires_grad=True)
+    q2 = torch.tensor(pi2, requires_grad=True)
     elbo = kl_divergence(dist.Bernoulli(q1), dist.Bernoulli(0.33))
     elbo = elbo + q1 * kl_divergence(dist.Bernoulli(q2 + 0.10), dist.Bernoulli(0.65))
     elbo = elbo + (1.0 - q1) * kl_divergence(dist.Bernoulli(0.10), dist.Bernoulli(0.10))
@@ -667,14 +652,14 @@ def test_non_mean_field_bern_normal_elbo_gradient(enumerate1, pi1, pi2, pi3, inc
 
     def model():
         with pyro.iarange("particles", num_particles):
-            q3 = pyro.param("q3", variable(pi3, requires_grad=True))
+            q3 = pyro.param("q3", torch.tensor(pi3, requires_grad=True))
             y = pyro.sample("y", dist.Bernoulli(q3).reshape([num_particles]))
             if include_z:
                 pyro.sample("z", dist.Normal(0.55 * y + q3, 1.0))
 
     def guide():
-        q1 = pyro.param("q1", variable(pi1, requires_grad=True))
-        q2 = pyro.param("q2", variable(pi2, requires_grad=True))
+        q1 = pyro.param("q1", torch.tensor(pi1, requires_grad=True))
+        q2 = pyro.param("q2", torch.tensor(pi2, requires_grad=True))
         with pyro.iarange("particles", num_particles):
             y = pyro.sample("y", dist.Bernoulli(q1).reshape([num_particles]), infer={"enumerate": enumerate1})
             if include_z:
@@ -689,9 +674,9 @@ def test_non_mean_field_bern_normal_elbo_gradient(enumerate1, pi1, pi2, pi3, inc
     actual_grad_q3 = pyro.param('q3').grad / num_particles
 
     logger.info("Computing analytic gradients")
-    q1 = variable(pi1, requires_grad=True)
-    q2 = variable(pi2, requires_grad=True)
-    q3 = variable(pi3, requires_grad=True)
+    q1 = torch.tensor(pi1, requires_grad=True)
+    q2 = torch.tensor(pi2, requires_grad=True)
+    q3 = torch.tensor(pi3, requires_grad=True)
     elbo = kl_divergence(dist.Bernoulli(q1), dist.Bernoulli(q3))
     if include_z:
         elbo = elbo + q1 * kl_divergence(dist.Normal(q2 + 0.10, 1.0), dist.Normal(q3 + 0.55, 1.0))
@@ -724,15 +709,15 @@ def test_non_mean_field_normal_bern_elbo_gradient(pi1, pi2, pi3):
 
     def model(num_particles):
         with pyro.iarange("particles", num_particles):
-            q3 = pyro.param("q3", variable(pi3, requires_grad=True))
-            q4 = pyro.param("q4", variable(0.5 * (pi1 + pi2), requires_grad=True))
+            q3 = pyro.param("q3", torch.tensor(pi3, requires_grad=True))
+            q4 = pyro.param("q4", torch.tensor(0.5 * (pi1 + pi2), requires_grad=True))
             z = pyro.sample("z", dist.Normal(q3, 1.0).reshape([num_particles]))
             zz = torch.exp(z) / (1.0 + torch.exp(z))
             pyro.sample("y", dist.Bernoulli(q4 * zz))
 
     def guide(num_particles):
-        q1 = pyro.param("q1", variable(pi1, requires_grad=True))
-        q2 = pyro.param("q2", variable(pi2, requires_grad=True))
+        q1 = pyro.param("q1", torch.tensor(pi1, requires_grad=True))
+        q2 = pyro.param("q2", torch.tensor(pi2, requires_grad=True))
         with pyro.iarange("particles", num_particles):
             z = pyro.sample("z", dist.Normal(q2, 1.0).reshape([num_particles]))
             zz = torch.exp(z) / (1.0 + torch.exp(z))

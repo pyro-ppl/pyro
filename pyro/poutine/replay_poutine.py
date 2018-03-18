@@ -39,7 +39,9 @@ class ReplayMessenger(Messenger):
         if msg["name"] in self.sites:
             if msg["type"] == "sample" and not msg["is_observed"]:
                 msg["done"] = True
-                msg["value"] = self.guide_trace.nodes[self.sites[msg["name"]]]["value"]
+                guide_msg = self.guide_trace.nodes[self.sites[msg["name"]]]
+                msg["value"] = guide_msg["value"]
+                msg["infer"] = guide_msg["infer"]
 
         return super(ReplayMessenger, self)._process_message(msg)
 

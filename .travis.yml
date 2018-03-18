@@ -7,16 +7,8 @@ env:
         - PYTHONPATH=$PWD:$PYTHONPATH
 
 install:
-    # download and install PyTorch wheel
-    - pip install --upgrade awscli
-    - mkdir -p tmp
-    - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
-        aws s3 --no-sign-request sync s3://pyro-ppl/ci tmp --exclude "*" --include "*-cp27-*";
-      else
-        aws s3 --no-sign-request sync s3://pyro-ppl/ci tmp --exclude "*" --include "*-cp35-*";
-      fi
-    - pip install tmp/*
-    - rm -r tmp
+    # Install PyTorch wheel using the install script
+    - bash scripts/install_pytorch.sh
     - pip install -e .[test]
     - pip freeze
 
@@ -42,7 +34,21 @@ jobs:
           script:
               - pip install -r docs/requirements.txt
               - make docs
-        - python: 2.7
+        - stage: perf
+          if: type = cron
+          python: 2.7
+          env: STAGE=perf
+          script:
+              - pip install -e .[profile]
+              - make perf-test
+        - python: 3.5
+          if: type = cron
+          env: STAGE=perf
+          script:
+              - pip install -e .[profile]
+              - make perf-test
+        - stage: profiler
+          python: 2.7
           env: STAGE=profiler
           script:
               - pip install -e .[profile]

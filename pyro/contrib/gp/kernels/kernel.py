@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 from collections import OrderedDict
 import numbers
 
-from pyro.contrib.gp import Parameterized
+from pyro.contrib.gp.util import Parameterized
 
 
 class Kernel(Parameterized):
@@ -161,7 +161,7 @@ class Combination(Kernel):
             if active_dims == active_dims1:  # on the same active_dims
                 pass
             elif len(active_dims & active_dims1) == 0:  # on disjoint active_dims
-                active_dims = active_dims + active_dims1
+                active_dims = active_dims | active_dims1
             else:
                 raise ValueError("Sub-kernels must act on the same active dimensions or disjoint active "
                                  "dimensions (to create direct sum or tensor product or kernels).")

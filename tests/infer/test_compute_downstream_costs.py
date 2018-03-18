@@ -5,24 +5,22 @@ import math
 import networkx
 import pytest
 import torch
-from torch.autograd import Variable, variable
 
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer.tracegraph_elbo import _compute_downstream_costs
-from pyro.infer.util import MultiFrameTensor
+from pyro.infer.util import MultiFrameTensor, get_iarange_stacks
 from pyro.poutine.util import prune_subsample_sites
 from tests.common import assert_equal
 
 
 def _brute_force_compute_downstream_costs(model_trace, guide_trace,  #
-                                          model_iarange_nodes, guide_iarange_nodes,  #
                                           non_reparam_nodes):
 
     guide_nodes = [x for x in guide_trace.nodes if guide_trace.nodes[x]["type"] == "sample"]
     downstream_costs, downstream_guide_cost_nodes = {}, {}
-    stacks = model_trace.graph["iarange_info"]['iarange_stacks']
+    stacks = get_iarange_stacks(model_trace)
 
     for node in guide_nodes:
         downstream_costs[node] = MultiFrameTensor((stacks[node],
@@ -51,7 +49,7 @@ def _brute_force_compute_downstream_costs(model_trace, guide_trace,  #
             downstream_costs[site].add(*child_mft.items())
             downstream_guide_cost_nodes[site].update([child])
 
-    for k in downstream_costs:
+    for k in non_reparam_nodes:
         downstream_costs[k] = downstream_costs[k].sum_to(guide_trace.nodes[k]["cond_indep_stack"])
 
     return downstream_costs, downstream_guide_cost_nodes
@@ -59,9 +57,9 @@ def _brute_force_compute_downstream_costs(model_trace, guide_trace,  #
 
 def big_model_guide(include_obs=True, include_single=False, include_inner_1=False, flip_c23=False,
                     include_triple=False, include_z1=False):
-    p0 = variable(math.exp(-0.20), requires_grad=True)
-    p1 = variable(math.exp(-0.33), requires_grad=True)
-    p2 = variable(math.exp(-0.70), requires_grad=True)
+    p0 = torch.tensor(math.exp(-0.20), requires_grad=True)
+    p1 = torch.tensor(math.exp(-0.33), requires_grad=True)
+    p2 = torch.tensor(math.exp(-0.70), requires_grad=True)
     if include_triple:
         with pyro.iarange("iarange_triple1", 6) as ind_triple1:
             with pyro.iarange("iarange_triple2", 7) as ind_triple2:
@@ -93,7 +91,7 @@ def big_model_guide(include_obs=True, include_single=False, include_inner_1=Fals
             assert d2.shape == (4, 2)
             if include_obs:
                 pyro.sample("obs", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_inner), len(ind_outer)]),
-                            obs=Variable(torch.ones(d2.size())))
+                            obs=torch.ones(d2.size()))
 
 
 @pytest.mark.parametrize("include_inner_1", [True, False])
@@ -116,22 +114,12 @@ def test_compute_downstream_costs_big_model_guide_pair(include_inner_1, include_
     model_trace = prune_subsample_sites(model_trace)
     model_trace.compute_batch_log_pdf()
     guide_trace.compute_batch_log_pdf()
-
-    guide_iarange_info = guide_trace.graph["iarange_info"]
-    model_iarange_info = model_trace.graph["iarange_info"]
-    guide_iarange_condition = guide_iarange_info['rao-blackwellization-condition']
-    model_iarange_condition = model_iarange_info['rao-blackwellization-condition']
-    do_vec_rb = guide_iarange_condition and model_iarange_condition
-    guide_iarange_nodes = guide_iarange_info['nodes'] if do_vec_rb else set()
-    model_iarange_nodes = model_iarange_info['nodes'] if do_vec_rb else set()
     non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
 
     dc, dc_nodes = _compute_downstream_costs(model_trace, guide_trace,
-                                             model_iarange_nodes, guide_iarange_nodes,
                                              non_reparam_nodes)
 
     dc_brute, dc_nodes_brute = _brute_force_compute_downstream_costs(model_trace, guide_trace,
-                                                                     model_iarange_nodes, guide_iarange_nodes,
                                                                      non_reparam_nodes)
 
     assert dc_nodes == dc_nodes_brute
@@ -215,19 +203,19 @@ def test_compute_downstream_costs_big_model_guide_pair(include_inner_1, include_
 
 
 def diamond_model(dim):
-    p0 = variable(math.exp(-0.20), requires_grad=True)
-    p1 = variable(math.exp(-0.33), requires_grad=True)
+    p0 = torch.tensor(math.exp(-0.20), requires_grad=True)
+    p1 = torch.tensor(math.exp(-0.33), requires_grad=True)
     pyro.sample("a1", dist.Bernoulli(p0))
     pyro.sample("c1", dist.Bernoulli(p1))
     for i in pyro.irange("irange", 2):
         b_i = pyro.sample("b{}".format(i), dist.Bernoulli(p0 * p1))
         assert b_i.shape == ()
-    pyro.sample("obs", dist.Bernoulli(p0), obs=variable(1.0))
+    pyro.sample("obs", dist.Bernoulli(p0), obs=torch.tensor(1.0))
 
 
 def diamond_guide(dim):
-    p0 = variable(math.exp(-0.70), requires_grad=True)
-    p1 = variable(math.exp(-0.43), requires_grad=True)
+    p0 = torch.tensor(math.exp(-0.70), requires_grad=True)
+    p1 = torch.tensor(math.exp(-0.43), requires_grad=True)
     pyro.sample("a1", dist.Bernoulli(p0))
     for i in pyro.irange("irange", dim):
         pyro.sample("b{}".format(i), dist.Bernoulli(p1))
@@ -246,21 +234,11 @@ def test_compute_downstream_costs_duplicates(dim):
     model_trace.compute_batch_log_pdf()
     guide_trace.compute_batch_log_pdf()
 
-    guide_iarange_info = guide_trace.graph["iarange_info"]
-    model_iarange_info = model_trace.graph["iarange_info"]
-    guide_iarange_condition = guide_iarange_info['rao-blackwellization-condition']
-    model_iarange_condition = model_iarange_info['rao-blackwellization-condition']
-    do_vec_rb = guide_iarange_condition and model_iarange_condition
-    guide_iarange_nodes = guide_iarange_info['nodes'] if do_vec_rb else set()
-    model_iarange_nodes = model_iarange_info['nodes'] if do_vec_rb else set()
     non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
 
     dc, dc_nodes = _compute_downstream_costs(model_trace, guide_trace,
-                                             model_iarange_nodes, guide_iarange_nodes,
                                              non_reparam_nodes)
-
     dc_brute, dc_nodes_brute = _brute_force_compute_downstream_costs(model_trace, guide_trace,
-                                                                     model_iarange_nodes, guide_iarange_nodes,
                                                                      non_reparam_nodes)
 
     assert dc_nodes == dc_nodes_brute
@@ -293,16 +271,16 @@ def test_compute_downstream_costs_duplicates(dim):
 
 
 def nested_model_guide(include_obs=True, dim1=11, dim2=7):
-    p0 = variable(math.exp(-0.40 - include_obs * 0.2), requires_grad=True)
-    p1 = variable(math.exp(-0.33 - include_obs * 0.1), requires_grad=True)
+    p0 = torch.tensor(math.exp(-0.40 - include_obs * 0.2), requires_grad=True)
+    p1 = torch.tensor(math.exp(-0.33 - include_obs * 0.1), requires_grad=True)
     pyro.sample("a1", dist.Bernoulli(p0 * p1))
     for i in pyro.irange("irange", dim1):
         pyro.sample("b{}".format(i), dist.Bernoulli(p0))
-        with pyro.iarange("iarange", dim2 + i) as ind:
+        with pyro.iarange("iarange_{}".format(i), dim2 + i) as ind:
             c_i = pyro.sample("c{}".format(i), dist.Bernoulli(p1).reshape(sample_shape=[len(ind)]))
             assert c_i.shape == (dim2 + i,)
             if include_obs:
-                obs_i = pyro.sample("obs{}".format(i), dist.Bernoulli(c_i), obs=Variable(torch.ones(c_i.size())))
+                obs_i = pyro.sample("obs{}".format(i), dist.Bernoulli(c_i), obs=torch.ones(c_i.size()))
                 assert obs_i.shape == (dim2 + i,)
 
 
@@ -318,21 +296,11 @@ def test_compute_downstream_costs_iarange_in_irange(dim1):
     model_trace.compute_batch_log_pdf()
     guide_trace.compute_batch_log_pdf()
 
-    guide_iarange_info = guide_trace.graph["iarange_info"]
-    model_iarange_info = model_trace.graph["iarange_info"]
-    guide_iarange_condition = guide_iarange_info['rao-blackwellization-condition']
-    model_iarange_condition = model_iarange_info['rao-blackwellization-condition']
-    do_vec_rb = guide_iarange_condition and model_iarange_condition
-    guide_iarange_nodes = guide_iarange_info['nodes'] if do_vec_rb else set()
-    model_iarange_nodes = model_iarange_info['nodes'] if do_vec_rb else set()
     non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
 
     dc, dc_nodes = _compute_downstream_costs(model_trace, guide_trace,
-                                             model_iarange_nodes, guide_iarange_nodes,
                                              non_reparam_nodes)
-
     dc_brute, dc_nodes_brute = _brute_force_compute_downstream_costs(model_trace, guide_trace,
-                                                                     model_iarange_nodes, guide_iarange_nodes,
                                                                      non_reparam_nodes)
 
     assert dc_nodes == dc_nodes_brute
@@ -362,8 +330,8 @@ def test_compute_downstream_costs_iarange_in_irange(dim1):
 
 
 def nested_model_guide2(include_obs=True, dim1=3, dim2=2):
-    p0 = variable(math.exp(-0.40 - include_obs * 0.2), requires_grad=True)
-    p1 = variable(math.exp(-0.33 - include_obs * 0.1), requires_grad=True)
+    p0 = torch.tensor(math.exp(-0.40 - include_obs * 0.2), requires_grad=True)
+    p1 = torch.tensor(math.exp(-0.33 - include_obs * 0.1), requires_grad=True)
     pyro.sample("a1", dist.Bernoulli(p0 * p1))
     with pyro.iarange("iarange", dim1) as ind:
         c = pyro.sample("c", dist.Bernoulli(p1).reshape(sample_shape=[len(ind)]))
@@ -372,7 +340,7 @@ def nested_model_guide2(include_obs=True, dim1=3, dim2=2):
             b_i = pyro.sample("b{}".format(i), dist.Bernoulli(p0).reshape(sample_shape=[len(ind)]))
             assert b_i.shape == (dim1,)
             if include_obs:
-                obs_i = pyro.sample("obs{}".format(i), dist.Bernoulli(b_i), obs=Variable(torch.ones(b_i.size())))
+                obs_i = pyro.sample("obs{}".format(i), dist.Bernoulli(b_i), obs=torch.ones(b_i.size()))
                 assert obs_i.shape == (dim1,)
 
 
@@ -389,22 +357,9 @@ def test_compute_downstream_costs_irange_in_iarange(dim1, dim2):
     model_trace.compute_batch_log_pdf()
     guide_trace.compute_batch_log_pdf()
 
-    guide_iarange_info = guide_trace.graph["iarange_info"]
-    model_iarange_info = model_trace.graph["iarange_info"]
-    guide_iarange_condition = guide_iarange_info['rao-blackwellization-condition']
-    model_iarange_condition = model_iarange_info['rao-blackwellization-condition']
-    do_vec_rb = guide_iarange_condition and model_iarange_condition
-    guide_iarange_nodes = guide_iarange_info['nodes'] if do_vec_rb else set()
-    model_iarange_nodes = model_iarange_info['nodes'] if do_vec_rb else set()
     non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
-
-    dc, dc_nodes = _compute_downstream_costs(model_trace, guide_trace,
-                                             model_iarange_nodes, guide_iarange_nodes,
-                                             non_reparam_nodes)
-
-    dc_brute, dc_nodes_brute = _brute_force_compute_downstream_costs(model_trace, guide_trace,
-                                                                     model_iarange_nodes, guide_iarange_nodes,
-                                                                     non_reparam_nodes)
+    dc, dc_nodes = _compute_downstream_costs(model_trace, guide_trace, non_reparam_nodes)
+    dc_brute, dc_nodes_brute = _brute_force_compute_downstream_costs(model_trace, guide_trace, non_reparam_nodes)
 
     assert dc_nodes == dc_nodes_brute
 
@@ -426,3 +381,50 @@ def test_compute_downstream_costs_irange_in_iarange(dim1, dim2):
     expected_a1 = model_trace.nodes['a1']['batch_log_pdf'] - guide_trace.nodes['a1']['batch_log_pdf']
     expected_a1 += expected_c.sum()
     assert_equal(expected_a1, dc['a1'])
+
+
+def iarange_reuse_model_guide(include_obs=True, dim1=3, dim2=2):
+    p0 = torch.tensor(math.exp(-0.40 - include_obs * 0.2), requires_grad=True)
+    p1 = torch.tensor(math.exp(-0.33 - include_obs * 0.1), requires_grad=True)
+    pyro.sample("a1", dist.Bernoulli(p0 * p1))
+    my_iarange1 = pyro.iarange("iarange1", dim1)
+    my_iarange2 = pyro.iarange("iarange2", dim2)
+    with my_iarange1 as ind1:
+        with my_iarange2 as ind2:
+            pyro.sample("c1", dist.Bernoulli(p1).reshape(sample_shape=[len(ind2), len(ind1)]))
+    pyro.sample("b1", dist.Bernoulli(p0 * p1))
+    with my_iarange2 as ind2:
+        with my_iarange1 as ind1:
+            c2 = pyro.sample("c2", dist.Bernoulli(p1).reshape(sample_shape=[len(ind2), len(ind1)]))
+            if include_obs:
+                pyro.sample("obs", dist.Bernoulli(c2), obs=torch.ones(c2.size()))
+
+
+@pytest.mark.parametrize("dim1", [2, 5])
+@pytest.mark.parametrize("dim2", [3, 4])
+def test_compute_downstream_costs_iarange_reuse(dim1, dim2):
+    guide_trace = poutine.trace(iarange_reuse_model_guide,
+                                graph_type="dense").get_trace(include_obs=False, dim1=dim1, dim2=dim2)
+    model_trace = poutine.trace(poutine.replay(iarange_reuse_model_guide, guide_trace),
+                                graph_type="dense").get_trace(include_obs=True, dim1=dim1, dim2=dim2)
+
+    guide_trace = prune_subsample_sites(guide_trace)
+    model_trace = prune_subsample_sites(model_trace)
+    model_trace.compute_batch_log_pdf()
+    guide_trace.compute_batch_log_pdf()
+
+    non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
+    dc, dc_nodes = _compute_downstream_costs(model_trace, guide_trace,
+                                             non_reparam_nodes)
+    dc_brute, dc_nodes_brute = _brute_force_compute_downstream_costs(model_trace, guide_trace, non_reparam_nodes)
+    assert dc_nodes == dc_nodes_brute
+
+    for k in dc:
+        assert(guide_trace.nodes[k]['batch_log_pdf'].size() == dc[k].size())
+        assert_equal(dc[k], dc_brute[k])
+
+    expected_c1 = model_trace.nodes['c1']['batch_log_pdf'] - guide_trace.nodes['c1']['batch_log_pdf']
+    expected_c1 += (model_trace.nodes['b1']['batch_log_pdf'] - guide_trace.nodes['b1']['batch_log_pdf']).sum()
+    expected_c1 += model_trace.nodes['c2']['batch_log_pdf'] - guide_trace.nodes['c2']['batch_log_pdf']
+    expected_c1 += model_trace.nodes['obs']['batch_log_pdf']
+    assert_equal(expected_c1, dc['c1'])
