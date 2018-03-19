@@ -9,6 +9,7 @@ import pyro.optim as optim
 from pyro.poutine.util import prune_subsample_sites
 from torch.distributions import transform_to
 
+
 # simple test model to test ADVI guide construction
 def test_model():
     pyro.sample("z1", dist.Normal(0.0, 1.0))
