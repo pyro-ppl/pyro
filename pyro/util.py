@@ -4,10 +4,11 @@ import functools
 import numbers
 import random
 import warnings
+from collections import defaultdict
 
 import graphviz
-from six.moves import zip_longest
 import torch
+from six.moves import zip_longest
 from torch.nn import Parameter
 
 from pyro.params import _PYRO_PARAM_STORE
@@ -384,6 +385,34 @@ def check_site_shape(site, max_iarange_nesting):
                 '- .permute() data dimensions']))
 
     # TODO Check parallel dimensions on the left of max_iarange_nesting.
+
+
+def check_traceenum_requirements(model_trace, guide_trace):
+    enumerated_sites = set(name for name, site in guide_trace.nodes.items()
+                           if site["type"] == "sample" and site["infer"].get("enumerate"))
+    iranges = {}
+    for role, trace in [('model', model_trace), ('guide', guide_trace)]:
+        restricted_contexts = defaultdict(set)
+        for name, site in trace.nodes.items():
+            if site["type"] != "sample":
+                continue
+            iranges[name] = tuple(f for f in  site["cond_indep_stack"] if not f.vectorized)
+            context = frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
+            for restricted_context, names in restricted_contexts.items():
+
+                # Check that sites outside each iarange context precede sites inside that context.
+                if context < restricted_context:
+                    names = sorted(n for n in names
+                                   if all(f1.count == f2.count for f1, f2 in zip(iranges[n], iranges[name])))
+                    if names:
+                        diff = sorted(f.name for f in restricted_context - context)
+                        warnings.warn('\n  '.join([
+                            'at {} site "{}", possibly invalid dependency.'.format(role, name),
+                            'Expected site "{}" to precede sites "{}"'.format(name, '", "'.join(sorted(names))),
+                            'to avoid breaking independence of iaranges "{}"'.format('", "'.join(diff)),
+                            ]), RuntimeWarning)
+            if name in enumerated_sites:
+                restricted_contexts[context].add(name)
 
 
 def deep_getattr(obj, name):

@@ -10,7 +10,7 @@ from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.util import MultiFrameDice
 from pyro.poutine.enumerate_poutine import EnumeratePoutine
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_match, check_site_shape, is_nan
+from pyro.util import check_model_guide_match, check_site_shape, check_traceenum_requirements, is_nan
 
 
 def _compute_dice_elbo(model_trace, guide_trace):
@@ -58,6 +58,7 @@ class TraceEnum_ELBO(ELBO):
                 check_model_guide_match(model_trace, guide_trace)
                 guide_trace = prune_subsample_sites(guide_trace)
                 model_trace = prune_subsample_sites(model_trace)
+                check_traceenum_requirements(model_trace, guide_trace)
 
                 model_trace.compute_batch_log_pdf()
                 for site in model_trace.nodes.values():
