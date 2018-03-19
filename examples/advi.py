@@ -7,7 +7,7 @@ from pyro.infer import SVI
 from tests.common import assert_equal
 import pyro.optim as optim
 from pyro.poutine.util import prune_subsample_sites
-
+from torch.distributions import transform_to
 
 # simple test model to test ADVI guide construction
 def test_model():
@@ -61,9 +61,7 @@ def advi_multivariate(model, *args, **kwargs):
                 size = product(shape)
                 unconstrained_value = latent[pos:pos + size].view(shape)
                 pos += size
-                # value = transform_to(site["fn"].support)(unconstrained_value)
-                # FIX ME: deal with constraints
-                value = unconstrained_value
+                value = transform_to(site["fn"].support)(unconstrained_value)
                 pyro.sample(name, dist.Delta(value))
 
     def wrapped_model(*args, **kwargs):
@@ -134,4 +132,4 @@ class ADVIGaussianChain(GaussianChain):
 
 
 chain = ADVIGaussianChain()
-chain.do_test_advi(3, True)
+chain.do_test_advi(7, True)
