@@ -396,7 +396,7 @@ def check_traceenum_requirements(model_trace, guide_trace):
         for name, site in trace.nodes.items():
             if site["type"] != "sample":
                 continue
-            iranges[name] = tuple(f for f in  site["cond_indep_stack"] if not f.vectorized)
+            iranges[name] = tuple(f for f in site["cond_indep_stack"] if not f.vectorized)
             context = frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
             for restricted_context, names in restricted_contexts.items():
 
