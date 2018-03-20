@@ -135,8 +135,7 @@ def _compute_elbo_non_reparam(guide_trace, non_reparam_nodes, downstream_costs):
         if use_decaying_avg_baseline:
             dc_shape = downstream_cost.shape
             avg_downstream_cost_old = pyro.param("__baseline_avg_downstream_cost_" + node,
-                                                 torch.tensor(0.0).expand(dc_shape).clone(),
-                                                 tags="__tracegraph_elbo_internal_tag")
+                                                 torch.tensor(0.0).expand(dc_shape).clone())
             avg_downstream_cost_new = (1 - baseline_beta) * downstream_cost.detach() + \
                 baseline_beta * avg_downstream_cost_old
             avg_downstream_cost_old.copy_(avg_downstream_cost_new)  # XXX is this copy_() what we want?

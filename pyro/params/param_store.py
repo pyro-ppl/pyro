@@ -54,12 +54,11 @@ class ParamStoreDict(object):
         """
         return self._params.keys()
 
-    def get_active_params(self, tags=None):
+    def get_active_params(self):
         """
         :returns: all active params in the ParamStore
         :rtype: set
         """
-        assert tags is None, "removing tag support"
         return self._active_params
 
     def mark_params_active(self, params):
@@ -98,7 +97,7 @@ class ParamStoreDict(object):
         self._param_to_name[new_param] = param_name
         self._param_to_name.pop(old_param)
 
-    def get_param(self, name, init_tensor=None, tags=None):
+    def get_param(self, name, init_tensor=None):
         """
         Get parameter from its name. If it does not yet exist in the
         ParamStore, it will be created and stored.
@@ -111,7 +110,6 @@ class ParamStoreDict(object):
         :returns: parameter
         :rtype: torch.Tensor
         """
-        assert tags is None, "removing tag support"
         if name not in self._params:
             # if not create the init tensor through
             assert init_tensor is not None,\
