@@ -134,12 +134,14 @@ def _compute_elbo_non_reparam(guide_trace, non_reparam_nodes, downstream_costs):
             "cannot use baseline_value and nn_baseline simultaneously"
         if use_decaying_avg_baseline:
             dc_shape = downstream_cost.shape
-            avg_downstream_cost_old = pyro.param("__baseline_avg_downstream_cost_" + node,
-                                                 torch.tensor(0.0).expand(dc_shape).clone(),
-                                                 tags="__tracegraph_elbo_internal_tag")
-            avg_downstream_cost_new = (1 - baseline_beta) * downstream_cost.detach() + \
-                baseline_beta * avg_downstream_cost_old
-            avg_downstream_cost_old.copy_(avg_downstream_cost_new)  # XXX is this copy_() what we want?
+            param_name = "__baseline_avg_downstream_cost_" + node
+            with torch.no_grad():
+                avg_downstream_cost_old = pyro.param(param_name,
+                                                     torch.tensor(0.0).expand(dc_shape).clone())
+                avg_downstream_cost_new = (1 - baseline_beta) * downstream_cost + \
+                    baseline_beta * avg_downstream_cost_old
+            pyro.get_param_store().replace_param(param_name, avg_downstream_cost_new,
+                                                 avg_downstream_cost_old)
             baseline += avg_downstream_cost_old
         if use_nn_baseline:
             # block nn_baseline_input gradients except in baseline loss

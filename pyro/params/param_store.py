@@ -39,7 +39,7 @@ class ParamStoreDict(object):
         initialize ParamStore data structures
         """
         self._params = {}  # dictionary from param name to param
-        self._param_to_name = {}  # dictionary from param to param name
+        self._param_to_name = {}  # dictionary from unconstrained param to param name
         self._active_params = set()  # set of all currently active params
         self._param_tags = defaultdict(lambda: set())  # dictionary from tag to param names
         self._tag_params = defaultdict(lambda: set())  # dictionary from param name to tags
@@ -201,10 +201,10 @@ class ParamStoreDict(object):
         :param old_param: the paramater to be removed from the ParamStore
         :type new_param: torch.Tensor
         """
-        assert id(self._params[param_name]) == id(old_param)
-        self._params[param_name] = new_param
-        self._param_to_name[new_param] = param_name
-        self._param_to_name.pop(old_param)
+        assert self._params[param_name] is old_param.unconstrained()
+        del self._params[param_name]
+        del self._param_to_name[old_param.unconstrained()]
+        self.get_param(param_name, new_param, constraint=self._constraints[param_name])
 
     def get_param(self, name, init_tensor=None, tags="default", constraint=constraints.real):
         """
