@@ -269,23 +269,34 @@ class ParamStoreDict(object):
         Get the ParamStore state.
         """
         param_tags = {k: list(tags) for k, tags in self._param_tags.items()}
-        state = (self._params, param_tags)
+        state = {
+            'params': self._params,
+            'param_tags': param_tags,
+            'constraints': self._constraints,
+        }
         return state
 
     def set_state(self, state):
         """
         Set the ParamStore state using state from a previous get_state() call
         """
-        assert isinstance(state, tuple) and len(state) == 2, "malformed ParamStore state"
-        loaded_params, loaded_param_tags = state
+        assert isinstance(state, dict), "malformed ParamStore state"
+        assert set(state.keys()) == set(['params', 'param_tags', 'constraints']), \
+            "malformed ParamStore keys {}".format(state.keys())
 
-        for param_name, param in loaded_params.items():
+        for param_name, param in state['params'].items():
             self._params[param_name] = param
             self._param_to_name[param] = param_name
 
-        for param_name, tags in loaded_param_tags.items():
+        for param_name, tags in state['param_tags'].items():
             for tag in tags:
                 self._param_tags[param_name].add(tag)
+
+        for param_name, constraint in state['constraints'].items():
+            if isinstance(constraint, type(constraints.real)):
+                # Work around lack of hash & equality comparison on constraints.
+                constraint = constraints.real
+            self._constraints[param_name] = constraint
 
     def save(self, filename):
         """
