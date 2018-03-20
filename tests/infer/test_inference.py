@@ -1,18 +1,20 @@
 from __future__ import absolute_import, division, print_function
 
+import math
 from unittest import TestCase
 
 import pytest
 import torch
 from torch import nn as nn
+from torch.distributions import constraints
 from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
+from pyro.distributions import TransformedDistribution
 from pyro.distributions.testing import fakes
 from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
-from pyro.distributions import TransformedDistribution
 from pyro.infer.svi import SVI
 from tests.common import assert_equal
 from tests.distributions.test_transformed_distribution import AffineExp
@@ -170,8 +172,6 @@ class PoissonGammaTests(TestCase):
         data_sum = self.data.sum(0)
         self.alpha_n = self.alpha0 + data_sum  # posterior alpha
         self.beta_n = self.beta0 + torch.tensor(self.n_data)  # posterior beta
-        self.log_alpha_n = torch.log(self.alpha_n)
-        self.log_beta_n = torch.log(self.beta_n)
 
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 10000)
@@ -190,19 +190,10 @@ class PoissonGammaTests(TestCase):
             return lambda_latent
 
         def guide():
-            alpha_q_log = pyro.param(
-                "alpha_q_log",
-                torch.tensor(
-                    self.log_alpha_n.data +
-                    0.17,
-                    requires_grad=True))
-            beta_q_log = pyro.param(
-                "beta_q_log",
-                torch.tensor(
-                    self.log_beta_n.data -
-                    0.143,
-                    requires_grad=True))
-            alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
+            alpha_q = pyro.param("alpha_q", self.alpha_n.detach() + math.exp(0.17),
+                                 constraint=constraints.positive)
+            beta_q = pyro.param("beta_q", self.beta_n.detach() / math.exp(0.143),
+                                constraint=constraints.positive)
             pyro.sample("lambda_latent", Gamma(alpha_q, beta_q))
 
         adam = optim.Adam({"lr": .0002, "betas": (0.97, 0.999)})
@@ -211,66 +202,55 @@ class PoissonGammaTests(TestCase):
         for k in range(n_steps):
             svi.step()
 
-        alpha_error = param_abs_error("alpha_q_log", self.log_alpha_n)
-        beta_error = param_abs_error("beta_q_log", self.log_beta_n)
-        assert_equal(0.0, alpha_error, prec=0.08)
-        assert_equal(0.0, beta_error, prec=0.08)
+        assert_equal(pyro.param("alpha_q"), self.alpha_n, prec=0.2, msg='{} vs {}'.format(
+            pyro.param("alpha_q").detach().numpy(), self.alpha_n.detach().numpy()))
+        assert_equal(pyro.param("beta_q"), self.beta_n, prec=0.15, msg='{} vs {}'.format(
+            pyro.param("beta_q").detach().numpy(), self.beta_n.detach().numpy()))
 
 
 @pytest.mark.stage("integration", "integration_batch_1")
-class ExponentialGammaTests(TestCase):
-    def setUp(self):
-        # exponential-gamma model
-        # gamma prior hyperparameter
-        self.alpha0 = torch.tensor(1.0)
-        # gamma prior hyperparameter
-        self.beta0 = torch.tensor(1.0)
-        self.n_data = 2
-        self.data = torch.tensor([3.0, 2.0])  # two observations
-        self.alpha_n = self.alpha0 + torch.tensor(self.n_data)  # posterior alpha
-        self.beta_n = self.beta0 + torch.sum(self.data)  # posterior beta
-        self.log_alpha_n = torch.log(self.alpha_n)
-        self.log_beta_n = torch.log(self.beta_n)
+@pytest.mark.parametrize('elbo_impl', ["Trace", "TraceGraph", "TraceEnum"])
+@pytest.mark.parametrize('gamma_dist,n_steps', [
+    (dist.Gamma, 5000),
+    (fakes.NonreparameterizedGamma, 10000),
+    (ShapeAugmentedGamma, 5000),
+], ids=['reparam', 'nonreparam', 'rsvi'])
+def test_exponential_gamma(gamma_dist, n_steps, elbo_impl):
+    pyro.clear_param_store()
 
-    def test_elbo_reparameterized(self):
-        self.do_elbo_test(dist.Gamma, 5000)
+    # gamma prior hyperparameter
+    alpha0 = torch.tensor(1.0)
+    # gamma prior hyperparameter
+    beta0 = torch.tensor(1.0)
+    n_data = 2
+    data = torch.tensor([3.0, 2.0])  # two observations
+    alpha_n = alpha0 + torch.tensor(n_data)  # posterior alpha
+    beta_n = beta0 + torch.sum(data)  # posterior beta
 
-    def test_elbo_rsvi(self):
-        self.do_elbo_test(ShapeAugmentedGamma, 5000)
-        self.do_elbo_test(ShapeAugmentedGamma, 5000, True)
+    def model():
+        lambda_latent = pyro.sample("lambda_latent", gamma_dist(alpha0, beta0))
+        with pyro.iarange("data", n_data):
+            pyro.sample("obs", dist.Exponential(lambda_latent), obs=data)
+        return lambda_latent
 
-    def test_elbo_nonreparameterized(self):
-        self.do_elbo_test(fakes.NonreparameterizedGamma, 10000)
+    def guide():
+        alpha_q = pyro.param("alpha_q", alpha_n * math.exp(0.17), constraint=constraints.positive)
+        beta_q = pyro.param("beta_q", beta_n / math.exp(0.143), constraint=constraints.positive)
+        pyro.sample("lambda_latent", gamma_dist(alpha_q, beta_q))
 
-    def do_elbo_test(self, gamma_dist, n_steps, trace_graph=False):
-        pyro.clear_param_store()
+    adam = optim.Adam({"lr": .0003, "betas": (0.97, 0.999)})
+    svi = SVI(model, guide, adam, loss="ELBO",
+              trace_graph=(elbo_impl == "TraceGraph"),
+              enum_discrete=(elbo_impl == "TraceEnum"),
+              max_iarange_nesting=1)
 
-        def model():
-            lambda_latent = pyro.sample("lambda_latent", gamma_dist(self.alpha0, self.beta0))
-            with pyro.iarange("data", self.n_data):
-                pyro.sample("obs", dist.Exponential(lambda_latent), obs=self.data)
-            return lambda_latent
+    for k in range(n_steps):
+        svi.step()
 
-        def guide():
-            alpha_q_log = pyro.param(
-                "alpha_q_log",
-                torch.tensor(self.log_alpha_n.data + 0.17, requires_grad=True))
-            beta_q_log = pyro.param(
-                "beta_q_log",
-                torch.tensor(self.log_beta_n.data - 0.143, requires_grad=True))
-            alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
-            pyro.sample("lambda_latent", gamma_dist(alpha_q, beta_q))
-
-        adam = optim.Adam({"lr": .0003, "betas": (0.97, 0.999)})
-        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=trace_graph)
-
-        for k in range(n_steps):
-            svi.step()
-
-        alpha_error = param_abs_error("alpha_q_log", self.log_alpha_n)
-        beta_error = param_abs_error("beta_q_log", self.log_beta_n)
-        assert_equal(0.0, alpha_error, prec=0.08)
-        assert_equal(0.0, beta_error, prec=0.08)
+    assert_equal(pyro.param("alpha_q"), alpha_n, prec=0.15, msg='{} vs {}'.format(
+        pyro.param("alpha_q").detach().numpy(), alpha_n.detach().numpy()))
+    assert_equal(pyro.param("beta_q"), beta_n, prec=0.15, msg='{} vs {}'.format(
+        pyro.param("beta_q").detach().numpy(), beta_n.detach().numpy()))
 
 
 @pytest.mark.stage("integration", "integration_batch_2")

@@ -14,6 +14,7 @@ import pyro.optim
 from pyro.infer import SVI, config_enumerate
 from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.traceenum_elbo import TraceEnum_ELBO
+from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
 from tests.common import assert_equal
 
 logger = logging.getLogger(__name__)
@@ -744,3 +745,43 @@ def test_non_mean_field_normal_bern_elbo_gradient(pi1, pi2, pi3):
                              "\nexpected (MC estimate) = {}".format(results['None']['actual_grad_%s' % q]),
                              "\n  actual ({} estimate) = {}".format(ed, results[ed]['actual_grad_%s' % q]),
                          ]))
+
+
+@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
+def test_elbo_rsvi(enumerate1):
+    pyro.clear_param_store()
+    num_particles = 10000
+    prec = 0.003 if enumerate1 else 0.01
+    q = pyro.param("q", torch.tensor(0.5, requires_grad=True))
+    a = pyro.param("a", torch.tensor(1.5, requires_grad=True))
+    kl1 = kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.25))
+    kl2 = kl_divergence(dist.Gamma(a, 1.0), dist.Gamma(0.5, 1.0))
+
+    def model():
+        with pyro.iarange("particles", num_particles):
+            pyro.sample("z", dist.Bernoulli(0.25).reshape([num_particles]))
+            pyro.sample("y", dist.Gamma(0.50, 1.0).reshape([num_particles]))
+
+    @config_enumerate(default=enumerate1)
+    def guide():
+        q = pyro.param("q")
+        a = pyro.param("a")
+        with pyro.iarange("particles", num_particles):
+            pyro.sample("z", dist.Bernoulli(q).reshape([num_particles]))
+            pyro.sample("y", ShapeAugmentedGamma(a, torch.tensor(1.0)).reshape([num_particles]))
+
+    elbo = TraceEnum_ELBO(max_iarange_nesting=1)
+    elbo.loss_and_grads(model, guide)
+
+    actual_q = q.grad / num_particles
+    expected_q = grad(kl1, [q])[0]
+    assert_equal(actual_q, expected_q, prec=prec, msg="".join([
+        "\nexpected q.grad = {}".format(expected_q.detach().cpu().numpy()),
+        "\n  actual q.grad = {}".format(actual_q.detach().cpu().numpy()),
+    ]))
+    actual_a = a.grad / num_particles
+    expected_a = grad(kl2, [a])[0]
+    assert_equal(actual_a, expected_a, prec=prec, msg="".join([
+        "\nexpected a.grad= {}".format(expected_a.detach().cpu().numpy()),
+        "\n  actual a.grad = {}".format(actual_a.detach().cpu().numpy()),
+    ]))
