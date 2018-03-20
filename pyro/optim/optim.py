@@ -107,7 +107,7 @@ class PyroOptim(object):
             stripped_param_name = user_param_name(param_name)
 
             # invoke the user-provided callable
-            opt_dict = self.pt_optim_args(module_name, stripped_param_name, None)
+            opt_dict = self.pt_optim_args(module_name, stripped_param_name)
 
             # must be dictionary
             assert isinstance(opt_dict, dict), "per-param optim arg must return defaults dictionary"
