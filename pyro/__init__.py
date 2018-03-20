@@ -372,7 +372,7 @@ def module(name, nn_module, tags="default", update_module_params=False):
         # register the parameter in the module with pyro
         # this only does something substantive if the parameter hasn't been seen before
         full_param_name = param_with_module_name(name, param_name)
-        returned_param = param(full_param_name, param_value, tags=tags)
+        returned_param = param(full_param_name, param_value)
 
         if param_value._cdata != returned_param._cdata:
             target_state_dict[param_name] = returned_param

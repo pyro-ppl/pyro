@@ -98,7 +98,7 @@ class PyroOptim(object):
     # helper to fetch the optim args if callable (only used internally)
     def _get_optim_args(self, param):
         # if we were passed a fct, we call fct with param info
-        # arguments are (module name, param name, tags) e.g. ('mymodule', 'bias', 'baseline')
+        # arguments are (module name, param name) e.g. ('mymodule', 'bias')
         if callable(self.pt_optim_args):
 
             # get param name
@@ -106,11 +106,8 @@ class PyroOptim(object):
             module_name = module_from_param_with_module_name(param_name)
             stripped_param_name = user_param_name(param_name)
 
-            # get tags
-            tags = pyro.get_param_store().get_param_tags(param_name)
-
             # invoke the user-provided callable
-            opt_dict = self.pt_optim_args(module_name, stripped_param_name, tags)
+            opt_dict = self.pt_optim_args(module_name, stripped_param_name, None)
 
             # must be dictionary
             assert isinstance(opt_dict, dict), "per-param optim arg must return defaults dictionary"
