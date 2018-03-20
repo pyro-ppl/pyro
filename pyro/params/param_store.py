@@ -1,8 +1,10 @@
 from __future__ import absolute_import, division, print_function
 
+import weakref
 from collections import defaultdict
 
 import torch
+from torch.distributions import constraints, transform_to
 
 
 class ParamStoreDict(object):
@@ -41,6 +43,7 @@ class ParamStoreDict(object):
         self._active_params = set()  # set of all currently active params
         self._param_tags = defaultdict(lambda: set())  # dictionary from tag to param names
         self._tag_params = defaultdict(lambda: set())  # dictionary from param name to tags
+        self._constraints = {}  # dictionary from param name to constraint object
 
     def clear(self):
         """
@@ -51,11 +54,13 @@ class ParamStoreDict(object):
         self._active_params = set()
         self._param_tags = defaultdict(lambda: set())
         self._tag_params = defaultdict(lambda: set())
+        self._constraints = {}
 
     def named_parameters(self):
         """
         Returns an iterator over tuples of the form (name, parameter) for each parameter in the ParamStore
         """
+        # TODO consider returing constrained
         return self._params.items()
 
     def get_all_param_names(self):
@@ -201,7 +206,7 @@ class ParamStoreDict(object):
         self._param_to_name[new_param] = param_name
         self._param_to_name.pop(old_param)
 
-    def get_param(self, name, init_tensor=None, tags="default"):
+    def get_param(self, name, init_tensor=None, tags="default", constraint=constraints.real):
         """
         Get parameter from its name. If it does not yet exist in the
         ParamStore, it will be created and stored.
@@ -223,19 +228,29 @@ class ParamStoreDict(object):
 
             # a function
             if callable(init_tensor):
-                self._params[name] = init_tensor()
-            else:
-                # from the memory passed in
-                self._params[name] = init_tensor
+                init_tensor = init_tensor()
+
+            # store the unconstrained value and constraint
+            with torch.no_grad():
+                unconstrained_param = transform_to(constraint).inv(init_tensor)
+            unconstrained_param.requires_grad = True
+            self._params[name] = unconstrained_param
+            self._constraints[name] = constraint
 
             # keep track of each tensor and it's name
-            self._param_to_name[self._params[name]] = name
+            self._param_to_name[unconstrained_param] = name
 
             # keep track of param tags
             self.tag_params(name, tags)
 
-        # send back the guaranteed to exist param
-        return self._params[name]
+        # get the guaranteed to exist param
+        unconstrained_param = self._params[name]
+
+        # compute the constrained value
+        param = transform_to(self._constraints[name])(unconstrained_param)
+        param.unconstrained = weakref.ref(unconstrained_param)
+
+        return param
 
     def param_name(self, p):
         """

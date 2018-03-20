@@ -266,7 +266,7 @@ class TraceGraph_ELBO(ELBO):
             surrogate_elbo += surrogate_elbo_term
 
         # collect parameters to train from model and guide
-        trainable_params = set(site["value"]
+        trainable_params = set(site["value"].unconstrained()
                                for trace in (model_trace, guide_trace)
                                for site in trace.nodes.values()
                                if site["type"] == "param")
