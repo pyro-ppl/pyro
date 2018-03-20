@@ -693,7 +693,7 @@ def test_enum_discrete_iarange_dependency_warning(enumerate_):
         with pyro.iarange("iarange", 10, 5):
             x = pyro.sample("x", dist.Bernoulli(0.5).reshape([5]),
                             infer={'enumerate': enumerate_})
-        pyro.sample("y", dist.Bernoulli(x.mean()))
+        pyro.sample("y", dist.Bernoulli(x.mean()))  # user should move this line up
 
     if enumerate_:
         assert_warning(model, model, enum_discrete=True, max_iarange_nesting=1)
@@ -716,7 +716,27 @@ def test_enum_discrete_irange_iarange_dependency_ok(enumerate_):
 
 
 @pytest.mark.parametrize('enumerate_', [None, "sequential", "parallel"])
-def test_enum_discrete_iarange_iarange_dependency_ok(enumerate_):
+def test_enum_discrete_iranges_iarange_dependency_warning(enumerate_):
+
+    def model():
+        inner_iarange = pyro.iarange("iarange", 10, 5)
+
+        for i in pyro.irange("irange1", 2):
+            with inner_iarange:
+                pyro.sample("x_{}".format(i), dist.Bernoulli(0.5).reshape([5]),
+                            infer={'enumerate': enumerate_})
+
+        for i in pyro.irange("irange2", 2):
+            pyro.sample("y_{}".format(i), dist.Bernoulli(0.5))
+
+    if enumerate_:
+        assert_warning(model, model, enum_discrete=True, max_iarange_nesting=1)
+    else:
+        assert_ok(model, model, enum_discrete=True, max_iarange_nesting=1)
+
+
+@pytest.mark.parametrize('enumerate_', [None, "sequential", "parallel"])
+def test_enum_discrete_iaranges_dependency_ok(enumerate_):
 
     def model():
         x_iarange = pyro.iarange("x_iarange", 10, 5, dim=-1)

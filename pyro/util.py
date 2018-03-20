@@ -387,32 +387,54 @@ def check_site_shape(site, max_iarange_nesting):
     # TODO Check parallel dimensions on the left of max_iarange_nesting.
 
 
+def _are_independent(counters1, counters2):
+    for name, counter1 in counters1.items():
+        if name in counters2:
+            if counters2[name] != counter1:
+                return True
+    return False
+
+
 def check_traceenum_requirements(model_trace, guide_trace):
+    """
+    Warn if user could easily rewrite the model or guide in a way that would
+    clearly avoid invalid dependencies on enumerated variables.
+
+    :class:`~pyro.infer.traceenum_elbo.TraceEnum_ELBO` enumerates over
+    synchronized products rather than full cartesian products. Therefore models
+    must ensure that no variable outside of an iarange depends on an enumerated
+    variable inside that iarange. Since full dependency checking is impossible,
+    this function aims to warn only in cases where models can be easily
+    rewitten to be obviously correct.
+    """
     enumerated_sites = set(name for name, site in guide_trace.nodes.items()
                            if site["type"] == "sample" and site["infer"].get("enumerate"))
-    iranges = {}
     for role, trace in [('model', model_trace), ('guide', guide_trace)]:
-        restricted_contexts = defaultdict(set)
+        irange_counters = {}
+        enumerated_contexts = defaultdict(set)
         for name, site in trace.nodes.items():
             if site["type"] != "sample":
                 continue
-            iranges[name] = tuple(f for f in site["cond_indep_stack"] if not f.vectorized)
+            irange_counter = {f.name: f.counter for f in site["cond_indep_stack"] if not f.vectorized}
             context = frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
-            for restricted_context, names in restricted_contexts.items():
 
-                # Check that sites outside each iarange context precede sites inside that context.
-                if context < restricted_context:
-                    names = sorted(n for n in names
-                                   if all(f1.count == f2.count for f1, f2 in zip(iranges[n], iranges[name])))
-                    if names:
-                        diff = sorted(f.name for f in restricted_context - context)
-                        warnings.warn('\n  '.join([
-                            'at {} site "{}", possibly invalid dependency.'.format(role, name),
-                            'Expected site "{}" to precede sites "{}"'.format(name, '", "'.join(sorted(names))),
-                            'to avoid breaking independence of iaranges "{}"'.format('", "'.join(diff)),
-                            ]), RuntimeWarning)
+            # Check that sites outside each independence context precede enumerated sites inside that context.
+            for enumerated_context, names in enumerated_contexts.items():
+                if not (context < enumerated_context):
+                    continue
+                names = sorted(n for n in names if not _are_independent(irange_counter, irange_counters[n]))
+                if not names:
+                    continue
+                diff = sorted(f.name for f in enumerated_context - context)
+                warnings.warn('\n  '.join([
+                    'at {} site "{}", possibly invalid dependency.'.format(role, name),
+                    'Expected site "{}" to precede sites "{}"'.format(name, '", "'.join(sorted(names))),
+                    'to avoid breaking independence of iaranges "{}"'.format('", "'.join(diff)),
+                ]), RuntimeWarning)
+
+            irange_counters[name] = irange_counter
             if name in enumerated_sites:
-                restricted_contexts[context].add(name)
+                enumerated_contexts[context].add(name)
 
 
 def deep_getattr(obj, name):
