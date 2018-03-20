@@ -91,7 +91,6 @@ class NormalNormalTests(TestCase):
         assert_equal(0.0, log_sig_error, prec=0.05)
 
 
-# @pytest.mark.skip("Reinstate once poisson is migrated to PyTorch - https://github.com/uber/pyro/issues/699")
 class TestFixedModelGuide(TestCase):
     def setUp(self):
         self.data = torch.tensor([2.0])
