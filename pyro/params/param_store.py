@@ -1,6 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
+import weakref
+
 import torch
+from torch.distributions import constraints, transform_to
 
 
 class ParamStoreDict(object):
@@ -31,8 +34,9 @@ class ParamStoreDict(object):
         initialize ParamStore data structures
         """
         self._params = {}  # dictionary from param name to param
-        self._param_to_name = {}  # dictionary from param to param name
+        self._param_to_name = {}  # dictionary from unconstrained param to param name
         self._active_params = set()  # set of all currently active params
+        self._constraints = {}  # dictionary from param name to constraint object
 
     def clear(self):
         """
@@ -41,11 +45,13 @@ class ParamStoreDict(object):
         self._params = {}
         self._param_to_name = {}
         self._active_params = set()
+        self._constraints = {}
 
     def named_parameters(self):
         """
         Returns an iterator over tuples of the form (name, parameter) for each parameter in the ParamStore
         """
+        # TODO consider returing constrained
         return self._params.items()
 
     def get_all_param_names(self):
@@ -92,12 +98,12 @@ class ParamStoreDict(object):
         :param old_param: the paramater to be removed from the ParamStore
         :type new_param: torch.Tensor
         """
-        assert id(self._params[param_name]) == id(old_param)
-        self._params[param_name] = new_param
-        self._param_to_name[new_param] = param_name
-        self._param_to_name.pop(old_param)
+        assert self._params[param_name] is old_param.unconstrained()
+        del self._params[param_name]
+        del self._param_to_name[old_param.unconstrained()]
+        self.get_param(param_name, new_param, constraint=self._constraints[param_name])
 
-    def get_param(self, name, init_tensor=None):
+    def get_param(self, name, init_tensor=None, constraint=constraints.real):
         """
         Get parameter from its name. If it does not yet exist in the
         ParamStore, it will be created and stored.
@@ -117,16 +123,26 @@ class ParamStoreDict(object):
 
             # a function
             if callable(init_tensor):
-                self._params[name] = init_tensor()
-            else:
-                # from the memory passed in
-                self._params[name] = init_tensor
+                init_tensor = init_tensor()
+
+            # store the unconstrained value and constraint
+            with torch.no_grad():
+                unconstrained_param = transform_to(constraint).inv(init_tensor)
+            unconstrained_param.requires_grad = True
+            self._params[name] = unconstrained_param
+            self._constraints[name] = constraint
 
             # keep track of each tensor and it's name
-            self._param_to_name[self._params[name]] = name
+            self._param_to_name[unconstrained_param] = name
 
-        # send back the guaranteed to exist param
-        return self._params[name]
+        # get the guaranteed to exist param
+        unconstrained_param = self._params[name]
+
+        # compute the constrained value
+        param = transform_to(self._constraints[name])(unconstrained_param)
+        param.unconstrained = weakref.ref(unconstrained_param)
+
+        return param
 
     def param_name(self, p):
         """
@@ -144,19 +160,29 @@ class ParamStoreDict(object):
         """
         Get the ParamStore state.
         """
-        state = (self._params,)
+        state = {
+            'params': self._params,
+            'constraints': self._constraints,
+        }
         return state
 
     def set_state(self, state):
         """
         Set the ParamStore state using state from a previous get_state() call
         """
-        assert isinstance(state, tuple) and len(state) == 1, "malformed ParamStore state"
-        loaded_params, = state
+        assert isinstance(state, dict), "malformed ParamStore state"
+        assert set(state.keys()) == set(['params', 'constraints']), \
+            "malformed ParamStore keys {}".format(state.keys())
 
-        for param_name, param in loaded_params.items():
+        for param_name, param in state['params'].items():
             self._params[param_name] = param
             self._param_to_name[param] = param_name
+
+        for param_name, constraint in state['constraints'].items():
+            if isinstance(constraint, type(constraints.real)):
+                # Work around lack of hash & equality comparison on constraints.
+                constraint = constraints.real
+            self._constraints[param_name] = constraint
 
     def save(self, filename):
         """

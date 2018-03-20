@@ -1,18 +1,20 @@
 from __future__ import absolute_import, division, print_function
 
+import math
 from unittest import TestCase
 
 import pytest
 import torch
 from torch import nn as nn
+from torch.distributions import constraints
 from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
+from pyro.distributions import TransformedDistribution
 from pyro.distributions.testing import fakes
 from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
-from pyro.distributions import TransformedDistribution
 from pyro.infer.svi import SVI
 from tests.common import assert_equal
 from tests.distributions.test_transformed_distribution import AffineExp
@@ -171,8 +173,6 @@ class PoissonGammaTests(TestCase):
         data_sum = self.data.sum(0)
         self.alpha_n = self.alpha0 + data_sum  # posterior alpha
         self.beta_n = self.beta0 + torch.tensor(self.n_data)  # posterior beta
-        self.log_alpha_n = torch.log(self.alpha_n)
-        self.log_beta_n = torch.log(self.beta_n)
 
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 10000)
@@ -191,19 +191,10 @@ class PoissonGammaTests(TestCase):
             return lambda_latent
 
         def guide():
-            alpha_q_log = pyro.param(
-                "alpha_q_log",
-                torch.tensor(
-                    self.log_alpha_n.data +
-                    0.17,
-                    requires_grad=True))
-            beta_q_log = pyro.param(
-                "beta_q_log",
-                torch.tensor(
-                    self.log_beta_n.data -
-                    0.143,
-                    requires_grad=True))
-            alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
+            alpha_q = pyro.param("alpha_q", self.alpha_n.detach() + math.exp(0.17),
+                                 constraint=constraints.positive)
+            beta_q = pyro.param("beta_q", self.beta_n.detach() / math.exp(0.143),
+                                constraint=constraints.positive)
             pyro.sample("lambda_latent", Gamma(alpha_q, beta_q))
 
         adam = optim.Adam({"lr": .0002, "betas": (0.97, 0.999)})
@@ -212,10 +203,10 @@ class PoissonGammaTests(TestCase):
         for k in range(n_steps):
             svi.step()
 
-        alpha_error = param_abs_error("alpha_q_log", self.log_alpha_n)
-        beta_error = param_abs_error("beta_q_log", self.log_beta_n)
-        assert_equal(0.0, alpha_error, prec=0.08)
-        assert_equal(0.0, beta_error, prec=0.08)
+        assert_equal(pyro.param("alpha_q"), self.alpha_n, prec=0.2, msg='{} vs {}'.format(
+            pyro.param("alpha_q").detach().numpy(), self.alpha_n.detach().numpy()))
+        assert_equal(pyro.param("beta_q"), self.beta_n, prec=0.15, msg='{} vs {}'.format(
+            pyro.param("beta_q").detach().numpy(), self.beta_n.detach().numpy()))
 
 
 @pytest.mark.stage("integration", "integration_batch_1")
@@ -236,8 +227,6 @@ def test_exponential_gamma(gamma_dist, n_steps, elbo_impl):
     data = torch.tensor([3.0, 2.0])  # two observations
     alpha_n = alpha0 + torch.tensor(n_data)  # posterior alpha
     beta_n = beta0 + torch.sum(data)  # posterior beta
-    log_alpha_n = torch.log(alpha_n)
-    log_beta_n = torch.log(beta_n)
 
     def model():
         lambda_latent = pyro.sample("lambda_latent", gamma_dist(alpha0, beta0))
@@ -246,9 +235,8 @@ def test_exponential_gamma(gamma_dist, n_steps, elbo_impl):
         return lambda_latent
 
     def guide():
-        alpha_q_log = pyro.param("alpha_q_log", torch.tensor(log_alpha_n.data + 0.17, requires_grad=True))
-        beta_q_log = pyro.param("beta_q_log", torch.tensor(log_beta_n.data - 0.143, requires_grad=True))
-        alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
+        alpha_q = pyro.param("alpha_q", alpha_n * math.exp(0.17), constraint=constraints.positive)
+        beta_q = pyro.param("beta_q", beta_n / math.exp(0.143), constraint=constraints.positive)
         pyro.sample("lambda_latent", gamma_dist(alpha_q, beta_q))
 
     adam = optim.Adam({"lr": .0003, "betas": (0.97, 0.999)})
@@ -260,10 +248,10 @@ def test_exponential_gamma(gamma_dist, n_steps, elbo_impl):
     for k in range(n_steps):
         svi.step()
 
-    alpha_error = param_abs_error("alpha_q_log", log_alpha_n)
-    beta_error = param_abs_error("beta_q_log", log_beta_n)
-    assert_equal(0.0, alpha_error, prec=0.08)
-    assert_equal(0.0, beta_error, prec=0.08)
+    assert_equal(pyro.param("alpha_q"), alpha_n, prec=0.15, msg='{} vs {}'.format(
+        pyro.param("alpha_q").detach().numpy(), alpha_n.detach().numpy()))
+    assert_equal(pyro.param("beta_q"), beta_n, prec=0.15, msg='{} vs {}'.format(
+        pyro.param("beta_q").detach().numpy(), beta_n.detach().numpy()))
 
 
 @pytest.mark.stage("integration", "integration_batch_2")
