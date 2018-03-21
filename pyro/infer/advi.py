@@ -21,7 +21,7 @@ def _product(shape):
 
 class ADVI(object):
     """
-    Base class for implementations of Automatic Differentiation Variational Inference.
+    Base class for implementations of Automatic Differentiation Variational Inference [1].
 
     Each derived class implements its own :meth:`sample_latent` method.
 
@@ -29,6 +29,10 @@ class ADVI(object):
     variables are continuous.
 
     :param callable model: a Pyro model
+
+    Reference:
+    [1] 'Automatic Differentiation Variational Inference',
+        Alp Kucukelbir, Dustin Tran, Rajesh Ranganath, Andrew Gelman, David M. Blei
     """
     def __init__(self, model):
         self.prototype_trace = None
