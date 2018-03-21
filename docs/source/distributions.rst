@@ -16,9 +16,6 @@ For differences between the Pyro and PyTorch interfaces, see
 :class:`~pyro.distributions.torch_distribution.TorchDistributionMixin`.
 
 .. automodule:: pyro.distributions.torch
-    :members:
-    :undoc-members:
-    :special-members: __call__
 
 Primitive Distributions
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -45,6 +42,13 @@ TorchDistribution
 Delta
 -----
 .. automodule:: pyro.distributions.delta
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+HalfCauchy
+----------
+.. automodule:: pyro.distributions.half_cauchy
     :members:
     :undoc-members:
     :show-inheritance:

@@ -6,7 +6,6 @@ import os
 
 import pytest
 import torch
-from torch.autograd import Variable, variable
 
 import pyro
 import pyro.distributions as dist
@@ -54,8 +53,8 @@ def test_nuts_conjugate_gaussian(fixture,
         param_name = 'mu_' + str(i)
         latent_mu = torch.mean(torch.stack(post_trace[param_name]), 0)
         latent_std = torch.std(torch.stack(post_trace[param_name]), 0)
-        expected_mean = Variable(torch.ones_like(torch.Tensor(fixture.dim)) * expected_means[i - 1])
-        expected_std = 1 / torch.sqrt(Variable(torch.ones_like(torch.Tensor(fixture.dim)) * expected_precs[i - 1]))
+        expected_mean = torch.ones(fixture.dim) * expected_means[i - 1]
+        expected_std = 1 / torch.sqrt(torch.ones(fixture.dim) * expected_precs[i - 1])
 
         # Actual vs expected posterior means for the latents
         logger.info('Posterior mean (actual) - {}'.format(param_name))
@@ -74,13 +73,13 @@ def test_nuts_conjugate_gaussian(fixture,
 
 def test_logistic_regression():
     dim = 3
-    true_coefs = Variable(torch.arange(1, dim+1))
-    data = Variable(torch.randn(2000, dim))
+    true_coefs = torch.arange(1, dim+1)
+    data = torch.randn(2000, dim)
     labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
 
     def model(data):
-        coefs_mean = Variable(torch.zeros(dim), requires_grad=True)
-        coefs = pyro.sample('beta', dist.Normal(coefs_mean, Variable(torch.ones(dim))))
+        coefs_mean = torch.zeros(dim)
+        coefs = pyro.sample('beta', dist.Normal(coefs_mean, torch.ones(dim)))
         y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
         return y
 
@@ -95,8 +94,8 @@ def test_logistic_regression():
 
 def test_bernoulli_beta():
     def model(data):
-        alpha = pyro.param('alpha', Variable(torch.Tensor([1.1, 1.1]), requires_grad=True))
-        beta = pyro.param('beta', Variable(torch.Tensor([1.1, 1.1]), requires_grad=True))
+        alpha = torch.tensor([1.1, 1.1])
+        beta = torch.tensor([1.1, 1.1])
         p_latent = pyro.sample("p_latent", dist.Beta(alpha, beta))
         pyro.observe("obs", dist.Bernoulli(p_latent), data)
         return p_latent
@@ -104,7 +103,7 @@ def test_bernoulli_beta():
     nuts_kernel = NUTS(model, step_size=0.02)
     mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100)
     posterior = []
-    true_probs = Variable(torch.Tensor([0.9, 0.1]))
+    true_probs = torch.tensor([0.9, 0.1])
     data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
     for trace, _ in mcmc_run._traces(data):
         posterior.append(trace.nodes['p_latent']['value'])
@@ -114,8 +113,8 @@ def test_bernoulli_beta():
 
 def test_normal_gamma():
     def model(data):
-        rate = pyro.param('rate', variable([1.0, 1.0], requires_grad=True))
-        concentration = pyro.param('conc', variable([1.0, 1.0], requires_grad=True))
+        rate = torch.tensor([1.0, 1.0])
+        concentration = torch.tensor([1.0, 1.0])
         p_latent = pyro.sample('p_latent', dist.Gamma(rate, concentration))
         pyro.observe("obs", dist.Normal(3, p_latent), data)
         return p_latent
@@ -123,7 +122,7 @@ def test_normal_gamma():
     nuts_kernel = NUTS(model, step_size=0.01)
     mcmc_run = MCMC(nuts_kernel, num_samples=200, warmup_steps=100)
     posterior = []
-    true_std = variable([0.5, 2])
+    true_std = torch.tensor([0.5, 2])
     data = dist.Normal(3, true_std).sample(sample_shape=(torch.Size((2000,))))
     for trace, _ in mcmc_run._traces(data):
         posterior.append(trace.nodes['p_latent']['value'])
@@ -133,13 +132,13 @@ def test_normal_gamma():
 
 def test_logistic_regression_with_dual_averaging():
     dim = 3
-    true_coefs = Variable(torch.arange(1, dim+1))
-    data = Variable(torch.randn(2000, dim))
+    true_coefs = torch.arange(1, dim+1)
+    data = torch.randn(2000, dim)
     labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
 
     def model(data):
-        coefs_mean = Variable(torch.zeros(dim), requires_grad=True)
-        coefs = pyro.sample('beta', dist.Normal(coefs_mean, Variable(torch.ones(dim))))
+        coefs_mean = torch.zeros(dim)
+        coefs = pyro.sample('beta', dist.Normal(coefs_mean, torch.ones(dim)))
         y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
         return y
 
@@ -155,8 +154,8 @@ def test_logistic_regression_with_dual_averaging():
 @pytest.mark.xfail(reason='the model is sensitive to NaN log_pdf')
 def test_bernoulli_beta_with_dual_averaging():
     def model(data):
-        alpha = pyro.param('alpha', Variable(torch.Tensor([1.1, 1.1]), requires_grad=True))
-        beta = pyro.param('beta', Variable(torch.Tensor([1.1, 1.1]), requires_grad=True))
+        alpha = torch.tensor([1.1, 1.1])
+        beta = torch.tensor([1.1, 1.1])
         p_latent = pyro.sample("p_latent", dist.Beta(alpha, beta))
         pyro.observe("obs", dist.Bernoulli(p_latent), data)
         return p_latent
@@ -164,7 +163,7 @@ def test_bernoulli_beta_with_dual_averaging():
     nuts_kernel = NUTS(model, adapt_step_size=True)
     mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100)
     posterior = []
-    true_probs = Variable(torch.Tensor([0.9, 0.1]))
+    true_probs = torch.tensor([0.9, 0.1])
     data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
     for trace, _ in mcmc_run._traces(data):
         posterior.append(trace.nodes['p_latent']['value'])

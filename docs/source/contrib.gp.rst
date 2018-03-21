@@ -9,6 +9,39 @@ See the `Gaussian Processes tutorial <http://pyro.ai/examples/gp.html>`_ for an 
     :show-inheritance:
     :member-order: bysource
 
+Models
+------
+
+.. automodule:: pyro.contrib.gp.models.model
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
+
+.. automodule:: pyro.contrib.gp.models.gpr
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
+
+.. automodule:: pyro.contrib.gp.models.sgpr
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
+
+.. automodule:: pyro.contrib.gp.models.vgp
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
+
+.. automodule:: pyro.contrib.gp.models.svgp
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
+
 Kernels
 -------
 
@@ -47,7 +80,7 @@ Kernels
     :undoc-members:
     :show-inheritance:
     :member-order: bysource
-    
+
 Likelihoods
 -----------
 
@@ -63,34 +96,10 @@ Likelihoods
     :show-inheritance:
     :member-order: bysource
 
-Models
-------
+Util
+____
 
-.. automodule:: pyro.contrib.gp.models.model
-    :members:
-    :undoc-members:
-    :show-inheritance:
-    :member-order: bysource
-
-.. automodule:: pyro.contrib.gp.models.gpr
-    :members:
-    :undoc-members:
-    :show-inheritance:
-    :member-order: bysource
-
-.. automodule:: pyro.contrib.gp.models.sgpr
-    :members:
-    :undoc-members:
-    :show-inheritance:
-    :member-order: bysource
-
-.. automodule:: pyro.contrib.gp.models.vgp
-    :members:
-    :undoc-members:
-    :show-inheritance:
-    :member-order: bysource
-
-.. automodule:: pyro.contrib.gp.models.svgp
+.. automodule:: pyro.contrib.gp.util
     :members:
     :undoc-members:
     :show-inheritance:
