@@ -21,21 +21,19 @@ class GPRegression(Model):
     Carl E. Rasmussen, Christopher K. I. Williams
 
     :param torch.Tensor X: A 1D or 2D tensor of input data for training.
-    :param torch.Tensor y: A 1D or 2D tensor of output data for training.
+    :param torch.Tensor y: A tensor of output data for training with
+        ``y.size(0)`` equals to number of data points.
     :param pyro.contrib.gp.kernels.Kernel kernel: A Pyro kernel object.
     :param torch.Tensor noise: An optional noise parameter.
     :param float jitter: An additional jitter to help stablize Cholesky decomposition.
     """
     def __init__(self, X, y, kernel, noise=None, jitter=1e-6):
-        super(GPRegression, self).__init__()
-        self.set_data(X, y)
-        self.kernel = kernel
+        latent_shape = torch.Size([])
+        super(GPRegression, self).__init__(X, y, kernel, latent_shape, jitter)
 
         if noise is None:
             noise = self.X.data.new([1])
         self.noise = Parameter(noise)
-
-        self.jitter = self.X.new([jitter])
         self.set_constraint("noise", constraints.greater_than(self.jitter))
 
     def model(self):
@@ -44,12 +42,12 @@ class GPRegression(Model):
         kernel = self.kernel
         noise = self.get_param("noise")
 
+        zero_loc = self.X.new([0]).expand(self.X.size(0))
         K = kernel(self.X) + noise.expand(self.X.size(0)).diag()
-        # correct event_shape for y
-        y_t = self.y.t() if self.y.dim() == 2 else self.y
-        zero_loc = y_t.new([0]).expand(y_t.size())
-        pyro.sample("y", dist.MultivariateNormal(zero_loc, K).reshape(
-            extra_event_dims=zero_loc.dim() - 1), obs=y_t)
+        # convert y_shape from N x D to D x N
+        y = self.y.permute(*range(self.y.dim())[1:], 0)
+        pyro.sample("y", dist.MultivariateNormal(zero_loc, K)
+                    .reshape(sample_shape=y.size()[:-1]), obs=y)
 
     def guide(self):
         self.set_mode("guide")
@@ -81,15 +79,18 @@ class GPRegression(Model):
         Kfs = kernel(self.X, Xnew)
         Lff = Kff.potrf(upper=False)
 
-        y = self.y.unsqueeze(1) if self.y.dim() == 1 else self.y
-        pack = torch.cat((y, Kfs), dim=1)
+        # convert y into 2D tensor before packing
+        y_temp = self.y.view(self.y.size(0), -1)
+        pack = torch.cat((y_temp, Kfs), dim=1)
         Lffinv_pack = matrix_triangular_solve_compat(pack, Lff, upper=False)
-        Lffinv_y = Lffinv_pack[:, :y.size(1)].view(self.y.size())
+        # unpack
+        Lffinv_y = Lffinv_pack[:, :y_temp.size(1)]
         # W = inv(Lff) @ Kfs
-        W = Lffinv_pack[:, y.size(1):]
+        W = Lffinv_pack[:, y_temp.size(1):]
 
         # loc = Kfs.T @ inv(Kff) @ y
-        loc = W.t().matmul(Lffinv_y)
+        loc_shape = Xnew.size()[:1] + self.y.size()[1:]
+        loc = W.t().matmul(Lffinv_y).view(loc_shape)
 
         # cov = Kss - Ksf @ inv(Kff) @ Kfs
         if full_cov:

@@ -29,7 +29,8 @@ class SparseGPRegression(Model):
     Michalis Titsias
 
     :param torch.Tensor X: A 1D or 2D tensor of input data for training.
-    :param torch.Tensor y: A 1D or 2D tensor of output data for training.
+    :param torch.Tensor y: A tensor of output data for training with
+        ``y.size(0)`` equals to number of data points.
     :param pyro.contrib.gp.kernels.Kernel kernel: A Pyro kernel object.
     :param torch.Tensor Xu: Initial values for inducing points, which are parameters
         of our model.
@@ -38,9 +39,8 @@ class SparseGPRegression(Model):
     :param float jitter: An additional jitter to help stablize Cholesky decomposition.
     """
     def __init__(self, X, y, kernel, Xu, noise=None, approx=None, jitter=1e-6):
-        super(SparseGPRegression, self).__init__()
-        self.set_data(X, y)
-        self.kernel = kernel
+        latent_shape = torch.Size([])
+        super(SparseGPRegression, self).__init__(X, y, kernel, latent_shape, jitter)
         self.Xu = Parameter(Xu)
 
         if noise is None:
@@ -55,8 +55,6 @@ class SparseGPRegression(Model):
         else:
             raise ValueError("The sparse approximation method should be one of 'DTC', "
                              "'FITC', 'VFE'.")
-
-        self.jitter = self.X.new([jitter])
 
     def model(self):
         self.set_mode("model")
@@ -83,14 +81,14 @@ class SparseGPRegression(Model):
             else:  # approx = "VFE"
                 trace_term += (Kffdiag - Qffdiag).sum() / noise
 
-        # correct event_shape for y
-        y_t = self.y.t() if self.y.dim() == 2 else self.y
-        zero_loc = y_t.new([0]).expand(y_t.size())
         # DTC: cov = Qff + noise, trace_term = 0
         # FITC: cov = Qff + diag(Kff - Qff) + noise, trace_term = 0
         # VFE: cov = Qff + noise, trace_term = tr(Kff - Qff) / noise
-        pyro.sample("y", dist.SparseMultivariateNormal(zero_loc, D, W, trace_term).reshape(
-            extra_event_dims=zero_loc.dim() - 1), obs=y_t)
+        zero_loc = self.X.new([0]).expand(self.X.size(0))
+        # convert y_shape from N x D to D x N
+        y = self.y.permute(*range(self.y.dim())[1:], 0)
+        pyro.sample("y", dist.SparseMultivariateNormal(zero_loc, D, W, trace_term)
+                    .reshape(sample_shape=y.size()[:-1]), obs=y)
 
     def guide(self):
         self.set_mode("guide")
@@ -99,7 +97,7 @@ class SparseGPRegression(Model):
         noise = self.get_param("noise")
         Xu = self.get_param("Xu")
 
-        return kernel, noise, Xu
+        return kernel, Xu, noise
 
     def forward(self, Xnew, full_cov=False, noiseless=True):
         r"""
@@ -116,7 +114,7 @@ class SparseGPRegression(Model):
         """
         self._check_Xnew_shape(Xnew, self.X)
 
-        kernel, noise, Xu = self.guide()
+        kernel, Xu, noise = self.guide()
 
         Kuu = kernel(Xu) + self.jitter.expand(Xu.size(0)).diag()
         Kus = kernel(Xu, Xnew)
@@ -146,13 +144,16 @@ class SparseGPRegression(Model):
         Ws = matrix_triangular_solve_compat(Kus, Luu, upper=False)
 
         # loc = Linv_Ws.T @ inv(L) @ W_Dinv @ y
-        W_Dinv_y = W_Dinv.matmul(self.y)
-        W_Dinv_y_temp = W_Dinv_y.unsqueeze(1) if W_Dinv_y.dim() == 1 else W_Dinv_y
-        pack = torch.cat((W_Dinv_y_temp, Ws), dim=1)
+        # convert y into 2D tensor
+        y_temp = self.y.view(self.y.size(0), -1)
+        W_Dinv_y = W_Dinv.matmul(y_temp)
+        pack = torch.cat((W_Dinv_y, Ws), dim=1)
         Linv_pack = matrix_triangular_solve_compat(pack, L, upper=False)
-        Linv_W_Dinv_y = Linv_pack[:, :W_Dinv_y_temp.size(1)].view(W_Dinv_y.size())
-        Linv_Ws = Linv_pack[:, W_Dinv_y_temp.size(1):]
-        loc = Linv_Ws.t().matmul(Linv_W_Dinv_y)
+        Linv_W_Dinv_y = Linv_pack[:, :W_Dinv_y.size(1)]
+        Linv_Ws = Linv_pack[:, W_Dinv_y.size(1):]
+
+        loc_shape = Xnew.size()[:1] + self.y.size()[1:]
+        loc = Linv_Ws.t().matmul(Linv_W_Dinv_y).view(loc_shape)
 
         # cov = Kss - Ws.T @ Ws + Linv_Ws.T @ Linv_Ws
         if full_cov:

@@ -21,15 +21,21 @@ class SparseVariationalGP(VariationalGP):
     James Hensman, Alexander G. de G. Matthews, Zoubin Ghahramani
 
     :param torch.Tensor X: A 1D or 2D tensor of input data for training.
-    :param torch.Tensor y: A 1D or 2D tensor of output data for training.
+    :param torch.Tensor y: A tensor of output data for training with
+        ``y.size(0)`` equals to number of data points.
     :param pyro.contrib.gp.kernels.Kernel kernel: A Pyro kernel object.
     :param torch.Tensor Xu: Initial values for inducing points, which are parameters
         of our model.
     :param pyro.contrib.gp.likelihoods.Likelihood likelihood: A likelihood module.
+    :param torch.Size latent_shape: Shape for latent processes. By default, it equals
+        to output batch shape ``y.size()[1:]``. For the multi-class classification
+        problems, ``latent_shape[-1]`` should corresponse to the number of classes
+        to predict.
     :param float jitter: An additional jitter to help stablize Cholesky decomposition.
     """
-    def __init__(self, X, y, kernel, Xu, likelihood, jitter=1e-6):
-        super(SparseVariationalGP, self).__init__(X, y, kernel, likelihood, jitter)
+    def __init__(self, X, y, kernel, Xu, likelihood, latent_shape=None, jitter=1e-6):
+        super(SparseVariationalGP, self).__init__(X, y, kernel, likelihood,
+                                                  latent_shape, jitter)
         self.Xu = Parameter(Xu)
 
     def model(self):
@@ -43,32 +49,35 @@ class SparseVariationalGP(VariationalGP):
         Kuf = kernel(Xu, self.X)
         Luu = Kuu.potrf(upper=False)
 
-        if self.y.dim() == 1:
-            zero_loc = Xu.new([0]).expand(Xu.size(0))
-        else:
-            zero_loc = Xu.new([0]).expand(self.y.size(1), Xu.size(0))
-        # TODO: use scale_tril=Luu
-        u = pyro.sample("u", dist.MultivariateNormal(loc=zero_loc, covariance_matrix=Kuu).reshape(
-            extra_event_dims=zero_loc.dim() - 1))
+        mu_shape = self.latent_shape + Xu.size()[:1]
+        zero_loc = Xu.new([0]).expand(mu_shape)
+        u = pyro.sample("u", dist.MultivariateNormal(loc=zero_loc, scale_tril=Luu))
 
         # p(f|u) ~ N(f|mf, Kf)
-        # mf = Kfu @ inv(Kuu) @ u; Kf = Kff - Kfu @ inv(Kuu) @ Kuf
-        u = u.unsqueeze(1) if u.dim() == 1 else u.t()
-        pack = torch.cat((u, Kuf), dim=1)
+        # mf = Kfu @ inv(Kuu) @ u; Kf = Kff - Kfu @ inv(Kuu) @ Kuf = Kff - W.T @ W
+        # convert u_shape from latent_shape x N to N x latent_shape
+        u = u.permute(-1, *range(u.dim())[:-1])
+        # convert u to 2D tensors before packing
+        u_temp = u.view(u.size(0), -1)
+        pack = torch.cat((u_temp, Kuf), dim=1)
         Luuinv_pack = matrix_triangular_solve_compat(pack, Luu, upper=False)
-        Luuinv_u = Luuinv_pack[:, :u.size(1)]
-        Luuinv_Kuf = Luuinv_pack[:, u.size(1):]
+        # unpack
+        Luuinv_u = Luuinv_pack[:, :u_temp.size(1)]
+        W = Luuinv_pack[:, u_temp.size(1):]
 
-        # correct event_shape for y
-        y_t = self.y.t() if self.y.dim() == 2 else self.y
-        mf_t = Luuinv_Kuf.t().matmul(Luuinv_u).view(y_t.size())
+        mf_shape = self.X.size()[:1] + self.latent_shape
+        mf = W.t().matmul(Luuinv_u).view(mf_shape)
+        # convert mf_shape from N x latent_shape to latent_shape x N
+        mf = mf.permute(*range(mf.dim())[1:], 0)
         Kffdiag = kernel(self.X, diag=True)
-        Qffdiag = (Luuinv_Kuf ** 2).sum(dim=0)
+        Qffdiag = (W ** 2).sum(dim=0)
         Kfdiag = Kffdiag - Qffdiag
 
         # get 1 sample for f
-        f = dist.Normal(mf_t, Kfdiag)()
-        likelihood(f, obs=y_t)
+        f = dist.Normal(mf, Kfdiag)()
+        # convert y_shape from N x D to D x N
+        y = self.y.permute(*range(self.y.dim())[1:], 0)
+        likelihood(f, obs=y)
 
     def guide(self):
         self.set_mode("guide")
@@ -78,25 +87,19 @@ class SparseVariationalGP(VariationalGP):
         Xu = self.get_param("Xu")
 
         # define variational parameters
-        if self.y.dim() == 1:
-            mu_0 = torch.tensor(Xu.data.new(Xu.size(0)).zero_(),
-                                requires_grad=True)
-        else:
-            mu_0 = torch.tensor(Xu.data.new(Xu.size(0), self.y.size(1)).zero_(),
-                                requires_grad=True)
+        mu_shape = self.latent_shape + Xu.size()[:1]
+        mu_0 = torch.tensor(Xu.data.new(mu_shape).zero_(),
+                            requires_grad=True)
         mu = pyro.param("u_loc", mu_0)
-        unconstrained_Lu_0 = torch.tensor(Xu.new(Xu.size(0), Xu.size(0)).zero_(),
+        Lu_shape = self.latent_shape + torch.Size([Xu.size(0), Xu.size(0)])
+        # TODO: use new syntax for pyro.param constraint
+        unconstrained_Lu_0 = torch.tensor(Xu.new(Lu_shape).zero_(),
                                           requires_grad=True)
         unconstrained_Lu = pyro.param("unconstrained_u_tril", unconstrained_Lu_0)
         Lu = transform_to(constraints.lower_cholesky)(unconstrained_Lu)
 
-        # TODO: use scale_tril=Lu
-        Ku = Lu.t().matmul(Lu) + self.jitter.expand(Lu.size(0)).diag()
-        # correct event_shape for mu
-        mu_t = mu.t() if mu.dim() == 2 else mu
-        pyro.sample("u", dist.MultivariateNormal(loc=mu_t, covariance_matrix=Ku).reshape(
-            extra_event_dims=mu_t.dim() - 1))
-        return kernel, likelihood, Xu, mu, Lu
+        pyro.sample("u", dist.MultivariateNormal(loc=mu, scale_tril=Lu))
+        return kernel, Xu, likelihood, mu, Lu
 
     def forward(self, Xnew, full_cov=False):
         """
@@ -113,7 +116,7 @@ class SparseVariationalGP(VariationalGP):
         """
         self._check_Xnew_shape(Xnew, self.X)
 
-        kernel, likelihood, Xu, mu, Lu = self.guide()
+        kernel, Xu, likelihood, mu, Lu = self.guide()
 
         loc, cov = self._predict_f(Xnew, Xu, kernel, mu, Lu, full_cov)
 
