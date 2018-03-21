@@ -300,6 +300,32 @@ def save_visualization(trace, graph_output):
     g.render(graph_output, view=False, cleanup=True)
 
 
+def check_traces_match(trace1, trace2):
+    """
+    :param pyro.poutine.Trace trace1: Trace object of the model
+    :param pyro.poutine.Trace trace2: Trace object of the guide
+    :raises: RuntimeWarning, ValueError
+
+    Checks that (1) there is a bijection between the samples in the two traces
+    and (2) at each sample site two traces agree on sample shape.
+    """
+    # Check ordinary sample sites.
+    vars1 = set(name for name, site in trace1.nodes.items() if site["type"] == "sample")
+    vars2 = set(name for name, site in trace2.nodes.items() if site["type"] == "sample")
+    if vars1 != vars2:
+        warnings.warn("Model vars changed: {} vs {}".format(vars1, vars2))
+
+    # Check shapes agree.
+    for name in vars1:
+        site1 = trace1.nodes[name]
+        site2 = trace2.nodes[name]
+        if hasattr(site1["fn"], "shape") and hasattr(site2["fn"], "shape"):
+            shape1 = site1["fn"].shape(*site1["args"], **site1["kwargs"])
+            shape2 = site2["fn"].shape(*site2["args"], **site2["kwargs"])
+            if shape1 != shape2:
+                raise ValueError("Site dims disagree at site '{}': {} vs {}".format(name, shape1, shape2))
+
+
 def check_model_guide_match(model_trace, guide_trace):
     """
     :param pyro.poutine.Trace model_trace: Trace object of the model
