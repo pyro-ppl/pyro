@@ -4,9 +4,32 @@ from .poutine import Messenger, Poutine, _PYRO_STACK
 
 
 def get_scope_stack():
-    return list(map(lambda x: (x.prefix, x.suffix),
-                    filter(lambda x: isinstance(x, ScopeMessenger),
-                           _PYRO_STACK)))
+    return tuple(map(lambda x: (x.prefix, x.suffix),
+                     filter(lambda x: isinstance(x, ScopeMessenger),
+                            _PYRO_STACK)))
+
+
+class _ScopeAllocator(object):
+    """
+    TODO docs
+    """
+    def __init__(self):
+        self._stacks = {}
+
+    def allocate(self, name, suffix, context):
+        if context not in self._stacks:
+            self._stacks[context] = {}
+        if name not in self._stacks[context]:
+            self._stacks[context][name] = set()
+        self._stacks[context][name].add(suffix)
+        return suffix + 1
+
+    def free(self, name, suffix, context):
+        # XXX remove all contexts where name is the root??
+        self._stacks[context][name].discard(suffix)
+
+
+_SCOPE_ALLOCATOR = _ScopeAllocator()
 
 
 class ScopeMessenger(Messenger):
@@ -14,6 +37,15 @@ class ScopeMessenger(Messenger):
         super(ScopeMessenger, self).__init__()
         self.prefix = prefix
         self.suffix = suffix
+
+    def __enter__(self):
+        self.context = get_scope_stack()
+        self.suffix = _SCOPE_ALLOCATOR.allocate(self.name, self.suffix, self.context)
+        return super(ScopeMessenger, self).__enter__()
+
+    def __exit__(self, *args):
+        _SCOPE_ALLOCATOR.free(self.name, self.suffix, self.context)
+        return super(ScopeMessenger, self).__exit__(*args)
 
     def __call__(self, fn):
         if self.prefix is None:
