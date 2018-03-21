@@ -178,16 +178,16 @@ class AIR(nn.Module):
         pyro.module('predict', self.predict),
         pyro.module('encode', self.encode),
         pyro.module('embed', self.embed),
-        pyro.module('bl_rnn', self.bl_rnn, tags='baseline'),
-        pyro.module('bl_predict', self.bl_predict, tags='baseline'),
-        pyro.module('bl_embed', self.bl_embed, tags='baseline')
+        pyro.module('bl_rnn', self.bl_rnn),
+        pyro.module('bl_predict', self.bl_predict),
+        pyro.module('bl_embed', self.bl_embed)
 
         pyro.param('h_init', self.h_init)
         pyro.param('c_init', self.c_init)
         pyro.param('z_where_init', self.z_where_init)
         pyro.param('z_what_init', self.z_what_init)
-        pyro.param('bl_h_init', self.bl_h_init, tags='baseline')
-        pyro.param('bl_c_init', self.bl_c_init, tags='baseline')
+        pyro.param('bl_h_init', self.bl_h_init)
+        pyro.param('bl_c_init', self.bl_c_init)
 
         with pyro.iarange('data', data.size(0), subsample_size=batch_size, use_cuda=self.use_cuda) as ix:
             batch = data[ix]

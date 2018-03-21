@@ -91,7 +91,6 @@ class NormalNormalTests(TestCase):
         assert_equal(0.0, log_sig_error, prec=0.05)
 
 
-@pytest.mark.skip("Reinstate once poisson is migrated to PyTorch - https://github.com/uber/pyro/issues/699")
 class TestFixedModelGuide(TestCase):
     def setUp(self):
         self.data = torch.tensor([2.0])
@@ -100,16 +99,16 @@ class TestFixedModelGuide(TestCase):
         self.alpha_p_log_0 = 0.11 * torch.ones(1)
         self.beta_p_log_0 = 0.13 * torch.ones(1)
 
-    def do_test_fixedness(self, fixed_tags):
+    def do_test_fixedness(self, fixed_parts):
         pyro.clear_param_store()
 
         def model():
             alpha_p_log = pyro.param(
                 "alpha_p_log", torch.tensor(
-                    self.alpha_p_log_0.clone(), requires_grad=True), tags="model")
+                    self.alpha_p_log_0.clone()))
             beta_p_log = pyro.param(
                 "beta_p_log", torch.tensor(
-                    self.beta_p_log_0.clone(), requires_grad=True), tags="model")
+                    self.beta_p_log_0.clone()))
             alpha_p, beta_p = torch.exp(alpha_p_log), torch.exp(beta_p_log)
             lambda_latent = pyro.sample("lambda_latent", dist.Gamma(alpha_p, beta_p))
             pyro.sample("obs", dist.Poisson(lambda_latent), obs=self.data)
@@ -118,18 +117,19 @@ class TestFixedModelGuide(TestCase):
         def guide():
             alpha_q_log = pyro.param(
                 "alpha_q_log", torch.tensor(
-                    self.alpha_q_log_0.clone(), requires_grad=True), tags="guide")
+                    self.alpha_q_log_0.clone()))
             beta_q_log = pyro.param(
                 "beta_q_log", torch.tensor(
-                    self.beta_q_log_0.clone(), requires_grad=True), tags="guide")
+                    self.beta_q_log_0.clone()))
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             pyro.sample("lambda_latent", dist.Gamma(alpha_q, beta_q))
 
-        def per_param_args(module_name, param_name, tags):
-            if tags in fixed_tags:
-                    return {'lr': 0.0}
-            else:
+        def per_param_args(module_name, param_name):
+            if 'model' in fixed_parts and 'p_' in param_name:
                 return {'lr': 0.0}
+            if 'guide' in fixed_parts and 'q_' in param_name:
+                return {'lr': 0.0}
+            return {'lr': 0.01}
 
         adam = optim.Adam(per_param_args)
         svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
@@ -143,20 +143,20 @@ class TestFixedModelGuide(TestCase):
                           (torch.equal(pyro.param("beta_q_log").data, self.beta_q_log_0))
         model_changed = not model_unchanged
         guide_changed = not guide_unchanged
-        error = ('model' in fixed_tags and model_changed) or ('guide' in fixed_tags and guide_changed)
+        error = ('model' in fixed_parts and model_changed) or ('guide' in fixed_parts and guide_changed)
         return (not error)
 
     def test_model_fixed(self):
-        assert self.do_test_fixedness(fixed_tags=["model"])
+        assert self.do_test_fixedness(fixed_parts=["model"])
 
     def test_guide_fixed(self):
-        assert self.do_test_fixedness(fixed_tags=["guide"])
+        assert self.do_test_fixedness(fixed_parts=["guide"])
 
     def test_guide_and_model_both_fixed(self):
-        assert self.do_test_fixedness(fixed_tags=["model", "guide"])
+        assert self.do_test_fixedness(fixed_parts=["model", "guide"])
 
     def test_guide_and_model_free(self):
-        assert self.do_test_fixedness(fixed_tags=["bogus_tag"])
+        assert self.do_test_fixedness(fixed_parts=["bogus_tag"])
 
 
 @pytest.mark.stage("integration", "integration_batch_2")
