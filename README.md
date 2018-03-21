@@ -59,17 +59,27 @@ pip install pyro-ppl[extras]  # for running examples/tutorials
 
 For recent features you can install Pyro from source.
 
+To install a compatible CPU version of Pytorch on OSX / Linux, you
+could use the PyTorch install helper script.
+
+```
+bash scripts/install_pytorch.sh
+```
+
+Alternatively, build PyTorch following instructions in the PyTorch
+[README](https://github.com/pytorch/pytorch/blob/master/README.md).
 ```sh
 git clone --recursive https://github.com/pytorch/pytorch
 cd pytorch
 git checkout e40425f  # <---- a well-tested commit
 ```
-Then build PyTorch following instructions in the PyTorch
-[README](https://github.com/pytorch/pytorch/blob/master/README.md).
-Depending on your system, this may be as simple as
+On Linux:
 ```sh
-pip install ninja
 python setup.py install
+```
+On OSX:
+```sh
+MACOSX_DEPLOYMENT_TARGET=10.9 CC=clang CXX=clang++ python setup.py install
 ```
 
 Finally install Pyro
