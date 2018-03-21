@@ -8,6 +8,10 @@ import pyro.distributions as dist
 from .likelihood import Likelihood
 
 
+def _softmax(x):
+    return F.softmax(x, dim=-1)
+
+
 class MultiClass(Likelihood):
     """
     Implementation of MultiClass likelihood, which is used for multi-class classification.
@@ -15,10 +19,10 @@ class MultiClass(Likelihood):
 
     def __init__(self, response_function=None):
         super(MultiClass, self).__init__()
-        self.response_function = response_function if response_function is not None else F.sigmoid
+        self.response_function = (response_function if response_function is not None
+                                  else _softmax)
 
     def forward(self, f, obs=None):
-        event_dims = f.dim()
+        f = f.transpose(-2, -1)
         f_response = self.response_function(f)
-        return pyro.sample("y", dist.Categorical(f_response).reshape(extra_event_dims=event_dims),
-                           obs=obs)
+        return pyro.sample("y", dist.Categorical(f_response), obs=obs)

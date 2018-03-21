@@ -10,11 +10,12 @@ class Model(Parameterized):
     Base class for models used in Gaussian Process.
 
     :param torch.Tensor X: A 1D or 2D tensor of input data for training.
-    :param torch.Tensor y: A 1D or 2D tensor of output data for training.
+    :param torch.Tensor y: A tensor of output data for training with
+        ``y.size(0)`` equals to number of data points.
     :param pyro.contrib.gp.kernels.Kernel kernel: A Pyro kernel object.
     :param torch.Size latent_shape: Shape for latent processes. By default, it equals
         to output batch shape ``y.size()[1:]``. For the multi-class classification
-        problems, the size should corresponse to the number of prediction classes.
+        problems, ``latent_shape[-1]`` should corresponse to the number of classes.
     :param float jitter: An additional jitter to help stablize Cholesky decomposition.
     """
     def __init__(self, X, y, kernel, latent_shape=None, jitter=1e-6):

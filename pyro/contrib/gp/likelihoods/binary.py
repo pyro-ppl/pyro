@@ -15,7 +15,8 @@ class Binary(Likelihood):
 
     def __init__(self, response_function=None):
         super(Binary, self).__init__()
-        self.response_function = response_function if response_function is not None else F.sigmoid
+        self.response_function = (response_function if response_function is not None
+                                  else F.sigmoid)
 
     def forward(self, f, obs=None):
         f_response = self.response_function(f)

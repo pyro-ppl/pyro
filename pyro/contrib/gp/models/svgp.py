@@ -29,8 +29,7 @@ class SparseVariationalGP(VariationalGP):
     :param pyro.contrib.gp.likelihoods.Likelihood likelihood: A likelihood module.
     :param torch.Size latent_shape: Shape for latent processes. By default, it equals
         to output batch shape ``y.size()[1:]``. For the multi-class classification
-        problems, ``latent_shape[-1]`` should corresponse to the number of classes
-        to predict.
+        problems, ``latent_shape[-1]`` should corresponse to the number of classes.
     :param float jitter: An additional jitter to help stablize Cholesky decomposition.
     """
     def __init__(self, X, y, kernel, Xu, likelihood, latent_shape=None, jitter=1e-6):
