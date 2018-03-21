@@ -7,6 +7,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.poutine.util import prune_subsample_sites
+from pyro.util import check_traces_match
 
 
 def _product(shape):
@@ -81,7 +82,10 @@ class ADVI(object):
         with poutine.scale("advi_scope", 0.0):
             self.sample_latent(*args, **kwargs)
         # actual model sample statements shouldn't be zeroed out
-        return self.base_model(*args, **kwargs)
+        base_trace = poutine.trace(self.base_model).get_trace(*args, **kwargs)
+        base_trace = prune_subsample_sites(base_trace)
+        check_traces_match(base_trace, self.prototype_trace)
+        return base_trace.nodes["_RETURN"]["value"]
 
 
 class ADVIMultivariateNormal(ADVI):
