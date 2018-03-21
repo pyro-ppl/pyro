@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import torch
+from torch.distributions import constraints
 
 from pyro.distributions.distribution import Distribution
 from pyro.distributions.score_parts import ScoreParts
@@ -207,6 +208,10 @@ class ReshapedDistribution(TorchDistribution):
     def has_enumerate_support(self):
         return self.base_dist.has_enumerate_support
 
+    @constraints.dependent_property
+    def support(self):
+        return self.base_dist.support
+
     def sample(self, sample_shape=torch.Size()):
         return self.base_dist.sample(sample_shape + self.sample_shape)
 
@@ -269,6 +274,10 @@ class MaskedDistribution(TorchDistribution):
     @property
     def has_enumerate_support(self):
         return self.base_dist.has_enumerate_support
+
+    @constraints.dependent_property
+    def support(self):
+        return self.base_dist.support
 
     def sample(self, sample_shape=torch.Size()):
         return self.base_dist.sample(sample_shape)

@@ -66,7 +66,7 @@ class ADVI(object):
                 unconstrained_value = latent[pos:pos + size].view(shape)
                 pos += size
                 value = transform_to(site["fn"].support)(unconstrained_value)
-                pyro.sample(name, dist.Delta(value))
+                pyro.sample(name, dist.Delta(value).reshape(extra_event_dims=site["fn"].event_dim))
         assert pos == len(latent)
 
     def model(self, *args, **kwargs):
@@ -100,8 +100,10 @@ class ADVIMultivariateNormal(ADVI):
         pyro.param("advi_cholesky_factor", torch.tril(torch.rand(latent_dim)),
                    constraint=constraints.lower_cholesky)
     """
-    # sample the (single) multivariate normal latent used in the advi guide
     def sample_latent(self, *args, **kwargs):
+        """
+        Samples the (single) multivariate normal latent used in the advi guide.
+        """
         loc = pyro.param("advi_loc", torch.zeros(self.latent_dim))
         lower_cholesky = pyro.param("advi_lower_cholesky", torch.eye(self.latent_dim),
                                     constraint=constraints.lower_cholesky)
@@ -130,8 +132,10 @@ class ADVIDiagonalNormal(ADVI):
         pyro.param("advi_scale", torch.ones(latent_dim),
                    constraint=constraints.positive)
     """
-    # sample the (single) multivariate normal latent used in the advi guide
     def sample_latent(self, *args, **kwargs):
+        """
+        Samples the (single) diagnoal normal latent used in the advi guide.
+        """
         loc = pyro.param("advi_loc", torch.zeros(self.latent_dim))
         scale = pyro.param("advi_scale", torch.ones(self.latent_dim),
                            constraint=constraints.positive)
