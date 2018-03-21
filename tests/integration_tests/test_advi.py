@@ -96,11 +96,12 @@ def test_diagonal_gaussians(advi_class):
 
     for k in range(n_steps):
         svi.step()
-        if advi_class == ADVIMultivariateNormal:
-            L = pyro.param("advi_lower_cholesky")
-            diag_cov = torch.mm(L, L.t()).diag()
-        else:
-            diag_cov = torch.pow(pyro.param("advi_scale"), 2.0)
+
+    if advi_class == ADVIMultivariateNormal:
+        L = pyro.param("advi_lower_cholesky")
+        diag_cov = torch.mm(L, L.t()).diag()
+    else:
+        diag_cov = torch.pow(pyro.param("advi_scale"), 2.0)
 
     assert_equal(pyro.param("advi_loc"), torch.tensor([-0.2, 0.2]), prec=0.05,
                  msg="advi mean off")
