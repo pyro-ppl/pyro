@@ -1,9 +1,10 @@
 import torch
+from torch.distributions import constraints, transform_to
+
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.poutine.util import prune_subsample_sites
-from torch.distributions import transform_to, constraints
 
 
 def _product(shape):
@@ -66,6 +67,11 @@ class ADVIMultivariateNormal(ADVI):
     This implementation of ADVI uses a Cholesky factorization of a Multivariate
     Normal distribution to construct a guide over the entire latent space.
 
+    Usage::
+
+        advi = ADVIMultivariateNormal(model)
+        svi = SVI(advi.model, advi.guide, ...)
+
     By default the mean vector is initialized to zero and the Cholesky factor
     is initialized to the identity.  To change this default behavior the user
     should call :func:`pyro.param` before beginning inference, e.g.::
@@ -87,8 +93,13 @@ class ADVIMultivariateNormal(ADVI):
 
 class ADVIDiagonalNormal(ADVI):
     """
-    This implementation of ADVI uses a diagonal Normal distribution to
-    construct a guide over the entire latent space.
+    This implementation of ADVI uses a Normal distribution with a diagonal
+    covariance matrix to construct a guide over the entire latent space.
+
+    Usage::
+
+        advi = ADVIDiagonalNormal(model)
+        svi = SVI(advi.model, advi.guide, ...)
 
     By default the mean vector is initialized to zero and the scale is
     initialized to the identity.  To change this default behavior the user

@@ -47,9 +47,9 @@ class ADVIGaussianChain(GaussianChain):
             self.target_advi_diag_cov[n] += (self.target_kappas[n].item() ** 2) * self.target_advi_diag_cov[n + 1]
 
     def test_multivariatate_normal_advi(self):
-        self.do_test_advi(3, reparameterized=True)
+        self.do_test_advi(3, reparameterized=True, n_steps=10001)
 
-    def do_test_advi(self, N, reparameterized, n_steps=10001):
+    def do_test_advi(self, N, reparameterized, n_steps):
         print("\nGoing to do ADVIGaussianChain test...")
         pyro.clear_param_store()
         self.setUp()
