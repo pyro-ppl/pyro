@@ -5,8 +5,10 @@ import logging
 import numbers
 import warnings
 from collections import OrderedDict
+from contextlib import contextmanager
 from inspect import isclass
 
+import pyro
 import torch
 
 import pyro.poutine as poutine
@@ -420,3 +422,17 @@ def random_module(name, nn_module, prior, *args, **kwargs):
         # update_module_params must be True or the lifted module will not update local params
         return lifted_fn(name, nn_copy, update_module_params=True, *args, **kwargs)
     return _fn
+
+
+def set_validation(is_validate):
+    pyro.infer.set_validation(is_validate)
+
+
+@contextmanager
+def validate(is_validate):
+    infer_validation_status = pyro.infer.is_validation_enabled()
+    try:
+        set_validation(is_validate)
+        yield
+    finally:
+        pyro.infer.set_validation(infer_validation_status)
