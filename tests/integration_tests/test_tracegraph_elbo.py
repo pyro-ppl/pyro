@@ -150,7 +150,7 @@ class NormalNormalNormalTests(TestCase):
                     h = self.sigmoid(self.lin1(x))
                     return self.lin2(h)
 
-            mu_prime_baseline = pyro.module("mu_prime_baseline", VanillaBaselineNN(2, 5), tags="baseline")
+            mu_prime_baseline = pyro.module("mu_prime_baseline", VanillaBaselineNN(2, 5))
         else:
             mu_prime_baseline = None
 
@@ -549,7 +549,7 @@ class RaoBlackwellizationTests(TestCase):
             log_sig_q = pyro.param("log_sig_q",
                                    torch.tensor(self.analytic_log_sig_n.expand(2) - 0.07, requires_grad=True))
             sig_q = torch.exp(log_sig_q)
-            trivial_baseline = pyro.module("mu_baseline", pt_mu_baseline, tags="baseline")
+            trivial_baseline = pyro.module("mu_baseline", pt_mu_baseline)
             baseline_value = trivial_baseline(torch.ones(1)).squeeze()
             mu_latent = pyro.sample("mu_latent",
                                     fakes.NonreparameterizedNormal(mu_q, sig_q).reshape(extra_event_dims=1),
@@ -559,7 +559,7 @@ class RaoBlackwellizationTests(TestCase):
                 with pyro.iarange("inner_%d" % i, 4 - i):
                     for k in range(n_superfluous_top + n_superfluous_bottom):
                         z_baseline = pyro.module("z_baseline_%d_%d" % (i, k),
-                                                 pt_superfluous_baselines[3 * k + i], tags="baseline")
+                                                 pt_superfluous_baselines[3 * k + i])
                         baseline_value = z_baseline(mu_latent.detach())
                         mean_i = pyro.param("mean_%d_%d" % (i, k),
                                             torch.tensor(0.5 * torch.ones(4 - i), requires_grad=True))
@@ -568,8 +568,8 @@ class RaoBlackwellizationTests(TestCase):
                                             infer=dict(baseline=dict(baseline_value=baseline_value)))
                         assert z_i_k.shape == (4 - i,)
 
-        def per_param_callable(module_name, param_name, tags):
-            if 'baseline' in tags:
+        def per_param_callable(module_name, param_name):
+            if 'baseline' in param_name or 'baseline' in module_name:
                 return {"lr": 0.010, "betas": (0.95, 0.999)}
             else:
                 return {"lr": 0.0012, "betas": (0.95, 0.999)}
