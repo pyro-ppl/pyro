@@ -24,8 +24,9 @@ class GPRegression(Model):
     :param torch.Tensor y: A 1D or 2D tensor of output data for training.
     :param pyro.contrib.gp.kernels.Kernel kernel: A Pyro kernel object.
     :param torch.Tensor noise: An optional noise parameter.
+    :param float jitter: An additional jitter to help stablize Cholesky decomposition.
     """
-    def __init__(self, X, y, kernel, noise=None):
+    def __init__(self, X, y, kernel, noise=None, jitter=1e-6):
         super(GPRegression, self).__init__()
         self.set_data(X, y)
         self.kernel = kernel
@@ -33,7 +34,9 @@ class GPRegression(Model):
         if noise is None:
             noise = self.X.data.new([1])
         self.noise = Parameter(noise)
-        self.set_constraint("noise", constraints.positive)
+
+        self.jitter = self.X.new([jitter])
+        self.set_constraint("noise", constraints.greater_than(self.jitter))
 
     def model(self):
         self.set_mode("model")
