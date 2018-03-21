@@ -1,3 +1,5 @@
+from __future__ import absolute_import, division, print_function
+
 import torch
 from torch.distributions import constraints, transform_to
 
@@ -19,14 +21,20 @@ def _product(shape):
 
 class ADVI(object):
     """
-    Base class for implementations of ADVI. Each derived class implements its own
-    :meth:`sample_latent` method. Assumes model structure and latent dimension are fixed.
+    Base class for implementations of Automatic Differentiation Variational Inference.
+
+    Each derived class implements its own :meth:`sample_latent` method.
+
+    Assumes model structure and latent dimension are fixed, and all latent
+    variables are continuous.
+
+    :param callable model: a Pyro model
     """
     def __init__(self, model):
         self.prototype_trace = None
         self.base_model = model
 
-    def setup_prototype(self, *args, **kwargs):
+    def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
         self.prototype_trace = poutine.block(poutine.trace(self.base_model).get_trace)(*args, **kwargs)
         self.prototype_trace = prune_subsample_sites(self.prototype_trace)
@@ -35,12 +43,19 @@ class ADVI(object):
                               if site["type"] == "sample" and not site["is_observed"])
 
     def sample_latent(self, *args, **kwargs):
+        """
+        Samples an encoded latent given the same ``*args, **kwargs`` as the
+        base ``model``.
+        """
         raise NotImplementedError
 
     def guide(self, *args, **kwargs):
+        """
+        An automatic guide with the same ``*args, **kwargs`` as the base ``model``.
+        """
         # if we've never run the model before, do so now so we can inspect the model structure
         if self.prototype_trace is None:
-            self.setup_prototype(*args, **kwargs)
+            self._setup_prototype(*args, **kwargs)
 
         latent = self.sample_latent(*args, **kwargs)
         pos = 0
@@ -55,6 +70,9 @@ class ADVI(object):
         assert pos == len(latent)
 
     def model(self, *args, **kwargs):
+        """
+        A wrapped model with the same ``*args, **kwargs`` as the base ``model``.
+        """
         # wrap sample statement with a 0.0 poutine.scale to zero out unwanted score
         with poutine.scale("advi_scope", 0.0):
             self.sample_latent(*args, **kwargs)
@@ -65,7 +83,8 @@ class ADVI(object):
 class ADVIMultivariateNormal(ADVI):
     """
     This implementation of ADVI uses a Cholesky factorization of a Multivariate
-    Normal distribution to construct a guide over the entire latent space.
+    Normal distribution to construct a guide over the entire latent space. The
+    guide does not depend on the model's ``*args, **kwargs``.
 
     Usage::
 
@@ -94,7 +113,8 @@ class ADVIMultivariateNormal(ADVI):
 class ADVIDiagonalNormal(ADVI):
     """
     This implementation of ADVI uses a Normal distribution with a diagonal
-    covariance matrix to construct a guide over the entire latent space.
+    covariance matrix to construct a guide over the entire latent space. The
+    guide does not depend on the model's ``*args, **kwargs``.
 
     Usage::
 
