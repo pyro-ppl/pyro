@@ -107,9 +107,9 @@ class VariationalGP(Model):
         Lff = Kff.potrf(upper=False)
 
         # convert mf_shape from latent_shape x N to N x latent_shape
-        mf = mf.permute(-1, *range(mf.dim())[:-1])
+        mf = mf.permute(mf.dim()-1, *range(mf.dim())[:-1])
         # convert Lf_shape from latent_shape x N x N to N x N x latent_shape
-        Lf = Lf.permute(-2, -1, *range(Lf.dim())[:-2]).contiguous()
+        Lf = Lf.permute(Lf.dim()-2, Lf.dim()-1, *range(Lf.dim())[:-2]).contiguous()
         # convert mf, Lf to 2D tensors before packing
         mf_temp = mf.view(mf.size(0), -1)
         Lf_temp = Lf.view(Lf.size(0), -1)
@@ -134,13 +134,13 @@ class VariationalGP(Model):
             K = Vt_W.transpose(-2, -1).matmul(Vt_W)
             cov = Kss - Qss + K
             # convert cov from D x N x N to N x N x D
-            cov = cov.permute(-2, -1, *range(cov.dim())[:-2])
+            cov = cov.permute(cov.dim()-2, cov.dim()-1, *range(cov.dim())[:-2])
         else:
             Kssdiag = kernel(Xnew, diag=True)
             Qssdiag = (W ** 2).sum(dim=0)
             Kdiag = (Vt_W ** 2).sum(dim=-2)
             cov = Kssdiag - Qssdiag + Kdiag
             # convert cov from D x N to N x D
-            cov = cov.permute(-1, *range(cov.dim())[:-1])
+            cov = cov.permute(cov.dim()-1, *range(cov.dim())[:-1])
 
         return loc, cov

@@ -56,7 +56,7 @@ class SparseVariationalGP(VariationalGP):
         # p(f|u) ~ N(f|mf, Kf)
         # mf = Kfu @ inv(Kuu) @ u; Kf = Kff - Kfu @ inv(Kuu) @ Kuf = Kff - W.T @ W
         # convert u_shape from latent_shape x N to N x latent_shape
-        u = u.permute(-1, *range(u.dim())[:-1])
+        u = u.permute(u.dim()-1, *range(u.dim())[:-1])
         # convert u to 2D tensors before packing
         u_temp = u.view(u.size(0), -1)
         pack = torch.cat((u_temp, Kuf), dim=1)
