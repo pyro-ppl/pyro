@@ -71,6 +71,14 @@ class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributi
     def __init__(self, loc, cov):
         super(MultivariateNormal, self).__init__(loc, cov)
 
+    @property
+    def mean(self):
+        return self.loc
+
+    @property
+    def variance(self):
+        return self.covariance_matrix.diag()
+
 
 class Normal(torch.distributions.Normal, TorchDistributionMixin):
     def __init__(self, mu, sigma):

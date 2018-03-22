@@ -33,7 +33,6 @@ def test_log_prob():
     assert_equal(mvn.log_prob(x), sparse_mvn.log_prob(x))
 
 
-@pytest.mark.skip(".variance not implemented by torch.distributions.multivariate_normal")
 def test_variance():
     loc = torch.tensor([1, 1, 1, 2, 0])
     D = torch.tensor([1, 2, 2, 4, 5])
