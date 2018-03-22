@@ -311,7 +311,7 @@ def test_irange_in_guide_not_model_error(subsample_size, trace_graph, enum_discr
             pass
         pyro.sample("x", dist.Bernoulli(p))
 
-    with pyro.validate(is_validate):
+    with pyro.validation_enabled(is_validate):
         if is_validate:
             assert_error(model, guide, trace_graph=trace_graph, enum_discrete=enum_discrete)
         else:
@@ -329,7 +329,7 @@ def test_iarange_broadcast_error(trace_graph, enum_discrete, is_validate):
         with pyro.iarange("iarange", 10, 5):
             pyro.sample("x", dist.Bernoulli(p).reshape(sample_shape=[1]))
 
-    with pyro.validate(is_validate):
+    with pyro.validation_enabled(is_validate):
         if is_validate:
             assert_error(model, model, trace_graph=trace_graph, enum_discrete=enum_discrete)
         else:
@@ -706,7 +706,7 @@ def test_enum_discrete_iarange_dependency_warning(enumerate_, is_validate):
                             infer={'enumerate': enumerate_})
         pyro.sample("y", dist.Bernoulli(x.mean()))  # user should move this line up
 
-    with pyro.validate(is_validate):
+    with pyro.validation_enabled(is_validate):
         if enumerate_ and is_validate:
             assert_warning(model, model, enum_discrete=True, max_iarange_nesting=1)
         else:
@@ -742,7 +742,7 @@ def test_enum_discrete_iranges_iarange_dependency_warning(enumerate_, is_validat
         for i in pyro.irange("irange2", 2):
             pyro.sample("y_{}".format(i), dist.Bernoulli(0.5))
 
-    with pyro.validate(is_validate):
+    with pyro.validation_enabled(is_validate):
         if enumerate_ and is_validate:
             assert_warning(model, model, enum_discrete=True, max_iarange_nesting=1)
         else:

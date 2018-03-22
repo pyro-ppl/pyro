@@ -10,13 +10,13 @@ from pyro.infer.advi import ADVI, ADVIMultivariateNormal, ADVIDiagonalNormal
 
 # flake8: noqa
 
-_IS_VALIDATE = False
+_VALIDATION_ENABLED = False
 
 
-def set_validation(is_validate):
-    global _IS_VALIDATE
-    _IS_VALIDATE = is_validate
+def enable_validation(is_validate):
+    global _VALIDATION_ENABLED
+    _VALIDATION_ENABLED = is_validate
 
 
 def is_validation_enabled():
-    return _IS_VALIDATE
+    return _VALIDATION_ENABLED

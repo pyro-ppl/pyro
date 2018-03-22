@@ -338,8 +338,6 @@ def check_model_guide_match(model_trace, guide_trace):
     also appears in the model, (3) at each sample site that appears in both
     the model and guide, the model and guide agree on sample shape.
     """
-    if not pyro.infer.is_validation_enabled():
-        return
     # Check ordinary sample sites.
     model_vars = set(name for name, site in model_trace.nodes.items()
                      if site["type"] == "sample" and not site["is_observed"]
@@ -375,8 +373,6 @@ def check_model_guide_match(model_trace, guide_trace):
 
 
 def check_site_shape(site, max_iarange_nesting):
-    if not pyro.infer.is_validation_enabled():
-        return
     actual_shape = list(site["batch_log_pdf"].shape)
 
     # Compute expected shape.
@@ -438,8 +434,6 @@ def check_traceenum_requirements(model_trace, guide_trace):
     this function aims to warn only in cases where models can be easily
     rewitten to be obviously correct.
     """
-    if not pyro.infer.is_validation_enabled():
-        return
     enumerated_sites = set(name for name, site in guide_trace.nodes.items()
                            if site["type"] == "sample" and site["infer"].get("enumerate"))
     for role, trace in [('model', model_trace), ('guide', guide_trace)]:
