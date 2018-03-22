@@ -1,11 +1,11 @@
 from __future__ import absolute_import, division, print_function
 
 import torch
-from torch.distributions import constraints, transform_to
 
 import pyro
 import pyro.distributions as dist
 from pyro.distributions.util import matrix_triangular_solve_compat
+from pyro.contrib.gp.util import batch_lower_cholesky_transform
 
 from .model import Model
 
@@ -42,10 +42,12 @@ class VariationalGP(Model):
         Kff = kernel(self.X) + self.jitter.expand(self.X.size(0)).diag()
         Lff = Kff.potrf(upper=False)
 
-        f = pyro.sample("f", dist.MultivariateNormal(zero_loc, scale_tril=Lff))
+        f = pyro.sample("f", dist.MultivariateNormal(zero_loc, scale_tril=Lff)
+                        .reshape(extra_event_dims=zero_loc.dim()-1))
         # convert y_shape from N x D to D x N
         y = self.y.permute(*range(self.y.dim())[1:], 0)
-        likelihood(f, obs=y)
+
+        likelihood(f, y)
 
     def guide(self):
         self.set_mode("guide")
@@ -55,17 +57,16 @@ class VariationalGP(Model):
 
         # define variational parameters
         mf_shape = self.latent_shape + self.X.size()[:1]
-        mf_0 = torch.tensor(self.X.new(mf_shape).zero_(),
-                            requires_grad=True)
+        mf_0 = torch.tensor(self.X.new(mf_shape).zero_(), requires_grad=True)
         mf = pyro.param("f_loc", mf_0)
         Lf_shape = self.latent_shape + torch.Size([self.X.size(0), self.X.size(0)])
         # TODO: use new syntax for pyro.param constraint
-        unconstrained_Lf_0 = torch.tensor(self.X.new(Lf_shape).zero_(),
-                                          requires_grad=True)
+        unconstrained_Lf_0 = torch.tensor(self.X.new(Lf_shape).zero_(), requires_grad=True)
         unconstrained_Lf = pyro.param("unconstrained_f_tril", unconstrained_Lf_0)
-        Lf = transform_to(constraints.lower_cholesky)(unconstrained_Lf)
+        Lf = batch_lower_cholesky_transform(unconstrained_Lf)
 
-        pyro.sample("f", dist.MultivariateNormal(loc=mf, scale_tril=Lf))
+        pyro.sample("f", dist.MultivariateNormal(loc=mf, scale_tril=Lf)
+                    .reshape(extra_event_dims=mf.dim()-1))
         return kernel, likelihood, mf, Lf
 
     def forward(self, Xnew, full_cov=False):
@@ -78,7 +79,7 @@ class VariationalGP(Model):
 
         :param torch.Tensor Xnew: A 1D or 2D tensor.
         :param bool full_cov: Predict full covariance matrix or just its diagonal.
-        :return: loc and covariance matrix of :math:`p(f^*|Xnew)`
+        :returns: loc and covariance matrix of :math:`p(f^*|Xnew)`
         :rtype: torch.Tensor and torch.Tensor
         """
         self._check_Xnew_shape(Xnew, self.X)
@@ -108,7 +109,7 @@ class VariationalGP(Model):
         # convert mf_shape from latent_shape x N to N x latent_shape
         mf = mf.permute(-1, *range(mf.dim())[:-1])
         # convert Lf_shape from latent_shape x N x N to N x N x latent_shape
-        Lf = Lf.permute(-2, -1, *range(Lf.dim())[:-2])
+        Lf = Lf.permute(-2, -1, *range(Lf.dim())[:-2]).contiguous()
         # convert mf, Lf to 2D tensors before packing
         mf_temp = mf.view(mf.size(0), -1)
         Lf_temp = Lf.view(Lf.size(0), -1)
@@ -122,7 +123,8 @@ class VariationalGP(Model):
         V_t = V.permute(*range(V.dim())[2:], 1, 0)
         Vt_W = V_t.matmul(W)
 
-        loc = W.t().matmul(Lffinv_mf).view(mf.size())
+        loc_shape = Xnew.size()[:1] + mf.size()[1:]
+        loc = W.t().matmul(Lffinv_mf).view(loc_shape)
 
         if full_cov:
             Kss = kernel(Xnew)

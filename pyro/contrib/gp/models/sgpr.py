@@ -88,7 +88,8 @@ class SparseGPRegression(Model):
         # convert y_shape from N x D to D x N
         y = self.y.permute(*range(self.y.dim())[1:], 0)
         pyro.sample("y", dist.SparseMultivariateNormal(zero_loc, D, W, trace_term)
-                    .reshape(sample_shape=y.size()[:-1]), obs=y)
+                    .reshape(sample_shape=y.size()[:-1], extra_event_dims=y.dim()-1),
+                    obs=y)
 
     def guide(self):
         self.set_mode("guide")
@@ -109,7 +110,7 @@ class SparseGPRegression(Model):
         :param torch.Tensor Xnew: A 1D or 2D tensor.
         :param bool full_cov: Predicts full covariance matrix or just its diagonal.
         :param bool noiseless: Includes noise in the prediction or not.
-        :return: loc and covariance matrix of :math:`p(y^*|Xnew)`.
+        :returns: loc and covariance matrix of :math:`p(y^*|Xnew)`.
         :rtype: torch.Tensor and torch.Tensor
         """
         self._check_Xnew_shape(Xnew, self.X)
@@ -168,5 +169,10 @@ class SparseGPRegression(Model):
                 Kssdiag = Kssdiag + noise.expand(Xnew.size(0))
             Qssdiag = (Ws ** 2).sum(dim=0)
             cov = Kssdiag - Qssdiag + (Linv_Ws ** 2).sum(dim=0)
+
+        # expand cov from N to N x 1 to N x D or N x N to N x N x 1 to N x N x D
+        cov_shape_pre = cov.size() + torch.Size([1] * (self.y.dim()-1))
+        cov_shape = cov.size() + self.y.size()[1:]
+        cov = cov.view(cov_shape_pre).expand(cov_shape)
 
         return loc, cov

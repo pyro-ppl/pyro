@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import torch
-from torch.distributions import transform_to
+from torch.distributions import constraints, transform_to
 import torch.nn as nn
 
 import pyro
@@ -128,3 +128,18 @@ class Parameterized(nn.Module):
             p = pyro.sample(param_name, dist.Delta(MAP_param))
 
         self._registered_params[param] = p
+
+
+def batch_lower_cholesky_transform(bmat):
+    """
+    Applies :class:`torch.distributions.transforms.LowerCholeskyTransform`
+    to a batch of matrices.
+
+    :param torch.Tensor bmat: A batch of matrices.
+    :returns: A batch of transformed matrices.
+    :rtype: torch.Tensor
+    """
+    n = bmat.size(-1)
+    transformed_bmat = torch.stack([transform_to(constraints.lower_cholesky)(mat)
+                                    for mat in bmat.view(-1, n, n)])
+    return transformed_bmat.contiguous().view(bmat.size())

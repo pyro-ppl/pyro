@@ -72,12 +72,15 @@ def test_model_forward(model_class, X, y, kernel, likelihood):
     loc1, var1 = gp(Xnew, full_cov=False)
     assert loc0.dim() == y.dim()
     assert loc0.size(0) == Xnew.size(0)
-    assert loc0.size()[1:] == y.size()[1:]  # test latent shape
-    assert cov0.dim() == 2
+    # test latent shape
+    assert loc0.size()[1:] == y.size()[1:]
+    assert cov0.size()[2:] == y.size()[1:]
     assert cov0.size(0) == cov0.size(1)
     assert cov0.size(0) == Xnew.size(0)
     assert_equal(loc0, loc1)
-    assert_equal(cov0.diag(), var1)
+    n = Xnew.size(0)
+    cov0_diag = torch.stack([mat.diag() for mat in cov0.view(-1, n, n)]).view(cov0.size()[1:])
+    assert_equal(cov0_diag, var1)
 
     # test trivial forward
     # for variational models, inferences depend on variational parameters, so skip
@@ -86,7 +89,7 @@ def test_model_forward(model_class, X, y, kernel, likelihood):
     else:
         loc, cov = gp(X, full_cov=True)
         assert_equal(loc, y)
-        assert_equal(cov.abs().sum().item(), 0)
+        assert_equal(cov.norm().item(), 0)
 
 
 @pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)

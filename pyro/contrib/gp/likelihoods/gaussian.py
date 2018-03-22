@@ -16,7 +16,6 @@ class Gaussian(Likelihood):
 
     :param torch.Tensor variance: Variance parameter.
     """
-
     def __init__(self, variance=None):
         super(Gaussian, self).__init__()
         if variance is None:
@@ -24,8 +23,7 @@ class Gaussian(Likelihood):
         self.variance = Parameter(variance)
         self.set_constraint("variance", constraints.positive)
 
-    def forward(self, f, obs=None):
-        variance = self.get_param("variance").expand_as(f)
-        event_dims = f.dim()
-        return pyro.sample("y", dist.Normal(f, variance).reshape(extra_event_dims=event_dims),
-                           obs=obs)
+    def forward(self, f, y):
+        variance = self.get_param("variance")
+        return pyro.sample("y", dist.Normal(f.expand_as(y), variance)
+                           .reshape(extra_event_dims=y.dim()), obs=y)

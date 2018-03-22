@@ -1,12 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
 import torch
-from torch.distributions import constraints, transform_to
 from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
 from pyro.distributions.util import matrix_triangular_solve_compat
+from pyro.contrib.gp.util import batch_lower_cholesky_transform
 
 from .vgp import VariationalGP
 
@@ -50,7 +50,8 @@ class SparseVariationalGP(VariationalGP):
 
         mu_shape = self.latent_shape + Xu.size()[:1]
         zero_loc = Xu.new([0]).expand(mu_shape)
-        u = pyro.sample("u", dist.MultivariateNormal(loc=zero_loc, scale_tril=Luu))
+        u = pyro.sample("u", dist.MultivariateNormal(loc=zero_loc, scale_tril=Luu)
+                        .reshape(extra_event_dims=zero_loc.dim()-1))
 
         # p(f|u) ~ N(f|mf, Kf)
         # mf = Kfu @ inv(Kuu) @ u; Kf = Kff - Kfu @ inv(Kuu) @ Kuf = Kff - W.T @ W
@@ -76,7 +77,8 @@ class SparseVariationalGP(VariationalGP):
         f = dist.Normal(mf, Kfdiag)()
         # convert y_shape from N x D to D x N
         y = self.y.permute(*range(self.y.dim())[1:], 0)
-        likelihood(f, obs=y)
+
+        likelihood(f, y)
 
     def guide(self):
         self.set_mode("guide")
@@ -87,17 +89,16 @@ class SparseVariationalGP(VariationalGP):
 
         # define variational parameters
         mu_shape = self.latent_shape + Xu.size()[:1]
-        mu_0 = torch.tensor(Xu.data.new(mu_shape).zero_(),
-                            requires_grad=True)
+        mu_0 = torch.tensor(Xu.new(mu_shape).zero_(), requires_grad=True)
         mu = pyro.param("u_loc", mu_0)
         Lu_shape = self.latent_shape + torch.Size([Xu.size(0), Xu.size(0)])
         # TODO: use new syntax for pyro.param constraint
-        unconstrained_Lu_0 = torch.tensor(Xu.new(Lu_shape).zero_(),
-                                          requires_grad=True)
+        unconstrained_Lu_0 = torch.tensor(Xu.new(Lu_shape).zero_(), requires_grad=True)
         unconstrained_Lu = pyro.param("unconstrained_u_tril", unconstrained_Lu_0)
-        Lu = transform_to(constraints.lower_cholesky)(unconstrained_Lu)
+        Lu = batch_lower_cholesky_transform(unconstrained_Lu)
 
-        pyro.sample("u", dist.MultivariateNormal(loc=mu, scale_tril=Lu))
+        pyro.sample("u", dist.MultivariateNormal(loc=mu, scale_tril=Lu)
+                    .reshape(extra_event_dims=mu.dim()-1))
         return kernel, Xu, likelihood, mu, Lu
 
     def forward(self, Xnew, full_cov=False):
@@ -110,7 +111,7 @@ class SparseVariationalGP(VariationalGP):
 
         :param torch.Tensor Xnew: A 2D tensor.
         :param bool full_cov: Predict full covariance matrix or just its diagonal.
-        :return: loc and covariance matrix of :math:`p(f^*|Xnew)`
+        :returns: loc and covariance matrix of :math:`p(f^*|Xnew)`
         :rtype: torch.Tensor and torch.Tensor
         """
         self._check_Xnew_shape(Xnew, self.X)
