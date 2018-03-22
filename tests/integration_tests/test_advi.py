@@ -83,7 +83,7 @@ class ADVIGaussianChain(GaussianChain):
 
 
 @pytest.mark.parametrize('advi_class', [ADVIDiagonalNormal, ADVIMultivariateNormal])
-def test_diagonal_gaussians(advi_class):
+def test_advi_diagonal_gaussians(advi_class):
     n_steps = 3501 if advi_class == ADVIDiagonalNormal else 6001
 
     def model():
@@ -106,4 +106,30 @@ def test_diagonal_gaussians(advi_class):
     assert_equal(pyro.param("advi_loc"), torch.tensor([-0.2, 0.2]), prec=0.05,
                  msg="advi mean off")
     assert_equal(diag_cov, torch.tensor([1.44, 0.49]), prec=0.08,
+                 msg="advi covariance off")
+
+
+@pytest.mark.parametrize('advi_class', [ADVIDiagonalNormal, ADVIMultivariateNormal])
+def test_advi_transform(advi_class):
+    n_steps = 3500
+
+    def model():
+        pyro.sample("x", dist.LogNormal(0.2, 0.7))
+
+    advi = advi_class(model)
+    adam = optim.Adam({"lr": .001, "betas": (0.90, 0.999)})
+    svi = SVI(advi.model, advi.guide, adam, loss="ELBO", trace_graph=False)
+
+    for k in range(n_steps):
+        svi.step()
+
+    if advi_class == ADVIMultivariateNormal:
+        L = pyro.param("advi_lower_cholesky")
+        diag_cov = torch.mm(L, L.t()).diag()
+    else:
+        diag_cov = torch.pow(pyro.param("advi_scale"), 2.0)
+
+    assert_equal(pyro.param("advi_loc"), torch.tensor([0.2]), prec=0.04,
+                 msg="advi mean off")
+    assert_equal(diag_cov, torch.tensor([0.49]), prec=0.04,
                  msg="advi covariance off")
