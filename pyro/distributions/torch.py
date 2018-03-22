@@ -71,6 +71,7 @@ class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributi
     def __init__(self, loc, cov):
         super(MultivariateNormal, self).__init__(loc, cov)
 
+    # TODO: push these properties to upstream torch.distributions
     @property
     def mean(self):
         return self.loc
