@@ -7,7 +7,6 @@ import warnings
 from collections import defaultdict
 
 import graphviz
-import pyro
 import torch
 from six.moves import zip_longest
 from torch.nn import Parameter
