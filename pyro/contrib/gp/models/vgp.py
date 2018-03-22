@@ -65,7 +65,7 @@ class VariationalGP(Model):
         Kf = Lf.t().matmul(Lf) + self.jitter.expand(Lf.size(0)).diag()
         # correct event_shape for mf
         mf_t = mf.t() if mf.dim() == 2 else mf
-        pyro.sample("f", dist.MultivariateNormal(loc=mf_t, cov=Kf).reshape(
+        pyro.sample("f", dist.MultivariateNormal(loc=mf_t, covariance_matrix=Kf).reshape(
             extra_event_dims=mf_t.dim() - 1))
         return kernel, likelihood, mf, Lf
 
