@@ -67,6 +67,17 @@ class Multinomial(torch.distributions.Multinomial, TorchDistributionMixin):
         super(Multinomial, self).__init__(n, probs=ps)
 
 
+class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributionMixin):
+    # TODO: push these properties to upstream torch.distributions
+    @property
+    def mean(self):
+        return self.loc
+
+    @property
+    def variance(self):
+        return self.covariance_matrix.diag()
+
+
 class Normal(torch.distributions.Normal, TorchDistributionMixin):
     def __init__(self, mu, sigma):
         super(Normal, self).__init__(mu, sigma)
