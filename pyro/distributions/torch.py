@@ -67,6 +67,11 @@ class Multinomial(torch.distributions.Multinomial, TorchDistributionMixin):
         super(Multinomial, self).__init__(n, probs=ps)
 
 
+class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributionMixin):
+    def __init__(self, loc, cov):
+        super(MultivariateNormal, self).__init__(loc, cov)
+
+
 class Normal(torch.distributions.Normal, TorchDistributionMixin):
     def __init__(self, mu, sigma):
         super(Normal, self).__init__(mu, sigma)

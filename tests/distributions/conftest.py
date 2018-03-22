@@ -138,11 +138,11 @@ continuous_dists = [
     Fixture(pyro_dist=dist.MultivariateNormal,
             scipy_dist=sp.multivariate_normal,
             examples=[
-                {'loc': [2.0, 1.0], 'covariance_matrix': [[1.0, 0.5], [0.5, 1.0]],
+                {'loc': [2.0, 1.0], 'cov': [[1.0, 0.5], [0.5, 1.0]],
                  'test_data': [[2.0, 1.0], [9.0, 3.4]]},
             ],
             # This hack seems to be the best option right now, as 'sigma' is not handled well by get_scipy_batch_logpdf
-            scipy_arg_fn=lambda loc, covariance_matrix=None:
+            scipy_arg_fn=lambda loc, cov=None:
                 ((), {"mean": np.array(loc), "cov": np.array([[1.0, 0.5], [0.5, 1.0]])}),
             prec=0.01,
             min_samples=500000),

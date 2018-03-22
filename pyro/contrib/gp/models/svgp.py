@@ -48,7 +48,7 @@ class SparseVariationalGP(VariationalGP):
         else:
             zero_loc = Xu.new([0]).expand(self.y.size(1), Xu.size(0))
         # TODO: use scale_tril=Luu
-        u = pyro.sample("u", dist.MultivariateNormal(loc=zero_loc, covariance_matrix=Kuu).reshape(
+        u = pyro.sample("u", dist.MultivariateNormal(loc=zero_loc, cov=Kuu).reshape(
             extra_event_dims=zero_loc.dim() - 1))
 
         # p(f|u) ~ N(f|mf, Kf)
@@ -94,7 +94,7 @@ class SparseVariationalGP(VariationalGP):
         Ku = Lu.t().matmul(Lu) + self.jitter.expand(Lu.size(0)).diag()
         # correct event_shape for mu
         mu_t = mu.t() if mu.dim() == 2 else mu
-        pyro.sample("u", dist.MultivariateNormal(loc=mu_t, covariance_matrix=Ku).reshape(
+        pyro.sample("u", dist.MultivariateNormal(loc=mu_t, cov=Ku).reshape(
             extra_event_dims=mu_t.dim() - 1))
         return kernel, likelihood, Xu, mu, Lu
 
