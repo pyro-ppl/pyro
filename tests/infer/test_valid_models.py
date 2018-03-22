@@ -753,6 +753,7 @@ def test_enum_discrete_iaranges_dependency_ok(enumerate_):
     assert_ok(model, model, enum_discrete=True, max_iarange_nesting=2)
 
 
+@pytest.mark.xfail(reason="lack of scalar support in log_abs_det_jacobian")
 @pytest.mark.parametrize('advi_class', [ADVIDiagonalNormal, ADVIMultivariateNormal])
 def test_advi(advi_class):
 
