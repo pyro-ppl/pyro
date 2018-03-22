@@ -142,7 +142,7 @@ continuous_dists = [
                  'test_data': [[2.0, 1.0], [9.0, 3.4]]},
             ],
             # This hack seems to be the best option right now, as 'sigma' is not handled well by get_scipy_batch_logpdf
-            scipy_arg_fn=lambda loc, cov=None:
+            scipy_arg_fn=lambda loc, covariance_matrix=None:
                 ((), {"mean": np.array(loc), "cov": np.array([[1.0, 0.5], [0.5, 1.0]])}),
             prec=0.01,
             min_samples=500000),
