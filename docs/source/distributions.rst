@@ -53,13 +53,6 @@ HalfCauchy
     :undoc-members:
     :show-inheritance:
 
-MultivariateNormal
-------------------
-.. automodule:: pyro.distributions.multivariate_normal
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 OMTMultivariateNormal
 ---------------------
 .. automodule:: pyro.distributions.omt_mvn
@@ -69,7 +62,7 @@ OMTMultivariateNormal
 
 SparseMultivariateNormal
 ------------------------
-.. automodule:: pyro.distributions.sparse_multivariate_normal
+.. automodule:: pyro.distributions.sparse_mvn
     :members:
     :undoc-members:
     :show-inheritance:
