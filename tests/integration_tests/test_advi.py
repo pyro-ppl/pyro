@@ -20,6 +20,7 @@ def test_model():
     pyro.sample("z2", dist.Normal(torch.zeros(3), 2.0 * torch.ones(3)))
 
 
+@pytest.mark.xfail(reason="lack of scalar support in log_abs_det_jacobian")
 @pytest.mark.parametrize("advi_implementation", [ADVIMultivariateNormal, ADVIDiagonalNormal])
 def test_advi_scores(advi_implementation):
     advi = advi_implementation(test_model)
@@ -50,6 +51,7 @@ class ADVIGaussianChain(GaussianChain):
             self.target_advi_diag_cov[n] += 1.0 / self.lambda_posts[n].item()
             self.target_advi_diag_cov[n] += (self.target_kappas[n].item() ** 2) * self.target_advi_diag_cov[n + 1]
 
+    @pytest.mark.xfail(reason="lack of scalar support in log_abs_det_jacobian")
     def test_multivariatate_normal_advi(self):
         self.do_test_advi(3, reparameterized=True, n_steps=10001)
 
@@ -82,6 +84,7 @@ class ADVIGaussianChain(GaussianChain):
                      msg="advi covariance off")
 
 
+@pytest.mark.xfail(reason="lack of scalar support in log_abs_det_jacobian")
 @pytest.mark.parametrize('advi_class', [ADVIDiagonalNormal, ADVIMultivariateNormal])
 def test_advi_diagonal_gaussians(advi_class):
     n_steps = 3501 if advi_class == ADVIDiagonalNormal else 6001
