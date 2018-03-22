@@ -55,7 +55,7 @@ class TraceEnum_ELBO(ELBO):
                 model_trace = poutine.trace(poutine.replay(model, guide_trace),
                                             graph_type="flat").get_trace(*args, **kwargs)
 
-                check_model_guide_match(model_trace, guide_trace)
+                check_model_guide_match(model_trace, guide_trace, self.max_iarange_nesting)
                 guide_trace = prune_subsample_sites(guide_trace)
                 model_trace = prune_subsample_sites(model_trace)
                 check_traceenum_requirements(model_trace, guide_trace)

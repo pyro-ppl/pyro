@@ -326,7 +326,7 @@ def check_traces_match(trace1, trace2):
                 raise ValueError("Site dims disagree at site '{}': {} vs {}".format(name, shape1, shape2))
 
 
-def check_model_guide_match(model_trace, guide_trace):
+def check_model_guide_match(model_trace, guide_trace, max_iarange_nesting=float('inf')):
     """
     :param pyro.poutine.Trace model_trace: Trace object of the model
     :param pyro.poutine.Trace guide_trace: Trace object of the guide
@@ -353,12 +353,29 @@ def check_model_guide_match(model_trace, guide_trace):
     for name in model_vars & guide_vars:
         model_site = model_trace.nodes[name]
         guide_site = guide_trace.nodes[name]
+
+        if hasattr(model_site["fn"], "event_dim") and hasattr(guide_site["fn"], "event_dim"):
+            if model_site["fn"].event_dim != guide_site["fn"].event_dim:
+                raise ValueError("Model and guide event_dims disagree at site '{}': {} vs {}".format(
+                    name, model_site["fn"].event_dim, guide_site["fn"].event_dim))
+
         if hasattr(model_site["fn"], "shape") and hasattr(guide_site["fn"], "shape"):
             model_shape = model_site["fn"].shape(*model_site["args"], **model_site["kwargs"])
             guide_shape = guide_site["fn"].shape(*guide_site["args"], **guide_site["kwargs"])
-            if model_shape != guide_shape:
-                raise ValueError("Model and guide dims disagree at site '{}': {} vs {}".format(
-                    name, model_shape, guide_shape))
+            if model_shape == guide_shape:
+                continue
+
+            # Allow broadcasting outside of max_iarange_nesting.
+            if len(model_shape) > max_iarange_nesting:
+                model_shape = model_shape[len(model_shape) - max_iarange_nesting:]
+            if len(guide_shape) > max_iarange_nesting:
+                guide_shape = guide_shape[len(guide_shape) - max_iarange_nesting:]
+            if model_shape == guide_shape:
+                continue
+            for model_size, guide_size in zip_longest(reversed(model_shape), reversed(guide_shape), fillvalue=1):
+                if model_size != guide_size:
+                    raise ValueError("Model and guide shapes disagree at site '{}': {} vs {}".format(
+                        name, model_shape, guide_shape))
 
     # Check subsample sites introduced by iarange.
     model_vars = set(name for name, site in model_trace.nodes.items()
