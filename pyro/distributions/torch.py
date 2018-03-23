@@ -80,7 +80,7 @@ class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributi
     def variance(self):
         n = self.covariance_matrix.size(-1)
         var = torch.stack([cov.diag() for cov in self.covariance_matrix.view(-1, n, n)])
-        return var.view(self.covariance_matrix.size())
+        return var.view(self.covariance_matrix.size()[:-1])
 
 
 class Normal(torch.distributions.Normal, TorchDistributionMixin):
