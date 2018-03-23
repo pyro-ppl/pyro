@@ -68,7 +68,7 @@ class SparseVariationalGP(VariationalGP):
         mf_shape = self.X.size()[:1] + self.latent_shape
         mf = W.t().matmul(Luuinv_u).view(mf_shape)
         # convert mf_shape from N x latent_shape to latent_shape x N
-        mf = mf.permute(*range(mf.dim())[1:], 0)
+        mf = mf.permute(list(range(1, mf.dim())) + [0])
         Kffdiag = kernel(self.X, diag=True)
         Qffdiag = (W ** 2).sum(dim=0)
         Kfdiag = Kffdiag - Qffdiag
@@ -76,7 +76,7 @@ class SparseVariationalGP(VariationalGP):
         # get 1 sample for f
         f = dist.Normal(mf, Kfdiag)()
         # convert y_shape from N x D to D x N
-        y = self.y.permute(*range(self.y.dim())[1:], 0)
+        y = self.y.permute(list(range(1, self.y.dim())) + [0])
 
         likelihood(f, y)
 

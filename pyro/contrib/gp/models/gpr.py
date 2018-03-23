@@ -44,7 +44,7 @@ class GPRegression(Model):
 
         K = kernel(self.X) + noise.expand(self.X.size(0)).diag()
         # convert y_shape from N x D to D x N
-        y = self.y.permute(*range(self.y.dim())[1:], 0)
+        y = self.y.permute(list(range(1, self.y.dim())) + [0])
         zero_loc = self.X.new([0]).expand_as(y)
         pyro.sample("y", dist.MultivariateNormal(zero_loc, K)
                     .reshape(extra_event_dims=y.dim()-1), obs=y)

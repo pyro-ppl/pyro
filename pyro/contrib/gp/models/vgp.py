@@ -45,7 +45,7 @@ class VariationalGP(Model):
         f = pyro.sample("f", dist.MultivariateNormal(zero_loc, scale_tril=Lff)
                         .reshape(extra_event_dims=zero_loc.dim()-1))
         # convert y_shape from N x D to D x N
-        y = self.y.permute(*range(self.y.dim())[1:], 0)
+        y = self.y.permute(list(range(1, self.y.dim())) + [0])
 
         likelihood(f, y)
 
@@ -120,7 +120,7 @@ class VariationalGP(Model):
         W = Lffinv_pack[:, mf_temp.size(1):-Lf_temp.size(1)]
         V = Lffinv_pack[:, -Lf_temp.size(1):].view(Lf.size())
         # covert V_shape from N x N' x D to D x N' x N
-        V_t = V.permute(*range(V.dim())[2:], 1, 0)
+        V_t = V.permute(list(range(2, V.dim())) + [1, 0])
         Vt_W = V_t.matmul(W)
 
         loc_shape = Xnew.size()[:1] + mf.size()[1:]

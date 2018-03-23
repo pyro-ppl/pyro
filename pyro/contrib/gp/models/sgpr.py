@@ -85,7 +85,7 @@ class SparseGPRegression(Model):
         # FITC: cov = Qff + diag(Kff - Qff) + noise, trace_term = 0
         # VFE: cov = Qff + noise, trace_term = tr(Kff - Qff) / noise
         # convert y_shape from N x D to D x N
-        y = self.y.permute(*range(self.y.dim())[1:], 0)
+        y = self.y.permute(list(range(1, self.y.dim())) + [0])
         zero_loc = self.X.new([0]).expand_as(y)
         pyro.sample("y", dist.SparseMultivariateNormal(zero_loc, D, W, trace_term)
                     .reshape(extra_event_dims=y.dim()-1), obs=y)
