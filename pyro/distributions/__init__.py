@@ -12,5 +12,6 @@ from pyro.distributions.omt_mvn import OMTMultivariateNormal
 from pyro.distributions.rejector import Rejector
 from pyro.distributions.sparse_mvn import SparseMultivariateNormal
 from pyro.distributions.torch_distribution import TorchDistribution
+from pyro.distributions.util import enable_validation, is_validation_enabled
 
 # flake8: noqa

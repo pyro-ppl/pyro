@@ -20,6 +20,7 @@ class HalfCauchy(TransformedDistribution):
     :param torch.Tensor scale: half width at half maximum.
     """
     arg_constraints = Cauchy.arg_constraints
+    support = Cauchy.support
 
     def __init__(self, loc, scale):
         loc, scale = broadcast_all(loc, scale)

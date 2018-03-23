@@ -283,7 +283,7 @@ class LiftPoutineTests(TestCase):
             flat_tensor = tensor.view(-1)
             m = torch.zeros(flat_tensor.size(0))
             s = torch.ones(flat_tensor.size(0))
-            return Normal(m, s).sample().view(tensor.size())
+            return Normal(m, s).sample().view(tensor.size()).exp()
 
         def mu2_prior(tensor, *args, **kwargs):
             flat_tensor = tensor.view(-1)
@@ -316,7 +316,7 @@ class LiftPoutineTests(TestCase):
 
         self.model = Model()
         self.guide = guide
-        self.prior = mu1_prior
+        self.prior = sigma1_prior
         self.prior_dict = {"mu1": mu1_prior, "sigma1": sigma1_prior, "mu2": mu2_prior, "sigma2": sigma2_prior}
         self.partial_dict = {"mu1": mu1_prior, "sigma1": sigma1_prior}
         self.nn_prior = {"fc.bias": bias_prior, "fc.weight": weight_prior}

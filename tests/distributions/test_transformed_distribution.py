@@ -6,6 +6,7 @@ import scipy.stats as sp
 import torch
 from torch.distributions import AffineTransform, ExpTransform, ComposeTransform
 
+import pyro
 import pyro.distributions as dist
 from pyro.distributions import LogNormal
 from pyro.distributions import TransformedDistribution
@@ -51,7 +52,9 @@ def AffineExp(affine_b, affine_a):
 
 
 def get_transformed_dist(distribution, affine_a, affine_b):
-    return TransformedDistribution(distribution, [AffineExp(affine_b, affine_a)])
+    # Set `validate_args=False` as base distribution would have been validated, if needed.
+    with pyro.validation_enabled(False):
+        return TransformedDistribution(distribution, [AffineExp(affine_b, affine_a)])
 
 
 @pytest.mark.parametrize('lognormal', EXAMPLES)
