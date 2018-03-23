@@ -71,7 +71,7 @@ Alternatively, build PyTorch following instructions in the PyTorch
 ```sh
 git clone --recursive https://github.com/pytorch/pytorch
 cd pytorch
-git checkout e40425f  # <---- a well-tested commit
+git checkout a58f2d2  # <---- a well-tested commit
 ```
 On Linux:
 ```sh
