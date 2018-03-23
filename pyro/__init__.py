@@ -5,10 +5,12 @@ import logging
 import numbers
 import warnings
 from collections import OrderedDict
+from contextlib import contextmanager
 from inspect import isclass
 
 import torch
 
+import pyro.infer as infer
 import pyro.poutine as poutine
 from pyro.distributions.distribution import Distribution
 from pyro.params import _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, param_with_module_name
@@ -420,3 +422,17 @@ def random_module(name, nn_module, prior, *args, **kwargs):
         # update_module_params must be True or the lifted module will not update local params
         return lifted_fn(name, nn_copy, update_module_params=True, *args, **kwargs)
     return _fn
+
+
+def enable_validation(is_validate=True):
+    infer.enable_validation(is_validate)
+
+
+@contextmanager
+def validation_enabled(is_validate=True):
+    infer_validation_status = infer.is_validation_enabled()
+    try:
+        enable_validation(is_validate)
+        yield
+    finally:
+        infer.enable_validation(infer_validation_status)
