@@ -7,6 +7,7 @@ import networkx
 import torch
 
 import pyro
+import pyro.infer as infer
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer import ELBO
@@ -193,8 +194,8 @@ class TraceGraph_ELBO(ELBO):
                                         graph_type="dense").get_trace(*args, **kwargs)
             model_trace = poutine.trace(poutine.replay(model, guide_trace),
                                         graph_type="dense").get_trace(*args, **kwargs)
-
-            check_model_guide_match(model_trace, guide_trace)
+            if infer.is_validation_enabled():
+                check_model_guide_match(model_trace, guide_trace)
             guide_trace = prune_subsample_sites(guide_trace)
             model_trace = prune_subsample_sites(model_trace)
 
@@ -247,13 +248,14 @@ class TraceGraph_ELBO(ELBO):
         # have the trace compute all the individual (batch) log pdf terms
         # and score function terms (if present) so that they are available below
         model_trace.compute_batch_log_pdf()
-        for site in model_trace.nodes.values():
-            if site["type"] == "sample":
-                check_site_shape(site, self.max_iarange_nesting)
         guide_trace.compute_score_parts()
-        for site in guide_trace.nodes.values():
-            if site["type"] == "sample":
-                check_site_shape(site, self.max_iarange_nesting)
+        if infer.is_validation_enabled():
+            for site in model_trace.nodes.values():
+                if site["type"] == "sample":
+                    check_site_shape(site, self.max_iarange_nesting)
+            for site in guide_trace.nodes.values():
+                if site["type"] == "sample":
+                    check_site_shape(site, self.max_iarange_nesting)
 
         # compute elbo for reparameterized nodes
         non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)

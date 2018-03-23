@@ -298,7 +298,8 @@ def test_irange_in_model_not_guide_ok(subsample_size, trace_graph, enum_discrete
 @pytest.mark.parametrize("trace_graph,enum_discrete",
                          [(False, False), (True, False), (False, True)],
                          ids=["Trace", "TraceGraph", "TraceEnum"])
-def test_irange_in_guide_not_model_error(subsample_size, trace_graph, enum_discrete):
+@pytest.mark.parametrize("is_validate", [True, False])
+def test_irange_in_guide_not_model_error(subsample_size, trace_graph, enum_discrete, is_validate):
 
     def model():
         p = torch.tensor(0.5)
@@ -310,20 +311,29 @@ def test_irange_in_guide_not_model_error(subsample_size, trace_graph, enum_discr
             pass
         pyro.sample("x", dist.Bernoulli(p))
 
-    assert_error(model, guide, trace_graph=trace_graph, enum_discrete=enum_discrete)
+    with pyro.validation_enabled(is_validate):
+        if is_validate:
+            assert_error(model, guide, trace_graph=trace_graph, enum_discrete=enum_discrete)
+        else:
+            assert_ok(model, guide, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
 
 @pytest.mark.parametrize("trace_graph,enum_discrete",
                          [(False, False), (True, False), (False, True)],
                          ids=["Trace", "TraceGraph", "TraceEnum"])
-def test_iarange_broadcast_error(trace_graph, enum_discrete):
+@pytest.mark.parametrize("is_validate", [True, False])
+def test_iarange_broadcast_error(trace_graph, enum_discrete, is_validate):
 
     def model():
         p = torch.tensor(0.5, requires_grad=True)
         with pyro.iarange("iarange", 10, 5):
             pyro.sample("x", dist.Bernoulli(p).reshape(sample_shape=[1]))
 
-    assert_error(model, model, trace_graph=trace_graph, enum_discrete=enum_discrete)
+    with pyro.validation_enabled(is_validate):
+        if is_validate:
+            assert_error(model, model, trace_graph=trace_graph, enum_discrete=enum_discrete)
+        else:
+            assert_ok(model, model, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
 
 @pytest.mark.parametrize("trace_graph,enum_discrete",
@@ -687,7 +697,8 @@ def test_enum_discrete_parallel_iarange_ok():
 
 
 @pytest.mark.parametrize('enumerate_', [None, "sequential", "parallel"])
-def test_enum_discrete_iarange_dependency_warning(enumerate_):
+@pytest.mark.parametrize('is_validate', [True, False])
+def test_enum_discrete_iarange_dependency_warning(enumerate_, is_validate):
 
     def model():
         with pyro.iarange("iarange", 10, 5):
@@ -695,10 +706,11 @@ def test_enum_discrete_iarange_dependency_warning(enumerate_):
                             infer={'enumerate': enumerate_})
         pyro.sample("y", dist.Bernoulli(x.mean()))  # user should move this line up
 
-    if enumerate_:
-        assert_warning(model, model, enum_discrete=True, max_iarange_nesting=1)
-    else:
-        assert_ok(model, model, enum_discrete=True, max_iarange_nesting=1)
+    with pyro.validation_enabled(is_validate):
+        if enumerate_ and is_validate:
+            assert_warning(model, model, enum_discrete=True, max_iarange_nesting=1)
+        else:
+            assert_ok(model, model, enum_discrete=True, max_iarange_nesting=1)
 
 
 @pytest.mark.parametrize('enumerate_', [None, "sequential", "parallel"])
@@ -716,7 +728,8 @@ def test_enum_discrete_irange_iarange_dependency_ok(enumerate_):
 
 
 @pytest.mark.parametrize('enumerate_', [None, "sequential", "parallel"])
-def test_enum_discrete_iranges_iarange_dependency_warning(enumerate_):
+@pytest.mark.parametrize('is_validate', [True, False])
+def test_enum_discrete_iranges_iarange_dependency_warning(enumerate_, is_validate):
 
     def model():
         inner_iarange = pyro.iarange("iarange", 10, 5)
@@ -729,10 +742,11 @@ def test_enum_discrete_iranges_iarange_dependency_warning(enumerate_):
         for i in pyro.irange("irange2", 2):
             pyro.sample("y_{}".format(i), dist.Bernoulli(0.5))
 
-    if enumerate_:
-        assert_warning(model, model, enum_discrete=True, max_iarange_nesting=1)
-    else:
-        assert_ok(model, model, enum_discrete=True, max_iarange_nesting=1)
+    with pyro.validation_enabled(is_validate):
+        if enumerate_ and is_validate:
+            assert_warning(model, model, enum_discrete=True, max_iarange_nesting=1)
+        else:
+            assert_ok(model, model, enum_discrete=True, max_iarange_nesting=1)
 
 
 @pytest.mark.parametrize('enumerate_', [None, "sequential", "parallel"])
