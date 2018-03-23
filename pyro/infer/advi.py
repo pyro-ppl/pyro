@@ -70,8 +70,9 @@ class ADVI(object):
                 size = _product(shape)
                 unconstrained_value = latent[pos:pos + size].view(shape)
                 pos += size
-                value = transform_to(site["fn"].support)(unconstrained_value)
-                pyro.sample(name, dist.Delta(value).reshape(extra_event_dims=site["fn"].event_dim))
+                delta_dist = dist.TransformedDistribution(dist.Delta(unconstrained_value),
+                                                          transform_to(site["fn"].support))
+                pyro.sample(name, delta_dist.reshape(extra_event_dims=site["fn"].event_dim))
         assert pos == len(latent)
 
     def model(self, *args, **kwargs):
