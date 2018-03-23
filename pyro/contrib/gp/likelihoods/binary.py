@@ -18,6 +18,7 @@ class Binary(Likelihood):
         self.response_function = (response_function if response_function is not None
                                   else F.sigmoid)
 
-    def forward(self, f, obs=None):
-        f_response = self.response_function(f)
-        return pyro.sample("y", dist.Bernoulli(f_response), obs=obs)
+    def forward(self, f, y):
+        f_res = self.response_function(f)
+        return pyro.sample("y", dist.Bernoulli(f_res.expand_as(y))
+                           .reshape(extra_event_dims=y.dim()), obs=y)
