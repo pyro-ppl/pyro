@@ -62,7 +62,7 @@ OMTMultivariateNormal
 
 SparseMultivariateNormal
 ------------------------
-.. automodule:: pyro.distributions.sparse_multivariate_normal
+.. automodule:: pyro.distributions.sparse_mvn
     :members:
     :undoc-members:
     :show-inheritance:
