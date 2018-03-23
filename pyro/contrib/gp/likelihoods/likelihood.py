@@ -13,13 +13,13 @@ class Likelihood(Parameterized):
     def __init__(self):
         super(Likelihood, self).__init__(name="likelihood")
 
-    def forward(self, f, y):
+    def forward(self, f, y=None):
         """
-        Samples :math:`y` (``obs``) given :math:`f`.
+        Samples :math:`y` given :math:`f`.
 
-        :param torch.Tensor f: A 1D tensor of size :math:`N`.
-        :param torch.Tensor y: A 1D tensor of size :math:`N`.
-        :returns: A 1D tensor of size :math:`N`
+        :param torch.Tensor f: Latent function output tensor.
+        :param torch.Tensor y: Training output tensor.
+        :returns: A tensor sampled from likelihood.
         :rtype: torch.Tensor
         """
         raise NotImplementedError

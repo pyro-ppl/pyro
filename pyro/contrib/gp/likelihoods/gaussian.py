@@ -23,7 +23,10 @@ class Gaussian(Likelihood):
         self.variance = Parameter(variance)
         self.set_constraint("variance", constraints.positive)
 
-    def forward(self, f, y):
+    def forward(self, f, y=None):
         variance = self.get_param("variance")
-        return pyro.sample("y", dist.Normal(f.expand_as(y), variance)
-                           .reshape(extra_event_dims=y.dim()), obs=y)
+        if y is None:
+            return pyro.sample("y", dist.Normal(f, variance))
+        else:
+            return pyro.sample("y", dist.Normal(f.expand_as(y), variance)
+                               .reshape(extra_event_dims=y.dim()), obs=y)
