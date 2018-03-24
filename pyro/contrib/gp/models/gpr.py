@@ -38,15 +38,20 @@ class GPRegression(Model):
     def model(self):
         self.set_mode("model")
 
-        kernel = self.kernel
         noise = self.get_param("noise")
 
-        K = kernel(self.X) + noise.expand(self.X.size(0)).diag()
-        # convert y_shape from N x D to D x N
-        y = self.y.permute(list(range(1, self.y.dim())) + [0])
-        zero_loc = self.X.new([0]).expand_as(y)
-        pyro.sample("y", dist.MultivariateNormal(zero_loc, K)
-                    .reshape(extra_event_dims=y.dim()-1), obs=y)
+        Kff = self.kernel(self.X) + noise.expand(self.X.shape[0]).diag()
+        Lff = Kff.potrf(upper=False)
+
+        if self.y is None:
+            zero_loc = self.X.new([0]).expand(self.X.shape[0])
+            return pyro.sample("y", dist.MultivariateNormal(zero_loc, scale_tril=Lff))
+        else:
+            # convert y_shape from N x D to D x N
+            y = self.y.permute(list(range(1, self.y.dim())) + [0])
+            zero_loc = self.X.new([0]).expand_as(y)
+            return pyro.sample("y", dist.MultivariateNormal(zero_loc, scale_tril=Lff)
+                               .reshape(extra_event_dims=y.dim()-1), obs=y)
 
     def guide(self):
         self.set_mode("guide")

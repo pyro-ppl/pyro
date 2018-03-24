@@ -46,20 +46,20 @@ class VariationalGP(Model):
     def model(self):
         self.set_mode("model")
 
-        kernel = self.kernel
-        likelihood = self.likelihood
-
-        mf_shape = self.latent_shape + self.X.size()[:1]
-        zero_loc = self.X.new([0]).expand(mf_shape)
-        Kff = kernel(self.X) + self.jitter.expand(self.X.size(0)).diag()
+        Kff = self.kernel(self.X) + self.jitter.expand(self.X.shape[0]).diag()
         Lff = Kff.potrf(upper=False)
 
+        f_loc_shape = self.latent_shape + (self.X.shape[0],)
+        zero_loc = self.X.new([0]).expand(f_loc_shape)
         f = pyro.sample("f", dist.MultivariateNormal(zero_loc, scale_tril=Lff)
                         .reshape(extra_event_dims=zero_loc.dim()-1))
-        # convert y_shape from N x D to D x N
-        y = self.y.permute(list(range(1, self.y.dim())) + [0])
 
-        likelihood(f, y)
+        if self.y is None:
+            return self.likelihood(f)
+        else:
+            # convert y_shape from N x D to D x N
+            y = self.y.permute(list(range(1, self.y.dim())) + [0])
+            return self.likelihood(f, y)
 
     def guide(self):
         self.set_mode("guide")

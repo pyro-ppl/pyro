@@ -52,45 +52,50 @@ class SparseVariationalGP(VariationalGP):
     def model(self):
         self.set_mode("model")
 
-        kernel = self.kernel
-        likelihood = self.likelihood
         Xu = self.get_param("Xu")
 
-        Kuu = kernel(Xu) + self.jitter.expand(Xu.size(0)).diag()
-        Kuf = kernel(Xu, self.X)
+        Kuu = self.kernel(Xu) + self.jitter.expand(Xu.shape[0]).diag()
         Luu = Kuu.potrf(upper=False)
+        Kuf = self.kernel(Xu, self.X)
 
-        mu_shape = self.latent_shape + Xu.size()[:1]
-        zero_loc = Xu.new([0]).expand(mu_shape)
-        u = pyro.sample("u", dist.MultivariateNormal(loc=zero_loc, scale_tril=Luu)
+        u_loc_shape = self.latent_shape + (Xu.shape[0],)
+        zero_loc = Xu.new([0]).expand(u_loc_shape)
+        u = pyro.sample("u", dist.MultivariateNormal(zero_loc, scale_tril=Luu)
                         .reshape(extra_event_dims=zero_loc.dim()-1))
 
-        # p(f|u) ~ N(f|mf, Kf)
-        # mf = Kfu @ inv(Kuu) @ u; Kf = Kff - Kfu @ inv(Kuu) @ Kuf = Kff - W.T @ W
+        # p(f | u) ~ N(f | f_loc, f_cov)
+        # f_loc = Kfu @ inv(Kuu) @ u
+        # f_cov = Kff - Kfu @ inv(Kuu) @ Kuf = Kff - Qff
+        # W = inv(Luu) @ Kuf -> Qff = W.T @ W, f_loc = W.T @ inv(Luu) @ u
+
         # convert u_shape from latent_shape x N to N x latent_shape
-        u = u.permute(u.dim()-1, *range(u.dim())[:-1])
+        u = u.permute(-1, *range(u.dim())[:-1]).contiguous()
         # convert u to 2D tensors before packing
         u_temp = u.view(u.size(0), -1)
         pack = torch.cat((u_temp, Kuf), dim=1)
         Luuinv_pack = matrix_triangular_solve_compat(pack, Luu, upper=False)
         # unpack
-        Luuinv_u = Luuinv_pack[:, :u_temp.size(1)]
-        W = Luuinv_pack[:, u_temp.size(1):]
+        Luuinv_u = Luuinv_pack[:, :u_temp.shape[1]]
+        W = Luuinv_pack[:, u_temp.shape[1]:]
 
-        mf_shape = self.X.size()[:1] + self.latent_shape
-        mf = W.t().matmul(Luuinv_u).view(mf_shape)
-        # convert mf_shape from N x latent_shape to latent_shape x N
-        mf = mf.permute(list(range(1, mf.dim())) + [0])
-        Kffdiag = kernel(self.X, diag=True)
+        Kffdiag = self.kernel(self.X, diag=True)
         Qffdiag = (W ** 2).sum(dim=0)
-        Kfdiag = Kffdiag - Qffdiag
+        f_var = Kffdiag - Qffdiag
+
+        f_loc_shape = (self.X.shape[0],) + self.latent_shape
+        f_loc = W.t().matmul(Luuinv_u).view(f_loc_shape)
+        # convert f_loc_shape from N x latent_shape to latent_shape x N
+        f_loc = f_loc.permute(list(range(1, f_loc.dim())) + [0]).contiguous()
 
         # get 1 sample for f
-        f = dist.Normal(mf, Kfdiag)()
-        # convert y_shape from N x D to D x N
-        y = self.y.permute(list(range(1, self.y.dim())) + [0])
+        f = dist.Normal(f_loc, f_var)()
 
-        likelihood(f, y)
+        if self.y is None:
+            return self.likelihood(f)
+        else:
+            # convert y_shape from N x D to D x N
+            y = self.y.permute(list(range(1, self.y.dim())) + [0])
+            return self.likelihood(f, y)
 
     def guide(self):
         self.set_mode("guide")

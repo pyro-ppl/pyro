@@ -59,36 +59,42 @@ class SparseGPRegression(Model):
     def model(self):
         self.set_mode("model")
 
-        kernel = self.kernel
         noise = self.get_param("noise")
         Xu = self.get_param("Xu")
 
-        Kuu = kernel(Xu) + self.jitter.expand(Xu.size(0)).diag()
-        Kuf = kernel(Xu, self.X)
+        # Qff = Kfu @ inv(Kuu) @ Kuf
+        # W = inv(Luu) @ Kuf -> Qff = W.T @ W
+        # SparseMultivariateNormal requires y_cov = W.T @ W + D
+        # and an additional trace_term for its log_prob in case we use VFE.
+        # Fomulas for each approximation method are
+        # DTC:  y_cov = Qff + noise,                   trace_term = 0
+        # FITC: y_cov = Qff + diag(Kff - Qff) + noise, trace_term = 0
+        # VFE:  y_cov = Qff + noise,                   trace_term = tr(Kff - Qff) / noise
+
+        Kuu = self.kernel(Xu) + self.jitter.expand(Xu.shape[0]).diag()
         Luu = Kuu.potrf(upper=False)
-        # W = inv(Luu) @ Kuf
+        Kuf = self.kernel(Xu, self.X)
         W = matrix_triangular_solve_compat(Kuf, Luu, upper=False)
 
         D = noise.expand(W.size(1))
         trace_term = 0
         if self.approx == "FITC" or self.approx == "VFE":
-            Kffdiag = kernel(self.X, diag=True)
-            # Qff = Kfu @ inv(Kuu) @ Kuf = W.T @ W
+            Kffdiag = self.kernel(self.X, diag=True)
             Qffdiag = (W ** 2).sum(dim=0)
-
             if self.approx == "FITC":
                 D = D + Kffdiag - Qffdiag
             else:  # approx = "VFE"
                 trace_term += (Kffdiag - Qffdiag).sum() / noise
 
-        # DTC: cov = Qff + noise, trace_term = 0
-        # FITC: cov = Qff + diag(Kff - Qff) + noise, trace_term = 0
-        # VFE: cov = Qff + noise, trace_term = tr(Kff - Qff) / noise
-        # convert y_shape from N x D to D x N
-        y = self.y.permute(list(range(1, self.y.dim())) + [0])
-        zero_loc = self.X.new([0]).expand_as(y)
-        pyro.sample("y", dist.SparseMultivariateNormal(zero_loc, D, W, trace_term)
-                    .reshape(extra_event_dims=y.dim()-1), obs=y)
+        if self.y is None:
+            zero_loc = self.X.new([0]).expand(self.X.shape[0])
+            return pyro.sample("y", dist.SparseMultivariateNormal(zero_loc, D, W, trace_term))
+        else:
+            # convert y_shape from N x D to D x N
+            y = self.y.permute(list(range(1, self.y.dim())) + [0])
+            zero_loc = self.X.new([0]).expand_as(y)
+            return pyro.sample("y", dist.SparseMultivariateNormal(zero_loc, D, W, trace_term)
+                               .reshape(extra_event_dims=y.dim()-1), obs=y)
 
     def guide(self):
         self.set_mode("guide")

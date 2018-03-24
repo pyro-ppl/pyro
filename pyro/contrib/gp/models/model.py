@@ -26,7 +26,7 @@ class Model(Parameterized):
         self.latent_shape = latent_shape if latent_shape is not None else y_batch_shape
         self.jitter = self.X.new([jitter])
 
-    def set_data(self, X, y):
+    def set_data(self, X, y=None):
         """
         Sets data for Gaussian Process models.
 
@@ -36,7 +36,7 @@ class Model(Parameterized):
         """
         if X.dim() > 2:
             raise ValueError("Input tensorshould be of 1 or 2 dimensionals.")
-        if X.size(0) != y.size(0):
+        if y is not None and X.size(0) != y.size(0):
             raise ValueError("Expect the number of data inputs equal to the number of data "
                              "outputs, but got {} and {}.".format(X.size(0), y.size(0)))
         self.X = X
