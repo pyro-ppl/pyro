@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import warnings
 
 import pyro
+import pyro.infer as infer
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
@@ -55,19 +56,22 @@ class TraceEnum_ELBO(ELBO):
                 model_trace = poutine.trace(poutine.replay(model, guide_trace),
                                             graph_type="flat").get_trace(*args, **kwargs)
 
-                check_model_guide_match(model_trace, guide_trace, self.max_iarange_nesting)
+                if infer.is_validation_enabled():
+                    check_model_guide_match(model_trace, guide_trace, self.max_iarange_nesting)
                 guide_trace = prune_subsample_sites(guide_trace)
                 model_trace = prune_subsample_sites(model_trace)
-                check_traceenum_requirements(model_trace, guide_trace)
+                if infer.is_validation_enabled():
+                    check_traceenum_requirements(model_trace, guide_trace)
 
                 model_trace.compute_batch_log_pdf()
-                for site in model_trace.nodes.values():
-                    if site["type"] == "sample":
-                        check_site_shape(site, self.max_iarange_nesting)
                 guide_trace.compute_score_parts()
-                for site in guide_trace.nodes.values():
-                    if site["type"] == "sample":
-                        check_site_shape(site, self.max_iarange_nesting)
+                if infer.is_validation_enabled():
+                    for site in model_trace.nodes.values():
+                        if site["type"] == "sample":
+                            check_site_shape(site, self.max_iarange_nesting)
+                    for site in guide_trace.nodes.values():
+                        if site["type"] == "sample":
+                            check_site_shape(site, self.max_iarange_nesting)
 
                 yield model_trace, guide_trace
 
