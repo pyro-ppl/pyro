@@ -31,8 +31,7 @@ class GPRegression(Model):
         latent_shape = torch.Size([])
         super(GPRegression, self).__init__(X, y, kernel, latent_shape, jitter)
 
-        if noise is None:
-            noise = self.X.data.new([1])
+        noise = self.X.new([1]) if noise is None else noise
         self.noise = Parameter(noise)
         self.set_constraint("noise", constraints.greater_than(self.jitter))
 
@@ -70,8 +69,7 @@ class GPRegression(Model):
         :returns: loc and covariance matrix of :math:`p(y^*|Xnew)`.
         :rtype: torch.Tensor and torch.Tensor
         """
-        self._check_Xnew_shape(Xnew, self.X)
-
+        self._check_Xnew_shape(Xnew)
         kernel, noise = self.guide()
 
         Kff = kernel(self.X)

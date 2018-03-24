@@ -41,12 +41,12 @@ class SparseGPRegression(Model):
     def __init__(self, X, y, kernel, Xu, noise=None, approx=None, jitter=1e-6):
         latent_shape = torch.Size([])
         super(SparseGPRegression, self).__init__(X, y, kernel, latent_shape, jitter)
-        self.Xu = Parameter(Xu)
 
-        if noise is None:
-            noise = self.X.data.new([1])
+        noise = self.X.new([1]) if noise is None else noise
         self.noise = Parameter(noise)
-        self.set_constraint("noise", constraints.positive)
+        self.set_constraint("noise", constraints.greater_than(self.jitter))
+
+        self.Xu = Parameter(Xu)
 
         if approx is None:
             self.approx = "VFE"
@@ -93,11 +93,10 @@ class SparseGPRegression(Model):
     def guide(self):
         self.set_mode("guide")
 
-        kernel = self.kernel
         noise = self.get_param("noise")
         Xu = self.get_param("Xu")
 
-        return kernel, Xu, noise
+        return self.kernel, noise, Xu
 
     def forward(self, Xnew, full_cov=False, noiseless=True):
         r"""
@@ -112,9 +111,8 @@ class SparseGPRegression(Model):
         :returns: loc and covariance matrix of :math:`p(y^*|Xnew)`.
         :rtype: torch.Tensor and torch.Tensor
         """
-        self._check_Xnew_shape(Xnew, self.X)
-
-        kernel, Xu, noise = self.guide()
+        self._check_Xnew_shape(Xnew)
+        kernel, noise, Xu = self.guide()
 
         Kuu = kernel(Xu) + self.jitter.expand(Xu.size(0)).diag()
         Kus = kernel(Xu, Xnew)

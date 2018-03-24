@@ -22,7 +22,7 @@ class Model(Parameterized):
         super(Model, self).__init__()
         self.set_data(X, y)
         self.kernel = kernel
-        y_batch_shape = self.y.size()[1:]
+        y_batch_shape = self.y.shape[1:]
         self.latent_shape = latent_shape if latent_shape is not None else y_batch_shape
         self.jitter = self.X.new([jitter])
 
@@ -78,11 +78,11 @@ class Model(Parameterized):
         """
         raise NotImplementedError
 
-    def _check_Xnew_shape(self, Xnew, X):
+    def _check_Xnew_shape(self, Xnew):
         """
         Checks the correction of the shape of new data.
         """
-        if Xnew.dim() != X.dim():
+        if Xnew.dim() != self.X.dim():
             raise ValueError("Train data and test data should have the same number of dimensions.")
-        if Xnew.dim() == 2 and X.size(1) != Xnew.size(1):
+        if Xnew.dim() == 2 and self.X.shape[1] != Xnew.shape[1]:
             raise ValueError("Train data and test data should have the same feature sizes.")
