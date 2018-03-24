@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 import torch
 
 from pyro.distributions.torch_distribution import TorchDistribution
-from pyro.distributions.util import broadcast_shape
 
 
 class Delta(TorchDistribution):
@@ -33,9 +32,8 @@ class Delta(TorchDistribution):
         return self.v.expand(shape)
 
     def log_prob(self, x):
-        v = self.v
-        v = v.expand(broadcast_shape(self.shape(), x.size()))
-        return torch.eq(x, v).float().log()
+        v = self.v.expand(self.shape())
+        return (x == v).type_as(x).log()
 
     def enumerate_support(self, v=None):
         """

@@ -5,6 +5,7 @@ import warnings
 import pyro
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
+import pyro.infer as infer
 from pyro.infer.elbo import ELBO
 from pyro.infer.util import MultiFrameTensor, get_iarange_stacks
 from pyro.poutine.util import prune_subsample_sites
@@ -36,19 +37,20 @@ class Trace_ELBO(ELBO):
         for i in range(self.num_particles):
             guide_trace = poutine.trace(guide).get_trace(*args, **kwargs)
             model_trace = poutine.trace(poutine.replay(model, guide_trace)).get_trace(*args, **kwargs)
-
-            check_model_guide_match(model_trace, guide_trace)
+            if infer.is_validation_enabled():
+                check_model_guide_match(model_trace, guide_trace)
             guide_trace = prune_subsample_sites(guide_trace)
             model_trace = prune_subsample_sites(model_trace)
 
             model_trace.compute_batch_log_pdf()
             guide_trace.compute_score_parts()
-            for site in model_trace.nodes.values():
-                if site["type"] == "sample":
-                    check_site_shape(site, self.max_iarange_nesting)
-            for site in guide_trace.nodes.values():
-                if site["type"] == "sample":
-                    check_site_shape(site, self.max_iarange_nesting)
+            if infer.is_validation_enabled():
+                for site in model_trace.nodes.values():
+                    if site["type"] == "sample":
+                        check_site_shape(site, self.max_iarange_nesting)
+                for site in guide_trace.nodes.values():
+                    if site["type"] == "sample":
+                        check_site_shape(site, self.max_iarange_nesting)
 
             yield model_trace, guide_trace
 
@@ -110,7 +112,7 @@ class Trace_ELBO(ELBO):
             elbo += elbo_particle / self.num_particles
 
             # collect parameters to train from model and guide
-            trainable_params = set(site["value"]
+            trainable_params = set(site["value"].unconstrained()
                                    for trace in (model_trace, guide_trace)
                                    for site in trace.nodes.values()
                                    if site["type"] == "param")

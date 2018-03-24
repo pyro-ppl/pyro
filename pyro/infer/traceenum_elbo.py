@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import warnings
 
 import pyro
+import pyro.infer as infer
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
@@ -10,7 +11,7 @@ from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.util import MultiFrameDice
 from pyro.poutine.enumerate_poutine import EnumeratePoutine
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_match, check_site_shape, is_nan
+from pyro.util import check_model_guide_match, check_site_shape, check_traceenum_requirements, is_nan
 
 
 def _compute_dice_elbo(model_trace, guide_trace):
@@ -55,18 +56,22 @@ class TraceEnum_ELBO(ELBO):
                 model_trace = poutine.trace(poutine.replay(model, guide_trace),
                                             graph_type="flat").get_trace(*args, **kwargs)
 
-                check_model_guide_match(model_trace, guide_trace)
+                if infer.is_validation_enabled():
+                    check_model_guide_match(model_trace, guide_trace)
                 guide_trace = prune_subsample_sites(guide_trace)
                 model_trace = prune_subsample_sites(model_trace)
+                if infer.is_validation_enabled():
+                    check_traceenum_requirements(model_trace, guide_trace)
 
                 model_trace.compute_batch_log_pdf()
-                for site in model_trace.nodes.values():
-                    if site["type"] == "sample":
-                        check_site_shape(site, self.max_iarange_nesting)
                 guide_trace.compute_score_parts()
-                for site in guide_trace.nodes.values():
-                    if site["type"] == "sample":
-                        check_site_shape(site, self.max_iarange_nesting)
+                if infer.is_validation_enabled():
+                    for site in model_trace.nodes.values():
+                        if site["type"] == "sample":
+                            check_site_shape(site, self.max_iarange_nesting)
+                    for site in guide_trace.nodes.values():
+                        if site["type"] == "sample":
+                            check_site_shape(site, self.max_iarange_nesting)
 
                 yield model_trace, guide_trace
 
@@ -107,7 +112,7 @@ class TraceEnum_ELBO(ELBO):
             elbo += elbo_particle.item() / self.num_particles
 
             # collect parameters to train from model and guide
-            trainable_params = set(site["value"]
+            trainable_params = set(site["value"].unconstrained()
                                    for trace in (model_trace, guide_trace)
                                    for site in trace.nodes.values()
                                    if site["type"] == "param")

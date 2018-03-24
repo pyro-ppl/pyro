@@ -7,6 +7,7 @@ import networkx
 import torch
 
 import pyro
+import pyro.infer as infer
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer import ELBO
@@ -134,12 +135,14 @@ def _compute_elbo_non_reparam(guide_trace, non_reparam_nodes, downstream_costs):
             "cannot use baseline_value and nn_baseline simultaneously"
         if use_decaying_avg_baseline:
             dc_shape = downstream_cost.shape
-            avg_downstream_cost_old = pyro.param("__baseline_avg_downstream_cost_" + node,
-                                                 torch.tensor(0.0).expand(dc_shape).clone(),
-                                                 tags="__tracegraph_elbo_internal_tag")
-            avg_downstream_cost_new = (1 - baseline_beta) * downstream_cost.detach() + \
-                baseline_beta * avg_downstream_cost_old
-            avg_downstream_cost_old.copy_(avg_downstream_cost_new)  # XXX is this copy_() what we want?
+            param_name = "__baseline_avg_downstream_cost_" + node
+            with torch.no_grad():
+                avg_downstream_cost_old = pyro.param(param_name,
+                                                     torch.tensor(0.0).expand(dc_shape).clone())
+                avg_downstream_cost_new = (1 - baseline_beta) * downstream_cost + \
+                    baseline_beta * avg_downstream_cost_old
+            pyro.get_param_store().replace_param(param_name, avg_downstream_cost_new,
+                                                 avg_downstream_cost_old)
             baseline += avg_downstream_cost_old
         if use_nn_baseline:
             # block nn_baseline_input gradients except in baseline loss
@@ -191,8 +194,8 @@ class TraceGraph_ELBO(ELBO):
                                         graph_type="dense").get_trace(*args, **kwargs)
             model_trace = poutine.trace(poutine.replay(model, guide_trace),
                                         graph_type="dense").get_trace(*args, **kwargs)
-
-            check_model_guide_match(model_trace, guide_trace)
+            if infer.is_validation_enabled():
+                check_model_guide_match(model_trace, guide_trace)
             guide_trace = prune_subsample_sites(guide_trace)
             model_trace = prune_subsample_sites(model_trace)
 
@@ -245,13 +248,14 @@ class TraceGraph_ELBO(ELBO):
         # have the trace compute all the individual (batch) log pdf terms
         # and score function terms (if present) so that they are available below
         model_trace.compute_batch_log_pdf()
-        for site in model_trace.nodes.values():
-            if site["type"] == "sample":
-                check_site_shape(site, self.max_iarange_nesting)
         guide_trace.compute_score_parts()
-        for site in guide_trace.nodes.values():
-            if site["type"] == "sample":
-                check_site_shape(site, self.max_iarange_nesting)
+        if infer.is_validation_enabled():
+            for site in model_trace.nodes.values():
+                if site["type"] == "sample":
+                    check_site_shape(site, self.max_iarange_nesting)
+            for site in guide_trace.nodes.values():
+                if site["type"] == "sample":
+                    check_site_shape(site, self.max_iarange_nesting)
 
         # compute elbo for reparameterized nodes
         non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
@@ -266,7 +270,7 @@ class TraceGraph_ELBO(ELBO):
             surrogate_elbo += surrogate_elbo_term
 
         # collect parameters to train from model and guide
-        trainable_params = set(site["value"]
+        trainable_params = set(site["value"].unconstrained()
                                for trace in (model_trace, guide_trace)
                                for site in trace.nodes.values()
                                if site["type"] == "param")

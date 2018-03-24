@@ -8,7 +8,7 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.infer import SVI, config_enumerate
+from pyro.infer import SVI, ADVIDiagonalNormal, ADVIMultivariateNormal, config_enumerate
 from pyro.optim import Adam
 
 logger = logging.getLogger(__name__)
@@ -298,7 +298,8 @@ def test_irange_in_model_not_guide_ok(subsample_size, trace_graph, enum_discrete
 @pytest.mark.parametrize("trace_graph,enum_discrete",
                          [(False, False), (True, False), (False, True)],
                          ids=["Trace", "TraceGraph", "TraceEnum"])
-def test_irange_in_guide_not_model_error(subsample_size, trace_graph, enum_discrete):
+@pytest.mark.parametrize("is_validate", [True, False])
+def test_irange_in_guide_not_model_error(subsample_size, trace_graph, enum_discrete, is_validate):
 
     def model():
         p = torch.tensor(0.5)
@@ -310,20 +311,29 @@ def test_irange_in_guide_not_model_error(subsample_size, trace_graph, enum_discr
             pass
         pyro.sample("x", dist.Bernoulli(p))
 
-    assert_error(model, guide, trace_graph=trace_graph, enum_discrete=enum_discrete)
+    with pyro.validation_enabled(is_validate):
+        if is_validate:
+            assert_error(model, guide, trace_graph=trace_graph, enum_discrete=enum_discrete)
+        else:
+            assert_ok(model, guide, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
 
 @pytest.mark.parametrize("trace_graph,enum_discrete",
                          [(False, False), (True, False), (False, True)],
                          ids=["Trace", "TraceGraph", "TraceEnum"])
-def test_iarange_broadcast_error(trace_graph, enum_discrete):
+@pytest.mark.parametrize("is_validate", [True, False])
+def test_iarange_broadcast_error(trace_graph, enum_discrete, is_validate):
 
     def model():
         p = torch.tensor(0.5, requires_grad=True)
         with pyro.iarange("iarange", 10, 5):
             pyro.sample("x", dist.Bernoulli(p).reshape(sample_shape=[1]))
 
-    assert_error(model, model, trace_graph=trace_graph, enum_discrete=enum_discrete)
+    with pyro.validation_enabled(is_validate):
+        if is_validate:
+            assert_error(model, model, trace_graph=trace_graph, enum_discrete=enum_discrete)
+        else:
+            assert_ok(model, model, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
 
 @pytest.mark.parametrize("trace_graph,enum_discrete",
@@ -684,3 +694,95 @@ def test_enum_discrete_parallel_iarange_ok():
     enum_discrete = True
     assert_ok(model, config_enumerate(model, "parallel"), enum_discrete=True,
               max_iarange_nesting=2)
+
+
+@pytest.mark.parametrize('enumerate_', [None, "sequential", "parallel"])
+@pytest.mark.parametrize('is_validate', [True, False])
+def test_enum_discrete_iarange_dependency_warning(enumerate_, is_validate):
+
+    def model():
+        with pyro.iarange("iarange", 10, 5):
+            x = pyro.sample("x", dist.Bernoulli(0.5).reshape([5]),
+                            infer={'enumerate': enumerate_})
+        pyro.sample("y", dist.Bernoulli(x.mean()))  # user should move this line up
+
+    with pyro.validation_enabled(is_validate):
+        if enumerate_ and is_validate:
+            assert_warning(model, model, enum_discrete=True, max_iarange_nesting=1)
+        else:
+            assert_ok(model, model, enum_discrete=True, max_iarange_nesting=1)
+
+
+@pytest.mark.parametrize('enumerate_', [None, "sequential", "parallel"])
+def test_enum_discrete_irange_iarange_dependency_ok(enumerate_):
+
+    def model():
+        inner_iarange = pyro.iarange("iarange", 10, 5)
+        for i in pyro.irange("irange", 3):
+            pyro.sample("y_{}".format(i), dist.Bernoulli(0.5))
+            with inner_iarange:
+                pyro.sample("x_{}".format(i), dist.Bernoulli(0.5).reshape([5]),
+                            infer={'enumerate': enumerate_})
+
+    assert_ok(model, model, enum_discrete=True, max_iarange_nesting=1)
+
+
+@pytest.mark.parametrize('enumerate_', [None, "sequential", "parallel"])
+@pytest.mark.parametrize('is_validate', [True, False])
+def test_enum_discrete_iranges_iarange_dependency_warning(enumerate_, is_validate):
+
+    def model():
+        inner_iarange = pyro.iarange("iarange", 10, 5)
+
+        for i in pyro.irange("irange1", 2):
+            with inner_iarange:
+                pyro.sample("x_{}".format(i), dist.Bernoulli(0.5).reshape([5]),
+                            infer={'enumerate': enumerate_})
+
+        for i in pyro.irange("irange2", 2):
+            pyro.sample("y_{}".format(i), dist.Bernoulli(0.5))
+
+    with pyro.validation_enabled(is_validate):
+        if enumerate_ and is_validate:
+            assert_warning(model, model, enum_discrete=True, max_iarange_nesting=1)
+        else:
+            assert_ok(model, model, enum_discrete=True, max_iarange_nesting=1)
+
+
+@pytest.mark.parametrize('enumerate_', [None, "sequential", "parallel"])
+def test_enum_discrete_iaranges_dependency_ok(enumerate_):
+
+    def model():
+        x_iarange = pyro.iarange("x_iarange", 10, 5, dim=-1)
+        y_iarange = pyro.iarange("y_iarange", 11, 6, dim=-2)
+        pyro.sample("a", dist.Bernoulli(0.5))
+        with x_iarange:
+            pyro.sample("b", dist.Bernoulli(0.5).reshape([5]))
+        with y_iarange:
+            # Note that it is difficult to check that c does not depend on b.
+            pyro.sample("c", dist.Bernoulli(0.5).reshape([6, 1]))
+        with x_iarange, y_iarange:
+            pyro.sample("d", dist.Bernoulli(0.5).reshape([6, 5]))
+
+    assert_ok(model, model, enum_discrete=True, max_iarange_nesting=2)
+
+
+@pytest.mark.xfail(reason="lack of scalar support in log_abs_det_jacobian")
+@pytest.mark.parametrize('advi_class', [ADVIDiagonalNormal, ADVIMultivariateNormal])
+def test_advi(advi_class):
+
+    def model():
+        x = pyro.sample("x", dist.Normal(0, 1))
+        assert x.shape == ()
+
+        for i in pyro.irange("irange", 3):
+            y = pyro.sample("y_{}".format(i), dist.Normal(0, 1).reshape([2, 1 + i, 2], extra_event_dims=3))
+            assert y.shape == (2, 1 + i, 2)
+
+        z = pyro.sample("z", dist.Normal(0, 1).reshape([2], extra_event_dims=1))
+        assert z.shape == (2,)
+
+        pyro.sample("obs", dist.Bernoulli(0.1), obs=torch.tensor(0))
+
+    advi = advi_class(model)
+    assert_ok(advi.model, advi.guide)

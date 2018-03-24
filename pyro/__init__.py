@@ -5,10 +5,12 @@ import logging
 import numbers
 import warnings
 from collections import OrderedDict
+from contextlib import contextmanager
 from inspect import isclass
 
 import torch
 
+import pyro.infer as infer
 import pyro.poutine as poutine
 from pyro.distributions.distribution import Distribution
 from pyro.params import _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, param_with_module_name
@@ -340,7 +342,7 @@ def param(name, *args, **kwargs):
         return msg["value"]
 
 
-def module(name, nn_module, tags="default", update_module_params=False):
+def module(name, nn_module, update_module_params=False):
     """
     Takes a torch.nn.Module and registers its parameters with the ParamStore.
     In conjunction with the ParamStore save() and load() functionality, this
@@ -350,8 +352,6 @@ def module(name, nn_module, tags="default", update_module_params=False):
     :type name: str
     :param nn_module: the module to be registered with Pyro
     :type nn_module: torch.nn.Module
-    :param tags: optional; tags to associate with any parameters inside the module
-    :type tags: string or iterable of strings
     :param update_module_params: determines whether Parameters
                                  in the PyTorch module get overridden with the values found in the
                                  ParamStore (if any). Defaults to `False`
@@ -372,7 +372,7 @@ def module(name, nn_module, tags="default", update_module_params=False):
         # register the parameter in the module with pyro
         # this only does something substantive if the parameter hasn't been seen before
         full_param_name = param_with_module_name(name, param_name)
-        returned_param = param(full_param_name, param_value, tags=tags)
+        returned_param = param(full_param_name, param_value)
 
         if param_value._cdata != returned_param._cdata:
             target_state_dict[param_name] = returned_param
@@ -422,3 +422,17 @@ def random_module(name, nn_module, prior, *args, **kwargs):
         # update_module_params must be True or the lifted module will not update local params
         return lifted_fn(name, nn_copy, update_module_params=True, *args, **kwargs)
     return _fn
+
+
+def enable_validation(is_validate=True):
+    infer.enable_validation(is_validate)
+
+
+@contextmanager
+def validation_enabled(is_validate=True):
+    infer_validation_status = infer.is_validation_enabled()
+    try:
+        enable_validation(is_validate)
+        yield
+    finally:
+        infer.enable_validation(infer_validation_status)
