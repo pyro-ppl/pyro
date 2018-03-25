@@ -35,7 +35,8 @@ class Model(Parameterized):
             ``y.size(0)`` equals to number of data points.
         """
         if X.dim() > 2:
-            raise ValueError("Input tensorshould be of 1 or 2 dimensionals.")
+            raise ValueError("Expected input tensor of 1 or 2 dimensions, "
+                             "actual dim = {}".format(X.dim()))
         if X.size(0) != y.size(0):
             raise ValueError("Expect the number of data inputs equal to the number of data "
                              "outputs, but got {} and {}.".format(X.size(0), y.size(0)))
