@@ -8,20 +8,35 @@ from pyro.optim import Adam, PyroOptim
 class Model(Parameterized):
     """
     Base class for models used in Gaussian Process.
-    """
 
-    def __init__(self):
+    :param torch.Tensor X: A 1D or 2D tensor of input data for training.
+    :param torch.Tensor y: A tensor of output data for training with
+        ``y.size(0)`` equals to number of data points.
+    :param pyro.contrib.gp.kernels.Kernel kernel: A Pyro kernel object.
+    :param torch.Size latent_shape: Shape for latent processes. By default, it equals
+        to output batch shape ``y.size()[1:]``. For the multi-class classification
+        problems, ``latent_shape[-1]`` should corresponse to the number of classes.
+    :param float jitter: An additional jitter to help stablize Cholesky decomposition.
+    """
+    def __init__(self, X, y, kernel, latent_shape=None, jitter=1e-6):
         super(Model, self).__init__()
+        self.set_data(X, y)
+        self.kernel = kernel
+        y_batch_shape = self.y.size()[1:]
+        self.latent_shape = latent_shape if latent_shape is not None else y_batch_shape
+        self.jitter = self.X.new([jitter])
 
     def set_data(self, X, y):
         """
         Sets data for Gaussian Process models.
 
         :param torch.Tensor X: A 1D or 2D tensor of input data for training.
-        :param torch.Tensor y: A 1D or 2D tensor of output data for training.
+        :param torch.Tensor y: A tensor of output data for training with
+            ``y.size(0)`` equals to number of data points.
         """
-        if X.dim() > 2 or y.dim() > 2:
-            raise ValueError("Input tensor and output tensor should be of 1 or 2 dimensionals.")
+        if X.dim() > 2:
+            raise ValueError("Expected input tensor of 1 or 2 dimensions, "
+                             "actual dim = {}".format(X.dim()))
         if X.size(0) != y.size(0):
             raise ValueError("Expect the number of data inputs equal to the number of data "
                              "outputs, but got {} and {}.".format(X.size(0), y.size(0)))

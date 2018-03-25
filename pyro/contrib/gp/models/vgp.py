@@ -1,11 +1,11 @@
 from __future__ import absolute_import, division, print_function
 
 import torch
-from torch.distributions import constraints, transform_to
 
 import pyro
 import pyro.distributions as dist
 from pyro.distributions.util import matrix_triangular_solve_compat
+from pyro.contrib.gp.util import batch_lower_cholesky_transform
 
 from .model import Model
 
@@ -18,18 +18,18 @@ class VariationalGP(Model):
     with :math:`Xu = X`.
 
     :param torch.Tensor X: A 1D or 2D tensor of inputs.
-    :param torch.Tensor y: A 1D tensor of outputs for training.
+    :param torch.Tensor y: A tensor of output data for training with
+        ``y.size(0)`` equals to number of data points.
     :param pyro.contrib.gp.kernels.Kernel kernel: A Pyro kernel object.
     :param pyro.contrib.gp.likelihoods.Likelihood likelihood: A likelihood module.
+    :param torch.Size latent_shape: Shape for latent processes. By default, it equals
+        to output batch shape ``y.size()[1:]``. For the multi-class classification
+        problems, ``latent_shape[-1]`` should corresponse to the number of classes.
     :param float jitter: An additional jitter to help stablize Cholesky decomposition.
     """
-    def __init__(self, X, y, kernel, likelihood, jitter=1e-6):
-        super(VariationalGP, self).__init__()
-        self.set_data(X, y)
-        self.kernel = kernel
+    def __init__(self, X, y, kernel, likelihood, latent_shape=None, jitter=1e-6):
+        super(VariationalGP, self).__init__(X, y, kernel, latent_shape, jitter)
         self.likelihood = likelihood
-
-        self.jitter = self.X.data.new([jitter])
 
     def model(self):
         self.set_mode("model")
@@ -37,14 +37,17 @@ class VariationalGP(Model):
         kernel = self.kernel
         likelihood = self.likelihood
 
-        # correct event_shape for y
-        y_t = self.y.t() if self.y.dim() == 2 else self.y
-        zero_loc = y_t.new([0]).expand(y_t.size())
+        mf_shape = self.latent_shape + self.X.size()[:1]
+        zero_loc = self.X.new([0]).expand(mf_shape)
         Kff = kernel(self.X) + self.jitter.expand(self.X.size(0)).diag()
+        Lff = Kff.potrf(upper=False)
 
-        f = pyro.sample("f", dist.MultivariateNormal(zero_loc, Kff).reshape(
-            extra_event_dims=zero_loc.dim() - 1))
-        likelihood(f, obs=y_t)
+        f = pyro.sample("f", dist.MultivariateNormal(zero_loc, scale_tril=Lff)
+                        .reshape(extra_event_dims=zero_loc.dim()-1))
+        # convert y_shape from N x D to D x N
+        y = self.y.permute(list(range(1, self.y.dim())) + [0])
+
+        likelihood(f, y)
 
     def guide(self):
         self.set_mode("guide")
@@ -53,20 +56,17 @@ class VariationalGP(Model):
         likelihood = self.likelihood
 
         # define variational parameters
-        mf_0 = torch.tensor(self.y.new(self.y.size()).zero_(),
-                            requires_grad=True)
+        mf_shape = self.latent_shape + self.X.size()[:1]
+        mf_0 = torch.tensor(self.X.new(mf_shape).zero_(), requires_grad=True)
         mf = pyro.param("f_loc", mf_0)
-        unconstrained_Lf_0 = torch.tensor(self.X.new(self.X.size(0), self.X.size(0)).zero_(),
-                                          requires_grad=True)
+        Lf_shape = self.latent_shape + torch.Size([self.X.size(0), self.X.size(0)])
+        # TODO: use new syntax for pyro.param constraint
+        unconstrained_Lf_0 = torch.tensor(self.X.new(Lf_shape).zero_(), requires_grad=True)
         unconstrained_Lf = pyro.param("unconstrained_f_tril", unconstrained_Lf_0)
-        Lf = transform_to(constraints.lower_cholesky)(unconstrained_Lf)
+        Lf = batch_lower_cholesky_transform(unconstrained_Lf)
 
-        # TODO: use scale_tril=Lf
-        Kf = Lf.t().matmul(Lf) + self.jitter.expand(Lf.size(0)).diag()
-        # correct event_shape for mf
-        mf_t = mf.t() if mf.dim() == 2 else mf
-        pyro.sample("f", dist.MultivariateNormal(loc=mf_t, covariance_matrix=Kf).reshape(
-            extra_event_dims=mf_t.dim() - 1))
+        pyro.sample("f", dist.MultivariateNormal(loc=mf, scale_tril=Lf)
+                    .reshape(extra_event_dims=mf.dim()-1))
         return kernel, likelihood, mf, Lf
 
     def forward(self, Xnew, full_cov=False):
@@ -79,7 +79,7 @@ class VariationalGP(Model):
 
         :param torch.Tensor Xnew: A 1D or 2D tensor.
         :param bool full_cov: Predict full covariance matrix or just its diagonal.
-        :return: loc and covariance matrix of :math:`p(f^*|Xnew)`
+        :returns: loc and covariance matrix of :math:`p(f^*|Xnew)`
         :rtype: torch.Tensor and torch.Tensor
         """
         self._check_Xnew_shape(Xnew, self.X)
@@ -106,27 +106,41 @@ class VariationalGP(Model):
         Kfs = kernel(X, Xnew)
         Lff = Kff.potrf(upper=False)
 
-        mf_temp = mf.unsqueeze(1) if mf.dim() == 1 else mf
-        pack = torch.cat((mf_temp, Kfs, Lf), dim=1)
+        # convert mf_shape from latent_shape x N to N x latent_shape
+        mf = mf.permute(mf.dim()-1, *range(mf.dim())[:-1])
+        # convert Lf_shape from latent_shape x N x N to N x N x latent_shape
+        Lf = Lf.permute(Lf.dim()-2, Lf.dim()-1, *range(Lf.dim())[:-2]).contiguous()
+        # convert mf, Lf to 2D tensors before packing
+        mf_temp = mf.view(mf.size(0), -1)
+        Lf_temp = Lf.view(Lf.size(0), -1)
+        pack = torch.cat((mf_temp, Kfs, Lf_temp), dim=1)
         Lffinv_pack = matrix_triangular_solve_compat(pack, Lff, upper=False)
-        Lffinv_mf = Lffinv_pack[:, :mf_temp.size(1)].view(mf.size())
-        W = Lffinv_pack[:, mf_temp.size(1):-Lf.size(1)]
-        V = Lffinv_pack[:, -Lf.size(1):]
-        Vt_W = V.t().matmul(W)
+        # unpack
+        Lffinv_mf = Lffinv_pack[:, :mf_temp.size(1)]
+        W = Lffinv_pack[:, mf_temp.size(1):-Lf_temp.size(1)]
+        V = Lffinv_pack[:, -Lf_temp.size(1):].view(Lf.size())
+        # covert V_shape from N x N' x D to D x N' x N
+        V_t = V.permute(list(range(2, V.dim())) + [1, 0])
+        Vt_W = V_t.matmul(W)
 
-        loc = W.t().matmul(Lffinv_mf)
+        loc_shape = Xnew.size()[:1] + mf.size()[1:]
+        loc = W.t().matmul(Lffinv_mf).view(loc_shape)
 
         if full_cov:
             Kss = kernel(Xnew)
             # Qss = Ksf @ inv(Kff) @ Kfs = W.T @ W
             Qss = W.t().matmul(W)
             # K = Ksf @ inv(Kff) @ S @ inv(Kff) @ Kfs = W.T @ V @ V.T @ W
-            K = Vt_W.t().matmul(Vt_W)
+            K = Vt_W.transpose(-2, -1).matmul(Vt_W)
             cov = Kss - Qss + K
+            # convert cov from D x N x N to N x N x D
+            cov = cov.permute(cov.dim()-2, cov.dim()-1, *range(cov.dim())[:-2])
         else:
             Kssdiag = kernel(Xnew, diag=True)
             Qssdiag = (W ** 2).sum(dim=0)
-            Kdiag = (Vt_W ** 2).sum(dim=0)
+            Kdiag = (Vt_W ** 2).sum(dim=-2)
             cov = Kssdiag - Qssdiag + Kdiag
+            # convert cov from D x N to N x D
+            cov = cov.permute(cov.dim()-1, *range(cov.dim())[:-1])
 
         return loc, cov
