@@ -16,7 +16,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from modules import Identity, Encoder, Decoder, MLP, Predict
-from pyro.util import ng_zeros, ng_ones, zeros
+from pyro.util import zeros
 
 
 # Default prior success probability for z_pres.
@@ -65,6 +65,7 @@ class AIR(nn.Module):
         self.baseline_scalar = baseline_scalar
         self.likelihood_sd = likelihood_sd
         self.use_cuda = use_cuda
+        self.prototype = torch.tensor(0).cuda() if use_cuda else torch.tensor(0)
 
         self.z_pres_size = 1
         self.z_where_size = 3
@@ -108,8 +109,8 @@ class AIR(nn.Module):
     def prior(self, n, **kwargs):
 
         state = ModelState(
-            x=self.ng_zeros([n, self.x_size, self.x_size]),
-            z_pres=self.ng_ones([n, self.z_pres_size]),
+            x=self.prototype.new_zeros([n, self.x_size, self.x_size]),
+            z_pres=self.prototype.new_ones([n, self.z_pres_size]),
             z_where=None)
 
         z_pres = []
@@ -144,8 +145,8 @@ class AIR(nn.Module):
 
             # Sample latent code for contents of the attention window.
             z_what = pyro.sample('z_what_{}'.format(t),
-                                 dist.Normal(self.ng_zeros([n, self.z_what_size]),
-                                             self.ng_ones([n, self.z_what_size]))
+                                 dist.Normal(self.prototype.new_zeros([n, self.z_what_size]),
+                                             self.prototype.new_ones([n, self.z_what_size]))
                                      .reshape(extra_event_dims=1))
 
         # Map latent code to pixel space.
@@ -169,7 +170,7 @@ class AIR(nn.Module):
             (z_where, z_pres), x = self.prior(n, **kwargs)
             pyro.sample('obs',
                         dist.Normal(x.view(n, -1),
-                                    (self.likelihood_sd * self.ng_ones(1)).expand(n, self.x_size ** 2))
+                                    (self.likelihood_sd * self.prototype.new_ones(n, self.x_size ** 2)))
                             .reshape(extra_event_dims=1),
                         obs=batch.view(n, -1))
 
@@ -207,7 +208,7 @@ class AIR(nn.Module):
                 c=batch_expand(self.c_init, n),
                 bl_h=batch_expand(self.bl_h_init, n),
                 bl_c=batch_expand(self.bl_c_init, n),
-                z_pres=self.ng_ones(n, self.z_pres_size),
+                z_pres=self.prototype.new_ones(n, self.z_pres_size),
                 z_where=batch_expand(self.z_where_init, n),
                 z_what=batch_expand(self.z_what_init, n))
 
@@ -281,19 +282,6 @@ class AIR(nn.Module):
 
         return bl_value, bl_h, bl_c
 
-    # Helpers to create zeros/ones on cpu/gpu as appropriate.
-    def ng_zeros(self, *args, **kwargs):
-        t = ng_zeros(*args, **kwargs)
-        if self.use_cuda:
-            t = t.cuda()
-        return t
-
-    def ng_ones(self, *args, **kwargs):
-        t = ng_ones(*args, **kwargs)
-        if self.use_cuda:
-            t = t.cuda()
-        return t
-
 
 # Spatial transformer helpers.
 
@@ -306,7 +294,7 @@ def expand_z_where(z_where):
     # [s,x,y] -> [[s,0,x],
     #             [0,s,y]]
     n = z_where.size(0)
-    out = torch.cat((ng_zeros([1, 1]).type_as(z_where).expand(n, 1), z_where), 1)
+    out = torch.cat((z_where.new_zeros(n, 1), z_where), 1)
     ix = expansion_indices
     if z_where.is_cuda:
         ix = ix.cuda()
@@ -324,7 +312,7 @@ def z_where_inv(z_where):
     # These are the parameters required to perform the inverse of the
     # spatial transform performed in the generative model.
     n = z_where.size(0)
-    out = torch.cat((ng_ones([1, 1]).type_as(z_where).expand(n, 1), -z_where[:, 1:]), 1)
+    out = torch.cat((z_where.new_ones(n, 1), -z_where[:, 1:]), 1)
     # Divide all entries by the scale.
     out = out / z_where[:, 0:1]
     return out

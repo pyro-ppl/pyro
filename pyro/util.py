@@ -157,28 +157,6 @@ def zeros(*args, **kwargs):
     return Parameter(p_tensor if retype is None else p_tensor.type_as(retype))
 
 
-def ng_ones(*args, **kwargs):
-    """
-    :param torch.Tensor type_as: optional argument for tensor type
-
-    A convenience function for torch.ones(..., requires_grad=False)
-    """
-    retype = kwargs.pop('type_as', None)
-    p_tensor = torch.ones(*args, **kwargs)
-    return torch.tensor(p_tensor if retype is None else p_tensor.type_as(retype), requires_grad=False)
-
-
-def ng_zeros(*args, **kwargs):
-    """
-    :param torch.Tensor type_as: optional argument for tensor type
-
-    A convenience function for torch.ones(..., requires_grad=False)
-    """
-    retype = kwargs.pop('type_as', None)
-    p_tensor = torch.zeros(*args, **kwargs)
-    return torch.tensor(p_tensor if retype is None else p_tensor.type_as(retype), requires_grad=False)
-
-
 def is_nan(x):
     """
     A convenient function to check if a Tensor contains all nan; also works with numbers
