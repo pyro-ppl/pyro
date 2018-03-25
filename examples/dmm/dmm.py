@@ -20,7 +20,6 @@ from pyro.infer import SVI
 from pyro.optim import ClippedAdam
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.util import ng_ones
 from pyro.distributions import InverseAutoregressiveFlow
 from pyro.distributions import TransformedDistribution
 import six.moves.cPickle as pickle
@@ -85,16 +84,15 @@ class GatedTransition(nn.Module):
         we return the mean and sigma vectors that parameterize the
         (diagonal) gaussian distribution `p(z_t | z_{t-1})`
         """
-        # compute the gating function and one minus the gating function
+        # compute the gating function
         gate_intermediate = self.relu(self.lin_gate_z_to_hidden(z_t_1))
         gate = self.sigmoid(self.lin_gate_hidden_to_z(gate_intermediate))
-        one_minus_gate = ng_ones(gate.size()).type_as(gate) - gate
         # compute the 'proposed mean'
         proposed_mean_intermediate = self.relu(self.lin_proposed_mean_z_to_hidden(z_t_1))
         proposed_mean = self.lin_proposed_mean_hidden_to_z(proposed_mean_intermediate)
         # assemble the actual mean used to sample z_t, which mixes a linear transformation
         # of z_{t-1} with the proposed mean modulated by the gating function
-        mu = one_minus_gate * self.lin_z_to_mu(z_t_1) + gate * proposed_mean
+        mu = (1 - gate) * self.lin_z_to_mu(z_t_1) + gate * proposed_mean
         # compute the sigma used to sample z_t, using the proposed mean from above as input
         # the softplus ensures that sigma is positive
         sigma = self.softplus(self.lin_sig(self.relu(proposed_mean)))
