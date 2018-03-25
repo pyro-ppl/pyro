@@ -796,17 +796,17 @@ def test_elbo_rsvi(enumerate1):
     ("parallel", 20),
     pytest.param("parallel", 30, marks=pytest.mark.skip(reason="extremely expensive")),
 ])
-def test_elbo_hmm(enumerate1, num_steps):
+def test_elbo_hmm_in_model(enumerate1, num_steps):
     pyro.clear_param_store()
     data = torch.ones(num_steps)
     init_probs = torch.tensor([0.5, 0.5])
 
     def model(data):
-        transition_probs = pyro.param("transition_probs", torch.tensor([[0.9, 0.1],
-                                                                        [0.1, 0.9]]),
+        transition_probs = pyro.param("transition_probs",
+                                      torch.tensor([[0.9, 0.1], [0.1, 0.9]]),
                                       constraint=constraints.simplex)
         locs = pyro.param("obs_locs", torch.tensor([-1, 1]))
-        scale = pyro.param("obs_scales", torch.tensor(1.0),
+        scale = pyro.param("obs_scale", torch.tensor(1.0),
                            constraint=constraints.positive)
 
         x = None
@@ -834,11 +834,78 @@ def test_elbo_hmm(enumerate1, num_steps):
 
     for name, value in pyro.get_param_store().named_parameters():
         actual = value.grad
-        try:
-            expected = expected_unconstrained_grads[name]
-        except KeyError:
-            continue
-        assert_equal(value.grad, expected, msg=''.join([
+        expected = expected_unconstrained_grads[name]
+        assert_equal(actual, expected, msg=''.join([
+            '\nexpected {}.grad = {}'.format(name, expected.numpy()),
+            '\n  actual {}.grad = {}'.format(name, actual.detach().cpu().numpy()),
+        ]))
+
+
+@pytest.mark.parametrize("enumerate1,num_steps", [
+    ("sequential", 2),
+    ("sequential", 3),
+    ("parallel", 2),
+    ("parallel", 3),
+    ("parallel", 10),
+    ("parallel", 20),
+    pytest.param("parallel", 30, marks=pytest.mark.skip(reason="extremely expensive")),
+])
+def test_elbo_hmm_in_guide(enumerate1, num_steps):
+    pyro.clear_param_store()
+    data = torch.ones(num_steps)
+    init_probs = torch.tensor([0.5, 0.5])
+
+    def model(data):
+        transition_probs = pyro.param("transition_probs",
+                                      torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
+                                      constraint=constraints.simplex)
+        emission_probs = pyro.param("emission_probs",
+                                    torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
+                                    constraint=constraints.simplex)
+
+        x = None
+        for i, y in enumerate(data):
+            probs = init_probs if x is None else transition_probs[x]
+            x = pyro.sample("x_{}".format(i), dist.Categorical(probs))
+            pyro.sample("y_{}".format(i), dist.Categorical(emission_probs[x]), obs=y)
+
+    @config_enumerate(default=enumerate1)
+    def guide(data):
+        transition_probs = pyro.param("transition_probs",
+                                      torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
+                                      constraint=constraints.simplex)
+        x = None
+        for i, y in enumerate(data):
+            probs = init_probs if x is None else transition_probs[x]
+            x = pyro.sample("x_{}".format(i), dist.Categorical(probs))
+
+    elbo = TraceEnum_ELBO(max_iarange_nesting=0)
+    elbo.loss_and_grads(model, guide, data)
+
+    # These golden values simply test agreement between parallel and sequential.
+    expected_grads = {
+        2: {
+            "transition_probs": [[0.1029949, -0.1029949], [0.1029949, -0.1029949]],
+            "emission_probs": [[0.75, -0.75], [0.25, -0.25]],
+        },
+        3: {
+            "transition_probs": [[0.25748726, -0.25748726], [0.25748726, -0.25748726]],
+            "emission_probs": [[1.125, -1.125], [0.375, -0.375]],
+        },
+        10: {
+            "transition_probs": [[1.64832076, -1.64832076], [1.64832076, -1.64832076]],
+            "emission_probs": [[3.75, -3.75], [1.25, -1.25]],
+        },
+        20: {
+            "transition_probs": [[3.70781687, -3.70781687], [3.70781687, -3.70781687]],
+            "emission_probs": [[7.5, -7.5], [2.5, -2.5]],
+        },
+    }
+
+    for name, value in pyro.get_param_store().named_parameters():
+        actual = value.grad
+        expected = torch.tensor(expected_grads[num_steps][name])
+        assert_equal(actual, expected, msg=''.join([
             '\nexpected {}.grad = {}'.format(name, expected.numpy()),
             '\n  actual {}.grad = {}'.format(name, actual.detach().cpu().numpy()),
         ]))
