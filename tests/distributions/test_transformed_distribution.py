@@ -52,9 +52,7 @@ def AffineExp(affine_b, affine_a):
 
 
 def get_transformed_dist(distribution, affine_a, affine_b):
-    # Set `validate_args=False` as base distribution would have been validated, if needed.
-    with pyro.validation_enabled(False):
-        return TransformedDistribution(distribution, [AffineExp(affine_b, affine_a)])
+    return TransformedDistribution(distribution, [AffineExp(affine_b, affine_a)])
 
 
 @pytest.mark.parametrize('lognormal', EXAMPLES)

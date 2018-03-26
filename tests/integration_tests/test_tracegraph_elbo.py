@@ -396,7 +396,6 @@ class LogNormalNormalTests(TestCase):
         assert_equal(0.0, mu_error, prec=0.05)
         assert_equal(0.0, tau_error, prec=0.05)
 
-    @pytest.mark.xfail(reason="awaiting https://github.com/pytorch/pytorch/pull/5989")
     def test_elbo_with_transformed_distribution(self):
         logger.info(" - - - - - DO LOGNORMAL-NORMAL ELBO TEST [uses TransformedDistribution] - - - - - ")
         pyro.clear_param_store()
