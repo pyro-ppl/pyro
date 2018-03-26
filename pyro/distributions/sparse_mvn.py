@@ -31,8 +31,9 @@ class SparseMultivariateNormal(TorchDistribution):
     :param float trace_term: A optional term to be added into Mahalabonis term
         according to p(y) = N(y|loc, cov).exp(-1/2 * trace_term).
     """
-    params = {"loc": constraints.real, "covariance_matrix_D_term": constraints.positive,
-              "scale_tril": constraints.lower_triangular}
+    arg_constraints = {"loc": constraints.real,
+                       "covariance_matrix_D_term": constraints.positive,
+                       "scale_tril": constraints.lower_triangular}
     support = constraints.real
     has_rsample = True
 

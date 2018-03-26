@@ -187,6 +187,8 @@ class ReshapedDistribution(TorchDistribution):
     :param int extra_event_dims: The number of extra event dimensions that will
         be considered dependent.
     """
+    arg_constraints = {}
+
     def __init__(self, base_dist, sample_shape=torch.Size(), extra_event_dims=0):
         sample_shape = torch.Size(sample_shape)
         if extra_event_dims > len(sample_shape + base_dist.batch_shape):
@@ -259,6 +261,8 @@ class MaskedDistribution(TorchDistribution):
 
     :param torch.Tensor mask: A zero-one valued float tensor.
     """
+    arg_constraints = {}
+
     def __init__(self, base_dist, mask):
         if broadcast_shape(mask.shape, base_dist.batch_shape) != base_dist.batch_shape:
             raise ValueError("Expected mask.shape to be broadcastable to base_dist.batch_shape, "

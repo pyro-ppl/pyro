@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import torch
+from torch.distributions import constraints
 
 from pyro.distributions.torch_distribution import TorchDistribution
 
@@ -22,6 +23,9 @@ class Delta(TorchDistribution):
     def __init__(self, v, *args, **kwargs):
         self.v = v
         super(Delta, self).__init__(*args, **kwargs)
+
+    arg_constraints = {'v': constraints.real}
+    support = constraints.real
 
     @property
     def batch_shape(self):
