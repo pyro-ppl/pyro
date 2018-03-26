@@ -87,12 +87,12 @@ class SparseGPRegression(Model):
                 trace_term += (Kffdiag - Qffdiag).sum() / noise
 
         if self.y is None:
-            zero_loc = self.X.new([0]).expand(self.X.shape[0])
+            zero_loc = self.X.new_zeros(self.X.shape[0])
             return pyro.sample("y", dist.SparseMultivariateNormal(zero_loc, D, W, trace_term))
         else:
             # convert y_shape from N x D to D x N
             y = self.y.permute(list(range(1, self.y.dim())) + [0])
-            zero_loc = self.X.new([0]).expand_as(y)
+            zero_loc = self.X.new_zeros(y.shape)
             return pyro.sample("y", dist.SparseMultivariateNormal(zero_loc, D, W, trace_term)
                                .reshape(extra_event_dims=y.dim()-1), obs=y)
 

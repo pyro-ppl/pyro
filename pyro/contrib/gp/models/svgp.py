@@ -40,7 +40,7 @@ class SparseVariationalGP(VariationalGP):
 
         num_inducing = self.Xu.shape[0]
         u_loc_shape = self.latent_shape + (num_inducing,)
-        u_loc = self.Xu.new(u_loc_shape).zero_()
+        u_loc = self.Xu.new_zeros(u_loc_shape)
         self.u_loc = Parameter(u_loc)
 
         u_scale_tril_shape = self.latent_shape + (num_inducing, num_inducing)
@@ -59,7 +59,7 @@ class SparseVariationalGP(VariationalGP):
         Kuf = self.kernel(Xu, self.X)
 
         u_loc_shape = self.latent_shape + (Xu.shape[0],)
-        zero_loc = Xu.new([0]).expand(u_loc_shape)
+        zero_loc = Xu.new_zeros(u_loc_shape)
         u = pyro.sample("u", dist.MultivariateNormal(zero_loc, scale_tril=Luu)
                         .reshape(extra_event_dims=zero_loc.dim()-1))
 
@@ -70,8 +70,8 @@ class SparseVariationalGP(VariationalGP):
 
         # convert u_shape from latent_shape x N to N x latent_shape
         u = u.permute(-1, *range(u.dim())[:-1]).contiguous()
-        # convert u to 2D tensors before packing
-        u_temp = u.view(u.size(0), -1)
+        # convert u to 2D tensor before packing
+        u_temp = u.view(u.shape[0], -1)
         pack = torch.cat((u_temp, Kuf), dim=1)
         Luuinv_pack = matrix_triangular_solve_compat(pack, Luu, upper=False)
         # unpack

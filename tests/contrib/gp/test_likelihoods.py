@@ -14,31 +14,49 @@ T = namedtuple("TestGPLikelihood", ["model_class", "X", "y", "kernel", "likeliho
 X = torch.tensor([[1, 5, 3], [4, 3, 7], [3, 4, 6]])
 kernel = RBF(input_dim=3, variance=torch.tensor([1]), lengthscale=torch.tensor([3]))
 noise = torch.tensor([1e-6])
-y_binary = torch.tensor([0, 1, 0])
+y_binary1D = torch.tensor([0, 1, 0])
+y_binary2D = torch.tensor([[0, 1], [1, 0], [1, 1]])
 binary_likelihood = Binary()
-y_multiclass = torch.tensor([2, 0, 1])
+y_multiclass1D = torch.tensor([2, 0, 1])
+y_multiclass2D = torch.tensor([[2, 0], [1, 2], [1, 1]])
 multiclass_likelihood = MultiClass(num_classes=3)
 
 TEST_CASES = [
     T(
         VariationalGP,
-        X, y_binary, kernel, binary_likelihood
+        X, y_binary1D, kernel, binary_likelihood
     ),
     T(
         VariationalGP,
-        X, y_multiclass, kernel, multiclass_likelihood
+        X, y_binary2D, kernel, binary_likelihood
+    ),
+    T(
+        VariationalGP,
+        X, y_binary1D, kernel, binary_likelihood
+    ),
+    T(
+        VariationalGP,
+        X, y_binary2D, kernel, binary_likelihood
     ),
     T(
         SparseVariationalGP,
-        X, y_binary, kernel, binary_likelihood
+        X, y_binary1D, kernel, binary_likelihood
     ),
     T(
         SparseVariationalGP,
-        X, y_multiclass, kernel, multiclass_likelihood
+        X, y_binary2D, kernel, binary_likelihood
+    ),
+    T(
+        SparseVariationalGP,
+        X, y_multiclass1D, kernel, multiclass_likelihood
+    ),
+    T(
+        SparseVariationalGP,
+        X, y_multiclass2D, kernel, multiclass_likelihood
     ),
 ]
 
-TEST_IDS = [t[0].__name__ + "_" + t[4].__class__.__name__.split(".")[-1]
+TEST_IDS = ["_".join([t[0].__name__, t[4].__class__.__name__.split(".")[-1], str(t[2].dim())])
             for t in TEST_CASES]
 
 

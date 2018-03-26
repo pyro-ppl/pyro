@@ -31,7 +31,7 @@ class GPRegression(Model):
         latent_shape = torch.Size([])
         super(GPRegression, self).__init__(X, y, kernel, latent_shape, jitter)
 
-        noise = self.X.new([1]) if noise is None else noise
+        noise = self.X.new_ones(1) if noise is None else noise
         self.noise = Parameter(noise)
         self.set_constraint("noise", constraints.greater_than(self.jitter))
 
@@ -44,12 +44,12 @@ class GPRegression(Model):
         Lff = Kff.potrf(upper=False)
 
         if self.y is None:
-            zero_loc = self.X.new([0]).expand(self.X.shape[0])
+            zero_loc = self.X.new_zeros(self.X.shape[0])
             return pyro.sample("y", dist.MultivariateNormal(zero_loc, scale_tril=Lff))
         else:
             # convert y_shape from N x D to D x N
             y = self.y.permute(list(range(1, self.y.dim())) + [0])
-            zero_loc = self.X.new([0]).expand_as(y)
+            zero_loc = self.X.new_zeros(y.shape)
             return pyro.sample("y", dist.MultivariateNormal(zero_loc, scale_tril=Lff)
                                .reshape(extra_event_dims=y.dim()-1), obs=y)
 
@@ -77,10 +77,9 @@ class GPRegression(Model):
         self._check_Xnew_shape(Xnew)
         kernel, noise = self.guide()
 
-        Kff = kernel(self.X)
-        Kff = Kff + noise.expand(Kff.size(0)).diag()
-        Kfs = kernel(self.X, Xnew)
+        Kff = kernel(self.X) + noise.expand(Kff.size(0)).diag()
         Lff = Kff.potrf(upper=False)
+        Kfs = kernel(self.X, Xnew)
 
         # convert y into 2D tensor before packing
         y_temp = self.y.view(self.y.size(0), -1)

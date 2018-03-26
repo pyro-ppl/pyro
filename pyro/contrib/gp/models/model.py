@@ -11,7 +11,7 @@ class Model(Parameterized):
 
     :param torch.Tensor X: A 1D or 2D tensor of input data for training.
     :param torch.Tensor y: A tensor of output data for training with
-        ``y.size(0)`` equals to number of data points.
+        ``y.shape[0]`` equals to number of data points.
     :param pyro.contrib.gp.kernels.Kernel kernel: A Pyro kernel object.
     :param torch.Size latent_shape: Shape for latent processes. By default, it equals
         to output batch shape ``y.size()[1:]``. For the multi-class classification
@@ -35,9 +35,10 @@ class Model(Parameterized):
             ``y.size(0)`` equals to number of data points.
         """
         if X.dim() > 2:
-            raise ValueError("Input tensorshould be of 1 or 2 dimensionals.")
-        if y is not None and X.size(0) != y.size(0):
-            raise ValueError("Expect the number of data inputs equal to the number of data "
+            raise ValueError("Expected input tensor of 1 or 2 dimensions, "
+                             "actual dim = {}".format(X.dim()))
+        if y is not None and X.shape[0] != y.shape[0]:
+            raise ValueError("Expected the number of data inputs equal to the number of data "
                              "outputs, but got {} and {}.".format(X.size(0), y.size(0)))
         self.X = X
         self.y = y

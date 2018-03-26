@@ -34,7 +34,7 @@ class VariationalGP(Model):
 
         num_data = self.X.shape[0]
         f_loc_shape = self.latent_shape + (num_data,)
-        f_loc = self.X.new(f_loc_shape).zero_()
+        f_loc = self.X.new_zeros(f_loc_shape)
         self.f_loc = Parameter(f_loc)
 
         f_scale_tril_shape = self.latent_shape + (num_data, num_data)
@@ -50,7 +50,7 @@ class VariationalGP(Model):
         Lff = Kff.potrf(upper=False)
 
         f_loc_shape = self.latent_shape + (self.X.shape[0],)
-        zero_loc = self.X.new([0]).expand(f_loc_shape)
+        zero_loc = self.X.new_zeros(f_loc_shape)
         f = pyro.sample("f", dist.MultivariateNormal(zero_loc, scale_tril=Lff)
                         .reshape(extra_event_dims=zero_loc.dim()-1))
 
