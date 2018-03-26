@@ -8,10 +8,10 @@ import pyro
 import pyro.distributions as dist
 from pyro.distributions.util import matrix_triangular_solve_compat
 
-from .model import Model
+from .model import GPModel
 
 
-class SparseGPRegression(Model):
+class SparseGPRegression(GPModel):
     """
     Sparse Gaussian Process Regression module.
 
@@ -30,7 +30,7 @@ class SparseGPRegression(Model):
 
     :param torch.Tensor X: A 1D or 2D tensor of input data for training.
     :param torch.Tensor y: A tensor of output data for training with
-        ``y.size(0)`` equals to number of data points.
+        ``y.shape[-1]`` equals to number of data points.
     :param pyro.contrib.gp.kernels.Kernel kernel: A Pyro kernel object.
     :param torch.Tensor Xu: Initial values for inducing points, which are parameters
         of our model.
@@ -53,8 +53,8 @@ class SparseGPRegression(Model):
         elif approx in ["DTC", "FITC", "VFE"]:
             self.approx = approx
         else:
-            raise ValueError("The sparse approximation method should be one of 'DTC', "
-                             "'FITC', 'VFE'.")
+            raise ValueError("The sparse approximation method should be one of "
+                             "'DTC', 'FITC', 'VFE'.")
 
     def model(self):
         self.set_mode("model")
@@ -62,21 +62,21 @@ class SparseGPRegression(Model):
         noise = self.get_param("noise")
         Xu = self.get_param("Xu")
 
-        # Qff = Kfu @ inv(Kuu) @ Kuf
-        # W = inv(Luu) @ Kuf -> Qff = W.T @ W
-        # SparseMultivariateNormal requires y_cov = W.T @ W + D
-        # and an additional trace_term for its log_prob in case we use VFE.
+        # W = inv(Luu) @ Kuf
+        # Qff = Kfu @ inv(Kuu) @ Kuf = W.T @ W
         # Fomulas for each approximation method are
         # DTC:  y_cov = Qff + noise,                   trace_term = 0
         # FITC: y_cov = Qff + diag(Kff - Qff) + noise, trace_term = 0
         # VFE:  y_cov = Qff + noise,                   trace_term = tr(Kff - Qff) / noise
+        # y_cov = W.T @ W + D
+        # trace_term is added into log_prob
 
         Kuu = self.kernel(Xu) + self.jitter.expand(Xu.shape[0]).diag()
         Luu = Kuu.potrf(upper=False)
         Kuf = self.kernel(Xu, self.X)
         W = matrix_triangular_solve_compat(Kuf, Luu, upper=False)
 
-        D = noise.expand(W.size(1))
+        D = noise.expand(W.shape[1])
         trace_term = 0
         if self.approx == "FITC" or self.approx == "VFE":
             Kffdiag = self.kernel(self.X, diag=True)
@@ -88,13 +88,11 @@ class SparseGPRegression(Model):
 
         if self.y is None:
             zero_loc = self.X.new_zeros(self.X.shape[0])
-            return pyro.sample("y", dist.SparseMultivariateNormal(zero_loc, D, W, trace_term))
+            return pyro.sample("y", dist.SparseMultivariateNormal(zero_loc, W, D, trace_term))
         else:
-            # convert y_shape from N x D to D x N
-            y = self.y.permute(list(range(1, self.y.dim())) + [0])
-            zero_loc = self.X.new_zeros(y.shape)
-            return pyro.sample("y", dist.SparseMultivariateNormal(zero_loc, D, W, trace_term)
-                               .reshape(extra_event_dims=y.dim()-1), obs=y)
+            zero_loc = self.X.new_zeros(self.y.shape)
+            return pyro.sample("y", dist.SparseMultivariateNormal(zero_loc, W, D, trace_term)
+                               .reshape(extra_event_dims=self.y.dim()-1), obs=self.y)
 
     def guide(self):
         self.set_mode("guide")
@@ -120,62 +118,66 @@ class SparseGPRegression(Model):
         self._check_Xnew_shape(Xnew)
         kernel, noise, Xu = self.guide()
 
-        Kuu = kernel(Xu) + self.jitter.expand(Xu.size(0)).diag()
-        Kus = kernel(Xu, Xnew)
-        Kuf = kernel(Xu, self.X)
-        Luu = Kuu.potrf(upper=False)
-
-        # loc = Ksu @ S @ Kuf @ inv(D) @ y
-        # cov = Kss - Ksu @ inv(Kuu) @ Kus + Ksu @ S @ Kus
+        # W = inv(Luu) @ Kuf
+        # Ws = inv(Luu) @ Kus
+        # D as in self.model()
+        # K = I + W @ inv(D) @ W.T = L @ L.T
         # S = inv[Kuu + Kuf @ inv(D) @ Kfu]
         #   = inv(Luu).T @ inv[I + inv(Luu) @ Kuf @ inv(D) @ Kfu @ inv(Luu).T] @ inv(Luu)
         #   = inv(Luu).T @ inv[I + W @ inv(D) @ W.T] @ inv(Luu)
+        #   = inv(Luu).T @ inv(K) @ inv(Luu)
         #   = inv(Luu).T @ inv(L).T @ inv(L) @ inv(Luu)
+        # loc = Ksu @ S @ Kuf @ inv(D) @ y = Ws.T @ inv(L).T @ inv(L) @ W @ inv(D) @ y
+        # cov = Kss - Ksu @ inv(Kuu) @ Kus + Ksu @ S @ Kus
+        #     = kss - Ksu @ inv(Kuu) @ Kus + Ws.T @ inv(L).T @ inv(L) @ Ws
+
+        N = self.X.shape[0]
+        M = Xu.shape[0]
+
+        Kuu = kernel(Xu) + self.jitter.expand(M).diag()
+        Luu = Kuu.potrf(upper=False)
+        Kus = kernel(Xu, Xnew)
+        Kuf = kernel(Xu, self.X)
 
         W = matrix_triangular_solve_compat(Kuf, Luu, upper=False)
-        D = noise.expand(W.size(1))
+        Ws = matrix_triangular_solve_compat(Kus, Luu, upper=False)
+        D = noise.expand(N)
         if self.approx == "FITC":
             Kffdiag = kernel(self.X, diag=True)
             Qffdiag = (W ** 2).sum(dim=0)
             D = D + Kffdiag - Qffdiag
 
         W_Dinv = W / D
-        M = W.size(0)
         Id = torch.eye(M, M, out=W.new(M, M))
         K = Id + W_Dinv.matmul(W.t())
         L = K.potrf(upper=False)
 
-        Ws = matrix_triangular_solve_compat(Kus, Luu, upper=False)
-
-        # loc = Linv_Ws.T @ inv(L) @ W_Dinv @ y
-        # convert y into 2D tensor
-        y_temp = self.y.view(self.y.size(0), -1)
-        W_Dinv_y = W_Dinv.matmul(y_temp)
+        # convert y into 2D tensor for packing
+        y_2D = self.y.view(-1, N).t()
+        W_Dinv_y = W_Dinv.matmul(y_2D)
         pack = torch.cat((W_Dinv_y, Ws), dim=1)
         Linv_pack = matrix_triangular_solve_compat(pack, L, upper=False)
-        Linv_W_Dinv_y = Linv_pack[:, :W_Dinv_y.size(1)]
-        Linv_Ws = Linv_pack[:, W_Dinv_y.size(1):]
+        # unpack
+        Linv_W_Dinv_y = Linv_pack[:, :W_Dinv_y.shape[1]]
+        Linv_Ws = Linv_pack[:, W_Dinv_y.shape[1]:]
 
-        loc_shape = Xnew.size()[:1] + self.y.size()[1:]
-        loc = Linv_Ws.t().matmul(Linv_W_Dinv_y).view(loc_shape)
+        loc_shape = self.y.shape[:-1] + (Xnew.shape[0],)
+        loc = Linv_W_Dinv_y.t().matmul(Linv_Ws).view(loc_shape)
 
-        # cov = Kss - Ws.T @ Ws + Linv_Ws.T @ Linv_Ws
         if full_cov:
             Kss = kernel(Xnew)
             if not noiseless:
-                Kss = Kss + noise.expand(Xnew.size(0)).diag()
+                Kss = Kss + noise.expand(Xnew.shape[0]).diag()
             Qss = Ws.t().matmul(Ws)
             cov = Kss - Qss + Linv_Ws.t().matmul(Linv_Ws)
         else:
             Kssdiag = kernel(Xnew, diag=True)
             if not noiseless:
-                Kssdiag = Kssdiag + noise.expand(Xnew.size(0))
+                Kssdiag = Kssdiag + noise.expand(Xnew.shape[0])
             Qssdiag = (Ws ** 2).sum(dim=0)
             cov = Kssdiag - Qssdiag + (Linv_Ws ** 2).sum(dim=0)
 
-        # expand cov from N to N x 1 to N x D or N x N to N x N x 1 to N x N x D
-        cov_shape_pre = cov.size() + torch.Size([1] * (self.y.dim()-1))
-        cov_shape = cov.size() + self.y.size()[1:]
-        cov = cov.view(cov_shape_pre).expand(cov_shape)
+        cov_shape = self.y.shape[:-1] + (Xnew.shape[0], Xnew.shape[0])
+        cov = cov.expand(cov_shape)
 
         return loc, cov

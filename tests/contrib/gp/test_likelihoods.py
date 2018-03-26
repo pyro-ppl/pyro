@@ -15,10 +15,10 @@ X = torch.tensor([[1, 5, 3], [4, 3, 7], [3, 4, 6]])
 kernel = RBF(input_dim=3, variance=torch.tensor([1]), lengthscale=torch.tensor([3]))
 noise = torch.tensor([1e-6])
 y_binary1D = torch.tensor([0, 1, 0])
-y_binary2D = torch.tensor([[0, 1], [1, 0], [1, 1]])
+y_binary2D = torch.tensor([[0, 1, 1], [1, 0, 1]])
 binary_likelihood = Binary()
 y_multiclass1D = torch.tensor([2, 0, 1])
-y_multiclass2D = torch.tensor([[2, 0], [1, 2], [1, 1]])
+y_multiclass2D = torch.tensor([[2, 1, 1], [0, 2, 1]])
 multiclass_likelihood = MultiClass(num_classes=3)
 
 TEST_CASES = [
@@ -56,16 +56,17 @@ TEST_CASES = [
     ),
 ]
 
-TEST_IDS = ["_".join([t[0].__name__, t[4].__class__.__name__.split(".")[-1], str(t[2].dim())])
+TEST_IDS = ["_".join([t[0].__name__, t[4].__class__.__name__.split(".")[-1],
+                      str(t[2].dim()) + "D"])
             for t in TEST_CASES]
 
 
 @pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
 def test_inference(model_class, X, y, kernel, likelihood):
     if isinstance(likelihood, MultiClass):
-        latent_shape = y.size()[1:] + torch.Size([likelihood.num_classes])
+        latent_shape = y.shape[:-1] + torch.Size([likelihood.num_classes])
     else:
-        latent_shape = y.size()[1:]
+        latent_shape = y.shape[:-1]
     if model_class is SparseVariationalGP:
         gp = model_class(X, y, kernel, X, likelihood, latent_shape)
     else:

@@ -6,12 +6,11 @@ from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
-from pyro.distributions.util import matrix_triangular_solve_compat
 
-from .model import Model
+from .model import GPModel
 
 
-class GPRegression(Model):
+class GPRegression(GPModel):
     """
     Gaussian Process Regression module.
 
@@ -22,7 +21,7 @@ class GPRegression(Model):
 
     :param torch.Tensor X: A 1D or 2D tensor of input data for training.
     :param torch.Tensor y: A tensor of output data for training with
-        ``y.size(0)`` equals to number of data points.
+        ``y.shape[-1]`` equals to number of data points.
     :param pyro.contrib.gp.kernels.Kernel kernel: A Pyro kernel object.
     :param torch.Tensor noise: An optional noise parameter.
     :param float jitter: An additional jitter to help stablize Cholesky decomposition.
@@ -47,11 +46,9 @@ class GPRegression(Model):
             zero_loc = self.X.new_zeros(self.X.shape[0])
             return pyro.sample("y", dist.MultivariateNormal(zero_loc, scale_tril=Lff))
         else:
-            # convert y_shape from N x D to D x N
-            y = self.y.permute(list(range(1, self.y.dim())) + [0])
-            zero_loc = self.X.new_zeros(y.shape)
+            zero_loc = self.X.new_zeros(self.y.shape)
             return pyro.sample("y", dist.MultivariateNormal(zero_loc, scale_tril=Lff)
-                               .reshape(extra_event_dims=y.dim()-1), obs=y)
+                               .reshape(extra_event_dims=self.y.dim()-1), obs=self.y)
 
     def guide(self):
         self.set_mode("guide")
@@ -77,40 +74,15 @@ class GPRegression(Model):
         self._check_Xnew_shape(Xnew)
         kernel, noise = self.guide()
 
-        Kff = kernel(self.X) + noise.expand(Kff.size(0)).diag()
+        Kff = kernel(self.X) + noise.expand(self.X.shape[0]).diag()
         Lff = Kff.potrf(upper=False)
-        Kfs = kernel(self.X, Xnew)
 
-        # convert y into 2D tensor before packing
-        y_temp = self.y.view(self.y.size(0), -1)
-        pack = torch.cat((y_temp, Kfs), dim=1)
-        Lffinv_pack = matrix_triangular_solve_compat(pack, Lff, upper=False)
-        # unpack
-        Lffinv_y = Lffinv_pack[:, :y_temp.size(1)]
-        # W = inv(Lff) @ Kfs
-        W = Lffinv_pack[:, y_temp.size(1):]
+        loc, cov = self._conditional(Xnew, self.X, kernel, self.y, f_scale_tril=None,
+                                     Lff=Lff, full_cov=full_cov)
 
-        # loc = Kfs.T @ inv(Kff) @ y
-        loc_shape = Xnew.size()[:1] + self.y.size()[1:]
-        loc = W.t().matmul(Lffinv_y).view(loc_shape)
-
-        # cov = Kss - Ksf @ inv(Kff) @ Kfs
-        if full_cov:
-            Kss = kernel(Xnew)
-            if not noiseless:
-                Kss = Kss + noise.expand(Xnew.size(0)).diag()
-            Qss = W.t().matmul(W)
-            cov = Kss - Qss
-        else:
-            Kssdiag = kernel(Xnew, diag=True)
-            if not noiseless:
-                Kssdiag = Kssdiag + noise.expand(Xnew.size(0))
-            Qssdiag = (W ** 2).sum(dim=0)
-            cov = Kssdiag - Qssdiag
-
-        # expand cov from N to N x 1 to N x D or N x N to N x N x 1 to N x N x D
-        cov_shape_pre = cov.size() + torch.Size([1] * (self.y.dim()-1))
-        cov_shape = cov.size() + self.y.size()[1:]
-        cov = cov.view(cov_shape_pre).expand(cov_shape)
+        if full_cov and not noiseless:
+            cov = cov + noise.expand(Xnew.shape[0]).diag()
+        if not full_cov and not noiseless:
+            cov = cov + noise.expand(Xnew.shape[0])
 
         return loc, cov

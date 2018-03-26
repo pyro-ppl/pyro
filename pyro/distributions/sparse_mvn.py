@@ -17,17 +17,17 @@ class SparseMultivariateNormal(TorchDistribution):
     Implements fast computation for log probability of Multivariate Normal distribution
     when the covariance matrix has the form::
 
-        covariance_matrix = D + W.T @ W.
+        covariance_matrix = W.T @ W + D.
 
     Here D is a diagonal vector and ``W`` is a matrix of size ``M x N``. The
     computation will be beneficial when ``M << N``.
 
     :param torch.Tensor loc: Mean.
         Must be a 1D or 2D tensor with the last dimension of size N.
-    :param torch.Tensor D_term: D term of covariance matrix.
-        Must be in 1 dimensional of size N.
     :param torch.Tensor W_term: W term of covariance matrix.
         Must be in 2 dimensional of size M x N.
+    :param torch.Tensor D_term: D term of covariance matrix.
+        Must be in 1 dimensional of size N.
     :param float trace_term: A optional term to be added into Mahalabonis term
         according to p(y) = N(y|loc, cov).exp(-1/2 * trace_term).
     """
@@ -36,7 +36,7 @@ class SparseMultivariateNormal(TorchDistribution):
     support = constraints.real
     has_rsample = True
 
-    def __init__(self, loc, D_term, W_term, trace_term=None):
+    def __init__(self, loc, W_term, D_term, trace_term=None):
         if loc.size(-1) != D_term.size(0):
             raise ValueError("Expected loc.size() == D_term.size(), but got {} vs {}".format(
                 loc.size(), D_term.size()))

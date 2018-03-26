@@ -32,14 +32,14 @@ class MultiClass(Likelihood):
                              "one for number of classes and one for number of data.")
         # swap class dimension and data dimension
         f_swap = f.transpose(-2, -1)  # -> num_data x num_classes
-        if f.size(-1) != self.num_classes:
+        if f_swap.shape[-1] != self.num_classes:
             raise ValueError("Number of Gaussian processes should be equal to the "
                              "number of classes. Expected {} but got {}."
-                             .format(self.num_classes, f.size(-1)))
+                             .format(self.num_classes, f_swap.shape[-1]))
         f_res = self.response_function(f_swap)
         if y is None:
             return pyro.sample("y", dist.Categorical(f_res))
         else:
-            f_shape = y.size() + f_swap.size()[-1:]
+            f_shape = y.shape + (f_swap.shape[-1],)
             return pyro.sample("y", dist.Categorical(f_res.expand(f_shape))
                                .reshape(extra_event_dims=y.dim()), obs=y)

@@ -15,7 +15,7 @@ T = namedtuple("TestGPModel", ["model_class", "X", "y", "kernel", "likelihood"])
 
 X = torch.tensor([[1, 5, 3], [4, 3, 7]])
 y1D = torch.tensor([2, 1])
-y2D = torch.tensor([[1, 3, 1, -1], [2, 3, 4, 1]])
+y2D = torch.tensor([[1, 2], [3, 3], [1, 4], [-1, 1]])
 kernel = RBF(input_dim=3, variance=torch.tensor([1]), lengthscale=torch.tensor([3]))
 noise = torch.tensor([1e-6])
 likelihood = Gaussian(noise)
@@ -71,15 +71,15 @@ def test_model_forward(model_class, X, y, kernel, likelihood):
     loc0, cov0 = gp(Xnew, full_cov=True)
     loc1, var1 = gp(Xnew, full_cov=False)
     assert loc0.dim() == y.dim()
-    assert loc0.size(0) == Xnew.size(0)
+    assert loc0.shape[-1] == Xnew.shape[0]
     # test latent shape
-    assert loc0.size()[1:] == y.size()[1:]
-    assert cov0.size()[2:] == y.size()[1:]
-    assert cov0.size(0) == cov0.size(1)
-    assert cov0.size(0) == Xnew.size(0)
+    assert loc0.shape[:-1] == y.shape[:-1]
+    assert cov0.shape[:-2] == y.shape[:-1]
+    assert cov0.shape[-1] == cov0.shape[-2]
+    assert cov0.shape[-1] == Xnew.shape[0]
     assert_equal(loc0, loc1)
-    n = Xnew.size(0)
-    cov0_diag = torch.stack([mat.diag() for mat in cov0.view(-1, n, n)]).view(cov0.size()[1:])
+    n = Xnew.shape[0]
+    cov0_diag = torch.stack([mat.diag() for mat in cov0.view(-1, n, n)]).view(var1.shape)
     assert_equal(cov0_diag, var1)
 
     # test trivial forward
@@ -118,12 +118,12 @@ def test_model_forward_with_empty_latent_shape(model_class, X, y, kernel, likeli
     Xnew = torch.tensor([[2, 3, 1]])
     loc0, cov0 = gp(Xnew, full_cov=True)
     loc1, var1 = gp(Xnew, full_cov=False)
-    assert loc0.size(0) == Xnew.size(0)
-    assert cov0.size(0) == cov0.size(1)
-    assert cov0.size(0) == Xnew.size(0)
+    assert loc0.shape[-1] == Xnew.shape[0]
+    assert cov0.shape[-1] == cov0.shape[-2]
+    assert cov0.shape[-1] == Xnew.shape[0]
     # test latent shape
-    assert loc0.size()[1:] == torch.Size([])
-    assert cov0.size()[2:] == torch.Size([])
+    assert loc0.size()[:-1] == torch.Size([])
+    assert cov0.size()[:-2] == torch.Size([])
     assert_equal(loc0, loc1)
     assert_equal(cov0.diag(), var1)
 
