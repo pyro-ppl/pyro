@@ -24,7 +24,7 @@ class Delta(TorchDistribution):
         self.v = v
         super(Delta, self).__init__(*args, **kwargs)
 
-    params = {'v': constraints.real}
+    arg_constraints = {'v': constraints.real}
     support = constraints.real
 
     @property
