@@ -10,6 +10,7 @@ from inspect import isclass
 
 import torch
 
+import pyro.distributions as dist
 import pyro.infer as infer
 import pyro.poutine as poutine
 from pyro.distributions.distribution import Distribution
@@ -425,14 +426,17 @@ def random_module(name, nn_module, prior, *args, **kwargs):
 
 
 def enable_validation(is_validate=True):
+    dist.enable_validation(is_validate)
     infer.enable_validation(is_validate)
 
 
 @contextmanager
 def validation_enabled(is_validate=True):
     infer_validation_status = infer.is_validation_enabled()
+    distribution_validation_status = dist.is_validation_enabled()
     try:
         enable_validation(is_validate)
         yield
     finally:
+        dist.enable_validation(distribution_validation_status)
         infer.enable_validation(infer_validation_status)
