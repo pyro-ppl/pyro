@@ -31,6 +31,14 @@ class ContinuationMessenger(Messenger):
             msg["done"] = True
             msg["continuation"] = self.cont_fn
 
+    def _pyro_param(self, msg):
+        """
+        TODO docs
+        """
+        if self.escape_fn(msg) and not msg["done"]:
+            msg["done"] = True
+            msg["continuation"] = self.cont_fn
+
 
 class ContinuationPoutine(Poutine):
     def __init__(self, fn, escape_fn, cont_fn, first_available_dim):
