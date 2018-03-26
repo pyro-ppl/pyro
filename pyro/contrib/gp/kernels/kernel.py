@@ -46,7 +46,7 @@ class Kernel(Parameterized):
         :param torch.Tensor Z: An optional 2D tensor of size :math:`M \\times input\_dim`.
         :param bool diag: A flag to decide if we want to return a full covariance matrix
             or just its diagonal part.
-        :return: Covariance matrix of :math:`X` and :math:`Z` with size :math:`N \\times M`.
+        :returns: Covariance matrix of :math:`X` and :math:`Z` with size :math:`N \\times M`.
         :rtype: torch.Tensor
         """
         raise NotImplementedError
@@ -57,7 +57,7 @@ class Kernel(Parameterized):
             a 2D tensor of size :math:`N \times 1`.
 
         :param torch.Tensor X: A 1D or 2D tensor.
-        :return: A 2D slice of :math:`X`.
+        :returns: A 2D slice of :math:`X`.
         :rtype: torch.Tensor
         """
         if X.dim() == 2:

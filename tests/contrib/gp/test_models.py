@@ -72,12 +72,15 @@ def test_model_forward(model_class, X, y, kernel, likelihood):
     loc1, var1 = gp(Xnew, full_cov=False)
     assert loc0.dim() == y.dim()
     assert loc0.size(0) == Xnew.size(0)
-    assert loc0.size()[1:] == y.size()[1:]  # test latent shape
-    assert cov0.dim() == 2
+    # test latent shape
+    assert loc0.size()[1:] == y.size()[1:]
+    assert cov0.size()[2:] == y.size()[1:]
     assert cov0.size(0) == cov0.size(1)
     assert cov0.size(0) == Xnew.size(0)
     assert_equal(loc0, loc1)
-    assert_equal(cov0.diag(), var1)
+    n = Xnew.size(0)
+    cov0_diag = torch.stack([mat.diag() for mat in cov0.view(-1, n, n)]).view(cov0.size()[1:])
+    assert_equal(cov0_diag, var1)
 
     # test trivial forward
     # for variational models, inferences depend on variational parameters, so skip
@@ -86,7 +89,7 @@ def test_model_forward(model_class, X, y, kernel, likelihood):
     else:
         loc, cov = gp(X, full_cov=True)
         assert_equal(loc, y)
-        assert_equal(cov.abs().sum().item(), 0)
+        assert_equal(cov.norm().item(), 0)
 
 
 @pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
@@ -95,5 +98,44 @@ def test_inference(model_class, X, y, kernel, likelihood):
         gp = model_class(X, y, kernel, X, likelihood)
     else:
         gp = model_class(X, y, kernel, likelihood)
+
+    gp.optimize(num_steps=1)
+
+
+@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
+def test_model_forward_with_empty_latent_shape(model_class, X, y, kernel, likelihood):
+    # regression models don't use latent_shape (default=torch.Size([]))
+    if model_class is GPRegression or model_class is SparseGPRegression:
+        return
+    elif model_class is VariationalGP:
+        gp = model_class(X, y, kernel, likelihood, latent_shape=torch.Size([]))
+    else:  # model_class is SparseVariationalGP
+        gp = model_class(X, y, kernel, X, likelihood, latent_shape=torch.Size([]))
+
+    gp.optimize(num_steps=1)
+
+    # test shape
+    Xnew = torch.tensor([[2, 3, 1]])
+    loc0, cov0 = gp(Xnew, full_cov=True)
+    loc1, var1 = gp(Xnew, full_cov=False)
+    assert loc0.size(0) == Xnew.size(0)
+    assert cov0.size(0) == cov0.size(1)
+    assert cov0.size(0) == Xnew.size(0)
+    # test latent shape
+    assert loc0.size()[1:] == torch.Size([])
+    assert cov0.size()[2:] == torch.Size([])
+    assert_equal(loc0, loc1)
+    assert_equal(cov0.diag(), var1)
+
+
+@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
+def test_inference_with_empty_latent_shape(model_class, X, y, kernel, likelihood):
+    # regression models don't use latent_shape (default=torch.Size([]))
+    if model_class is GPRegression or model_class is SparseGPRegression:
+        return
+    elif model_class is VariationalGP:
+        gp = model_class(X, y, kernel, likelihood, latent_shape=torch.Size([]))
+    else:  # model_class is SparseVariationalGP
+        gp = model_class(X, y, kernel, X, likelihood, latent_shape=torch.Size([]))
 
     gp.optimize(num_steps=1)

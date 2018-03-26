@@ -21,32 +21,37 @@ class GPRegression(Model):
     Carl E. Rasmussen, Christopher K. I. Williams
 
     :param torch.Tensor X: A 1D or 2D tensor of input data for training.
-    :param torch.Tensor y: A 1D or 2D tensor of output data for training.
+    :param torch.Tensor y: A tensor of output data for training with
+        ``y.size(0)`` equals to number of data points.
     :param pyro.contrib.gp.kernels.Kernel kernel: A Pyro kernel object.
     :param torch.Tensor noise: An optional noise parameter.
+    :param float jitter: An additional jitter to help stablize Cholesky decomposition.
     """
-    def __init__(self, X, y, kernel, noise=None):
-        super(GPRegression, self).__init__()
-        self.set_data(X, y)
-        self.kernel = kernel
+    def __init__(self, X, y, kernel, noise=None, jitter=1e-6):
+        latent_shape = torch.Size([])
+        super(GPRegression, self).__init__(X, y, kernel, latent_shape, jitter)
 
-        if noise is None:
-            noise = self.X.data.new([1])
+        noise = self.X.new([1]) if noise is None else noise
         self.noise = Parameter(noise)
-        self.set_constraint("noise", constraints.positive)
+        self.set_constraint("noise", constraints.greater_than(self.jitter))
 
     def model(self):
         self.set_mode("model")
 
-        kernel = self.kernel
         noise = self.get_param("noise")
 
-        K = kernel(self.X) + noise.expand(self.X.size(0)).diag()
-        # correct event_shape for y
-        y_t = self.y.t() if self.y.dim() == 2 else self.y
-        zero_loc = y_t.new([0]).expand(y_t.size())
-        pyro.sample("y", dist.MultivariateNormal(zero_loc, K).reshape(
-            extra_event_dims=zero_loc.dim() - 1), obs=y_t)
+        Kff = self.kernel(self.X) + noise.expand(self.X.shape[0]).diag()
+        Lff = Kff.potrf(upper=False)
+
+        if self.y is None:
+            zero_loc = self.X.new([0]).expand(self.X.shape[0])
+            return pyro.sample("y", dist.MultivariateNormal(zero_loc, scale_tril=Lff))
+        else:
+            # convert y_shape from N x D to D x N
+            y = self.y.permute(list(range(1, self.y.dim())) + [0])
+            zero_loc = self.X.new([0]).expand_as(y)
+            return pyro.sample("y", dist.MultivariateNormal(zero_loc, scale_tril=Lff)
+                               .reshape(extra_event_dims=y.dim()-1), obs=y)
 
     def guide(self):
         self.set_mode("guide")
@@ -66,11 +71,10 @@ class GPRegression(Model):
         :param torch.Tensor Xnew: A 1D or 2D tensor.
         :param bool full_cov: Predicts full covariance matrix or just its diagonal.
         :param bool noiseless: Includes noise in the prediction or not.
-        :return: loc and covariance matrix of :math:`p(y^*|Xnew)`.
+        :returns: loc and covariance matrix of :math:`p(y^*|Xnew)`.
         :rtype: torch.Tensor and torch.Tensor
         """
-        self._check_Xnew_shape(Xnew, self.X)
-
+        self._check_Xnew_shape(Xnew)
         kernel, noise = self.guide()
 
         Kff = kernel(self.X)
@@ -78,15 +82,18 @@ class GPRegression(Model):
         Kfs = kernel(self.X, Xnew)
         Lff = Kff.potrf(upper=False)
 
-        y = self.y.unsqueeze(1) if self.y.dim() == 1 else self.y
-        pack = torch.cat((y, Kfs), dim=1)
+        # convert y into 2D tensor before packing
+        y_temp = self.y.view(self.y.size(0), -1)
+        pack = torch.cat((y_temp, Kfs), dim=1)
         Lffinv_pack = matrix_triangular_solve_compat(pack, Lff, upper=False)
-        Lffinv_y = Lffinv_pack[:, :y.size(1)].view(self.y.size())
+        # unpack
+        Lffinv_y = Lffinv_pack[:, :y_temp.size(1)]
         # W = inv(Lff) @ Kfs
-        W = Lffinv_pack[:, y.size(1):]
+        W = Lffinv_pack[:, y_temp.size(1):]
 
         # loc = Kfs.T @ inv(Kff) @ y
-        loc = W.t().matmul(Lffinv_y)
+        loc_shape = Xnew.size()[:1] + self.y.size()[1:]
+        loc = W.t().matmul(Lffinv_y).view(loc_shape)
 
         # cov = Kss - Ksf @ inv(Kff) @ Kfs
         if full_cov:
@@ -101,5 +108,10 @@ class GPRegression(Model):
                 Kssdiag = Kssdiag + noise.expand(Xnew.size(0))
             Qssdiag = (W ** 2).sum(dim=0)
             cov = Kssdiag - Qssdiag
+
+        # expand cov from N to N x 1 to N x D or N x N to N x N x 1 to N x N x D
+        cov_shape_pre = cov.size() + torch.Size([1] * (self.y.dim()-1))
+        cov_shape = cov.size() + self.y.size()[1:]
+        cov = cov.view(cov_shape_pre).expand(cov_shape)
 
         return loc, cov
