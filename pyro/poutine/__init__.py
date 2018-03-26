@@ -8,6 +8,7 @@ from pyro.poutine import util
 # poutines
 from .block_poutine import BlockPoutine
 from .condition_poutine import ConditionPoutine
+from .continuation_poutine import ContinuationMessenger, ContinuationPoutine  # noqa: F401
 from .enumerate_poutine import EnumeratePoutine  # noqa: F401
 from .escape_poutine import EscapePoutine
 from .indep_poutine import IndepMessenger  # noqa: F401
@@ -124,6 +125,13 @@ def condition(fn, data):
     with those values
     """
     return ConditionPoutine(fn, data=data)
+
+
+def continuation(fn, escape_fn, continuation_fn, first_available_dim=None):
+    """
+    TODO docs
+    """
+    return ContinuationPoutine(fn, escape_fn, continuation_fn, first_available_dim)
 
 
 def infer_config(fn, config_fn):

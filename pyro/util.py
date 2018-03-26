@@ -231,7 +231,9 @@ def apply_stack(initial_msg):
     # msg is used to pass information up and down the stack
     msg = initial_msg
 
+    bottom_ptr = 0
     counter = 0
+    msg["continuation"] = default_process_message
     # go until time to stop?
     for frame in stack:
         validate_message(msg)
@@ -240,17 +242,22 @@ def apply_stack(initial_msg):
 
         frame._process_message(msg)
 
+        if msg["done"] and msg["continuation"] is not None:
+            msg["continuation"](msg)
+            msg["continuation"] = None
+            for frame2 in reversed(stack[bottom_ptr:counter]):
+                frame2._postprocess_message(msg)
+            bottom_ptr = counter
+
         if msg["stop"]:
             break
 
-    default_process_message(msg)
+    if not msg["done"]:
+        default_process_message(msg)
 
-    for frame in reversed(stack[0:counter]):
-        frame._postprocess_message(msg)
-
-    cont = msg["continuation"]
-    if cont is not None:
-        cont(msg)
+    if bottom_ptr < counter:
+        for frame in reversed(stack[bottom_ptr:counter]):
+            frame._postprocess_message(msg)
 
     return None
 
