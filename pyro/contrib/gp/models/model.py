@@ -124,14 +124,16 @@ class GPModel(Parameterized):
             Lff = Kff.potrf(upper=False)
         Kfs = kernel(X, Xnew)
 
+        # convert f_loc_shape from latent_shape x N to N x latent_shape
+        f_loc = f_loc.permute(-1, *range(len(latent_shape)))
         # convert f_loc to 2D tensor for packing
-        f_loc_2D = f_loc.view(-1, N).t()
+        f_loc_2D = f_loc.reshape(N, -1)
         pack = torch.cat((f_loc_2D, Kfs), dim=1)
         if f_scale_tril is not None:
             # convert f_scale_tril_shape from latent_shape x N x N to N x N x latent_shape
-            f_scale_tril = f_scale_tril.permute(-2, -1, *range(len(latent_shape))).contiguous()
+            f_scale_tril = f_scale_tril.permute(-2, -1, *range(len(latent_shape)))
             # convert f_scale_tril to 2D tensor for packing
-            f_scale_tril_2D = f_scale_tril.view(N, -1)
+            f_scale_tril_2D = f_scale_tril.reshape(N, -1)
             pack = torch.cat((pack, f_scale_tril_2D), dim=1)
 
         Lffinv_pack = matrix_triangular_solve_compat(pack, Lff, upper=False)
@@ -141,7 +143,7 @@ class GPModel(Parameterized):
         Wt = W.t()
 
         loc_shape = latent_shape + (M,)
-        loc = v_2D.t().matmul(W).view(loc_shape)
+        loc = v_2D.t().matmul(W).reshape(loc_shape)
 
         if full_cov:
             Kss = kernel(Xnew)
@@ -156,7 +158,7 @@ class GPModel(Parameterized):
             # unpack
             S_2D = Lffinv_pack[:, -f_scale_tril_2D.shape[1]:]
             Wt_S_shape = (Xnew.shape[0],) + f_scale_tril.shape[1:]
-            Wt_S = Wt.matmul(S_2D).view(Wt_S_shape)
+            Wt_S = Wt.matmul(S_2D).reshape(Wt_S_shape)
             # convert Wt_S_shape from M x N x latent_shape to latent_shape x M x N
             Wt_S = Wt_S.permute(list(range(2, Wt_S.dim())) + [0, 1])
 

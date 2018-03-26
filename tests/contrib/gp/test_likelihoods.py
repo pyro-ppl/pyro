@@ -64,7 +64,7 @@ TEST_IDS = ["_".join([t[0].__name__, t[4].__class__.__name__.split(".")[-1],
 @pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
 def test_inference(model_class, X, y, kernel, likelihood):
     if isinstance(likelihood, MultiClass):
-        latent_shape = y.shape[:-1] + torch.Size([likelihood.num_classes])
+        latent_shape = y.shape[:-1] + (likelihood.num_classes,)
     else:
         latent_shape = y.shape[:-1]
     if model_class is SparseVariationalGP:

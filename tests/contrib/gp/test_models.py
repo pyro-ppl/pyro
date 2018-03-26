@@ -79,7 +79,7 @@ def test_model_forward(model_class, X, y, kernel, likelihood):
     assert cov0.shape[-1] == Xnew.shape[0]
     assert_equal(loc0, loc1)
     n = Xnew.shape[0]
-    cov0_diag = torch.stack([mat.diag() for mat in cov0.view(-1, n, n)]).view(var1.shape)
+    cov0_diag = torch.stack([mat.diag() for mat in cov0.view(-1, n, n)]).reshape(var1.shape)
     assert_equal(cov0_diag, var1)
 
     # test trivial forward
@@ -122,8 +122,8 @@ def test_model_forward_with_empty_latent_shape(model_class, X, y, kernel, likeli
     assert cov0.shape[-1] == cov0.shape[-2]
     assert cov0.shape[-1] == Xnew.shape[0]
     # test latent shape
-    assert loc0.size()[:-1] == torch.Size([])
-    assert cov0.size()[:-2] == torch.Size([])
+    assert loc0.shape[:-1] == torch.Size([])
+    assert cov0.shape[:-2] == torch.Size([])
     assert_equal(loc0, loc1)
     assert_equal(cov0.diag(), var1)
 

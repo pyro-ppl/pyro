@@ -153,7 +153,7 @@ class SparseGPRegression(GPModel):
         L = K.potrf(upper=False)
 
         # convert y into 2D tensor for packing
-        y_2D = self.y.view(-1, N).t()
+        y_2D = self.y.reshape(-1, N).t()
         W_Dinv_y = W_Dinv.matmul(y_2D)
         pack = torch.cat((W_Dinv_y, Ws), dim=1)
         Linv_pack = matrix_triangular_solve_compat(pack, L, upper=False)
@@ -162,7 +162,7 @@ class SparseGPRegression(GPModel):
         Linv_Ws = Linv_pack[:, W_Dinv_y.shape[1]:]
 
         loc_shape = self.y.shape[:-1] + (Xnew.shape[0],)
-        loc = Linv_W_Dinv_y.t().matmul(Linv_Ws).view(loc_shape)
+        loc = Linv_W_Dinv_y.t().matmul(Linv_Ws).reshape(loc_shape)
 
         if full_cov:
             Kss = kernel(Xnew)
