@@ -6,7 +6,6 @@ import scipy.stats as sp
 import torch
 from torch.distributions import AffineTransform, ExpTransform, ComposeTransform
 
-import pyro
 import pyro.distributions as dist
 from pyro.distributions import LogNormal
 from pyro.distributions import TransformedDistribution
