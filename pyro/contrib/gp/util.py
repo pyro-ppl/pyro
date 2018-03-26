@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import torch
-from torch.distributions import transform_to
 import torch.nn as nn
 
 import pyro
@@ -112,13 +111,7 @@ class Parameterized(nn.Module):
             if constraint is None:
                 p = pyro.param(param_name, default_value)
             else:
-                # TODO: use `constraint_to` inside `pyro.param(...)` when available
-                unconstrained_param_name = param_name + "_unconstrained"
-                unconstrained_param_0 = torch.tensor(
-                    transform_to(constraint).inv(default_value).data.clone(),
-                    requires_grad=True)
-                p = transform_to(constraint)(pyro.param(unconstrained_param_name,
-                                                        unconstrained_param_0))
+                p = pyro.param(param_name, default_value, constraint=constraint)
         elif mode == "model":
             p = pyro.sample(param_name, prior)
         else:  # prior != None and mode = "guide"
