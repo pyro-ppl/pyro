@@ -192,18 +192,17 @@ def setup(app):
 PYTORCH_SCRIPT = """
 #!/bin/bash\n
 curl https://raw.githubusercontent.com/uber/pyro/dev/README.md > README.md\n
-echo 'got readme'; ls\n
 PYTORCH_BUILD_COMMIT=$(grep 'git checkout .* a well-tested commit' README.md | cut -f3 -d' ')\n
 echo $PYTORCH_BUILD_COMMIT\n
 PYTHON_VERSION=$(python -c 'import sys; version=sys.version_info[:3]; print("{0}{1}".format(*version))')\n
 WHL_VERSION=${PYTORCH_VERSION}%2B${PYTORCH_BUILD_COMMIT}\n
 PYTORCH_LINUX_PREFIX='https://d2fefpcigoriu7.cloudfront.net/pytorch-build/linux-cpu'\n
 WHL_LOOKUP=PYTORCH_LINUX_PY_${PYTHON_VERSION}_WHL\n
-ls\n
-curl ${PYTORCH_LINUX_PREFIX}/${!WHL_LOOKUP}.whl > pt.whl\n
-echo 'curled'; ls\n
-pip install pt.whl\n
-rm -f pt.whl
+mkdir tmp
+curl ${PYTORCH_LINUX_PREFIX}/${!WHL_LOOKUP}.whl > tmp/pt.whl\n
+echo 'curled'; ls tmp\n
+pip install tmp/*\n
+rm -rf tmp
 """
 
 with open('install.sh', 'w') as f:
