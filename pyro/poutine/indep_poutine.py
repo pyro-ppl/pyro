@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from collections import namedtuple
 
-from .poutine import Messenger
+from .poutine import Messenger, Poutine
 
 
 class CondIndepStackFrame(namedtuple("CondIndepStackFrame", ["name", "dim", "size", "counter"])):
@@ -87,3 +87,14 @@ class IndepMessenger(Messenger):
         frame = CondIndepStackFrame(self.name, self.dim, self.size, self.counter)
         msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
         return None
+
+
+class IndepPoutine(Poutine):
+    """
+    TODO docs
+    """
+    def __init__(self, fn, name, size, dim=None):
+        """
+        TODO docs
+        """
+        super(IndepPoutine, self).__init__(IndepMessenger(name, size, dim), fn)
