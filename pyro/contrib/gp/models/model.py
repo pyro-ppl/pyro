@@ -25,7 +25,7 @@ class GPModel(Parameterized):
         super(GPModel, self).__init__()
         self.set_data(X, y)
         self.kernel = kernel
-        y_batch_shape = self.y.shape[:-1]
+        y_batch_shape = self.y.shape[:-1] if self.y is not None else torch.Size([])
         self.latent_shape = latent_shape if latent_shape is not None else y_batch_shape
         self.jitter = self.X.new([jitter])
 

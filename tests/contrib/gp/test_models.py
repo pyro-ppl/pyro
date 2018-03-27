@@ -1,15 +1,24 @@
 from __future__ import absolute_import, division, print_function
 
-from collections import namedtuple
+from collections import defaultdict, namedtuple
+import logging
 
 import pytest
 import torch
 
+import pyro
 from pyro.contrib.gp.kernels import RBF
 from pyro.contrib.gp.likelihoods import Gaussian
 from pyro.contrib.gp.models import (GPRegression, SparseGPRegression,
                                     VariationalGP, SparseVariationalGP)
+import pyro.distributions as dist
+from pyro.infer.mcmc.hmc import HMC
+from pyro.infer.mcmc.mcmc import MCMC
 from tests.common import assert_equal
+
+logging.basicConfig(format='%(levelname)s %(message)s')
+logger = logging.getLogger('pyro')
+logger.setLevel(logging.INFO)
 
 T = namedtuple("TestGPModel", ["model_class", "X", "y", "kernel", "likelihood"])
 
@@ -139,3 +148,32 @@ def test_inference_with_empty_latent_shape(model_class, X, y, kernel, likelihood
         gp = model_class(X, y, kernel, X, likelihood, latent_shape=torch.Size([]))
 
     gp.optimize(num_steps=1)
+
+
+@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
+def test_hmc(model_class, X, y, kernel, likelihood):
+    if model_class is SparseGPRegression or model_class is SparseVariationalGP:
+        gp = model_class(X, y, kernel, X, likelihood)
+    else:
+        gp = model_class(X, y, kernel, likelihood)
+
+    kernel.set_prior("variance", dist.Uniform(torch.tensor([0.5]), torch.tensor([1.5])))
+    kernel.set_prior("lengthscale", dist.Uniform(torch.tensor([1]), torch.tensor([3])))
+
+    hmc_kernel = HMC(gp.model, step_size=1)
+    mcmc_run = MCMC(hmc_kernel, num_samples=10)
+
+    post_trace = defaultdict(list)
+    for trace, _ in mcmc_run._traces():
+        print("New traceeeeeeeee")
+        variance_name = pyro.param_with_module_name(kernel, "variance")
+        post_trace["variance"].append(trace.nodes[variance_name]["value"])
+        lengthscale_name = pyro.param_with_module_name(kernel, "lengthscale")
+        post_trace["lengthscale"].append(trace.nodes[lengthscale_name]["value"])
+
+    variance_mean = torch.mean(torch.stack(post_trace["variance"]), 0)
+    logger.info("Posterior mean - {}".format("variance"))
+    logger.info(variance_mean)
+    lengthscale_mean = torch.mean(torch.stack(post_trace["lengthscale"]), 0)
+    logger.info("Posterior mean - {}".format("lengthscale"))
+    logger.info(lengthscale_mean)
