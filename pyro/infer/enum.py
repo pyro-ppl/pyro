@@ -2,8 +2,11 @@ from __future__ import absolute_import, division, print_function
 
 from six.moves.queue import LifoQueue
 
+from pyro import infer
 from pyro import poutine
 from pyro.poutine.trace import Trace
+from pyro.poutine.util import prune_subsample_sites
+from pyro.util import check_model_guide_match, check_site_shape, check_traceenum_requirements
 
 
 def _iter_discrete_escape(trace, msg):
@@ -46,6 +49,45 @@ def iter_discrete_traces(graph_type, fn, *args, **kwargs):
         graph_type=graph_type)
     while not queue.empty():
         yield traced_fn.get_trace(*args, **kwargs)
+
+
+def iter_importance_traces(num_particles=1,
+                           graph_type="flat",
+                           max_iarange_nesting=float('inf')):
+    """
+    TODO docs
+    """
+    def _get_traces(model, guide, *args, **kwargs):
+
+        guide = poutine.enum(guide, first_available_dim=max_iarange_nesting)
+
+        for i in range(num_particles):
+            for guide_trace in iter_discrete_traces(graph_type, guide, *args, **kwargs):
+                model_trace = poutine.trace(poutine.replay(model, guide_trace),
+                                            graph_type=graph_type).get_trace(*args, **kwargs)
+
+                if infer.is_validation_enabled():
+                    check_model_guide_match(model_trace, guide_trace)
+
+                guide_trace = prune_subsample_sites(guide_trace)
+                model_trace = prune_subsample_sites(model_trace)
+
+                if infer.is_validation_enabled():
+                    check_traceenum_requirements(model_trace, guide_trace)
+
+                model_trace.compute_batch_log_pdf()
+                guide_trace.compute_score_parts()
+
+                if infer.is_validation_enabled():
+                    for site in model_trace.nodes.values():
+                        if site["type"] == "sample":
+                            check_site_shape(site, max_iarange_nesting)
+                    for site in guide_trace.nodes.values():
+                        if site["type"] == "sample":
+                            check_site_shape(site, max_iarange_nesting)
+
+                yield 1.0/num_particles, model_trace, guide_trace
+    return _get_traces
 
 
 def _config_enumerate(default):

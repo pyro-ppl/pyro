@@ -8,12 +8,11 @@ import torch
 
 import pyro
 import pyro.infer as infer
-import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer import ELBO
+from pyro.infer.enum import iter_importance_traces
 from pyro.infer.util import MultiFrameTensor, get_iarange_stacks, torch_backward, torch_data_sum
-from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_match, check_site_shape, detach_iterable, is_nan
+from pyro.util import detach_iterable, is_nan
 
 
 def _get_baseline_options(site):
@@ -188,19 +187,9 @@ class TraceGraph_ELBO(ELBO):
         runs the guide and runs the model against the guide with
         the result packaged as a tracegraph generator
         """
-
-        for i in range(self.num_particles):
-            guide_trace = poutine.trace(guide,
-                                        graph_type="dense").get_trace(*args, **kwargs)
-            model_trace = poutine.trace(poutine.replay(model, guide_trace),
-                                        graph_type="dense").get_trace(*args, **kwargs)
-            if infer.is_validation_enabled():
-                check_model_guide_match(model_trace, guide_trace)
-            guide_trace = prune_subsample_sites(guide_trace)
-            model_trace = prune_subsample_sites(model_trace)
-
-            weight = 1.0 / self.num_particles
-            yield weight, model_trace, guide_trace
+        return iter_importance_traces(num_particles=self.num_particles,
+                                      graph_type="dense")(
+                                          model, guide, *args, **kwargs)
 
     def loss(self, model, guide, *args, **kwargs):
         """
