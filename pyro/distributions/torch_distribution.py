@@ -210,11 +210,11 @@ class ReshapedDistribution(TorchDistribution):
         return sum_rightmost(self.base_dist.log_prob(value), self.extra_event_dims)
 
     def score_parts(self, value):
-        log_prob_sum, score_function, entropy_term = self.base_dist.score_parts(value)
-        log_prob_sum = sum_rightmost(log_prob_sum, self.extra_event_dims)
+        log_prob, score_function, entropy_term = self.base_dist.score_parts(value)
+        log_prob = sum_rightmost(log_prob, self.extra_event_dims)
         score_function = sum_rightmost(score_function, self.extra_event_dims)
         entropy_term = sum_rightmost(entropy_term, self.extra_event_dims)
-        return ScoreParts(log_prob_sum, score_function, entropy_term)
+        return ScoreParts(log_prob, score_function, entropy_term)
 
     def enumerate_support(self):
         if self.extra_event_dims:

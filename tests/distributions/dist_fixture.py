@@ -84,10 +84,10 @@ class Fixture(object):
         dist_params = self._convert_logits_to_ps(dist_params)
         args, kwargs = self.scipy_arg_fn(**dist_params)
         if self.is_discrete:
-            log_prob_sum = self.scipy_dist.logpmf(self.get_test_data(idx, wrap_tensor=False), *args, **kwargs)
+            log_prob = self.scipy_dist.logpmf(self.get_test_data(idx, wrap_tensor=False), *args, **kwargs)
         else:
-            log_prob_sum = self.scipy_dist.logpdf(self.get_test_data(idx, wrap_tensor=False), *args, **kwargs)
-        return np.sum(log_prob_sum)
+            log_prob = self.scipy_dist.logpdf(self.get_test_data(idx, wrap_tensor=False), *args, **kwargs)
+        return np.sum(log_prob)
 
     def get_scipy_batch_logpdf(self, idx):
         if not self.scipy_arg_fn:

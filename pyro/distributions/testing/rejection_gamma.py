@@ -108,8 +108,8 @@ class ShapeAugmentedGamma(Gamma):
         assert boosted_x is self._unboost_x_cache[0]
         x = self._unboost_x_cache[1]
         _, score_function, _ = self._rejection_gamma.score_parts(x)
-        log_prob_sum = self.log_prob(boosted_x)
-        return ScoreParts(log_prob_sum, score_function, log_prob_sum)
+        log_prob = self.log_prob(boosted_x)
+        return ScoreParts(log_prob, score_function, log_prob)
 
 
 @copy_docs_from(Dirichlet)
