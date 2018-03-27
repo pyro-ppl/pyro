@@ -1,13 +1,36 @@
 from __future__ import absolute_import, division, print_function
 
+import subprocess
 import sys
 
+import os
 from setuptools import find_packages, setup
 
+PROJECT_PATH = os.path.dirname(os.path.abspath(__file__))
+VERSION = """
+# This file is auto-generated with the version information during setup.py installation.
+
+__version__ = '{}'
+"""
+
 # Find pyro version.
-for line in open('pyro/__init__.py'):
-    if line.startswith('__version__ = '):
+for line in open(os.path.join(PROJECT_PATH, 'pyro', '__init__.py')):
+    if line.startswith('version_prefix = '):
         version = line.strip().split()[2][1:-1]
+
+# Append current commit sha to version
+commit_sha = ''
+try:
+    commit_sha = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'],
+                                         cwd=PROJECT_PATH).decode('ascii').strip()
+except OSError:
+    pass
+
+# Write version to _version.py
+if commit_sha:
+    version += '+{}'.format(commit_sha)
+with open(os.path.join(PROJECT_PATH, 'pyro', '_version.py'), 'w') as f:
+    f.write(VERSION.format(version))
 
 # Convert README.md to rst for display at https://pypi.python.org/pypi/pyro-ppl
 # When releasing on pypi, make sure pandoc is on your system:

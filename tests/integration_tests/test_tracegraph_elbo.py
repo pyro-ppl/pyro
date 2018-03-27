@@ -7,16 +7,13 @@ import numpy as np
 import pytest
 import torch
 from torch import nn as nn
-from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
 from pyro.distributions.testing import fakes
-from pyro.distributions import TransformedDistribution
 from pyro.infer import SVI
 from tests.common import assert_equal
-from tests.distributions.test_transformed_distribution import AffineExp
 
 pytestmark = pytest.mark.stage("integration", "integration_batch_2")
 logger = logging.getLogger(__name__)
@@ -327,107 +324,6 @@ class ExponentialGammaTests(TestCase):
 
         assert_equal(0.0, alpha_error, prec=0.04)
         assert_equal(0.0, beta_error, prec=0.04)
-
-
-class LogNormalNormalGuide(nn.Module):
-    def __init__(self, mu_q_log_init, tau_q_log_init):
-        super(LogNormalNormalGuide, self).__init__()
-        self.mu_q_log = Parameter(mu_q_log_init)
-        self.tau_q_log = Parameter(tau_q_log_init)
-
-
-class LogNormalNormalTests(TestCase):
-    def setUp(self):
-        # lognormal-normal model
-        # putting some of the parameters inside of a torch module to
-        # make sure that that functionality is ok (XXX: do this somewhere else in the future)
-        self.mu0 = torch.tensor(1.0)  # normal prior hyperparameter
-        # normal prior hyperparameter
-        self.tau0 = torch.tensor(1.0)
-        # known precision for observation likelihood
-        self.tau = torch.tensor(2.5)
-        self.data = torch.tensor([1.5, 2.2])  # two observations
-        self.tau_n = self.tau0 + len(self.data) * self.tau  # posterior tau
-        mu_numerator = self.mu0 * self.tau0 + self.tau * torch.log(self.data).sum(0)
-        self.mu_n = mu_numerator / self.tau_n  # posterior mu
-        self.log_mu_n = torch.log(self.mu_n)
-        self.log_tau_n = torch.log(self.tau_n)
-
-    def test_elbo_reparameterized(self):
-        self.do_elbo_test(True, 7000, 0.95, 0.001)
-
-    def test_elbo_nonreparameterized(self):
-        self.do_elbo_test(False, 7000, 0.95, 0.001)
-
-    def do_elbo_test(self, reparameterized, n_steps, beta1, lr):
-        logger.info(" - - - - - DO LOGNORMAL-NORMAL ELBO TEST [repa = %s] - - - - - " % reparameterized)
-        pyro.clear_param_store()
-        Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
-        pt_guide = LogNormalNormalGuide(self.log_mu_n.data + 0.17,
-                                        self.log_tau_n.data - 0.143)
-
-        def model():
-            mu_latent = pyro.sample("mu_latent", dist.Normal(self.mu0, torch.pow(self.tau0, -0.5)))
-            sigma = torch.pow(self.tau, -0.5)
-            with pyro.iarange("data", len(self.data)):
-                pyro.sample("obs", dist.LogNormal(mu_latent, sigma), obs=self.data)
-            return mu_latent
-
-        def guide():
-            pyro.module("mymodule", pt_guide)
-            mu_q = torch.exp(pt_guide.mu_q_log).squeeze()
-            tau_q = torch.exp(pt_guide.tau_q_log).squeeze()
-            sigma = torch.pow(tau_q, -0.5)
-            pyro.sample("mu_latent", Normal(mu_q, sigma),
-                        infer=dict(baseline=dict(use_decaying_avg_baseline=True)))
-            with pyro.iarange("data", len(self.data)):
-                pass
-
-        adam = optim.Adam({"lr": lr, "betas": (beta1, 0.999)})
-        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
-
-        for k in range(n_steps):
-            svi.step()
-            mu_error = param_abs_error("mymodule$$$mu_q_log", self.log_mu_n)
-            tau_error = param_abs_error("mymodule$$$tau_q_log", self.log_tau_n)
-            if k % 500 == 0:
-                logger.debug("mu_error, tau_error = %.4f, %.4f" % (mu_error, tau_error))
-
-        assert_equal(0.0, mu_error, prec=0.05)
-        assert_equal(0.0, tau_error, prec=0.05)
-
-    def test_elbo_with_transformed_distribution(self):
-        logger.info(" - - - - - DO LOGNORMAL-NORMAL ELBO TEST [uses TransformedDistribution] - - - - - ")
-        pyro.clear_param_store()
-
-        def model():
-            mu_latent = pyro.sample("mu_latent", dist.Normal(self.mu0, torch.pow(self.tau0, -0.5)))
-            bijector = AffineExp(torch.pow(self.tau, -0.5), mu_latent)
-            x_dist = TransformedDistribution(dist.Normal(0, 1), bijector)
-            pyro.sample("obs0", x_dist, obs=self.data[0])
-            pyro.sample("obs1", x_dist, obs=self.data[1])
-            return mu_latent
-
-        def guide():
-            mu_q_log = pyro.param("mu_q_log",
-                                  torch.tensor(self.log_mu_n + 0.17, requires_grad=True))
-            tau_q_log = pyro.param("tau_q_log",
-                                   torch.tensor(self.log_tau_n - 0.143, requires_grad=True))
-            mu_q, tau_q = torch.exp(mu_q_log), torch.exp(tau_q_log)
-            pyro.sample("mu_latent", dist.Normal(mu_q, torch.pow(tau_q, -0.5)))
-
-        adam = optim.Adam({"lr": 0.001, "betas": (0.95, 0.999)})
-        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
-
-        for k in range(7000):
-            svi.step()
-            mu_error = param_abs_error("mu_q_log", self.log_mu_n)
-            tau_error = param_abs_error("tau_q_log", self.log_tau_n)
-            if k % 500 == 0:
-                logger.debug("mu_error, tau_error = %.4f, %.4f" % (mu_error, tau_error))
-
-        assert_equal(0.0, mu_error, prec=0.05)
-        assert_equal(0.0, tau_error, prec=0.05)
 
 
 @pytest.mark.init(rng_seed=0)
