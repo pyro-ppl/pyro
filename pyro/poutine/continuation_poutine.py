@@ -28,8 +28,10 @@ class ContinuationMessenger(Messenger):
         TODO docs
         """
         if self.escape_fn(msg) and not msg["done"]:
+            msg["infer"]["next_available_dim"] = self.next_available_dim
             msg["done"] = True
             msg["continuation"] = self.cont_fn
+        self.next_available_dim = msg["infer"]["next_available_dim"]
 
     def _pyro_param(self, msg):
         """

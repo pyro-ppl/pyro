@@ -110,6 +110,13 @@ def escape(fn, escape_fn=None):
     return EscapePoutine(fn, escape_fn)
 
 
+def enum(fn, next_available_dim):
+    """
+    TODO docs
+    """
+    return EnumeratePoutine(fn, next_available_dim)
+
+
 def condition(fn, data):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
