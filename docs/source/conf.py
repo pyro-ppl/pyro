@@ -199,7 +199,7 @@ WHL_VERSION=${PYTORCH_VERSION}%2B${PYTORCH_BUILD_COMMIT}\n
 PYTORCH_LINUX_PREFIX='https://d2fefpcigoriu7.cloudfront.net/pytorch-build/linux-cpu'\n
 WHL_LOOKUP=PYTORCH_LINUX_PY_${PYTHON_VERSION}_WHL\n
 mkdir tmp
-curl ${PYTORCH_LINUX_PREFIX}/${!WHL_LOOKUP}.whl > tmp/pt.whl\n
+curl ${PYTORCH_LINUX_PREFIX}/${!WHL_LOOKUP}.whl -o tmp/pt.whl\n
 echo 'curled'; ls tmp\n
 pip install tmp/*\n
 rm -rf tmp
