@@ -28,14 +28,6 @@ class TorchDistributionMixin(Distribution):
         """
         return self.has_rsample
 
-    @property
-    def enumerable(self):
-        """
-        :return: Whether this distribution implements :meth:`enumerate_support`
-        :rtype: bool
-        """
-        return self.has_enumerate_support
-
     def __call__(self, sample_shape=torch.Size()):
         """
         Samples a random value.
@@ -104,12 +96,6 @@ class TorchDistributionMixin(Distribution):
         :rtype: :class:`MaskedDistribution`
         """
         return MaskedDistribution(self, mask)
-
-    def analytic_mean(self):
-        return self.mean
-
-    def analytic_var(self):
-        return self.variance
 
 
 class TorchDistribution(torch.distributions.Distribution, TorchDistributionMixin):

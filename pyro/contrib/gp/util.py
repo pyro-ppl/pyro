@@ -123,7 +123,7 @@ class Parameterized(nn.Module):
             p = pyro.sample(param_name, prior)
         else:  # prior != None and mode = "guide"
             MAP_param_name = param_name + "_MAP"
-            MAP_param_0 = torch.tensor(prior.analytic_mean().data.clone(), requires_grad=True)
+            MAP_param_0 = torch.tensor(prior.mean.data.clone(), requires_grad=True)
             MAP_param = pyro.param(MAP_param_name, MAP_param_0)
             p = pyro.sample(param_name, dist.Delta(MAP_param))
 
