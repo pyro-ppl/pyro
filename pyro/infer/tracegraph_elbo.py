@@ -170,7 +170,7 @@ class TraceGraph_ELBO(ELBO):
     A TraceGraph implementation of ELBO-based SVI. The gradient estimator
     is constructed along the lines of reference [1] specialized to the case
     of the ELBO. It supports arbitrary dependency structure for the model
-    and guide as well as baselines for non-reparameteriable random variables.
+    and guide as well as baselines for non-reparameterizable random variables.
     Where possible, conditional dependency information as recorded in the
     :class:`Trace` is used to reduce the variance of the gradient estimator.
     In particular three kinds of conditional dependency information are
