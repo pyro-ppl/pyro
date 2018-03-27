@@ -59,8 +59,6 @@ def iter_importance_traces(num_particles=1,
     """
     def _get_traces(model, guide, *args, **kwargs):
 
-        guide = poutine.enum(guide, first_available_dim=max_iarange_nesting)
-
         for i in range(num_particles):
             for guide_trace in iter_discrete_traces(graph_type, guide, *args, **kwargs):
                 model_trace = poutine.trace(poutine.replay(model, guide_trace),

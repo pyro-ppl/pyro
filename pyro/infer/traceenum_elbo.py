@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import warnings
 
 import pyro
+import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import iter_importance_traces
@@ -44,6 +45,7 @@ class TraceEnum_ELBO(ELBO):
         runs the guide and runs the model against the guide with
         the result packaged as a trace generator
         """
+        guide = poutine.enum(guide, first_available_dim=self.max_iarange_nesting)
         return iter_importance_traces(num_particles=self.num_particles,
                                       graph_type="flat",
                                       max_iarange_nesting=self.max_iarange_nesting)(
