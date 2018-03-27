@@ -109,7 +109,6 @@ def escape(fn, escape_fn=None):
     """
     # TODO fix
     return ContinuationPoutine(fn, escape_fn, util.escape_cont_fn)
-    # return EscapePoutine(fn, escape_fn)
 
 
 def enum(fn, first_available_dim):
@@ -119,7 +118,6 @@ def enum(fn, first_available_dim):
     return ContinuationPoutine(fn, util.broadcast_enum_filter,
                                util.broadcast_enum_cont,
                                first_available_dim)
-    # return EnumeratePoutine(fn, next_available_dim)
 
 
 def condition(fn, data):
