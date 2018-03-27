@@ -191,4 +191,5 @@ def setup(app):
 
 # @jpchen's hack to get rtd builder to install latest pytorch
 if 'READTHEDOCS' in os.environ:
+    os.system('chmod +x scripts/install_pytorch.sh')
     os.system('sh scripts/install_pytorch.sh')
