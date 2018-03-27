@@ -53,7 +53,7 @@ def _config_enumerate(default):
     def config_fn(site):
         if site["type"] != "sample" or site["is_observed"]:
             return {}
-        if not getattr(site["fn"], "enumerable", False):
+        if not getattr(site["fn"], "has_enumerate_support", False):
             return {}
         if "enumerate" in site["infer"]:
             return {}  # do not overwrite existing config

@@ -39,7 +39,7 @@ class Histogram(dist.Distribution):
     Abstract Histogram distribution of equality-comparable values.
     Should only be used inside Marginal.
     """
-    enumerable = True
+    has_enumerate_support = True
 
     @util.memoize
     def _dist_and_values(self, *args, **kwargs):

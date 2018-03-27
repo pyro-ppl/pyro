@@ -31,7 +31,7 @@ class Distribution(object):
     with inference algorithms.
     """
     reparameterized = False
-    enumerable = False
+    has_enumerate_support = False
 
     def __call__(self, *args, **kwargs):
         """
