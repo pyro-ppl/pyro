@@ -10,7 +10,7 @@ from .block_poutine import BlockPoutine
 from .condition_poutine import ConditionPoutine
 from .continuation_poutine import ContinuationMessenger, ContinuationPoutine  # noqa: F401
 from .enumerate_poutine import EnumeratePoutine  # noqa: F401
-from .escape_poutine import EscapePoutine
+from .escape_poutine import EscapePoutine  # noqa: F401
 from .indep_poutine import IndepMessenger  # noqa: F401
 from .infer_config_poutine import InferConfigPoutine
 from .lift_poutine import LiftPoutine
@@ -107,14 +107,19 @@ def escape(fn, escape_fn=None):
     raise a NonlocalExit exception that stops execution
     and returns the offending site.
     """
-    return EscapePoutine(fn, escape_fn)
+    # TODO fix
+    return ContinuationPoutine(fn, escape_fn, util.escape_cont_fn)
+    # return EscapePoutine(fn, escape_fn)
 
 
-def enum(fn, next_available_dim):
+def enum(fn, first_available_dim):
     """
     TODO docs
     """
-    return EnumeratePoutine(fn, next_available_dim)
+    return ContinuationPoutine(fn, util.broadcast_enum_filter,
+                               util.broadcast_enum_cont,
+                               first_available_dim)
+    # return EnumeratePoutine(fn, next_available_dim)
 
 
 def condition(fn, data):
