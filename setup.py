@@ -19,11 +19,16 @@ for line in open(os.path.join(PROJECT_PATH, 'pyro', '__init__.py')):
         version = line.strip().split()[2][1:-1]
 
 # Append current commit sha to version
-commit_sha = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'],
-                                     cwd=PROJECT_PATH).strip()
+commit_sha = ''
+try:
+    commit_sha = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'],
+                                         cwd=PROJECT_PATH).decode('ascii').strip()
+except OSError:
+    pass
 
 # Write version to _version.py
-version += '+{}'.format(commit_sha)
+if commit_sha:
+    version += '+{}'.format(commit_sha)
 with open(os.path.join(PROJECT_PATH, 'pyro', '_version.py'), 'w') as f:
     f.write(VERSION.format(version))
 
