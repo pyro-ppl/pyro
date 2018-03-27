@@ -7,7 +7,6 @@ import networkx
 import torch
 
 import pyro
-import pyro.infer as infer
 from pyro.distributions.util import is_identically_zero
 from pyro.infer import ELBO
 from pyro.infer.enum import iter_importance_traces
@@ -234,18 +233,6 @@ class TraceGraph_ELBO(ELBO):
         return loss
 
     def _loss_and_grads_particle(self, weight, model_trace, guide_trace):
-        # have the trace compute all the individual (batch) log pdf terms
-        # and score function terms (if present) so that they are available below
-        model_trace.compute_batch_log_pdf()
-        guide_trace.compute_score_parts()
-        if infer.is_validation_enabled():
-            for site in model_trace.nodes.values():
-                if site["type"] == "sample":
-                    check_site_shape(site, self.max_iarange_nesting)
-            for site in guide_trace.nodes.values():
-                if site["type"] == "sample":
-                    check_site_shape(site, self.max_iarange_nesting)
-
         # compute elbo for reparameterized nodes
         non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
         elbo, surrogate_elbo = _compute_elbo_reparam(model_trace, guide_trace, non_reparam_nodes)
