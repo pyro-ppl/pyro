@@ -189,28 +189,7 @@ def setup(app):
     app.connect("autodoc-skip-member", skip)
 """
 
-PYTORCH_SCRIPT = """
-#!/bin/bash\n
-pip install --upgrade pip
-curl https://raw.githubusercontent.com/uber/pyro/dev/README.md > README.md\n
-PYTORCH_BUILD_COMMIT=$(grep 'git checkout .* a well-tested commit' README.md | cut -f3 -d' ')\n
-PYTORCH_VERSION=0.4.0a0
-echo $PYTORCH_BUILD_COMMIT\n
-PYTHON_VERSION=$(python -c 'import sys; version=sys.version_info[:3]; print("{0}{1}".format(*version))')\n
-WHL_VERSION=${PYTORCH_VERSION}+${PYTORCH_BUILD_COMMIT}\n
-PYTORCH_LINUX_PREFIX='https://d2fefpcigoriu7.cloudfront.net/pytorch-build/linux-cpu'\n
-WHL_LOOKUP="torch-${WHL_VERSION}-cp27-cp27mu-linux_x86_64"
-curl -o ${WHL_LOOKUP}.whl ${PYTORCH_LINUX_PREFIX}/${!WHL_LOOKUP}.whl\n
-echo 'curled'; ls *.whl\n
-cat *.whl\n
-pip install ${!WHL_LOOKUP}.whl\n
-rm -f ${!WHL_LOOKUP}.whl
-"""
-
-with open('install.sh', 'w') as f:
-    f.write(PYTORCH_SCRIPT)
-
 # @jpchen's hack to get rtd builder to install latest pytorch
 if 'READTHEDOCS' in os.environ:
-    os.system('bash install.sh')
+    os.system('curl -o install.sh https://gist.githubusercontent.com/jpchen/32325c3e9c9944947dd3f6f1586c5829/raw/343b033ce40caf53123305f18a793553953edef5/tst.sh')
     os.system('rm -f install.sh')
