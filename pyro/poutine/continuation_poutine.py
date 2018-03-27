@@ -25,6 +25,10 @@ class ContinuationMessenger(Messenger):
         self.next_available_dim = self.first_available_dim
         return super(ContinuationMessenger, self).__enter__()
 
+    def _postprocess_message(self, msg):
+        if "next_available_dim" in msg["infer"]:
+            self.next_available_dim = msg["infer"]["next_available_dim"]
+
     def _pyro_sample(self, msg):
         """
         TODO docs
@@ -33,7 +37,6 @@ class ContinuationMessenger(Messenger):
             msg["infer"]["next_available_dim"] = self.next_available_dim
             msg["done"] = True
             msg["continuation"] = self.cont_fn
-            self.next_available_dim = self.next_available_dim + 1
 
     def _pyro_param(self, msg):
         """
