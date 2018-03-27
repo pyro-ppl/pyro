@@ -33,7 +33,7 @@ class Trace_ELBO(ELBO):
     non-reparameterizable random variables are present. The Rao-Blackwellization is
     partial in that it only uses conditional independence information that is marked
     by :class:`~pyro.iarange` contexts. For more fine-grained Rao-Blackwellization,
-    see :class:`TraceGraph_ELBO`.
+    see :class:`~pyro.infer.tracegraph_elbo.TraceGraph_ELBO`.
 
     References
 

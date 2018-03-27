@@ -172,12 +172,12 @@ class TraceGraph_ELBO(ELBO):
     of the ELBO. It supports arbitrary dependency structure for the model
     and guide as well as baselines for non-reparameterizable random variables.
     Where possible, conditional dependency information as recorded in the
-    :class:`Trace` is used to reduce the variance of the gradient estimator.
+    :class:`~pyro.poutine.trace.Trace` is used to reduce the variance of the gradient estimator.
     In particular three kinds of conditional dependency information are
     used to reduce variance:
     - the sequential order of samples (z is sampled after y => y does not depend on z)
-    - :class:`~pyro.iarange` contexts
-    - :class:`~pyro.irange` contexts
+    - :class:`~pyro.iarange` generators
+    - :class:`~pyro.irange` generators
 
     References
 
