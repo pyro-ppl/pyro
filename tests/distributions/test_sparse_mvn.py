@@ -14,7 +14,7 @@ def test_scale_tril():
     cov = D.diag() + W.t().matmul(W)
 
     mvn = MultivariateNormal(loc, cov)
-    sparse_mvn = SparseMultivariateNormal(loc, D, W)
+    sparse_mvn = SparseMultivariateNormal(loc, W, D)
 
     assert_equal(mvn.scale_tril, sparse_mvn.scale_tril)
 
@@ -27,7 +27,7 @@ def test_log_prob():
     cov = D.diag() + W.t().matmul(W)
 
     mvn = MultivariateNormal(loc, cov)
-    sparse_mvn = SparseMultivariateNormal(loc, D, W)
+    sparse_mvn = SparseMultivariateNormal(loc, W, D)
 
     assert_equal(mvn.log_prob(x), sparse_mvn.log_prob(x))
 
@@ -39,6 +39,6 @@ def test_variance():
     cov = D.diag() + W.t().matmul(W)
 
     mvn = MultivariateNormal(loc, cov)
-    sparse_mvn = SparseMultivariateNormal(loc, D, W)
+    sparse_mvn = SparseMultivariateNormal(loc, W, D)
 
     assert_equal(mvn.variance, sparse_mvn.variance)
