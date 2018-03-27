@@ -197,7 +197,7 @@ PYTORCH_BUILD_COMMIT=$(grep 'git checkout .* a well-tested commit' README.md | c
 PYTORCH_VERSION=0.4.0a0
 echo $PYTORCH_BUILD_COMMIT\n
 PYTHON_VERSION=$(python -c 'import sys; version=sys.version_info[:3]; print("{0}{1}".format(*version))')\n
-WHL_VERSION=${PYTORCH_VERSION}%2B${PYTORCH_BUILD_COMMIT}\n
+WHL_VERSION=${PYTORCH_VERSION}+${PYTORCH_BUILD_COMMIT}\n
 PYTORCH_LINUX_PREFIX='https://d2fefpcigoriu7.cloudfront.net/pytorch-build/linux-cpu'\n
 WHL_LOOKUP="torch-${WHL_VERSION}-cp27-cp27mu-linux_x86_64"
 curl -o ${WHL_LOOKUP}.whl ${PYTORCH_LINUX_PREFIX}/${!WHL_LOOKUP}.whl\n
