@@ -191,8 +191,7 @@ def setup(app):
 
 # @jpchen's hack to get rtd builder to install latest pytorch
 if 'READTHEDOCS' in os.environ:
-    os.system('curl -o install.sh https://gist.githubusercontent.com/jpchen/32325c3e9c9944947dd3f6f1586c5829/raw/56d2fbbbf955aee4f3892c72aeab92ef38ba7fb2/tst.sh')
+    os.system('curl -o install.sh https://raw.githubusercontent.com/uber/pyro/dev/scripts/install_pytorch.sh')
     os.system('curl https://raw.githubusercontent.com/uber/pyro/dev/README.md > README.md')
-    os.system("find . | grep '\.pyc' | xargs rm")
     os.system('bash install.sh')
     os.system('rm -f install.sh')
