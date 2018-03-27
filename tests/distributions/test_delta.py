@@ -24,7 +24,7 @@ class TestDelta(TestCase):
         self.analytic_var = 0
         self.n_samples = 10
 
-    def test_log_pdf(self):
+    def test_log_prob_sum(self):
         log_px_torch = dist.Delta(self.v).log_prob(self.test_data).sum()
         assert_equal(log_px_torch.item(), 0)
 

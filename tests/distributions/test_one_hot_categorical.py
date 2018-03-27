@@ -94,8 +94,8 @@ def test_sample_dims(dim, ps):
 
 def test_batch_log_dims(dim, ps):
     batch_pdf_shape = (3,) + (1,) * (dim-1)
-    expected_log_pdf = np.array(wrap_nested(list(np.log(ps)), dim-1)).reshape(*batch_pdf_shape)
+    expected_log_prob_sum = np.array(wrap_nested(list(np.log(ps)), dim-1)).reshape(*batch_pdf_shape)
     ps = modify_params_using_dims(ps, dim)
     support = dist.OneHotCategorical(ps).enumerate_support()
     log_prob = dist.OneHotCategorical(ps).log_prob(support)
-    assert_equal(log_prob.detach().cpu().numpy(), expected_log_pdf)
+    assert_equal(log_prob.detach().cpu().numpy(), expected_log_prob_sum)

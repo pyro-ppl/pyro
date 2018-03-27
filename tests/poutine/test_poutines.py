@@ -627,8 +627,8 @@ def test_enumerate_poutine(depth, first_available_dim):
 
     for i in range(num_particles):
         tr = model.get_trace()
-        tr.compute_batch_log_pdf()
-        log_prob = sum(site["batch_log_pdf"] for name, site in tr.iter_stochastic_nodes())
+        tr.compute_log_prob()
+        log_prob = sum(site["log_prob"] for name, site in tr.iter_stochastic_nodes())
         actual_shape = log_prob.shape
         expected_shape = (2,) * depth
         if depth:
@@ -664,8 +664,8 @@ def test_replay_enumerate_poutine(depth, first_available_dim):
     for i in range(num_particles):
         tr = model.get_trace()
         assert tr.nodes["y"]["value"] is guide_trace.nodes["y"]["value"]
-        tr.compute_batch_log_pdf()
-        log_prob = sum(site["batch_log_pdf"] for name, site in tr.iter_stochastic_nodes())
+        tr.compute_log_prob()
+        log_prob = sum(site["log_prob"] for name, site in tr.iter_stochastic_nodes())
         actual_shape = log_prob.shape
         expected_shape = (2,) * depth + (3,) + (2,) * depth + (1,) * first_available_dim
         assert actual_shape == expected_shape, 'error on iteration {}'.format(i)

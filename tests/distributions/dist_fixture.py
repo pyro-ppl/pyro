@@ -84,10 +84,10 @@ class Fixture(object):
         dist_params = self._convert_logits_to_ps(dist_params)
         args, kwargs = self.scipy_arg_fn(**dist_params)
         if self.is_discrete:
-            log_pdf = self.scipy_dist.logpmf(self.get_test_data(idx, wrap_tensor=False), *args, **kwargs)
+            log_prob_sum = self.scipy_dist.logpmf(self.get_test_data(idx, wrap_tensor=False), *args, **kwargs)
         else:
-            log_pdf = self.scipy_dist.logpdf(self.get_test_data(idx, wrap_tensor=False), *args, **kwargs)
-        return np.sum(log_pdf)
+            log_prob_sum = self.scipy_dist.logpdf(self.get_test_data(idx, wrap_tensor=False), *args, **kwargs)
+        return np.sum(log_prob_sum)
 
     def get_scipy_batch_logpdf(self, idx):
         if not self.scipy_arg_fn:
@@ -98,7 +98,7 @@ class Fixture(object):
         test_data = self.get_test_data(idx, wrap_tensor=False)
         test_data_wrapped = self.get_test_data(idx)
         shape = broadcast_shape(self.pyro_dist(**dist_params_wrapped).shape(), test_data_wrapped.size())
-        batch_log_pdf = []
+        log_prob = []
         for i in range(len(test_data)):
             batch_params = {}
             for k in dist_params:
@@ -106,14 +106,10 @@ class Fixture(object):
                 batch_params[k] = param[i]
             args, kwargs = self.scipy_arg_fn(**batch_params)
             if self.is_discrete:
-                batch_log_pdf.append(self.scipy_dist.logpmf(test_data[i],
-                                                            *args,
-                                                            **kwargs))
+                log_prob.append(self.scipy_dist.logpmf(test_data[i], *args, **kwargs))
             else:
-                batch_log_pdf.append(self.scipy_dist.logpdf(test_data[i],
-                                                            *args,
-                                                            **kwargs))
-        return batch_log_pdf
+                log_prob.append(self.scipy_dist.logpdf(test_data[i], *args, **kwargs))
+        return log_prob
 
     def get_num_samples(self, idx):
         """

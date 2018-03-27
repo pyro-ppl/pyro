@@ -34,10 +34,10 @@ def test_rejection_exponential_sample_shape(sample_shape, batch_shape):
 
 def compute_elbo_grad(model, guide, variables):
     x = guide.rsample()
-    model_log_pdf = model.log_prob(x)
-    guide_log_pdf, score_function, entropy_term = guide.score_parts(x)
-    log_r = model_log_pdf - guide_log_pdf
-    surrogate_elbo = model_log_pdf + log_r.detach() * score_function - entropy_term
+    model_log_prob_sum = model.log_prob(x)
+    guide_log_prob_sum, score_function, entropy_term = guide.score_parts(x)
+    log_r = model_log_prob_sum - guide_log_prob_sum
+    surrogate_elbo = model_log_prob_sum + log_r.detach() * score_function - entropy_term
     return grad(surrogate_elbo.sum(), variables, create_graph=True)
 
 

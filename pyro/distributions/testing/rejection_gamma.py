@@ -72,9 +72,9 @@ class RejectionGamma(Gamma):
         return self._standard_gamma.log_prob(x * self.beta) + torch.log(self.beta)
 
     def score_parts(self, x):
-        log_pdf, score_function, _ = self._standard_gamma.score_parts(x * self.beta)
-        log_pdf = log_pdf + torch.log(self.beta)
-        return ScoreParts(log_pdf, score_function, log_pdf)
+        log_prob_sum, score_function, _ = self._standard_gamma.score_parts(x * self.beta)
+        log_prob_sum = log_prob_sum + torch.log(self.beta)
+        return ScoreParts(log_prob_sum, score_function, log_prob_sum)
 
 
 @copy_docs_from(Gamma)
@@ -108,8 +108,8 @@ class ShapeAugmentedGamma(Gamma):
         assert boosted_x is self._unboost_x_cache[0]
         x = self._unboost_x_cache[1]
         _, score_function, _ = self._rejection_gamma.score_parts(x)
-        log_pdf = self.log_prob(boosted_x)
-        return ScoreParts(log_pdf, score_function, log_pdf)
+        log_prob_sum = self.log_prob(boosted_x)
+        return ScoreParts(log_prob_sum, score_function, log_prob_sum)
 
 
 @copy_docs_from(Dirichlet)

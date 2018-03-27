@@ -74,7 +74,7 @@ def test_mean_and_var(lognormal):
 
 
 @pytest.mark.parametrize('lognormal', EXAMPLES)
-def test_log_pdf(lognormal):
+def test_log_prob_sum(lognormal):
     dist_params = lognormal.get_dist_params(0)
     mu_lognorm = dist_params['mu']
     sigma_lognorm = dist_params['sigma']

@@ -367,7 +367,7 @@ def check_model_guide_match(model_trace, guide_trace, max_iarange_nesting=float(
 
 
 def check_site_shape(site, max_iarange_nesting):
-    actual_shape = list(site["batch_log_pdf"].shape)
+    actual_shape = list(site["log_prob"].shape)
 
     # Compute expected shape.
     expected_shape = []

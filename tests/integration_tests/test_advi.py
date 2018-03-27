@@ -27,13 +27,13 @@ def test_advi_scores(advi_implementation):
     guide_trace = poutine.trace(advi.guide).get_trace()
     model_trace = poutine.trace(poutine.replay(advi.model, guide_trace)).get_trace()
 
-    guide_trace.compute_batch_log_pdf()
-    model_trace.compute_batch_log_pdf()
+    guide_trace.compute_log_prob()
+    model_trace.compute_log_prob()
 
-    assert model_trace.nodes['_advi_latent']['log_pdf'].item() == 0.0
-    assert model_trace.nodes['z1']['log_pdf'].item() != 0.0
-    assert guide_trace.nodes['_advi_latent']['log_pdf'].item() != 0.0
-    assert guide_trace.nodes['z1']['log_pdf'].item() == 0.0
+    assert model_trace.nodes['_advi_latent']['log_prob_sum'].item() == 0.0
+    assert model_trace.nodes['z1']['log_prob_sum'].item() != 0.0
+    assert guide_trace.nodes['_advi_latent']['log_prob_sum'].item() != 0.0
+    assert guide_trace.nodes['z1']['log_prob_sum'].item() == 0.0
 
 
 # conjugate model to test ADVI logic from end-to-end (this has a non-mean-field posterior)

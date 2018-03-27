@@ -213,7 +213,7 @@ class iarange(object):
         right. If not specified, ``dim`` is set to the rightmost dim that is
         left of all enclosing ``iarange`` contexts.
     :param bool use_cuda: Optional bool specifying whether to use cuda tensors
-        for `subsample` and `log_pdf`. Defaults to `torch.Tensor.is_cuda`.
+        for `subsample` and `log_prob_sum`. Defaults to `torch.Tensor.is_cuda`.
     :return: A reusabe context manager yielding a single 1-dimensional
         :class:`torch.Tensor` of indices.
 
@@ -281,7 +281,7 @@ class irange(object):
         ``len(subsample)``.
     :type subsample: Anything supporting ``len()``.
     :param bool use_cuda: Optional bool specifying whether to use cuda tensors
-        for internal ``log_pdf`` computations. Defaults to
+        for internal ``log_prob_sum`` computations. Defaults to
         ``torch.Tensor.is_cuda``.
     :return: A reusable iterator yielding a sequence of integers.
 

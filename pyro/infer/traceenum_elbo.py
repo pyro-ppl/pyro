@@ -19,9 +19,9 @@ def _compute_dice_elbo(model_trace, guide_trace):
     elbo = 0
     for name, model_site in model_trace.nodes.items():
         if model_site["type"] == "sample":
-            cost = model_site["batch_log_pdf"]
+            cost = model_site["log_prob"]
             if not model_site["is_observed"]:
-                cost = cost - guide_trace.nodes[name]["batch_log_pdf"]
+                cost = cost - guide_trace.nodes[name]["log_prob"]
             dice_prob = dice.in_context(model_site["cond_indep_stack"])
             # TODO use score_parts.entropy_term to "stick the landing"
             elbo = elbo + (dice_prob * cost).sum()
@@ -63,7 +63,7 @@ class TraceEnum_ELBO(ELBO):
                 if infer.is_validation_enabled():
                     check_traceenum_requirements(model_trace, guide_trace)
 
-                model_trace.compute_batch_log_pdf()
+                model_trace.compute_log_prob()
                 guide_trace.compute_score_parts()
                 if infer.is_validation_enabled():
                     for site in model_trace.nodes.values():
