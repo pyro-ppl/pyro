@@ -27,8 +27,9 @@ class VariationalGP(GPModel):
         problems, ``latent_shape[-1]`` should corresponse to the number of classes.
     :param float jitter: An additional jitter to help stablize Cholesky decomposition.
     """
-    def __init__(self, X, y, kernel, likelihood, latent_shape=None, infer=None, jitter=1e-6):
-        super(VariationalGP, self).__init__(X, y, kernel, latent_shape, jitter)
+    def __init__(self, X, y, kernel, likelihood, latent_shape=None,
+                 jitter=1e-6, name="VGP"):
+        super(VariationalGP, self).__init__(X, y, kernel, latent_shape, jitter, name)
         self.likelihood = likelihood
 
         N = self.X.shape[0]
@@ -36,7 +37,6 @@ class VariationalGP(GPModel):
         f_loc = self.X.new_zeros(f_loc_shape)
         self.f_loc = Parameter(f_loc)
 
-        # TODO: set f_scale_tril = None for MCMC
         f_scale_tril_shape = self.latent_shape + (N, N)
         f_scale_tril = torch.eye(N, out=self.X.new(N, N))
         f_scale_tril = f_scale_tril.expand(f_scale_tril_shape)
@@ -48,14 +48,24 @@ class VariationalGP(GPModel):
     def model(self):
         self.set_mode("model")
 
+        f_loc = self.get_param("f_loc")
+        f_scale_tril = self.get_param("f_scale_tril")
+
         Kff = self.kernel(self.X) + self.jitter.expand(self.X.shape[0]).diag()
         Lff = Kff.potrf(upper=False)
 
         f_loc_shape = self.latent_shape + (self.X.shape[0],)
         zero_loc = self.X.new_zeros(f_loc_shape)
-        f = pyro.sample("f", dist.MultivariateNormal(zero_loc, scale_tril=Lff)
-                        .reshape(extra_event_dims=zero_loc.dim()-1))
-        return self.likelihood(f, self.y)
+        f_name = pyro.param_with_module_name(self.name, "f")
+        pyro.sample(f_name, dist.MultivariateNormal(zero_loc, scale_tril=Lff)
+                    .reshape(extra_event_dims=zero_loc.dim()-1))
+
+        f_var = (f_scale_tril ** 2).sum(dim=-1)
+
+        if self.y is None:
+            return f_loc, f_var
+        else:
+            return self.likelihood(f_loc, f_var, self.y)
 
     def guide(self):
         self.set_mode("guide")
@@ -64,7 +74,8 @@ class VariationalGP(GPModel):
         f_scale_tril = self.get_param("f_scale_tril")
 
         if self._sample_latent:
-            pyro.sample("f", dist.MultivariateNormal(f_loc, scale_tril=f_scale_tril)
+            f_name = pyro.param_with_module_name(self.name, "f")
+            pyro.sample(f_name, dist.MultivariateNormal(f_loc, scale_tril=f_scale_tril)
                         .reshape(extra_event_dims=f_loc.dim()-1))
         return self.kernel, f_loc, f_scale_tril
 

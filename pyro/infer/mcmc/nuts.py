@@ -81,10 +81,10 @@ class NUTS(HMC):
         self._max_sliced_energy = 1000
 
     def _is_turning(self, z_left, r_left, z_right, r_right):
-        z_left = torch.stack([z_left[name] for name in self._r_dist])
-        r_left = torch.stack([r_left[name] for name in self._r_dist])
-        z_right = torch.stack([z_right[name] for name in self._r_dist])
-        r_right = torch.stack([r_right[name] for name in self._r_dist])
+        z_left = torch.cat([z_left[name] for name in self._r_dist])
+        r_left = torch.cat([r_left[name] for name in self._r_dist])
+        z_right = torch.cat([z_right[name] for name in self._r_dist])
+        r_right = torch.cat([r_right[name] for name in self._r_dist])
         dz = z_right - z_left
         return (torch_data_sum(dz * r_left) < 0) or (torch_data_sum(dz * r_right) < 0)
 

@@ -7,13 +7,15 @@ import pytest
 import torch
 
 import pyro
-from pyro.contrib.gp.kernels import RBF
+from pyro.contrib.gp.kernels import RBF, Matern32
 from pyro.contrib.gp.likelihoods import Gaussian
 from pyro.contrib.gp.models import (GPRegression, SparseGPRegression,
                                     VariationalGP, SparseVariationalGP)
 import pyro.distributions as dist
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.mcmc import MCMC
+from pyro.infer.svi import SVI
+import pyro.optim as optim
 from tests.common import assert_equal
 
 logging.basicConfig(format='%(levelname)s %(message)s')
@@ -152,10 +154,14 @@ def test_inference_with_empty_latent_shape(model_class, X, y, kernel, likelihood
 
 @pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
 def test_hmc(model_class, X, y, kernel, likelihood):
-    if model_class is SparseGPRegression or model_class is SparseVariationalGP:
-        gp = model_class(X, y, kernel, X, likelihood)
-    else:
+    if model_class is GPRegression:
         gp = model_class(X, y, kernel, likelihood)
+    if model_class is SparseGPRegression:
+        gp = model_class(X, y, kernel, X, likelihood)
+    if model_class is VariationalGP:
+        gp = model_class(X, y, kernel, likelihood, latent_shape=torch.Size([]))
+    if model_class is SparseVariationalGP:
+        gp = model_class(X, y, kernel, X, likelihood, latent_shape=torch.Size([]))
 
     kernel.set_prior("variance", dist.Uniform(torch.tensor([0.5]), torch.tensor([1.5])))
     kernel.set_prior("lengthscale", dist.Uniform(torch.tensor([1]), torch.tensor([3])))
@@ -165,15 +171,36 @@ def test_hmc(model_class, X, y, kernel, likelihood):
 
     post_trace = defaultdict(list)
     for trace, _ in mcmc_run._traces():
-        print("New traceeeeeeeee")
-        variance_name = pyro.param_with_module_name(kernel, "variance")
+        variance_name = pyro.param_with_module_name(kernel.name, "variance")
         post_trace["variance"].append(trace.nodes[variance_name]["value"])
-        lengthscale_name = pyro.param_with_module_name(kernel, "lengthscale")
+        lengthscale_name = pyro.param_with_module_name(kernel.name, "lengthscale")
         post_trace["lengthscale"].append(trace.nodes[lengthscale_name]["value"])
+        if model_class is VariationalGP:
+            f_name = pyro.param_with_module_name(gp.name, "f")
+            post_trace["f"].append(trace.nodes[f_name]["value"])
+        if model_class is SparseVariationalGP:
+            u_name = pyro.param_with_module_name(gp.name, "u")
+            post_trace["u"].append(trace.nodes[u_name]["value"])
 
-    variance_mean = torch.mean(torch.stack(post_trace["variance"]), 0)
-    logger.info("Posterior mean - {}".format("variance"))
-    logger.info(variance_mean)
-    lengthscale_mean = torch.mean(torch.stack(post_trace["lengthscale"]), 0)
-    logger.info("Posterior mean - {}".format("lengthscale"))
-    logger.info(lengthscale_mean)
+    for param in post_trace:
+        param_mean = torch.mean(torch.stack(post_trace[param]), 0)
+        logger.info("Posterior mean - {}".format(param))
+        logger.info(param_mean)
+
+
+def test_deep_GP():
+    gp1 = GPRegression(X, None, RBF(1), name="GPR1")
+    Z, _ = gp1.model()
+    gp2 = SparseVariationalGP(Z, y2D, Matern32(1), Z.clone(), likelihood, name="GPR2")
+
+    def model():
+        Z, _ = gp1.model()
+        gp2.set_data(Z, y2D)
+        gp2.model()
+
+    def guide():
+        gp1.guide()
+        gp2.guide()
+
+    svi = SVI(model, guide, optim.Adam({}), "ELBO")
+    svi.step()

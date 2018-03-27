@@ -26,9 +26,9 @@ class GPRegression(GPModel):
     :param torch.Tensor noise: An optional noise parameter.
     :param float jitter: An additional jitter to help stablize Cholesky decomposition.
     """
-    def __init__(self, X, y, kernel, noise=None, jitter=1e-6):
+    def __init__(self, X, y, kernel, noise=None, jitter=1e-6, name="GPR"):
         latent_shape = torch.Size([])
-        super(GPRegression, self).__init__(X, y, kernel, latent_shape, jitter)
+        super(GPRegression, self).__init__(X, y, kernel, latent_shape, jitter, name)
 
         noise = self.X.new_ones(1) if noise is None else noise
         self.noise = Parameter(noise)
@@ -43,12 +43,16 @@ class GPRegression(GPModel):
         Lff = Kff.potrf(upper=False)
 
         if self.y is None:
-            zero_loc = self.X.new_zeros(self.X.shape[0])
-            return pyro.sample("y", dist.MultivariateNormal(zero_loc, scale_tril=Lff))
+            f_loc = self.X.new_zeros(self.X.shape[0])
+            f_var = (Lff ** 2).sum(-1)
+            return f_loc, f_var
         else:
-            zero_loc = self.X.new_zeros(self.y.shape)
-            return pyro.sample("y", dist.MultivariateNormal(zero_loc, scale_tril=Lff)
-                               .reshape(extra_event_dims=self.y.dim()-1), obs=self.y)
+            f_loc = self.X.new_zeros(self.y.shape)
+            y_name = pyro.param_with_module_name(self.name, "y")
+            return pyro.sample(y_name,
+                               dist.MultivariateNormal(f_loc, scale_tril=Lff)
+                                   .reshape(extra_event_dims=self.y.dim()-1),
+                               obs=self.y)
 
     def guide(self):
         self.set_mode("guide")

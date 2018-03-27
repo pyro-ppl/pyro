@@ -15,15 +15,16 @@ class Binary(Likelihood):
     :param callable response_function: A mapping to correct domain for Binary likelihood.
         By default, we use `sigmoid` function.
     """
-    def __init__(self, response_function=None):
-        super(Binary, self).__init__()
+    def __init__(self, response_function=None, name="Binary"):
+        super(Binary, self).__init__(name)
         self.response_function = (response_function if response_function is not None
                                   else F.sigmoid)
 
-    def forward(self, f, y=None):
+    def forward(self, f_loc, f_var, y):
+        # calculates Monte Carlo estimate for E_q(f) [logp(y | f)]
+        f = dist.Normal(f_loc, f_var)()
         f_res = self.response_function(f)
-        if y is None:
-            return pyro.sample("y", dist.Bernoulli(f_res))
-        else:
-            return pyro.sample("y", dist.Bernoulli(f_res.expand_as(y))
-                               .reshape(extra_event_dims=y.dim()), obs=y)
+        return pyro.sample(self.y_name,
+                           dist.Bernoulli(f_res.expand_as(y))
+                               .reshape(extra_event_dims=y.dim()),
+                           obs=y)

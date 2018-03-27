@@ -21,8 +21,8 @@ class GPModel(Parameterized):
         problems, ``latent_shape[-1]`` should corresponse to the number of classes.
     :param float jitter: An additional jitter to help stablize Cholesky decomposition.
     """
-    def __init__(self, X, y, kernel, latent_shape=None, jitter=1e-6):
-        super(GPModel, self).__init__()
+    def __init__(self, X, y, kernel, latent_shape=None, jitter=1e-6, name=None):
+        super(GPModel, self).__init__(name)
         self.set_data(X, y)
         self.kernel = kernel
         y_batch_shape = self.y.shape[:-1] if self.y is not None else torch.Size([])

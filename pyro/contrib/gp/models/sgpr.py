@@ -38,9 +38,11 @@ class SparseGPRegression(GPModel):
     :param str approx: One of approximation methods: "DTC", "FITC", and "VFE" (default).
     :param float jitter: An additional jitter to help stablize Cholesky decomposition.
     """
-    def __init__(self, X, y, kernel, Xu, noise=None, approx=None, jitter=1e-6):
+    def __init__(self, X, y, kernel, Xu, noise=None, approx=None,
+                 jitter=1e-6, name="SGPR"):
         latent_shape = torch.Size([])
-        super(SparseGPRegression, self).__init__(X, y, kernel, latent_shape, jitter)
+        super(SparseGPRegression, self).__init__(X, y, kernel, latent_shape,
+                                                 jitter, name)
 
         noise = self.X.new([1]) if noise is None else noise
         self.noise = Parameter(noise)
@@ -87,12 +89,15 @@ class SparseGPRegression(GPModel):
                 trace_term += (Kffdiag - Qffdiag).sum() / noise
 
         if self.y is None:
-            zero_loc = self.X.new_zeros(self.X.shape[0])
-            return pyro.sample("y", dist.SparseMultivariateNormal(zero_loc, W, D, trace_term))
+            f_loc = self.X.new_zeros(self.X.shape[0])
+            f_var = D + (W ** 2).sum(dim=0)
+            return f_loc, f_var
         else:
-            zero_loc = self.X.new_zeros(self.y.shape)
-            return pyro.sample("y", dist.SparseMultivariateNormal(zero_loc, W, D, trace_term)
-                               .reshape(extra_event_dims=self.y.dim()-1), obs=self.y)
+            f_loc = self.X.new_zeros(self.y.shape)
+            y_name = pyro.param_with_module_name(self.name, "y")
+            return pyro.sample(y_name,
+                               dist.SparseMultivariateNormal(f_loc, W, D, trace_term)
+                                   .reshape(extra_event_dims=self.y.dim()-1), obs=self.y)
 
     def guide(self):
         self.set_mode("guide")

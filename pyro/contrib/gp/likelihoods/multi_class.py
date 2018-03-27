@@ -20,16 +20,19 @@ class MultiClass(Likelihood):
     :param callable response_function: A mapping to correct domain for MultiClass likelihood.
         By default, we use `softmax` function.
     """
-    def __init__(self, num_classes, response_function=None):
-        super(MultiClass, self).__init__()
+    def __init__(self, num_classes, response_function=None, name="MultiClass"):
+        super(MultiClass, self).__init__(name)
         self.num_classes = num_classes
         self.response_function = (response_function if response_function is not None
                                   else _softmax)
 
-    def forward(self, f, y=None):
+    def forward(self, f_loc, f_var, y=None):
+        # calculates Monte Carlo estimate for E_q(f) [logp(y | f)]
+        f = dist.Normal(f_loc, f_var)()
         if f.dim() < 2:
             raise ValueError("Latent function output should be at least 2 dimensional: "
                              "one for number of classes and one for number of data.")
+
         # swap class dimension and data dimension
         f_swap = f.transpose(-2, -1)  # -> num_data x num_classes
         if f_swap.shape[-1] != self.num_classes:
@@ -37,9 +40,8 @@ class MultiClass(Likelihood):
                              "number of classes. Expected {} but got {}."
                              .format(self.num_classes, f_swap.shape[-1]))
         f_res = self.response_function(f_swap)
-        if y is None:
-            return pyro.sample("y", dist.Categorical(f_res))
-        else:
-            f_shape = y.shape + (f_swap.shape[-1],)
-            return pyro.sample("y", dist.Categorical(f_res.expand(f_shape))
-                               .reshape(extra_event_dims=y.dim()), obs=y)
+        f_shape = y.shape + (f_swap.shape[-1],)
+        return pyro.sample(self.y_name,
+                           dist.Categorical(f_res.expand(f_shape))
+                               .reshape(extra_event_dims=y.dim()),
+                           obs=y)
