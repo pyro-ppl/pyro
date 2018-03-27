@@ -197,8 +197,12 @@ class NUTS(HMC):
         #     `Slice sampling` by Radford M. Neal.
         # For another version of NUTS which uses multinomial sampling instead of slice sampling, see
         #     `A Conceptual Introduction to Hamiltonian Monte Carlo` by Michael Betancourt.
-        slice_var = pyro.sample("slicevar_t={}".format(self._t),
-                                dist.Uniform(torch.zeros(1), torch.exp(-energy_current)))
+        joint_prob = torch.exp(-energy_current)
+        if joint_prob == 0:
+            slice_var = torch.tensor(0)
+        else:
+            slice_var = pyro.sample("slicevar_t={}".format(self._t),
+                                    dist.Uniform(torch.zeros(1), joint_prob))
         log_slice = slice_var.log()
 
         z_left = z_right = z
