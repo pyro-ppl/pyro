@@ -243,8 +243,14 @@ def apply_stack(initial_msg):
         frame._process_message(msg)
 
         if msg["done"] and msg["continuation"] is not None:
-            msg["continuation"](msg)
-            msg["continuation"] = None
+            try:
+                msg["continuation"](msg)
+                msg["continuation"] = None
+            except:  # noqa: E722
+                default_process_message(msg)
+                for frame2 in reversed(stack[bottom_ptr:counter]):
+                    frame2._postprocess_message(msg)
+                raise
             for frame2 in reversed(stack[bottom_ptr:counter]):
                 frame2._postprocess_message(msg)
             bottom_ptr = counter
