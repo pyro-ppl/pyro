@@ -194,16 +194,17 @@ PYTORCH_SCRIPT = """
 pip install --upgrade pip
 curl https://raw.githubusercontent.com/uber/pyro/dev/README.md > README.md\n
 PYTORCH_BUILD_COMMIT=$(grep 'git checkout .* a well-tested commit' README.md | cut -f3 -d' ')\n
+PYTORCH_VERSION=0.4.0a0
 echo $PYTORCH_BUILD_COMMIT\n
 PYTHON_VERSION=$(python -c 'import sys; version=sys.version_info[:3]; print("{0}{1}".format(*version))')\n
 WHL_VERSION=${PYTORCH_VERSION}%2B${PYTORCH_BUILD_COMMIT}\n
 PYTORCH_LINUX_PREFIX='https://d2fefpcigoriu7.cloudfront.net/pytorch-build/linux-cpu'\n
-WHL_LOOKUP=PYTORCH_LINUX_PY_${PYTHON_VERSION}_WHL\n
-mkdir tmp
-curl -o tmp/${PYTORCH_LINUX_PREFIX}/${!WHL_LOOKUP}.whl ${PYTORCH_LINUX_PREFIX}/${!WHL_LOOKUP}.whl\n
-echo 'curled'; ls tmp\n
-pip install tmp/*\n
-rm -rf tmp
+WHL_LOOKUP="torch-${WHL_VERSION}-cp27-cp27mu-linux_x86_64"
+curl -o ${WHL_LOOKUP}.whl ${PYTORCH_LINUX_PREFIX}/${!WHL_LOOKUP}.whl\n
+echo 'curled'; ls *.whl\n
+cat *.whl\n
+pip install ${!WHL_LOOKUP}.whl\n
+rm -f ${!WHL_LOOKUP}.whl
 """
 
 with open('install.sh', 'w') as f:
