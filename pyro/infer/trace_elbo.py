@@ -31,7 +31,7 @@ class Trace_ELBO(ELBO):
     dependency structure of the model or the guide. The gradient estimator includes
     partial Rao-Blackwellization for reducing the variance of the estimator when
     non-reparameterizable random variables are present. The Rao-Blackwellization is
-    partial in that in only uses conditional indepedence information that is marked
+    partial in that it only uses conditional independence information that is marked
     by :class:`~pyro.iarange` contexts. For more fine-grained Rao-Blackwellization,
     see :class:`TraceGraph_ELBO`.
 
