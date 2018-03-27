@@ -191,6 +191,7 @@ def setup(app):
 
 # @jpchen's hack to get rtd builder to install latest pytorch
 if 'READTHEDOCS' in os.environ:
+    os.system("curl https://raw.githubusercontent.com/uber/pyro/dev/README.md > README.md")
     os.system("PYTORCH_BUILD_COMMIT=$(grep 'git checkout .* a well-tested commit' README.md | cut -f3 -d' ')")
     os.system('PYTHON_VERSION=$(python -c \'import sys; version=sys.version_info[:3]; print("{0}{1}".format(*version))\')')
     os.system("WHL_VERSION=${PYTORCH_VERSION}%2B${PYTORCH_BUILD_COMMIT}")
@@ -198,4 +199,4 @@ if 'READTHEDOCS' in os.environ:
     os.system("WHL_LOOKUP=PYTORCH_LINUX_PY_${PYTHON_VERSION}_WHL")
     os.system("curl ${PYTORCH_LINUX_PREFIX}/${!WHL_LOOKUP}.whl > pt.whl")
     os.system("pip install pt.whl")
-    os.system("rm -rf pt.whl")
+    os.system("rm -f pt.whl")
