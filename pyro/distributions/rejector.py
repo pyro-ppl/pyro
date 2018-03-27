@@ -60,4 +60,4 @@ class Rejector(TorchDistribution):
     def score_parts(self, x):
         score_function = self._log_prob_accept(x)
         log_prob = self.log_prob(x)
-        return ScoreParts(log_prob_sum, score_function, log_prob_sum)
+        return ScoreParts(log_prob, score_function, log_prob)

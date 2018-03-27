@@ -72,9 +72,9 @@ class RejectionGamma(Gamma):
         return self._standard_gamma.log_prob(x * self.beta) + torch.log(self.beta)
 
     def score_parts(self, x):
-        log_prob_sum, score_function, _ = self._standard_gamma.score_parts(x * self.beta)
-        log_prob_sum = log_prob_sum + torch.log(self.beta)
-        return ScoreParts(log_prob_sum, score_function, log_prob_sum)
+        log_prob, score_function, _ = self._standard_gamma.score_parts(x * self.beta)
+        log_prob = log_prob + torch.log(self.beta)
+        return ScoreParts(log_prob, score_function, log_prob)
 
 
 @copy_docs_from(Gamma)
