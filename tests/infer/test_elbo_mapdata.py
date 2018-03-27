@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 @pytest.mark.stage("integration", "integration_batch_1")
 @pytest.mark.init(rng_seed=161)
-@pytest.mark.parametrize("batch_size", [3, 5, 7, 8, None])
+@pytest.mark.parametrize("batch_size", [3, 8, None])
 @pytest.mark.parametrize("map_type", ["iarange", "irange", "range"])
 def test_elbo_mapdata(batch_size, map_type):
     # normal-normal: known covariance

@@ -26,7 +26,22 @@ def _compute_log_r(model_trace, guide_trace):
 
 class Trace_ELBO(ELBO):
     """
-    A trace implementation of ELBO-based SVI
+    A trace implementation of ELBO-based SVI. The estimator is constructed
+    along the lines of references [1] and [2]. There are no restrictions on the
+    dependency structure of the model or the guide. The gradient estimator includes
+    partial Rao-Blackwellization for reducing the variance of the estimator when
+    non-reparameterizable random variables are present. The Rao-Blackwellization is
+    partial in that in only uses conditional indepedence information that is marked
+    by :class:`~pyro.iarange` contexts. For more fine-grained Rao-Blackwellization,
+    see :class:`TraceGraph_ELBO`.
+
+    References
+
+    [1] Automated Variational Inference in Probabilistic Programming,
+        David Wingate, Theo Weber
+
+    [2] Black Box Variational Inference,
+        Rajesh Ranganath, Sean Gerrish, David M. Blei
     """
 
     def _get_traces(self, model, guide, *args, **kwargs):
