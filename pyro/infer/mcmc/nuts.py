@@ -6,7 +6,6 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.infer.util import torch_data_sum
 from pyro.ops.integrator import single_step_velocity_verlet
 
 from .hmc import HMC
