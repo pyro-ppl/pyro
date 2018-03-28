@@ -96,15 +96,14 @@ def bernoulli_beta_hmc(**kwargs):
         p_latent = pyro.sample("p_latent", dist.Beta(alpha, beta))
         pyro.observe("obs", dist.Bernoulli(p_latent), data)
         return p_latent
+
+    true_probs = torch.tensor([0.9, 0.1])
+    data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
     kernel = kwargs.pop('kernel')
     num_samples = kwargs.pop('num_samples')
     mcmc_kernel = kernel(model, **kwargs)
-    mcmc_run = MCMC(mcmc_kernel, num_samples=num_samples, warmup_steps=100)
-    posterior = []
-    true_probs = torch.tensor([0.9, 0.1])
-    data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
-    for trace, _ in mcmc_run._traces(data):
-        posterior.append(trace.nodes['p_latent']['value'])
+    mcmc_run = MCMC(mcmc_kernel, num_samples=num_samples, warmup_steps=100).run(data)
+    return mcmc_run.marginal('p_latent')
 
 
 @pytest.mark.parametrize('model, model_args, id', TEST_MODELS, ids=MODEL_IDS)
