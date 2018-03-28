@@ -84,7 +84,7 @@ class HMC(TraceKernel):
         for name, transform in self.transforms.items():
             z_constrained[name] = transform.inv(z_constrained[name])
         trace = self._get_trace(z_constrained)
-        potential_energy = -trace.log_pdf()
+        potential_energy = -trace.log_prob_sum()
         # adjust by the jacobian for this transformation.
         for name, transform in self.transforms.items():
             potential_energy += transform.log_abs_det_jacobian(z_constrained[name], z[name]).sum()
@@ -145,8 +145,8 @@ class HMC(TraceKernel):
         self.num_steps = max(1, int(self.trajectory_length / self.step_size))
 
     def _validate_trace(self, trace):
-        trace_log_pdf = trace.log_pdf()
-        if is_nan(trace_log_pdf) or is_inf(trace_log_pdf):
+        trace_log_prob_sum = trace.log_prob_sum()
+        if is_nan(trace_log_prob_sum) or is_inf(trace_log_prob_sum):
             raise ValueError("Model specification incorrect - trace log pdf is NaN or Inf.")
 
     def initial_trace(self):

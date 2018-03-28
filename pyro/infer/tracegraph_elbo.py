@@ -50,8 +50,8 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
 
     for node in topo_sort_guide_nodes:
         downstream_costs[node] = MultiFrameTensor((stacks[node],
-                                                   model_trace.nodes[node]['batch_log_pdf'] -
-                                                   guide_trace.nodes[node]['batch_log_pdf']))
+                                                   model_trace.nodes[node]['log_prob'] -
+                                                   guide_trace.nodes[node]['log_prob']))
         nodes_included_in_sum = set([node])
         downstream_guide_cost_nodes[node] = set([node])
         # make more efficient by ordering children appropriately (higher children first)
@@ -69,8 +69,8 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
         # include terms we missed because we had to avoid duplicates
         for missing_node in missing_downstream_costs:
             downstream_costs[node].add((stacks[missing_node],
-                                        model_trace.nodes[missing_node]['batch_log_pdf'] -
-                                        guide_trace.nodes[missing_node]['batch_log_pdf']))
+                                        model_trace.nodes[missing_node]['log_prob'] -
+                                        guide_trace.nodes[missing_node]['log_prob']))
 
     # finish assembling complete downstream costs
     # (the above computation may be missing terms from model)
@@ -83,7 +83,7 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
         for child in children_in_model:
             assert (model_trace.nodes[child]["type"] == "sample")
             downstream_costs[site].add((stacks[child],
-                                        model_trace.nodes[child]['batch_log_pdf']))
+                                        model_trace.nodes[child]['log_prob']))
             downstream_guide_cost_nodes[site].update([child])
 
     for k in non_reparam_nodes:
@@ -98,15 +98,15 @@ def _compute_elbo_reparam(model_trace, guide_trace, non_reparam_nodes):
     for name, model_site in model_trace.nodes.items():
         if model_site["type"] == "sample":
             if model_site["is_observed"]:
-                elbo += model_site["log_pdf"]
-                surrogate_elbo += model_site["log_pdf"]
+                elbo += model_site["log_prob_sum"]
+                surrogate_elbo += model_site["log_prob_sum"]
             else:
                 # deal with log p(z|...) term
-                elbo += model_site["log_pdf"]
-                surrogate_elbo += model_site["log_pdf"]
+                elbo += model_site["log_prob_sum"]
+                surrogate_elbo += model_site["log_prob_sum"]
                 # deal with log q(z|...) term, if present
                 guide_site = guide_trace.nodes[name]
-                elbo -= guide_site["log_pdf"]
+                elbo -= guide_site["log_prob_sum"]
                 entropy_term = guide_site["score_parts"].entropy_term
                 if not is_identically_zero(entropy_term):
                     surrogate_elbo -= entropy_term.sum()
@@ -216,17 +216,17 @@ class TraceGraph_ELBO(ELBO):
         """
         elbo = 0.0
         for weight, model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
-            guide_trace.log_pdf(), model_trace.log_pdf()
+            guide_trace.log_prob_sum(), model_trace.log_prob_sum()
 
             elbo_particle = 0.0
 
             for name in model_trace.nodes.keys():
                 if model_trace.nodes[name]["type"] == "sample":
                     if model_trace.nodes[name]["is_observed"]:
-                        elbo_particle += model_trace.nodes[name]["log_pdf"]
+                        elbo_particle += model_trace.nodes[name]["log_prob_sum"]
                     else:
-                        elbo_particle += model_trace.nodes[name]["log_pdf"]
-                        elbo_particle -= guide_trace.nodes[name]["log_pdf"]
+                        elbo_particle += model_trace.nodes[name]["log_prob_sum"]
+                        elbo_particle -= guide_trace.nodes[name]["log_prob_sum"]
 
             elbo += torch_data_sum(weight * elbo_particle)
 
@@ -252,7 +252,7 @@ class TraceGraph_ELBO(ELBO):
     def _loss_and_grads_particle(self, weight, model_trace, guide_trace):
         # have the trace compute all the individual (batch) log pdf terms
         # and score function terms (if present) so that they are available below
-        model_trace.compute_batch_log_pdf()
+        model_trace.compute_log_prob()
         guide_trace.compute_score_parts()
         if infer.is_validation_enabled():
             for site in model_trace.nodes.values():

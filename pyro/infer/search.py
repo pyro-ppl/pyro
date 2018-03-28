@@ -39,4 +39,4 @@ class Search(TracePosterior):
             poutine.queue(self.model, queue=self.queue, max_tries=self.max_tries))
         while not self.queue.empty():
             tr = p.get_trace(*args, **kwargs)
-            yield (tr, tr.log_pdf())
+            yield (tr, tr.log_prob_sum())

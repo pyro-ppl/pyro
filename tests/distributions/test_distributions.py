@@ -22,7 +22,7 @@ def _log_prob_shape(dist, x_size=torch.Size()):
 
 def test_batch_log_prob(dist):
     if dist.scipy_arg_fn is None:
-        pytest.skip('{}.log_pdf has no scipy equivalent'.format(dist.pyro_dist.__name__))
+        pytest.skip('{}.log_prob_sum has no scipy equivalent'.format(dist.pyro_dist.__name__))
     for idx in dist.get_batch_data_indices():
         dist_params = dist.get_dist_params(idx)
         d = dist.pyro_dist(**dist_params)

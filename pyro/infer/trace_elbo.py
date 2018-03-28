@@ -17,9 +17,9 @@ def _compute_log_r(model_trace, guide_trace):
     stacks = get_iarange_stacks(model_trace)
     for name, model_site in model_trace.nodes.items():
         if model_site["type"] == "sample":
-            log_r_term = model_site["batch_log_pdf"]
+            log_r_term = model_site["log_prob"]
             if not model_site["is_observed"]:
-                log_r_term = log_r_term - guide_trace.nodes[name]["batch_log_pdf"]
+                log_r_term = log_r_term - guide_trace.nodes[name]["log_prob"]
             log_r.add((stacks[name], log_r_term.detach()))
     return log_r
 
@@ -57,7 +57,7 @@ class Trace_ELBO(ELBO):
             guide_trace = prune_subsample_sites(guide_trace)
             model_trace = prune_subsample_sites(model_trace)
 
-            model_trace.compute_batch_log_pdf()
+            model_trace.compute_log_prob()
             guide_trace.compute_score_parts()
             if infer.is_validation_enabled():
                 for site in model_trace.nodes.values():
@@ -78,7 +78,7 @@ class Trace_ELBO(ELBO):
         """
         elbo = 0.0
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
-            elbo_particle = (model_trace.log_pdf() - guide_trace.log_pdf()).item()
+            elbo_particle = (model_trace.log_prob_sum() - guide_trace.log_prob_sum()).item()
             elbo += elbo_particle / self.num_particles
 
         loss = -elbo
@@ -104,16 +104,16 @@ class Trace_ELBO(ELBO):
             # compute elbo and surrogate elbo
             for name, model_site in model_trace.nodes.items():
                 if model_site["type"] == "sample":
-                    model_log_pdf = model_site["log_pdf"]
+                    model_log_prob_sum = model_site["log_prob_sum"]
                     if model_site["is_observed"]:
-                        elbo_particle = elbo_particle + model_log_pdf.item()
-                        surrogate_elbo_particle = surrogate_elbo_particle + model_log_pdf
+                        elbo_particle = elbo_particle + model_log_prob_sum.item()
+                        surrogate_elbo_particle = surrogate_elbo_particle + model_log_prob_sum
                     else:
                         guide_site = guide_trace.nodes[name]
-                        guide_log_pdf, score_function_term, entropy_term = guide_site["score_parts"]
+                        guide_log_prob, score_function_term, entropy_term = guide_site["score_parts"]
 
-                        elbo_particle = elbo_particle + model_log_pdf - guide_log_pdf.sum()
-                        surrogate_elbo_particle = surrogate_elbo_particle + model_log_pdf
+                        elbo_particle = elbo_particle + model_log_prob_sum - guide_log_prob.sum()
+                        surrogate_elbo_particle = surrogate_elbo_particle + model_log_prob_sum
 
                         if not is_identically_zero(entropy_term):
                             surrogate_elbo_particle -= entropy_term.sum()

@@ -89,13 +89,13 @@ class Distribution(object):
         :return: A `ScoreParts` object containing parts of the ELBO estimator.
         :rtype: ScoreParts
         """
-        log_pdf = self.log_prob(x, *args, **kwargs)
+        log_prob = self.log_prob(x, *args, **kwargs)
         if self.reparameterized:
-            return ScoreParts(log_pdf=log_pdf, score_function=0, entropy_term=log_pdf)
+            return ScoreParts(log_prob=log_prob, score_function=0, entropy_term=log_prob)
         else:
             # XXX should the user be able to control inclusion of the entropy term?
             # See Roeder, Wu, Duvenaud (2017) "Sticking the Landing" https://arxiv.org/abs/1703.09194
-            return ScoreParts(log_pdf=log_pdf, score_function=log_pdf, entropy_term=0)
+            return ScoreParts(log_prob=log_prob, score_function=log_prob, entropy_term=0)
 
     def enumerate_support(self):
         """

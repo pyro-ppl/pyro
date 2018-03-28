@@ -35,7 +35,7 @@ class TestCategorical(TestCase):
         self.support_non_vec = torch.tensor([0, 1, 2])
         self.support = torch.tensor([[0, 0], [1, 1], [2, 2]])
 
-    def test_log_pdf(self):
+    def test_log_prob_sum(self):
         log_px_torch = dist.Categorical(self.ps).log_prob(self.test_data).sum().item()
         log_px_np = float(sp.multinomial.logpmf(np.array([0, 0, 1]), 1, self.ps.detach().cpu().numpy()))
         assert_equal(log_px_torch, log_px_np, prec=1e-4)
