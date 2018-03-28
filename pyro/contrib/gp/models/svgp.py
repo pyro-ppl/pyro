@@ -37,11 +37,13 @@ class SparseVariationalGP(GPModel):
     """
     def __init__(self, X, y, kernel, Xu, likelihood, latent_shape=None,
                  jitter=1e-6, name="SVGP"):
-        super(SparseVariationalGP, self).__init__(X, y, kernel, latent_shape,
-                                                  jitter, name)
+        super(SparseVariationalGP, self).__init__(X, y, kernel, jitter, name)
         self.likelihood = likelihood
 
         self.Xu = Parameter(Xu)
+
+        y_batch_shape = self.y.shape[:-1] if self.y is not None else torch.Size([])
+        self.latent_shape = latent_shape if latent_shape is not None else y_batch_shape
 
         M = self.Xu.shape[0]
         u_loc_shape = self.latent_shape + (M,)

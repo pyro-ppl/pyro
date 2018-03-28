@@ -1,9 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-import torch
-
 from pyro.contrib.gp.util import Parameterized
-from pyro.distributions.util import matrix_triangular_solve_compat
 from pyro.infer import SVI
 from pyro.optim import Adam, PyroOptim
 
@@ -21,12 +18,10 @@ class GPModel(Parameterized):
         problems, ``latent_shape[-1]`` should corresponse to the number of classes.
     :param float jitter: An additional jitter to help stablize Cholesky decomposition.
     """
-    def __init__(self, X, y, kernel, latent_shape=None, jitter=1e-6, name=None):
+    def __init__(self, X, y, kernel, jitter=1e-6, name=None):
         super(GPModel, self).__init__(name)
         self.set_data(X, y)
         self.kernel = kernel
-        y_batch_shape = self.y.shape[:-1] if self.y is not None else torch.Size([])
-        self.latent_shape = latent_shape if latent_shape is not None else y_batch_shape
         self.jitter = jitter
 
     def set_data(self, X, y=None):

@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import torch
 from torch.distributions import constraints
 from torch.nn import Parameter
 
@@ -28,8 +27,7 @@ class GPRegression(GPModel):
     :param float jitter: An additional jitter to help stablize Cholesky decomposition.
     """
     def __init__(self, X, y, kernel, noise=None, jitter=1e-6, name="GPR"):
-        latent_shape = torch.Size([])
-        super(GPRegression, self).__init__(X, y, kernel, latent_shape, jitter, name)
+        super(GPRegression, self).__init__(X, y, kernel, jitter, name)
 
         noise = self.X.new_ones(()) if noise is None else noise
         self.noise = Parameter(noise)

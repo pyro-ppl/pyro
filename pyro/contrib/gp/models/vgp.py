@@ -30,8 +30,11 @@ class VariationalGP(GPModel):
     """
     def __init__(self, X, y, kernel, likelihood, latent_shape=None,
                  jitter=1e-6, name="VGP"):
-        super(VariationalGP, self).__init__(X, y, kernel, latent_shape, jitter, name)
+        super(VariationalGP, self).__init__(X, y, kernel, jitter, name)
         self.likelihood = likelihood
+
+        y_batch_shape = self.y.shape[:-1] if self.y is not None else torch.Size([])
+        self.latent_shape = latent_shape if latent_shape is not None else y_batch_shape
 
         N = self.X.shape[0]
         f_loc_shape = self.latent_shape + (N,)

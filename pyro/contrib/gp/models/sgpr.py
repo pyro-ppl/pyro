@@ -40,9 +40,7 @@ class SparseGPRegression(GPModel):
     """
     def __init__(self, X, y, kernel, Xu, noise=None, approx=None,
                  jitter=1e-6, name="SGPR"):
-        latent_shape = torch.Size([])
-        super(SparseGPRegression, self).__init__(X, y, kernel, latent_shape,
-                                                 jitter, name)
+        super(SparseGPRegression, self).__init__(X, y, kernel, jitter, name)
 
         noise = self.X.new_ones(()) if noise is None else noise
         self.noise = Parameter(noise)
@@ -92,7 +90,7 @@ class SparseGPRegression(GPModel):
         zero_loc = self.X.new_zeros(self.X.shape[0])
         if self.y is None:
             f_var = D + W.pow(2).sum(dim=0)
-            return f_loc, f_var
+            return zero_loc, f_var
         else:
             y_name = pyro.param_with_module_name(self.name, "y")
             return pyro.sample(y_name,
