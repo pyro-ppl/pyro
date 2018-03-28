@@ -75,7 +75,7 @@ class HMC(TraceKernel):
         return trace_poutine.trace
 
     def _kinetic_energy(self, r):
-        return 0.5 * torch.sum(torch.cat([r[name]**2 for name in r]))
+        return 0.5 * sum(x.pow(2).sum() for x in r.values())
 
     def _potential_energy(self, z):
         # Since the model is specified in the constrained space, transform the

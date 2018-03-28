@@ -62,6 +62,7 @@ TEST_IDS = ["_".join([t[0].__name__, t[4].__class__.__name__.split(".")[-1],
 
 
 @pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
+@pytest.mark.disable_validation()
 def test_inference(model_class, X, y, kernel, likelihood):
     if isinstance(likelihood, MultiClass):
         latent_shape = y.shape[:-1] + (likelihood.num_classes,)

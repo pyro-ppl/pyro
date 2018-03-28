@@ -24,7 +24,4 @@ class Binary(Likelihood):
         # calculates Monte Carlo estimate for E_q(f) [logp(y | f)]
         f = dist.Normal(f_loc, f_var)()
         f_res = self.response_function(f)
-        return pyro.sample(self.y_name,
-                           dist.Bernoulli(f_res.expand_as(y))
-                               .reshape(extra_event_dims=y.dim()),
-                           obs=y)
+        return pyro.sample(self.y_name, dist.Bernoulli(f_res), obs=y)

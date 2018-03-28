@@ -44,7 +44,7 @@ class SparseGPRegression(GPModel):
         super(SparseGPRegression, self).__init__(X, y, kernel, latent_shape,
                                                  jitter, name)
 
-        noise = self.X.new([1]) if noise is None else noise
+        noise = self.X.new_ones(()) if noise is None else noise
         self.noise = Parameter(noise)
         self.set_constraint("noise", constraints.greater_than(self.jitter))
 
@@ -73,7 +73,8 @@ class SparseGPRegression(GPModel):
         # y_cov = W.T @ W + D
         # trace_term is added into log_prob
 
-        Kuu = self.kernel(Xu) + self.jitter.expand(Xu.shape[0]).diag()
+        M = Xu.shape[0]
+        Kuu = self.kernel(Xu) + torch.eye(M, out=Xu.new(M, M)) * self.jitter
         Luu = Kuu.potrf(upper=False)
         Kuf = self.kernel(Xu, self.X)
         W = matrix_triangular_solve_compat(Kuf, Luu, upper=False)
@@ -82,22 +83,21 @@ class SparseGPRegression(GPModel):
         trace_term = 0
         if self.approx == "FITC" or self.approx == "VFE":
             Kffdiag = self.kernel(self.X, diag=True)
-            Qffdiag = (W ** 2).sum(dim=0)
+            Qffdiag = W.pow(2).sum(dim=0)
             if self.approx == "FITC":
                 D = D + Kffdiag - Qffdiag
             else:  # approx = "VFE"
                 trace_term += (Kffdiag - Qffdiag).sum() / noise
 
+        zero_loc = self.X.new_zeros(self.X.shape[0])
         if self.y is None:
-            f_loc = self.X.new_zeros(self.X.shape[0])
-            f_var = D + (W ** 2).sum(dim=0)
+            f_var = D + W.pow(2).sum(dim=0)
             return f_loc, f_var
         else:
-            f_loc = self.X.new_zeros(self.y.shape)
             y_name = pyro.param_with_module_name(self.name, "y")
             return pyro.sample(y_name,
-                               dist.SparseMultivariateNormal(f_loc, W, D, trace_term)
-                                   .reshape(extra_event_dims=self.y.dim()-1), obs=self.y)
+                               dist.SparseMultivariateNormal(zero_loc, W, D, trace_term),
+                               obs=self.y)
 
     def guide(self):
         self.set_mode("guide")
@@ -139,7 +139,7 @@ class SparseGPRegression(GPModel):
         N = self.X.shape[0]
         M = Xu.shape[0]
 
-        Kuu = kernel(Xu) + self.jitter.expand(M).diag()
+        Kuu = kernel(Xu) + torch.eye(M, out=Xu.new(M, M)) * self.jitter
         Luu = Kuu.potrf(upper=False)
         Kus = kernel(Xu, Xnew)
         Kuf = kernel(Xu, self.X)
@@ -149,7 +149,7 @@ class SparseGPRegression(GPModel):
         D = noise.expand(N)
         if self.approx == "FITC":
             Kffdiag = kernel(self.X, diag=True)
-            Qffdiag = (W ** 2).sum(dim=0)
+            Qffdiag = W.pow(2).sum(dim=0)
             D = D + Kffdiag - Qffdiag
 
         W_Dinv = W / D
@@ -179,8 +179,8 @@ class SparseGPRegression(GPModel):
             Kssdiag = kernel(Xnew, diag=True)
             if not noiseless:
                 Kssdiag = Kssdiag + noise.expand(Xnew.shape[0])
-            Qssdiag = (Ws ** 2).sum(dim=0)
-            cov = Kssdiag - Qssdiag + (Linv_Ws ** 2).sum(dim=0)
+            Qssdiag = Ws.pow(2).sum(dim=0)
+            cov = Kssdiag - Qssdiag + Linv_Ws.pow(2).sum(dim=0)
 
         cov_shape = self.y.shape[:-1] + (Xnew.shape[0], Xnew.shape[0])
         cov = cov.expand(cov_shape)

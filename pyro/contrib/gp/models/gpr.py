@@ -6,6 +6,7 @@ from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
+from pyro.contrib.gp.util import conditional
 
 from .model import GPModel
 
@@ -30,7 +31,7 @@ class GPRegression(GPModel):
         latent_shape = torch.Size([])
         super(GPRegression, self).__init__(X, y, kernel, latent_shape, jitter, name)
 
-        noise = self.X.new_ones(1) if noise is None else noise
+        noise = self.X.new_ones(()) if noise is None else noise
         self.noise = Parameter(noise)
         self.set_constraint("noise", constraints.greater_than(self.jitter))
 
@@ -42,16 +43,14 @@ class GPRegression(GPModel):
         Kff = self.kernel(self.X) + noise.expand(self.X.shape[0]).diag()
         Lff = Kff.potrf(upper=False)
 
+        zero_loc = self.X.new_zeros(self.X.shape[0])
         if self.y is None:
-            f_loc = self.X.new_zeros(self.X.shape[0])
-            f_var = (Lff ** 2).sum(-1)
-            return f_loc, f_var
+            f_var = Lff.pow(2).sum(dim=-1)
+            return zero_loc, f_var
         else:
-            f_loc = self.X.new_zeros(self.y.shape)
             y_name = pyro.param_with_module_name(self.name, "y")
             return pyro.sample(y_name,
-                               dist.MultivariateNormal(f_loc, scale_tril=Lff)
-                                   .reshape(extra_event_dims=self.y.dim()-1),
+                               dist.MultivariateNormal(zero_loc, scale_tril=Lff),
                                obs=self.y)
 
     def guide(self):
@@ -81,8 +80,8 @@ class GPRegression(GPModel):
         Kff = kernel(self.X) + noise.expand(self.X.shape[0]).diag()
         Lff = Kff.potrf(upper=False)
 
-        loc, cov = self._conditional(Xnew, self.X, kernel, self.y, f_scale_tril=None,
-                                     Lff=Lff, full_cov=full_cov)
+        loc, cov = conditional(Xnew, self.X, kernel, self.y, None,
+                               Lff, full_cov, self.jitter)
 
         if full_cov and not noiseless:
             cov = cov + noise.expand(Xnew.shape[0]).diag()

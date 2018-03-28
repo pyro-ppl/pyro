@@ -18,6 +18,7 @@ from pyro.infer.svi import SVI
 import pyro.optim as optim
 from tests.common import assert_equal
 
+
 logging.basicConfig(format='%(levelname)s %(message)s')
 logger = logging.getLogger('pyro')
 logger.setLevel(logging.INFO)
@@ -27,8 +28,8 @@ T = namedtuple("TestGPModel", ["model_class", "X", "y", "kernel", "likelihood"])
 X = torch.tensor([[1, 5, 3], [4, 3, 7]])
 y1D = torch.tensor([2, 1])
 y2D = torch.tensor([[1, 2], [3, 3], [1, 4], [-1, 1]])
-kernel = RBF(input_dim=3, variance=torch.tensor([1]), lengthscale=torch.tensor([3]))
-noise = torch.tensor([1e-6])
+kernel = RBF(input_dim=3, variance=torch.tensor(1), lengthscale=torch.tensor(3))
+noise = torch.tensor(1e-6)
 likelihood = Gaussian(noise)
 
 TEST_CASES = [
@@ -104,16 +105,6 @@ def test_model_forward(model_class, X, y, kernel, likelihood):
 
 
 @pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
-def test_inference(model_class, X, y, kernel, likelihood):
-    if model_class is SparseGPRegression or model_class is SparseVariationalGP:
-        gp = model_class(X, y, kernel, X, likelihood)
-    else:
-        gp = model_class(X, y, kernel, likelihood)
-
-    gp.optimize(num_steps=1)
-
-
-@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
 def test_model_forward_with_empty_latent_shape(model_class, X, y, kernel, likelihood):
     # regression models don't use latent_shape (default=torch.Size([]))
     if model_class is GPRegression or model_class is SparseGPRegression:
@@ -122,8 +113,6 @@ def test_model_forward_with_empty_latent_shape(model_class, X, y, kernel, likeli
         gp = model_class(X, y, kernel, likelihood, latent_shape=torch.Size([]))
     else:  # model_class is SparseVariationalGP
         gp = model_class(X, y, kernel, X, likelihood, latent_shape=torch.Size([]))
-
-    gp.optimize(num_steps=1)
 
     # test shape
     Xnew = torch.tensor([[2, 3, 1]])
@@ -137,9 +126,21 @@ def test_model_forward_with_empty_latent_shape(model_class, X, y, kernel, likeli
     assert cov0.shape[:-2] == torch.Size([])
     assert_equal(loc0, loc1)
     assert_equal(cov0.diag(), var1)
+        
+        
+@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
+@pytest.mark.disable_validation()
+def test_inference(model_class, X, y, kernel, likelihood):
+    if model_class is SparseGPRegression or model_class is SparseVariationalGP:
+        gp = model_class(X, y, kernel, X, likelihood)
+    else:
+        gp = model_class(X, y, kernel, likelihood)
+
+    gp.optimize(num_steps=1)
 
 
 @pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
+@pytest.mark.disable_validation()
 def test_inference_with_empty_latent_shape(model_class, X, y, kernel, likelihood):
     # regression models don't use latent_shape (default=torch.Size([]))
     if model_class is GPRegression or model_class is SparseGPRegression:
@@ -153,15 +154,12 @@ def test_inference_with_empty_latent_shape(model_class, X, y, kernel, likelihood
 
 
 @pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
+@pytest.mark.disable_validation()
 def test_hmc(model_class, X, y, kernel, likelihood):
-    if model_class is GPRegression:
-        gp = model_class(X, y, kernel, likelihood)
-    if model_class is SparseGPRegression:
+    if model_class is SparseGPRegression or model_class is SparseVariationalGP:
         gp = model_class(X, y, kernel, X, likelihood)
-    if model_class is VariationalGP:
-        gp = model_class(X, y, kernel, likelihood, latent_shape=torch.Size([]))
-    if model_class is SparseVariationalGP:
-        gp = model_class(X, y, kernel, X, likelihood, latent_shape=torch.Size([]))
+    else:
+        gp = model_class(X, y, kernel, likelihood)
 
     kernel.set_prior("variance", dist.Uniform(torch.tensor([0.5]), torch.tensor([1.5])))
     kernel.set_prior("lengthscale", dist.Uniform(torch.tensor([1]), torch.tensor([3])))
@@ -188,7 +186,8 @@ def test_hmc(model_class, X, y, kernel, likelihood):
         logger.info(param_mean)
 
 
-def test_deep_GP():
+@pytest.mark.disable_validation()
+def test_inference_deepGP():
     gp1 = GPRegression(X, None, RBF(1), name="GPR1")
     Z, _ = gp1.model()
     gp2 = SparseVariationalGP(Z, y2D, Matern32(1), Z.clone(), likelihood, name="GPR2")

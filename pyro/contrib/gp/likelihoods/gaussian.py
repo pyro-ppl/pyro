@@ -26,7 +26,4 @@ class Gaussian(Likelihood):
     def forward(self, f_loc, f_var, y):
         variance = self.get_param("variance")
         y_var = f_var + variance
-        return pyro.sample(self.y_name,
-                           dist.Normal(f_loc.expand_as(y), y_var)
-                               .reshape(extra_event_dims=y.dim()),
-                           obs=y)
+        return pyro.sample(self.y_name, dist.Normal(f_loc.expand_as(y), y_var), obs=y)

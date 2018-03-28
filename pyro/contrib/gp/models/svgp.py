@@ -6,6 +6,7 @@ from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
+from pyro.contrib.gp.util import conditional
 
 from .model import GPModel
 
@@ -42,13 +43,13 @@ class SparseVariationalGP(GPModel):
 
         self.Xu = Parameter(Xu)
 
-        N = self.Xu.shape[0]
-        u_loc_shape = self.latent_shape + (N,)
+        M = self.Xu.shape[0]
+        u_loc_shape = self.latent_shape + (M,)
         u_loc = self.Xu.new_zeros(u_loc_shape)
         self.u_loc = Parameter(u_loc)
 
-        u_scale_tril_shape = self.latent_shape + (N, N)
-        u_scale_tril = torch.eye(N, out=self.Xu.new(N, N))
+        u_scale_tril_shape = self.latent_shape + (M, M)
+        u_scale_tril = torch.eye(M, out=self.Xu.new(M, M))
         u_scale_tril = u_scale_tril.expand(u_scale_tril_shape)
         self.u_scale_tril = Parameter(u_scale_tril)
         self.set_constraint("u_scale_tril", constraints.lower_cholesky)
@@ -62,17 +63,16 @@ class SparseVariationalGP(GPModel):
         u_loc = self.get_param("u_loc")
         u_scale_tril = self.get_param("u_scale_tril")
 
-        Kuu = self.kernel(Xu) + self.jitter.expand(Xu.shape[0]).diag()
+        M = Xu.shape[0]
+        Kuu = self.kernel(Xu) + torch.eye(M, out=Xu.new(M, M)) * self.jitter
         Luu = Kuu.potrf(upper=False)
 
-        u_loc_shape = self.latent_shape + (Xu.shape[0],)
-        zero_loc = Xu.new_zeros(u_loc_shape)
+        zero_loc = Xu.new_zeros(u_loc.shape)
         u_name = pyro.param_with_module_name(self.name, "u")
-        pyro.sample(u_name, dist.MultivariateNormal(zero_loc, scale_tril=Luu)
-                    .reshape(extra_event_dims=zero_loc.dim()-1))
+        pyro.sample(u_name, dist.MultivariateNormal(zero_loc, scale_tril=Luu))
 
-        f_loc, f_var = self._conditional(self.X, Xu, self.kernel, u_loc, u_scale_tril,
-                                         Lff=Luu, full_cov=False)
+        f_loc, f_var = conditional(self.X, Xu, self.kernel, u_loc, u_scale_tril,
+                                   Luu, full_cov=False, jitter=self.jitter)
 
         if self.y is None:
             return f_loc, f_var
@@ -88,8 +88,7 @@ class SparseVariationalGP(GPModel):
 
         if self._sample_latent:
             u_name = pyro.param_with_module_name(self.name, "u")
-            pyro.sample(u_name, dist.MultivariateNormal(u_loc, scale_tril=u_scale_tril)
-                        .reshape(extra_event_dims=u_loc.dim()-1))
+            pyro.sample(u_name, dist.MultivariateNormal(u_loc, scale_tril=u_scale_tril))
         return Xu, self.kernel, u_loc, u_scale_tril
 
     def forward(self, Xnew, full_cov=False):
@@ -111,6 +110,6 @@ class SparseVariationalGP(GPModel):
         Xu, kernel, u_loc, u_scale_tril = self.guide()
         self._sample_latent = tmp_sample_latent
 
-        loc, cov = self._conditional(Xnew, Xu, kernel, u_loc, u_scale_tril,
-                                     full_cov=full_cov)
+        loc, cov = conditional(Xnew, Xu, kernel, u_loc, u_scale_tril,
+                               full_cov=full_cov, jitter=self.jitter)
         return loc, cov

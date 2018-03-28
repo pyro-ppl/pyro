@@ -6,6 +6,7 @@ from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
+from pyro.contrib.gp.util import conditional
 
 from .model import GPModel
 
@@ -51,16 +52,15 @@ class VariationalGP(GPModel):
         f_loc = self.get_param("f_loc")
         f_scale_tril = self.get_param("f_scale_tril")
 
-        Kff = self.kernel(self.X) + self.jitter.expand(self.X.shape[0]).diag()
+        N = self.X.shape[0]
+        Kff = self.kernel(self.X) + torch.eye(N, out=self.X.new(N, N)) * self.jitter
         Lff = Kff.potrf(upper=False)
 
-        f_loc_shape = self.latent_shape + (self.X.shape[0],)
-        zero_loc = self.X.new_zeros(f_loc_shape)
+        zero_loc = self.X.new_zeros(f_loc.shape)
         f_name = pyro.param_with_module_name(self.name, "f")
-        pyro.sample(f_name, dist.MultivariateNormal(zero_loc, scale_tril=Lff)
-                    .reshape(extra_event_dims=zero_loc.dim()-1))
+        pyro.sample(f_name, dist.MultivariateNormal(zero_loc, scale_tril=Lff))
 
-        f_var = (f_scale_tril ** 2).sum(dim=-1)
+        f_var = f_scale_tril.pow(2).sum(dim=-1)
 
         if self.y is None:
             return f_loc, f_var
@@ -75,8 +75,7 @@ class VariationalGP(GPModel):
 
         if self._sample_latent:
             f_name = pyro.param_with_module_name(self.name, "f")
-            pyro.sample(f_name, dist.MultivariateNormal(f_loc, scale_tril=f_scale_tril)
-                        .reshape(extra_event_dims=f_loc.dim()-1))
+            pyro.sample(f_name, dist.MultivariateNormal(f_loc, scale_tril=f_scale_tril))
         return self.kernel, f_loc, f_scale_tril
 
     def forward(self, Xnew, full_cov=False):
@@ -98,6 +97,6 @@ class VariationalGP(GPModel):
         kernel, f_loc, f_scale_tril = self.guide()
         self._sample_latent = tmp_sample_latent
 
-        loc, cov = self._conditional(Xnew, self.X, kernel, f_loc, f_scale_tril,
-                                     full_cov=full_cov)
+        loc, cov = conditional(Xnew, self.X, kernel, f_loc, f_scale_tril,
+                               full_cov=full_cov, jitter=self.jitter)
         return loc, cov
