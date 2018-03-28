@@ -50,11 +50,9 @@ class Empirical(Distribution):
         self.samples.append(value)
 
     def sample(self, sample_shape=torch.Size()):
-        if not sample_shape:
-            rand_idx = np.random.randint(0, high=self.finalized_tensor.size(0), dtype=np.int64)
-        else:
-            rand_idx = np.random.randint(0, high=self.finalized_tensor.size(0), dtype=np.int64,
-                                         size=np.prod(sample_shape).astype(np.int64))
+        sample_size = np.prod(sample_shape)
+        rand_idx = torch.empty(size=torch.Size((sample_size,)),
+                               dtype=torch.long).random_(to=self.sample_size)
         return self.finalized_tensor[rand_idx].view(sample_shape + self.batch_shape)
 
     def log_prob(self, value):
