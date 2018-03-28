@@ -6,7 +6,6 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.infer.util import torch_data_sum
 from pyro.ops.integrator import single_step_velocity_verlet
 
 from .hmc import HMC
@@ -81,12 +80,13 @@ class NUTS(HMC):
         self._max_sliced_energy = 1000
 
     def _is_turning(self, z_left, r_left, z_right, r_right):
-        z_left = torch.stack([z_left[name] for name in self._r_dist])
-        r_left = torch.stack([r_left[name] for name in self._r_dist])
-        z_right = torch.stack([z_right[name] for name in self._r_dist])
-        r_right = torch.stack([r_right[name] for name in self._r_dist])
-        dz = z_right - z_left
-        return (torch_data_sum(dz * r_left) < 0) or (torch_data_sum(dz * r_right) < 0)
+        diff_left = 0
+        diff_right = 0
+        for name in self._r_dist:
+            dz = z_right[name] - z_left[name]
+            diff_left += (dz * r_left[name]).sum()
+            diff_right += (dz * r_right[name]).sum()
+        return diff_left < 0 or diff_right < 0
 
     def _build_basetree(self, z, r, z_grads, log_slice, direction, energy_current):
         step_size = self.step_size if direction == 1 else -self.step_size
