@@ -65,9 +65,9 @@ def test_elbo_mapdata(batch_size, map_type):
         else:
             for i, x in enumerate(data):
                 pyro.sample('obs_%d' % i,
-                             dist.Normal(mu_latent, torch.pow(lam, -0.5))
-                                 .reshape(extra_event_dims=1),
-                             obs=x)
+                            dist.Normal(mu_latent, torch.pow(lam, -0.5))
+                            .reshape(extra_event_dims=1),
+                            obs=x)
         return mu_latent
 
     def guide():

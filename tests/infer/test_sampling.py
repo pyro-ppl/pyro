@@ -30,8 +30,8 @@ class HMMSamplingTestCase(TestCase):
 
                 observes.append(
                     pyro.sample("observe_{}".format(str(t)),
-                                 Bernoulli(torch.index_select(p_obs, 0, latents[-1].view(-1).long())),
-                                 obs=self.data[t]))
+                                Bernoulli(torch.index_select(p_obs, 0, latents[-1].view(-1).long())),
+                                obs=self.data[t]))
             return torch.sum(torch.cat(latents))
 
         self.model_steps = 3
