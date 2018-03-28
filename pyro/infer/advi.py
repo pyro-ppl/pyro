@@ -43,10 +43,12 @@ class ADVI(object):
         # run the model so we can inspect its structure
         self.prototype_trace = poutine.block(poutine.trace(self.base_model).get_trace)(*args, **kwargs)
         self.prototype_trace = prune_subsample_sites(self.prototype_trace)
-        self.latent_shapes = {name: biject_to(site["fn"].support).inv(site["value"]).shape
-                              for name, site in self.prototype_trace.nodes.items()
-                              if site["type"] == "sample" and not site["is_observed"]}
-        self.latent_dim = sum(_product(shape) for shape in self.latent_shapes.values())
+
+        # collect the shapes of unconstrained values, which may differ from the shapes of constrained values
+        self._unconstrained_shapes = {name: biject_to(site["fn"].support).inv(site["value"]).shape
+                                      for name, site in self.prototype_trace.nodes.items()
+                                      if site["type"] == "sample" and not site["is_observed"]}
+        self.latent_dim = sum(_product(shape) for shape in self._unconstrained_shapes.values())
 
     def sample_latent(self, *args, **kwargs):
         """
@@ -73,7 +75,7 @@ class ADVI(object):
         pos = 0
         for name, site in self.prototype_trace.nodes.items():
             if site["type"] == "sample" and not site["is_observed"]:
-                shape = self.latent_shapes[name]
+                shape = self._unconstrained_shapes[name]
                 size = _product(shape)
                 unconstrained_value = latent[pos:pos + size].view(shape)
                 pos += size

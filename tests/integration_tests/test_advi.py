@@ -136,7 +136,7 @@ def test_advi_transform(advi_class):
                  msg="advi covariance off")
 
 
-@pytest.mark.xfail(reason="jacobian bug https://github.com/probtorch/pytorch/issues/112")
+@pytest.mark.xfail(reason="numerical imprecision of transformed delta distribution")
 @pytest.mark.parametrize('advi_class', [ADVIDiagonalNormal, ADVIMultivariateNormal])
 def test_advi_dirichlet(advi_class):
     num_steps = 1000
