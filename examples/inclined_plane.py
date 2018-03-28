@@ -77,7 +77,7 @@ def model(observed_data):
     def observe_T(T_obs, obs_name):
         T_simulated = simulate(mu)
         T_obs_dist = Normal(T_simulated, torch.tensor([time_measurement_sigma]))
-        pyro.observe(obs_name, T_obs_dist, T_obs)
+        pyro.sample(obs_name, T_obs_dist, obs=T_obs)
 
     for i, T_obs in enumerate(observed_data):
         observe_T(T_obs, "obs_%d" % i)
