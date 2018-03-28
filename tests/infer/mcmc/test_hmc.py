@@ -119,6 +119,7 @@ TEST_IDS = [t[0].id_fn() if type(t).__name__ == 'TestExample'
     TEST_CASES,
     ids=TEST_IDS)
 @pytest.mark.init(rng_seed=34)
+@pytest.mark.disable_validation()
 def test_hmc_conjugate_gaussian(fixture,
                                 num_samples,
                                 warmup_steps,

@@ -48,5 +48,6 @@ else
 fi
 
 # Download wheel and install
-wget -P tmp/ "${WHL_PREFIX}/${!WHL_LOOKUP}.whl"
+curl -o tmp/"${!WHL_LOOKUP}.whl" "${WHL_PREFIX}/${!WHL_LOOKUP}.whl"
+
 pip install tmp/*

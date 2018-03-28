@@ -10,6 +10,7 @@ from inspect import isclass
 
 import torch
 
+import pyro.distributions as dist
 import pyro.infer as infer
 import pyro.poutine as poutine
 from pyro.distributions.distribution import Distribution
@@ -18,7 +19,14 @@ from pyro.poutine import _PYRO_STACK, condition, do  # noqa: F401
 from pyro.poutine.indep_poutine import _DIM_ALLOCATOR
 from pyro.util import am_i_wrapped, apply_stack, deep_getattr, ones, set_rng_seed, zeros  # noqa: F401
 
-__version__ = '0.1.2'
+version_prefix = '0.2.0-a0'
+
+# Get the __version__ string from the auto-generated _version.py file, if exists.
+try:
+    from pyro._version import __version__
+except ImportError:
+    __version__ = version_prefix
+
 
 # Default logger to prevent 'No handler found' warning.
 logging.getLogger(__name__).addHandler(logging.NullHandler())
@@ -425,14 +433,17 @@ def random_module(name, nn_module, prior, *args, **kwargs):
 
 
 def enable_validation(is_validate=True):
+    dist.enable_validation(is_validate)
     infer.enable_validation(is_validate)
 
 
 @contextmanager
 def validation_enabled(is_validate=True):
     infer_validation_status = infer.is_validation_enabled()
+    distribution_validation_status = dist.is_validation_enabled()
     try:
         enable_validation(is_validate)
         yield
     finally:
+        dist.enable_validation(distribution_validation_status)
         infer.enable_validation(infer_validation_status)

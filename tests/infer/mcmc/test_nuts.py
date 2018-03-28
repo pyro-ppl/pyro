@@ -33,6 +33,7 @@ TEST_CASES[3] = T3
     TEST_CASES,
     ids=TEST_IDS)
 @pytest.mark.init(rng_seed=34)
+@pytest.mark.disable_validation()
 def test_nuts_conjugate_gaussian(fixture,
                                  num_samples,
                                  warmup_steps,

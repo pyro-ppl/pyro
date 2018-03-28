@@ -57,7 +57,7 @@ class TraceEnum_ELBO(ELBO):
                                             graph_type="flat").get_trace(*args, **kwargs)
 
                 if infer.is_validation_enabled():
-                    check_model_guide_match(model_trace, guide_trace)
+                    check_model_guide_match(model_trace, guide_trace, self.max_iarange_nesting)
                 guide_trace = prune_subsample_sites(guide_trace)
                 model_trace = prune_subsample_sites(model_trace)
                 if infer.is_validation_enabled():

@@ -19,7 +19,6 @@ import numpy as np
 from observations import jsb_chorales
 from os.path import join, exists
 import six.moves.cPickle as pickle
-from pyro.util import ng_zeros
 
 
 # this function processes the raw data; in particular it unsparsifies it
@@ -68,7 +67,7 @@ def reverse_sequences_numpy(mini_batch, seq_lengths):
 # in contrast to `reverse_sequences_numpy`, this function plays
 # nice with torch autograd
 def reverse_sequences_torch(mini_batch, seq_lengths):
-    reversed_mini_batch = ng_zeros(mini_batch.size(), type_as=mini_batch.data)
+    reversed_mini_batch = mini_batch.new_zeros(mini_batch.size())
     for b in range(mini_batch.size(0)):
         T = seq_lengths[b]
         time_slice = np.arange(T - 1, -1, -1)

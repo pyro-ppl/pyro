@@ -189,10 +189,9 @@ def setup(app):
     app.connect("autodoc-skip-member", skip)
 """
 
-# @jpchen's hack to get rtd builder to install pytorch
+# @jpchen's hack to get rtd builder to install latest pytorch
 if 'READTHEDOCS' in os.environ:
-    os.system('pip install awscli')
-    os.system('aws s3 --no-sign-request sync s3://pyro-ppl/ci tmp --exclude "*" --include "*-cp27-*";')
-    os.system('pip install tmp/*')
-    os.system('rm -r tmp')
-    os.system('pip install -e .')
+    os.system('curl -o install.sh https://raw.githubusercontent.com/uber/pyro/dev/scripts/install_pytorch.sh')
+    os.system('curl https://raw.githubusercontent.com/uber/pyro/dev/README.md > README.md')
+    os.system('bash install.sh')
+    os.system('rm -f install.sh')
