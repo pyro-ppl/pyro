@@ -1,12 +1,13 @@
 import logging
 
+import pytest
 import torch
+from torch.distributions import biject_to, constraints
 
 import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
 import pyro.poutine as poutine
-import pytest
 from pyro.infer import SVI, ADVIDiagonalNormal, ADVIMultivariateNormal
 from tests.common import assert_equal
 from tests.integration_tests.test_conjugate_gaussian_models import GaussianChain
@@ -20,7 +21,6 @@ def test_model():
     pyro.sample("z2", dist.Normal(torch.zeros(3), 2.0 * torch.ones(3)))
 
 
-@pytest.mark.xfail(reason="lack of scalar support in log_abs_det_jacobian")
 @pytest.mark.parametrize("advi_implementation", [ADVIMultivariateNormal, ADVIDiagonalNormal])
 def test_advi_scores(advi_implementation):
     advi = advi_implementation(test_model)
@@ -51,7 +51,6 @@ class ADVIGaussianChain(GaussianChain):
             self.target_advi_diag_cov[n] += 1.0 / self.lambda_posts[n].item()
             self.target_advi_diag_cov[n] += (self.target_kappas[n].item() ** 2) * self.target_advi_diag_cov[n + 1]
 
-    @pytest.mark.xfail(reason="lack of scalar support in log_abs_det_jacobian")
     def test_multivariatate_normal_advi(self):
         self.do_test_advi(3, reparameterized=True, n_steps=10001)
 
@@ -74,7 +73,7 @@ class ADVIGaussianChain(GaussianChain):
 
             if k % 1000 == 0 and k > 0 or k == n_steps - 1:
                 logger.debug("[step {}] advi mean parameter: {}".format(k, pyro.param("advi_loc").detach().numpy()))
-                L = pyro.param("advi_lower_cholesky")
+                L = pyro.param("advi_scale_tril")
                 diag_cov = torch.mm(L, L.t()).diag()
                 logger.debug("[step {}] advi_diag_cov: {}".format(k, diag_cov.detach().numpy()))
 
@@ -84,7 +83,6 @@ class ADVIGaussianChain(GaussianChain):
                      msg="advi covariance off")
 
 
-@pytest.mark.xfail(reason="lack of scalar support in log_abs_det_jacobian")
 @pytest.mark.parametrize('advi_class', [ADVIDiagonalNormal, ADVIMultivariateNormal])
 def test_advi_diagonal_gaussians(advi_class):
     n_steps = 3501 if advi_class == ADVIDiagonalNormal else 6001
@@ -101,7 +99,7 @@ def test_advi_diagonal_gaussians(advi_class):
         svi.step()
 
     if advi_class == ADVIMultivariateNormal:
-        L = pyro.param("advi_lower_cholesky")
+        L = pyro.param("advi_scale_tril")
         diag_cov = torch.mm(L, L.t()).diag()
     else:
         diag_cov = torch.pow(pyro.param("advi_scale"), 2.0)
@@ -127,7 +125,7 @@ def test_advi_transform(advi_class):
         svi.step()
 
     if advi_class == ADVIMultivariateNormal:
-        L = pyro.param("advi_lower_cholesky")
+        L = pyro.param("advi_scale_tril")
         diag_cov = torch.mm(L, L.t()).diag()
     else:
         diag_cov = torch.pow(pyro.param("advi_scale"), 2.0)
@@ -136,3 +134,28 @@ def test_advi_transform(advi_class):
                  msg="advi mean off")
     assert_equal(diag_cov, torch.tensor([0.49]), prec=0.04,
                  msg="advi covariance off")
+
+
+@pytest.mark.xfail(reason="numerical imprecision of transformed delta distribution")
+@pytest.mark.parametrize('advi_class', [ADVIDiagonalNormal, ADVIMultivariateNormal])
+def test_advi_dirichlet(advi_class):
+    num_steps = 1000
+    prior = torch.tensor([0.1, 0.2, 0.3, 0.4])
+    data = torch.tensor([0, 2]).long()
+    true_posterior = torch.tensor([1.1, 0.2, 1.3, 0.4])
+
+    def model(data):
+        p = pyro.sample("p", dist.Dirichlet(prior))
+        with pyro.iarange("data_iarange"):
+            pyro.sample("data", dist.Categorical(p).reshape(data.shape), obs=data)
+
+    advi = advi_class(model)
+    svi = SVI(advi.model, advi.guide, optim.Adam({"lr": .01}), loss="ELBO")
+
+    for _ in range(num_steps):
+        svi.step(data)
+
+    actual_posterior = biject_to(constraints.simplex)(pyro.param("advi_loc"))
+    assert_equal(actual_posterior, true_posterior, prec=0.01, msg=''.join([
+        '\nexpected {}'.format(true_posterior.detach().cpu().numpy()),
+        '\n  actual {}'.format(actual_posterior.detach().cpu().numpy())]))
