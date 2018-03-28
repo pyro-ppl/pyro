@@ -47,14 +47,10 @@ def normal_normal_model(data):
 def test_mcmc_interface():
     data = torch.tensor([1.0])
     kernel = PriorKernel(normal_normal_model)
-    mcmc = MCMC(kernel=kernel, num_samples=800, warmup_steps=100)
-    marginal = Marginal(mcmc)
-    dist, values = marginal._dist_and_values(data)
-    assert_equal(len(values), 800)
-    samples = []
-    for _ in range(600):
-        samples.append(values[dist.sample().item()])
-    sample_mean = torch.mean(torch.stack(samples), 0)
-    sample_std = torch.std(torch.stack(samples), 0)
-    assert_equal(sample_mean.data, torch.tensor([0.0]), prec=0.08)
-    assert_equal(sample_std.data, torch.tensor([1.0]), prec=0.08)
+    mcmc = MCMC(kernel=kernel, num_samples=800, warmup_steps=100).run(data)
+    marginal = mcmc.marginal()
+    assert_equal(marginal.sample_size, 800)
+    sample_mean = marginal.mean
+    sample_std = marginal.variance.sqrt()
+    assert_equal(sample_mean, torch.tensor([0.0]), prec=0.08)
+    assert_equal(sample_std, torch.tensor([1.0]), prec=0.08)

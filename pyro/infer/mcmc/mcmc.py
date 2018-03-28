@@ -3,8 +3,6 @@ from __future__ import absolute_import, division, print_function
 import logging
 import math
 
-import torch
-
 from pyro.infer.mcmc.trace_joint import TraceJoint
 
 

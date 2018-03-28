@@ -147,6 +147,6 @@ def test_bernoulli_beta_with_dual_averaging():
     true_probs = torch.tensor([0.9, 0.1])
     data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
     nuts_kernel = NUTS(model, adapt_step_size=True)
-    mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100)
+    mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100).run(data)
     posterior = mcmc_run.marginal('p_latent')
     assert_equal(posterior.mean, true_probs, prec=0.01)

@@ -34,6 +34,10 @@ class Empirical(Distribution):
         self.samples = []
         return self.tensorized_samples
 
+    @property
+    def sample_size(self):
+        return self.finalized_tensor.size(0)
+
     def add(self, value):
         """
         Adds the data point to the sample. The values in successive
