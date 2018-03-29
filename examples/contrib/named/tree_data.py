@@ -28,7 +28,7 @@ def model(data):
 
 def model_recurse(data, latent):
     if torch.is_tensor(data):
-        latent.x.observe_(dist.Normal(latent.z, torch.ones(1)), data)
+        latent.x.sample_(dist.Normal(latent.z, torch.ones(1)), obs=data)
     elif isinstance(data, list):
         latent.prior_sigma.param_(torch.ones(1, requires_grad=True))
         latent.list = named.List()

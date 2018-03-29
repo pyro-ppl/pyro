@@ -32,7 +32,7 @@ class OptimTests(TestCase):
             prior_dist = Normal(self.mu0, torch.pow(self.lam0, -0.5))
             mu_latent = pyro.sample("mu_latent", prior_dist)
             x_dist = Normal(mu_latent, torch.pow(self.lam, -0.5))
-            pyro.observe("obs", x_dist, self.data)
+            pyro.sample("obs", x_dist, obs=self.data)
             return mu_latent
 
         def guide():
