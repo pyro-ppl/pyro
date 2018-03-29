@@ -87,7 +87,7 @@ class MultiFrameTensor(dict):
 
         downstream_cost = MultiFrameTensor()
         for site in downstream_nodes:
-            downstream_cost.add((site["cond_indep_stack"], site["batch_log_pdf"]))
+            downstream_cost.add((site["cond_indep_stack"], site["log_prob"]))
         downstream_cost.add(*other_costs.items())  # add in bulk
         summed = downstream_cost.sum_to(target_site["cond_indep_stack"])
     """

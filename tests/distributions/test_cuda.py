@@ -28,7 +28,7 @@ def test_sample(dist):
 
 
 @requires_cuda
-def test_log_pdf(dist):
+def test_log_prob_sum(dist):
     for idx in range(len(dist.dist_params)):
 
         # Compute CPU value.
@@ -36,21 +36,21 @@ def test_log_pdf(dist):
             data = dist.get_test_data(idx)
             params = dist.get_dist_params(idx)
         with xfail_if_not_implemented():
-            cpu_value = dist.pyro_dist(**params).log_pdf(data)
+            cpu_value = dist.pyro_dist(**params).log_prob_sum(data)
         assert not cpu_value.is_cuda
 
         # Compute GPU value.
         with tensors_default_to("cuda"):
             data = dist.get_test_data(idx)
             params = dist.get_dist_params(idx)
-        cuda_value = dist.pyro_dist(**params).log_pdf(data)
+        cuda_value = dist.pyro_dist(**params).log_prob_sum(data)
         assert cuda_value.is_cuda
 
         assert_equal(cpu_value, cuda_value.cpu())
 
 
 @requires_cuda
-def test_batch_log_pdf(dist):
+def test_log_prob(dist):
     for idx in range(len(dist.dist_params)):
 
         # Compute CPU value.

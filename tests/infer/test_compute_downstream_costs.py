@@ -24,16 +24,16 @@ def _brute_force_compute_downstream_costs(model_trace, guide_trace,  #
 
     for node in guide_nodes:
         downstream_costs[node] = MultiFrameTensor((stacks[node],
-                                                   model_trace.nodes[node]['batch_log_pdf'] -
-                                                   guide_trace.nodes[node]['batch_log_pdf']))
+                                                   model_trace.nodes[node]['log_prob'] -
+                                                   guide_trace.nodes[node]['log_prob']))
         downstream_guide_cost_nodes[node] = set([node])
 
         descendants = networkx.descendants(guide_trace._graph, node)
 
         for desc in descendants:
             desc_mft = MultiFrameTensor((stacks[desc],
-                                         model_trace.nodes[desc]['batch_log_pdf'] -
-                                         guide_trace.nodes[desc]['batch_log_pdf']))
+                                         model_trace.nodes[desc]['log_prob'] -
+                                         guide_trace.nodes[desc]['log_prob']))
             downstream_costs[node].add(*desc_mft.items())
             downstream_guide_cost_nodes[node].update([desc])
 
@@ -45,7 +45,7 @@ def _brute_force_compute_downstream_costs(model_trace, guide_trace,  #
         for child in children_in_model:
             assert (model_trace.nodes[child]["type"] == "sample")
             child_mft = MultiFrameTensor((stacks[child],
-                                          model_trace.nodes[child]['batch_log_pdf']))
+                                          model_trace.nodes[child]['log_prob']))
             downstream_costs[site].add(*child_mft.items())
             downstream_guide_cost_nodes[site].update([child])
 
@@ -112,8 +112,8 @@ def test_compute_downstream_costs_big_model_guide_pair(include_inner_1, include_
 
     guide_trace = prune_subsample_sites(guide_trace)
     model_trace = prune_subsample_sites(model_trace)
-    model_trace.compute_batch_log_pdf()
-    guide_trace.compute_batch_log_pdf()
+    model_trace.compute_log_prob()
+    guide_trace.compute_log_prob()
     non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
 
     dc, dc_nodes = _compute_downstream_costs(model_trace, guide_trace,
@@ -133,63 +133,63 @@ def test_compute_downstream_costs_big_model_guide_pair(include_inner_1, include_
     if not include_triple and include_inner_1 and include_single and not flip_c23:
         assert(dc_nodes == expected_nodes_full_model)
 
-    expected_b1 = (model_trace.nodes['b1']['batch_log_pdf'] - guide_trace.nodes['b1']['batch_log_pdf'])
-    expected_b1 += (model_trace.nodes['d2']['batch_log_pdf'] - guide_trace.nodes['d2']['batch_log_pdf']).sum(0)
-    expected_b1 += (model_trace.nodes['d1']['batch_log_pdf'] - guide_trace.nodes['d1']['batch_log_pdf']).sum(0)
-    expected_b1 += model_trace.nodes['obs']['batch_log_pdf'].sum(0, keepdim=False)
+    expected_b1 = (model_trace.nodes['b1']['log_prob'] - guide_trace.nodes['b1']['log_prob'])
+    expected_b1 += (model_trace.nodes['d2']['log_prob'] - guide_trace.nodes['d2']['log_prob']).sum(0)
+    expected_b1 += (model_trace.nodes['d1']['log_prob'] - guide_trace.nodes['d1']['log_prob']).sum(0)
+    expected_b1 += model_trace.nodes['obs']['log_prob'].sum(0, keepdim=False)
     if include_inner_1:
-        expected_b1 += (model_trace.nodes['c1']['batch_log_pdf'] - guide_trace.nodes['c1']['batch_log_pdf']).sum(0)
-        expected_b1 += (model_trace.nodes['c2']['batch_log_pdf'] - guide_trace.nodes['c2']['batch_log_pdf']).sum(0)
-        expected_b1 += (model_trace.nodes['c3']['batch_log_pdf'] - guide_trace.nodes['c3']['batch_log_pdf']).sum(0)
+        expected_b1 += (model_trace.nodes['c1']['log_prob'] - guide_trace.nodes['c1']['log_prob']).sum(0)
+        expected_b1 += (model_trace.nodes['c2']['log_prob'] - guide_trace.nodes['c2']['log_prob']).sum(0)
+        expected_b1 += (model_trace.nodes['c3']['log_prob'] - guide_trace.nodes['c3']['log_prob']).sum(0)
     assert_equal(expected_b1, dc['b1'], prec=1.0e-6)
 
     if include_single:
-        expected_b0 = (model_trace.nodes['b0']['batch_log_pdf'] - guide_trace.nodes['b0']['batch_log_pdf'])
-        expected_b0 += (model_trace.nodes['b1']['batch_log_pdf'] - guide_trace.nodes['b1']['batch_log_pdf']).sum()
-        expected_b0 += (model_trace.nodes['d2']['batch_log_pdf'] - guide_trace.nodes['d2']['batch_log_pdf']).sum()
-        expected_b0 += (model_trace.nodes['d1']['batch_log_pdf'] - guide_trace.nodes['d1']['batch_log_pdf']).sum()
-        expected_b0 += model_trace.nodes['obs']['batch_log_pdf'].sum()
+        expected_b0 = (model_trace.nodes['b0']['log_prob'] - guide_trace.nodes['b0']['log_prob'])
+        expected_b0 += (model_trace.nodes['b1']['log_prob'] - guide_trace.nodes['b1']['log_prob']).sum()
+        expected_b0 += (model_trace.nodes['d2']['log_prob'] - guide_trace.nodes['d2']['log_prob']).sum()
+        expected_b0 += (model_trace.nodes['d1']['log_prob'] - guide_trace.nodes['d1']['log_prob']).sum()
+        expected_b0 += model_trace.nodes['obs']['log_prob'].sum()
         if include_inner_1:
-            expected_b0 += (model_trace.nodes['c1']['batch_log_pdf'] - guide_trace.nodes['c1']['batch_log_pdf']).sum()
-            expected_b0 += (model_trace.nodes['c2']['batch_log_pdf'] - guide_trace.nodes['c2']['batch_log_pdf']).sum()
-            expected_b0 += (model_trace.nodes['c3']['batch_log_pdf'] - guide_trace.nodes['c3']['batch_log_pdf']).sum()
+            expected_b0 += (model_trace.nodes['c1']['log_prob'] - guide_trace.nodes['c1']['log_prob']).sum()
+            expected_b0 += (model_trace.nodes['c2']['log_prob'] - guide_trace.nodes['c2']['log_prob']).sum()
+            expected_b0 += (model_trace.nodes['c3']['log_prob'] - guide_trace.nodes['c3']['log_prob']).sum()
         assert_equal(expected_b0, dc['b0'], prec=1.0e-6)
         assert dc['b0'].size() == (5,)
 
     if include_inner_1:
-        expected_c3 = (model_trace.nodes['c3']['batch_log_pdf'] - guide_trace.nodes['c3']['batch_log_pdf'])
-        expected_c3 += (model_trace.nodes['d1']['batch_log_pdf'] - guide_trace.nodes['d1']['batch_log_pdf']).sum(0)
-        expected_c3 += (model_trace.nodes['d2']['batch_log_pdf'] - guide_trace.nodes['d2']['batch_log_pdf']).sum(0)
-        expected_c3 += model_trace.nodes['obs']['batch_log_pdf'].sum(0)
+        expected_c3 = (model_trace.nodes['c3']['log_prob'] - guide_trace.nodes['c3']['log_prob'])
+        expected_c3 += (model_trace.nodes['d1']['log_prob'] - guide_trace.nodes['d1']['log_prob']).sum(0)
+        expected_c3 += (model_trace.nodes['d2']['log_prob'] - guide_trace.nodes['d2']['log_prob']).sum(0)
+        expected_c3 += model_trace.nodes['obs']['log_prob'].sum(0)
 
-        expected_c2 = (model_trace.nodes['c2']['batch_log_pdf'] - guide_trace.nodes['c2']['batch_log_pdf'])
-        expected_c2 += (model_trace.nodes['d1']['batch_log_pdf'] - guide_trace.nodes['d1']['batch_log_pdf']).sum(0)
-        expected_c2 += (model_trace.nodes['d2']['batch_log_pdf'] - guide_trace.nodes['d2']['batch_log_pdf']).sum(0)
-        expected_c2 += model_trace.nodes['obs']['batch_log_pdf'].sum(0)
+        expected_c2 = (model_trace.nodes['c2']['log_prob'] - guide_trace.nodes['c2']['log_prob'])
+        expected_c2 += (model_trace.nodes['d1']['log_prob'] - guide_trace.nodes['d1']['log_prob']).sum(0)
+        expected_c2 += (model_trace.nodes['d2']['log_prob'] - guide_trace.nodes['d2']['log_prob']).sum(0)
+        expected_c2 += model_trace.nodes['obs']['log_prob'].sum(0)
 
-        expected_c1 = (model_trace.nodes['c1']['batch_log_pdf'] - guide_trace.nodes['c1']['batch_log_pdf'])
+        expected_c1 = (model_trace.nodes['c1']['log_prob'] - guide_trace.nodes['c1']['log_prob'])
 
         if flip_c23:
-            expected_c3 += model_trace.nodes['c2']['batch_log_pdf'] - guide_trace.nodes['c2']['batch_log_pdf']
-            expected_c2 += model_trace.nodes['c3']['batch_log_pdf']
+            expected_c3 += model_trace.nodes['c2']['log_prob'] - guide_trace.nodes['c2']['log_prob']
+            expected_c2 += model_trace.nodes['c3']['log_prob']
         else:
-            expected_c2 += model_trace.nodes['c3']['batch_log_pdf'] - guide_trace.nodes['c3']['batch_log_pdf']
-            expected_c2 += model_trace.nodes['c2']['batch_log_pdf'] - guide_trace.nodes['c2']['batch_log_pdf']
+            expected_c2 += model_trace.nodes['c3']['log_prob'] - guide_trace.nodes['c3']['log_prob']
+            expected_c2 += model_trace.nodes['c2']['log_prob'] - guide_trace.nodes['c2']['log_prob']
         expected_c1 += expected_c3
 
         assert_equal(expected_c1, dc['c1'], prec=1.0e-6)
         assert_equal(expected_c2, dc['c2'], prec=1.0e-6)
         assert_equal(expected_c3, dc['c3'], prec=1.0e-6)
 
-    expected_d1 = model_trace.nodes['d1']['batch_log_pdf'] - guide_trace.nodes['d1']['batch_log_pdf']
-    expected_d1 += model_trace.nodes['d2']['batch_log_pdf'] - guide_trace.nodes['d2']['batch_log_pdf']
-    expected_d1 += model_trace.nodes['obs']['batch_log_pdf']
+    expected_d1 = model_trace.nodes['d1']['log_prob'] - guide_trace.nodes['d1']['log_prob']
+    expected_d1 += model_trace.nodes['d2']['log_prob'] - guide_trace.nodes['d2']['log_prob']
+    expected_d1 += model_trace.nodes['obs']['log_prob']
 
-    expected_d2 = (model_trace.nodes['d2']['batch_log_pdf'] - guide_trace.nodes['d2']['batch_log_pdf'])
-    expected_d2 += model_trace.nodes['obs']['batch_log_pdf']
+    expected_d2 = (model_trace.nodes['d2']['log_prob'] - guide_trace.nodes['d2']['log_prob'])
+    expected_d2 += model_trace.nodes['obs']['log_prob']
 
     if include_triple:
-        expected_z0 = dc['a1'] + model_trace.nodes['z0']['batch_log_pdf'] - guide_trace.nodes['z0']['batch_log_pdf']
+        expected_z0 = dc['a1'] + model_trace.nodes['z0']['log_prob'] - guide_trace.nodes['z0']['log_prob']
         assert_equal(expected_z0, dc['z0'], prec=1.0e-6)
     assert_equal(expected_d2, dc['d2'], prec=1.0e-6)
     assert_equal(expected_d1, dc['d1'], prec=1.0e-6)
@@ -198,7 +198,7 @@ def test_compute_downstream_costs_big_model_guide_pair(include_inner_1, include_
     assert dc['d2'].size() == (4, 2)
 
     for k in dc:
-        assert(guide_trace.nodes[k]['batch_log_pdf'].size() == dc[k].size())
+        assert(guide_trace.nodes[k]['log_prob'].size() == dc[k].size())
         assert_equal(dc[k], dc_brute[k])
 
 
@@ -231,8 +231,8 @@ def test_compute_downstream_costs_duplicates(dim):
 
     guide_trace = prune_subsample_sites(guide_trace)
     model_trace = prune_subsample_sites(model_trace)
-    model_trace.compute_batch_log_pdf()
-    guide_trace.compute_batch_log_pdf()
+    model_trace.compute_log_prob()
+    guide_trace.compute_log_prob()
 
     non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
 
@@ -243,30 +243,30 @@ def test_compute_downstream_costs_duplicates(dim):
 
     assert dc_nodes == dc_nodes_brute
 
-    expected_a1 = (model_trace.nodes['a1']['batch_log_pdf'] - guide_trace.nodes['a1']['batch_log_pdf'])
+    expected_a1 = (model_trace.nodes['a1']['log_prob'] - guide_trace.nodes['a1']['log_prob'])
     for d in range(dim):
-        expected_a1 += model_trace.nodes['b{}'.format(d)]['batch_log_pdf']
-        expected_a1 -= guide_trace.nodes['b{}'.format(d)]['batch_log_pdf']
-    expected_a1 += (model_trace.nodes['c1']['batch_log_pdf'] - guide_trace.nodes['c1']['batch_log_pdf'])
-    expected_a1 += model_trace.nodes['obs']['batch_log_pdf']
+        expected_a1 += model_trace.nodes['b{}'.format(d)]['log_prob']
+        expected_a1 -= guide_trace.nodes['b{}'.format(d)]['log_prob']
+    expected_a1 += (model_trace.nodes['c1']['log_prob'] - guide_trace.nodes['c1']['log_prob'])
+    expected_a1 += model_trace.nodes['obs']['log_prob']
 
-    expected_b1 = - guide_trace.nodes['b1']['batch_log_pdf']
+    expected_b1 = - guide_trace.nodes['b1']['log_prob']
     for d in range(dim):
-        expected_b1 += model_trace.nodes['b{}'.format(d)]['batch_log_pdf']
-    expected_b1 += (model_trace.nodes['c1']['batch_log_pdf'] - guide_trace.nodes['c1']['batch_log_pdf'])
-    expected_b1 += model_trace.nodes['obs']['batch_log_pdf']
+        expected_b1 += model_trace.nodes['b{}'.format(d)]['log_prob']
+    expected_b1 += (model_trace.nodes['c1']['log_prob'] - guide_trace.nodes['c1']['log_prob'])
+    expected_b1 += model_trace.nodes['obs']['log_prob']
 
-    expected_c1 = (model_trace.nodes['c1']['batch_log_pdf'] - guide_trace.nodes['c1']['batch_log_pdf'])
+    expected_c1 = (model_trace.nodes['c1']['log_prob'] - guide_trace.nodes['c1']['log_prob'])
     for d in range(dim):
-        expected_c1 += model_trace.nodes['b{}'.format(d)]['batch_log_pdf']
-    expected_c1 += model_trace.nodes['obs']['batch_log_pdf']
+        expected_c1 += model_trace.nodes['b{}'.format(d)]['log_prob']
+    expected_c1 += model_trace.nodes['obs']['log_prob']
 
     assert_equal(expected_a1, dc['a1'], prec=1.0e-6)
     assert_equal(expected_b1, dc['b1'], prec=1.0e-6)
     assert_equal(expected_c1, dc['c1'], prec=1.0e-6)
 
     for k in dc:
-        assert(guide_trace.nodes[k]['batch_log_pdf'].size() == dc[k].size())
+        assert(guide_trace.nodes[k]['log_prob'].size() == dc[k].size())
         assert_equal(dc[k], dc_brute[k])
 
 
@@ -293,8 +293,8 @@ def test_compute_downstream_costs_iarange_in_irange(dim1):
 
     guide_trace = prune_subsample_sites(guide_trace)
     model_trace = prune_subsample_sites(model_trace)
-    model_trace.compute_batch_log_pdf()
-    guide_trace.compute_batch_log_pdf()
+    model_trace.compute_log_prob()
+    guide_trace.compute_log_prob()
 
     non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
 
@@ -305,19 +305,19 @@ def test_compute_downstream_costs_iarange_in_irange(dim1):
 
     assert dc_nodes == dc_nodes_brute
 
-    expected_c1 = (model_trace.nodes['c1']['batch_log_pdf'] - guide_trace.nodes['c1']['batch_log_pdf'])
-    expected_c1 += model_trace.nodes['obs1']['batch_log_pdf']
+    expected_c1 = (model_trace.nodes['c1']['log_prob'] - guide_trace.nodes['c1']['log_prob'])
+    expected_c1 += model_trace.nodes['obs1']['log_prob']
 
-    expected_b1 = (model_trace.nodes['b1']['batch_log_pdf'] - guide_trace.nodes['b1']['batch_log_pdf'])
-    expected_b1 += (model_trace.nodes['c1']['batch_log_pdf'] - guide_trace.nodes['c1']['batch_log_pdf']).sum()
-    expected_b1 += model_trace.nodes['obs1']['batch_log_pdf'].sum()
+    expected_b1 = (model_trace.nodes['b1']['log_prob'] - guide_trace.nodes['b1']['log_prob'])
+    expected_b1 += (model_trace.nodes['c1']['log_prob'] - guide_trace.nodes['c1']['log_prob']).sum()
+    expected_b1 += model_trace.nodes['obs1']['log_prob'].sum()
 
-    expected_c0 = (model_trace.nodes['c0']['batch_log_pdf'] - guide_trace.nodes['c0']['batch_log_pdf'])
-    expected_c0 += model_trace.nodes['obs0']['batch_log_pdf']
+    expected_c0 = (model_trace.nodes['c0']['log_prob'] - guide_trace.nodes['c0']['log_prob'])
+    expected_c0 += model_trace.nodes['obs0']['log_prob']
 
-    expected_b0 = (model_trace.nodes['b0']['batch_log_pdf'] - guide_trace.nodes['b0']['batch_log_pdf'])
-    expected_b0 += (model_trace.nodes['c0']['batch_log_pdf'] - guide_trace.nodes['c0']['batch_log_pdf']).sum()
-    expected_b0 += model_trace.nodes['obs0']['batch_log_pdf'].sum()
+    expected_b0 = (model_trace.nodes['b0']['log_prob'] - guide_trace.nodes['b0']['log_prob'])
+    expected_b0 += (model_trace.nodes['c0']['log_prob'] - guide_trace.nodes['c0']['log_prob']).sum()
+    expected_b0 += model_trace.nodes['obs0']['log_prob'].sum()
 
     assert_equal(expected_c1, dc['c1'], prec=1.0e-6)
     assert_equal(expected_b1, dc['b1'], prec=1.0e-6)
@@ -325,7 +325,7 @@ def test_compute_downstream_costs_iarange_in_irange(dim1):
     assert_equal(expected_b0, dc['b0'], prec=1.0e-6)
 
     for k in dc:
-        assert(guide_trace.nodes[k]['batch_log_pdf'].size() == dc[k].size())
+        assert(guide_trace.nodes[k]['log_prob'].size() == dc[k].size())
         assert_equal(dc[k], dc_brute[k])
 
 
@@ -354,8 +354,8 @@ def test_compute_downstream_costs_irange_in_iarange(dim1, dim2):
 
     guide_trace = prune_subsample_sites(guide_trace)
     model_trace = prune_subsample_sites(model_trace)
-    model_trace.compute_batch_log_pdf()
-    guide_trace.compute_batch_log_pdf()
+    model_trace.compute_log_prob()
+    guide_trace.compute_log_prob()
 
     non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
     dc, dc_nodes = _compute_downstream_costs(model_trace, guide_trace, non_reparam_nodes)
@@ -364,21 +364,21 @@ def test_compute_downstream_costs_irange_in_iarange(dim1, dim2):
     assert dc_nodes == dc_nodes_brute
 
     for k in dc:
-        assert(guide_trace.nodes[k]['batch_log_pdf'].size() == dc[k].size())
+        assert(guide_trace.nodes[k]['log_prob'].size() == dc[k].size())
         assert_equal(dc[k], dc_brute[k])
 
-    expected_b1 = model_trace.nodes['b1']['batch_log_pdf'] - guide_trace.nodes['b1']['batch_log_pdf']
-    expected_b1 += model_trace.nodes['obs1']['batch_log_pdf']
+    expected_b1 = model_trace.nodes['b1']['log_prob'] - guide_trace.nodes['b1']['log_prob']
+    expected_b1 += model_trace.nodes['obs1']['log_prob']
     assert_equal(expected_b1, dc['b1'])
 
-    expected_c = model_trace.nodes['c']['batch_log_pdf'] - guide_trace.nodes['c']['batch_log_pdf']
+    expected_c = model_trace.nodes['c']['log_prob'] - guide_trace.nodes['c']['log_prob']
     for i in range(dim2):
-        expected_c += model_trace.nodes['b{}'.format(i)]['batch_log_pdf'] - \
-            guide_trace.nodes['b{}'.format(i)]['batch_log_pdf']
-        expected_c += model_trace.nodes['obs{}'.format(i)]['batch_log_pdf']
+        expected_c += model_trace.nodes['b{}'.format(i)]['log_prob'] - \
+            guide_trace.nodes['b{}'.format(i)]['log_prob']
+        expected_c += model_trace.nodes['obs{}'.format(i)]['log_prob']
     assert_equal(expected_c, dc['c'])
 
-    expected_a1 = model_trace.nodes['a1']['batch_log_pdf'] - guide_trace.nodes['a1']['batch_log_pdf']
+    expected_a1 = model_trace.nodes['a1']['log_prob'] - guide_trace.nodes['a1']['log_prob']
     expected_a1 += expected_c.sum()
     assert_equal(expected_a1, dc['a1'])
 
@@ -410,8 +410,8 @@ def test_compute_downstream_costs_iarange_reuse(dim1, dim2):
 
     guide_trace = prune_subsample_sites(guide_trace)
     model_trace = prune_subsample_sites(model_trace)
-    model_trace.compute_batch_log_pdf()
-    guide_trace.compute_batch_log_pdf()
+    model_trace.compute_log_prob()
+    guide_trace.compute_log_prob()
 
     non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
     dc, dc_nodes = _compute_downstream_costs(model_trace, guide_trace,
@@ -420,11 +420,11 @@ def test_compute_downstream_costs_iarange_reuse(dim1, dim2):
     assert dc_nodes == dc_nodes_brute
 
     for k in dc:
-        assert(guide_trace.nodes[k]['batch_log_pdf'].size() == dc[k].size())
+        assert(guide_trace.nodes[k]['log_prob'].size() == dc[k].size())
         assert_equal(dc[k], dc_brute[k])
 
-    expected_c1 = model_trace.nodes['c1']['batch_log_pdf'] - guide_trace.nodes['c1']['batch_log_pdf']
-    expected_c1 += (model_trace.nodes['b1']['batch_log_pdf'] - guide_trace.nodes['b1']['batch_log_pdf']).sum()
-    expected_c1 += model_trace.nodes['c2']['batch_log_pdf'] - guide_trace.nodes['c2']['batch_log_pdf']
-    expected_c1 += model_trace.nodes['obs']['batch_log_pdf']
+    expected_c1 = model_trace.nodes['c1']['log_prob'] - guide_trace.nodes['c1']['log_prob']
+    expected_c1 += (model_trace.nodes['b1']['log_prob'] - guide_trace.nodes['b1']['log_prob']).sum()
+    expected_c1 += model_trace.nodes['c2']['log_prob'] - guide_trace.nodes['c2']['log_prob']
+    expected_c1 += model_trace.nodes['obs']['log_prob']
     assert_equal(expected_c1, dc['c1'])

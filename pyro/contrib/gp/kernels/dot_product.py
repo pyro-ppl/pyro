@@ -18,7 +18,7 @@ class DotProduct(Kernel):
         super(DotProduct, self).__init__(input_dim, active_dims, name)
 
         if variance is None:
-            variance = torch.ones(1)
+            variance = torch.tensor(1.)
         self.variance = Parameter(variance)
         self.set_constraint("variance", constraints.positive)
 
@@ -69,7 +69,7 @@ class Polynomial(DotProduct):
         super(Polynomial, self).__init__(input_dim, variance, active_dims, name)
 
         if bias is None:
-            bias = torch.ones(1)
+            bias = torch.tensor(1.)
         self.bias = Parameter(bias)
         self.set_constraint("bias", constraints.positive)
 

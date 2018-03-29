@@ -133,7 +133,7 @@ class AIR(nn.Module):
         # If zero is sampled for a data point, then no more objects
         # will be added to its output image. We can't
         # straight-forwardly avoid generating further objects, so
-        # instead we zero out the log_pdf of future choices.
+        # instead we zero out the log_prob_sum of future choices.
         sample_mask = z_pres.squeeze(-1) if self.use_masking else 1
         with poutine.scale(None, sample_mask):
 
