@@ -1,5 +1,6 @@
 import logging
 
+import numpy as np
 import pytest
 import torch
 from torch.distributions import biject_to, constraints
@@ -69,7 +70,8 @@ class ADVIGaussianChain(GaussianChain):
         svi = SVI(self.advi.model, self.advi.guide, adam, loss="ELBO", trace_graph=False)
 
         for k in range(n_steps):
-            svi.step(reparameterized)
+            loss = svi.step(reparameterized)
+            assert np.isfinite(loss), loss
 
             if k % 1000 == 0 and k > 0 or k == n_steps - 1:
                 logger.debug("[step {}] advi mean parameter: {}".format(k, pyro.param("advi_loc").detach().numpy()))
@@ -96,7 +98,8 @@ def test_advi_diagonal_gaussians(advi_class):
     svi = SVI(advi.model, advi.guide, adam, loss="ELBO", trace_graph=False)
 
     for k in range(n_steps):
-        svi.step()
+        loss = svi.step()
+        assert np.isfinite(loss), loss
 
     if advi_class == ADVIMultivariateNormal:
         L = pyro.param("advi_scale_tril")
@@ -122,7 +125,8 @@ def test_advi_transform(advi_class):
     svi = SVI(advi.model, advi.guide, adam, loss="ELBO", trace_graph=False)
 
     for k in range(n_steps):
-        svi.step()
+        loss = svi.step()
+        assert np.isfinite(loss), loss
 
     if advi_class == ADVIMultivariateNormal:
         L = pyro.param("advi_scale_tril")
@@ -136,13 +140,12 @@ def test_advi_transform(advi_class):
                  msg="advi covariance off")
 
 
-@pytest.mark.xfail(reason="numerical imprecision of transformed delta distribution")
 @pytest.mark.parametrize('advi_class', [ADVIDiagonalNormal, ADVIMultivariateNormal])
 def test_advi_dirichlet(advi_class):
-    num_steps = 1000
-    prior = torch.tensor([0.1, 0.2, 0.3, 0.4])
-    data = torch.tensor([0, 2]).long()
-    true_posterior = torch.tensor([1.1, 0.2, 1.3, 0.4])
+    num_steps = 2000
+    prior = torch.tensor([0.5, 1.0, 1.5, 3.0])
+    data = torch.tensor([0] * 4 + [1] * 2 + [2] * 5).long()
+    posterior = torch.tensor([4.5, 3.0, 6.5, 3.0])
 
     def model(data):
         p = pyro.sample("p", dist.Dirichlet(prior))
@@ -150,12 +153,14 @@ def test_advi_dirichlet(advi_class):
             pyro.sample("data", dist.Categorical(p).reshape(data.shape), obs=data)
 
     advi = advi_class(model)
-    svi = SVI(advi.model, advi.guide, optim.Adam({"lr": .01}), loss="ELBO")
+    svi = SVI(advi.model, advi.guide, optim.Adam({"lr": .003}), loss="ELBO")
 
     for _ in range(num_steps):
-        svi.step(data)
+        loss = svi.step(data)
+        assert np.isfinite(loss), loss
 
-    actual_posterior = biject_to(constraints.simplex)(pyro.param("advi_loc"))
-    assert_equal(actual_posterior, true_posterior, prec=0.01, msg=''.join([
-        '\nexpected {}'.format(true_posterior.detach().cpu().numpy()),
-        '\n  actual {}'.format(actual_posterior.detach().cpu().numpy())]))
+    expected_mean = posterior / posterior.sum()
+    actual_mean = biject_to(constraints.simplex)(pyro.param("advi_loc"))
+    assert_equal(actual_mean, expected_mean, prec=0.2, msg=''.join([
+        '\nexpected {}'.format(expected_mean.detach().cpu().numpy()),
+        '\n  actual {}'.format(actual_mean.detach().cpu().numpy())]))

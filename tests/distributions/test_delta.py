@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 from unittest import TestCase
 
 import numpy as np
+import pytest
 import torch
 
 import pyro.distributions as dist
@@ -46,10 +47,17 @@ class TestDelta(TestCase):
         assert_equal(torch_mean, self.analytic_mean)
         assert_equal(torch_var, self.analytic_var)
 
-    def test_support(self):
-        actual_support = dist.Delta(self.vs).enumerate_support()
-        actual_support_non_vec = dist.Delta(self.v).enumerate_support()
-        assert len(actual_support) == 1
-        assert len(actual_support_non_vec) == 1
-        assert_equal(actual_support.data, torch.tensor(self.expected_support))
-        assert_equal(actual_support_non_vec.data, torch.tensor(self.expected_support_non_vec))
+
+@pytest.mark.parametrize('batch_dim,event_dim',
+                         [(b, e) for b in range(4) for e in range(1+b)])
+@pytest.mark.parametrize('has_log_density', [False, True])
+def test_shapes(batch_dim, event_dim, has_log_density):
+    shape = tuple(range(2, 2 + batch_dim + event_dim))
+    batch_shape = shape[:batch_dim]
+    v = torch.randn(shape)
+    log_density = torch.randn(batch_shape) if has_log_density else 0
+
+    d = dist.Delta(v, log_density=log_density, event_dim=event_dim)
+    x = d.rsample()
+    assert (x == v).all()
+    assert (d.log_prob(x) == log_density).all()

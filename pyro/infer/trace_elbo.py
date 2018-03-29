@@ -112,7 +112,7 @@ class Trace_ELBO(ELBO):
                         guide_site = guide_trace.nodes[name]
                         guide_log_prob, score_function_term, entropy_term = guide_site["score_parts"]
 
-                        elbo_particle = elbo_particle + model_log_prob_sum - guide_log_prob.sum()
+                        elbo_particle = elbo_particle + (model_log_prob_sum.item() - guide_log_prob.sum().item())
                         surrogate_elbo_particle = surrogate_elbo_particle + model_log_prob_sum
 
                         if not is_identically_zero(entropy_term):

@@ -75,19 +75,15 @@ class ADVI(object):
         pos = 0
         for name, site in self.prototype_trace.nodes.items():
             if site["type"] == "sample" and not site["is_observed"]:
-                shape = self._unconstrained_shapes[name]
-                size = _product(shape)
-                unconstrained_value = latent[pos:pos + size].view(shape)
+                unconstrained_shape = self._unconstrained_shapes[name]
+                size = _product(unconstrained_shape)
+                unconstrained_value = latent[pos:pos + size].view(unconstrained_shape)
                 pos += size
-                delta_dist = dist.Delta(unconstrained_value)
-                delta_dist = dist.TransformedDistribution(delta_dist, biject_to(site["fn"].support))
-                delta_dist = delta_dist.reshape(extra_event_dims=site["fn"].event_dim - delta_dist.event_dim)
-                value = pyro.sample(name, delta_dist)
-
-                # work around event_shape bug in TransformedDistribution(_, StickBreakingTransform())
-                delta_dist._event_shape = value.shape[value.dim() - delta_dist.event_dim:]
-
-                result[name] = value
+                transform = biject_to(site["fn"].support)
+                value = transform(unconstrained_value)
+                log_density = transform.inv.log_abs_det_jacobian(value, unconstrained_value)
+                delta_dist = dist.Delta(value, log_density=log_density, event_dim=site["fn"].event_dim)
+                result[name] = pyro.sample(name, delta_dist)
         assert pos == len(latent)
 
         return result
