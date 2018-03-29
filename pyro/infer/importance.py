@@ -42,5 +42,5 @@ class Importance(TracePosterior):
         traces = iter_importance_traces(num_particles=self.num_samples)(
             self.model, self.guide, *args, **kwargs)
         for _, model_trace, guide_trace in traces:
-            log_weight = model_trace.log_pdf() - guide_trace.log_pdf()
+            log_weight = model_trace.log_prob_sum() - guide_trace.log_prob_sum()
             yield (model_trace, log_weight)

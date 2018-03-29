@@ -41,7 +41,7 @@ class Search(TracePosterior):
             poutine.queue(self.model, queue=self.queue, max_tries=self.max_tries))
         while not self.queue.empty():
             tr = p.get_trace(*args, **kwargs)
-            yield (tr, tr.log_pdf())
+            yield (tr, tr.log_prob_sum())
 
 
 class ParallelSearch(TracePosterior):
@@ -69,7 +69,7 @@ class ParallelSearch(TracePosterior):
         # now compute joint probabilities:
         # TODO identify all global independence dimensions,
         # and aggregate over all non-global ones
-        tr.compute_batch_log_pdf()
-        log_joints = sum([tr.nodes[name]["batch_log_pdf"] for name in tr.nodes
+        tr.compute_log_prob()
+        log_joints = sum([tr.nodes[name]["log_prob"] for name in tr.nodes
                           if tr.nodes[name]["type"] == "sample"])
         yield (tr, log_joints)

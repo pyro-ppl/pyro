@@ -73,7 +73,7 @@ def iter_importance_traces(num_particles=1,
                 if infer.is_validation_enabled():
                     check_traceenum_requirements(model_trace, guide_trace)
 
-                model_trace.compute_batch_log_pdf()
+                model_trace.compute_log_prob()
                 guide_trace.compute_score_parts()
 
                 if infer.is_validation_enabled():

@@ -59,7 +59,7 @@ class Trace_ELBO(ELBO):
         """
         elbo = 0.0
         for _, model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
-            elbo_particle = (model_trace.log_pdf() - guide_trace.log_pdf()).item()
+            elbo_particle = (model_trace.log_prob_sum() - guide_trace.log_prob_sum()).item()
             elbo += elbo_particle / self.num_particles
 
         loss = -elbo
