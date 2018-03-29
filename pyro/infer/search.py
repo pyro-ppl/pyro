@@ -44,23 +44,33 @@ class Search(TracePosterior):
             yield (tr, tr.log_pdf())
 
 
-def _sum_except(trace, name):
-    return None
-
-
 class ParallelSearch(TracePosterior):
-    def __init__(self, model):
+    """
+    TODO docs
+    """
+    def __init__(self, model, first_available_dim=None):
+        """
+        TODO docs
+        """
+        if first_available_dim is None:
+            first_available_dim = 0
+        self.first_available_dim = first_available_dim
         self.model = model
 
     def _traces(self, *args, **kwargs):
+        """
+        TODO docs
+        """
         p = poutine.trace(
             poutine.enum(
-                poutine.indep(
-                    config_enumerate(self.model, default="parallel"))),
-            name="global_frame", size=1, dim=-1)
+                config_enumerate(self.model, default="parallel"),
+                first_available_dim=self.first_available_dim))
         tr = p.get_trace(*args, **kwargs)
         # now compute joint probabilities:
         # identify all global independence dimensions,
         # and aggregate over all non-global ones
-        log_joints = _sum_except(tr, "global_frame")
+        tr.compute_batch_log_pdf()
+        # import pdb; pdb.set_trace()
+        log_joints = sum([tr.nodes[name]["batch_log_pdf"] for name in tr.nodes
+                          if tr.nodes[name]["type"] == "sample"])
         yield (tr, log_joints)

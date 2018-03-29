@@ -15,9 +15,10 @@ from tests.common import assert_equal
 logger = logging.getLogger(__name__)
 
 
-def test_elbo_hmm_in_model():
+@pytest.mark.parametrize("num_data", [2, 3, 4, 5])
+def test_parallel_equals_sequential_naive(num_data):
     pyro.clear_param_store()
-    data = torch.ones(3)
+    data = torch.ones(num_data)
     init_probs = torch.tensor([0.5, 0.5])
 
     def model(data):
@@ -40,3 +41,11 @@ def test_elbo_hmm_in_model():
 
     parallel_trace = [(tr, log_w) for tr, log_w in parallel_posterior._traces(data)]
     seq_traces = [(tr, log_w) for tr, log_w in sequential_posterior._traces(data)]
+
+    assert_equal(parallel_trace[0][1].size(), torch.Size([2]*num_data))
+
+    assert_equal(parallel_trace[0][1].view(-1),
+                 torch.stack([p[1] for p in seq_traces]))
+
+    assert_equal(parallel_trace[0][1].sum().item(),
+                 sum(map(lambda p: p[1], seq_traces)).sum().item())
