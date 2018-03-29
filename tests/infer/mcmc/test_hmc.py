@@ -119,6 +119,7 @@ TEST_IDS = [t[0].id_fn() if type(t).__name__ == 'TestExample'
     TEST_CASES,
     ids=TEST_IDS)
 @pytest.mark.init(rng_seed=34)
+@pytest.mark.disable_validation()
 def test_hmc_conjugate_gaussian(fixture,
                                 num_samples,
                                 warmup_steps,
@@ -275,7 +276,7 @@ def test_bernoulli_beta_with_dual_averaging():
     assert_equal(posterior_mean, true_probs, prec=0.01)
 
 
-@pytest.mark.xfail(reason='the model is sensitive to NaN log_pdf')
+@pytest.mark.xfail(reason='the model is sensitive to NaN log_prob_sum')
 def test_normal_gamma_with_dual_averaging():
     def model(data):
         rate = torch.tensor([1.0, 1.0])

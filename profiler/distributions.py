@@ -82,7 +82,7 @@ def sample(dist, batch_size):
     tool=get_tool,
     tool_cfg=get_tool_cfg,
     fn_id=lambda dist, batch, *args, **kwargs:  #
-    'batch_log_pdf_' + dist.dist_class.__name__ + '_N=' + str(batch.size()[0]))
+    'log_prob_' + dist.dist_class.__name__ + '_N=' + str(batch.size()[0]))
 def log_prob(dist, batch):
     return dist.log_prob(batch)
 

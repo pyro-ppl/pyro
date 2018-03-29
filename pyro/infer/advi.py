@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import torch
-from torch.distributions import constraints, transform_to
+from torch.distributions import biject_to, constraints
 
 import pyro
 import pyro.distributions as dist
@@ -43,9 +43,12 @@ class ADVI(object):
         # run the model so we can inspect its structure
         self.prototype_trace = poutine.block(poutine.trace(self.base_model).get_trace)(*args, **kwargs)
         self.prototype_trace = prune_subsample_sites(self.prototype_trace)
-        self.latent_dim = sum(site["value"].view(-1).size(0)
-                              for site in self.prototype_trace.nodes.values()
-                              if site["type"] == "sample" and not site["is_observed"])
+
+        # collect the shapes of unconstrained values, which may differ from the shapes of constrained values
+        self._unconstrained_shapes = {name: biject_to(site["fn"].support).inv(site["value"]).shape
+                                      for name, site in self.prototype_trace.nodes.items()
+                                      if site["type"] == "sample" and not site["is_observed"]}
+        self.latent_dim = sum(_product(shape) for shape in self._unconstrained_shapes.values())
 
     def sample_latent(self, *args, **kwargs):
         """
@@ -57,23 +60,33 @@ class ADVI(object):
     def guide(self, *args, **kwargs):
         """
         An automatic guide with the same ``*args, **kwargs`` as the base ``model``.
+
+        :return: A dictionary mapping sample site name to sampled value.
+        :rtype: dict
         """
         # if we've never run the model before, do so now so we can inspect the model structure
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
 
+        result = {}
         latent = self.sample_latent(*args, **kwargs)
+
+        # unpack latent samples
         pos = 0
         for name, site in self.prototype_trace.nodes.items():
             if site["type"] == "sample" and not site["is_observed"]:
-                shape = site["fn"].shape()
-                size = _product(shape)
-                unconstrained_value = latent[pos:pos + size].view(shape)
+                unconstrained_shape = self._unconstrained_shapes[name]
+                size = _product(unconstrained_shape)
+                unconstrained_value = latent[pos:pos + size].view(unconstrained_shape)
                 pos += size
-                delta_dist = dist.TransformedDistribution(dist.Delta(unconstrained_value),
-                                                          transform_to(site["fn"].support))
-                pyro.sample(name, delta_dist.reshape(extra_event_dims=site["fn"].event_dim))
+                transform = biject_to(site["fn"].support)
+                value = transform(unconstrained_value)
+                log_density = transform.inv.log_abs_det_jacobian(value, unconstrained_value)
+                delta_dist = dist.Delta(value, log_density=log_density, event_dim=site["fn"].event_dim)
+                result[name] = pyro.sample(name, delta_dist)
         assert pos == len(latent)
+
+        return result
 
     def model(self, *args, **kwargs):
         """
@@ -106,7 +119,7 @@ class ADVIMultivariateNormal(ADVI):
 
         latent_dim = 10
         pyro.param("advi_loc", torch.randn(latent_dim))
-        pyro.param("advi_cholesky_factor", torch.tril(torch.rand(latent_dim)),
+        pyro.param("advi_scale_tril", torch.tril(torch.rand(latent_dim)),
                    constraint=constraints.lower_cholesky)
     """
     def sample_latent(self, *args, **kwargs):
@@ -114,11 +127,9 @@ class ADVIMultivariateNormal(ADVI):
         Samples the (single) multivariate normal latent used in the advi guide.
         """
         loc = pyro.param("advi_loc", torch.zeros(self.latent_dim))
-        lower_cholesky = pyro.param("advi_lower_cholesky", torch.eye(self.latent_dim),
-                                    constraint=constraints.lower_cholesky)
-        cov = torch.mm(lower_cholesky, lower_cholesky.t())
-        # TODO use Multivariate normal that consumes L directly
-        return pyro.sample("_advi_latent", dist.MultivariateNormal(loc, cov))
+        scale_tril = pyro.param("advi_scale_tril", torch.eye(self.latent_dim),
+                                constraint=constraints.lower_cholesky)
+        return pyro.sample("_advi_latent", dist.MultivariateNormal(loc, scale_tril=scale_tril))
 
 
 class ADVIDiagonalNormal(ADVI):

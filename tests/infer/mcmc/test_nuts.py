@@ -33,6 +33,7 @@ TEST_CASES[3] = T3
     TEST_CASES,
     ids=TEST_IDS)
 @pytest.mark.init(rng_seed=34)
+@pytest.mark.disable_validation()
 def test_nuts_conjugate_gaussian(fixture,
                                  num_samples,
                                  warmup_steps,
@@ -151,7 +152,7 @@ def test_logistic_regression_with_dual_averaging():
     assert_equal(rmse(true_coefs, posterior_mean).item(), 0.0, prec=0.05)
 
 
-@pytest.mark.xfail(reason='the model is sensitive to NaN log_pdf')
+@pytest.mark.xfail(reason='the model is sensitive to NaN log_prob_sum')
 def test_bernoulli_beta_with_dual_averaging():
     def model(data):
         alpha = torch.tensor([1.1, 1.1])

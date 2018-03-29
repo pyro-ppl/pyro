@@ -111,7 +111,7 @@ def discrete_escape(trace, msg):
     return (msg["type"] == "sample") and \
         (not msg["is_observed"]) and \
         (msg["name"] not in trace) and \
-        (getattr(msg["fn"], "enumerable", False))
+        (getattr(msg["fn"], "has_enumerate_support", False))
 
 
 def all_escape(trace, msg):

@@ -136,7 +136,7 @@ def irange_cuda_model(subsample_size):
 @pytest.mark.parametrize('model', [iarange_cuda_model, irange_cuda_model], ids=["iarange", "irange"])
 def test_cuda(model, subsample_size):
     tr = poutine.trace(model).get_trace(subsample_size)
-    assert tr.log_pdf().is_cuda
+    assert tr.log_prob_sum().is_cuda
 
 
 @pytest.mark.parametrize('model', [iarange_model, irange_model], ids=['iarange', 'irange'])

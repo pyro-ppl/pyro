@@ -20,7 +20,7 @@ class OMTMultivariateNormal(MultivariateNormal):
     :param torch.Tensor loc: Mean.
     :param torch.Tensor scale_tril: Cholesky of Covariance matrix.
     """
-    params = {"loc": constraints.real, "scale_tril": constraints.lower_triangular}
+    arg_constraints = {"loc": constraints.real, "scale_tril": constraints.lower_triangular}
 
     def __init__(self, loc, scale_tril):
         assert(loc.dim() == 1), "OMTMultivariateNormal loc must be 1-dimensional"

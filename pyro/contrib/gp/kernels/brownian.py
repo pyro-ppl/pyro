@@ -26,7 +26,7 @@ class Brownian(Kernel):
         super(Brownian, self).__init__(input_dim, active_dims, name)
 
         if variance is None:
-            variance = torch.ones(1)
+            variance = torch.tensor(1.)
         self.variance = Parameter(variance)
         self.set_constraint("variance", constraints.positive)
 

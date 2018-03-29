@@ -3,7 +3,11 @@ from __future__ import absolute_import, division, print_function
 import numbers
 
 import torch
+import torch.distributions as torch_dist
 import torch.nn.functional as F
+
+
+_VALIDATION_ENABLED = False
 
 
 def copy_docs_from(source_class, full_text=False):
@@ -315,3 +319,13 @@ def matrix_triangular_solve_compat(b, A, upper=True):
         return A.inverse().matmul(b)
     else:
         return b.trtrs(A, upper=upper)[0].view(b.size())
+
+
+def enable_validation(is_validate):
+    global _VALIDATION_ENABLED
+    _VALIDATION_ENABLED = is_validate
+    torch_dist.Distribution.set_default_validate_args(is_validate)
+
+
+def is_validation_enabled():
+    return _VALIDATION_ENABLED

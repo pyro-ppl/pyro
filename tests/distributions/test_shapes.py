@@ -42,21 +42,21 @@ def test_dirichlet_shape():
     assert d.sample().size() == d.shape()
 
 
-def test_bernoulli_batch_log_pdf_shape():
+def test_bernoulli_log_prob_shape():
     ps = torch.ones(3, 2)
     x = torch.ones(3, 2)
     d = dist.Bernoulli(ps)
     assert d.log_prob(x).size() == (3, 2)
 
 
-def test_categorical_batch_log_pdf_shape():
+def test_categorical_log_prob_shape():
     ps = torch.ones(3, 2, 4) / 4
     x = torch.zeros(3, 2)
     d = dist.Categorical(ps)
     assert d.log_prob(x).size() == (3, 2)
 
 
-def test_one_hot_categorical_batch_log_pdf_shape():
+def test_one_hot_categorical_log_prob_shape():
     ps = torch.ones(3, 2, 4) / 4
     x = torch.zeros(3, 2, 4)
     x[:, :, 0] = 1
@@ -64,7 +64,7 @@ def test_one_hot_categorical_batch_log_pdf_shape():
     assert d.log_prob(x).size() == (3, 2)
 
 
-def test_normal_batch_log_pdf_shape():
+def test_normal_log_prob_shape():
     mu = torch.zeros(3, 2)
     sigma = torch.ones(3, 2)
     x = torch.zeros(3, 2)
@@ -72,10 +72,10 @@ def test_normal_batch_log_pdf_shape():
     assert d.log_prob(x).size() == (3, 2)
 
 
-def test_diag_normal_batch_log_pdf_shape():
+def test_diag_normal_log_prob_shape():
     mu1 = torch.zeros(2, 3)
     mu2 = torch.zeros(2, 4)
-    sigma = torch.zeros(2, 1)
+    sigma = torch.ones(2, 1)
     d1 = dist.Normal(mu1, sigma.expand_as(mu1)).reshape(extra_event_dims=1)
     d2 = dist.Normal(mu2, sigma.expand_as(mu2)).reshape(extra_event_dims=1)
     x1 = d1.sample()

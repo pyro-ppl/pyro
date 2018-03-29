@@ -15,16 +15,31 @@ def _compute_log_r(model_trace, guide_trace):
     stacks = get_iarange_stacks(model_trace)
     for name, model_site in model_trace.nodes.items():
         if model_site["type"] == "sample":
-            log_r_term = model_site["batch_log_pdf"]
+            log_r_term = model_site["log_prob"]
             if not model_site["is_observed"]:
-                log_r_term = log_r_term - guide_trace.nodes[name]["batch_log_pdf"]
+                log_r_term = log_r_term - guide_trace.nodes[name]["log_prob"]
             log_r.add((stacks[name], log_r_term.detach()))
     return log_r
 
 
 class Trace_ELBO(ELBO):
     """
-    A trace implementation of ELBO-based SVI
+    A trace implementation of ELBO-based SVI. The estimator is constructed
+    along the lines of references [1] and [2]. There are no restrictions on the
+    dependency structure of the model or the guide. The gradient estimator includes
+    partial Rao-Blackwellization for reducing the variance of the estimator when
+    non-reparameterizable random variables are present. The Rao-Blackwellization is
+    partial in that it only uses conditional independence information that is marked
+    by :class:`~pyro.iarange` contexts. For more fine-grained Rao-Blackwellization,
+    see :class:`~pyro.infer.tracegraph_elbo.TraceGraph_ELBO`.
+
+    References
+
+    [1] Automated Variational Inference in Probabilistic Programming,
+        David Wingate, Theo Weber
+
+    [2] Black Box Variational Inference,
+        Rajesh Ranganath, Sean Gerrish, David M. Blei
     """
 
     def _get_traces(self, model, guide, *args, **kwargs):
@@ -70,16 +85,16 @@ class Trace_ELBO(ELBO):
             # compute elbo and surrogate elbo
             for name, model_site in model_trace.nodes.items():
                 if model_site["type"] == "sample":
-                    model_log_pdf = model_site["log_pdf"]
+                    model_log_prob_sum = model_site["log_prob_sum"]
                     if model_site["is_observed"]:
-                        elbo_particle = elbo_particle + model_log_pdf.item()
-                        surrogate_elbo_particle = surrogate_elbo_particle + model_log_pdf
+                        elbo_particle = elbo_particle + model_log_prob_sum.item()
+                        surrogate_elbo_particle = surrogate_elbo_particle + model_log_prob_sum
                     else:
                         guide_site = guide_trace.nodes[name]
-                        guide_log_pdf, score_function_term, entropy_term = guide_site["score_parts"]
+                        guide_log_prob, score_function_term, entropy_term = guide_site["score_parts"]
 
-                        elbo_particle = elbo_particle + model_log_pdf - guide_log_pdf.sum()
-                        surrogate_elbo_particle = surrogate_elbo_particle + model_log_pdf
+                        elbo_particle = elbo_particle + (model_log_prob_sum.item() - guide_log_prob.sum().item())
+                        surrogate_elbo_particle = surrogate_elbo_particle + model_log_prob_sum
 
                         if not is_identically_zero(entropy_term):
                             surrogate_elbo_particle -= entropy_term.sum()

@@ -4,6 +4,8 @@ import numpy as np
 import pytest
 import torch
 
+import pyro
+import pyro.distributions as dist
 from pyro.distributions.util import broadcast_shape
 from tests.common import assert_equal, xfail_if_not_implemented
 
@@ -20,7 +22,7 @@ def _log_prob_shape(dist, x_size=torch.Size()):
 
 def test_batch_log_prob(dist):
     if dist.scipy_arg_fn is None:
-        pytest.skip('{}.log_pdf has no scipy equivalent'.format(dist.pyro_dist.__name__))
+        pytest.skip('{}.log_prob_sum has no scipy equivalent'.format(dist.pyro_dist.__name__))
     for idx in dist.get_batch_data_indices():
         dist_params = dist.get_dist_params(idx)
         d = dist.pyro_dist(**dist_params)
@@ -79,3 +81,18 @@ def test_enumerate_support(discrete_dist):
     actual_support = Dist(**discrete_dist.get_dist_params(-1)).enumerate_support()
     assert_equal(actual_support.data, torch.tensor(expected_support))
     assert_equal(actual_support_non_vec.data, torch.tensor(expected_support_non_vec))
+
+
+@pytest.mark.parametrize("dist_class, args", [
+    (dist.Normal, {"mu": torch.tensor(0.0), "sigma": torch.tensor(-1.0)}),
+    (dist.Gamma, {"alpha": -1.0, "beta": 1.0}),
+    (dist.Exponential, {"lam": -2})
+])
+@pytest.mark.parametrize("validate_args", [True, False])
+def test_distribution_validate_args(dist_class, args, validate_args):
+    with pyro.validation_enabled(validate_args):
+        if not validate_args:
+            dist_class(**args)
+        else:
+            with pytest.raises(ValueError):
+                dist_class(**args)

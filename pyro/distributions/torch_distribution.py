@@ -28,14 +28,6 @@ class TorchDistributionMixin(Distribution):
         """
         return self.has_rsample
 
-    @property
-    def enumerable(self):
-        """
-        :return: Whether this distribution implements :meth:`enumerate_support`
-        :rtype: bool
-        """
-        return self.has_enumerate_support
-
     def __call__(self, sample_shape=torch.Size()):
         """
         Samples a random value.
@@ -104,12 +96,6 @@ class TorchDistributionMixin(Distribution):
         :rtype: :class:`MaskedDistribution`
         """
         return MaskedDistribution(self, mask)
-
-    def analytic_mean(self):
-        return self.mean
-
-    def analytic_var(self):
-        return self.variance
 
 
 class TorchDistribution(torch.distributions.Distribution, TorchDistributionMixin):
@@ -187,6 +173,8 @@ class ReshapedDistribution(TorchDistribution):
     :param int extra_event_dims: The number of extra event dimensions that will
         be considered dependent.
     """
+    arg_constraints = {}
+
     def __init__(self, base_dist, sample_shape=torch.Size(), extra_event_dims=0):
         sample_shape = torch.Size(sample_shape)
         if extra_event_dims > len(sample_shape + base_dist.batch_shape):
@@ -222,11 +210,11 @@ class ReshapedDistribution(TorchDistribution):
         return sum_rightmost(self.base_dist.log_prob(value), self.extra_event_dims)
 
     def score_parts(self, value):
-        log_pdf, score_function, entropy_term = self.base_dist.score_parts(value)
-        log_pdf = sum_rightmost(log_pdf, self.extra_event_dims)
+        log_prob, score_function, entropy_term = self.base_dist.score_parts(value)
+        log_prob = sum_rightmost(log_prob, self.extra_event_dims)
         score_function = sum_rightmost(score_function, self.extra_event_dims)
         entropy_term = sum_rightmost(entropy_term, self.extra_event_dims)
-        return ScoreParts(log_pdf, score_function, entropy_term)
+        return ScoreParts(log_prob, score_function, entropy_term)
 
     def enumerate_support(self):
         if self.extra_event_dims:
@@ -259,6 +247,8 @@ class MaskedDistribution(TorchDistribution):
 
     :param torch.Tensor mask: A zero-one valued float tensor.
     """
+    arg_constraints = {}
+
     def __init__(self, base_dist, mask):
         if broadcast_shape(mask.shape, base_dist.batch_shape) != base_dist.batch_shape:
             raise ValueError("Expected mask.shape to be broadcastable to base_dist.batch_shape, "

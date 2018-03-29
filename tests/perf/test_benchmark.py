@@ -112,6 +112,7 @@ def bernoulli_beta_hmc(**kwargs):
     min_rounds=5,
     disable_gc=True,
 )
+@pytest.mark.disable_validation()
 def test_benchmark(benchmark, model, model_args, id):
     print("Running - {}".format(id))
     benchmark(model, **model_args)

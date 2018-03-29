@@ -26,17 +26,17 @@ class Rejector(TorchDistribution):
 
         # These LRU(1) caches allow work to be shared across different method calls.
         self._log_prob_accept_cache = None, None
-        self._propose_batch_log_pdf_cache = None, None
+        self._propose_log_prob_cache = None, None
 
     def _log_prob_accept(self, x):
         if x is not self._log_prob_accept_cache[0]:
             self._log_prob_accept_cache = x, self.log_prob_accept(x) - self._log_scale
         return self._log_prob_accept_cache[1]
 
-    def _propose_batch_log_pdf(self, x):
-        if x is not self._propose_batch_log_pdf_cache[0]:
-            self._propose_batch_log_pdf_cache = x, self.propose.log_prob(x)
-        return self._propose_batch_log_pdf_cache[1]
+    def _propose_log_prob(self, x):
+        if x is not self._propose_log_prob_cache[0]:
+            self._propose_log_prob_cache = x, self.propose.log_prob(x)
+        return self._propose_log_prob_cache[1]
 
     def rsample(self, sample_shape=torch.Size()):
         # Implements parallel batched accept-reject sampling.
@@ -55,9 +55,9 @@ class Rejector(TorchDistribution):
         return x
 
     def log_prob(self, x):
-        return self._propose_batch_log_pdf(x) + self._log_prob_accept(x)
+        return self._propose_log_prob(x) + self._log_prob_accept(x)
 
     def score_parts(self, x):
         score_function = self._log_prob_accept(x)
-        log_pdf = self.log_prob(x)
-        return ScoreParts(log_pdf, score_function, log_pdf)
+        log_prob = self.log_prob(x)
+        return ScoreParts(log_prob, score_function, log_prob)
