@@ -40,4 +40,8 @@ class MultiClass(Likelihood):
                              "number of classes. Expected {} but got {}."
                              .format(self.num_classes, f_swap.shape[-1]))
         f_res = self.response_function(f_swap)
-        return pyro.sample(self.y_name, dist.Categorical(f_res), obs=y)
+        return pyro.sample(self.y_name,
+                           dist.Categorical(f_res)
+                               .reshape(sample_shape=y.shape[:-f_res.dim() + 1],
+                                        extra_event_dims=y.dim()),
+                           obs=y)

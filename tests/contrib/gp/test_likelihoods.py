@@ -12,8 +12,8 @@ from pyro.contrib.gp.models import SparseVariationalGP, VariationalGP
 T = namedtuple("TestGPLikelihood", ["model_class", "X", "y", "kernel", "likelihood"])
 
 X = torch.tensor([[1, 5, 3], [4, 3, 7], [3, 4, 6]])
-kernel = RBF(input_dim=3, variance=torch.tensor([1]), lengthscale=torch.tensor([3]))
-noise = torch.tensor([1e-6])
+kernel = RBF(input_dim=3, variance=torch.tensor(1.), lengthscale=torch.tensor(3.))
+noise = torch.tensor(1e-6)
 y_binary1D = torch.tensor([0, 1, 0])
 y_binary2D = torch.tensor([[0, 1, 1], [1, 0, 1]])
 binary_likelihood = Binary()
@@ -32,11 +32,11 @@ TEST_CASES = [
     ),
     T(
         VariationalGP,
-        X, y_binary1D, kernel, binary_likelihood
+        X, y_multiclass1D, kernel, multiclass_likelihood
     ),
     T(
         VariationalGP,
-        X, y_binary2D, kernel, binary_likelihood
+        X, y_multiclass2D, kernel, multiclass_likelihood
     ),
     T(
         SparseVariationalGP,
@@ -62,7 +62,6 @@ TEST_IDS = ["_".join([t[0].__name__, t[4].__class__.__name__.split(".")[-1],
 
 
 @pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
-@pytest.mark.disable_validation()
 def test_inference(model_class, X, y, kernel, likelihood):
     if isinstance(likelihood, MultiClass):
         latent_shape = y.shape[:-1] + (likelihood.num_classes,)
@@ -72,5 +71,19 @@ def test_inference(model_class, X, y, kernel, likelihood):
         gp = model_class(X, y, kernel, X, likelihood, latent_shape)
     else:
         gp = model_class(X, y, kernel, likelihood, latent_shape)
+
+    gp.optimize(num_steps=1)
+
+
+@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
+def test_inference_with_empty_latent_shape(model_class, X, y, kernel, likelihood):
+    if isinstance(likelihood, MultiClass):
+        latent_shape = torch.Size([likelihood.num_classes])
+    else:
+        latent_shape = torch.Size([])
+    if model_class is SparseVariationalGP:
+        gp = model_class(X, y, kernel, X, likelihood, latent_shape=latent_shape)
+    else:
+        gp = model_class(X, y, kernel, likelihood, latent_shape=latent_shape)
 
     gp.optimize(num_steps=1)

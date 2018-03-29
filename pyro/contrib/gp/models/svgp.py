@@ -71,7 +71,9 @@ class SparseVariationalGP(GPModel):
 
         zero_loc = Xu.new_zeros(u_loc.shape)
         u_name = pyro.param_with_module_name(self.name, "u")
-        pyro.sample(u_name, dist.MultivariateNormal(zero_loc, scale_tril=Luu))
+        pyro.sample(u_name,
+                    dist.MultivariateNormal(zero_loc, scale_tril=Luu)
+                        .reshape(extra_event_dims=zero_loc.dim()-1))
 
         f_loc, f_var = conditional(self.X, Xu, self.kernel, u_loc, u_scale_tril,
                                    Luu, full_cov=False, jitter=self.jitter)
@@ -90,7 +92,9 @@ class SparseVariationalGP(GPModel):
 
         if self._sample_latent:
             u_name = pyro.param_with_module_name(self.name, "u")
-            pyro.sample(u_name, dist.MultivariateNormal(u_loc, scale_tril=u_scale_tril))
+            pyro.sample(u_name,
+                        dist.MultivariateNormal(u_loc, scale_tril=u_scale_tril)
+                            .reshape(extra_event_dims=u_loc.dim()-1))
         return Xu, self.kernel, u_loc, u_scale_tril
 
     def forward(self, Xnew, full_cov=False):

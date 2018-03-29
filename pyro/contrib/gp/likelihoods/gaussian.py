@@ -19,11 +19,15 @@ class Gaussian(Likelihood):
     def __init__(self, variance=None, name="Gaussian"):
         super(Gaussian, self).__init__(name)
         if variance is None:
-            variance = torch.ones(1)
+            variance = torch.tensor(1.)
         self.variance = Parameter(variance)
         self.set_constraint("variance", constraints.positive)
 
     def forward(self, f_loc, f_var, y):
         variance = self.get_param("variance")
         y_var = f_var + variance
-        return pyro.sample(self.y_name, dist.Normal(f_loc, y_var), obs=y)
+        return pyro.sample(self.y_name,
+                           dist.Normal(f_loc, y_var)
+                               .reshape(sample_shape=y.shape[:-f_loc.dim()],
+                                        extra_event_dims=y.dim()),
+                           obs=y)

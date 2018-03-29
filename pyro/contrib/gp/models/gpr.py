@@ -48,7 +48,9 @@ class GPRegression(GPModel):
         else:
             y_name = pyro.param_with_module_name(self.name, "y")
             return pyro.sample(y_name,
-                               dist.MultivariateNormal(zero_loc, scale_tril=Lff),
+                               dist.MultivariateNormal(zero_loc, scale_tril=Lff)
+                                   .reshape(sample_shape=self.y.shape[:-1],
+                                            extra_event_dims=self.y.dim()-1),
                                obs=self.y)
 
     def guide(self):
