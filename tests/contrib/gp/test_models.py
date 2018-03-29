@@ -205,7 +205,7 @@ def test_inference_sgpr():
 
 
 @pytest.mark.init(rng_seed=0)
-@pytest.mark.skip("Failure on PyTorch master - https://github.com/uber/pyro/issues/953")
+@pytest.mark.xfail(reason="Failure on PyTorch master - https://github.com/uber/pyro/issues/953")
 def test_inference_svgp():
     N = 1000
     X = dist.Uniform(torch.zeros(N), torch.ones(N)*5).sample()
@@ -268,7 +268,7 @@ def test_hmc(model_class, X, y, kernel, likelihood):
         logger.info(param_mean)
 
 
-@pytest.mark.skip("Failure on PyTorch master - https://github.com/uber/pyro/issues/953")
+@pytest.mark.xfail(reason="Failure on PyTorch master - https://github.com/uber/pyro/issues/953")
 def test_inference_deepGP():
     gp1 = GPRegression(X, None, kernel, name="GPR1")
     Z, _ = gp1.model()
