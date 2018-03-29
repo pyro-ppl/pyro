@@ -9,7 +9,7 @@ from pyro.poutine import util
 from .block_poutine import BlockPoutine
 from .condition_poutine import ConditionPoutine
 from .continuation_poutine import ContinuationMessenger, ContinuationPoutine  # noqa: F401
-from .indep_poutine import IndepMessenger, IndepPoutine  # noqa: F401
+from .indep_poutine import IndepMessenger  # noqa: F401
 from .infer_config_poutine import InferConfigPoutine
 from .lift_poutine import LiftPoutine
 from .poutine import _PYRO_STACK, Poutine  # noqa: F401
@@ -154,13 +154,6 @@ def infer_config(fn, config_fn):
     updates the value of the infer kwarg at a sample site to config_fn(site)
     """
     return InferConfigPoutine(fn, config_fn)
-
-
-def indep(fn, name, size, dim=None):
-    """
-    TODO docs
-    """
-    return IndepPoutine(fn, name, size, dim)
 
 
 def scale(null, scale):
