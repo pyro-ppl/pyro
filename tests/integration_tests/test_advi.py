@@ -140,13 +140,12 @@ def test_advi_transform(advi_class):
                  msg="advi covariance off")
 
 
-@pytest.mark.xfail(reason='unstable gradients in Dirichlet')
 @pytest.mark.parametrize('advi_class', [ADVIDiagonalNormal, ADVIMultivariateNormal])
 def test_advi_dirichlet(advi_class):
-    num_steps = 1000
-    prior = torch.tensor([0.1, 0.2, 0.3, 0.4])
-    data = torch.tensor([0, 0, 0, 1, 1, 1, 2, 2, 3, 3]).long()
-    true_posterior = torch.tensor([3.1, 3.2, 2.3, 2.4])
+    num_steps = 2000
+    prior = torch.tensor([0.5, 1.0, 1.5, 3.0])
+    data = torch.tensor([0] * 4 + [1] * 2 + [2] * 5).long()
+    posterior = torch.tensor([4.5, 3.0, 6.5, 3.0])
 
     def model(data):
         p = pyro.sample("p", dist.Dirichlet(prior))
@@ -154,13 +153,14 @@ def test_advi_dirichlet(advi_class):
             pyro.sample("data", dist.Categorical(p).reshape(data.shape), obs=data)
 
     advi = advi_class(model)
-    svi = SVI(advi.model, advi.guide, optim.Adam({"lr": .01}), loss="ELBO")
+    svi = SVI(advi.model, advi.guide, optim.Adam({"lr": .003}), loss="ELBO")
 
     for _ in range(num_steps):
         loss = svi.step(data)
         assert np.isfinite(loss), loss
 
-    actual_posterior = biject_to(constraints.simplex)(pyro.param("advi_loc"))
-    assert_equal(actual_posterior, true_posterior, prec=0.1, msg=''.join([
-        '\nexpected {}'.format(true_posterior.detach().cpu().numpy()),
-        '\n  actual {}'.format(actual_posterior.detach().cpu().numpy())]))
+    expected_mean = posterior / posterior.sum()
+    actual_mean = biject_to(constraints.simplex)(pyro.param("advi_loc"))
+    assert_equal(actual_mean, expected_mean, prec=0.2, msg=''.join([
+        '\nexpected {}'.format(expected_mean.detach().cpu().numpy()),
+        '\n  actual {}'.format(actual_mean.detach().cpu().numpy())]))
