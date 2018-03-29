@@ -103,7 +103,7 @@ def test_iter_discrete_traces_nan(enumerate1):
 def gmm_model(data, verbose=False):
     p = pyro.param("p", torch.tensor(0.3, requires_grad=True))
     sigma = pyro.param("sigma", torch.tensor(1.0, requires_grad=True))
-    mus = torch.tensor([-1, 1])
+    mus = torch.tensor([-1.0, 1.0])
     for i in pyro.irange("data", len(data)):
         z = pyro.sample("z_{}".format(i), dist.Bernoulli(p))
         z = z.long()
@@ -138,7 +138,7 @@ def gmm_batch_model(data):
     p = pyro.param("p", torch.tensor([0.3], requires_grad=True))
     p = torch.cat([p, 1 - p])
     sigma = pyro.param("sigma", torch.tensor([1.0], requires_grad=True))
-    mus = torch.tensor([-1, 1])
+    mus = torch.tensor([-1.0, 1.0])
     with pyro.iarange("data", len(data)) as batch:
         n = len(batch)
         z = pyro.sample("z", dist.OneHotCategorical(p).reshape([n]))
@@ -175,7 +175,7 @@ def test_gmm_batch_iter_discrete_traces(model, data_size, graph_type):
 @pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
 def test_svi_step_smoke(model, guide, enumerate1):
     pyro.clear_param_store()
-    data = torch.tensor([0, 1, 9])
+    data = torch.tensor([0.0, 1.0, 9.0])
 
     guide = config_enumerate(guide, default=enumerate1)
     optimizer = pyro.optim.Adam({"lr": .001})
@@ -805,7 +805,7 @@ def test_elbo_hmm_in_model(enumerate1, num_steps):
         transition_probs = pyro.param("transition_probs",
                                       torch.tensor([[0.9, 0.1], [0.1, 0.9]]),
                                       constraint=constraints.simplex)
-        locs = pyro.param("obs_locs", torch.tensor([-1, 1]))
+        locs = pyro.param("obs_locs", torch.tensor([-1.0, 1.0]))
         scale = pyro.param("obs_scale", torch.tensor(1.0),
                            constraint=constraints.positive)
 

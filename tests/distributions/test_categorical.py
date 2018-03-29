@@ -21,19 +21,19 @@ class TestCategorical(TestCase):
         self.ps = torch.tensor([0.1, 0.6, 0.3])
         self.batch_ps = torch.tensor([[0.1, 0.6, 0.3], [0.2, 0.4, 0.4]])
         self.n = torch.tensor([n])
-        self.test_data = torch.tensor([2])
+        self.test_data = torch.tensor([2.0])
         self.analytic_mean = n * self.ps
         one = torch.ones(3)
         self.analytic_var = n * torch.mul(self.ps, one.sub(self.ps))
 
         # Discrete Distribution
         self.d_ps = torch.tensor([[0.2, 0.3, 0.5], [0.1, 0.1, 0.8]])
-        self.d_test_data = torch.tensor([[0], [5]])
+        self.d_test_data = torch.tensor([[0.0], [5.0]])
 
         self.n_samples = 50000
 
-        self.support_non_vec = torch.tensor([0, 1, 2])
-        self.support = torch.tensor([[0, 0], [1, 1], [2, 2]])
+        self.support_non_vec = torch.tensor([0.0, 1.0, 2.0])
+        self.support = torch.tensor([[0.0, 0.0], [1.0, 1.0], [2.0, 2.0]])
 
     def test_log_prob_sum(self):
         log_px_torch = dist.Categorical(self.ps).log_prob(self.test_data).sum().item()

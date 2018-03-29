@@ -24,9 +24,9 @@ logger.setLevel(logging.INFO)
 
 T = namedtuple("TestGPModel", ["model_class", "X", "y", "kernel", "likelihood"])
 
-X = torch.tensor([[1, 5, 3], [4, 3, 7]])
-y1D = torch.tensor([2, 1])
-y2D = torch.tensor([[1, 2], [3, 3], [1, 4], [-1, 1]])
+X = torch.tensor([[1., 5., 3.], [4., 3., 7.]])
+y1D = torch.tensor([2., 1.])
+y2D = torch.tensor([[1., 2.], [3., 3.], [1., 4.], [-1., 1.]])
 kernel = RBF(input_dim=3, variance=torch.tensor(3.), lengthscale=torch.tensor(2.))
 noise = torch.tensor(1e-6)
 likelihood = Gaussian(noise)
@@ -94,7 +94,7 @@ def test_forward(model_class, X, y, kernel, likelihood):
         gp = model_class(X, y, kernel, likelihood)
 
     # test shape
-    Xnew = torch.tensor([[2, 3, 1]])
+    Xnew = torch.tensor([[2.0, 3.0, 1.0]])
     loc0, cov0 = gp(Xnew, full_cov=True)
     loc1, var1 = gp(Xnew, full_cov=False)
     assert loc0.dim() == y.dim()

@@ -46,10 +46,10 @@ def test_mean_gradient(sample_shape, L21, omega1, L11, L22=0.8, L33=0.9, omega2=
 
 
 def test_log_prob():
-    loc = torch.tensor([2, 1, 1, 2, 2])
-    D = torch.tensor([1, 2, 3, 1, 3])
-    W = torch.tensor([[1, -1, 2, 2, 4], [2, 1, 1, 2, 6]])
-    x = torch.tensor([2, 3, 4, 1, 7])
+    loc = torch.tensor([2.0, 1.0, 1.0, 2.0, 2.0])
+    D = torch.tensor([1.0, 2.0, 3.0, 1.0, 3.0])
+    W = torch.tensor([[1.0, -1.0, 2.0, 2.0, 4.0], [2.0, 1.0, 1.0, 2.0, 6.0]])
+    x = torch.tensor([2.0, 3.0, 4.0, 1.0, 7.0])
     L = D.diag() + torch.tril(W.t().matmul(W))
     cov = torch.mm(L, L.t())
 

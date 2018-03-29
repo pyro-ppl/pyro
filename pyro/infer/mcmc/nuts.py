@@ -199,7 +199,7 @@ class NUTS(HMC):
         #     `A Conceptual Introduction to Hamiltonian Monte Carlo` by Michael Betancourt.
         joint_prob = torch.exp(-energy_current)
         if joint_prob == 0:
-            slice_var = torch.tensor(0)
+            slice_var = torch.tensor(0.0)
         else:
             slice_var = pyro.sample("slicevar_t={}".format(self._t),
                                     dist.Uniform(torch.zeros(1), joint_prob))
