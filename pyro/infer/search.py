@@ -4,8 +4,6 @@ import pyro.poutine as poutine
 from pyro.infer import TracePosterior
 from six.moves.queue import Queue
 
-from .enum import config_enumerate
-
 
 class Search(TracePosterior):
     """
@@ -42,34 +40,3 @@ class Search(TracePosterior):
         while not self.queue.empty():
             tr = p.get_trace(*args, **kwargs)
             yield (tr, tr.log_prob_sum())
-
-
-class ParallelSearch(TracePosterior):
-    """
-    TODO docs
-    """
-    def __init__(self, model, first_available_dim=None):
-        """
-        TODO docs
-        """
-        if first_available_dim is None:
-            first_available_dim = 0
-        self.first_available_dim = first_available_dim
-        self.model = model
-
-    def _traces(self, *args, **kwargs):
-        """
-        TODO docs
-        """
-        p = poutine.trace(
-            poutine.enum(
-                config_enumerate(self.model, default="parallel"),
-                first_available_dim=self.first_available_dim))
-        tr = p.get_trace(*args, **kwargs)
-        # now compute joint probabilities:
-        # TODO identify all global independence dimensions,
-        # and aggregate over all non-global ones
-        tr.compute_log_prob()
-        log_joints = sum([tr.nodes[name]["log_prob"] for name in tr.nodes
-                          if tr.nodes[name]["type"] == "sample"])
-        yield (tr, log_joints)
