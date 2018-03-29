@@ -67,10 +67,9 @@ class ParallelSearch(TracePosterior):
                 first_available_dim=self.first_available_dim))
         tr = p.get_trace(*args, **kwargs)
         # now compute joint probabilities:
-        # identify all global independence dimensions,
+        # TODO identify all global independence dimensions,
         # and aggregate over all non-global ones
         tr.compute_batch_log_pdf()
-        # import pdb; pdb.set_trace()
         log_joints = sum([tr.nodes[name]["batch_log_pdf"] for name in tr.nodes
                           if tr.nodes[name]["type"] == "sample"])
         yield (tr, log_joints)

@@ -16,7 +16,8 @@ logger = logging.getLogger(__name__)
 
 
 @pytest.mark.parametrize("num_data", [2, 3, 4, 5])
-def test_parallel_equals_sequential_naive(num_data):
+@pytest.mark.parametrize("first_available_dim", [0, 1, 2])
+def test_enum_parallel_equals_sequential_naive(num_data, first_available_dim):
     pyro.clear_param_store()
     data = torch.ones(num_data)
     init_probs = torch.tensor([0.5, 0.5])
@@ -37,15 +38,16 @@ def test_parallel_equals_sequential_naive(num_data):
 
     # XXX max_iarange_nesting = 0 ?
     sequential_posterior = Search(model)
-    parallel_posterior = ParallelSearch(model)
+    parallel_posterior = ParallelSearch(model, first_available_dim)
 
     parallel_trace = [(tr, log_w) for tr, log_w in parallel_posterior._traces(data)]
     seq_traces = [(tr, log_w) for tr, log_w in sequential_posterior._traces(data)]
 
-    assert_equal(parallel_trace[0][1].size(), torch.Size([2]*num_data))
+    parallel_log_prob = parallel_trace[0][1]
+    sequential_log_prob = torch.stack([p[1] for p in seq_traces])
 
-    assert_equal(parallel_trace[0][1].view(-1),
-                 torch.stack([p[1] for p in seq_traces]))
+    assert_equal(parallel_log_prob.size(),
+                 torch.Size([2]*num_data + [1]*first_available_dim))
 
-    assert_equal(parallel_trace[0][1].sum().item(),
-                 sum(map(lambda p: p[1], seq_traces)).sum().item())
+    assert_equal(parallel_log_prob,
+                 sequential_log_prob.view(parallel_log_prob.shape))
