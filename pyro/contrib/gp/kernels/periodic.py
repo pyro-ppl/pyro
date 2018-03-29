@@ -47,17 +47,17 @@ class ExpSineSquared(Kernel):
         super(ExpSineSquared, self).__init__(input_dim, active_dims, name)
 
         if variance is None:
-            variance = torch.ones(1)
+            variance = torch.tensor(1.)
         self.variance = Parameter(variance)
         self.set_constraint("variance", constraints.positive)
 
         if lengthscale is None:
-            lengthscale = torch.ones(1)
+            lengthscale = torch.tensor(1.)
         self.lengthscale = Parameter(lengthscale)
         self.set_constraint("lengthscale", constraints.positive)
 
         if period is None:
-            period = torch.ones(1)
+            period = torch.tensor(1.)
         self.period = Parameter(period)
         self.set_constraint("period", constraints.positive)
 
