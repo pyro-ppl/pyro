@@ -118,9 +118,9 @@ def get_mini_batch(mini_batch_indices, sequences, seq_lengths, cuda=False):
     mini_batch_mask = get_mini_batch_mask(mini_batch, sorted_seq_lengths)
 
     # wrap in PyTorch Tensors, using default tensor type
-    mini_batch = torch.tensor(mini_batch).type(torch.empty(1).type())
-    mini_batch_reversed = torch.tensor(mini_batch_reversed).type(torch.empty(1).type())
-    mini_batch_mask = torch.tensor(mini_batch_mask).type(torch.empty(1).type())
+    mini_batch = torch.tensor(mini_batch).type(torch.Tensor)
+    mini_batch_reversed = torch.tensor(mini_batch_reversed).type(torch.Tensor)
+    mini_batch_mask = torch.tensor(mini_batch_mask).type(torch.Tensor)
 
     # cuda() here because need to cuda() before packing
     if cuda:
