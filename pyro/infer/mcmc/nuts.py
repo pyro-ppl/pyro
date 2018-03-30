@@ -146,7 +146,7 @@ class NUTS(HMC):
         if tree_size != 0:
             other_half_tree_prob = other_half_tree.size / tree_size
             is_other_half_tree = pyro.sample("is_other_halftree",
-                                             dist.Bernoulli(ps=torch.ones(1) * other_half_tree_prob))
+                                             dist.Bernoulli(probs=torch.ones(1) * other_half_tree_prob))
             if int(is_other_half_tree.item()) == 1:
                 z_proposal = other_half_tree.z_proposal
 
@@ -214,7 +214,7 @@ class NUTS(HMC):
         # doubling process, stop when turning or diverging
         for tree_depth in range(self._max_tree_depth + 1):
             direction = pyro.sample("direction_t={}_treedepth={}".format(self._t, tree_depth),
-                                    dist.Bernoulli(ps=torch.ones(1) * 0.5))
+                                    dist.Bernoulli(probs=torch.ones(1) * 0.5))
             direction = int(direction.item())
             if direction == 1:  # go to the right, start from the right leaf of current tree
                 new_tree = self._build_tree(z_right, r_right, z_right_grads, log_slice,

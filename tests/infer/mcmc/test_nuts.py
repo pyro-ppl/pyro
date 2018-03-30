@@ -48,21 +48,21 @@ def test_nuts_conjugate_gaussian(fixture,
     post_trace = defaultdict(list)
     for t, _ in mcmc_run._traces(fixture.data):
         for i in range(1, fixture.chain_len + 1):
-            param_name = 'mu_' + str(i)
+            param_name = 'loc_' + str(i)
             post_trace[param_name].append(t.nodes[param_name]['value'])
     for i in range(1, fixture.chain_len + 1):
-        param_name = 'mu_' + str(i)
-        latent_mu = torch.mean(torch.stack(post_trace[param_name]), 0)
+        param_name = 'loc_' + str(i)
+        latent_loc = torch.mean(torch.stack(post_trace[param_name]), 0)
         latent_std = torch.std(torch.stack(post_trace[param_name]), 0)
         expected_mean = torch.ones(fixture.dim) * expected_means[i - 1]
         expected_std = 1 / torch.sqrt(torch.ones(fixture.dim) * expected_precs[i - 1])
 
         # Actual vs expected posterior means for the latents
         logger.info('Posterior mean (actual) - {}'.format(param_name))
-        logger.info(latent_mu)
+        logger.info(latent_loc)
         logger.info('Posterior mean (expected) - {}'.format(param_name))
         logger.info(expected_mean)
-        assert_equal(rmse(latent_mu, expected_mean).item(), 0.0, prec=mean_tol)
+        assert_equal(rmse(latent_loc, expected_mean).item(), 0.0, prec=mean_tol)
 
         # Actual vs expected posterior precisions for the latents
         logger.info('Posterior std (actual) - {}'.format(param_name))

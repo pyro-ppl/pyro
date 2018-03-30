@@ -44,15 +44,15 @@ def test_iter_discrete_traces_scalar(graph_type):
     @config_enumerate
     def model():
         p = pyro.param("p", torch.tensor(0.05))
-        ps = pyro.param("ps", torch.tensor([0.1, 0.2, 0.3, 0.4]))
+        probs = pyro.param("probs", torch.tensor([0.1, 0.2, 0.3, 0.4]))
         x = pyro.sample("x", dist.Bernoulli(p))
-        y = pyro.sample("y", dist.Categorical(ps))
+        y = pyro.sample("y", dist.Categorical(probs))
         return dict(x=x, y=y)
 
     traces = list(iter_discrete_traces(graph_type, model))
 
-    ps = pyro.param("ps")
-    assert len(traces) == 2 * len(ps)
+    probs = pyro.param("probs")
+    assert len(traces) == 2 * len(probs)
 
 
 @pytest.mark.parametrize("graph_type", ["flat", "dense"])
@@ -62,19 +62,19 @@ def test_iter_discrete_traces_vector(graph_type):
     @config_enumerate
     def model():
         p = pyro.param("p", torch.tensor([0.05, 0.15]))
-        ps = pyro.param("ps", torch.tensor([[0.1, 0.2, 0.3, 0.4],
-                                           [0.4, 0.3, 0.2, 0.1]]))
+        probs = pyro.param("probs", torch.tensor([[0.1, 0.2, 0.3, 0.4],
+                                                  [0.4, 0.3, 0.2, 0.1]]))
         with pyro.iarange("iarange", 2):
             x = pyro.sample("x", dist.Bernoulli(p))
-            y = pyro.sample("y", dist.Categorical(ps))
+            y = pyro.sample("y", dist.Categorical(probs))
         assert x.size() == (2,)
         assert y.size() == (2,)
         return dict(x=x, y=y)
 
     traces = list(iter_discrete_traces(graph_type, model))
 
-    ps = pyro.param("ps")
-    assert len(traces) == 2 * ps.size(-1)
+    probs = pyro.param("probs")
+    assert len(traces) == 2 * probs.size(-1)
 
 
 @pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
@@ -102,14 +102,14 @@ def test_iter_discrete_traces_nan(enumerate1):
 # A simple Gaussian mixture model, with no vectorization.
 def gmm_model(data, verbose=False):
     p = pyro.param("p", torch.tensor(0.3, requires_grad=True))
-    sigma = pyro.param("sigma", torch.tensor(1.0, requires_grad=True))
+    scale = pyro.param("scale", torch.tensor(1.0, requires_grad=True))
     mus = torch.tensor([-1.0, 1.0])
     for i in pyro.irange("data", len(data)):
         z = pyro.sample("z_{}".format(i), dist.Bernoulli(p))
         z = z.long()
         if verbose:
             logger.debug("M{} z_{} = {}".format("  " * i, i, z.numpy()))
-        pyro.sample("x_{}".format(i), dist.Normal(mus[z], sigma), obs=data[i])
+        pyro.sample("x_{}".format(i), dist.Normal(mus[z], scale), obs=data[i])
 
 
 def gmm_guide(data, verbose=False):
@@ -137,22 +137,22 @@ def test_gmm_iter_discrete_traces(data_size, graph_type, model):
 def gmm_batch_model(data):
     p = pyro.param("p", torch.tensor([0.3], requires_grad=True))
     p = torch.cat([p, 1 - p])
-    sigma = pyro.param("sigma", torch.tensor([1.0], requires_grad=True))
+    scale = pyro.param("scale", torch.tensor([1.0], requires_grad=True))
     mus = torch.tensor([-1.0, 1.0])
     with pyro.iarange("data", len(data)) as batch:
         n = len(batch)
         z = pyro.sample("z", dist.OneHotCategorical(p).reshape([n]))
         assert z.shape[-2:] == (n, 2)
-        mu = (z * mus).sum(-1)
-        pyro.sample("x", dist.Normal(mu, sigma.expand(n)), obs=data[batch])
+        loc = (z * mus).sum(-1)
+        pyro.sample("x", dist.Normal(loc, scale.expand(n)), obs=data[batch])
 
 
 def gmm_batch_guide(data):
     with pyro.iarange("data", len(data)) as batch:
         n = len(batch)
-        ps = pyro.param("ps", torch.tensor(torch.ones(n, 1) * 0.6, requires_grad=True))
-        ps = torch.cat([ps, 1 - ps], dim=1)
-        z = pyro.sample("z", dist.OneHotCategorical(ps))
+        probs = pyro.param("probs", torch.tensor(torch.ones(n, 1) * 0.6, requires_grad=True))
+        probs = torch.cat([probs, 1 - probs], dim=1)
+        z = pyro.sample("z", dist.OneHotCategorical(probs))
         assert z.shape[-2:] == (n, 2)
 
 
