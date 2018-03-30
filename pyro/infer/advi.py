@@ -6,8 +6,14 @@ from torch.distributions import biject_to, constraints
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
+from pyro.distributions.util import sum_rightmost
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_traces_match
+
+try:
+    from contextlib import ExitStack  # python 3
+except ImportError:
+    from contextlib2 import ExitStack  # python 2
 
 
 def _product(shape):
@@ -44,10 +50,24 @@ class ADVI(object):
         self.prototype_trace = poutine.block(poutine.trace(self.base_model).get_trace)(*args, **kwargs)
         self.prototype_trace = prune_subsample_sites(self.prototype_trace)
 
-        # collect the shapes of unconstrained values, which may differ from the shapes of constrained values
-        self._unconstrained_shapes = {name: biject_to(site["fn"].support).inv(site["value"]).shape
-                                      for name, site in self.prototype_trace.nodes.items()
-                                      if site["type"] == "sample" and not site["is_observed"]}
+        self._unconstrained_shapes = {}
+        self._cond_indep_stacks = {}
+        self._iaranges = {}
+        for name, site in self.prototype_trace.nodes.items():
+            if site["type"] != "sample" or site["is_observed"]:
+                continue
+
+            # collect the shapes of unconstrained values, which may differ from the shapes of constrained values
+            self._unconstrained_shapes[name] = biject_to(site["fn"].support).inv(site["value"]).shape
+
+            # collect independence contexts
+            self._cond_indep_stacks[name] = site["cond_indep_stack"]
+            for frame in site["cond_indep_stack"]:
+                if frame.vectorized:
+                    self._iaranges[frame.name] = frame
+                else:
+                    raise NotImplementedError("ADVI does not support pyro.irange")
+
         self.latent_dim = sum(_product(shape) for shape in self._unconstrained_shapes.values())
 
     def sample_latent(self, *args, **kwargs):
@@ -71,6 +91,10 @@ class ADVI(object):
         result = {}
         latent = self.sample_latent(*args, **kwargs)
 
+        # create all iaranges
+        iaranges = {frame.name: pyro.iarange(frame.name, frame.size, dim=frame.dim)
+                    for frame in sorted(self._iaranges.values())}
+
         # unpack latent samples
         pos = 0
         for name, site in self.prototype_trace.nodes.items():
@@ -82,8 +106,14 @@ class ADVI(object):
                 transform = biject_to(site["fn"].support)
                 value = transform(unconstrained_value)
                 log_density = transform.inv.log_abs_det_jacobian(value, unconstrained_value)
+                log_density = sum_rightmost(log_density, log_density.dim() - value.dim() + site["fn"].event_dim)
                 delta_dist = dist.Delta(value, log_density=log_density, event_dim=site["fn"].event_dim)
-                result[name] = pyro.sample(name, delta_dist)
+
+                with ExitStack() as stack:
+                    for frame in self._cond_indep_stacks[name]:
+                        stack.enter_context(iaranges[frame.name])
+                    result[name] = pyro.sample(name, delta_dist)
+
         assert pos == len(latent)
 
         return result
