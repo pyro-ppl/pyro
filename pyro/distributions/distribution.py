@@ -80,8 +80,8 @@ class Distribution(object):
         """
         Computes ingredients for stochastic gradient estimators of ELBO.
 
-        The default implementation is correct both for non-has_rsample and
-        for fully has_rsample distributions. Partially has_rsample
+        The default implementation is correct both for non-reparameterized and
+        for fully reparameterized distributions. Partially reparameterized
         distributions should override this method to compute correct
         `.score_function` and `.entropy_term` parts.
 
