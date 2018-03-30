@@ -20,27 +20,27 @@ class TestOneHotCategorical(TestCase):
         self.ps = torch.tensor([0.1, 0.6, 0.3])
         self.batch_ps = torch.tensor([[0.1, 0.6, 0.3], [0.2, 0.4, 0.4]])
         self.n = torch.tensor([n])
-        self.test_data = torch.tensor([0, 1, 0])
-        self.test_data_nhot = torch.tensor([2])
+        self.test_data = torch.tensor([0.0, 1.0, 0.0])
+        self.test_data_nhot = torch.tensor([2.0])
         self.analytic_mean = n * self.ps
         one = torch.ones(3)
         self.analytic_var = n * torch.mul(self.ps, one.sub(self.ps))
 
         # Discrete Distribution
         self.d_ps = torch.tensor([[0.2, 0.3, 0.5], [0.1, 0.1, 0.8]])
-        self.d_test_data = torch.tensor([[0], [5]])
+        self.d_test_data = torch.tensor([[0.0], [5.0]])
         self.d_v_test_data = [['a'], ['f']]
 
         self.n_samples = 50000
 
-        self.support_one_hot_non_vec = torch.tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+        self.support_one_hot_non_vec = torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
         self.support_one_hot = torch.tensor([[[1, 0, 0], [1, 0, 0]],
                                              [[0, 1, 0], [0, 1, 0]],
                                              [[0, 0, 1], [0, 0, 1]]])
         self.support_non_vec = torch.LongTensor([[0], [1], [2]])
         self.support = torch.LongTensor([[[0], [0]], [[1], [1]], [[2], [2]]])
-        self.discrete_support_non_vec = torch.tensor([[0], [1], [2]])
-        self.discrete_support = torch.tensor([[[0], [3]], [[1], [4]], [[2], [5]]])
+        self.discrete_support_non_vec = torch.tensor([[0.0], [1.0], [2.0]])
+        self.discrete_support = torch.tensor([[[0.0], [3.0]], [[1.0], [4.0]], [[2.0], [5.0]]])
         self.discrete_arr_support_non_vec = [['a'], ['b'], ['c']]
         self.discrete_arr_support = [[['a'], ['d']], [['b'], ['e']], [['c'], ['f']]]
 

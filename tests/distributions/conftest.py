@@ -16,12 +16,12 @@ continuous_dists = [
     Fixture(pyro_dist=dist.Uniform,
             scipy_dist=sp.uniform,
             examples=[
-                {'a': [2], 'b': [2.5],
+                {'a': [2.], 'b': [2.5],
                  'test_data': [2.2]},
-                {'a': [2, 4], 'b': [3, 5],
+                {'a': [2., 4.], 'b': [3., 5.],
                  'test_data': [[[2.5, 4.5]], [[2.5, 4.5]], [[2.5, 4.5]]]},
-                {'a': [[2], [-3], [0]],
-                 'b': [[2.5], [0], [1]],
+                {'a': [[2.], [-3.], [0.]],
+                 'b': [[2.5], [0.], [1.]],
                  'test_data': [[2.2], [-2], [0.7]]},
             ],
             scipy_arg_fn=lambda a, b: ((), {"loc": np.array(a),
@@ -218,13 +218,13 @@ discrete_dists = [
             scipy_dist=sp.multinomial,
             examples=[
                 {'ps': [0.1, 0.6, 0.3],
-                 'test_data': [0, 1, 0]},
+                 'test_data': [0., 1., 0.]},
                 {'ps': [0.1, 0.6, 0.3], 'n': [8],
-                 'test_data': [2, 4, 2]},
+                 'test_data': [2., 4., 2.]},
                 {'ps': [0.1, 0.6, 0.3], 'n': [8],
-                 'test_data': [[2, 4, 2], [2, 4, 2]]},
+                 'test_data': [[2., 4., 2.], [2., 4., 2.]]},
                 {'ps': [[0.1, 0.6, 0.3], [0.2, 0.4, 0.4]], 'n': [[8], [8]],
-                 'test_data': [[2, 4, 2], [1, 4, 3]]}
+                 'test_data': [[2., 4., 2.], [1., 4., 3.]]}
             ],
             scipy_arg_fn=lambda ps, n=[1]: ((n[0], np.array(ps)), {}),
             prec=0.05,
@@ -234,19 +234,19 @@ discrete_dists = [
             scipy_dist=sp.bernoulli,
             examples=[
                 {'ps': [0.25],
-                 'test_data': [1]},
+                 'test_data': [1.]},
                 {'ps': [0.25, 0.25],
-                 'test_data': [[[0, 1]], [[1, 0]], [[0, 0]]]},
+                 'test_data': [[[0., 1.]], [[1., 0.]], [[0., 0.]]]},
                 {'logits': [math.log(p / (1 - p)) for p in (0.25, 0.25)],
-                 'test_data': [[[0, 1]], [[1, 0]], [[0, 0]]]},
+                 'test_data': [[[0., 1.]], [[1., 0.]], [[0., 0.]]]},
                 # for now, avoid tests on infinite logits
                 # {'logits': [-float('inf'), 0],
                 #  'test_data': [[0, 1], [0, 1], [0, 1]]},
                 {'logits': [[math.log(p / (1 - p)) for p in (0.25, 0.25)],
                             [math.log(p / (1 - p)) for p in (0.3, 0.3)]],
-                 'test_data': [[1, 1], [0, 0]]},
+                 'test_data': [[1., 1.], [0., 0.]]},
                 {'ps': [[0.25, 0.25], [0.3, 0.3]],
-                 'test_data': [[1, 1], [0, 0]]}
+                 'test_data': [[1., 1.], [0., 0.]]}
             ],
             # for now, avoid tests on infinite logits
             # test_data_indices=[0, 1, 2, 3],
@@ -255,17 +255,17 @@ discrete_dists = [
             prec=0.01,
             min_samples=10000,
             is_discrete=True,
-            expected_support_non_vec=[[0], [1]],
-            expected_support=[[[0, 0], [0, 0]], [[1, 1], [1, 1]]]),
+            expected_support_non_vec=[[0.], [1.]],
+            expected_support=[[[0., 0.], [0., 0.]], [[1., 1.], [1., 1.]]]),
     Fixture(pyro_dist=dist.Binomial,
             scipy_dist=sp.binom,
             examples=[
                 {'ps': [0.6], 'n': 8,
-                 'test_data': [4]},
+                 'test_data': [4.]},
                 {'ps': [0.3], 'n': 8,
-                 'test_data': [[2], [4]]},
+                 'test_data': [[2.], [4.]]},
                 {'ps': [[0.2], [0.4]], 'n': 8,
-                 'test_data': [[4], [3]]}
+                 'test_data': [[4.], [3.]]}
             ],
             scipy_arg_fn=lambda ps, n: ((n, ps[0]), {}),
             prec=0.05,
@@ -295,15 +295,15 @@ discrete_dists = [
             scipy_dist=sp.multinomial,
             examples=[
                 {'ps': [0.1, 0.6, 0.3],
-                 'test_data': [0, 0, 1]},
+                 'test_data': [0., 0., 1.]},
                 {'logits': list(map(math.log, [0.1, 0.6, 0.3])),
-                 'test_data': [0, 0, 1]},
+                 'test_data': [0., 0., 1.]},
                 {'logits': [list(map(math.log, [0.1, 0.6, 0.3])),
                             list(map(math.log, [0.2, 0.4, 0.4]))],
-                 'test_data': [[0, 0, 1], [1, 0, 0]]},
+                 'test_data': [[0., 0., 1.], [1., 0., 0.]]},
                 {'ps': [[0.1, 0.6, 0.3],
                         [0.2, 0.4, 0.4]],
-                 'test_data': [[0, 0, 1], [1, 0, 0]]}
+                 'test_data': [[0., 0., 1.], [1., 0., 0.]]}
             ],
             test_data_indices=[0, 1, 2],
             batch_data_indices=[-1, -2],
@@ -315,15 +315,15 @@ discrete_dists = [
             scipy_dist=sp.poisson,
             examples=[
                 {'lam': [2.0],
-                 'test_data': [0]},
+                 'test_data': [0.]},
                 {'lam': [3.0],
-                 'test_data': [1]},
+                 'test_data': [1.]},
                 {'lam': [6.0],
-                 'test_data': [4]},
+                 'test_data': [4.]},
                 {'lam': [2.0, 3.0, 6.0],
-                 'test_data': [[0, 1, 4], [0, 1, 4]]},
+                 'test_data': [[0., 1., 4.], [0., 1., 4.]]},
                 {'lam': [[2.0], [3.0], [6.0]],
-                 'test_data': [[0], [1], [4]]}
+                 'test_data': [[0.], [1.], [4.]]}
             ],
             scipy_arg_fn=lambda lam: ((np.array(lam),), {}),
             prec=0.08,

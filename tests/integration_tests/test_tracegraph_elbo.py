@@ -40,7 +40,7 @@ class NormalNormalTests(TestCase):
         self.data.append(torch.tensor([0.00, 0.4]))
         self.data.append(torch.tensor([0.20, 0.5]))
         self.data.append(torch.tensor([0.10, 0.7]))
-        self.n_data = torch.tensor(len(self.data))
+        self.n_data = torch.tensor(float(len(self.data)))
         self.sum_data = self.data[0] + \
             self.data[1] + self.data[2] + self.data[3]
         self.analytic_lam_n = self.lam0 + \
@@ -106,7 +106,7 @@ class NormalNormalNormalTests(TestCase):
                                  [0.00, 0.4],
                                  [0.20, 0.5],
                                  [0.10, 0.7]])
-        self.analytic_lam_n = self.lam0 + len(self.data) * self.lam
+        self.analytic_lam_n = self.lam0 + float(len(self.data)) * self.lam
         self.analytic_log_sig_n = -0.5 * torch.log(self.analytic_lam_n)
         self.analytic_mu_n = self.data.sum(0) * (self.lam / self.analytic_lam_n) +\
             self.mu0 * (self.lam0 / self.analytic_lam_n)
@@ -218,7 +218,7 @@ class BernoulliBetaTests(TestCase):
         self.alpha0 = torch.tensor(1.0)
         self.beta0 = torch.tensor(1.0)  # beta prior hyperparameter
         self.data = torch.tensor([0.0, 1.0, 1.0, 1.0])
-        self.n_data = len(self.data)
+        self.n_data = float(len(self.data))
         data_sum = self.data.sum()
         self.alpha_n = self.alpha0 + data_sum  # posterior alpha
         self.beta_n = self.beta0 - data_sum + torch.tensor(self.n_data)  # posterior beta
@@ -337,13 +337,13 @@ class RaoBlackwellizationTests(TestCase):
         self.lam = torch.tensor([6.0, 4.0])
         self.n_outer = 3
         self.n_inner = 3
-        self.n_data = torch.tensor(self.n_outer * self.n_inner)
+        self.n_data = torch.tensor(float(self.n_outer * self.n_inner))
         self.data = []
         self.sum_data = torch.zeros(2)
         for _out in range(self.n_outer):
             data_in = []
             for _in in range(self.n_inner):
-                data_in.append(torch.tensor([-0.1, 0.3]) + torch.tensor(torch.Size([2])).normal_() / self.lam.sqrt())
+                data_in.append(torch.tensor([-0.1, 0.3]) + torch.empty(torch.Size((2,))).normal_() / self.lam.sqrt())
                 self.sum_data += data_in[-1]
             self.data.append(data_in)
         self.analytic_lam_n = self.lam0 + self.n_data.expand_as(self.lam) * self.lam
