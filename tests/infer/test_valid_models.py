@@ -55,9 +55,9 @@ def assert_warning(model, guide, **kwargs):
 def test_nonempty_model_empty_guide_ok(trace_graph, enum_discrete):
 
     def model():
-        mu = torch.tensor([0.0, 0.0])
-        sigma = torch.tensor([1.0, 1.0])
-        pyro.sample("x", dist.Normal(mu, sigma).reshape(extra_event_dims=1), obs=mu)
+        loc = torch.tensor([0.0, 0.0])
+        scale = torch.tensor([1.0, 1.0])
+        pyro.sample("x", dist.Normal(loc, scale).reshape(extra_event_dims=1), obs=loc)
 
     def guide():
         pass
@@ -102,14 +102,14 @@ def test_variable_clash_in_model_error(trace_graph, enum_discrete):
 def test_model_guide_dim_mismatch_error(trace_graph, enum_discrete):
 
     def model():
-        mu = torch.zeros(2)
-        sigma = torch.zeros(2)
-        pyro.sample("x", dist.Normal(mu, sigma))
+        loc = torch.zeros(2)
+        scale = torch.zeros(2)
+        pyro.sample("x", dist.Normal(loc, scale))
 
     def guide():
-        mu = pyro.param("mu", torch.zeros(2, 1, requires_grad=True))
-        sigma = pyro.param("sigma", torch.zeros(2, 1, requires_grad=True))
-        pyro.sample("x", dist.Normal(mu, sigma))
+        loc = pyro.param("loc", torch.zeros(2, 1, requires_grad=True))
+        scale = pyro.param("scale", torch.zeros(2, 1, requires_grad=True))
+        pyro.sample("x", dist.Normal(loc, scale))
 
     assert_error(model, guide, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
@@ -120,14 +120,14 @@ def test_model_guide_dim_mismatch_error(trace_graph, enum_discrete):
 def test_model_guide_shape_mismatch_error(trace_graph, enum_discrete):
 
     def model():
-        mu = torch.zeros(1, 2)
-        sigma = torch.zeros(1, 2)
-        pyro.sample("x", dist.Normal(mu, sigma))
+        loc = torch.zeros(1, 2)
+        scale = torch.zeros(1, 2)
+        pyro.sample("x", dist.Normal(loc, scale))
 
     def guide():
-        mu = pyro.param("mu", torch.zeros(2, 1, requires_grad=True))
-        sigma = pyro.param("sigma", torch.zeros(2, 1, requires_grad=True))
-        pyro.sample("x", dist.Normal(mu, sigma))
+        loc = pyro.param("loc", torch.zeros(2, 1, requires_grad=True))
+        scale = pyro.param("scale", torch.zeros(2, 1, requires_grad=True))
+        pyro.sample("x", dist.Normal(loc, scale))
 
     assert_error(model, guide, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
@@ -602,16 +602,16 @@ def test_iarange_enum_discrete_batch_ok():
 def test_iarange_enum_discrete_no_discrete_vars_ok():
 
     def model():
-        mu = torch.tensor(0.0)
-        sigma = torch.tensor(1.0)
+        loc = torch.tensor(0.0)
+        scale = torch.tensor(1.0)
         with pyro.iarange("iarange", 10, 5) as ind:
-            pyro.sample("x", dist.Normal(mu, sigma).reshape(sample_shape=[len(ind)]))
+            pyro.sample("x", dist.Normal(loc, scale).reshape(sample_shape=[len(ind)]))
 
     def guide():
-        mu = pyro.param("mu", torch.tensor(1.0, requires_grad=True))
-        sigma = pyro.param("sigma", torch.tensor(2.0, requires_grad=True))
+        loc = pyro.param("loc", torch.tensor(1.0, requires_grad=True))
+        scale = pyro.param("scale", torch.tensor(2.0, requires_grad=True))
         with pyro.iarange("iarange", 10, 5) as ind:
-            pyro.sample("x", dist.Normal(mu, sigma).reshape(sample_shape=[len(ind)]))
+            pyro.sample("x", dist.Normal(loc, scale).reshape(sample_shape=[len(ind)]))
 
     assert_ok(model, config_enumerate(guide), enum_discrete=True)
 

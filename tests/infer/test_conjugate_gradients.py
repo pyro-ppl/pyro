@@ -21,7 +21,7 @@ class ConjugateChainGradientTests(GaussianChain):
         elbo.loss_and_grads(self.model, self.guide, reparameterized=reparameterized)
 
         for i in range(1, N + 1):
-            for param_prefix in ["mu_q_%d", "log_sig_q_%d", "kappa_q_%d"]:
+            for param_prefix in ["loc_q_%d", "log_sig_q_%d", "kappa_q_%d"]:
                 if i == N and param_prefix == 'kappa_q_%d':
                     continue
                 actual_grad = pyro.param(param_prefix % i).grad
