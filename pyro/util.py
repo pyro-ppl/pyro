@@ -9,7 +9,6 @@ from collections import defaultdict
 import graphviz
 import torch
 from six.moves import zip_longest
-from torch.nn import Parameter
 
 from pyro.params import _PYRO_PARAM_STORE
 from pyro.poutine.poutine import _PYRO_STACK
