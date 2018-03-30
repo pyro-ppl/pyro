@@ -16,7 +16,6 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from modules import Identity, Encoder, Decoder, MLP, Predict
-from pyro.util import zeros
 
 
 # Default prior success probability for z_pres.
@@ -96,12 +95,12 @@ class AIR(nn.Module):
         self.bl_embed = Identity() if embed_net is None else MLP(x_size ** 2, embed_net, nl, True)
 
         # Create parameters.
-        self.h_init = zeros(1, rnn_hidden_size)
-        self.c_init = zeros(1, rnn_hidden_size)
-        self.bl_h_init = zeros(1, rnn_hidden_size)
-        self.bl_c_init = zeros(1, rnn_hidden_size)
-        self.z_where_init = zeros(1, self.z_where_size)
-        self.z_what_init = zeros(1, self.z_what_size)
+        self.h_init = torch.zeros(1, rnn_hidden_size)
+        self.c_init = torch.zeros(1, rnn_hidden_size)
+        self.bl_h_init = torch.zeros(1, rnn_hidden_size)
+        self.bl_c_init = torch.zeros(1, rnn_hidden_size)
+        self.z_where_init = torch.zeros(1, self.z_where_size)
+        self.z_what_init = torch.zeros(1, self.z_what_size)
 
         if use_cuda:
             self.cuda()

@@ -135,28 +135,6 @@ def set_rng_seed(rng_seed):
         pass
 
 
-def ones(*args, **kwargs):
-    """
-    :param torch.Tensor type_as: optional argument for tensor type
-
-    A convenience function for Parameter(torch.ones(...))
-    """
-    retype = kwargs.pop('type_as', None)
-    p_tensor = torch.ones(*args, **kwargs)
-    return Parameter(p_tensor if retype is None else p_tensor.type_as(retype))
-
-
-def zeros(*args, **kwargs):
-    """
-    :param torch.Tensor type_as: optional argument for tensor type
-
-    A convenience function for Parameter(torch.zeros(...))
-    """
-    retype = kwargs.pop('type_as', None)
-    p_tensor = torch.zeros(*args, **kwargs)
-    return Parameter(p_tensor if retype is None else p_tensor.type_as(retype))
-
-
 def is_nan(x):
     """
     A convenient function to check if a Tensor contains all nan; also works with numbers
