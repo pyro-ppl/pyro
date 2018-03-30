@@ -159,7 +159,6 @@ def test_forward_with_empty_latent_shape(model_class, X, y, kernel, likelihood):
 
 @pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
 @pytest.mark.init(rng_seed=0)
-@pytest.mark.xfail(reason="Failure on PyTorch master - https://github.com/uber/pyro/issues/953")
 def test_inference(model_class, X, y, kernel, likelihood):
     # skip variational GP models because variance/lengthscale highly
     # depend on variational parameters
@@ -205,7 +204,6 @@ def test_inference_sgpr():
 
 
 @pytest.mark.init(rng_seed=0)
-@pytest.mark.xfail(reason="Failure on PyTorch master - https://github.com/uber/pyro/issues/953")
 def test_inference_svgp():
     N = 1000
     X = dist.Uniform(torch.zeros(N), torch.ones(N)*5).sample()
@@ -268,7 +266,6 @@ def test_hmc(model_class, X, y, kernel, likelihood):
         logger.info(param_mean)
 
 
-@pytest.mark.xfail(reason="Failure on PyTorch master - https://github.com/uber/pyro/issues/953")
 def test_inference_deepGP():
     gp1 = GPRegression(X, None, kernel, name="GPR1")
     Z, _ = gp1.model()

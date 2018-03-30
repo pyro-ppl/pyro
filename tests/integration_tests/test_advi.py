@@ -52,7 +52,6 @@ class ADVIGaussianChain(GaussianChain):
             self.target_advi_diag_cov[n] += 1.0 / self.lambda_posts[n].item()
             self.target_advi_diag_cov[n] += (self.target_kappas[n].item() ** 2) * self.target_advi_diag_cov[n + 1]
 
-    @pytest.mark.xfail(reason="Failure on PyTorch master - https://github.com/uber/pyro/issues/953")
     def test_multivariatate_normal_advi(self):
         self.do_test_advi(3, reparameterized=True, n_steps=10001)
 
@@ -86,10 +85,7 @@ class ADVIGaussianChain(GaussianChain):
                      msg="advi covariance off")
 
 
-@pytest.mark.parametrize('advi_class', [ADVIDiagonalNormal,
-                                        pytest.param(ADVIMultivariateNormal,
-                                                     marks=[pytest.mark.xfail(reason="Failure on PyTorch master -" +
-                                                            "https://github.com/uber/pyro/issues/953")])])
+@pytest.mark.parametrize('advi_class', [ADVIDiagonalNormal, ADVIMultivariateNormal])
 def test_advi_diagonal_gaussians(advi_class):
     n_steps = 3501 if advi_class == ADVIDiagonalNormal else 6001
 
@@ -117,11 +113,7 @@ def test_advi_diagonal_gaussians(advi_class):
                  msg="advi covariance off")
 
 
-@pytest.mark.parametrize('advi_class',
-                         [ADVIDiagonalNormal,
-                          pytest.param(ADVIMultivariateNormal,
-                                       marks=[pytest.mark.xfail(reason="Failure on PyTorch master -" +
-                                                                "https://github.com/uber/pyro/issues/953")])])
+@pytest.mark.parametrize('advi_class', [ADVIDiagonalNormal, ADVIMultivariateNormal])
 def test_advi_transform(advi_class):
     n_steps = 3500
 

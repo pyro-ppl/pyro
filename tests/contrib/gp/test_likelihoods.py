@@ -62,7 +62,6 @@ TEST_IDS = ["_".join([t[0].__name__, t[4].__class__.__name__.split(".")[-1],
 
 
 @pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
-@pytest.mark.xfail(reason="Failure on PyTorch master - https://github.com/uber/pyro/issues/953")
 def test_inference(model_class, X, y, kernel, likelihood):
     if isinstance(likelihood, MultiClass):
         latent_shape = y.shape[:-1] + (likelihood.num_classes,)
@@ -77,7 +76,6 @@ def test_inference(model_class, X, y, kernel, likelihood):
 
 
 @pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
-@pytest.mark.xfail(reason="Failure on PyTorch master - https://github.com/uber/pyro/issues/953")
 def test_inference_with_empty_latent_shape(model_class, X, y, kernel, likelihood):
     if isinstance(likelihood, MultiClass):
         latent_shape = torch.Size([likelihood.num_classes])
