@@ -243,67 +243,67 @@ def _get_clamping_buffer(tensor):
     return clamp_eps
 
 
-def get_probs_and_logits(ps=None, logits=None, is_multidimensional=True):
+def get_probs_and_logits(probs=None, logits=None, is_multidimensional=True):
     """
-    Convert probability values to logits, or vice-versa. Either ``ps`` or
+    Convert probability values to logits, or vice-versa. Either ``probs`` or
     ``logits`` should be specified, but not both.
 
-    :param ps: tensor of probabilities. Should be in the interval *[0, 1]*.
+    :param probs: tensor of probabilities. Should be in the interval *[0, 1]*.
         If, ``is_multidimensional = True``, then must be normalized along
         axis -1.
     :param logits: tensor of logit values.  For the multidimensional case,
         the values, when exponentiated along the last dimension, must sum
         to 1.
-    :param is_multidimensional: determines the computation of ps from logits,
+    :param is_multidimensional: determines the computation of probs from logits,
         and vice-versa. For the multi-dimensional case, logit values are
         assumed to be log probabilities, whereas for the uni-dimensional case,
         it specifically refers to log odds.
     :return: tuple containing raw probabilities and logits as tensors.
     """
-    assert (ps is None) != (logits is None)
-    if ps is not None:
-        eps = _get_clamping_buffer(ps)
-        ps_clamped = ps.clamp(min=eps, max=1 - eps)
+    assert (probs is None) != (logits is None)
+    if probs is not None:
+        eps = _get_clamping_buffer(probs)
+        ps_clamped = probs.clamp(min=eps, max=1 - eps)
     if is_multidimensional:
-        if ps is None:
-            ps = softmax(logits, -1)
+        if probs is None:
+            probs = softmax(logits, -1)
         else:
             logits = torch.log(ps_clamped)
     else:
-        if ps is None:
-            ps = F.sigmoid(logits)
+        if probs is None:
+            probs = F.sigmoid(logits)
         else:
             logits = torch.log(ps_clamped) - torch.log1p(-ps_clamped)
-    return ps, logits
+    return probs, logits
 
 
-def get_clamped_probs(ps=None, logits=None, is_multidimensional=True):
+def get_clamped_probs(probs=None, logits=None, is_multidimensional=True):
     """
-    Clamp probabilities, given probability values or logits. Either ``ps`` or
+    Clamp probabilities, given probability values or logits. Either ``probs`` or
     ``logits`` should be specified, but not both.
 
-    :param ps: tensor of probabilities. Should be in the interval *[0, 1]*.
+    :param probs: tensor of probabilities. Should be in the interval *[0, 1]*.
         If, ``is_multidimensional = True``, then must be normalized along
         axis -1.
     :param logits: tensor of logit values.  For the multidimensional case,
         the values, when exponentiated along the last dimension, must sum
         to 1.
-    :param is_multidimensional: determines the computation of ps from logits,
+    :param is_multidimensional: determines the computation of probs from logits,
         and vice-versa. For the multi-dimensional case, logit values are
         assumed to be log probabilities, whereas for the uni-dimensional case,
         it specifically refers to log odds.
     :return: clamped probabilities.
     """
-    if (ps is None) == (logits is None):
-        raise ValueError("Got ps={}, logits={}. Either `ps` or `logits` must be specified, "
-                         "but not both.".format(ps, logits))
-    if ps is None:
-        ps = softmax(logits, -1) if is_multidimensional else F.sigmoid(logits)
-    eps = _get_clamping_buffer(ps)
-    ps = ps.clamp(min=eps, max=1 - eps)
+    if (probs is None) == (logits is None):
+        raise ValueError("Got probs={}, logits={}. Either `probs` or `logits` must be specified, "
+                         "but not both.".format(probs, logits))
+    if probs is None:
+        probs = softmax(logits, -1) if is_multidimensional else F.sigmoid(logits)
+    eps = _get_clamping_buffer(probs)
+    probs = probs.clamp(min=eps, max=1 - eps)
     if is_multidimensional:
-        ps /= ps.sum(-1, True)
-    return ps
+        probs /= probs.sum(-1, True)
+    return probs
 
 
 def matrix_triangular_solve_compat(b, A, upper=True):

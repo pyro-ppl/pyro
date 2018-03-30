@@ -30,7 +30,7 @@ class NormalNormalTests(TestCase):
     def setUp(self):
         # normal-normal; known covariance
         self.lam0 = torch.tensor([0.1, 0.1])   # precision of prior
-        self.mu0 = torch.tensor([0.0, 0.5])   # prior mean
+        self.loc0 = torch.tensor([0.0, 0.5])   # prior mean
         # known precision of observation noise
         self.lam = torch.tensor([6.0, 4.0])
         self.data = torch.tensor([[-0.1, 0.3],
@@ -41,8 +41,8 @@ class NormalNormalTests(TestCase):
         self.data_sum = self.data.sum(0)
         self.analytic_lam_n = self.lam0 + self.n_data.expand_as(self.lam) * self.lam
         self.analytic_log_sig_n = -0.5 * torch.log(self.analytic_lam_n)
-        self.analytic_mu_n = self.data_sum * (self.lam / self.analytic_lam_n) +\
-            self.mu0 * (self.lam0 / self.analytic_lam_n)
+        self.analytic_loc_n = self.data_sum * (self.lam / self.analytic_lam_n) +\
+            self.loc0 * (self.lam0 / self.analytic_lam_n)
         self.batch_size = 4
 
     def test_elbo_reparameterized(self):
@@ -55,24 +55,24 @@ class NormalNormalTests(TestCase):
         pyro.clear_param_store()
 
         def model():
-            mu_latent = pyro.sample("mu_latent",
-                                    dist.Normal(self.mu0, torch.pow(self.lam0, -0.5))
-                                    .reshape(extra_event_dims=1))
+            loc_latent = pyro.sample("loc_latent",
+                                     dist.Normal(self.loc0, torch.pow(self.lam0, -0.5))
+                                     .reshape(extra_event_dims=1))
             with pyro.iarange('data', self.batch_size):
                 pyro.sample("obs",
-                            dist.Normal(mu_latent, torch.pow(self.lam, -0.5)).reshape(extra_event_dims=1),
+                            dist.Normal(loc_latent, torch.pow(self.lam, -0.5)).reshape(extra_event_dims=1),
                             obs=self.data)
-            return mu_latent
+            return loc_latent
 
         def guide():
-            mu_q = pyro.param("mu_q", torch.tensor(self.analytic_mu_n.data + 0.134 * torch.ones(2),
-                                                   requires_grad=True))
+            loc_q = pyro.param("loc_q", torch.tensor(self.analytic_loc_n.data + 0.134 * torch.ones(2),
+                                                     requires_grad=True))
             log_sig_q = pyro.param("log_sig_q", torch.tensor(
                                    self.analytic_log_sig_n.data - 0.14 * torch.ones(2),
                                    requires_grad=True))
             sig_q = torch.exp(log_sig_q)
             Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
-            pyro.sample("mu_latent", Normal(mu_q, sig_q).reshape(extra_event_dims=1))
+            pyro.sample("loc_latent", Normal(loc_q, sig_q).reshape(extra_event_dims=1))
 
         adam = optim.Adam({"lr": .001})
         svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
@@ -80,10 +80,10 @@ class NormalNormalTests(TestCase):
         for k in range(n_steps):
             svi.step()
 
-            mu_error = param_mse("mu_q", self.analytic_mu_n)
+            loc_error = param_mse("loc_q", self.analytic_loc_n)
             log_sig_error = param_mse("log_sig_q", self.analytic_log_sig_n)
 
-        assert_equal(0.0, mu_error, prec=0.05)
+        assert_equal(0.0, loc_error, prec=0.05)
         assert_equal(0.0, log_sig_error, prec=0.05)
 
 
@@ -307,20 +307,20 @@ class SafetyTests(TestCase):
     def setUp(self):
         # normal-normal; known covariance
         def model_dup():
-            pyro.param("mu_q", torch.ones(1, requires_grad=True))
-            pyro.sample("mu_q", dist.Normal(torch.zeros(1), torch.ones(1)))
+            pyro.param("loc_q", torch.ones(1, requires_grad=True))
+            pyro.sample("loc_q", dist.Normal(torch.zeros(1), torch.ones(1)))
 
         def model_obs_dup():
-            pyro.sample("mu_q", dist.Normal(torch.zeros(1), torch.ones(1)))
-            pyro.sample("mu_q", dist.Normal(torch.zeros(1), torch.ones(1)), obs=torch.zeros(1))
+            pyro.sample("loc_q", dist.Normal(torch.zeros(1), torch.ones(1)))
+            pyro.sample("loc_q", dist.Normal(torch.zeros(1), torch.ones(1)), obs=torch.zeros(1))
 
         def model():
-            pyro.sample("mu_q", dist.Normal(torch.zeros(1), torch.ones(1)))
+            pyro.sample("loc_q", dist.Normal(torch.zeros(1), torch.ones(1)))
 
         def guide():
             p = pyro.param("p", torch.ones(1, requires_grad=True))
-            pyro.sample("mu_q", dist.Normal(torch.zeros(1), p))
-            pyro.sample("mu_q_2", dist.Normal(torch.zeros(1), p))
+            pyro.sample("loc_q", dist.Normal(torch.zeros(1), p))
+            pyro.sample("loc_q_2", dist.Normal(torch.zeros(1), p))
 
         self.duplicate_model = model_dup
         self.duplicate_obs = model_obs_dup
