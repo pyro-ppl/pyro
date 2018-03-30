@@ -58,7 +58,7 @@ class RejectionStandardGamma(Rejector):
 
 @copy_docs_from(Gamma)
 class RejectionGamma(Gamma):
-    reparameterized = True
+    has_rsample = True
 
     def __init__(self, alpha, beta):
         super(RejectionGamma, self).__init__(alpha, beta)
@@ -83,7 +83,7 @@ class ShapeAugmentedGamma(Gamma):
     This implements the shape augmentation trick of
     Naesseth, Ruiz, Linderman, Blei (2017) https://arxiv.org/abs/1610.05683
     """
-    reparameterized = True
+    has_rsample = True
 
     def __init__(self, alpha, beta, boost=1):
         if alpha.min() + boost < 1:
