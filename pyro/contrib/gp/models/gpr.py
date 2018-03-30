@@ -11,8 +11,11 @@ from .model import GPModel
 
 
 class GPRegression(GPModel):
-    """
-    Gaussian Process Regression module.
+    r"""
+    Gaussian Process Regression module. The model has the form
+        
+        :math:` 
+        
 
     References
 
