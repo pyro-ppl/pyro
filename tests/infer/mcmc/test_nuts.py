@@ -98,7 +98,7 @@ def test_bernoulli_beta():
         alpha = torch.tensor([1.1, 1.1])
         beta = torch.tensor([1.1, 1.1])
         p_latent = pyro.sample("p_latent", dist.Beta(alpha, beta))
-        pyro.observe("obs", dist.Bernoulli(p_latent), data)
+        pyro.sample("obs", dist.Bernoulli(p_latent), obs=data)
         return p_latent
 
     nuts_kernel = NUTS(model, step_size=0.02)
@@ -117,7 +117,7 @@ def test_normal_gamma():
         rate = torch.tensor([1.0, 1.0])
         concentration = torch.tensor([1.0, 1.0])
         p_latent = pyro.sample('p_latent', dist.Gamma(rate, concentration))
-        pyro.observe("obs", dist.Normal(3, p_latent), data)
+        pyro.sample("obs", dist.Normal(3, p_latent), obs=data)
         return p_latent
 
     nuts_kernel = NUTS(model, step_size=0.01)
@@ -158,7 +158,7 @@ def test_bernoulli_beta_with_dual_averaging():
         alpha = torch.tensor([1.1, 1.1])
         beta = torch.tensor([1.1, 1.1])
         p_latent = pyro.sample("p_latent", dist.Beta(alpha, beta))
-        pyro.observe("obs", dist.Bernoulli(p_latent), data)
+        pyro.sample("obs", dist.Bernoulli(p_latent), obs=data)
         return p_latent
 
     nuts_kernel = NUTS(model, adapt_step_size=True)

@@ -115,14 +115,6 @@ class Object(object):
         self._set_value(value)
         return value
 
-    @functools.wraps(pyro.observe)
-    def observe_(self, fn, obs, *args, **kwargs):
-        if not self._is_placeholder:
-            raise RuntimeError("Cannot .observe_ an initialized named.Object {}".format(self))
-        value = pyro.observe(str(self), fn, obs, *args, **kwargs)
-        self._set_value(value)
-        return value
-
     @functools.wraps(pyro.param)
     def param_(self, *args, **kwargs):
         if not self._is_placeholder:

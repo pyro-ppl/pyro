@@ -34,7 +34,7 @@ class NormalNormalNormalPoutineTestCase(TestCase):
                                   Normal(latent1,
                                          5 * torch.ones(2)))
             x_dist = Normal(latent2, torch.ones(2))
-            pyro.observe("obs", x_dist, torch.ones(2))
+            pyro.sample("obs", x_dist, obs=torch.ones(2))
             return latent1
 
         def guide():
@@ -214,9 +214,9 @@ class QueuePoutineDiscreteTest(TestCase):
                                 Bernoulli(ps[latents[-1][0].long().data])))
 
                 observes.append(
-                    pyro.observe("observe_{}".format(str(t)),
-                                 Normal(mu[latents[-1][0].long().data], sigma),
-                                 pyro.ones(1)))
+                    pyro.sample("observe_{}".format(str(t)),
+                                Normal(mu[latents[-1][0].long().data], sigma),
+                                obs=pyro.ones(1)))
             return latents
 
         self.sites = ["observe_{}".format(str(t)) for t in range(3)] + \

@@ -29,7 +29,7 @@ def test_named_object():
         latent = named.Object("latent")
         mu = latent.mu.param_(torch.zeros(1))
         foo = latent.foo.sample_(dist.Normal(mu, torch.ones(1)))
-        latent.bar.observe_(dist.Normal(mu, torch.ones(1)), foo)
+        latent.bar.sample_(dist.Normal(mu, torch.ones(1)), obs=foo)
         latent.x.z.sample_(dist.Normal(mu, torch.ones(1)))
 
     tr = poutine.trace(model).get_trace()
@@ -45,7 +45,7 @@ def test_named_list():
         latent = named.List("latent")
         mu = latent.add().param_(torch.zeros(1))
         foo = latent.add().sample_(dist.Normal(mu, torch.ones(1)))
-        latent.add().observe_(dist.Normal(mu, torch.ones(1)), foo)
+        latent.add().sample_(dist.Normal(mu, torch.ones(1)), obs=foo)
         latent.add().z.sample_(dist.Normal(mu, torch.ones(1)))
 
     tr = poutine.trace(model).get_trace()
@@ -61,7 +61,7 @@ def test_named_dict():
         latent = named.Dict("latent")
         mu = latent["mu"].param_(torch.zeros(1))
         foo = latent["foo"].sample_(dist.Normal(mu, torch.ones(1)))
-        latent["bar"].observe_(dist.Normal(mu, torch.ones(1)), foo)
+        latent["bar"].sample_(dist.Normal(mu, torch.ones(1)), obs=foo)
         latent["x"].z.sample_(dist.Normal(mu, torch.ones(1)))
 
     tr = poutine.trace(model).get_trace()
@@ -79,7 +79,7 @@ def test_nested():
         mu = latent.list.add().mu.param_(torch.zeros(1))
         latent.dict = named.Dict()
         foo = latent.dict["foo"].foo.sample_(dist.Normal(mu, torch.ones(1)))
-        latent.object.bar.observe_(dist.Normal(mu, torch.ones(1)), foo)
+        latent.object.bar.sample_(dist.Normal(mu, torch.ones(1)), obs=foo)
 
     tr = poutine.trace(model).get_trace()
     assert get_sample_names(tr) == set(["latent.dict['foo'].foo"])
