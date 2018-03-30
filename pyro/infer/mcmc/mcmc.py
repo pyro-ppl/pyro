@@ -3,12 +3,10 @@ from __future__ import absolute_import, division, print_function
 import logging
 import math
 
-import torch
-
-from pyro.infer import TracePosterior
+from pyro.infer.mcmc.trace_joint import TraceJoint
 
 
-class MCMC(TracePosterior):
+class MCMC(TraceJoint):
     """
     Wrapper class for Markov Chain Monte Carlo algorithms. Specific MCMC algorithms
     are TraceKernel instances and need to be supplied as a ``kernel`` argument
@@ -46,5 +44,5 @@ class MCMC(TracePosterior):
                 if t == self.warmup_steps:
                     self.kernel.end_warmup()
                 continue
-            yield (trace, torch.tensor([1.0]))
+            yield trace
         self.kernel.cleanup()
