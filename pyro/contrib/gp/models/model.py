@@ -12,10 +12,29 @@ class GPModel(Parameterized):
     GP models are :class:`Parameterized` subclasses. So its parameters can be learned,
     set priors, or fixed by using corresponding methods from :class:`Parameterized`.
 
+<<<<<<< HEAD
     You can use MCMC algorithms on :meth:`model` to get posterior samples for GP
     parameters. Or you can use SVI with the pair :meth:`model`, :meth:`guide` as in 
     `SVI tutorial <http://pyro.ai/examples/svi_part_i.html>`_. Take a look at
     definition of :meth:`optimize` which use SVI to optimize your GP parameters.
+=======
+    + You can use MCMC algorithms in :mod:`pyro.infer.mcmc` on :meth:`model` to get posterior samples for your test :func:`torch.tensor` 
+      GP's parameters. For example:
+    
+        >>> xx
+        >>> yy
+        >>> zz
+        
+    + Using SVI on 
+    
+        >>> dd
+        >>> dd
+        >>> dd
+    
+    Or you can train with SVI using the pair :meth:`model`, :meth:`guide`
+    as in `SVI tutorial <http://pyro.ai/examples/svi_part_i.html>`_. The source of
+    :meth:`optimize` shows an example for how to use SVI for GP models.
+>>>>>>> dev
 
     :param torch.Tensor X: A 1D or 2D input data for training. Its first dimension is
         the number of data points.
@@ -77,7 +96,7 @@ class GPModel(Parameterized):
         A convenient method to optimize parameters for the Gaussian Process model
         using SVI.
 
-        :param pyro.optim.PyroOptim optimizer: Optimizer.
+        :param PyroOptim optimizer: Optimizer.
         :param int num_steps: Number of steps to run SVI.
         :returns: losses of the training procedure
         :rtype: list

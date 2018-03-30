@@ -29,9 +29,9 @@ class HMMSamplingTestCase(TestCase):
                                 Bernoulli(torch.index_select(p_latent, 0, latents[-1].view(-1).long()))))
 
                 observes.append(
-                    pyro.observe("observe_{}".format(str(t)),
-                                 Bernoulli(torch.index_select(p_obs, 0, latents[-1].view(-1).long())),
-                                 self.data[t]))
+                    pyro.sample("observe_{}".format(str(t)),
+                                Bernoulli(torch.index_select(p_obs, 0, latents[-1].view(-1).long())),
+                                obs=self.data[t]))
             return torch.sum(torch.cat(latents))
 
         self.model_steps = 3
@@ -49,7 +49,7 @@ class NormalNormalSamplingTestCase(TestCase):
             mu = pyro.sample("mu", Normal(torch.zeros(1),
                                           torch.ones(1)))
             xd = Normal(mu, torch.ones(1))
-            pyro.observe("xs", xd, self.data)
+            pyro.sample("xs", xd, obs=self.data)
             return mu
 
         def guide():

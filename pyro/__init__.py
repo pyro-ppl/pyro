@@ -98,19 +98,6 @@ def sample(name, fn, *args, **kwargs):
         return msg["value"]
 
 
-def observe(name, fn, obs, *args, **kwargs):
-    """
-    Alias of `pyro.sample(name, fn, *args, obs=obs, **kwargs)`.
-
-    :param name: name of observation
-    :param fn: distribution class or function
-    :param obs: observed datum
-    :returns: sample
-    """
-    kwargs.update({"obs": obs})
-    return sample(name, fn, *args, **kwargs)
-
-
 class _Subsample(Distribution):
     """
     Randomly select a subsample of a range of indices.

@@ -109,7 +109,7 @@ def gmm_model(data, verbose=False):
         z = z.long()
         if verbose:
             logger.debug("M{} z_{} = {}".format("  " * i, i, z.numpy()))
-        pyro.observe("x_{}".format(i), dist.Normal(mus[z], sigma), data[i])
+        pyro.sample("x_{}".format(i), dist.Normal(mus[z], sigma), obs=data[i])
 
 
 def gmm_guide(data, verbose=False):
@@ -144,7 +144,7 @@ def gmm_batch_model(data):
         z = pyro.sample("z", dist.OneHotCategorical(p).reshape([n]))
         assert z.shape[-2:] == (n, 2)
         mu = (z * mus).sum(-1)
-        pyro.observe("x", dist.Normal(mu, sigma.expand(n)), data[batch])
+        pyro.sample("x", dist.Normal(mu, sigma.expand(n)), obs=data[batch])
 
 
 def gmm_batch_guide(data):
