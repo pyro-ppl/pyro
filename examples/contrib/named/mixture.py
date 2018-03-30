@@ -22,18 +22,18 @@ def model(data, k):
 
     # Create parameters for a Gaussian mixture model.
     latent.ps.param_(torch.tensor(torch.ones(k) / k, requires_grad=True))
-    latent.mus.param_(torch.zeros(k, requires_grad=True))
+    latent.locs.param_(torch.zeros(k, requires_grad=True))
     latent.scales.param_(torch.ones(k, requires_grad=True))
 
     # Observe all the data. We pass a local latent in to the local_model.
     latent.local = named.List()
     for x in data:
-        local_model(latent.local.add(), latent.ps, latent.mus, latent.scales, obs=x)
+        local_model(latent.local.add(), latent.ps, latent.locs, latent.scales, obs=x)
 
 
-def local_model(latent, ps, mus, scales, obs=None):
+def local_model(latent, ps, locs, scales, obs=None):
     i = latent.id.sample_(dist.Categorical(softmax(ps)))
-    return latent.x.sample_(dist.Normal(mus[i], scales[i]), obs=obs)
+    return latent.x.sample_(dist.Normal(locs[i], scales[i]), obs=obs)
 
 
 def guide(data, k):
@@ -46,8 +46,8 @@ def guide(data, k):
 
 def local_guide(latent, k):
     # The local guide simply guesses category assignments.
-    latent.ps.param_(torch.tensor(torch.ones(k) / k, requires_grad=True))
-    latent.id.sample_(dist.Categorical(softmax(latent.ps)))
+    latent.probs.param_(torch.tensor(torch.ones(k) / k, requires_grad=True))
+    latent.id.sample_(dist.Categorical(softmax(latent.probs)))
 
 
 def main(args):
