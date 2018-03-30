@@ -216,7 +216,7 @@ class QueuePoutineDiscreteTest(TestCase):
                 observes.append(
                     pyro.sample("observe_{}".format(str(t)),
                                 Normal(mu[latents[-1][0].long().data], sigma),
-                                obs=pyro.ones(1)))
+                                obs=torch.ones(1)))
             return latents
 
         self.sites = ["observe_{}".format(str(t)) for t in range(3)] + \

@@ -35,7 +35,7 @@ class HMMSamplingTestCase(TestCase):
             return torch.sum(torch.cat(latents))
 
         self.model_steps = 3
-        self.data = [pyro.ones(1, 1) for _ in range(self.model_steps)]
+        self.data = [torch.ones(1, 1) for _ in range(self.model_steps)]
         self.model = model
 
 
