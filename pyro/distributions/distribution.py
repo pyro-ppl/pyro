@@ -30,7 +30,7 @@ class Distribution(object):
     Take a look at the `examples <http://pyro.ai/examples>`_ to see how they interact
     with inference algorithms.
     """
-    reparameterized = False
+    has_rsample = False
     has_enumerate_support = False
 
     def __call__(self, *args, **kwargs):
@@ -80,8 +80,8 @@ class Distribution(object):
         """
         Computes ingredients for stochastic gradient estimators of ELBO.
 
-        The default implementation is correct both for non-reparameterized and
-        for fully reparameterized distributions. Partially reparameterized
+        The default implementation is correct both for non-has_rsample and
+        for fully has_rsample distributions. Partially has_rsample
         distributions should override this method to compute correct
         `.score_function` and `.entropy_term` parts.
 
@@ -90,7 +90,7 @@ class Distribution(object):
         :rtype: ScoreParts
         """
         log_prob = self.log_prob(x, *args, **kwargs)
-        if self.reparameterized:
+        if self.has_rsample:
             return ScoreParts(log_prob=log_prob, score_function=0, entropy_term=log_prob)
         else:
             # XXX should the user be able to control inclusion of the entropy term?
