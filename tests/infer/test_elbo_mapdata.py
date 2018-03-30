@@ -41,7 +41,7 @@ def test_elbo_mapdata(batch_size, map_type):
     add_data_point(-0.04, 0.17)
 
     data = torch.stack(data)
-    n_data = torch.tensor([len(data)])
+    n_data = torch.tensor([float(len(data))])
     analytic_lam_n = lam0 + n_data.expand_as(lam) * lam
     analytic_log_sig_n = -0.5 * torch.log(analytic_lam_n)
     analytic_mu_n = sum_data * (lam / analytic_lam_n) +\

@@ -37,7 +37,7 @@ class NormalNormalTests(TestCase):
                                   [0.00, 0.4],
                                   [0.20, 0.5],
                                   [0.10, 0.7]])
-        self.n_data = torch.tensor([len(self.data)])
+        self.n_data = torch.tensor([float(len(self.data))])
         self.data_sum = self.data.sum(0)
         self.analytic_lam_n = self.lam0 + self.n_data.expand_as(self.lam) * self.lam
         self.analytic_log_sig_n = -0.5 * torch.log(self.analytic_lam_n)

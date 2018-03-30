@@ -53,7 +53,7 @@ def local_guide(latent, k):
 def main(args):
     optim = Adam({"lr": 0.1})
     inference = SVI(model, guide, optim, loss="ELBO")
-    data = torch.tensor([0, 1, 2, 20, 30, 40])
+    data = torch.tensor([0.0, 1.0, 2.0, 20.0, 30.0, 40.0])
     k = 2
 
     print('Step\tLoss')

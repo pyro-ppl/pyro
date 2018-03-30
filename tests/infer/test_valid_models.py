@@ -55,8 +55,8 @@ def assert_warning(model, guide, **kwargs):
 def test_nonempty_model_empty_guide_ok(trace_graph, enum_discrete):
 
     def model():
-        mu = torch.tensor([0, 0])
-        sigma = torch.tensor([1, 1])
+        mu = torch.tensor([0.0, 0.0])
+        sigma = torch.tensor([1.0, 1.0])
         pyro.sample("x", dist.Normal(mu, sigma).reshape(extra_event_dims=1), obs=mu)
 
     def guide():

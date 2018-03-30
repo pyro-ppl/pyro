@@ -65,7 +65,7 @@ class AIR(nn.Module):
         self.baseline_scalar = baseline_scalar
         self.likelihood_sd = likelihood_sd
         self.use_cuda = use_cuda
-        self.prototype = torch.tensor(0).cuda() if use_cuda else torch.tensor(0)
+        self.prototype = torch.tensor(0.).cuda() if use_cuda else torch.tensor(0.)
 
         self.z_pres_size = 1
         self.z_where_size = 3
