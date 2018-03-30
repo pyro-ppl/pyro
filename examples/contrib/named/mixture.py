@@ -21,14 +21,14 @@ def model(data, k):
     latent = named.Object("latent")
 
     # Create parameters for a Gaussian mixture model.
-    latent.ps.param_(torch.tensor(torch.ones(k) / k, requires_grad=True))
+    latent.probs.param_(torch.tensor(torch.ones(k) / k, requires_grad=True))
     latent.locs.param_(torch.zeros(k, requires_grad=True))
     latent.scales.param_(torch.ones(k, requires_grad=True))
 
     # Observe all the data. We pass a local latent in to the local_model.
     latent.local = named.List()
     for x in data:
-        local_model(latent.local.add(), latent.ps, latent.locs, latent.scales, obs=x)
+        local_model(latent.local.add(), latent.probs, latent.locs, latent.scales, obs=x)
 
 
 def local_model(latent, ps, locs, scales, obs=None):
