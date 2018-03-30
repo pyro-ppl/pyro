@@ -62,7 +62,7 @@ jobs:
           script:
               - pytest -vs --cov=pyro --stage test_examples
               - CI=1 grep -l smoke_test tutorial/source/*.ipynb | xargs grep -L 'smoke_test = False' \
-              | xargs pytest -vx --nbval-lax --current-env
+                  | xargs pytest -vx --nbval-lax --current-env
         - python: 3.5
           env: STAGE=unit
           script: pytest -vs --cov=pyro --stage unit --durations 20
