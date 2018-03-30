@@ -335,9 +335,9 @@ class RaoBlackwellizationTests(TestCase):
         self.mu0 = torch.tensor([0.0, 0.5])   # prior mean
         # known precision of observation noise
         self.lam = torch.tensor([6.0, 4.0])
-        self.n_outer = 3.
-        self.n_inner = 3.
-        self.n_data = torch.tensor(self.n_outer * self.n_inner)
+        self.n_outer = 3
+        self.n_inner = 3
+        self.n_data = torch.tensor(float(self.n_outer * self.n_inner))
         self.data = []
         self.sum_data = torch.zeros(2)
         for _out in range(self.n_outer):

@@ -206,7 +206,7 @@ class GaussianPyramidTests(TestCase):
                               (0.1 + 0.4 * (i + 1) / bottom_layer_size) * torch.randn(1))
             self.data.append(data_i)
         self.data_sums = [sum(self.data[i]) for i in range(bottom_layer_size)]
-        self.N_data = torch.tensor([self.N_data])
+        self.N_data = torch.tensor([float(self.N_data)])
         self.q_dag = self.construct_q_dag()
         # compute the order in which guide samples are generated
         self.q_topo_sort = list(networkx.topological_sort(self.q_dag))
