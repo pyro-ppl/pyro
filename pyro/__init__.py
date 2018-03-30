@@ -98,19 +98,6 @@ def sample(name, fn, *args, **kwargs):
         return msg["value"]
 
 
-def observe(name, fn, obs, *args, **kwargs):
-    """
-    Alias of `pyro.sample(name, fn, *args, obs=obs, **kwargs)`.
-
-    :param name: name of observation
-    :param fn: distribution class or function
-    :param obs: observed datum
-    :returns: sample
-    """
-    kwargs.update({"obs": obs})
-    return sample(name, fn, *args, **kwargs)
-
-
 class _Subsample(Distribution):
     """
     Randomly select a subsample of a range of indices.
@@ -228,26 +215,26 @@ class iarange(object):
 
         # This version simply declares independence:
         >>> with iarange('data'):
-                sample('obs', Normal(mu, sigma), obs=data)
+                sample('obs', Normal(loc, scale), obs=data)
 
         # This version subsamples data in vectorized way:
         >>> with iarange('data', 100, subsample_size=10) as ind:
-                sample('obs', Normal(mu, sigma), obs=data[ind])
+                sample('obs', Normal(loc, scale), obs=data[ind])
 
         # This wraps a user-defined subsampling method for use in pyro:
         >>> ind = my_custom_subsample
         >>> with iarange('data', 100, subsample=ind):
-                sample('obs', Normal(mu, sigma), obs=data[ind])
+                sample('obs', Normal(loc, scale), obs=data[ind])
 
         # This reuses two different independence contexts.
         >>> x_axis = iarange('outer', 320, dim=-1)
         >>> y_axis = iarange('outer', 200, dim=-2)
         >>> with x_axis:
-                x_noise = sample("x_noise", Normal(mu, sigma).reshape([320]))
+                x_noise = sample("x_noise", Normal(loc, scale).reshape([320]))
         >>> with y_axis:
-                y_noise = sample("y_noise", Normal(mu, sigma).reshape([200, 1]))
+                y_noise = sample("y_noise", Normal(loc, scale).reshape([200, 1]))
         >>> with x_axis, y_axis:
-                xy_noise = sample("xy_noise", Normal(mu, sigma).reshape([200, 320]))
+                xy_noise = sample("xy_noise", Normal(loc, scale).reshape([200, 320]))
 
     See `SVI Part II <http://pyro.ai/examples/svi_part_ii.html>`_ for an
     extended discussion.
@@ -296,7 +283,7 @@ class irange(object):
 
         >>> for i in irange('data', 100, subsample_size=10):
                 if z[i]:  # Prevents vectorization.
-                    observe('obs_{}'.format(i), normal, data[i], mu, sigma)
+                    observe('obs_{}'.format(i), normal, data[i], loc, scale)
 
     See `SVI Part II <http://pyro.ai/examples/svi_part_ii.html>`_ for an extended discussion.
     """
