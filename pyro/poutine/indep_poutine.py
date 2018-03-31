@@ -77,6 +77,14 @@ class IndepMessenger(Messenger):
         self.size = size
         self.counter = 0
 
+    def __enter__(self):
+        self.dim = _DIM_ALLOCATOR.allocate(self.name, self.dim)
+        return super(IndepMessenger, self).__enter__()
+
+    def __exit__(self, *args):
+        _DIM_ALLOCATOR.free(self.name, self.dim)
+        return super(IndepMessenger, self).__exit__(*args)
+
     def next_context(self):
         """
         Increments the counter.
