@@ -25,7 +25,8 @@ class GPRegression(GPModel):
     :param torch.Tensor X: A 1D or 2D tensor of input data for training.
     :param torch.Tensor y: A tensor of output data for training with
         ``y.shape[-1]`` equals to number of data points.
-    :param pyro.contrib.gp.kernels.Kernel kernel: A Pyro kernel object.
+    :param kernel: A Pyro kernel object.
+    :type kernel: pyro.contrib.gp.kernels.Kernel
     :param torch.Tensor noise: An optional noise parameter.
     :param float jitter: An additional jitter to help stablize Cholesky decomposition.
     """

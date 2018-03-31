@@ -1,7 +1,7 @@
 Primitives
 ==========
 
-.. automodule:: pyro.__init__
+.. automodule:: pyro
     :members:
     :undoc-members:
     :show-inheritance:
