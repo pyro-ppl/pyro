@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import numbers
+from functools import update_wrapper
 
 import torch
 import torch.distributions as torch_dist
@@ -319,6 +320,20 @@ def matrix_triangular_solve_compat(b, A, upper=True):
         return A.inverse().matmul(b)
     else:
         return b.trtrs(A, upper=upper)[0].view(b.size())
+
+
+def log_sum_exp(tensor, scale=1.0, dim=-1):
+    """
+    Numerically stable implementation for the `LogSumExp` operation. The
+    summing is done along the dimension specified by ``dim``.
+
+    :param torch.Tensor tensor: Input tensor.
+    :param torch.Tensor scale: Optional scale factor for each ``exp(tensor)``. Must be
+        broadcastable to tensor.
+    :param dim: Dimension to be summed out.
+    """
+    max_val = tensor.max(dim)[0]
+    return max_val + torch.sum(scale * (tensor - max_val.unsqueeze(-1)).exp(), dim=dim).log()
 
 
 def enable_validation(is_validate):
