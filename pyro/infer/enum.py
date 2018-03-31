@@ -55,7 +55,14 @@ def iter_importance_traces(num_particles=1,
                            graph_type="flat",
                            max_iarange_nesting=float('inf')):
     """
-    TODO docs
+    Iterate over global non-parallel importance samples of a model-guide pair,
+    including both parallel and non-parallel enumeration
+    if the guide is annotated for enumeration.
+
+    :param num_particles: number of non-parallel importance samples to take
+    :param graph_type: the type of the graph, e.g. "flat" or "dense".
+    :param max_iarange_nesting: maximum depth of iaranges
+    :returns: An iterator over model/guide trace pairs
     """
     def _get_traces(model, guide, *args, **kwargs):
 
