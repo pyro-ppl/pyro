@@ -93,8 +93,8 @@ class GatedTransition(nn.Module):
         # assemble the actual mean used to sample z_t, which mixes a linear transformation
         # of z_{t-1} with the proposed mean modulated by the gating function
         loc = (1 - gate) * self.lin_z_to_loc(z_t_1) + gate * proposed_mean
-        # compute the scale used to sample z_t, using the proposed mean from above as input
-        # the softplus ensures that scale is positive
+        # compute the scale used to sample z_t, using the proposed mean from
+        # above as input the softplus ensures that scale is positive
         scale = self.softplus(self.lin_sig(self.relu(proposed_mean)))
         # return loc, scale which can be fed into Normal
         return loc, scale
@@ -180,7 +180,6 @@ class DMM(nn.Module):
         # set z_prev = z_0 to setup the recursive conditioning in p(z_t | z_{t-1})
         z_prev = self.z_0.expand(mini_batch.size(0), self.z_0.size(0))
 
-<<<<<<< HEAD
         # we enclose all the sample statements in the model in a iarange.
         # this marks that each datapoint is conditionally independent of the others
         with pyro.iarange("z_minibatch", len(mini_batch)):
@@ -193,12 +192,11 @@ class DMM(nn.Module):
                 # have different lengths)
 
                 # first compute the parameters of the diagonal gaussian distribution p(z_t | z_{t-1})
-                z_mu, z_sigma = self.trans(z_prev)
+                z_loc, z_scale = self.trans(z_prev)
 
-                # then sample z_t according to dist.Normal(z_mu, z_sigma).
+                # then sample z_t according to dist.Normal(z_loc, z_scale)
                 # note that we use the reshape method so that the univariate Normal distribution
                 # is treated as a multivariate Normal distribution with a diagonal covariance.
-                # then sample z_t according to dist.Normal(z_loc, z_scale)
                 with poutine.scale(None, annealing_factor):
                     z_t = pyro.sample("z_%d" % t,
                                       dist.Normal(z_loc, z_scale)
@@ -244,15 +242,15 @@ class DMM(nn.Module):
             # sample the latents z one time step at a time
             for t in range(1, T_max + 1):
                 # the next two lines assemble the distribution q(z_t | z_{t-1}, x_{t:T})
-                z_mu, z_sigma = self.combiner(z_prev, rnn_output[:, t - 1, :])
+                z_loc, z_scale = self.combiner(z_prev, rnn_output[:, t - 1, :])
 
                 # if we are using normalizing flows, we apply the sequence of transformations
                 # parameterized by self.iafs to the base distribution defined in the previous line
                 # to yield a transformed distribution that we use for q(z_t|...)
                 if len(self.iafs) > 0:
-                    z_dist = TransformedDistribution(dist.Normal(z_mu, z_sigma), self.iafs)
+                    z_dist = TransformedDistribution(dist.Normal(z_loc, z_scale), self.iafs)
                 else:
-                    z_dist = dist.Normal(z_mu, z_sigma)
+                    z_dist = dist.Normal(z_loc, z_scale)
                 assert z_dist.event_shape == ()
                 assert z_dist.batch_shape == (len(mini_batch), self.z_q_0.size(0))
 
@@ -424,12 +422,12 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', type=int, default=5000)
-    parser.add_argument('-lr', '--learning-rate', type=float, default=0.0004)
+    parser.add_argument('-lr', '--learning-rate', type=float, default=0.0003)
     parser.add_argument('-b1', '--beta1', type=float, default=0.96)
     parser.add_argument('-b2', '--beta2', type=float, default=0.999)
     parser.add_argument('-cn', '--clip-norm', type=float, default=20.0)
     parser.add_argument('-lrd', '--lr-decay', type=float, default=0.99996)
-    parser.add_argument('-wd', '--weight-decay', type=float, default=0.6)
+    parser.add_argument('-wd', '--weight-decay', type=float, default=2.0)
     parser.add_argument('-mbs', '--mini-batch-size', type=int, default=20)
     parser.add_argument('-ae', '--annealing-epochs', type=int, default=1000)
     parser.add_argument('-maf', '--minimum-annealing-factor', type=float, default=0.1)
