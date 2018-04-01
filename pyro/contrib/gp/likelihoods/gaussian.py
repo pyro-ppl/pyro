@@ -12,9 +12,13 @@ from .likelihood import Likelihood
 
 class Gaussian(Likelihood):
     """
-    Implementation of Gaussian likelihood.
+    Implementation of Gaussian likelihood, which is used for regression problems.
 
-    :param torch.Tensor variance: Variance parameter.
+    Gaussian likelihood uses :class:`~pyro.distributions.distribution.Normal`
+    distribution.
+
+    :param torch.Tensor variance: A variance parameter, which plays the role of
+        ``noise`` in regression problems.
     """
     def __init__(self, variance=None, name="Gaussian"):
         super(Gaussian, self).__init__(name)

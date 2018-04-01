@@ -14,7 +14,7 @@ class Cosine(Isotropy):
     r"""
     Implementation of Cosine kernel:
 
-        :math:`\sigma^2 \cos\left(\frac{|x-z|}{l}\right).`
+        :math:`k(x,z) = \sigma^2 \cos\left(\frac{|x-z|}{l}\right).`
 
     :param torch.Tensor lengthscale: Length-scale parameter of this kernel.
     """

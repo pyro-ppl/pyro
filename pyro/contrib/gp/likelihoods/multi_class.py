@@ -14,11 +14,16 @@ def _softmax(x):
 
 class MultiClass(Likelihood):
     """
-    Implementation of MultiClass likelihood, which is used for multi-class classification.
+    Implementation of MultiClass likelihood, which is used for multi-class
+    classification problems.
+
+    MultiClass likelihood uses :class:`~pyro.distributions.distribution.Categorical`
+    distribution, so ``response_function`` should normalize its input's rightmost axis.
+    By default, we use `softmax` function.
 
     :param int num_classes: Number of classes for prediction.
-    :param callable response_function: A mapping to correct domain for MultiClass likelihood.
-        By default, we use `softmax` function.
+    :param callable response_function: A mapping to correct domain for MultiClass
+        likelihood.
     """
     def __init__(self, num_classes, response_function=None, name="MultiClass"):
         super(MultiClass, self).__init__(name)
@@ -30,8 +35,9 @@ class MultiClass(Likelihood):
         # calculates Monte Carlo estimate for E_q(f) [logp(y | f)]
         f = dist.Normal(f_loc, f_var)()
         if f.dim() < 2:
-            raise ValueError("Latent function output should be at least 2 dimensional: "
-                             "one for number of classes and one for number of data.")
+            raise ValueError("Latent function output should have at least 2 "
+                             "dimensions: one for number of classes and one for "
+                             "number of data.")
 
         # swap class dimension and data dimension
         f_swap = f.transpose(-2, -1)  # -> num_data x num_classes

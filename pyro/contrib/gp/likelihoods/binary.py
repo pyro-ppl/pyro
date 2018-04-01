@@ -10,10 +10,15 @@ from .likelihood import Likelihood
 
 class Binary(Likelihood):
     """
-    Implementation of Binary likelihood, which is used for binary classification.
+    Implementation of Binary likelihood, which is used for binary classification
+    problems.
 
-    :param callable response_function: A mapping to correct domain for Binary likelihood.
-        By default, we use `sigmoid` function.
+    Binary likelihood uses :class:`~pyro.distributions.distribution.Bernoulli`
+    distribution, so the output of ``response_function`` should be in range
+    :math:`(0,1)`. By default, we use `sigmoid` function.
+
+    :param callable response_function: A mapping to correct domain for Binary
+        likelihood.
     """
     def __init__(self, response_function=None, name="Binary"):
         super(Binary, self).__init__(name)
