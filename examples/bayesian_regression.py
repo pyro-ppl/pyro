@@ -51,12 +51,12 @@ regression_model = RegressionModel(p)
 
 def model(data):
     # Create unit normal priors over the parameters
-    mu = torch.zeros(1, p).type_as(data)
-    sigma = 2 * torch.ones(1, p).type_as(data)
-    bias_mu = torch.zeros(1).type_as(data)
-    bias_sigma = 2 * torch.ones(1).type_as(data)
-    w_prior = Normal(mu, sigma).reshape(extra_event_dims=1)
-    b_prior = Normal(bias_mu, bias_sigma).reshape(extra_event_dims=1)
+    loc = torch.zeros(1, p).type_as(data)
+    scale = 2 * torch.ones(1, p).type_as(data)
+    bias_loc = torch.zeros(1).type_as(data)
+    bias_scale = 2 * torch.ones(1).type_as(data)
+    w_prior = Normal(loc, scale).reshape(extra_event_dims=1)
+    b_prior = Normal(bias_loc, bias_scale).reshape(extra_event_dims=1)
     priors = {'linear.weight': w_prior, 'linear.bias': b_prior}
     # lift module parameters to random variables sampled from the priors
     lifted_module = pyro.random_module("module", regression_model, priors)
@@ -73,16 +73,16 @@ def model(data):
 
 
 def guide(data):
-    w_mu = torch.randn(1, p, requires_grad=True).type_as(data)
+    w_loc = torch.randn(1, p, requires_grad=True).type_as(data)
     w_log_sig = torch.tensor((-3.0 * torch.ones(1, p) + 0.05 * torch.randn(1, p)).type_as(data),
                              requires_grad=True)
-    b_mu = torch.randn(1, requires_grad=True).type_as(data)
+    b_loc = torch.randn(1, requires_grad=True).type_as(data)
     b_log_sig = torch.tensor((-3.0 * torch.ones(1) + 0.05 * torch.randn(1)).type_as(data.data), requires_grad=True)
     # register learnable params in the param store
-    mw_param = pyro.param("guide_mean_weight", w_mu)
-    sw_param = softplus(pyro.param("guide_log_sigma_weight", w_log_sig))
-    mb_param = pyro.param("guide_mean_bias", b_mu)
-    sb_param = softplus(pyro.param("guide_log_sigma_bias", b_log_sig))
+    mw_param = pyro.param("guide_mean_weight", w_loc)
+    sw_param = softplus(pyro.param("guide_log_scale_weight", w_log_sig))
+    mb_param = pyro.param("guide_mean_bias", b_loc)
+    sb_param = softplus(pyro.param("guide_log_scale_bias", b_log_sig))
     # gaussian guide distributions for w and b
     w_dist = Normal(mw_param, sw_param).reshape(extra_event_dims=1)
     b_dist = Normal(mb_param, sb_param).reshape(extra_event_dims=1)

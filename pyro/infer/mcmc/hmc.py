@@ -161,9 +161,9 @@ class HMC(TraceKernel):
         self._prototype_trace = trace
         # momenta distribution - currently standard normal
         for name, node in sorted(trace.iter_stochastic_nodes(), key=lambda x: x[0]):
-            r_mu = torch.zeros_like(node["value"])
-            r_sigma = torch.ones_like(node["value"])
-            self._r_dist[name] = dist.Normal(mu=r_mu, sigma=r_sigma)
+            r_loc = torch.zeros_like(node["value"])
+            r_scale = torch.ones_like(node["value"])
+            self._r_dist[name] = dist.Normal(loc=r_loc, scale=r_scale)
             if node["fn"].support is not constraints.real and self._automatic_transform_enabled:
                 self.transforms[name] = biject_to(node["fn"].support).inv
         self._validate_trace(trace)
@@ -175,8 +175,8 @@ class HMC(TraceKernel):
             self.step_size = self._find_reasonable_step_size(z)
             self.num_steps = max(1, int(self.trajectory_length / self.step_size))
             # make prox-center for Dual Averaging scheme
-            mu = math.log(10 * self.step_size)
-            self._adapted_scheme = DualAveraging(prox_center=mu)
+            loc = math.log(10 * self.step_size)
+            self._adapted_scheme = DualAveraging(prox_center=loc)
 
     def end_warmup(self):
         if self.adapt_step_size:

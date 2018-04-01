@@ -18,46 +18,46 @@ TOOL = 'timeit'
 TOOL_CFG = {}
 DISTRIBUTIONS = {
     'Bernoulli': (Bernoulli, {
-        'ps': T([0.3, 0.3, 0.3, 0.3])
+        'probs': T([0.3, 0.3, 0.3, 0.3])
     }),
     'Beta': (Beta, {
-        'alpha': T([2.4, 2.4, 2.4, 2.4]),
-        'beta': T([3.2, 3.2, 3.2, 3.2])
+        'concentration1': T([2.4, 2.4, 2.4, 2.4]),
+        'concentration0': T([3.2, 3.2, 3.2, 3.2])
     }),
     'Categorical': (Categorical, {
-        'ps': T([0.1, 0.3, 0.4, 0.2])
+        'probs': T([0.1, 0.3, 0.4, 0.2])
     }),
     'OneHotCategorical': (OneHotCategorical, {
-        'ps': T([0.1, 0.3, 0.4, 0.2])
+        'probs': T([0.1, 0.3, 0.4, 0.2])
     }),
     'Dirichlet': (Dirichlet, {
-        'alpha': T([2.4, 3, 6, 6])
+        'concentration': T([2.4, 3, 6, 6])
     }),
     'Normal': (Normal, {
-        'mu': T([0.5, 0.5, 0.5, 0.5]),
-        'sigma': T([1.2, 1.2, 1.2, 1.2])
+        'loc': T([0.5, 0.5, 0.5, 0.5]),
+        'scale': T([1.2, 1.2, 1.2, 1.2])
     }),
     'LogNormal': (LogNormal, {
-        'mu': T([0.5, 0.5, 0.5, 0.5]),
-        'sigma': T([1.2, 1.2, 1.2, 1.2])
+        'loc': T([0.5, 0.5, 0.5, 0.5]),
+        'scale': T([1.2, 1.2, 1.2, 1.2])
     }),
     'Cauchy': (Cauchy, {
-        'mu': T([0.5, 0.5, 0.5, 0.5]),
-        'gamma': T([1.2, 1.2, 1.2, 1.2])
+        'loc': T([0.5, 0.5, 0.5, 0.5]),
+        'scale': T([1.2, 1.2, 1.2, 1.2])
     }),
     'Exponential': (Exponential, {
-        'lam': T([5.5, 3.2, 4.1, 5.6])
+        'rate': T([5.5, 3.2, 4.1, 5.6])
     }),
     'Poisson': (Poisson, {
-        'lam': T([5.5, 3.2, 4.1, 5.6])
+        'rate': T([5.5, 3.2, 4.1, 5.6])
     }),
     'Gamma': (Gamma, {
-        'alpha': T([2.4, 2.4, 2.4, 2.4]),
-        'beta': T([3.2, 3.2, 3.2, 3.2])
+        'concentration': T([2.4, 2.4, 2.4, 2.4]),
+        'rate': T([3.2, 3.2, 3.2, 3.2])
     }),
     'Uniform': (Uniform, {
-        'a': T([0, 0, 0, 0]),
-        'b': T([4, 4, 4, 4])
+        'low': T([0, 0, 0, 0]),
+        'high': T([4, 4, 4, 4])
     })
 }
 

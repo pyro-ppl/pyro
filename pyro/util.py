@@ -9,7 +9,6 @@ from collections import defaultdict
 import graphviz
 import torch
 from six.moves import zip_longest
-from torch.nn import Parameter
 
 from pyro.params import _PYRO_PARAM_STORE
 from pyro.poutine.poutine import _PYRO_STACK
@@ -133,28 +132,6 @@ def set_rng_seed(rng_seed):
         np.random.seed(rng_seed)
     except ImportError:
         pass
-
-
-def ones(*args, **kwargs):
-    """
-    :param torch.Tensor type_as: optional argument for tensor type
-
-    A convenience function for Parameter(torch.ones(...))
-    """
-    retype = kwargs.pop('type_as', None)
-    p_tensor = torch.ones(*args, **kwargs)
-    return Parameter(p_tensor if retype is None else p_tensor.type_as(retype))
-
-
-def zeros(*args, **kwargs):
-    """
-    :param torch.Tensor type_as: optional argument for tensor type
-
-    A convenience function for Parameter(torch.zeros(...))
-    """
-    retype = kwargs.pop('type_as', None)
-    p_tensor = torch.zeros(*args, **kwargs)
-    return Parameter(p_tensor if retype is None else p_tensor.type_as(retype))
 
 
 def is_nan(x):

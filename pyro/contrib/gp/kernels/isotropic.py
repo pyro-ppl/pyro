@@ -19,7 +19,7 @@ def _torch_sqrt(x, eps=1e-18):
 class Isotropy(Kernel):
     """
     Base class for a family of isotropic covariance kernels which are functions of the
-    distance :math:`\frac{|x-z|}{l}`, where :math:`l` is the length-scale parameter.
+    distance :math:`|x-z|/l`, where :math:`l` is the length-scale parameter.
 
     By default, the parameter ``lengthscale`` has size 1. To use the isotropic version
     (different lengthscale for each dimension), make sure that ``lengthscale`` has size
@@ -38,7 +38,7 @@ class Isotropy(Kernel):
         self.set_constraint("variance", constraints.positive)
 
         if lengthscale is None:
-            lengthscale = torch.tensor(1)
+            lengthscale = torch.tensor(1.)
         self.lengthscale = Parameter(lengthscale)
         self.set_constraint("lengthscale", constraints.positive)
 

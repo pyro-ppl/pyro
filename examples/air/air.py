@@ -16,7 +16,6 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from modules import Identity, Encoder, Decoder, MLP, Predict
-from pyro.util import zeros
 
 
 # Default prior success probability for z_pres.
@@ -65,17 +64,17 @@ class AIR(nn.Module):
         self.baseline_scalar = baseline_scalar
         self.likelihood_sd = likelihood_sd
         self.use_cuda = use_cuda
-        self.prototype = torch.tensor(0).cuda() if use_cuda else torch.tensor(0)
+        self.prototype = torch.tensor(0.).cuda() if use_cuda else torch.tensor(0.)
 
         self.z_pres_size = 1
         self.z_where_size = 3
         # By making these parameters they will be moved to the gpu
         # when necessary. (They are not registered with pyro for
         # optimization.)
-        self.z_where_mu_prior = nn.Parameter(
+        self.z_where_loc_prior = nn.Parameter(
             torch.FloatTensor([scale_prior_mean, pos_prior_mean, pos_prior_mean]),
             requires_grad=False)
-        self.z_where_sigma_prior = nn.Parameter(
+        self.z_where_scale_prior = nn.Parameter(
             torch.FloatTensor([scale_prior_sd, pos_prior_sd, pos_prior_sd]),
             requires_grad=False)
 
@@ -96,12 +95,12 @@ class AIR(nn.Module):
         self.bl_embed = Identity() if embed_net is None else MLP(x_size ** 2, embed_net, nl, True)
 
         # Create parameters.
-        self.h_init = zeros(1, rnn_hidden_size)
-        self.c_init = zeros(1, rnn_hidden_size)
-        self.bl_h_init = zeros(1, rnn_hidden_size)
-        self.bl_c_init = zeros(1, rnn_hidden_size)
-        self.z_where_init = zeros(1, self.z_where_size)
-        self.z_what_init = zeros(1, self.z_what_size)
+        self.h_init = torch.zeros(1, rnn_hidden_size)
+        self.c_init = torch.zeros(1, rnn_hidden_size)
+        self.bl_h_init = torch.zeros(1, rnn_hidden_size)
+        self.bl_c_init = torch.zeros(1, rnn_hidden_size)
+        self.z_where_init = torch.zeros(1, self.z_where_size)
+        self.z_what_init = torch.zeros(1, self.z_what_size)
 
         if use_cuda:
             self.cuda()
@@ -139,8 +138,8 @@ class AIR(nn.Module):
 
             # Sample attention window position.
             z_where = pyro.sample('z_where_{}'.format(t),
-                                  dist.Normal(self.z_where_mu_prior.expand(n, self.z_where_size),
-                                              self.z_where_sigma_prior.expand(n, self.z_where_size))
+                                  dist.Normal(self.z_where_loc_prior.expand(n, self.z_where_size),
+                                              self.z_where_scale_prior.expand(n, self.z_where_size))
                                       .reshape(extra_event_dims=1))
 
             # Sample latent code for contents of the attention window.
@@ -226,7 +225,7 @@ class AIR(nn.Module):
 
         rnn_input = torch.cat((inputs['embed'], prev.z_where, prev.z_what, prev.z_pres), 1)
         h, c = self.rnn(rnn_input, (prev.h, prev.c))
-        z_pres_p, z_where_mu, z_where_sigma = self.predict(h)
+        z_pres_p, z_where_loc, z_where_scale = self.predict(h)
 
         # Compute baseline estimates for discrete choice z_pres.
         bl_value, bl_h, bl_c = self.baseline_step(prev, inputs)
@@ -238,8 +237,8 @@ class AIR(nn.Module):
 
         with poutine.scale(None, z_pres.squeeze(-1) if self.use_masking else 1):
             z_where = pyro.sample('z_where_{}'.format(t),
-                                  dist.Normal(z_where_mu + self.z_where_mu_prior,
-                                              z_where_sigma * self.z_where_sigma_prior)
+                                  dist.Normal(z_where_loc + self.z_where_loc_prior,
+                                              z_where_scale * self.z_where_scale_prior)
                                       .reshape(extra_event_dims=1))
 
             # Figure 2 of [1] shows x_att depending on z_where and h,
@@ -248,10 +247,10 @@ class AIR(nn.Module):
             x_att = image_to_window(z_where, self.window_size, self.x_size, inputs['raw'])
 
             # Encode attention windows.
-            z_what_mu, z_what_sigma = self.encode(x_att)
+            z_what_loc, z_what_scale = self.encode(x_att)
 
             z_what = pyro.sample('z_what_{}'.format(t),
-                                 dist.Normal(z_what_mu, z_what_sigma)
+                                 dist.Normal(z_what_loc, z_what_scale)
                                      .reshape(extra_event_dims=1))
         return GuideState(h=h, c=c, bl_h=bl_h, bl_c=bl_c, z_pres=z_pres, z_where=z_where, z_what=z_what)
 

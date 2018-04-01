@@ -209,7 +209,7 @@ class Trace(object):
         return [name for name, node in self.nodes.items()
                 if node["type"] == "sample" and
                 not node["is_observed"] and
-                getattr(node["fn"], "reparameterized", False)]
+                getattr(node["fn"], "has_rsample", False)]
 
     @property
     def nonreparam_stochastic_nodes(self):

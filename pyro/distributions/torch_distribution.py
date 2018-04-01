@@ -19,15 +19,6 @@ class TorchDistributionMixin(Distribution):
     :class:`torch.distributions.distribution.Distribution` and then inherit
     from :class:`TorchDistributionMixin`.
     """
-    @property
-    def reparameterized(self):
-        """
-        :return: Whether this distribution is reparameterized, i.e. whether
-            this distribution implements :meth:`rsample`.
-        :rtype: bool
-        """
-        return self.has_rsample
-
     def __call__(self, sample_shape=torch.Size()):
         """
         Samples a random value.
