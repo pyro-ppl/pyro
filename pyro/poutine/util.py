@@ -145,20 +145,21 @@ def broadcast_enum_cont(msg):
     value = dist.enumerate_support()
     assert len(value.shape) == 1 + len(dist.batch_shape) + len(dist.event_shape)
 
-    # Ensure enumeration happens at an available tensor dimension.
-    # This allocates the next available dim for enumeration, to the left all other dims.
-    actual_dim = len(dist.batch_shape)  # the leftmost dim of log_prob, counting from the right
-    target_dim = msg["infer"]["next_available_dim"]  # possibly even farther left than actual_dim
-    msg["infer"]["next_available_dim"] += 1
-    if target_dim == float('inf'):
-        raise ValueError("max_iarange_nesting must be set to a finite value for parallel enumeration")
-    if actual_dim > target_dim:
-        raise ValueError("Expected enumerated value to have dim at most {} but got shape {}".format(
-            target_dim + len(dist.event_shape), value.shape))
-    elif target_dim > actual_dim:
-        # Reshape to move actual_dim to target_dim.
-        diff = target_dim - actual_dim
-        value = value.contiguous().view(value.shape[:1] + (1,) * diff + value.shape[1:])
+    # # Ensure enumeration happens at an available tensor dimension.
+    # # This allocates the next available dim for enumeration, to the left all other dims.
+    # actual_dim = len(dist.batch_shape)  # the leftmost dim of log_prob, counting from the right
+    # # target_dim = msg["infer"]["next_available_dim"]  # possibly even farther left than actual_dim
+    # # msg["infer"]["next_available_dim"] += 1
+    # target_dim = msg["cond_indep_stack"][0].dim
+    # if target_dim == float('inf'):
+    #     raise ValueError("max_iarange_nesting must be set to a finite value for parallel enumeration")
+    # if actual_dim > target_dim:
+    #     raise ValueError("Expected enumerated value to have dim at most {} but got shape {}".format(
+    #         target_dim + len(dist.event_shape), value.shape))
+    # elif target_dim > actual_dim:
+    #     # Reshape to move actual_dim to target_dim.
+    #     diff = target_dim - actual_dim
+    #     value = value.contiguous().view(value.shape[:1] + (1,) * diff + value.shape[1:])
 
     msg["value"] = value
 

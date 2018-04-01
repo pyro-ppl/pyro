@@ -66,12 +66,12 @@ class IndepMessenger(Messenger):
     a ``cond_indep_stack`` at each sample/observe site for consumption by
     ``TracePoutine``.
     """
-    def __init__(self, name, size, dim=None):
+    def __init__(self, name, size, dim=None, stack=None):
         """
         Constructor: basically default, but store a counter to keep track of
         which ``irange`` branch we're in.
         """
-        super(IndepMessenger, self).__init__()
+        super(IndepMessenger, self).__init__(stack=stack)
         self.name = name
         self.dim = dim
         self.size = size
@@ -95,3 +95,9 @@ class IndepMessenger(Messenger):
         frame = CondIndepStackFrame(self.name, self.dim, self.size, self.counter)
         msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
         return None
+
+    def _postprocess_message(self, msg):
+        if msg["type"] == "sample" and msg["value"].shape[self.dim] == 1:
+            frame = CondIndepStackFrame(self.name, self.dim, self.size, self.counter)
+            if frame.vectorized:
+                msg["cond_indep_stack"].pop(msg["cond_indep_stack"].index(frame))

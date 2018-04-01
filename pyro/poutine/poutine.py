@@ -10,8 +10,10 @@ class Messenger(object):
     Most inference operations are implemented in subclasses of this.
     """
 
-    def __init__(self):
-        pass
+    def __init__(self, stack=None):
+        if stack is None:
+            stack = _PYRO_STACK
+        self._stack = stack
 
     def __enter__(self):
         """
@@ -27,10 +29,10 @@ class Messenger(object):
         Derived versions cannot be overridden to take arguments
         and must always return self.
         """
-        if not (self in _PYRO_STACK):
+        if not (self in self._stack):
             # if this poutine is not already installed,
             # put it on the bottom of the stack.
-            _PYRO_STACK.insert(0, self)
+            self._stack.insert(0, self)
 
             # necessary to return self because the return value of __enter__
             # is bound to VAR in with EXPR as VAR.
@@ -73,8 +75,8 @@ class Messenger(object):
             # this poutine should be on the bottom of the stack.
             # If so, remove it from the stack.
             # if not, raise a ValueError because something really weird happened.
-            if _PYRO_STACK[0] == self:
-                _PYRO_STACK.pop(0)
+            if self._stack[0] == self:
+                self._stack.pop(0)
             else:
                 # should never get here, but just in case...
                 raise ValueError("This Messenger is not on the bottom of the stack")
@@ -83,10 +85,10 @@ class Messenger(object):
             # when the callee or enclosed block raises an exception,
             # find this poutine's position in the stack,
             # then remove it and everything below it in the stack.
-            if self in _PYRO_STACK:
-                loc = _PYRO_STACK.index(self)
+            if self in self._stack:
+                loc = self._stack.index(self)
                 for i in range(0, loc + 1):
-                    _PYRO_STACK.pop(0)
+                    self._stack.pop(0)
 
     def _reset(self):
         pass
