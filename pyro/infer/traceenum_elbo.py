@@ -8,23 +8,28 @@ import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import iter_discrete_traces
-from pyro.infer.util import MultiFrameDice
+from pyro.infer.util import Dice
 from pyro.poutine.enumerate_poutine import EnumeratePoutine
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, check_site_shape, check_traceenum_requirements, is_nan
 
 
 def _compute_dice_elbo(model_trace, guide_trace):
-    dice = MultiFrameDice(guide_trace)
-    elbo = 0
+    # y depends on x iff ordering[x] <= ordering[y]
+    # TODO refine this coarse dependency ordering.
+    ordering = {name: frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
+                for name, site in model_trace.nodes.items()
+                if site["type"] == "sample"}
+
+    dice = Dice(guide_trace, ordering)
+    elbo = 0.0
     for name, model_site in model_trace.nodes.items():
         if model_site["type"] == "sample":
             cost = model_site["log_prob"]
             if not model_site["is_observed"]:
                 cost = cost - guide_trace.nodes[name]["log_prob"]
-            dice_prob = dice.in_context(model_site["cond_indep_stack"])
             # TODO use score_parts.entropy_term to "stick the landing"
-            elbo = elbo + (dice_prob * cost).sum()
+            elbo = elbo + dice.expectation(cost, ordering[name])
     return elbo
 
 

@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import math
 import numbers
+from collections import defaultdict
 
 import torch
 
@@ -125,20 +126,13 @@ class MultiFrameTensor(dict):
             '({}, ...)'.format(frames) for frames in self]))
 
 
-def _dict_iadd(items, key, value):
-    if key in items:
-        items[key] = items[key] + value
-    else:
-        items[key] = value
-
-
-class MultiFrameDice(object):
+class Dice(object):
     """
     An implementation of the DiCE operator compatible with Pyro features.
 
     This implementation correctly handles:
     - scaled log-probability due to subsampling
-    - independence in different contexts due to iarange
+    - independence in different ordinals due to iarange
     - weights due to parallel and sequential enumeration
 
     This assumes restricted dependency structure on the model and guide:
@@ -151,45 +145,69 @@ class MultiFrameDice(object):
         "DiCE: The Infinitely Differentiable Monte-Carlo Estimator"
         https://arxiv.org/abs/1802.05098
     """
-    def __init__(self, guide_trace):
-        log_denom = {}  # avoids double-counting when sequentially enumerating
-        log_probs = {}  # accounts for upstream probabilties
+    def __init__(self, guide_trace, ordering):
+        log_denom = defaultdict(lambda: 0.0)  # avoids double-counting when sequentially enumerating
+        log_probs = defaultdict(list)  # accounts for upstream probabilties
 
-        for site in guide_trace.nodes.values():
+        for name, site in guide_trace.nodes.items():
             if site["type"] != "sample":
                 continue
             log_prob = site['score_parts'].score_function  # not scaled by subsampling
             if is_identically_zero(log_prob):
                 continue
-            context = frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
 
+            ordinal = ordering[name]
             if site["infer"].get("enumerate"):
                 if site["infer"]["enumerate"] == "sequential":
-                    _dict_iadd(log_denom, context, math.log(site["infer"]["_enum_total"]))
+                    log_denom[ordinal] += math.log(site["infer"]["_enum_total"])
             else:  # site was monte carlo sampled
                 log_prob = log_prob - log_prob.detach()
-            _dict_iadd(log_probs, context, log_prob)
+            log_probs[ordinal].append(log_prob)
 
         self.log_denom = log_denom
         self.log_probs = log_probs
-        self.cache = {}
+        self._log_factors_cache = {}
+        self._dice_prob_cache = {}
 
-    def in_context(self, cond_indep_stack):
+    def get_log_factors(self, target_ordinal):
         """
-        Returns a vectorized DiCE factor in a given :class:`~pyro.iarange` context.
+        Returns a list of DiCE factors ordinal.
         """
-        target_context = frozenset(f for f in cond_indep_stack if f.vectorized)
-        if target_context in self.cache:
-            return self.cache[target_context]
+        try:
+            return self._log_factors_cache[target_ordinal]
+        except KeyError:
+            pass
 
-        log_prob = 0
-        for context, term in self.log_denom.items():
-            if not context <= target_context:  # not downstream
-                log_prob = log_prob - term  # term = log(# times this context is counted)
-        for context, term in self.log_probs.items():
-            if context <= target_context:  # upstream
-                log_prob = log_prob + term  # term = log(dice weight of this context)
-        result = 1 if is_identically_zero(log_prob) else log_prob.exp()
+        log_denom = 0
+        for ordinal, term in self.log_denom.items():
+            if not ordinal <= target_ordinal:  # not downstream
+                log_denom += term  # term = log(# times this ordinal is counted)
 
-        self.cache[target_context] = result
-        return result
+        log_factors = [] if is_identically_zero(log_denom) else [-log_denom]
+        for ordinal, term in self.log_probs.items():
+            if ordinal <= target_ordinal:  # upstream
+                log_factors += term  # term = [log(dice weight of this ordinal)]
+
+        self._log_factors_cache[target_ordinal] = log_factors
+        return log_factors
+
+    def get_dice_prob(self, shape, ordinal):
+        """
+        Returns the DiCE operator at a given ordinal, summed to given shape.
+        """
+        try:
+            return self._dice_prob_cache[shape, ordinal]
+        except KeyError:
+            pass
+
+        log_factors = self.get_log_factors(ordinal)
+
+        # TODO replace this naive sum-product computation with message passing.
+        dice_prob = sum(log_factors).exp()
+
+        self._dice_prob_cache[ordinal] = dice_prob
+        return dice_prob
+
+    def expectation(self, cost, ordinal):
+        dice_prob = self.get_dice_prob(cost.shape, ordinal)
+        return (dice_prob * cost).sum()
