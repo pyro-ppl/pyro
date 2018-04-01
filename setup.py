@@ -97,7 +97,7 @@ setup(
             'pytest',
             'pytest-xdist',
             'scipy>=0.19.0',
-            'sphinx==1.6.3',
+            'sphinx',
             'sphinx_rtd_theme',
             'yapf',
         ],
