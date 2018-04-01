@@ -57,6 +57,8 @@ def make_ids(examples):
 @pytest.mark.stage("test_examples")
 @pytest.mark.parametrize('example,args', CPU_EXAMPLES, ids=make_ids(CPU_EXAMPLES))
 def test_cpu(example, args):
+    if example == 'bayesian_regression.py':
+        pytest.skip("Failure on PyTorch master - https://github.com/uber/pyro/issues/953")
     example = os.path.join(EXAMPLES_DIR, example)
     check_call([sys.executable, example] + args)
 

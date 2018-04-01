@@ -68,11 +68,11 @@ class GatedTransition(nn.Module):
         self.lin_proposed_mean_z_to_hidden = nn.Linear(z_dim, transition_dim)
         self.lin_proposed_mean_hidden_to_z = nn.Linear(transition_dim, z_dim)
         self.lin_sig = nn.Linear(z_dim, z_dim)
-        self.lin_z_to_mu = nn.Linear(z_dim, z_dim)
-        # modify the default initialization of lin_z_to_mu
+        self.lin_z_to_loc = nn.Linear(z_dim, z_dim)
+        # modify the default initialization of lin_z_to_loc
         # so that it's starts out as the identity function
-        self.lin_z_to_mu.weight.data = torch.eye(z_dim)
-        self.lin_z_to_mu.bias.data = torch.zeros(z_dim)
+        self.lin_z_to_loc.weight.data = torch.eye(z_dim)
+        self.lin_z_to_loc.bias.data = torch.zeros(z_dim)
         # initialize the three non-linearities used in the neural network
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
@@ -81,7 +81,7 @@ class GatedTransition(nn.Module):
     def forward(self, z_t_1):
         """
         Given the latent `z_{t-1}` corresponding to the time step t-1
-        we return the mean and sigma vectors that parameterize the
+        we return the mean and scale vectors that parameterize the
         (diagonal) gaussian distribution `p(z_t | z_{t-1})`
         """
         # compute the gating function
@@ -92,12 +92,12 @@ class GatedTransition(nn.Module):
         proposed_mean = self.lin_proposed_mean_hidden_to_z(_proposed_mean)
         # assemble the actual mean used to sample z_t, which mixes a linear transformation
         # of z_{t-1} with the proposed mean modulated by the gating function
-        mu = (1 - gate) * self.lin_z_to_mu(z_t_1) + gate * proposed_mean
-        # compute the sigma used to sample z_t, using the proposed mean from above as input
-        # the softplus ensures that sigma is positive
-        sigma = self.softplus(self.lin_sig(self.relu(proposed_mean)))
-        # return mu, sigma which can be fed into Normal
-        return mu, sigma
+        loc = (1 - gate) * self.lin_z_to_loc(z_t_1) + gate * proposed_mean
+        # compute the scale used to sample z_t, using the proposed mean from above as input
+        # the softplus ensures that scale is positive
+        scale = self.softplus(self.lin_sig(self.relu(proposed_mean)))
+        # return loc, scale which can be fed into Normal
+        return loc, scale
 
 
 class Combiner(nn.Module):
@@ -110,8 +110,8 @@ class Combiner(nn.Module):
         super(Combiner, self).__init__()
         # initialize the three linear transformations used in the neural network
         self.lin_z_to_hidden = nn.Linear(z_dim, rnn_dim)
-        self.lin_hidden_to_mu = nn.Linear(rnn_dim, z_dim)
-        self.lin_hidden_to_sigma = nn.Linear(rnn_dim, z_dim)
+        self.lin_hidden_to_loc = nn.Linear(rnn_dim, z_dim)
+        self.lin_hidden_to_scale = nn.Linear(rnn_dim, z_dim)
         # initialize the two non-linearities used in the neural network
         self.tanh = nn.Tanh()
         self.softplus = nn.Softplus()
@@ -119,17 +119,17 @@ class Combiner(nn.Module):
     def forward(self, z_t_1, h_rnn):
         """
         Given the latent z at at a particular time step t-1 as well as the hidden
-        state of the RNN `h(x_{t:T})` we return the mean and sigma vectors that
+        state of the RNN `h(x_{t:T})` we return the mean and scale vectors that
         parameterize the (diagonal) gaussian distribution `q(z_t | z_{t-1}, x_{t:T})`
         """
         # combine the rnn hidden state with a transformed version of z_t_1
         h_combined = 0.5 * (self.tanh(self.lin_z_to_hidden(z_t_1)) + h_rnn)
         # use the combined hidden state to compute the mean used to sample z_t
-        mu = self.lin_hidden_to_mu(h_combined)
-        # use the combined hidden state to compute the sigma used to sample z_t
-        sigma = self.softplus(self.lin_hidden_to_sigma(h_combined))
-        # return mu, sigma which can be fed into Normal
-        return mu, sigma
+        loc = self.lin_hidden_to_loc(h_combined)
+        # use the combined hidden state to compute the scale used to sample z_t
+        scale = self.softplus(self.lin_hidden_to_scale(h_combined))
+        # return loc, scale which can be fed into Normal
+        return loc, scale
 
 
 class DMM(nn.Module):
@@ -180,6 +180,7 @@ class DMM(nn.Module):
         # set z_prev = z_0 to setup the recursive conditioning in p(z_t | z_{t-1})
         z_prev = self.z_0.expand(mini_batch.size(0), self.z_0.size(0))
 
+<<<<<<< HEAD
         # we enclose all the sample statements in the model in a iarange.
         # this marks that each datapoint is conditionally independent of the others
         with pyro.iarange("z_minibatch", len(mini_batch)):
@@ -197,9 +198,10 @@ class DMM(nn.Module):
                 # then sample z_t according to dist.Normal(z_mu, z_sigma).
                 # note that we use the reshape method so that the univariate Normal distribution
                 # is treated as a multivariate Normal distribution with a diagonal covariance.
+                # then sample z_t according to dist.Normal(z_loc, z_scale)
                 with poutine.scale(None, annealing_factor):
                     z_t = pyro.sample("z_%d" % t,
-                                      dist.Normal(z_mu, z_sigma)
+                                      dist.Normal(z_loc, z_scale)
                                           .mask(mini_batch_mask[:, t - 1:t])
                                           .reshape(extra_event_dims=1))
 

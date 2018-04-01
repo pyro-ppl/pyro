@@ -1,3 +1,5 @@
+from __future__ import absolute_import, division, print_function
+
 import logging
 
 import numpy as np
@@ -8,33 +10,11 @@ from torch.distributions import biject_to, constraints
 import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
-import pyro.poutine as poutine
 from pyro.infer import SVI, ADVIDiagonalNormal, ADVIMultivariateNormal
 from tests.common import assert_equal
 from tests.integration_tests.test_conjugate_gaussian_models import GaussianChain
 
 logger = logging.getLogger(__name__)
-
-
-# simple test model to test ADVI guide construction
-def test_model():
-    pyro.sample("z1", dist.Normal(0.0, 1.0))
-    pyro.sample("z2", dist.Normal(torch.zeros(3), 2.0 * torch.ones(3)))
-
-
-@pytest.mark.parametrize("advi_implementation", [ADVIMultivariateNormal, ADVIDiagonalNormal])
-def test_advi_scores(advi_implementation):
-    advi = advi_implementation(test_model)
-    guide_trace = poutine.trace(advi.guide).get_trace()
-    model_trace = poutine.trace(poutine.replay(advi.model, guide_trace)).get_trace()
-
-    guide_trace.compute_log_prob()
-    model_trace.compute_log_prob()
-
-    assert model_trace.nodes['_advi_latent']['log_prob_sum'].item() == 0.0
-    assert model_trace.nodes['z1']['log_prob_sum'].item() != 0.0
-    assert guide_trace.nodes['_advi_latent']['log_prob_sum'].item() != 0.0
-    assert guide_trace.nodes['z1']['log_prob_sum'].item() == 0.0
 
 
 # conjugate model to test ADVI logic from end-to-end (this has a non-mean-field posterior)

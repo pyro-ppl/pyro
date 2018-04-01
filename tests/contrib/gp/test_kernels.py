@@ -12,10 +12,10 @@ from tests.common import assert_equal
 
 T = namedtuple("TestGPKernel", ["kernel", "X", "Z", "K_sum"])
 
-variance = torch.Tensor([3])
-lengthscale = torch.Tensor([2, 1, 2])
-X = torch.tensor([[1, 0, 1], [2, 1, 3]])
-Z = torch.tensor([[4, 5, 6], [3, 1, 7], [3, 1, 2]])
+variance = torch.tensor([3.0])
+lengthscale = torch.tensor([2.0, 1.0, 2.0])
+X = torch.tensor([[1.0, 0.0, 1.0], [2.0, 1.0, 3.0]])
+Z = torch.tensor([[4.0, 5.0, 6.0], [3.0, 1.0, 7.0], [3.0, 1.0, 2.0]])
 
 TEST_CASES = [
     T(
