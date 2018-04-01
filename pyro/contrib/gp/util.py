@@ -55,7 +55,7 @@ class Parameterized(nn.Module):
 
     def fix_param(self, param, value=None):
         """
-        Fixes a parameter to a specic value. If ``value is None``, fixes the parameter
+        Fixes a parameter to a specic value. If ``value=None``, fixes the parameter
         to the default value.
 
         :param str param: Name of the parameter.
@@ -68,8 +68,8 @@ class Parameterized(nn.Module):
     def set_mode(self, mode):
         """
         Sets ``mode`` of this object to be able to use its parameters in stochastic
-        functions. If ``mode == "model"``, a parameter with prior will get its value
-        from the primitive :func:`pyro.sample`. If ``mode == "guide"`` or there is no
+        functions. If ``mode="model"``, a parameter with prior will get its value
+        from the primitive :func:`pyro.sample`. If ``mode="guide"`` or there is no
         prior on a parameter, :func:`pyro.param` will be called.
 
         This method automatically sets ``mode`` for submodules which belong to
@@ -153,12 +153,12 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
     and :math:`y` is computed from :math:`f` by some likelihood function
     :math:`p(y|f)`.
 
-    In case ``f_scale_tril is None``, we consider ``f = f_loc`` and computes
+    In case ``f_scale_tril=None``, we consider :math:`f = f_{loc}` and computes
 
         :math:`p(f^*(X_{new}) | X, kernel, f)`.
 
-    In case ``f_scale_tril is not None``, we follow the derivation from reference [1].
-    For the case ``f_scale_tril is None``, we follow the popular reference [2].
+    In case ``f_scale_tril`` is not ``None``, we follow the derivation from reference
+    [1]. For the case ``f_scale_tril=None``, we follow the popular reference [2].
 
     References:
 
@@ -171,8 +171,8 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
     :param torch.Tensor Xnew: A new input data.
     :param torch.Tensor X: An input data to be conditioned on.
     :param ~pyro.contrib.gp.kernels.kernel.Kernel kernel: A Pyro kernel object.
-    :param torch.Tensor f_loc: Mean of :math:`q(f)`. In case ``f_scale_tril is None``,
-        ``f_loc = f``.
+    :param torch.Tensor f_loc: Mean of :math:`q(f)`. In case ``f_scale_tril=None``,
+        :math:`f_{loc} = f`.
     :param torch.Tensor f_scale_tril: Lower triangular decomposition of covariance
         matrix of :math:`q(f)`'s .
     :param torch.Tensor Lff: Lower triangular decomposition of :math:`kernel(X, X)`

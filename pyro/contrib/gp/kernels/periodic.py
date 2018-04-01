@@ -11,12 +11,17 @@ from .isotropic import Isotropy
 
 
 class Cosine(Isotropy):
-    """
-    Implementation of Cosine kernel :math:`\cos(r)`.
-    """
+    r"""
+    Implementation of Cosine kernel:
 
-    def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None, name="Cosine"):
-        super(Cosine, self).__init__(input_dim, variance, lengthscale, active_dims, name)
+        :math:`\sigma^2 \cos(\frac{|x-z|}{l})`.
+
+    :param torch.Tensor lengthscale: Length-scale parameter of this kernel.
+    """
+    def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None,
+                 name="Cosine"):
+        super(Cosine, self).__init__(input_dim, variance, lengthscale, active_dims,
+                                     name)
 
     def forward(self, X, Z=None, diag=False):
         if diag:
@@ -29,21 +34,22 @@ class Cosine(Isotropy):
 
 class ExpSineSquared(Kernel):
     r"""
-    Implementation of ExpSineSquared kernel (Periodic kernel)
-    :math:`k(x, z) = \exp\left(-2 \times \frac{\sin^2(\pi (x-z) / p)}{l^2}\right)`,
-    where :math:`p` is ``period`` parameter.
+    Implementation of ExpSineSquared (Periodic) kernel:
+
+        :math:`k(x,z)=\sigma^2\exp\left(-2\times\frac{\sin^2(\pi(x-z)/p)}{l^2}\right)`,
+
+    where :math:`p` is the ``period`` parameter.
 
     References:
 
     [1] `Introduction to Gaussian processes`,
     David J.C. MacKay
 
-    :param torch.Tensor variance: Variance parameter of this kernel.
     :param torch.Tensor lengthscale: Length scale parameter of this kernel.
     :param torch.Tensor period: Period parameter of this kernel.
     """
-    def __init__(self, input_dim, variance=None, lengthscale=None, period=None, active_dims=None,
-                 name="ExpSineSquared"):
+    def __init__(self, input_dim, variance=None, lengthscale=None, period=None,
+                 active_dims=None, name="ExpSineSquared"):
         super(ExpSineSquared, self).__init__(input_dim, active_dims, name)
 
         if variance is None:
@@ -84,9 +90,9 @@ class ExpSineSquared(Kernel):
 
 class Periodic(ExpSineSquared):
     """
-    Periodic is another name for :class:`ExpSineSquared` kernel.
+    Another name of :class:`ExpSineSquared` kernel.
     """
-
-    def __init__(self, input_dim, variance=None, lengthscale=None,  period=None, active_dims=None,
-                 name="Periodic"):
-        super(Periodic, self).__init__(input_dim, variance, lengthscale, period, active_dims, name)
+    def __init__(self, input_dim, variance=None, lengthscale=None, period=None,
+                 active_dims=None, name="Periodic"):
+        super(Periodic, self).__init__(input_dim, variance, lengthscale, period,
+                                       active_dims, name)

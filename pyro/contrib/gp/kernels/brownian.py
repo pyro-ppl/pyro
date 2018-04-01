@@ -8,13 +8,15 @@ from .kernel import Kernel
 
 
 class Brownian(Kernel):
-    """
+    r"""
     This kernel correponds to a two-sided Brownion motion (Wiener process):
-    :math:`k(x, z) = \min(|x|,|z|)` if :math:`x\cdot z \ge 0` and :math:`k(x, z) = 0` otherwise.
+
+        :math:`k(x,z)=\begin{cases}\sigma\min(|x|,|z|),& \text{if } x\cdot z\ge 0\\
+                                   0,                  & \text{otherwise} \end{cases}`.
 
     Note that the input dimension of this kernel must be 1.
 
-    References:
+    Reference:
 
     [1] `Theory and Statistical Applications of Stochastic Processes`,
     Yuliya Mishura, Georgiy Shevchenko

@@ -9,11 +9,10 @@ from .kernel import Kernel
 
 class Constant(Kernel):
     """
-    Implementation of Constant kernel.
+    Implementation of Constant kernel:
 
-    :param torch.Tensor variance: Variance parameter of this kernel.
+        :math:`k(x, z) = \sigma^2`.
     """
-
     def __init__(self, input_dim, variance=None, active_dims=None, name="Constant"):
         super(Constant, self).__init__(input_dim, active_dims, name)
 
@@ -42,13 +41,15 @@ class Bias(Constant):
 
 class WhiteNoise(Kernel):
     """
-    Implementation of WhiteNoise kernel.
+    Implementation of WhiteNoise kernel:
 
-    :param torch.Tensor variance: Variance parameter of this kernel.
+        :math:`k(x, z) = \sigma^2 \delta(x, z)`,
+
+    where :math:`\delta` is a Dirac delta function.
     """
-
     def __init__(self, input_dim, variance=None, active_dims=None, name="WhiteNoise"):
         super(WhiteNoise, self).__init__(input_dim, active_dims, name)
+
         if variance is None:
             variance = torch.tensor(1.)
         self.variance = Parameter(variance)

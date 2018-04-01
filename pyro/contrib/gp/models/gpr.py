@@ -13,9 +13,6 @@ from .model import GPModel
 class GPRegression(GPModel):
     r"""
     Gaussian Process Regression module. The model has the form
-        
-        :math:` 
-        
 
     References
 

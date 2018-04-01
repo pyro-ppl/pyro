@@ -113,8 +113,8 @@ class GPModel(Parameterized):
 
     def model(self):
         """
-        A "model" stochastic function. When ``self.y == None``, it returns mean and
-        variance of the Gaussian Process prior.
+        A "model" stochastic function. If ``self.y`` is ``None``, this method returns
+        mean and variance of the Gaussian Process prior.
         """
         raise NotImplementedError
 
