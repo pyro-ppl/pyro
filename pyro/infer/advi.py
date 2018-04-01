@@ -39,7 +39,7 @@ class ADVI(object):
 
     Reference:
     [1] 'Automatic Differentiation Variational Inference',
-        Alp Kucukelbir, Dustin Tran, Rajesh Ranganath, Andrew Gelman, David M. Blei
+    Alp Kucukelbir, Dustin Tran, Rajesh Ranganath, Andrew Gelman, David M. Blei
     """
     def __init__(self, model):
         self.prototype_trace = None
