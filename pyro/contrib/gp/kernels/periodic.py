@@ -14,7 +14,7 @@ class Cosine(Isotropy):
     r"""
     Implementation of Cosine kernel:
 
-        :math:`\sigma^2 \cos(\frac{|x-z|}{l})`.
+        :math:`\sigma^2 \cos\left(\frac{|x-z|}{l}\right).`
 
     :param torch.Tensor lengthscale: Length-scale parameter of this kernel.
     """
@@ -36,7 +36,7 @@ class ExpSineSquared(Kernel):
     r"""
     Implementation of ExpSineSquared (Periodic) kernel:
 
-        :math:`k(x,z)=\sigma^2\exp\left(-2\times\frac{\sin^2(\pi(x-z)/p)}{l^2}\right)`,
+        :math:`k(x,z)=\sigma^2\exp\left(-2\times\frac{\sin^2(\pi(x-z)/p)}{l^2}\right),`
 
     where :math:`p` is the ``period`` parameter.
 

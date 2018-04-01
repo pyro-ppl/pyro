@@ -11,7 +11,7 @@ class Constant(Kernel):
     """
     Implementation of Constant kernel:
 
-        :math:`k(x, z) = \sigma^2`.
+        :math:`k(x, z) = \sigma^2.`
     """
     def __init__(self, input_dim, variance=None, active_dims=None, name="Constant"):
         super(Constant, self).__init__(input_dim, active_dims, name)
@@ -43,7 +43,7 @@ class WhiteNoise(Kernel):
     """
     Implementation of WhiteNoise kernel:
 
-        :math:`k(x, z) = \sigma^2 \delta(x, z)`,
+        :math:`k(x, z) = \sigma^2 \delta(x, z),`
 
     where :math:`\delta` is a Dirac delta function.
     """

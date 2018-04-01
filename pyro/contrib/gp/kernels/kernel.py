@@ -51,7 +51,7 @@ class Kernel(Parameterized):
             :math:`M \times input\_dim`.
         :param bool diag: A flag to decide if we want to return full covariance matrix
             or just its diagonal part.
-        :returns: covariance matrix of ``X`` and ``Z`` with shape :math:`N \\times M`
+        :returns: covariance matrix of ``X`` and ``Z`` with shape :math:`N \times M`
         :rtype: torch.Tensor
         """
         raise NotImplementedError
@@ -77,7 +77,7 @@ class Kernel(Parameterized):
         Creates a new kernel from a sum/direct sum of this kernel object and ``other``.
 
         :param other: A kernel to be combined with this kernel object.
-        :type: Kernel or numbers.Number
+        :type other: Kernel or numbers.Number
         :param str name: An optional name for the derived kernel.
         :returns: a Sum kernel
         :rtype: Sum
@@ -90,7 +90,7 @@ class Kernel(Parameterized):
         ``other``.
 
         :param Kernel other: A kernel to be combined with this kernel object.
-        :type: Kernel or numbers.Number
+        :type other: Kernel or numbers.Number
         :param str name: An optional name for the derived kernel.
         :returns: a Product kernel
         :rtype: Product
@@ -101,7 +101,7 @@ class Kernel(Parameterized):
         """
         Creates a new kernel according to
 
-            :math:`k_{new}(x, z) = \exp(k(x, z))`.
+            :math:`k_{new}(x, z) = \exp(k(x, z)).`
 
         :param str name: An optional name for the derived kernel.
         :returns: an Exponent kernel
@@ -113,7 +113,7 @@ class Kernel(Parameterized):
         """
         Creates a new kernel according to
 
-            :math:`k_{new}(x, z) = f(x)k(x, z)f(z)`,
+            :math:`k_{new}(x, z) = f(x)k(x, z)f(z),`
 
         where :math:`f` is a function.
 
@@ -128,7 +128,7 @@ class Kernel(Parameterized):
         """
         Creates a new kernel according to
 
-            :math:`k_{new}(x, z) = q(k(f(x), f(z)))`,
+            :math:`k_{new}(x, z) = q(k(f(x), f(z))),`
 
         where :math:`f` is an function and :math:`q` is a polynomial with non-negative
         coefficients ``owarping_coef``.
@@ -258,7 +258,7 @@ class Exponent(Transforming):
     """
     Creates a new kernel according to
 
-        :math:`k_{new}(x, z) = \exp(k(x, z))`.
+        :math:`k_{new}(x, z) = \exp(k(x, z)).`
     """
     def forward(self, X, Z=None, diag=False):
         return self.kern(X, Z, diag).exp()
@@ -268,7 +268,7 @@ class VerticalScaling(Transforming):
     """
     Creates a new kernel according to
 
-        :math:`k_{new}(x, z) = f(x)k(x, z)f(z)`,
+        :math:`k_{new}(x, z) = f(x)k(x, z)f(z),`
 
     where :math:`f` is a function.
 
@@ -306,7 +306,7 @@ class Warping(Transforming):
     """
     Creates a new kernel according to
 
-        :math:`k_{new}(x, z) = q(k(f(x), f(z)))`,
+        :math:`k_{new}(x, z) = q(k(f(x), f(z))),`
 
     where :math:`f` is an function and :math:`q` is a polynomial with non-negative
     coefficients ``owarping_coef``.

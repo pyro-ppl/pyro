@@ -10,8 +10,6 @@ from .kernel import Kernel
 class DotProduct(Kernel):
     """
     Base class for kernels which are functions of :math:`x \cdot z`.
-
-    :param torch.Tensor variance: Variance parameter which plays the role of scaling.
     """
 
     def __init__(self, input_dim, variance=None, active_dims=None, name=None):
@@ -43,14 +41,14 @@ class Linear(DotProduct):
     """
     Implementation of Linear kernel:
 
-        :math:`k(x, z) = \sigma^2 x \cdot z`.
+        :math:`k(x, z) = \sigma^2 x \cdot z.`
 
     Doing Gaussian Process regression with linear kernel is equivalent to doing a
     linear regression.
 
     .. note:: Here we implement the homogeneous version. To use the inhomogeneous
-    version, consider using :class:`Polynomial` kernel with ``degree=1`` or making
-    a :class:`.Sum` with a :class:`.Bias` kernel.
+        version, consider using :class:`Polynomial` kernel with ``degree=1`` or making
+        a :class:`.Sum` with a :class:`.Bias` kernel.
     """
 
     def __init__(self, input_dim, variance=None, active_dims=None, name="Linear"):
@@ -65,7 +63,7 @@ class Polynomial(DotProduct):
     r"""
     Implementation of Polynomial kernel:
 
-        :math:`k(x, z) = \sigma^2(\text{bias} + x \cdot z)^d`.
+        :math:`k(x, z) = \sigma^2(\text{bias} + x \cdot z)^d.`
 
     :param torch.Tensor bias: Bias parameter of this kernel. Should be positive.
     :param int degree: Degree :math:`d` of the polynomial.

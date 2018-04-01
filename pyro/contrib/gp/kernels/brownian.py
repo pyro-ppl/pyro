@@ -11,8 +11,8 @@ class Brownian(Kernel):
     r"""
     This kernel correponds to a two-sided Brownion motion (Wiener process):
 
-        :math:`k(x,z)=\begin{cases}\sigma\min(|x|,|z|),& \text{if } x\cdot z\ge 0\\
-                                   0,                  & \text{otherwise} \end{cases}`.
+        :math:`k(x,z)=\begin{cases}\sigma^2\min(|x|,|z|),& \text{if } x\cdot z\ge 0\\
+        0, & \text{otherwise}. \end{cases}`
 
     Note that the input dimension of this kernel must be 1.
 
