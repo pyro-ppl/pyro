@@ -96,13 +96,13 @@ class GPModel(Parameterized):
     def forward(self, Xnew, full_cov=False):
         """
         Computes the mean and covariance matrix (or variance) of Gaussian Process
-        posterior on a test input data ``Xnew``.
+        posterior on a test input data :math:`X_{new}`.
 
         :param torch.Tensor Xnew: A 1D or 2D input data for testing. In 2D case, its
             second dimension should have the same size as of train input data.
         :param bool full_cov: A flag to decide if we want to predict full covariance
             matrix or just variance.
-        :returns: loc and covariance matrix (or variance) of :math:`p(f^*(X_{new}))`
+        :returns: loc and covariance matrix (or variance) of :math:`p(f(X_{new}))`
         :rtype: tuple(torch.Tensor, torch.Tensor)
         """
         raise NotImplementedError

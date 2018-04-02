@@ -12,7 +12,7 @@ from .model import GPModel
 
 
 class VariationalGP(GPModel):
-    """
+    r"""
     Variational Gaussian Process model.
 
     This model deals with both Gaussian and non-Gaussian likelihoods. Given inputs\
@@ -24,10 +24,10 @@ class VariationalGP(GPModel):
 
     where :math:`p(y \mid f)` is the likelihood.
 
-    We will use a variational approach in this model by approximating `q(f)` to the
-    posterior :math:`p(f\mid y)`. Precisely, `q(f)` will be a multivariate normal
-    distribution with two parameters ``f_loc`` and ``f_scale_tril``, which will be
-    learned during a variational inference process.
+    We will use a variational approach in this model by approximating :math:`q(f)` to
+    the posterior :math:`p(f\mid y)`. Precisely, :math:`q(f)` will be a multivariate
+    normal distribution with two parameters ``f_loc`` and ``f_scale_tril``, which will
+    be learned during a variational inference process.
 
     .. note:: This model can be seen as a special version of
         :class:`.SparseVariationalGP` model with :math:`X_u = X`.

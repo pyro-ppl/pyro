@@ -12,7 +12,7 @@ from .model import GPModel
 
 
 class SparseVariationalGP(GPModel):
-    """
+    r"""
     Sparse Variational Gaussian Process model.
 
     This model introduces an additional inducing-input parameter :math:`X_u` as in
@@ -21,18 +21,19 @@ class SparseVariationalGP(GPModel):
     inducing-input parameters :math:`X_u`, the model takes the form:
 
     .. math::
-        [f, u] \sim \mathcal{GP}(0, k([X, X_u], [X, X_u])),\\
+        [f, u] &\sim \mathcal{GP}(0, k([X, X_u], [X, X_u])),\\
         y & \sim p(y) = p(y \mid f) p(f),
 
     where :math:`p(y \mid f)` is the likelihood.
 
-    We will use a variational approach in this model by approximating `q(f,u)` to the
-    posterior :math:`p(f,u \mid y)`. Precisely, :math:`q(f) = p(f\mid u)q(u)`,
+    We will use a variational approach in this model by approximating :math:`q(f,u)`
+    to the posterior :math:`p(f,u \mid y)`. Precisely, :math:`q(f) = p(f\mid u)q(u)`,
     where :math:`q(u)` is a multivariate normal distribution with two parameters
     ``f_loc`` and ``f_scale_tril``, which will be learned during a variational
     inference process.
 
-    .. note:: This model can be learned using MCMC method as in reference [2].
+    .. note:: This model can be learned using MCMC method as in reference [2]. See also
+        :class:`.GPModel`.
 
     References
 

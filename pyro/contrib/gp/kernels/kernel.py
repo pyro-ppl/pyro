@@ -51,7 +51,8 @@ class Kernel(Parameterized):
             :math:`M \times input\_dim`.
         :param bool diag: A flag to decide if we want to return full covariance matrix
             or just its diagonal part.
-        :returns: covariance matrix of ``X`` and ``Z`` with shape :math:`N \times M`
+        :returns: covariance matrix of :math:`X` and :math:`Z` with shape
+            :math:`N \times M`
         :rtype: torch.Tensor
         """
         raise NotImplementedError
