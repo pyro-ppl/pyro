@@ -29,7 +29,8 @@ class Empirical(TorchDistribution):
         self._weights_buffer = []
         super(TorchDistribution, self).__init__(batch_shape=torch.Size(), validate_args=validate_args)
 
-    def _append_from_buffer(self, tensor, buffer):
+    @staticmethod
+    def _append_from_buffer(tensor, buffer):
         """
         Append values from the buffer to the finalized tensor, along the
         leftmost dimension.
@@ -157,3 +158,7 @@ class Empirical(TorchDistribution):
         for _ in range(self._samples.dim() - 1):
             weights = weights.unsqueeze(-1)
         return (log_sum_exp(weights, scale=deviation_squared, dim=0) - log_sum_exp(weights, dim=0)).exp()
+
+    def enumerate_support(self):
+        self._finalize()
+        return self._samples
