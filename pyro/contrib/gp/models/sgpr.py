@@ -12,14 +12,14 @@ from .model import GPModel
 
 
 class SparseGPRegression(GPModel):
-    r"""
+    u"""
     Sparse Gaussian Process Regression model.
 
     In :class:`.GPRegression` model, when the number of input data :math:`X` is large,
     the covariance matrix :math:`k(X, X)` will require a lot of computational steps to
     compute its inverse (for log likelihood and for prediction). By introducing an
     additional inducing-input parameter :math:`X_u`, we can reduce computational cost
-    by approximate :math:`k(X, X)` by a low-rank Nymström approximation :math:`Q`
+    by approximate :math:`k(X, X)` by a low-rank Nymstr\u00F6m approximation :math:`Q`
     (see reference [1]), where
 
     .. math:: Q = k(X, X_u) k(X,X)^{-1} k(X_u, X).
@@ -28,8 +28,8 @@ class SparseGPRegression(GPModel):
     parameters :math:`X_u`, the model takes the form:
 
     .. math::
-        u & \sim \mathcal{GP}(0, k(X_u, X_u)),\\
-        f & \sim q(f \mid X, X_u) = \mathbb{E}_{p(u)}q(f\mid X, X_u, u),\\
+        u & \sim \mathcal{GP}(0, k(X_u, X_u)),\\\
+        f & \sim q(f \mid X, X_u) = \mathbb{E}_{p(u)}q(f\mid X, X_u, u),\\\
         y & \sim f + \epsilon,
 
     where :math:`\epsilon` is noise and the conditional distribution
@@ -68,7 +68,7 @@ class SparseGPRegression(GPModel):
     References
 
     [1] `A Unifying View of Sparse Approximate Gaussian Process Regression`,
-    Joaquin Quiñonero-Candela, Carl E. Rasmussen
+    Joaquin Qui\u00F1onero-Candela, Carl E. Rasmussen
 
     [2] `Variational learning of inducing variables in sparse Gaussian processes`,
     Michalis Titsias
