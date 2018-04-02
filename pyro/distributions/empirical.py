@@ -4,10 +4,11 @@ import numbers
 
 import math
 import torch
+from torch.distributions import constraints
 
 from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.torch import Categorical
-from pyro.distributions.util import copy_docs_from, is_validation_enabled
+from pyro.distributions.util import copy_docs_from
 from pyro.distributions.util import log_sum_exp
 
 
@@ -18,14 +19,15 @@ class Empirical(TorchDistribution):
     """
 
     arg_constraints = {}
+    support = constraints.real
 
-    def __init__(self):
+    def __init__(self, validate_args=None):
         self._samples = None
         self._log_weights = None
         self._categorical = None
         self._samples_buffer = []
         self._weights_buffer = []
-        super(TorchDistribution, self).__init__()
+        super(TorchDistribution, self).__init__(batch_shape=torch.Size(), validate_args=validate_args)
 
     def _append_from_buffer(self, tensor, buffer):
         """
@@ -64,7 +66,7 @@ class Empirical(TorchDistribution):
             return 0
         return self._samples.size(0)
 
-    def add(self, value, log_weight=None, weight=None):
+    def add(self, value, weight=None, log_weight=None):
         """
         Adds a new data point to the sample. The values in successive calls to
         ``add`` must have the same tensor shape and size. Optionally, an
@@ -77,13 +79,14 @@ class Empirical(TorchDistribution):
         :param torch.Tensor log_weight: weight (optional) corresponding
             to the sample.
         """
-        if is_validation_enabled():
+        if self._validate_args:
             if weight is not None and log_weight is not None:
                 raise ValueError("Only one of ```weight`` or ``log_weight`` should be specified.")
             if torch.is_tensor(weight) and weight.dim() > 0:
                 raise ValueError("``weight.dim() > 0``, but weight should be a scalar.")
 
-        weight_type = torch.Tensor if value.dtype in (torch.int32, torch.int64) else value.type()
+        weight_type = value.new_empty(1).float().type() if value.dtype in (torch.int32, torch.int64) \
+            else value.type()
         # Apply default weight of 1.0.
         if log_weight is None and weight is None:
             log_weight = torch.tensor(1.0).type(weight_type).log()
@@ -113,7 +116,7 @@ class Empirical(TorchDistribution):
 
         :param torch.Tensor value: scalar or tensor value to be scored.
         """
-        if is_validation_enabled():
+        if self._validate_args:
             if value.size() != self.event_shape:
                 raise ValueError("``value.size()`` must be {}".format(self.event_shape))
         self._finalize()
@@ -124,10 +127,6 @@ class Empirical(TorchDistribution):
         idxs = torch.arange(self.sample_size)[selection_mask.min(dim=-1)[0]]
         log_probs = self._categorical.log_prob(idxs)
         return log_sum_exp(log_probs)
-
-    @property
-    def batch_shape(self):
-        return torch.Size()
 
     @property
     def event_shape(self):
