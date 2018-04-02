@@ -7,11 +7,26 @@ from .indep_poutine import IndepMessenger
 
 class ContinuationMessenger(Messenger):
     """
-    TODO docs
+    This Messenger sets the continuation field at each site,
+    and makes sure it gets called and unwound correctly.
+    Continuations give up (or simulate giving up) control of execution
+    by expanding along a dimension, yielding a coroutine,
+    or raising a special poutine.util.NonlocalExit exception.
+
+    It is currently used primarily for sequential and parallel enumeration.
+
+    Generalizes and replaces EscapeMessenger and EnumerateMessenger.
     """
     def __init__(self, escape_fn, cont_fn, first_available_dim):
         """
-        TODO docs
+        :param escape_fn: boolean function evaluated on site
+        :param cont_fn: function of site that returns None or raises NonlocalExit
+        :param first_available_dim: first available expansion dimension
+
+        Sets escape_fn, the function evaluated at each site to decide
+        whether to apply cont_fn, the continuation.
+        If cont_fn is applied, mark available dimensions starting from
+        first_available_dim.
         """
         super(ContinuationMessenger, self).__init__()
         if first_available_dim is None:
@@ -24,7 +39,7 @@ class ContinuationMessenger(Messenger):
 
     def __enter__(self):
         """
-        TODO docs
+        Resets the next available expansion dimension.
         """
         self.next_available_dim = self.first_available_dim
         return super(ContinuationMessenger, self).__enter__()
@@ -39,7 +54,9 @@ class ContinuationMessenger(Messenger):
 
     def _reset(self):
         """
-        TODO docs
+        If self.escape_fn evaluates to True
+        and a continuation hasn't already been applied at this site,
+        set the continuation field of the site and mark it done.
         """
         self._ctxs = []  # OrderedDict({})
 
@@ -65,7 +82,9 @@ class ContinuationMessenger(Messenger):
 
     def _process_message(self, msg):
         """
-        TODO docs
+        If self.escape_fn evaluates to True
+        and a continuation hasn't already been applied at this site,
+        set the continuation field of the site and mark it done.
         """
         if self.escape_fn(msg) and not msg["done"]:
             msg["done"] = True
@@ -91,6 +110,27 @@ class ContinuationMessenger(Messenger):
 
 
 class ContinuationPoutine(Poutine):
+    """
+    This Poutine sets the continuation field at each site,
+    and makes sure it gets called and unwound correctly.
+    Continuations give up (or simulate giving up) control of execution
+    by expanding along a dimension, yielding a coroutine,
+    or raising a special poutine.util.NonlocalExit exception.
+
+    It is currently used primarily for sequential and parallel enumeration.
+
+    Generalizes and replaces EscapePoutine and EnumeratePoutine.
+    """
     def __init__(self, fn, escape_fn, cont_fn, first_available_dim=None):
+        """
+        :param escape_fn: boolean function evaluated on site
+        :param cont_fn: function of site that returns None or raises NonlocalExit
+        :param first_available_dim: first available expansion dimension
+
+        Sets escape_fn, the function evaluated at each site to decide
+        whether to apply cont_fn, the continuation.
+        If cont_fn is applied, mark available dimensions starting from
+        first_available_dim.
+        """
         super(ContinuationPoutine, self).__init__(
             ContinuationMessenger(escape_fn, cont_fn, first_available_dim), fn)
