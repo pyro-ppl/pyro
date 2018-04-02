@@ -84,5 +84,5 @@ def test_weighted_mean_var(event_shape, dtype):
         assert_equal(empirical_dist.variance, true_var)
     else:
         with pytest.raises(ValueError):
-            mean = empirical_dist.mean
-            var = empirical_dist.variance
+            empirical_dist.mean
+            empirical_dist.variance

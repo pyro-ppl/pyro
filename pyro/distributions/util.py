@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import numbers
-from functools import update_wrapper
 
 import torch
 import torch.distributions as torch_dist
