@@ -9,6 +9,18 @@ class GPModel(Parameterized):
     """
     Base class for Gaussian Process models.
 
+    The core of a Gaussian Process is a covariance function :math:`k` which governs
+    the similarity between input points. Given :math:`k`, we can establish a
+    distribution over functions :math:`f` by a multivarite normal distribution
+
+    .. math:: p(f(X)) = \mathcal{N}(0, k(X, X)),
+
+    where :math:`X` is any set of input points and :math:`k(X, X)` is a covariance
+    matrix whose entries are outputs :math:`k(x, z)` of :math:`k` over input pairs
+    :math:`(x, z)`. This distribution is usually denoted by
+
+    .. math:: f \sim \mathcal{GP}(0, k).
+
     Gaussian Process models are :class:`~pyro.contrib.gp.util.Parameterized`
     subclasses. So its parameters can be learned, set priors, or fixed by using
     corresponding methods from :class:`~pyro.contrib.gp.util.Parameterized`. A typical
@@ -46,11 +58,17 @@ class GPModel(Parameterized):
         >>> Xnew = torch.tensor([[2., 3, 1]])
         >>> f_loc, f_cov = gpr(Xnew, full_cov=True)
 
+    Reference:
+
+    [1] `Gaussian Processes for Machine Learning`,
+    Carl E. Rasmussen, Christopher K. I. Williams
+
     :param torch.Tensor X: A 1D or 2D input data for training. Its first dimension is
         the number of data points.
     :param torch.Tensor y: An output data for training. Its last dimension is the
         number of data points.
-    :param ~pyro.contrib.gp.kernels.kernel.Kernel kernel: A Pyro kernel object.
+    :param ~pyro.contrib.gp.kernels.kernel.Kernel kernel: A Pyro kernel object, which
+        is the covariance function :math:`k`.
     :param float jitter: A small positive term which is added into the diagonal part of
         a covariance matrix to help stablize its Cholesky decomposition.
     :param str name: Name of this model.
@@ -60,6 +78,34 @@ class GPModel(Parameterized):
         self.set_data(X, y)
         self.kernel = kernel
         self.jitter = jitter
+
+    def model(self):
+        """
+        A "model" stochastic function. If ``self.y`` is ``None``, this method returns
+        mean and variance of the Gaussian Process prior.
+        """
+        raise NotImplementedError
+
+    def guide(self):
+        """
+        A "guide" stochastic function to be used in variational inference methods. It
+        also gives posterior information to the method :meth:`forward` for prediction.
+        """
+        raise NotImplementedError
+
+    def forward(self, Xnew, full_cov=False):
+        """
+        Computes the mean and covariance matrix (or variance) of Gaussian Process
+        posterior on a test input data ``Xnew``.
+
+        :param torch.Tensor Xnew: A 1D or 2D input data for testing. In 2D case, its
+            second dimension should have the same size as of train input data.
+        :param bool full_cov: A flag to decide if we want to predict full covariance
+            matrix or just variance.
+        :returns: loc and covariance matrix (or variance) of :math:`p(f^*(X_{new}))`
+        :rtype: tuple(torch.Tensor, torch.Tensor)
+        """
+        raise NotImplementedError
 
     def set_data(self, X, y=None):
         """
@@ -111,20 +157,6 @@ class GPModel(Parameterized):
         self.X = X
         self.y = y
 
-    def model(self):
-        """
-        A "model" stochastic function. If ``self.y`` is ``None``, this method returns
-        mean and variance of the Gaussian Process prior.
-        """
-        raise NotImplementedError
-
-    def guide(self):
-        """
-        A "guide" stochastic function to be used in variational inference methods. It
-        also gives posterior information to the method :meth:`forward` for prediction.
-        """
-        raise NotImplementedError
-
     def optimize(self, optimizer=Adam({}), num_steps=1000):
         """
         A convenient method to optimize parameters for the Gaussian Process model
@@ -143,20 +175,6 @@ class GPModel(Parameterized):
         for i in range(num_steps):
             losses.append(svi.step())
         return losses
-
-    def forward(self, Xnew, full_cov=False, **kwargs):
-        """
-        Computes the mean and covariance matrix (or variance) of Gaussian Process
-        posterior on a test input data ``Xnew``.
-
-        :param torch.Tensor Xnew: A 1D or 2D input data for testing. In 2D case, its
-            second dimension should have the same size as of train input data.
-        :param bool full_cov: A flag to decide if we want to predict full covariance
-            matrix or just variance.
-        :returns: loc and covariance matrix (or variance) of :math:`p(f^*(X_{new}))`
-        :rtype: tuple(torch.Tensor, torch.Tensor)
-        """
-        raise NotImplementedError
 
     def _check_Xnew_shape(self, Xnew):
         """

@@ -136,26 +136,26 @@ class Parameterized(nn.Module):
 def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=False,
                 jitter=1e-6):
     """
-    Given ``Xnew``, predicts loc and covariance matrix of the conditional multivariate
-    normal distribution
+    Given :math:`X_{new}`, predicts loc and covariance matrix of the conditional
+    multivariate normal distribution
 
-        :math:`p(f^*(X_{new}) | X, kernel, f_{loc}, f_{scale\_tril})`.
+    .. math:: p(f^*(X_{new}) \mid X, k, f_{loc}, f_{scale\_tril}).
 
     Here ``f_loc`` and ``f_scale_tril`` are variation parameters of the variational
     distribution
 
-        :math:`q(f | f_{loc}, f_{scale\_tril}) \sim p(f | X, y)`,
+    .. math:: q(f \mid f_{loc}, f_{scale\_tril}) \sim p(f | X, y),
 
-    where :math:`f` is the function value of the Gaussian Process given input ``X``
+    where :math:`f` is the function value of the Gaussian Process given input :math:`X`
 
-        :math:`p(f(X)) \sim \mathcal{N}(0, kernel(X, X))`
+    .. math:: p(f(X)) \sim \mathcal{N}(0, k(X, X))
 
     and :math:`y` is computed from :math:`f` by some likelihood function
     :math:`p(y|f)`.
 
     In case ``f_scale_tril=None``, we consider :math:`f = f_{loc}` and computes
 
-        :math:`p(f^*(X_{new}) | X, kernel, f)`.
+    .. math:: p(f^*(X_{new}) \mid X, k, f).
 
     In case ``f_scale_tril`` is not ``None``, we follow the derivation from reference
     [1]. For the case ``f_scale_tril=None``, we follow the popular reference [2].

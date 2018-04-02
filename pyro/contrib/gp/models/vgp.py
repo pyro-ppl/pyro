@@ -13,20 +13,40 @@ from .model import GPModel
 
 class VariationalGP(GPModel):
     """
-    Variational Gaussian Process module.
+    Variational Gaussian Process model.
 
-    This model can be seen as a special version of SparseVariationalGP model
-    with :math:`Xu = X`.
+    This model deals with both Gaussian and non-Gaussian likelihoods. Given inputs\
+    :math:`X` and their noisy observations :math:`y`, the model takes the form
 
-    :param torch.Tensor X: A 1D or 2D tensor of inputs.
-    :param torch.Tensor y: A tensor of output data for training with
-        ``y.shape[-1]`` equals to number of data points.
-    :param pyro.contrib.gp.kernels.Kernel kernel: A Pyro kernel object.
-    :param pyro.contrib.gp.likelihoods.Likelihood likelihood: A likelihood module.
-    :param torch.Size latent_shape: Shape for latent processes. By default, it equals
-        to output batch shape ``y.shape[:-1]``. For the multi-class classification
-        problems, ``latent_shape[-1]`` should corresponse to the number of classes.
-    :param float jitter: An additional jitter to help stablize Cholesky decomposition.
+    .. math::
+        f &\sim \mathcal{GP}(0, k(X, X)),\\
+        y & \sim p(y) = p(y \mid f) p(f),
+
+    where :math:`p(y \mid f)` is the likelihood.
+
+    We will use a variational approach in this model by approximating `q(f)` to the
+    posterior :math:`p(f\mid y)`. Precisely, `q(f)` will be a multivariate normal
+    distribution with two parameters ``f_loc`` and ``f_scale_tril``, which will be
+    learned during a variational inference process.
+
+    .. note:: This model can be seen as a special version of
+        :class:`.SparseVariationalGP` model with :math:`X_u = X`.
+
+    :param torch.Tensor X: A 1D or 2D input data for training. Its first dimension is
+        the number of data points.
+    :param torch.Tensor y: An output data for training. Its last dimension is the
+        number of data points.
+    :param ~pyro.contrib.gp.kernels.kernel.Kernel kernel: A Pyro kernel object, which
+        is the covariance function :math:`k`.
+    :param ~pyro.contrib.gp.likelihoods.likelihood Likelihood likelihood: A likelihood
+        object.
+    :param torch.Size latent_shape: Shape for latent processes (`batch_shape` of
+        :math:`q(f)`). By default, it equals to output batch shape ``y.shape[:-1]``.
+        For the multi-class classification problems, ``latent_shape[-1]`` should
+        corresponse to the number of classes.
+    :param float jitter: A small positive term which is added into the diagonal part of
+        a covariance matrix to help stablize its Cholesky decomposition.
+    :param str name: Name of this model.
     """
     def __init__(self, X, y, kernel, likelihood, latent_shape=None,
                  jitter=1e-6, name="VGP"):
@@ -86,18 +106,6 @@ class VariationalGP(GPModel):
         return self.kernel, f_loc, f_scale_tril
 
     def forward(self, Xnew, full_cov=False):
-        """
-        Computes the parameters of :math:`p(f^*|Xnew) \sim N(\\text{loc}, \\text{cov})`
-        according to :math:`p(f^*,f|y) = p(f^*|f)p(f|y) \sim p(f^*|f)q(f)`, then
-        marginalize out variable :math:`f`. In case output data is a 2D tensor of shape
-        :math:`N \times D`, :math:`loc` is also a 2D tensor of shape :math:`N \times D`.
-        Covariance matrix :math:`cov` is always a 2D tensor of shape :math:`N \times N`.
-
-        :param torch.Tensor Xnew: A 1D or 2D tensor.
-        :param bool full_cov: Predict full covariance matrix or just its diagonal.
-        :returns: loc and covariance matrix of :math:`p(f^*|Xnew)`
-        :rtype: torch.Tensor and torch.Tensor
-        """
         self._check_Xnew_shape(Xnew)
         tmp_sample_latent = self._sample_latent
         self._sample_latent = False
