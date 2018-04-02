@@ -328,8 +328,8 @@ def log_sum_exp(tensor, scale=1.0, dim=-1):
     summing is done along the dimension specified by ``dim``.
 
     :param torch.Tensor tensor: Input tensor.
-    :param torch.Tensor scale: Optional scale factor for each ``exp(tensor)``. Must be
-        broadcastable to tensor.
+    :param torch.Tensor scale: Optional scale factor for each ``exp(tensor)``.
+        Must be broadcastable to tensor.
     :param dim: Dimension to be summed out.
     """
     max_val = tensor.max(dim)[0]

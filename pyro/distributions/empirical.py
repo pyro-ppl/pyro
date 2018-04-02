@@ -66,14 +66,16 @@ class Empirical(TorchDistribution):
 
     def add(self, value, log_weight=None, weight=None):
         """
-        Adds a new data point to the sample. The values in successive calls to ``add``
-        must have the same tensor shape and size. Optionally, an importance weight
-        can be specified via ``log_weight`` or ``weight`` (default value of `1`
-        is used if not specified).
+        Adds a new data point to the sample. The values in successive calls to
+        ``add`` must have the same tensor shape and size. Optionally, an
+        importance weight can be specified via ``log_weight`` or ``weight``
+        (default value of `1` is used if not specified).
 
         :param torch.Tensor value: tensor to add to the sample.
-        :param torch.Tensor weight: log weight (optional) corresponding to the sample.
-        :param torch.Tensor log_weight: weight (optional) corresponding to the sample.
+        :param torch.Tensor weight: log weight (optional) corresponding
+            to the sample.
+        :param torch.Tensor log_weight: weight (optional) corresponding
+            to the sample.
         """
         if is_validation_enabled():
             if weight is not None and log_weight is not None:
