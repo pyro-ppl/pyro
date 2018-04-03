@@ -63,4 +63,4 @@ class WhiteNoise(Kernel):
         if Z is None:
             return variance.expand(X.size(0)).diag()
         else:
-            return X.data.new(X.size(0), Z.size(0)).zero_()
+            return X.data.new_zeros(X.size(0), Z.size(0))

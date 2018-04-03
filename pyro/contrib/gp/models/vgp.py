@@ -62,7 +62,7 @@ class VariationalGP(GPModel):
         self.f_loc = Parameter(f_loc)
 
         f_scale_tril_shape = self.latent_shape + (N, N)
-        f_scale_tril = torch.eye(N, out=self.X.new(N, N))
+        f_scale_tril = torch.eye(N, out=self.X.new_empty(N, N))
         f_scale_tril = f_scale_tril.expand(f_scale_tril_shape)
         self.f_scale_tril = Parameter(f_scale_tril)
         self.set_constraint("f_scale_tril", constraints.lower_cholesky)
@@ -76,7 +76,8 @@ class VariationalGP(GPModel):
         f_scale_tril = self.get_param("f_scale_tril")
 
         N = self.X.shape[0]
-        Kff = self.kernel(self.X) + torch.eye(N, out=self.X.new(N, N)) * self.jitter
+        Kff = self.kernel(self.X) + (torch.eye(N, out=self.X.new_empty(N, N)) *
+                                     self.jitter)
         Lff = Kff.potrf(upper=False)
 
         zero_loc = self.X.new_zeros(f_loc.shape)

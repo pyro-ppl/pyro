@@ -77,7 +77,7 @@ class SparseVariationalGP(GPModel):
         self.u_loc = Parameter(u_loc)
 
         u_scale_tril_shape = self.latent_shape + (M, M)
-        u_scale_tril = torch.eye(M, out=self.Xu.new(M, M))
+        u_scale_tril = torch.eye(M, out=self.Xu.new_empty(M, M))
         u_scale_tril = u_scale_tril.expand(u_scale_tril_shape)
         self.u_scale_tril = Parameter(u_scale_tril)
         self.set_constraint("u_scale_tril", constraints.lower_cholesky)
@@ -92,7 +92,7 @@ class SparseVariationalGP(GPModel):
         u_scale_tril = self.get_param("u_scale_tril")
 
         M = Xu.shape[0]
-        Kuu = self.kernel(Xu) + torch.eye(M, out=Xu.new(M, M)) * self.jitter
+        Kuu = self.kernel(Xu) + torch.eye(M, out=Xu.new_empty(M, M)) * self.jitter
         Luu = Kuu.potrf(upper=False)
 
         zero_loc = Xu.new_zeros(u_loc.shape)

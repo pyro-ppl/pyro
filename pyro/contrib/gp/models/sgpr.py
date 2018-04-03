@@ -122,7 +122,7 @@ class SparseGPRegression(GPModel):
         # trace_term is added into log_prob
 
         M = Xu.shape[0]
-        Kuu = self.kernel(Xu) + torch.eye(M, out=Xu.new(M, M)) * self.jitter
+        Kuu = self.kernel(Xu) + torch.eye(M, out=Xu.new_empty(M, M)) * self.jitter
         Luu = Kuu.potrf(upper=False)
         Kuf = self.kernel(Xu, self.X)
         W = matrix_triangular_solve_compat(Kuf, Luu, upper=False)
@@ -182,7 +182,7 @@ class SparseGPRegression(GPModel):
         N = self.X.shape[0]
         M = Xu.shape[0]
 
-        Kuu = kernel(Xu) + torch.eye(M, out=Xu.new(M, M)) * self.jitter
+        Kuu = kernel(Xu) + torch.eye(M, out=Xu.new_empty(M, M)) * self.jitter
         Luu = Kuu.potrf(upper=False)
         Kus = kernel(Xu, Xnew)
         Kuf = kernel(Xu, self.X)
@@ -196,7 +196,7 @@ class SparseGPRegression(GPModel):
             D = D + Kffdiag - Qffdiag
 
         W_Dinv = W / D
-        Id = torch.eye(M, M, out=W.new(M, M))
+        Id = torch.eye(M, M, out=W.new_empty(M, M))
         K = Id + W_Dinv.matmul(W.t())
         L = K.potrf(upper=False)
 
