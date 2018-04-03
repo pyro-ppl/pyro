@@ -321,6 +321,20 @@ def matrix_triangular_solve_compat(b, A, upper=True):
         return b.trtrs(A, upper=upper)[0].view(b.size())
 
 
+def log_sum_exp(tensor, dim=-1, scale=1.0):
+    """
+    Numerically stable implementation for the `LogSumExp` operation. The
+    summing is done along the dimension specified by ``dim``.
+
+    :param torch.Tensor tensor: Input tensor.
+    :param dim: Dimension to be summed out.
+    :param torch.Tensor scale: Optional scale factor for each ``exp(tensor)``.
+        Must be broadcastable to tensor.
+    """
+    max_val = tensor.max(dim)[0]
+    return max_val + torch.sum(scale * (tensor - max_val.unsqueeze(-1)).exp(), dim=dim).log()
+
+
 def enable_validation(is_validate):
     global _VALIDATION_ENABLED
     _VALIDATION_ENABLED = is_validate

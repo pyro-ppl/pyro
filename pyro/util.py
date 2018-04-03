@@ -152,11 +152,6 @@ def is_inf(x):
     return (x == float('inf')).all()
 
 
-def log_sum_exp(tensor):
-    max_val = tensor.max(dim=-1)[0]
-    return max_val + (tensor - max_val.unsqueeze(-1)).exp().sum(dim=-1).log()
-
-
 def zero_grads(tensors):
     """
     Sets gradients of list of Variables to zero in place
