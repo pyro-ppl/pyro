@@ -41,7 +41,7 @@ def zero_grads(tensors):
     """
     for p in tensors:
         if p.grad is not None:
-            p.grad = p.grad.new(p.shape).zero_()
+            p.grad = p.grad.new_zeros(p.shape)
 
 
 def get_iarange_stacks(trace):

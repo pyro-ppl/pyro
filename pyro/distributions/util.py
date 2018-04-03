@@ -148,7 +148,7 @@ def sum_leftmost(value, dim):
 
 def scale_tensor(tensor, scale):
     """
-    Safely scale a tensor without increasing its ``.size()``.
+    Safely scale a tensor without increasing its ``.shape``.
     This avoids NANs by assuming ``inf * 0 = 0 * inf = 0``.
     """
     if isinstance(tensor, numbers.Number):

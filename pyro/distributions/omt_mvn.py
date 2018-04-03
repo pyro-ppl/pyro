@@ -36,7 +36,7 @@ class OMTMultivariateNormal(MultivariateNormal):
 class _OMTMVNSample(Function):
     @staticmethod
     def forward(ctx, loc, scale_tril, shape):
-        ctx.white = loc.new(shape).normal_()
+        ctx.white = loc.new_empty(shape).normal_()
         ctx.z = torch.matmul(ctx.white, scale_tril.t())
         ctx.save_for_backward(scale_tril)
         return loc + ctx.z
@@ -49,11 +49,11 @@ class _OMTMVNSample(Function):
         z = ctx.z
         epsilon = ctx.white
 
-        dim = L.size(0)
+        dim = L.shape[0]
         g = grad_output
         loc_grad = sum_leftmost(grad_output, -1)
 
-        identity = torch.eye(dim, out=torch.tensor(g.new(dim, dim)))
+        identity = torch.eye(dim, out=torch.tensor(g.new_empty(dim, dim)))
         R_inv = torch.trtrs(identity, L.t(), transpose=False, upper=True)[0]
 
         z_ja = z.unsqueeze(-1)

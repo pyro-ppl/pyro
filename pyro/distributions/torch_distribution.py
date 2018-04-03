@@ -131,7 +131,7 @@ class TorchDistribution(torch.distributions.Distribution, TorchDistributionMixin
     ``sample_shape + d.batch_shape``::
 
       x = d.sample(sample_shape)
-      assert x.size() == d.shape(sample_shape)
+      assert x.shape == d.shape(sample_shape)
       log_p = d.log_prob(x)
       assert log_p.shape == sample_shape + d.batch_shape
 
@@ -217,8 +217,7 @@ class ReshapedDistribution(TorchDistribution):
 
         # Shift enumeration dim to correct location.
         enum_shape, base_shape = samples.shape[:1], samples.shape[1:]
-        samples = samples.contiguous()
-        samples = samples.view(enum_shape + (1,) * len(self.sample_shape) + base_shape)
+        samples = samples.reshape(enum_shape + (1,) * len(self.sample_shape) + base_shape)
         samples = samples.expand(enum_shape + self.sample_shape + base_shape)
         return samples
 

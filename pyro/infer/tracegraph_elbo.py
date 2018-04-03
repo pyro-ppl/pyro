@@ -157,9 +157,9 @@ def _compute_elbo_non_reparam(guide_trace, non_reparam_nodes, downstream_costs):
 
         score_function_term = guide_site["score_parts"].score_function
         if use_nn_baseline or use_decaying_avg_baseline or use_baseline_value:
-            if downstream_cost.size() != baseline.size():
+            if downstream_cost.shape != baseline.shape:
                 raise ValueError("Expected baseline at site {} to be {} instead got {}".format(
-                    node, downstream_cost.size(), baseline.size()))
+                    node, downstream_cost.shape, baseline.shape))
             downstream_cost = downstream_cost - baseline
         surrogate_elbo += (score_function_term * downstream_cost.detach()).sum()
 
