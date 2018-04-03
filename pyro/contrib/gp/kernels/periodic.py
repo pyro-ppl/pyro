@@ -70,13 +70,13 @@ class ExpSineSquared(Kernel):
     def forward(self, X, Z=None, diag=False):
         if diag:
             variance = self.get_param("variance")
-            return variance.expand(X.size(0))
+            return variance.expand(X.shape[0])
 
         if Z is None:
             Z = X
         X = self._slice_input(X)
         Z = self._slice_input(Z)
-        if X.size(1) != Z.size(1):
+        if X.shape[1] != Z.shape[1]:
             raise ValueError("Inputs must have the same number of features.")
 
         variance = self.get_param("variance")

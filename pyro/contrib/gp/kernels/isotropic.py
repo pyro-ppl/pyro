@@ -49,7 +49,7 @@ class Isotropy(Kernel):
             Z = X
         X = self._slice_input(X)
         Z = self._slice_input(Z)
-        if X.size(1) != Z.size(1):
+        if X.shape[1] != Z.shape[1]:
             raise ValueError("Inputs must have the same number of features.")
 
         lengthscale = self.get_param("lengthscale")
@@ -72,7 +72,7 @@ class Isotropy(Kernel):
         Calculates the diagonal part of covariance matrix on active features.
         """
         variance = self.get_param("variance")
-        return variance.expand(X.size(0))
+        return variance.expand(X.shape[0])
 
 
 class RBF(Isotropy):

@@ -24,11 +24,11 @@ class Constant(Kernel):
     def forward(self, X, Z=None, diag=False):
         variance = self.get_param("variance")
         if diag:
-            return variance.expand(X.size(0))
+            return variance.expand(X.shape[0])
 
         if Z is None:
             Z = X
-        return variance.expand(X.size(0), Z.size(0))
+        return variance.expand(X.shape[0], Z.shape[0])
 
 
 class Bias(Constant):
@@ -58,9 +58,9 @@ class WhiteNoise(Kernel):
     def forward(self, X, Z=None, diag=False):
         variance = self.get_param("variance")
         if diag:
-            return variance.expand(X.size(0))
+            return variance.expand(X.shape[0])
 
         if Z is None:
-            return variance.expand(X.size(0)).diag()
+            return variance.expand(X.shape[0]).diag()
         else:
-            return X.data.new_zeros(X.size(0), Z.size(0))
+            return X.data.new_zeros(X.shape[0], Z.shape[0])

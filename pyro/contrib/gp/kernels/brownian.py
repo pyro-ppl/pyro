@@ -42,10 +42,10 @@ class Brownian(Kernel):
             return variance * X.abs().squeeze(1)
 
         Z = self._slice_input(Z)
-        if X.size(1) != Z.size(1):
+        if X.shape[1] != Z.shape[1]:
             raise ValueError("Inputs must have the same number of features.")
 
         Zt = Z.t()
         return torch.where(X.sign() == Zt.sign(),
                            variance * torch.min(X.abs(), Zt.abs()),
-                           X.data.new_zeros(X.size(0), Z.size(0)))
+                           X.data.new_zeros(X.shape[0], Z.shape[0]))

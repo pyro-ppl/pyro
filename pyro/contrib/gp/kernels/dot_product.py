@@ -31,7 +31,7 @@ class DotProduct(Kernel):
             return (X ** 2).sum(-1)
 
         Z = self._slice_input(Z)
-        if X.size(1) != Z.size(1):
+        if X.shape[1] != Z.shape[1]:
             raise ValueError("Inputs must have the same number of features.")
 
         return X.matmul(Z.t())
