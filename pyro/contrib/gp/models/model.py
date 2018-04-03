@@ -41,7 +41,7 @@ class GPModel(Parameterized):
         >>> posterior_ls_trace = []  # store lengthscale trace
         >>> ls_name = pyro.param_with_module_name(gpr.kernel.name, "lengthscale")
         >>> for trace, _ in mcmc_run._traces():
-        >>>     posterior_ls_trace.append(trace.nodes[ls_name]["value"])
+        ...     posterior_ls_trace.append(trace.nodes[ls_name]["value"])
 
     + Using a variational inference (e.g. :class:`~pyro.infer.svi.SVI`) on the pair
       :meth:`model`, :meth:`guide` as in `SVI tutorial
@@ -50,7 +50,7 @@ class GPModel(Parameterized):
         >>> optimizer = pyro.optim.Adam({"lr": 0.01})
         >>> svi = SVI(gpr.model, gpr.guide, optimizer, loss="ELBO")
         >>> for i in range(1000):
-        >>>     svi.step()
+        ...     svi.step()
 
     To give a prediction on new dataset, simply use :meth:`forward` like any PyTorch
     :class:`torch.nn.Module`:
@@ -121,8 +121,8 @@ class GPModel(Parameterized):
             >>> svi = SVI(svgp.model, svgp.guide, optimizer, "ELBO")
             >>> batched_X, batched_y = X.split(split_size=10), y.split(split_size=10)
             >>> for Xi, yi in zip(batched_X, batched_y):
-            >>>     svgp.set_data(Xi, yi)
-            >>>     svi.step()
+            ...     svgp.set_data(Xi, yi)
+            ...     svi.step()
 
         + Making a two-layer Gaussian Process stochastic function:
 
@@ -130,9 +130,9 @@ class GPModel(Parameterized):
             >>> Z, _ = gp_layer1.model()
             >>> gpr2 = gp.models.GPRegression(Z, y, kernel2, name="GPR2")
             >>> def two_layer_model():
-            >>>     Z, _ = gpr1.model()
-            >>>     gpr2.set_data(Z, y)
-            >>>     return gpr2.model()
+            ...     Z, _ = gpr1.model()
+            ...     gpr2.set_data(Z, y)
+            ...     return gpr2.model()
 
         References:
 
