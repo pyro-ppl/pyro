@@ -46,6 +46,13 @@ Delta
     :undoc-members:
     :show-inheritance:
 
+EmpiricalDistribution
+----------------------
+.. automodule:: pyro.distributions.empirical
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 HalfCauchy
 ----------
 .. automodule:: pyro.distributions.half_cauchy

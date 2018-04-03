@@ -189,11 +189,6 @@ def torch_isinf(x):
     return (x == float('inf')).all()
 
 
-def log_sum_exp(tensor):
-    max_val = tensor.max(dim=-1)[0]
-    return max_val + (tensor - max_val.unsqueeze(-1)).exp().sum(dim=-1).log()
-
-
 def save_visualization(trace, graph_output):
     """
     :param pyro.poutine.Trace trace: a trace to be visualized
