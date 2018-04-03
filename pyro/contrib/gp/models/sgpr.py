@@ -28,8 +28,8 @@ class SparseGPRegression(GPModel):
     parameters :math:`X_u`, the model takes the form:
 
     .. math::
-        u & \sim \mathcal{GP}(0, k(X_u, X_u)),\\\
-        f & \sim q(f \mid X, X_u) = \mathbb{E}_{p(u)}q(f\mid X, X_u, u),\\\
+        u & \sim \mathcal{GP}(0, k(X_u, X_u)),\\\\
+        f & \sim q(f \mid X, X_u) = \mathbb{E}_{p(u)}q(f\mid X, X_u, u),\\\\
         y & \sim f + \epsilon,
 
     where :math:`\epsilon` is noise and the conditional distribution
@@ -64,6 +64,10 @@ class SparseGPRegression(GPModel):
       `trace_term` in the model's log likelihood. This additional term makes "VFE"
       equivalent to the variational approach in :class:`.SparseVariationalGP`
       (see reference [2]).
+
+    .. note:: This model has :math:`\mathcal{O}(NM^2)` complexity for training,
+        :math:`\mathcal{O}(NM^2)` complexity for testing. Here, :math:`N` is the number
+        of train inputs, :math:`M` is the number of inducing inputs.
 
     References
 
@@ -159,9 +163,24 @@ class SparseGPRegression(GPModel):
         return self.kernel, noise, Xu
 
     def forward(self, Xnew, full_cov=False, noiseless=True):
-        """
+        r"""
+        Computes the mean and covariance matrix (or variance) of Gaussian Process
+        posterior on a test input data :math:`X_{new}`:
+
+        .. math:: p(f^* \mid X_{new}, X, y, k, X_u, \epsilon) = \mathcal{N}(loc, cov).
+
+        .. note:: The noise parameter ``noise`` (:math:`\epsilon`), the inducing-point
+            parameter ``Xu``, together with kernel's parameters have been learned from
+            a training procedure (MCMC or SVI).
+
+        :param torch.Tensor Xnew: A 1D or 2D input data for testing. In 2D case, its
+            second dimension should have the same size as of train input data.
+        :param bool full_cov: A flag to decide if we want to predict full covariance
+            matrix or just variance.
         :param bool noiseless: A flag to decide if we want to include noise in the
             prediction output or not.
+        :returns: loc and covariance matrix (or variance) of :math:`p(f^*(X_{new}))`
+        :rtype: tuple(torch.Tensor, torch.Tensor)
         """
         self._check_Xnew_shape(Xnew)
         kernel, noise, Xu = self.guide()

@@ -32,6 +32,10 @@ class VariationalGP(GPModel):
     .. note:: This model can be seen as a special version of
         :class:`.SparseVariationalGP` model with :math:`X_u = X`.
 
+    .. note:: This model has :math:`\mathcal{O}(N^3)` complexity for training,
+        :math:`\mathcal{O}(N^3)` complexity for testing. Here, :math:`N` is the number
+        of train inputs. Size of variational parameters is :math:`\mathcal{O}(N^2)`.
+
     :param torch.Tensor X: A 1D or 2D input data for training. Its first dimension is
         the number of data points.
     :param torch.Tensor y: An output data for training. Its last dimension is the
@@ -107,6 +111,24 @@ class VariationalGP(GPModel):
         return self.kernel, f_loc, f_scale_tril
 
     def forward(self, Xnew, full_cov=False):
+        r"""
+        Computes the mean and covariance matrix (or variance) of Gaussian Process
+        posterior on a test input data :math:`X_{new}`:
+
+        .. math:: p(f^* \mid X_{new}, X, y, k, f_{loc}, f_{scale\_tril})
+            = \mathcal{N}(loc, cov).
+
+        .. note:: Variational parameters ``f_loc``, ``f_scale_tril``, together with
+            kernel's parameters have been learned from a training procedure (MCMC or
+            SVI).
+
+        :param torch.Tensor Xnew: A 1D or 2D input data for testing. In 2D case, its
+            second dimension should have the same size as of train input data.
+        :param bool full_cov: A flag to decide if we want to predict full covariance
+            matrix or just variance.
+        :returns: loc and covariance matrix (or variance) of :math:`p(f^*(X_{new}))`
+        :rtype: tuple(torch.Tensor, torch.Tensor)
+        """
         self._check_Xnew_shape(Xnew)
         tmp_sample_latent = self._sample_latent
         self._sample_latent = False

@@ -15,10 +15,12 @@ class SparseVariationalGP(GPModel):
     r"""
     Sparse Variational Gaussian Process model.
 
-    This model introduces an additional inducing-input parameter :math:`X_u` as in
-    :class:`~.SparseGPRegression` model and deals with both Gaussian and non-Gaussian
-    likelihoods. Given inputs :math:`X`, their noisy observations :math:`y`, and the
-    inducing-input parameters :math:`X_u`, the model takes the form:
+    In :class:`.VariationalGP` model, when the number of input data :math:`X` is large,
+    the covariance matrix :math:`k(X, X)` will require a lot of computational steps to
+    compute its inverse (for log likelihood and for prediction). This model introduces
+    an additional inducing-input parameter :math:`X_u` to solve that problem. Given
+    inputs :math:`X`, their noisy observations :math:`y`, and the inducing-input
+    parameters :math:`X_u`, the model takes the form:
 
     .. math::
         [f, u] &\sim \mathcal{GP}(0, k([X, X_u], [X, X_u])),\\
@@ -29,11 +31,16 @@ class SparseVariationalGP(GPModel):
     We will use a variational approach in this model by approximating :math:`q(f,u)`
     to the posterior :math:`p(f,u \mid y)`. Precisely, :math:`q(f) = p(f\mid u)q(u)`,
     where :math:`q(u)` is a multivariate normal distribution with two parameters
-    ``f_loc`` and ``f_scale_tril``, which will be learned during a variational
+    ``u_loc`` and ``u_scale_tril``, which will be learned during a variational
     inference process.
 
     .. note:: This model can be learned using MCMC method as in reference [2]. See also
         :class:`.GPModel`.
+
+    .. note:: This model has :math:`\mathcal{O}(NM^2)` complexity for training,
+        :math:`\mathcal{O}(M^3)` complexity for testing. Here, :math:`N` is the number
+        of train inputs, :math:`M` is the number of inducing inputs. Size of
+        variational parameters is :math:`\mathcal{O}(M^2)`.
 
     References
 
@@ -124,6 +131,24 @@ class SparseVariationalGP(GPModel):
         return Xu, self.kernel, u_loc, u_scale_tril
 
     def forward(self, Xnew, full_cov=False):
+        r"""
+        Computes the mean and covariance matrix (or variance) of Gaussian Process
+        posterior on a test input data :math:`X_{new}`:
+
+        .. math:: p(f^* \mid X_{new}, X, y, k, X_u, u_{loc}, u_{scale\_tril})
+            = \mathcal{N}(loc, cov).
+
+        .. note:: Variational parameters ``u_loc``, ``u_scale_tril``, the
+            inducing-point parameter ``Xu``, together with kernel's parameters have
+            been learned from a training procedure (MCMC or SVI).
+
+        :param torch.Tensor Xnew: A 1D or 2D input data for testing. In 2D case, its
+            second dimension should have the same size as of train input data.
+        :param bool full_cov: A flag to decide if we want to predict full covariance
+            matrix or just variance.
+        :returns: loc and covariance matrix (or variance) of :math:`p(f^*(X_{new}))`
+        :rtype: tuple(torch.Tensor, torch.Tensor)
+        """
         self._check_Xnew_shape(Xnew)
         tmp_sample_latent = self._sample_latent
         self._sample_latent = False
