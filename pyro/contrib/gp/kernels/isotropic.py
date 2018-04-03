@@ -80,6 +80,8 @@ class RBF(Isotropy):
     Implementation of Radial Basis Function kernel:
 
         :math:`k(x,z) = \sigma^2\exp\left(-0.5 \times \frac{|x-z|^2}{l^2}\right).`
+
+    .. note:: This kernel also has name `Squared Exponential` in literature.
     """
     def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None,
                  name="RBF"):
@@ -92,16 +94,6 @@ class RBF(Isotropy):
         variance = self.get_param("variance")
         r2 = self._square_scaled_dist(X, Z)
         return variance * torch.exp(-0.5 * r2)
-
-
-class SquaredExponential(RBF):
-    """
-    Another name of :class:`RBF` kernel.
-    """
-    def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None,
-                 name="SquaredExponential"):
-        super(SquaredExponential, self).__init__(input_dim, variance, lengthscale,
-                                                 active_dims, name)
 
 
 class RationalQuadratic(Isotropy):
@@ -152,16 +144,6 @@ class Exponential(Isotropy):
         variance = self.get_param("variance")
         r = self._scaled_dist(X, Z)
         return variance * torch.exp(-r)
-
-
-class Matern12(Exponential):
-    """
-    Another name of Exponential kernel.
-    """
-    def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None,
-                 name="Matern12"):
-        super(Matern12, self).__init__(input_dim, variance, lengthscale, active_dims,
-                                       name)
 
 
 class Matern32(Isotropy):

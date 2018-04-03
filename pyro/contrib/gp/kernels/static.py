@@ -31,14 +31,6 @@ class Constant(Kernel):
         return variance.expand(X.shape[0], Z.shape[0])
 
 
-class Bias(Constant):
-    """
-    Another name of :class:`Constant` kernel.
-    """
-    def __init__(self, input_dim, variance=None, active_dims=None, name="Bias"):
-        super(Bias, self).__init__(input_dim, variance, active_dims, name)
-
-
 class WhiteNoise(Kernel):
     """
     Implementation of WhiteNoise kernel:

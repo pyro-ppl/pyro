@@ -32,9 +32,9 @@ class Cosine(Isotropy):
         return variance * torch.cos(r)
 
 
-class ExpSineSquared(Kernel):
+class Periodic(Kernel):
     r"""
-    Implementation of ExpSineSquared (Periodic) kernel:
+    Implementation of Periodic kernel:
 
         :math:`k(x,z)=\sigma^2\exp\left(-2\times\frac{\sin^2(\pi(x-z)/p)}{l^2}\right),`
 
@@ -49,8 +49,8 @@ class ExpSineSquared(Kernel):
     :param torch.Tensor period: Period parameter of this kernel.
     """
     def __init__(self, input_dim, variance=None, lengthscale=None, period=None,
-                 active_dims=None, name="ExpSineSquared"):
-        super(ExpSineSquared, self).__init__(input_dim, active_dims, name)
+                 active_dims=None, name="Periodic"):
+        super(Periodic, self).__init__(input_dim, active_dims, name)
 
         if variance is None:
             variance = torch.tensor(1.)
@@ -86,13 +86,3 @@ class ExpSineSquared(Kernel):
         d = X.unsqueeze(1) - Z.unsqueeze(0)
         scaled_sin = torch.sin(math.pi * d / period) / lengthscale
         return variance * torch.exp(-2 * (scaled_sin ** 2).sum(-1))
-
-
-class Periodic(ExpSineSquared):
-    """
-    Another name of :class:`ExpSineSquared` kernel.
-    """
-    def __init__(self, input_dim, variance=None, lengthscale=None, period=None,
-                 active_dims=None, name="Periodic"):
-        super(Periodic, self).__init__(input_dim, variance, lengthscale, period,
-                                       active_dims, name)
