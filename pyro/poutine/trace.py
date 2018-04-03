@@ -24,6 +24,9 @@ class DiGraph(networkx.DiGraph):
     node_dict_factory = collections.OrderedDict
 
     def fresh_copy(self):
+        """
+        Returns a new ``DiGraph`` instance.
+        """
         return DiGraph()
 
 
