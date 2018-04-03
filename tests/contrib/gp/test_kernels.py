@@ -5,11 +5,10 @@ from collections import namedtuple
 import pytest
 import torch
 
-from pyro.contrib.gp.kernels import (Bias, Brownian, Cosine, Exponent, Linear,
-                                     Matern12, Matern32, Matern52, Periodic,
-                                     Polynomial, Product, RationalQuadratic,
-                                     SquaredExponential, Sum, VerticalScaling, Warping,
-                                     WhiteNoise)
+from pyro.contrib.gp.kernels import (Brownian, Constant, Cosine, Exponent, Exponential,
+                                     Linear, Matern32, Matern52, Periodic, Polynomial,
+                                     Product, RationalQuadratic, RBF, Sum,
+                                     VerticalScaling, Warping, WhiteNoise)
 from tests.common import assert_equal
 
 T = namedtuple("TestGPKernel", ["kernel", "X", "Z", "K_sum"])
@@ -21,7 +20,7 @@ Z = torch.tensor([[4.0, 5.0, 6.0], [3.0, 1.0, 7.0], [3.0, 1.0, 2.0]])
 
 TEST_CASES = [
     T(
-        Bias(3, variance),
+        Constant(3, variance),
         X=X, Z=Z, K_sum=18
     ),
     T(
@@ -38,7 +37,7 @@ TEST_CASES = [
         X=X, Z=Z, K_sum=291
     ),
     T(
-        Matern12(3, variance, lengthscale),
+        Exponential(3, variance, lengthscale),
         X=X, Z=Z, K_sum=2.685679
     ),
     T(
@@ -62,7 +61,7 @@ TEST_CASES = [
         X=X, Z=Z, K_sum=5.684670
     ),
     T(
-        SquaredExponential(3, variance, lengthscale),
+        RBF(3, variance, lengthscale),
         X=X, Z=Z, K_sum=3.681117
     ),
     T(
@@ -106,14 +105,14 @@ def test_combination():
 
 
 def test_active_dims_overlap_error():
-    k1 = Matern12(2, variance, lengthscale[0], active_dims=[0, 1])
+    k1 = Matern52(2, variance, lengthscale[0], active_dims=[0, 1])
     k2 = Matern32(2, variance, lengthscale[0], active_dims=[1, 2])
     with pytest.raises(ValueError):
         Sum(k1, k2)
 
 
 def test_active_dims_disjoint_ok():
-    k1 = Matern12(2, variance, lengthscale[0], active_dims=[0, 1])
+    k1 = Matern52(2, variance, lengthscale[0], active_dims=[0, 1])
     k2 = Matern32(1, variance, lengthscale[0], active_dims=[2])
     Sum(k1, k2)
 
