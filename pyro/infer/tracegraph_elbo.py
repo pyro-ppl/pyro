@@ -11,9 +11,10 @@ import pyro.infer as infer
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer import ELBO
-from pyro.infer.util import MultiFrameTensor, get_iarange_stacks, torch_backward, torch_data_sum
+from pyro.infer.util import (MultiFrameTensor, get_iarange_stacks, torch_backward,
+                             torch_data_sum, detach_iterable)
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_match, check_site_shape, detach_iterable, torch_isnan
+from pyro.util import check_model_guide_match, check_site_shape, torch_isnan
 
 
 def _get_baseline_options(site):

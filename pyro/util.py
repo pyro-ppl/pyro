@@ -127,13 +127,6 @@ def am_i_wrapped():
     return len(_PYRO_STACK) > 0
 
 
-def detach_iterable(iterable):
-    if torch.is_tensor(iterable):
-        return iterable.detach()
-    else:
-        return [var.detach() for var in iterable]
-
-
 def _dict_to_tuple(d):
     """
     Recursively converts a dictionary to a list of key-value tuples
@@ -199,15 +192,6 @@ def torch_isinf(x):
 def log_sum_exp(tensor):
     max_val = tensor.max(dim=-1)[0]
     return max_val + (tensor - max_val.unsqueeze(-1)).exp().sum(dim=-1).log()
-
-
-def zero_grads(tensors):
-    """
-    Sets gradients of list of Variables to zero in place
-    """
-    for p in tensors:
-        if p.grad is not None:
-            p.grad = p.grad.new(p.shape).zero_()
 
 
 def save_visualization(trace, graph_output):
