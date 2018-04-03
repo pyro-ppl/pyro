@@ -13,7 +13,7 @@ from pyro.distributions.util import is_identically_zero
 from pyro.infer import ELBO
 from pyro.infer.util import MultiFrameTensor, get_iarange_stacks, torch_backward, torch_data_sum
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_match, check_site_shape, detach_iterable, is_nan
+from pyro.util import check_model_guide_match, check_site_shape, detach_iterable, torch_isnan
 
 
 def _get_baseline_options(site):
@@ -231,7 +231,7 @@ class TraceGraph_ELBO(ELBO):
             elbo += torch_data_sum(weight * elbo_particle)
 
         loss = -elbo
-        if is_nan(loss):
+        if torch_isnan(loss):
             warnings.warn('Encountered NAN loss')
         return loss
 
@@ -286,6 +286,6 @@ class TraceGraph_ELBO(ELBO):
             pyro.get_param_store().mark_params_active(trainable_params)
 
         loss = -elbo
-        if is_nan(loss):
+        if torch_isnan(loss):
             warnings.warn('Encountered NAN loss')
         return weight * loss

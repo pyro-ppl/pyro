@@ -75,6 +75,50 @@ def default_process_message(msg):
     return None
 
 
+def apply_stack(initial_msg):
+    """
+    :param dict initial_msg: the starting version of the trace site
+    :returns: an updated message that is the final version of the trace site
+
+    Execute the poutine stack at a single site according to the following scheme:
+    1. Walk down the stack from top to bottom, collecting into the message
+        all information necessary to execute the stack at that site
+    2. For each poutine in the stack from bottom to top:
+           Execute the poutine with the message;
+           If the message field "stop" is True, stop;
+           Otherwise, continue
+    3. Return the updated message
+    """
+    stack = _PYRO_STACK
+    # TODO check at runtime if stack is valid
+
+    # msg is used to pass information up and down the stack
+    msg = initial_msg
+
+    counter = 0
+    # go until time to stop?
+    for frame in stack:
+        validate_message(msg)
+
+        counter = counter + 1
+
+        frame._process_message(msg)
+
+        if msg["stop"]:
+            break
+
+    default_process_message(msg)
+
+    for frame in reversed(stack[0:counter]):
+        frame._postprocess_message(msg)
+
+    cont = msg["continuation"]
+    if cont is not None:
+        cont(msg)
+
+    return None
+
+
 def am_i_wrapped():
     """
     Checks whether the current computation is wrapped in a poutine.
@@ -134,16 +178,16 @@ def set_rng_seed(rng_seed):
         pass
 
 
-def is_nan(x):
+def torch_isnan(x):
     """
     A convenient function to check if a Tensor contains all nan; also works with numbers
     """
     if isinstance(x, numbers.Number):
         return x != x
-    return (x != x).all()
+    return torch.isnan(x).all()
 
 
-def is_inf(x):
+def torch_isinf(x):
     """
     A convenient function to check if a Tensor contains all inf; also works with numbers
     """
@@ -164,50 +208,6 @@ def zero_grads(tensors):
     for p in tensors:
         if p.grad is not None:
             p.grad = p.grad.new(p.shape).zero_()
-
-
-def apply_stack(initial_msg):
-    """
-    :param dict initial_msg: the starting version of the trace site
-    :returns: an updated message that is the final version of the trace site
-
-    Execute the poutine stack at a single site according to the following scheme:
-    1. Walk down the stack from top to bottom, collecting into the message
-        all information necessary to execute the stack at that site
-    2. For each poutine in the stack from bottom to top:
-           Execute the poutine with the message;
-           If the message field "stop" is True, stop;
-           Otherwise, continue
-    3. Return the updated message
-    """
-    stack = _PYRO_STACK
-    # TODO check at runtime if stack is valid
-
-    # msg is used to pass information up and down the stack
-    msg = initial_msg
-
-    counter = 0
-    # go until time to stop?
-    for frame in stack:
-        validate_message(msg)
-
-        counter = counter + 1
-
-        frame._process_message(msg)
-
-        if msg["stop"]:
-            break
-
-    default_process_message(msg)
-
-    for frame in reversed(stack[0:counter]):
-        frame._postprocess_message(msg)
-
-    cont = msg["continuation"]
-    if cont is not None:
-        cont(msg)
-
-    return None
 
 
 def save_visualization(trace, graph_output):

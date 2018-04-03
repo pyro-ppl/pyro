@@ -9,16 +9,6 @@ from pyro.distributions.util import is_identically_zero
 from pyro.poutine.util import site_is_subsample
 
 
-def torch_exp(x):
-    """
-    Like ``x.exp()`` for a :class:`~torch.Tensor`, but also accepts
-    numbers.
-    """
-    if isinstance(x, numbers.Number):
-        return math.exp(x)
-    return x.exp()
-
-
 def torch_data_sum(x):
     """
     Like ``x.sum().item()`` for a :class:`~torch.Tensor`, but also works
