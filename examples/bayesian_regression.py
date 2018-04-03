@@ -73,10 +73,12 @@ def model(data):
 
 
 def guide(data):
-    w_loc = torch.randn(1, p, requires_grad=True).type_as(data)
+    w_loc = torch.randn(1, p).type_as(data)
+    w_loc.requires_grad = True
     w_log_sig = torch.tensor((-3.0 * torch.ones(1, p) + 0.05 * torch.randn(1, p)).type_as(data),
                              requires_grad=True)
-    b_loc = torch.randn(1, requires_grad=True).type_as(data)
+    b_loc = torch.randn(1).type_as(data)
+    b_loc.requires_grad = True
     b_log_sig = torch.tensor((-3.0 * torch.ones(1) + 0.05 * torch.randn(1)).type_as(data.data), requires_grad=True)
     # register learnable params in the param store
     mw_param = pyro.param("guide_mean_weight", w_loc)
