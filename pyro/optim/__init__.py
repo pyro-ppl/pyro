@@ -7,68 +7,12 @@ from .adagrad_rmsprop import AdagradRMSProp as pt_AdagradRMSProp
 from .optim import PyroOptim
 
 
-def Adam(optim_args):
-    """
-    A wrapper for :class:`torch.optim.Adam`.
-    """
-    return PyroOptim(torch.optim.Adam, optim_args)
-
-
-def Adadelta(optim_args):
-    """
-    A wrapper for :class:`torch.optim.Adadelta`.
-    """
-    return PyroOptim(torch.optim.Adadelta, optim_args)
-
-
-def Adagrad(optim_args):
-    """
-    A wrapper for :class:`torch.optim.Adagrad`.
-    """
-    return PyroOptim(torch.optim.Adagrad, optim_args)
-
-
 def AdagradRMSProp(optim_args):
     """
     A wrapper for an optimizer that is a mash-up of
-    :class:`~torch.optim.Adagrad` and :class:`~torch.optim.RMSProp`.
+    :class:`~torch.optim.Adagrad` and :class:`~torch.optim.RMSprop`.
     """
     return PyroOptim(pt_AdagradRMSProp, optim_args)
-
-
-def Adamax(optim_args):
-    """
-    A wrapper for :class:`torch.optim.Adamax`.
-    """
-    return PyroOptim(torch.optim.Adamax, optim_args)
-
-
-def ASGD(optim_args):
-    """
-    A wrapper for :class:`torch.optim.ASGD`.
-    """
-    return PyroOptim(torch.optim.ASGD, optim_args)
-
-
-def RMSprop(optim_args):
-    """
-    A wrapper for :class:`torch.optim.RMSprop`.
-    """
-    return PyroOptim(torch.optim.RMSprop, optim_args)
-
-
-def Rprop(optim_args):
-    """
-    A wrapper for :class:`torch.optim.Rprop`.
-    """
-    return PyroOptim(torch.optim.Rprop, optim_args)
-
-
-def SGD(optim_args):
-    """
-    A wrapper for :class:`torch.optim.SGD`.
-    """
-    return PyroOptim(torch.optim.SGD, optim_args)
 
 
 def ClippedAdam(optim_args):
@@ -77,3 +21,23 @@ def ClippedAdam(optim_args):
     optimization algorithm that supports gradient clipping.
     """
     return PyroOptim(pt_ClippedAdam, optim_args)
+
+
+# Programmatically load all optimizers from PyTorch.
+for _name, _Optim in torch.optim.__dict__.items():
+    if not isinstance(_Optim, type):
+        continue
+    if not issubclass(_Optim, torch.optim.Optimizer):
+        continue
+    if _Optim is torch.optim.Optimizer:
+        continue
+
+    def _PyroOptim(optim_args):
+        return PyroOptim(_Optim, optim_args)
+
+    _PyroOptim.__name__ = _name
+    _PyroOptim.__doc__ = 'Wraps :class:`torch.optim.{}` with :class:`~pyro.optim.optim.PyroOptim`.'.format(
+        _name, _Optim.__name__)
+
+    locals()[_name] = _PyroOptim
+    del _PyroOptim
