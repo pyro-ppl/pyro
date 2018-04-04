@@ -177,9 +177,31 @@ class ADVIMultivariateNormal(ADVI):
         :return: A dictionary mapping sample site name to median tensor.
         :rtype: dict
         """
-        latent = pyro.param("advi_loc", torch.zeros(self.latent_dim))
+        latent = pyro.param("advi_loc")
         return {site["name"]: biject_to(site["fn"].support)(unconstrained_value)
                 for site, unconstrained_value in self._unpack_latent(latent)}
+
+    def quantiles(self, quantiles, *args, **kwargs):
+        """
+        Returns posterior quantiles each latent variable. Example::
+
+            print(advi.quantiles([0.05, 0.5, 0.95]))
+
+        :param quantiles: A list of requested quantiles between 0 and 1.
+        :type quantiles: torch.Tensor or list
+        :return: A dictionary mapping sample site name to median tensor.
+        :rtype: dict
+        """
+        loc = pyro.param("advi_loc")
+        scale = pyro.param("advi_scale_tril").diag()
+        quantiles = loc.new_tensor(quantiles).unsqueeze(-1)
+        latents = dist.Normal(loc, scale).icdf(quantiles)
+
+        result = {}
+        for latent in latents:
+            for site, unconstrained_value in self._unpack_latent(latent):
+                result.setdefault(site["name"], []).append(biject_to(site["fn"].support)(unconstrained_value))
+        return result
 
 
 class ADVIDiagonalNormal(ADVI):
@@ -218,6 +240,28 @@ class ADVIDiagonalNormal(ADVI):
         :return: A dictionary mapping sample site name to median tensor.
         :rtype: dict
         """
-        latent = pyro.param("advi_loc", torch.zeros(self.latent_dim))
+        latent = pyro.param("advi_loc")
         return {site["name"]: biject_to(site["fn"].support)(unconstrained_value)
                 for site, unconstrained_value in self._unpack_latent(latent)}
+
+    def quantiles(self, quantiles, *args, **kwargs):
+        """
+        Returns posterior quantiles each latent variable. Example::
+
+            print(advi.quantiles([0.05, 0.5, 0.95]))
+
+        :param quantiles: A list of requested quantiles between 0 and 1.
+        :type quantiles: torch.Tensor or list
+        :return: A dictionary mapping sample site name to median tensor.
+        :rtype: dict
+        """
+        loc = pyro.param("advi_loc")
+        scale = pyro.param("advi_scale")
+        quantiles = loc.new_tensor(quantiles).unsqueeze(-1)
+        latents = dist.Normal(loc, scale).icdf(quantiles)
+
+        result = {}
+        for latent in latents:
+            for site, unconstrained_value in self._unpack_latent(latent):
+                result.setdefault(site["name"], []).append(biject_to(site["fn"].support)(unconstrained_value))
+        return result
