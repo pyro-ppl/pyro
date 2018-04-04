@@ -29,13 +29,13 @@ class HMMSamplingTestCase(TestCase):
                                 Bernoulli(torch.index_select(p_latent, 0, latents[-1].view(-1).long()))))
 
                 observes.append(
-                    pyro.observe("observe_{}".format(str(t)),
-                                 Bernoulli(torch.index_select(p_obs, 0, latents[-1].view(-1).long())),
-                                 self.data[t]))
+                    pyro.sample("observe_{}".format(str(t)),
+                                Bernoulli(torch.index_select(p_obs, 0, latents[-1].view(-1).long())),
+                                obs=self.data[t]))
             return torch.sum(torch.cat(latents))
 
         self.model_steps = 3
-        self.data = [pyro.ones(1, 1) for _ in range(self.model_steps)]
+        self.data = [torch.ones(1, 1) for _ in range(self.model_steps)]
         self.model = model
 
 
@@ -46,20 +46,20 @@ class NormalNormalSamplingTestCase(TestCase):
         pyro.clear_param_store()
 
         def model():
-            mu = pyro.sample("mu", Normal(torch.zeros(1),
-                                          torch.ones(1)))
-            xd = Normal(mu, torch.ones(1))
-            pyro.observe("xs", xd, self.data)
-            return mu
+            loc = pyro.sample("loc", Normal(torch.zeros(1),
+                                            torch.ones(1)))
+            xd = Normal(loc, torch.ones(1))
+            pyro.sample("xs", xd, obs=self.data)
+            return loc
 
         def guide():
-            return pyro.sample("mu", Normal(torch.zeros(1),
-                                            torch.ones(1)))
+            return pyro.sample("loc", Normal(torch.zeros(1),
+                                             torch.ones(1)))
 
         # data
         self.data = torch.zeros(50, 1)
-        self.mu_mean = torch.zeros(1)
-        self.mu_stddev = torch.sqrt(torch.ones(1) / 51.0)
+        self.loc_mean = torch.zeros(1)
+        self.loc_stddev = torch.sqrt(torch.ones(1) / 51.0)
 
         # model and guide
         self.model = model
@@ -109,8 +109,8 @@ class ImportanceTest(NormalNormalSamplingTestCase):
         posterior_samples = [marginal() for i in range(1000)]
         posterior_mean = torch.mean(torch.cat(posterior_samples))
         posterior_stddev = torch.std(torch.cat(posterior_samples), 0)
-        assert_equal(0, torch.norm(posterior_mean - self.mu_mean).item(), prec=0.01)
-        assert_equal(0, torch.norm(posterior_stddev - self.mu_stddev).item(), prec=0.1)
+        assert_equal(0, torch.norm(posterior_mean - self.loc_mean).item(), prec=0.01)
+        assert_equal(0, torch.norm(posterior_stddev - self.loc_stddev).item(), prec=0.1)
 
     @pytest.mark.init(rng_seed=0)
     @pytest.mark.skip(reason='Slow test - use only for debugging')
@@ -120,5 +120,5 @@ class ImportanceTest(NormalNormalSamplingTestCase):
         posterior_samples = [marginal() for i in range(1000)]
         posterior_mean = torch.mean(torch.cat(posterior_samples))
         posterior_stddev = torch.std(torch.cat(posterior_samples), 0)
-        assert_equal(0, torch.norm(posterior_mean - self.mu_mean).item(), prec=0.01)
-        assert_equal(0, torch.norm(posterior_stddev - self.mu_stddev).item(), prec=0.1)
+        assert_equal(0, torch.norm(posterior_mean - self.loc_mean).item(), prec=0.01)
+        assert_equal(0, torch.norm(posterior_stddev - self.loc_stddev).item(), prec=0.1)

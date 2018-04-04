@@ -70,6 +70,9 @@ setup(
     author='Uber AI Labs',
     author_email='pyro@uber.com',
     install_requires=[
+        # if you add any additional libraries, please also
+        # add them to `docs/requirements.txt`
+        'contextlib2',
         'graphviz>=0.8',
         'networkx>=2.0.0',
         'six>=1.10.0',

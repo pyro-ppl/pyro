@@ -84,9 +84,9 @@ def test_enumerate_support(discrete_dist):
 
 
 @pytest.mark.parametrize("dist_class, args", [
-    (dist.Normal, {"mu": torch.tensor(0.0), "sigma": torch.tensor(-1.0)}),
-    (dist.Gamma, {"alpha": -1.0, "beta": 1.0}),
-    (dist.Exponential, {"lam": -2})
+    (dist.Normal, {"loc": torch.tensor(0.0), "scale": torch.tensor(-1.0)}),
+    (dist.Gamma, {"concentration": -1.0, "rate": 1.0}),
+    (dist.Exponential, {"rate": -2})
 ])
 @pytest.mark.parametrize("validate_args", [True, False])
 def test_distribution_validate_args(dist_class, args, validate_args):

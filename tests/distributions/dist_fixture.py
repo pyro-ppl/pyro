@@ -4,8 +4,9 @@ import math
 
 import numpy as np
 import torch
+from torch.distributions.utils import logits_to_probs
 
-from pyro.distributions.util import get_probs_and_logits, broadcast_shape
+from pyro.distributions.util import broadcast_shape
 
 SINGLE_TEST_DATUM_IDX = [0]
 BATCH_TEST_DATA_IDX = [-1]
@@ -73,8 +74,8 @@ class Fixture(object):
         if 'logits' in dist_params:
             logits = torch.tensor(dist_params.pop('logits'))
             is_multidimensional = self.get_test_distribution_name() != 'Bernoulli'
-            ps, _ = get_probs_and_logits(logits=logits, is_multidimensional=is_multidimensional)
-            dist_params['ps'] = list(ps.detach().cpu().numpy())
+            probs = logits_to_probs(logits, is_binary=not is_multidimensional)
+            dist_params['probs'] = list(probs.detach().cpu().numpy())
         return dist_params
 
     def get_scipy_logpdf(self, idx):
@@ -116,7 +117,7 @@ class Fixture(object):
         Number of samples needed to estimate the population variance within the tolerance limit
         Sample variance is normally distributed http://stats.stackexchange.com/a/105338/71884
         (see warning below).
-        Var(s^2) /approx 1/n * (\mu_4 - \sigma^4)
+        Var(s^2) /approx 1/n * (\loc_4 - \scale^4)
         Adjust n as per the tolerance needed to estimate the sample variance
         warning: does not work for some distributions like bernoulli - https://stats.stackexchange.com/a/104911
         use the min_samples for explicitly controlling the number of samples to be drawn

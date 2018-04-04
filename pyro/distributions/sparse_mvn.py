@@ -38,10 +38,10 @@ class SparseMultivariateNormal(TorchDistribution):
     has_rsample = True
 
     def __init__(self, loc, W_term, D_term, trace_term=None):
-        if loc.size(-1) != D_term.size(0):
-            raise ValueError("Expected loc.size() == D_term.size(), but got {} vs {}".format(
-                loc.size(), D_term.size()))
-        if D_term.size(0) != W_term.size(1):
+        if loc.shape[-1] != D_term.shape[0]:
+            raise ValueError("Expected loc.shape == D_term.shape, but got {} vs {}".format(
+                loc.shape, D_term.shape))
+        if D_term.shape[0] != W_term.shape[1]:
             raise ValueError("The dimension of D_term must match the second dimension of W_term.")
         if D_term.dim() != 1 or W_term.dim() != 2 or loc.dim() > 2:
             raise ValueError("D_term, W_term must be 1D, 2D tensors respectively and "
@@ -71,14 +71,14 @@ class SparseMultivariateNormal(TorchDistribution):
         Dsqrt = self.covariance_matrix_D_term.sqrt()
         A = self.covariance_matrix_W_term / Dsqrt
         At_A = A.t().matmul(A)
-        N = A.size(1)
-        Id = torch.eye(N, N, out=A.data.new(N, N))
+        N = A.shape[1]
+        Id = torch.eye(N, N, out=A.new_empty(N, N))
         K = Id + At_A
         L = K.potrf(upper=False)
         return Dsqrt.unsqueeze(1) * L
 
     def rsample(self, sample_shape=torch.Size()):
-        white = self.loc.new(sample_shape + self.loc.shape).normal_()
+        white = self.loc.new_empty(sample_shape + self.loc.shape).normal_()
         return self.loc + torch.matmul(white, self.scale_tril.t())
 
     def log_prob(self, value):
@@ -98,8 +98,8 @@ class SparseMultivariateNormal(TorchDistribution):
             log|D + Wt.W| = log|Id + Wt.inv(D).W| + log|D|
         """
         W_Dinv = W / D
-        M = W.size(0)
-        Id = torch.eye(M, M, out=torch.tensor(W.data.new(M, M)))
+        M = W.shape[0]
+        Id = torch.eye(M, M, out=W.new_empty(M, M))
         K = Id + W_Dinv.matmul(W.t())
         L = K.potrf(upper=False)
         if y.dim() == 1:

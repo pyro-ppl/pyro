@@ -7,15 +7,15 @@ import networkx
 import torch
 
 from pyro.distributions.util import scale_tensor
-from pyro.util import is_nan, is_inf
+from pyro.util import torch_isnan, torch_isinf
 
 
 def _warn_if_nan(name, value):
     if torch.is_tensor(value):
         value = value.item()
-    if is_nan(value):
+    if torch_isnan(value):
         warnings.warn("Encountered NAN log_prob_sum at site '{}'".format(name))
-    if is_inf(value) and value > 0:
+    if torch_isinf(value) and value > 0:
         warnings.warn("Encountered +inf log_prob_sum at site '{}'".format(name))
     # Note that -inf log_prob_sum is fine: it is merely a zero-probability event.
 
@@ -24,6 +24,9 @@ class DiGraph(networkx.DiGraph):
     node_dict_factory = collections.OrderedDict
 
     def fresh_copy(self):
+        """
+        Returns a new ``DiGraph`` instance.
+        """
         return DiGraph()
 
 
@@ -209,7 +212,7 @@ class Trace(object):
         return [name for name, node in self.nodes.items()
                 if node["type"] == "sample" and
                 not node["is_observed"] and
-                getattr(node["fn"], "reparameterized", False)]
+                getattr(node["fn"], "has_rsample", False)]
 
     @property
     def nonreparam_stochastic_nodes(self):

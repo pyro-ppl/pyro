@@ -9,16 +9,6 @@ from pyro.distributions.util import is_identically_zero
 from pyro.poutine.util import site_is_subsample
 
 
-def torch_exp(x):
-    """
-    Like ``x.exp()`` for a :class:`~torch.Tensor`, but also accepts
-    numbers.
-    """
-    if isinstance(x, numbers.Number):
-        return math.exp(x)
-    return x.exp()
-
-
 def torch_data_sum(x):
     """
     Like ``x.sum().item()`` for a :class:`~torch.Tensor`, but also works
@@ -38,30 +28,20 @@ def torch_backward(x):
         x.backward()
 
 
-def reduce_to_target(source, target):
-    """
-    Sums out any dimensions in source that are of size > 1 in source but of
-    size 1 in target.
-    """
-    while source.dim() > target.dim():
-        source = source.sum(0)
-    for k in range(1, 1 + source.dim()):
-        if source.size(-k) > target.size(-k):
-            source = source.sum(-k, keepdim=True)
-    return source
+def detach_iterable(iterable):
+    if torch.is_tensor(iterable):
+        return iterable.detach()
+    else:
+        return [var.detach() for var in iterable]
 
 
-def reduce_to_shape(source, shape):
+def zero_grads(tensors):
     """
-    Sums out any dimensions in source that are of size > 1 in source but of
-    size 1 in target.
+    Sets gradients of list of Variables to zero in place
     """
-    while source.dim() > len(shape):
-        source = source.sum(0)
-    for k in range(1, 1 + source.dim()):
-        if source.size(-k) > shape[-k]:
-            source = source.sum(-k, keepdim=True)
-    return source
+    for p in tensors:
+        if p.grad is not None:
+            p.grad = p.grad.new_zeros(p.shape)
 
 
 def get_iarange_stacks(trace):

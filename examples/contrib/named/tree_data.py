@@ -14,7 +14,7 @@ from pyro.optim import Adam
 # Data can be a number, a list of data, or a dict with data values.
 #
 # The goal is to learn a mean field approximation to the posterior
-# values z, parameterized by parameters post_mu and post_sigma.
+# values z, parameterized by parameters post_loc and post_scale.
 #
 # Notice that the named.Objects allow for modularity that fits well
 # with the recursive model and guide functions.
@@ -28,19 +28,19 @@ def model(data):
 
 def model_recurse(data, latent):
     if torch.is_tensor(data):
-        latent.x.observe_(dist.Normal(latent.z, torch.ones(1)), data)
+        latent.x.sample_(dist.Normal(latent.z, torch.ones(1)), obs=data)
     elif isinstance(data, list):
-        latent.prior_sigma.param_(torch.ones(1, requires_grad=True))
+        latent.prior_scale.param_(torch.ones(1, requires_grad=True))
         latent.list = named.List()
         for data_i in data:
             latent_i = latent.list.add()
-            latent_i.z.sample_(dist.Normal(latent.z, latent.prior_sigma))
+            latent_i.z.sample_(dist.Normal(latent.z, latent.prior_scale))
             model_recurse(data_i, latent_i)
     elif isinstance(data, dict):
-        latent.prior_sigma.param_(torch.ones(1, requires_grad=True))
+        latent.prior_scale.param_(torch.ones(1, requires_grad=True))
         latent.dict = named.Dict()
         for key, value in data.items():
-            latent.dict[key].z.sample_(dist.Normal(latent.z, latent.prior_sigma))
+            latent.dict[key].z.sample_(dist.Normal(latent.z, latent.prior_scale))
             model_recurse(value, latent.dict[key])
     else:
         raise TypeError("Unsupported type {}".format(type(data)))
@@ -51,9 +51,9 @@ def guide(data):
 
 
 def guide_recurse(data, latent):
-    latent.post_mu.param_(torch.zeros(1, requires_grad=True))
-    latent.post_sigma.param_(torch.ones(1, requires_grad=True))
-    latent.z.sample_(dist.Normal(latent.post_mu, latent.post_sigma))
+    latent.post_loc.param_(torch.zeros(1, requires_grad=True))
+    latent.post_scale.param_(torch.ones(1, requires_grad=True))
+    latent.z.sample_(dist.Normal(latent.post_loc, latent.post_scale))
     if torch.is_tensor(data):
         pass
     elif isinstance(data, list):

@@ -91,9 +91,9 @@ tr_bernoulli_normal.add_node("bern_0", type="sample", is_observed=False, value=t
                 do={'data': {'bern_0': torch.ones(1)}})
 def bernoulli_normal_model():
     bern_0 = pyro.sample('bern_0', dist.Bernoulli(torch.zeros(1) * 1e-2))
-    mu = torch.ones(1) if bern_0.item() else -torch.ones(1)
+    loc = torch.ones(1) if bern_0.item() else -torch.ones(1)
     normal_0 = torch.ones(1)
-    pyro.sample('normal_0', dist.Normal(mu, torch.ones(1) * 1e-2),
+    pyro.sample('normal_0', dist.Normal(loc, torch.ones(1) * 1e-2),
                 obs=normal_0)
     return [bern_0, normal_0]
 

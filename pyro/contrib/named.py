@@ -36,10 +36,10 @@ statements. These named data structures even provide in-place methods that
 alias Pyro statements. For example::
 
     >>> state = named.Object("state")
-    >>> mu = state.mu.param_(torch.zeros(1, requires_grad=True))
-    >>> sigma = state.sigma.param_(torch.ones(1, requires_grad=True))
-    >>> z = state.z.sample_(dist.normal, mu, sigma)
-    >>> state.x.observe_(dist.normal, z, mu, sigma)
+    >>> loc = state.loc.param_(torch.zeros(1, requires_grad=True))
+    >>> scale = state.scale.param_(torch.ones(1, requires_grad=True))
+    >>> z = state.z.sample_(dist.normal, loc, scale)
+    >>> state.x.observe_(dist.normal, z, loc, scale)
 
 For deeper examples of how these can be used in model code, see the
 `Tree Data <https://github.com/uber/pyro/blob/dev/examples/contrib/named/tree_data.py>`_
@@ -112,14 +112,6 @@ class Object(object):
         if not self._is_placeholder:
             raise RuntimeError("Cannot .sample_ an initialized named.Object {}".format(self))
         value = pyro.sample(str(self), fn, *args, **kwargs)
-        self._set_value(value)
-        return value
-
-    @functools.wraps(pyro.observe)
-    def observe_(self, fn, obs, *args, **kwargs):
-        if not self._is_placeholder:
-            raise RuntimeError("Cannot .observe_ an initialized named.Object {}".format(self))
-        value = pyro.observe(str(self), fn, obs, *args, **kwargs)
         self._set_value(value)
         return value
 

@@ -7,7 +7,7 @@ from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import iter_importance_traces
 from pyro.infer.util import MultiFrameTensor, get_iarange_stacks
-from pyro.util import is_nan
+from pyro.util import torch_isnan
 
 
 def _compute_log_r(model_trace, guide_trace):
@@ -63,7 +63,7 @@ class Trace_ELBO(ELBO):
             elbo += elbo_particle / self.num_particles
 
         loss = -elbo
-        if is_nan(loss):
+        if torch_isnan(loss):
             warnings.warn('Encountered NAN loss')
         return loss
 
@@ -119,6 +119,6 @@ class Trace_ELBO(ELBO):
                 pyro.get_param_store().mark_params_active(trainable_params)
 
         loss = -elbo
-        if is_nan(loss):
+        if torch_isnan(loss):
             warnings.warn('Encountered NAN loss')
         return loss
