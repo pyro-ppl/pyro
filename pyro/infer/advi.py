@@ -77,6 +77,22 @@ class ADVI(object):
         """
         raise NotImplementedError
 
+    def _unpack_latent(self, latent):
+        """
+        Unpacks a packed latent tensor, iterating over tuples of the form::
+
+            (site, unconstrained_value)
+        """
+        pos = 0
+        for name, site in self.prototype_trace.nodes.items():
+            if site["type"] == "sample" and not site["is_observed"]:
+                unconstrained_shape = self._unconstrained_shapes[name]
+                size = _product(unconstrained_shape)
+                unconstrained_value = latent[pos:pos + size].view(unconstrained_shape)
+                yield site, unconstrained_value
+                pos += size
+        assert pos == len(latent)
+
     def guide(self, *args, **kwargs):
         """
         An automatic guide with the same ``*args, **kwargs`` as the base ``model``.
@@ -88,7 +104,6 @@ class ADVI(object):
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
 
-        result = {}
         latent = self.sample_latent(*args, **kwargs)
 
         # create all iaranges
@@ -96,25 +111,19 @@ class ADVI(object):
                     for frame in sorted(self._iaranges.values())}
 
         # unpack latent samples
-        pos = 0
-        for name, site in self.prototype_trace.nodes.items():
-            if site["type"] == "sample" and not site["is_observed"]:
-                unconstrained_shape = self._unconstrained_shapes[name]
-                size = _product(unconstrained_shape)
-                unconstrained_value = latent[pos:pos + size].view(unconstrained_shape)
-                pos += size
-                transform = biject_to(site["fn"].support)
-                value = transform(unconstrained_value)
-                log_density = transform.inv.log_abs_det_jacobian(value, unconstrained_value)
-                log_density = sum_rightmost(log_density, log_density.dim() - value.dim() + site["fn"].event_dim)
-                delta_dist = dist.Delta(value, log_density=log_density, event_dim=site["fn"].event_dim)
+        result = {}
+        for site, unconstrained_value in self._unpack_latent(latent):
+            name = site["name"]
+            transform = biject_to(site["fn"].support)
+            value = transform(unconstrained_value)
+            log_density = transform.inv.log_abs_det_jacobian(value, unconstrained_value)
+            log_density = sum_rightmost(log_density, log_density.dim() - value.dim() + site["fn"].event_dim)
+            delta_dist = dist.Delta(value, log_density=log_density, event_dim=site["fn"].event_dim)
 
-                with ExitStack() as stack:
-                    for frame in self._cond_indep_stacks[name]:
-                        stack.enter_context(iaranges[frame.name])
-                    result[name] = pyro.sample(name, delta_dist)
-
-        assert pos == len(latent)
+            with ExitStack() as stack:
+                for frame in self._cond_indep_stacks[name]:
+                    stack.enter_context(iaranges[frame.name])
+                result[name] = pyro.sample(name, delta_dist)
 
         return result
 
@@ -161,6 +170,17 @@ class ADVIMultivariateNormal(ADVI):
                                 constraint=constraints.lower_cholesky)
         return pyro.sample("_advi_latent", dist.MultivariateNormal(loc, scale_tril=scale_tril))
 
+    def median(self, *args, **kwargs):
+        """
+        Returns the posterior median value of each latent variable.
+
+        :return: A dictionary mapping sample site name to median tensor.
+        :rtype: dict
+        """
+        latent = pyro.param("advi_loc", torch.zeros(self.latent_dim))
+        return {site["name"]: biject_to(site["fn"].support)(unconstrained_value)
+                for site, unconstrained_value in self._unpack_latent(latent)}
+
 
 class ADVIDiagonalNormal(ADVI):
     """
@@ -190,3 +210,14 @@ class ADVIDiagonalNormal(ADVI):
         scale = pyro.param("advi_scale", torch.ones(self.latent_dim),
                            constraint=constraints.positive)
         return pyro.sample("_advi_latent", dist.Normal(loc, scale).reshape(extra_event_dims=1))
+
+    def median(self, *args, **kwargs):
+        """
+        Returns the posterior median value of each latent variable.
+
+        :return: A dictionary mapping sample site name to median tensor.
+        :rtype: dict
+        """
+        latent = pyro.param("advi_loc", torch.zeros(self.latent_dim))
+        return {site["name"]: biject_to(site["fn"].support)(unconstrained_value)
+                for site, unconstrained_value in self._unpack_latent(latent)}
