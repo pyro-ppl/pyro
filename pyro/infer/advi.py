@@ -189,7 +189,7 @@ class ADVIMultivariateNormal(ADVI):
 
         :param quantiles: A list of requested quantiles between 0 and 1.
         :type quantiles: torch.Tensor or list
-        :return: A dictionary mapping sample site name to median tensor.
+        :return: A dictionary mapping sample site name to a list of quantile values.
         :rtype: dict
         """
         loc = pyro.param("advi_loc")
@@ -252,7 +252,7 @@ class ADVIDiagonalNormal(ADVI):
 
         :param quantiles: A list of requested quantiles between 0 and 1.
         :type quantiles: torch.Tensor or list
-        :return: A dictionary mapping sample site name to median tensor.
+        :return: A dictionary mapping sample site name to a list of quantile values.
         :rtype: dict
         """
         loc = pyro.param("advi_loc")
