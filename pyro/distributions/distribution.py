@@ -37,7 +37,7 @@ class Distribution(object):
         """
         Samples a random value (just an alias for ``.sample(*args, **kwargs)``).
 
-        For tensor distributions, the returned tensor should have the same ``.size()`` as the
+        For tensor distributions, the returned tensor should have the same ``.shape`` as the
         parameters.
 
         :return: A random value.
@@ -50,14 +50,14 @@ class Distribution(object):
         """
         Samples a random value.
 
-        For tensor distributions, the returned tensor should have the same ``.size()`` as the
+        For tensor distributions, the returned tensor should have the same ``.shape`` as the
         parameters, unless otherwise noted.
 
         :param sample_shape: the size of the iid batch to be drawn from the
             distribution.
         :type sample_shape: torch.Size
         :return: A random value or batch of random values (if parameters are
-            batched). The shape of the result should be ``self.size()``.
+            batched). The shape of the result should be ``self.shape()``.
         :rtype: torch.Tensor
         """
         raise NotImplementedError

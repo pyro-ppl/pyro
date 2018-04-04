@@ -4,7 +4,6 @@ import numbers
 
 import torch
 import torch.distributions as torch_dist
-import torch.nn.functional as F
 
 
 _VALIDATION_ENABLED = False
@@ -112,7 +111,7 @@ def sum_rightmost(value, dim):
         return value
     if dim >= value.dim():
         return value.sum()
-    return value.contiguous().view(value.shape[:-dim] + (-1,)).sum(-1)
+    return value.reshape(value.shape[:-dim] + (-1,)).sum(-1)
 
 
 def sum_leftmost(value, dim):
@@ -144,12 +143,12 @@ def sum_leftmost(value, dim):
         return value
     if dim >= value.dim():
         return value.sum()
-    return value.contiguous().view(-1, *value.shape[dim:]).sum(0)
+    return value.reshape(-1, *value.shape[dim:]).sum(0)
 
 
 def scale_tensor(tensor, scale):
     """
-    Safely scale a tensor without increasing its ``.size()``.
+    Safely scale a tensor without increasing its ``.shape``.
     This avoids NANs by assuming ``inf * 0 = 0 * inf = 0``.
     """
     if isinstance(tensor, numbers.Number):
@@ -176,36 +175,6 @@ def scale_tensor(tensor, scale):
     return result
 
 
-def torch_eye(n, m=None, out=None):
-    """
-    Like :func:`torch.eye`, but works with cuda tensors.
-    """
-    if m is None:
-        m = n
-    try:
-        return torch.eye(n, m, out=out)
-    except TypeError:
-        # Only catch errors due to torch.eye() not being available for cuda tensors.
-        module = torch.Tensor.__module__ if out is None else type(out).__module__
-        if module != 'torch.cuda':
-            raise
-    Tensor = getattr(torch, torch.Tensor.__name__)
-    cpu_out = Tensor(n, m)
-    cuda_out = torch.eye(m, n, out=cpu_out).cuda()
-    return cuda_out if out is None else out.copy_(cuda_out)
-
-
-def torch_multinomial(input, num_samples, replacement=False):
-    """
-    Like :func:`torch.multinomial` but works with cuda tensors.
-    Does not support keyword argument `out`.
-    """
-    if input.is_cuda:
-        return torch.multinomial(input.cpu(), num_samples, replacement).cuda(input.get_device())
-    else:
-        return torch.multinomial(input, num_samples, replacement)
-
-
 def torch_sign(value):
     """
     Like :func:`torch.sign`` but also works for numbers.
@@ -213,97 +182,6 @@ def torch_sign(value):
     if isinstance(value, numbers.Number):
         return (value > 0) - (value < 0)
     return torch.sign(value)
-
-
-def softmax(x, dim=-1):
-    """
-    TODO: change to use the default pyTorch implementation when available
-    Source: https://discuss.pytorch.org/t/why-softmax-function-cant-specify-the-dimension-to-operate/2637
-    :param x: tensor
-    :param dim: Dimension to apply the softmax function to. The elements of the tensor in this
-        dimension must sum to 1.
-    :return: tensor having the same dimension as `x` rescaled along dim
-    """
-    input_size = x.size()
-
-    trans_input = x.transpose(dim, len(input_size) - 1)
-    trans_size = trans_input.size()
-
-    input_2d = trans_input.contiguous().view(-1, trans_size[-1])
-    soft_max_2d = F.softmax(input_2d, 1)
-
-    soft_max_nd = soft_max_2d.view(*trans_size)
-    return soft_max_nd.transpose(dim, len(input_size) - 1)
-
-
-def _get_clamping_buffer(tensor):
-    clamp_eps = 1e-6
-    if isinstance(tensor, (torch.DoubleTensor, torch.cuda.DoubleTensor)):
-        clamp_eps = 1e-15
-    return clamp_eps
-
-
-def get_probs_and_logits(probs=None, logits=None, is_multidimensional=True):
-    """
-    Convert probability values to logits, or vice-versa. Either ``probs`` or
-    ``logits`` should be specified, but not both.
-
-    :param probs: tensor of probabilities. Should be in the interval *[0, 1]*.
-        If, ``is_multidimensional = True``, then must be normalized along
-        axis -1.
-    :param logits: tensor of logit values.  For the multidimensional case,
-        the values, when exponentiated along the last dimension, must sum
-        to 1.
-    :param is_multidimensional: determines the computation of probs from logits,
-        and vice-versa. For the multi-dimensional case, logit values are
-        assumed to be log probabilities, whereas for the uni-dimensional case,
-        it specifically refers to log odds.
-    :return: tuple containing raw probabilities and logits as tensors.
-    """
-    assert (probs is None) != (logits is None)
-    if probs is not None:
-        eps = _get_clamping_buffer(probs)
-        ps_clamped = probs.clamp(min=eps, max=1 - eps)
-    if is_multidimensional:
-        if probs is None:
-            probs = softmax(logits, -1)
-        else:
-            logits = torch.log(ps_clamped)
-    else:
-        if probs is None:
-            probs = F.sigmoid(logits)
-        else:
-            logits = torch.log(ps_clamped) - torch.log1p(-ps_clamped)
-    return probs, logits
-
-
-def get_clamped_probs(probs=None, logits=None, is_multidimensional=True):
-    """
-    Clamp probabilities, given probability values or logits. Either ``probs`` or
-    ``logits`` should be specified, but not both.
-
-    :param probs: tensor of probabilities. Should be in the interval *[0, 1]*.
-        If, ``is_multidimensional = True``, then must be normalized along
-        axis -1.
-    :param logits: tensor of logit values.  For the multidimensional case,
-        the values, when exponentiated along the last dimension, must sum
-        to 1.
-    :param is_multidimensional: determines the computation of probs from logits,
-        and vice-versa. For the multi-dimensional case, logit values are
-        assumed to be log probabilities, whereas for the uni-dimensional case,
-        it specifically refers to log odds.
-    :return: clamped probabilities.
-    """
-    if (probs is None) == (logits is None):
-        raise ValueError("Got probs={}, logits={}. Either `probs` or `logits` must be specified, "
-                         "but not both.".format(probs, logits))
-    if probs is None:
-        probs = softmax(logits, -1) if is_multidimensional else F.sigmoid(logits)
-    eps = _get_clamping_buffer(probs)
-    probs = probs.clamp(min=eps, max=1 - eps)
-    if is_multidimensional:
-        probs /= probs.sum(-1, True)
-    return probs
 
 
 def matrix_triangular_solve_compat(b, A, upper=True):
@@ -318,7 +196,7 @@ def matrix_triangular_solve_compat(b, A, upper=True):
     if A.requires_grad or A.is_cuda:
         return A.inverse().matmul(b)
     else:
-        return b.trtrs(A, upper=upper)[0].view(b.size())
+        return b.trtrs(A, upper=upper)[0].view(b.shape)
 
 
 def log_sum_exp(tensor, dim=-1, scale=1.0):

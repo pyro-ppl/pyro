@@ -3,11 +3,11 @@ from __future__ import absolute_import, division, print_function
 import argparse
 
 import torch
+import torch.nn.functional as F
 
 import pyro
 import pyro.distributions as dist
 from pyro.contrib import named
-from pyro.distributions.util import softmax
 from pyro.infer import SVI
 from pyro.optim import Adam
 
@@ -32,7 +32,7 @@ def model(data, k):
 
 
 def local_model(latent, ps, locs, scales, obs=None):
-    i = latent.id.sample_(dist.Categorical(softmax(ps)))
+    i = latent.id.sample_(dist.Categorical(F.softmax(ps, dim=-1)))
     return latent.x.sample_(dist.Normal(locs[i], scales[i]), obs=obs)
 
 
@@ -47,7 +47,7 @@ def guide(data, k):
 def local_guide(latent, k):
     # The local guide simply guesses category assignments.
     latent.probs.param_(torch.tensor(torch.ones(k) / k, requires_grad=True))
-    latent.id.sample_(dist.Categorical(softmax(latent.probs)))
+    latent.id.sample_(dist.Categorical(F.softmax(latent.probs, dim=-1)))
 
 
 def main(args):

@@ -56,7 +56,7 @@ class Histogram(dist.Distribution):
                 # Value has already been seen.
                 logits[ix] = log_sum_exp(torch.stack([logits[ix], logit]))
 
-        logits = torch.stack(logits).contiguous().view(-1)
+        logits = torch.stack(logits).reshape(-1)
         logits -= log_sum_exp(logits)
         logits = logits - log_sum_exp(logits)
         d = dist.Categorical(logits=logits)

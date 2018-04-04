@@ -4,8 +4,9 @@ import math
 
 import numpy as np
 import torch
+from torch.distributions.utils import logits_to_probs
 
-from pyro.distributions.util import get_probs_and_logits, broadcast_shape
+from pyro.distributions.util import broadcast_shape
 
 SINGLE_TEST_DATUM_IDX = [0]
 BATCH_TEST_DATA_IDX = [-1]
@@ -73,7 +74,7 @@ class Fixture(object):
         if 'logits' in dist_params:
             logits = torch.tensor(dist_params.pop('logits'))
             is_multidimensional = self.get_test_distribution_name() != 'Bernoulli'
-            probs, _ = get_probs_and_logits(logits=logits, is_multidimensional=is_multidimensional)
+            probs = logits_to_probs(logits, is_binary=not is_multidimensional)
             dist_params['probs'] = list(probs.detach().cpu().numpy())
         return dist_params
 
