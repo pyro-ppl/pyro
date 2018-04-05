@@ -177,7 +177,7 @@ class Dice(object):
         self._log_factors_cache[target_ordinal] = log_factors
         return log_factors
 
-    def get_prob(self, shape, ordinal):
+    def in_context(self, shape, ordinal):
         """
         Returns the DiCE operator at a given ordinal, summed to given shape.
 
