@@ -2,8 +2,11 @@ from __future__ import absolute_import, division, print_function
 
 from six.moves.queue import LifoQueue
 
+from pyro import infer
 from pyro import poutine
 from pyro.poutine.trace import Trace
+from pyro.poutine.util import prune_subsample_sites
+from pyro.util import check_model_guide_match, check_site_shape, check_traceenum_requirements
 
 
 def _iter_discrete_escape(trace, msg):
@@ -46,6 +49,50 @@ def iter_discrete_traces(graph_type, fn, *args, **kwargs):
         graph_type=graph_type)
     while not queue.empty():
         yield traced_fn.get_trace(*args, **kwargs)
+
+
+def iter_importance_traces(num_particles=1,
+                           graph_type="flat",
+                           max_iarange_nesting=float('inf')):
+    """
+    Iterate over global non-parallel importance samples of a model-guide pair,
+    including both parallel and non-parallel enumeration
+    if the guide is annotated for enumeration.
+
+    :param num_particles: number of non-parallel importance samples to take
+    :param graph_type: the type of the graph, e.g. "flat" or "dense".
+    :param max_iarange_nesting: maximum depth of iaranges
+    :returns: An iterator over model/guide trace pairs
+    """
+    def _get_traces(model, guide, *args, **kwargs):
+
+        for i in range(num_particles):
+            for guide_trace in iter_discrete_traces(graph_type, guide, *args, **kwargs):
+                model_trace = poutine.trace(poutine.replay(model, guide_trace),
+                                            graph_type=graph_type).get_trace(*args, **kwargs)
+
+                if infer.is_validation_enabled():
+                    check_model_guide_match(model_trace, guide_trace, max_iarange_nesting)
+
+                guide_trace = prune_subsample_sites(guide_trace)
+                model_trace = prune_subsample_sites(model_trace)
+
+                if infer.is_validation_enabled():
+                    check_traceenum_requirements(model_trace, guide_trace)
+
+                model_trace.compute_log_prob()
+                guide_trace.compute_score_parts()
+
+                if infer.is_validation_enabled():
+                    for site in model_trace.nodes.values():
+                        if site["type"] == "sample":
+                            check_site_shape(site, max_iarange_nesting)
+                    for site in guide_trace.nodes.values():
+                        if site["type"] == "sample":
+                            check_site_shape(site, max_iarange_nesting)
+
+                yield 1.0/num_particles, model_trace, guide_trace
+    return _get_traces
 
 
 def _config_enumerate(default):

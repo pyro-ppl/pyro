@@ -75,50 +75,6 @@ def default_process_message(msg):
     return None
 
 
-def apply_stack(initial_msg):
-    """
-    :param dict initial_msg: the starting version of the trace site
-    :returns: an updated message that is the final version of the trace site
-
-    Execute the poutine stack at a single site according to the following scheme:
-    1. Walk down the stack from top to bottom, collecting into the message
-        all information necessary to execute the stack at that site
-    2. For each poutine in the stack from bottom to top:
-           Execute the poutine with the message;
-           If the message field "stop" is True, stop;
-           Otherwise, continue
-    3. Return the updated message
-    """
-    stack = _PYRO_STACK
-    # TODO check at runtime if stack is valid
-
-    # msg is used to pass information up and down the stack
-    msg = initial_msg
-
-    counter = 0
-    # go until time to stop?
-    for frame in stack:
-        validate_message(msg)
-
-        counter = counter + 1
-
-        frame._process_message(msg)
-
-        if msg["stop"]:
-            break
-
-    default_process_message(msg)
-
-    for frame in reversed(stack[0:counter]):
-        frame._postprocess_message(msg)
-
-    cont = msg["continuation"]
-    if cont is not None:
-        cont(msg)
-
-    return None
-
-
 def am_i_wrapped():
     """
     Checks whether the current computation is wrapped in a poutine.
@@ -187,6 +143,63 @@ def torch_isinf(x):
     if isinstance(x, numbers.Number):
         return x == float('inf')
     return (x == float('inf')).all()
+
+
+def apply_stack(initial_msg):
+    """
+    :param dict initial_msg: the starting version of the trace site
+    :returns: an updated message that is the final version of the trace site
+
+    Execute the poutine stack at a single site according to the following scheme:
+    1. Walk down the stack from top to bottom, collecting into the message
+        all information necessary to execute the stack at that site
+    2. For each poutine in the stack from bottom to top:
+           Execute the poutine with the message;
+           If the message field "stop" is True, stop;
+           Otherwise, continue
+    3. Return the updated message
+    """
+    stack = _PYRO_STACK
+    # TODO check at runtime if stack is valid
+
+    # msg is used to pass information up and down the stack
+    msg = initial_msg
+
+    bottom_ptr = 0
+    counter = 0
+    msg["continuation"] = default_process_message
+    # go until time to stop?
+    for frame in stack:
+        validate_message(msg)
+
+        counter = counter + 1
+
+        frame._process_message(msg)
+
+        if msg["done"] and msg["continuation"] is not None:
+            try:
+                msg["continuation"](msg)
+                msg["continuation"] = None
+            except:  # noqa: E722
+                default_process_message(msg)
+                for frame2 in reversed(stack[bottom_ptr:counter]):
+                    frame2._postprocess_message(msg)
+                raise
+            for frame2 in reversed(stack[bottom_ptr:counter]):
+                frame2._postprocess_message(msg)
+            bottom_ptr = counter
+
+        if msg["stop"]:
+            break
+
+    if not msg["done"]:
+        default_process_message(msg)
+
+    if bottom_ptr < counter:
+        for frame in reversed(stack[bottom_ptr:counter]):
+            frame._postprocess_message(msg)
+
+    return None
 
 
 def save_visualization(trace, graph_output):

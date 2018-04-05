@@ -3,13 +3,11 @@ from __future__ import absolute_import, division, print_function
 import warnings
 
 import pyro
-import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
-import pyro.infer as infer
 from pyro.infer.elbo import ELBO
+from pyro.infer.enum import iter_importance_traces
 from pyro.infer.util import MultiFrameTensor, get_iarange_stacks
-from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_match, check_site_shape, torch_isnan
+from pyro.util import torch_isnan
 
 
 def _compute_log_r(model_trace, guide_trace):
@@ -49,25 +47,8 @@ class Trace_ELBO(ELBO):
         runs the guide and runs the model against the guide with
         the result packaged as a trace generator
         """
-        for i in range(self.num_particles):
-            guide_trace = poutine.trace(guide).get_trace(*args, **kwargs)
-            model_trace = poutine.trace(poutine.replay(model, guide_trace)).get_trace(*args, **kwargs)
-            if infer.is_validation_enabled():
-                check_model_guide_match(model_trace, guide_trace)
-            guide_trace = prune_subsample_sites(guide_trace)
-            model_trace = prune_subsample_sites(model_trace)
-
-            model_trace.compute_log_prob()
-            guide_trace.compute_score_parts()
-            if infer.is_validation_enabled():
-                for site in model_trace.nodes.values():
-                    if site["type"] == "sample":
-                        check_site_shape(site, self.max_iarange_nesting)
-                for site in guide_trace.nodes.values():
-                    if site["type"] == "sample":
-                        check_site_shape(site, self.max_iarange_nesting)
-
-            yield model_trace, guide_trace
+        return iter_importance_traces(num_particles=self.num_particles,
+                                      graph_type="flat")(model, guide, *args, **kwargs)
 
     def loss(self, model, guide, *args, **kwargs):
         """
@@ -77,7 +58,7 @@ class Trace_ELBO(ELBO):
         Evaluates the ELBO with an estimator that uses num_particles many samples/particles.
         """
         elbo = 0.0
-        for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+        for _, model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = (model_trace.log_prob_sum() - guide_trace.log_prob_sum()).item()
             elbo += elbo_particle / self.num_particles
 
@@ -96,7 +77,7 @@ class Trace_ELBO(ELBO):
         """
         elbo = 0.0
         # grab a trace from the generator
-        for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+        for _, model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = 0
             surrogate_elbo_particle = 0
             log_r = None

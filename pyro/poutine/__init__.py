@@ -8,8 +8,7 @@ from pyro.poutine import util
 # poutines
 from .block_poutine import BlockPoutine
 from .condition_poutine import ConditionPoutine
-from .enumerate_poutine import EnumeratePoutine  # noqa: F401
-from .escape_poutine import EscapePoutine
+from .continuation_poutine import ContinuationMessenger, ContinuationPoutine  # noqa: F401
 from .indep_poutine import IndepMessenger  # noqa: F401
 from .infer_config_poutine import InferConfigPoutine
 from .lift_poutine import LiftPoutine
@@ -99,14 +98,32 @@ def escape(fn, escape_fn=None):
     and returns a boolean value to decide whether to exit at that site
     :returns: stochastic function wrapped in EscapePoutine
 
-    Alias for EscapePoutine constructor.
+    Alias for ContinuationPoutine constructor.
+    Formerly an alias for EscapePoutine constructor.
 
     Given a callable that contains Pyro primitive calls,
     evaluate escape_fn on each site, and if the result is True,
     raise a NonlocalExit exception that stops execution
     and returns the offending site.
     """
-    return EscapePoutine(fn, escape_fn)
+    return ContinuationPoutine(fn, escape_fn, util.escape_cont_fn)
+
+
+def enum(fn, first_available_dim):
+    """
+    :param fn: a stochastic function (callable containing pyro primitive calls)
+    :param first_available_dim: first available dimension for enumeration
+
+    Alias for ContinuationPoutine constructor.
+    Formerly an alias for EnumeratePoutine constructor.
+
+    Given a callable that contains Pyro primitive calls,
+    at each site marked for parallel enumeration,
+    enumerate support at the site and allocate a dimension.
+    """
+    return ContinuationPoutine(fn, util.broadcast_enum_filter,
+                               util.broadcast_enum_cont,
+                               first_available_dim)
 
 
 def condition(fn, data):
@@ -124,6 +141,25 @@ def condition(fn, data):
     with those values
     """
     return ConditionPoutine(fn, data=data)
+
+
+def continuation(fn, escape_fn, continuation_fn, first_available_dim=None):
+    """
+    :param escape_fn: boolean function evaluated on site
+    :param cont_fn: function of site that returns None or raises NonlocalExit
+    :param first_available_dim: first available expansion dimension
+
+    This Poutine sets the continuation field at each site,
+    and makes sure it gets called and unwound correctly.
+    Continuations give up (or simulate giving up) control of execution
+    by expanding along a dimension, yielding a coroutine,
+    or raising a special poutine.util.NonlocalExit exception.
+
+    It is currently used primarily for sequential and parallel enumeration.
+
+    Generalizes and replaces EscapePoutine and EnumeratePoutine.
+    """
+    return ContinuationPoutine(fn, escape_fn, continuation_fn, first_available_dim)
 
 
 def infer_config(fn, config_fn):

@@ -7,14 +7,12 @@ import networkx
 import torch
 
 import pyro
-import pyro.infer as infer
-import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer import ELBO
-from pyro.infer.util import (MultiFrameTensor, get_iarange_stacks, torch_backward,
-                             torch_data_sum, detach_iterable)
-from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_match, check_site_shape, torch_isnan
+from pyro.infer.enum import iter_importance_traces
+from pyro.infer.util import MultiFrameTensor, detach_iterable, \
+    get_iarange_stacks, torch_backward, torch_data_sum
+from pyro.util import torch_isnan
 
 
 def _get_baseline_options(site):
@@ -194,19 +192,9 @@ class TraceGraph_ELBO(ELBO):
         runs the guide and runs the model against the guide with
         the result packaged as a tracegraph generator
         """
-
-        for i in range(self.num_particles):
-            guide_trace = poutine.trace(guide,
-                                        graph_type="dense").get_trace(*args, **kwargs)
-            model_trace = poutine.trace(poutine.replay(model, guide_trace),
-                                        graph_type="dense").get_trace(*args, **kwargs)
-            if infer.is_validation_enabled():
-                check_model_guide_match(model_trace, guide_trace)
-            guide_trace = prune_subsample_sites(guide_trace)
-            model_trace = prune_subsample_sites(model_trace)
-
-            weight = 1.0 / self.num_particles
-            yield weight, model_trace, guide_trace
+        return iter_importance_traces(num_particles=self.num_particles,
+                                      graph_type="dense")(
+                                          model, guide, *args, **kwargs)
 
     def loss(self, model, guide, *args, **kwargs):
         """
@@ -251,18 +239,6 @@ class TraceGraph_ELBO(ELBO):
         return loss
 
     def _loss_and_grads_particle(self, weight, model_trace, guide_trace):
-        # have the trace compute all the individual (batch) log pdf terms
-        # and score function terms (if present) so that they are available below
-        model_trace.compute_log_prob()
-        guide_trace.compute_score_parts()
-        if infer.is_validation_enabled():
-            for site in model_trace.nodes.values():
-                if site["type"] == "sample":
-                    check_site_shape(site, self.max_iarange_nesting)
-            for site in guide_trace.nodes.values():
-                if site["type"] == "sample":
-                    check_site_shape(site, self.max_iarange_nesting)
-
         # compute elbo for reparameterized nodes
         non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
         elbo, surrogate_elbo = _compute_elbo_reparam(model_trace, guide_trace, non_reparam_nodes)

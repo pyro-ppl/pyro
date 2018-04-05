@@ -3,15 +3,12 @@ from __future__ import absolute_import, division, print_function
 import warnings
 
 import pyro
-import pyro.infer as infer
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
-from pyro.infer.enum import iter_discrete_traces
+from pyro.infer.enum import iter_importance_traces
 from pyro.infer.util import MultiFrameDice
-from pyro.poutine.enumerate_poutine import EnumeratePoutine
-from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_match, check_site_shape, check_traceenum_requirements, torch_isnan
+from pyro.util import torch_isnan
 
 
 def _compute_dice_elbo(model_trace, guide_trace):
@@ -48,32 +45,11 @@ class TraceEnum_ELBO(ELBO):
         runs the guide and runs the model against the guide with
         the result packaged as a trace generator
         """
-        # enable parallel enumeration
-        guide = EnumeratePoutine(guide, first_available_dim=self.max_iarange_nesting)
-
-        for i in range(self.num_particles):
-            for guide_trace in iter_discrete_traces("flat", guide, *args, **kwargs):
-                model_trace = poutine.trace(poutine.replay(model, guide_trace),
-                                            graph_type="flat").get_trace(*args, **kwargs)
-
-                if infer.is_validation_enabled():
-                    check_model_guide_match(model_trace, guide_trace, self.max_iarange_nesting)
-                guide_trace = prune_subsample_sites(guide_trace)
-                model_trace = prune_subsample_sites(model_trace)
-                if infer.is_validation_enabled():
-                    check_traceenum_requirements(model_trace, guide_trace)
-
-                model_trace.compute_log_prob()
-                guide_trace.compute_score_parts()
-                if infer.is_validation_enabled():
-                    for site in model_trace.nodes.values():
-                        if site["type"] == "sample":
-                            check_site_shape(site, self.max_iarange_nesting)
-                    for site in guide_trace.nodes.values():
-                        if site["type"] == "sample":
-                            check_site_shape(site, self.max_iarange_nesting)
-
-                yield model_trace, guide_trace
+        guide = poutine.enum(guide, first_available_dim=self.max_iarange_nesting)
+        return iter_importance_traces(num_particles=self.num_particles,
+                                      graph_type="flat",
+                                      max_iarange_nesting=self.max_iarange_nesting)(
+                                          model, guide, *args, **kwargs)
 
     def loss(self, model, guide, *args, **kwargs):
         """
@@ -83,7 +59,7 @@ class TraceEnum_ELBO(ELBO):
         Estimates the ELBO using ``num_particles`` many samples (particles).
         """
         elbo = 0.0
-        for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+        for _, model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = _compute_dice_elbo(model_trace, guide_trace)
             if is_identically_zero(elbo_particle):
                 continue
@@ -104,7 +80,7 @@ class TraceEnum_ELBO(ELBO):
         Performs backward on the ELBO of each particle.
         """
         elbo = 0.0
-        for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+        for _, model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = _compute_dice_elbo(model_trace, guide_trace)
             if is_identically_zero(elbo_particle):
                 continue

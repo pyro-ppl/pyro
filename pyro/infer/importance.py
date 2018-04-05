@@ -5,6 +5,7 @@ import logging
 import pyro.poutine as poutine
 
 from .abstract_infer import TracePosterior
+from .enum import iter_importance_traces
 
 logger = logging.getLogger(__name__)
 
@@ -38,9 +39,8 @@ class Importance(TracePosterior):
         """
         Generator of weighted samples from the proposal distribution.
         """
-        for i in range(self.num_samples):
-            guide_trace = poutine.trace(self.guide).get_trace(*args, **kwargs)
-            model_trace = poutine.trace(
-                poutine.replay(self.model, guide_trace)).get_trace(*args, **kwargs)
+        traces = iter_importance_traces(num_particles=self.num_samples)(
+            self.model, self.guide, *args, **kwargs)
+        for _, model_trace, guide_trace in traces:
             log_weight = model_trace.log_prob_sum() - guide_trace.log_prob_sum()
             yield (model_trace, log_weight)
