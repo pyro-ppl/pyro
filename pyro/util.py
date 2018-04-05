@@ -9,7 +9,6 @@ from collections import defaultdict
 import graphviz
 import torch
 from six.moves import zip_longest
-from torch.nn import Parameter
 
 from pyro.params import _PYRO_PARAM_STORE
 from pyro.poutine.poutine import _PYRO_STACK
@@ -84,13 +83,6 @@ def am_i_wrapped():
     return len(_PYRO_STACK) > 0
 
 
-def detach_iterable(iterable):
-    if torch.is_tensor(iterable):
-        return iterable.detach()
-    else:
-        return [var.detach() for var in iterable]
-
-
 def _dict_to_tuple(d):
     """
     Recursively converts a dictionary to a list of key-value tuples
@@ -135,58 +127,22 @@ def set_rng_seed(rng_seed):
         pass
 
 
-def ones(*args, **kwargs):
-    """
-    :param torch.Tensor type_as: optional argument for tensor type
-
-    A convenience function for Parameter(torch.ones(...))
-    """
-    retype = kwargs.pop('type_as', None)
-    p_tensor = torch.ones(*args, **kwargs)
-    return Parameter(p_tensor if retype is None else p_tensor.type_as(retype))
-
-
-def zeros(*args, **kwargs):
-    """
-    :param torch.Tensor type_as: optional argument for tensor type
-
-    A convenience function for Parameter(torch.zeros(...))
-    """
-    retype = kwargs.pop('type_as', None)
-    p_tensor = torch.zeros(*args, **kwargs)
-    return Parameter(p_tensor if retype is None else p_tensor.type_as(retype))
-
-
-def is_nan(x):
+def torch_isnan(x):
     """
     A convenient function to check if a Tensor contains all nan; also works with numbers
     """
     if isinstance(x, numbers.Number):
         return x != x
-    return (x != x).all()
+    return torch.isnan(x).all()
 
 
-def is_inf(x):
+def torch_isinf(x):
     """
     A convenient function to check if a Tensor contains all inf; also works with numbers
     """
     if isinstance(x, numbers.Number):
         return x == float('inf')
     return (x == float('inf')).all()
-
-
-def log_sum_exp(tensor):
-    max_val = tensor.max(dim=-1)[0]
-    return max_val + (tensor - max_val.unsqueeze(-1)).exp().sum(dim=-1).log()
-
-
-def zero_grads(tensors):
-    """
-    Sets gradients of list of Variables to zero in place
-    """
-    for p in tensors:
-        if p.grad is not None:
-            p.grad = p.grad.new(p.shape).zero_()
 
 
 def apply_stack(initial_msg):

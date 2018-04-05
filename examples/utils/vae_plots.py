@@ -15,8 +15,8 @@ def plot_conditional_samples_ssvae(ssvae, visdom_session):
     for i in range(10):
         images = []
         for rr in range(100):
-            sample_i, sample_mu_i = ssvae.model_sample(ys[i])
-            img = sample_mu_i[0].view(1, 28, 28).cpu().data.numpy()
+            sample_i, sample_loc_i = ssvae.model_sample(ys[i])
+            img = sample_loc_i[0].view(1, 28, 28).cpu().data.numpy()
             images.append(img)
         vis.images(images, 10, 2)
 
@@ -43,8 +43,8 @@ def plot_vae_samples(vae, visdom_session):
     for i in range(10):
         images = []
         for rr in range(100):
-            sample_i, sample_mu_i = vae.model_sample()
-            img = sample_mu_i[0].view(1, 28, 28).cpu().data.numpy()
+            sample_i, sample_loc_i = vae.model_sample()
+            img = sample_loc_i[0].view(1, 28, 28).cpu().data.numpy()
             images.append(img)
         vis.images(images, 10, 2)
 
@@ -56,8 +56,8 @@ def mnist_test_tsne(vae=None, test_loader=None):
     name = 'VAE'
     data = test_loader.dataset.test_data.float()
     mnist_labels = test_loader.dataset.test_labels
-    z_mu, z_sigma = vae.encoder(data)
-    plot_tsne(z_mu, mnist_labels, name)
+    z_loc, z_scale = vae.encoder(data)
+    plot_tsne(z_loc, mnist_labels, name)
 
 
 def mnist_test_tsne_ssvae(name=None, ssvae=None, test_loader=None):
@@ -68,18 +68,18 @@ def mnist_test_tsne_ssvae(name=None, ssvae=None, test_loader=None):
         name = 'SS-VAE'
     data = test_loader.dataset.test_data.float()
     mnist_labels = test_loader.dataset.test_labels
-    z_mu, z_sigma = ssvae.encoder_z([data, mnist_labels])
-    plot_tsne(z_mu, mnist_labels, name)
+    z_loc, z_scale = ssvae.encoder_z([data, mnist_labels])
+    plot_tsne(z_loc, mnist_labels, name)
 
 
-def plot_tsne(z_mu, classes, name):
+def plot_tsne(z_loc, classes, name):
     import numpy as np
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
     from sklearn.manifold import TSNE
     model_tsne = TSNE(n_components=2, random_state=0)
-    z_states = z_mu.detach().cpu().numpy()
+    z_states = z_loc.detach().cpu().numpy()
     z_embed = model_tsne.fit_transform(z_states)
     classes = classes.detach().cpu().numpy()
     fig666 = plt.figure()

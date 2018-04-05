@@ -11,14 +11,14 @@ from pyro.contrib.gp.models import SparseVariationalGP, VariationalGP
 
 T = namedtuple("TestGPLikelihood", ["model_class", "X", "y", "kernel", "likelihood"])
 
-X = torch.tensor([[1, 5, 3], [4, 3, 7], [3, 4, 6]])
+X = torch.tensor([[1.0, 5.0, 3.0], [4.0, 3.0, 7.0], [3.0, 4.0, 6.0]])
 kernel = RBF(input_dim=3, variance=torch.tensor(1.), lengthscale=torch.tensor(3.))
 noise = torch.tensor(1e-6)
-y_binary1D = torch.tensor([0, 1, 0])
-y_binary2D = torch.tensor([[0, 1, 1], [1, 0, 1]])
+y_binary1D = torch.tensor([0.0, 1.0, 0.0])
+y_binary2D = torch.tensor([[0.0, 1.0, 1.0], [1.0, 0.0, 1.0]])
 binary_likelihood = Binary()
-y_multiclass1D = torch.tensor([2, 0, 1])
-y_multiclass2D = torch.tensor([[2, 1, 1], [0, 2, 1]])
+y_multiclass1D = torch.tensor([2.0, 0.0, 1.0])
+y_multiclass2D = torch.tensor([[2.0, 1.0, 1.0], [0.0, 2.0, 1.0]])
 multiclass_likelihood = MultiClass(num_classes=3)
 
 TEST_CASES = [

@@ -8,9 +8,9 @@ from tests.common import assert_equal
 
 
 def test_scale_tril():
-    loc = torch.tensor([1, 2, 1, 2, 0])
-    D = torch.tensor([1, 2, 3, 4, 5])
-    W = torch.tensor([[1, -1, 2, 3, 4], [2, 3, 1, 2, 4]])
+    loc = torch.tensor([1.0, 2.0, 1.0, 2.0, 0.0])
+    D = torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0])
+    W = torch.tensor([[1.0, -1.0, 2.0, 3.0, 4.0], [2.0, 3.0, 1.0, 2.0, 4.0]])
     cov = D.diag() + W.t().matmul(W)
 
     mvn = MultivariateNormal(loc, cov)
@@ -20,10 +20,10 @@ def test_scale_tril():
 
 
 def test_log_prob():
-    loc = torch.tensor([2, 1, 1, 2, 2])
-    D = torch.tensor([1, 2, 3, 1, 3])
-    W = torch.tensor([[1, -1, 2, 2, 4], [2, 1, 1, 2, 6]])
-    x = torch.tensor([2, 3, 4, 1, 7])
+    loc = torch.tensor([2.0, 1.0, 1.0, 2.0, 2.0])
+    D = torch.tensor([1.0, 2.0, 3.0, 1.0, 3.0])
+    W = torch.tensor([[1.0, -1.0, 2.0, 2.0, 4.0], [2.0, 1.0, 1.0, 2.0, 6.0]])
+    x = torch.tensor([2.0, 3.0, 4.0, 1.0, 7.0])
     cov = D.diag() + W.t().matmul(W)
 
     mvn = MultivariateNormal(loc, cov)
@@ -33,9 +33,9 @@ def test_log_prob():
 
 
 def test_variance():
-    loc = torch.tensor([1, 1, 1, 2, 0])
-    D = torch.tensor([1, 2, 2, 4, 5])
-    W = torch.tensor([[3, -1, 3, 3, 4], [2, 3, 1, 3, 4]])
+    loc = torch.tensor([1.0, 1.0, 1.0, 2.0, 0.0])
+    D = torch.tensor([1.0, 2.0, 2.0, 4.0, 5.0])
+    W = torch.tensor([[3.0, -1.0, 3.0, 3.0, 4.0], [2.0, 3.0, 1.0, 3.0, 4.0]])
     cov = D.diag() + W.t().matmul(W)
 
     mvn = MultivariateNormal(loc, cov)

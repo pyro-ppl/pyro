@@ -8,7 +8,7 @@ from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import iter_importance_traces
 from pyro.infer.util import MultiFrameDice
-from pyro.util import is_nan
+from pyro.util import torch_isnan
 
 
 def _compute_dice_elbo(model_trace, guide_trace):
@@ -67,7 +67,7 @@ class TraceEnum_ELBO(ELBO):
             elbo += elbo_particle.item() / self.num_particles
 
         loss = -elbo
-        if is_nan(loss):
+        if torch_isnan(loss):
             warnings.warn('Encountered NAN loss')
         return loss
 
@@ -99,6 +99,6 @@ class TraceEnum_ELBO(ELBO):
                 pyro.get_param_store().mark_params_active(trainable_params)
 
         loss = -elbo
-        if is_nan(loss):
+        if torch_isnan(loss):
             warnings.warn('Encountered NAN loss')
         return loss

@@ -43,7 +43,7 @@ class Delta(TorchDistribution):
         super(Delta, self).__init__(batch_shape, event_shape, validate_args=validate_args)
 
     def rsample(self, sample_shape=torch.Size()):
-        shape = sample_shape + self.v.size()
+        shape = sample_shape + self.v.shape
         return self.v.expand(shape)
 
     def log_prob(self, x):

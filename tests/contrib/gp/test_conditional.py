@@ -13,8 +13,8 @@ from tests.common import assert_equal
 T = namedtuple("TestConditional", ["Xnew", "X", "kernel", "f_loc", "f_scale_tril",
                                    "loc", "cov"])
 
-Xnew = torch.tensor([[2, 3], [4, 6]])
-X = torch.tensor([[1, 5], [2, 1], [3, 2]])
+Xnew = torch.tensor([[2., 3.], [4., 6.]])
+X = torch.tensor([[1., 5.], [2., 1.], [3., 2.]])
 kernel = Matern52(input_dim=2)
 Kff = kernel(X) + torch.eye(3) * 1e-6
 Lff = Kff.potrf(upper=False)

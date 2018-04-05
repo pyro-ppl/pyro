@@ -68,7 +68,7 @@ class SSVAE(nn.Module):
         # a split in the final layer's size is used for multiple outputs
         # and potentially applying separate activation functions on them
         # e.g. in this network the final output is of size [z_dim,z_dim]
-        # to produce mu and sigma, and apply different activations [None,Exp] on them
+        # to produce loc and scale, and apply different activations [None,Exp] on them
         self.encoder_z = MLP([self.input_size + self.output_size] +
                              hidden_sizes + [[z_dim, z_dim]],
                              activation=nn.Softplus,
@@ -91,8 +91,8 @@ class SSVAE(nn.Module):
         The model corresponds to the following generative process:
         p(z) = normal(0,I)              # handwriting style (latent)
         p(y|x) = categorical(I/10.)     # which digit (semi-supervised)
-        p(x|y,z) = bernoulli(mu(y,z))   # an image
-        mu is given by a neural network  `decoder`
+        p(x|y,z) = bernoulli(loc(y,z))   # an image
+        loc is given by a neural network  `decoder`
 
         :param xs: a batch of scaled vectors of pixels from an image
         :param ys: (optional) a batch of the class labels i.e.
@@ -106,9 +106,9 @@ class SSVAE(nn.Module):
         with pyro.iarange("independent"):
 
             # sample the handwriting style from the constant prior distribution
-            prior_mu = torch.zeros([batch_size, self.z_dim])
-            prior_sigma = torch.ones([batch_size, self.z_dim])
-            zs = pyro.sample("z", dist.Normal(prior_mu, prior_sigma).reshape(extra_event_dims=1))
+            prior_loc = torch.zeros([batch_size, self.z_dim])
+            prior_scale = torch.ones([batch_size, self.z_dim])
+            zs = pyro.sample("z", dist.Normal(prior_loc, prior_scale).reshape(extra_event_dims=1))
 
             # if the label y (which digit to write) is supervised, sample from the
             # constant prior, otherwise, observe the value (i.e. score it against the constant prior)
@@ -122,15 +122,15 @@ class SSVAE(nn.Module):
             # the class label y (which digit to write) against the
             # parametrized distribution p(x|y,z) = bernoulli(decoder(y,z))
             # where `decoder` is a neural network
-            mu = self.decoder.forward([zs, ys])
-            pyro.sample("x", dist.Bernoulli(mu).reshape(extra_event_dims=1), obs=xs)
+            loc = self.decoder.forward([zs, ys])
+            pyro.sample("x", dist.Bernoulli(loc).reshape(extra_event_dims=1), obs=xs)
 
     def guide(self, xs, ys=None):
         """
         The guide corresponds to the following:
         q(y|x) = categorical(alpha(x))              # infer digit from an image
-        q(z|x,y) = normal(mu(x,y),sigma(x,y))       # infer handwriting style from an image and the digit
-        mu, sigma are given by a neural network `encoder_z`
+        q(z|x,y) = normal(loc(x,y),scale(x,y))       # infer handwriting style from an image and the digit
+        loc, scale are given by a neural network `encoder_z`
         alpha is given by a neural network `encoder_y`
         :param xs: a batch of scaled vectors of pixels from an image
         :param ys: (optional) a batch of the class labels i.e.
@@ -148,9 +148,9 @@ class SSVAE(nn.Module):
                 ys = pyro.sample("y", dist.OneHotCategorical(alpha))
 
             # sample (and score) the latent handwriting-style with the variational
-            # distribution q(z|x,y) = normal(mu(x,y),sigma(x,y))
-            mu, sigma = self.encoder_z.forward([xs, ys])
-            pyro.sample("z", dist.Normal(mu, sigma).reshape(extra_event_dims=1))
+            # distribution q(z|x,y) = normal(loc(x,y),scale(x,y))
+            loc, scale = self.encoder_z.forward([xs, ys])
+            pyro.sample("z", dist.Normal(loc, scale).reshape(extra_event_dims=1))
 
     def classifier(self, xs):
         """
@@ -198,14 +198,14 @@ class SSVAE(nn.Module):
 
     def model_sample(self, ys, batch_size=1):
         # sample the handwriting style from the constant prior distribution
-        prior_mu = torch.zeros([batch_size, self.z_dim])
-        prior_sigma = torch.ones([batch_size, self.z_dim])
-        zs = pyro.sample("z", dist.Normal(prior_mu, prior_sigma).reshape(extra_event_dims=1))
+        prior_loc = torch.zeros([batch_size, self.z_dim])
+        prior_scale = torch.ones([batch_size, self.z_dim])
+        zs = pyro.sample("z", dist.Normal(prior_loc, prior_scale).reshape(extra_event_dims=1))
 
         # sample an image using the decoder
-        mu = self.decoder.forward([zs, ys])
-        xs = pyro.sample("sample", dist.Bernoulli(mu).reshape(extra_event_dims=1))
-        return xs, mu
+        loc = self.decoder.forward([zs, ys])
+        xs = pyro.sample("sample", dist.Bernoulli(loc).reshape(extra_event_dims=1))
+        return xs, loc
 
 
 def run_inference_for_epoch(data_loaders, losses, periodic_interval_batches):

@@ -69,9 +69,9 @@ class Predict(nn.Module):
     def forward(self, h):
         out = self.mlp(h)
         z_pres_p = sigmoid(out[:, 0:self.z_pres_size])
-        z_where_mu = out[:, self.z_pres_size:self.z_pres_size + self.z_where_size]
-        z_where_sigma = softplus(out[:, (self.z_pres_size + self.z_where_size):])
-        return z_pres_p, z_where_mu, z_where_sigma
+        z_where_loc = out[:, self.z_pres_size:self.z_pres_size + self.z_where_size]
+        z_where_scale = softplus(out[:, (self.z_pres_size + self.z_where_size):])
+        return z_pres_p, z_where_loc, z_where_scale
 
 
 class Identity(nn.Module):

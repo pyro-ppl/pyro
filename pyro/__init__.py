@@ -17,7 +17,7 @@ from pyro.distributions.distribution import Distribution
 from pyro.params import _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, param_with_module_name
 from pyro.poutine import _PYRO_STACK, condition, do  # noqa: F401
 from pyro.poutine.indep_poutine import _DIM_ALLOCATOR
-from pyro.util import am_i_wrapped, apply_stack, deep_getattr, ones, set_rng_seed, zeros  # noqa: F401
+from pyro.util import am_i_wrapped, apply_stack, deep_getattr, set_rng_seed  # noqa: F401
 
 version_prefix = '0.2.0-a0'
 
@@ -96,19 +96,6 @@ def sample(name, fn, *args, **kwargs):
         # apply the stack and return its return value
         apply_stack(msg)
         return msg["value"]
-
-
-def observe(name, fn, obs, *args, **kwargs):
-    """
-    Alias of `pyro.sample(name, fn, *args, obs=obs, **kwargs)`.
-
-    :param name: name of observation
-    :param fn: distribution class or function
-    :param obs: observed datum
-    :returns: sample
-    """
-    kwargs.update({"obs": obs})
-    return sample(name, fn, *args, **kwargs)
 
 
 class _Subsample(Distribution):
@@ -228,26 +215,26 @@ class iarange(object):
 
         # This version simply declares independence:
         >>> with iarange('data'):
-                sample('obs', Normal(mu, sigma), obs=data)
+                sample('obs', Normal(loc, scale), obs=data)
 
         # This version subsamples data in vectorized way:
         >>> with iarange('data', 100, subsample_size=10) as ind:
-                sample('obs', Normal(mu, sigma), obs=data[ind])
+                sample('obs', Normal(loc, scale), obs=data[ind])
 
         # This wraps a user-defined subsampling method for use in pyro:
         >>> ind = my_custom_subsample
         >>> with iarange('data', 100, subsample=ind):
-                sample('obs', Normal(mu, sigma), obs=data[ind])
+                sample('obs', Normal(loc, scale), obs=data[ind])
 
         # This reuses two different independence contexts.
         >>> x_axis = iarange('outer', 320, dim=-1)
         >>> y_axis = iarange('outer', 200, dim=-2)
         >>> with x_axis:
-                x_noise = sample("x_noise", Normal(mu, sigma).reshape([320]))
+                x_noise = sample("x_noise", Normal(loc, scale).reshape([320]))
         >>> with y_axis:
-                y_noise = sample("y_noise", Normal(mu, sigma).reshape([200, 1]))
+                y_noise = sample("y_noise", Normal(loc, scale).reshape([200, 1]))
         >>> with x_axis, y_axis:
-                xy_noise = sample("xy_noise", Normal(mu, sigma).reshape([200, 320]))
+                xy_noise = sample("xy_noise", Normal(loc, scale).reshape([200, 320]))
 
     See `SVI Part II <http://pyro.ai/examples/svi_part_ii.html>`_ for an
     extended discussion.
@@ -295,7 +282,7 @@ class irange(object):
 
         >>> for i in irange('data', 100, subsample_size=10):
                 if z[i]:  # Prevents vectorization.
-                    observe('obs_{}'.format(i), normal, data[i], mu, sigma)
+                    observe('obs_{}'.format(i), normal, data[i], loc, scale)
 
     See `SVI Part II <http://pyro.ai/examples/svi_part_ii.html>`_ for an extended discussion.
     """

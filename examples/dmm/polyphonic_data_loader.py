@@ -95,9 +95,9 @@ def get_mini_batch_mask(mini_batch, seq_lengths):
     return mask
 
 
-# this function prepares a mini-batch for training or evaluation
+# this function prepares a mini-batch for training or evaluation.
 # it returns a mini-batch in forward temporal order (`mini_batch`) as
-# as a mini-batch in reverse temporal order (`mini_batch_reversed`).
+# well as a mini-batch in reverse temporal order (`mini_batch_reversed`).
 # it also deals with the fact that packed sequences (which are what what we
 # feed to the PyTorch rnn) need to be sorted by sequence length.
 def get_mini_batch(mini_batch_indices, sequences, seq_lengths, cuda=False):
@@ -117,10 +117,10 @@ def get_mini_batch(mini_batch_indices, sequences, seq_lengths, cuda=False):
     # get mask for mini-batch
     mini_batch_mask = get_mini_batch_mask(mini_batch, sorted_seq_lengths)
 
-    # wrap in PyTorch Tensors
-    mini_batch = torch.tensor(mini_batch)
-    mini_batch_reversed = torch.tensor(mini_batch_reversed)
-    mini_batch_mask = torch.tensor(mini_batch_mask)
+    # wrap in PyTorch Tensors, using default tensor type
+    mini_batch = torch.tensor(mini_batch).type(torch.Tensor)
+    mini_batch_reversed = torch.tensor(mini_batch_reversed).type(torch.Tensor)
+    mini_batch_mask = torch.tensor(mini_batch_mask).type(torch.Tensor)
 
     # cuda() here because need to cuda() before packing
     if cuda:

@@ -38,7 +38,7 @@ class Isotropy(Kernel):
         self.set_constraint("variance", constraints.positive)
 
         if lengthscale is None:
-            lengthscale = torch.tensor(1)
+            lengthscale = torch.tensor(1.)
         self.lengthscale = Parameter(lengthscale)
         self.set_constraint("lengthscale", constraints.positive)
 
