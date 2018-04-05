@@ -31,7 +31,7 @@ class Encoder(nn.Module):
     def forward(self, x):
         # define the forward computation on the image x
         # first shape the mini-batch to have pixels in the rightmost dimension
-        x = x.view(-1, 784)
+        x = x.reshape(-1, 784)
         # then compute the hidden units
         hidden = self.softplus(self.fc1(x))
         # then return a mean vector and a (positive) square root covariance
@@ -87,15 +87,14 @@ class VAE(nn.Module):
         pyro.module("decoder", self.decoder)
         with pyro.iarange("data", x.size(0)):
             # setup hyperparameters for prior p(z)
-            # the type_as ensures we get cuda Tensors if x is on gpu
-            z_loc = torch.zeros([x.size(0), self.z_dim]).type_as(x)
-            z_scale = torch.ones([x.size(0), self.z_dim]).type_as(x)
+            z_loc = x.new_zeros(torch.Size((x.size(0), self.z_dim)))
+            z_scale = x.new_ones(torch.Size((x.size(0), self.z_dim)))
             # sample from prior (value will be sampled by guide when computing the ELBO)
             z = pyro.sample("latent", dist.Normal(z_loc, z_scale).reshape(extra_event_dims=1))
             # decode the latent code z
             loc_img = self.decoder.forward(z)
             # score against actual images
-            pyro.sample("obs", dist.Bernoulli(loc_img).reshape(extra_event_dims=1), obs=x.view(-1, 784))
+            pyro.sample("obs", dist.Bernoulli(loc_img).reshape(extra_event_dims=1), obs=x.reshape(-1, 784))
 
     # define the guide (i.e. variational distribution) q(z|x)
     def guide(self, x):
@@ -187,9 +186,9 @@ def main(args):
                         for index in reco_indices:
                             test_img = x[index, :]
                             reco_img = vae.reconstruct_img(test_img)
-                            vis.image(test_img.contiguous().view(28, 28).detach().cpu().numpy(),
+                            vis.image(test_img.reshape(28, 28).detach().cpu().numpy(),
                                       opts={'caption': 'test image'})
-                            vis.image(reco_img.contiguous().view(28, 28).detach().cpu().numpy(),
+                            vis.image(reco_img.reshape(28, 28).detach().cpu().numpy(),
                                       opts={'caption': 'reconstructed image'})
 
             # report test diagnostics

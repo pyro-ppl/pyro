@@ -51,10 +51,10 @@ regression_model = RegressionModel(p)
 
 def model(data):
     # Create unit normal priors over the parameters
-    loc = torch.zeros(1, p).type_as(data)
-    scale = 2 * torch.ones(1, p).type_as(data)
-    bias_loc = torch.zeros(1).type_as(data)
-    bias_scale = 2 * torch.ones(1).type_as(data)
+    loc = data.new_zeros(torch.Size((1, p)))
+    scale = 2 * data.new_ones(torch.Size((1, p)))
+    bias_loc = data.new_zeros(torch.Size((1,)))
+    bias_scale = 2 * data.new_ones(torch.Size((1,)))
     w_prior = Normal(loc, scale).reshape(extra_event_dims=1)
     b_prior = Normal(bias_loc, bias_scale).reshape(extra_event_dims=1)
     priors = {'linear.weight': w_prior, 'linear.bias': b_prior}
@@ -73,10 +73,10 @@ def model(data):
 
 
 def guide(data):
-    w_loc = torch.randn(1, p).type_as(data)
-    w_log_sig = (-3.0 * torch.ones(1, p) + 0.05 * torch.randn(1, p)).type_as(data)
-    b_loc = torch.randn(1).type_as(data)
-    b_log_sig = (-3.0 * torch.ones(1) + 0.05 * torch.randn(1)).type_as(data.data)
+    w_loc = data.new_tensor(torch.randn(1, p))
+    w_log_sig = data.new_tensor(-3.0 * torch.ones(1, p) + 0.05 * torch.randn(1, p))
+    b_loc = data.new_tensor(torch.randn(1))
+    b_log_sig = data.new_tensor(-3.0 * torch.ones(1) + 0.05 * torch.randn(1))
     # register learnable params in the param store
     mw_param = pyro.param("guide_mean_weight", w_loc)
     sw_param = softplus(pyro.param("guide_log_scale_weight", w_log_sig))
