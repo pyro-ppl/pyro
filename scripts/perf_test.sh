@@ -15,6 +15,12 @@ BENCHMARK_FILE=tests/perf/test_benchmark.py
 IS_BENCHMARK_FILE_IN_DEV=1
 REF_TMP_DIR=.tmp_test_dir
 
+if [ -z ${CI} ]; then
+    PERCENT_REGRESSION_FAILURE=10
+else
+    PERCENT_REGRESSION_FAILURE=20
+fi
+
 CURRENT_HEAD=$(git rev-parse --abbrev-ref HEAD)
 # If the current state is detached head (e.g. travis), store current commit info instead.
 if [ ${CURRENT_HEAD} = 'HEAD' ]; then
@@ -38,7 +44,8 @@ popd
 
 # Run benchmark comparison - fails if the min run time is 10% less than on the ref branch.
 if [ ${IS_BENCHMARK_FILE_IN_DEV} = 1 ]; then
-    pytest -vx tests/perf/test_benchmark.py --benchmark-compare --benchmark-compare-fail=min:15% \
+    pytest -vx tests/perf/test_benchmark.py --benchmark-compare \
+        --benchmark-compare-fail=min:${PERCENT_REGRESSION_FAILURE}% \
         --benchmark-name=short --benchmark-columns=min,median,max --benchmark-sort=name \
         --benchmark-timer timeit.default_timer
 else
