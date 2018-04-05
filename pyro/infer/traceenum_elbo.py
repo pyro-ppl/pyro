@@ -28,8 +28,9 @@ def _compute_dice_elbo(model_trace, guide_trace):
             cost = model_site["log_prob"]
             if not model_site["is_observed"]:
                 cost = cost - guide_trace.nodes[name]["log_prob"]
+            dice_prob = dice.get_prob(cost.shape, ordering[name])
             # TODO use score_parts.entropy_term to "stick the landing"
-            elbo = elbo + dice.expectation(cost, ordering[name])
+            elbo = elbo + (dice_prob * cost).sum()
     return elbo
 
 

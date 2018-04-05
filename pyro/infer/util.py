@@ -119,11 +119,16 @@ class Dice(object):
     variables outside of an :class:`~pyro.iarange` can never depend on
     variables inside that :class:`~pyro.iarange`.
 
-    Refereces:
+    References:
     [1] Jakob Foerster, Greg Farquhar, Maruan Al-Shedivat, Tim Rocktaeschel,
         Eric P. Xing, Shimon Whiteson (2018)
         "DiCE: The Infinitely Differentiable Monte-Carlo Estimator"
         https://arxiv.org/abs/1802.05098
+
+    :param pyro.poutine.trace.Trace guide_trace: A guide trace.
+    :param ordering: A dictionary mapping model site names to ordinal values.
+        Ordinal values may be any type that is (1) ``<=`` comparable and (2)
+        hashable; the canonical ordinal is a ``frozenset`` of site names.
     """
     def __init__(self, guide_trace, ordering):
         log_denom = defaultdict(lambda: 0.0)  # avoids double-counting when sequentially enumerating
@@ -147,12 +152,13 @@ class Dice(object):
         self.log_denom = log_denom
         self.log_probs = log_probs
         self._log_factors_cache = {}
-        self._dice_prob_cache = {}
+        self._prob_cache = {}
 
-    def get_log_factors(self, target_ordinal):
+    def _get_log_factors(self, target_ordinal):
         """
         Returns a list of DiCE factors ordinal.
         """
+        # memoize
         try:
             return self._log_factors_cache[target_ordinal]
         except KeyError:
@@ -171,23 +177,40 @@ class Dice(object):
         self._log_factors_cache[target_ordinal] = log_factors
         return log_factors
 
-    def get_dice_prob(self, shape, ordinal):
+    def get_prob(self, shape, ordinal):
         """
         Returns the DiCE operator at a given ordinal, summed to given shape.
+
+        :param torch.Size shape: a target shape
+        :param ordinal: an ordinal key that has been passed in to the
+            ``ordering`` argument of the :class:`Dice` constructor.
+        :return: the dice probability summed down to at most ``shape``.
+            This should be broadcastable up to ``shape``.
+        :rtype: torch.Tensor or float
         """
+        # ignore leading 1's since they can be broadcast
+        while shape and shape[0] == 1:
+            shape = shape[1:]
+
+        # memoize
         try:
-            return self._dice_prob_cache[shape, ordinal]
+            return self._prob_cache[shape, ordinal]
         except KeyError:
             pass
 
-        log_factors = self.get_log_factors(ordinal)
+        log_prob = sum(self._get_log_factors(ordinal))
+        if isinstance(log_prob, numbers.Number):
+            dice_prob = math.exp(log_prob)
+        else:
+            # TODO replace this naive sum-product computation with message passing.
+            dice_prob = log_prob.exp()
+            while dice_prob.dim() > len(shape):
+                dice_prob = dice_prob.sum(0)
+            while dice_prob.dim() < len(shape):
+                dice_prob = dice_prob.unsqueeze(0)
+            for dim, (dice_size, target_size) in enumerate(zip(dice_prob.shape, shape)):
+                if dice_size > target_size:
+                    dice_prob = dice_prob.sum(dim, True)
 
-        # TODO replace this naive sum-product computation with message passing.
-        dice_prob = sum(log_factors).exp()
-
-        self._dice_prob_cache[ordinal] = dice_prob
+        self._prob_cache[shape, ordinal] = dice_prob
         return dice_prob
-
-    def expectation(self, cost, ordinal):
-        dice_prob = self.get_dice_prob(cost.shape, ordinal)
-        return (dice_prob * cost).sum()
