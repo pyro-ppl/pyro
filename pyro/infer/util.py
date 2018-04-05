@@ -198,11 +198,11 @@ class Dice(object):
         except KeyError:
             pass
 
+        # TODO replace this naive sum-product computation with message passing.
         log_prob = sum(self._get_log_factors(ordinal))
         if isinstance(log_prob, numbers.Number):
             dice_prob = math.exp(log_prob)
         else:
-            # TODO replace this naive sum-product computation with message passing.
             dice_prob = log_prob.exp()
             while dice_prob.dim() > len(shape):
                 dice_prob = dice_prob.sum(0)
