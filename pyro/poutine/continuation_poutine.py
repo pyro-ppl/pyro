@@ -66,19 +66,15 @@ class ContinuationMessenger(Messenger):
         """
 
         # if "next_available_dim" in msg["infer"]:
-        #     self.next_available_dim = msg["infer"]["next_available_dim"]
+        #     next_available_dim = msg["infer"]["next_available_dim"]
 
         for ctx in reversed(self._ctxs):
             ctx._postprocess_message(msg)
 
         if msg["type"] == "sample":
-            for i, frame in enumerate(msg["cond_indep_stack"]):
-                print(frame, msg["value"].shape)
-                if frame.name in [ctx.name for ctx in self._ctxs] and \
-                   msg["value"].shape[frame.dim] == 1:  # XXX should check msg["fn"]
-                    print("here")
-                    ctx = list(filter(lambda c: c.name == frame.name, self._ctxs))[0]
-                    ctx.__exit__()
+            for ctx in reversed(self._ctxs):
+                if ctx.name not in [frame.name for frame in msg["cond_indep_stack"]]:
+                    ctx.__exit__(None, None, None)
 
     def _process_message(self, msg):
         """
@@ -107,6 +103,8 @@ class ContinuationMessenger(Messenger):
             for ctx2 in self._ctxs:
                 ctx2._process_message(msg)
             # msg["infer"]["next_available_dim"] = ctx.dim  # self.next_available_dim
+            msg["infer"]["next_available_dim"] = -len(msg["fn"].event_shape) - \
+                                                 msg["cond_indep_stack"][0].dim
 
 
 class ContinuationPoutine(Poutine):

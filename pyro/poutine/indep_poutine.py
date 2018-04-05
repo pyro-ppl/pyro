@@ -100,4 +100,5 @@ class IndepMessenger(Messenger):
         if msg["type"] == "sample" and msg["value"].shape[self.dim] == 1:
             frame = CondIndepStackFrame(self.name, self.dim, self.size, self.counter)
             if frame.vectorized:
-                msg["cond_indep_stack"].pop(msg["cond_indep_stack"].index(frame))
+                ix = msg["cond_indep_stack"].index(frame)
+                msg["cond_indep_stack"] = msg["cond_indep_stack"][:ix] + msg["cond_indep_stack"][ix+1:]
