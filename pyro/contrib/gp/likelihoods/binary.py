@@ -26,6 +26,21 @@ class Binary(Likelihood):
                                   else F.sigmoid)
 
     def forward(self, f_loc, f_var, y):
+        r"""
+        Samples :math:`y` given :math:`f_{loc}`, :math:`f_{var}` according to
+
+            .. math:: f & \sim \mathbb{Normal}(f_{loc}, f_{var}),\\
+                y & \sim \mathbb{Bernoulli}(f).
+
+        .. note:: The log likelihood is estimated using Monte Carlo with 1 sample of
+            :math:`f`.
+
+        :param torch.Tensor f_loc: Mean of latent function output.
+        :param torch.Tensor f_var: Variance of latent function output.
+        :param torch.Tensor y: Training output tensor.
+        :returns: a tensor sampled from likelihood
+        :rtype: torch.Tensor
+        """
         # calculates Monte Carlo estimate for E_q(f) [logp(y | f)]
         f = dist.Normal(f_loc, f_var)()
         f_res = self.response_function(f)

@@ -14,8 +14,20 @@ class GPRegression(GPModel):
     r"""
     Gaussian Process Regression model.
 
-    Given inputs :math:`X` and their noisy observations :math:`y`, the model takes the
-    form
+    The core of a Gaussian Process is a covariance function :math:`k` which governs
+    the similarity between input points. Given :math:`k`, we can establish a
+    distribution over functions :math:`f` by a multivarite normal distribution
+
+    .. math:: p(f(X)) = \mathcal{N}(0, k(X, X)),
+
+    where :math:`X` is any set of input points and :math:`k(X, X)` is a covariance
+    matrix whose entries are outputs :math:`k(x, z)` of :math:`k` over input pairs
+    :math:`(x, z)`. This distribution is usually denoted by
+
+    .. math:: f \sim \mathcal{GP}(0, k).
+
+    Given inputs :math:`X` and their noisy observations :math:`y`, the Gaussian Process
+    Regression model takes the form
 
     .. math::
         f &\sim \mathcal{GP}(0, k(X, X)),\\

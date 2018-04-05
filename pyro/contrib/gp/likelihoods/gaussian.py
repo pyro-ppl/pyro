@@ -28,6 +28,19 @@ class Gaussian(Likelihood):
         self.set_constraint("variance", constraints.positive)
 
     def forward(self, f_loc, f_var, y):
+        """
+        Samples :math:`y` given :math:`f_{loc}`, :math:`f_{var}` according to
+
+            .. math:: y \sim \mathbb{Normal}(f_{loc}, f_{var} + \epsilon),
+
+        where :math:`\epsilon` is the ``variance`` parameter of this likelihood.
+
+        :param torch.Tensor f_loc: Mean of latent function output.
+        :param torch.Tensor f_var: Variance of latent function output.
+        :param torch.Tensor y: Training output tensor.
+        :returns: a tensor sampled from likelihood
+        :rtype: torch.Tensor
+        """
         variance = self.get_param("variance")
         y_var = f_var + variance
         return pyro.sample(self.y_name,
