@@ -158,7 +158,7 @@ def broadcast_enum_cont(msg):
     elif target_dim > actual_dim:
         # Reshape to move actual_dim to target_dim.
         diff = target_dim - actual_dim
-        value = value.contiguous().view(value.shape[:1] + (1,) * diff + value.shape[1:])
+        value = value.reshape(value.shape[:1] + (1,) * diff + value.shape[1:])
 
     msg["value"] = value
 
