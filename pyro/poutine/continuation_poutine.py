@@ -44,7 +44,9 @@ class ContinuationMessenger(Messenger):
         """
         Increments the next available expansion dimension.
         """
-        if "next_available_dim" in msg["infer"]:
+        if "next_available_dim" in msg["infer"] and \
+           (msg["infer"]["next_available_dim"] != float('inf')) and \
+           self.first_available_dim != float('inf'):
             self.next_available_dim = msg["infer"]["next_available_dim"]
 
     def _pyro_sample(self, msg):
@@ -54,7 +56,8 @@ class ContinuationMessenger(Messenger):
         set the continuation field of the site and mark it done.
         """
         if self.escape_fn(msg) and not msg["done"]:
-            msg["infer"]["next_available_dim"] = self.next_available_dim
+            if self.next_available_dim != float('inf'):
+                msg["infer"]["next_available_dim"] = self.next_available_dim
             msg["done"] = True
             msg["continuation"] = self.cont_fn
 
