@@ -12,7 +12,7 @@ import pyro.poutine as poutine
 from pyro.infer.mcmc.trace_kernel import TraceKernel
 from pyro.ops.dual_averaging import DualAveraging
 from pyro.ops.integrator import velocity_verlet, single_step_velocity_verlet
-from pyro.util import is_nan, is_inf
+from pyro.util import torch_isnan, torch_isinf
 
 
 class HMC(TraceKernel):
@@ -146,7 +146,7 @@ class HMC(TraceKernel):
 
     def _validate_trace(self, trace):
         trace_log_prob_sum = trace.log_prob_sum()
-        if is_nan(trace_log_prob_sum) or is_inf(trace_log_prob_sum):
+        if torch_isnan(trace_log_prob_sum) or torch_isinf(trace_log_prob_sum):
             raise ValueError("Model specification incorrect - trace log pdf is NaN or Inf.")
 
     def initial_trace(self):

@@ -18,7 +18,7 @@ class RejectionStandardGamma(Rejector):
         if concentration.data.min() < 1:
             raise NotImplementedError('concentration < 1 is not supported')
         self.concentration = concentration
-        self._standard_gamma = Gamma(concentration, concentration.new([1]).squeeze().expand_as(concentration))
+        self._standard_gamma = Gamma(concentration, concentration.new_tensor([1.]).squeeze().expand_as(concentration))
         # The following are Marsaglia & Tsang's variable names.
         self._d = self.concentration - 1.0 / 3.0
         self._c = 1.0 / torch.sqrt(9.0 * self._d)
@@ -29,7 +29,7 @@ class RejectionStandardGamma(Rejector):
 
     def propose(self, sample_shape=torch.Size()):
         # Marsaglia & Tsang's x == Naesseth's epsilon
-        x = self.concentration.new(sample_shape + self.concentration.shape).normal_()
+        x = self.concentration.new_empty(sample_shape + self.concentration.shape).normal_()
         y = 1.0 + self._c * x
         v = y * y * y
         return (self._d * v).clamp_(1e-30, 1e30)
@@ -98,7 +98,7 @@ class ShapeAugmentedGamma(Gamma):
         x = self._rejection_gamma.rsample(sample_shape)
         boosted_x = x.clone()
         for i in range(self._boost):
-            boosted_x *= (1 - x.new(x.shape).uniform_()) ** (1 / (i + self.concentration))
+            boosted_x *= (1 - x.new_empty(x.shape).uniform_()) ** (1 / (i + self.concentration))
         self._unboost_x_cache = boosted_x, x
         return boosted_x
 
