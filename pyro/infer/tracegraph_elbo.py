@@ -11,9 +11,10 @@ import pyro.infer as infer
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer import ELBO
-from pyro.infer.util import MultiFrameTensor, get_iarange_stacks, torch_backward, torch_data_sum
+from pyro.infer.util import (MultiFrameTensor, get_iarange_stacks, torch_backward,
+                             torch_data_sum, detach_iterable)
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_match, check_site_shape, detach_iterable, is_nan
+from pyro.util import check_model_guide_match, check_site_shape, torch_isnan
 
 
 def _get_baseline_options(site):
@@ -156,9 +157,9 @@ def _compute_elbo_non_reparam(guide_trace, non_reparam_nodes, downstream_costs):
 
         score_function_term = guide_site["score_parts"].score_function
         if use_nn_baseline or use_decaying_avg_baseline or use_baseline_value:
-            if downstream_cost.size() != baseline.size():
+            if downstream_cost.shape != baseline.shape:
                 raise ValueError("Expected baseline at site {} to be {} instead got {}".format(
-                    node, downstream_cost.size(), baseline.size()))
+                    node, downstream_cost.shape, baseline.shape))
             downstream_cost = downstream_cost - baseline
         surrogate_elbo += (score_function_term * downstream_cost.detach()).sum()
 
@@ -231,7 +232,7 @@ class TraceGraph_ELBO(ELBO):
             elbo += torch_data_sum(weight * elbo_particle)
 
         loss = -elbo
-        if is_nan(loss):
+        if torch_isnan(loss):
             warnings.warn('Encountered NAN loss')
         return loss
 
@@ -286,6 +287,6 @@ class TraceGraph_ELBO(ELBO):
             pyro.get_param_store().mark_params_active(trainable_params)
 
         loss = -elbo
-        if is_nan(loss):
+        if torch_isnan(loss):
             warnings.warn('Encountered NAN loss')
         return weight * loss

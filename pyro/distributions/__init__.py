@@ -5,6 +5,7 @@ from __future__ import absolute_import, division, print_function
 from pyro.distributions.torch import *
 
 from pyro.distributions.delta import Delta
+from pyro.distributions.empirical import Empirical
 from pyro.distributions.distribution import Distribution
 from pyro.distributions.half_cauchy import HalfCauchy
 from pyro.distributions.iaf import InverseAutoregressiveFlow

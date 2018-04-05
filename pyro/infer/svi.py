@@ -104,7 +104,7 @@ class SVI(object):
         self.optim(params)
 
         # zero gradients
-        pyro.util.zero_grads(params)
+        pyro.infer.util.zero_grads(params)
 
         # mark parameters in the param store as inactive
         pyro.get_param_store().mark_params_inactive(params)

@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from unittest import TestCase
 
+import pytest
 import torch
 
 import pyro
@@ -72,3 +73,9 @@ class OptimTests(TestCase):
         free_param_unchanged = torch.equal(pyro.param(free_param).data, torch.zeros(1))
         fixed_param_unchanged = torch.equal(pyro.param(fixed_param).data, torch.zeros(1))
         assert fixed_param_unchanged and not free_param_unchanged
+
+
+@pytest.mark.parametrize('factory', [optim.Adam, optim.ClippedAdam, optim.RMSprop, optim.SGD])
+def test_autowrap(factory):
+    instance = factory({})
+    assert instance.pt_optim_constructor.__name__ == factory.__name__

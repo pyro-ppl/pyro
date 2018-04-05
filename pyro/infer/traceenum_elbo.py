@@ -11,7 +11,7 @@ from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.util import Dice
 from pyro.poutine.enumerate_poutine import EnumeratePoutine
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_match, check_site_shape, check_traceenum_requirements, is_nan
+from pyro.util import check_model_guide_match, check_site_shape, check_traceenum_requirements, torch_isnan
 
 
 def _compute_dice_elbo(model_trace, guide_trace):
@@ -96,7 +96,7 @@ class TraceEnum_ELBO(ELBO):
             elbo += elbo_particle.item() / self.num_particles
 
         loss = -elbo
-        if is_nan(loss):
+        if torch_isnan(loss):
             warnings.warn('Encountered NAN loss')
         return loss
 
@@ -128,6 +128,6 @@ class TraceEnum_ELBO(ELBO):
                 pyro.get_param_store().mark_params_active(trainable_params)
 
         loss = -elbo
-        if is_nan(loss):
+        if torch_isnan(loss):
             warnings.warn('Encountered NAN loss')
         return loss

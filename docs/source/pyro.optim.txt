@@ -13,3 +13,11 @@ ClippedAdam
     :members:
     :undoc-members:
     :show-inheritance:
+
+Pyro Optimizers
+---------------
+
+.. automodule:: pyro.optim
+    :members:
+    :undoc-members:
+    :show-inheritance:
