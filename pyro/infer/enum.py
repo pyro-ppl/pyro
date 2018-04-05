@@ -72,7 +72,7 @@ def iter_importance_traces(num_particles=1,
                                             graph_type=graph_type).get_trace(*args, **kwargs)
 
                 if infer.is_validation_enabled():
-                    check_model_guide_match(model_trace, guide_trace)
+                    check_model_guide_match(model_trace, guide_trace, max_iarange_nesting)
 
                 guide_trace = prune_subsample_sites(guide_trace)
                 model_trace = prune_subsample_sites(model_trace)
