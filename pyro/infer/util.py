@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import math
 import numbers
+from collections import defaultdict
 
 import torch
 
@@ -105,71 +106,111 @@ class MultiFrameTensor(dict):
             '({}, ...)'.format(frames) for frames in self]))
 
 
-def _dict_iadd(items, key, value):
-    if key in items:
-        items[key] = items[key] + value
-    else:
-        items[key] = value
-
-
-class MultiFrameDice(object):
+class Dice(object):
     """
     An implementation of the DiCE operator compatible with Pyro features.
 
     This implementation correctly handles:
     - scaled log-probability due to subsampling
-    - independence in different contexts due to iarange
+    - independence in different ordinals due to iarange
     - weights due to parallel and sequential enumeration
 
     This assumes restricted dependency structure on the model and guide:
     variables outside of an :class:`~pyro.iarange` can never depend on
     variables inside that :class:`~pyro.iarange`.
 
-    Refereces:
+    References:
     [1] Jakob Foerster, Greg Farquhar, Maruan Al-Shedivat, Tim Rocktaeschel,
         Eric P. Xing, Shimon Whiteson (2018)
         "DiCE: The Infinitely Differentiable Monte-Carlo Estimator"
         https://arxiv.org/abs/1802.05098
-    """
-    def __init__(self, guide_trace):
-        log_denom = {}  # avoids double-counting when sequentially enumerating
-        log_probs = {}  # accounts for upstream probabilties
 
-        for site in guide_trace.nodes.values():
+    :param pyro.poutine.trace.Trace guide_trace: A guide trace.
+    :param ordering: A dictionary mapping model site names to ordinal values.
+        Ordinal values may be any type that is (1) ``<=`` comparable and (2)
+        hashable; the canonical ordinal is a ``frozenset`` of site names.
+    """
+    def __init__(self, guide_trace, ordering):
+        log_denom = defaultdict(lambda: 0.0)  # avoids double-counting when sequentially enumerating
+        log_probs = defaultdict(list)  # accounts for upstream probabilties
+
+        for name, site in guide_trace.nodes.items():
             if site["type"] != "sample":
                 continue
             log_prob = site['score_parts'].score_function  # not scaled by subsampling
             if is_identically_zero(log_prob):
                 continue
-            context = frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
 
+            ordinal = ordering[name]
             if site["infer"].get("enumerate"):
                 if site["infer"]["enumerate"] == "sequential":
-                    _dict_iadd(log_denom, context, math.log(site["infer"]["_enum_total"]))
+                    log_denom[ordinal] += math.log(site["infer"]["_enum_total"])
             else:  # site was monte carlo sampled
                 log_prob = log_prob - log_prob.detach()
-            _dict_iadd(log_probs, context, log_prob)
+            log_probs[ordinal].append(log_prob)
 
         self.log_denom = log_denom
         self.log_probs = log_probs
-        self.cache = {}
+        self._log_factors_cache = {}
+        self._prob_cache = {}
 
-    def in_context(self, cond_indep_stack):
+    def _get_log_factors(self, target_ordinal):
         """
-        Returns a vectorized DiCE factor in a given :class:`~pyro.iarange` context.
+        Returns a list of DiCE factors ordinal.
         """
-        target_context = frozenset(f for f in cond_indep_stack if f.vectorized)
-        if target_context in self.cache:
-            return self.cache[target_context]
+        # memoize
+        try:
+            return self._log_factors_cache[target_ordinal]
+        except KeyError:
+            pass
 
-        log_prob = 0
-        for context, term in self.log_denom.items():
-            if not context <= target_context:  # not downstream
-                log_prob = log_prob - term  # term = log(# times this context is counted)
-        for context, term in self.log_probs.items():
-            if context <= target_context:  # upstream
-                log_prob = log_prob + term  # term = log(dice weight of this context)
-        result = 1 if is_identically_zero(log_prob) else log_prob.exp()
+        log_denom = 0
+        for ordinal, term in self.log_denom.items():
+            if not ordinal <= target_ordinal:  # not downstream
+                log_denom += term  # term = log(# times this ordinal is counted)
 
-        self.cache[target_context] = result
-        return result
+        log_factors = [] if is_identically_zero(log_denom) else [-log_denom]
+        for ordinal, term in self.log_probs.items():
+            if ordinal <= target_ordinal:  # upstream
+                log_factors += term  # term = [log(dice weight of this ordinal)]
+
+        self._log_factors_cache[target_ordinal] = log_factors
+        return log_factors
+
+    def in_context(self, shape, ordinal):
+        """
+        Returns the DiCE operator at a given ordinal, summed to given shape.
+
+        :param torch.Size shape: a target shape
+        :param ordinal: an ordinal key that has been passed in to the
+            ``ordering`` argument of the :class:`Dice` constructor.
+        :return: the dice probability summed down to at most ``shape``.
+            This should be broadcastable up to ``shape``.
+        :rtype: torch.Tensor or float
+        """
+        # ignore leading 1's since they can be broadcast
+        while shape and shape[0] == 1:
+            shape = shape[1:]
+
+        # memoize
+        try:
+            return self._prob_cache[shape, ordinal]
+        except KeyError:
+            pass
+
+        # TODO replace this naive sum-product computation with message passing.
+        log_prob = sum(self._get_log_factors(ordinal))
+        if isinstance(log_prob, numbers.Number):
+            dice_prob = math.exp(log_prob)
+        else:
+            dice_prob = log_prob.exp()
+            while dice_prob.dim() > len(shape):
+                dice_prob = dice_prob.sum(0)
+            while dice_prob.dim() < len(shape):
+                dice_prob = dice_prob.unsqueeze(0)
+            for dim, (dice_size, target_size) in enumerate(zip(dice_prob.shape, shape)):
+                if dice_size > target_size:
+                    dice_prob = dice_prob.sum(dim, True)
+
+        self._prob_cache[shape, ordinal] = dice_prob
+        return dice_prob
