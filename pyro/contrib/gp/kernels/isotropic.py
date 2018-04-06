@@ -7,7 +7,7 @@ from torch.nn import Parameter
 from .kernel import Kernel
 
 
-def _torch_sqrt(x, eps=1e-18):
+def _torch_sqrt(x, eps=1e-12):
     """
     A convenient function to avoid the NaN gradient issue of :func:`torch.sqrt`
     at 0.
@@ -59,7 +59,7 @@ class Isotropy(Kernel):
         Z2 = (scaled_Z ** 2).sum(1, keepdim=True)
         XZ = scaled_X.matmul(scaled_Z.t())
         r2 = X2 - 2 * XZ + Z2.t()
-        return r2
+        return r2.clamp(min=0)
 
     def _scaled_dist(self, X, Z=None):
         r"""

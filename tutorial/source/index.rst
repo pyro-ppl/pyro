@@ -33,6 +33,7 @@ Welcome to Pyro Examples and Tutorials!
 
    gmm
    gp
+   bo
 
 
 Indices and tables
