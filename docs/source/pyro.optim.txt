@@ -14,8 +14,8 @@ ClippedAdam
     :undoc-members:
     :show-inheritance:
 
-PyTorch Optimizers
-------------------
+Pyro Optimizers
+---------------
 
 .. automodule:: pyro.optim
     :members:
