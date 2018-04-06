@@ -12,8 +12,35 @@ from .model import GPModel
 
 
 class SparseVariationalGP(GPModel):
-    """
-    Sparse Variational Gaussian Process module.
+    r"""
+    Sparse Variational Gaussian Process model.
+
+    In :class:`.VariationalGP` model, when the number of input data :math:`X` is large,
+    the covariance matrix :math:`k(X, X)` will require a lot of computational steps to
+    compute its inverse (for log likelihood and for prediction). This model introduces
+    an additional inducing-input parameter :math:`X_u` to solve that problem. Given
+    inputs :math:`X`, their noisy observations :math:`y`, and the inducing-input
+    parameters :math:`X_u`, the model takes the form:
+
+    .. math::
+        [f, u] &\sim \mathcal{GP}(0, k([X, X_u], [X, X_u])),\\
+        y & \sim p(y) = p(y \mid f) p(f),
+
+    where :math:`p(y \mid f)` is the likelihood.
+
+    We will use a variational approach in this model by approximating :math:`q(f,u)`
+    to the posterior :math:`p(f,u \mid y)`. Precisely, :math:`q(f) = p(f\mid u)q(u)`,
+    where :math:`q(u)` is a multivariate normal distribution with two parameters
+    ``u_loc`` and ``u_scale_tril``, which will be learned during a variational
+    inference process.
+
+    .. note:: This model can be learned using MCMC method as in reference [2]. See also
+        :class:`.GPModel`.
+
+    .. note:: This model has :math:`\mathcal{O}(NM^2)` complexity for training,
+        :math:`\mathcal{O}(M^3)` complexity for testing. Here, :math:`N` is the number
+        of train inputs, :math:`M` is the number of inducing inputs. Size of
+        variational parameters is :math:`\mathcal{O}(M^2)`.
 
     References
 
@@ -23,17 +50,23 @@ class SparseVariationalGP(GPModel):
     [2] `MCMC for Variationally Sparse Gaussian Processes`,
     James Hensman, Alexander G. de G. Matthews, Maurizio Filippone, Zoubin Ghahramani
 
-    :param torch.Tensor X: A 1D or 2D tensor of input data for training.
-    :param torch.Tensor y: A tensor of output data for training with
-        ``y.shape[0]`` equals to number of data points.
-    :param pyro.contrib.gp.kernels.Kernel kernel: A Pyro kernel object.
+    :param torch.Tensor X: A 1D or 2D input data for training. Its first dimension is
+        the number of data points.
+    :param torch.Tensor y: An output data for training. Its last dimension is the
+        number of data points.
+    :param ~pyro.contrib.gp.kernels.kernel.Kernel kernel: A Pyro kernel object, which
+        is the covariance function :math:`k`.
     :param torch.Tensor Xu: Initial values for inducing points, which are parameters
         of our model.
-    :param pyro.contrib.gp.likelihoods.Likelihood likelihood: A likelihood module.
-    :param torch.Size latent_shape: Shape for latent processes. By default, it equals
-        to output batch shape ``y.shape[:-1]``. For the multi-class classification
-        problems, ``latent_shape[-1]`` should corresponse to the number of classes.
-    :param float jitter: An additional jitter to help stablize Cholesky decomposition.
+    :param ~pyro.contrib.gp.likelihoods.likelihood Likelihood likelihood: A likelihood
+        object.
+    :param torch.Size latent_shape: Shape for latent processes (`batch_shape` of
+        :math:`q(u)`). By default, it equals to output batch shape ``y.shape[:-1]``.
+        For the multi-class classification problems, ``latent_shape[-1]`` should
+        corresponse to the number of classes.
+    :param float jitter: A small positive term which is added into the diagonal part of
+        a covariance matrix to help stablize its Cholesky decomposition.
+    :param str name: Name of this model.
     """
     def __init__(self, X, y, kernel, Xu, likelihood, latent_shape=None,
                  jitter=1e-6, name="SVGP"):
@@ -51,7 +84,7 @@ class SparseVariationalGP(GPModel):
         self.u_loc = Parameter(u_loc)
 
         u_scale_tril_shape = self.latent_shape + (M, M)
-        u_scale_tril = torch.eye(M, out=self.Xu.new(M, M))
+        u_scale_tril = torch.eye(M, out=self.Xu.new_empty(M, M))
         u_scale_tril = u_scale_tril.expand(u_scale_tril_shape)
         self.u_scale_tril = Parameter(u_scale_tril)
         self.set_constraint("u_scale_tril", constraints.lower_cholesky)
@@ -66,7 +99,7 @@ class SparseVariationalGP(GPModel):
         u_scale_tril = self.get_param("u_scale_tril")
 
         M = Xu.shape[0]
-        Kuu = self.kernel(Xu) + torch.eye(M, out=Xu.new(M, M)) * self.jitter
+        Kuu = self.kernel(Xu) + torch.eye(M, out=Xu.new_empty(M, M)) * self.jitter
         Luu = Kuu.potrf(upper=False)
 
         zero_loc = Xu.new_zeros(u_loc.shape)
@@ -98,17 +131,23 @@ class SparseVariationalGP(GPModel):
         return Xu, self.kernel, u_loc, u_scale_tril
 
     def forward(self, Xnew, full_cov=False):
-        """
-        Computes the parameters of :math:`p(f^*|Xnew) \sim N(\\text{loc}, \\text{cov})`
-        according to :math:`p(f^*,u|y) = p(f^*|u)p(u|y) \sim p(f^*|u)q(u)`, then
-        marginalize out variable :math:`u`. In case output data is a 2D tensor of shape
-        :math:`N \times D`, :math:`loc` is also a 2D tensor of shape :math:`N \times D`.
-        Covariance matrix :math:`cov` is always a 2D tensor of shape :math:`N \times N`.
+        r"""
+        Computes the mean and covariance matrix (or variance) of Gaussian Process
+        posterior on a test input data :math:`X_{new}`:
 
-        :param torch.Tensor Xnew: A 2D tensor.
-        :param bool full_cov: Predict full covariance matrix or just its diagonal.
-        :returns: loc and covariance matrix of :math:`p(f^*|Xnew)`
-        :rtype: torch.Tensor and torch.Tensor
+        .. math:: p(f^* \mid X_{new}, X, y, k, X_u, u_{loc}, u_{scale\_tril})
+            = \mathcal{N}(loc, cov).
+
+        .. note:: Variational parameters ``u_loc``, ``u_scale_tril``, the
+            inducing-point parameter ``Xu``, together with kernel's parameters have
+            been learned from a training procedure (MCMC or SVI).
+
+        :param torch.Tensor Xnew: A 1D or 2D input data for testing. In 2D case, its
+            second dimension should have the same size as of train input data.
+        :param bool full_cov: A flag to decide if we want to predict full covariance
+            matrix or just variance.
+        :returns: loc and covariance matrix (or variance) of :math:`p(f^*(X_{new}))`
+        :rtype: tuple(torch.Tensor, torch.Tensor)
         """
         self._check_Xnew_shape(Xnew)
         tmp_sample_latent = self._sample_latent

@@ -10,17 +10,19 @@ from pyro.distributions.util import matrix_triangular_solve_compat
 
 class Parameterized(nn.Module):
     """
-    Parameterized class.
+    Base class for other modules in Gaussin Process module.
 
-    This is a base class for other classes in Gaussian Process.
-    By default, a parameter will be a :class:`torch.nn.Parameter` containing :class:`torch.FloatTensor`.
-    To cast them to the correct data type or GPU device, we can call methods such as
-    ``.double()``, ``.cuda(device=0)``,...
-    See :class:`torch.nn.Module` for more information.
+    Parameters of this object can be set priors, set constraints, or fixed to a
+    specific value.
 
-    :param str name: Name of this module.
+    By default, data of a parameter is a float :class:`torch.Tensor` (unless we use
+    :func:`torch.set_default_tensor_type` to change default tensor type). To cast these
+    parameters to a correct data type or GPU device, we can call methods such as
+    :meth:`~torch.nn.Module.double` or :meth:`~torch.nn.Module.cuda`. See
+    :class:`torch.nn.Module` for more information.
+
+    :param str name: Name of this object.
     """
-
     def __init__(self, name=None):
         super(Parameterized, self).__init__()
         self._priors = {}
@@ -34,9 +36,9 @@ class Parameterized(nn.Module):
         """
         Sets a prior to a parameter.
 
-        :param str param: Name of a parameter.
-        :param pyro.distributions.distribution.Distribution prior: A prior
-            distribution for random variable ``param``.
+        :param str param: Name of the parameter.
+        :param ~pyro.distributions.distribution.Distribution prior: A Pyro prior
+            distribution.
         """
         self._priors[param] = prior
 
@@ -44,19 +46,20 @@ class Parameterized(nn.Module):
         """
         Sets a constraint to a parameter.
 
-        :param str param: Name of a parameter.
-        :param torch.distributions.constraints.Constraint constraint: A Pytorch constraint.
-            See :mod:`torch.distributions.constraints` for a list of constraints.
+        :param str param: Name of the parameter.
+        :param ~torch.distributions.constraints.Constraint constraint: A PyTorch
+            constraint. See :mod:`torch.distributions.constraints` for a list of
+            constraints.
         """
         self._constraints[param] = constraint
 
     def fix_param(self, param, value=None):
         """
-        Fixes a parameter to a specic value. If ``value=None``, fixes the parameter to the
-        default value.
+        Fixes a parameter to a specic value. If ``value=None``, fixes the parameter
+        to the default value.
 
-        :param str param: Name of a parameter.
-        :param torch.Tensor value: A tensor to be fixed to ``param``.
+        :param str param: Name of the parameter.
+        :param torch.Tensor value: Fixed value.
         """
         if value is None:
             value = getattr(self, param).detach()
@@ -64,13 +67,19 @@ class Parameterized(nn.Module):
 
     def set_mode(self, mode):
         """
-        Sets ``mode`` for the module to be able to use its parameters in stochastic functions.
-        It also sets ``mode`` for submodules which belong to :class:`Parameterized` class.
+        Sets ``mode`` of this object to be able to use its parameters in stochastic
+        functions. If ``mode="model"``, a parameter with prior will get its value
+        from the primitive :func:`pyro.sample`. If ``mode="guide"`` or there is no
+        prior on a parameter, :func:`pyro.param` will be called.
+
+        This method automatically sets ``mode`` for submodules which belong to
+        :class:`Parameterized` class.
 
         :param str mode: Either "model" or "guide".
         """
         if mode not in ["model", "guide"]:
-            raise ValueError("Mode should be either 'model' or 'guide', but got {}.".format(mode))
+            raise ValueError("Mode should be either 'model' or 'guide', but got {}."
+                             .format(mode))
         for module in self.children():
             if isinstance(module, Parameterized):
                 module.set_mode(mode)
@@ -79,10 +88,10 @@ class Parameterized(nn.Module):
 
     def get_param(self, param):
         """
-        Gets variable to be used in stochastic functions. The correct behavior will depend on
-        the current ``mode`` of the module.
+        Gets the current value of a parameter. The correct behavior will depend on
+        ``mode`` of this object (see :meth:`set_mode` method).
 
-        :param str param: Name of a parameter.
+        :param str param: Name of the parameter.
         """
         if param not in self._registered_params:  # set_mode() has not been called yet
             return getattr(self, param)
@@ -91,10 +100,10 @@ class Parameterized(nn.Module):
 
     def _register_param(self, param, mode="model"):
         """
-        Registers a parameter to Pyro. It can be seen as a wrapper for ``pyro.param()`` and
-        ``pyro.sample()`` calls.
+        Registers a parameter to Pyro. It can be seen as a wrapper for
+        :func:`pyro.param` and :func:`pyro.sample` primitives.
 
-        :param str param: Name of a parameter.
+        :param str param: Name of the parameter.
         :param str mode: Either "model" or "guide".
         """
         if param in self._fixed_params:
@@ -117,22 +126,64 @@ class Parameterized(nn.Module):
             p = pyro.sample(param_name, prior)
         else:  # prior != None and mode = "guide"
             MAP_param_name = param_name + "_MAP"
-            MAP_param_0 = torch.tensor(prior.mean.data.clone(), requires_grad=True)
-            MAP_param = pyro.param(MAP_param_name, MAP_param_0)
+            # TODO: consider to init parameter from a prior call instead of mean
+            MAP_param = pyro.param(MAP_param_name, prior.mean.detach())
             p = pyro.sample(param_name, dist.Delta(MAP_param))
 
         self._registered_params[param] = p
 
 
-def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None,
-                Lff=None, full_cov=False, jitter=1e-6):
+def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=False,
+                jitter=1e-6):
     """
-    Computes the parameters of :math:`p(f^*|Xnew) \sim N(\\text{loc}, \\text{cov})`
-    according to :math:`p(f^*,f|y) = p(f^*|f)p(f|y) \sim p(f^*|f)q(f)`,
-    then marginalize out variable :math:`f`.
-    Here :math:`q(f)` is parameterized by :math:`q(f) \sim N(mf, Lf)`.
+    Given :math:`X_{new}`, predicts loc and covariance matrix of the conditional
+    multivariate normal distribution
+
+    .. math:: p(f^*(X_{new}) \mid X, k, f_{loc}, f_{scale\_tril}).
+
+    Here ``f_loc`` and ``f_scale_tril`` are variation parameters of the variational
+    distribution
+
+    .. math:: q(f \mid f_{loc}, f_{scale\_tril}) \sim p(f | X, y),
+
+    where :math:`f` is the function value of the Gaussian Process given input :math:`X`
+
+    .. math:: p(f(X)) \sim \mathcal{N}(0, k(X, X))
+
+    and :math:`y` is computed from :math:`f` by some likelihood function
+    :math:`p(y|f)`.
+
+    In case ``f_scale_tril=None``, we consider :math:`f = f_{loc}` and computes
+
+    .. math:: p(f^*(X_{new}) \mid X, k, f).
+
+    In case ``f_scale_tril`` is not ``None``, we follow the derivation from reference
+    [1]. For the case ``f_scale_tril=None``, we follow the popular reference [2].
+
+    References:
+
+    [1] `Sparse GPs: approximate the posterior, not the model
+    <https://www.prowler.io/sparse-gps-approximate-the-posterior-not-the-model/>`_
+
+    [2] `Gaussian Processes for Machine Learning`,
+    Carl E. Rasmussen, Christopher K. I. Williams
+
+    :param torch.Tensor Xnew: A new input data.
+    :param torch.Tensor X: An input data to be conditioned on.
+    :param ~pyro.contrib.gp.kernels.kernel.Kernel kernel: A Pyro kernel object.
+    :param torch.Tensor f_loc: Mean of :math:`q(f)`. In case ``f_scale_tril=None``,
+        :math:`f_{loc} = f`.
+    :param torch.Tensor f_scale_tril: Lower triangular decomposition of covariance
+        matrix of :math:`q(f)`'s .
+    :param torch.Tensor Lff: Lower triangular decomposition of :math:`kernel(X, X)`
+        (optional).
+    :param bool full_cov: A flag to decide if we want to return full covariance
+        matrix or just variance.
+    :param float jitter: A small positive term which is added into the diagonal part of
+        a covariance matrix to help stablize its Cholesky decomposition.
+    :returns: loc and covariance matrix (or variance) of :math:`p(f^*(X_{new}))`
+    :rtype: tuple(torch.Tensor, torch.Tensor)
     """
-    # Ref: https://www.prowler.io/sparse-gps-approximate-the-posterior-not-the-model/
     # p(f* | Xnew, X, kernel, f_loc, f_scale_tril) ~ N(f* | loc, cov)
     # Kff = Lff @ Lff.T
     # v = inv(Lff) @ f_loc  <- whitened f_loc
@@ -154,7 +205,7 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None,
     latent_shape = f_loc.shape[:-1]
 
     if Lff is None:
-        Kff = kernel(X) + torch.eye(N, out=X.new(N, N)) * jitter
+        Kff = kernel(X) + torch.eye(N, out=X.new_empty(N, N)) * jitter
         Lff = Kff.potrf(upper=False)
     Kfs = kernel(X, Xnew)
 

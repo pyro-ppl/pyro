@@ -17,12 +17,12 @@ class Likelihood(Parameterized):
 
     def forward(self, f_loc, f_var, y):
         """
-        Samples :math:`y` given :math:`f`.
+        Samples :math:`y` given :math:`f_{loc}`, :math:`f_{var}`.
 
         :param torch.Tensor f_loc: Mean of latent function output.
         :param torch.Tensor f_var: Variance of latent function output.
         :param torch.Tensor y: Training output tensor.
-        :returns: A tensor sampled from likelihood.
+        :returns: a tensor sampled from likelihood
         :rtype: torch.Tensor
         """
         raise NotImplementedError

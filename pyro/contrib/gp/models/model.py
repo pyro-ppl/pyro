@@ -1,22 +1,77 @@
 from __future__ import absolute_import, division, print_function
 
 from pyro.contrib.gp.util import Parameterized
-from pyro.infer import SVI
+from pyro.infer.svi import SVI
 from pyro.optim import Adam, PyroOptim
 
 
 class GPModel(Parameterized):
     """
-    Base class for models used in Gaussian Process.
+    Base class for Gaussian Process models.
 
-    :param torch.Tensor X: A 1D or 2D tensor of input data for training.
-    :param torch.Tensor y: A tensor of output data for training with
-        ``y.shape[-1]`` equals to number of data points.
-    :param pyro.contrib.gp.kernels.Kernel kernel: A Pyro kernel object.
-    :param torch.Size latent_shape: Shape for latent processes. By default, it equals
-        to output batch shape ``y.shape[:-1]``. For the multi-class classification
-        problems, ``latent_shape[-1]`` should corresponse to the number of classes.
-    :param float jitter: An additional jitter to help stablize Cholesky decomposition.
+    The core of a Gaussian Process is a covariance function :math:`k` which governs
+    the similarity between input points. Given :math:`k`, we can establish a
+    distribution over functions :math:`f` by a multivarite normal distribution
+
+    .. math:: p(f(X)) = \mathcal{N}(0, k(X, X)),
+
+    where :math:`X` is any set of input points and :math:`k(X, X)` is a covariance
+    matrix whose entries are outputs :math:`k(x, z)` of :math:`k` over input pairs
+    :math:`(x, z)`. This distribution is usually denoted by
+
+    .. math:: f \sim \mathcal{GP}(0, k).
+
+    Gaussian Process models are :class:`~pyro.contrib.gp.util.Parameterized`
+    subclasses. So its parameters can be learned, set priors, or fixed by using
+    corresponding methods from :class:`~pyro.contrib.gp.util.Parameterized`. A typical
+    way to define a Gaussian Process model is
+
+        >>> X = torch.tensor([[1., 5, 3], [4, 3, 7]])
+        >>> y = torch.tensor([2., 1])
+        >>> kernel = gp.kernels.RBF(input_dim=3)
+        >>> gpr = gp.models.GPRegression(X, y, kernel)
+
+    There are two ways to train a Gaussian Process model:
+
+    + Using an MCMC algorithm (in module :mod:`pyro.infer.mcmc`) on :meth:`model` to
+      get posterior samples for the Gaussian Process's parameters. For example:
+
+        >>> hmc_kernel = HMC(gpr.model)
+        >>> mcmc_run = MCMC(hmc_kernel, num_samples=10)
+        >>> posterior_ls_trace = []  # store lengthscale trace
+        >>> ls_name = pyro.param_with_module_name(gpr.kernel.name, "lengthscale")
+        >>> for trace, _ in mcmc_run._traces():
+        ...     posterior_ls_trace.append(trace.nodes[ls_name]["value"])
+
+    + Using a variational inference (e.g. :class:`~pyro.infer.svi.SVI`) on the pair
+      :meth:`model`, :meth:`guide` as in `SVI tutorial
+      <http://pyro.ai/examples/svi_part_i.html>`_:
+
+        >>> optimizer = pyro.optim.Adam({"lr": 0.01})
+        >>> svi = SVI(gpr.model, gpr.guide, optimizer, loss="ELBO")
+        >>> for i in range(1000):
+        ...     svi.step()
+
+    To give a prediction on new dataset, simply use :meth:`forward` like any PyTorch
+    :class:`torch.nn.Module`:
+
+        >>> Xnew = torch.tensor([[2., 3, 1]])
+        >>> f_loc, f_cov = gpr(Xnew, full_cov=True)
+
+    Reference:
+
+    [1] `Gaussian Processes for Machine Learning`,
+    Carl E. Rasmussen, Christopher K. I. Williams
+
+    :param torch.Tensor X: A 1D or 2D input data for training. Its first dimension is
+        the number of data points.
+    :param torch.Tensor y: An output data for training. Its last dimension is the
+        number of data points.
+    :param ~pyro.contrib.gp.kernels.kernel.Kernel kernel: A Pyro kernel object, which
+        is the covariance function :math:`k`.
+    :param float jitter: A small positive term which is added into the diagonal part of
+        a covariance matrix to help stablize its Cholesky decomposition.
+    :param str name: Name of this model.
     """
     def __init__(self, X, y, kernel, jitter=1e-6, name=None):
         super(GPModel, self).__init__(name)
@@ -24,64 +79,122 @@ class GPModel(Parameterized):
         self.kernel = kernel
         self.jitter = jitter
 
-    def set_data(self, X, y=None):
-        """
-        Sets data for Gaussian Process models.
-
-        :param torch.Tensor X: A 1D or 2D tensor of input data for training.
-        :param torch.Tensor y: A tensor of output data for training with
-            ``y.shape[-1]`` equals to number of data points.
-        """
-        if X.dim() > 2:
-            raise ValueError("Expected input tensor of 1 or 2 dimensions, "
-                             "actual dim = {}".format(X.dim()))
-        if y is not None and X.shape[0] != y.shape[-1]:
-            raise ValueError("Expected the number of data inputs equal to the number of data "
-                             "outputs, but got {} and {}.".format(X.shape[0], y.shape[-1]))
-        self.X = X
-        self.y = y
-
     def model(self):
         """
-        A "model" stochastic method.
+        A "model" stochastic function. If ``self.y`` is ``None``, this method returns
+        mean and variance of the Gaussian Process prior.
         """
         raise NotImplementedError
 
     def guide(self):
         """
-        A "guide" stochastic method.
+        A "guide" stochastic function to be used in variational inference methods. It
+        also gives posterior information to the method :meth:`forward` for prediction.
         """
         raise NotImplementedError
+
+    def forward(self, Xnew, full_cov=False):
+        r"""
+        Computes the mean and covariance matrix (or variance) of Gaussian Process
+        posterior on a test input data :math:`X_{new}`:
+
+        .. math:: p(f^* \mid X_{new}, X, y, k, \theta),
+
+        where :math:`\theta` are parameters of this model.
+
+        .. note:: Model's parameters :math:`\theta` together with kernel's parameters
+            have been learned from a training procedure (MCMC or SVI).
+
+        :param torch.Tensor Xnew: A 1D or 2D input data for testing. In 2D case, its
+            second dimension should have the same size as of train input data.
+        :param bool full_cov: A flag to decide if we want to predict full covariance
+            matrix or just variance.
+        :returns: loc and covariance matrix (or variance) of :math:`p(f^*(X_{new}))`
+        :rtype: tuple(torch.Tensor, torch.Tensor)
+        """
+        raise NotImplementedError
+
+    def set_data(self, X, y=None):
+        """
+        Sets data for Gaussian Process models.
+
+        Some examples to utilize this method are:
+
+        + Batch training on a sparse variational model:
+
+            >>> Xu = torch.tensor([[1., 0, 2]])  # inducing input
+            >>> likelihood = gp.likelihoods.Gaussian()
+            >>> svgp = gp.models.SparseVariationalGP(X, y, kernel, Xu, likelihood)
+            >>> svi = SVI(svgp.model, svgp.guide, optimizer, "ELBO")
+            >>> batched_X, batched_y = X.split(split_size=10), y.split(split_size=10)
+            >>> for Xi, yi in zip(batched_X, batched_y):
+            ...     svgp.set_data(Xi, yi)
+            ...     svi.step()
+
+        + Making a two-layer Gaussian Process stochastic function:
+
+            >>> gpr1 = gp.models.GPRegression(X, None, kernel1, name="GPR1")
+            >>> Z, _ = gp_layer1.model()
+            >>> gpr2 = gp.models.GPRegression(Z, y, kernel2, name="GPR2")
+            >>> def two_layer_model():
+            ...     Z, _ = gpr1.model()
+            ...     gpr2.set_data(Z, y)
+            ...     return gpr2.model()
+
+        References:
+
+        [1] `Scalable Variational Gaussian Process Classification`,
+        James Hensman, Alexander G. de G. Matthews, Zoubin Ghahramani
+
+        [2] `Deep Gaussian Processes`,
+        Andreas C. Damianou, Neil D. Lawrence
+
+        :param torch.Tensor X: A 1D or 2D input data for training. Its first dimension
+            is the number of data points.
+        :param torch.Tensor y: An output data for training. Its last dimension is the
+            number of data points.
+        """
+        if X.dim() > 2:
+            raise ValueError("Expected input tensor of 1 or 2 dimensions, "
+                             "but got dim = {}.".format(X.dim()))
+        if y is not None and X.shape[0] != y.shape[-1]:
+            raise ValueError("Expected the number of input data points equal to the "
+                             "number of output data points, but got {} and {}."
+                             .format(X.shape[0], y.shape[-1]))
+        self.X = X
+        self.y = y
 
     def optimize(self, optimizer=Adam({}), num_steps=1000):
         """
         A convenient method to optimize parameters for the Gaussian Process model
-        using SVI.
+        using :class:`~pyro.infer.svi.SVI`.
 
-        :param pyro.optim.PyroOptim optimizer: Optimizer.
+        :param PyroOptim optimizer: A Pyro optimizer.
         :param int num_steps: Number of steps to run SVI.
-        :returns: losses of the training procedure
+        :returns: a list of losses during the training procedure
         :rtype: list
         """
         if not isinstance(optimizer, PyroOptim):
-            raise ValueError("Optimizer should be an instance of pyro.optim.PyroOptim class.")
+            raise ValueError("Optimizer should be an instance of "
+                             "pyro.optim.PyroOptim class.")
         svi = SVI(self.model, self.guide, optimizer, loss="ELBO")
         losses = []
         for i in range(num_steps):
             losses.append(svi.step())
         return losses
 
-    def forward(self, *args, **kwargs):
-        """
-        Implements prediction step.
-        """
-        raise NotImplementedError
-
     def _check_Xnew_shape(self, Xnew):
         """
         Checks the correction of the shape of new data.
+
+        :param torch.Tensor Xnew: A 1D or 2D input data for testing. In 2D case, its
+            second dimension should have the same size as one of train input data.
         """
         if Xnew.dim() != self.X.dim():
-            raise ValueError("Train data and test data should have the same number of dimensions.")
+            raise ValueError("Train data and test data should have the same "
+                             "number of dimensions, but got {} and {}."
+                             .format(self.X.dim(), Xnew.dim()))
         if Xnew.dim() == 2 and self.X.shape[1] != Xnew.shape[1]:
-            raise ValueError("Train data and test data should have the same feature sizes.")
+            raise ValueError("Train data and test data should have the same "
+                             "number of features, but got {} and {}."
+                             .format(self.X.shape[1], Xnew.shape[1]))
