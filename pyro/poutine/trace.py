@@ -7,23 +7,26 @@ import networkx
 import torch
 
 from pyro.distributions.util import scale_tensor
-from pyro.util import is_nan, is_inf
+from pyro.util import torch_isnan, torch_isinf
 
 
 def _warn_if_nan(name, value):
     if torch.is_tensor(value):
         value = value.item()
-    if is_nan(value):
-        warnings.warn("Encountered NAN log_pdf at site '{}'".format(name))
-    if is_inf(value) and value > 0:
-        warnings.warn("Encountered +inf log_pdf at site '{}'".format(name))
-    # Note that -inf log_pdf is fine: it is merely a zero-probability event.
+    if torch_isnan(value):
+        warnings.warn("Encountered NAN log_prob_sum at site '{}'".format(name))
+    if torch_isinf(value) and value > 0:
+        warnings.warn("Encountered +inf log_prob_sum at site '{}'".format(name))
+    # Note that -inf log_prob_sum is fine: it is merely a zero-probability event.
 
 
 class DiGraph(networkx.DiGraph):
     node_dict_factory = collections.OrderedDict
 
     def fresh_copy(self):
+        """
+        Returns a new ``DiGraph`` instance.
+        """
         return DiGraph()
 
 
@@ -122,11 +125,12 @@ class Trace(object):
         trace.graph_type = self.graph_type
         return trace
 
-    def log_pdf(self, site_filter=lambda name, site: True):
+    def log_prob_sum(self, site_filter=lambda name, site: True):
         """
-        Compute the local and overall log-probabilities of the trace.
-
-        The local computation is memoized.
+        Compute the site-wise log probabilities of the trace.
+        Each `log_prob` has shape equal to the corresponding `batch_shape`.
+        Each `log_prob_sum` is a scalar.
+        The computation of `log_prob_sum` is memoized.
 
         :returns: total log probability.
         :rtype: torch.Tensor
@@ -135,37 +139,41 @@ class Trace(object):
         for name, site in self.nodes.items():
             if site["type"] == "sample" and site_filter(name, site):
                 try:
-                    site_log_p = site["log_pdf"]
+                    site_log_p = site["log_prob_sum"]
                 except KeyError:
                     args, kwargs = site["args"], site["kwargs"]
                     site_log_p = site["fn"].log_prob(site["value"], *args, **kwargs)
                     site_log_p = scale_tensor(site_log_p, site["scale"]).sum()
-                    site["log_pdf"] = site_log_p
+                    site["log_prob_sum"] = site_log_p
                     _warn_if_nan(name, site_log_p)
                 log_p += site_log_p
         return log_p
 
-    def compute_batch_log_pdf(self, site_filter=lambda name, site: True):
+    def compute_log_prob(self, site_filter=lambda name, site: True):
         """
-        Compute the batched local log-probabilities at each site of the trace.
-
-        The local computation is memoized, and also stores the local `.log_pdf()`.
+        Compute the site-wise log probabilities of the trace.
+        Each `log_prob` has shape equal to the corresponding `batch_shape`.
+        Each `log_prob_sum` is a scalar.
+        Both computations are memoized.
         """
         for name, site in self.nodes.items():
             if site["type"] == "sample" and site_filter(name, site):
                 try:
-                    site["batch_log_pdf"]
+                    site["log_prob"]
                 except KeyError:
                     args, kwargs = site["args"], site["kwargs"]
                     site_log_p = site["fn"].log_prob(site["value"], *args, **kwargs)
                     site_log_p = scale_tensor(site_log_p, site["scale"])
-                    site["batch_log_pdf"] = site_log_p
-                    site["log_pdf"] = site_log_p.sum()
-                    _warn_if_nan(name, site["log_pdf"])
+                    site["log_prob"] = site_log_p
+                    site["log_prob_sum"] = site_log_p.sum()
+                    _warn_if_nan(name, site["log_prob_sum"])
 
     def compute_score_parts(self):
         """
         Compute the batched local score parts at each site of the trace.
+        Each `log_prob` has shape equal to the corresponding `batch_shape`.
+        Each `log_prob_sum` is a scalar.
+        All computations are memoized.
         """
         for name, site in self.nodes.items():
             if site["type"] == "sample" and "score_parts" not in site:
@@ -173,9 +181,9 @@ class Trace(object):
                 # to correctly scale each of its three parts.
                 value = site["fn"].score_parts(site["value"], *site["args"], **site["kwargs"]) * site["scale"]
                 site["score_parts"] = value
-                site["batch_log_pdf"] = value[0]
-                site["log_pdf"] = value[0].sum()
-                _warn_if_nan(name, site["log_pdf"])
+                site["log_prob"] = value[0]
+                site["log_prob_sum"] = value[0].sum()
+                _warn_if_nan(name, site["log_prob_sum"])
 
     @property
     def observation_nodes(self):
@@ -204,7 +212,7 @@ class Trace(object):
         return [name for name, node in self.nodes.items()
                 if node["type"] == "sample" and
                 not node["is_observed"] and
-                getattr(node["fn"], "reparameterized", False)]
+                getattr(node["fn"], "has_rsample", False)]
 
     @property
     def nonreparam_stochastic_nodes(self):

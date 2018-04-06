@@ -30,14 +30,14 @@ class Distribution(object):
     Take a look at the `examples <http://pyro.ai/examples>`_ to see how they interact
     with inference algorithms.
     """
-    reparameterized = False
-    enumerable = False
+    has_rsample = False
+    has_enumerate_support = False
 
     def __call__(self, *args, **kwargs):
         """
         Samples a random value (just an alias for ``.sample(*args, **kwargs)``).
 
-        For tensor distributions, the returned tensor should have the same ``.size()`` as the
+        For tensor distributions, the returned tensor should have the same ``.shape`` as the
         parameters.
 
         :return: A random value.
@@ -50,14 +50,14 @@ class Distribution(object):
         """
         Samples a random value.
 
-        For tensor distributions, the returned tensor should have the same ``.size()`` as the
+        For tensor distributions, the returned tensor should have the same ``.shape`` as the
         parameters, unless otherwise noted.
 
         :param sample_shape: the size of the iid batch to be drawn from the
             distribution.
         :type sample_shape: torch.Size
         :return: A random value or batch of random values (if parameters are
-            batched). The shape of the result should be ``self.size()``.
+            batched). The shape of the result should be ``self.shape()``.
         :rtype: torch.Tensor
         """
         raise NotImplementedError
@@ -89,13 +89,13 @@ class Distribution(object):
         :return: A `ScoreParts` object containing parts of the ELBO estimator.
         :rtype: ScoreParts
         """
-        log_pdf = self.log_prob(x, *args, **kwargs)
-        if self.reparameterized:
-            return ScoreParts(log_pdf=log_pdf, score_function=0, entropy_term=log_pdf)
+        log_prob = self.log_prob(x, *args, **kwargs)
+        if self.has_rsample:
+            return ScoreParts(log_prob=log_prob, score_function=0, entropy_term=log_prob)
         else:
             # XXX should the user be able to control inclusion of the entropy term?
             # See Roeder, Wu, Duvenaud (2017) "Sticking the Landing" https://arxiv.org/abs/1703.09194
-            return ScoreParts(log_pdf=log_pdf, score_function=log_pdf, entropy_term=0)
+            return ScoreParts(log_prob=log_prob, score_function=log_prob, entropy_term=0)
 
     def enumerate_support(self):
         """

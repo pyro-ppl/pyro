@@ -46,16 +46,16 @@ Delta
     :undoc-members:
     :show-inheritance:
 
-HalfCauchy
-----------
-.. automodule:: pyro.distributions.half_cauchy
+EmpiricalDistribution
+----------------------
+.. automodule:: pyro.distributions.empirical
     :members:
     :undoc-members:
     :show-inheritance:
 
-MultivariateNormal
-------------------
-.. automodule:: pyro.distributions.multivariate_normal
+HalfCauchy
+----------
+.. automodule:: pyro.distributions.half_cauchy
     :members:
     :undoc-members:
     :show-inheritance:
@@ -69,7 +69,7 @@ OMTMultivariateNormal
 
 SparseMultivariateNormal
 ------------------------
-.. automodule:: pyro.distributions.sparse_multivariate_normal
+.. automodule:: pyro.distributions.sparse_mvn
     :members:
     :undoc-members:
     :show-inheritance:

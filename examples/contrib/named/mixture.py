@@ -3,11 +3,11 @@ from __future__ import absolute_import, division, print_function
 import argparse
 
 import torch
+import torch.nn.functional as F
 
 import pyro
 import pyro.distributions as dist
 from pyro.contrib import named
-from pyro.distributions.util import softmax
 from pyro.infer import SVI
 from pyro.optim import Adam
 
@@ -21,19 +21,19 @@ def model(data, k):
     latent = named.Object("latent")
 
     # Create parameters for a Gaussian mixture model.
-    latent.ps.param_(torch.tensor(torch.ones(k) / k, requires_grad=True))
-    latent.mus.param_(torch.zeros(k, requires_grad=True))
-    latent.sigmas.param_(torch.ones(k, requires_grad=True))
+    latent.probs.param_(torch.tensor(torch.ones(k) / k, requires_grad=True))
+    latent.locs.param_(torch.zeros(k, requires_grad=True))
+    latent.scales.param_(torch.ones(k, requires_grad=True))
 
     # Observe all the data. We pass a local latent in to the local_model.
     latent.local = named.List()
     for x in data:
-        local_model(latent.local.add(), latent.ps, latent.mus, latent.sigmas, obs=x)
+        local_model(latent.local.add(), latent.probs, latent.locs, latent.scales, obs=x)
 
 
-def local_model(latent, ps, mus, sigmas, obs=None):
-    i = latent.id.sample_(dist.Categorical(softmax(ps)))
-    return latent.x.sample_(dist.Normal(mus[i], sigmas[i]), obs=obs)
+def local_model(latent, ps, locs, scales, obs=None):
+    i = latent.id.sample_(dist.Categorical(F.softmax(ps, dim=-1)))
+    return latent.x.sample_(dist.Normal(locs[i], scales[i]), obs=obs)
 
 
 def guide(data, k):
@@ -46,14 +46,14 @@ def guide(data, k):
 
 def local_guide(latent, k):
     # The local guide simply guesses category assignments.
-    latent.ps.param_(torch.tensor(torch.ones(k) / k, requires_grad=True))
-    latent.id.sample_(dist.Categorical(softmax(latent.ps)))
+    latent.probs.param_(torch.tensor(torch.ones(k) / k, requires_grad=True))
+    latent.id.sample_(dist.Categorical(F.softmax(latent.probs, dim=-1)))
 
 
 def main(args):
     optim = Adam({"lr": 0.1})
     inference = SVI(model, guide, optim, loss="ELBO")
-    data = torch.tensor([0, 1, 2, 20, 30, 40])
+    data = torch.tensor([0.0, 1.0, 2.0, 20.0, 30.0, 40.0])
     k = 2
 
     print('Step\tLoss')

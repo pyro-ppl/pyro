@@ -33,6 +33,7 @@ TEST_CASES[3] = T3
     TEST_CASES,
     ids=TEST_IDS)
 @pytest.mark.init(rng_seed=34)
+@pytest.mark.disable_validation()
 def test_nuts_conjugate_gaussian(fixture,
                                  num_samples,
                                  warmup_steps,
@@ -47,21 +48,21 @@ def test_nuts_conjugate_gaussian(fixture,
     post_trace = defaultdict(list)
     for t, _ in mcmc_run._traces(fixture.data):
         for i in range(1, fixture.chain_len + 1):
-            param_name = 'mu_' + str(i)
+            param_name = 'loc_' + str(i)
             post_trace[param_name].append(t.nodes[param_name]['value'])
     for i in range(1, fixture.chain_len + 1):
-        param_name = 'mu_' + str(i)
-        latent_mu = torch.mean(torch.stack(post_trace[param_name]), 0)
+        param_name = 'loc_' + str(i)
+        latent_loc = torch.mean(torch.stack(post_trace[param_name]), 0)
         latent_std = torch.std(torch.stack(post_trace[param_name]), 0)
         expected_mean = torch.ones(fixture.dim) * expected_means[i - 1]
         expected_std = 1 / torch.sqrt(torch.ones(fixture.dim) * expected_precs[i - 1])
 
         # Actual vs expected posterior means for the latents
         logger.info('Posterior mean (actual) - {}'.format(param_name))
-        logger.info(latent_mu)
+        logger.info(latent_loc)
         logger.info('Posterior mean (expected) - {}'.format(param_name))
         logger.info(expected_mean)
-        assert_equal(rmse(latent_mu, expected_mean).item(), 0.0, prec=mean_tol)
+        assert_equal(rmse(latent_loc, expected_mean).item(), 0.0, prec=mean_tol)
 
         # Actual vs expected posterior precisions for the latents
         logger.info('Posterior std (actual) - {}'.format(param_name))
@@ -97,7 +98,7 @@ def test_bernoulli_beta():
         alpha = torch.tensor([1.1, 1.1])
         beta = torch.tensor([1.1, 1.1])
         p_latent = pyro.sample("p_latent", dist.Beta(alpha, beta))
-        pyro.observe("obs", dist.Bernoulli(p_latent), data)
+        pyro.sample("obs", dist.Bernoulli(p_latent), obs=data)
         return p_latent
 
     nuts_kernel = NUTS(model, step_size=0.02)
@@ -116,7 +117,7 @@ def test_normal_gamma():
         rate = torch.tensor([1.0, 1.0])
         concentration = torch.tensor([1.0, 1.0])
         p_latent = pyro.sample('p_latent', dist.Gamma(rate, concentration))
-        pyro.observe("obs", dist.Normal(3, p_latent), data)
+        pyro.sample("obs", dist.Normal(3, p_latent), obs=data)
         return p_latent
 
     nuts_kernel = NUTS(model, step_size=0.01)
@@ -151,13 +152,13 @@ def test_logistic_regression_with_dual_averaging():
     assert_equal(rmse(true_coefs, posterior_mean).item(), 0.0, prec=0.05)
 
 
-@pytest.mark.xfail(reason='the model is sensitive to NaN log_pdf')
+@pytest.mark.xfail(reason='the model is sensitive to NaN log_prob_sum')
 def test_bernoulli_beta_with_dual_averaging():
     def model(data):
         alpha = torch.tensor([1.1, 1.1])
         beta = torch.tensor([1.1, 1.1])
         p_latent = pyro.sample("p_latent", dist.Beta(alpha, beta))
-        pyro.observe("obs", dist.Bernoulli(p_latent), data)
+        pyro.sample("obs", dist.Bernoulli(p_latent), obs=data)
         return p_latent
 
     nuts_kernel = NUTS(model, adapt_step_size=True)

@@ -8,13 +8,15 @@ from .kernel import Kernel
 
 
 class Brownian(Kernel):
-    """
+    r"""
     This kernel correponds to a two-sided Brownion motion (Wiener process):
-    :math:`k(x, z) = \min(|x|,|z|)` if :math:`x\cdot z \ge 0` and :math:`k(x, z) = 0` otherwise.
+
+        :math:`k(x,z)=\begin{cases}\sigma^2\min(|x|,|z|),& \text{if } x\cdot z\ge 0\\
+        0, & \text{otherwise}. \end{cases}`
 
     Note that the input dimension of this kernel must be 1.
 
-    References:
+    Reference:
 
     [1] `Theory and Statistical Applications of Stochastic Processes`,
     Yuliya Mishura, Georgiy Shevchenko
@@ -26,7 +28,7 @@ class Brownian(Kernel):
         super(Brownian, self).__init__(input_dim, active_dims, name)
 
         if variance is None:
-            variance = torch.ones(1)
+            variance = torch.tensor(1.)
         self.variance = Parameter(variance)
         self.set_constraint("variance", constraints.positive)
 
@@ -40,10 +42,10 @@ class Brownian(Kernel):
             return variance * X.abs().squeeze(1)
 
         Z = self._slice_input(Z)
-        if X.size(1) != Z.size(1):
+        if X.shape[1] != Z.shape[1]:
             raise ValueError("Inputs must have the same number of features.")
 
         Zt = Z.t()
         return torch.where(X.sign() == Zt.sign(),
                            variance * torch.min(X.abs(), Zt.abs()),
-                           X.data.new(X.size(0), Z.size(0)).zero_())
+                           X.data.new_zeros(X.shape[0], Z.shape[0]))

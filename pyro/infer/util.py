@@ -5,17 +5,8 @@ import numbers
 
 import torch
 
+from pyro.distributions.util import is_identically_zero
 from pyro.poutine.util import site_is_subsample
-
-
-def torch_exp(x):
-    """
-    Like ``x.exp()`` for a :class:`~torch.Tensor`, but also accepts
-    numbers.
-    """
-    if isinstance(x, numbers.Number):
-        return math.exp(x)
-    return x.exp()
 
 
 def torch_data_sum(x):
@@ -37,30 +28,20 @@ def torch_backward(x):
         x.backward()
 
 
-def reduce_to_target(source, target):
-    """
-    Sums out any dimensions in source that are of size > 1 in source but of
-    size 1 in target.
-    """
-    while source.dim() > target.dim():
-        source = source.sum(0)
-    for k in range(1, 1 + source.dim()):
-        if source.size(-k) > target.size(-k):
-            source = source.sum(-k, keepdim=True)
-    return source
+def detach_iterable(iterable):
+    if torch.is_tensor(iterable):
+        return iterable.detach()
+    else:
+        return [var.detach() for var in iterable]
 
 
-def reduce_to_shape(source, shape):
+def zero_grads(tensors):
     """
-    Sums out any dimensions in source that are of size > 1 in source but of
-    size 1 in target.
+    Sets gradients of list of Variables to zero in place
     """
-    while source.dim() > len(shape):
-        source = source.sum(0)
-    for k in range(1, 1 + source.dim()):
-        if source.size(-k) > shape[-k]:
-            source = source.sum(-k, keepdim=True)
-    return source
+    for p in tensors:
+        if p.grad is not None:
+            p.grad = p.grad.new_zeros(p.shape)
 
 
 def get_iarange_stacks(trace):
@@ -86,7 +67,7 @@ class MultiFrameTensor(dict):
 
         downstream_cost = MultiFrameTensor()
         for site in downstream_nodes:
-            downstream_cost.add((site["cond_indep_stack"], site["batch_log_pdf"]))
+            downstream_cost.add((site["cond_indep_stack"], site["log_prob"]))
         downstream_cost.add(*other_costs.items())  # add in bulk
         summed = downstream_cost.sum_to(target_site["cond_indep_stack"])
     """
@@ -124,68 +105,71 @@ class MultiFrameTensor(dict):
             '({}, ...)'.format(frames) for frames in self]))
 
 
-class TreeSum(object):
+def _dict_iadd(items, key, value):
+    if key in items:
+        items[key] = items[key] + value
+    else:
+        items[key] = value
+
+
+class MultiFrameDice(object):
     """
-    Data structure to compute cumulative costs along paths in a tree.
-    Typically keys are ``cond_indep_stack``s.
+    An implementation of the DiCE operator compatible with Pyro features.
+
+    This implementation correctly handles:
+    - scaled log-probability due to subsampling
+    - independence in different contexts due to iarange
+    - weights due to parallel and sequential enumeration
+
+    This assumes restricted dependency structure on the model and guide:
+    variables outside of an :class:`~pyro.iarange` can never depend on
+    variables inside that :class:`~pyro.iarange`.
+
+    Refereces:
+    [1] Jakob Foerster, Greg Farquhar, Maruan Al-Shedivat, Tim Rocktaeschel,
+        Eric P. Xing, Shimon Whiteson (2018)
+        "DiCE: The Infinitely Differentiable Monte-Carlo Estimator"
+        https://arxiv.org/abs/1802.05098
     """
-    def __init__(self):
-        self._terms = {}
-        self._upstream = {}
-        self._frozen = False
+    def __init__(self, guide_trace):
+        log_denom = {}  # avoids double-counting when sequentially enumerating
+        log_probs = {}  # accounts for upstream probabilties
 
-    def copy(self):
-        result = TreeSum()
-        result._terms = self._terms.copy()
-        result._upstream = self._upstream.copy()
-        result._frozen = self._frozen
+        for site in guide_trace.nodes.values():
+            if site["type"] != "sample":
+                continue
+            log_prob = site['score_parts'].score_function  # not scaled by subsampling
+            if is_identically_zero(log_prob):
+                continue
+            context = frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
+
+            if site["infer"].get("enumerate"):
+                if site["infer"]["enumerate"] == "sequential":
+                    _dict_iadd(log_denom, context, math.log(site["infer"]["_enum_total"]))
+            else:  # site was monte carlo sampled
+                log_prob = log_prob - log_prob.detach()
+            _dict_iadd(log_probs, context, log_prob)
+
+        self.log_denom = log_denom
+        self.log_probs = log_probs
+        self.cache = {}
+
+    def in_context(self, cond_indep_stack):
+        """
+        Returns a vectorized DiCE factor in a given :class:`~pyro.iarange` context.
+        """
+        target_context = frozenset(f for f in cond_indep_stack if f.vectorized)
+        if target_context in self.cache:
+            return self.cache[target_context]
+
+        log_prob = 0
+        for context, term in self.log_denom.items():
+            if not context <= target_context:  # not downstream
+                log_prob = log_prob - term  # term = log(# times this context is counted)
+        for context, term in self.log_probs.items():
+            if context <= target_context:  # upstream
+                log_prob = log_prob + term  # term = log(dice weight of this context)
+        result = 1 if is_identically_zero(log_prob) else log_prob.exp()
+
+        self.cache[target_context] = result
         return result
-
-    def add(self, key, value):
-        """
-        Adds a term at one node.
-        """
-        assert not self._frozen, 'Cannot call TreeSum.add() after .get_upstream()'
-        if key in self._terms:
-            self._terms[key] = self._terms[key] + value
-        else:
-            self._terms[key] = value
-
-    def get_upstream(self, key):
-        """
-        Returns upstream sum or None. None denotes zero.
-        """
-        try:
-            return self._upstream[key]
-        except KeyError:
-            result = self._terms.get(key)
-            if key:
-                upstream = self.get_upstream(key[:-1])
-                if upstream is not None:
-                    result = upstream if result is None else upstream + result
-            self._upstream[key] = result
-            self._frozen = True
-            return result
-
-    def _freeze(self):
-        for key in self._terms:
-            self.get_upstream(key)
-        self._frozen = True
-
-    def items(self):
-        self._freeze()
-        return self._upstream.items()
-
-    def exp(self):
-        self._freeze()
-        # Exponentiate _only_ the supporting terms of self._upstream.
-        # This restriction is required for .prune() to work correctly.
-        result = TreeSum()
-        result._upstream = {key: torch_exp(self._upstream[key]) for key in self._terms}
-        result._frozen = True
-        return result
-
-    def prune(self, key):
-        assert self._frozen, 'Cannot call TreeSum.prune() before freezing'
-        self._upstream.pop(key, None)
-        self._terms.pop(key, None)

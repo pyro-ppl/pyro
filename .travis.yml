@@ -7,16 +7,8 @@ env:
         - PYTHONPATH=$PWD:$PYTHONPATH
 
 install:
-    # download and install PyTorch wheel
-    - pip install --upgrade awscli
-    - mkdir -p tmp
-    - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
-        aws s3 --no-sign-request sync s3://pyro-ppl/ci tmp --exclude "*" --include "*-cp27-*";
-      else
-        aws s3 --no-sign-request sync s3://pyro-ppl/ci tmp --exclude "*" --include "*-cp35-*";
-      fi
-    - pip install tmp/*
-    - rm -r tmp
+    # Install PyTorch wheel using the install script
+    - bash scripts/install_pytorch.sh
     - pip install -e .[test]
     - pip freeze
 
@@ -69,7 +61,8 @@ jobs:
           env: STAGE=examples
           script:
               - pytest -vs --cov=pyro --stage test_examples
-              - grep -l smoke_test tutorial/source/*.ipynb | xargs pytest -v --nbval-lax
+              - CI=1 grep -l smoke_test tutorial/source/*.ipynb | xargs grep -L 'smoke_test = False' \
+                  | xargs pytest -vx --nbval-lax --current-env
         - python: 3.5
           env: STAGE=unit
           script: pytest -vs --cov=pyro --stage unit --durations 20

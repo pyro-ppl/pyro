@@ -94,7 +94,7 @@ def bernoulli_beta_hmc(**kwargs):
         alpha = pyro.param('alpha', torch.tensor([1.1, 1.1]))
         beta = pyro.param('beta', torch.tensor([1.1, 1.1]))
         p_latent = pyro.sample("p_latent", dist.Beta(alpha, beta))
-        pyro.observe("obs", dist.Bernoulli(p_latent), data)
+        pyro.sample("obs", dist.Bernoulli(p_latent), obs=data)
         return p_latent
     kernel = kwargs.pop('kernel')
     num_samples = kwargs.pop('num_samples')
@@ -112,6 +112,7 @@ def bernoulli_beta_hmc(**kwargs):
     min_rounds=5,
     disable_gc=True,
 )
+@pytest.mark.disable_validation()
 def test_benchmark(benchmark, model, model_args, id):
     print("Running - {}".format(id))
     benchmark(model, **model_args)

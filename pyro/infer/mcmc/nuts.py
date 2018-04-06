@@ -6,7 +6,6 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.infer.util import torch_data_sum
 from pyro.ops.integrator import single_step_velocity_verlet
 
 from .hmc import HMC
@@ -81,12 +80,13 @@ class NUTS(HMC):
         self._max_sliced_energy = 1000
 
     def _is_turning(self, z_left, r_left, z_right, r_right):
-        z_left = torch.stack([z_left[name] for name in self._r_dist])
-        r_left = torch.stack([r_left[name] for name in self._r_dist])
-        z_right = torch.stack([z_right[name] for name in self._r_dist])
-        r_right = torch.stack([r_right[name] for name in self._r_dist])
-        dz = z_right - z_left
-        return (torch_data_sum(dz * r_left) < 0) or (torch_data_sum(dz * r_right) < 0)
+        diff_left = 0
+        diff_right = 0
+        for name in self._r_dist:
+            dz = z_right[name] - z_left[name]
+            diff_left += (dz * r_left[name]).sum()
+            diff_right += (dz * r_right[name]).sum()
+        return diff_left < 0 or diff_right < 0
 
     def _build_basetree(self, z, r, z_grads, log_slice, direction, energy_current):
         step_size = self.step_size if direction == 1 else -self.step_size
@@ -146,7 +146,7 @@ class NUTS(HMC):
         if tree_size != 0:
             other_half_tree_prob = other_half_tree.size / tree_size
             is_other_half_tree = pyro.sample("is_other_halftree",
-                                             dist.Bernoulli(ps=torch.ones(1) * other_half_tree_prob))
+                                             dist.Bernoulli(probs=torch.ones(1) * other_half_tree_prob))
             if int(is_other_half_tree.item()) == 1:
                 z_proposal = other_half_tree.z_proposal
 
@@ -197,8 +197,12 @@ class NUTS(HMC):
         #     `Slice sampling` by Radford M. Neal.
         # For another version of NUTS which uses multinomial sampling instead of slice sampling, see
         #     `A Conceptual Introduction to Hamiltonian Monte Carlo` by Michael Betancourt.
-        slice_var = pyro.sample("slicevar_t={}".format(self._t),
-                                dist.Uniform(torch.zeros(1), torch.exp(-energy_current)))
+        joint_prob = torch.exp(-energy_current)
+        if joint_prob == 0:
+            slice_var = torch.tensor(0.0)
+        else:
+            slice_var = pyro.sample("slicevar_t={}".format(self._t),
+                                    dist.Uniform(torch.zeros(1), joint_prob))
         log_slice = slice_var.log()
 
         z_left = z_right = z
@@ -210,7 +214,7 @@ class NUTS(HMC):
         # doubling process, stop when turning or diverging
         for tree_depth in range(self._max_tree_depth + 1):
             direction = pyro.sample("direction_t={}_treedepth={}".format(self._t, tree_depth),
-                                    dist.Bernoulli(ps=torch.ones(1) * 0.5))
+                                    dist.Bernoulli(probs=torch.ones(1) * 0.5))
             direction = int(direction.item())
             if direction == 1:  # go to the right, start from the right leaf of current tree
                 new_tree = self._build_tree(z_right, r_right, z_right_grads, log_slice,

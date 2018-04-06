@@ -17,30 +17,30 @@ class TestOneHotCategorical(TestCase):
 
     def setUp(self):
         n = 1
-        self.ps = torch.tensor([0.1, 0.6, 0.3])
+        self.probs = torch.tensor([0.1, 0.6, 0.3])
         self.batch_ps = torch.tensor([[0.1, 0.6, 0.3], [0.2, 0.4, 0.4]])
         self.n = torch.tensor([n])
-        self.test_data = torch.tensor([0, 1, 0])
-        self.test_data_nhot = torch.tensor([2])
-        self.analytic_mean = n * self.ps
+        self.test_data = torch.tensor([0.0, 1.0, 0.0])
+        self.test_data_nhot = torch.tensor([2.0])
+        self.analytic_mean = n * self.probs
         one = torch.ones(3)
-        self.analytic_var = n * torch.mul(self.ps, one.sub(self.ps))
+        self.analytic_var = n * torch.mul(self.probs, one.sub(self.probs))
 
         # Discrete Distribution
         self.d_ps = torch.tensor([[0.2, 0.3, 0.5], [0.1, 0.1, 0.8]])
-        self.d_test_data = torch.tensor([[0], [5]])
+        self.d_test_data = torch.tensor([[0.0], [5.0]])
         self.d_v_test_data = [['a'], ['f']]
 
         self.n_samples = 50000
 
-        self.support_one_hot_non_vec = torch.tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+        self.support_one_hot_non_vec = torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
         self.support_one_hot = torch.tensor([[[1, 0, 0], [1, 0, 0]],
                                              [[0, 1, 0], [0, 1, 0]],
                                              [[0, 0, 1], [0, 0, 1]]])
         self.support_non_vec = torch.LongTensor([[0], [1], [2]])
         self.support = torch.LongTensor([[[0], [0]], [[1], [1]], [[2], [2]]])
-        self.discrete_support_non_vec = torch.tensor([[0], [1], [2]])
-        self.discrete_support = torch.tensor([[[0], [3]], [[1], [4]], [[2], [5]]])
+        self.discrete_support_non_vec = torch.tensor([[0.0], [1.0], [2.0]])
+        self.discrete_support = torch.tensor([[[0.0], [3.0]], [[1.0], [4.0]], [[2.0], [5.0]]])
         self.discrete_arr_support_non_vec = [['a'], ['b'], ['c']]
         self.discrete_arr_support = [[['a'], ['d']], [['b'], ['e']], [['c'], ['f']]]
 
@@ -59,8 +59,8 @@ def wrap_nested(x, dim):
     return wrap_nested([x], dim-1)
 
 
-def assert_correct_dimensions(sample, ps):
-    ps_shape = list(ps.data.size())
+def assert_correct_dimensions(sample, probs):
+    ps_shape = list(probs.data.size())
     sample_shape = list(sample.shape)
     assert_equal(sample_shape, ps_shape)
 
@@ -71,31 +71,31 @@ def dim(request):
 
 
 @pytest.fixture(params=[[0.3, 0.5, 0.2]], ids=None)
-def ps(request):
+def probs(request):
     return request.param
 
 
-def modify_params_using_dims(ps, dim):
-    return torch.tensor(wrap_nested(ps, dim-1))
+def modify_params_using_dims(probs, dim):
+    return torch.tensor(wrap_nested(probs, dim-1))
 
 
-def test_support_dims(dim, ps):
-    ps = modify_params_using_dims(ps, dim)
-    support = dist.OneHotCategorical(ps).enumerate_support()
+def test_support_dims(dim, probs):
+    probs = modify_params_using_dims(probs, dim)
+    support = dist.OneHotCategorical(probs).enumerate_support()
     for s in support:
-        assert_correct_dimensions(s, ps)
+        assert_correct_dimensions(s, probs)
 
 
-def test_sample_dims(dim, ps):
-    ps = modify_params_using_dims(ps, dim)
-    sample = dist.OneHotCategorical(ps).sample()
-    assert_correct_dimensions(sample, ps)
+def test_sample_dims(dim, probs):
+    probs = modify_params_using_dims(probs, dim)
+    sample = dist.OneHotCategorical(probs).sample()
+    assert_correct_dimensions(sample, probs)
 
 
-def test_batch_log_dims(dim, ps):
+def test_batch_log_dims(dim, probs):
     batch_pdf_shape = (3,) + (1,) * (dim-1)
-    expected_log_pdf = np.array(wrap_nested(list(np.log(ps)), dim-1)).reshape(*batch_pdf_shape)
-    ps = modify_params_using_dims(ps, dim)
-    support = dist.OneHotCategorical(ps).enumerate_support()
-    log_prob = dist.OneHotCategorical(ps).log_prob(support)
-    assert_equal(log_prob.detach().cpu().numpy(), expected_log_pdf)
+    expected_log_prob_sum = np.array(wrap_nested(list(np.log(probs)), dim-1)).reshape(*batch_pdf_shape)
+    probs = modify_params_using_dims(probs, dim)
+    support = dist.OneHotCategorical(probs).enumerate_support()
+    log_prob = dist.OneHotCategorical(probs).log_prob(support)
+    assert_equal(log_prob.detach().cpu().numpy(), expected_log_prob_sum)

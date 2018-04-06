@@ -196,8 +196,8 @@ def main(**kwargs):
         z, x = air.prior(5, z_pres_prior_p=partial(z_pres_prior_p, 0))
         vis.images(draw_many(x, tensor_to_objs(latents_to_tensor(z))))
 
-    def per_param_optim_args(module_name, param_name, tags):
-        lr = args.baseline_learning_rate if 'baseline' in tags else args.learning_rate
+    def per_param_optim_args(module_name, param_name):
+        lr = args.baseline_learning_rate if 'bl_' in param_name else args.learning_rate
         return {'lr': lr}
 
     svi = SVI(air.model, air.guide,

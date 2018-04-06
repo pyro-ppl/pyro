@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import torch
+from torch.distributions import constraints
 
 from pyro.distributions.distribution import Distribution
 from pyro.distributions.score_parts import ScoreParts
@@ -18,23 +19,6 @@ class TorchDistributionMixin(Distribution):
     :class:`torch.distributions.distribution.Distribution` and then inherit
     from :class:`TorchDistributionMixin`.
     """
-    @property
-    def reparameterized(self):
-        """
-        :return: Whether this distribution is reparameterized, i.e. whether
-            this distribution implements :meth:`rsample`.
-        :rtype: bool
-        """
-        return self.has_rsample
-
-    @property
-    def enumerable(self):
-        """
-        :return: Whether this distribution implements :meth:`enumerate_support`
-        :rtype: bool
-        """
-        return self.has_enumerate_support
-
     def __call__(self, sample_shape=torch.Size()):
         """
         Samples a random value.
@@ -104,12 +88,6 @@ class TorchDistributionMixin(Distribution):
         """
         return MaskedDistribution(self, mask)
 
-    def analytic_mean(self):
-        return self.mean
-
-    def analytic_var(self):
-        return self.variance
-
 
 class TorchDistribution(torch.distributions.Distribution, TorchDistributionMixin):
     """
@@ -153,7 +131,7 @@ class TorchDistribution(torch.distributions.Distribution, TorchDistributionMixin
     ``sample_shape + d.batch_shape``::
 
       x = d.sample(sample_shape)
-      assert x.size() == d.shape(sample_shape)
+      assert x.shape == d.shape(sample_shape)
       log_p = d.log_prob(x)
       assert log_p.shape == sample_shape + d.batch_shape
 
@@ -186,6 +164,8 @@ class ReshapedDistribution(TorchDistribution):
     :param int extra_event_dims: The number of extra event dimensions that will
         be considered dependent.
     """
+    arg_constraints = {}
+
     def __init__(self, base_dist, sample_shape=torch.Size(), extra_event_dims=0):
         sample_shape = torch.Size(sample_shape)
         if extra_event_dims > len(sample_shape + base_dist.batch_shape):
@@ -207,6 +187,10 @@ class ReshapedDistribution(TorchDistribution):
     def has_enumerate_support(self):
         return self.base_dist.has_enumerate_support
 
+    @constraints.dependent_property
+    def support(self):
+        return self.base_dist.support
+
     def sample(self, sample_shape=torch.Size()):
         return self.base_dist.sample(sample_shape + self.sample_shape)
 
@@ -217,11 +201,11 @@ class ReshapedDistribution(TorchDistribution):
         return sum_rightmost(self.base_dist.log_prob(value), self.extra_event_dims)
 
     def score_parts(self, value):
-        log_pdf, score_function, entropy_term = self.base_dist.score_parts(value)
-        log_pdf = sum_rightmost(log_pdf, self.extra_event_dims)
+        log_prob, score_function, entropy_term = self.base_dist.score_parts(value)
+        log_prob = sum_rightmost(log_prob, self.extra_event_dims)
         score_function = sum_rightmost(score_function, self.extra_event_dims)
         entropy_term = sum_rightmost(entropy_term, self.extra_event_dims)
-        return ScoreParts(log_pdf, score_function, entropy_term)
+        return ScoreParts(log_prob, score_function, entropy_term)
 
     def enumerate_support(self):
         if self.extra_event_dims:
@@ -233,8 +217,7 @@ class ReshapedDistribution(TorchDistribution):
 
         # Shift enumeration dim to correct location.
         enum_shape, base_shape = samples.shape[:1], samples.shape[1:]
-        samples = samples.contiguous()
-        samples = samples.view(enum_shape + (1,) * len(self.sample_shape) + base_shape)
+        samples = samples.reshape(enum_shape + (1,) * len(self.sample_shape) + base_shape)
         samples = samples.expand(enum_shape + self.sample_shape + base_shape)
         return samples
 
@@ -254,6 +237,8 @@ class MaskedDistribution(TorchDistribution):
 
     :param torch.Tensor mask: A zero-one valued float tensor.
     """
+    arg_constraints = {}
+
     def __init__(self, base_dist, mask):
         if broadcast_shape(mask.shape, base_dist.batch_shape) != base_dist.batch_shape:
             raise ValueError("Expected mask.shape to be broadcastable to base_dist.batch_shape, "
@@ -269,6 +254,10 @@ class MaskedDistribution(TorchDistribution):
     @property
     def has_enumerate_support(self):
         return self.base_dist.has_enumerate_support
+
+    @constraints.dependent_property
+    def support(self):
+        return self.base_dist.support
 
     def sample(self, sample_shape=torch.Size()):
         return self.base_dist.sample(sample_shape)

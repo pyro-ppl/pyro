@@ -1,18 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
-import functools
-
 from six.moves.queue import LifoQueue
 
 from pyro import poutine
-from pyro.infer.util import TreeSum
 from pyro.poutine.trace import Trace
-
-
-def _iter_discrete_filter(msg):
-    return ((msg["type"] == "sample") and
-            (not msg["is_observed"]) and
-            msg["infer"].get("enumerate"))  # sequential or parallel
 
 
 def _iter_discrete_escape(trace, msg):
@@ -22,35 +13,16 @@ def _iter_discrete_escape(trace, msg):
             (msg["name"] not in trace))
 
 
-def _iter_discrete_extend(trace, site, enum_tree):
+def _iter_discrete_extend(trace, site, **ignored):
     values = site["fn"].enumerate_support()
-    log_probs = site["fn"].log_prob(values).detach()
-    for i, (value, log_prob) in enumerate(zip(values, log_probs)):
+    for i, value in enumerate(values):
         extended_site = site.copy()
+        extended_site["infer"] = site["infer"].copy()
+        extended_site["infer"]["_enum_total"] = len(values)
         extended_site["value"] = value
         extended_trace = trace.copy()
         extended_trace.add_node(site["name"], **extended_site)
-        extended_enum_tree = enum_tree.copy()
-        extended_enum_tree.add(site["cond_indep_stack"], (i,))
-        yield extended_trace, extended_enum_tree
-
-
-def _iter_discrete_queue(graph_type, fn, *args, **kwargs):
-    queue = LifoQueue()
-    partial_trace = Trace()
-    enum_tree = TreeSum()
-    queue.put((partial_trace, enum_tree))
-    while not queue.empty():
-        partial_trace, enum_tree = queue.get()
-        traced_fn = poutine.trace(poutine.escape(poutine.replay(fn, partial_trace),
-                                                 functools.partial(_iter_discrete_escape, partial_trace)),
-                                  graph_type=graph_type)
-        try:
-            yield traced_fn.get_trace(*args, **kwargs), enum_tree
-        except poutine.util.NonlocalExit as e:
-            e.reset_stack()
-            for item in _iter_discrete_extend(traced_fn.trace, e.site, enum_tree):
-                queue.put(item)
+        yield extended_trace
 
 
 def iter_discrete_traces(graph_type, fn, *args, **kwargs):
@@ -65,31 +37,15 @@ def iter_discrete_traces(graph_type, fn, *args, **kwargs):
 
     :param str graph_type: The type of the graph, e.g. "flat" or "dense".
     :param callable fn: A stochastic function.
-    :returns: An iterator over (weights, trace) pairs, where weights is a
-        :class:`~pyro.infer.util.TreeSum` object.
+    :returns: An iterator over traces pairs.
     """
-    already_counted = set()  # to avoid double counting
-    for trace, enum_tree in _iter_discrete_queue(graph_type, fn, *args, **kwargs):
-        # Collect log_probs for each iarange stack.
-        log_probs = TreeSum()
-        if not already_counted:
-            log_probs.add((), 0)  # ensures globals are counted exactly once
-        for name, site in trace.nodes.items():
-            if _iter_discrete_filter(site):
-                cond_indep_stack = site["cond_indep_stack"]
-                log_prob = site["fn"].log_prob(site["value"]).detach()
-                log_probs.add(cond_indep_stack, log_prob)
-
-        # Avoid double-counting across traces.
-        weights = log_probs.exp()
-        for context in enum_tree.items():
-            if context in already_counted:
-                cond_indep_stack, _ = context
-                weights.prune(cond_indep_stack)
-            else:
-                already_counted.add(context)
-
-        yield weights, trace
+    queue = LifoQueue()
+    queue.put(Trace())
+    traced_fn = poutine.trace(
+        poutine.queue(fn, queue, escape_fn=_iter_discrete_escape, extend_fn=_iter_discrete_extend),
+        graph_type=graph_type)
+    while not queue.empty():
+        yield traced_fn.get_trace(*args, **kwargs)
 
 
 def _config_enumerate(default):
@@ -97,7 +53,7 @@ def _config_enumerate(default):
     def config_fn(site):
         if site["type"] != "sample" or site["is_observed"]:
             return {}
-        if not getattr(site["fn"], "enumerable", False):
+        if not getattr(site["fn"], "has_enumerate_support", False):
             return {}
         if "enumerate" in site["infer"]:
             return {}  # do not overwrite existing config

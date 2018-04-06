@@ -26,7 +26,7 @@ def test_subsample_gradient(trace_graph, enum_discrete, reparameterized, subsamp
     pyro.clear_param_store()
     data = torch.tensor([-0.5, 2.0])
     subsample_size = 1 if subsample else len(data)
-    num_particles = 20000
+    num_particles = 50000
     precision = 0.05
     Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
 
@@ -38,12 +38,12 @@ def test_subsample_gradient(trace_graph, enum_discrete, reparameterized, subsamp
                 pyro.sample("x", Normal(z, 1), obs=x)
 
     def guide(subsample):
-        mu = pyro.param("mu", lambda: torch.zeros(len(data), requires_grad=True))
-        sigma = pyro.param("sigma", lambda: torch.tensor([1.0], requires_grad=True))
+        loc = pyro.param("loc", lambda: torch.zeros(len(data), requires_grad=True))
+        scale = pyro.param("scale", lambda: torch.tensor([1.0], requires_grad=True))
         with pyro.iarange("particles", num_particles):
             with pyro.iarange("data", len(data), subsample_size, subsample) as ind:
-                mu_ind = mu[ind].unsqueeze(-1).expand(-1, num_particles)
-                pyro.sample("z", Normal(mu_ind, sigma))
+                loc_ind = loc[ind].unsqueeze(-1).expand(-1, num_particles)
+                pyro.sample("z", Normal(loc_ind, scale))
 
     optim = Adam({"lr": 0.1})
     inference = SVI(model, guide, optim, loss="ELBO",
@@ -58,7 +58,7 @@ def test_subsample_gradient(trace_graph, enum_discrete, reparameterized, subsamp
     normalizer = 2 * num_particles / subsample_size
     actual_grads = {name: param.grad.detach().cpu().numpy() / normalizer for name, param in params.items()}
 
-    expected_grads = {'mu': np.array([0.5, -2.0]), 'sigma': np.array([2.0])}
+    expected_grads = {'loc': np.array([0.5, -2.0]), 'scale': np.array([2.0])}
     for name in sorted(params):
         logger.info('expected {} = {}'.format(name, expected_grads[name]))
         logger.info('actual   {} = {}'.format(name, actual_grads[name]))
@@ -66,11 +66,9 @@ def test_subsample_gradient(trace_graph, enum_discrete, reparameterized, subsamp
 
 
 @pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
-@pytest.mark.parametrize("trace_graph,enum_discrete", [
-    (False, False),
-    (True, False),
-    pytest.param(False, True, marks=pytest.mark.xfail(reason="https://github.com/uber/pyro/issues/846")),
-], ids=["Trace", "TraceGraph", "TraceEnum"])
+@pytest.mark.parametrize("trace_graph,enum_discrete",
+                         [(False, False), (True, False), (False, True)],
+                         ids=["Trace", "TraceGraph", "TraceEnum"])
 def test_iarange(trace_graph, enum_discrete, reparameterized):
     pyro.clear_param_store()
     data = torch.tensor([-0.5, 2.0])
@@ -92,14 +90,14 @@ def test_iarange(trace_graph, enum_discrete, reparameterized):
         pyro.sample("nuisance_c", Normal(4, 5))
 
     def guide():
-        mu = pyro.param("mu", lambda: torch.zeros(len(data), requires_grad=True))
-        sigma = pyro.param("sigma", lambda: torch.tensor([1.0], requires_grad=True))
-        mus = mu.unsqueeze(-1).expand(-1, num_particles)
+        loc = pyro.param("loc", lambda: torch.zeros(len(data), requires_grad=True))
+        scale = pyro.param("scale", lambda: torch.tensor([1.0], requires_grad=True))
+        mus = loc.unsqueeze(-1).expand(-1, num_particles)
 
         pyro.sample("nuisance_c", Normal(4, 5))
         with pyro.iarange("particles", num_particles):
             with pyro.iarange("data", len(data)):
-                pyro.sample("z", Normal(mus, sigma))
+                pyro.sample("z", Normal(mus, scale))
         pyro.sample("nuisance_b", Normal(2, 3))
         pyro.sample("nuisance_a", Normal(0, 1))
 
@@ -111,7 +109,7 @@ def test_iarange(trace_graph, enum_discrete, reparameterized):
     actual_grads = {name: param.grad.detach().cpu().numpy() / num_particles
                     for name, param in params.items()}
 
-    expected_grads = {'mu': np.array([0.5, -2.0]), 'sigma': np.array([2.0])}
+    expected_grads = {'loc': np.array([0.5, -2.0]), 'scale': np.array([2.0])}
     for name in sorted(params):
         logger.info('expected {} = {}'.format(name, expected_grads[name]))
         logger.info('actual   {} = {}'.format(name, actual_grads[name]))
@@ -138,10 +136,10 @@ def test_subsample_gradient_sequential(trace_graph, enum_discrete, reparameteriz
             pyro.sample("x", Normal(z, 1), obs=x)
 
     def guide():
-        mu = pyro.param("mu", lambda: torch.zeros(len(data), requires_grad=True))
-        sigma = pyro.param("sigma", lambda: torch.tensor([1.0], requires_grad=True))
+        loc = pyro.param("loc", lambda: torch.zeros(len(data), requires_grad=True))
+        scale = pyro.param("scale", lambda: torch.tensor([1.0], requires_grad=True))
         with pyro.iarange("data", len(data), subsample_size) as ind:
-            pyro.sample("z", Normal(mu[ind], sigma))
+            pyro.sample("z", Normal(loc[ind], scale))
 
     optim = Adam({"lr": 0.1})
     inference = SVI(model, guide, optim, loss="ELBO",
@@ -151,7 +149,7 @@ def test_subsample_gradient_sequential(trace_graph, enum_discrete, reparameteriz
     params = dict(pyro.get_param_store().named_parameters())
     actual_grads = {name: param.grad.detach().cpu().numpy() for name, param in params.items()}
 
-    expected_grads = {'mu': np.array([0.5, -2.0]), 'sigma': np.array([2.0])}
+    expected_grads = {'loc': np.array([0.5, -2.0]), 'scale': np.array([2.0])}
     for name in sorted(params):
         logger.info('expected {} = {}'.format(name, expected_grads[name]))
         logger.info('actual   {} = {}'.format(name, actual_grads[name]))

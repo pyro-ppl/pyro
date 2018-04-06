@@ -5,7 +5,7 @@ from torch.autograd import Function
 from torch.autograd.function import once_differentiable
 from torch.distributions import constraints
 
-from pyro.distributions.multivariate_normal import MultivariateNormal
+from pyro.distributions import MultivariateNormal
 from pyro.distributions.util import sum_leftmost
 
 
@@ -20,7 +20,7 @@ class OMTMultivariateNormal(MultivariateNormal):
     :param torch.Tensor loc: Mean.
     :param torch.Tensor scale_tril: Cholesky of Covariance matrix.
     """
-    params = {"loc": constraints.real, "scale_tril": constraints.lower_triangular}
+    arg_constraints = {"loc": constraints.real, "scale_tril": constraints.lower_triangular}
 
     def __init__(self, loc, scale_tril):
         assert(loc.dim() == 1), "OMTMultivariateNormal loc must be 1-dimensional"
@@ -36,7 +36,7 @@ class OMTMultivariateNormal(MultivariateNormal):
 class _OMTMVNSample(Function):
     @staticmethod
     def forward(ctx, loc, scale_tril, shape):
-        ctx.white = loc.new(shape).normal_()
+        ctx.white = loc.new_empty(shape).normal_()
         ctx.z = torch.matmul(ctx.white, scale_tril.t())
         ctx.save_for_backward(scale_tril)
         return loc + ctx.z
@@ -49,11 +49,11 @@ class _OMTMVNSample(Function):
         z = ctx.z
         epsilon = ctx.white
 
-        dim = L.size(0)
+        dim = L.shape[0]
         g = grad_output
         loc_grad = sum_leftmost(grad_output, -1)
 
-        identity = torch.eye(dim, out=torch.tensor(g.new(dim, dim)))
+        identity = torch.eye(dim, out=torch.tensor(g.new_empty(dim, dim)))
         R_inv = torch.trtrs(identity, L.t(), transpose=False, upper=True)[0]
 
         z_ja = z.unsqueeze(-1)

@@ -51,18 +51,6 @@ Kernels
     :show-inheritance:
     :member-order: bysource
 
-.. automodule:: pyro.contrib.gp.kernels.brownian
-    :members:
-    :undoc-members:
-    :show-inheritance:
-    :member-order: bysource
-
-.. automodule:: pyro.contrib.gp.kernels.dot_product
-    :members:
-    :undoc-members:
-    :show-inheritance:
-    :member-order: bysource
-
 .. automodule:: pyro.contrib.gp.kernels.isotropic
     :members:
     :undoc-members:
@@ -81,6 +69,18 @@ Kernels
     :show-inheritance:
     :member-order: bysource
 
+.. automodule:: pyro.contrib.gp.kernels.dot_product
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
+
+.. automodule:: pyro.contrib.gp.kernels.brownian
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
+
 Likelihoods
 -----------
 
@@ -91,6 +91,18 @@ Likelihoods
     :member-order: bysource
 
 .. automodule:: pyro.contrib.gp.likelihoods.gaussian
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
+
+.. automodule:: pyro.contrib.gp.likelihoods.binary
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
+
+.. automodule:: pyro.contrib.gp.likelihoods.multi_class
     :members:
     :undoc-members:
     :show-inheritance:

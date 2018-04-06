@@ -5,18 +5,28 @@ import logging
 import numbers
 import warnings
 from collections import OrderedDict
+from contextlib import contextmanager
 from inspect import isclass
 
 import torch
 
+import pyro.distributions as dist
+import pyro.infer as infer
 import pyro.poutine as poutine
 from pyro.distributions.distribution import Distribution
 from pyro.params import _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, param_with_module_name
 from pyro.poutine import _PYRO_STACK, condition, do  # noqa: F401
 from pyro.poutine.indep_poutine import _DIM_ALLOCATOR
-from pyro.util import am_i_wrapped, apply_stack, deep_getattr, ones, set_rng_seed, zeros  # noqa: F401
+from pyro.util import am_i_wrapped, apply_stack, deep_getattr, set_rng_seed  # noqa: F401
 
-__version__ = '0.1.2'
+version_prefix = '0.2.0-a0'
+
+# Get the __version__ string from the auto-generated _version.py file, if exists.
+try:
+    from pyro._version import __version__
+except ImportError:
+    __version__ = version_prefix
+
 
 # Default logger to prevent 'No handler found' warning.
 logging.getLogger(__name__).addHandler(logging.NullHandler())
@@ -86,19 +96,6 @@ def sample(name, fn, *args, **kwargs):
         # apply the stack and return its return value
         apply_stack(msg)
         return msg["value"]
-
-
-def observe(name, fn, obs, *args, **kwargs):
-    """
-    Alias of `pyro.sample(name, fn, *args, obs=obs, **kwargs)`.
-
-    :param name: name of observation
-    :param fn: distribution class or function
-    :param obs: observed datum
-    :returns: sample
-    """
-    kwargs.update({"obs": obs})
-    return sample(name, fn, *args, **kwargs)
 
 
 class _Subsample(Distribution):
@@ -210,7 +207,7 @@ class iarange(object):
         right. If not specified, ``dim`` is set to the rightmost dim that is
         left of all enclosing ``iarange`` contexts.
     :param bool use_cuda: Optional bool specifying whether to use cuda tensors
-        for `subsample` and `log_pdf`. Defaults to `torch.Tensor.is_cuda`.
+        for `subsample` and `log_prob`. Defaults to `torch.Tensor.is_cuda`.
     :return: A reusabe context manager yielding a single 1-dimensional
         :class:`torch.Tensor` of indices.
 
@@ -218,26 +215,26 @@ class iarange(object):
 
         # This version simply declares independence:
         >>> with iarange('data'):
-                sample('obs', Normal(mu, sigma), obs=data)
+                sample('obs', Normal(loc, scale), obs=data)
 
         # This version subsamples data in vectorized way:
         >>> with iarange('data', 100, subsample_size=10) as ind:
-                sample('obs', Normal(mu, sigma), obs=data[ind])
+                sample('obs', Normal(loc, scale), obs=data[ind])
 
         # This wraps a user-defined subsampling method for use in pyro:
         >>> ind = my_custom_subsample
         >>> with iarange('data', 100, subsample=ind):
-                sample('obs', Normal(mu, sigma), obs=data[ind])
+                sample('obs', Normal(loc, scale), obs=data[ind])
 
         # This reuses two different independence contexts.
         >>> x_axis = iarange('outer', 320, dim=-1)
         >>> y_axis = iarange('outer', 200, dim=-2)
         >>> with x_axis:
-                x_noise = sample("x_noise", Normal(mu, sigma).reshape([320]))
+                x_noise = sample("x_noise", Normal(loc, scale).reshape([320]))
         >>> with y_axis:
-                y_noise = sample("y_noise", Normal(mu, sigma).reshape([200, 1]))
+                y_noise = sample("y_noise", Normal(loc, scale).reshape([200, 1]))
         >>> with x_axis, y_axis:
-                xy_noise = sample("xy_noise", Normal(mu, sigma).reshape([200, 320]))
+                xy_noise = sample("xy_noise", Normal(loc, scale).reshape([200, 320]))
 
     See `SVI Part II <http://pyro.ai/examples/svi_part_ii.html>`_ for an
     extended discussion.
@@ -278,7 +275,7 @@ class irange(object):
         ``len(subsample)``.
     :type subsample: Anything supporting ``len()``.
     :param bool use_cuda: Optional bool specifying whether to use cuda tensors
-        for internal ``log_pdf`` computations. Defaults to
+        for internal ``log_prob`` computations. Defaults to
         ``torch.Tensor.is_cuda``.
     :return: A reusable iterator yielding a sequence of integers.
 
@@ -286,7 +283,7 @@ class irange(object):
 
         >>> for i in irange('data', 100, subsample_size=10):
                 if z[i]:  # Prevents vectorization.
-                    observe('obs_{}'.format(i), normal, data[i], mu, sigma)
+                    observe('obs_{}'.format(i), normal, data[i], loc, scale)
 
     See `SVI Part II <http://pyro.ai/examples/svi_part_ii.html>`_ for an extended discussion.
     """
@@ -340,7 +337,7 @@ def param(name, *args, **kwargs):
         return msg["value"]
 
 
-def module(name, nn_module, tags="default", update_module_params=False):
+def module(name, nn_module, update_module_params=False):
     """
     Takes a torch.nn.Module and registers its parameters with the ParamStore.
     In conjunction with the ParamStore save() and load() functionality, this
@@ -350,8 +347,6 @@ def module(name, nn_module, tags="default", update_module_params=False):
     :type name: str
     :param nn_module: the module to be registered with Pyro
     :type nn_module: torch.nn.Module
-    :param tags: optional; tags to associate with any parameters inside the module
-    :type tags: string or iterable of strings
     :param update_module_params: determines whether Parameters
                                  in the PyTorch module get overridden with the values found in the
                                  ParamStore (if any). Defaults to `False`
@@ -372,7 +367,7 @@ def module(name, nn_module, tags="default", update_module_params=False):
         # register the parameter in the module with pyro
         # this only does something substantive if the parameter hasn't been seen before
         full_param_name = param_with_module_name(name, param_name)
-        returned_param = param(full_param_name, param_value, tags=tags)
+        returned_param = param(full_param_name, param_value)
 
         if param_value._cdata != returned_param._cdata:
             target_state_dict[param_name] = returned_param
@@ -422,3 +417,20 @@ def random_module(name, nn_module, prior, *args, **kwargs):
         # update_module_params must be True or the lifted module will not update local params
         return lifted_fn(name, nn_copy, update_module_params=True, *args, **kwargs)
     return _fn
+
+
+def enable_validation(is_validate=True):
+    dist.enable_validation(is_validate)
+    infer.enable_validation(is_validate)
+
+
+@contextmanager
+def validation_enabled(is_validate=True):
+    infer_validation_status = infer.is_validation_enabled()
+    distribution_validation_status = dist.is_validation_enabled()
+    try:
+        enable_validation(is_validate)
+        yield
+    finally:
+        dist.enable_validation(distribution_validation_status)
+        infer.enable_validation(infer_validation_status)

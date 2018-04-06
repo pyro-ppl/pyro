@@ -4,6 +4,7 @@ import torch
 
 import pyro.distributions as dist
 import pyro.poutine as poutine
+from pyro.distributions.util import log_sum_exp
 import pyro.util as util
 
 
@@ -39,7 +40,7 @@ class Histogram(dist.Distribution):
     Abstract Histogram distribution of equality-comparable values.
     Should only be used inside Marginal.
     """
-    enumerable = True
+    has_enumerate_support = True
 
     @util.memoize
     def _dist_and_values(self, *args, **kwargs):
@@ -53,11 +54,11 @@ class Histogram(dist.Distribution):
                 logits.append(logit)
             else:
                 # Value has already been seen.
-                logits[ix] = util.log_sum_exp(torch.stack([logits[ix], logit]))
+                logits[ix] = log_sum_exp(torch.stack([logits[ix], logit]))
 
-        logits = torch.stack(logits).contiguous().view(-1)
-        logits -= util.log_sum_exp(logits)
-        logits = logits - util.log_sum_exp(logits)
+        logits = torch.stack(logits).reshape(-1)
+        logits -= log_sum_exp(logits)
+        logits = logits - log_sum_exp(logits)
         d = dist.Categorical(logits=logits)
         return d, values
 
@@ -142,6 +143,6 @@ class TracePosterior(object):
             traces.append(tr)
             logits.append(logit)
         logits = torch.stack(logits).squeeze()
-        logits -= util.log_sum_exp(logits)
+        logits -= log_sum_exp(logits)
         ix = dist.Categorical(logits=logits).sample()
         return traces[ix]

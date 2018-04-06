@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 from unittest import TestCase
 
 import numpy as np
+import pytest
 import torch
 
 import pyro.distributions as dist
@@ -11,10 +12,10 @@ from tests.common import assert_equal
 
 class TestDelta(TestCase):
     def setUp(self):
-        self.v = torch.tensor([3])
-        self.vs = torch.tensor([[0], [1], [2], [3]])
+        self.v = torch.tensor([3.0])
+        self.vs = torch.tensor([[0.0], [1.0], [2.0], [3.0]])
         self.vs_expanded = self.vs.expand(4, 3)
-        self.test_data = torch.tensor([[3], [3], [3]])
+        self.test_data = torch.tensor([[3.0], [3.0], [3.0]])
         self.batch_test_data_1 = torch.arange(0, 4).unsqueeze(1).expand(4, 3)
         self.batch_test_data_2 = torch.arange(4, 8).unsqueeze(1).expand(4, 3)
         self.batch_test_data_3 = torch.Tensor([[3], [3], [3], [3]])
@@ -24,7 +25,7 @@ class TestDelta(TestCase):
         self.analytic_var = 0
         self.n_samples = 10
 
-    def test_log_pdf(self):
+    def test_log_prob_sum(self):
         log_px_torch = dist.Delta(self.v).log_prob(self.test_data).sum()
         assert_equal(log_px_torch.item(), 0)
 
@@ -46,10 +47,17 @@ class TestDelta(TestCase):
         assert_equal(torch_mean, self.analytic_mean)
         assert_equal(torch_var, self.analytic_var)
 
-    def test_support(self):
-        actual_support = dist.Delta(self.vs).enumerate_support()
-        actual_support_non_vec = dist.Delta(self.v).enumerate_support()
-        assert len(actual_support) == 1
-        assert len(actual_support_non_vec) == 1
-        assert_equal(actual_support.data, torch.tensor(self.expected_support))
-        assert_equal(actual_support_non_vec.data, torch.tensor(self.expected_support_non_vec))
+
+@pytest.mark.parametrize('batch_dim,event_dim',
+                         [(b, e) for b in range(4) for e in range(1+b)])
+@pytest.mark.parametrize('has_log_density', [False, True])
+def test_shapes(batch_dim, event_dim, has_log_density):
+    shape = tuple(range(2, 2 + batch_dim + event_dim))
+    batch_shape = shape[:batch_dim]
+    v = torch.randn(shape)
+    log_density = torch.randn(batch_shape) if has_log_density else 0
+
+    d = dist.Delta(v, log_density=log_density, event_dim=event_dim)
+    x = d.rsample()
+    assert (x == v).all()
+    assert (d.log_prob(x) == log_density).all()
