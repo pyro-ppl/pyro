@@ -14,7 +14,6 @@ import torch.nn.functional as F
 
 import pyro
 import pyro.distributions as dist
-import pyro.poutine as poutine
 from modules import Identity, Encoder, Decoder, MLP, Predict
 
 
