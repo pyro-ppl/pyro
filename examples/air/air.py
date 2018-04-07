@@ -133,20 +133,21 @@ class AIR(nn.Module):
         # will be added to its output image. We can't
         # straight-forwardly avoid generating further objects, so
         # instead we zero out the log_prob_sum of future choices.
-        sample_mask = z_pres.squeeze(-1) if self.use_masking else 1
-        with poutine.scale(None, sample_mask):
+        sample_mask = z_pres if self.use_masking else torch.tensor(1.0)
 
-            # Sample attention window position.
-            z_where = pyro.sample('z_where_{}'.format(t),
-                                  dist.Normal(self.z_where_loc_prior.expand(n, self.z_where_size),
-                                              self.z_where_scale_prior.expand(n, self.z_where_size))
-                                      .reshape(extra_event_dims=1))
+        # Sample attention window position.
+        z_where = pyro.sample('z_where_{}'.format(t),
+                              dist.Normal(self.z_where_loc_prior.expand(n, self.z_where_size),
+                                          self.z_where_scale_prior.expand(n, self.z_where_size))
+                                  .mask(sample_mask)
+                                  .reshape(extra_event_dims=1))
 
-            # Sample latent code for contents of the attention window.
-            z_what = pyro.sample('z_what_{}'.format(t),
-                                 dist.Normal(self.prototype.new_zeros([n, self.z_what_size]),
-                                             self.prototype.new_ones([n, self.z_what_size]))
-                                     .reshape(extra_event_dims=1))
+        # Sample latent code for contents of the attention window.
+        z_what = pyro.sample('z_what_{}'.format(t),
+                             dist.Normal(self.prototype.new_zeros([n, self.z_what_size]),
+                                         self.prototype.new_ones([n, self.z_what_size]))
+                                 .mask(sample_mask)
+                                 .reshape(extra_event_dims=1))
 
         # Map latent code to pixel space.
         y_att = self.decode(z_what)
@@ -235,23 +236,26 @@ class AIR(nn.Module):
                              dist.Bernoulli(z_pres_p * prev.z_pres).reshape(extra_event_dims=1),
                              infer=dict(baseline=dict(baseline_value=bl_value.squeeze(-1))))
 
-        with poutine.scale(None, z_pres.squeeze(-1) if self.use_masking else 1):
-            z_where = pyro.sample('z_where_{}'.format(t),
-                                  dist.Normal(z_where_loc + self.z_where_loc_prior,
-                                              z_where_scale * self.z_where_scale_prior)
-                                      .reshape(extra_event_dims=1))
+        sample_mask = z_pres if self.use_masking else torch.tensor(1.0)
 
-            # Figure 2 of [1] shows x_att depending on z_where and h,
-            # rather than z_where and x as here, but I think this is
-            # correct.
-            x_att = image_to_window(z_where, self.window_size, self.x_size, inputs['raw'])
+        z_where = pyro.sample('z_where_{}'.format(t),
+                              dist.Normal(z_where_loc + self.z_where_loc_prior,
+                                          z_where_scale * self.z_where_scale_prior)
+                                  .mask(sample_mask)
+                                  .reshape(extra_event_dims=1))
 
-            # Encode attention windows.
-            z_what_loc, z_what_scale = self.encode(x_att)
+        # Figure 2 of [1] shows x_att depending on z_where and h,
+        # rather than z_where and x as here, but I think this is
+        # correct.
+        x_att = image_to_window(z_where, self.window_size, self.x_size, inputs['raw'])
 
-            z_what = pyro.sample('z_what_{}'.format(t),
-                                 dist.Normal(z_what_loc, z_what_scale)
-                                     .reshape(extra_event_dims=1))
+        # Encode attention windows.
+        z_what_loc, z_what_scale = self.encode(x_att)
+
+        z_what = pyro.sample('z_what_{}'.format(t),
+                             dist.Normal(z_what_loc, z_what_scale)
+                                 .mask(sample_mask)
+                                 .reshape(extra_event_dims=1))
         return GuideState(h=h, c=c, bl_h=bl_h, bl_c=bl_c, z_pres=z_pres, z_where=z_where, z_what=z_what)
 
     def baseline_step(self, prev, inputs):
