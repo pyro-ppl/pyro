@@ -140,7 +140,7 @@ def infer_config(fn, config_fn):
     return InferConfigPoutine(fn, config_fn)
 
 
-def scale(null, scale):
+def scale(fn, scale):
     """
     :param scale: a positive scaling factor
     :rtype: pyro.poutine.ScaleMessenger
@@ -151,7 +151,7 @@ def scale(null, scale):
     scale factor, scale the score of all sample and observe sites in the
     function.
     """
-    return ScaleMessenger(scale=scale)
+    return Poutine(ScaleMessenger(scale=scale), fn)
 
 
 #########################################

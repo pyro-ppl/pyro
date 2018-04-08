@@ -117,7 +117,7 @@ class GPRegression(GPModel):
         Lff = Kff.potrf(upper=False)
 
         loc, cov = conditional(Xnew, self.X, kernel, self.y, None, Lff, full_cov,
-                               self.jitter)
+                               jitter=self.jitter)
 
         if full_cov and not noiseless:
             cov = cov + noise.expand(Xnew.shape[0]).diag()

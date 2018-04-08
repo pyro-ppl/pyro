@@ -31,7 +31,7 @@ class MultiClass(Likelihood):
         self.response_function = (response_function if response_function is not None
                                   else _softmax)
 
-    def forward(self, f_loc, f_var, y):
+    def forward(self, f_loc, f_var, y=None):
         r"""
         Samples :math:`y` given :math:`f_{loc}`, :math:`f_{var}` according to
 
@@ -61,6 +61,10 @@ class MultiClass(Likelihood):
                              "number of classes. Expected {} but got {}."
                              .format(self.num_classes, f_swap.shape[-1]))
         f_res = self.response_function(f_swap)
+
+        if y is None:
+            return pyro.sample(self.y_name, dist.Categorical(f_res))
+
         return pyro.sample(self.y_name,
                            dist.Categorical(f_res)
                                .reshape(sample_shape=y.shape[:-f_res.dim() + 1],
