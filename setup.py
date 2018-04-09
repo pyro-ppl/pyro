@@ -45,7 +45,8 @@ except (IOError, ImportError, OSError) as e:
     long_description = open('README.md').read()
 
 # Remove badges since they will always be obsolete.
-blacklist = ['Build Status', 'Latest Version', 'travis-ci.org', 'pypi.python.org']
+blacklist = ['Build Status', 'Latest Version', 'Documentation Status',
+             'travis-ci.org', 'pypi.python.org', 'pyro-ppl.readthedocs.io']
 long_description = '\n'.join(
     [line for line in long_description.split('\n') if not any(patt in line for patt in blacklist)])
 
