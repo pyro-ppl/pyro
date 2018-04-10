@@ -6,7 +6,8 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-import pyro.poutine as poutine
+# import pyro.poutine as poutine
+import pyro.poutine.decorators as poutine
 from pyro.infer import ELBO, SVI, ADVIDiagonalNormal, ADVIMultivariateNormal
 from pyro.optim import Adam
 from tests.common import assert_equal
@@ -18,8 +19,8 @@ def test_scores(advi_class):
         pyro.sample("z", dist.Normal(0.0, 1.0))
 
     advi = advi_class(model)
-    guide_trace = poutine.trace(advi.guide).get_trace()
-    model_trace = poutine.trace(poutine.replay(advi.model, guide_trace)).get_trace()
+    guide_trace = poutine.trace()(advi.guide).get_trace()
+    model_trace = poutine.trace()(poutine.replay(guide_trace)(advi.model)).get_trace()
 
     guide_trace.compute_log_prob()
     model_trace.compute_log_prob()
