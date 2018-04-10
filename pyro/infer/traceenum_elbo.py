@@ -110,7 +110,6 @@ class TraceEnum_ELBO(ELBO):
         Performs backward on the ELBO of each particle.
         """
         elbo = 0.0
-        current_active_params = pyro.get_param_store().get_active_params()
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = _compute_dice_elbo(model_trace, guide_trace)
             if is_identically_zero(elbo_particle):
@@ -124,7 +123,7 @@ class TraceEnum_ELBO(ELBO):
                                    for site in trace.nodes.values()
                                    if site["type"] == "param")
 
-            if (trainable_params or current_active_params) and elbo_particle.requires_grad:
+            if trainable_params and elbo_particle.requires_grad:
                 loss_particle = -elbo_particle
                 (loss_particle / self.num_particles).backward()
                 pyro.get_param_store().mark_params_active(trainable_params)
