@@ -11,5 +11,5 @@ __all__ = [
     "GPRegression",
     "SparseGPRegression",
     "SparseVariationalGP",
-    "VariationalGP"
+    "VariationalGP",
 ]

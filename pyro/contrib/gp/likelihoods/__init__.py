@@ -9,5 +9,5 @@ __all__ = [
     "Binary",
     "Gaussian",
     "Likelihood",
-    "MultiClass"
+    "MultiClass",
 ]

@@ -6,8 +6,8 @@ from pyro.optim.pytorch_optimizers import __all__ as pytorch_optims
 
 
 __all__ = [
-    "PyroOptim",
     "AdagradRMSProp",
-    "ClippedAdam"
+    "ClippedAdam",
+    "PyroOptim",
 ]
 __all__.extend(pytorch_optims)

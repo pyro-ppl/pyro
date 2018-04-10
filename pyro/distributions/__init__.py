@@ -14,17 +14,17 @@ from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import enable_validation, is_validation_enabled
 
 __all__ = [
+    "enable_validation",
+    "is_validation_enabled",
     "Delta",
-    "Empirical",
     "Distribution",
+    "Empirical",
     "HalfCauchy",
     "InverseAutoregressiveFlow",
     "OMTMultivariateNormal",
     "Rejector",
     "SparseMultivariateNormal",
     "TorchDistribution",
-    "enable_validation",
-    "is_validation_enabled",
 ]
 
 # Import all torch distributions from `pyro.distributions.torch_distribution`
