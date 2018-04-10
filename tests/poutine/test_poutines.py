@@ -622,7 +622,7 @@ def test_enumerate_poutine(depth, first_available_dim):
         for i in range(depth):
             pyro.sample("a_{}".format(i), Bernoulli(0.5), infer={"enumerate": "parallel"})
 
-    model = poutine.EnumeratePoutine(model, first_available_dim)
+    model = poutine.EnumerateMessenger(first_available_dim)(model)
     model = poutine.trace(model)
 
     for i in range(num_particles):
@@ -645,7 +645,7 @@ def test_replay_enumerate_poutine(depth, first_available_dim):
     def guide():
         pyro.sample("y", y_dist, infer={"enumerate": "parallel"})
 
-    guide = poutine.EnumeratePoutine(guide, depth + first_available_dim)
+    guide = poutine.EnumerateMessenger(depth + first_available_dim)(guide)
     guide = poutine.trace(guide)
     guide_trace = guide.get_trace()
 
@@ -657,7 +657,7 @@ def test_replay_enumerate_poutine(depth, first_available_dim):
         for i in range(depth):
             pyro.sample("b_{}".format(i), Bernoulli(0.5), infer={"enumerate": "parallel"})
 
-    model = poutine.EnumeratePoutine(model, first_available_dim)
+    model = poutine.EnumerateMessenger(first_available_dim)(model)
     model = poutine.replay(model, guide_trace)
     model = poutine.trace(model)
 

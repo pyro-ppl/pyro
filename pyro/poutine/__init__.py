@@ -5,19 +5,18 @@ from six.moves import xrange
 
 from pyro.poutine import util
 
-# poutines
-from .block_poutine import BlockPoutine
-from .condition_poutine import ConditionPoutine
-from .enumerate_poutine import EnumeratePoutine  # noqa: F401
-from .escape_poutine import EscapePoutine
+from .block_poutine import BlockMessenger
+from .condition_poutine import ConditionMessenger
+from .enumerate_poutine import EnumerateMessenger  # noqa: F401
+from .escape_poutine import EscapeMessenger
 from .indep_poutine import IndepMessenger  # noqa: F401
-from .infer_config_poutine import InferConfigPoutine
-from .lift_poutine import LiftPoutine
-from .poutine import _PYRO_STACK, Poutine  # noqa: F401
-from .replay_poutine import ReplayPoutine
+from .infer_config_poutine import InferConfigMessenger
+from .lift_poutine import LiftMessenger
+from .poutine import _PYRO_STACK, Messenger  # noqa: F401
+from .replay_poutine import ReplayMessenger
 from .scale_poutine import ScaleMessenger
 from .trace import Trace  # noqa: F401
-from .trace_poutine import TracePoutine
+from .trace_poutine import TraceMessenger
 
 ############################################
 # Begin primitive operations
@@ -39,7 +38,7 @@ def trace(fn, graph_type=None):
 
     Adds trace data structure site constructors to primitive stacks
     """
-    return TracePoutine(fn, graph_type=graph_type)
+    return TraceMessenger(graph_type=graph_type)(fn)
 
 
 def replay(fn, trace, sites=None):
@@ -57,7 +56,7 @@ def replay(fn, trace, sites=None):
     return a callable that runs the original, reusing the values at sites in trace
     at those sites in the new trace
     """
-    return ReplayPoutine(fn, trace, sites=sites)
+    return ReplayMessenger(trace, sites=sites)(fn)
 
 
 def lift(fn, prior):
@@ -70,7 +69,7 @@ def lift(fn, prior):
     create a stochastic function where all param calls are replaced by sampling from prior.
     Prior should be a callable or a dict of names to callables.
     """
-    return LiftPoutine(fn, prior)
+    return LiftMessenger(prior)(fn)
 
 
 def block(fn, hide=None, expose=None, hide_types=None, expose_types=None):
@@ -88,8 +87,8 @@ def block(fn, hide=None, expose=None, hide_types=None, expose_types=None):
     Given a callable that contains Pyro primitive calls,
     selectively hide some of those calls from poutines higher up the stack
     """
-    return BlockPoutine(fn, hide=hide, expose=expose,
-                        hide_types=hide_types, expose_types=expose_types)
+    return BlockMessenger(hide=hide, expose=expose,
+                          hide_types=hide_types, expose_types=expose_types)(fn)
 
 
 def escape(fn, escape_fn=None):
@@ -106,7 +105,7 @@ def escape(fn, escape_fn=None):
     raise a NonlocalExit exception that stops execution
     and returns the offending site.
     """
-    return EscapePoutine(fn, escape_fn)
+    return EscapeMessenger(escape_fn)(fn)
 
 
 def condition(fn, data):
@@ -123,7 +122,7 @@ def condition(fn, data):
     change the sample statements at those names into observes
     with those values
     """
-    return ConditionPoutine(fn, data=data)
+    return ConditionMessenger(data=data)(fn)
 
 
 def infer_config(fn, config_fn):
@@ -137,10 +136,10 @@ def infer_config(fn, config_fn):
     and a callable taking a trace site and returning a dictionary,
     updates the value of the infer kwarg at a sample site to config_fn(site)
     """
-    return InferConfigPoutine(fn, config_fn)
+    return InferConfigMessenger(config_fn)(fn)
 
 
-def scale(null, scale):
+def scale(fn, scale):
     """
     :param scale: a positive scaling factor
     :rtype: pyro.poutine.ScaleMessenger
@@ -151,7 +150,9 @@ def scale(null, scale):
     scale factor, scale the score of all sample and observe sites in the
     function.
     """
-    return ScaleMessenger(scale=scale)
+    m = ScaleMessenger(scale=scale)
+    # temporary change to preserve API
+    return m(fn) if fn is not None else m
 
 
 #########################################
@@ -172,8 +173,7 @@ def do(fn, data):
     as if they were hard-coded to those values
     by using BlockPoutine
     """
-    return BlockPoutine(ConditionPoutine(fn, data=data),
-                        hide=list(data.keys()))
+    return block(condition(fn, data=data), hide=list(data.keys()))
 
 
 def queue(fn, queue, max_tries=None,

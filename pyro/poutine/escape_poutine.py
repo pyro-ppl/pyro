@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from .util import NonlocalExit
 
-from .poutine import Messenger, Poutine
+from .poutine import Messenger
 
 
 class EscapeMessenger(Messenger):
@@ -37,18 +37,3 @@ class EscapeMessenger(Messenger):
                 raise NonlocalExit(m)
             msg["continuation"] = cont
         return None
-
-
-class EscapePoutine(Poutine):
-    """
-    Poutine that does a nonlocal exit by raising a util.NonlocalExit exception
-    """
-    def __init__(self, fn, escape_fn):
-        """
-        :param fn: a stochastic function (callable containing pyro primitive calls)
-        :param escape_fn: function that takes a msg as input and returns True
-            if the poutine should perform a nonlocal exit at that site.
-
-        Constructor.  Stores fn and escape_fn.
-        """
-        super(EscapePoutine, self).__init__(EscapeMessenger(escape_fn), fn)
