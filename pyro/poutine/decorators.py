@@ -52,11 +52,11 @@ def do(data):
     as if they were hard-coded to those values
     by using BlockHandler
     """
-    def _fn(fn):
+    def _do_decorator(fn):
         return block(hide=list(data.keys()))(
             condition(data=data)(fn))
 
-    return _fn
+    return _do_decorator
 
 
 def queue(queue, max_tries=None,
@@ -87,7 +87,7 @@ def queue(queue, max_tries=None,
     if num_samples is None:
         num_samples = -1
 
-    def queue_decorator(fn):
+    def _queue_decorator(fn):
         def _fn(*args, **kwargs):
 
             for i in xrange(max_tries):
@@ -110,4 +110,4 @@ def queue(queue, max_tries=None,
             raise ValueError("max tries ({}) exceeded".format(str(max_tries)))
         return _fn
 
-    return queue_decorator
+    return _queue_decorator
