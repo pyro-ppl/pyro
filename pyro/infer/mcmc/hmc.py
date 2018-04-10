@@ -210,7 +210,8 @@ class HMC(TraceKernel):
             z = z_new
 
         if self.adapt_step_size:
-            accept_prob = (-delta_energy).exp().clamp(max=1).item()
+            accept_prob = (-delta_energy).exp().clamp(max=1).item() if not torch_isnan(delta_energy) \
+                else torch.tensor(0.0)
             self._adapt_step_size(accept_prob)
 
         self._t += 1
