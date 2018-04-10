@@ -4,11 +4,13 @@ import torch
 
 import pyro
 from pyro.params import module_from_param_with_module_name, user_param_name
+from pyro.optim.clipped_adam import ClippedAdam as pt_ClippedAdam
+from pyro.optim.adagrad_rmsprop import AdagradRMSProp as pt_AdagradRMSProp
 
 
 class PyroOptim(object):
     """
-    A wrapper for torch.optim.Optimizer objects that helps managing with dynamically generated parameters
+    A wrapper for torch.optim.Optimizer objects that helps with managing dynamically generated parameters.
 
     :param optim_constructor: a torch.optim.Optimizer
     :param optim_args: a dictionary of learning arguments for the optimizer or a callable that returns
@@ -114,3 +116,19 @@ class PyroOptim(object):
             return opt_dict
         else:
             return self.pt_optim_args
+
+
+def AdagradRMSProp(optim_args):
+    """
+    A wrapper for an optimizer that is a mash-up of
+    :class:`~torch.optim.Adagrad` and :class:`~torch.optim.RMSprop`.
+    """
+    return PyroOptim(pt_AdagradRMSProp, optim_args)
+
+
+def ClippedAdam(optim_args):
+    """
+    A wrapper for a modification of the :class:`~torch.optim.Adam`
+    optimization algorithm that supports gradient clipping.
+    """
+    return PyroOptim(pt_ClippedAdam, optim_args)
