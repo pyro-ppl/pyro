@@ -32,11 +32,18 @@ trace = TraceMessenger
 
 
 def do(data):
+    """
+    :param data: a dict or a Trace
+    :returns: stochastic function wrapped in a BlockHandler and ConditionHandler
+    :rtype: pyro.poutine.BlockHandler
 
-    # @do(data)
-    # def fn(...):
-    #     ...
-
+    Given a dictionary of values at names,
+    return a wrapper for a stochastic function that will
+    set the return values of those sites equal to the values
+    and hide them from the rest of the stack
+    as if they were hard-coded to those values
+    by using BlockHandler
+    """
     def _fn(fn):
         return block(hide=list(data.keys()))(
             condition(data=data)(fn))
@@ -81,8 +88,10 @@ def queue(queue, max_tries=None,
 
                 next_trace = queue.get()
                 try:
-                    ftr = trace(escape(replay(fn, next_trace),
-                                       functools.partial(escape_fn, next_trace)))
+                    ftr = trace()(
+                        escape(functools.partial(escape_fn, next_trace))(
+                            replay(next_trace)(
+                                fn)))
                     return ftr(*args, **kwargs)
                 except util.NonlocalExit as site_container:
                     site_container.reset_stack()
