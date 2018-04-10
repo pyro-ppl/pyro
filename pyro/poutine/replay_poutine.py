@@ -54,7 +54,7 @@ class ReplayMessenger(Messenger):
         from the stochastic function at the site.
 
         At a sample site that does not appear in self.guide_trace,
-        reverts to default Poutine._pyro_sample behavior with no additional side effects.
+        reverts to default Messenger._pyro_sample behavior with no additional side effects.
         """
         name = msg["name"]
         # case 1: dict, positive: sample from guide

@@ -27,12 +27,12 @@ def trace(fn, graph_type=None):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param graph_type: string that specifies the kind of graph to construct
-    :returns: stochastic function wrapped in a TracePoutine
-    :rtype: pyro.poutine.TracePoutine
+    :returns: stochastic function wrapped in a TraceHandler
+    :rtype: pyro.poutine.TraceHandler
 
-    Alias for TracePoutine constructor.
+    Alias for TraceHandler constructor.
 
-    Given a callable that contains Pyro primitive calls, return a TracePoutine callable
+    Given a callable that contains Pyro primitive calls, return a TraceHandler callable
     that records the inputs and outputs to those primitive calls
     and their dependencies.
 
@@ -47,10 +47,10 @@ def replay(fn, trace, sites=None):
     :param trace: a Trace data structure to replay against
     :param sites: list or dict of names of sample sites in fn to replay against,
     defaulting to all sites
-    :returns: stochastic function wrapped in a ReplayPoutine
-    :rtype: pyro.poutine.ReplayPoutine
+    :returns: stochastic function wrapped in a ReplayHandler
+    :rtype: pyro.poutine.ReplayHandler
 
-    Alias for ReplayPoutine constructor.
+    Alias for ReplayHandler constructor.
 
     Given a callable that contains Pyro primitive calls,
     return a callable that runs the original, reusing the values at sites in trace
@@ -63,7 +63,7 @@ def lift(fn, prior):
     """
     :param fn: function whose parameters will be lifted to random values
     :param prior: prior function in the form of a Distribution or a dict of stochastic fns
-    :returns: stochastic function wrapped in LiftPoutine
+    :returns: stochastic function wrapped in LiftHandler
 
     Given a stochastic function with param calls and a prior distribution,
     create a stochastic function where all param calls are replaced by sampling from prior.
@@ -79,10 +79,10 @@ def block(fn, hide=None, expose=None, hide_types=None, expose_types=None):
     :param expose: list of site names to be exposed while all others hidden
     :param hide_types: list of site types to be hidden
     :param expose_types: list of site types to be exposed while all others hidden
-    :returns: stochastic function wrapped in a BlockPoutine
-    :rtype: pyro.poutine.BlockPoutine
+    :returns: stochastic function wrapped in a BlockHandler
+    :rtype: pyro.poutine.BlockHandler
 
-    Alias for BlockPoutine constructor.
+    Alias for BlockHandler constructor.
 
     Given a callable that contains Pyro primitive calls,
     selectively hide some of those calls from poutines higher up the stack
@@ -96,9 +96,9 @@ def escape(fn, escape_fn=None):
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param escape_fn: function that takes a partial trace and a site
     and returns a boolean value to decide whether to exit at that site
-    :returns: stochastic function wrapped in EscapePoutine
+    :returns: stochastic function wrapped in EscapeHandler
 
-    Alias for EscapePoutine constructor.
+    Alias for EscapeHandler constructor.
 
     Given a callable that contains Pyro primitive calls,
     evaluate escape_fn on each site, and if the result is True,
@@ -112,10 +112,10 @@ def condition(fn, data):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param data: a dict or a Trace
-    :returns: stochastic function wrapped in a ConditionPoutine
-    :rtype: pyro.poutine.ConditionPoutine
+    :returns: stochastic function wrapped in a ConditionHandler
+    :rtype: pyro.poutine.ConditionHandler
 
-    Alias for ConditionPoutine constructor.
+    Alias for ConditionHandler constructor.
 
     Given a stochastic function with some sample statements
     and a dictionary of observations at names,
@@ -130,7 +130,7 @@ def infer_config(fn, config_fn):
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param config_fn: a callable taking a site and returning an infer dict
 
-    Alias for :class:`~pyro.poutine.infer_config_poutine.InferConfigPoutine` constructor.
+    Alias for :class:`~pyro.poutine.infer_config_poutine.InferConfigHandler` constructor.
 
     Given a callable that contains Pyro primitive calls
     and a callable taking a trace site and returning a dictionary,
@@ -163,15 +163,15 @@ def do(fn, data):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param data: a dict or a Trace
-    :returns: stochastic function wrapped in a BlockPoutine and ConditionPoutine
-    :rtype: pyro.poutine.BlockPoutine
+    :returns: stochastic function wrapped in a BlockHandler and ConditionHandler
+    :rtype: pyro.poutine.BlockHandler
 
     Given a stochastic function with some sample statements
     and a dictionary of values at names,
     set the return values of those sites equal to the values
     and hide them from the rest of the stack
     as if they were hard-coded to those values
-    by using BlockPoutine
+    by using BlockHandler
     """
     return block(condition(fn, data=data), hide=list(data.keys()))
 
