@@ -7,6 +7,7 @@ import torch
 import pyro
 import pyro.distributions as dist
 from pyro.ops.integrator import single_step_velocity_verlet
+from pyro.util import torch_isnan
 
 from .hmc import HMC
 
@@ -100,9 +101,17 @@ class NUTS(HMC):
         # Due to this elimination (and stop doubling conditions),
         #     the size of binary tree might not equal to 2^tree_depth.
         tree_size = 1 if sliced_energy <= 0 else 0
-        diverging = sliced_energy >= self._max_sliced_energy
-        delta_energy = energy_new - energy_current
-        accept_prob = (-delta_energy).exp().clamp(max=1)
+        # Special case: Set diverging to True and accept prob to 0 if the
+        # diverging trajectory returns `NaN` energy (e.g. in the case of
+        # evaluating log prob of a value simulated using a large step size
+        # for a constrained sample site).
+        if torch_isnan(energy_new):
+            diverging = True
+            accept_prob = energy_new.new_tensor(0.0)
+        else:
+            diverging = (sliced_energy >= self._max_sliced_energy)
+            delta_energy = energy_new - energy_current
+            accept_prob = (-delta_energy).exp().clamp(max=1)
         return _TreeInfo(z_new, r_new, z_grads, z_new, r_new, z_grads,
                          z_new, tree_size, False, diverging, accept_prob, 1)
 
@@ -245,7 +254,7 @@ class NUTS(HMC):
                 tree_size += new_tree.size
 
         if self.adapt_step_size:
-            accept_prob = new_tree.sum_accept_probs.item() / new_tree.num_proposals
+            accept_prob = new_tree.sum_accept_probs / new_tree.num_proposals
             self._adapt_step_size(accept_prob)
 
         if accepted:

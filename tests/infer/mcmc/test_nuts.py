@@ -152,7 +152,7 @@ def test_logistic_regression_with_dual_averaging():
     assert_equal(rmse(true_coefs, posterior_mean).item(), 0.0, prec=0.05)
 
 
-@pytest.mark.xfail(reason='the model is sensitive to NaN log_prob_sum')
+@pytest.mark.filterwarnings("ignore:Encountered NAN")
 def test_bernoulli_beta_with_dual_averaging():
     def model(data):
         alpha = torch.tensor([1.1, 1.1])
@@ -166,7 +166,9 @@ def test_bernoulli_beta_with_dual_averaging():
     posterior = []
     true_probs = torch.tensor([0.9, 0.1])
     data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
-    for trace, _ in mcmc_run._traces(data):
-        posterior.append(trace.nodes['p_latent']['value'])
+    # Model temporarily returns NaNs during warmup phase while tuning step size
+    with pyro.validation_enabled(False):
+        for trace, _ in mcmc_run._traces(data):
+            posterior.append(trace.nodes['p_latent']['value'])
     posterior_mean = torch.mean(torch.stack(posterior), 0)
     assert_equal(posterior_mean.data, true_probs.data, prec=0.01)
