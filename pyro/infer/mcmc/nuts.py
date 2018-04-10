@@ -101,10 +101,17 @@ class NUTS(HMC):
         # Due to this elimination (and stop doubling conditions),
         #     the size of binary tree might not equal to 2^tree_depth.
         tree_size = 1 if sliced_energy <= 0 else 0
-        diverging = sliced_energy >= self._max_sliced_energy
-        delta_energy = energy_new - energy_current
-        accept_prob = (-delta_energy).exp().clamp(max=1) if not torch_isnan(delta_energy) \
-            else torch.tensor(0.0)
+        # Special case: Set diverging to True and accept prob to 0 if the
+        # diverging trajectory returns `NaN` energy (e.g. in the case of
+        # evaluating log prob of a value simulated using a large step size
+        # for a constrained sample site).
+        if torch_isnan(energy_new):
+            diverging = True
+            accept_prob = torch.tensor(0.0)
+        else:
+            diverging = sliced_energy >= self._max_sliced_energy
+            delta_energy = energy_new - energy_current
+            accept_prob = (-delta_energy).exp().clamp(max=1)
         return _TreeInfo(z_new, r_new, z_grads, z_new, r_new, z_grads,
                          z_new, tree_size, False, diverging, accept_prob, 1)
 

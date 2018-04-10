@@ -119,7 +119,11 @@ class HMC(TraceKernel):
             z, r, self._potential_energy, step_size)
         energy_new = potential_energy + self._kinetic_energy(r_new)
         delta_energy = energy_new - energy_current
-        # direction=1 means keep increasing step_size, otherwise decreasing step_size
+        # direction=1 means keep increasing step_size, otherwise decreasing step_size.
+        # Note that the direction is -1 if delta_energy is `NaN` which may be the
+        # case for a diverging trajectory (e.g. in the case of evaluating log prob
+        # of a value simulated using a large step size for a constrained sample
+        # site).
         direction = 1 if target_accept_logprob < -delta_energy else -1
 
         # define scale for step_size: 2 for increasing, 1/2 for decreasing
@@ -210,6 +214,10 @@ class HMC(TraceKernel):
             z = z_new
 
         if self.adapt_step_size:
+            # Set accept prob to 0.0 if delta_energy is `NaN` which could be the case
+            # which may be the case for a diverging trajectory (e.g. in the case of
+            # evaluating log prob of a value simulated using a large step size for
+            # a constrained sample site).
             accept_prob = (-delta_energy).exp().clamp(max=1).item() if not torch_isnan(delta_energy) \
                 else torch.tensor(0.0)
             self._adapt_step_size(accept_prob)
