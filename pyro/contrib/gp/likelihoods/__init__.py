@@ -1,8 +1,13 @@
 from __future__ import absolute_import, division, print_function
 
-from .binary import Binary
-from .gaussian import Gaussian
-from .likelihood import Likelihood
-from .multi_class import MultiClass
+from pyro.contrib.gp.likelihoods.binary import Binary
+from pyro.contrib.gp.likelihoods.gaussian import Gaussian
+from pyro.contrib.gp.likelihoods.likelihood import Likelihood
+from pyro.contrib.gp.likelihoods.multi_class import MultiClass
 
-# flake8: noqa
+__all__ = [
+    "Binary",
+    "Gaussian",
+    "Likelihood",
+    "MultiClass",
+]
