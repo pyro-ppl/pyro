@@ -10,9 +10,9 @@ from torch.nn import functional
 from torchvision.utils import save_image
 
 import pyro
-from examples import util
-from examples.util import RESULTS_DIR
-from pyro.distributions import Normal, Bernoulli
+from pyro.contrib.examples import util
+from pyro.contrib.examples.util import RESULTS_DIR
+from pyro.distributions import Bernoulli, Normal
 from pyro.infer import SVI
 from pyro.optim import Adam
 

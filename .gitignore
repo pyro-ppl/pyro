@@ -6,6 +6,9 @@ examples/processed
 examples/results
 examples/raw
 examples/dmm/*.pkl
+pyro/contrib/examples/processed
+pyro/contrib/examples/results
+pyro/contrib/examples/raw
 pyro/_version.py
 processed
 raw

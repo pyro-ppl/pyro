@@ -1,15 +1,16 @@
 
 import torch
+import torch.nn as nn
+
 import pyro
 import pyro.distributions as dist
-from utils.mnist_cached import MNISTCached, setup_data_loaders
+from pyro.contrib.examples.custom_mlp import MLP, Exp
+from pyro.contrib.examples.mnist_cached import MNISTCached, setup_data_loaders
+from pyro.contrib.examples.util import mkdir_p, print_and_log, set_seed
+from pyro.contrib.examples.vae_plots import mnist_test_tsne_ssvae, plot_conditional_samples_ssvae
 from pyro.infer import SVI, config_enumerate
+from pyro.nn import ClippedSigmoid, ClippedSoftmax
 from pyro.optim import Adam
-from pyro.nn import ClippedSoftmax, ClippedSigmoid
-from utils.custom_mlp import MLP, Exp
-from utils.vae_plots import plot_conditional_samples_ssvae, mnist_test_tsne_ssvae
-from util import set_seed, print_and_log, mkdir_p
-import torch.nn as nn
 
 
 class SSVAE(nn.Module):
