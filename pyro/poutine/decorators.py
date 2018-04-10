@@ -19,6 +19,10 @@ from .trace import Trace  # noqa: F401
 from .trace_poutine import TraceMessenger
 
 
+############################################
+# Begin primitive operations
+############################################
+
 block = BlockMessenger
 condition = ConditionMessenger
 enum = EnumerateMessenger
@@ -30,6 +34,10 @@ replay = ReplayMessenger
 scale = ScaleMessenger
 trace = TraceMessenger
 
+
+#########################################
+# Begin composite operations
+#########################################
 
 def do(data):
     """
