@@ -218,8 +218,10 @@ class HMC(TraceKernel):
             # which may be the case for a diverging trajectory (e.g. in the case of
             # evaluating log prob of a value simulated using a large step size for
             # a constrained sample site).
-            accept_prob = (-delta_energy).exp().clamp(max=1).item() if not torch_isnan(delta_energy) \
-                else torch.tensor(0.0)
+            if torch_isnan(delta_energy):
+                accept_prob = delta_energy.new_tensor(0.0)
+            else:
+                accept_prob = (-delta_energy).exp().clamp(max=1).item()
             self._adapt_step_size(accept_prob)
 
         self._t += 1

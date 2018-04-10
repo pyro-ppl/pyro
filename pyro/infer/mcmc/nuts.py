@@ -107,9 +107,9 @@ class NUTS(HMC):
         # for a constrained sample site).
         if torch_isnan(energy_new):
             diverging = True
-            accept_prob = torch.tensor(0.0)
+            accept_prob = energy_new.new_tensor(0.0)
         else:
-            diverging = sliced_energy >= self._max_sliced_energy
+            diverging = (sliced_energy >= self._max_sliced_energy)
             delta_energy = energy_new - energy_current
             accept_prob = (-delta_energy).exp().clamp(max=1)
         return _TreeInfo(z_new, r_new, z_grads, z_new, r_new, z_grads,
