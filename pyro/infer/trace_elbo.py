@@ -95,6 +95,7 @@ class Trace_ELBO(ELBO):
         Performs backward on the latter. Num_particle many samples are used to form the estimators.
         """
         elbo = 0.0
+        current_active_params = pyro.get_param_store().get_active_params()
         # grab a trace from the generator
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = 0
@@ -132,7 +133,8 @@ class Trace_ELBO(ELBO):
                                    for site in trace.nodes.values()
                                    if site["type"] == "param")
 
-            if trainable_params and getattr(surrogate_elbo_particle, 'requires_grad', False):
+            if (trainable_params or current_active_params) and getattr(surrogate_elbo_particle,
+                                                                       'requires_grad', False):
                 surrogate_loss_particle = -surrogate_elbo_particle / self.num_particles
                 surrogate_loss_particle.backward()
                 pyro.get_param_store().mark_params_active(trainable_params)
