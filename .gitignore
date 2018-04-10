@@ -2,9 +2,9 @@ run_outputs*
 .DS_Store
 .benchmarks
 data
-examples/processed
-examples/results
-examples/raw
+examples/*/processed
+examples/*/results
+examples/*/raw
 examples/dmm/*.pkl
 pyro/contrib/examples/processed
 pyro/contrib/examples/results

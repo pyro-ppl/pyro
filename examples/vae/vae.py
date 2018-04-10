@@ -7,11 +7,11 @@ import visdom
 
 import pyro
 import pyro.distributions as dist
-from pyro.contrib.examples.mnist_cached import MNISTCached as MNIST
-from pyro.contrib.examples.mnist_cached import setup_data_loaders
-from pyro.contrib.examples.vae_plots import mnist_test_tsne, plot_llk, plot_vae_samples
 from pyro.infer import SVI
 from pyro.optim import Adam
+from utils.mnist_cached import MNISTCached as MNIST
+from utils.mnist_cached import setup_data_loaders
+from utils.vae_plots import mnist_test_tsne, plot_llk, plot_vae_samples
 
 fudge = 1e-7
 

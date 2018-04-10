@@ -1,8 +1,13 @@
-import torch
-from torchvision.datasets import MNIST
-import numpy as np
+import errno
+import os
 from functools import reduce
+
+import numpy as np
+import torch
 from torch.utils.data import DataLoader
+from torchvision.datasets import MNIST
+
+
 # This file contains utilities for caching, transforming and splitting MNIST data
 # efficiently. By default, a Pytorch DataLoader will apply the transform every epoch
 # we avoid this by caching the data early on in MNISTCached class
@@ -218,3 +223,18 @@ def setup_data_loaders(dataset, use_cuda, batch_size, sup_num=None, root='./data
         loaders[mode] = DataLoader(cached_data[mode], batch_size=batch_size, shuffle=True, **kwargs)
 
     return loaders
+
+
+def mkdir_p(path):
+    try:
+        os.makedirs(path)
+    except OSError as exc:  # Python >2.5
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else:
+            raise
+
+
+EXAMPLE_DIR = os.path.dirname(os.path.abspath(os.path.join(__file__, os.pardir)))
+DATA_DIR = os.path.join(EXAMPLE_DIR, 'data')
+RESULTS_DIR = os.path.join(EXAMPLE_DIR, 'results')
