@@ -5,7 +5,8 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-import pyro.poutine as poutine
+# import pyro.poutine as poutine
+import pyro.poutine.decorators as poutine
 from pyro.util import set_rng_seed
 from tests.common import assert_equal
 
@@ -27,7 +28,7 @@ class ExampleModel(object):
         """
         p = getattr(poutine, poutine_name)
         kwargs = self.poutine_kwargs.get(poutine_name, {})
-        return lambda fn: p(fn, **kwargs)
+        return lambda fn: p(**kwargs)(fn)
 
 
 def register_model(**poutine_kwargs):
@@ -100,7 +101,7 @@ def bernoulli_normal_model():
 
 def get_trace(fn, *args, **kwargs):
     set_rng_seed(123)
-    return poutine.trace(fn).get_trace(*args, **kwargs)
+    return poutine.trace()(fn).get_trace(*args, **kwargs)
 
 
 @pytest.mark.parametrize('model', EXAMPLE_MODELS, ids=EXAMPLE_MODEL_IDS)
