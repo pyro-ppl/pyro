@@ -69,9 +69,11 @@ class SparseVariationalGP(GPModel):
         a covariance matrix to help stablize its Cholesky decomposition.
     :param str name: Name of this model.
     """
-    def __init__(self, X, y, kernel, Xu, likelihood, latent_shape=None, num_data=None,
-                 whiten=False, jitter=1e-6, name="SVGP"):
-        super(SparseVariationalGP, self).__init__(X, y, kernel, jitter, name)
+    def __init__(self, X, y, kernel, Xu, likelihood, mean_function=None,
+                 latent_shape=None, num_data=None, whiten=False, jitter=1e-6,
+                 name="SVGP"):
+        super(SparseVariationalGP, self).__init__(X, y, kernel, mean_function,
+                                                  jitter, name)
         self.likelihood = likelihood
 
         self.num_data = num_data if num_data is not None else self.X.shape[0]
@@ -121,6 +123,7 @@ class SparseVariationalGP(GPModel):
         f_loc, f_var = conditional(self.X, Xu, self.kernel, u_loc, u_scale_tril,
                                    Luu, full_cov=False, whiten=self.whiten,
                                    jitter=self.jitter)
+        f_loc = f_loc + self.mean_function(self.X)
 
         likelihood = poutine.scale(self.likelihood, self.num_data / self.X.shape[0])
 
@@ -171,4 +174,4 @@ class SparseVariationalGP(GPModel):
         loc, cov = conditional(Xnew, Xu, kernel, u_loc, u_scale_tril,
                                full_cov=full_cov, whiten=self.whiten,
                                jitter=self.jitter)
-        return loc, cov
+        return loc + self.mean_function(Xnew), cov

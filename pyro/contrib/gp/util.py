@@ -133,6 +133,10 @@ class Parameterized(nn.Module):
         self._registered_params[param] = p
 
 
+def zero_mean_function(x):
+    return 0
+
+
 def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=False,
                 whiten=False, jitter=1e-6):
     """

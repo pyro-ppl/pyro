@@ -132,7 +132,10 @@ class Trace_ELBO(ELBO):
                                    for site in trace.nodes.values()
                                    if site["type"] == "param")
 
-            if trainable_params and getattr(surrogate_elbo_particle, 'requires_grad', False):
+            current_active_params = pyro.get_param_store().get_active_params()
+
+            if (trainable_params or current_active_params) and getattr(surrogate_elbo_particle,
+                                                                       'requires_grad', False):
                 surrogate_loss_particle = -surrogate_elbo_particle / self.num_particles
                 surrogate_loss_particle.backward()
                 pyro.get_param_store().mark_params_active(trainable_params)

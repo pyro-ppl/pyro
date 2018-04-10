@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from pyro.contrib.gp.util import Parameterized
+from pyro.contrib.gp.util import Parameterized, zero_mean_function
 from pyro.infer.svi import SVI
 from pyro.optim import Adam, PyroOptim
 
@@ -73,10 +73,12 @@ class GPModel(Parameterized):
         a covariance matrix to help stablize its Cholesky decomposition.
     :param str name: Name of this model.
     """
-    def __init__(self, X, y, kernel, jitter=1e-6, name=None):
+    def __init__(self, X, y, kernel, mean_function=None, jitter=1e-6, name=None):
         super(GPModel, self).__init__(name)
         self.set_data(X, y)
         self.kernel = kernel
+        self.mean_function = (mean_function if mean_function is not None
+                              else zero_mean_function)
         self.jitter = jitter
 
     def model(self):
