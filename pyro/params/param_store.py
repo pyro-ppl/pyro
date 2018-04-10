@@ -73,9 +73,10 @@ class ParamStoreDict(object):
             this information is used to determine which parameters are being optimized,
             e.g. in the context of pyro.infer.SVI
         """
-        assert(all([p in self._param_to_name for p in params])), \
+        params_set = set(params)
+        assert(all([p in self._param_to_name for p in params_set])), \
             "some of these parameters are not in the ParamStore"
-        self._active_params.update(set(params))
+        self._active_params.update(params_set)
 
     def mark_params_inactive(self, params):
         """
@@ -83,9 +84,10 @@ class ParamStoreDict(object):
             this information is used to determine which parameters are being optimized,
             e.g. in the context of pyro.infer.SVI
         """
-        assert(all([p in self._param_to_name for p in params])), \
+        params_set = set(params)
+        assert(all([p in self._param_to_name for p in params_set])), \
             "some of these parameters are not in the ParamStore"
-        self._active_params.difference_update(set(params))
+        self._active_params.difference_update(set(params_set))
 
     def replace_param(self, param_name, new_param, old_param):
         """
