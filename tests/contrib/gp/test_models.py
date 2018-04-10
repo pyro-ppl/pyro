@@ -254,7 +254,7 @@ def test_inference_with_empty_latent_shape(model_class, X, y, kernel, likelihood
 
 @pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
 def test_inference_with_whiten(model_class, X, y, kernel, likelihood):
-    # regression models don't use latent_shape (default=torch.Size([]))
+    # regression models don't use whiten
     if model_class is GPRegression or model_class is SparseGPRegression:
         return
     elif model_class is VariationalGP:

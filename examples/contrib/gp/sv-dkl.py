@@ -4,7 +4,7 @@ from reference [1], we will combine a convolutional neural network with a RBF ke
 to create a "deep" kernel. Then we train a SparseVariationalGP model using SVI. Note
 that the model is trained end-to-end in mini-batch.
 
-With default arguments, the accuracy is 98.46%.
+With default arguments (trained on CPU), the accuracy is 98.59%.
 
 Reference:
 
@@ -26,7 +26,6 @@ import pyro
 import pyro.contrib.gp as gp
 import pyro.infer as infer
 import pyro.optim as optim
-import pyro.poutine as poutine
 from examples import util
 
 
@@ -47,13 +46,11 @@ class CNN(nn.Module):
         return x
 
 
-def train(args, train_loader, gpmodel, svi, cnn, epoch):
+def train(args, train_loader, gpmodel, svi, epoch):
     for batch_idx, (data, target) in enumerate(train_loader):
         if args.cuda:
             data, target = data.cuda(), target.cuda()
         gpmodel.set_data(data, target)
-        # mark params of cnn active for svi's optimizer
-        pyro.get_param_store().mark_params_active(cnn.parameters())
         loss = svi.step()
         if batch_idx % args.log_interval == 0:
             print('Train Epoch: {:2d} [{:5d}/{} ({:2.0f}%)]\tLoss: {:.6f}'.format(
@@ -87,9 +84,14 @@ def main(args):
                                        is_training_set=False,
                                        shuffle=True)
 
-    cnn = pyro.module("CNN", CNN().cuda() if args.cuda else CNN())
+    cnn = CNN().cuda() if args.cuda else CNN()
+
+    # helper to inject CNN's parameters to gpmodel
+    def cnn_fn(x):
+        return pyro.module("CNN", cnn)(x)
     # create deep kernel by warping RBF with cnn
-    kernel = gp.kernels.RBF(input_dim=10, lengthscale=torch.ones(10)).warp(iwarping_fn=cnn)
+    kernel = gp.kernels.RBF(input_dim=10, lengthscale=torch.ones(10)).warp(iwarping_fn=cnn_fn)
+
     # init inducing points (taken randomly from dataset)
     Xu = next(iter(train_loader))[0][:args.num_inducing]
     likelihood = gp.likelihoods.MultiClass(num_classes=10)
@@ -101,12 +103,10 @@ def main(args):
 
     optimizer = optim.Adam({"lr": args.lr})
 
-    # it is necessary to scale the loss by taking averaging over train data size
-    svi = infer.SVI(poutine.scale(gpmodel.model, 1/60000), poutine.scale(gpmodel.guide, 1/60000),
-                    optimizer, "ELBO")
+    svi = infer.SVI(gpmodel.model, gpmodel.guide, optimizer, "ELBO")
 
     for epoch in range(1, args.epochs + 1):
-        train(args, train_loader, gpmodel, svi, cnn, epoch)
+        train(args, train_loader, gpmodel, svi, epoch)
         with torch.no_grad():
             test(args, test_loader, gpmodel)
 

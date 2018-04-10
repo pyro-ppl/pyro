@@ -128,12 +128,11 @@ class SparseVariationalGP(GPModel):
                                    Luu, full_cov=False, whiten=self.whiten,
                                    jitter=self.jitter)
 
-        likelihood = poutine.scale(self.likelihood, self.num_data / self.X.shape[0])
-
         if self.y is None:
             return f_loc, f_var
         else:
-            return likelihood(f_loc, f_var, self.y)
+            with poutine.scale(None, self.num_data / self.X.shape[0]):
+                return self.likelihood(f_loc, f_var, self.y)
 
     def guide(self):
         self.set_mode("guide")
