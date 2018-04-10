@@ -51,8 +51,8 @@ class SparseVariationalGP(GPModel):
     [2] `MCMC for Variationally Sparse Gaussian Processes`,
     James Hensman, Alexander G. de G. Matthews, Maurizio Filippone, Zoubin Ghahramani
 
-    :param torch.Tensor X: A 1D or 2D input data for training. Its first dimension is
-        the number of data points.
+    :param torch.Tensor X: A input data for training. Its first dimension is the number
+        of data points.
     :param torch.Tensor y: An output data for training. Its last dimension is the
         number of data points.
     :param ~pyro.contrib.gp.kernels.kernel.Kernel kernel: A Pyro kernel object, which
@@ -65,15 +65,19 @@ class SparseVariationalGP(GPModel):
         :math:`q(u)`). By default, it equals to output batch shape ``y.shape[:-1]``.
         For the multi-class classification problems, ``latent_shape[-1]`` should
         corresponse to the number of classes.
+    :param int num_data: The size of full training dataset. It is useful for training
+        this model with mini-batch.
+    :param bool whiten: A flag to tell if variational parameters ``u_loc`` and
+        ``u_scale_tril`` are transformed by the inverse of ``Luu``, where ``Luu`` is
+        the lower triangular decomposition of :math:`kernel(X_u, X_u)`. Enable this
+        flag will help optimization.
     :param float jitter: A small positive term which is added into the diagonal part of
         a covariance matrix to help stablize its Cholesky decomposition.
     :param str name: Name of this model.
     """
-    def __init__(self, X, y, kernel, Xu, likelihood, mean_function=None,
-                 latent_shape=None, num_data=None, whiten=False, jitter=1e-6,
-                 name="SVGP"):
-        super(SparseVariationalGP, self).__init__(X, y, kernel, mean_function,
-                                                  jitter, name)
+    def __init__(self, X, y, kernel, Xu, likelihood, latent_shape=None, num_data=None,
+                 whiten=False, jitter=1e-6, name="SVGP"):
+        super(SparseVariationalGP, self).__init__(X, y, kernel, jitter, name)
         self.likelihood = likelihood
 
         self.num_data = num_data if num_data is not None else self.X.shape[0]
@@ -123,7 +127,6 @@ class SparseVariationalGP(GPModel):
         f_loc, f_var = conditional(self.X, Xu, self.kernel, u_loc, u_scale_tril,
                                    Luu, full_cov=False, whiten=self.whiten,
                                    jitter=self.jitter)
-        f_loc = f_loc + self.mean_function(self.X)
 
         likelihood = poutine.scale(self.likelihood, self.num_data / self.X.shape[0])
 
@@ -158,8 +161,8 @@ class SparseVariationalGP(GPModel):
             inducing-point parameter ``Xu``, together with kernel's parameters have
             been learned from a training procedure (MCMC or SVI).
 
-        :param torch.Tensor Xnew: A 1D or 2D input data for testing. In 2D case, its
-            second dimension should have the same size as of train input data.
+        :param torch.Tensor Xnew: A input data for testing. Note that
+            ``Xnew.shape[1:]`` must be the same as ``self.X.shape[1:]``.
         :param bool full_cov: A flag to decide if we want to predict full covariance
             matrix or just variance.
         :returns: loc and covariance matrix (or variance) of :math:`p(f^*(X_{new}))`
@@ -174,4 +177,4 @@ class SparseVariationalGP(GPModel):
         loc, cov = conditional(Xnew, Xu, kernel, u_loc, u_scale_tril,
                                full_cov=full_cov, whiten=self.whiten,
                                jitter=self.jitter)
-        return loc + self.mean_function(Xnew), cov
+        return loc, cov

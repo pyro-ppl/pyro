@@ -133,10 +133,6 @@ class Parameterized(nn.Module):
         self._registered_params[param] = p
 
 
-def zero_mean_function(x):
-    return 0
-
-
 def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=False,
                 whiten=False, jitter=1e-6):
     """
@@ -183,6 +179,8 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
         (optional).
     :param bool full_cov: A flag to decide if we want to return full covariance
         matrix or just variance.
+    :param bool whiten: A flag to tell if ``f_loc`` and ``f_scale_tril`` are
+        already transformed by the inverse of ``Lff``.
     :param float jitter: A small positive term which is added into the diagonal part of
         a covariance matrix to help stablize its Cholesky decomposition.
     :returns: loc and covariance matrix (or variance) of :math:`p(f^*(X_{new}))`
