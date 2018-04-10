@@ -99,3 +99,19 @@ def test_quantiles(advi_class):
     assert quantiles["z"][0] + 0.1 < quantiles["z"][1]
     assert quantiles["z"][1] + 0.1 < quantiles["z"][2]
     assert quantiles["z"][2] < 0.99
+
+
+@pytest.mark.parametrize("advi_class", [ADVIMultivariateNormal, ADVIDiagonalNormal])
+def test_discrete_parallel(continuous_class):
+    K = 2
+    data = torch.tensor([0., 1., 10., 11., 12.])
+
+    def model(data):
+        weights = pyro.sample('weights', dist.Dirichlet(0.5 * torch.ones(K)))
+        locs = pyro.sample('locs', dist.Normal(0, 10).reshape([K]))
+        scale = pyro.sample('scale', dist.LogNormal(0, 1))
+
+        with pyro.iarange('data'):
+            # Local variables.
+            assignment = pyro.sample('assignment', dist.Categorical(weights).reshape([len(data)]))
+            pyro.sample('obs', dist.Normal(locs[assignment], scale), obs=data)
