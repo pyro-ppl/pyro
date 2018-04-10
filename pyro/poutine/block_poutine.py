@@ -12,8 +12,8 @@ class BlockMessenger(Messenger):
     Then any poutine outside of BlockMessenger(fn, hide=["a"])
     will not be applied to site "a" and will only see site "b":
 
-    >>> fn_inner = TraceMessenger(fn)
-    >>> fn_outer = TraceMessenger(BlockMessenger(TraceMessenger(fn), hide=["a"]))
+    >>> fn_inner = TraceMessenger()(fn)
+    >>> fn_outer = TraceMessenger()(BlockMessenger(hide=["a"])(TraceMessenger()(fn)))
     >>> trace_inner = fn_inner.get_trace()
     >>> trace_outer  = fn_outer.get_trace()
     >>> "a" in trace_inner

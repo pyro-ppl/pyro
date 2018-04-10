@@ -152,7 +152,7 @@ def scale(fn, scale):
     """
     m = ScaleMessenger(scale=scale)
     # temporary change to preserve API
-    return m(fn) if fn is not None else m
+    return m(fn) if callable(fn) else m
 
 
 #########################################
