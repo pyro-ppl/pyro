@@ -10,5 +10,5 @@ __all__ = [
     "kernels",
     "likelihoods",
     "models",
-    "util"
+    "util",
 ]

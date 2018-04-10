@@ -7,5 +7,5 @@ __all__ = [
     "AutoRegressiveNN",
     "ClippedSigmoid",
     "ClippedSoftmax",
-    "MaskedLinear"
+    "MaskedLinear",
 ]
