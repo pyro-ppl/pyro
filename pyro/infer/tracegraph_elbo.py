@@ -8,7 +8,8 @@ import torch
 
 import pyro
 import pyro.infer as infer
-import pyro.poutine as poutine
+# import pyro.poutine as poutine
+import pyro.poutine.decorators as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer import ELBO
 from pyro.infer.util import (MultiFrameTensor, get_iarange_stacks, torch_backward,
@@ -196,10 +197,9 @@ class TraceGraph_ELBO(ELBO):
         """
 
         for i in range(self.num_particles):
-            guide_trace = poutine.trace(guide,
-                                        graph_type="dense").get_trace(*args, **kwargs)
-            model_trace = poutine.trace(poutine.replay(model, guide_trace),
-                                        graph_type="dense").get_trace(*args, **kwargs)
+            guide_trace = poutine.trace(graph_type="dense")(guide).get_trace(*args, **kwargs)
+            model_trace = poutine.trace(graph_type="dense")(
+                poutine.replay(guide_trace)(model)).get_trace(*args, **kwargs)
             if infer.is_validation_enabled():
                 check_model_guide_match(model_trace, guide_trace)
             guide_trace = prune_subsample_sites(guide_trace)
