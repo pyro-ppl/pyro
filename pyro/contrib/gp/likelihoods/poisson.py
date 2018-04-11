@@ -14,7 +14,8 @@ class Poisson(Likelihood):
 
     Poisson likelihood uses the :class:`~pyro.distributions.torch.Poisson`
     distribution, so the output of ``response_function`` should be positive.
-    By default, we use :func:`torch.exp` as response function.
+    By default, we use :func:`torch.exp` as response function, corresponding
+    to a log-Gaussian Cox process.
 
     :param callable response_function: A mapping to positive real numbers.
     """
