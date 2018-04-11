@@ -4,7 +4,8 @@ import warnings
 
 import pyro
 import pyro.infer as infer
-import pyro.poutine as poutine
+# import pyro.poutine as poutine
+import pyro.poutine.decorators as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import iter_discrete_traces
@@ -59,8 +60,8 @@ class TraceEnum_ELBO(ELBO):
 
         for i in range(self.num_particles):
             for guide_trace in iter_discrete_traces("flat", guide, *args, **kwargs):
-                model_trace = poutine.trace(poutine.replay(model, guide_trace),
-                                            graph_type="flat").get_trace(*args, **kwargs)
+                model_trace = poutine.trace(graph_type="flat")(
+                    poutine.replay(guide_trace)(model)).get_trace(*args, **kwargs)
 
                 if infer.is_validation_enabled():
                     check_model_guide_match(model_trace, guide_trace, self.max_iarange_nesting)
