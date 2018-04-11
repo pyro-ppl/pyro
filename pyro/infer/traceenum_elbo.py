@@ -58,7 +58,7 @@ class TraceEnum_ELBO(ELBO):
 
         for i in range(self.num_particles):
             for guide_trace in iter_discrete_traces("flat", guide, *args, **kwargs):
-                model_trace = poutine.trace(poutine.replay(model, guide_trace),
+                model_trace = poutine.trace(poutine.replay(model, trace=guide_trace),
                                             graph_type="flat").get_trace(*args, **kwargs)
 
                 if infer.is_validation_enabled():

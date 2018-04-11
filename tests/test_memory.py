@@ -107,7 +107,7 @@ def test_trace_copy():
 
 def trace_replay(model, guide, *args):
     guide_trace = poutine.trace(guide).get_trace(*args)
-    poutine.trace(poutine.replay(model, guide_trace)).get_trace(*args)
+    poutine.trace(poutine.replay(model, trace=guide_trace)).get_trace(*args)
 
 
 def test_trace_replay():

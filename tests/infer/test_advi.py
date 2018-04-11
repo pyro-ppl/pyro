@@ -19,7 +19,7 @@ def test_scores(advi_class):
 
     advi = advi_class(model)
     guide_trace = poutine.trace(advi.guide).get_trace()
-    model_trace = poutine.trace(poutine.replay(advi.model, guide_trace)).get_trace()
+    model_trace = poutine.trace(poutine.replay(advi.model, trace=guide_trace)).get_trace()
 
     guide_trace.compute_log_prob()
     model_trace.compute_log_prob()

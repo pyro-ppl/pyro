@@ -86,7 +86,7 @@ def test_replay(model, subsample_size):
     traced_model = poutine.trace(model)
     original = traced_model(subsample_size)
 
-    replayed = poutine.replay(model, traced_model.trace)(subsample_size)
+    replayed = poutine.replay(model, trace=traced_model.trace)(subsample_size)
     assert replayed == original
 
     if subsample_size < 20:
@@ -155,8 +155,8 @@ def test_model_guide_mismatch(behavior, model_size, guide_size, model):
     model = poutine.trace(model)
     expected_ind = model(guide_size)
     if behavior == "ok":
-        actual_ind = poutine.replay(model, model.trace)(model_size)
+        actual_ind = poutine.replay(model, trace=model.trace)(model_size)
         assert actual_ind == expected_ind
     else:
         with pytest.raises(ValueError):
-            poutine.replay(model, model.trace)(model_size)
+            poutine.replay(model, trace=model.trace)(model_size)

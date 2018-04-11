@@ -379,7 +379,7 @@ class RaoBlackwellizationTests(TestCase):
                     pass
 
         guide_trace = pyro.poutine.trace(guide, graph_type="dense").get_trace()
-        model_trace = pyro.poutine.trace(pyro.poutine.replay(model, guide_trace),
+        model_trace = pyro.poutine.trace(pyro.poutine.replay(model, trace=guide_trace),
                                          graph_type="dense").get_trace()
         assert len(model_trace.edges()) == 27
         assert len(model_trace.nodes()) == 16

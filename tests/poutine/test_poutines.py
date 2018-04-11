@@ -88,7 +88,7 @@ class ReplayHandlerTests(NormalNormalNormalHandlerTestCase):
 
     def test_replay_full(self):
         guide_trace = poutine.trace(self.guide).get_trace()
-        model_trace = poutine.trace(poutine.replay(self.model, guide_trace)).get_trace()
+        model_trace = poutine.trace(poutine.replay(self.model, trace=guide_trace)).get_trace()
         for name in self.full_sample_sites.keys():
             assert_equal(model_trace.nodes[name]["value"],
                          guide_trace.nodes[name]["value"])
@@ -96,7 +96,7 @@ class ReplayHandlerTests(NormalNormalNormalHandlerTestCase):
     def test_replay_partial(self):
         guide_trace = poutine.trace(self.guide).get_trace()
         model_trace = poutine.trace(poutine.replay(self.model,
-                                                   guide_trace,
+                                                   trace=guide_trace,
                                                    sites=self.partial_sample_sites)).get_trace()
         for name in self.full_sample_sites.keys():
             if name in self.partial_sample_sites:
@@ -108,10 +108,10 @@ class ReplayHandlerTests(NormalNormalNormalHandlerTestCase):
 
     def test_replay_full_repeat(self):
         model_trace = poutine.trace(self.model).get_trace()
-        ftr = poutine.trace(poutine.replay(self.model, model_trace))
+        ftr = poutine.trace(poutine.replay(self.model, trace=model_trace))
         tr11 = ftr.get_trace()
         tr12 = ftr.get_trace()
-        tr2 = poutine.trace(poutine.replay(self.model, model_trace)).get_trace()
+        tr2 = poutine.trace(poutine.replay(self.model, trace=model_trace)).get_trace()
         for name in self.full_sample_sites.keys():
             assert_equal(tr11.nodes[name]["value"], tr12.nodes[name]["value"])
             assert_equal(tr11.nodes[name]["value"], tr2.nodes[name]["value"])
@@ -663,7 +663,7 @@ def test_replay_enumerate_poutine(depth, first_available_dim):
             pyro.sample("b_{}".format(i), Bernoulli(0.5), infer={"enumerate": "parallel"})
 
     model = poutine.enum(model, first_available_dim=first_available_dim)
-    model = poutine.replay(model, guide_trace)
+    model = poutine.replay(model, trace=guide_trace)
     model = poutine.trace(model)
 
     for i in range(num_particles):
