@@ -767,6 +767,24 @@ def test_enum_discrete_iaranges_dependency_ok(enumerate_):
     assert_ok(model, model, enum_discrete=True, max_iarange_nesting=2)
 
 
+@pytest.mark.parametrize('enumerate_', [None, "sequential", "parallel"])
+def test_enum_discrete_non_enumerated_iarange_ok(enumerate_):
+
+    def model():
+        with pyro.iarange("non_enum", 2):
+            a = pyro.sample("a", dist.Bernoulli(0.5).reshape([2]),
+                            infer={'enumerate': None})
+
+        p = (1.0 + a.sum(-1)) / (2.0 + a.size(0))  # introduce dependency of b on a
+
+        with pyro.iarange("enum_1", 3):
+            pyro.sample("b", dist.Bernoulli(p).reshape([3]),
+                        infer={'enumerate': enumerate_})
+
+    with pyro.validation_enabled():
+        assert_ok(model, model, enum_discrete=True, max_iarange_nesting=1)
+
+
 @pytest.mark.xfail(reason="lack of scalar support in log_abs_det_jacobian")
 @pytest.mark.parametrize('advi_class', [ADVIDiagonalNormal, ADVIMultivariateNormal])
 def test_advi(advi_class):

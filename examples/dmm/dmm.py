@@ -12,21 +12,22 @@ Reference:
     Rahul G. Krishnan, Uri Shalit, David Sontag
 """
 
-import torch
-import torch.nn as nn
-import numpy as np
-import pyro
-from pyro.infer import SVI
-from pyro.optim import ClippedAdam
-import pyro.distributions as dist
-import pyro.poutine as poutine
-from pyro.distributions import InverseAutoregressiveFlow
-from pyro.distributions import TransformedDistribution
-import six.moves.cPickle as pickle
-import polyphonic_data_loader as poly
-from os.path import exists
 import argparse
 import time
+from os.path import exists
+
+import numpy as np
+import six.moves.cPickle as pickle
+import torch
+import torch.nn as nn
+
+import polyphonic_data_loader as poly
+import pyro
+import pyro.distributions as dist
+import pyro.poutine as poutine
+from pyro.distributions import InverseAutoregressiveFlow, TransformedDistribution
+from pyro.infer import SVI
+from pyro.optim import ClippedAdam
 from util import get_logger
 
 
