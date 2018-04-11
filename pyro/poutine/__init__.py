@@ -209,7 +209,7 @@ def do(fn, data=None):
     by using BlockHandler
     """
     msngr = block(condition(fn, data=data), hide=list(data.keys()))
-    return msngr(fn) if fn is not None else msngr
+    return msngr
 
 
 def queue(fn=None, queue=None, max_tries=None,
