@@ -40,14 +40,14 @@ class ADVIMaster(object):
         self._iaranges = {}
         self.iaranges = {}
 
-    def setup_prototype(self, *args, **kwargs):
-        """
-        Eagerly setup a prototype trace.
-        Workaround for #1003
-        """
-        self._setup_prototype(*args, **kwargs)
-        for part in self.parts:
-            part._setup_prototype(*args, **kwargs)
+    def _check_prototype(self, part_trace):
+        for name, part_site in part_trace.nodes.items():
+            if part_site["type"] != "sample":
+                continue
+            self_site = self.prototype_trace.nodes[name]
+            assert part_site["fn"].batch_shape == self_site["fn"].batch_shape
+            assert part_site["fn"].event_shape == self_site["fn"].event_shape
+            assert part_site["value"].shape == self_site["value"].shape
 
     def add(self, part):
         assert isinstance(part, ADVISlave), type(part)
@@ -138,6 +138,8 @@ class ADVIContinuous(ADVISlave):
         # run the model so we can inspect its structure
         self.prototype_trace = poutine.block(poutine.trace(self.base_model).get_trace)(*args, **kwargs)
         self.prototype_trace = prune_subsample_sites(self.prototype_trace)
+        if self.master is not None:
+            self.master()._check_prototype(self.prototype_trace)
 
         self._unconstrained_shapes = {}
         self._cond_indep_stacks = {}
@@ -355,6 +357,8 @@ class ADVIDiscreteParallel(ADVISlave):
         model = config_enumerate(self.base_model, default="parallel")
         self.prototype_trace = poutine.block(poutine.trace(model).get_trace)(*args, **kwargs)
         self.prototype_trace = prune_subsample_sites(self.prototype_trace)
+        if self.master is not None:
+            self.master()._check_prototype(self.prototype_trace)
 
         self._discrete_sites = []
         self._cond_indep_stacks = {}

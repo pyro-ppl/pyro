@@ -119,7 +119,6 @@ def test_discrete_parallel(continuous_class):
     advi = ADVIMaster(model)
     advi.add(continuous_class(poutine.block(model, hide=["assignment"])))
     advi.add(ADVIDiscreteParallel(poutine.block(model, expose=["assignment"])))
-    advi.setup_prototype(data)
 
     elbo = ELBO.make(enum_discrete=True, max_iarange_nesting=1)
     loss = elbo.loss_and_grads(advi.model, advi.guide, data)
