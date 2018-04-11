@@ -1,3 +1,4 @@
+import json
 import torch
 import pyro
 import pyro.distributions as dist
@@ -10,20 +11,16 @@ from pdb import set_trace as bb
 
 def model(K, N, D, y, alpha0, alpha0_vec):
     theta = pyro.sample("theta", dist.Dirichlet(alpha0_vec))
-    mu = pyro.sample("mu", dist.Normal(torch.zeros(K, D), torch.ones(K, D)*10.))
+    mu = pyro.sample("mu", dist.Normal(torch.zeros(K, D), 10. * torch.ones(K, D)))
     sigma = pyro.sample("sigma", dist.LogNormal(torch.ones(K, D), torch.ones(K, D)))
     # sigma = transform_to(dist.Normal.arg_constraints['scale'])(sigma)
 
-    ps = torch.zeros(K)
-
-    for n in range(N):
-        for k in range(K):
-            ps[k] = torch.log(theta[k]) + torch.sum(dist.Normal(mu[k], sigma[k]).log_prob(y[n]))
-        pyro.sample("ps[%d]" % (n), dist.Bernoulli(log_sum_exp(ps)), obs=(1))
+    with pyro.iarange('data'):
+        assign = pyro.sample('mixture', dist.Categorical(theta))
+        pyro.sample('obs', dist.Normal(mu[assign], sigma[assign]), obs=data)
 
 
 def get_data(fname, varnames):
-    import json
     with open(fname, "r") as f:
         j = json.load(f)
     d = {}
@@ -38,20 +35,20 @@ def get_data(fname, varnames):
 
 
 def transformed_data(K, N, D, y, alpha0):
-    alpha0_vec = torch.ones(K)*alpha0
+    alpha0_vec = torch.ones(K) * alpha0
     return alpha0_vec
 
 
-def main(K, N, D, y, alpha0, alpha0_vec):
+def main(args):
     advi = ADVIDiagonalNormal(model)
     adam = optim.Adam({'lr': 1e-3})
     svi = SVI(advi.model, advi.guide, adam, loss="ELBO")
     for i in range(100):
-        loss = svi.step(K, N, D, y, alpha0, alpha0_vec)
+        loss = svi.step(*args)
         print('loss=', loss)
         if i % 5 == 0:
             d = advi.median()
-            print({k: d[k] for k in ["mu", "theta", "sigma"]})
+#             print({k: d[k] for k in ["mu", "theta", "sigma"]})
 
 
 if __name__ == "__main__":
@@ -59,4 +56,4 @@ if __name__ == "__main__":
     (K, N, D, y, alpha0), data = get_data("data/training.data.json", varnames)
     alpha0_vec = transformed_data(K, N, D, y, alpha0)
     args = (K, N, D, y, alpha0, alpha0_vec)
-    main(*args)
+    main(args)
