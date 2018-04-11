@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import argparse
 
 import torch
+from torch.distributions import constraints
 
 import pyro
 import pyro.distributions as dist
@@ -22,22 +23,22 @@ from pyro.optim import Adam
 
 def model(data):
     latent = named.Object("latent")
-    latent.z.sample_(dist.Normal(torch.zeros(1), torch.ones(1)))
+    latent.z.sample_(dist.Normal(0.0, 1.0))
     model_recurse(data, latent)
 
 
 def model_recurse(data, latent):
     if torch.is_tensor(data):
-        latent.x.sample_(dist.Normal(latent.z, torch.ones(1)), obs=data)
+        latent.x.sample_(dist.Normal(latent.z, 1.0), obs=data)
     elif isinstance(data, list):
-        latent.prior_scale.param_(torch.ones(1, requires_grad=True))
+        latent.prior_scale.param_(torch.tensor(1.0), constraint=constraints.positive)
         latent.list = named.List()
         for data_i in data:
             latent_i = latent.list.add()
             latent_i.z.sample_(dist.Normal(latent.z, latent.prior_scale))
             model_recurse(data_i, latent_i)
     elif isinstance(data, dict):
-        latent.prior_scale.param_(torch.ones(1, requires_grad=True))
+        latent.prior_scale.param_(torch.tensor(1.0), constraint=constraints.positive)
         latent.dict = named.Dict()
         for key, value in data.items():
             latent.dict[key].z.sample_(dist.Normal(latent.z, latent.prior_scale))
@@ -51,8 +52,8 @@ def guide(data):
 
 
 def guide_recurse(data, latent):
-    latent.post_loc.param_(torch.zeros(1, requires_grad=True))
-    latent.post_scale.param_(torch.ones(1, requires_grad=True))
+    latent.post_loc.param_(torch.tensor(0.0))
+    latent.post_scale.param_(torch.tensor(1.0), constraint=constraints.positive)
     latent.z.sample_(dist.Normal(latent.post_loc, latent.post_scale))
     if torch.is_tensor(data):
         pass
@@ -69,11 +70,14 @@ def guide_recurse(data, latent):
 
 
 def main(args):
+    pyro.set_rng_seed(0)
+    pyro.enable_validation()
+
     optim = Adam({"lr": 0.1})
     inference = SVI(model, guide, optim, loss="ELBO")
 
     # Data is an arbitrary json-like structure with tensors at leaves.
-    one = torch.ones(1)
+    one = torch.tensor(1.0)
     data = {
         "foo": one,
         "bar": [0 * one, 1 * one, 2 * one],
@@ -87,10 +91,12 @@ def main(args):
     }
 
     print('Step\tLoss')
+    loss = 0.0
     for step in range(args.num_epochs):
-        if step % 100 == 0:
-            loss = inference.step(data)
+        loss += inference.step(data)
+        if step and step % 10 == 0:
             print('{}\t{:0.5g}'.format(step, loss))
+            loss = 0.0
 
     print('Parameters:')
     for name in sorted(pyro.get_param_store().get_all_param_names()):
@@ -99,6 +105,6 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', default=1000, type=int)
+    parser.add_argument('-n', '--num-epochs', default=100, type=int)
     args = parser.parse_args()
     main(args)

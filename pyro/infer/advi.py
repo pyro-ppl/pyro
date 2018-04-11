@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import weakref
+
 import torch
 from torch.distributions import biject_to, constraints
 
@@ -7,6 +9,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions.util import sum_rightmost
+from pyro.infer.enum import config_enumerate
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_traces_match
 
@@ -26,9 +29,139 @@ def _product(shape):
     return result
 
 
-class ADVI(object):
+class ADVIMaster(object):
     """
-    Base class for implementations of Automatic Differentiation Variational Inference [1].
+    Container class to combine multiple ADVI strategies.
+
+    Example usage::
+
+        advi = ADVIMaster(my_model)
+        advi.add(ADVIDiagonalNormal(poutine.block(model, hide=["assignment"])))
+        advi.add(ADVIDiscreteParallel(poutine.block(model, expose=["assignment"])))
+        svi = SVI(advi.model, advi.guide, optim, 'ELBO')
+
+    :param callable model: a Pyro model
+    """
+    def __init__(self, model):
+        self.parts = []
+        self.base_model = model
+        self.prototype_trace = None
+        self._iaranges = {}
+        self.iaranges = {}
+
+    def _check_prototype(self, part_trace):
+        for name, part_site in part_trace.nodes.items():
+            if part_site["type"] != "sample":
+                continue
+            self_site = self.prototype_trace.nodes[name]
+            assert part_site["fn"].batch_shape == self_site["fn"].batch_shape
+            assert part_site["fn"].event_shape == self_site["fn"].event_shape
+            assert part_site["value"].shape == self_site["value"].shape
+
+    def add(self, part):
+        """
+        Add an ADVI strategy for part of the model. The ADVI strategy should
+        have been created by blocking the model to restrict to a subset of
+        sample sites. No two parts should operate on any one sample site.
+
+        :param ADVISlave part: an ADVI strategy to add
+        """
+        assert isinstance(part, ADVISlave), type(part)
+        self.parts.append(part)
+        assert part.master is None
+        part.master = weakref.ref(self)
+
+    def model(self, *args, **kwargs):
+        """
+        A wrapped model with the same ``*args, **kwargs`` as the base ``model``.
+        """
+        for part in self.parts:
+            part.model(*args, **kwargs)
+        return self.base_model(*args, **kwargs)
+
+    def guide(self, *args, **kwargs):
+        """
+        A composite guide with the same ``*args, **kwargs`` as the base ``model``.
+
+        :return: A dict mapping sample site name to sampled value.
+        :rtype: dict
+        """
+        # if we've never run the model before, do so now so we can inspect the model structure
+        if self.prototype_trace is None:
+            self._setup_prototype(*args, **kwargs)
+
+        # create all iaranges
+        self.iaranges = {frame.name: pyro.iarange(frame.name, frame.size, dim=frame.dim)
+                         for frame in sorted(self._iaranges.values())}
+
+        # run slave guides
+        result = {}
+        for part in self.parts:
+            result.update(part.guide(*args, **kwargs))
+        return result
+
+    def _setup_prototype(self, *args, **kwargs):
+        # run the model so we can inspect its structure
+        # self.prototype_trace = poutine.block(poutine.trace(self.base_model).get_trace)(*args, **kwargs)
+        self.prototype_trace = poutine.block(poutine.trace(self.base_model).get_trace)(*args, **kwargs)
+        self.prototype_trace = prune_subsample_sites(self.prototype_trace)
+
+        self._iaranges = {}
+        for name, site in self.prototype_trace.nodes.items():
+            if site["type"] != "sample" or site["is_observed"]:
+                continue
+            for frame in site["cond_indep_stack"]:
+                if frame.vectorized:
+                    self._iaranges[frame.name] = frame
+                else:
+                    raise NotImplementedError("ADVI does not support pyro.irange")
+
+
+class ADVISlave(object):
+    """
+    Base class for ADVI strategies.
+
+    ADVI strategies can be used individually or combined in an
+    :class:`ADVIMaster` object.
+    """
+    def __init__(self, model):
+        self.master = None
+        self.base_model = model
+        self.prototype_trace = None
+
+    def model(self, *args, **kwargs):
+        """
+        A wrapped model with the same ``*args, **kwargs`` as the base ``model``.
+        """
+        # wrap sample statement with a 0.0 poutine.scale to zero out unwanted score
+        with poutine.scale(None, 0.0):
+            self.sample_latent(*args, **kwargs)
+
+        if self.master is None:
+            # actual model sample statements shouldn't be zeroed out
+            base_trace = poutine.trace(self.base_model).get_trace(*args, **kwargs)
+            base_trace = prune_subsample_sites(base_trace)
+            check_traces_match(base_trace, self.prototype_trace)
+            return base_trace.nodes["_RETURN"]["value"]
+
+    def sample_latent(*args, **kwargs):
+        """
+        Samples an encoded latent given the same ``*args, **kwargs`` as the
+        base ``model``.
+        """
+        pass
+
+    def _create_iaranges(self):
+        if self.master is not None:
+            return self.master().iaranges
+        return {frame.name: pyro.iarange(frame.name, frame.size, dim=frame.dim)
+                for frame in sorted(self._iaranges.values())}
+
+
+class ADVIContinuous(ADVISlave):
+    """
+    Base class for implementations of continuous-valued Automatic
+    Differentiation Variational Inference [1].
 
     Each derived class implements its own :meth:`sample_latent` method.
 
@@ -40,16 +173,18 @@ class ADVI(object):
     Reference:
 
     [1] 'Automatic Differentiation Variational Inference',
-    Alp Kucukelbir, Dustin Tran, Rajesh Ranganath, Andrew Gelman, David M. Blei
+        Alp Kucukelbir, Dustin Tran, Rajesh Ranganath, Andrew Gelman, David M.
+        Blei
     """
     def __init__(self, model):
-        self.prototype_trace = None
-        self.base_model = model
+        super(ADVIContinuous, self).__init__(model)
 
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
         self.prototype_trace = poutine.block(poutine.trace(self.base_model).get_trace)(*args, **kwargs)
         self.prototype_trace = prune_subsample_sites(self.prototype_trace)
+        if self.master is not None:
+            self.master()._check_prototype(self.prototype_trace)
 
         self._unconstrained_shapes = {}
         self._cond_indep_stacks = {}
@@ -67,7 +202,7 @@ class ADVI(object):
                 if frame.vectorized:
                     self._iaranges[frame.name] = frame
                 else:
-                    raise NotImplementedError("ADVI does not support pyro.irange")
+                    raise NotImplementedError("ADVIContinuous does not support pyro.irange")
 
         self.latent_dim = sum(_product(shape) for shape in self._unconstrained_shapes.values())
 
@@ -98,7 +233,7 @@ class ADVI(object):
         """
         An automatic guide with the same ``*args, **kwargs`` as the base ``model``.
 
-        :return: A dictionary mapping sample site name to sampled value.
+        :return: A dict mapping sample site name to sampled value.
         :rtype: dict
         """
         # if we've never run the model before, do so now so we can inspect the model structure
@@ -106,12 +241,9 @@ class ADVI(object):
             self._setup_prototype(*args, **kwargs)
 
         latent = self.sample_latent(*args, **kwargs)
+        iaranges = self._create_iaranges()
 
-        # create all iaranges
-        iaranges = {frame.name: pyro.iarange(frame.name, frame.size, dim=frame.dim)
-                    for frame in sorted(self._iaranges.values())}
-
-        # unpack latent samples
+        # unpack continuous latent samples
         result = {}
         for site, unconstrained_value in self._unpack_latent(latent):
             name = site["name"]
@@ -128,21 +260,8 @@ class ADVI(object):
 
         return result
 
-    def model(self, *args, **kwargs):
-        """
-        A wrapped model with the same ``*args, **kwargs`` as the base ``model``.
-        """
-        # wrap sample statement with a 0.0 poutine.scale to zero out unwanted score
-        with poutine.scale("advi_scope", 0.0):
-            self.sample_latent(*args, **kwargs)
-        # actual model sample statements shouldn't be zeroed out
-        base_trace = poutine.trace(self.base_model).get_trace(*args, **kwargs)
-        base_trace = prune_subsample_sites(base_trace)
-        check_traces_match(base_trace, self.prototype_trace)
-        return base_trace.nodes["_RETURN"]["value"]
 
-
-class ADVIMultivariateNormal(ADVI):
+class ADVIMultivariateNormal(ADVIContinuous):
     """
     This implementation of ADVI uses a Cholesky factorization of a Multivariate
     Normal distribution to construct a guide over the entire latent space. The
@@ -175,7 +294,7 @@ class ADVIMultivariateNormal(ADVI):
         """
         Returns the posterior median value of each latent variable.
 
-        :return: A dictionary mapping sample site name to median tensor.
+        :return: A dict mapping sample site name to median tensor.
         :rtype: dict
         """
         latent = pyro.param("advi_loc")
@@ -190,7 +309,7 @@ class ADVIMultivariateNormal(ADVI):
 
         :param quantiles: A list of requested quantiles between 0 and 1.
         :type quantiles: torch.Tensor or list
-        :return: A dictionary mapping sample site name to a list of quantile values.
+        :return: A dict mapping sample site name to a list of quantile values.
         :rtype: dict
         """
         loc = pyro.param("advi_loc")
@@ -205,7 +324,7 @@ class ADVIMultivariateNormal(ADVI):
         return result
 
 
-class ADVIDiagonalNormal(ADVI):
+class ADVIDiagonalNormal(ADVIContinuous):
     """
     This implementation of ADVI uses a Normal distribution with a diagonal
     covariance matrix to construct a guide over the entire latent space. The
@@ -238,7 +357,7 @@ class ADVIDiagonalNormal(ADVI):
         """
         Returns the posterior median value of each latent variable.
 
-        :return: A dictionary mapping sample site name to median tensor.
+        :return: A dict mapping sample site name to median tensor.
         :rtype: dict
         """
         latent = pyro.param("advi_loc")
@@ -253,7 +372,7 @@ class ADVIDiagonalNormal(ADVI):
 
         :param quantiles: A list of requested quantiles between 0 and 1.
         :type quantiles: torch.Tensor or list
-        :return: A dictionary mapping sample site name to a list of quantile values.
+        :return: A dict mapping sample site name to a list of quantile values.
         :rtype: dict
         """
         loc = pyro.param("advi_loc")
@@ -265,4 +384,75 @@ class ADVIDiagonalNormal(ADVI):
         for latent in latents:
             for site, unconstrained_value in self._unpack_latent(latent):
                 result.setdefault(site["name"], []).append(biject_to(site["fn"].support)(unconstrained_value))
+        return result
+
+
+class ADVIDiscreteParallel(ADVISlave):
+    def __init__(self, model):
+        super(ADVIDiscreteParallel, self).__init__(model)
+
+    def _setup_prototype(self, *args, **kwargs):
+        # run the model so we can inspect its structure
+        model = config_enumerate(self.base_model, default="parallel")
+        self.prototype_trace = poutine.block(poutine.trace(model).get_trace)(*args, **kwargs)
+        self.prototype_trace = prune_subsample_sites(self.prototype_trace)
+        if self.master is not None:
+            self.master()._check_prototype(self.prototype_trace)
+
+        self._discrete_sites = []
+        self._cond_indep_stacks = {}
+        self._iaranges = {}
+        for name, site in self.prototype_trace.nodes.items():
+            if site["type"] != "sample" or site["is_observed"]:
+                continue
+            if site["infer"].get("enumerate") != "parallel":
+                raise NotImplementedError('Expected sample site "{}" to be discrete and '
+                                          'configured for parallel enumeration'.format(name))
+
+            # collect discrete sample sites
+            fn = site["fn"]
+            Dist = type(fn)
+            if Dist in (dist.Bernoulli, dist.Categorical, dist.OneHotCategorical):
+                params = [("probs", fn.probs.detach().clone(), fn.arg_constraints["probs"])]
+            else:
+                raise NotImplementedError("{} is not supported".format(Dist.__name__))
+            self._discrete_sites.append((site, Dist, params))
+
+            # collect independence contexts
+            self._cond_indep_stacks[name] = site["cond_indep_stack"]
+            for frame in site["cond_indep_stack"]:
+                if frame.vectorized:
+                    self._iaranges[frame.name] = frame
+                else:
+                    raise NotImplementedError("ADVI does not support pyro.irange")
+
+    def guide(self, *args, **kwargs):
+        """
+        An automatic guide with the same ``*args, **kwargs`` as the base ``model``.
+
+        :return: A dict mapping sample site name to sampled value.
+        :rtype: dict
+        """
+        # if we've never run the model before, do so now so we can inspect the model structure
+        if self.prototype_trace is None:
+            self._setup_prototype(*args, **kwargs)
+
+        iaranges = self._create_iaranges()
+
+        # enumerate discrete latent samples
+        result = {}
+        for site, Dist, param_spec in self._discrete_sites:
+            name = site["name"]
+            dist_params = {
+                param_name: pyro.param("advi_discrete_{}_{}".format(name, param_name), param_init,
+                                       constraint=param_constraint)
+                for param_name, param_init, param_constraint in param_spec
+            }
+            discrete_dist = Dist(**dist_params)
+
+            with ExitStack() as stack:
+                for frame in self._cond_indep_stacks[name]:
+                    stack.enter_context(iaranges[frame.name])
+                result[name] = pyro.sample(name, discrete_dist, infer={"enumerate": "parallel"})
+
         return result

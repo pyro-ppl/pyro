@@ -1,4 +1,4 @@
-Poutines (Pyro Coroutines)
+Poutine (Effect handlers)
 ==========================
 
 .. include:: pyro.poutine.txt
