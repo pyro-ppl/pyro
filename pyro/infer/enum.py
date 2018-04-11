@@ -4,7 +4,6 @@ from six.moves.queue import LifoQueue
 
 # import pyro.poutine as poutine
 import pyro.poutine.decorators as poutine
-from poutine import Trace
 
 
 def _iter_discrete_escape(trace, msg):
@@ -41,7 +40,7 @@ def iter_discrete_traces(graph_type, fn, *args, **kwargs):
     :returns: An iterator over traces pairs.
     """
     queue = LifoQueue()
-    queue.put(Trace())
+    queue.put(poutine.Trace())
     traced_fn = poutine.trace(graph_type=graph_type)(
         poutine.queue(queue, escape_fn=_iter_discrete_escape, extend_fn=_iter_discrete_extend)(fn))
     while not queue.empty():
