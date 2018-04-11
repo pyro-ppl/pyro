@@ -40,6 +40,15 @@ class ADVIMaster(object):
         self._iaranges = {}
         self.iaranges = {}
 
+    def setup_prototype(self, *args, **kwargs):
+        """
+        Eagerly setup a prototype trace.
+        Workaround for #1003
+        """
+        self._setup_prototype(*args, **kwargs)
+        for part in self.parts:
+            part._setup_prototype(*args, **kwargs)
+
     def add(self, part):
         assert isinstance(part, ADVISlave), type(part)
         self.parts.append(part)
@@ -48,7 +57,7 @@ class ADVIMaster(object):
 
     def model(self, *args, **kwargs):
         for part in self.parts:
-            part.model_prelude()
+            part.model(*args, **kwargs)
         return self.base_model(*args, **kwargs)
 
     def guide(self, *args, **kwargs):
@@ -66,6 +75,7 @@ class ADVIMaster(object):
 
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
+        # self.prototype_trace = poutine.block(poutine.trace(self.base_model).get_trace)(*args, **kwargs)
         self.prototype_trace = poutine.block(poutine.trace(self.base_model).get_trace)(*args, **kwargs)
         self.prototype_trace = prune_subsample_sites(self.prototype_trace)
 

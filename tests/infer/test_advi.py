@@ -108,18 +108,19 @@ def test_discrete_parallel(continuous_class):
 
     def model(data):
         weights = pyro.sample('weights', dist.Dirichlet(0.5 * torch.ones(K)))
-        locs = pyro.sample('locs', dist.Normal(0, 10).reshape([K]))
+        locs = pyro.sample('locs', dist.Normal(0, 10).reshape([K], extra_event_dims=1))
         scale = pyro.sample('scale', dist.LogNormal(0, 1))
 
-        with pyro.iarange('data'):
+        with pyro.iarange('data', len(data)):
             weights = weights.expand(torch.Size((len(data),)) + weights.shape)
             assignment = pyro.sample('assignment', dist.Categorical(weights))
             pyro.sample('obs', dist.Normal(locs[assignment], scale), obs=data)
 
     advi = ADVIMaster(model)
-    advi.add(ADVIDiscreteParallel(poutine.block(model, expose=["assignment"])))
     advi.add(continuous_class(poutine.block(model, hide=["assignment"])))
+    advi.add(ADVIDiscreteParallel(poutine.block(model, expose=["assignment"])))
+    advi.setup_prototype(data)
 
-    elbo = ELBO.make(enum_discrete=True)
+    elbo = ELBO.make(enum_discrete=True, max_iarange_nesting=1)
     loss = elbo.loss_and_grads(advi.model, advi.guide, data)
     assert np.isfinite(loss), loss
