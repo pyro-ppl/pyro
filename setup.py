@@ -4,7 +4,7 @@ import subprocess
 import sys
 
 import os
-from setuptools import find_packages, setup
+from setuptools import setup
 
 PROJECT_PATH = os.path.dirname(os.path.abspath(__file__))
 VERSION = """
@@ -65,7 +65,7 @@ setup(
     version=version,
     description='A Python library for probabilistic modeling and inference',
     long_description=long_description,
-    packages=find_packages(exclude=('tests*',)),
+    packages=['pyro'],
     url='http://pyro.ai',
     author='Uber AI Labs',
     author_email='pyro@uber.com',

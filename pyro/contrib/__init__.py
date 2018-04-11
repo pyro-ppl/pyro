@@ -1,6 +1,10 @@
 from __future__ import absolute_import, division, print_function
 
-from . import gp
-from . import named
+from pyro.contrib import gp
+from pyro.contrib import named
 
-# flake8: noqa
+
+__all__ = [
+    "gp",
+    "named",
+]

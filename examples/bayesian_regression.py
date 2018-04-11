@@ -1,13 +1,15 @@
-import numpy as np
 import argparse
+
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.nn.functional import normalize  # noqa: F401
 
 import pyro
-from pyro.distributions import Normal, Bernoulli  # noqa: F401
+from pyro.distributions import Bernoulli, Normal  # noqa: F401
 from pyro.infer import SVI
 from pyro.optim import Adam
+
 
 """
 Bayesian Regression
