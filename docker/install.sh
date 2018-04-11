@@ -7,14 +7,16 @@ set -xe
 if [ ${pytorch_branch} = "release" ]
 then
     conda install -y pytorch torchvision -c pytorch
-    if [ ${cuda} ]; then conda install -y cuda90 -c pytorch; fi
+    if [ ${cuda} = 1 ]; then conda install -y cuda90 -c pytorch; fi
 else
-    conda install -y numpy pyyaml mkl setuptools cmake cffi
-    if [ ${cuda} ]; then conda install -y cuda90 -c pytorch; fi
+    conda install -y numpy pyyaml mkl mkl-include setuptools cmake cffi typing
+    pip install --upgrade pip
+    pip install jupyter matplotlib
+    if [ ${cuda} = 1 ]; then conda install -y cuda90 -c pytorch; fi
     git clone --recursive https://github.com/pytorch/pytorch.git
-    cd pytorch && git checkout ${pytorch_branch}
+    pushd pytorch && git checkout ${pytorch_branch}
     python setup.py install
-    cd ..
+    popd
 fi
 
 
