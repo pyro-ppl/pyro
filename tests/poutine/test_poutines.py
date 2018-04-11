@@ -553,16 +553,18 @@ class EscapeHandlerTests(TestCase):
 
     def test_discrete_escape(self):
         try:
-            poutine.escape(self.model, functools.partial(discrete_escape,
-                                                         poutine.Trace()))()
+            poutine.escape(self.model,
+                           escape_fn=functools.partial(discrete_escape,
+                                                       poutine.Trace()))()
             assert False
         except NonlocalExit as e:
             assert e.site["name"] == "y"
 
     def test_all_escape(self):
         try:
-            poutine.escape(self.model, functools.partial(all_escape,
-                                                         poutine.Trace()))()
+            poutine.escape(self.model,
+                           escape_fn=functools.partial(all_escape,
+                                                       poutine.Trace()))()
             assert False
         except NonlocalExit as e:
             assert e.site["name"] == "x"
@@ -570,14 +572,17 @@ class EscapeHandlerTests(TestCase):
     def test_trace_compose(self):
         tm = poutine.trace(self.model)
         try:
-            poutine.escape(tm, functools.partial(all_escape, poutine.Trace()))()
+            poutine.escape(tm,
+                           escape_fn=functools.partial(all_escape,
+                                                       poutine.Trace()))()
             assert False
         except NonlocalExit:
             assert "x" in tm.trace
             try:
                 tem = poutine.trace(
-                    poutine.escape(self.model, functools.partial(all_escape,
-                                                                 poutine.Trace())))
+                    poutine.escape(self.model,
+                                   escape_fn=functools.partial(all_escape,
+                                                               poutine.Trace())))
                 tem()
                 assert False
             except NonlocalExit:
@@ -603,7 +608,7 @@ class InferConfigHandlerTests(TestCase):
         self.config_fn = config_fn
 
     def test_infer_config_sample(self):
-        cfg_model = poutine.infer_config(self.model, self.config_fn)
+        cfg_model = poutine.infer_config(self.model, config_fn=self.config_fn)
 
         tr = poutine.trace(cfg_model).get_trace()
 
@@ -622,7 +627,7 @@ def test_enumerate_poutine(depth, first_available_dim):
         for i in range(depth):
             pyro.sample("a_{}".format(i), Bernoulli(0.5), infer={"enumerate": "parallel"})
 
-    model = poutine.EnumerateMessenger(first_available_dim)(model)
+    model = poutine.enum(model, first_available_dim=first_available_dim)
     model = poutine.trace(model)
 
     for i in range(num_particles):
@@ -645,7 +650,7 @@ def test_replay_enumerate_poutine(depth, first_available_dim):
     def guide():
         pyro.sample("y", y_dist, infer={"enumerate": "parallel"})
 
-    guide = poutine.EnumerateMessenger(depth + first_available_dim)(guide)
+    guide = poutine.enum(guide, first_available_dim=depth + first_available_dim)
     guide = poutine.trace(guide)
     guide_trace = guide.get_trace()
 
@@ -657,7 +662,7 @@ def test_replay_enumerate_poutine(depth, first_available_dim):
         for i in range(depth):
             pyro.sample("b_{}".format(i), Bernoulli(0.5), infer={"enumerate": "parallel"})
 
-    model = poutine.EnumerateMessenger(first_available_dim)(model)
+    model = poutine.enum(model, first_available_dim=first_available_dim)
     model = poutine.replay(model, guide_trace)
     model = poutine.trace(model)
 

@@ -9,7 +9,6 @@ from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.util import Dice
-from pyro.poutine import EnumerateMessenger
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, check_site_shape, check_traceenum_requirements, torch_isnan
 
@@ -55,7 +54,7 @@ class TraceEnum_ELBO(ELBO):
         the result packaged as a trace generator
         """
         # enable parallel enumeration
-        guide = EnumerateMessenger(first_available_dim=self.max_iarange_nesting)(guide)
+        guide = poutine.enum(guide, first_available_dim=self.max_iarange_nesting)
 
         for i in range(self.num_particles):
             for guide_trace in iter_discrete_traces("flat", guide, *args, **kwargs):

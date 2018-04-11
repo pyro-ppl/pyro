@@ -248,8 +248,8 @@ class iarange(object):
         self._wrapped = am_i_wrapped()
         self.dim = _DIM_ALLOCATOR.allocate(self.name, self.dim)
         if self._wrapped:
-            self._scale_poutine = poutine.ScaleMessenger(self.size / self.subsample_size)
-            self._indep_poutine = poutine.IndepMessenger(self.name, size=self.subsample_size, dim=self.dim)
+            self._scale_poutine = poutine.scale(scale=self.size / self.subsample_size)
+            self._indep_poutine = poutine.indep(name=self.name, size=self.subsample_size, dim=self.dim)
             self._scale_poutine.__enter__()
             self._indep_poutine.__enter__()
         return self.subsample
@@ -296,8 +296,8 @@ class irange(object):
             for i in self.subsample:
                 yield i if isinstance(i, numbers.Number) else i.item()
         else:
-            indep_context = poutine.IndepMessenger(self.name, size=self.subsample_size)
-            with poutine.ScaleMessenger(self.size / self.subsample_size):
+            indep_context = poutine.indep(name=self.name, size=self.subsample_size)
+            with poutine.scale(scale=self.size / self.subsample_size):
                 for i in self.subsample:
                     indep_context.next_context()
                     with indep_context:

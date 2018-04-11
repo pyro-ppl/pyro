@@ -158,8 +158,36 @@ def scale(fn=None, scale=None):
     function.
     """
     msngr = ScaleMessenger(scale=scale)
-    # temporary compatibility fix
+    # XXX temporary compatibility fix
     return msngr(fn) if callable(fn) else msngr
+
+
+def indep(fn=None, name=None, size=None, dim=None):
+    """
+    Alias for IndepMessenger constructor.
+
+    This messenger keeps track of stack of independence information declared by
+    nested ``irange`` and ``iarange`` contexts. This information is stored in
+    a ``cond_indep_stack`` at each sample/observe site for consumption by
+    ``TraceMessenger``.
+    """
+    msngr = IndepMessenger(name=name, size=size, dim=dim)
+    return msngr(fn) if fn is not None else msngr
+
+
+def enum(fn=None, first_available_dim=None):
+    """
+    :param int first_available_dim: The first tensor dimension (counting
+        from the right) that is available for parallel enumeration. This
+        dimension and all dimensions left may be used internally by Pyro.
+
+    Alias for EnumerateMessenger constructor.
+
+    Enumerates in parallel over discrete sample sites marked
+    ``infer={"enumerate": "parallel"}``.
+    """
+    msngr = EnumerateMessenger(first_available_dim=first_available_dim)
+    return msngr(fn) if fn is not None else msngr
 
 
 #########################################

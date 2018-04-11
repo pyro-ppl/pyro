@@ -197,7 +197,7 @@ class DMM(nn.Module):
                 # then sample z_t according to dist.Normal(z_loc, z_scale)
                 # note that we use the reshape method so that the univariate Normal distribution
                 # is treated as a multivariate Normal distribution with a diagonal covariance.
-                with poutine.scale(None, annealing_factor):
+                with poutine.scale(scale=annealing_factor):
                     z_t = pyro.sample("z_%d" % t,
                                       dist.Normal(z_loc, z_scale)
                                           .mask(mini_batch_mask[:, t - 1:t])
@@ -255,7 +255,7 @@ class DMM(nn.Module):
                 assert z_dist.batch_shape == (len(mini_batch), self.z_q_0.size(0))
 
                 # sample z_t from the distribution z_dist
-                with pyro.poutine.scale(None, annealing_factor):
+                with pyro.poutine.scale(scale=annealing_factor):
                     z_t = pyro.sample("z_%d" % t,
                                       z_dist.mask(mini_batch_mask[:, t - 1:t])
                                             .reshape(extra_event_dims=1))
