@@ -9,7 +9,7 @@ env:
 install:
     # Install PyTorch wheel using the install script
     - bash scripts/install_pytorch.sh
-    - pip install -e .[test]
+    - pip install .[test]
     - pip freeze
 
 branches:
