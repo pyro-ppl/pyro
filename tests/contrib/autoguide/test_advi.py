@@ -7,7 +7,8 @@ import torch
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.infer import ELBO, SVI, ADVIDiagonalNormal, ADVIDiscreteParallel, ADVIMaster, ADVIMultivariateNormal
+from pyro.contrib.autoguide import ADVIDiagonalNormal, ADVIDiscreteParallel, ADVIMaster, ADVIMultivariateNormal
+from pyro.infer import ELBO, SVI
 from pyro.optim import Adam
 from tests.common import assert_equal
 
