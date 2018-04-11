@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
-import pyro.poutine as poutine
+# import pyro.poutine as poutine
+import pyro.poutine.decorators as poutine
 from pyro.infer import TracePosterior
 from six.moves.queue import Queue
 
@@ -35,8 +36,8 @@ class Search(TracePosterior):
         self.queue = Queue()
         self.queue.put(poutine.Trace())
 
-        p = poutine.trace(
-            poutine.queue(self.model, queue=self.queue, max_tries=self.max_tries))
+        p = poutine.trace()(
+            poutine.queue(queue=self.queue, max_tries=self.max_tries)(self.model))
         while not self.queue.empty():
             tr = p.get_trace(*args, **kwargs)
             yield (tr, tr.log_prob_sum())

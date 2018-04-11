@@ -8,7 +8,8 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-import pyro.poutine as poutine
+# import pyro.poutine as poutine
+import pyro.poutine.decorators as poutine
 from pyro.infer.tracegraph_elbo import _compute_downstream_costs
 from pyro.infer.util import MultiFrameTensor, get_iarange_stacks
 from pyro.poutine.util import prune_subsample_sites
@@ -101,14 +102,15 @@ def big_model_guide(include_obs=True, include_single=False, include_inner_1=Fals
 @pytest.mark.parametrize("include_z1", [True, False])
 def test_compute_downstream_costs_big_model_guide_pair(include_inner_1, include_single, flip_c23,
                                                        include_triple, include_z1):
-    guide_trace = poutine.trace(big_model_guide,
-                                graph_type="dense").get_trace(include_obs=False, include_inner_1=include_inner_1,
-                                                              include_single=include_single, flip_c23=flip_c23,
-                                                              include_triple=include_triple, include_z1=include_z1)
-    model_trace = poutine.trace(poutine.replay(big_model_guide, guide_trace),
-                                graph_type="dense").get_trace(include_obs=True, include_inner_1=include_inner_1,
-                                                              include_single=include_single, flip_c23=flip_c23,
-                                                              include_triple=include_triple, include_z1=include_z1)
+    guide_trace = poutine.trace(graph_type="dense")(
+        big_model_guide).get_trace(include_obs=False, include_inner_1=include_inner_1,
+                                   include_single=include_single, flip_c23=flip_c23,
+                                   include_triple=include_triple, include_z1=include_z1)
+    model_trace = poutine.trace(graph_type="dense")(
+        poutine.replay(guide_trace)(
+            big_model_guide)).get_trace(include_obs=True, include_inner_1=include_inner_1,
+                                        include_single=include_single, flip_c23=flip_c23,
+                                        include_triple=include_triple, include_z1=include_z1)
 
     guide_trace = prune_subsample_sites(guide_trace)
     model_trace = prune_subsample_sites(model_trace)
@@ -224,10 +226,9 @@ def diamond_guide(dim):
 
 @pytest.mark.parametrize("dim", [2, 3, 7, 11])
 def test_compute_downstream_costs_duplicates(dim):
-    guide_trace = poutine.trace(diamond_guide,
-                                graph_type="dense").get_trace(dim=dim)
-    model_trace = poutine.trace(poutine.replay(diamond_model, guide_trace),
-                                graph_type="dense").get_trace(dim=dim)
+    guide_trace = poutine.trace(graph_type="dense")(diamond_guide).get_trace(dim=dim)
+    model_trace = poutine.trace(graph_type="dense")(
+        poutine.replay(guide_trace)(diamond_model)).get_trace(dim=dim)
 
     guide_trace = prune_subsample_sites(guide_trace)
     model_trace = prune_subsample_sites(model_trace)
@@ -286,10 +287,11 @@ def nested_model_guide(include_obs=True, dim1=11, dim2=7):
 
 @pytest.mark.parametrize("dim1", [2, 5, 9])
 def test_compute_downstream_costs_iarange_in_irange(dim1):
-    guide_trace = poutine.trace(nested_model_guide,
-                                graph_type="dense").get_trace(include_obs=False, dim1=dim1)
-    model_trace = poutine.trace(poutine.replay(nested_model_guide, guide_trace),
-                                graph_type="dense").get_trace(include_obs=True, dim1=dim1)
+    guide_trace = poutine.trace(graph_type="dense")(
+        nested_model_guide).get_trace(include_obs=False, dim1=dim1)
+    model_trace = poutine.trace(graph_type="dense")(
+        poutine.replay(guide_trace)(
+            nested_model_guide)).get_trace(include_obs=True, dim1=dim1)
 
     guide_trace = prune_subsample_sites(guide_trace)
     model_trace = prune_subsample_sites(model_trace)
@@ -347,10 +349,11 @@ def nested_model_guide2(include_obs=True, dim1=3, dim2=2):
 @pytest.mark.parametrize("dim1", [2, 5])
 @pytest.mark.parametrize("dim2", [3, 4])
 def test_compute_downstream_costs_irange_in_iarange(dim1, dim2):
-    guide_trace = poutine.trace(nested_model_guide2,
-                                graph_type="dense").get_trace(include_obs=False, dim1=dim1, dim2=dim2)
-    model_trace = poutine.trace(poutine.replay(nested_model_guide2, guide_trace),
-                                graph_type="dense").get_trace(include_obs=True, dim1=dim1, dim2=dim2)
+    guide_trace = poutine.trace(graph_type="dense")(
+        nested_model_guide2).get_trace(include_obs=False, dim1=dim1, dim2=dim2)
+    model_trace = poutine.trace(graph_type="dense")(
+        poutine.replay(guide_trace)(
+            nested_model_guide2)).get_trace(include_obs=True, dim1=dim1, dim2=dim2)
 
     guide_trace = prune_subsample_sites(guide_trace)
     model_trace = prune_subsample_sites(model_trace)
@@ -403,10 +406,11 @@ def iarange_reuse_model_guide(include_obs=True, dim1=3, dim2=2):
 @pytest.mark.parametrize("dim1", [2, 5])
 @pytest.mark.parametrize("dim2", [3, 4])
 def test_compute_downstream_costs_iarange_reuse(dim1, dim2):
-    guide_trace = poutine.trace(iarange_reuse_model_guide,
-                                graph_type="dense").get_trace(include_obs=False, dim1=dim1, dim2=dim2)
-    model_trace = poutine.trace(poutine.replay(iarange_reuse_model_guide, guide_trace),
-                                graph_type="dense").get_trace(include_obs=True, dim1=dim1, dim2=dim2)
+    guide_trace = poutine.trace(graph_type="dense")(
+        iarange_reuse_model_guide).get_trace(include_obs=False, dim1=dim1, dim2=dim2)
+    model_trace = poutine.trace(graph_type="dense")(
+        poutine.replay(guide_trace)(
+            iarange_reuse_model_guide)).get_trace(include_obs=True, dim1=dim1, dim2=dim2)
 
     guide_trace = prune_subsample_sites(guide_trace)
     model_trace = prune_subsample_sites(model_trace)

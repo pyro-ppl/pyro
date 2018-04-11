@@ -8,21 +8,21 @@ class ReplayMessenger(Messenger):
     Messenger for replaying from an existing execution trace.
     """
 
-    def __init__(self, guide_trace, sites=None):
+    def __init__(self, trace, sites=None):
         """
-        :param guide_trace: a trace whose values should be reused
+        :param trace: a trace whose values should be reused
 
         Constructor.
-        Stores guide_trace in an attribute.
+        Stores trace in an attribute.
         """
         super(ReplayMessenger, self).__init__()
-        assert guide_trace is not None, "must provide guide_trace"
-        self.guide_trace = guide_trace
+        assert trace is not None, "must provide trace"
+        self.trace = trace
         # case 1: no sites
         if sites is None:
-            self.sites = {site: site for site in guide_trace.nodes.keys()
-                          if guide_trace.nodes[site]["type"] == "sample" and
-                          not guide_trace.nodes[site]["is_observed"]}
+            self.sites = {site: site for site in trace.nodes.keys()
+                          if trace.nodes[site]["type"] == "sample" and
+                          not trace.nodes[site]["is_observed"]}
         # case 2: sites is a list/tuple/set
         elif isinstance(sites, (list, tuple, set)):
             self.sites = {site: site for site in sites}
@@ -39,7 +39,7 @@ class ReplayMessenger(Messenger):
         if msg["name"] in self.sites:
             if msg["type"] == "sample" and not msg["is_observed"]:
                 msg["done"] = True
-                guide_msg = self.guide_trace.nodes[self.sites[msg["name"]]]
+                guide_msg = self.trace.nodes[self.sites[msg["name"]]]
                 msg["value"] = guide_msg["value"]
                 msg["infer"] = guide_msg["infer"]
 
@@ -49,11 +49,11 @@ class ReplayMessenger(Messenger):
         """
         :param msg: current message at a trace site.
 
-        At a sample site that appears in self.guide_trace,
-        returns the value from self.guide_trace instead of sampling
+        At a sample site that appears in self.trace,
+        returns the value from self.trace instead of sampling
         from the stochastic function at the site.
 
-        At a sample site that does not appear in self.guide_trace,
+        At a sample site that does not appear in self.trace,
         reverts to default Messenger._pyro_sample behavior with no additional side effects.
         """
         name = msg["name"]
@@ -62,13 +62,13 @@ class ReplayMessenger(Messenger):
             if msg["is_observed"]:
                 raise RuntimeError("site {} is observed and should not be overwritten".format(name))
             g_name = self.sites[name]
-            if g_name not in self.guide_trace:
+            if g_name not in self.trace:
                 raise RuntimeError("{} in sites but {} not in trace".format(name, g_name))
-            if self.guide_trace.nodes[g_name]["type"] != "sample" or \
-                    self.guide_trace.nodes[g_name]["is_observed"]:
-                raise RuntimeError("site {} must be sample in guide_trace".format(g_name))
+            if self.trace.nodes[g_name]["type"] != "sample" or \
+                    self.trace.nodes[g_name]["is_observed"]:
+                raise RuntimeError("site {} must be sample in trace".format(g_name))
             msg["done"] = True
-            msg["value"] = self.guide_trace.nodes[g_name]["value"]
+            msg["value"] = self.trace.nodes[g_name]["value"]
         return None
 
     def _pyro_param(self, msg):

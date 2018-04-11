@@ -2,8 +2,8 @@ from __future__ import absolute_import, division, print_function
 
 from six.moves.queue import LifoQueue
 
-from pyro import poutine
-from pyro.poutine.trace import Trace
+# import pyro.poutine as poutine
+import pyro.poutine.decorators as poutine
 
 
 def _iter_discrete_escape(trace, msg):
@@ -40,10 +40,9 @@ def iter_discrete_traces(graph_type, fn, *args, **kwargs):
     :returns: An iterator over traces pairs.
     """
     queue = LifoQueue()
-    queue.put(Trace())
-    traced_fn = poutine.trace(
-        poutine.queue(fn, queue, escape_fn=_iter_discrete_escape, extend_fn=_iter_discrete_extend),
-        graph_type=graph_type)
+    queue.put(poutine.Trace())
+    traced_fn = poutine.trace(graph_type=graph_type)(
+        poutine.queue(queue, escape_fn=_iter_discrete_escape, extend_fn=_iter_discrete_extend)(fn))
     while not queue.empty():
         yield traced_fn.get_trace(*args, **kwargs)
 
@@ -95,4 +94,4 @@ def config_enumerate(guide=None, default="sequential"):
     if guide is None:
         return lambda guide: config_enumerate(guide, default=default)
 
-    return poutine.infer_config(guide, _config_enumerate(default))
+    return poutine.infer_config(_config_enumerate(default))(guide)

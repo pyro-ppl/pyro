@@ -3,7 +3,8 @@ from __future__ import absolute_import, division, print_function
 import warnings
 
 import pyro
-import pyro.poutine as poutine
+# import pyro.poutine as poutine
+import pyro.poutine.decorators as poutine
 from pyro.distributions.util import is_identically_zero
 import pyro.infer as infer
 from pyro.infer.elbo import ELBO
@@ -50,8 +51,8 @@ class Trace_ELBO(ELBO):
         the result packaged as a trace generator
         """
         for i in range(self.num_particles):
-            guide_trace = poutine.trace(guide).get_trace(*args, **kwargs)
-            model_trace = poutine.trace(poutine.replay(model, guide_trace)).get_trace(*args, **kwargs)
+            guide_trace = poutine.trace()(guide).get_trace(*args, **kwargs)
+            model_trace = poutine.trace()(poutine.replay(guide_trace)(model)).get_trace(*args, **kwargs)
             if infer.is_validation_enabled():
                 check_model_guide_match(model_trace, guide_trace)
             guide_trace = prune_subsample_sites(guide_trace)

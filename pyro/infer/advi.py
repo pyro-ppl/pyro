@@ -5,7 +5,8 @@ from torch.distributions import biject_to, constraints
 
 import pyro
 import pyro.distributions as dist
-import pyro.poutine as poutine
+# import pyro.poutine as poutine
+import pyro.poutine.decorators as poutine
 from pyro.distributions.util import sum_rightmost
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_traces_match
@@ -48,7 +49,8 @@ class ADVI(object):
 
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
-        self.prototype_trace = poutine.block(poutine.trace(self.base_model).get_trace)(*args, **kwargs)
+        self.prototype_trace = poutine.block()(
+            poutine.trace()(self.base_model).get_trace)(*args, **kwargs)
         self.prototype_trace = prune_subsample_sites(self.prototype_trace)
 
         self._unconstrained_shapes = {}
@@ -133,10 +135,10 @@ class ADVI(object):
         A wrapped model with the same ``*args, **kwargs`` as the base ``model``.
         """
         # wrap sample statement with a 0.0 poutine.scale to zero out unwanted score
-        with poutine.scale("advi_scope", 0.0):
+        with poutine.scale(0.0):
             self.sample_latent(*args, **kwargs)
         # actual model sample statements shouldn't be zeroed out
-        base_trace = poutine.trace(self.base_model).get_trace(*args, **kwargs)
+        base_trace = poutine.trace()(self.base_model).get_trace(*args, **kwargs)
         base_trace = prune_subsample_sites(base_trace)
         check_traces_match(base_trace, self.prototype_trace)
         return base_trace.nodes["_RETURN"]["value"]

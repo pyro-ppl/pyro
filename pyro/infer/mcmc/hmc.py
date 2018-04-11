@@ -8,7 +8,8 @@ from torch.distributions import biject_to, constraints
 
 import pyro
 import pyro.distributions as dist
-import pyro.poutine as poutine
+# import pyro.poutine as poutine
+import pyro.poutine.decorators as poutine
 from pyro.infer.mcmc.trace_kernel import TraceKernel
 from pyro.ops.dual_averaging import DualAveraging
 from pyro.ops.integrator import velocity_verlet, single_step_velocity_verlet
@@ -70,7 +71,7 @@ class HMC(TraceKernel):
         z_trace = self._prototype_trace
         for name, value in z.items():
             z_trace.nodes[name]["value"] = value
-        trace_poutine = poutine.trace(poutine.replay(self.model, trace=z_trace))
+        trace_poutine = poutine.trace()(poutine.replay(trace=z_trace)(self.model))
         trace_poutine(*self._args, **self._kwargs)
         return trace_poutine.trace
 
@@ -161,7 +162,7 @@ class HMC(TraceKernel):
         self._kwargs = kwargs
         # set the trace prototype to inter-convert between trace object
         # and dict object used by the integrator
-        trace = poutine.trace(self.model).get_trace(*args, **kwargs)
+        trace = poutine.trace()(self.model).get_trace(*args, **kwargs)
         self._prototype_trace = trace
         # momenta distribution - currently standard normal
         for name, node in sorted(trace.iter_stochastic_nodes(), key=lambda x: x[0]):

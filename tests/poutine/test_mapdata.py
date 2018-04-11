@@ -7,7 +7,8 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-import pyro.poutine as poutine
+# import pyro.poutine as poutine
+import pyro.poutine.decorators as poutine
 from tests.common import requires_cuda
 
 logger = logging.getLogger(__name__)
@@ -29,7 +30,7 @@ def test_nested_irange():
     assert len(xs) == mean_batch_size
     assert len(xs[0]) == std_batch_size
 
-    tr = poutine.trace(model).get_trace(means, stds)
+    tr = poutine.trace()(model).get_trace(means, stds)
     for name in tr.nodes.keys():
         if tr.nodes[name]["type"] == "sample" and name.startswith("x_"):
             assert tr.nodes[name]["scale"] == 4.0 * 2.0
@@ -71,7 +72,7 @@ def nested_irange_model(subsample_size):
 @pytest.mark.parametrize('model', [iarange_model, irange_model, nested_irange_model],
                          ids=['iarange', 'irange', 'nested_irange'])
 def test_cond_indep_stack(model, subsample_size):
-    tr = poutine.trace(model).get_trace(subsample_size)
+    tr = poutine.trace()(model).get_trace(subsample_size)
     for name, node in tr.nodes.items():
         if name.startswith("x"):
             assert node["cond_indep_stack"], "missing cond_indep_stack at node {}".format(name)
@@ -83,10 +84,10 @@ def test_cond_indep_stack(model, subsample_size):
 def test_replay(model, subsample_size):
     pyro.set_rng_seed(0)
 
-    traced_model = poutine.trace(model)
+    traced_model = poutine.trace()(model)
     original = traced_model(subsample_size)
 
-    replayed = poutine.replay(model, traced_model.trace)(subsample_size)
+    replayed = poutine.replay(traced_model.trace)(model)(subsample_size)
     assert replayed == original
 
     if subsample_size < 20:
@@ -114,7 +115,7 @@ def test_custom_subsample(model):
 
     subsample = [1, 3, 5, 7]
     assert model(subsample) == subsample
-    assert poutine.trace(model)(subsample) == subsample
+    assert poutine.trace()(model)(subsample) == subsample
 
 
 def iarange_cuda_model(subsample_size):
@@ -135,7 +136,7 @@ def irange_cuda_model(subsample_size):
 @pytest.mark.parametrize('subsample_size', [5, 20])
 @pytest.mark.parametrize('model', [iarange_cuda_model, irange_cuda_model], ids=["iarange", "irange"])
 def test_cuda(model, subsample_size):
-    tr = poutine.trace(model).get_trace(subsample_size)
+    tr = poutine.trace()(model).get_trace(subsample_size)
     assert tr.log_prob_sum().is_cuda
 
 
@@ -152,11 +153,11 @@ def test_cuda(model, subsample_size):
     ("ok", None, None),
 ])
 def test_model_guide_mismatch(behavior, model_size, guide_size, model):
-    model = poutine.trace(model)
+    model = poutine.trace()(model)
     expected_ind = model(guide_size)
     if behavior == "ok":
-        actual_ind = poutine.replay(model, model.trace)(model_size)
+        actual_ind = poutine.replay(model.trace)(model)(model_size)
         assert actual_ind == expected_ind
     else:
         with pytest.raises(ValueError):
-            poutine.replay(model, model.trace)(model_size)
+            poutine.replay(model.trace)(model)(model_size)

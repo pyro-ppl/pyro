@@ -3,7 +3,8 @@ from __future__ import absolute_import, division, print_function
 import torch
 
 import pyro.distributions as dist
-import pyro.poutine as poutine
+# import pyro.poutine as poutine
+import pyro.poutine.decorators as poutine
 from pyro.distributions.util import log_sum_exp
 import pyro.util as util
 
@@ -112,7 +113,7 @@ class Marginal(Histogram):
         self.trace_dist = trace_dist
 
     def _gen_weighted_samples(self, *args, **kwargs):
-        for tr, log_w in poutine.block(self.trace_dist._traces)(*args, **kwargs):
+        for tr, log_w in poutine.block()(self.trace_dist._traces)(*args, **kwargs):
             if self.sites == "_RETURN":
                 val = tr.nodes["_RETURN"]["value"]
             else:
@@ -139,7 +140,7 @@ class TracePosterior(object):
 
     def __call__(self, *args, **kwargs):
         traces, logits = [], []
-        for tr, logit in poutine.block(self._traces)(*args, **kwargs):
+        for tr, logit in poutine.block()(self._traces)(*args, **kwargs):
             traces.append(tr)
             logits.append(logit)
         logits = torch.stack(logits).squeeze()

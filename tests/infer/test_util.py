@@ -4,7 +4,8 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-import pyro.poutine as poutine
+# import pyro.poutine as poutine
+import pyro.poutine.decorators as poutine
 from pyro.infer.util import MultiFrameTensor
 from tests.common import assert_equal
 
@@ -25,7 +26,7 @@ def xy_model():
 def test_multi_frame_tensor():
     stacks = {}
     actual = MultiFrameTensor()
-    tr = poutine.trace(xy_model).get_trace()
+    tr = poutine.trace()(xy_model).get_trace()
     for name, site in tr.nodes.items():
         if site["type"] == "sample":
             log_prob = site["fn"].log_prob(site["value"])
