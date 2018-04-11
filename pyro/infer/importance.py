@@ -2,7 +2,8 @@ from __future__ import absolute_import, division, print_function
 
 import logging
 
-import pyro.poutine as poutine
+# import pyro.poutine as poutine
+import pyro.poutine.decorators as poutine
 
 from .abstract_infer import TracePosterior
 
