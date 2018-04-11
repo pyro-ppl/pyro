@@ -23,7 +23,7 @@ from .trace_poutine import TraceMessenger
 ############################################
 
 
-def trace(fn, graph_type=None):
+def trace(fn=None, graph_type=None):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param graph_type: string that specifies the kind of graph to construct
@@ -38,10 +38,11 @@ def trace(fn, graph_type=None):
 
     Adds trace data structure site constructors to primitive stacks
     """
-    return TraceMessenger(graph_type=graph_type)(fn)
+    msngr = TraceMessenger(graph_type=graph_type)
+    return msngr(fn) if fn is not None else msngr
 
 
-def replay(fn, trace, sites=None):
+def replay(fn=None, trace=None, sites=None):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param trace: a Trace data structure to replay against
@@ -56,10 +57,11 @@ def replay(fn, trace, sites=None):
     return a callable that runs the original, reusing the values at sites in trace
     at those sites in the new trace
     """
-    return ReplayMessenger(trace, sites=sites)(fn)
+    msngr = ReplayMessenger(trace=trace, sites=sites)
+    return msngr(fn) if fn is not None else msngr
 
 
-def lift(fn, prior):
+def lift(fn=None, prior=None):
     """
     :param fn: function whose parameters will be lifted to random values
     :param prior: prior function in the form of a Distribution or a dict of stochastic fns
@@ -69,10 +71,11 @@ def lift(fn, prior):
     create a stochastic function where all param calls are replaced by sampling from prior.
     Prior should be a callable or a dict of names to callables.
     """
-    return LiftMessenger(prior)(fn)
+    msngr = LiftMessenger(prior=prior)
+    return msngr(fn) if fn is not None else msngr
 
 
-def block(fn, hide=None, expose=None, hide_types=None, expose_types=None):
+def block(fn=None, hide=None, expose=None, hide_types=None, expose_types=None):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param hide: list of site names to hide
@@ -87,11 +90,12 @@ def block(fn, hide=None, expose=None, hide_types=None, expose_types=None):
     Given a callable that contains Pyro primitive calls,
     selectively hide some of those calls from poutines higher up the stack
     """
-    return BlockMessenger(hide=hide, expose=expose,
-                          hide_types=hide_types, expose_types=expose_types)(fn)
+    msngr = BlockMessenger(hide=hide, expose=expose,
+                           hide_types=hide_types, expose_types=expose_types)
+    return msngr(fn) if fn is not None else msngr
 
 
-def escape(fn, escape_fn=None):
+def escape(fn=None, escape_fn=None):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param escape_fn: function that takes a partial trace and a site
@@ -105,10 +109,11 @@ def escape(fn, escape_fn=None):
     raise a NonlocalExit exception that stops execution
     and returns the offending site.
     """
-    return EscapeMessenger(escape_fn)(fn)
+    msngr = EscapeMessenger(escape_fn)
+    return msngr(fn) if fn is not None else msngr
 
 
-def condition(fn, data):
+def condition(fn=None, data=None):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param data: a dict or a Trace
@@ -122,10 +127,11 @@ def condition(fn, data):
     change the sample statements at those names into observes
     with those values
     """
-    return ConditionMessenger(data=data)(fn)
+    msngr = ConditionMessenger(data=data)
+    return msngr(fn) if fn is not None else msngr
 
 
-def infer_config(fn, config_fn):
+def infer_config(fn=None, config_fn=None):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param config_fn: a callable taking a site and returning an infer dict
@@ -136,10 +142,11 @@ def infer_config(fn, config_fn):
     and a callable taking a trace site and returning a dictionary,
     updates the value of the infer kwarg at a sample site to config_fn(site)
     """
-    return InferConfigMessenger(config_fn)(fn)
+    msngr = InferConfigMessenger(config_fn)
+    return msngr(fn) if fn is not None else msngr
 
 
-def scale(fn, scale):
+def scale(fn=None, scale=None):
     """
     :param scale: a positive scaling factor
     :rtype: pyro.poutine.ScaleMessenger
@@ -150,16 +157,16 @@ def scale(fn, scale):
     scale factor, scale the score of all sample and observe sites in the
     function.
     """
-    m = ScaleMessenger(scale=scale)
-    # temporary change to preserve API
-    return m(fn) if callable(fn) else m
+    msngr = ScaleMessenger(scale=scale)
+    # temporary compatibility fix
+    return msngr(fn) if callable(fn) else msngr
 
 
 #########################################
 # Begin composite operations
 #########################################
 
-def do(fn, data):
+def do(fn, data=None):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param data: a dict or a Trace
@@ -173,10 +180,11 @@ def do(fn, data):
     as if they were hard-coded to those values
     by using BlockHandler
     """
-    return block(condition(fn, data=data), hide=list(data.keys()))
+    msngr = block(condition(fn, data=data), hide=list(data.keys()))
+    return msngr(fn) if fn is not None else msngr
 
 
-def queue(fn, queue, max_tries=None,
+def queue(fn=None, queue=None, max_tries=None,
           extend_fn=None, escape_fn=None, num_samples=None):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
@@ -205,23 +213,26 @@ def queue(fn, queue, max_tries=None,
     if num_samples is None:
         num_samples = -1
 
-    def _fn(*args, **kwargs):
+    def wrapper(wrapped):
+        def _fn(*args, **kwargs):
 
-        for i in xrange(max_tries):
-            assert not queue.empty(), \
-                "trying to get() from an empty queue will deadlock"
+            for i in xrange(max_tries):
+                assert not queue.empty(), \
+                    "trying to get() from an empty queue will deadlock"
 
-            next_trace = queue.get()
-            try:
-                ftr = trace(escape(replay(fn, next_trace),
-                                   functools.partial(escape_fn, next_trace)))
-                return ftr(*args, **kwargs)
-            except util.NonlocalExit as site_container:
-                site_container.reset_stack()
-                for tr in extend_fn(ftr.trace.copy(), site_container.site,
-                                    num_samples=num_samples):
-                    queue.put(tr)
+                next_trace = queue.get()
+                try:
+                    ftr = trace(escape(replay(wrapped, trace=next_trace),
+                                       escape_fn=functools.partial(escape_fn,
+                                                                   next_trace)))
+                    return ftr(*args, **kwargs)
+                except util.NonlocalExit as site_container:
+                    site_container.reset_stack()
+                    for tr in extend_fn(ftr.trace.copy(), site_container.site,
+                                        num_samples=num_samples):
+                        queue.put(tr)
 
-        raise ValueError("max tries ({}) exceeded".format(str(max_tries)))
+            raise ValueError("max tries ({}) exceeded".format(str(max_tries)))
+        return _fn
 
-    return _fn
+    return wrapper(fn) if fn is not None else wrapper
