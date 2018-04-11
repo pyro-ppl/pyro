@@ -4,20 +4,23 @@ import pyro
 import pyro.distributions as dist
 from pyro.distributions.util import log_sum_exp
 from torch.distributions import constraints, transform_to
-from pyro.infer import SVI, ADVIDiagonalNormal
+from pyro.infer import SVI
+from pyro import poutine
+from pyro.contrib.autoguide import (ADVIDiagonalNormal, ADVIDiscreteParallel,
+                                    ADVIMaster, ADVIMultivariateNormal)
 import pyro.optim as optim
 from pdb import set_trace as bb
 
 
-def model(K, N, D, y, alpha0, alpha0_vec):
-    theta = pyro.sample("theta", dist.Dirichlet(alpha0_vec))
-    mu = pyro.sample("mu", dist.Normal(torch.zeros(K, D), 10. * torch.ones(K, D)))
-    sigma = pyro.sample("sigma", dist.LogNormal(torch.ones(K, D), torch.ones(K, D)))
+def model(K, alpha0, y):
+    theta = pyro.sample("theta", dist.Dirichlet(alpha0 * torch.ones(K)))
+    mu = pyro.sample("mu", dist.Normal(torch.zeros(K, y.shape[-1]), 10. * torch.ones(K, y.shape[-1])))
+    sigma = pyro.sample("sigma", dist.LogNormal(torch.ones(K, y.shape[-1]), torch.ones(K, y.shape[-1])))
     # sigma = transform_to(dist.Normal.arg_constraints['scale'])(sigma)
 
-    with pyro.iarange('data'):
+    with pyro.iarange('data', len(y)):
         assign = pyro.sample('mixture', dist.Categorical(theta))
-        pyro.sample('obs', dist.Normal(mu[assign], sigma[assign]), obs=data)
+        pyro.sample('obs', dist.Normal(mu[assign], sigma[assign]), obs=y[assign])
 
 
 def get_data(fname, varnames):
@@ -31,16 +34,14 @@ def get_data(fname, varnames):
         else:
             val = torch.tensor(j[1][i])
         d[var_name] = val
-    return tuple([d[k] for k in varnames]), d
-
-
-def transformed_data(K, N, D, y, alpha0):
-    alpha0_vec = torch.ones(K) * alpha0
-    return alpha0_vec
+    return ([d[k] for k in varnames])
 
 
 def main(args):
-    advi = ADVIDiagonalNormal(model)
+    advi = ADVIMaster(model)
+    advi.add(ADVIDiagonalNormal(poutine.block(model, hide=["mixture"]))),
+    advi.add(ADVIDiscreteParallel(poutine.block(model, expose=["mixture"])))
+
     adam = optim.Adam({'lr': 1e-3})
     svi = SVI(advi.model, advi.guide, adam, loss="ELBO")
     for i in range(100):
@@ -52,8 +53,6 @@ def main(args):
 
 
 if __name__ == "__main__":
-    varnames = ["K", "N", "D", "y", "alpha0"]
-    (K, N, D, y, alpha0), data = get_data("data/training.data.json", varnames)
-    alpha0_vec = transformed_data(K, N, D, y, alpha0)
-    args = (K, N, D, y, alpha0, alpha0_vec)
+    varnames = ["K", "alpha0", "y"]
+    args = get_data("data/training.data.json", varnames)
     main(args)
