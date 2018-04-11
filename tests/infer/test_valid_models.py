@@ -8,7 +8,7 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.infer import SVI, ADVIDiagonalNormal, ADVIMultivariateNormal, config_enumerate
+from pyro.infer import SVI, config_enumerate
 from pyro.optim import Adam
 
 logger = logging.getLogger(__name__)
@@ -783,24 +783,3 @@ def test_enum_discrete_non_enumerated_iarange_ok(enumerate_):
 
     with pyro.validation_enabled():
         assert_ok(model, model, enum_discrete=True, max_iarange_nesting=1)
-
-
-@pytest.mark.xfail(reason="lack of scalar support in log_abs_det_jacobian")
-@pytest.mark.parametrize('advi_class', [ADVIDiagonalNormal, ADVIMultivariateNormal])
-def test_advi(advi_class):
-
-    def model():
-        x = pyro.sample("x", dist.Normal(0, 1))
-        assert x.shape == ()
-
-        for i in pyro.irange("irange", 3):
-            y = pyro.sample("y_{}".format(i), dist.Normal(0, 1).reshape([2, 1 + i, 2], extra_event_dims=3))
-            assert y.shape == (2, 1 + i, 2)
-
-        z = pyro.sample("z", dist.Normal(0, 1).reshape([2], extra_event_dims=1))
-        assert z.shape == (2,)
-
-        pyro.sample("obs", dist.Bernoulli(0.1), obs=torch.tensor(0))
-
-    advi = advi_class(model)
-    assert_ok(advi.model, advi.guide)
