@@ -1,4 +1,3 @@
-import json
 import torch
 import pyro
 import pyro.distributions as dist
@@ -9,6 +8,7 @@ from pyro import poutine
 from pyro.contrib.autoguide import (ADVIDiagonalNormal, ADVIDiscreteParallel,
                                     ADVIMaster, ADVIMultivariateNormal)
 import pyro.optim as optim
+from utils import get_data
 from pdb import set_trace as bb
 
 
@@ -21,20 +21,6 @@ def model(K, alpha0, y):
     with pyro.iarange('data', len(y)):
         assign = pyro.sample('mixture', dist.Categorical(theta))
         pyro.sample('obs', dist.Normal(mu[assign], sigma[assign]), obs=y[assign])
-
-
-def get_data(fname, varnames):
-    with open(fname, "r") as f:
-        j = json.load(f)
-    d = {}
-    for i in range(len(j[0])):
-        var_name = j[0][i]
-        if isinstance(j[1][i], int):
-            val = j[1][i]
-        else:
-            val = torch.tensor(j[1][i])
-        d[var_name] = val
-    return ([d[k] for k in varnames])
 
 
 def main(args):
@@ -54,5 +40,5 @@ def main(args):
 
 if __name__ == "__main__":
     varnames = ["K", "alpha0", "y"]
-    args = get_data("data/training.data.json", varnames)
+    args = get_data("../../data/gmm_training_data.json", varnames)
     main(args)
