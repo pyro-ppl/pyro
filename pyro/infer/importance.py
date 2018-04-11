@@ -29,7 +29,7 @@ class Importance(TracePosterior):
             logger.warn("num_samples not provided, defaulting to {}".format(num_samples))
         if guide is None:
             # propose from the prior by making a guide from the model by hiding observes
-            guide = poutine.block(model, hide_types=["observe"])
+            guide = poutine.block(hide_types=["observe"])(model)
         self.num_samples = num_samples
         self.model = model
         self.guide = guide
@@ -39,8 +39,8 @@ class Importance(TracePosterior):
         Generator of weighted samples from the proposal distribution.
         """
         for i in range(self.num_samples):
-            guide_trace = poutine.trace(self.guide).get_trace(*args, **kwargs)
-            model_trace = poutine.trace(
-                poutine.replay(self.model, guide_trace)).get_trace(*args, **kwargs)
+            guide_trace = poutine.trace()(self.guide).get_trace(*args, **kwargs)
+            model_trace = poutine.trace()(
+                poutine.replay(guide_trace)(self.model)).get_trace(*args, **kwargs)
             log_weight = model_trace.log_prob_sum() - guide_trace.log_prob_sum()
             yield (model_trace, log_weight)
