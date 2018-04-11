@@ -7,7 +7,7 @@ import torch
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.infer import ELBO, SVI, ADVIDiagonalNormal, ADVIMultivariateNormal
+from pyro.infer import ELBO, SVI, ADVIDiagonalNormal, ADVIDiscreteParallel, ADVIMaster, ADVIMultivariateNormal
 from pyro.optim import Adam
 from tests.common import assert_equal
 
@@ -101,7 +101,7 @@ def test_quantiles(advi_class):
     assert quantiles["z"][2] < 0.99
 
 
-@pytest.mark.parametrize("advi_class", [ADVIMultivariateNormal, ADVIDiagonalNormal])
+@pytest.mark.parametrize("continuous_class", [ADVIMultivariateNormal, ADVIDiagonalNormal])
 def test_discrete_parallel(continuous_class):
     K = 2
     data = torch.tensor([0., 1., 10., 11., 12.])
@@ -112,6 +112,14 @@ def test_discrete_parallel(continuous_class):
         scale = pyro.sample('scale', dist.LogNormal(0, 1))
 
         with pyro.iarange('data'):
-            # Local variables.
-            assignment = pyro.sample('assignment', dist.Categorical(weights).reshape([len(data)]))
+            weights = weights.expand(torch.Size((len(data),)) + weights.shape)
+            assignment = pyro.sample('assignment', dist.Categorical(weights))
             pyro.sample('obs', dist.Normal(locs[assignment], scale), obs=data)
+
+    advi = ADVIMaster(model)
+    advi.add(ADVIDiscreteParallel(poutine.block(model, expose=["assignment"])))
+    advi.add(continuous_class(poutine.block(model, hide=["assignment"])))
+
+    elbo = ELBO.make(enum_discrete=True)
+    loss = elbo.loss_and_grads(advi.model, advi.guide, data)
+    assert np.isfinite(loss), loss

@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import weakref
+
 import torch
 from torch.distributions import biject_to, constraints
 
@@ -7,6 +9,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions.util import sum_rightmost
+from pyro.infer.enum import config_enumerate
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_traces_match
 
@@ -26,7 +29,83 @@ def _product(shape):
     return result
 
 
-class ADVIContinuous(object):
+class ADVIMaster(object):
+    """
+    Master ADVI class. This is a container for other ADVI strategies.
+    """
+    def __init__(self, model):
+        self.parts = []
+        self.base_model = model
+        self.prototype_trace = None
+        self._iaranges = {}
+        self.iaranges = {}
+
+    def add(self, part):
+        assert isinstance(part, ADVISlave), type(part)
+        self.parts.append(part)
+        assert part.master is None
+        part.master = weakref.ref(self)
+
+    def model(self, *args, **kwargs):
+        for part in self.parts:
+            part.model_prelude()
+        return self.base_model(*args, **kwargs)
+
+    def guide(self, *args, **kwargs):
+        # if we've never run the model before, do so now so we can inspect the model structure
+        if self.prototype_trace is None:
+            self._setup_prototype(*args, **kwargs)
+
+        # create all iaranges
+        self.iaranges = {frame.name: pyro.iarange(frame.name, frame.size, dim=frame.dim)
+                         for frame in sorted(self._iaranges.values())}
+
+        # run slave guides
+        for part in self.parts:
+            part.guide(*args, **kwargs)
+
+    def _setup_prototype(self, *args, **kwargs):
+        # run the model so we can inspect its structure
+        self.prototype_trace = poutine.block(poutine.trace(self.base_model).get_trace)(*args, **kwargs)
+        self.prototype_trace = prune_subsample_sites(self.prototype_trace)
+
+        self._iaranges = {}
+        for name, site in self.prototype_trace.nodes.items():
+            if site["type"] != "sample" or site["is_observed"]:
+                continue
+            for frame in site["cond_indep_stack"]:
+                if frame.vectorized:
+                    self._iaranges[frame.name] = frame
+                else:
+                    raise NotImplementedError("ADVI does not support pyro.irange")
+
+
+class ADVISlave(object):
+    def __init__(self, model):
+        self.master = None
+        self.base_model = model
+        self.prototype_trace = None
+
+    def model(self, *args, **kwargs):
+        """
+        A wrapped model with the same ``*args, **kwargs`` as the base ``model``.
+        """
+        # wrap sample statement with a 0.0 poutine.scale to zero out unwanted score
+        with poutine.scale(None, 0.0):
+            self.sample_latent(*args, **kwargs)
+
+        if self.master is None:
+            # actual model sample statements shouldn't be zeroed out
+            base_trace = poutine.trace(self.base_model).get_trace(*args, **kwargs)
+            base_trace = prune_subsample_sites(base_trace)
+            check_traces_match(base_trace, self.prototype_trace)
+            return base_trace.nodes["_RETURN"]["value"]
+
+    def sample_latent(*args, **kwargs):
+        pass
+
+
+class ADVIContinuous(ADVISlave):
     """
     Base class for implementations of Automatic Differentiation Variational Inference [1].
 
@@ -43,8 +122,7 @@ class ADVIContinuous(object):
     Alp Kucukelbir, Dustin Tran, Rajesh Ranganath, Andrew Gelman, David M. Blei
     """
     def __init__(self, model):
-        self.prototype_trace = None
-        self.base_model = model
+        super(ADVIContinuous, self).__init__(model)
 
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
@@ -108,8 +186,11 @@ class ADVIContinuous(object):
         latent = self.sample_latent(*args, **kwargs)
 
         # create all iaranges
-        iaranges = {frame.name: pyro.iarange(frame.name, frame.size, dim=frame.dim)
-                    for frame in sorted(self._iaranges.values())}
+        if self.master is None:
+            iaranges = {frame.name: pyro.iarange(frame.name, frame.size, dim=frame.dim)
+                        for frame in sorted(self._iaranges.values())}
+        else:
+            iaranges = self.master().iaranges
 
         # unpack continuous latent samples
         result = {}
@@ -127,19 +208,6 @@ class ADVIContinuous(object):
                 result[name] = pyro.sample(name, delta_dist)
 
         return result
-
-    def model(self, *args, **kwargs):
-        """
-        A wrapped model with the same ``*args, **kwargs`` as the base ``model``.
-        """
-        # wrap sample statement with a 0.0 poutine.scale to zero out unwanted score
-        with poutine.scale("advi_scope", 0.0):
-            self.sample_latent(*args, **kwargs)
-        # actual model sample statements shouldn't be zeroed out
-        base_trace = poutine.trace(self.base_model).get_trace(*args, **kwargs)
-        base_trace = prune_subsample_sites(base_trace)
-        check_traces_match(base_trace, self.prototype_trace)
-        return base_trace.nodes["_RETURN"]["value"]
 
 
 class ADVIMultivariateNormal(ADVIContinuous):
@@ -268,10 +336,9 @@ class ADVIDiagonalNormal(ADVIContinuous):
         return result
 
 
-class ADVIDiscreteParallel(ADVI):
+class ADVIDiscreteParallel(ADVISlave):
     def __init__(self, model):
-        self.prototype_trace = None
-        self.base_model = model
+        super(ADVIDiscreteParallel, self).__init__(model)
 
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
@@ -279,7 +346,7 @@ class ADVIDiscreteParallel(ADVI):
         self.prototype_trace = poutine.block(poutine.trace(model).get_trace)(*args, **kwargs)
         self.prototype_trace = prune_subsample_sites(self.prototype_trace)
 
-        self._discrete_sites = {}
+        self._discrete_sites = []
         self._cond_indep_stacks = {}
         self._iaranges = {}
         for name, site in self.prototype_trace.nodes.items():
@@ -318,8 +385,11 @@ class ADVIDiscreteParallel(ADVI):
             self._setup_prototype(*args, **kwargs)
 
         # create all iaranges
-        iaranges = {frame.name: pyro.iarange(frame.name, frame.size, dim=frame.dim)
-                    for frame in sorted(self._iaranges.values())}
+        if self.master is None:
+            iaranges = {frame.name: pyro.iarange(frame.name, frame.size, dim=frame.dim)
+                        for frame in sorted(self._iaranges.values())}
+        else:
+            iaranges = self.master().iaranges
 
         # enumerate discrete latent samples
         result = {}
