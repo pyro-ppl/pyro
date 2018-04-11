@@ -1,7 +1,8 @@
+import math
 from collections import namedtuple
+
 import numpy as np
 from PIL import Image, ImageDraw
-import math
 
 
 def bounding_box(z_where, x_size):

@@ -25,7 +25,7 @@ class NonlocalExit(Exception):
     """
     Exception for exiting nonlocally from poutine execution.
 
-    Used by poutine.EscapePoutine to return site information.
+    Used by poutine.EscapeMessenger to return site information.
     """
     def __init__(self, site, *args, **kwargs):
         """
@@ -105,7 +105,7 @@ def discrete_escape(trace, msg):
 
     Utility function that checks if a sample site is discrete and not already in a trace.
 
-    Used by EscapePoutine to decide whether to do a nonlocal exit at a site.
+    Used by EscapeMessenger to decide whether to do a nonlocal exit at a site.
     Subroutine for integrating out discrete variables for variance reduction.
     """
     return (msg["type"] == "sample") and \
@@ -122,7 +122,7 @@ def all_escape(trace, msg):
 
     Utility function that checks if a site is not already in a trace.
 
-    Used by EscapePoutine to decide whether to do a nonlocal exit at a site.
+    Used by EscapeMessenger to decide whether to do a nonlocal exit at a site.
     Subroutine for approximately integrating out variables for variance reduction.
     """
     return (msg["type"] == "sample") and \

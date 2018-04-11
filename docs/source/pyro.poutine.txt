@@ -1,4 +1,4 @@
-Poutine
+Handler
 -------
 
 .. automodule:: pyro.poutine.poutine
@@ -6,7 +6,7 @@ Poutine
     :undoc-members:
     :show-inheritance:
 
-BlockPoutine
+BlockHandler
 ------------
 
 .. automodule:: pyro.poutine.block_poutine
@@ -14,7 +14,7 @@ BlockPoutine
     :undoc-members:
     :show-inheritance:
 
-ConditionPoutine
+ConditionHandler
 ----------------
 
 .. automodule:: pyro.poutine.condition_poutine
@@ -22,7 +22,7 @@ ConditionPoutine
     :undoc-members:
     :show-inheritance:
 
-EscapePoutine
+EscapeHandler
 -------------
 
 .. automodule:: pyro.poutine.escape_poutine
@@ -30,7 +30,7 @@ EscapePoutine
     :undoc-members:
     :show-inheritance:
 
-IndepPoutine
+IndepHandler
 ------------
 
 .. automodule:: pyro.poutine.indep_poutine
@@ -38,7 +38,7 @@ IndepPoutine
     :undoc-members:
     :show-inheritance:
 
-LiftPoutine
+LiftHandler
 -----------
 
 .. automodule:: pyro.poutine.lift_poutine
@@ -46,7 +46,7 @@ LiftPoutine
     :undoc-members:
     :show-inheritance:
 
-ReplayPoutine
+ReplayHandler
 -------------
 
 .. automodule:: pyro.poutine.replay_poutine
@@ -54,7 +54,7 @@ ReplayPoutine
     :undoc-members:
     :show-inheritance:
 
-ScalePoutine
+ScaleHandler
 ------------
 
 .. automodule:: pyro.poutine.scale_poutine
@@ -70,7 +70,7 @@ Trace
     :undoc-members:
     :show-inheritance:
 
-TracePoutine
+TraceHandler
 ------------
 
 .. automodule:: pyro.poutine.trace_poutine

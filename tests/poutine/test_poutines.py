@@ -21,7 +21,7 @@ def eq(x, y, prec=1e-10):
 
 
 # XXX name is a bit silly
-class NormalNormalNormalPoutineTestCase(TestCase):
+class NormalNormalNormalHandlerTestCase(TestCase):
 
     def setUp(self):
         pyro.clear_param_store()
@@ -63,7 +63,7 @@ class NormalNormalNormalPoutineTestCase(TestCase):
         self.partial_sample_sites = {"latent1": "latent1"}
 
 
-class TracePoutineTests(NormalNormalNormalPoutineTestCase):
+class TraceHandlerTests(NormalNormalNormalHandlerTestCase):
 
     def test_trace_full(self):
         guide_trace = poutine.trace(self.guide).get_trace()
@@ -84,7 +84,7 @@ class TracePoutineTests(NormalNormalNormalPoutineTestCase):
                      model_trace.nodes["_RETURN"]["value"])
 
 
-class ReplayPoutineTests(NormalNormalNormalPoutineTestCase):
+class ReplayHandlerTests(NormalNormalNormalHandlerTestCase):
 
     def test_replay_full(self):
         guide_trace = poutine.trace(self.guide).get_trace()
@@ -119,7 +119,7 @@ class ReplayPoutineTests(NormalNormalNormalPoutineTestCase):
             assert_equal(model_trace.nodes[name]["value"], tr2.nodes[name]["value"])
 
 
-class BlockPoutineTests(NormalNormalNormalPoutineTestCase):
+class BlockHandlerTests(NormalNormalNormalHandlerTestCase):
 
     def test_block_full(self):
         model_trace = poutine.trace(poutine.block(self.model)).get_trace()
@@ -195,7 +195,7 @@ class BlockPoutineTests(NormalNormalNormalPoutineTestCase):
         assert "obs" not in guide_trace
 
 
-class QueuePoutineDiscreteTest(TestCase):
+class QueueHandlerDiscreteTest(TestCase):
 
     def setUp(self):
 
@@ -268,7 +268,7 @@ class Model(nn.Module):
         return self.fc(x)
 
 
-class LiftPoutineTests(TestCase):
+class LiftHandlerTests(TestCase):
 
     def setUp(self):
         pyro.clear_param_store()
@@ -376,7 +376,7 @@ class LiftPoutineTests(TestCase):
                 assert not lifted_tr.nodes[key_name]["is_observed"]
 
 
-class QueuePoutineMixedTest(TestCase):
+class QueueHandlerMixedTest(TestCase):
 
     def setUp(self):
 
@@ -426,7 +426,7 @@ class QueuePoutineMixedTest(TestCase):
         assert values[0]["z"] != values[1]["z"]  # Almost surely true.
 
 
-class IndirectLambdaPoutineTests(TestCase):
+class IndirectLambdaHandlerTests(TestCase):
 
     def setUp(self):
 
@@ -470,7 +470,7 @@ class IndirectLambdaPoutineTests(TestCase):
         _test_scale_factor(2, 1, [2.0] * 2)
 
 
-class ConditionPoutineTests(NormalNormalNormalPoutineTestCase):
+class ConditionHandlerTests(NormalNormalNormalHandlerTestCase):
 
     def test_condition(self):
         data = {"latent2": torch.randn(2)}
@@ -533,7 +533,7 @@ class ConditionPoutineTests(NormalNormalNormalPoutineTestCase):
         assert eq(sample_from_do_model, torch.zeros(1))
 
 
-class EscapePoutineTests(TestCase):
+class EscapeHandlerTests(TestCase):
 
     def setUp(self):
 
@@ -584,7 +584,7 @@ class EscapePoutineTests(TestCase):
                 assert "x" not in tem.trace
 
 
-class InferConfigPoutineTests(TestCase):
+class InferConfigHandlerTests(TestCase):
     def setUp(self):
         def model():
             pyro.param("p", torch.zeros(1, requires_grad=True))
@@ -622,7 +622,7 @@ def test_enumerate_poutine(depth, first_available_dim):
         for i in range(depth):
             pyro.sample("a_{}".format(i), Bernoulli(0.5), infer={"enumerate": "parallel"})
 
-    model = poutine.EnumeratePoutine(model, first_available_dim)
+    model = poutine.EnumerateMessenger(first_available_dim)(model)
     model = poutine.trace(model)
 
     for i in range(num_particles):
@@ -645,7 +645,7 @@ def test_replay_enumerate_poutine(depth, first_available_dim):
     def guide():
         pyro.sample("y", y_dist, infer={"enumerate": "parallel"})
 
-    guide = poutine.EnumeratePoutine(guide, depth + first_available_dim)
+    guide = poutine.EnumerateMessenger(depth + first_available_dim)(guide)
     guide = poutine.trace(guide)
     guide_trace = guide.get_trace()
 
@@ -657,7 +657,7 @@ def test_replay_enumerate_poutine(depth, first_available_dim):
         for i in range(depth):
             pyro.sample("b_{}".format(i), Bernoulli(0.5), infer={"enumerate": "parallel"})
 
-    model = poutine.EnumeratePoutine(model, first_available_dim)
+    model = poutine.EnumerateMessenger(first_available_dim)(model)
     model = poutine.replay(model, guide_trace)
     model = poutine.trace(model)
 
