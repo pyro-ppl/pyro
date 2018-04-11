@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from .poutine import Messenger, Poutine
+from .poutine import Messenger, Handler
 from .trace import Trace
 from .util import site_is_subsample
 
@@ -61,6 +61,12 @@ class TraceMessenger(Messenger):
             identify_dense_edges(self.trace)
         return super(TraceMessenger, self).__exit__(*args, **kwargs)
 
+    def __call__(self, fn):
+        """
+        TODO docs
+        """
+        return TraceHandler(self, fn)
+
     def get_trace(self):
         """
         :returns: data structure
@@ -85,7 +91,7 @@ class TraceMessenger(Messenger):
         :param msg: current message at a trace site.
         :returns: updated message
 
-        Implements default pyro.sample Poutine behavior with an additional side effect:
+        Implements default pyro.sample Handler behavior with an additional side effect:
         if the observation at the site is not None,
         then store the observation in self.trace
         and return the observation,
@@ -109,7 +115,7 @@ class TraceMessenger(Messenger):
         :param msg: current message at a trace site.
         :returns: updated message
 
-        Implements default pyro.param Poutine behavior with an additional side effect:
+        Implements default pyro.param Handler behavior with an additional side effect:
         queries the parameter store with the site name and varargs
         and returns the result of the query.
 
@@ -130,26 +136,17 @@ class TraceMessenger(Messenger):
         return None
 
 
-class TracePoutine(Poutine):
+class TraceHandler(Handler):
     """
     Execution trace poutine.
 
-    A TracePoutine records the input and output to every pyro primitive
+    A TraceHandler records the input and output to every pyro primitive
     and stores them as a site in a Trace().
     This should, in theory, be sufficient information for every inference algorithm
     (along with the implicit computational graph in the Variables?)
 
     We can also use this for visualization.
     """
-
-    def __init__(self, fn, graph_type=None):
-        """
-        :param fn: a stochastic function (callable containing pyro primitive calls)
-        :param string graph_type: string that specifies the type of graph
-            to construct (currently only "flat" or "dense" supported)
-        """
-        super(TracePoutine, self).__init__(TraceMessenger(graph_type), fn)
-
     def __call__(self, *args, **kwargs):
         """
         Runs the stochastic function stored in this poutine,
@@ -163,13 +160,16 @@ class TracePoutine(Poutine):
         and returns self.fn's return value
         """
         self.msngr.trace = Trace(graph_type=self.msngr.graph_type)
-        self.trace = self.msngr.trace  # for compatibility with code that accesses trace directly
         self.msngr.trace.add_node("_INPUT",
                                   name="_INPUT", type="args",
                                   args=args, kwargs=kwargs)
-        ret = super(TracePoutine, self).__call__(*args, **kwargs)
+        ret = super(TraceHandler, self).__call__(*args, **kwargs)
         self.msngr.trace.add_node("_RETURN", name="_RETURN", type="return", value=ret)
         return ret
+
+    @property
+    def trace(self):
+        return self.msngr.trace
 
     def get_trace(self, *args, **kwargs):
         """
