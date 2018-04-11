@@ -194,7 +194,7 @@ def enum(fn=None, first_available_dim=None):
 # Begin composite operations
 #########################################
 
-def do(fn, data=None):
+def do(fn=None, data=None):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param data: a dict or a Trace
@@ -208,8 +208,9 @@ def do(fn, data=None):
     as if they were hard-coded to those values
     by using BlockHandler
     """
-    msngr = block(condition(fn, data=data), hide=list(data.keys()))
-    return msngr
+    def wrapper(wrapped):
+        return block(condition(wrapped, data=data), hide=list(data.keys()))
+    return wrapper(fn) if fn is not None else wrapper
 
 
 def queue(fn=None, queue=None, max_tries=None,
