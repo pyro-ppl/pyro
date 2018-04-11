@@ -31,7 +31,16 @@ def _product(shape):
 
 class ADVIMaster(object):
     """
-    Master ADVI class. This is a container for other ADVI strategies.
+    Container class to combine multiple ADVI strategies.
+
+    Example usage::
+
+        advi = ADVIMaster(my_model)
+        advi.add(ADVIDiagonalNormal(poutine.block(model, hide=["assignment"])))
+        advi.add(ADVIDiscreteParallel(poutine.block(model, expose=["assignment"])))
+        svi = SVI(advi.model, advi.guide, optim, 'ELBO')
+
+    :param callable model: a Pyro model
     """
     def __init__(self, model):
         self.parts = []
@@ -50,17 +59,33 @@ class ADVIMaster(object):
             assert part_site["value"].shape == self_site["value"].shape
 
     def add(self, part):
+        """
+        Add an ADVI strategy for part of the model. The ADVI strategy should
+        have been created by blocking the model to restrict to a subset of
+        sample sites. No two parts should operate on any one sample site.
+
+        :param ADVISlave part: an ADVI strategy to add
+        """
         assert isinstance(part, ADVISlave), type(part)
         self.parts.append(part)
         assert part.master is None
         part.master = weakref.ref(self)
 
     def model(self, *args, **kwargs):
+        """
+        A wrapped model with the same ``*args, **kwargs`` as the base ``model``.
+        """
         for part in self.parts:
             part.model(*args, **kwargs)
         return self.base_model(*args, **kwargs)
 
     def guide(self, *args, **kwargs):
+        """
+        A composite guide with the same ``*args, **kwargs`` as the base ``model``.
+
+        :return: A dict mapping sample site name to sampled value.
+        :rtype: dict
+        """
         # if we've never run the model before, do so now so we can inspect the model structure
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
@@ -70,8 +95,10 @@ class ADVIMaster(object):
                          for frame in sorted(self._iaranges.values())}
 
         # run slave guides
+        result = {}
         for part in self.parts:
-            part.guide(*args, **kwargs)
+            result.update(part.guide(*args, **kwargs))
+        return result
 
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
@@ -91,6 +118,12 @@ class ADVIMaster(object):
 
 
 class ADVISlave(object):
+    """
+    Base class for ADVI strategies.
+
+    ADVI strategies can be used individually or combined in an
+    :class:`ADVIMaster` object.
+    """
     def __init__(self, model):
         self.master = None
         self.base_model = model
@@ -112,12 +145,23 @@ class ADVISlave(object):
             return base_trace.nodes["_RETURN"]["value"]
 
     def sample_latent(*args, **kwargs):
+        """
+        Samples an encoded latent given the same ``*args, **kwargs`` as the
+        base ``model``.
+        """
         pass
+
+    def _create_iaranges(self):
+        if self.master is not None:
+            return self.master().iaranges
+        return {frame.name: pyro.iarange(frame.name, frame.size, dim=frame.dim)
+                for frame in sorted(self._iaranges.values())}
 
 
 class ADVIContinuous(ADVISlave):
     """
-    Base class for implementations of Automatic Differentiation Variational Inference [1].
+    Base class for implementations of continuous-valued Automatic
+    Differentiation Variational Inference [1].
 
     Each derived class implements its own :meth:`sample_latent` method.
 
@@ -129,7 +173,8 @@ class ADVIContinuous(ADVISlave):
     Reference:
 
     [1] 'Automatic Differentiation Variational Inference',
-    Alp Kucukelbir, Dustin Tran, Rajesh Ranganath, Andrew Gelman, David M. Blei
+        Alp Kucukelbir, Dustin Tran, Rajesh Ranganath, Andrew Gelman, David M.
+        Blei
     """
     def __init__(self, model):
         super(ADVIContinuous, self).__init__(model)
@@ -188,7 +233,7 @@ class ADVIContinuous(ADVISlave):
         """
         An automatic guide with the same ``*args, **kwargs`` as the base ``model``.
 
-        :return: A dictionary mapping sample site name to sampled value.
+        :return: A dict mapping sample site name to sampled value.
         :rtype: dict
         """
         # if we've never run the model before, do so now so we can inspect the model structure
@@ -196,13 +241,7 @@ class ADVIContinuous(ADVISlave):
             self._setup_prototype(*args, **kwargs)
 
         latent = self.sample_latent(*args, **kwargs)
-
-        # create all iaranges
-        if self.master is None:
-            iaranges = {frame.name: pyro.iarange(frame.name, frame.size, dim=frame.dim)
-                        for frame in sorted(self._iaranges.values())}
-        else:
-            iaranges = self.master().iaranges
+        iaranges = self._create_iaranges()
 
         # unpack continuous latent samples
         result = {}
@@ -255,7 +294,7 @@ class ADVIMultivariateNormal(ADVIContinuous):
         """
         Returns the posterior median value of each latent variable.
 
-        :return: A dictionary mapping sample site name to median tensor.
+        :return: A dict mapping sample site name to median tensor.
         :rtype: dict
         """
         latent = pyro.param("advi_loc")
@@ -270,7 +309,7 @@ class ADVIMultivariateNormal(ADVIContinuous):
 
         :param quantiles: A list of requested quantiles between 0 and 1.
         :type quantiles: torch.Tensor or list
-        :return: A dictionary mapping sample site name to a list of quantile values.
+        :return: A dict mapping sample site name to a list of quantile values.
         :rtype: dict
         """
         loc = pyro.param("advi_loc")
@@ -318,7 +357,7 @@ class ADVIDiagonalNormal(ADVIContinuous):
         """
         Returns the posterior median value of each latent variable.
 
-        :return: A dictionary mapping sample site name to median tensor.
+        :return: A dict mapping sample site name to median tensor.
         :rtype: dict
         """
         latent = pyro.param("advi_loc")
@@ -333,7 +372,7 @@ class ADVIDiagonalNormal(ADVIContinuous):
 
         :param quantiles: A list of requested quantiles between 0 and 1.
         :type quantiles: torch.Tensor or list
-        :return: A dictionary mapping sample site name to a list of quantile values.
+        :return: A dict mapping sample site name to a list of quantile values.
         :rtype: dict
         """
         loc = pyro.param("advi_loc")
@@ -391,19 +430,14 @@ class ADVIDiscreteParallel(ADVISlave):
         """
         An automatic guide with the same ``*args, **kwargs`` as the base ``model``.
 
-        :return: A dictionary mapping sample site name to sampled value.
+        :return: A dict mapping sample site name to sampled value.
         :rtype: dict
         """
         # if we've never run the model before, do so now so we can inspect the model structure
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
 
-        # create all iaranges
-        if self.master is None:
-            iaranges = {frame.name: pyro.iarange(frame.name, frame.size, dim=frame.dim)
-                        for frame in sorted(self._iaranges.values())}
-        else:
-            iaranges = self.master().iaranges
+        iaranges = self._create_iaranges()
 
         # enumerate discrete latent samples
         result = {}

@@ -36,6 +36,7 @@ ADVI
     :members:
     :undoc-members:
     :show-inheritance:
+    :member-order: bysource
 
 Importance
 ----------
