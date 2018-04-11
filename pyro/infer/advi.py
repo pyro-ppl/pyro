@@ -134,7 +134,7 @@ class ADVISlave(object):
         A wrapped model with the same ``*args, **kwargs`` as the base ``model``.
         """
         # wrap sample statement with a 0.0 poutine.scale to zero out unwanted score
-        with poutine.scale(None, 0.0):
+        with poutine.scale(scale=0.0):
             self.sample_latent(*args, **kwargs)
 
         if self.master is None:
