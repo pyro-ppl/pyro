@@ -42,6 +42,12 @@ Models
     :show-inheritance:
     :member-order: bysource
 
+.. automodule:: pyro.contrib.gp.models.gplvm
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
+
 Kernels
 -------
 

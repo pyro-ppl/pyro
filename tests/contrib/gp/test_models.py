@@ -9,7 +9,7 @@ import torch
 import pyro
 from pyro.contrib.gp.kernels import Matern32, RBF, WhiteNoise
 from pyro.contrib.gp.likelihoods import Gaussian
-from pyro.contrib.gp.models import (GPRegression, SparseGPRegression,
+from pyro.contrib.gp.models import (GPLVM, GPRegression, SparseGPRegression,
                                     VariationalGP, SparseVariationalGP)
 import pyro.distributions as dist
 from pyro.infer.mcmc.hmc import HMC
@@ -314,3 +314,17 @@ def test_inference_deepGP():
 
     svi = SVI(model, guide, optim.Adam({}), "ELBO")
     svi.step()
+
+
+@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
+def test_gplvm(model_class, X, y, kernel, likelihood):
+    if model_class is SparseGPRegression or model_class is SparseVariationalGP:
+        gp = model_class(X, y, kernel, X, likelihood)
+    else:
+        gp = model_class(X, y, kernel, likelihood)
+
+    gplvm = GPLVM(gp)
+    # test inference
+    gplvm.optimize(num_steps=1)
+    # test forward
+    gplvm(Xnew=X)

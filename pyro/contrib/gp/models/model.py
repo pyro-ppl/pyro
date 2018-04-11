@@ -1,8 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
 from pyro.contrib.gp.util import Parameterized
-from pyro.infer.svi import SVI
-from pyro.optim import Adam, PyroOptim
+import pyro.infer as infer
+import pyro.optim as optim
 
 
 class GPModel(Parameterized):
@@ -161,7 +161,7 @@ class GPModel(Parameterized):
         self.X = X
         self.y = y
 
-    def optimize(self, optimizer=Adam({}), num_steps=1000):
+    def optimize(self, optimizer=optim.Adam({}), num_steps=1000):
         """
         A convenient method to optimize parameters for the Gaussian Process model
         using :class:`~pyro.infer.svi.SVI`.
@@ -171,10 +171,10 @@ class GPModel(Parameterized):
         :returns: a list of losses during the training procedure
         :rtype: list
         """
-        if not isinstance(optimizer, PyroOptim):
+        if not isinstance(optimizer, optim.PyroOptim):
             raise ValueError("Optimizer should be an instance of "
                              "pyro.optim.PyroOptim class.")
-        svi = SVI(self.model, self.guide, optimizer, loss="ELBO")
+        svi = infer.SVI(self.model, self.guide, optimizer, loss="ELBO")
         losses = []
         for i in range(num_steps):
             losses.append(svi.step())
