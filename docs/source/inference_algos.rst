@@ -29,14 +29,6 @@ ELBO
     :undoc-members:
     :show-inheritance:
 
-ADVI
-----
-
-.. automodule:: pyro.infer.advi
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 Importance
 ----------
 

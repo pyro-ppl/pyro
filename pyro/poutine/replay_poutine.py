@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from .poutine import Messenger, Poutine
+from .poutine import Messenger
 
 
 class ReplayMessenger(Messenger):
@@ -54,7 +54,7 @@ class ReplayMessenger(Messenger):
         from the stochastic function at the site.
 
         At a sample site that does not appear in self.guide_trace,
-        reverts to default Poutine._pyro_sample behavior with no additional side effects.
+        reverts to default Messenger._pyro_sample behavior with no additional side effects.
         """
         name = msg["name"]
         # case 1: dict, positive: sample from guide
@@ -73,19 +73,3 @@ class ReplayMessenger(Messenger):
 
     def _pyro_param(self, msg):
         return None
-
-
-class ReplayPoutine(Poutine):
-    """
-    Poutine for replaying from an existing execution trace.
-    """
-
-    def __init__(self, fn, guide_trace, sites=None):
-        """
-        :param fn: a stochastic function (callable containing pyro primitive calls)
-        :param guide_trace: a trace whose values should be reused
-
-        Constructor.
-        Stores guide_trace in an attribute.
-        """
-        super(ReplayPoutine, self).__init__(ReplayMessenger(guide_trace, sites), fn)

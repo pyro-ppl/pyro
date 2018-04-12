@@ -64,7 +64,7 @@ class IndepMessenger(Messenger):
     This messenger keeps track of stack of independence information declared by
     nested ``irange`` and ``iarange`` contexts. This information is stored in
     a ``cond_indep_stack`` at each sample/observe site for consumption by
-    ``TracePoutine``.
+    ``TraceMessenger``.
     """
     def __init__(self, name, size, dim=None):
         """

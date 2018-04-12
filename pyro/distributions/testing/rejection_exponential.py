@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import torch
 
-from pyro.distributions import Exponential
+from pyro.distributions.torch import Exponential
 from pyro.distributions.rejector import Rejector
 from pyro.distributions.util import copy_docs_from
 from torch.distributions.utils import broadcast_all

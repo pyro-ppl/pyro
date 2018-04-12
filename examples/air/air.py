@@ -94,12 +94,12 @@ class AIR(nn.Module):
         self.bl_embed = Identity() if embed_net is None else MLP(x_size ** 2, embed_net, nl, True)
 
         # Create parameters.
-        self.h_init = torch.zeros(1, rnn_hidden_size)
-        self.c_init = torch.zeros(1, rnn_hidden_size)
-        self.bl_h_init = torch.zeros(1, rnn_hidden_size)
-        self.bl_c_init = torch.zeros(1, rnn_hidden_size)
-        self.z_where_init = torch.zeros(1, self.z_where_size)
-        self.z_what_init = torch.zeros(1, self.z_what_size)
+        self.h_init = nn.Parameter(torch.zeros(1, rnn_hidden_size))
+        self.c_init = nn.Parameter(torch.zeros(1, rnn_hidden_size))
+        self.bl_h_init = nn.Parameter(torch.zeros(1, rnn_hidden_size))
+        self.bl_c_init = nn.Parameter(torch.zeros(1, rnn_hidden_size))
+        self.z_where_init = nn.Parameter(torch.zeros(1, self.z_where_size))
+        self.z_what_init = nn.Parameter(torch.zeros(1, self.z_what_size))
 
         if use_cuda:
             self.cuda()

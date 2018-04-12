@@ -10,11 +10,13 @@ from torch.distributions import biject_to, constraints
 import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
-from pyro.infer import SVI, ADVIDiagonalNormal, ADVIMultivariateNormal
+from pyro.contrib.autoguide import ADVIDiagonalNormal, ADVIMultivariateNormal
+from pyro.infer import SVI
 from tests.common import assert_equal
 from tests.integration_tests.test_conjugate_gaussian_models import GaussianChain
 
 logger = logging.getLogger(__name__)
+pytestmark = pytest.mark.stage("integration", "integration_batch_2")
 
 
 # conjugate model to test ADVI logic from end-to-end (this has a non-mean-field posterior)
