@@ -1,29 +1,14 @@
-import os
 import sys
+
+import numpy as np
+import torch
+import torchvision.datasets as datasets
 from torch.utils.data import DataLoader
 from torchvision import transforms
-import torchvision.datasets as datasets
-import torch
-import numpy as np
-import errno
-
-
-def mkdir_p(path):
-    try:
-        os.makedirs(path)
-    except OSError as exc:  # Python >2.5
-        if exc.errno == errno.EEXIST and os.path.isdir(path):
-            pass
-        else:
-            raise
-
-
-EXAMPLES_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(EXAMPLES_DIR, 'data')
-RESULTS_DIR = os.path.join(EXAMPLES_DIR, 'results')
 
 
 def get_data_loader(dataset_name,
+                    data_dir,
                     batch_size=1,
                     dataset_transforms=None,
                     is_training_set=True,
@@ -33,7 +18,7 @@ def get_data_loader(dataset_name,
     trans = transforms.Compose([transforms.ToTensor()] + dataset_transforms)
     dataset = getattr(datasets, dataset_name)
     return DataLoader(
-        dataset(root=DATA_DIR,
+        dataset(root=data_dir,
                 train=is_training_set,
                 transform=trans,
                 download=True),

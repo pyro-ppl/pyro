@@ -11,6 +11,7 @@ Taken from: http://forestdb.org/models/schelling.html
 from __future__ import print_function
 
 import argparse
+
 import torch
 
 import pyro

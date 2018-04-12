@@ -13,6 +13,9 @@ class Messenger(object):
     def __init__(self):
         pass
 
+    def __call__(self, fn):
+        return Handler(self, fn)
+
     def __enter__(self):
         """
         :returns: self
@@ -40,7 +43,7 @@ class Messenger(object):
             # However, this isn't strictly necessary,
             # and blocks recursive poutine execution patterns like
             # like calling self.__call__ inside of self.__call__
-            # or with Poutine(...) as p: with p: <BLOCK>
+            # or with Handler(...) as p: with p: <BLOCK>
             # It's hard to imagine use cases for this pattern,
             # but it could in principle be enabled...
             raise ValueError("cannot install a Messenger instance twice")
@@ -111,19 +114,19 @@ class Messenger(object):
         return None
 
 
-class Poutine(object):
+class Handler(object):
     """
     Context manager class that modifies behavior
     and adds side effects to stochastic functions
     i.e. callables containing pyro primitive statements.
 
-    See the Poutine execution model writeup in the documentation
-    for a description of the entire Poutine system.
+    See the Handler execution model writeup in the documentation
+    for a description of the entire Handler system.
 
-    This is the base Poutine class.
+    This is the base Handler class.
     It implements the default behavior for all pyro primitives,
     so that the joint distribution induced by a stochastic function fn
-    is identical to the joint distribution induced by Poutine(fn).
+    is identical to the joint distribution induced by Handler(fn).
     """
 
     def __init__(self, msngr, fn):

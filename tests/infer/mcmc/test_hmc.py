@@ -276,7 +276,7 @@ def test_bernoulli_beta_with_dual_averaging():
     assert_equal(posterior_mean, true_probs, prec=0.01)
 
 
-@pytest.mark.xfail(reason='the model is sensitive to NaN log_prob_sum')
+@pytest.mark.filterwarnings("ignore:Encountered NAN")
 def test_normal_gamma_with_dual_averaging():
     def model(data):
         rate = torch.tensor([1.0, 1.0])
@@ -290,7 +290,9 @@ def test_normal_gamma_with_dual_averaging():
     posterior = []
     true_std = torch.tensor([0.5, 2])
     data = dist.Normal(3, true_std).sample(sample_shape=(torch.Size((2000,))))
-    for trace, _ in mcmc_run._traces(data):
-        posterior.append(trace.nodes['p_latent']['value'])
+    # Model temporarily returns NaNs during warmup phase while tuning step size
+    with pyro.validation_enabled(False):
+        for trace, _ in mcmc_run._traces(data):
+            posterior.append(trace.nodes['p_latent']['value'])
     posterior_mean = torch.mean(torch.stack(posterior), 0)
     assert_equal(posterior_mean, true_std, prec=0.02)

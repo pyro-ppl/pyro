@@ -53,7 +53,7 @@ def count_accuracy(X, true_counts, air, batch_size):
         error_latents.append(latents_to_tensor((z_where, z_pres)).index_select(0, error_ix))
         error_indicators.append(error_ind)
 
-    acc = counts.diag().sum() / X.size(0)
+    acc = counts.diag().sum().float() / X.size(0)
     error_indices = torch.cat(error_indicators).nonzero().squeeze()
     if X.is_cuda:
         error_indices = error_indices.cuda()

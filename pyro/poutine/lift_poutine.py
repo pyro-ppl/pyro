@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 from pyro import params
 from pyro.distributions import Distribution
 
-from .poutine import Messenger, Poutine
+from .poutine import Messenger
 
 
 class LiftMessenger(Messenger):
@@ -66,24 +66,3 @@ class LiftMessenger(Messenger):
         msg["type"] = "sample"
         msg["is_observed"] = False
         return self._pyro_sample(msg)
-
-
-class LiftPoutine(Poutine):
-    """
-    Poutine which "lifts" parameters to random samples.
-    Given a stochastic function with param calls and a prior,
-    creates a stochastic function where all param calls are
-    replaced by sampling from prior.
-
-    Prior should be a callable or a dict of names to callables.
-    """
-
-    def __init__(self, fn, prior):
-        """
-        :param fn: stochastic function
-        :param prior: prior used to lift parameters. Prior can be of type
-                      dict, pyro.distributions, or a python stochastic fn
-
-        Constructor
-        """
-        super(LiftPoutine, self).__init__(LiftMessenger(prior), fn)

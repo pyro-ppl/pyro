@@ -8,7 +8,7 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.infer import SVI, ADVIDiagonalNormal, ADVIMultivariateNormal, config_enumerate
+from pyro.infer import SVI, config_enumerate
 from pyro.optim import Adam
 
 logger = logging.getLogger(__name__)
@@ -767,22 +767,19 @@ def test_enum_discrete_iaranges_dependency_ok(enumerate_):
     assert_ok(model, model, enum_discrete=True, max_iarange_nesting=2)
 
 
-@pytest.mark.xfail(reason="lack of scalar support in log_abs_det_jacobian")
-@pytest.mark.parametrize('advi_class', [ADVIDiagonalNormal, ADVIMultivariateNormal])
-def test_advi(advi_class):
+@pytest.mark.parametrize('enumerate_', [None, "sequential", "parallel"])
+def test_enum_discrete_non_enumerated_iarange_ok(enumerate_):
 
     def model():
-        x = pyro.sample("x", dist.Normal(0, 1))
-        assert x.shape == ()
+        with pyro.iarange("non_enum", 2):
+            a = pyro.sample("a", dist.Bernoulli(0.5).reshape([2]),
+                            infer={'enumerate': None})
 
-        for i in pyro.irange("irange", 3):
-            y = pyro.sample("y_{}".format(i), dist.Normal(0, 1).reshape([2, 1 + i, 2], extra_event_dims=3))
-            assert y.shape == (2, 1 + i, 2)
+        p = (1.0 + a.sum(-1)) / (2.0 + a.size(0))  # introduce dependency of b on a
 
-        z = pyro.sample("z", dist.Normal(0, 1).reshape([2], extra_event_dims=1))
-        assert z.shape == (2,)
+        with pyro.iarange("enum_1", 3):
+            pyro.sample("b", dist.Bernoulli(p).reshape([3]),
+                        infer={'enumerate': enumerate_})
 
-        pyro.sample("obs", dist.Bernoulli(0.1), obs=torch.tensor(0))
-
-    advi = advi_class(model)
-    assert_ok(advi.model, advi.guide)
+    with pyro.validation_enabled():
+        assert_ok(model, model, enum_discrete=True, max_iarange_nesting=1)
