@@ -15,6 +15,3 @@ def get_data(fname, varnames):
             val = torch.tensor(j[1][i])
         d[var_name] = val
     return ([d[k] for k in varnames])
-
-
-
