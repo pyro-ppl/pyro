@@ -91,7 +91,8 @@ def main(args):
 
     cnn = CNN().cuda() if args.cuda else CNN()
 
-    # helper to inject CNN's parameters to gpmodel
+    # optimizer in SVI just works with params which are active inside its model/guide scope;
+    # so we need this helper to mark cnn's parameters active for each `svi.step()` call.
     def cnn_fn(x):
         return pyro.module("CNN", cnn)(x)
     # Create deep kernel by warping RBF with CNN.
