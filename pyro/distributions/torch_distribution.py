@@ -62,6 +62,14 @@ class TorchDistributionMixin(Distribution):
         """
         return sample_shape + self.batch_shape + self.event_shape
 
+    def expand_by(self, sample_shape):
+        return ReshapedDistribution(self, sample_shape=sample_shape)
+
+    def independent(self, reinterpreted_batch_ndims=None):
+        if reinterpreted_batch_ndims is None:
+            reinterpreted_batch_ndims = len(self.batch_shape)
+        return ReshapedDistribution(self, extra_event_dims=reinterpreted_batch_ndims)
+
     def reshape(self, sample_shape=torch.Size(), extra_event_dims=0):
         """
         Reshapes a distribution by adding ``sample_shape`` to its total shape
@@ -178,6 +186,20 @@ class ReshapedDistribution(TorchDistribution):
         batch_dim = len(shape) - extra_event_dims - len(base_dist.event_shape)
         batch_shape, event_shape = shape[:batch_dim], shape[batch_dim:]
         super(ReshapedDistribution, self).__init__(batch_shape, event_shape)
+
+    def expand_by(self, sample_shape):
+        base_dist = self.base_dist
+        sample_shape = torch.Size(sample_shape) + self.sample_shape
+        extra_event_dims = self.extra_event_dims
+        return ReshapedDistribution(base_dist, sample_shape, extra_event_dims)
+
+    def independent(self, reinterpreted_batch_ndims=None):
+        if reinterpreted_batch_ndims is None:
+            reinterpreted_batch_ndims = len(self.batch_shape)
+        base_dist = self.base_dist
+        sample_shape = self.sample_shape
+        extra_event_dims = self.extra_event_dims + reinterpreted_batch_ndims
+        return ReshapedDistribution(base_dist, sample_shape, extra_event_dims)
 
     @property
     def has_rsample(self):

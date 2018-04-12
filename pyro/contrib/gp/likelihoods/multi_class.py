@@ -63,6 +63,6 @@ class MultiClass(Likelihood):
         f_res = self.response_function(f_swap)
         return pyro.sample(self.y_name,
                            dist.Categorical(f_res)
-                               .reshape(sample_shape=y.shape[:-f_res.dim() + 1],
-                                        extra_event_dims=y.dim()),
+                               .expand_by(y.shape[:-f_res.dim() + 1])
+                               .independent(y.dim()),
                            obs=y)

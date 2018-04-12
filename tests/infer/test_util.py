@@ -15,11 +15,11 @@ def xy_model():
     y_axis = pyro.iarange('y_axis', 3, dim=-2)
     pyro.sample('b', d)
     with x_axis:
-        pyro.sample('bx', d.reshape([2]))
+        pyro.sample('bx', d.expand_by([2]))
     with y_axis:
-        pyro.sample('by', d.reshape([3, 1]))
+        pyro.sample('by', d.expand_by([3, 1]))
     with x_axis, y_axis:
-        pyro.sample('bxy', d.reshape([3, 2]))
+        pyro.sample('bxy', d.expand_by([3, 2]))
 
 
 def test_multi_frame_tensor():

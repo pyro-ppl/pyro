@@ -45,6 +45,6 @@ class Gaussian(Likelihood):
         y_var = f_var + variance
         return pyro.sample(self.y_name,
                            dist.Normal(f_loc, y_var)
-                               .reshape(sample_shape=y.shape[:-f_loc.dim()],
-                                        extra_event_dims=y.dim()),
+                               .expand_by(y.shape[:-f_loc.dim()])
+                               .independent(y.dim()),
                            obs=y)

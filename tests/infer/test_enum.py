@@ -141,7 +141,7 @@ def gmm_batch_model(data):
     mus = torch.tensor([-1.0, 1.0])
     with pyro.iarange("data", len(data)) as batch:
         n = len(batch)
-        z = pyro.sample("z", dist.OneHotCategorical(p).reshape([n]))
+        z = pyro.sample("z", dist.OneHotCategorical(p).expand_by([n]))
         assert z.shape[-2:] == (n, 2)
         loc = (z * mus).sum(-1)
         pyro.sample("x", dist.Normal(loc, scale.expand(n)), obs=data[batch])
