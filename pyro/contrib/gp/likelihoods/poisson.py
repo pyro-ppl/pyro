@@ -23,12 +23,12 @@ class Poisson(Likelihood):
         super(Poisson, self).__init__(name)
         self.response_function = torch.exp if response_function is None else response_function
 
-    def forward(self, f_loc, f_var, y):
+    def forward(self, f_loc, f_var, y=None):
         r"""
         Samples :math:`y` given :math:`f_{loc}`, :math:`f_{var}` according to
 
             .. math:: f & \sim \mathbb{Normal}(f_{loc}, f_{var}),\\
-                y & \sim \mathbb{Poisson}(f).
+                y & \sim \mathbb{Poisson}(\exp(f)).
 
         .. note:: The log likelihood is estimated using Monte Carlo with 1 sample of
             :math:`f`.
@@ -42,8 +42,8 @@ class Poisson(Likelihood):
         # calculates Monte Carlo estimate for E_q(f) [logp(y | f)]
         f = dist.Normal(f_loc, f_var)()
         f_res = self.response_function(f)
-        return pyro.sample(self.y_name,
-                           dist.Poisson(f_res)
-                               .reshape(sample_shape=y.shape[:-f_res.dim()],
-                                        extra_event_dims=y.dim()),
-                           obs=y)
+        y_dist = dist.Poisson(f_res)
+        if y is not None:
+            y_dist = y_dist.reshape(sample_shape=y.shape[:-f_res.dim()],
+                                    extra_event_dims=y.dim())
+        return pyro.sample(self.y_name, y_dist, obs=y)
