@@ -27,8 +27,6 @@ if [ ${pyro_branch} = "release" ]
 then
     pip install pyro-ppl
 else
-    conda install -y numpy pyyaml mkl setuptools cmake cffi
-    conda install -y -c soumith magma-cuda90
     git clone https://github.com/uber/pyro.git
     (cd pyro && git checkout ${pyro_branch} && pip install -e .)
 fi
