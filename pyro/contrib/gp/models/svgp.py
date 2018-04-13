@@ -122,7 +122,7 @@ class SparseVariationalGP(GPModel):
         else:
             pyro.sample(u_name,
                         dist.MultivariateNormal(zero_loc, scale_tril=Luu)
-                            .independent(extra_event_dims=zero_loc.dim() - 1))
+                            .independent(zero_loc.dim() - 1))
 
         f_loc, f_var = conditional(self.X, Xu, self.kernel, u_loc, u_scale_tril,
                                    Luu, full_cov=False, whiten=self.whiten,
