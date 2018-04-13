@@ -704,7 +704,7 @@ def test_enum_discrete_parallel_iarange_ok():
             with pyro.iarange("inner", 5):
                 x536 = pyro.sample("x536", dist.Categorical(p536))
 
-        if  enum_discrete == "sequential":
+        if enum_discrete == "sequential":
             # All dimensions are iarange dimensions.
             assert x2.shape == torch.Size([])
             assert x34.shape == torch.Size([3])
