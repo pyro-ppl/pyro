@@ -6,12 +6,13 @@ import torch.nn as nn
 import pyro
 import pyro.distributions as dist
 from pyro.contrib.examples.util import print_and_log, set_seed
-from pyro.infer import SVI, config_enumerate
+from pyro.infer import SVI, config_enumerate, Trace_ELBO, TraceEnum_ELBO
 from pyro.nn import ClippedSigmoid, ClippedSoftmax
 from pyro.optim import Adam
 from utils.custom_mlp import MLP, Exp
 from utils.mnist_cached import MNISTCached, setup_data_loaders, mkdir_p
 from utils.vae_plots import mnist_test_tsne_ssvae, plot_conditional_samples_ssvae
+from visdom import Visdom
 
 
 class SSVAE(nn.Module):
@@ -302,7 +303,6 @@ def main(args):
 
     viz = None
     if args.visualize:
-        from visdom import Visdom
         viz = Visdom()
         mkdir_p("./vae_results")
 
@@ -320,15 +320,14 @@ def main(args):
     # set up the loss(es) for inference. wrapping the guide in config_enumerate builds the loss as a sum
     # by enumerating each class label for the sampled discrete categorical distribution in the model
     guide = config_enumerate(ss_vae.guide, args.enum_discrete)
-    loss_basic = SVI(ss_vae.model, guide, optimizer, loss="ELBO",
-                     enum_discrete=True, max_iarange_nesting=1)
+    loss_basic = SVI(ss_vae.model, guide, optimizer, TraceEnum_ELBO(max_iarange_nesting=1))
 
     # build a list of all losses considered
     losses = [loss_basic]
 
     # aux_loss: whether to use the auxiliary loss from NIPS 14 paper (Kingma et al)
     if args.aux_loss:
-        loss_aux = SVI(ss_vae.model_classify, ss_vae.guide_classify, optimizer, loss="ELBO")
+        loss_aux = SVI(ss_vae.model_classify, ss_vae.guide_classify, optimizer, Trace_ELBO())
         losses.append(loss_aux)
 
     try:
@@ -411,8 +410,7 @@ if __name__ == "__main__":
     parser.add_argument('-alm', '--aux-loss-multiplier', default=300, type=float,
                         help="the multiplier to use with the auxiliary loss")
     parser.add_argument('-enum', '--enum-discrete', default=None,
-                        help="whether to enumerate the discrete support of the categorical distribution"
-                             "while computing the ELBO loss")
+                        help="parallel or sequential")
     parser.add_argument('-sup', '--sup-num', default=3000,
                         type=float, help="supervised amount of the data i.e. "
                                          "how many of the images have supervised labels")
