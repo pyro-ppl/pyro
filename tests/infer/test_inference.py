@@ -75,8 +75,7 @@ class NormalNormalTests(TestCase):
             pyro.sample("loc_latent", Normal(loc_q, sig_q).independent(1))
 
         adam = optim.Adam({"lr": .001})
-        elbo = Trace_ELBO()
-        svi = SVI(model, guide, adam, loss=elbo)
+        svi = SVI(model, guide, adam, loss=Trace_ELBO())
 
         for k in range(n_steps):
             svi.step()
@@ -129,7 +128,7 @@ class TestFixedModelGuide(TestCase):
             return {'lr': 0.01}
 
         adam = optim.Adam(per_param_args)
-        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
+        svi = SVI(model, guide, adam, loss=Trace_ELBO())
 
         for _ in range(3):
             svi.step()
@@ -194,7 +193,7 @@ class PoissonGammaTests(TestCase):
             pyro.sample("lambda_latent", Gamma(alpha_q, beta_q))
 
         adam = optim.Adam({"lr": .0002, "betas": (0.97, 0.999)})
-        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
+        svi = SVI(model, guide, adam, loss=Trace_ELBO())
 
         for k in range(n_steps):
             svi.step()
@@ -292,7 +291,7 @@ class BernoulliBetaTests(TestCase):
             pyro.sample("p_latent", Beta(alpha_q, beta_q))
 
         adam = optim.Adam({"lr": .001, "betas": (0.97, 0.999)})
-        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
+        svi = SVI(model, guide, adam, loss=Trace_ELBO())
 
         for k in range(n_steps):
             svi.step()
@@ -332,7 +331,7 @@ class SafetyTests(TestCase):
         pyro.clear_param_store()
 
         adam = optim.Adam({"lr": .001})
-        svi = SVI(self.duplicate_model, self.guide, adam, loss="ELBO", trace_graph=False)
+        svi = SVI(self.duplicate_model, self.guide, adam, loss=Trace_ELBO())
 
         with pytest.raises(RuntimeError):
             svi.step()
@@ -341,7 +340,7 @@ class SafetyTests(TestCase):
         pyro.clear_param_store()
 
         adam = optim.Adam({"lr": .001})
-        svi = SVI(self.model, self.guide, adam, loss="ELBO", trace_graph=False)
+        svi = SVI(self.model, self.guide, adam, loss=Trace_ELBO())
 
         with pytest.warns(Warning):
             svi.step()
@@ -350,7 +349,7 @@ class SafetyTests(TestCase):
         pyro.clear_param_store()
 
         adam = optim.Adam({"lr": .001})
-        svi = SVI(self.duplicate_obs, self.guide, adam, loss="ELBO", trace_graph=False)
+        svi = SVI(self.duplicate_obs, self.guide, adam, loss=Trace_ELBO())
 
         with pytest.raises(RuntimeError):
             svi.step()

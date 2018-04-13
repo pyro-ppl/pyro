@@ -9,10 +9,9 @@ import torch
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
-from pyro.infer.svi import SVI
+from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import Adam
 from pyro.poutine.trace import Trace
-
 
 pytestmark = pytest.mark.stage('unit')
 
@@ -146,7 +145,7 @@ def test_svi():
         pass
 
     optim = Adam({'lr': 1e-3})
-    inference = SVI(model, guide, optim, 'ELBO')
+    inference = SVI(model, guide, optim, Trace_ELBO())
 
     counts = []
     gc.collect()

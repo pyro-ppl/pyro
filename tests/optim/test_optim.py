@@ -8,7 +8,7 @@ import torch
 import pyro
 import pyro.optim as optim
 from pyro.distributions import Normal
-from pyro.infer import SVI
+from pyro.infer import SVI, TraceGraph_ELBO
 
 
 class OptimTests(TestCase):
@@ -54,8 +54,8 @@ class OptimTests(TestCase):
 
         adam = optim.Adam(optim_params)
         adam2 = optim.Adam(optim_params)
-        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
-        svi2 = SVI(model, guide, adam2, loss="ELBO", trace_graph=True)
+        svi = SVI(model, guide, adam, loss=TraceGraph_ELBO())
+        svi2 = SVI(model, guide, adam2, loss=TraceGraph_ELBO())
 
         svi.step()
         adam_initial_step_count = list(adam.get_state()['loc_q']['state'].items())[0][1]['step']

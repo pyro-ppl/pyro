@@ -8,7 +8,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.contrib.autoguide import ADVIDiagonalNormal, ADVIDiscreteParallel, ADVIMaster, ADVIMultivariateNormal
-from pyro.infer import ELBO, SVI
+from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO
 from pyro.optim import Adam
 from tests.common import assert_equal
 
@@ -31,11 +31,9 @@ def test_scores(advi_class):
     assert guide_trace.nodes['z']['log_prob_sum'].item() == 0.0
 
 
-@pytest.mark.parametrize("trace_graph,enum_discrete",
-                         [(False, False), (True, False), (False, True)],
-                         ids=["Trace", "TraceGraph", "TraceEnum"])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 @pytest.mark.parametrize("advi_class", [ADVIMultivariateNormal, ADVIDiagonalNormal])
-def test_shapes(advi_class, trace_graph, enum_discrete):
+def test_shapes(advi_class, Elbo):
 
     def model():
         pyro.sample("z1", dist.Normal(0.0, 1.0))
@@ -44,7 +42,7 @@ def test_shapes(advi_class, trace_graph, enum_discrete):
             pyro.sample("z3", dist.Normal(torch.zeros(3), torch.ones(3)))
 
     advi = advi_class(model)
-    elbo = ELBO.make(trace_graph=trace_graph, enum_discrete=enum_discrete)
+    elbo = Elbo()
     loss = elbo.loss(advi.model, advi.guide)
     assert np.isfinite(loss), loss
 
@@ -67,7 +65,7 @@ def test_irange_smoke(advi_class):
         pyro.sample("obs", dist.Bernoulli(0.1), obs=torch.tensor(0))
 
     advi = advi_class(model)
-    infer = SVI(advi.model, advi.guide, Adam({"lr": 1e-6}), "ELBO")
+    infer = SVI(advi.model, advi.guide, Adam({"lr": 1e-6}), Trace_ELBO())
     infer.step()
 
 
@@ -80,7 +78,7 @@ def test_median(advi_class):
         pyro.sample("z", dist.Beta(2.0, 2.0))
 
     advi = advi_class(model)
-    infer = SVI(advi.model, advi.guide, Adam({'lr': 0.01}), 'ELBO')
+    infer = SVI(advi.model, advi.guide, Adam({'lr': 0.01}), Trace_ELBO())
     for _ in range(100):
         infer.step()
 
@@ -99,7 +97,7 @@ def test_quantiles(advi_class):
         pyro.sample("z", dist.Beta(2.0, 2.0))
 
     advi = advi_class(model)
-    infer = SVI(advi.model, advi.guide, Adam({'lr': 0.01}), 'ELBO')
+    infer = SVI(advi.model, advi.guide, Adam({'lr': 0.01}), Trace_ELBO())
     for _ in range(100):
         infer.step()
 
@@ -143,6 +141,6 @@ def test_discrete_parallel(continuous_class):
     advi.add(continuous_class(poutine.block(model, hide=["assignment"])))
     advi.add(ADVIDiscreteParallel(poutine.block(model, expose=["assignment"])))
 
-    elbo = ELBO.make(enum_discrete=True, max_iarange_nesting=1)
+    elbo = TraceEnum_ELBO(max_iarange_nesting=1)
     loss = elbo.loss_and_grads(advi.model, advi.guide, data)
     assert np.isfinite(loss), loss

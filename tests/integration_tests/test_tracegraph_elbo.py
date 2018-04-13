@@ -12,7 +12,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
 from pyro.distributions.testing import fakes
-from pyro.infer import SVI
+from pyro.infer import SVI, TraceGraph_ELBO
 from tests.common import assert_equal
 
 pytestmark = pytest.mark.stage("integration", "integration_batch_2")
@@ -80,7 +80,7 @@ class NormalNormalTests(TestCase):
             return loc_latent
 
         adam = optim.Adam({"lr": .0015, "betas": (0.97, 0.999)})
-        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
+        svi = SVI(model, guide, adam, loss=TraceGraph_ELBO())
 
         for k in range(n_steps):
             svi.step()
@@ -188,7 +188,7 @@ class NormalNormalNormalTests(TestCase):
             return loc_latent
 
         adam = optim.Adam({"lr": .0015, "betas": (0.97, 0.999)})
-        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
+        svi = SVI(model, guide, adam, loss=TraceGraph_ELBO())
 
         for k in range(n_steps):
             svi.step()
@@ -255,7 +255,7 @@ class BernoulliBetaTests(TestCase):
             return p_latent
 
         adam = optim.Adam({"lr": lr, "betas": (beta1, 0.999)})
-        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
+        svi = SVI(model, guide, adam, loss=TraceGraph_ELBO())
 
         for k in range(n_steps):
             svi.step()
@@ -313,7 +313,7 @@ class ExponentialGammaTests(TestCase):
                 pass
 
         adam = optim.Adam({"lr": lr, "betas": (beta1, 0.999)})
-        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
+        svi = SVI(model, guide, adam, loss=TraceGraph_ELBO())
 
         for k in range(n_steps):
             svi.step()
@@ -386,7 +386,7 @@ class RaoBlackwellizationTests(TestCase):
         assert len(guide_trace.nodes()) == 9
 
         adam = optim.Adam({"lr": 0.0008, "betas": (0.96, 0.999)})
-        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
+        svi = SVI(model, guide, adam, loss=TraceGraph_ELBO())
 
         for k in range(n_steps):
             svi.step()
@@ -470,7 +470,7 @@ class RaoBlackwellizationTests(TestCase):
                 return {"lr": 0.0012, "betas": (0.95, 0.999)}
 
         adam = optim.Adam(per_param_callable)
-        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
+        svi = SVI(model, guide, adam, loss=TraceGraph_ELBO())
 
         for step in range(n_steps):
             svi.step()
