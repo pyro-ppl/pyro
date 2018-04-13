@@ -36,8 +36,8 @@ class VariationalGP(GPModel):
         :math:`\mathcal{O}(N^3)` complexity for testing. Here, :math:`N` is the number
         of train inputs. Size of variational parameters is :math:`\mathcal{O}(N^2)`.
 
-    :param torch.Tensor X: A 1D or 2D input data for training. Its first dimension is
-        the number of data points.
+    :param torch.Tensor X: A input data for training. Its first dimension is the number
+        of data points.
     :param torch.Tensor y: An output data for training. Its last dimension is the
         number of data points.
     :param ~pyro.contrib.gp.kernels.kernel.Kernel kernel: A Pyro kernel object, which
@@ -48,14 +48,20 @@ class VariationalGP(GPModel):
         :math:`q(f)`). By default, it equals to output batch shape ``y.shape[:-1]``.
         For the multi-class classification problems, ``latent_shape[-1]`` should
         corresponse to the number of classes.
+    :param bool whiten: A flag to tell if variational parameters ``f_loc`` and
+        ``f_scale_tril`` are transformed by the inverse of ``Lff``, where ``Lff`` is
+        the lower triangular decomposition of :math:`kernel(X, X)`. Enable this flag
+        will help optimization.
     :param float jitter: A small positive term which is added into the diagonal part of
         a covariance matrix to help stablize its Cholesky decomposition.
     :param str name: Name of this model.
     """
-    def __init__(self, X, y, kernel, likelihood, latent_shape=None,
+    def __init__(self, X, y, kernel, likelihood, latent_shape=None, whiten=False,
                  jitter=1e-6, name="VGP"):
         super(VariationalGP, self).__init__(X, y, kernel, jitter, name)
         self.likelihood = likelihood
+
+        self.whiten = whiten
 
         y_batch_shape = self.y.shape[:-1] if self.y is not None else torch.Size([])
         self.latent_shape = latent_shape if latent_shape is not None else y_batch_shape
@@ -86,9 +92,17 @@ class VariationalGP(GPModel):
 
         zero_loc = self.X.new_zeros(f_loc.shape)
         f_name = pyro.param_with_module_name(self.name, "f")
-        pyro.sample(f_name,
-                    dist.MultivariateNormal(zero_loc, scale_tril=Lff)
-                        .independent(zero_loc.dim()-1))
+
+        if self.whiten:
+            Id = torch.eye(N, out=self.X.new_empty(N, N))
+            pyro.sample(f_name,
+                        dist.MultivariateNormal(zero_loc, scale_tril=Id)
+                            .independent(zero_loc.dim() - 1))
+            f_scale_tril = Lff.matmul(f_scale_tril)
+        else:
+            pyro.sample(f_name,
+                        dist.MultivariateNormal(zero_loc, scale_tril=Lff)
+                            .independent(zero_loc.dim() - 1))
 
         f_var = f_scale_tril.pow(2).sum(dim=-1)
 
@@ -122,8 +136,8 @@ class VariationalGP(GPModel):
             kernel's parameters have been learned from a training procedure (MCMC or
             SVI).
 
-        :param torch.Tensor Xnew: A 1D or 2D input data for testing. In 2D case, its
-            second dimension should have the same size as of train input data.
+        :param torch.Tensor Xnew: A input data for testing. Note that
+            ``Xnew.shape[1:]`` must be the same as ``self.X.shape[1:]``.
         :param bool full_cov: A flag to decide if we want to predict full covariance
             matrix or just variance.
         :returns: loc and covariance matrix (or variance) of :math:`p(f^*(X_{new}))`
@@ -136,5 +150,6 @@ class VariationalGP(GPModel):
         self._sample_latent = tmp_sample_latent
 
         loc, cov = conditional(Xnew, self.X, kernel, f_loc, f_scale_tril,
-                               full_cov=full_cov, jitter=self.jitter)
+                               full_cov=full_cov, whiten=self.whiten,
+                               jitter=self.jitter)
         return loc, cov

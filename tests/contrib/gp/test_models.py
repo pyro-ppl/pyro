@@ -221,6 +221,24 @@ def test_inference_svgp():
     assert_equal((loc - target).abs().mean().item(), 0, prec=0.05)
 
 
+@pytest.mark.init(rng_seed=0)
+def test_inference_whiten_svgp():
+    N = 1000
+    X = dist.Uniform(torch.zeros(N), torch.ones(N)*5).sample()
+    y = 0.5 * torch.sin(3*X) + dist.Normal(torch.zeros(N), torch.ones(N)*0.5).sample()
+    kernel = RBF(input_dim=1)
+    Xu = torch.linspace(0, 5, 10)
+
+    svgp = SparseVariationalGP(X, y, kernel, Xu, Gaussian(), whiten=True)
+    svgp.optimize(optim.Adam({"lr": 0.01}), num_steps=1000)
+
+    Xnew = torch.linspace(0, 5, 100)
+    loc, var = svgp(Xnew, full_cov=False)
+    target = 0.5 * torch.sin(3*Xnew)
+
+    assert_equal((loc - target).abs().mean().item(), 0, prec=0.05)
+
+
 @pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
 def test_inference_with_empty_latent_shape(model_class, X, y, kernel, likelihood):
     # regression models don't use latent_shape (default=torch.Size([]))
@@ -230,6 +248,19 @@ def test_inference_with_empty_latent_shape(model_class, X, y, kernel, likelihood
         gp = model_class(X, y, kernel, likelihood, latent_shape=torch.Size([]))
     else:  # model_class is SparseVariationalGP
         gp = model_class(X, y, kernel, X, likelihood, latent_shape=torch.Size([]))
+
+    gp.optimize(num_steps=1)
+
+
+@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
+def test_inference_with_whiten(model_class, X, y, kernel, likelihood):
+    # regression models don't use whiten
+    if model_class is GPRegression or model_class is SparseGPRegression:
+        return
+    elif model_class is VariationalGP:
+        gp = model_class(X, y, kernel, likelihood, whiten=True)
+    else:  # model_class is SparseVariationalGP
+        gp = model_class(X, y, kernel, X, likelihood, whiten=True)
 
     gp.optimize(num_steps=1)
 

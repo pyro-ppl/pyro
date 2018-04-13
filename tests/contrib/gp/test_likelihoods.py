@@ -87,3 +87,41 @@ def test_inference_with_empty_latent_shape(model_class, X, y, kernel, likelihood
         gp = model_class(X, y, kernel, likelihood, latent_shape=latent_shape)
 
     gp.optimize(num_steps=1)
+
+
+@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
+def test_forward(model_class, X, y, kernel, likelihood):
+    if isinstance(likelihood, MultiClass):
+        latent_shape = y.shape[:-1] + (likelihood.num_classes,)
+    else:
+        latent_shape = y.shape[:-1]
+    if model_class is SparseVariationalGP:
+        gp = model_class(X, y, kernel, X, likelihood, latent_shape)
+    else:
+        gp = model_class(X, y, kernel, likelihood, latent_shape)
+
+    Xnew_shape = (X.shape[0] * 2,) + X.shape[1:]
+    Xnew = X.new_tensor(torch.rand(Xnew_shape))
+    f_loc, f_var = gp(Xnew)
+    ynew = gp.likelihood(f_loc, f_var)
+
+    assert ynew.shape == y.shape[:-1] + (Xnew.shape[0],)
+
+
+@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
+def test_forward_with_empty_latent_shape(model_class, X, y, kernel, likelihood):
+    if isinstance(likelihood, MultiClass):
+        latent_shape = torch.Size([likelihood.num_classes])
+    else:
+        latent_shape = torch.Size([])
+    if model_class is SparseVariationalGP:
+        gp = model_class(X, y, kernel, X, likelihood, latent_shape=latent_shape)
+    else:
+        gp = model_class(X, y, kernel, likelihood, latent_shape=latent_shape)
+
+    Xnew_shape = (X.shape[0] * 2,) + X.shape[1:]
+    Xnew = X.new_tensor(torch.rand(Xnew_shape))
+    f_loc, f_var = gp(Xnew)
+    ynew = gp.likelihood(f_loc, f_var)
+
+    assert ynew.shape == (Xnew.shape[0],)
