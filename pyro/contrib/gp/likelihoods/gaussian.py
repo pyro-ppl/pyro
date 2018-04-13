@@ -27,7 +27,7 @@ class Gaussian(Likelihood):
         self.variance = Parameter(variance)
         self.set_constraint("variance", constraints.positive)
 
-    def forward(self, f_loc, f_var, y):
+    def forward(self, f_loc, f_var, y=None):
         """
         Samples :math:`y` given :math:`f_{loc}`, :math:`f_{var}` according to
 
@@ -43,8 +43,12 @@ class Gaussian(Likelihood):
         """
         variance = self.get_param("variance")
         y_var = f_var + variance
-        return pyro.sample(self.y_name,
-                           dist.Normal(f_loc, y_var)
-                               .reshape(sample_shape=y.shape[:-f_loc.dim()],
-                                        extra_event_dims=y.dim()),
-                           obs=y)
+
+        if y is not None:
+            return pyro.sample(self.y_name,
+                               dist.Normal(f_loc, y_var)
+                                   .reshape(sample_shape=y.shape[:-f_loc.dim()],
+                                            extra_event_dims=y.dim()),
+                               obs=y)
+        else:
+            return pyro.sample(self.y_name, dist.Normal(f_loc, y_var))
