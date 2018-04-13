@@ -14,7 +14,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
 from pyro.distributions.testing import fakes
-from pyro.infer import SVI
+from pyro.infer import SVI, TraceGraph_ELBO
 from tests.common import assert_equal
 
 logger = logging.getLogger(__name__)
@@ -152,7 +152,7 @@ class GaussianChainTests(GaussianChain):
             pyro.clear_param_store()
 
         adam = optim.Adam({"lr": lr, "betas": (0.95, 0.999)})
-        svi = SVI(self.model, self.guide, adam, loss="ELBO", trace_graph=True)
+        svi = SVI(self.model, self.guide, adam, loss=TraceGraph_ELBO())
 
         for step in range(n_steps):
             t0 = time.time()
@@ -458,7 +458,7 @@ class GaussianPyramidTests(TestCase):
             assert expected_edges == set(guide_trace.edges)
 
         adam = optim.Adam({"lr": lr, "betas": (beta1, 0.999)})
-        svi = SVI(self.model, self.guide, adam, loss="ELBO", trace_graph=True)
+        svi = SVI(self.model, self.guide, adam, loss=TraceGraph_ELBO())
 
         for step in range(n_steps):
             t0 = time.time()
