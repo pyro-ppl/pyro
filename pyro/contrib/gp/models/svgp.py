@@ -61,6 +61,8 @@ class SparseVariationalGP(GPModel):
         of our model.
     :param ~pyro.contrib.gp.likelihoods.likelihood Likelihood likelihood: A likelihood
         object.
+    :param callable mean_function: An optional mean function :math:`m` of this Gaussian
+        process. By default, we use zero mean.
     :param torch.Size latent_shape: Shape for latent processes (`batch_shape` of
         :math:`q(u)`). By default, it equals to output batch shape ``y.shape[:-1]``.
         For the multi-class classification problems, ``latent_shape[-1]`` should
@@ -75,9 +77,11 @@ class SparseVariationalGP(GPModel):
         a covariance matrix to help stablize its Cholesky decomposition.
     :param str name: Name of this model.
     """
-    def __init__(self, X, y, kernel, Xu, likelihood, latent_shape=None, num_data=None,
-                 whiten=False, jitter=1e-6, name="SVGP"):
-        super(SparseVariationalGP, self).__init__(X, y, kernel, jitter, name)
+    def __init__(self, X, y, kernel, Xu, likelihood, mean_function=None,
+                 latent_shape=None, num_data=None, whiten=False, jitter=1e-6,
+                 name="SVGP"):
+        super(SparseVariationalGP, self).__init__(X, y, kernel, mean_function, jitter,
+                                                  name)
         self.likelihood = likelihood
 
         self.num_data = num_data if num_data is not None else self.X.shape[0]
@@ -128,6 +132,7 @@ class SparseVariationalGP(GPModel):
                                    Luu, full_cov=False, whiten=self.whiten,
                                    jitter=self.jitter)
 
+        f_loc = f_loc + self.mean_function(self.X)
         if self.y is None:
             return f_loc, f_var
         else:
@@ -146,7 +151,7 @@ class SparseVariationalGP(GPModel):
             pyro.sample(u_name,
                         dist.MultivariateNormal(u_loc, scale_tril=u_scale_tril)
                             .reshape(extra_event_dims=u_loc.dim()-1))
-        return Xu, self.kernel, u_loc, u_scale_tril
+        return self.kernel, Xu, self.mean_function, u_loc, u_scale_tril
 
     def forward(self, Xnew, full_cov=False):
         r"""
@@ -170,10 +175,10 @@ class SparseVariationalGP(GPModel):
         self._check_Xnew_shape(Xnew)
         tmp_sample_latent = self._sample_latent
         self._sample_latent = False
-        Xu, kernel, u_loc, u_scale_tril = self.guide()
+        kernel, Xu, mean_function, u_loc, u_scale_tril = self.guide()
         self._sample_latent = tmp_sample_latent
 
         loc, cov = conditional(Xnew, Xu, kernel, u_loc, u_scale_tril,
                                full_cov=full_cov, whiten=self.whiten,
                                jitter=self.jitter)
-        return loc, cov
+        return loc + mean_function(self.X), cov

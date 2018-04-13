@@ -86,21 +86,24 @@ class SparseGPRegression(GPModel):
     :param torch.Tensor Xu: Initial values for inducing points, which are parameters
         of our model.
     :param torch.Tensor noise: Noise parameter of this model.
+    :param callable mean_function: An optional mean function :math:`m` of this Gaussian
+        process. By default, we use zero mean.
     :param str approx: One of approximation methods: "DTC", "FITC", and "VFE"
         (default).
     :param float jitter: A small positive term which is added into the diagonal part of
         a covariance matrix to help stablize its Cholesky decomposition.
     :param str name: Name of this model.
     """
-    def __init__(self, X, y, kernel, Xu, noise=None, approx=None, jitter=1e-6,
-                 name="SGPR"):
-        super(SparseGPRegression, self).__init__(X, y, kernel, jitter, name)
+    def __init__(self, X, y, kernel, Xu, noise=None, mean_function=None, approx=None,
+                 jitter=1e-6, name="SGPR"):
+        super(SparseGPRegression, self).__init__(X, y, kernel, mean_function, jitter,
+                                                 name)
+
+        self.Xu = Parameter(Xu)
 
         noise = self.X.new_ones(()) if noise is None else noise
         self.noise = Parameter(noise)
         self.set_constraint("noise", constraints.greater_than(self.jitter))
-
-        self.Xu = Parameter(Xu)
 
         if approx is None:
             self.approx = "VFE"
@@ -113,8 +116,8 @@ class SparseGPRegression(GPModel):
     def model(self):
         self.set_mode("model")
 
-        noise = self.get_param("noise")
         Xu = self.get_param("Xu")
+        noise = self.get_param("noise")
 
         # W = inv(Luu) @ Kuf
         # Qff = Kfu @ inv(Kuu) @ Kuf = W.T @ W
@@ -142,25 +145,25 @@ class SparseGPRegression(GPModel):
                 trace_term += (Kffdiag - Qffdiag).sum() / noise
 
         zero_loc = self.X.new_zeros(self.X.shape[0])
+        f_loc = zero_loc + self.mean_function(self.X)
         if self.y is None:
             f_var = D + W.pow(2).sum(dim=0)
-            return zero_loc, f_var
+            return f_loc, f_var
         else:
             y_name = pyro.param_with_module_name(self.name, "y")
             return pyro.sample(y_name,
-                               dist.SparseMultivariateNormal(zero_loc, W, D,
-                                                             trace_term)
-                                   .reshape(sample_shape=self.y.shape[:-1],
+                               dist.SparseMultivariateNormal(f_loc, W, D, trace_term)
+                                   .reshape(sample_shape=self.y.shape[:-f_loc.dim()],
                                             extra_event_dims=self.y.dim()-1),
                                obs=self.y)
 
     def guide(self):
         self.set_mode("guide")
 
-        noise = self.get_param("noise")
         Xu = self.get_param("Xu")
+        noise = self.get_param("noise")
 
-        return self.kernel, noise, Xu
+        return self.kernel, Xu, noise, self.mean_function
 
     def forward(self, Xnew, full_cov=False, noiseless=True):
         r"""
@@ -183,7 +186,7 @@ class SparseGPRegression(GPModel):
         :rtype: tuple(torch.Tensor, torch.Tensor)
         """
         self._check_Xnew_shape(Xnew)
-        kernel, noise, Xu = self.guide()
+        kernel, Xu, noise, mean_function = self.guide()
 
         # W = inv(Luu) @ Kuf
         # Ws = inv(Luu) @ Kus
@@ -219,8 +222,9 @@ class SparseGPRegression(GPModel):
         K = Id + W_Dinv.matmul(W.t())
         L = K.potrf(upper=False)
 
-        # convert y into 2D tensor for packing
-        y_2D = self.y.reshape(-1, N).t()
+        # get y_residual and convert it into 2D tensor for packing
+        y_residual = self.y - mean_function(self.X)
+        y_2D = y_residual.reshape(-1, N).t()
         W_Dinv_y = W_Dinv.matmul(y_2D)
         pack = torch.cat((W_Dinv_y, Ws), dim=1)
         Linv_pack = matrix_triangular_solve_compat(pack, L, upper=False)
@@ -247,4 +251,4 @@ class SparseGPRegression(GPModel):
         cov_shape = self.y.shape[:-1] + (Xnew.shape[0], Xnew.shape[0])
         cov = cov.expand(cov_shape)
 
-        return loc, cov
+        return loc + mean_function(Xnew), cov

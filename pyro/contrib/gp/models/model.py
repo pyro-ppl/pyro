@@ -5,6 +5,10 @@ from pyro.infer.svi import SVI
 from pyro.optim import Adam, PyroOptim
 
 
+def _zero_mean_function(x):
+    return 0
+
+
 class GPModel(Parameterized):
     """
     Base class for Gaussian Process models.
@@ -20,6 +24,12 @@ class GPModel(Parameterized):
     :math:`(x, z)`. This distribution is usually denoted by
 
     .. math:: f \sim \mathcal{GP}(0, k).
+
+    .. note:: Generally, beside a covariance matrix :math:`k`, a Gaussian Process can
+        also be specified by a mean function :math:`m` (which is a zero-value function
+        by default). In that case, its distribution will be
+
+        .. math:: p(f(X)) = \mathcal{N}(m(X), k(X, X)).
 
     Gaussian Process models are :class:`~pyro.contrib.gp.util.Parameterized`
     subclasses. So its parameters can be learned, set priors, or fixed by using
@@ -69,14 +79,18 @@ class GPModel(Parameterized):
         number of data points.
     :param ~pyro.contrib.gp.kernels.kernel.Kernel kernel: A Pyro kernel object, which
         is the covariance function :math:`k`.
+    :param callable mean_function: An optional mean function :math:`m` of this Gaussian
+        process. By default, we use zero mean.
     :param float jitter: A small positive term which is added into the diagonal part of
         a covariance matrix to help stablize its Cholesky decomposition.
     :param str name: Name of this model.
     """
-    def __init__(self, X, y, kernel, jitter=1e-6, name=None):
+    def __init__(self, X, y, kernel, mean_function=None, jitter=1e-6, name=None):
         super(GPModel, self).__init__(name)
         self.set_data(X, y)
         self.kernel = kernel
+        self.mean_function = (mean_function if mean_function is not None else
+                              _zero_mean_function)
         self.jitter = jitter
 
     def model(self):
