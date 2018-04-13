@@ -6,13 +6,14 @@ from unittest import TestCase
 import pytest
 import torch
 import torch.nn as nn
+from six.moves.queue import Queue
 
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions import Bernoulli, Categorical, Normal
-from pyro.poutine.util import all_escape, discrete_escape, NonlocalExit
-from six.moves.queue import Queue
+from pyro.poutine.indep_poutine import _DIM_ALLOCATOR
+from pyro.poutine.util import NonlocalExit, all_escape, discrete_escape
 from tests.common import assert_equal
 
 
@@ -669,3 +670,14 @@ def test_replay_enumerate_poutine(depth, first_available_dim):
         actual_shape = log_prob.shape
         expected_shape = (2,) * depth + (3,) + (2,) * depth + (1,) * first_available_dim
         assert actual_shape == expected_shape, 'error on iteration {}'.format(i)
+
+
+def test_iarange_error_on_enter():
+    def model():
+        with pyro.iarange('foo', 0):
+            pass
+
+    assert len(_DIM_ALLOCATOR._stack) == 0
+    with pytest.raises(ZeroDivisionError):
+        poutine.trace(model)()
+    assert len(_DIM_ALLOCATOR._stack) == 0, 'stack was not cleaned on error'

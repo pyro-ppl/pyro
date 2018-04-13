@@ -25,7 +25,7 @@ class Binary(Likelihood):
         self.response_function = (response_function if response_function is not None
                                   else F.sigmoid)
 
-    def forward(self, f_loc, f_var, y):
+    def forward(self, f_loc, f_var, y=None):
         r"""
         Samples :math:`y` given :math:`f_{loc}`, :math:`f_{var}` according to
 
@@ -44,9 +44,12 @@ class Binary(Likelihood):
         # calculates Monte Carlo estimate for E_q(f) [logp(y | f)]
         f = dist.Normal(f_loc, f_var)()
         f_res = self.response_function(f)
-        print(f_res.shape, y.shape)
-        return pyro.sample(self.y_name,
-                           dist.Bernoulli(f_res)
-                               .reshape(sample_shape=y.shape[:-f_res.dim()],
-                                        extra_event_dims=y.dim()),
-                           obs=y)
+
+        if y is not None:
+            return pyro.sample(self.y_name,
+                               dist.Bernoulli(f_res)
+                                   .expand_by(y.shape[:-f_res.dim()])
+                                   .independent(y.dim()),
+                               obs=y)
+        else:
+            return pyro.sample(self.y_name, dist.Bernoulli(f_res))

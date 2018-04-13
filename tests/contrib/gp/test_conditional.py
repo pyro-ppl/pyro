@@ -64,3 +64,22 @@ def test_conditional(Xnew, X, kernel, f_loc, f_scale_tril, loc, cov):
     assert_equal(var0, var1)
     if cov is not None:
         assert_equal(cov0, cov)
+
+
+@pytest.mark.parametrize("Xnew, X, kernel, f_loc, f_scale_tril, loc, cov",
+                         TEST_CASES, ids=TEST_IDS)
+def test_conditional_whiten(Xnew, X, kernel, f_loc, f_scale_tril, loc, cov):
+    if f_scale_tril is None:
+        return
+
+    loc0, cov0 = conditional(Xnew, X, kernel, f_loc, f_scale_tril, full_cov=True,
+                             whiten=False)
+    Kff = kernel(X) + torch.eye(3) * 1e-6
+    Lff = Kff.potrf(upper=False)
+    whiten_f_loc = Lff.inverse().matmul(f_loc)
+    whiten_f_scale_tril = Lff.inverse().matmul(f_scale_tril)
+    loc1, cov1 = conditional(Xnew, X, kernel, whiten_f_loc, whiten_f_scale_tril,
+                             full_cov=True, whiten=True)
+
+    assert_equal(loc0, loc1)
+    assert_equal(cov0, cov1)

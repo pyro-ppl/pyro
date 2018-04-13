@@ -39,7 +39,7 @@ def test_shapes(advi_class, trace_graph, enum_discrete):
 
     def model():
         pyro.sample("z1", dist.Normal(0.0, 1.0))
-        pyro.sample("z2", dist.Normal(torch.zeros(2), torch.ones(2)).reshape(extra_event_dims=1))
+        pyro.sample("z2", dist.Normal(torch.zeros(2), torch.ones(2)).independent(1))
         with pyro.iarange("iarange", 3):
             pyro.sample("z3", dist.Normal(torch.zeros(3), torch.ones(3)))
 
@@ -58,10 +58,10 @@ def test_irange_smoke(advi_class):
         assert x.shape == ()
 
         for i in pyro.irange("irange", 3):
-            y = pyro.sample("y_{}".format(i), dist.Normal(0, 1).reshape([2, 1 + i, 2], extra_event_dims=3))
+            y = pyro.sample("y_{}".format(i), dist.Normal(0, 1).expand_by([2, 1 + i, 2]).independent(3))
             assert y.shape == (2, 1 + i, 2)
 
-        z = pyro.sample("z", dist.Normal(0, 1).reshape([2], extra_event_dims=1))
+        z = pyro.sample("z", dist.Normal(0, 1).expand_by([2]).independent(1))
         assert z.shape == (2,)
 
         pyro.sample("obs", dist.Bernoulli(0.1), obs=torch.tensor(0))
@@ -131,7 +131,7 @@ def test_discrete_parallel(continuous_class):
 
     def model(data):
         weights = pyro.sample('weights', dist.Dirichlet(0.5 * torch.ones(K)))
-        locs = pyro.sample('locs', dist.Normal(0, 10).reshape([K], extra_event_dims=1))
+        locs = pyro.sample('locs', dist.Normal(0, 10).expand_by([K]).independent(1))
         scale = pyro.sample('scale', dist.LogNormal(0, 1))
 
         with pyro.iarange('data', len(data)):

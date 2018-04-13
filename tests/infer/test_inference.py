@@ -12,7 +12,7 @@ import pyro.distributions as dist
 import pyro.optim as optim
 from pyro.distributions.testing import fakes
 from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
-from pyro.infer.svi import SVI
+from pyro.infer import SVI, Trace_ELBO
 from tests.common import assert_equal
 
 
@@ -57,10 +57,10 @@ class NormalNormalTests(TestCase):
         def model():
             loc_latent = pyro.sample("loc_latent",
                                      dist.Normal(self.loc0, torch.pow(self.lam0, -0.5))
-                                     .reshape(extra_event_dims=1))
+                                     .independent(1))
             with pyro.iarange('data', self.batch_size):
                 pyro.sample("obs",
-                            dist.Normal(loc_latent, torch.pow(self.lam, -0.5)).reshape(extra_event_dims=1),
+                            dist.Normal(loc_latent, torch.pow(self.lam, -0.5)).independent(1),
                             obs=self.data)
             return loc_latent
 
@@ -72,10 +72,11 @@ class NormalNormalTests(TestCase):
                                    requires_grad=True))
             sig_q = torch.exp(log_sig_q)
             Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
-            pyro.sample("loc_latent", Normal(loc_q, sig_q).reshape(extra_event_dims=1))
+            pyro.sample("loc_latent", Normal(loc_q, sig_q).independent(1))
 
         adam = optim.Adam({"lr": .001})
-        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
+        elbo = Trace_ELBO()
+        svi = SVI(model, guide, adam, loss=elbo)
 
         for k in range(n_steps):
             svi.step()

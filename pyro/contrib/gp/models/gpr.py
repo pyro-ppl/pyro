@@ -44,8 +44,8 @@ class GPRegression(GPModel):
     [1] `Gaussian Processes for Machine Learning`,
     Carl E. Rasmussen, Christopher K. I. Williams
 
-    :param torch.Tensor X: A 1D or 2D input data for training. Its first dimension is
-        the number of data points.
+    :param torch.Tensor X: A input data for training. Its first dimension is the number
+        of data points.
     :param torch.Tensor y: An output data for training. Its last dimension is the
         number of data points.
     :param ~pyro.contrib.gp.kernels.kernel.Kernel kernel: A Pyro kernel object, which
@@ -78,8 +78,8 @@ class GPRegression(GPModel):
             y_name = pyro.param_with_module_name(self.name, "y")
             return pyro.sample(y_name,
                                dist.MultivariateNormal(zero_loc, scale_tril=Lff)
-                                   .reshape(sample_shape=self.y.shape[:-1],
-                                            extra_event_dims=self.y.dim()-1),
+                                   .expand_by(self.y.shape[:-1])
+                                   .independent(self.y.dim() - 1),
                                obs=self.y)
 
     def guide(self):
@@ -101,8 +101,8 @@ class GPRegression(GPModel):
             kernel's parameters have been learned from a training procedure (MCMC or
             SVI).
 
-        :param torch.Tensor Xnew: A 1D or 2D input data for testing. In 2D case, its
-            second dimension should have the same size as of train input data.
+        :param torch.Tensor Xnew: A input data for testing. Note that
+            ``Xnew.shape[1:]`` must be the same as ``self.X.shape[1:]``.
         :param bool full_cov: A flag to decide if we want to predict full covariance
             matrix or just variance.
         :param bool noiseless: A flag to decide if we want to include noise in the
@@ -117,7 +117,7 @@ class GPRegression(GPModel):
         Lff = Kff.potrf(upper=False)
 
         loc, cov = conditional(Xnew, self.X, kernel, self.y, None, Lff, full_cov,
-                               self.jitter)
+                               jitter=self.jitter)
 
         if full_cov and not noiseless:
             cov = cov + noise.expand(Xnew.shape[0]).diag()
