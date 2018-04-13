@@ -108,8 +108,8 @@ def bernoulli_beta_hmc(**kwargs):
         posterior.append(trace.nodes['p_latent']['value'])
 
 
-@register_model(num_steps=5000, whiten=False, id='SVGP::MultiClass_whiten=False')
-@register_model(num_steps=5000, whiten=True, id='SVGP::MultiClass_whiten=True')
+@register_model(num_steps=2000, whiten=False, id='SVGP::MultiClass_whiten=False')
+@register_model(num_steps=2000, whiten=True, id='SVGP::MultiClass_whiten=True')
 def svgp_multiclass(num_steps, whiten):
     # adapted from http://gpflow.readthedocs.io/en/latest/notebooks/multiclass.html
     X = torch.rand(100, 1)
@@ -117,12 +117,14 @@ def svgp_multiclass(num_steps, whiten):
     f = K.potrf(upper=False).matmul(torch.randn(100, 3))
     y = f.argmax(dim=-1)
 
-    kernel = gp.kernels.Matern32(1).add(gp.kernels.WhiteNoise(1, variance=torch.tensor(0.01)))
+    kernel = gp.kernels.Matern32(1).add(
+        gp.kernels.WhiteNoise(1, variance=torch.tensor(0.01)))
     likelihood = gp.likelihoods.MultiClass(num_classes=3)
     Xu = X[::5].clone()
 
     gpmodel = gp.models.SparseVariationalGP(X, y, kernel, Xu, likelihood,
-                                            latent_shape=torch.Size([3]), whiten=whiten)
+                                            latent_shape=torch.Size([3]),
+                                            whiten=whiten)
 
     gpmodel.fix_param("Xu")
     gpmodel.kernel.get_subkernel("WhiteNoise").fix_param("variance")
