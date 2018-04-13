@@ -358,7 +358,7 @@ def check_site_shape(site, max_iarange_nesting):
                 'Expected {}, actual {}'.format(expected_shape, actual_shape),
                 'Try one of the following fixes:',
                 '- enclose the batched tensor in a with iarange(...): context',
-                '- .reshape(extra_event_dims=...) the distribution being sampled',
+                '- .independent(...) the distribution being sampled',
                 '- .permute() data dimensions']))
 
     # TODO Check parallel dimensions on the left of max_iarange_nesting.

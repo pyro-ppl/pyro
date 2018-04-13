@@ -202,7 +202,7 @@ class DMM(nn.Module):
                     z_t = pyro.sample("z_%d" % t,
                                       dist.Normal(z_loc, z_scale)
                                           .mask(mini_batch_mask[:, t - 1:t])
-                                          .reshape(extra_event_dims=1))
+                                          .independent(1))
 
                 # compute the probabilities that parameterize the bernoulli likelihood
                 emission_probs_t = self.emitter(z_t)
@@ -211,7 +211,7 @@ class DMM(nn.Module):
                 pyro.sample("obs_x_%d" % t,
                             dist.Bernoulli(emission_probs_t)
                                 .mask(mini_batch_mask[:, t - 1:t])
-                                .reshape(extra_event_dims=1),
+                                .independent(1),
                             obs=mini_batch[:, t - 1, :])
                 # the latent sampled at this time step will be conditioned upon
                 # in the next time step so keep track of it
@@ -259,7 +259,7 @@ class DMM(nn.Module):
                 with pyro.poutine.scale(None, annealing_factor):
                     z_t = pyro.sample("z_%d" % t,
                                       z_dist.mask(mini_batch_mask[:, t - 1:t])
-                                            .reshape(extra_event_dims=1))
+                                            .independent(1))
                 # the latent sampled at this time step will be conditioned upon in the next time step
                 # so keep track of it
                 z_prev = z_t
