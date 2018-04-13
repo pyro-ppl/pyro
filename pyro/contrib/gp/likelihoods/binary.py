@@ -13,9 +13,9 @@ class Binary(Likelihood):
     Implementation of Binary likelihood, which is used for binary classification
     problems.
 
-    Binary likelihood uses :class:`~pyro.distributions.distribution.Bernoulli`
-    distribution, so the output of ``response_function`` should be in range
-    :math:`(0,1)`. By default, we use `sigmoid` function.
+    Binary likelihood uses :class:`~pyro.distributions.torch.Bernoulli` distribution,
+    so the output of ``response_function`` should be in range :math:`(0,1)`. By
+    default, we use `sigmoid` function.
 
     :param callable response_function: A mapping to correct domain for Binary
         likelihood.
@@ -45,11 +45,8 @@ class Binary(Likelihood):
         f = dist.Normal(f_loc, f_var)()
         f_res = self.response_function(f)
 
-        if y is None:
-            return pyro.sample(self.y_name, dist.Bernoulli(f_res))
-
-        return pyro.sample(self.y_name,
-                           dist.Bernoulli(f_res)
-                               .reshape(sample_shape=y.shape[:-f_res.dim()],
-                                        extra_event_dims=y.dim()),
-                           obs=y)
+        y_dist = dist.Bernoulli(f_res)
+        if y is not None:
+            y_dist = y_dist.reshape(sample_shape=y.shape[:-f_res.dim()],
+                                    extra_event_dims=y.dim())
+        return pyro.sample(self.y_name, y_dist, obs=y)

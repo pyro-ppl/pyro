@@ -14,8 +14,7 @@ class Gaussian(Likelihood):
     """
     Implementation of Gaussian likelihood, which is used for regression problems.
 
-    Gaussian likelihood uses :class:`~pyro.distributions.distribution.Normal`
-    distribution.
+    Gaussian likelihood uses :class:`~pyro.distributions.torch.Normal` distribution.
 
     :param torch.Tensor variance: A variance parameter, which plays the role of
         ``noise`` in regression problems.
@@ -44,11 +43,8 @@ class Gaussian(Likelihood):
         variance = self.get_param("variance")
         y_var = f_var + variance
 
-        if y is None:
-            return pyro.sample(self.y_name, dist.Normal(f_loc, y_var))
-
-        return pyro.sample(self.y_name,
-                           dist.Normal(f_loc, y_var)
-                               .reshape(sample_shape=y.shape[:-f_loc.dim()],
-                                        extra_event_dims=y.dim()),
-                           obs=y)
+        y_dist = dist.Normal(f_loc, y_var)
+        if y is not None:
+            y_dist = y_dist.reshape(sample_shape=y.shape[:-f_loc.dim()],
+                                    extra_event_dims=y.dim())
+        return pyro.sample(self.y_name, y_dist, obs=y)

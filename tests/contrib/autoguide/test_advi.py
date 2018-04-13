@@ -7,7 +7,8 @@ import torch
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.infer import ELBO, SVI, ADVIDiagonalNormal, ADVIDiscreteParallel, ADVIMaster, ADVIMultivariateNormal
+from pyro.contrib.autoguide import ADVIDiagonalNormal, ADVIDiscreteParallel, ADVIMaster, ADVIMultivariateNormal
+from pyro.infer import ELBO, SVI
 from pyro.optim import Adam
 from tests.common import assert_equal
 
@@ -46,6 +47,28 @@ def test_shapes(advi_class, trace_graph, enum_discrete):
     elbo = ELBO.make(trace_graph=trace_graph, enum_discrete=enum_discrete)
     loss = elbo.loss(advi.model, advi.guide)
     assert np.isfinite(loss), loss
+
+
+@pytest.mark.xfail(reason="irange is not yet supported")
+@pytest.mark.parametrize('advi_class', [ADVIDiagonalNormal, ADVIMultivariateNormal])
+def test_irange_smoke(advi_class):
+
+    def model():
+        x = pyro.sample("x", dist.Normal(0, 1))
+        assert x.shape == ()
+
+        for i in pyro.irange("irange", 3):
+            y = pyro.sample("y_{}".format(i), dist.Normal(0, 1).reshape([2, 1 + i, 2], extra_event_dims=3))
+            assert y.shape == (2, 1 + i, 2)
+
+        z = pyro.sample("z", dist.Normal(0, 1).reshape([2], extra_event_dims=1))
+        assert z.shape == (2,)
+
+        pyro.sample("obs", dist.Bernoulli(0.1), obs=torch.tensor(0))
+
+    advi = advi_class(model)
+    infer = SVI(advi.model, advi.guide, Adam({"lr": 1e-6}), "ELBO")
+    infer.step()
 
 
 @pytest.mark.parametrize("advi_class", [ADVIMultivariateNormal, ADVIDiagonalNormal])

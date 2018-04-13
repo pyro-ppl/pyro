@@ -108,8 +108,8 @@ def bernoulli_beta_hmc(**kwargs):
         posterior.append(trace.nodes['p_latent']['value'])
 
 
-@register_model(num_steps=10000, whiten=False, id='SVGP::MultiClass_whiten=False')
-@register_model(num_steps=10000, whiten=True, id='SVGP::MultiClass_whiten=True')
+@register_model(num_steps=5000, whiten=False, id='SVGP::MultiClass_whiten=False')
+@register_model(num_steps=5000, whiten=True, id='SVGP::MultiClass_whiten=True')
 def svgp_multiclass(num_steps, whiten):
     # adapted from http://gpflow.readthedocs.io/en/latest/notebooks/multiclass.html
     X = torch.rand(100, 1)

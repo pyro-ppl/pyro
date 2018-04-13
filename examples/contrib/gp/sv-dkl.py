@@ -26,7 +26,7 @@ import pyro
 import pyro.contrib.gp as gp
 import pyro.infer as infer
 import pyro.optim as optim
-from examples import util
+from pyro.contrib.examples.util import get_data_loader
 
 
 class CNN(nn.Module):
@@ -63,8 +63,11 @@ def test(args, test_loader, gpmodel):
     for data, target in test_loader:
         if args.cuda:
             data, target = data.cuda(), target.cuda()
+        # get prediction of GP model on new data
         f_loc, f_var = gpmodel(data)
+        # use its likelihood to give prediction class
         pred = gpmodel.likelihood(f_loc, f_var)
+        # compare prediction and target to count accuaracy
         correct += pred.eq(target).long().cpu().sum()
 
     print('\nTest set: Accuracy: {}/{} ({:.0f}%)\n'.format(
@@ -73,28 +76,38 @@ def test(args, test_loader, gpmodel):
 
 
 def main(args):
-    train_loader = util.get_data_loader(dataset_name='MNIST',
-                                        batch_size=args.batch_size,
-                                        dataset_transforms=[transforms.Normalize((0.1307,), (0.3081,))],
-                                        is_training_set=True,
-                                        shuffle=True)
-    test_loader = util.get_data_loader(dataset_name='MNIST',
-                                       batch_size=args.batch_size,
-                                       dataset_transforms=[transforms.Normalize((0.1307,), (0.3081,))],
-                                       is_training_set=False,
-                                       shuffle=True)
+    train_loader = get_data_loader(dataset_name='MNIST',
+                                   data_dir=args.data_dir,
+                                   batch_size=args.batch_size,
+                                   dataset_transforms=[transforms.Normalize((0.1307,), (0.3081,))],
+                                   is_training_set=True,
+                                   shuffle=True)
+    test_loader = get_data_loader(dataset_name='MNIST',
+                                  data_dir=args.data_dir,
+                                  batch_size=args.batch_size,
+                                  dataset_transforms=[transforms.Normalize((0.1307,), (0.3081,))],
+                                  is_training_set=False,
+                                  shuffle=True)
 
     cnn = CNN().cuda() if args.cuda else CNN()
 
-    # helper to inject CNN's parameters to gpmodel
+    # optimizer in SVI just works with params which are active inside its model/guide scope;
+    # so we need this helper to mark cnn's parameters active for each `svi.step()` call.
     def cnn_fn(x):
         return pyro.module("CNN", cnn)(x)
-    # create deep kernel by warping RBF with cnn
+    # Create deep kernel by warping RBF with CNN.
+    # CNN will transform a high dimension image into a low dimension 2D tensors for RBF kernel.
+    # This kernel accepts inputs are inputs of CNN and gives outputs are covariance matrix of RBF on
+    # outputs of CNN.
     kernel = gp.kernels.RBF(input_dim=10, lengthscale=torch.ones(10)).warp(iwarping_fn=cnn_fn)
 
     # init inducing points (taken randomly from dataset)
     Xu = next(iter(train_loader))[0][:args.num_inducing]
+    # use MultiClass likelihood for 10-class classification problem
     likelihood = gp.likelihoods.MultiClass(num_classes=10)
+    # Because we use Categorical distribution in MultiClass likelihood, we need GP model returns a list
+    # of probabilities of each class. Hence it is required to use latent_shape = 10.
+    # Turns on "whiten" flag will help optimization for variational models.
     gpmodel = gp.models.SparseVariationalGP(X=Xu, y=None, kernel=kernel, Xu=Xu,
                                             likelihood=likelihood, latent_shape=torch.Size([10]),
                                             num_data=60000, whiten=True)
@@ -113,6 +126,8 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Pyro GP MNIST Example')
+    parser.add_argument('--data-dir', type=str, default='../data', metavar='PATH',
+                        help='default directory to cache MNIST data')
     parser.add_argument('--num-inducing', type=int, default=70, metavar='N',
                         help='number of inducing input (default: 70)')
     parser.add_argument('--batch-size', type=int, default=64, metavar='N',
