@@ -537,6 +537,24 @@ def test_iarange_wrong_size_error():
     assert_error(model, guide, TraceGraph_ELBO())
 
 
+@pytest.mark.parametrize("enumerate_", [None, "sequential", "parallel"])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+def test_enum_discrete_misuse_warning(Elbo, enumerate_):
+
+    def model():
+        p = torch.tensor(0.5)
+        pyro.sample("x", dist.Bernoulli(p))
+
+    def guide():
+        p = pyro.param("p", torch.tensor(0.5, requires_grad=True))
+        pyro.sample("x", dist.Bernoulli(p), infer={"enumerate": enumerate_})
+
+    if (enumerate_ is None) == (Elbo is TraceEnum_ELBO):
+        assert_warning(model, guide, Elbo(max_iarange_nesting=0))
+    else:
+        assert_ok(model, guide, Elbo(max_iarange_nesting=0))
+
+
 def test_enum_discrete_single_ok():
 
     def model():
