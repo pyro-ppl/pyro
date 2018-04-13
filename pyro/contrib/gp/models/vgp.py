@@ -88,7 +88,7 @@ class VariationalGP(GPModel):
         f_name = pyro.param_with_module_name(self.name, "f")
         pyro.sample(f_name,
                     dist.MultivariateNormal(zero_loc, scale_tril=Lff)
-                        .reshape(extra_event_dims=zero_loc.dim()-1))
+                        .independent(zero_loc.dim()-1))
 
         f_var = f_scale_tril.pow(2).sum(dim=-1)
 
@@ -107,7 +107,7 @@ class VariationalGP(GPModel):
             f_name = pyro.param_with_module_name(self.name, "f")
             pyro.sample(f_name,
                         dist.MultivariateNormal(f_loc, scale_tril=f_scale_tril)
-                            .reshape(extra_event_dims=f_loc.dim()-1))
+                            .independent(f_loc.dim()-1))
         return self.kernel, f_loc, f_scale_tril
 
     def forward(self, Xnew, full_cov=False):
