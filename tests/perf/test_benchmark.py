@@ -11,7 +11,6 @@ import re
 import torch
 
 import pyro
-import pyro.contrib.gp as gp
 import pyro.distributions as dist
 from pyro.distributions.testing import fakes
 from pyro.infer import SVI
@@ -106,28 +105,6 @@ def bernoulli_beta_hmc(**kwargs):
     data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
     for trace, _ in mcmc_run._traces(data):
         posterior.append(trace.nodes['p_latent']['value'])
-
-
-@register_model(num_steps=10000, whiten=False, id='SVGP::MultiClass_whiten=False')
-@register_model(num_steps=10000, whiten=True, id='SVGP::MultiClass_whiten=True')
-def svgp_multiclass(num_steps, whiten):
-    # adapted from http://gpflow.readthedocs.io/en/latest/notebooks/multiclass.html
-    X = torch.rand(100, 1)
-    K = (-0.5 * (X - X.t()).pow(2) / 0.01).exp() + torch.eye(100) * 1e-6
-    f = K.potrf(upper=False).matmul(torch.randn(100, 3))
-    y = f.argmax(dim=-1)
-
-    kernel = gp.kernels.Matern32(1).add(gp.kernels.WhiteNoise(1, variance=torch.tensor(0.01)))
-    likelihood = gp.likelihoods.MultiClass(num_classes=3)
-    Xu = X[::5].clone()
-
-    gpmodel = gp.models.SparseVariationalGP(X, y, kernel, Xu, likelihood,
-                                            latent_shape=torch.Size([3]), whiten=whiten)
-
-    gpmodel.fix_param("Xu")
-    gpmodel.kernel.get_subkernel("WhiteNoise").fix_param("variance")
-
-    gpmodel.optimize(optim.Adam({"lr": 0.0001}), num_steps)
 
 
 @pytest.mark.parametrize('model, model_args, id', TEST_MODELS, ids=MODEL_IDS)
