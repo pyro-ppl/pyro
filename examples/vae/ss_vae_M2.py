@@ -1,3 +1,5 @@
+import argparse
+
 import torch
 import torch.nn as nn
 
@@ -103,7 +105,7 @@ class SSVAE(nn.Module):
         pyro.module("ss_vae", self)
 
         batch_size = xs.size(0)
-        with pyro.iarange("independent"):
+        with pyro.iarange("data"):
 
             # sample the handwriting style from the constant prior distribution
             prior_loc = torch.zeros([batch_size, self.z_dim])
@@ -113,10 +115,7 @@ class SSVAE(nn.Module):
             # if the label y (which digit to write) is supervised, sample from the
             # constant prior, otherwise, observe the value (i.e. score it against the constant prior)
             alpha_prior = torch.ones([batch_size, self.output_size]) / (1.0 * self.output_size)
-            if ys is None:
-                ys = pyro.sample("y", dist.OneHotCategorical(alpha_prior))
-            else:
-                pyro.sample("y", dist.OneHotCategorical(alpha_prior), obs=ys)
+            ys = pyro.sample("y", dist.OneHotCategorical(alpha_prior), obs=ys)
 
             # finally, score the image (x) using the handwriting style (z) and
             # the class label y (which digit to write) against the
@@ -132,13 +131,14 @@ class SSVAE(nn.Module):
         q(z|x,y) = normal(loc(x,y),scale(x,y))       # infer handwriting style from an image and the digit
         loc, scale are given by a neural network `encoder_z`
         alpha is given by a neural network `encoder_y`
+
         :param xs: a batch of scaled vectors of pixels from an image
         :param ys: (optional) a batch of the class labels i.e.
                    the digit corresponding to the image(s)
         :return: None
         """
         # inform Pyro that the variables in the batch of xs, ys are conditionally independent
-        with pyro.iarange("independent"):
+        with pyro.iarange("data"):
 
             # if the class label (the digit) is not supervised, sample
             # (and score) the digit with the variational distribution
@@ -175,16 +175,14 @@ class SSVAE(nn.Module):
     def model_classify(self, xs, ys=None):
         """
         this model is used to add an auxiliary (supervised) loss as described in the
-        NIPS 2014 paper by Kingma et al titled
-        "Semi-Supervised Learning with Deep Generative Models"
+        Kingma et al., "Semi-Supervised Learning with Deep Generative Models".
         """
         # register all pytorch (sub)modules with pyro
         pyro.module("ss_vae", self)
 
         # inform Pyro that the variables in the batch of xs, ys are conditionally independent
-        with pyro.iarange("independent"):
-            # this here is the extra Term to yield an auxiliary loss that we do gradient descend on
-            # similar to the NIPS 14 paper (Kingma et al).
+        with pyro.iarange("data"):
+            # this here is the extra term to yield an auxiliary loss that we do gradient descent on
             if ys is not None:
                 alpha = self.encoder_y.forward(xs)
                 with pyro.poutine.scale(None, self.aux_loss_multiplier):
@@ -197,6 +195,10 @@ class SSVAE(nn.Module):
         pass
 
     def model_sample(self, ys, batch_size=1):
+        """
+        sample an image from the model
+        """
+
         # sample the handwriting style from the constant prior distribution
         prior_loc = torch.zeros([batch_size, self.z_dim])
         prior_scale = torch.ones([batch_size, self.z_dim])
@@ -281,12 +283,12 @@ def get_accuracy(data_loader, classifier_fn, batch_size):
 
 
 def visualize(ss_vae, viz, test_loader):
-    if viz is not None:
+    if viz:
         plot_conditional_samples_ssvae(ss_vae, viz)
         mnist_test_tsne_ssvae(ssvae=ss_vae, test_loader=test_loader)
 
 
-def run_inference_ss_vae(args):
+def main(args):
     """
     run inference for SS-VAE
     :param args: arguments for SS-VAE
@@ -331,7 +333,7 @@ def run_inference_ss_vae(args):
 
     try:
         # setup the logger if a filename is provided
-        logger = None if args.logfile is None else open(args.logfile, "w")
+        logger = open(args.logfile, "w") if args.logfile else None
 
         data_loaders = setup_data_loaders(MNISTCached, args.use_cuda, args.batch_size, sup_num=args.sup_num)
 
@@ -389,21 +391,20 @@ def run_inference_ss_vae(args):
         visualize(ss_vae, viz, data_loaders["test"])
     finally:
         # close the logger file object if we opened it earlier
-        if args.logfile is not None:
+        if args.logfile:
             logger.close()
 
 
-EXAMPLE_RUN = "example run: python example_M2.py --seed 0 -cuda -ne 2 --aux-loss -alm 300 -enum -sup 3000 " \
+EXAMPLE_RUN = "example run: python ss_vae_M2.py --seed 0 -cuda -ne 2 --aux-loss -alm 300 -enum -sup 3000 " \
               "-zd 20 -hl 400 200 -lr 0.001 -b1 0.95 -bs 500 -eps 1e-7 -log ./tmp.log"
 
 if __name__ == "__main__":
-    import argparse
 
-    parser = argparse.ArgumentParser(description="SS-VAE model inference\n{}".format(EXAMPLE_RUN))
+    parser = argparse.ArgumentParser(description="SS-VAE\n{}".format(EXAMPLE_RUN))
 
     parser.add_argument('-cuda', '--use-cuda', action='store_true',
                         help="use GPU(s) to speed up training")
-    parser.add_argument('-ne', '--num-epochs', default=1, type=int,
+    parser.add_argument('-ne', '--num-epochs', default=100, type=int,
                         help="number of epochs to run")
     parser.add_argument('--aux-loss', action="store_true",
                         help="whether to use the auxiliary loss from NIPS 14 paper (Kingma et al)")
@@ -446,4 +447,4 @@ if __name__ == "__main__":
         "batch size doesn't divide total number of training data examples"
     assert MNISTCached.test_size % args.batch_size == 0, "batch size should divide the number of test examples"
 
-    run_inference_ss_vae(args)
+    main(args)

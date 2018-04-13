@@ -53,6 +53,7 @@ def call_nn_op(op, epsilon):
     """
     a helper function that adds appropriate parameters when calling
     an nn module representing an operation like Softmax
+
     :param op: the nn.Module operation to instantiate
     :param epsilon: a scaling parameter for certain custom modules
     :return: instantiation of the op module with appropriate parameters
