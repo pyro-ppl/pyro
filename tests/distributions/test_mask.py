@@ -23,7 +23,7 @@ def test_mask(batch_dim, event_dim, mask_dim):
     shape = torch.Size([2, 3, 4, 5, 6][:batch_dim + event_dim])
     batch_shape = shape[:batch_dim]
     mask_shape = batch_shape[batch_dim - mask_dim:]
-    base_dist = Bernoulli(0.1).reshape(shape, event_dim)
+    base_dist = Bernoulli(0.1).expand_by(shape).independent(event_dim)
 
     # Construct masked distribution.
     mask = checker_mask(mask_shape)
@@ -54,7 +54,7 @@ def test_mask(batch_dim, event_dim, mask_dim):
     ([2, 1], [2]),
 ])
 def test_mask_invalid_shape(batch_shape, mask_shape):
-    dist = Bernoulli(0.1).reshape(batch_shape)
+    dist = Bernoulli(0.1).expand_by(batch_shape)
     mask = checker_mask(mask_shape)
     with pytest.raises(ValueError):
         dist.mask(mask)

@@ -108,7 +108,7 @@ class SSVAE(nn.Module):
             # sample the handwriting style from the constant prior distribution
             prior_loc = torch.zeros([batch_size, self.z_dim])
             prior_scale = torch.ones([batch_size, self.z_dim])
-            zs = pyro.sample("z", dist.Normal(prior_loc, prior_scale).reshape(extra_event_dims=1))
+            zs = pyro.sample("z", dist.Normal(prior_loc, prior_scale).independent(1))
 
             # if the label y (which digit to write) is supervised, sample from the
             # constant prior, otherwise, observe the value (i.e. score it against the constant prior)
@@ -123,7 +123,7 @@ class SSVAE(nn.Module):
             # parametrized distribution p(x|y,z) = bernoulli(decoder(y,z))
             # where `decoder` is a neural network
             loc = self.decoder.forward([zs, ys])
-            pyro.sample("x", dist.Bernoulli(loc).reshape(extra_event_dims=1), obs=xs)
+            pyro.sample("x", dist.Bernoulli(loc).independent(1), obs=xs)
 
     def guide(self, xs, ys=None):
         """
@@ -150,7 +150,7 @@ class SSVAE(nn.Module):
             # sample (and score) the latent handwriting-style with the variational
             # distribution q(z|x,y) = normal(loc(x,y),scale(x,y))
             loc, scale = self.encoder_z.forward([xs, ys])
-            pyro.sample("z", dist.Normal(loc, scale).reshape(extra_event_dims=1))
+            pyro.sample("z", dist.Normal(loc, scale).independent(1))
 
     def classifier(self, xs):
         """
@@ -200,11 +200,11 @@ class SSVAE(nn.Module):
         # sample the handwriting style from the constant prior distribution
         prior_loc = torch.zeros([batch_size, self.z_dim])
         prior_scale = torch.ones([batch_size, self.z_dim])
-        zs = pyro.sample("z", dist.Normal(prior_loc, prior_scale).reshape(extra_event_dims=1))
+        zs = pyro.sample("z", dist.Normal(prior_loc, prior_scale).independent(1))
 
         # sample an image using the decoder
         loc = self.decoder.forward([zs, ys])
-        xs = pyro.sample("sample", dist.Bernoulli(loc).reshape(extra_event_dims=1))
+        xs = pyro.sample("sample", dist.Bernoulli(loc).independent(1))
         return xs, loc
 
 

@@ -183,17 +183,17 @@ class PyroVAEImpl(VAE):
         decoder = pyro.module('decoder', self.vae_decoder)
         z_mean, z_std = torch.zeros([data.size(0), 20]), torch.ones([data.size(0), 20])
         with pyro.iarange('data', data.size(0)):
-            z = pyro.sample('latent', Normal(z_mean, z_std).reshape(extra_event_dims=1))
+            z = pyro.sample('latent', Normal(z_mean, z_std).independent(1))
             img = decoder.forward(z)
             pyro.sample('obs',
-                        Bernoulli(img).reshape(extra_event_dims=1),
+                        Bernoulli(img).independent(1),
                         obs=data.reshape(-1, 784))
 
     def guide(self, data):
         encoder = pyro.module('encoder', self.vae_encoder)
         with pyro.iarange('data', data.size(0)):
             z_mean, z_var = encoder.forward(data)
-            pyro.sample('latent', Normal(z_mean, z_var.sqrt()).reshape(extra_event_dims=1))
+            pyro.sample('latent', Normal(z_mean, z_var.sqrt()).independent(1))
 
     def compute_loss_and_gradient(self, x):
         if self.mode == TRAIN:

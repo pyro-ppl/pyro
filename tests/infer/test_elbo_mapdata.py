@@ -53,20 +53,20 @@ def test_elbo_mapdata(batch_size, map_type):
 
     def model():
         loc_latent = pyro.sample("loc_latent",
-                                 dist.Normal(loc0, torch.pow(lam0, -0.5)).reshape(extra_event_dims=1))
+                                 dist.Normal(loc0, torch.pow(lam0, -0.5)).independent(1))
         if map_type == "irange":
             for i in pyro.irange("aaa", len(data), batch_size):
-                pyro.sample("obs_%d" % i, dist.Normal(loc_latent, torch.pow(lam, -0.5)) .reshape(extra_event_dims=1),
+                pyro.sample("obs_%d" % i, dist.Normal(loc_latent, torch.pow(lam, -0.5)) .independent(1),
                             obs=data[i]),
         elif map_type == "iarange":
             with pyro.iarange("aaa", len(data), batch_size) as ind:
-                pyro.sample("obs", dist.Normal(loc_latent, torch.pow(lam, -0.5)) .reshape(extra_event_dims=1),
+                pyro.sample("obs", dist.Normal(loc_latent, torch.pow(lam, -0.5)) .independent(1),
                             obs=data[ind]),
         else:
             for i, x in enumerate(data):
                 pyro.sample('obs_%d' % i,
                             dist.Normal(loc_latent, torch.pow(lam, -0.5))
-                            .reshape(extra_event_dims=1),
+                            .independent(1),
                             obs=x)
         return loc_latent
 
@@ -76,7 +76,7 @@ def test_elbo_mapdata(batch_size, map_type):
         log_sig_q = pyro.param("log_sig_q", torch.tensor(
             analytic_log_sig_n.data - torch.tensor([-0.18, 0.23]), requires_grad=True))
         sig_q = torch.exp(log_sig_q)
-        pyro.sample("loc_latent", dist.Normal(loc_q, sig_q).reshape(extra_event_dims=1))
+        pyro.sample("loc_latent", dist.Normal(loc_q, sig_q).independent(1))
         if map_type == "irange" or map_type is None:
             for i in pyro.irange("aaa", len(data), batch_size):
                 pass

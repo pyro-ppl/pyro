@@ -34,7 +34,7 @@ def test_subsample_gradient(trace_graph, enum_discrete, reparameterized, subsamp
         with pyro.iarange("particles", num_particles):
             with pyro.iarange("data", len(data), subsample_size, subsample) as ind:
                 x = data[ind].unsqueeze(-1).expand(-1, num_particles)
-                z = pyro.sample("z", Normal(0, 1).reshape(x.shape))
+                z = pyro.sample("z", Normal(0, 1).expand_by(x.shape))
                 pyro.sample("x", Normal(z, 1), obs=x)
 
     def guide(subsample):
@@ -83,7 +83,7 @@ def test_iarange(trace_graph, enum_discrete, reparameterized):
 
         pyro.sample("nuisance_a", Normal(0, 1))
         with particles_iarange, data_iarange:
-            z = pyro.sample("z", Normal(0, 1).reshape(x.shape))
+            z = pyro.sample("z", Normal(0, 1).expand_by(x.shape))
         pyro.sample("nuisance_b", Normal(2, 3))
         with data_iarange, particles_iarange:
             pyro.sample("x", Normal(z, 1), obs=x)
@@ -132,7 +132,7 @@ def test_subsample_gradient_sequential(trace_graph, enum_discrete, reparameteriz
     def model():
         with pyro.iarange("data", len(data), subsample_size) as ind:
             x = data[ind]
-            z = pyro.sample("z", Normal(0, 1).reshape(x.shape))
+            z = pyro.sample("z", Normal(0, 1).expand_by(x.shape))
             pyro.sample("x", Normal(z, 1), obs=x)
 
     def guide():

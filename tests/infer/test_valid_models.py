@@ -57,7 +57,7 @@ def test_nonempty_model_empty_guide_ok(trace_graph, enum_discrete):
     def model():
         loc = torch.tensor([0.0, 0.0])
         scale = torch.tensor([1.0, 1.0])
-        pyro.sample("x", dist.Normal(loc, scale).reshape(extra_event_dims=1), obs=loc)
+        pyro.sample("x", dist.Normal(loc, scale).independent(1), obs=loc)
 
     def guide():
         pass
@@ -197,12 +197,12 @@ def test_iarange_ok(subsample_size, trace_graph, enum_discrete):
     def model():
         p = torch.tensor(0.5)
         with pyro.iarange("iarange", 10, subsample_size) as ind:
-            pyro.sample("x", dist.Bernoulli(p).reshape(sample_shape=[len(ind)]))
+            pyro.sample("x", dist.Bernoulli(p).expand_by([len(ind)]))
 
     def guide():
         p = pyro.param("p", torch.tensor(0.5, requires_grad=True))
         with pyro.iarange("iarange", 10, subsample_size) as ind:
-            pyro.sample("x", dist.Bernoulli(p).reshape(sample_shape=[len(ind)]))
+            pyro.sample("x", dist.Bernoulli(p).expand_by([len(ind)]))
 
     assert_ok(model, guide, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
@@ -215,12 +215,12 @@ def test_iarange_no_size_ok(trace_graph, enum_discrete):
     def model():
         p = torch.tensor(0.5)
         with pyro.iarange("iarange"):
-            pyro.sample("x", dist.Bernoulli(p).reshape(sample_shape=[10]))
+            pyro.sample("x", dist.Bernoulli(p).expand_by([10]))
 
     def guide():
         p = pyro.param("p", torch.tensor(0.5, requires_grad=True))
         with pyro.iarange("iarange"):
-            pyro.sample("x", dist.Bernoulli(p).reshape(sample_shape=[10]))
+            pyro.sample("x", dist.Bernoulli(p).expand_by([10]))
 
     assert_ok(model, guide, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
@@ -327,7 +327,7 @@ def test_iarange_broadcast_error(trace_graph, enum_discrete, is_validate):
     def model():
         p = torch.tensor(0.5, requires_grad=True)
         with pyro.iarange("iarange", 10, 5):
-            pyro.sample("x", dist.Bernoulli(p).reshape(sample_shape=[1]))
+            pyro.sample("x", dist.Bernoulli(p).expand_by([1]))
 
     with pyro.validation_enabled(is_validate):
         if is_validate:
@@ -345,13 +345,13 @@ def test_iarange_irange_ok(trace_graph, enum_discrete):
         p = torch.tensor(0.5)
         with pyro.iarange("iarange", 10, 5) as ind:
             for i in pyro.irange("irange", 10, 5):
-                pyro.sample("x_{}".format(i), dist.Bernoulli(p).reshape(sample_shape=[len(ind)]))
+                pyro.sample("x_{}".format(i), dist.Bernoulli(p).expand_by([len(ind)]))
 
     def guide():
         p = pyro.param("p", torch.tensor(0.5, requires_grad=True))
         with pyro.iarange("iarange", 10, 5) as ind:
             for i in pyro.irange("irange", 10, 5):
-                pyro.sample("x_{}".format(i), dist.Bernoulli(p).reshape(sample_shape=[len(ind)]))
+                pyro.sample("x_{}".format(i), dist.Bernoulli(p).expand_by([len(ind)]))
 
     assert_ok(model, guide, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
@@ -366,14 +366,14 @@ def test_irange_iarange_ok(trace_graph, enum_discrete):
         inner_iarange = pyro.iarange("iarange", 10, 5)
         for i in pyro.irange("irange", 10, 5):
             with inner_iarange as ind:
-                pyro.sample("x_{}".format(i), dist.Bernoulli(p).reshape(sample_shape=[len(ind)]))
+                pyro.sample("x_{}".format(i), dist.Bernoulli(p).expand_by([len(ind)]))
 
     def guide():
         p = pyro.param("p", torch.tensor(0.5, requires_grad=True))
         inner_iarange = pyro.iarange("iarange", 10, 5)
         for i in pyro.irange("irange", 10, 5):
             with inner_iarange as ind:
-                pyro.sample("x_{}".format(i), dist.Bernoulli(p).reshape(sample_shape=[len(ind)]))
+                pyro.sample("x_{}".format(i), dist.Bernoulli(p).expand_by([len(ind)]))
 
     assert_ok(model, guide, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
@@ -386,9 +386,9 @@ def test_nested_iarange_iarange_ok(trace_graph, enum_discrete):
     def model():
         p = torch.tensor(0.5, requires_grad=True)
         with pyro.iarange("iarange_outer", 10, 5) as ind_outer:
-            pyro.sample("x", dist.Bernoulli(p).reshape(sample_shape=[len(ind_outer)]))
+            pyro.sample("x", dist.Bernoulli(p).expand_by([len(ind_outer)]))
             with pyro.iarange("iarange_inner", 11, 6) as ind_inner:
-                pyro.sample("y", dist.Bernoulli(p).reshape(sample_shape=[len(ind_inner), len(ind_outer)]))
+                pyro.sample("y", dist.Bernoulli(p).expand_by([len(ind_inner), len(ind_outer)]))
 
     assert_ok(model, model, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
@@ -403,11 +403,11 @@ def test_iarange_reuse_ok(trace_graph, enum_discrete):
         iarange_outer = pyro.iarange("iarange_outer", 10, 5, dim=-1)
         iarange_inner = pyro.iarange("iarange_inner", 11, 6, dim=-2)
         with iarange_outer as ind_outer:
-            pyro.sample("x", dist.Bernoulli(p).reshape(sample_shape=[len(ind_outer)]))
+            pyro.sample("x", dist.Bernoulli(p).expand_by([len(ind_outer)]))
         with iarange_inner as ind_inner:
-            pyro.sample("y", dist.Bernoulli(p).reshape(sample_shape=[len(ind_inner), 1]))
+            pyro.sample("y", dist.Bernoulli(p).expand_by([len(ind_inner), 1]))
         with iarange_outer as ind_outer, iarange_inner as ind_inner:
-            pyro.sample("z", dist.Bernoulli(p).reshape(sample_shape=[len(ind_inner), len(ind_outer)]))
+            pyro.sample("z", dist.Bernoulli(p).expand_by([len(ind_inner), len(ind_outer)]))
 
     assert_ok(model, model, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
@@ -420,10 +420,10 @@ def test_nested_iarange_iarange_dim_error_1(trace_graph, enum_discrete):
     def model():
         p = torch.tensor([0.5], requires_grad=True)
         with pyro.iarange("iarange_outer", 10, 5) as ind_outer:
-            pyro.sample("x", dist.Bernoulli(p).reshape(sample_shape=[len(ind_outer)]))  # error here
+            pyro.sample("x", dist.Bernoulli(p).expand_by([len(ind_outer)]))  # error here
             with pyro.iarange("iarange_inner", 11, 6) as ind_inner:
-                pyro.sample("y", dist.Bernoulli(p).reshape(sample_shape=[len(ind_inner)]))
-                pyro.sample("z", dist.Bernoulli(p).reshape(sample_shape=[len(ind_outer), len(ind_inner)]))
+                pyro.sample("y", dist.Bernoulli(p).expand_by([len(ind_inner)]))
+                pyro.sample("z", dist.Bernoulli(p).expand_by([len(ind_outer), len(ind_inner)]))
 
     assert_error(model, model, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
@@ -436,10 +436,10 @@ def test_nested_iarange_iarange_dim_error_2(trace_graph, enum_discrete):
     def model():
         p = torch.tensor([0.5], requires_grad=True)
         with pyro.iarange("iarange_outer", 10, 5) as ind_outer:
-            pyro.sample("x", dist.Bernoulli(p).reshape(sample_shape=[len(ind_outer), 1]))
+            pyro.sample("x", dist.Bernoulli(p).expand_by([len(ind_outer), 1]))
             with pyro.iarange("iarange_inner", 11, 6) as ind_inner:
-                pyro.sample("y", dist.Bernoulli(p).reshape(sample_shape=[len(ind_outer)]))  # error here
-                pyro.sample("z", dist.Bernoulli(p).reshape(sample_shape=[len(ind_outer), len(ind_inner)]))
+                pyro.sample("y", dist.Bernoulli(p).expand_by([len(ind_outer)]))  # error here
+                pyro.sample("z", dist.Bernoulli(p).expand_by([len(ind_outer), len(ind_inner)]))
 
     assert_error(model, model, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
@@ -452,10 +452,10 @@ def test_nested_iarange_iarange_dim_error_3(trace_graph, enum_discrete):
     def model():
         p = torch.tensor([0.5], requires_grad=True)
         with pyro.iarange("iarange_outer", 10, 5) as ind_outer:
-            pyro.sample("x", dist.Bernoulli(p).reshape(sample_shape=[len(ind_outer), 1]))
+            pyro.sample("x", dist.Bernoulli(p).expand_by([len(ind_outer), 1]))
             with pyro.iarange("iarange_inner", 11, 6) as ind_inner:
-                pyro.sample("y", dist.Bernoulli(p).reshape(sample_shape=[len(ind_inner)]))
-                pyro.sample("z", dist.Bernoulli(p).reshape(sample_shape=[len(ind_inner), 1]))  # error here
+                pyro.sample("y", dist.Bernoulli(p).expand_by([len(ind_inner)]))
+                pyro.sample("z", dist.Bernoulli(p).expand_by([len(ind_inner), 1]))  # error here
 
     assert_error(model, model, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
@@ -468,10 +468,10 @@ def test_nested_iarange_iarange_dim_error_4(trace_graph, enum_discrete):
     def model():
         p = torch.tensor([0.5], requires_grad=True)
         with pyro.iarange("iarange_outer", 10, 5) as ind_outer:
-            pyro.sample("x", dist.Bernoulli(p).reshape(sample_shape=[len(ind_outer), 1]))
+            pyro.sample("x", dist.Bernoulli(p).expand_by([len(ind_outer), 1]))
             with pyro.iarange("iarange_inner", 11, 6) as ind_inner:
-                pyro.sample("y", dist.Bernoulli(p).reshape(sample_shape=[len(ind_inner)]))
-                pyro.sample("z", dist.Bernoulli(p).reshape(sample_shape=[len(ind_outer), len(ind_outer)]))  # error here
+                pyro.sample("y", dist.Bernoulli(p).expand_by([len(ind_inner)]))
+                pyro.sample("z", dist.Bernoulli(p).expand_by([len(ind_outer), len(ind_outer)]))  # error here
 
     assert_error(model, model, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
@@ -484,9 +484,9 @@ def test_nonnested_iarange_iarange_ok(trace_graph, enum_discrete):
     def model():
         p = torch.tensor(0.5, requires_grad=True)
         with pyro.iarange("iarange_0", 10, 5) as ind1:
-            pyro.sample("x0", dist.Bernoulli(p).reshape(sample_shape=[len(ind1)]))
+            pyro.sample("x0", dist.Bernoulli(p).expand_by([len(ind1)]))
         with pyro.iarange("iarange_1", 11, 6) as ind2:
-            pyro.sample("x1", dist.Bernoulli(p).reshape(sample_shape=[len(ind2)]))
+            pyro.sample("x1", dist.Bernoulli(p).expand_by([len(ind2)]))
 
     assert_ok(model, model, trace_graph=trace_graph, enum_discrete=enum_discrete)
 
@@ -505,10 +505,10 @@ def test_three_indep_iarange_at_different_depths_ok():
             if i == 0:
                 for j in pyro.irange("irange1", 2):
                     with inner_iarange as ind:
-                        pyro.sample("y_%d" % j, dist.Bernoulli(p).reshape(sample_shape=[len(ind)]))
+                        pyro.sample("y_%d" % j, dist.Bernoulli(p).expand_by([len(ind)]))
             elif i == 1:
                 with inner_iarange as ind:
-                    pyro.sample("z", dist.Bernoulli(p).reshape(sample_shape=[len(ind)]))
+                    pyro.sample("z", dist.Bernoulli(p).expand_by([len(ind)]))
 
     def guide():
         p = pyro.param("p", torch.tensor(0.5, requires_grad=True))
@@ -518,10 +518,10 @@ def test_three_indep_iarange_at_different_depths_ok():
             if i == 0:
                 for j in pyro.irange("irange1", 2):
                     with inner_iarange as ind:
-                        pyro.sample("y_%d" % j, dist.Bernoulli(p).reshape(sample_shape=[len(ind)]))
+                        pyro.sample("y_%d" % j, dist.Bernoulli(p).expand_by([len(ind)]))
             elif i == 1:
                 with inner_iarange as ind:
-                    pyro.sample("z", dist.Bernoulli(p).reshape(sample_shape=[len(ind)]))
+                    pyro.sample("z", dist.Bernoulli(p).expand_by([len(ind)]))
 
     assert_ok(model, guide, trace_graph=True)
 
@@ -531,12 +531,12 @@ def test_iarange_wrong_size_error():
     def model():
         p = torch.tensor(0.5)
         with pyro.iarange("iarange", 10, 5) as ind:
-            pyro.sample("x", dist.Bernoulli(p).reshape(sample_shape=[1 + len(ind)]))
+            pyro.sample("x", dist.Bernoulli(p).expand_by([1 + len(ind)]))
 
     def guide():
         p = pyro.param("p", torch.tensor(0.5, requires_grad=True))
         with pyro.iarange("iarange", 10, 5) as ind:
-            pyro.sample("x", dist.Bernoulli(p).reshape(sample_shape=[1 + len(ind)]))
+            pyro.sample("x", dist.Bernoulli(p).expand_by([1 + len(ind)]))
 
     assert_error(model, guide, trace_graph=True)
 
@@ -589,12 +589,12 @@ def test_iarange_enum_discrete_batch_ok():
     def model():
         p = torch.tensor(0.5)
         with pyro.iarange("iarange", 10, 5) as ind:
-            pyro.sample("x", dist.Bernoulli(p).reshape(sample_shape=[len(ind)]))
+            pyro.sample("x", dist.Bernoulli(p).expand_by([len(ind)]))
 
     def guide():
         p = pyro.param("p", torch.tensor(0.5, requires_grad=True))
         with pyro.iarange("iarange", 10, 5) as ind:
-            pyro.sample("x", dist.Bernoulli(p).reshape(sample_shape=[len(ind)]))
+            pyro.sample("x", dist.Bernoulli(p).expand_by([len(ind)]))
 
     assert_ok(model, config_enumerate(guide), enum_discrete=True)
 
@@ -605,13 +605,13 @@ def test_iarange_enum_discrete_no_discrete_vars_ok():
         loc = torch.tensor(0.0)
         scale = torch.tensor(1.0)
         with pyro.iarange("iarange", 10, 5) as ind:
-            pyro.sample("x", dist.Normal(loc, scale).reshape(sample_shape=[len(ind)]))
+            pyro.sample("x", dist.Normal(loc, scale).expand_by([len(ind)]))
 
     def guide():
         loc = pyro.param("loc", torch.tensor(1.0, requires_grad=True))
         scale = pyro.param("scale", torch.tensor(2.0, requires_grad=True))
         with pyro.iarange("iarange", 10, 5) as ind:
-            pyro.sample("x", dist.Normal(loc, scale).reshape(sample_shape=[len(ind)]))
+            pyro.sample("x", dist.Normal(loc, scale).expand_by([len(ind)]))
 
     assert_ok(model, config_enumerate(guide), enum_discrete=True)
 
@@ -620,11 +620,11 @@ def test_no_iarange_enum_discrete_batch_error():
 
     def model():
         p = torch.tensor(0.5)
-        pyro.sample("x", dist.Bernoulli(p).reshape(sample_shape=[5]))
+        pyro.sample("x", dist.Bernoulli(p).expand_by([5]))
 
     def guide():
         p = pyro.param("p", torch.tensor(0.5, requires_grad=True))
-        pyro.sample("x", dist.Bernoulli(p).reshape(sample_shape=[5]))
+        pyro.sample("x", dist.Bernoulli(p).expand_by([5]))
 
     assert_error(model, config_enumerate(guide), enum_discrete=True)
 
@@ -702,7 +702,7 @@ def test_enum_discrete_iarange_dependency_warning(enumerate_, is_validate):
 
     def model():
         with pyro.iarange("iarange", 10, 5):
-            x = pyro.sample("x", dist.Bernoulli(0.5).reshape([5]),
+            x = pyro.sample("x", dist.Bernoulli(0.5).expand_by([5]),
                             infer={'enumerate': enumerate_})
         pyro.sample("y", dist.Bernoulli(x.mean()))  # user should move this line up
 
@@ -721,7 +721,7 @@ def test_enum_discrete_irange_iarange_dependency_ok(enumerate_):
         for i in pyro.irange("irange", 3):
             pyro.sample("y_{}".format(i), dist.Bernoulli(0.5))
             with inner_iarange:
-                pyro.sample("x_{}".format(i), dist.Bernoulli(0.5).reshape([5]),
+                pyro.sample("x_{}".format(i), dist.Bernoulli(0.5).expand_by([5]),
                             infer={'enumerate': enumerate_})
 
     assert_ok(model, model, enum_discrete=True, max_iarange_nesting=1)
@@ -736,7 +736,7 @@ def test_enum_discrete_iranges_iarange_dependency_warning(enumerate_, is_validat
 
         for i in pyro.irange("irange1", 2):
             with inner_iarange:
-                pyro.sample("x_{}".format(i), dist.Bernoulli(0.5).reshape([5]),
+                pyro.sample("x_{}".format(i), dist.Bernoulli(0.5).expand_by([5]),
                             infer={'enumerate': enumerate_})
 
         for i in pyro.irange("irange2", 2):
@@ -757,12 +757,12 @@ def test_enum_discrete_iaranges_dependency_ok(enumerate_):
         y_iarange = pyro.iarange("y_iarange", 11, 6, dim=-2)
         pyro.sample("a", dist.Bernoulli(0.5))
         with x_iarange:
-            pyro.sample("b", dist.Bernoulli(0.5).reshape([5]))
+            pyro.sample("b", dist.Bernoulli(0.5).expand_by([5]))
         with y_iarange:
             # Note that it is difficult to check that c does not depend on b.
-            pyro.sample("c", dist.Bernoulli(0.5).reshape([6, 1]))
+            pyro.sample("c", dist.Bernoulli(0.5).expand_by([6, 1]))
         with x_iarange, y_iarange:
-            pyro.sample("d", dist.Bernoulli(0.5).reshape([6, 5]))
+            pyro.sample("d", dist.Bernoulli(0.5).expand_by([6, 5]))
 
     assert_ok(model, model, enum_discrete=True, max_iarange_nesting=2)
 
@@ -772,13 +772,13 @@ def test_enum_discrete_non_enumerated_iarange_ok(enumerate_):
 
     def model():
         with pyro.iarange("non_enum", 2):
-            a = pyro.sample("a", dist.Bernoulli(0.5).reshape([2]),
+            a = pyro.sample("a", dist.Bernoulli(0.5).expand_by([2]),
                             infer={'enumerate': None})
 
         p = (1.0 + a.sum(-1)) / (2.0 + a.size(0))  # introduce dependency of b on a
 
         with pyro.iarange("enum_1", 3):
-            pyro.sample("b", dist.Bernoulli(p).reshape([3]),
+            pyro.sample("b", dist.Bernoulli(p).expand_by([3]),
                         infer={'enumerate': enumerate_})
 
     with pyro.validation_enabled():
