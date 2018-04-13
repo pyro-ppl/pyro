@@ -65,7 +65,7 @@ class Parameterized(nn.Module):
             value = getattr(self, param).detach()
         self._fixed_params[param] = value
 
-    def set_mode(self, mode):
+    def set_mode(self, mode, only_this_module=False):
         """
         Sets ``mode`` of this object to be able to use its parameters in stochastic
         functions. If ``mode="model"``, a parameter with prior will get its value
@@ -73,16 +73,19 @@ class Parameterized(nn.Module):
         prior on a parameter, :func:`pyro.param` will be called.
 
         This method automatically sets ``mode`` for submodules which belong to
-        :class:`Parameterized` class.
+        :class:`Parameterized` class unless ``only_this_module=True``.
 
         :param str mode: Either "model" or "guide".
+        :param bool only_this_module: A flag to tell if we want to set mode for all
+            submodules.
         """
         if mode not in ["model", "guide"]:
             raise ValueError("Mode should be either 'model' or 'guide', but got {}."
                              .format(mode))
-        for module in self.children():
-            if isinstance(module, Parameterized):
-                module.set_mode(mode)
+        if not only_this_module:
+            for module in self.children():
+                if isinstance(module, Parameterized):
+                    module.set_mode(mode)
         for param in self._parameters:
             self._register_param(param, mode)
 

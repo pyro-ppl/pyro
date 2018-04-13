@@ -53,8 +53,10 @@ class GPLVM(Parameterized):
         self.X_scale_tril = Parameter(X_scale_tril)
         self.set_constraint("X_scale_tril", constraints.lower_cholesky)
 
+        self._call_base_model_guide = True
+
     def model(self):
-        self.set_mode("model")
+        self.set_mode("model", only_this_module=True)
 
         zero_loc = self.X_loc.new_zeros(self.X_loc.shape)
         C = self.X_loc.shape[1]
@@ -67,7 +69,7 @@ class GPLVM(Parameterized):
         self.base_model.model()
 
     def guide(self):
-        self.set_mode("guide")
+        self.set_mode("guide", only_this_module=True)
 
         X_loc = self.get_param("X_loc")
         X_scale_tril = self.get_param("X_scale_tril")
@@ -77,14 +79,18 @@ class GPLVM(Parameterized):
                             .reshape(extra_event_dims=X_loc.dim()-1))
 
         self.base_model.set_data(X, self.y)
-        self.base_model.guide()
+        if self._call_base_model_guide:
+            self.base_model.guide()
 
     def forward(self, **kwargs):
         """
         Forward method has the same signal as its ``base_model``. Note that the train
         input data of ``base_model`` is sampled from GPLVM.
         """
+        # avoid calling base_model's guide two times
+        self._call_base_model_guide = False
         self.guide()
+        self._call_base_model_guide = True
         return self.base_model(**kwargs)
 
     def optimize(self, optimizer=optim.Adam({}), num_steps=1000):

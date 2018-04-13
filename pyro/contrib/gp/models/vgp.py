@@ -143,10 +143,10 @@ class VariationalGP(GPModel):
         :rtype: tuple(torch.Tensor, torch.Tensor)
         """
         self._check_Xnew_shape(Xnew)
-        tmp_sample_latent = self._sample_latent
+        # avoid sampling the unnecessary latent f
         self._sample_latent = False
         kernel, f_loc, f_scale_tril = self.guide()
-        self._sample_latent = tmp_sample_latent
+        self._sample_latent = True
 
         loc, cov = conditional(Xnew, self.X, kernel, f_loc, f_scale_tril,
                                full_cov=full_cov, whiten=self.whiten,

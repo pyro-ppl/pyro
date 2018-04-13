@@ -168,10 +168,10 @@ class SparseVariationalGP(GPModel):
         :rtype: tuple(torch.Tensor, torch.Tensor)
         """
         self._check_Xnew_shape(Xnew)
-        tmp_sample_latent = self._sample_latent
+        # avoid sampling the unnecessary latent u
         self._sample_latent = False
         Xu, kernel, u_loc, u_scale_tril = self.guide()
-        self._sample_latent = tmp_sample_latent
+        self._sample_latent = True
 
         loc, cov = conditional(Xnew, Xu, kernel, u_loc, u_scale_tril,
                                full_cov=full_cov, whiten=self.whiten,
