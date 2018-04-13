@@ -13,7 +13,7 @@ import pyro
 from utils.mnist_cached import RESULTS_DIR, DATA_DIR
 from pyro.contrib.examples import util
 from pyro.distributions import Bernoulli, Normal
-from pyro.infer import SVI
+from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import Adam
 
 """
@@ -205,7 +205,7 @@ class PyroVAEImpl(VAE):
 
     def initialize_optimizer(self, lr):
         optimizer = Adam({'lr': lr})
-        return SVI(self.model, self.guide, optimizer, loss='ELBO')
+        return SVI(self.model, self.guide, optimizer, loss=Trace_ELBO())
 
 
 def setup(args):
