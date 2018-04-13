@@ -2,7 +2,6 @@ import torch
 import pyro
 import pyro.distributions as dist
 from pyro.infer import SVI
-from pyro import poutine
 from pyro.contrib.autoguide import (ADVIDiagonalNormal, ADVIDiscreteParallel,  # noqa: F401
                                     ADVIMaster, ADVIMultivariateNormal)
 import pyro.optim as optim
@@ -20,9 +19,7 @@ def model(K, U, I, c, y):
 
 def main(args):
     advi = ADVIMaster(model)
-    advi.add(ADVIDiagonalNormal(poutine.block(model, hide=["obs"]))),
-    advi.add(ADVIDiscreteParallel(poutine.block(model, expose=["obs"])))
-
+    advi.add(ADVIDiagonalNormal(model))
     adam = optim.Adam({'lr': 1e-3})
     svi = SVI(advi.model, advi.guide, adam, loss="ELBO", enum_discrete=True, max_iarange_nesting=1)
     for i in range(100):
