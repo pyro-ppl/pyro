@@ -45,11 +45,11 @@ class Binary(Likelihood):
         f = dist.Normal(f_loc, f_var)()
         f_res = self.response_function(f)
 
-        if y is None:
+        if y is not None:
+            return pyro.sample(self.y_name,
+                               dist.Bernoulli(f_res)
+                                   .reshape(sample_shape=y.shape[:-f_res.dim()],
+                                            extra_event_dims=y.dim()),
+                               obs=y)
+        else:
             return pyro.sample(self.y_name, dist.Bernoulli(f_res))
-
-        return pyro.sample(self.y_name,
-                           dist.Bernoulli(f_res)
-                               .reshape(sample_shape=y.shape[:-f_res.dim()],
-                                        extra_event_dims=y.dim()),
-                           obs=y)
