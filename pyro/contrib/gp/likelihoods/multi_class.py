@@ -62,11 +62,11 @@ class MultiClass(Likelihood):
                              .format(self.num_classes, f_swap.shape[-1]))
         f_res = self.response_function(f_swap)
 
-        if y is None:
+        if y is not None:
+            return pyro.sample(self.y_name,
+                               dist.Categorical(f_res)
+                                   .reshape(sample_shape=y.shape[:-f_res.dim() + 1],
+                                            extra_event_dims=y.dim()),
+                               obs=y)
+        else:
             return pyro.sample(self.y_name, dist.Categorical(f_res))
-
-        return pyro.sample(self.y_name,
-                           dist.Categorical(f_res)
-                               .reshape(sample_shape=y.shape[:-f_res.dim() + 1],
-                                        extra_event_dims=y.dim()),
-                           obs=y)

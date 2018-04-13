@@ -44,11 +44,11 @@ class Gaussian(Likelihood):
         variance = self.get_param("variance")
         y_var = f_var + variance
 
-        if y is None:
+        if y is not None:
+            return pyro.sample(self.y_name,
+                               dist.Normal(f_loc, y_var)
+                                   .reshape(sample_shape=y.shape[:-f_loc.dim()],
+                                            extra_event_dims=y.dim()),
+                               obs=y)
+        else:
             return pyro.sample(self.y_name, dist.Normal(f_loc, y_var))
-
-        return pyro.sample(self.y_name,
-                           dist.Normal(f_loc, y_var)
-                               .reshape(sample_shape=y.shape[:-f_loc.dim()],
-                                        extra_event_dims=y.dim()),
-                           obs=y)
