@@ -44,6 +44,5 @@ class Poisson(Likelihood):
         f_res = self.response_function(f)
         y_dist = dist.Poisson(f_res)
         if y is not None:
-            y_dist = y_dist.reshape(sample_shape=y.shape[:-f_res.dim()],
-                                    extra_event_dims=y.dim())
+            y_dist = y_dist.expand_by(y.shape[:-f_res.dim()]).independent(y.dim())
         return pyro.sample(self.y_name, y_dist, obs=y)
