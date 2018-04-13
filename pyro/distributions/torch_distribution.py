@@ -74,6 +74,11 @@ class TorchDistributionMixin(Distribution):
         """
         return ReshapedDistribution(self, sample_shape=sample_shape)
 
+    def reshape(self, sample_shape=None, extra_event_dims=None):
+        raise Exception('''
+            .reshape(sample_shape=s, extra_event_dims=n) was renamed and split into
+            .expand_by(sample_shape=s).independent(reinterpreted_batch_ndims=n).''')
+
     def independent(self, reinterpreted_batch_ndims=None):
         """
         Reinterprets the ``n`` rightmost dimensions of this distributions
