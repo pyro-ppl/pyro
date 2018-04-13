@@ -132,7 +132,7 @@ def test_advi_dirichlet(advi_class):
     def model(data):
         p = pyro.sample("p", dist.Dirichlet(prior))
         with pyro.iarange("data_iarange"):
-            pyro.sample("data", dist.Categorical(p.expand(data.shape)), obs=data)
+            pyro.sample("data", dist.Categorical(p).expand_by(data.shape), obs=data)
 
     advi = advi_class(model)
     svi = SVI(advi.model, advi.guide, optim.Adam({"lr": .003}), loss="ELBO")
