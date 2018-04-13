@@ -30,8 +30,8 @@ def test_idempotent(batch_dim, event_dim):
     assert dist0.batch_shape == batch_shape
     assert dist0.event_shape == event_shape
 
-    # Check that an empty .expand_by() is a no-op.
-    dist = dist0.expand_by()
+    # Check that an .expand_by() an empty shape is a no-op.
+    dist = dist0.expand_by([])
     assert dist.batch_shape == dist0.batch_shape
     assert dist.event_shape == dist0.event_shape
 
@@ -50,7 +50,7 @@ def test_reshape(sample_dim, extra_event_dims):
     assert dist0.batch_shape == batch_shape
 
     # Check that reshaping has the desired final shape.
-    dist = dist0.expand_by(sample_shape).indepedent(extra_event_dims)
+    dist = dist0.expand_by(sample_shape).independent(extra_event_dims)
     sample = dist.sample()
     assert sample.shape == shape
     assert dist.mean.shape == shape
@@ -80,7 +80,7 @@ def test_reshape_reshape(sample_dim, extra_event_dims):
     assert dist1.batch_shape == batch_shape
 
     # Check that reshaping has the desired final shape.
-    dist = dist1.expand_by(sample_shape).indepedent(extra_event_dims)
+    dist = dist1.expand_by(sample_shape).independent(extra_event_dims)
     sample = dist.sample()
     assert sample.shape == shape
     assert dist.mean.shape == shape
