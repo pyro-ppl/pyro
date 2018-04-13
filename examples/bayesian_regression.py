@@ -7,7 +7,7 @@ from torch.nn.functional import normalize  # noqa: F401
 
 import pyro
 from pyro.distributions import Bernoulli, Normal  # noqa: F401
-from pyro.infer import SVI
+from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import Adam
 
 
@@ -96,7 +96,7 @@ def guide(data):
 
 # instantiate optim and inference objects
 optim = Adam({"lr": 0.05})
-svi = SVI(model, guide, optim, loss="ELBO")
+svi = SVI(model, guide, optim, loss=Trace_ELBO())
 
 
 # get array of batch indices

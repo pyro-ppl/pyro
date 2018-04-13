@@ -7,7 +7,7 @@ import visdom
 
 import pyro
 import pyro.distributions as dist
-from pyro.infer import SVI
+from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import Adam
 from utils.mnist_cached import MNISTCached as MNIST
 from utils.mnist_cached import setup_data_loaders
@@ -139,7 +139,7 @@ def main(args):
     optimizer = Adam(adam_args)
 
     # setup the inference algorithm
-    svi = SVI(vae.model, vae.guide, optimizer, loss="ELBO")
+    svi = SVI(vae.model, vae.guide, optimizer, loss=Trace_ELBO())
 
     # setup visdom for visualization
     if args.visdom_flag:
