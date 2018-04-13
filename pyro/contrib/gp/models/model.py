@@ -63,8 +63,8 @@ class GPModel(Parameterized):
     [1] `Gaussian Processes for Machine Learning`,
     Carl E. Rasmussen, Christopher K. I. Williams
 
-    :param torch.Tensor X: A 1D or 2D input data for training. Its first dimension is
-        the number of data points.
+    :param torch.Tensor X: A input data for training. Its first dimension is the number
+        of data points.
     :param torch.Tensor y: An output data for training. Its last dimension is the
         number of data points.
     :param ~pyro.contrib.gp.kernels.kernel.Kernel kernel: A Pyro kernel object, which
@@ -105,8 +105,8 @@ class GPModel(Parameterized):
         .. note:: Model's parameters :math:`\theta` together with kernel's parameters
             have been learned from a training procedure (MCMC or SVI).
 
-        :param torch.Tensor Xnew: A 1D or 2D input data for testing. In 2D case, its
-            second dimension should have the same size as of train input data.
+        :param torch.Tensor Xnew: A input data for testing. Note that
+            ``Xnew.shape[1:]`` must be the same as ``X.shape[1:]``.
         :param bool full_cov: A flag to decide if we want to predict full covariance
             matrix or just variance.
         :returns: loc and covariance matrix (or variance) of :math:`p(f^*(X_{new}))`
@@ -149,14 +149,11 @@ class GPModel(Parameterized):
         [2] `Deep Gaussian Processes`,
         Andreas C. Damianou, Neil D. Lawrence
 
-        :param torch.Tensor X: A 1D or 2D input data for training. Its first dimension
-            is the number of data points.
+        :param torch.Tensor X: A input data for training. Its first dimension is the
+            number of data points.
         :param torch.Tensor y: An output data for training. Its last dimension is the
             number of data points.
         """
-        if X.dim() > 2:
-            raise ValueError("Expected input tensor of 1 or 2 dimensions, "
-                             "but got dim = {}.".format(X.dim()))
         if y is not None and X.shape[0] != y.shape[-1]:
             raise ValueError("Expected the number of input data points equal to the "
                              "number of output data points, but got {} and {}."
@@ -187,14 +184,14 @@ class GPModel(Parameterized):
         """
         Checks the correction of the shape of new data.
 
-        :param torch.Tensor Xnew: A 1D or 2D input data for testing. In 2D case, its
-            second dimension should have the same size as one of train input data.
+        :param torch.Tensor Xnew: A input data for testing. Note that
+            ``Xnew.shape[1:]`` must be the same as ``self.X.shape[1:]``.
         """
         if Xnew.dim() != self.X.dim():
             raise ValueError("Train data and test data should have the same "
                              "number of dimensions, but got {} and {}."
                              .format(self.X.dim(), Xnew.dim()))
-        if Xnew.dim() == 2 and self.X.shape[1] != Xnew.shape[1]:
+        if self.X.shape[1:] != Xnew.shape[1:]:
             raise ValueError("Train data and test data should have the same "
-                             "number of features, but got {} and {}."
-                             .format(self.X.shape[1], Xnew.shape[1]))
+                             "shape of features, but got {} and {}."
+                             .format(self.X.shape[1:], Xnew.shape[1:]))
