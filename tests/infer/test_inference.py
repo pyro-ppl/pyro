@@ -12,7 +12,7 @@ import pyro.distributions as dist
 import pyro.optim as optim
 from pyro.distributions.testing import fakes
 from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
-from pyro.infer.svi import SVI
+from pyro.infer import SVI, Trace_ELBO
 from tests.common import assert_equal
 
 
@@ -75,7 +75,8 @@ class NormalNormalTests(TestCase):
             pyro.sample("loc_latent", Normal(loc_q, sig_q).independent(1))
 
         adam = optim.Adam({"lr": .001})
-        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=False)
+        elbo = Trace_ELBO()
+        svi = SVI(model, guide, adam, loss=elbo)
 
         for k in range(n_steps):
             svi.step()

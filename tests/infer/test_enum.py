@@ -179,8 +179,8 @@ def test_svi_step_smoke(model, guide, enumerate1):
 
     guide = config_enumerate(guide, default=enumerate1)
     optimizer = pyro.optim.Adam({"lr": .001})
-    inference = SVI(model, guide, optimizer, loss="ELBO",
-                    enum_discrete=True, max_iarange_nesting=1)
+    elbo = TraceEnum_ELBO(max_iarange_nesting=1)
+    inference = SVI(model, guide, optimizer, loss=elbo)
     inference.step(data)
 
 

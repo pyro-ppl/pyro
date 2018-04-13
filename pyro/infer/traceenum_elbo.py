@@ -3,12 +3,11 @@ from __future__ import absolute_import, division, print_function
 import warnings
 
 import pyro
-import pyro.infer as infer
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import iter_discrete_traces
-from pyro.infer.util import Dice
+from pyro.infer.util import Dice, is_validation_enabled
 from pyro.poutine import EnumerateMessenger
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, check_site_shape, check_traceenum_requirements, torch_isnan
@@ -62,16 +61,16 @@ class TraceEnum_ELBO(ELBO):
                 model_trace = poutine.trace(poutine.replay(model, guide_trace),
                                             graph_type="flat").get_trace(*args, **kwargs)
 
-                if infer.is_validation_enabled():
+                if is_validation_enabled():
                     check_model_guide_match(model_trace, guide_trace, self.max_iarange_nesting)
                 guide_trace = prune_subsample_sites(guide_trace)
                 model_trace = prune_subsample_sites(model_trace)
-                if infer.is_validation_enabled():
+                if is_validation_enabled():
                     check_traceenum_requirements(model_trace, guide_trace)
 
                 model_trace.compute_log_prob()
                 guide_trace.compute_score_parts()
-                if infer.is_validation_enabled():
+                if is_validation_enabled():
                     for site in model_trace.nodes.values():
                         if site["type"] == "sample":
                             check_site_shape(site, self.max_iarange_nesting)

@@ -5,9 +5,8 @@ import warnings
 import pyro
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
-import pyro.infer as infer
 from pyro.infer.elbo import ELBO
-from pyro.infer.util import MultiFrameTensor, get_iarange_stacks
+from pyro.infer.util import MultiFrameTensor, get_iarange_stacks, is_validation_enabled
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, check_site_shape, torch_isnan
 
@@ -52,14 +51,14 @@ class Trace_ELBO(ELBO):
         for i in range(self.num_particles):
             guide_trace = poutine.trace(guide).get_trace(*args, **kwargs)
             model_trace = poutine.trace(poutine.replay(model, guide_trace)).get_trace(*args, **kwargs)
-            if infer.is_validation_enabled():
+            if is_validation_enabled():
                 check_model_guide_match(model_trace, guide_trace)
             guide_trace = prune_subsample_sites(guide_trace)
             model_trace = prune_subsample_sites(model_trace)
 
             model_trace.compute_log_prob()
             guide_trace.compute_score_parts()
-            if infer.is_validation_enabled():
+            if is_validation_enabled():
                 for site in model_trace.nodes.values():
                     if site["type"] == "sample":
                         check_site_shape(site, self.max_iarange_nesting)
