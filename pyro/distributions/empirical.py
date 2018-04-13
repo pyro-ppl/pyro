@@ -8,8 +8,7 @@ from torch.distributions import constraints
 
 from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.torch import Categorical
-from pyro.distributions.util import copy_docs_from
-from pyro.distributions.util import log_sum_exp
+from pyro.distributions.util import copy_docs_from, log_sum_exp
 
 
 @copy_docs_from(TorchDistribution)
@@ -20,6 +19,7 @@ class Empirical(TorchDistribution):
 
     arg_constraints = {}
     support = constraints.real
+    has_enumerate_support = True
 
     def __init__(self, validate_args=None):
         self._samples = None
@@ -83,18 +83,18 @@ class Empirical(TorchDistribution):
         if self._validate_args:
             if weight is not None and log_weight is not None:
                 raise ValueError("Only one of ```weight`` or ``log_weight`` should be specified.")
-            if torch.is_tensor(weight) and weight.dim() > 0:
-                raise ValueError("``weight.dim() > 0``, but weight should be a scalar.")
 
         weight_type = value.new_empty(1).float().type() if value.dtype in (torch.int32, torch.int64) \
             else value.type()
         # Apply default weight of 1.0.
         if log_weight is None and weight is None:
-            log_weight = torch.tensor(1.0).type(weight_type).log()
+            log_weight = torch.tensor(0.0).type(weight_type)
         elif weight is not None and log_weight is None:
             log_weight = math.log(weight)
         if isinstance(log_weight, numbers.Number):
             log_weight = torch.tensor(log_weight).type(weight_type)
+        if self._validate_args and log_weight.dim() > 0:
+            raise ValueError("``weight.dim() > 0``, but weight should be a scalar.")
 
         # Seed the container tensors with the correct tensor types
         if self._samples is None:
@@ -129,6 +129,13 @@ class Empirical(TorchDistribution):
         log_probs = self._categorical.log_prob(idxs)
         return log_sum_exp(log_probs)
 
+    def _weighted_mean(self, value, dim=0):
+        weights = self._log_weights
+        for _ in range(value.dim() - 1):
+            weights = weights.unsqueeze(-1)
+        max_val = weights.max(dim)[0]
+        return max_val.exp() * (value * (weights - max_val.unsqueeze(-1)).exp()).sum(dim=dim)
+
     @property
     def event_shape(self):
         self._finalize()
@@ -140,24 +147,20 @@ class Empirical(TorchDistribution):
     def mean(self):
         self._finalize()
         if self._samples.dtype in (torch.int32, torch.int64):
-            raise ValueError("Mean for discrete empirical distribution undefined. Consider converting samples " +
-                             "to ``torch.float32`` or ``torch.float64``.")
-        weights = self._log_weights
-        for _ in range(self._samples.dim() - 1):
-            weights = weights.unsqueeze(-1)
-        return (log_sum_exp(weights, scale=self._samples, dim=0) - log_sum_exp(weights, dim=0)).exp()
+            raise ValueError("Mean for discrete empirical distribution undefined. " +
+                             "Consider converting samples to ``torch.float32`` " +
+                             "or ``torch.float64``.")
+        return self._weighted_mean(self._samples) / self._weighted_mean(self._samples.new_tensor([1.]))
 
     @property
     def variance(self):
         self._finalize()
         if self._samples.dtype in (torch.int32, torch.int64):
-            raise ValueError("Variance for discrete empirical distribution undefined. Consider converting samples " +
-                             "to ``torch.float32`` or ``torch.float64``.")
+            raise ValueError("Variance for discrete empirical distribution undefined. " +
+                             "Consider converting samples to ``torch.float32`` " +
+                             "or ``torch.float64``.")
         deviation_squared = torch.pow(self._samples - self.mean, 2)
-        weights = self._log_weights
-        for _ in range(self._samples.dim() - 1):
-            weights = weights.unsqueeze(-1)
-        return (log_sum_exp(weights, scale=deviation_squared, dim=0) - log_sum_exp(weights, dim=0)).exp()
+        return self._weighted_mean(deviation_squared) / self._weighted_mean(self._samples.new_tensor([1.]))
 
     def enumerate_support(self):
         self._finalize()
