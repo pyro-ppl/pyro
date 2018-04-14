@@ -34,7 +34,7 @@ class SSVAE(nn.Module):
     :param aux_loss_multiplier: the multiplier to use with the auxiliary loss
     """
     def __init__(self, output_size=10, input_size=784, z_dim=50, hidden_layers=(500,),
-                 epsilon_scale=1e-7, config_enum='sequential', use_cuda=False, aux_loss_multiplier=None):
+                 epsilon_scale=1e-7, config_enum=None, use_cuda=False, aux_loss_multiplier=None):
 
         super(SSVAE, self).__init__()
 
@@ -44,7 +44,7 @@ class SSVAE(nn.Module):
         self.z_dim = z_dim
         self.hidden_layers = hidden_layers
         self.epsilon_scale = epsilon_scale
-        self.config_enum = config_enum == 'parallel'
+        self.allow_broadcast = config_enum == 'parallel'
         self.use_cuda = use_cuda
         self.aux_loss_multiplier = aux_loss_multiplier
 
@@ -67,7 +67,7 @@ class SSVAE(nn.Module):
                              activation=nn.Softplus,
                              output_activation=ClippedSoftmax,
                              epsilon_scale=self.epsilon_scale,
-                             allow_broadcast=self.config_enum,
+                             allow_broadcast=self.allow_broadcast,
                              use_cuda=self.use_cuda)
 
         # a split in the final layer's size is used for multiple outputs
@@ -78,7 +78,7 @@ class SSVAE(nn.Module):
                              hidden_sizes + [[z_dim, z_dim]],
                              activation=nn.Softplus,
                              output_activation=[None, Exp],
-                             allow_broadcast=self.config_enum,
+                             allow_broadcast=self.allow_broadcast,
                              use_cuda=self.use_cuda)
 
         self.decoder = MLP([z_dim + self.output_size] +
@@ -86,7 +86,7 @@ class SSVAE(nn.Module):
                            activation=nn.Softplus,
                            output_activation=ClippedSigmoid,
                            epsilon_scale=self.epsilon_scale,
-                           allow_broadcast=self.config_enum,
+                           allow_broadcast=self.allow_broadcast,
                            use_cuda=self.use_cuda)
 
         # using GPUs for faster training of the networks
@@ -415,7 +415,7 @@ if __name__ == "__main__":
     parser.add_argument('-alm', '--aux-loss-multiplier', default=300, type=float,
                         help="the multiplier to use with the auxiliary loss")
     parser.add_argument('-enum', '--enum-discrete', default=None,
-                        help="parallel or sequential")
+                        help="parallel or sequential. if none is specified, discrete vars are sampled.")
     parser.add_argument('-sup', '--sup-num', default=3000,
                         type=float, help="supervised amount of the data i.e. "
                                          "how many of the images have supervised labels")
