@@ -116,7 +116,7 @@ def main(args):
 
     optimizer = optim.Adam({"lr": args.lr})
 
-    svi = infer.SVI(gpmodel.model, gpmodel.guide, optimizer, "ELBO")
+    svi = infer.SVI(gpmodel.model, gpmodel.guide, optimizer, infer.Trace_ELBO())
 
     for epoch in range(1, args.epochs + 1):
         train(args, train_loader, gpmodel, svi, epoch)

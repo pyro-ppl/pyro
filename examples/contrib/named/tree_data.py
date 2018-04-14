@@ -8,7 +8,7 @@ from torch.distributions import constraints
 import pyro
 import pyro.distributions as dist
 from pyro.contrib import named
-from pyro.infer import SVI
+from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import Adam
 
 # This is a linear mixed-effects model over arbitrary json-like data.
@@ -74,7 +74,7 @@ def main(args):
     pyro.enable_validation()
 
     optim = Adam({"lr": 0.1})
-    inference = SVI(model, guide, optim, loss="ELBO")
+    inference = SVI(model, guide, optim, loss=Trace_ELBO())
 
     # Data is an arbitrary json-like structure with tensors at leaves.
     one = torch.tensor(1.0)
