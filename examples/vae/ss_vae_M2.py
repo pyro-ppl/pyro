@@ -1,6 +1,7 @@
 import argparse
 
 import torch
+from torch.distributions.utils import broadcast_all
 import torch.nn as nn
 
 import pyro

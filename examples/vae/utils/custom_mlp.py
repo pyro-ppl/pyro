@@ -2,6 +2,7 @@ import torch.nn as nn
 import torch
 from inspect import isclass
 from pyro.nn import ClippedSoftmax, ClippedSigmoid
+from pyro.distributions.util import broadcast_shape
 
 
 class Exp(nn.Module):
@@ -19,7 +20,8 @@ class ConcatModule(nn.Module):
     """
     a custom module for concatenation of tensors
     """
-    def __init__(self):
+    def __init__(self, allow_broadcast=True):
+        self.allow_broadcast = allow_broadcast
         super(ConcatModule, self).__init__()
 
     def forward(self, *input_args):
@@ -34,6 +36,9 @@ class ConcatModule(nn.Module):
         if torch.is_tensor(input_args):
             return input_args
         else:
+            if self.allow_broadcast:
+                shape = broadcast_shape(*[s.shape[:-1] for s in input_args]) + (-1,)
+                input_args = [s.expand(shape) for s in input_args]
             return torch.cat(input_args, dim=-1)
 
 
