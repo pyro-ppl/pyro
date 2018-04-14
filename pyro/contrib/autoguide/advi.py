@@ -11,7 +11,6 @@ import pyro.poutine as poutine
 from pyro.distributions.util import sum_rightmost
 from pyro.infer.enum import config_enumerate
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_traces_match
 
 try:
     from contextlib import ExitStack  # python 3
