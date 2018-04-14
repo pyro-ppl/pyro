@@ -1,7 +1,6 @@
 import argparse
 
 import torch
-from torch.distributions.utils import broadcast_all
 import torch.nn as nn
 
 import pyro
@@ -35,7 +34,7 @@ class SSVAE(nn.Module):
     :param aux_loss_multiplier: the multiplier to use with the auxiliary loss
     """
     def __init__(self, output_size=10, input_size=784, z_dim=50, hidden_layers=(500,),
-                 epsilon_scale=1e-7, use_cuda=False, aux_loss_multiplier=None):
+                 epsilon_scale=1e-7, config_enum='sequential', use_cuda=False, aux_loss_multiplier=None):
 
         super(SSVAE, self).__init__()
 
@@ -45,6 +44,7 @@ class SSVAE(nn.Module):
         self.z_dim = z_dim
         self.hidden_layers = hidden_layers
         self.epsilon_scale = epsilon_scale
+        self.config_enum = config_enum == 'parallel'
         self.use_cuda = use_cuda
         self.aux_loss_multiplier = aux_loss_multiplier
 
@@ -67,6 +67,7 @@ class SSVAE(nn.Module):
                              activation=nn.Softplus,
                              output_activation=ClippedSoftmax,
                              epsilon_scale=self.epsilon_scale,
+                             allow_broadcast=self.config_enum,
                              use_cuda=self.use_cuda)
 
         # a split in the final layer's size is used for multiple outputs
@@ -77,6 +78,7 @@ class SSVAE(nn.Module):
                              hidden_sizes + [[z_dim, z_dim]],
                              activation=nn.Softplus,
                              output_activation=[None, Exp],
+                             allow_broadcast=self.config_enum,
                              use_cuda=self.use_cuda)
 
         self.decoder = MLP([z_dim + self.output_size] +
@@ -84,6 +86,7 @@ class SSVAE(nn.Module):
                            activation=nn.Softplus,
                            output_activation=ClippedSigmoid,
                            epsilon_scale=self.epsilon_scale,
+                           allow_broadcast=self.config_enum,
                            use_cuda=self.use_cuda)
 
         # using GPUs for faster training of the networks
@@ -312,6 +315,7 @@ def main(args):
                    hidden_layers=args.hidden_layers,
                    epsilon_scale=args.epsilon_scale,
                    use_cuda=args.use_cuda,
+                   config_enum=args.enum_discrete,
                    aux_loss_multiplier=args.aux_loss_multiplier)
 
     # setup the optimizer
