@@ -8,7 +8,7 @@ import torch
 import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
-from pyro.infer import SVI
+from pyro.infer import SVI, TraceGraph_ELBO
 from tests.common import assert_equal
 
 logger = logging.getLogger(__name__)
@@ -88,7 +88,7 @@ def test_elbo_mapdata(batch_size, map_type):
             pass
 
     adam = optim.Adam({"lr": 0.0008, "betas": (0.95, 0.999)})
-    svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
+    svi = SVI(model, guide, adam, loss=TraceGraph_ELBO())
 
     for k in range(n_steps):
         svi.step()

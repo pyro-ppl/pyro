@@ -26,7 +26,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions import InverseAutoregressiveFlow, TransformedDistribution
-from pyro.infer import SVI
+from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import ClippedAdam
 from util import get_logger
 
@@ -320,7 +320,7 @@ def main(args):
     adam = ClippedAdam(adam_params)
 
     # setup inference algorithm
-    elbo = SVI(dmm.model, dmm.guide, adam, "ELBO", trace_graph=False)
+    elbo = SVI(dmm.model, dmm.guide, adam, Trace_ELBO())
 
     # now we're going to define some functions we need to form the main training loop
 

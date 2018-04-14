@@ -4,11 +4,11 @@ import torch.nn as nn
 import pyro
 import pyro.distributions as dist
 from pyro.contrib.examples.util import print_and_log, set_seed
-from pyro.infer import SVI, config_enumerate
+from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, config_enumerate
 from pyro.nn import ClippedSigmoid, ClippedSoftmax
 from pyro.optim import Adam
 from utils.custom_mlp import MLP, Exp
-from utils.mnist_cached import MNISTCached, setup_data_loaders, mkdir_p
+from utils.mnist_cached import MNISTCached, mkdir_p, setup_data_loaders
 from utils.vae_plots import mnist_test_tsne_ssvae, plot_conditional_samples_ssvae
 
 
@@ -318,15 +318,14 @@ def run_inference_ss_vae(args):
     # set up the loss(es) for inference. wrapping the guide in config_enumerate builds the loss as a sum
     # by enumerating each class label for the sampled discrete categorical distribution in the model
     guide = config_enumerate(ss_vae.guide, args.enum_discrete)
-    loss_basic = SVI(ss_vae.model, guide, optimizer, loss="ELBO",
-                     enum_discrete=True, max_iarange_nesting=1)
+    loss_basic = SVI(ss_vae.model, guide, optimizer, loss=TraceEnum_ELBO(max_iarange_nesting=1))
 
     # build a list of all losses considered
     losses = [loss_basic]
 
     # aux_loss: whether to use the auxiliary loss from NIPS 14 paper (Kingma et al)
     if args.aux_loss:
-        loss_aux = SVI(ss_vae.model_classify, ss_vae.guide_classify, optimizer, loss="ELBO")
+        loss_aux = SVI(ss_vae.model_classify, ss_vae.guide_classify, optimizer, loss=Trace_ELBO())
         losses.append(loss_aux)
 
     try:
