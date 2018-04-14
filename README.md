@@ -1,5 +1,5 @@
 <div align="center">
-  <a href="http://pyro.ai"> <img width="150px" height="150px" src="docs/source/_static/img/pyro_logo.png"></a>
+  <a href="http://pyro.ai"> <img width="150px" height="150px" src="docs/source/_static/img/pyro_logo_with_text.png"></a>
 </div>
 
 
