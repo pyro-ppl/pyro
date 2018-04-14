@@ -1,9 +1,8 @@
 <div align="center">
-  <a href="http://pyro.ai"> <img width="150px" height="150px" src="docs/source/_static/img/pyro_logo_with_text.png"></a>
+  <a href="http://pyro.ai"> <img width="250px" height="277px" src="docs/source/_static/img/pyro_logo_with_text.png"></a>
 </div>
 
-
-----------------------------------------------------------------
+-----------------------------------------
 
 [![Build Status](https://travis-ci.org/uber/pyro.svg?branch=dev)](https://travis-ci.org/uber/pyro)
 [![Latest Version](https://badge.fury.io/py/pyro-ppl.svg)](https://pypi.python.org/pypi/pyro-ppl)
