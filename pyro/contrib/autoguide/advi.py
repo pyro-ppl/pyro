@@ -44,7 +44,7 @@ class ADVIMaster(object):
     """
     def __init__(self, model):
         self.parts = []
-        self.base_model = model
+        self.model = model
         self.prototype_trace = None
         self._iaranges = {}
         self.iaranges = {}
@@ -71,14 +71,6 @@ class ADVIMaster(object):
         assert part.master is None
         part.master = weakref.ref(self)
 
-    def model(self, *args, **kwargs):
-        """
-        A wrapped model with the same ``*args, **kwargs`` as the base ``model``.
-        """
-        for part in self.parts:
-            part.model(*args, **kwargs)
-        return self.base_model(*args, **kwargs)
-
     def guide(self, *args, **kwargs):
         """
         A composite guide with the same ``*args, **kwargs`` as the base ``model``.
@@ -102,8 +94,7 @@ class ADVIMaster(object):
 
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
-        # self.prototype_trace = poutine.block(poutine.trace(self.base_model).get_trace)(*args, **kwargs)
-        self.prototype_trace = poutine.block(poutine.trace(self.base_model).get_trace)(*args, **kwargs)
+        self.prototype_trace = poutine.block(poutine.trace(self.model).get_trace)(*args, **kwargs)
         self.prototype_trace = prune_subsample_sites(self.prototype_trace)
 
         self._iaranges = {}
@@ -126,23 +117,8 @@ class ADVISlave(object):
     """
     def __init__(self, model):
         self.master = None
-        self.base_model = model
+        self.model = model
         self.prototype_trace = None
-
-    def model(self, *args, **kwargs):
-        """
-        A wrapped model with the same ``*args, **kwargs`` as the base ``model``.
-        """
-        # wrap sample statement with a 0.0 poutine.scale to zero out unwanted score
-        with poutine.scale(None, 0.0):
-            self.sample_latent(*args, **kwargs)
-
-        if self.master is None:
-            # actual model sample statements shouldn't be zeroed out
-            base_trace = poutine.trace(self.base_model).get_trace(*args, **kwargs)
-            base_trace = prune_subsample_sites(base_trace)
-            check_traces_match(base_trace, self.prototype_trace)
-            return base_trace.nodes["_RETURN"]["value"]
 
     def sample_latent(*args, **kwargs):
         """
@@ -181,7 +157,7 @@ class ADVIContinuous(ADVISlave):
 
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
-        self.prototype_trace = poutine.block(poutine.trace(self.base_model).get_trace)(*args, **kwargs)
+        self.prototype_trace = poutine.block(poutine.trace(self.model).get_trace)(*args, **kwargs)
         self.prototype_trace = prune_subsample_sites(self.prototype_trace)
         if self.master is not None:
             self.master()._check_prototype(self.prototype_trace)
@@ -288,7 +264,8 @@ class ADVIMultivariateNormal(ADVIContinuous):
         loc = pyro.param("advi_loc", torch.zeros(self.latent_dim))
         scale_tril = pyro.param("advi_scale_tril", torch.eye(self.latent_dim),
                                 constraint=constraints.lower_cholesky)
-        return pyro.sample("_advi_latent", dist.MultivariateNormal(loc, scale_tril=scale_tril))
+        return pyro.sample("_advi_latent", dist.MultivariateNormal(loc, scale_tril=scale_tril),
+                           infer={"is_auxiliary": True})
 
     def median(self, *args, **kwargs):
         """
@@ -351,7 +328,8 @@ class ADVIDiagonalNormal(ADVIContinuous):
         loc = pyro.param("advi_loc", torch.zeros(self.latent_dim))
         scale = pyro.param("advi_scale", torch.ones(self.latent_dim),
                            constraint=constraints.positive)
-        return pyro.sample("_advi_latent", dist.Normal(loc, scale).independent(1))
+        return pyro.sample("_advi_latent", dist.Normal(loc, scale).independent(1),
+                           infer={"is_auxiliary": True})
 
     def median(self, *args, **kwargs):
         """
@@ -393,7 +371,7 @@ class ADVIDiscreteParallel(ADVISlave):
 
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
-        model = config_enumerate(self.base_model, default="parallel")
+        model = config_enumerate(self.model, default="parallel")
         self.prototype_trace = poutine.block(poutine.trace(model).get_trace)(*args, **kwargs)
         self.prototype_trace = prune_subsample_sites(self.prototype_trace)
         if self.master is not None:
