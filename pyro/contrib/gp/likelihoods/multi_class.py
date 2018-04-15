@@ -18,8 +18,8 @@ class MultiClass(Likelihood):
     classification problems.
 
     MultiClass likelihood uses :class:`~pyro.distributions.torch.Categorical`
-    distribution, so ``response_function`` should normalize its input's rightmost
-    axis. By default, we use `softmax` function.
+    distribution, so ``response_function`` should normalize its input's rightmost axis.
+    By default, we use `softmax` function.
 
     :param int num_classes: Number of classes for prediction.
     :param callable response_function: A mapping to correct domain for MultiClass
