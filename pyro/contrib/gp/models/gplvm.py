@@ -16,11 +16,11 @@ class GPLVM(Parameterized):
     Gaussian Process Latent Variable Model (GPLVM) model.
 
     GPLVM is a Gaussian Process model with its train input data is a latent variable.
-    This model is useful for dimensional reduction of high dimensional data. Assume
-    the mapping from low dimensional latent variable to is a Gaussian Process
-    instance. Then the high dimensional data will play the role of train output ``y``
-    and our target is to learn latent inputs which best explain ``y``. For the purpose
-    of dimensional reduction, latent inputs should have lower dimensions than ``y``.
+    This model is useful for dimensional reduction of high dimensional data. Assume the
+    mapping from low dimensional latent variable to is a Gaussian Process instance.
+    Then the high dimensional data will play the role of train output ``y`` and our
+    target is to learn latent inputs which best explain ``y``. For the purpose of
+    dimensional reduction, latent inputs should have lower dimensions than ``y``.
 
     We follows reference [1] to put a unit Gaussian prior to the input and approximate
     its posterior by a multivariate normal distribution with two variational
