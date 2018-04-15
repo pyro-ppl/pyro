@@ -9,6 +9,17 @@ import torch
 from pyro.distributions.util import is_identically_zero
 from pyro.poutine.util import site_is_subsample
 
+_VALIDATION_ENABLED = False
+
+
+def enable_validation(is_validate):
+    global _VALIDATION_ENABLED
+    _VALIDATION_ENABLED = is_validate
+
+
+def is_validation_enabled():
+    return _VALIDATION_ENABLED
+
 
 def torch_data_sum(x):
     """

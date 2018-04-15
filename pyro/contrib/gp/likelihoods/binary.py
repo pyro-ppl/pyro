@@ -47,6 +47,16 @@ class Binary(Likelihood):
 
         y_dist = dist.Bernoulli(f_res)
         if y is not None:
+<<<<<<< HEAD
             y_dist = y_dist.reshape(sample_shape=y.shape[:-f_res.dim()],
                                     extra_event_dims=y.dim())
         return pyro.sample(self.y_name, y_dist, obs=y)
+=======
+            return pyro.sample(self.y_name,
+                               dist.Bernoulli(f_res)
+                                   .expand_by(y.shape[:-f_res.dim()])
+                                   .independent(y.dim()),
+                               obs=y)
+        else:
+            return pyro.sample(self.y_name, dist.Bernoulli(f_res))
+>>>>>>> dev

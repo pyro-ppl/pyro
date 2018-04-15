@@ -7,7 +7,7 @@ import visdom
 
 import pyro
 import pyro.distributions as dist
-from pyro.infer import SVI
+from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import Adam
 from utils.mnist_cached import MNISTCached as MNIST
 from utils.mnist_cached import setup_data_loaders
@@ -90,11 +90,11 @@ class VAE(nn.Module):
             z_loc = x.new_zeros(torch.Size((x.size(0), self.z_dim)))
             z_scale = x.new_ones(torch.Size((x.size(0), self.z_dim)))
             # sample from prior (value will be sampled by guide when computing the ELBO)
-            z = pyro.sample("latent", dist.Normal(z_loc, z_scale).reshape(extra_event_dims=1))
+            z = pyro.sample("latent", dist.Normal(z_loc, z_scale).independent(1))
             # decode the latent code z
             loc_img = self.decoder.forward(z)
             # score against actual images
-            pyro.sample("obs", dist.Bernoulli(loc_img).reshape(extra_event_dims=1), obs=x.reshape(-1, 784))
+            pyro.sample("obs", dist.Bernoulli(loc_img).independent(1), obs=x.reshape(-1, 784))
 
     # define the guide (i.e. variational distribution) q(z|x)
     def guide(self, x):
@@ -104,7 +104,7 @@ class VAE(nn.Module):
             # use the encoder to get the parameters used to define q(z|x)
             z_loc, z_scale = self.encoder.forward(x)
             # sample the latent code z
-            pyro.sample("latent", dist.Normal(z_loc, z_scale).reshape(extra_event_dims=1))
+            pyro.sample("latent", dist.Normal(z_loc, z_scale).independent(1))
 
     # define a helper function for reconstructing images
     def reconstruct_img(self, x):
@@ -139,7 +139,7 @@ def main(args):
     optimizer = Adam(adam_args)
 
     # setup the inference algorithm
-    svi = SVI(vae.model, vae.guide, optimizer, loss="ELBO")
+    svi = SVI(vae.model, vae.guide, optimizer, loss=Trace_ELBO())
 
     # setup visdom for visualization
     if args.visdom_flag:

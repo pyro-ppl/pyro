@@ -351,7 +351,7 @@ class ADVIDiagonalNormal(ADVIContinuous):
         loc = pyro.param("advi_loc", torch.zeros(self.latent_dim))
         scale = pyro.param("advi_scale", torch.ones(self.latent_dim),
                            constraint=constraints.positive)
-        return pyro.sample("_advi_latent", dist.Normal(loc, scale).reshape(extra_event_dims=1))
+        return pyro.sample("_advi_latent", dist.Normal(loc, scale).independent(1))
 
     def median(self, *args, **kwargs):
         """

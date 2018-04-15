@@ -10,7 +10,7 @@ import torch.optim
 import pyro
 import pyro.distributions as dist
 from pyro.distributions.testing import fakes
-from pyro.infer import SVI
+from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO
 from pyro.optim import Adam
 from tests.common import assert_equal
 
@@ -19,10 +19,8 @@ logger = logging.getLogger(__name__)
 
 @pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
 @pytest.mark.parametrize("subsample", [False, True], ids=["full", "subsample"])
-@pytest.mark.parametrize("trace_graph,enum_discrete",
-                         [(False, False), (True, False), (False, True)],
-                         ids=["Trace", "TraceGraph", "TraceEnum"])
-def test_subsample_gradient(trace_graph, enum_discrete, reparameterized, subsample):
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+def test_subsample_gradient(Elbo, reparameterized, subsample):
     pyro.clear_param_store()
     data = torch.tensor([-0.5, 2.0])
     subsample_size = 1 if subsample else len(data)
@@ -34,7 +32,7 @@ def test_subsample_gradient(trace_graph, enum_discrete, reparameterized, subsamp
         with pyro.iarange("particles", num_particles):
             with pyro.iarange("data", len(data), subsample_size, subsample) as ind:
                 x = data[ind].unsqueeze(-1).expand(-1, num_particles)
-                z = pyro.sample("z", Normal(0, 1).reshape(x.shape))
+                z = pyro.sample("z", Normal(0, 1).expand_by(x.shape))
                 pyro.sample("x", Normal(z, 1), obs=x)
 
     def guide(subsample):
@@ -46,9 +44,7 @@ def test_subsample_gradient(trace_graph, enum_discrete, reparameterized, subsamp
                 pyro.sample("z", Normal(loc_ind, scale))
 
     optim = Adam({"lr": 0.1})
-    inference = SVI(model, guide, optim, loss="ELBO",
-                    trace_graph=trace_graph, enum_discrete=enum_discrete,
-                    num_particles=1)
+    inference = SVI(model, guide, optim, loss=Elbo(num_particles=1))
     if subsample_size == 1:
         inference.loss_and_grads(model, guide, subsample=torch.LongTensor([0]))
         inference.loss_and_grads(model, guide, subsample=torch.LongTensor([1]))
@@ -66,10 +62,8 @@ def test_subsample_gradient(trace_graph, enum_discrete, reparameterized, subsamp
 
 
 @pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
-@pytest.mark.parametrize("trace_graph,enum_discrete",
-                         [(False, False), (True, False), (False, True)],
-                         ids=["Trace", "TraceGraph", "TraceEnum"])
-def test_iarange(trace_graph, enum_discrete, reparameterized):
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+def test_iarange(Elbo, reparameterized):
     pyro.clear_param_store()
     data = torch.tensor([-0.5, 2.0])
     num_particles = 20000
@@ -83,7 +77,7 @@ def test_iarange(trace_graph, enum_discrete, reparameterized):
 
         pyro.sample("nuisance_a", Normal(0, 1))
         with particles_iarange, data_iarange:
-            z = pyro.sample("z", Normal(0, 1).reshape(x.shape))
+            z = pyro.sample("z", Normal(0, 1).expand_by(x.shape))
         pyro.sample("nuisance_b", Normal(2, 3))
         with data_iarange, particles_iarange:
             pyro.sample("x", Normal(z, 1), obs=x)
@@ -102,8 +96,7 @@ def test_iarange(trace_graph, enum_discrete, reparameterized):
         pyro.sample("nuisance_a", Normal(0, 1))
 
     optim = Adam({"lr": 0.1})
-    inference = SVI(model, guide, optim, loss="ELBO",
-                    trace_graph=trace_graph, enum_discrete=enum_discrete)
+    inference = SVI(model, guide, optim, loss=Elbo())
     inference.loss_and_grads(model, guide)
     params = dict(pyro.get_param_store().named_parameters())
     actual_grads = {name: param.grad.detach().cpu().numpy() / num_particles
@@ -118,10 +111,8 @@ def test_iarange(trace_graph, enum_discrete, reparameterized):
 
 @pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
 @pytest.mark.parametrize("subsample", [False, True], ids=["full", "subsample"])
-@pytest.mark.parametrize("trace_graph,enum_discrete",
-                         [(False, False), (True, False), (False, True)],
-                         ids=["Trace", "TraceGraph", "TraceEnum"])
-def test_subsample_gradient_sequential(trace_graph, enum_discrete, reparameterized, subsample):
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+def test_subsample_gradient_sequential(Elbo, reparameterized, subsample):
     pyro.clear_param_store()
     data = torch.tensor([-0.5, 2.0])
     subsample_size = 1 if subsample else len(data)
@@ -132,7 +123,7 @@ def test_subsample_gradient_sequential(trace_graph, enum_discrete, reparameteriz
     def model():
         with pyro.iarange("data", len(data), subsample_size) as ind:
             x = data[ind]
-            z = pyro.sample("z", Normal(0, 1).reshape(x.shape))
+            z = pyro.sample("z", Normal(0, 1).expand_by(x.shape))
             pyro.sample("x", Normal(z, 1), obs=x)
 
     def guide():
@@ -142,9 +133,7 @@ def test_subsample_gradient_sequential(trace_graph, enum_discrete, reparameteriz
             pyro.sample("z", Normal(loc[ind], scale))
 
     optim = Adam({"lr": 0.1})
-    inference = SVI(model, guide, optim, loss="ELBO",
-                    trace_graph=trace_graph, enum_discrete=enum_discrete,
-                    num_particles=num_particles)
+    inference = SVI(model, guide, optim, loss=Elbo(num_particles=num_particles))
     inference.loss_and_grads(model, guide)
     params = dict(pyro.get_param_store().named_parameters())
     actual_grads = {name: param.grad.detach().cpu().numpy() for name, param in params.items()}

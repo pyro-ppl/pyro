@@ -26,7 +26,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions import InverseAutoregressiveFlow, TransformedDistribution
-from pyro.infer import SVI
+from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import ClippedAdam
 from util import get_logger
 
@@ -202,7 +202,7 @@ class DMM(nn.Module):
                     z_t = pyro.sample("z_%d" % t,
                                       dist.Normal(z_loc, z_scale)
                                           .mask(mini_batch_mask[:, t - 1:t])
-                                          .reshape(extra_event_dims=1))
+                                          .independent(1))
 
                 # compute the probabilities that parameterize the bernoulli likelihood
                 emission_probs_t = self.emitter(z_t)
@@ -211,7 +211,7 @@ class DMM(nn.Module):
                 pyro.sample("obs_x_%d" % t,
                             dist.Bernoulli(emission_probs_t)
                                 .mask(mini_batch_mask[:, t - 1:t])
-                                .reshape(extra_event_dims=1),
+                                .independent(1),
                             obs=mini_batch[:, t - 1, :])
                 # the latent sampled at this time step will be conditioned upon
                 # in the next time step so keep track of it
@@ -259,7 +259,7 @@ class DMM(nn.Module):
                 with pyro.poutine.scale(None, annealing_factor):
                     z_t = pyro.sample("z_%d" % t,
                                       z_dist.mask(mini_batch_mask[:, t - 1:t])
-                                            .reshape(extra_event_dims=1))
+                                            .independent(1))
                 # the latent sampled at this time step will be conditioned upon in the next time step
                 # so keep track of it
                 z_prev = z_t
@@ -320,7 +320,7 @@ def main(args):
     adam = ClippedAdam(adam_params)
 
     # setup inference algorithm
-    elbo = SVI(dmm.model, dmm.guide, adam, "ELBO", trace_graph=False)
+    elbo = SVI(dmm.model, dmm.guide, adam, Trace_ELBO())
 
     # now we're going to define some functions we need to form the main training loop
 

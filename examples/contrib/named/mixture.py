@@ -8,7 +8,7 @@ from torch.distributions import constraints
 import pyro
 import pyro.distributions as dist
 from pyro.contrib import named
-from pyro.infer import SVI
+from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import Adam
 
 # This is a simple gaussian mixture model.
@@ -55,7 +55,7 @@ def main(args):
     pyro.enable_validation()
 
     optim = Adam({"lr": 0.1})
-    inference = SVI(model, guide, optim, loss="ELBO")
+    inference = SVI(model, guide, optim, loss=Trace_ELBO())
     data = torch.tensor([0.0, 1.0, 2.0, 20.0, 30.0, 40.0])
     k = 2
 
