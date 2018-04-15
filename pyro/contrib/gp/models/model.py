@@ -174,7 +174,7 @@ class GPModel(Parameterized):
         if not isinstance(optimizer, optim.PyroOptim):
             raise ValueError("Optimizer should be an instance of "
                              "pyro.optim.PyroOptim class.")
-        svi = infer.SVI(self.model, self.guide, optimizer, loss="ELBO")
+        svi = infer.SVI(self.model, self.guide, optimizer, loss=infer.Trace_ELBO())
         losses = []
         for i in range(num_steps):
             losses.append(svi.step())
