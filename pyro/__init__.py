@@ -230,11 +230,11 @@ class iarange(object):
         >>> x_axis = iarange('outer', 320, dim=-1)
         >>> y_axis = iarange('outer', 200, dim=-2)
         >>> with x_axis:
-                x_noise = sample("x_noise", Normal(loc, scale).reshape([320]))
+                x_noise = sample("x_noise", Normal(loc, scale).expand_by([320]))
         >>> with y_axis:
-                y_noise = sample("y_noise", Normal(loc, scale).reshape([200, 1]))
+                y_noise = sample("y_noise", Normal(loc, scale).expand_by([200, 1]))
         >>> with x_axis, y_axis:
-                xy_noise = sample("xy_noise", Normal(loc, scale).reshape([200, 320]))
+                xy_noise = sample("xy_noise", Normal(loc, scale).expand_by([200, 320]))
 
     See `SVI Part II <http://pyro.ai/examples/svi_part_ii.html>`_ for an
     extended discussion.

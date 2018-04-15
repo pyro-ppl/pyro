@@ -1,9 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
-import copy
-
 import pyro
-from pyro.infer import ELBO
+from pyro.infer.elbo import ELBO
 
 
 class SVI(object):
@@ -34,37 +32,18 @@ class SVI(object):
         self.optim = optim
 
         if isinstance(loss, str):
-            assert loss in ["ELBO"], "The only built-in loss currently supported by SVI is ELBO"
-
             if loss == "ELBO":
                 self.ELBO = ELBO.make(**kwargs)
                 self.loss = self.ELBO.loss
                 self.loss_and_grads = self.ELBO.loss_and_grads
             else:
-                raise NotImplementedError
-
-        else:  # the user provided a loss function
-            self.loss = loss
-            if loss_and_grads is None:
-                # default implementation of loss_and_grads:
-                # marks all parameters in param store as active
-                # and calls backward() on loss
-                # TODO: clean this up
-
-                self._loss = copy.copy(loss)
-
-                def new_loss(model, guide, *args, **kwargs):
-                    return self._loss(model, guide, *args, **kwargs).item()
-
-                self.loss = new_loss
-
-                def loss_and_grads(model, guide, *args, **kwargs):
-                    _loss = self._loss(model, guide, *args, **kwargs)
-                    _loss.backward()
-                    pyro.get_param_store().mark_params_active(pyro.get_param_store().get_all_param_names())
-                    return _loss
-
-            self.loss_and_grads = loss_and_grads
+                raise NotImplementedError("The only built-in loss currently supported by SVI is ELBO")
+        elif isinstance(loss, ELBO):
+            self.ELBO = loss
+            self.loss = self.ELBO.loss
+            self.loss_and_grads = self.ELBO.loss_and_grads
+        else:
+            raise TypeError("Unsupported loss type {}".format(type(loss)))
 
     def __call__(self, *args, **kwargs):
         """

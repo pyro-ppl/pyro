@@ -7,7 +7,7 @@ from torch.nn.functional import normalize  # noqa: F401
 
 import pyro
 from pyro.distributions import Bernoulli, Normal  # noqa: F401
-from pyro.infer import SVI
+from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import Adam
 
 
@@ -57,8 +57,8 @@ def model(data):
     scale = 2 * data.new_ones(torch.Size((1, p)))
     bias_loc = data.new_zeros(torch.Size((1,)))
     bias_scale = 2 * data.new_ones(torch.Size((1,)))
-    w_prior = Normal(loc, scale).reshape(extra_event_dims=1)
-    b_prior = Normal(bias_loc, bias_scale).reshape(extra_event_dims=1)
+    w_prior = Normal(loc, scale).independent(1)
+    b_prior = Normal(bias_loc, bias_scale).independent(1)
     priors = {'linear.weight': w_prior, 'linear.bias': b_prior}
     # lift module parameters to random variables sampled from the priors
     lifted_module = pyro.random_module("module", regression_model, priors)
@@ -85,8 +85,8 @@ def guide(data):
     mb_param = pyro.param("guide_mean_bias", b_loc)
     sb_param = softplus(pyro.param("guide_log_scale_bias", b_log_sig))
     # gaussian guide distributions for w and b
-    w_dist = Normal(mw_param, sw_param).reshape(extra_event_dims=1)
-    b_dist = Normal(mb_param, sb_param).reshape(extra_event_dims=1)
+    w_dist = Normal(mw_param, sw_param).independent(1)
+    b_dist = Normal(mb_param, sb_param).independent(1)
     dists = {'linear.weight': w_dist, 'linear.bias': b_dist}
     # overloading the parameters in the module with random samples from the guide distributions
     lifted_module = pyro.random_module("module", regression_model, dists)
@@ -96,7 +96,7 @@ def guide(data):
 
 # instantiate optim and inference objects
 optim = Adam({"lr": 0.05})
-svi = SVI(model, guide, optim, loss="ELBO")
+svi = SVI(model, guide, optim, loss=Trace_ELBO())
 
 
 # get array of batch indices

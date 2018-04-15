@@ -64,33 +64,33 @@ def big_model_guide(include_obs=True, include_single=False, include_inner_1=Fals
         with pyro.iarange("iarange_triple1", 6) as ind_triple1:
             with pyro.iarange("iarange_triple2", 7) as ind_triple2:
                 if include_z1:
-                    pyro.sample("z1", dist.Bernoulli(p2).reshape(sample_shape=[
-                                len(ind_triple2), len(ind_triple1)]))
+                    pyro.sample("z1", dist.Bernoulli(p2).expand_by([len(ind_triple2), len(ind_triple1)]))
                 with pyro.iarange("iarange_triple3", 9) as ind_triple3:
-                    pyro.sample("z0", dist.Bernoulli(p2).reshape(sample_shape=[len(ind_triple3),
-                                len(ind_triple2), len(ind_triple1)]))
+                    pyro.sample("z0",
+                                dist.Bernoulli(p2).expand_by(
+                                    [len(ind_triple3), len(ind_triple2), len(ind_triple1)]))
     pyro.sample("a1", dist.Bernoulli(p0))
     if include_single:
         with pyro.iarange("iarange_single", 5) as ind_single:
-            b0 = pyro.sample("b0", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_single)]))
+            b0 = pyro.sample("b0", dist.Bernoulli(p0).expand_by([len(ind_single)]))
             assert b0.shape == (5,)
     with pyro.iarange("iarange_outer", 2) as ind_outer:
-        pyro.sample("b1", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_outer)]))
+        pyro.sample("b1", dist.Bernoulli(p0).expand_by([len(ind_outer)]))
         if include_inner_1:
             with pyro.iarange("iarange_inner_1", 3) as ind_inner:
-                pyro.sample("c1", dist.Bernoulli(p1).reshape(sample_shape=[len(ind_inner), len(ind_outer)]))
+                pyro.sample("c1", dist.Bernoulli(p1).expand_by([len(ind_inner), len(ind_outer)]))
                 if flip_c23 and not include_obs:
-                    pyro.sample("c3", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_inner), len(ind_outer)]))
-                    pyro.sample("c2", dist.Bernoulli(p1).reshape(sample_shape=[len(ind_inner), len(ind_outer)]))
+                    pyro.sample("c3", dist.Bernoulli(p0).expand_by([len(ind_inner), len(ind_outer)]))
+                    pyro.sample("c2", dist.Bernoulli(p1).expand_by([len(ind_inner), len(ind_outer)]))
                 else:
-                    pyro.sample("c2", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_inner), len(ind_outer)]))
-                    pyro.sample("c3", dist.Bernoulli(p2).reshape(sample_shape=[len(ind_inner), len(ind_outer)]))
+                    pyro.sample("c2", dist.Bernoulli(p0).expand_by([len(ind_inner), len(ind_outer)]))
+                    pyro.sample("c3", dist.Bernoulli(p2).expand_by([len(ind_inner), len(ind_outer)]))
         with pyro.iarange("iarange_inner_2", 4) as ind_inner:
-            pyro.sample("d1", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_inner), len(ind_outer)]))
-            d2 = pyro.sample("d2", dist.Bernoulli(p2).reshape(sample_shape=[len(ind_inner), len(ind_outer)]))
+            pyro.sample("d1", dist.Bernoulli(p0).expand_by([len(ind_inner), len(ind_outer)]))
+            d2 = pyro.sample("d2", dist.Bernoulli(p2).expand_by([len(ind_inner), len(ind_outer)]))
             assert d2.shape == (4, 2)
             if include_obs:
-                pyro.sample("obs", dist.Bernoulli(p0).reshape(sample_shape=[len(ind_inner), len(ind_outer)]),
+                pyro.sample("obs", dist.Bernoulli(p0).expand_by([len(ind_inner), len(ind_outer)]),
                             obs=torch.ones(d2.size()))
 
 
@@ -277,7 +277,7 @@ def nested_model_guide(include_obs=True, dim1=11, dim2=7):
     for i in pyro.irange("irange", dim1):
         pyro.sample("b{}".format(i), dist.Bernoulli(p0))
         with pyro.iarange("iarange_{}".format(i), dim2 + i) as ind:
-            c_i = pyro.sample("c{}".format(i), dist.Bernoulli(p1).reshape(sample_shape=[len(ind)]))
+            c_i = pyro.sample("c{}".format(i), dist.Bernoulli(p1).expand_by([len(ind)]))
             assert c_i.shape == (dim2 + i,)
             if include_obs:
                 obs_i = pyro.sample("obs{}".format(i), dist.Bernoulli(c_i), obs=torch.ones(c_i.size()))
@@ -334,10 +334,10 @@ def nested_model_guide2(include_obs=True, dim1=3, dim2=2):
     p1 = torch.tensor(math.exp(-0.33 - include_obs * 0.1), requires_grad=True)
     pyro.sample("a1", dist.Bernoulli(p0 * p1))
     with pyro.iarange("iarange", dim1) as ind:
-        c = pyro.sample("c", dist.Bernoulli(p1).reshape(sample_shape=[len(ind)]))
+        c = pyro.sample("c", dist.Bernoulli(p1).expand_by([len(ind)]))
         assert c.shape == (dim1,)
         for i in pyro.irange("irange", dim2):
-            b_i = pyro.sample("b{}".format(i), dist.Bernoulli(p0).reshape(sample_shape=[len(ind)]))
+            b_i = pyro.sample("b{}".format(i), dist.Bernoulli(p0).expand_by([len(ind)]))
             assert b_i.shape == (dim1,)
             if include_obs:
                 obs_i = pyro.sample("obs{}".format(i), dist.Bernoulli(b_i), obs=torch.ones(b_i.size()))
@@ -391,11 +391,11 @@ def iarange_reuse_model_guide(include_obs=True, dim1=3, dim2=2):
     my_iarange2 = pyro.iarange("iarange2", dim2)
     with my_iarange1 as ind1:
         with my_iarange2 as ind2:
-            pyro.sample("c1", dist.Bernoulli(p1).reshape(sample_shape=[len(ind2), len(ind1)]))
+            pyro.sample("c1", dist.Bernoulli(p1).expand_by([len(ind2), len(ind1)]))
     pyro.sample("b1", dist.Bernoulli(p0 * p1))
     with my_iarange2 as ind2:
         with my_iarange1 as ind1:
-            c2 = pyro.sample("c2", dist.Bernoulli(p1).reshape(sample_shape=[len(ind2), len(ind1)]))
+            c2 = pyro.sample("c2", dist.Bernoulli(p1).expand_by([len(ind2), len(ind1)]))
             if include_obs:
                 pyro.sample("obs", dist.Bernoulli(c2), obs=torch.ones(c2.size()))
 

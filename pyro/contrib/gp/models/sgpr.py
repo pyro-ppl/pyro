@@ -152,9 +152,15 @@ class SparseGPRegression(GPModel):
         else:
             y_name = pyro.param_with_module_name(self.name, "y")
             return pyro.sample(y_name,
+<<<<<<< HEAD
                                dist.SparseMultivariateNormal(f_loc, W, D, trace_term)
                                    .reshape(sample_shape=self.y.shape[:-f_loc.dim()],
                                             extra_event_dims=self.y.dim()-1),
+=======
+                               dist.SparseMultivariateNormal(zero_loc, W, D, trace_term)
+                                   .expand_by(self.y.shape[:-1])
+                                   .independent(self.y.dim() - 1),
+>>>>>>> dev
                                obs=self.y)
 
     def guide(self):
