@@ -45,16 +45,5 @@ class Gaussian(Likelihood):
 
         y_dist = dist.Normal(f_loc, y_var)
         if y is not None:
-<<<<<<< HEAD
-            y_dist = y_dist.reshape(sample_shape=y.shape[:-f_loc.dim()],
-                                    extra_event_dims=y.dim())
+            y_dist = y_dist.expand_by(y.shape[:-f_loc.dim()]).independent(y.dim())
         return pyro.sample(self.y_name, y_dist, obs=y)
-=======
-            return pyro.sample(self.y_name,
-                               dist.Normal(f_loc, y_var)
-                                   .expand_by(y.shape[:-f_loc.dim()])
-                                   .independent(y.dim()),
-                               obs=y)
-        else:
-            return pyro.sample(self.y_name, dist.Normal(f_loc, y_var))
->>>>>>> dev
