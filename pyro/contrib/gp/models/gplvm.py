@@ -31,7 +31,7 @@ class GPLVM(Parameterized):
     [1] Bayesian Gaussian Process Latent Variable Model
     Michalis K. Titsias, Neil D. Lawrence
 
-    :param pyro.contrib.gp.models.model.GPModel base_model: A Pyro Gaussian Process
+    :param ~pyro.contrib.gp.models.model.GPModel base_model: A Pyro Gaussian Process
         model object. Note that ``base_model.X`` will be the initial value for the
         variational parameter ``X_loc``.
     :param str name: Name of this model.
