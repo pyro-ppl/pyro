@@ -181,4 +181,4 @@ class SparseVariationalGP(GPModel):
         loc, cov = conditional(Xnew, Xu, kernel, u_loc, u_scale_tril,
                                full_cov=full_cov, whiten=self.whiten,
                                jitter=self.jitter)
-        return loc + mean_function(self.X), cov
+        return loc + mean_function(Xnew), cov
