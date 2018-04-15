@@ -16,15 +16,15 @@ class GPLVM(Parameterized):
     Gaussian Process Latent Variable Model (GPLVM) model.
 
     GPLVM is a Gaussian Process model with its train input data is a latent variable.
-    This model is useful for dimensional reduction of high dimensional data. Assume the
-    mapping from low dimensional latent variable to is a Gaussian Process instance.
-    Then the high dimensional data will play the role of train output ``y`` and our
-    target is to learn latent inputs which best explain ``y``. For the purpose of
-    dimensional reduction, latent inputs should have lower dimensions than ``y``.
+    This model is useful for dimensional reduction of high dimensional data. Assume
+    the mapping from low dimensional latent variable to is a Gaussian Process
+    instance. Then the high dimensional data will play the role of train output ``y``
+    and our target is to learn latent inputs which best explain ``y``. For the purpose
+    of dimensional reduction, latent inputs should have lower dimensions than ``y``.
 
     We follows reference [1] to put a unit Gaussian prior to the input and approximate
-    its posterior by a Gaussian with two variational parameters: ``X_loc`` and
-    ``X_scale_tril``.
+    its posterior by a multivariate normal distribution with two variational
+    parameters: ``X_loc`` and ``X_scale_tril``.
 
     Reference:
 
@@ -63,7 +63,7 @@ class GPLVM(Parameterized):
         Id = torch.eye(C, out=self.X_loc.new_empty(C, C))
         X_name = pyro.param_with_module_name(self.name, "X")
         X = pyro.sample(X_name, dist.MultivariateNormal(zero_loc, scale_tril=Id)
-                                    .reshape(extra_event_dims=zero_loc.dim()-1))
+                                    .independent(zero_loc.dim()-1))
 
         self.base_model.set_data(X, self.y)
         self.base_model.model()
@@ -76,7 +76,7 @@ class GPLVM(Parameterized):
         X_name = pyro.param_with_module_name(self.name, "X")
         X = pyro.sample(X_name,
                         dist.MultivariateNormal(X_loc, scale_tril=X_scale_tril)
-                            .reshape(extra_event_dims=X_loc.dim()-1))
+                            .independent(X_loc.dim()-1))
 
         self.base_model.set_data(X, self.y)
         if self._call_base_model_guide:

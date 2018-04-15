@@ -20,7 +20,7 @@ import torch
 import pyro
 import pyro.optim as optim
 import pyro.poutine as poutine
-from pyro.infer import SVI
+from pyro.infer import SVI, TraceGraph_ELBO
 
 import visdom
 
@@ -202,8 +202,7 @@ def main(**kwargs):
 
     svi = SVI(air.model, air.guide,
               optim.Adam(per_param_optim_args),
-              loss='ELBO',
-              trace_graph=True)
+              loss=TraceGraph_ELBO())
 
     # Do inference.
     t0 = time.time()

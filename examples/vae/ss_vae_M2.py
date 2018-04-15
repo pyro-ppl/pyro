@@ -4,11 +4,11 @@ import torch.nn as nn
 import pyro
 import pyro.distributions as dist
 from pyro.contrib.examples.util import print_and_log, set_seed
-from pyro.infer import SVI, config_enumerate
+from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, config_enumerate
 from pyro.nn import ClippedSigmoid, ClippedSoftmax
 from pyro.optim import Adam
 from utils.custom_mlp import MLP, Exp
-from utils.mnist_cached import MNISTCached, setup_data_loaders, mkdir_p
+from utils.mnist_cached import MNISTCached, mkdir_p, setup_data_loaders
 from utils.vae_plots import mnist_test_tsne_ssvae, plot_conditional_samples_ssvae
 
 
@@ -108,7 +108,7 @@ class SSVAE(nn.Module):
             # sample the handwriting style from the constant prior distribution
             prior_loc = torch.zeros([batch_size, self.z_dim])
             prior_scale = torch.ones([batch_size, self.z_dim])
-            zs = pyro.sample("z", dist.Normal(prior_loc, prior_scale).reshape(extra_event_dims=1))
+            zs = pyro.sample("z", dist.Normal(prior_loc, prior_scale).independent(1))
 
             # if the label y (which digit to write) is supervised, sample from the
             # constant prior, otherwise, observe the value (i.e. score it against the constant prior)
@@ -123,7 +123,7 @@ class SSVAE(nn.Module):
             # parametrized distribution p(x|y,z) = bernoulli(decoder(y,z))
             # where `decoder` is a neural network
             loc = self.decoder.forward([zs, ys])
-            pyro.sample("x", dist.Bernoulli(loc).reshape(extra_event_dims=1), obs=xs)
+            pyro.sample("x", dist.Bernoulli(loc).independent(1), obs=xs)
 
     def guide(self, xs, ys=None):
         """
@@ -150,7 +150,7 @@ class SSVAE(nn.Module):
             # sample (and score) the latent handwriting-style with the variational
             # distribution q(z|x,y) = normal(loc(x,y),scale(x,y))
             loc, scale = self.encoder_z.forward([xs, ys])
-            pyro.sample("z", dist.Normal(loc, scale).reshape(extra_event_dims=1))
+            pyro.sample("z", dist.Normal(loc, scale).independent(1))
 
     def classifier(self, xs):
         """
@@ -200,11 +200,11 @@ class SSVAE(nn.Module):
         # sample the handwriting style from the constant prior distribution
         prior_loc = torch.zeros([batch_size, self.z_dim])
         prior_scale = torch.ones([batch_size, self.z_dim])
-        zs = pyro.sample("z", dist.Normal(prior_loc, prior_scale).reshape(extra_event_dims=1))
+        zs = pyro.sample("z", dist.Normal(prior_loc, prior_scale).independent(1))
 
         # sample an image using the decoder
         loc = self.decoder.forward([zs, ys])
-        xs = pyro.sample("sample", dist.Bernoulli(loc).reshape(extra_event_dims=1))
+        xs = pyro.sample("sample", dist.Bernoulli(loc).independent(1))
         return xs, loc
 
 
@@ -318,15 +318,14 @@ def run_inference_ss_vae(args):
     # set up the loss(es) for inference. wrapping the guide in config_enumerate builds the loss as a sum
     # by enumerating each class label for the sampled discrete categorical distribution in the model
     guide = config_enumerate(ss_vae.guide, args.enum_discrete)
-    loss_basic = SVI(ss_vae.model, guide, optimizer, loss="ELBO",
-                     enum_discrete=True, max_iarange_nesting=1)
+    loss_basic = SVI(ss_vae.model, guide, optimizer, loss=TraceEnum_ELBO(max_iarange_nesting=1))
 
     # build a list of all losses considered
     losses = [loss_basic]
 
     # aux_loss: whether to use the auxiliary loss from NIPS 14 paper (Kingma et al)
     if args.aux_loss:
-        loss_aux = SVI(ss_vae.model_classify, ss_vae.guide_classify, optimizer, loss="ELBO")
+        loss_aux = SVI(ss_vae.model_classify, ss_vae.guide_classify, optimizer, loss=Trace_ELBO())
         losses.append(loss_aux)
 
     try:

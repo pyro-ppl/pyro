@@ -11,7 +11,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
 from pyro.contrib.autoguide import ADVIDiagonalNormal, ADVIMultivariateNormal
-from pyro.infer import SVI
+from pyro.infer import SVI, Trace_ELBO
 from tests.common import assert_equal
 from tests.integration_tests.test_conjugate_gaussian_models import GaussianChain
 
@@ -49,7 +49,7 @@ class ADVIGaussianChain(GaussianChain):
 
         # TODO speed up with parallel num_particles > 1
         adam = optim.Adam({"lr": .0005, "betas": (0.95, 0.999)})
-        svi = SVI(self.advi.model, self.advi.guide, adam, loss="ELBO", trace_graph=False)
+        svi = SVI(self.advi.model, self.advi.guide, adam, loss=Trace_ELBO())
 
         for k in range(n_steps):
             loss = svi.step(reparameterized)
@@ -77,7 +77,7 @@ def test_advi_diagonal_gaussians(advi_class):
 
     advi = advi_class(model)
     adam = optim.Adam({"lr": .001, "betas": (0.95, 0.999)})
-    svi = SVI(advi.model, advi.guide, adam, loss="ELBO", trace_graph=False)
+    svi = SVI(advi.model, advi.guide, adam, loss=Trace_ELBO())
 
     for k in range(n_steps):
         loss = svi.step()
@@ -104,7 +104,7 @@ def test_advi_transform(advi_class):
 
     advi = advi_class(model)
     adam = optim.Adam({"lr": .001, "betas": (0.90, 0.999)})
-    svi = SVI(advi.model, advi.guide, adam, loss="ELBO", trace_graph=False)
+    svi = SVI(advi.model, advi.guide, adam, loss=Trace_ELBO())
 
     for k in range(n_steps):
         loss = svi.step()
@@ -132,7 +132,7 @@ def test_advi_dirichlet(advi_class):
     def model(data):
         p = pyro.sample("p", dist.Dirichlet(prior))
         with pyro.iarange("data_iarange"):
-            pyro.sample("data", dist.Categorical(p).reshape(data.shape), obs=data)
+            pyro.sample("data", dist.Categorical(p).expand_by(data.shape), obs=data)
 
     advi = advi_class(model)
     svi = SVI(advi.model, advi.guide, optim.Adam({"lr": .003}), loss="ELBO")

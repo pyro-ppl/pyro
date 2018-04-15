@@ -7,12 +7,11 @@ import networkx
 import torch
 
 import pyro
-import pyro.infer as infer
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer import ELBO
 from pyro.infer.util import (MultiFrameTensor, get_iarange_stacks, torch_backward,
-                             torch_data_sum, detach_iterable)
+                             torch_data_sum, detach_iterable, is_validation_enabled)
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, check_site_shape, torch_isnan
 
@@ -200,7 +199,7 @@ class TraceGraph_ELBO(ELBO):
                                         graph_type="dense").get_trace(*args, **kwargs)
             model_trace = poutine.trace(poutine.replay(model, guide_trace),
                                         graph_type="dense").get_trace(*args, **kwargs)
-            if infer.is_validation_enabled():
+            if is_validation_enabled():
                 check_model_guide_match(model_trace, guide_trace)
             guide_trace = prune_subsample_sites(guide_trace)
             model_trace = prune_subsample_sites(model_trace)
@@ -255,7 +254,7 @@ class TraceGraph_ELBO(ELBO):
         # and score function terms (if present) so that they are available below
         model_trace.compute_log_prob()
         guide_trace.compute_score_parts()
-        if infer.is_validation_enabled():
+        if is_validation_enabled():
             for site in model_trace.nodes.values():
                 if site["type"] == "sample":
                     check_site_shape(site, self.max_iarange_nesting)

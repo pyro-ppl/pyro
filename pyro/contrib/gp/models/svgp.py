@@ -118,11 +118,11 @@ class SparseVariationalGP(GPModel):
             Id = torch.eye(M, out=Xu.new_empty(M, M))
             pyro.sample(u_name,
                         dist.MultivariateNormal(zero_loc, scale_tril=Id)
-                            .reshape(extra_event_dims=zero_loc.dim()-1))
+                            .independent(zero_loc.dim() - 1))
         else:
             pyro.sample(u_name,
                         dist.MultivariateNormal(zero_loc, scale_tril=Luu)
-                            .reshape(extra_event_dims=zero_loc.dim()-1))
+                            .independent(zero_loc.dim() - 1))
 
         f_loc, f_var = conditional(self.X, Xu, self.kernel, u_loc, u_scale_tril,
                                    Luu, full_cov=False, whiten=self.whiten,
@@ -145,7 +145,7 @@ class SparseVariationalGP(GPModel):
             u_name = pyro.param_with_module_name(self.name, "u")
             pyro.sample(u_name,
                         dist.MultivariateNormal(u_loc, scale_tril=u_scale_tril)
-                            .reshape(extra_event_dims=u_loc.dim()-1))
+                            .independent(u_loc.dim()-1))
         return Xu, self.kernel, u_loc, u_scale_tril
 
     def forward(self, Xnew, full_cov=False):

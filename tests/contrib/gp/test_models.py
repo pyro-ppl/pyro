@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
-from collections import defaultdict, namedtuple
 import logging
+from collections import defaultdict, namedtuple
 
 import pytest
 import torch
@@ -12,10 +12,10 @@ from pyro.contrib.gp.likelihoods import Gaussian
 from pyro.contrib.gp.models import (GPLVM, GPRegression, SparseGPRegression,
                                     VariationalGP, SparseVariationalGP)
 import pyro.distributions as dist
+import pyro.optim as optim
+from pyro.infer import SVI, Trace_ELBO
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.mcmc import MCMC
-from pyro.infer.svi import SVI
-import pyro.optim as optim
 from tests.common import assert_equal
 
 logging.basicConfig(format='%(levelname)s %(message)s')
@@ -312,7 +312,7 @@ def test_inference_deepGP():
         gp1.guide()
         gp2.guide()
 
-    svi = SVI(model, guide, optim.Adam({}), "ELBO")
+    svi = SVI(model, guide, optim.Adam({}), Trace_ELBO())
     svi.step()
 
 

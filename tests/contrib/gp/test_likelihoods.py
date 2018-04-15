@@ -6,7 +6,7 @@ import pytest
 import torch
 
 from pyro.contrib.gp.kernels import RBF
-from pyro.contrib.gp.likelihoods import Binary, MultiClass
+from pyro.contrib.gp.likelihoods import Binary, MultiClass, Poisson
 from pyro.contrib.gp.models import SparseVariationalGP, VariationalGP
 
 T = namedtuple("TestGPLikelihood", ["model_class", "X", "y", "kernel", "likelihood"])
@@ -17,6 +17,9 @@ noise = torch.tensor(1e-6)
 y_binary1D = torch.tensor([0.0, 1.0, 0.0])
 y_binary2D = torch.tensor([[0.0, 1.0, 1.0], [1.0, 0.0, 1.0]])
 binary_likelihood = Binary()
+y_count1D = torch.tensor([0.0, 1.0, 4.0])
+y_count2D = torch.tensor([[5.0, 9.0, 3.0], [4.0, 0.0, 1.0]])
+poisson_likelihood = Poisson()
 y_multiclass1D = torch.tensor([2.0, 0.0, 1.0])
 y_multiclass2D = torch.tensor([[2.0, 1.0, 1.0], [0.0, 2.0, 1.0]])
 multiclass_likelihood = MultiClass(num_classes=3)
@@ -39,6 +42,14 @@ TEST_CASES = [
         X, y_multiclass2D, kernel, multiclass_likelihood
     ),
     T(
+        VariationalGP,
+        X, y_count1D, kernel, poisson_likelihood
+    ),
+    T(
+        VariationalGP,
+        X, y_count2D, kernel, poisson_likelihood
+    ),
+    T(
         SparseVariationalGP,
         X, y_binary1D, kernel, binary_likelihood
     ),
@@ -53,6 +64,14 @@ TEST_CASES = [
     T(
         SparseVariationalGP,
         X, y_multiclass2D, kernel, multiclass_likelihood
+    ),
+    T(
+        SparseVariationalGP,
+        X, y_count1D, kernel, poisson_likelihood
+    ),
+    T(
+        SparseVariationalGP,
+        X, y_count2D, kernel, poisson_likelihood
     ),
 ]
 

@@ -114,6 +114,12 @@ Likelihoods
     :show-inheritance:
     :member-order: bysource
 
+.. automodule:: pyro.contrib.gp.likelihoods.poisson
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
+
 Util
 ____
 
