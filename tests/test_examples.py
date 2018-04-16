@@ -33,16 +33,23 @@ def discover_examples():
             # TODO: May be worth whitelisting the set of arguments to test
             # for each example.
             CPU_EXAMPLES.append((example, args))
+            cuda_args = args + ['--cuda']
+            if '--cuda' in text:
+                CUDA_EXAMPLES.append((example, cuda_args))
             if '--aux-loss' in text:
                 CPU_EXAMPLES.append((example, args + ['--aux-loss']))
+                if '--cuda' in text:
+                    CUDA_EXAMPLES.append((example, cuda_args + ['--aux-loss']))
             if '--enum-discrete' in text:
                 CPU_EXAMPLES.append((example, args + ['--enum-discrete=sequential']))
-                # TODO fix examples to work with --enum-discrete=parallel
-                # CPU_EXAMPLES.append((example, args + ['--enum-discrete=parallel']))
+                CPU_EXAMPLES.append((example, args + ['--enum-discrete=parallel']))
+                if '--cuda' in text:
+                    CUDA_EXAMPLES.append((example, cuda_args + ['--enum-discrete=sequential']))
+                    CUDA_EXAMPLES.append((example, cuda_args + ['--enum-discrete=parallel']))
             if '--num-iafs' in text:
                 CPU_EXAMPLES.append((example, args + ['--num-iafs=1']))
-            if '--cuda' in text:
-                CUDA_EXAMPLES.append((example, args + ['--cuda']))
+                if '--cuda' in text:
+                    CUDA_EXAMPLES.append((example, cuda_args + ['--num-iafs=1']))
     CPU_EXAMPLES.sort()
     CUDA_EXAMPLES.sort()
 

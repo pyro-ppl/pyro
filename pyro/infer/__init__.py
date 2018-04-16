@@ -11,4 +11,17 @@ from pyro.infer.traceenum_elbo import TraceEnum_ELBO
 from pyro.infer.tracegraph_elbo import TraceGraph_ELBO
 from pyro.infer.util import enable_validation, is_validation_enabled
 
-# flake8: noqa
+__all__ = [
+    "config_enumerate",
+    "enable_validation",
+    "is_validation_enabled",
+    "ELBO",
+    "Importance",
+    "Marginal",
+    "Search",
+    "SVI",
+    "TracePosterior",
+    "Trace_ELBO",
+    "TraceEnum_ELBO",
+    "TraceGraph_ELBO",
+]

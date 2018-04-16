@@ -6,6 +6,7 @@ import torch.nn as nn
 import pyro
 import pyro.distributions as dist
 from pyro.distributions.util import matrix_triangular_solve_compat
+from pyro.params import param_with_module_name
 
 
 class Parameterized(nn.Module):
@@ -113,7 +114,7 @@ class Parameterized(nn.Module):
         if self.name is None:
             param_name = param
         else:
-            param_name = pyro.param_with_module_name(self.name, param)
+            param_name = param_with_module_name(self.name, param)
 
         if prior is None:
             constraint = self._constraints.get(param)
