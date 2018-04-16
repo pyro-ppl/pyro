@@ -5,9 +5,9 @@ from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
+from pyro.contrib.gp.models.model import GPModel
 from pyro.contrib.gp.util import conditional
-
-from .model import GPModel
+from pyro.params import param_with_module_name
 
 
 class GPRegression(GPModel):
@@ -75,7 +75,7 @@ class GPRegression(GPModel):
             f_var = Lff.pow(2).sum(dim=-1)
             return zero_loc, f_var
         else:
-            y_name = pyro.param_with_module_name(self.name, "y")
+            y_name = param_with_module_name(self.name, "y")
             return pyro.sample(y_name,
                                dist.MultivariateNormal(zero_loc, scale_tril=Lff)
                                    .expand_by(self.y.shape[:-1])
