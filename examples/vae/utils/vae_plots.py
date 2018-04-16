@@ -1,5 +1,4 @@
 import torch
-# import numpy as np
 
 
 def plot_conditional_samples_ssvae(ssvae, visdom_session):
@@ -82,7 +81,7 @@ def plot_tsne(z_loc, classes, name):
     z_states = z_loc.detach().cpu().numpy()
     z_embed = model_tsne.fit_transform(z_states)
     classes = classes.detach().cpu().numpy()
-    fig666 = plt.figure()
+    fig = plt.figure()
     for ic in range(10):
         ind_vec = np.zeros_like(classes)
         ind_vec[:, ic] = 1
@@ -90,5 +89,5 @@ def plot_tsne(z_loc, classes, name):
         color = plt.cm.Set1(ic)
         plt.scatter(z_embed[ind_class, 0], z_embed[ind_class, 1], s=10, color=color)
         plt.title("Latent Variable T-SNE per Class")
-        fig666.savefig('./vae_results/'+str(name)+'_embedding_'+str(ic)+'.png')
-    fig666.savefig('./vae_results/'+str(name)+'_embedding.png')
+        fig.savefig('./vae_results/'+str(name)+'_embedding_'+str(ic)+'.png')
+    fig.savefig('./vae_results/'+str(name)+'_embedding.png')
