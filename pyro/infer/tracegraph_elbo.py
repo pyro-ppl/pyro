@@ -10,7 +10,8 @@ import pyro
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer import ELBO
-from pyro.infer.util import MultiFrameTensor, detach_iterable, get_iarange_stacks, is_validation_enabled, torch_backward
+from pyro.infer.util import (MultiFrameTensor, detach_iterable, get_iarange_stacks, is_validation_enabled,
+                             torch_backward, torch_item)
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, check_site_shape, torch_isnan
 
@@ -98,13 +99,13 @@ def _compute_elbo_reparam(model_trace, guide_trace, non_reparam_nodes):
     # deal with log p(z|...) terms
     for name, site in model_trace.nodes.items():
         if site["type"] == "sample":
-            elbo += site["log_prob_sum"].item()
+            elbo += torch_item(site["log_prob_sum"])
             surrogate_elbo += site["log_prob_sum"]
 
     # deal with log q(z|...) terms
     for name, site in guide_trace.nodes.items():
         if site["type"] == "sample":
-            elbo -= site["log_prob_sum"].item()
+            elbo -= torch_item(site["log_prob_sum"])
             entropy_term = site["score_parts"].entropy_term
             if not is_identically_zero(entropy_term):
                 surrogate_elbo -= entropy_term.sum()

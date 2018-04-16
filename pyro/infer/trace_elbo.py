@@ -6,7 +6,7 @@ import pyro
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
-from pyro.infer.util import MultiFrameTensor, get_iarange_stacks, is_validation_enabled
+from pyro.infer.util import MultiFrameTensor, get_iarange_stacks, is_validation_enabled, torch_item
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, check_site_shape, torch_isnan
 
@@ -77,7 +77,7 @@ class Trace_ELBO(ELBO):
         """
         elbo = 0.0
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
-            elbo_particle = model_trace.log_prob_sum().item() - guide_trace.log_prob_sum().item()
+            elbo_particle = torch_item(model_trace.log_prob_sum()) - torch_item(guide_trace.log_prob_sum())
             elbo += elbo_particle / self.num_particles
 
         loss = -elbo
@@ -103,14 +103,14 @@ class Trace_ELBO(ELBO):
             # compute elbo and surrogate elbo
             for name, site in model_trace.nodes.items():
                 if site["type"] == "sample":
-                    elbo_particle = elbo_particle + site["log_prob_sum"].item()
+                    elbo_particle = elbo_particle + torch_item(site["log_prob_sum"])
                     surrogate_elbo_particle = surrogate_elbo_particle + site["log_prob_sum"]
 
             for name, site in guide_trace.nodes.items():
                 if site["type"] == "sample":
                     log_prob, score_function_term, entropy_term = site["score_parts"]
 
-                    elbo_particle = elbo_particle - log_prob.sum().item()
+                    elbo_particle = elbo_particle - torch_item(site["log_prob_sum"])
 
                     if not is_identically_zero(entropy_term):
                         surrogate_elbo_particle = surrogate_elbo_particle - entropy_term.sum()

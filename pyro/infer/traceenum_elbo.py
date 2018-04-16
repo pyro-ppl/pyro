@@ -24,7 +24,8 @@ def _compute_dice_elbo(model_trace, guide_trace):
     # y depends on x iff ordering[x] <= ordering[y]
     # TODO refine this coarse dependency ordering.
     ordering = {name: frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
-                for name, site in model_trace.nodes.items()
+                for trace in (model_trace, guide_trace)
+                for name, site in trace.nodes.items()
                 if site["type"] == "sample"}
 
     costs = {}
