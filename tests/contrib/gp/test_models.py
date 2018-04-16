@@ -385,6 +385,7 @@ def test_mean_function_VGP():
     _post_test_mean_function(model, Xnew, ynew)
 
 
+@pytest.mark.xfail(reason='precision_matrix validation is unstable before Pytorch #6128')
 def test_mean_function_VGP_whiten():
     X, y, Xnew, ynew, kernel, mean_fn = _pre_test_mean_function()
     likelihood = Gaussian()
