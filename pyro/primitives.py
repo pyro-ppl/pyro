@@ -112,7 +112,7 @@ class _Subsample(Distribution):
         """
         self.size = size
         self.subsample_size = subsample_size
-        self.use_cuda = torch.Tensor.is_cuda if use_cuda is None else use_cuda
+        self.use_cuda = torch.Tensor().is_cuda if use_cuda is None else use_cuda
 
     def sample(self, sample_shape=torch.Size()):
         """
