@@ -213,7 +213,7 @@ class TraceGraph_ELBO(ELBO):
         """
         elbo = 0.0
         for weight, model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
-            elbo_particle = model_trace.log_prob_sum().item() - guide_trace.log_prob_sum().item()
+            elbo_particle = torch_item(model_trace.log_prob_sum()) - torch_item(guide_trace.log_prob_sum())
             elbo += weight * elbo_particle
 
         loss = -elbo

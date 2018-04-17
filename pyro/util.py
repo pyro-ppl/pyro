@@ -268,7 +268,7 @@ def check_model_guide_match(model_trace, guide_trace, max_iarange_nesting=float(
 
     Checks the following assumptions:
     1. Each sample site in the model also appears in the guide and is not
-        marke auxiliary.
+        marked auxiliary.
     2. Each sample site in the guide either appears in the model or is marked,
         auxiliary via ``infer={'is_auxiliary': True}``.
     3. Each :class:``~pyro.iarange`` statement in the guide also appears in the
