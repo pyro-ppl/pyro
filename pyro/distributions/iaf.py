@@ -82,7 +82,7 @@ class InverseAutoregressiveFlow(Transform):
         scale = self.module.sigmoid(hidden[:, 0:self.input_dim] +
                                     hidden.new_tensor(self.module.sigmoid_bias))
         mean = hidden[:, self.input_dim:]
-        y = scale * x + (scale.new_ones(scale.shape) - scale) * mean
+        y = scale * x + (1 - scale) * mean
         self._add_intermediate_to_cache(x, y, 'x')
         self._add_intermediate_to_cache(scale, y, 'scale')
         return y

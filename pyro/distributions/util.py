@@ -194,10 +194,10 @@ def matrix_triangular_solve_compat(b, A, upper=True):
     :param A: A 2D tensor of size N X N.
     :param upper: A flag if A is a upper triangular matrix or not.
     """
-    if A.requires_grad or A.is_cuda:
+    if A.is_cuda:
         return A.inverse().matmul(b)
     else:
-        return b.trtrs(A, upper=upper)[0].view(b.shape)
+        return b.view(b.shape[0], -1).trtrs(A, upper=upper)[0].view(b.shape)
 
 
 def log_sum_exp(tensor, dim=-1, scale=1.0):
