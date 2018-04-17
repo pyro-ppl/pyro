@@ -6,6 +6,7 @@ from collections import defaultdict, namedtuple
 import pytest
 import torch
 
+import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
 from pyro.contrib.gp.kernels import Cosine, RBF, Matern32, WhiteNoise
