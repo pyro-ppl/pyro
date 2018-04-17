@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import numbers
+from contextlib import contextmanager
 
 import torch
 import torch.distributions as torch_dist
@@ -221,3 +222,13 @@ def enable_validation(is_validate):
 
 def is_validation_enabled():
     return _VALIDATION_ENABLED
+
+
+@contextmanager
+def validation_enabled(is_validate=True):
+    distribution_validation_status = is_validation_enabled()
+    try:
+        enable_validation(is_validate)
+        yield
+    finally:
+        enable_validation(distribution_validation_status)
