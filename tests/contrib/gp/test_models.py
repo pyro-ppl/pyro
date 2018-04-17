@@ -6,7 +6,6 @@ from collections import defaultdict, namedtuple
 import pytest
 import torch
 
-import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
 from pyro.contrib.gp.kernels import Cosine, RBF, Matern32, WhiteNoise
@@ -15,6 +14,7 @@ from pyro.contrib.gp.models import GPRegression, SparseGPRegression, SparseVaria
 from pyro.infer import SVI, Trace_ELBO
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.mcmc import MCMC
+from pyro.params import param_with_module_name
 from tests.common import assert_equal
 
 logging.basicConfig(format='%(levelname)s %(message)s')
@@ -279,15 +279,15 @@ def test_hmc(model_class, X, y, kernel, likelihood):
 
     post_trace = defaultdict(list)
     for trace, _ in mcmc_run._traces():
-        variance_name = pyro.param_with_module_name(kernel.name, "variance")
+        variance_name = param_with_module_name(kernel.name, "variance")
         post_trace["variance"].append(trace.nodes[variance_name]["value"])
-        lengthscale_name = pyro.param_with_module_name(kernel.name, "lengthscale")
+        lengthscale_name = param_with_module_name(kernel.name, "lengthscale")
         post_trace["lengthscale"].append(trace.nodes[lengthscale_name]["value"])
         if model_class is VariationalGP:
-            f_name = pyro.param_with_module_name(gp.name, "f")
+            f_name = param_with_module_name(gp.name, "f")
             post_trace["f"].append(trace.nodes[f_name]["value"])
         if model_class is SparseVariationalGP:
-            u_name = pyro.param_with_module_name(gp.name, "u")
+            u_name = param_with_module_name(gp.name, "u")
             post_trace["u"].append(trace.nodes[u_name]["value"])
 
     for param in post_trace:

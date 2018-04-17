@@ -49,7 +49,7 @@ class GPModel(Parameterized):
         >>> hmc_kernel = HMC(gpr.model)
         >>> mcmc_run = MCMC(hmc_kernel, num_samples=10)
         >>> posterior_ls_trace = []  # store lengthscale trace
-        >>> ls_name = pyro.param_with_module_name(gpr.kernel.name, "lengthscale")
+        >>> ls_name = param_with_module_name(gpr.kernel.name, "lengthscale")
         >>> for trace, _ in mcmc_run._traces():
         ...     posterior_ls_trace.append(trace.nodes[ls_name]["value"])
 

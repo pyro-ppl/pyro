@@ -5,10 +5,10 @@ from torch.distributions import constraints
 from torch.nn import Parameter
 
 import pyro
+from pyro.contrib.gp.models.model import GPModel
 import pyro.distributions as dist
 from pyro.distributions.util import matrix_triangular_solve_compat
-
-from .model import GPModel
+from pyro.params import param_with_module_name
 
 
 class SparseGPRegression(GPModel):
@@ -150,7 +150,7 @@ class SparseGPRegression(GPModel):
             f_var = D + W.pow(2).sum(dim=0)
             return f_loc, f_var
         else:
-            y_name = pyro.param_with_module_name(self.name, "y")
+            y_name = param_with_module_name(self.name, "y")
             return pyro.sample(y_name,
                                dist.SparseMultivariateNormal(f_loc, W, D, trace_term)
                                    .expand_by(self.y.shape[:-1])

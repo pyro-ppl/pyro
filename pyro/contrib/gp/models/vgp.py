@@ -6,9 +6,9 @@ from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
+from pyro.contrib.gp.models.model import GPModel
 from pyro.contrib.gp.util import conditional
-
-from .model import GPModel
+from pyro.params import param_with_module_name
 
 
 class VariationalGP(GPModel):
@@ -93,7 +93,7 @@ class VariationalGP(GPModel):
         Lff = Kff.potrf(upper=False)
 
         zero_loc = self.X.new_zeros(f_loc.shape)
-        f_name = pyro.param_with_module_name(self.name, "f")
+        f_name = param_with_module_name(self.name, "f")
 
         if self.whiten:
             Id = torch.eye(N, out=self.X.new_empty(N, N))
@@ -123,7 +123,7 @@ class VariationalGP(GPModel):
         f_scale_tril = self.get_param("f_scale_tril")
 
         if self._sample_latent:
-            f_name = pyro.param_with_module_name(self.name, "f")
+            f_name = param_with_module_name(self.name, "f")
             pyro.sample(f_name,
                         dist.MultivariateNormal(f_loc, scale_tril=f_scale_tril)
                             .independent(f_loc.dim()-1))

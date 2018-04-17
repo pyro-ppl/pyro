@@ -7,9 +7,9 @@ from torch.nn import Parameter
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
+from pyro.contrib.gp.models.model import GPModel
 from pyro.contrib.gp.util import conditional
-
-from .model import GPModel
+from pyro.params import param_with_module_name
 
 
 class SparseVariationalGP(GPModel):
@@ -117,7 +117,7 @@ class SparseVariationalGP(GPModel):
         Luu = Kuu.potrf(upper=False)
 
         zero_loc = Xu.new_zeros(u_loc.shape)
-        u_name = pyro.param_with_module_name(self.name, "u")
+        u_name = param_with_module_name(self.name, "u")
         if self.whiten:
             Id = torch.eye(M, out=Xu.new_empty(M, M))
             pyro.sample(u_name,
@@ -147,7 +147,7 @@ class SparseVariationalGP(GPModel):
         u_scale_tril = self.get_param("u_scale_tril")
 
         if self._sample_latent:
-            u_name = pyro.param_with_module_name(self.name, "u")
+            u_name = param_with_module_name(self.name, "u")
             pyro.sample(u_name,
                         dist.MultivariateNormal(u_loc, scale_tril=u_scale_tril)
                             .independent(u_loc.dim()-1))

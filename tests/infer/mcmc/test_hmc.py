@@ -290,9 +290,7 @@ def test_normal_gamma_with_dual_averaging():
     posterior = []
     true_std = torch.tensor([0.5, 2])
     data = dist.Normal(3, true_std).sample(sample_shape=(torch.Size((2000,))))
-    # Model temporarily returns NaNs during warmup phase while tuning step size
-    with pyro.validation_enabled(False):
-        for trace, _ in mcmc_run._traces(data):
-            posterior.append(trace.nodes['p_latent']['value'])
+    for trace, _ in mcmc_run._traces(data):
+        posterior.append(trace.nodes['p_latent']['value'])
     posterior_mean = torch.mean(torch.stack(posterior), 0)
     assert_equal(posterior_mean, true_std, prec=0.02)
