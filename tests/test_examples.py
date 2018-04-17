@@ -11,7 +11,7 @@ from tests.common import EXAMPLES_DIR, requires_cuda
 CPU_EXAMPLES = [
     ['air/main.py', '--num-steps=1'],
     ['bayesian_regression.py', '--num-epochs=1'],
-    ['contrib/gp/sv-dkl.py', '--epochs=1', '--num-inducing=4', '--no-cuda'],
+    ['contrib/gp/sv-dkl.py', '--epochs=1', '--num-inducing=4'],
     ['contrib/named/mixture.py', '--num-epochs=1'],
     ['contrib/named/tree_data.py', '--num-epochs=1'],
     ['dmm/dmm.py', '--num-epochs=1'],
@@ -30,14 +30,14 @@ CPU_EXAMPLES = [
 CUDA_EXAMPLES = [
     ['air/main.py', '--num-steps=1', '--cuda'],
     ['bayesian_regression.py', '--num-epochs=1', '--cuda'],
-    ['contrib/gp/sv-dkl.py', '--epochs=1', '--num_inducing=4'],
+    ['contrib/gp/sv-dkl.py', '--epochs=1', '--num_inducing=4', '--cuda'],
     ['dmm/dmm.py', '--num-epochs=1', '--cuda'],
     ['dmm/dmm.py', '--num-epochs=1', '--num-iafs=1', '--cuda'],
     ['vae/vae.py', '--num-epochs=1', '--cuda'],
-    ['vae/ss_vae_M2.py', '--num-epochs=1', '--use-cuda'],
-    ['vae/ss_vae_M2.py', '--num-epochs=1', '--aux-loss', '--use-cuda'],
-    ['vae/ss_vae_M2.py', '--num-epochs=1', '--enum-discrete=parallel', '--use-cuda'],
-    ['vae/ss_vae_M2.py', '--num-epochs=1', '--enum-discrete=sequential', '--use-cuda'],
+    ['vae/ss_vae_M2.py', '--num-epochs=1', '--cuda'],
+    ['vae/ss_vae_M2.py', '--num-epochs=1', '--aux-loss', '--cuda'],
+    ['vae/ss_vae_M2.py', '--num-epochs=1', '--enum-discrete=parallel', '--cuda'],
+    ['vae/ss_vae_M2.py', '--num-epochs=1', '--enum-discrete=sequential', '--cuda'],
 ]
 
 CPU_EXAMPLES = [(example[0], example[1:]) for example in sorted(CPU_EXAMPLES)]
@@ -62,7 +62,7 @@ def test_coverage():
             if '__main__' in text:
                 if example not in cpu_tests:
                     pytest.fail('Example: {} not covered in CPU_TESTS.'.format(example))
-                if 'cuda' in text and example not in cuda_tests:
+                if '--cuda' in text and example not in cuda_tests:
                     pytest.fail('Example: {} not covered by CUDA_TESTS.'.format(example))
 
 
