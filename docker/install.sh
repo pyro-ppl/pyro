@@ -9,7 +9,7 @@ then
     conda install -y pytorch torchvision -c pytorch
     if [ ${cuda} = 1 ]; then conda install -y cuda90 -c pytorch; fi
 else
-    conda install -y numpy pyyaml mkl mkl-include setuptools cmake cffi typing
+    conda install -y numpy pyyaml mkl mkl-include setuptools cmake cffi typing jupyter
     pip install --upgrade pip
     pip install jupyter matplotlib
     if [ ${cuda} = 1 ]; then conda install -y cuda90 -c pytorch; fi

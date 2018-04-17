@@ -4,8 +4,8 @@ FROM ${base_img}
 # Optional args
 ARG cuda=0
 ARG python_version=2.7
-ARG pyro_branch=release
-ARG pytorch_branch=release
+ARG pyro_branch=dev
+ARG pytorch_branch=master
 ARG uid=1000
 ARG gid=1000
 ARG ostype=Linux
