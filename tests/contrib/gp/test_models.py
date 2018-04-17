@@ -6,9 +6,10 @@ from collections import defaultdict, namedtuple
 import pytest
 import torch
 
+import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
-from pyro.contrib.gp.kernels import RBF, Matern32, WhiteNoise
+from pyro.contrib.gp.kernels import Cosine, RBF, Matern32, WhiteNoise
 from pyro.contrib.gp.likelihoods import Gaussian
 from pyro.contrib.gp.models import GPRegression, SparseGPRegression, SparseVariationalGP, VariationalGP
 from pyro.infer import SVI, Trace_ELBO
@@ -313,3 +314,102 @@ def test_inference_deepGP():
 
     svi = SVI(model, guide, optim.Adam({}), Trace_ELBO())
     svi.step()
+
+
+def _pre_test_mean_function():
+    def f(x):
+        return 2 * x + 3 + 5 * torch.sin(7 * x)
+
+    X = torch.arange(100)
+    y = f(X)
+    Xnew = torch.arange(100, 150)
+    ynew = f(Xnew)
+
+    kernel = Cosine(input_dim=1)
+
+    def trend(x):
+        a = pyro.param("a", torch.tensor(0.))
+        b = pyro.param("b", torch.tensor(1.))
+        return a * x + b
+
+    return X, y, Xnew, ynew, kernel, trend
+
+
+def _mape(y_true, y_pred):
+    return ((y_pred - y_true) / y_true).abs().mean()
+
+
+def _post_test_mean_function(model, Xnew, y_true):
+    assert_equal(pyro.param("a").item(), 2, prec=0.02)
+    assert_equal(pyro.param("b").item(), 3, prec=0.02)
+
+    y_pred, _ = model(Xnew)
+    assert_equal(_mape(y_true, y_pred).item(), 0, prec=0.02)
+
+
+def test_mean_function_GPR():
+    X, y, Xnew, ynew, kernel, mean_fn = _pre_test_mean_function()
+    model = GPRegression(X, y, kernel, mean_function=mean_fn)
+    model.optimize(optim.Adam({"lr": 0.01}))
+    _post_test_mean_function(model, Xnew, ynew)
+
+
+def test_mean_function_SGPR():
+    X, y, Xnew, ynew, kernel, mean_fn = _pre_test_mean_function()
+    Xu = X[::20].clone()
+    model = SparseGPRegression(X, y, kernel, Xu, mean_function=mean_fn)
+    model.optimize(optim.Adam({"lr": 0.01}))
+    _post_test_mean_function(model, Xnew, ynew)
+
+
+def test_mean_function_SGPR_DTC():
+    X, y, Xnew, ynew, kernel, mean_fn = _pre_test_mean_function()
+    Xu = X[::20].clone()
+    model = SparseGPRegression(X, y, kernel, Xu, mean_function=mean_fn, approx="DTC")
+    model.optimize(optim.Adam({"lr": 0.01}))
+    _post_test_mean_function(model, Xnew, ynew)
+
+
+def test_mean_function_SGPR_FITC():
+    X, y, Xnew, ynew, kernel, mean_fn = _pre_test_mean_function()
+    Xu = X[::20].clone()
+    model = SparseGPRegression(X, y, kernel, Xu, mean_function=mean_fn, approx="FITC")
+    model.optimize(optim.Adam({"lr": 0.01}))
+    _post_test_mean_function(model, Xnew, ynew)
+
+
+def test_mean_function_VGP():
+    X, y, Xnew, ynew, kernel, mean_fn = _pre_test_mean_function()
+    likelihood = Gaussian()
+    model = VariationalGP(X, y, kernel, likelihood, mean_function=mean_fn)
+    model.optimize(optim.Adam({"lr": 0.01}))
+    _post_test_mean_function(model, Xnew, ynew)
+
+
+@pytest.mark.xfail(reason='precision_matrix validation is unstable before Pytorch #6128')
+def test_mean_function_VGP_whiten():
+    X, y, Xnew, ynew, kernel, mean_fn = _pre_test_mean_function()
+    likelihood = Gaussian()
+    model = VariationalGP(X, y, kernel, likelihood, mean_function=mean_fn,
+                          whiten=True)
+    model.optimize(optim.Adam({"lr": 0.1}))
+    _post_test_mean_function(model, Xnew, ynew)
+
+
+def test_mean_function_SVGP():
+    X, y, Xnew, ynew, kernel, mean_fn = _pre_test_mean_function()
+    Xu = X[::20].clone()
+    likelihood = Gaussian()
+    model = SparseVariationalGP(X, y, kernel, Xu, likelihood, mean_function=mean_fn)
+    model.optimize(optim.Adam({"lr": 0.02}))
+    _post_test_mean_function(model, Xnew, ynew)
+
+
+def test_mean_function_SVGP_whiten():
+    X, y, Xnew, ynew, kernel, mean_fn = _pre_test_mean_function()
+    Xu = X[::20].clone()
+    likelihood = Gaussian()
+    model = SparseVariationalGP(X, y, kernel, Xu, likelihood, mean_function=mean_fn,
+                                whiten=True)
+    model.optimize(optim.Adam({"lr": 0.1}))
+    _post_test_mean_function(model, Xnew, ynew)
