@@ -200,13 +200,17 @@ class HMC(TraceKernel):
         r = {name: pyro.sample("r_{}_t={}".format(name, self._t), self._r_dist[name])
              for name in self._r_dist}
 
-        z_new, r_new = velocity_verlet(z, r,
-                                       self._potential_energy,
-                                       self.step_size,
-                                       self.num_steps)
-        # apply Metropolis correction.
-        energy_proposal = self._energy(z_new, r_new)
-        energy_current = self._energy(z, r)
+        # Temporarily disable distributions args checking as
+        # NaNs are expected during step size adaptation
+        dist_arg_check = False if self.adapt_step_size else pyro.distributions.is_validation_enabled()
+        with dist.validation_enabled(dist_arg_check):
+            z_new, r_new = velocity_verlet(z, r,
+                                           self._potential_energy,
+                                           self.step_size,
+                                           self.num_steps)
+            # apply Metropolis correction.
+            energy_proposal = self._energy(z_new, r_new)
+            energy_current = self._energy(z, r)
         delta_energy = energy_proposal - energy_current
         rand = pyro.sample("rand_t={}".format(self._t), dist.Uniform(torch.zeros(1), torch.ones(1)))
         if rand < (-delta_energy).exp():
@@ -214,10 +218,8 @@ class HMC(TraceKernel):
             z = z_new
 
         if self.adapt_step_size:
-            # Set accept prob to 0.0 if delta_energy is `NaN` which could be the case
-            # which may be the case for a diverging trajectory (e.g. in the case of
-            # evaluating log prob of a value simulated using a large step size for
-            # a constrained sample site).
+            # Set accept prob to 0.0 if delta_energy is `NaN` which may be
+            # the case for a diverging trajectory when using a large step size.
             if torch_isnan(delta_energy):
                 accept_prob = delta_energy.new_tensor(0.0)
             else:
@@ -231,5 +233,5 @@ class HMC(TraceKernel):
         return self._get_trace(z)
 
     def diagnostics(self):
-        return "Step size: {:.6f} | Acceptance rate: {:.6f}".format(
+        return "Step size: {:.6f} \t Acceptance rate: {:.6f}".format(
             self.step_size, self._accept_cnt / self._t)
