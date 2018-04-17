@@ -21,14 +21,11 @@ def is_validation_enabled():
     return _VALIDATION_ENABLED
 
 
-def torch_data_sum(x):
+def torch_item(x):
     """
-    Like ``x.sum().item()`` for a :class:`~torch.Tensor`, but also works
-    with numbers.
+    Like ``x.item()`` for a :class:`~torch.Tensor`, but also works with numbers.
     """
-    if isinstance(x, numbers.Number):
-        return x
-    return x.sum().item()
+    return x if isinstance(x, numbers.Number) else x.item()
 
 
 def torch_backward(x):
