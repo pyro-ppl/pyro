@@ -135,7 +135,7 @@ def test_advi_dirichlet(advi_class):
             pyro.sample("data", dist.Categorical(p).expand_by(data.shape), obs=data)
 
     guide = advi_class(model)
-    svi = SVI(model, guide, optim.Adam({"lr": .003}), loss="ELBO")
+    svi = SVI(model, guide, optim.Adam({"lr": .003}), loss=Trace_ELBO())
 
     for _ in range(num_steps):
         loss = svi.step(data)
