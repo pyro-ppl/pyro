@@ -9,39 +9,39 @@ import pytest
 from tests.common import EXAMPLES_DIR, requires_cuda
 
 CPU_EXAMPLES = [
-    ('air/main.py', ['--num-steps=1']),
-    ('bayesian_regression.py', ['--num-epochs=1']),
-    ('contrib/gp/sv-dkl.py', ['--epochs=1', '--num-inducing=4', '--no-cuda']),
-    ('contrib/named/mixture.py', ['--num-epochs=1']),
-    ('contrib/named/tree_data.py', ['--num-epochs=1']),
-    ('dmm/dmm.py', ['--num-epochs=1']),
-    ('dmm/dmm.py', ['--num-epochs=1', '--num-iafs=1']),
-    ('inclined_plane.py', ['--num-samples=1']),
-    ('schelling.py', ['--num-samples=1']),
-    ('schelling_false.py', ['--num-samples=1']),
-    ('vae/ss_vae_M2.py', ['--num-epochs=1']),
-    ('vae/ss_vae_M2.py', ['--num-epochs=1', '--aux-loss']),
-    ('vae/ss_vae_M2.py', ['--num-epochs=1', '--enum-discrete=parallel']),
-    ('vae/ss_vae_M2.py', ['--num-epochs=1', '--enum-discrete=sequential']),
-    ('vae/vae.py', ['--num-epochs=1']),
-    ('vae/vae_comparison.py', ['--num-epochs=1']),
+    ['air/main.py', '--num-steps=1'],
+    ['bayesian_regression.py', '--num-epochs=1'],
+    ['contrib/gp/sv-dkl.py', '--epochs=1', '--num-inducing=4', '--no-cuda'],
+    ['contrib/named/mixture.py', '--num-epochs=1'],
+    ['contrib/named/tree_data.py', '--num-epochs=1'],
+    ['dmm/dmm.py', '--num-epochs=1'],
+    ['dmm/dmm.py', '--num-epochs=1', '--num-iafs=1'],
+    ['inclined_plane.py', '--num-samples=1'],
+    ['schelling.py', '--num-samples=1'],
+    ['schelling_false.py', '--num-samples=1'],
+    ['vae/ss_vae_M2.py', '--num-epochs=1'],
+    ['vae/ss_vae_M2.py', '--num-epochs=1', '--aux-loss'],
+    ['vae/ss_vae_M2.py', '--num-epochs=1', '--enum-discrete=parallel'],
+    ['vae/ss_vae_M2.py', '--num-epochs=1', '--enum-discrete=sequential'],
+    ['vae/vae.py', '--num-epochs=1'],
+    ['vae/vae_comparison.py', '--num-epochs=1'],
 ]
 
 CUDA_EXAMPLES = [
-    ('air/main.py', ['--num-steps=1', '--cuda']),
-    ('bayesian_regression.py', ['--num-epochs=1', '--cuda']),
-    ('contrib/gp/sv-dkl.py', ['--epochs=1', '--num_inducing=4']),
-    ('dmm/dmm.py', ['--num-epochs=1', '--cuda']),
-    ('dmm/dmm.py', ['--num-epochs=1', '--num-iafs=1', '--cuda']),
-    ('vae/vae.py', ['--num-epochs=1', '--cuda']),
-    ('vae/ss_vae_M2.py', ['--num-epochs=1', '--use-cuda']),
-    ('vae/ss_vae_M2.py', ['--num-epochs=1', '--aux-loss', '--use-cuda']),
-    ('vae/ss_vae_M2.py', ['--num-epochs=1', '--enum-discrete=parallel', '--use-cuda']),
-    ('vae/ss_vae_M2.py', ['--num-epochs=1', '--enum-discrete=sequential', '--use-cuda']),
+    ['air/main.py', '--num-steps=1', '--cuda'],
+    ['bayesian_regression.py', '--num-epochs=1', '--cuda'],
+    ['contrib/gp/sv-dkl.py', '--epochs=1', '--num_inducing=4'],
+    ['dmm/dmm.py', '--num-epochs=1', '--cuda'],
+    ['dmm/dmm.py', '--num-epochs=1', '--num-iafs=1', '--cuda'],
+    ['vae/vae.py', '--num-epochs=1', '--cuda'],
+    ['vae/ss_vae_M2.py', '--num-epochs=1', '--use-cuda'],
+    ['vae/ss_vae_M2.py', '--num-epochs=1', '--aux-loss', '--use-cuda'],
+    ['vae/ss_vae_M2.py', '--num-epochs=1', '--enum-discrete=parallel', '--use-cuda'],
+    ['vae/ss_vae_M2.py', '--num-epochs=1', '--enum-discrete=sequential', '--use-cuda'],
 ]
 
-CPU_EXAMPLES.sort()
-CUDA_EXAMPLES.sort()
+CPU_EXAMPLES = [(example[0], example[1:]) for example in sorted(CPU_EXAMPLES)]
+CUDA_EXAMPLES = [(example[0], example[1:]) for example in sorted(CUDA_EXAMPLES)]
 
 
 def make_ids(examples):
