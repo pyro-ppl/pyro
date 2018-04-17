@@ -127,7 +127,7 @@ class VariationalGP(GPModel):
             pyro.sample(f_name,
                         dist.MultivariateNormal(f_loc, scale_tril=f_scale_tril)
                             .independent(f_loc.dim()-1))
-        return self.kernel, self.mean_function, f_loc, f_scale_tril
+        return f_loc, f_scale_tril
 
     def forward(self, Xnew, full_cov=False):
         r"""
@@ -151,10 +151,10 @@ class VariationalGP(GPModel):
         self._check_Xnew_shape(Xnew)
         tmp_sample_latent = self._sample_latent
         self._sample_latent = False
-        kernel, mean_function, f_loc, f_scale_tril = self.guide()
+        f_loc, f_scale_tril = self.guide()
         self._sample_latent = tmp_sample_latent
 
-        loc, cov = conditional(Xnew, self.X, kernel, f_loc, f_scale_tril,
+        loc, cov = conditional(Xnew, self.X, self.kernel, f_loc, f_scale_tril,
                                full_cov=full_cov, whiten=self.whiten,
                                jitter=self.jitter)
-        return loc + mean_function(Xnew), cov
+        return loc + self.mean_function(Xnew), cov

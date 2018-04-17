@@ -151,7 +151,7 @@ class SparseVariationalGP(GPModel):
             pyro.sample(u_name,
                         dist.MultivariateNormal(u_loc, scale_tril=u_scale_tril)
                             .independent(u_loc.dim()-1))
-        return self.kernel, Xu, self.mean_function, u_loc, u_scale_tril
+        return Xu, u_loc, u_scale_tril
 
     def forward(self, Xnew, full_cov=False):
         r"""
@@ -175,10 +175,10 @@ class SparseVariationalGP(GPModel):
         self._check_Xnew_shape(Xnew)
         tmp_sample_latent = self._sample_latent
         self._sample_latent = False
-        kernel, Xu, mean_function, u_loc, u_scale_tril = self.guide()
+        Xu, u_loc, u_scale_tril = self.guide()
         self._sample_latent = tmp_sample_latent
 
-        loc, cov = conditional(Xnew, Xu, kernel, u_loc, u_scale_tril,
+        loc, cov = conditional(Xnew, Xu, self.kernel, u_loc, u_scale_tril,
                                full_cov=full_cov, whiten=self.whiten,
                                jitter=self.jitter)
-        return loc + mean_function(Xnew), cov
+        return loc + self.mean_function(Xnew), cov

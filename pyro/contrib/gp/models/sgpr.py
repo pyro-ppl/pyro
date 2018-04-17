@@ -163,7 +163,7 @@ class SparseGPRegression(GPModel):
         Xu = self.get_param("Xu")
         noise = self.get_param("noise")
 
-        return self.kernel, Xu, noise, self.mean_function
+        return Xu, noise
 
     def forward(self, Xnew, full_cov=False, noiseless=True):
         r"""
@@ -186,7 +186,7 @@ class SparseGPRegression(GPModel):
         :rtype: tuple(torch.Tensor, torch.Tensor)
         """
         self._check_Xnew_shape(Xnew)
-        kernel, Xu, noise, mean_function = self.guide()
+        Xu, noise = self.guide()
 
         # W = inv(Luu) @ Kuf
         # Ws = inv(Luu) @ Kus
@@ -204,16 +204,16 @@ class SparseGPRegression(GPModel):
         N = self.X.shape[0]
         M = Xu.shape[0]
 
-        Kuu = kernel(Xu) + torch.eye(M, out=Xu.new_empty(M, M)) * self.jitter
+        Kuu = self.kernel(Xu) + torch.eye(M, out=Xu.new_empty(M, M)) * self.jitter
         Luu = Kuu.potrf(upper=False)
-        Kus = kernel(Xu, Xnew)
-        Kuf = kernel(Xu, self.X)
+        Kus = self.kernel(Xu, Xnew)
+        Kuf = self.kernel(Xu, self.X)
 
         W = matrix_triangular_solve_compat(Kuf, Luu, upper=False)
         Ws = matrix_triangular_solve_compat(Kus, Luu, upper=False)
         D = noise.expand(N)
         if self.approx == "FITC":
-            Kffdiag = kernel(self.X, diag=True)
+            Kffdiag = self.kernel(self.X, diag=True)
             Qffdiag = W.pow(2).sum(dim=0)
             D = D + Kffdiag - Qffdiag
 
@@ -223,7 +223,7 @@ class SparseGPRegression(GPModel):
         L = K.potrf(upper=False)
 
         # get y_residual and convert it into 2D tensor for packing
-        y_residual = self.y - mean_function(self.X)
+        y_residual = self.y - self.mean_function(self.X)
         y_2D = y_residual.reshape(-1, N).t()
         W_Dinv_y = W_Dinv.matmul(y_2D)
         pack = torch.cat((W_Dinv_y, Ws), dim=1)
@@ -236,13 +236,13 @@ class SparseGPRegression(GPModel):
         loc = Linv_W_Dinv_y.t().matmul(Linv_Ws).reshape(loc_shape)
 
         if full_cov:
-            Kss = kernel(Xnew)
+            Kss = self.kernel(Xnew)
             if not noiseless:
                 Kss = Kss + noise.expand(Xnew.shape[0]).diag()
             Qss = Ws.t().matmul(Ws)
             cov = Kss - Qss + Linv_Ws.t().matmul(Linv_Ws)
         else:
-            Kssdiag = kernel(Xnew, diag=True)
+            Kssdiag = self.kernel(Xnew, diag=True)
             if not noiseless:
                 Kssdiag = Kssdiag + noise.expand(Xnew.shape[0])
             Qssdiag = Ws.pow(2).sum(dim=0)
@@ -251,4 +251,4 @@ class SparseGPRegression(GPModel):
         cov_shape = self.y.shape[:-1] + (Xnew.shape[0], Xnew.shape[0])
         cov = cov.expand(cov_shape)
 
-        return loc + mean_function(Xnew), cov
+        return loc + self.mean_function(Xnew), cov

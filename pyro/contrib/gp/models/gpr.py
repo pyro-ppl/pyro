@@ -97,7 +97,7 @@ class GPRegression(GPModel):
 
         noise = self.get_param("noise")
 
-        return self.kernel, noise, self.mean_function
+        return noise
 
     def forward(self, Xnew, full_cov=False, noiseless=True):
         r"""
@@ -120,18 +120,18 @@ class GPRegression(GPModel):
         :rtype: tuple(torch.Tensor, torch.Tensor)
         """
         self._check_Xnew_shape(Xnew)
-        kernel, noise, mean_function = self.guide()
+        noise = self.guide()
 
-        Kff = kernel(self.X) + noise.expand(self.X.shape[0]).diag()
+        Kff = self.kernel(self.X) + noise.expand(self.X.shape[0]).diag()
         Lff = Kff.potrf(upper=False)
 
-        y_residual = self.y - mean_function(self.X)
-        loc, cov = conditional(Xnew, self.X, kernel, y_residual, None, Lff, full_cov,
-                               jitter=self.jitter)
+        y_residual = self.y - self.mean_function(self.X)
+        loc, cov = conditional(Xnew, self.X, self.kernel, y_residual, None, Lff,
+                               full_cov, jitter=self.jitter)
 
         if full_cov and not noiseless:
             cov = cov + noise.expand(Xnew.shape[0]).diag()
         if not full_cov and not noiseless:
             cov = cov + noise.expand(Xnew.shape[0])
 
-        return loc + mean_function(Xnew), cov
+        return loc + self.mean_function(Xnew), cov
