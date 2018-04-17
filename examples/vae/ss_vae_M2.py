@@ -8,6 +8,7 @@ import pyro.distributions as dist
 from pyro.contrib.examples.util import print_and_log, set_seed
 from pyro.infer import SVI, config_enumerate, Trace_ELBO, TraceEnum_ELBO
 from pyro.nn import ClippedSigmoid, ClippedSoftmax
+from pyro import poutine
 from pyro.optim import Adam
 from utils.custom_mlp import MLP, Exp
 from utils.mnist_cached import MNISTCached, mkdir_p, setup_data_loaders
@@ -208,6 +209,8 @@ class SSVAE(nn.Module):
         prior_loc = torch.zeros([batch_size, self.z_dim])
         prior_scale = torch.ones([batch_size, self.z_dim])
         zs = pyro.sample("z", dist.Normal(prior_loc, prior_scale).independent(1))
+
+        log_p = poutine.trace(poutine.replay(self.model)(xs, ys))
 
         # sample an image using the decoder
         loc = self.decoder.forward([zs, ys])
