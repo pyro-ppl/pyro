@@ -66,40 +66,6 @@ class NormalNormalSamplingTestCase(TestCase):
         self.guide = guide
 
 
-class SearchTest(HMMSamplingTestCase):
-
-    def test_complete(self):
-        posterior = pyro.infer.Search(self.model)
-
-        true_latents = set()
-        for i1 in range(2):
-            for i2 in range(2):
-                for i3 in range(2):
-                    true_latents.add((float(i1), float(i2), float(i3)))
-
-        tr_latents = set()
-        for tr, _ in posterior._traces():
-            tr_latents.add(tuple([tr.nodes[name]["value"].view(-1).item()
-                                  for name in tr.nodes.keys()
-                                  if tr.nodes[name]["type"] == "sample" and
-                                  not tr.nodes[name]["is_observed"]]))
-
-        assert true_latents == tr_latents
-
-    def test_marginal(self):
-        posterior = pyro.infer.Search(self.model)
-        marginal = pyro.infer.Marginal(posterior)
-        d, values = marginal._dist_and_values()
-
-        tr_rets = []
-        for v in values:
-            tr_rets.append(v.view(-1).item())
-
-        assert len(tr_rets) == 4
-        for i in range(4):
-            assert i + 1 in tr_rets
-
-
 class ImportanceTest(NormalNormalSamplingTestCase):
 
     @pytest.mark.init(rng_seed=0)
