@@ -25,7 +25,7 @@ def test_scores(advi_class):
     guide_trace.compute_log_prob()
     model_trace.compute_log_prob()
 
-    assert model_trace.nodes['_advi_latent']['log_prob_sum'].item() == 0.0
+    assert '_advi_latent' not in model_trace.nodes
     assert model_trace.nodes['z']['log_prob_sum'].item() != 0.0
     assert guide_trace.nodes['_advi_latent']['log_prob_sum'].item() != 0.0
     assert guide_trace.nodes['z']['log_prob_sum'].item() == 0.0
@@ -49,7 +49,8 @@ def test_shapes(advi_class, Elbo):
 
 @pytest.mark.xfail(reason="irange is not yet supported")
 @pytest.mark.parametrize('advi_class', [ADVIDiagonalNormal, ADVIMultivariateNormal])
-def test_irange_smoke(advi_class):
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO])
+def test_irange_smoke(advi_class, Elbo):
 
     def model():
         x = pyro.sample("x", dist.Normal(0, 1))
@@ -65,12 +66,13 @@ def test_irange_smoke(advi_class):
         pyro.sample("obs", dist.Bernoulli(0.1), obs=torch.tensor(0))
 
     advi = advi_class(model)
-    infer = SVI(advi.model, advi.guide, Adam({"lr": 1e-6}), Trace_ELBO())
+    infer = SVI(advi.model, advi.guide, Adam({"lr": 1e-6}), Elbo())
     infer.step()
 
 
 @pytest.mark.parametrize("advi_class", [ADVIMultivariateNormal, ADVIDiagonalNormal])
-def test_median(advi_class):
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO])
+def test_median(advi_class, Elbo):
 
     def model():
         pyro.sample("x", dist.Normal(0.0, 1.0))
@@ -78,7 +80,7 @@ def test_median(advi_class):
         pyro.sample("z", dist.Beta(2.0, 2.0))
 
     advi = advi_class(model)
-    infer = SVI(advi.model, advi.guide, Adam({'lr': 0.01}), Trace_ELBO())
+    infer = SVI(advi.model, advi.guide, Adam({'lr': 0.01}), Elbo())
     for _ in range(100):
         infer.step()
 
@@ -89,7 +91,8 @@ def test_median(advi_class):
 
 
 @pytest.mark.parametrize("advi_class", [ADVIMultivariateNormal, ADVIDiagonalNormal])
-def test_quantiles(advi_class):
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO])
+def test_quantiles(advi_class, Elbo):
 
     def model():
         pyro.sample("x", dist.Normal(0.0, 1.0))
@@ -97,7 +100,7 @@ def test_quantiles(advi_class):
         pyro.sample("z", dist.Beta(2.0, 2.0))
 
     advi = advi_class(model)
-    infer = SVI(advi.model, advi.guide, Adam({'lr': 0.01}), Trace_ELBO())
+    infer = SVI(advi.model, advi.guide, Adam({'lr': 0.01}), Elbo())
     for _ in range(100):
         infer.step()
 
@@ -105,18 +108,19 @@ def test_quantiles(advi_class):
     median = advi.median()
     for name in ["x", "y", "z"]:
         assert_equal(median[name], quantiles[name][1])
+    quantiles = {name: [v.item() for v in value] for name, value in quantiles.items()}
 
-    assert torch.tensor(-3.0) < quantiles["x"][0]
+    assert -3.0 < quantiles["x"][0]
     assert quantiles["x"][0] + 1.0 < quantiles["x"][1]
     assert quantiles["x"][1] + 1.0 < quantiles["x"][2]
     assert quantiles["x"][2] < 3.0
 
-    assert torch.tensor(0.01) < quantiles["y"][0]
+    assert 0.01 < quantiles["y"][0]
     assert quantiles["y"][0] * 2.0 < quantiles["y"][1]
     assert quantiles["y"][1] * 2.0 < quantiles["y"][2]
     assert quantiles["y"][2] < 100.0
 
-    assert torch.tensor(0.01) < quantiles["z"][0]
+    assert 0.01 < quantiles["z"][0]
     assert quantiles["z"][0] + 0.1 < quantiles["z"][1]
     assert quantiles["z"][1] + 0.1 < quantiles["z"][2]
     assert quantiles["z"][2] < 0.99

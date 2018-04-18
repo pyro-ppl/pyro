@@ -87,9 +87,9 @@ def test_inference(model_class, X, y, kernel, likelihood):
     else:
         latent_shape = y.shape[:-1]
     if model_class is SparseVariationalGP:
-        gp = model_class(X, y, kernel, X, likelihood, latent_shape)
+        gp = model_class(X, y, kernel, X, likelihood, latent_shape=latent_shape)
     else:
-        gp = model_class(X, y, kernel, likelihood, latent_shape)
+        gp = model_class(X, y, kernel, likelihood, latent_shape=latent_shape)
 
     gp.optimize(num_steps=1)
 
@@ -115,9 +115,9 @@ def test_forward(model_class, X, y, kernel, likelihood):
     else:
         latent_shape = y.shape[:-1]
     if model_class is SparseVariationalGP:
-        gp = model_class(X, y, kernel, X, likelihood, latent_shape)
+        gp = model_class(X, y, kernel, X, likelihood, latent_shape=latent_shape)
     else:
-        gp = model_class(X, y, kernel, likelihood, latent_shape)
+        gp = model_class(X, y, kernel, likelihood, latent_shape=latent_shape)
 
     Xnew_shape = (X.shape[0] * 2,) + X.shape[1:]
     Xnew = X.new_tensor(torch.rand(Xnew_shape))

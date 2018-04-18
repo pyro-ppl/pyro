@@ -9,6 +9,7 @@ from pyro.contrib.gp.util import Parameterized
 import pyro.distributions as dist
 import pyro.infer as infer
 import pyro.optim as optim
+from pyro.params import param_with_module_name
 
 
 class GPLVM(Parameterized):
@@ -61,7 +62,7 @@ class GPLVM(Parameterized):
         zero_loc = self.X_loc.new_zeros(self.X_loc.shape)
         C = self.X_loc.shape[1]
         Id = torch.eye(C, out=self.X_loc.new_empty(C, C))
-        X_name = pyro.param_with_module_name(self.name, "X")
+        X_name = param_with_module_name(self.name, "X")
         X = pyro.sample(X_name, dist.MultivariateNormal(zero_loc, scale_tril=Id)
                                     .independent(zero_loc.dim()-1))
 
@@ -73,7 +74,7 @@ class GPLVM(Parameterized):
 
         X_loc = self.get_param("X_loc")
         X_scale_tril = self.get_param("X_scale_tril")
-        X_name = pyro.param_with_module_name(self.name, "X")
+        X_name = param_with_module_name(self.name, "X")
         X = pyro.sample(X_name,
                         dist.MultivariateNormal(X_loc, scale_tril=X_scale_tril)
                             .independent(X_loc.dim()-1))
