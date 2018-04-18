@@ -2,10 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
 from torch.nn import functional as F
-
-from pyro.distributions.util import torch_multinomial
 
 
 class MaskedLinear(nn.Linear):
@@ -17,7 +14,7 @@ class MaskedLinear(nn.Linear):
     :param out_features: the number of output features
     :type out_features: int
     :param mask: the mask to apply to the in_features x out_features weight matrix
-    :type mask: torch.autograd.Variable
+    :type mask: torch.Tensor
     :param bias: whether or not `MaskedLinear` should include a bias term. defaults to `True`
     :type bias: bool
     """
@@ -29,7 +26,7 @@ class MaskedLinear(nn.Linear):
         """
         the forward method that does the masked linear computation and returns the result
         """
-        masked_weight = self.weight * torch.autograd.Variable(self.mask)
+        masked_weight = self.weight * self.mask
         return F.linear(_input, masked_weight, self.bias)
 
 
@@ -68,7 +65,7 @@ class AutoRegressiveNN(nn.Module):
 
         if mask_encoding is None:
             # the dependency structure is chosen at random
-            self.mask_encoding = 1 + torch_multinomial(torch.ones(input_dim - 1) / (input_dim - 1),
+            self.mask_encoding = 1 + torch.multinomial(torch.ones(input_dim - 1) / (input_dim - 1),
                                                        num_samples=hidden_dim, replacement=True)
         else:
             # the dependency structure is given by the user
@@ -82,12 +79,12 @@ class AutoRegressiveNN(nn.Module):
             self.permutation = permutation
 
         # these masks control the autoregressive structure
-        self.mask1 = Variable(torch.zeros(hidden_dim, input_dim))
-        self.mask2 = Variable(torch.zeros(input_dim * self.output_dim_multiplier, hidden_dim))
+        self.mask1 = torch.zeros(hidden_dim, input_dim)
+        self.mask2 = torch.zeros(input_dim * self.output_dim_multiplier, hidden_dim)
 
         for k in range(hidden_dim):
             # fill in mask1
-            m_k = self.mask_encoding[k]
+            m_k = self.mask_encoding[k].item()
             slice_k = torch.cat([torch.ones(m_k), torch.zeros(input_dim - m_k)])
             for j in range(input_dim):
                 self.mask1[k, self.permutation[j]] = slice_k[j]

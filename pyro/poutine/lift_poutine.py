@@ -3,12 +3,12 @@ from __future__ import absolute_import, division, print_function
 from pyro import params
 from pyro.distributions import Distribution
 
-from .poutine import Poutine
+from .poutine import Messenger
 
 
-class LiftPoutine(Poutine):
+class LiftMessenger(Messenger):
     """
-    Poutine which "lifts" parameters to random samples.
+    Messenger which "lifts" parameters to random samples.
     Given a stochastic function with param calls and a prior,
     creates a stochastic function where all param calls are
     replaced by sampling from prior.
@@ -16,29 +16,18 @@ class LiftPoutine(Poutine):
     Prior should be a callable or a dict of names to callables.
     """
 
-    def __init__(self, fn, prior):
+    def __init__(self, prior):
         """
-        :param fn: stochastic function
         :param prior: prior used to lift parameters. Prior can be of type
                       dict, pyro.distributions, or a python stochastic fn
 
         Constructor
         """
+        super(LiftMessenger, self).__init__()
         self.prior = prior
-        super(LiftPoutine, self).__init__(fn)
 
-    def _prepare_site(self, msg):
-        """
-        Sets flags of params that will be overridden so they are not
-        reexecuted in the stack and not added to the param store.
-        """
-        name = msg["name"]
-        param_name = params.user_param_name(name)
-        if isinstance(self.prior, dict) and param_name in self.prior.keys() \
-                or callable(self.prior):
-            if msg["type"] == "param":
-                msg["done"] = True
-        return msg
+    def _pyro_sample(self, msg):
+        return None
 
     def _pyro_param(self, msg):
         """
@@ -57,15 +46,15 @@ class LiftPoutine(Poutine):
                 if isinstance(msg['fn'], Distribution):
                     msg["args"] = ()
                     msg["kwargs"] = {}
-                    msg["baseline"] = {}
+                    msg["infer"] = {}
             else:
-                return super(LiftPoutine, self)._pyro_param(msg)
+                return None
         elif isinstance(self.prior, Distribution):
             # prior is a distribution
             msg["fn"] = self.prior
             msg["args"] = ()
             msg["kwargs"] = {}
-            msg["baseline"] = {}
+            msg["infer"] = {}
         elif callable(self.prior):
             if not isinstance(self.prior, Distribution):
                 # prior is a stochastic fn. block sample
@@ -73,8 +62,7 @@ class LiftPoutine(Poutine):
             msg["fn"] = self.prior
         else:
             # otherwise leave as is
-            return super(LiftPoutine, self)._pyro_param(msg)
+            return None
         msg["type"] = "sample"
-        msg["done"] = False
         msg["is_observed"] = False
         return self._pyro_sample(msg)

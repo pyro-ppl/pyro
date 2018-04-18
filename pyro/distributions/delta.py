@@ -1,14 +1,15 @@
 from __future__ import absolute_import, division, print_function
 
+import numbers
+
 import torch
-from torch.autograd import Variable
+from torch.distributions import constraints
 
-from pyro.distributions.distribution import Distribution
-from pyro.distributions.util import copy_docs_from
+from pyro.distributions.torch_distribution import TorchDistribution
+from pyro.distributions.util import sum_rightmost
 
 
-@copy_docs_from(Distribution)
-class Delta(Distribution):
+class Delta(TorchDistribution):
     """
     Degenerate discrete distribution (a single point).
 
@@ -16,53 +17,45 @@ class Delta(Distribution):
     its support. Delta distribution parameterized by a random choice should not
     be used with MCMC based inference, as doing so produces incorrect results.
 
-    :param torch.autograd.Variable v: The single support element.
+    :param torch.Tensor v: The single support element.
+    :param torch.Tensor log_density: An optional density for this Delta. This
+        is useful to keep the class of :class:`Delta` distributions closed
+        under differentiable transformation.
+    :param int event_dim: Optional event dimension, defaults to zero.
     """
-    enumerable = True
+    has_rsample = True
+    arg_constraints = {'v': constraints.real, 'log_density': constraints.real}
+    support = constraints.real
 
-    def __init__(self, v, batch_size=None, *args, **kwargs):
+    def __init__(self, v, log_density=0.0, event_dim=0, validate_args=None):
+        if event_dim > v.dim():
+            raise ValueError('Expected event_dim <= v.dim(), actual {} vs {}'.format(event_dim, v.dim()))
+        batch_dim = v.dim() - event_dim
+        batch_shape = v.shape[:batch_dim]
+        event_shape = v.shape[batch_dim:]
+        if isinstance(log_density, numbers.Number):
+            log_density = v.new_empty(batch_shape).fill_(log_density)
+        elif log_density.shape != batch_shape:
+            raise ValueError('Expected log_density.shape = {}, actual {}'.format(
+                log_density.shape, batch_shape))
         self.v = v
-        if not isinstance(self.v, Variable):
-            self.v = Variable(self.v)
-        if v.dim() == 1 and batch_size is not None:
-            self.v = v.expand(v, v.size(0))
-        super(Delta, self).__init__(*args, **kwargs)
+        self.log_density = log_density
+        super(Delta, self).__init__(batch_shape, event_shape, validate_args=validate_args)
 
-    def batch_shape(self, x=None):
-        event_dim = 1
-        v = self.v
-        if x is not None:
-            if x.size()[-event_dim] != v.size()[-event_dim]:
-                raise ValueError("The event size for the data and distribution parameters must match.\n"
-                                 "Expected x.size()[-1] == self.v.size()[-1], but got {} vs {}".format(
-                                     x.size(-1), v.size(-1)))
-            try:
-                v = self.v.expand_as(x)
-            except RuntimeError as e:
-                raise ValueError("Parameter `v` with shape {} is not broadcastable to "
-                                 "the data shape {}. \nError: {}".format(v.size(), x.size(), str(e)))
-        return v.size()[:-event_dim]
+    def rsample(self, sample_shape=torch.Size()):
+        shape = sample_shape + self.v.shape
+        return self.v.expand(shape)
 
-    def event_shape(self):
-        event_dim = 1
-        return self.v.size()[-event_dim:]
+    def log_prob(self, x):
+        v = self.v.expand(self.shape())
+        log_prob = x.new_tensor(x == v).log()
+        log_prob = sum_rightmost(log_prob, self.event_dim)
+        return log_prob + self.log_density
 
-    def sample(self):
+    @property
+    def mean(self):
         return self.v
 
-    def batch_log_pdf(self, x):
-        v = self.v
-        v = v.expand(self.shape(x))
-        batch_shape = self.batch_shape(x) + (1,)
-        return torch.sum(torch.eq(x, v).float().log(), -1).contiguous().view(batch_shape)
-
-    def enumerate_support(self, v=None):
-        """
-        Returns the delta distribution's support, as a tensor along the first dimension.
-
-        :param v: torch variable where each element of the tensor represents the point at
-            which the delta distribution is concentrated.
-        :return: torch variable enumerating the support of the delta distribution.
-        :rtype: torch.autograd.Variable.
-        """
-        return Variable(self.v.data.unsqueeze(0))
+    @property
+    def variance(self):
+        return torch.zeros_like(self.v)

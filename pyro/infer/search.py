@@ -7,7 +7,7 @@ from six.moves.queue import Queue
 
 class Search(TracePosterior):
     """
-    Trace and Poutine-based implementation of systematic search.
+    Trace and replay-based implementation of systematic search.
 
     :param callable model: Probabilistic model defined as a function.
     :param int max_tries: The maximum number of times to try completing a trace from the queue.
@@ -39,4 +39,4 @@ class Search(TracePosterior):
             poutine.queue(self.model, queue=self.queue, max_tries=self.max_tries))
         while not self.queue.empty():
             tr = p.get_trace(*args, **kwargs)
-            yield (tr, tr.log_pdf())
+            yield (tr, tr.log_prob_sum())

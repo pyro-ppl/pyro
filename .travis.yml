@@ -7,17 +7,9 @@ env:
         - PYTHONPATH=$PWD:$PYTHONPATH
 
 install:
-    # download and install PyTorch wheel
-    - pip install --upgrade awscli
-    - mkdir -p tmp
-    - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
-        aws s3 --no-sign-request sync s3://pyro-ppl/ci tmp --exclude "*" --include "*-cp27-*";
-      else
-        aws s3 --no-sign-request sync s3://pyro-ppl/ci tmp --exclude "*" --include "*-cp35-*";
-      fi
-    - pip install tmp/*
-    - rm -r tmp
-    - pip install -e .[test]
+    # Install PyTorch wheel using the install script
+    - bash scripts/install_pytorch.sh
+    - pip install .[test]
     - pip freeze
 
 branches:
@@ -36,20 +28,41 @@ jobs:
               - make lint
               #- make scrub;
               #  git diff-index --quiet HEAD
-        - stage: unit test
+        - stage: auxiliary modules
           python: 2.7
           env: STAGE=docs
-          script: 
+          script:
               - pip install -r docs/requirements.txt
               - make docs
-        - python: 2.7
+        - stage: perf
+          if: type = cron
+          python: 2.7
+          env: STAGE=perf
+          script:
+              - pip install -e .[profile]
+              - make perf-test
+        - python: 3.5
+          if: type = cron
+          env: STAGE=perf
+          script:
+              - pip install -e .[profile]
+              - make perf-test
+        - stage: profiler
+          python: 2.7
+          env: STAGE=profiler
+          script:
+              - pip install -e .[profile]
+              - python -m profiler.distributions
+        - stage: unit test
+          python: 2.7
           env: STAGE=unit
           script: pytest -vs --cov=pyro --stage unit --durations 20
         - python: 2.7
           env: STAGE=examples
           script:
               - pytest -vs --cov=pyro --stage test_examples
-              - grep -l smoke_test tutorial/source/*.ipynb | xargs pytest -v --nbval-lax
+              - CI=1 grep -l smoke_test tutorial/source/*.ipynb | xargs grep -L 'smoke_test = False' \
+                  | xargs pytest -vx --nbval-lax --current-env
         - python: 3.5
           env: STAGE=unit
           script: pytest -vs --cov=pyro --stage unit --durations 20

@@ -1,20 +1,22 @@
 from __future__ import absolute_import, division, print_function
 
 import functools
+from six.moves import xrange
 
-from pyro import util
+from pyro.poutine import util
 
-# poutines
-from .block_poutine import BlockPoutine
-from .condition_poutine import ConditionPoutine
-from .escape_poutine import EscapePoutine
-from .indep_poutine import IndepPoutine  # noqa: F401
-from .lift_poutine import LiftPoutine
-from .poutine import _PYRO_STACK, Poutine  # noqa: F401
-from .replay_poutine import ReplayPoutine
-from .scale_poutine import ScalePoutine
+from .block_poutine import BlockMessenger
+from .condition_poutine import ConditionMessenger
+from .enumerate_poutine import EnumerateMessenger  # noqa: F401
+from .escape_poutine import EscapeMessenger
+from .indep_poutine import IndepMessenger  # noqa: F401
+from .infer_config_poutine import InferConfigMessenger
+from .lift_poutine import LiftMessenger
+from .poutine import _PYRO_STACK, Messenger  # noqa: F401
+from .replay_poutine import ReplayMessenger
+from .scale_poutine import ScaleMessenger
 from .trace import Trace  # noqa: F401
-from .trace_poutine import TracePoutine
+from .trace_poutine import TraceMessenger
 
 ############################################
 # Begin primitive operations
@@ -25,18 +27,18 @@ def trace(fn, graph_type=None):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param graph_type: string that specifies the kind of graph to construct
-    :returns: stochastic function wrapped in a TracePoutine
-    :rtype: pyro.poutine.TracePoutine
+    :returns: stochastic function wrapped in a TraceHandler
+    :rtype: pyro.poutine.TraceHandler
 
-    Alias for TracePoutine constructor.
+    Alias for TraceHandler constructor.
 
-    Given a callable that contains Pyro primitive calls, return a TracePoutine callable
+    Given a callable that contains Pyro primitive calls, return a TraceHandler callable
     that records the inputs and outputs to those primitive calls
     and their dependencies.
 
     Adds trace data structure site constructors to primitive stacks
     """
-    return TracePoutine(fn, graph_type=graph_type)
+    return TraceMessenger(graph_type=graph_type)(fn)
 
 
 def replay(fn, trace, sites=None):
@@ -45,29 +47,29 @@ def replay(fn, trace, sites=None):
     :param trace: a Trace data structure to replay against
     :param sites: list or dict of names of sample sites in fn to replay against,
     defaulting to all sites
-    :returns: stochastic function wrapped in a ReplayPoutine
-    :rtype: pyro.poutine.ReplayPoutine
+    :returns: stochastic function wrapped in a ReplayHandler
+    :rtype: pyro.poutine.ReplayHandler
 
-    Alias for ReplayPoutine constructor.
+    Alias for ReplayHandler constructor.
 
     Given a callable that contains Pyro primitive calls,
     return a callable that runs the original, reusing the values at sites in trace
     at those sites in the new trace
     """
-    return ReplayPoutine(fn, trace, sites=sites)
+    return ReplayMessenger(trace, sites=sites)(fn)
 
 
 def lift(fn, prior):
     """
     :param fn: function whose parameters will be lifted to random values
     :param prior: prior function in the form of a Distribution or a dict of stochastic fns
-    :returns: stochastic function wrapped in LiftPoutine
+    :returns: stochastic function wrapped in LiftHandler
 
     Given a stochastic function with param calls and a prior distribution,
     create a stochastic function where all param calls are replaced by sampling from prior.
     Prior should be a callable or a dict of names to callables.
     """
-    return LiftPoutine(fn, prior)
+    return LiftMessenger(prior)(fn)
 
 
 def block(fn, hide=None, expose=None, hide_types=None, expose_types=None):
@@ -77,16 +79,16 @@ def block(fn, hide=None, expose=None, hide_types=None, expose_types=None):
     :param expose: list of site names to be exposed while all others hidden
     :param hide_types: list of site types to be hidden
     :param expose_types: list of site types to be exposed while all others hidden
-    :returns: stochastic function wrapped in a BlockPoutine
-    :rtype: pyro.poutine.BlockPoutine
+    :returns: stochastic function wrapped in a BlockHandler
+    :rtype: pyro.poutine.BlockHandler
 
-    Alias for BlockPoutine constructor.
+    Alias for BlockHandler constructor.
 
     Given a callable that contains Pyro primitive calls,
     selectively hide some of those calls from poutines higher up the stack
     """
-    return BlockPoutine(fn, hide=hide, expose=expose,
-                        hide_types=hide_types, expose_types=expose_types)
+    return BlockMessenger(hide=hide, expose=expose,
+                          hide_types=hide_types, expose_types=expose_types)(fn)
 
 
 def escape(fn, escape_fn=None):
@@ -94,64 +96,63 @@ def escape(fn, escape_fn=None):
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param escape_fn: function that takes a partial trace and a site
     and returns a boolean value to decide whether to exit at that site
-    :returns: stochastic function wrapped in EscapePoutine
+    :returns: stochastic function wrapped in EscapeHandler
 
-    Alias for EscapePoutine constructor.
+    Alias for EscapeHandler constructor.
 
     Given a callable that contains Pyro primitive calls,
     evaluate escape_fn on each site, and if the result is True,
     raise a NonlocalExit exception that stops execution
     and returns the offending site.
     """
-    return EscapePoutine(fn, escape_fn)
+    return EscapeMessenger(escape_fn)(fn)
 
 
 def condition(fn, data):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param data: a dict or a Trace
-    :returns: stochastic function wrapped in a ConditionPoutine
-    :rtype: pyro.poutine.ConditionPoutine
+    :returns: stochastic function wrapped in a ConditionHandler
+    :rtype: pyro.poutine.ConditionHandler
 
-    Alias for ConditionPoutine constructor.
+    Alias for ConditionHandler constructor.
 
     Given a stochastic function with some sample statements
     and a dictionary of observations at names,
     change the sample statements at those names into observes
     with those values
     """
-    return ConditionPoutine(fn, data=data)
+    return ConditionMessenger(data=data)(fn)
 
 
-def indep(fn, name, vectorized):
+def infer_config(fn, config_fn):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
-    :param str name: a name for subsample sites
-    :param bool vectorized: True for ``iarange``, False for ``irange``
-    :returns: stochastic function wrapped in an IndepPoutine
-    :rtype: pyro.poutine.IndepPoutine
+    :param config_fn: a callable taking a site and returning an infer dict
 
-    Alias for IndepPoutine constructor.
+    Alias for :class:`~pyro.poutine.infer_config_poutine.InferConfigHandler` constructor.
 
-    Used internally by ``iarange`` and ``irange``.
+    Given a callable that contains Pyro primitive calls
+    and a callable taking a trace site and returning a dictionary,
+    updates the value of the infer kwarg at a sample site to config_fn(site)
     """
-    return IndepPoutine(fn, name=name, vectorized=vectorized)
+    return InferConfigMessenger(config_fn)(fn)
 
 
 def scale(fn, scale):
     """
-    :param fn: a stochastic function (callable containing pyro primitive calls)
     :param scale: a positive scaling factor
-    :returns: stochastic function wrapped in a ScalePoutine
-    :rtype: pyro.poutine.ScalePoutine
+    :rtype: pyro.poutine.ScaleMessenger
 
-    Alias for ScalePoutine constructor.
+    Alias for ScaleMessenger constructor.
 
     Given a stochastic function with some sample statements and a positive
     scale factor, scale the score of all sample and observe sites in the
     function.
     """
-    return ScalePoutine(fn, scale=scale)
+    m = ScaleMessenger(scale=scale)
+    # temporary change to preserve API
+    return m(fn) if callable(fn) else m
 
 
 #########################################
@@ -162,18 +163,17 @@ def do(fn, data):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param data: a dict or a Trace
-    :returns: stochastic function wrapped in a BlockPoutine and ConditionPoutine
-    :rtype: pyro.poutine.BlockPoutine
+    :returns: stochastic function wrapped in a BlockHandler and ConditionHandler
+    :rtype: pyro.poutine.BlockHandler
 
     Given a stochastic function with some sample statements
     and a dictionary of values at names,
     set the return values of those sites equal to the values
     and hide them from the rest of the stack
     as if they were hard-coded to those values
-    by using BlockPoutine
+    by using BlockHandler
     """
-    return BlockPoutine(ConditionPoutine(fn, data=data),
-                        hide=list(data.keys()))
+    return block(condition(fn, data=data), hide=list(data.keys()))
 
 
 def queue(fn, queue, max_tries=None,
@@ -197,11 +197,9 @@ def queue(fn, queue, max_tries=None,
         max_tries = int(1e6)
 
     if extend_fn is None:
-        # XXX should be util.enum_extend
         extend_fn = util.enum_extend
 
     if escape_fn is None:
-        # XXX should be util.discrete_escape
         escape_fn = util.discrete_escape
 
     if num_samples is None:
@@ -209,7 +207,7 @@ def queue(fn, queue, max_tries=None,
 
     def _fn(*args, **kwargs):
 
-        for i in range(max_tries):
+        for i in xrange(max_tries):
             assert not queue.empty(), \
                 "trying to get() from an empty queue will deadlock"
 
@@ -219,8 +217,7 @@ def queue(fn, queue, max_tries=None,
                                    functools.partial(escape_fn, next_trace)))
                 return ftr(*args, **kwargs)
             except util.NonlocalExit as site_container:
-                for frame in _PYRO_STACK:
-                    frame._reset()
+                site_container.reset_stack()
                 for tr in extend_fn(ftr.trace.copy(), site_container.site,
                                     num_samples=num_samples):
                     queue.put(tr)

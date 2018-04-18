@@ -15,12 +15,10 @@ und Kognitive Systeme at Universitaet Karlsruhe.
 
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
 import numpy as np
 from observations import jsb_chorales
 from os.path import join, exists
 import six.moves.cPickle as pickle
-from pyro.util import ng_zeros
 
 
 # this function processes the raw data; in particular it unsparsifies it
@@ -69,12 +67,12 @@ def reverse_sequences_numpy(mini_batch, seq_lengths):
 # in contrast to `reverse_sequences_numpy`, this function plays
 # nice with torch autograd
 def reverse_sequences_torch(mini_batch, seq_lengths):
-    reversed_mini_batch = ng_zeros(mini_batch.size(), type_as=mini_batch.data)
+    reversed_mini_batch = mini_batch.new_zeros(mini_batch.size())
     for b in range(mini_batch.size(0)):
         T = seq_lengths[b]
         time_slice = np.arange(T - 1, -1, -1)
-        time_slice = Variable(torch.cuda.LongTensor(time_slice)) if 'cuda' in mini_batch.data.type() \
-            else Variable(torch.LongTensor(time_slice))
+        time_slice = torch.cuda.LongTensor(time_slice) if 'cuda' in mini_batch.data.type() \
+            else torch.LongTensor(time_slice)
         reversed_sequence = torch.index_select(mini_batch[b, :, :], 0, time_slice)
         reversed_mini_batch[b, 0:T, :] = reversed_sequence
     return reversed_mini_batch
@@ -97,9 +95,9 @@ def get_mini_batch_mask(mini_batch, seq_lengths):
     return mask
 
 
-# this function prepares a mini-batch for training or evaluation
+# this function prepares a mini-batch for training or evaluation.
 # it returns a mini-batch in forward temporal order (`mini_batch`) as
-# as a mini-batch in reverse temporal order (`mini_batch_reversed`).
+# well as a mini-batch in reverse temporal order (`mini_batch_reversed`).
 # it also deals with the fact that packed sequences (which are what what we
 # feed to the PyTorch rnn) need to be sorted by sequence length.
 def get_mini_batch(mini_batch_indices, sequences, seq_lengths, cuda=False):
@@ -119,10 +117,10 @@ def get_mini_batch(mini_batch_indices, sequences, seq_lengths, cuda=False):
     # get mask for mini-batch
     mini_batch_mask = get_mini_batch_mask(mini_batch, sorted_seq_lengths)
 
-    # wrap in PyTorch Variables
-    mini_batch = Variable(torch.Tensor(mini_batch))
-    mini_batch_reversed = Variable(torch.Tensor(mini_batch_reversed))
-    mini_batch_mask = Variable(torch.Tensor(mini_batch_mask))
+    # wrap in PyTorch Tensors, using default tensor type
+    mini_batch = torch.tensor(mini_batch).type(torch.Tensor)
+    mini_batch_reversed = torch.tensor(mini_batch_reversed).type(torch.Tensor)
+    mini_batch_mask = torch.tensor(mini_batch_mask).type(torch.Tensor)
 
     # cuda() here because need to cuda() before packing
     if cuda:

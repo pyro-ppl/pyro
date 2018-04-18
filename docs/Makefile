@@ -2,7 +2,7 @@
 #
 
 # You can set these variables from the command line.
-SPHINXOPTS    ?= -E
+SPHINXOPTS    ?= -E -W
 SPHINXBUILD   = python -msphinx
 APIDOC        = sphinx-apidoc
 SPHINXPROJ    = Pyro

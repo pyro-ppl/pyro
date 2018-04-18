@@ -1,7 +1,6 @@
 import logging
 
 import torch
-from torch.autograd import Variable
 
 import pyro
 import pyro.distributions as dist
@@ -39,21 +38,23 @@ class PriorKernel(TraceKernel):
 
 
 def normal_normal_model(data):
-    x = pyro.param('mu', Variable(torch.Tensor([0.0])))
-    y = pyro.sample('x', dist.normal, mu=x, sigma=Variable(torch.Tensor([1])))
-    pyro.sample('obs', dist.normal, mu=y, sigma=Variable(torch.Tensor([1])), obs=data)
+    x = pyro.param('loc', torch.tensor([0.0]))
+    y = pyro.sample('x', dist.Normal(x, torch.tensor([1.0])))
+    pyro.sample('obs', dist.Normal(y, torch.tensor([1.0])), obs=data)
     return y
 
 
 def test_mcmc_interface():
-    data = Variable(torch.Tensor([1.0]))
+    data = torch.tensor([1.0])
     kernel = PriorKernel(normal_normal_model)
-    mcmc = MCMC(kernel=kernel, num_samples=800)
+    mcmc = MCMC(kernel=kernel, num_samples=800, warmup_steps=100)
     marginal = Marginal(mcmc)
+    dist, values = marginal._dist_and_values(data)
+    assert_equal(len(values), 800)
     samples = []
-    for _ in range(400):
-        samples.append(marginal.sample(data))
+    for _ in range(600):
+        samples.append(values[dist.sample().item()])
     sample_mean = torch.mean(torch.stack(samples), 0)
     sample_std = torch.std(torch.stack(samples), 0)
-    assert_equal(sample_mean.data, torch.Tensor([0.0]), prec=5e-2)
-    assert_equal(sample_std.data, torch.Tensor([1.0]), prec=5e-2)
+    assert_equal(sample_mean.data, torch.tensor([0.0]), prec=0.08)
+    assert_equal(sample_std.data, torch.tensor([1.0]), prec=0.08)

@@ -1,8 +1,7 @@
 Primitives
 ==========
 
-.. automodule:: pyro.__init__
+.. automodule:: pyro.primitives
     :members:
     :undoc-members:
-    :exclude-members: map_data
     :show-inheritance:

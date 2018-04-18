@@ -1,11 +1,10 @@
 from __future__ import absolute_import, division, print_function
 
-import numpy as np
 import torch
-from torch.autograd import Variable
 
 import pyro.distributions as dist
 import pyro.poutine as poutine
+from pyro.distributions.util import log_sum_exp
 import pyro.util as util
 
 
@@ -19,10 +18,8 @@ def _eq(x, y):
         if set(x.keys()) != set(y.keys()):
             return False
         return all(_eq(x_val, y[key]) for key, x_val in x.items())
-    elif isinstance(x, (np.ndarray, torch.Tensor)):
+    elif torch.is_tensor(x):
         return (x == y).all()
-    elif isinstance(x, torch.autograd.Variable):
-        return (x.data == y.data).all()
     else:
         return x == y
 
@@ -43,7 +40,7 @@ class Histogram(dist.Distribution):
     Abstract Histogram distribution of equality-comparable values.
     Should only be used inside Marginal.
     """
-    enumerable = True
+    has_enumerate_support = True
 
     @util.memoize
     def _dist_and_values(self, *args, **kwargs):
@@ -57,14 +54,11 @@ class Histogram(dist.Distribution):
                 logits.append(logit)
             else:
                 # Value has already been seen.
-                logits[ix] = util.log_sum_exp(torch.stack([logits[ix], logit]).squeeze())
+                logits[ix] = log_sum_exp(torch.stack([logits[ix], logit]))
 
-        logits = torch.stack(logits).squeeze()
-        logits -= util.log_sum_exp(logits)
-        if not isinstance(logits, torch.autograd.Variable):
-            logits = Variable(logits)
-        logits = logits - util.log_sum_exp(logits)
-
+        logits = torch.stack(logits).reshape(-1)
+        logits -= log_sum_exp(logits)
+        logits = logits - log_sum_exp(logits)
         d = dist.Categorical(logits=logits)
         return d, values
 
@@ -72,19 +66,19 @@ class Histogram(dist.Distribution):
         raise NotImplementedError("_gen_weighted_samples is abstract method")
 
     def sample(self, *args, **kwargs):
+        sample_shape = kwargs.pop("sample_shape", None)
+        if sample_shape:
+            raise ValueError("Arbitrary `sample_shape` not supported by Histogram class.")
         d, values = self._dist_and_values(*args, **kwargs)
-        ix = d.sample().data[0]
+        ix = d.sample()
         return values[ix]
 
-    def log_pdf(self, val, *args, **kwargs):
-        d, values = self._dist_and_values(*args, **kwargs)
-        ix = _index(values, val)
-        return d.log_pdf(Variable(torch.Tensor([ix])))
+    __call__ = sample
 
-    def batch_log_pdf(self, val, *args, **kwargs):
+    def log_prob(self, val, *args, **kwargs):
         d, values = self._dist_and_values(*args, **kwargs)
         ix = _index(values, val)
-        return d.batch_log_pdf(Variable(torch.Tensor([ix])))
+        return d.log_prob(torch.tensor([ix]))
 
     def enumerate_support(self, *args, **kwargs):
         d, values = self._dist_and_values(*args, **kwargs)
@@ -126,9 +120,6 @@ class Marginal(Histogram):
                        for name in self.sites}
             yield (val, log_w)
 
-    def batch_log_pdf(self, val, *args, **kwargs):
-        raise NotImplementedError("batch_log_pdf not well defined for Marginal")
-
 
 class TracePosterior(object):
     """
@@ -152,8 +143,6 @@ class TracePosterior(object):
             traces.append(tr)
             logits.append(logit)
         logits = torch.stack(logits).squeeze()
-        logits -= util.log_sum_exp(logits)
-        if not isinstance(logits, torch.autograd.Variable):
-            logits = Variable(logits)
-        ix = dist.categorical(logits=logits)
-        return traces[ix.data[0]]
+        logits -= log_sum_exp(logits)
+        ix = dist.Categorical(logits=logits).sample()
+        return traces[ix]

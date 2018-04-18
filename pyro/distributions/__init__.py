@@ -1,57 +1,35 @@
 from __future__ import absolute_import, division, print_function
 
-# Notice to Contributors. (@fritzo 2017-12-26)
-#
-# The Pyro team is moving pyro.distributions implementations upstream to
-# torch.distributions, aiming for the PyTorch 0.4 release and Pyro 0.2 release
-# around Feb 2018.
-# Tasks: https://github.com/probtorch/pytorch/projects/1
-# Design Doc: https://goo.gl/9ccYsq
-#
-# To contribute new distributions you can either:
-# 1. (Preferred) Implement a new distributions in torch.distributions and then
-#    create a wrapper in pyro.distributions.torch.
-# 2. Implement a new distribution in pyro.distribution and let Pyro devs move
-#    this implementation upstream to torch.distributions.
-
-# TODO move these implementations upstream to torch.distributions
-from pyro.distributions.binomial import Binomial
 from pyro.distributions.delta import Delta
-from pyro.distributions.distribution import Distribution  # noqa: F401
+from pyro.distributions.distribution import Distribution
+from pyro.distributions.empirical import Empirical
 from pyro.distributions.half_cauchy import HalfCauchy
-from pyro.distributions.log_normal import LogNormal
-from pyro.distributions.multivariate_normal import MultivariateNormal
-from pyro.distributions.poisson import Poisson
-from pyro.distributions.random_primitive import RandomPrimitive
+from pyro.distributions.iaf import InverseAutoregressiveFlow
+from pyro.distributions.omt_mvn import OMTMultivariateNormal
+from pyro.distributions.rejector import Rejector
+from pyro.distributions.sparse_mvn import SparseMultivariateNormal
+from pyro.distributions.torch import __all__ as torch_dists
+from pyro.distributions.torch import *  # noqa F403
+from pyro.distributions.torch_distribution import TorchDistribution
+from pyro.distributions.util import enable_validation, is_validation_enabled, validation_enabled
+from pyro.distributions.von_mises import VonMises
 
-# distribution classes with working torch versions in torch.distributions
-from pyro.distributions.torch.bernoulli import Bernoulli
-from pyro.distributions.torch.beta import Beta
-from pyro.distributions.torch.categorical import Categorical
-from pyro.distributions.torch.cauchy import Cauchy
-from pyro.distributions.torch.dirichlet import Dirichlet
-from pyro.distributions.torch.exponential import Exponential
-from pyro.distributions.torch.gamma import Gamma
-from pyro.distributions.torch.multinomial import Multinomial
-from pyro.distributions.torch.normal import Normal
-from pyro.distributions.torch.one_hot_categorical import OneHotCategorical
-from pyro.distributions.torch.uniform import Uniform
+__all__ = [
+    "enable_validation",
+    "is_validation_enabled",
+    "validation_enabled",
+    "Delta",
+    "Distribution",
+    "Empirical",
+    "HalfCauchy",
+    "InverseAutoregressiveFlow",
+    "OMTMultivariateNormal",
+    "Rejector",
+    "SparseMultivariateNormal",
+    "TorchDistribution",
+    "VonMises",
+]
 
-# function aliases
-bernoulli = RandomPrimitive(Bernoulli)
-beta = RandomPrimitive(Beta)
-binomial = RandomPrimitive(Binomial)
-categorical = RandomPrimitive(Categorical)
-cauchy = RandomPrimitive(Cauchy)
-delta = RandomPrimitive(Delta)
-dirichlet = RandomPrimitive(Dirichlet)
-exponential = RandomPrimitive(Exponential)
-gamma = RandomPrimitive(Gamma)
-halfcauchy = RandomPrimitive(HalfCauchy)
-lognormal = RandomPrimitive(LogNormal)
-multinomial = RandomPrimitive(Multinomial)
-normal = RandomPrimitive(Normal)
-one_hot_categorical = RandomPrimitive(OneHotCategorical)
-poisson = RandomPrimitive(Poisson)
-uniform = RandomPrimitive(Uniform)
-multivariate_normal = RandomPrimitive(MultivariateNormal)
+# Import all torch distributions from `pyro.distributions.torch_distribution`
+__all__.extend(torch_dists)
+del torch_dists

@@ -47,6 +47,9 @@ pytest -vs {path_to_test}::{test_name}
 ## Testing Tutorials
 
 We run some tutorials on travis to avoid bit rot.
+Before submitting a new tutorial, please run `make scrub` from 
+the top-level pyro directory in order to scrub the metadata in 
+the notebooks.
 To enable a tutorial for testing
 
 1.  Add a line `smoke_test = ('CI' in os.environ)` to your tutorial. Our test
@@ -111,4 +114,3 @@ In your PR, please include:
 
 Please add the `awaiting review` tag and add any of the core Pyro contributors as reviewers.
 For speculative changes meant for early-stage review, add the `WIP` tag.
-Our policy is to require the reviewer to merge the PR, rather than the PR author.
