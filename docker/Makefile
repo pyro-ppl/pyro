@@ -5,12 +5,12 @@ BASE_IMG=ubuntu:16.04
 BASE_CUDA_IMG=nvidia/cuda:9.1-cudnn7-devel-ubuntu16.04
 DOCKER_CMD=docker
 DOCKER_GPU_CMD=nvidia-docker
-DOCKER_WORK_DIR=/workspace/shared
-HOST_WORK_DIR=${HOME}/workspace/pyro_docker
+HOST_WORK_DIR=${HOME}/pyro_docker
 UID=$(shell id -u)
 GID=$(shell id -g)
 OSTYPE=$(shell uname)
 USER=pyromancer
+DOCKER_WORK_DIR=/home/${USER}/workspace/shared
 
 # Optional args
 python_version?=2.7
