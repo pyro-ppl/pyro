@@ -15,6 +15,17 @@ BENCHMARK_FILE=tests/perf/test_benchmark.py
 IS_BENCHMARK_FILE_IN_DEV=1
 REF_TMP_DIR=.tmp_test_dir
 
+# Use process time whenever possible to make timing more robust
+# inside of VMs or when running other processes.
+PY_VERSION=$(python -c 'import sys; print(sys.version_info[0])')
+if [ ${PY_VERSION} = 2 ]; then
+    TIMER=time.clock
+else
+    TIMER=time.process_time
+fi
+
+# Tests have much higher variance when run inside VMs; adjust
+# the threshold accordingly.
 if [ -z ${CI} ]; then
     PERCENT_REGRESSION_FAILURE=10
 else
@@ -36,7 +47,7 @@ if [ -e ${BENCHMARK_FILE} ]; then
     pytest -vs tests/perf/test_benchmark.py --benchmark-save=${REF_HEAD} --benchmark-name=short \
         --benchmark-columns=min,median,max --benchmark-sort=name \
         --benchmark-storage=file://../.benchmarks || echo "ERR: Failed on branch upstream/${REF_HEAD}." \
-        --benchmark-timer timeit.default_timer
+        --benchmark-timer ${TIMER}
 fi
 
 # cd back into the current repo to run comparison benchmarks
@@ -47,8 +58,8 @@ if [ ${IS_BENCHMARK_FILE_IN_DEV} = 1 ]; then
     pytest -vx tests/perf/test_benchmark.py --benchmark-compare \
         --benchmark-compare-fail=min:${PERCENT_REGRESSION_FAILURE}% \
         --benchmark-name=short --benchmark-columns=min,median,max --benchmark-sort=name \
-        --benchmark-timer timeit.default_timer
+        --benchmark-timer ${TIMER}
 else
     pytest -vx tests/perf/test_benchmark.py --benchmark-name=short --benchmark-columns=min,median,max \
-        --benchmark-sort=name --benchmark-timer timeit.default_timer
+        --benchmark-sort=name --benchmark-timer ${TIMER}
 fi
