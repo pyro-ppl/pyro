@@ -108,7 +108,7 @@ def gmm_model(data, verbose=False):
         z = pyro.sample("z_{}".format(i), dist.Bernoulli(p))
         z = z.long()
         if verbose:
-            logger.debug("M{} z_{} = {}".format("  " * i, i, z.numpy()))
+            logger.debug("M{} z_{} = {}".format("  " * i, i, z.cpu().numpy()))
         pyro.sample("x_{}".format(i), dist.Normal(mus[z], scale), obs=data[i])
 
 
@@ -118,7 +118,7 @@ def gmm_guide(data, verbose=False):
         z = pyro.sample("z_{}".format(i), dist.Bernoulli(p))
         z = z.long()
         if verbose:
-            logger.debug("G{} z_{} = {}".format("  " * i, i, z.numpy()))
+            logger.debug("G{} z_{} = {}".format("  " * i, i, z.cpu().numpy()))
 
 
 @pytest.mark.parametrize("data_size", [1, 2, 3])
@@ -398,7 +398,7 @@ def test_elbo_irange(irange_dim, enumerate1, enumerate2):
 @pytest.mark.parametrize("outer_dim", [2])
 def test_elbo_iarange_iarange(outer_dim, inner_dim, enumerate1, enumerate2, enumerate3, enumerate4):
     pyro.clear_param_store()
-    num_particles = 1 if all([enumerate1, enumerate2, enumerate3, enumerate4]) else 50000
+    num_particles = 1 if all([enumerate1, enumerate2, enumerate3, enumerate4]) else 100000
     q = pyro.param("q", torch.tensor(0.75, requires_grad=True))
     p = 0.2693204236205713  # for which kl(Bernoulli(q), Bernoulli(p)) = 0.5
 
@@ -454,7 +454,7 @@ def test_elbo_iarange_iarange(outer_dim, inner_dim, enumerate1, enumerate2, enum
 @pytest.mark.parametrize("outer_dim", [3])
 def test_elbo_iarange_irange(outer_dim, inner_dim, enumerate1, enumerate2, enumerate3):
     pyro.clear_param_store()
-    num_particles = 1 if all([enumerate1, enumerate2, enumerate3]) else 50000
+    num_particles = 1 if all([enumerate1, enumerate2, enumerate3]) else 100000
     q = pyro.param("q", torch.tensor(0.75, requires_grad=True))
     p = 0.2693204236205713  # for which kl(Bernoulli(q), Bernoulli(p)) = 0.5
 
@@ -750,8 +750,8 @@ def test_non_mean_field_normal_bern_elbo_gradient(pi1, pi2, pi3):
 @pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
 def test_elbo_rsvi(enumerate1):
     pyro.clear_param_store()
-    num_particles = 10000
-    prec = 0.003 if enumerate1 else 0.01
+    num_particles = 20000
+    prec = 0.01 if enumerate1 else 0.02
     q = pyro.param("q", torch.tensor(0.5, requires_grad=True))
     a = pyro.param("a", torch.tensor(1.5, requires_grad=True))
     kl1 = kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.25))
@@ -836,7 +836,7 @@ def test_elbo_hmm_in_model(enumerate1, num_steps):
         actual = value.grad
         expected = expected_unconstrained_grads[name]
         assert_equal(actual, expected, msg=''.join([
-            '\nexpected {}.grad = {}'.format(name, expected.numpy()),
+            '\nexpected {}.grad = {}'.format(name, expected.cpu().numpy()),
             '\n  actual {}.grad = {}'.format(name, actual.detach().cpu().numpy()),
         ]))
 
@@ -906,6 +906,6 @@ def test_elbo_hmm_in_guide(enumerate1, num_steps):
         actual = value.grad
         expected = torch.tensor(expected_grads[num_steps][name])
         assert_equal(actual, expected, msg=''.join([
-            '\nexpected {}.grad = {}'.format(name, expected.numpy()),
+            '\nexpected {}.grad = {}'.format(name, expected.cpu().numpy()),
             '\n  actual {}.grad = {}'.format(name, actual.detach().cpu().numpy()),
         ]))
