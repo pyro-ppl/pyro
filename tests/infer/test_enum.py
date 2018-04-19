@@ -750,7 +750,7 @@ def test_non_mean_field_normal_bern_elbo_gradient(pi1, pi2, pi3):
 @pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
 def test_elbo_rsvi(enumerate1):
     pyro.clear_param_store()
-    num_particles = 20000
+    num_particles = 40000
     prec = 0.01 if enumerate1 else 0.02
     q = pyro.param("q", torch.tensor(0.5, requires_grad=True))
     a = pyro.param("a", torch.tensor(1.5, requires_grad=True))
