@@ -127,7 +127,8 @@ class _Subsample(Distribution):
         if subsample_size == self.size:
             result = torch.LongTensor(list(range(self.size)))
         else:
-            result = torch.randperm(self.size)[:self.subsample_size]
+            # torch.randperm does not have a CUDA implementation
+            result = torch.randperm(self.size, device=torch.device('cpu'))[:self.subsample_size]
         return result.cuda() if self.use_cuda else result
 
     def log_prob(self, x):

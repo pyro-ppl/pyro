@@ -52,7 +52,8 @@ test-all: lint FORCE
 	  | xargs pytest -vx --nbval-lax
 
 test-cuda: lint FORCE
-	PYRO_TENSOR_TYPE=torch.cuda.DoubleTensor pytest -vx -n 8 --stage unit
+	CUDA_TEST=1 PYRO_TENSOR_TYPE=torch.cuda.DoubleTensor pytest -vx -n 8 --stage unit
+	CUDA_TEST=1 pytest -vx -n 8 tests/test_examples.py::test_cuda
 
 clean: FORCE
 	git clean -dfx -e pyro-egg.info

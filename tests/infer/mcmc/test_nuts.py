@@ -19,9 +19,7 @@ logging.basicConfig(format='%(levelname)s %(message)s')
 logger = logging.getLogger('pyro')
 logger.setLevel(logging.INFO)
 
-TEST_CASES[0] = TEST_CASES[0]._replace(mean_tol=0.04, std_tol=0.04)
-TEST_CASES[1] = TEST_CASES[1]._replace(mean_tol=0.04, std_tol=0.04)
-T2 = T(*TEST_CASES[2].values)._replace(num_samples=600, warmup_steps=100)
+T2 = T(*TEST_CASES[2].values)._replace(num_samples=800, warmup_steps=200)
 TEST_CASES[2] = pytest.param(*T2, marks=pytest.mark.skipif(
     'CI' in os.environ and os.environ['CI'] == 'true', reason='Slow test - skip on CI'))
 T3 = T(*TEST_CASES[3].values)._replace(num_samples=700, warmup_steps=100)
@@ -90,7 +88,7 @@ def test_logistic_regression():
     for trace, _ in mcmc_run._traces(data):
         posterior.append(trace.nodes['beta']['value'])
     posterior_mean = torch.mean(torch.stack(posterior), 0)
-    assert_equal(rmse(true_coefs, posterior_mean).item(), 0.0, prec=0.05)
+    assert_equal(rmse(true_coefs, posterior_mean).item(), 0.0, prec=0.1)
 
 
 def test_bernoulli_beta():
@@ -149,7 +147,7 @@ def test_logistic_regression_with_dual_averaging():
     for trace, _ in mcmc_run._traces(data):
         posterior.append(trace.nodes['beta']['value'])
     posterior_mean = torch.mean(torch.stack(posterior), 0)
-    assert_equal(rmse(true_coefs, posterior_mean).item(), 0.0, prec=0.05)
+    assert_equal(rmse(true_coefs, posterior_mean).item(), 0.0, prec=0.1)
 
 
 @pytest.mark.filterwarnings("ignore:Encountered NAN")

@@ -44,8 +44,10 @@ class AutoGaussianChain(GaussianChain):
         self.setup_chain(N)
         self.compute_target(N)
         self.guide = AutoMultivariateNormal(self.model)
-        logger.debug("target advi_loc: {}".format(self.target_advi_mus[1:].detach().numpy()))
-        logger.debug("target advi_diag_cov: {}".format(self.target_advi_diag_cov[1:].detach().numpy()))
+        logger.debug("target advi_loc: {}"
+                     .format(self.target_advi_mus[1:].detach().cpu().numpy()))
+        logger.debug("target advi_diag_cov: {}"
+                     .format(self.target_advi_diag_cov[1:].detach().cpu().numpy()))
 
         # TODO speed up with parallel num_particles > 1
         adam = optim.Adam({"lr": .0005, "betas": (0.95, 0.999)})
@@ -56,10 +58,12 @@ class AutoGaussianChain(GaussianChain):
             assert np.isfinite(loss), loss
 
             if k % 1000 == 0 and k > 0 or k == n_steps - 1:
-                logger.debug("[step {}] guide mean parameter: {}".format(k, pyro.param("advi_loc").detach().numpy()))
+                logger.debug("[step {}] guide mean parameter: {}"
+                             .format(k, pyro.param("advi_loc").detach().cpu().numpy()))
                 L = pyro.param("advi_scale_tril")
                 diag_cov = torch.mm(L, L.t()).diag()
-                logger.debug("[step {}] advi_diag_cov: {}".format(k, diag_cov.detach().numpy()))
+                logger.debug("[step {}] advi_diag_cov: {}"
+                             .format(k, diag_cov.detach().cpu().numpy()))
 
         assert_equal(pyro.param("advi_loc"), self.target_advi_mus[1:], prec=0.05,
                      msg="guide mean off")
