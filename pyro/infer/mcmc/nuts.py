@@ -220,38 +220,42 @@ class NUTS(HMC):
         tree_size = 1
         accepted = False
 
-        # doubling process, stop when turning or diverging
-        for tree_depth in range(self._max_tree_depth + 1):
-            direction = pyro.sample("direction_t={}_treedepth={}".format(self._t, tree_depth),
-                                    dist.Bernoulli(probs=torch.ones(1) * 0.5))
-            direction = int(direction.item())
-            if direction == 1:  # go to the right, start from the right leaf of current tree
-                new_tree = self._build_tree(z_right, r_right, z_right_grads, log_slice,
-                                            direction, tree_depth, energy_current)
-                # update leaf for the next doubling process
-                z_right = new_tree.z_right
-                r_right = new_tree.r_right
-                z_right_grads = new_tree.z_right_grads
-            else:  # go the the left, start from the left leaf of current tree
-                new_tree = self._build_tree(z_left, r_left, z_left_grads, log_slice,
-                                            direction, tree_depth, energy_current)
-                z_left = new_tree.z_left
-                r_left = new_tree.r_left
-                z_left_grads = new_tree.z_left_grads
+        # Temporarily disable distributions args checking as
+        # NaNs are expected during step size adaptation.
+        dist_arg_check = False if self.adapt_step_size else pyro.distributions.is_validation_enabled()
+        with dist.validation_enabled(dist_arg_check):
+            # doubling process, stop when turning or diverging
+            for tree_depth in range(self._max_tree_depth + 1):
+                direction = pyro.sample("direction_t={}_treedepth={}".format(self._t, tree_depth),
+                                        dist.Bernoulli(probs=torch.ones(1) * 0.5))
+                direction = int(direction.item())
+                if direction == 1:  # go to the right, start from the right leaf of current tree
+                    new_tree = self._build_tree(z_right, r_right, z_right_grads, log_slice,
+                                                direction, tree_depth, energy_current)
+                    # update leaf for the next doubling process
+                    z_right = new_tree.z_right
+                    r_right = new_tree.r_right
+                    z_right_grads = new_tree.z_right_grads
+                else:  # go the the left, start from the left leaf of current tree
+                    new_tree = self._build_tree(z_left, r_left, z_left_grads, log_slice,
+                                                direction, tree_depth, energy_current)
+                    z_left = new_tree.z_left
+                    r_left = new_tree.r_left
+                    z_left_grads = new_tree.z_left_grads
 
-            if new_tree.turning or new_tree.diverging:  # stop doubling
-                break
+                if new_tree.turning or new_tree.diverging:  # stop doubling
+                    break
 
-            rand = pyro.sample("rand_t={}_treedepth={}".format(self._t, tree_depth),
-                               dist.Uniform(torch.zeros(1), torch.ones(1)))
-            if rand < new_tree.size / tree_size:
-                accepted = True
-                z = new_tree.z_proposal
+                rand = pyro.sample("rand_t={}_treedepth={}".format(self._t, tree_depth),
+                                   dist.Uniform(torch.zeros(1), torch.ones(1)))
+                if rand < new_tree.size / tree_size:
+                    accepted = True
+                    z = new_tree.z_proposal
 
-            if self._is_turning(z_left, r_left, z_right, r_right):  # stop doubling
-                break
-            else:  # update tree_size
-                tree_size += new_tree.size
+                if self._is_turning(z_left, r_left, z_right, r_right):  # stop doubling
+                    break
+                else:  # update tree_size
+                    tree_size += new_tree.size
 
         if self.adapt_step_size:
             accept_prob = new_tree.sum_accept_probs / new_tree.num_proposals

@@ -7,5 +7,6 @@ Contributed Code
 .. toctree::
    :maxdepth: 2
 
-   contrib.named
+   contrib.autoguide
    contrib.gp
+   contrib.named

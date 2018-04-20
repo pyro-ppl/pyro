@@ -126,7 +126,7 @@ class AIR(nn.Module):
         # Sample presence indicators.
         z_pres = pyro.sample('z_pres_{}'.format(t),
                              dist.Bernoulli(z_pres_prior_p(t) * prev.z_pres)
-                                 .reshape(extra_event_dims=1))
+                                 .independent(1))
 
         # If zero is sampled for a data point, then no more objects
         # will be added to its output image. We can't
@@ -139,14 +139,14 @@ class AIR(nn.Module):
                               dist.Normal(self.z_where_loc_prior.expand(n, self.z_where_size),
                                           self.z_where_scale_prior.expand(n, self.z_where_size))
                                   .mask(sample_mask)
-                                  .reshape(extra_event_dims=1))
+                                  .independent(1))
 
         # Sample latent code for contents of the attention window.
         z_what = pyro.sample('z_what_{}'.format(t),
                              dist.Normal(self.prototype.new_zeros([n, self.z_what_size]),
                                          self.prototype.new_ones([n, self.z_what_size]))
                                  .mask(sample_mask)
-                                 .reshape(extra_event_dims=1))
+                                 .independent(1))
 
         # Map latent code to pixel space.
         y_att = self.decode(z_what)
@@ -170,7 +170,7 @@ class AIR(nn.Module):
             pyro.sample('obs',
                         dist.Normal(x.view(n, -1),
                                     (self.likelihood_sd * self.prototype.new_ones(n, self.x_size ** 2)))
-                            .reshape(extra_event_dims=1),
+                            .independent(1),
                         obs=batch.view(n, -1))
 
     def guide(self, data, batch_size, **kwargs):
@@ -232,7 +232,7 @@ class AIR(nn.Module):
 
         # Sample presence.
         z_pres = pyro.sample('z_pres_{}'.format(t),
-                             dist.Bernoulli(z_pres_p * prev.z_pres).reshape(extra_event_dims=1),
+                             dist.Bernoulli(z_pres_p * prev.z_pres).independent(1),
                              infer=dict(baseline=dict(baseline_value=bl_value.squeeze(-1))))
 
         sample_mask = z_pres if self.use_masking else torch.tensor(1.0)
@@ -241,7 +241,7 @@ class AIR(nn.Module):
                               dist.Normal(z_where_loc + self.z_where_loc_prior,
                                           z_where_scale * self.z_where_scale_prior)
                                   .mask(sample_mask)
-                                  .reshape(extra_event_dims=1))
+                                  .independent(1))
 
         # Figure 2 of [1] shows x_att depending on z_where and h,
         # rather than z_where and x as here, but I think this is
@@ -254,7 +254,7 @@ class AIR(nn.Module):
         z_what = pyro.sample('z_what_{}'.format(t),
                              dist.Normal(z_what_loc, z_what_scale)
                                  .mask(sample_mask)
-                                 .reshape(extra_event_dims=1))
+                                 .independent(1))
         return GuideState(h=h, c=c, bl_h=bl_h, bl_c=bl_c, z_pres=z_pres, z_where=z_where, z_what=z_what)
 
     def baseline_step(self, prev, inputs):

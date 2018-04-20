@@ -12,7 +12,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
 from pyro.distributions.testing import fakes
-from pyro.infer import SVI
+from pyro.infer import SVI, TraceGraph_ELBO
 from tests.common import assert_equal
 
 pytestmark = pytest.mark.stage("integration", "integration_batch_2")
@@ -80,7 +80,7 @@ class NormalNormalTests(TestCase):
             return loc_latent
 
         adam = optim.Adam({"lr": .0015, "betas": (0.97, 0.999)})
-        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
+        svi = SVI(model, guide, adam, loss=TraceGraph_ELBO())
 
         for k in range(n_steps):
             svi.step()
@@ -158,7 +158,7 @@ class NormalNormalNormalTests(TestCase):
                 with pyro.iarange("data", len(self.data)):
                     pyro.sample("obs",
                                 dist.Normal(loc_latent, torch.pow(self.lam, -0.5))
-                                    .reshape(sample_shape=self.data.shape[:1]),
+                                    .expand_by(self.data.shape[:1]),
                                 obs=self.data)
             return loc_latent
 
@@ -188,7 +188,7 @@ class NormalNormalNormalTests(TestCase):
             return loc_latent
 
         adam = optim.Adam({"lr": .0015, "betas": (0.97, 0.999)})
-        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
+        svi = SVI(model, guide, adam, loss=TraceGraph_ELBO())
 
         for k in range(n_steps):
             svi.step()
@@ -255,7 +255,7 @@ class BernoulliBetaTests(TestCase):
             return p_latent
 
         adam = optim.Adam({"lr": lr, "betas": (beta1, 0.999)})
-        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
+        svi = SVI(model, guide, adam, loss=TraceGraph_ELBO())
 
         for k in range(n_steps):
             svi.step()
@@ -313,7 +313,7 @@ class ExponentialGammaTests(TestCase):
                 pass
 
         adam = optim.Adam({"lr": lr, "betas": (beta1, 0.999)})
-        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
+        svi = SVI(model, guide, adam, loss=TraceGraph_ELBO())
 
         for k in range(n_steps):
             svi.step()
@@ -357,13 +357,12 @@ class RaoBlackwellizationTests(TestCase):
 
         def model():
             loc_latent = pyro.sample("loc_latent",
-                                     fakes.NonreparameterizedNormal(self.loc0,
-                                                                    torch.pow(self.lam0,
-                                                                              -0.5)).reshape(extra_event_dims=1))
+                                     fakes.NonreparameterizedNormal(self.loc0, torch.pow(self.lam0, -0.5))
+                                          .independent(1))
             for i in pyro.irange("outer", self.n_outer):
                 for j in pyro.irange("inner_%d" % i, self.n_inner):
                     pyro.sample("obs_%d_%d" % (i, j),
-                                dist.Normal(loc_latent, torch.pow(self.lam, -0.5)).reshape(extra_event_dims=1),
+                                dist.Normal(loc_latent, torch.pow(self.lam, -0.5)).independent(1),
                                 obs=self.data[i][j])
 
         def guide():
@@ -371,7 +370,7 @@ class RaoBlackwellizationTests(TestCase):
             log_sig_q = pyro.param("log_sig_q",
                                    torch.tensor(self.analytic_log_sig_n.expand(2) - 0.27, requires_grad=True))
             sig_q = torch.exp(log_sig_q)
-            pyro.sample("loc_latent", fakes.NonreparameterizedNormal(loc_q, sig_q).reshape(extra_event_dims=1),
+            pyro.sample("loc_latent", fakes.NonreparameterizedNormal(loc_q, sig_q).independent(1),
                         infer=dict(baseline=dict(use_decaying_avg_baseline=True)))
 
             for i in pyro.irange("outer", self.n_outer):
@@ -387,7 +386,7 @@ class RaoBlackwellizationTests(TestCase):
         assert len(guide_trace.nodes()) == 9
 
         adam = optim.Adam({"lr": 0.0008, "betas": (0.96, 0.999)})
-        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
+        svi = SVI(model, guide, adam, loss=TraceGraph_ELBO())
 
         for k in range(n_steps):
             svi.step()
@@ -417,21 +416,21 @@ class RaoBlackwellizationTests(TestCase):
         def model():
             loc_latent = pyro.sample("loc_latent",
                                      fakes.NonreparameterizedNormal(self.loc0, torch.pow(self.lam0, -0.5))
-                                     .reshape(extra_event_dims=1))
+                                     .independent(1))
 
             for i in pyro.irange("outer", 3):
                 x_i = self.data_as_list[i]
                 with pyro.iarange("inner_%d" % i, x_i.size(0)):
                     for k in range(n_superfluous_top):
                         z_i_k = pyro.sample("z_%d_%d" % (i, k),
-                                            fakes.NonreparameterizedNormal(0, 1).reshape(sample_shape=[4 - i]))
+                                            fakes.NonreparameterizedNormal(0, 1).expand_by([4 - i]))
                         assert z_i_k.shape == (4 - i,)
                     obs_i = pyro.sample("obs_%d" % i, dist.Normal(loc_latent, torch.pow(self.lam, -0.5))
-                                                          .reshape(extra_event_dims=1), obs=x_i)
+                                                          .independent(1), obs=x_i)
                     assert obs_i.shape == (4 - i, 2)
                     for k in range(n_superfluous_top, n_superfluous_top + n_superfluous_bottom):
                         z_i_k = pyro.sample("z_%d_%d" % (i, k),
-                                            fakes.NonreparameterizedNormal(0, 1).reshape(sample_shape=[4 - i]))
+                                            fakes.NonreparameterizedNormal(0, 1).expand_by([4 - i]))
                         assert z_i_k.shape == (4 - i,)
 
         pt_loc_baseline = torch.nn.Linear(1, 1)
@@ -448,7 +447,7 @@ class RaoBlackwellizationTests(TestCase):
             trivial_baseline = pyro.module("loc_baseline", pt_loc_baseline)
             baseline_value = trivial_baseline(torch.ones(1)).squeeze()
             loc_latent = pyro.sample("loc_latent",
-                                     fakes.NonreparameterizedNormal(loc_q, sig_q).reshape(extra_event_dims=1),
+                                     fakes.NonreparameterizedNormal(loc_q, sig_q).independent(1),
                                      infer=dict(baseline=dict(baseline_value=baseline_value)))
 
             for i in pyro.irange("outer", 3):
@@ -471,7 +470,7 @@ class RaoBlackwellizationTests(TestCase):
                 return {"lr": 0.0012, "betas": (0.95, 0.999)}
 
         adam = optim.Adam(per_param_callable)
-        svi = SVI(model, guide, adam, loss="ELBO", trace_graph=True)
+        svi = SVI(model, guide, adam, loss=TraceGraph_ELBO())
 
         for step in range(n_steps):
             svi.step()

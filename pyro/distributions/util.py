@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import numbers
+from contextlib import contextmanager
 
 import torch
 import torch.distributions as torch_dist
@@ -193,10 +194,10 @@ def matrix_triangular_solve_compat(b, A, upper=True):
     :param A: A 2D tensor of size N X N.
     :param upper: A flag if A is a upper triangular matrix or not.
     """
-    if A.requires_grad or A.is_cuda:
+    if A.is_cuda:
         return A.inverse().matmul(b)
     else:
-        return b.trtrs(A, upper=upper)[0].view(b.shape)
+        return b.view(b.shape[0], -1).trtrs(A, upper=upper)[0].view(b.shape)
 
 
 def log_sum_exp(tensor, dim=-1, scale=1.0):
@@ -221,3 +222,13 @@ def enable_validation(is_validate):
 
 def is_validation_enabled():
     return _VALIDATION_ENABLED
+
+
+@contextmanager
+def validation_enabled(is_validate=True):
+    distribution_validation_status = is_validation_enabled()
+    try:
+        enable_validation(is_validate)
+        yield
+    finally:
+        enable_validation(distribution_validation_status)

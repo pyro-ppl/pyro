@@ -266,10 +266,15 @@ def check_model_guide_match(model_trace, guide_trace, max_iarange_nesting=float(
     :param pyro.poutine.Trace guide_trace: Trace object of the guide
     :raises: RuntimeWarning, ValueError
 
-    Checks that (1) there is a bijection between the samples in the guide
-    and the samples in the model, (2) each `iarange` statement in the guide
-    also appears in the model, (3) at each sample site that appears in both
-    the model and guide, the model and guide agree on sample shape.
+    Checks the following assumptions:
+    1. Each sample site in the model also appears in the guide and is not
+        marked auxiliary.
+    2. Each sample site in the guide either appears in the model or is marked,
+        auxiliary via ``infer={'is_auxiliary': True}``.
+    3. Each :class:``~pyro.iarange`` statement in the guide also appears in the
+        model.
+    4. At each sample site that appears in both the model and guide, the model
+        and guide agree on sample shape.
     """
     # Check ordinary sample sites.
     model_vars = set(name for name, site in model_trace.nodes.items()
@@ -278,8 +283,15 @@ def check_model_guide_match(model_trace, guide_trace, max_iarange_nesting=float(
     guide_vars = set(name for name, site in guide_trace.nodes.items()
                      if site["type"] == "sample"
                      if type(site["fn"]).__name__ != "_Subsample")
-    if not (guide_vars <= model_vars):
-        warnings.warn("Found vars in guide but not model: {}".format(guide_vars - model_vars))
+    aux_vars = set(name for name, site in guide_trace.nodes.items()
+                   if site["type"] == "sample"
+                   if site["infer"].get("is_auxiliary"))
+    if aux_vars & model_vars:
+        warnings.warn("Found auxiliary vars in the model: {}".format(aux_vars & model_vars))
+    if not (guide_vars <= model_vars | aux_vars):
+        warnings.warn("Found non-auxiliary vars in guide but not model, "
+                      "consider marking these infer={{'is_auxiliary': True}}:\n{}".format(
+                          guide_vars - aux_vars - model_vars))
     if not (model_vars <= guide_vars):
         warnings.warn("Found vars in model but not guide: {}".format(model_vars - guide_vars))
 
@@ -358,7 +370,7 @@ def check_site_shape(site, max_iarange_nesting):
                 'Expected {}, actual {}'.format(expected_shape, actual_shape),
                 'Try one of the following fixes:',
                 '- enclose the batched tensor in a with iarange(...): context',
-                '- .reshape(extra_event_dims=...) the distribution being sampled',
+                '- .independent(...) the distribution being sampled',
                 '- .permute() data dimensions']))
 
     # TODO Check parallel dimensions on the left of max_iarange_nesting.

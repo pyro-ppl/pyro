@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
-import pyro
 from pyro.contrib.gp.util import Parameterized
+from pyro.params import param_with_module_name
 
 
 class Likelihood(Parameterized):
@@ -13,9 +13,10 @@ class Likelihood(Parameterized):
     """
     def __init__(self, name=None):
         super(Likelihood, self).__init__(name)
-        self.y_name = pyro.param_with_module_name(name, "y") if name is not None else "y"
+        self.y_name = (param_with_module_name(name, "y") if name is not None
+                       else "y")
 
-    def forward(self, f_loc, f_var, y):
+    def forward(self, f_loc, f_var, y=None):
         """
         Samples :math:`y` given :math:`f_{loc}`, :math:`f_{var}`.
 

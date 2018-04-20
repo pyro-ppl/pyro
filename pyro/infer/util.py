@@ -9,15 +9,23 @@ import torch
 from pyro.distributions.util import is_identically_zero
 from pyro.poutine.util import site_is_subsample
 
+_VALIDATION_ENABLED = False
 
-def torch_data_sum(x):
+
+def enable_validation(is_validate):
+    global _VALIDATION_ENABLED
+    _VALIDATION_ENABLED = is_validate
+
+
+def is_validation_enabled():
+    return _VALIDATION_ENABLED
+
+
+def torch_item(x):
     """
-    Like ``x.sum().item()`` for a :class:`~torch.Tensor`, but also works
-    with numbers.
+    Like ``x.item()`` for a :class:`~torch.Tensor`, but also works with numbers.
     """
-    if isinstance(x, numbers.Number):
-        return x
-    return x.sum().item()
+    return x if isinstance(x, numbers.Number) else x.item()
 
 
 def torch_backward(x):

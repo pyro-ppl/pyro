@@ -13,10 +13,8 @@ ARG ostype=Linux
 # Configurable settings
 ENV USER_NAME pyromancer
 ENV CONDA_DIR /opt/conda
-ENV WORK_DIR /workspace
+ENV WORK_DIR /home/${USER_NAME}/workspace
 ENV PATH ${CONDA_DIR}/bin:${PATH}
-
-COPY install.sh /install.sh
 
 # Install linux utils
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -27,26 +25,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
          ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
+# Change to default user
+RUN bash -c 'if [ ${ostype} == Linux ]; then groupadd -r --gid ${gid} ${USER_NAME}; fi && \
+    useradd -r --create-home --shell /bin/bash --uid ${uid} --gid ${gid} ${USER_NAME}' && \
+    mkdir -p ${CONDA_DIR} ${WORK_DIR} && chown ${USER_NAME} ${CONDA_DIR} ${WORK_DIR}
+USER ${USER_NAME}
+
 # Install conda
-RUN curl -o ~/miniconda.sh -O  https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh  && \
-    chmod +x ~/miniconda.sh && \
-    ~/miniconda.sh -b -p ${CONDA_DIR} && \
+RUN curl -o ~/miniconda.sh -O \
+    https://repo.continuum.io/miniconda/Miniconda${python_version%%.*}-latest-Linux-x86_64.sh && \
+    bash ~/miniconda.sh -f -b -p ${CONDA_DIR} && \
     rm ~/miniconda.sh
 ENV CMAKE_PREFIX_PATH="$(dirname $(which conda))/../"
 
-# Change to default user
-RUN bash -c 'if [ ${ostype} == Linux ]; then groupadd -r --gid ${gid} ${USER_NAME}; fi && \
-    useradd -r --create-home --shell /bin/bash --uid ${uid} --gid ${gid} ${USER_NAME}'
+# Move to home directory; and copy the install script
 WORKDIR ${WORK_DIR}
-RUN chown ${USER_NAME} ${WORK_DIR} ${CONDA_DIR} -R
-USER ${USER_NAME}
+COPY install.sh ${WORK_DIR}/install.sh
 
-# Install python 2/3; and other packages
-RUN conda install -y python=${python_version} && \
-    conda install -y jupyter matplotlib
-
-# Install PyTorch and Pyro
-RUN bash /install.sh
+# Install python 2/3, Pytorch and Pyro
+RUN cd ${WORK_DIR} && conda update -n base conda -c defaults && bash install.sh
 
 # Run Jupyter notebook
 # (Ref: http://jupyter-notebook.readthedocs.io/en/latest/public_server.html#docker-cmd)

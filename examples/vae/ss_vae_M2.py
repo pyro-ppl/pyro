@@ -1,15 +1,18 @@
+import argparse
+
 import torch
 import torch.nn as nn
 
 import pyro
 import pyro.distributions as dist
 from pyro.contrib.examples.util import print_and_log, set_seed
-from pyro.infer import SVI, config_enumerate
+from pyro.infer import SVI, config_enumerate, Trace_ELBO, TraceEnum_ELBO
 from pyro.nn import ClippedSigmoid, ClippedSoftmax
 from pyro.optim import Adam
 from utils.custom_mlp import MLP, Exp
-from utils.mnist_cached import MNISTCached, setup_data_loaders, mkdir_p
+from utils.mnist_cached import MNISTCached, mkdir_p, setup_data_loaders
 from utils.vae_plots import mnist_test_tsne_ssvae, plot_conditional_samples_ssvae
+from visdom import Visdom
 
 
 class SSVAE(nn.Module):
@@ -31,7 +34,7 @@ class SSVAE(nn.Module):
     :param aux_loss_multiplier: the multiplier to use with the auxiliary loss
     """
     def __init__(self, output_size=10, input_size=784, z_dim=50, hidden_layers=(500,),
-                 epsilon_scale=1e-7, use_cuda=False, aux_loss_multiplier=None):
+                 epsilon_scale=1e-7, config_enum=None, use_cuda=False, aux_loss_multiplier=None):
 
         super(SSVAE, self).__init__()
 
@@ -41,6 +44,7 @@ class SSVAE(nn.Module):
         self.z_dim = z_dim
         self.hidden_layers = hidden_layers
         self.epsilon_scale = epsilon_scale
+        self.allow_broadcast = config_enum == 'parallel'
         self.use_cuda = use_cuda
         self.aux_loss_multiplier = aux_loss_multiplier
 
@@ -63,6 +67,7 @@ class SSVAE(nn.Module):
                              activation=nn.Softplus,
                              output_activation=ClippedSoftmax,
                              epsilon_scale=self.epsilon_scale,
+                             allow_broadcast=self.allow_broadcast,
                              use_cuda=self.use_cuda)
 
         # a split in the final layer's size is used for multiple outputs
@@ -73,6 +78,7 @@ class SSVAE(nn.Module):
                              hidden_sizes + [[z_dim, z_dim]],
                              activation=nn.Softplus,
                              output_activation=[None, Exp],
+                             allow_broadcast=self.allow_broadcast,
                              use_cuda=self.use_cuda)
 
         self.decoder = MLP([z_dim + self.output_size] +
@@ -80,6 +86,7 @@ class SSVAE(nn.Module):
                            activation=nn.Softplus,
                            output_activation=ClippedSigmoid,
                            epsilon_scale=self.epsilon_scale,
+                           allow_broadcast=self.allow_broadcast,
                            use_cuda=self.use_cuda)
 
         # using GPUs for faster training of the networks
@@ -103,27 +110,24 @@ class SSVAE(nn.Module):
         pyro.module("ss_vae", self)
 
         batch_size = xs.size(0)
-        with pyro.iarange("independent"):
+        with pyro.iarange("data"):
 
             # sample the handwriting style from the constant prior distribution
-            prior_loc = torch.zeros([batch_size, self.z_dim])
-            prior_scale = torch.ones([batch_size, self.z_dim])
-            zs = pyro.sample("z", dist.Normal(prior_loc, prior_scale).reshape(extra_event_dims=1))
+            prior_loc = xs.new_zeros([batch_size, self.z_dim])
+            prior_scale = xs.new_ones([batch_size, self.z_dim])
+            zs = pyro.sample("z", dist.Normal(prior_loc, prior_scale).independent(1))
 
             # if the label y (which digit to write) is supervised, sample from the
             # constant prior, otherwise, observe the value (i.e. score it against the constant prior)
-            alpha_prior = torch.ones([batch_size, self.output_size]) / (1.0 * self.output_size)
-            if ys is None:
-                ys = pyro.sample("y", dist.OneHotCategorical(alpha_prior))
-            else:
-                pyro.sample("y", dist.OneHotCategorical(alpha_prior), obs=ys)
+            alpha_prior = xs.new_ones([batch_size, self.output_size]) / (1.0 * self.output_size)
+            ys = pyro.sample("y", dist.OneHotCategorical(alpha_prior), obs=ys)
 
             # finally, score the image (x) using the handwriting style (z) and
             # the class label y (which digit to write) against the
             # parametrized distribution p(x|y,z) = bernoulli(decoder(y,z))
             # where `decoder` is a neural network
             loc = self.decoder.forward([zs, ys])
-            pyro.sample("x", dist.Bernoulli(loc).reshape(extra_event_dims=1), obs=xs)
+            pyro.sample("x", dist.Bernoulli(loc).independent(1), obs=xs)
 
     def guide(self, xs, ys=None):
         """
@@ -132,13 +136,14 @@ class SSVAE(nn.Module):
         q(z|x,y) = normal(loc(x,y),scale(x,y))       # infer handwriting style from an image and the digit
         loc, scale are given by a neural network `encoder_z`
         alpha is given by a neural network `encoder_y`
+
         :param xs: a batch of scaled vectors of pixels from an image
         :param ys: (optional) a batch of the class labels i.e.
                    the digit corresponding to the image(s)
         :return: None
         """
         # inform Pyro that the variables in the batch of xs, ys are conditionally independent
-        with pyro.iarange("independent"):
+        with pyro.iarange("data"):
 
             # if the class label (the digit) is not supervised, sample
             # (and score) the digit with the variational distribution
@@ -150,7 +155,7 @@ class SSVAE(nn.Module):
             # sample (and score) the latent handwriting-style with the variational
             # distribution q(z|x,y) = normal(loc(x,y),scale(x,y))
             loc, scale = self.encoder_z.forward([xs, ys])
-            pyro.sample("z", dist.Normal(loc, scale).reshape(extra_event_dims=1))
+            pyro.sample("z", dist.Normal(loc, scale).independent(1))
 
     def classifier(self, xs):
         """
@@ -168,23 +173,21 @@ class SSVAE(nn.Module):
         res, ind = torch.topk(alpha, 1)
 
         # convert the digit(s) to one-hot tensor(s)
-        ys = torch.zeros(alpha.size())
+        ys = xs.new_zeros(alpha.size())
         ys = ys.scatter_(1, ind, 1.0)
         return ys
 
     def model_classify(self, xs, ys=None):
         """
         this model is used to add an auxiliary (supervised) loss as described in the
-        NIPS 2014 paper by Kingma et al titled
-        "Semi-Supervised Learning with Deep Generative Models"
+        Kingma et al., "Semi-Supervised Learning with Deep Generative Models".
         """
         # register all pytorch (sub)modules with pyro
         pyro.module("ss_vae", self)
 
         # inform Pyro that the variables in the batch of xs, ys are conditionally independent
-        with pyro.iarange("independent"):
-            # this here is the extra Term to yield an auxiliary loss that we do gradient descend on
-            # similar to the NIPS 14 paper (Kingma et al).
+        with pyro.iarange("data"):
+            # this here is the extra term to yield an auxiliary loss that we do gradient descent on
             if ys is not None:
                 alpha = self.encoder_y.forward(xs)
                 with pyro.poutine.scale(scale=self.aux_loss_multiplier):
@@ -197,14 +200,18 @@ class SSVAE(nn.Module):
         pass
 
     def model_sample(self, ys, batch_size=1):
+        """
+        sample an image from the model
+        """
+
         # sample the handwriting style from the constant prior distribution
-        prior_loc = torch.zeros([batch_size, self.z_dim])
-        prior_scale = torch.ones([batch_size, self.z_dim])
-        zs = pyro.sample("z", dist.Normal(prior_loc, prior_scale).reshape(extra_event_dims=1))
+        prior_loc = ys.new_zeros([batch_size, self.z_dim])
+        prior_scale = ys.new_ones([batch_size, self.z_dim])
+        zs = pyro.sample("z", dist.Normal(prior_loc, prior_scale).independent(1))
 
         # sample an image using the decoder
         loc = self.decoder.forward([zs, ys])
-        xs = pyro.sample("sample", dist.Bernoulli(loc).reshape(extra_event_dims=1))
+        xs = pyro.sample("sample", dist.Bernoulli(loc).independent(1))
         return xs, loc
 
 
@@ -281,26 +288,22 @@ def get_accuracy(data_loader, classifier_fn, batch_size):
 
 
 def visualize(ss_vae, viz, test_loader):
-    if viz is not None:
+    if viz:
         plot_conditional_samples_ssvae(ss_vae, viz)
         mnist_test_tsne_ssvae(ssvae=ss_vae, test_loader=test_loader)
 
 
-def run_inference_ss_vae(args):
+def main(args):
     """
     run inference for SS-VAE
     :param args: arguments for SS-VAE
     :return: None
     """
-    if args.use_cuda:
-        torch.set_default_tensor_type('torch.cuda.FloatTensor')
-
     if args.seed is not None:
-        set_seed(args.seed, args.use_cuda)
+        set_seed(args.seed, args.cuda)
 
     viz = None
     if args.visualize:
-        from visdom import Visdom
         viz = Visdom()
         mkdir_p("./vae_results")
 
@@ -308,7 +311,8 @@ def run_inference_ss_vae(args):
     ss_vae = SSVAE(z_dim=args.z_dim,
                    hidden_layers=args.hidden_layers,
                    epsilon_scale=args.epsilon_scale,
-                   use_cuda=args.use_cuda,
+                   use_cuda=args.cuda,
+                   config_enum=args.enum_discrete,
                    aux_loss_multiplier=args.aux_loss_multiplier)
 
     # setup the optimizer
@@ -318,22 +322,21 @@ def run_inference_ss_vae(args):
     # set up the loss(es) for inference. wrapping the guide in config_enumerate builds the loss as a sum
     # by enumerating each class label for the sampled discrete categorical distribution in the model
     guide = config_enumerate(ss_vae.guide, args.enum_discrete)
-    loss_basic = SVI(ss_vae.model, guide, optimizer, loss="ELBO",
-                     enum_discrete=True, max_iarange_nesting=1)
+    loss_basic = SVI(ss_vae.model, guide, optimizer, loss=TraceEnum_ELBO(max_iarange_nesting=1))
 
     # build a list of all losses considered
     losses = [loss_basic]
 
     # aux_loss: whether to use the auxiliary loss from NIPS 14 paper (Kingma et al)
     if args.aux_loss:
-        loss_aux = SVI(ss_vae.model_classify, ss_vae.guide_classify, optimizer, loss="ELBO")
+        loss_aux = SVI(ss_vae.model_classify, ss_vae.guide_classify, optimizer, loss=Trace_ELBO())
         losses.append(loss_aux)
 
     try:
         # setup the logger if a filename is provided
-        logger = None if args.logfile is None else open(args.logfile, "w")
+        logger = open(args.logfile, "w") if args.logfile else None
 
-        data_loaders = setup_data_loaders(MNISTCached, args.use_cuda, args.batch_size, sup_num=args.sup_num)
+        data_loaders = setup_data_loaders(MNISTCached, args.cuda, args.batch_size, sup_num=args.sup_num)
 
         # how often would a supervised batch be encountered during inference
         # e.g. if sup_num is 3000, we would have every 16th = int(50000/3000) batch supervised
@@ -389,29 +392,27 @@ def run_inference_ss_vae(args):
         visualize(ss_vae, viz, data_loaders["test"])
     finally:
         # close the logger file object if we opened it earlier
-        if args.logfile is not None:
+        if args.logfile:
             logger.close()
 
 
-EXAMPLE_RUN = "example run: python example_M2.py --seed 0 -cuda -ne 2 --aux-loss -alm 300 -enum -sup 3000 " \
+EXAMPLE_RUN = "example run: python ss_vae_M2.py --seed 0 --cuda -ne 2 --aux-loss -alm 300 -enum -sup 3000 " \
               "-zd 20 -hl 400 200 -lr 0.001 -b1 0.95 -bs 500 -eps 1e-7 -log ./tmp.log"
 
 if __name__ == "__main__":
-    import argparse
 
-    parser = argparse.ArgumentParser(description="SS-VAE model inference\n{}".format(EXAMPLE_RUN))
+    parser = argparse.ArgumentParser(description="SS-VAE\n{}".format(EXAMPLE_RUN))
 
-    parser.add_argument('-cuda', '--use-cuda', action='store_true',
+    parser.add_argument('--cuda', action='store_true',
                         help="use GPU(s) to speed up training")
-    parser.add_argument('-ne', '--num-epochs', default=1, type=int,
+    parser.add_argument('-ne', '--num-epochs', default=100, type=int,
                         help="number of epochs to run")
     parser.add_argument('--aux-loss', action="store_true",
                         help="whether to use the auxiliary loss from NIPS 14 paper (Kingma et al)")
     parser.add_argument('-alm', '--aux-loss-multiplier', default=300, type=float,
                         help="the multiplier to use with the auxiliary loss")
     parser.add_argument('-enum', '--enum-discrete', default=None,
-                        help="whether to enumerate the discrete support of the categorical distribution"
-                             "while computing the ELBO loss")
+                        help="parallel or sequential. if none is specified, discrete vars are sampled.")
     parser.add_argument('-sup', '--sup-num', default=3000,
                         type=float, help="supervised amount of the data i.e. "
                                          "how many of the images have supervised labels")
@@ -446,4 +447,4 @@ if __name__ == "__main__":
         "batch size doesn't divide total number of training data examples"
     assert MNISTCached.test_size % args.batch_size == 0, "batch size should divide the number of test examples"
 
-    run_inference_ss_vae(args)
+    main(args)

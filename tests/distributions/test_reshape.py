@@ -11,9 +11,9 @@ def test_sample_shape_order():
     shape34 = torch.Size((3, 4))
     d = Bernoulli(0.5)
 
-    # .reshape(sample_shape=...) should add dimensions on the left.
-    actual = d.reshape(shape34).reshape(shape12)
-    expected = d.reshape(shape12 + shape34)
+    # .expand_by(...) should add dimensions on the left.
+    actual = d.expand_by(shape34).expand_by(shape12)
+    expected = d.expand_by(shape12 + shape34)
     assert actual.event_shape == expected.event_shape
     assert actual.batch_shape == expected.batch_shape
 
@@ -26,12 +26,12 @@ def test_idempotent(batch_dim, event_dim):
     event_shape = shape[batch_dim:]
 
     # Construct a base dist of desired starting shape.
-    dist0 = Bernoulli(0.5).reshape(sample_shape=shape, extra_event_dims=event_dim)
+    dist0 = Bernoulli(0.5).expand_by(shape).independent(event_dim)
     assert dist0.batch_shape == batch_shape
     assert dist0.event_shape == event_shape
 
-    # Check that an empty .reshape() is a no-op.
-    dist = dist0.reshape()
+    # Check that an .expand_by() an empty shape is a no-op.
+    dist = dist0.expand_by([])
     assert dist.batch_shape == dist0.batch_shape
     assert dist.event_shape == dist0.event_shape
 
@@ -50,7 +50,7 @@ def test_reshape(sample_dim, extra_event_dims):
     assert dist0.batch_shape == batch_shape
 
     # Check that reshaping has the desired final shape.
-    dist = dist0.reshape(sample_shape, extra_event_dims)
+    dist = dist0.expand_by(sample_shape).independent(extra_event_dims)
     sample = dist.sample()
     assert sample.shape == shape
     assert dist.mean.shape == shape
@@ -75,12 +75,12 @@ def test_reshape_reshape(sample_dim, extra_event_dims):
 
     # Construct a base dist of desired starting shape.
     dist0 = Bernoulli(0.5 * torch.ones(event_shape))
-    dist1 = dist0.reshape(sample_shape=batch_shape, extra_event_dims=2)
+    dist1 = dist0.expand_by(batch_shape).independent(2)
     assert dist1.event_shape == event_shape
     assert dist1.batch_shape == batch_shape
 
     # Check that reshaping has the desired final shape.
-    dist = dist1.reshape(sample_shape, extra_event_dims)
+    dist = dist1.expand_by(sample_shape).independent(extra_event_dims)
     sample = dist.sample()
     assert sample.shape == shape
     assert dist.mean.shape == shape
@@ -105,17 +105,17 @@ def test_extra_event_dim_overflow(sample_dim, batch_dim, event_dim):
     event_shape = shape[sample_dim + batch_dim:]
 
     # Construct a base dist of desired starting shape.
-    dist0 = Bernoulli(0.5).reshape(sample_shape=batch_shape + event_shape, extra_event_dims=event_dim)
+    dist0 = Bernoulli(0.5).expand_by(batch_shape + event_shape).independent(event_dim)
     assert dist0.batch_shape == batch_shape
     assert dist0.event_shape == event_shape
 
-    # Check .reshape(extra_event_dims=...) for valid values.
+    # Check .independent(...) for valid values.
     for extra_event_dims in range(1 + sample_dim + batch_dim):
-        dist = dist0.reshape(sample_shape=sample_shape, extra_event_dims=extra_event_dims)
+        dist = dist0.expand_by(sample_shape).independent(extra_event_dims)
         assert dist.batch_shape == shape[:sample_dim + batch_dim - extra_event_dims]
         assert dist.event_shape == shape[sample_dim + batch_dim - extra_event_dims:]
 
-    # Check .reshape(extra_event_dims=...) for invalid values.
+    # Check .independent(...) for invalid values.
     for extra_event_dims in range(1 + sample_dim + batch_dim, 20):
         with pytest.raises(ValueError):
-            dist0.reshape(sample_shape=sample_shape, extra_event_dims=extra_event_dims)
+            dist0.expand_by(sample_shape).independent(extra_event_dims)

@@ -6,6 +6,7 @@ import torch.nn as nn
 import pyro
 import pyro.distributions as dist
 from pyro.distributions.util import matrix_triangular_solve_compat
+from pyro.params import param_with_module_name
 
 
 class Parameterized(nn.Module):
@@ -113,7 +114,7 @@ class Parameterized(nn.Module):
         if self.name is None:
             param_name = param
         else:
-            param_name = pyro.param_with_module_name(self.name, param)
+            param_name = param_with_module_name(self.name, param)
 
         if prior is None:
             constraint = self._constraints.get(param)
@@ -134,7 +135,7 @@ class Parameterized(nn.Module):
 
 
 def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=False,
-                jitter=1e-6):
+                whiten=False, jitter=1e-6):
     """
     Given :math:`X_{new}`, predicts loc and covariance matrix of the conditional
     multivariate normal distribution
@@ -179,6 +180,8 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
         (optional).
     :param bool full_cov: A flag to decide if we want to return full covariance
         matrix or just variance.
+    :param bool whiten: A flag to tell if ``f_loc`` and ``f_scale_tril`` are
+        already transformed by the inverse of ``Lff``.
     :param float jitter: A small positive term which is added into the diagonal part of
         a covariance matrix to help stablize its Cholesky decomposition.
     :returns: loc and covariance matrix (or variance) of :math:`p(f^*(X_{new}))`
@@ -213,26 +216,35 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
     f_loc = f_loc.permute(-1, *range(len(latent_shape)))
     # convert f_loc to 2D tensor for packing
     f_loc_2D = f_loc.reshape(N, -1)
-    pack = torch.cat((f_loc_2D, Kfs), dim=1)
     if f_scale_tril is not None:
         # convert f_scale_tril_shape from latent_shape x N x N to N x N x latent_shape
         f_scale_tril = f_scale_tril.permute(-2, -1, *range(len(latent_shape)))
         # convert f_scale_tril to 2D tensor for packing
         f_scale_tril_2D = f_scale_tril.reshape(N, -1)
-        pack = torch.cat((pack, f_scale_tril_2D), dim=1)
 
-    Lffinv_pack = matrix_triangular_solve_compat(pack, Lff, upper=False)
-    # unpack
-    v_2D = Lffinv_pack[:, :f_loc_2D.shape[1]]
-    W = Lffinv_pack[:, f_loc_2D.shape[1]:f_loc_2D.shape[1] + M]
-    Wt = W.t()
+    if whiten:
+        v_2D = f_loc_2D
+        W = matrix_triangular_solve_compat(Kfs, Lff, upper=False)
+        if f_scale_tril is not None:
+            S_2D = f_scale_tril_2D
+    else:
+        pack = torch.cat((f_loc_2D, Kfs), dim=1)
+        if f_scale_tril is not None:
+            pack = torch.cat((pack, f_scale_tril_2D), dim=1)
+
+        Lffinv_pack = matrix_triangular_solve_compat(pack, Lff, upper=False)
+        # unpack
+        v_2D = Lffinv_pack[:, :f_loc_2D.shape[1]]
+        W = Lffinv_pack[:, f_loc_2D.shape[1]:f_loc_2D.shape[1] + M]
+        if f_scale_tril is not None:
+            S_2D = Lffinv_pack[:, -f_scale_tril_2D.shape[1]:]
 
     loc_shape = latent_shape + (M,)
     loc = v_2D.t().matmul(W).reshape(loc_shape)
 
     if full_cov:
         Kss = kernel(Xnew)
-        Qss = Wt.matmul(W)
+        Qss = W.t().matmul(W)
         cov = Kss - Qss
     else:
         Kssdiag = kernel(Xnew, diag=True)
@@ -240,10 +252,8 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
         var = Kssdiag - Qssdiag
 
     if f_scale_tril is not None:
-        # unpack
-        S_2D = Lffinv_pack[:, -f_scale_tril_2D.shape[1]:]
         Wt_S_shape = (Xnew.shape[0],) + f_scale_tril.shape[1:]
-        Wt_S = Wt.matmul(S_2D).reshape(Wt_S_shape)
+        Wt_S = W.t().matmul(S_2D).reshape(Wt_S_shape)
         # convert Wt_S_shape from M x N x latent_shape to latent_shape x M x N
         Wt_S = Wt_S.permute(list(range(2, Wt_S.dim())) + [0, 1])
 

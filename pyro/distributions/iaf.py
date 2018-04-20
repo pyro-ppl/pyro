@@ -79,9 +79,10 @@ class InverseAutoregressiveFlow(Transform):
         sample from the base distribution (or the output of a previous flow)
         """
         hidden = self.module.arn(x)
-        scale = self.module.sigmoid(hidden[:, 0:self.input_dim] + self.module.sigmoid_bias.type_as(hidden))
+        scale = self.module.sigmoid(hidden[:, 0:self.input_dim] +
+                                    hidden.new_tensor(self.module.sigmoid_bias))
         mean = hidden[:, self.input_dim:]
-        y = scale * x + (torch.ones(scale.shape).type_as(scale) - scale) * mean
+        y = scale * x + (1 - scale) * mean
         self._add_intermediate_to_cache(x, y, 'x')
         self._add_intermediate_to_cache(scale, y, 'scale')
         return y

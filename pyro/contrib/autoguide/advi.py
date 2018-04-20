@@ -11,7 +11,6 @@ import pyro.poutine as poutine
 from pyro.distributions.util import sum_rightmost
 from pyro.infer.enum import config_enumerate
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_traces_match
 
 try:
     from contextlib import ExitStack  # python 3
@@ -29,23 +28,59 @@ def _product(shape):
     return result
 
 
-class ADVIMaster(object):
+class AutoGuide(object):
     """
-    Container class to combine multiple ADVI strategies.
+    Base class for automatic guides.
+
+    Derived classes must implement the :meth:`__call__` method.
+
+    Auto guides can be used individually or combined in an
+    :class:`AutoGuideList` object.
+    """
+    def __init__(self, model):
+        self.master = None
+        self.model = model
+        self.prototype_trace = None
+
+    def __call__(self, *args, **kwargs):
+        """
+        A guide with the same ``*args, **kwargs`` as the base ``model``.
+
+        :return: A dict mapping sample site name to sampled value.
+        :rtype: dict
+        """
+        raise NotImplementedError
+
+    def sample_latent(*args, **kwargs):
+        """
+        Samples an encoded latent given the same ``*args, **kwargs`` as the
+        base ``model``.
+        """
+        pass
+
+    def _create_iaranges(self):
+        if self.master is not None:
+            return self.master().iaranges
+        return {frame.name: pyro.iarange(frame.name, frame.size, dim=frame.dim)
+                for frame in sorted(self._iaranges.values())}
+
+
+class AutoGuideList(AutoGuide):
+    """
+    Container class to combine multiple automatic guides.
 
     Example usage::
 
-        advi = ADVIMaster(my_model)
-        advi.add(ADVIDiagonalNormal(poutine.block(model, hide=["assignment"])))
-        advi.add(ADVIDiscreteParallel(poutine.block(model, expose=["assignment"])))
-        svi = SVI(advi.model, advi.guide, optim, 'ELBO')
+        guide = AutoGuideList(my_model)
+        guide.add(AutoDiagonalNormal(poutine.block(model, hide=["assignment"])))
+        guide.add(AutoDiscreteParallel(poutine.block(model, expose=["assignment"])))
+        svi = SVI(model, guide, optim, 'ELBO')
 
     :param callable model: a Pyro model
     """
     def __init__(self, model):
+        super(AutoGuideList, self).__init__(model)
         self.parts = []
-        self.base_model = model
-        self.prototype_trace = None
         self._iaranges = {}
         self.iaranges = {}
 
@@ -60,26 +95,18 @@ class ADVIMaster(object):
 
     def add(self, part):
         """
-        Add an ADVI strategy for part of the model. The ADVI strategy should
+        Add an automatic guide for part of the model. The guide should
         have been created by blocking the model to restrict to a subset of
         sample sites. No two parts should operate on any one sample site.
 
-        :param ADVISlave part: an ADVI strategy to add
+        :param AutoGuide part: a partial guide to add
         """
-        assert isinstance(part, ADVISlave), type(part)
+        assert isinstance(part, AutoGuide), type(part)
         self.parts.append(part)
         assert part.master is None
         part.master = weakref.ref(self)
 
-    def model(self, *args, **kwargs):
-        """
-        A wrapped model with the same ``*args, **kwargs`` as the base ``model``.
-        """
-        for part in self.parts:
-            part.model(*args, **kwargs)
-        return self.base_model(*args, **kwargs)
-
-    def guide(self, *args, **kwargs):
+    def __call__(self, *args, **kwargs):
         """
         A composite guide with the same ``*args, **kwargs`` as the base ``model``.
 
@@ -97,13 +124,12 @@ class ADVIMaster(object):
         # run slave guides
         result = {}
         for part in self.parts:
-            result.update(part.guide(*args, **kwargs))
+            result.update(part(*args, **kwargs))
         return result
 
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
-        # self.prototype_trace = poutine.block(poutine.trace(self.base_model).get_trace)(*args, **kwargs)
-        self.prototype_trace = poutine.block(poutine.trace(self.base_model).get_trace)(*args, **kwargs)
+        self.prototype_trace = poutine.block(poutine.trace(self.model).get_trace)(*args, **kwargs)
         self.prototype_trace = prune_subsample_sites(self.prototype_trace)
 
         self._iaranges = {}
@@ -114,51 +140,10 @@ class ADVIMaster(object):
                 if frame.vectorized:
                     self._iaranges[frame.name] = frame
                 else:
-                    raise NotImplementedError("ADVI does not support pyro.irange")
+                    raise NotImplementedError("AutoGuideList does not support pyro.irange")
 
 
-class ADVISlave(object):
-    """
-    Base class for ADVI strategies.
-
-    ADVI strategies can be used individually or combined in an
-    :class:`ADVIMaster` object.
-    """
-    def __init__(self, model):
-        self.master = None
-        self.base_model = model
-        self.prototype_trace = None
-
-    def model(self, *args, **kwargs):
-        """
-        A wrapped model with the same ``*args, **kwargs`` as the base ``model``.
-        """
-        # wrap sample statement with a 0.0 poutine.scale to zero out unwanted score
-        with poutine.scale(scale=0.0):
-            self.sample_latent(*args, **kwargs)
-
-        if self.master is None:
-            # actual model sample statements shouldn't be zeroed out
-            base_trace = poutine.trace(self.base_model).get_trace(*args, **kwargs)
-            base_trace = prune_subsample_sites(base_trace)
-            check_traces_match(base_trace, self.prototype_trace)
-            return base_trace.nodes["_RETURN"]["value"]
-
-    def sample_latent(*args, **kwargs):
-        """
-        Samples an encoded latent given the same ``*args, **kwargs`` as the
-        base ``model``.
-        """
-        pass
-
-    def _create_iaranges(self):
-        if self.master is not None:
-            return self.master().iaranges
-        return {frame.name: pyro.iarange(frame.name, frame.size, dim=frame.dim)
-                for frame in sorted(self._iaranges.values())}
-
-
-class ADVIContinuous(ADVISlave):
+class AutoContinuous(AutoGuide):
     """
     Base class for implementations of continuous-valued Automatic
     Differentiation Variational Inference [1].
@@ -176,12 +161,9 @@ class ADVIContinuous(ADVISlave):
         Alp Kucukelbir, Dustin Tran, Rajesh Ranganath, Andrew Gelman, David M.
         Blei
     """
-    def __init__(self, model):
-        super(ADVIContinuous, self).__init__(model)
-
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
-        self.prototype_trace = poutine.block(poutine.trace(self.base_model).get_trace)(*args, **kwargs)
+        self.prototype_trace = poutine.block(poutine.trace(self.model).get_trace)(*args, **kwargs)
         self.prototype_trace = prune_subsample_sites(self.prototype_trace)
         if self.master is not None:
             self.master()._check_prototype(self.prototype_trace)
@@ -202,7 +184,7 @@ class ADVIContinuous(ADVISlave):
                 if frame.vectorized:
                     self._iaranges[frame.name] = frame
                 else:
-                    raise NotImplementedError("ADVIContinuous does not support pyro.irange")
+                    raise NotImplementedError("AutoContinuous does not support pyro.irange")
 
         self.latent_dim = sum(_product(shape) for shape in self._unconstrained_shapes.values())
 
@@ -229,7 +211,7 @@ class ADVIContinuous(ADVISlave):
                 pos += size
         assert pos == len(latent)
 
-    def guide(self, *args, **kwargs):
+    def __call__(self, *args, **kwargs):
         """
         An automatic guide with the same ``*args, **kwargs`` as the base ``model``.
 
@@ -261,16 +243,17 @@ class ADVIContinuous(ADVISlave):
         return result
 
 
-class ADVIMultivariateNormal(ADVIContinuous):
+class AutoMultivariateNormal(AutoContinuous):
     """
-    This implementation of ADVI uses a Cholesky factorization of a Multivariate
-    Normal distribution to construct a guide over the entire latent space. The
-    guide does not depend on the model's ``*args, **kwargs``.
+    This implementation of :class:`AutoContinuous` uses a Cholesky
+    factorization of a Multivariate Normal distribution to construct a guide
+    over the entire latent space. The guide does not depend on the model's
+    ``*args, **kwargs``.
 
     Usage::
 
-        advi = ADVIMultivariateNormal(model)
-        svi = SVI(advi.model, advi.guide, ...)
+        guide = AutoMultivariateNormal(model)
+        svi = SVI(model, guide, ...)
 
     By default the mean vector is initialized to zero and the Cholesky factor
     is initialized to the identity.  To change this default behavior the user
@@ -283,12 +266,13 @@ class ADVIMultivariateNormal(ADVIContinuous):
     """
     def sample_latent(self, *args, **kwargs):
         """
-        Samples the (single) multivariate normal latent used in the advi guide.
+        Samples the (single) multivariate normal latent used in the auto guide.
         """
         loc = pyro.param("advi_loc", torch.zeros(self.latent_dim))
         scale_tril = pyro.param("advi_scale_tril", torch.eye(self.latent_dim),
                                 constraint=constraints.lower_cholesky)
-        return pyro.sample("_advi_latent", dist.MultivariateNormal(loc, scale_tril=scale_tril))
+        return pyro.sample("_advi_latent", dist.MultivariateNormal(loc, scale_tril=scale_tril),
+                           infer={"is_auxiliary": True})
 
     def median(self, *args, **kwargs):
         """
@@ -305,7 +289,7 @@ class ADVIMultivariateNormal(ADVIContinuous):
         """
         Returns posterior quantiles each latent variable. Example::
 
-            print(advi.quantiles([0.05, 0.5, 0.95]))
+            print(guide.quantiles([0.05, 0.5, 0.95]))
 
         :param quantiles: A list of requested quantiles between 0 and 1.
         :type quantiles: torch.Tensor or list
@@ -324,16 +308,16 @@ class ADVIMultivariateNormal(ADVIContinuous):
         return result
 
 
-class ADVIDiagonalNormal(ADVIContinuous):
+class AutoDiagonalNormal(AutoContinuous):
     """
-    This implementation of ADVI uses a Normal distribution with a diagonal
-    covariance matrix to construct a guide over the entire latent space. The
-    guide does not depend on the model's ``*args, **kwargs``.
+    This implementation of :class:`AutoContinuous` uses a Normal distribution
+    with a diagonal covariance matrix to construct a guide over the entire
+    latent space. The guide does not depend on the model's ``*args, **kwargs``.
 
     Usage::
 
-        advi = ADVIDiagonalNormal(model)
-        svi = SVI(advi.model, advi.guide, ...)
+        guide = AutoDiagonalNormal(model)
+        svi = SVI(model, guide, ...)
 
     By default the mean vector is initialized to zero and the scale is
     initialized to the identity.  To change this default behavior the user
@@ -346,12 +330,13 @@ class ADVIDiagonalNormal(ADVIContinuous):
     """
     def sample_latent(self, *args, **kwargs):
         """
-        Samples the (single) diagnoal normal latent used in the advi guide.
+        Samples the (single) diagnoal normal latent used in the auto guide.
         """
         loc = pyro.param("advi_loc", torch.zeros(self.latent_dim))
         scale = pyro.param("advi_scale", torch.ones(self.latent_dim),
                            constraint=constraints.positive)
-        return pyro.sample("_advi_latent", dist.Normal(loc, scale).reshape(extra_event_dims=1))
+        return pyro.sample("_advi_latent", dist.Normal(loc, scale).independent(1),
+                           infer={"is_auxiliary": True})
 
     def median(self, *args, **kwargs):
         """
@@ -368,7 +353,7 @@ class ADVIDiagonalNormal(ADVIContinuous):
         """
         Returns posterior quantiles each latent variable. Example::
 
-            print(advi.quantiles([0.05, 0.5, 0.95]))
+            print(guide.quantiles([0.05, 0.5, 0.95]))
 
         :param quantiles: A list of requested quantiles between 0 and 1.
         :type quantiles: torch.Tensor or list
@@ -387,13 +372,14 @@ class ADVIDiagonalNormal(ADVIContinuous):
         return result
 
 
-class ADVIDiscreteParallel(ADVISlave):
-    def __init__(self, model):
-        super(ADVIDiscreteParallel, self).__init__(model)
-
+class AutoDiscreteParallel(AutoGuide):
+    """
+    A discrete mean-field guide that learns a latent discrete distribution for
+    each discrete site in the model.
+    """
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
-        model = config_enumerate(self.base_model, default="parallel")
+        model = config_enumerate(self.model, default="parallel")
         self.prototype_trace = poutine.block(poutine.trace(model).get_trace)(*args, **kwargs)
         self.prototype_trace = prune_subsample_sites(self.prototype_trace)
         if self.master is not None:
@@ -424,9 +410,9 @@ class ADVIDiscreteParallel(ADVISlave):
                 if frame.vectorized:
                     self._iaranges[frame.name] = frame
                 else:
-                    raise NotImplementedError("ADVI does not support pyro.irange")
+                    raise NotImplementedError("AutoDiscreteParallel does not support pyro.irange")
 
-    def guide(self, *args, **kwargs):
+    def __call__(self, *args, **kwargs):
         """
         An automatic guide with the same ``*args, **kwargs`` as the base ``model``.
 
