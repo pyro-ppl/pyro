@@ -8,7 +8,6 @@ from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.util import Dice, is_validation_enabled
-from pyro.poutine import EnumerateMessenger
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, check_site_shape, check_traceenum_requirements, torch_isnan
 
