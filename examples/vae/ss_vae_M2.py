@@ -114,13 +114,13 @@ class SSVAE(nn.Module):
         with pyro.iarange("data"):
 
             # sample the handwriting style from the constant prior distribution
-            prior_loc = torch.zeros([batch_size, self.z_dim])
-            prior_scale = torch.ones([batch_size, self.z_dim])
+            prior_loc = xs.new_zeros([batch_size, self.z_dim])
+            prior_scale = xs.new_ones([batch_size, self.z_dim])
             zs = pyro.sample("z", dist.Normal(prior_loc, prior_scale).independent(1))
 
             # if the label y (which digit to write) is supervised, sample from the
             # constant prior, otherwise, observe the value (i.e. score it against the constant prior)
-            alpha_prior = torch.ones([batch_size, self.output_size]) / (1.0 * self.output_size)
+            alpha_prior = xs.new_ones([batch_size, self.output_size]) / (1.0 * self.output_size)
             ys = pyro.sample("y", dist.OneHotCategorical(alpha_prior), obs=ys)
 
             # finally, score the image (x) using the handwriting style (z) and
@@ -174,7 +174,7 @@ class SSVAE(nn.Module):
         res, ind = torch.topk(alpha, 1)
 
         # convert the digit(s) to one-hot tensor(s)
-        ys = torch.zeros(alpha.size())
+        ys = xs.new_zeros(alpha.size())
         ys = ys.scatter_(1, ind, 1.0)
         return ys
 
@@ -191,7 +191,7 @@ class SSVAE(nn.Module):
             # this here is the extra term to yield an auxiliary loss that we do gradient descent on
             if ys is not None:
                 alpha = self.encoder_y.forward(xs)
-                with pyro.poutine.scale(None, self.aux_loss_multiplier):
+                with pyro.poutine.scale(scale=self.aux_loss_multiplier):
                     pyro.sample("y_aux", dist.OneHotCategorical(alpha), obs=ys)
 
     def guide_classify(self, xs, ys=None):
@@ -206,8 +206,8 @@ class SSVAE(nn.Module):
         """
 
         # sample the handwriting style from the constant prior distribution
-        prior_loc = torch.zeros([batch_size, self.z_dim])
-        prior_scale = torch.ones([batch_size, self.z_dim])
+        prior_loc = ys.new_zeros([batch_size, self.z_dim])
+        prior_scale = ys.new_ones([batch_size, self.z_dim])
         zs = pyro.sample("z", dist.Normal(prior_loc, prior_scale).independent(1))
 
         log_p = poutine.trace(poutine.replay(self.model)(xs, ys))
@@ -302,11 +302,8 @@ def main(args):
     :param args: arguments for SS-VAE
     :return: None
     """
-    if args.use_cuda:
-        torch.set_default_tensor_type('torch.cuda.FloatTensor')
-
     if args.seed is not None:
-        set_seed(args.seed, args.use_cuda)
+        set_seed(args.seed, args.cuda)
 
     viz = None
     if args.visualize:
@@ -317,7 +314,7 @@ def main(args):
     ss_vae = SSVAE(z_dim=args.z_dim,
                    hidden_layers=args.hidden_layers,
                    epsilon_scale=args.epsilon_scale,
-                   use_cuda=args.use_cuda,
+                   use_cuda=args.cuda,
                    config_enum=args.enum_discrete,
                    aux_loss_multiplier=args.aux_loss_multiplier)
 
@@ -342,7 +339,7 @@ def main(args):
         # setup the logger if a filename is provided
         logger = open(args.logfile, "w") if args.logfile else None
 
-        data_loaders = setup_data_loaders(MNISTCached, args.use_cuda, args.batch_size, sup_num=args.sup_num)
+        data_loaders = setup_data_loaders(MNISTCached, args.cuda, args.batch_size, sup_num=args.sup_num)
 
         # how often would a supervised batch be encountered during inference
         # e.g. if sup_num is 3000, we would have every 16th = int(50000/3000) batch supervised
@@ -402,14 +399,14 @@ def main(args):
             logger.close()
 
 
-EXAMPLE_RUN = "example run: python ss_vae_M2.py --seed 0 -cuda -ne 2 --aux-loss -alm 300 -enum -sup 3000 " \
+EXAMPLE_RUN = "example run: python ss_vae_M2.py --seed 0 --cuda -ne 2 --aux-loss -alm 300 -enum -sup 3000 " \
               "-zd 20 -hl 400 200 -lr 0.001 -b1 0.95 -bs 500 -eps 1e-7 -log ./tmp.log"
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="SS-VAE\n{}".format(EXAMPLE_RUN))
 
-    parser.add_argument('-cuda', '--use-cuda', action='store_true',
+    parser.add_argument('--cuda', action='store_true',
                         help="use GPU(s) to speed up training")
     parser.add_argument('-ne', '--num-epochs', default=100, type=int,
                         help="number of epochs to run")

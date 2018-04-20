@@ -74,6 +74,13 @@ SparseMultivariateNormal
     :undoc-members:
     :show-inheritance:
 
+VonMises
+--------
+.. automodule:: pyro.distributions.von_mises
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Transformed Distributions
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 

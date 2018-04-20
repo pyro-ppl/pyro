@@ -44,6 +44,8 @@ class VariationalGP(GPModel):
         is the covariance function :math:`k`.
     :param ~pyro.contrib.gp.likelihoods.likelihood Likelihood likelihood: A likelihood
         object.
+    :param callable mean_function: An optional mean function :math:`m` of this Gaussian
+        process. By default, we use zero mean.
     :param torch.Size latent_shape: Shape for latent processes (`batch_shape` of
         :math:`q(f)`). By default, it equals to output batch shape ``y.shape[:-1]``.
         For the multi-class classification problems, ``latent_shape[-1]`` should
@@ -56,9 +58,9 @@ class VariationalGP(GPModel):
         a covariance matrix to help stablize its Cholesky decomposition.
     :param str name: Name of this model.
     """
-    def __init__(self, X, y, kernel, likelihood, latent_shape=None, whiten=False,
-                 jitter=1e-6, name="VGP"):
-        super(VariationalGP, self).__init__(X, y, kernel, jitter, name)
+    def __init__(self, X, y, kernel, likelihood, mean_function=None,
+                 latent_shape=None, whiten=False, jitter=1e-6, name="VGP"):
+        super(VariationalGP, self).__init__(X, y, kernel, mean_function, jitter, name)
         self.likelihood = likelihood
 
         self.whiten = whiten
@@ -106,6 +108,9 @@ class VariationalGP(GPModel):
 
         f_var = f_scale_tril.pow(2).sum(dim=-1)
 
+        if self.whiten:
+            f_loc = Lff.matmul(f_loc.unsqueeze(-1)).squeeze(-1)
+        f_loc = f_loc + self.mean_function(self.X)
         if self.y is None:
             return f_loc, f_var
         else:
@@ -122,7 +127,7 @@ class VariationalGP(GPModel):
             pyro.sample(f_name,
                         dist.MultivariateNormal(f_loc, scale_tril=f_scale_tril)
                             .independent(f_loc.dim()-1))
-        return self.kernel, f_loc, f_scale_tril
+        return f_loc, f_scale_tril
 
     def forward(self, Xnew, full_cov=False):
         r"""
@@ -146,10 +151,10 @@ class VariationalGP(GPModel):
         self._check_Xnew_shape(Xnew)
         tmp_sample_latent = self._sample_latent
         self._sample_latent = False
-        kernel, f_loc, f_scale_tril = self.guide()
+        f_loc, f_scale_tril = self.guide()
         self._sample_latent = tmp_sample_latent
 
-        loc, cov = conditional(Xnew, self.X, kernel, f_loc, f_scale_tril,
+        loc, cov = conditional(Xnew, self.X, self.kernel, f_loc, f_scale_tril,
                                full_cov=full_cov, whiten=self.whiten,
                                jitter=self.jitter)
-        return loc, cov
+        return loc + self.mean_function(Xnew), cov

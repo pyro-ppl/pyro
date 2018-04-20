@@ -6,7 +6,7 @@ import pyro
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
-from pyro.infer.util import MultiFrameTensor, get_iarange_stacks, is_validation_enabled
+from pyro.infer.util import MultiFrameTensor, get_iarange_stacks, is_validation_enabled, torch_item
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, check_site_shape, torch_isnan
 
@@ -50,7 +50,7 @@ class Trace_ELBO(ELBO):
         """
         for i in range(self.num_particles):
             guide_trace = poutine.trace(guide).get_trace(*args, **kwargs)
-            model_trace = poutine.trace(poutine.replay(model, guide_trace)).get_trace(*args, **kwargs)
+            model_trace = poutine.trace(poutine.replay(model, trace=guide_trace)).get_trace(*args, **kwargs)
             if is_validation_enabled():
                 check_model_guide_match(model_trace, guide_trace)
             guide_trace = prune_subsample_sites(guide_trace)
@@ -77,7 +77,7 @@ class Trace_ELBO(ELBO):
         """
         elbo = 0.0
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
-            elbo_particle = (model_trace.log_prob_sum() - guide_trace.log_prob_sum()).item()
+            elbo_particle = torch_item(model_trace.log_prob_sum()) - torch_item(guide_trace.log_prob_sum())
             elbo += elbo_particle / self.num_particles
 
         loss = -elbo
@@ -101,27 +101,25 @@ class Trace_ELBO(ELBO):
             log_r = None
 
             # compute elbo and surrogate elbo
-            for name, model_site in model_trace.nodes.items():
-                if model_site["type"] == "sample":
-                    model_log_prob_sum = model_site["log_prob_sum"]
-                    if model_site["is_observed"]:
-                        elbo_particle = elbo_particle + model_log_prob_sum.item()
-                        surrogate_elbo_particle = surrogate_elbo_particle + model_log_prob_sum
-                    else:
-                        guide_site = guide_trace.nodes[name]
-                        guide_log_prob, score_function_term, entropy_term = guide_site["score_parts"]
+            for name, site in model_trace.nodes.items():
+                if site["type"] == "sample":
+                    elbo_particle = elbo_particle + torch_item(site["log_prob_sum"])
+                    surrogate_elbo_particle = surrogate_elbo_particle + site["log_prob_sum"]
 
-                        elbo_particle = elbo_particle + (model_log_prob_sum.item() - guide_log_prob.sum().item())
-                        surrogate_elbo_particle = surrogate_elbo_particle + model_log_prob_sum
+            for name, site in guide_trace.nodes.items():
+                if site["type"] == "sample":
+                    log_prob, score_function_term, entropy_term = site["score_parts"]
 
-                        if not is_identically_zero(entropy_term):
-                            surrogate_elbo_particle -= entropy_term.sum()
+                    elbo_particle = elbo_particle - torch_item(site["log_prob_sum"])
 
-                        if not is_identically_zero(score_function_term):
-                            if log_r is None:
-                                log_r = _compute_log_r(model_trace, guide_trace)
-                            log_r_site = log_r.sum_to(guide_site["cond_indep_stack"])
-                            surrogate_elbo_particle = surrogate_elbo_particle + (log_r_site * score_function_term).sum()
+                    if not is_identically_zero(entropy_term):
+                        surrogate_elbo_particle = surrogate_elbo_particle - entropy_term.sum()
+
+                    if not is_identically_zero(score_function_term):
+                        if log_r is None:
+                            log_r = _compute_log_r(model_trace, guide_trace)
+                        site = log_r.sum_to(site["cond_indep_stack"])
+                        surrogate_elbo_particle = surrogate_elbo_particle + (site * score_function_term).sum()
 
             elbo += elbo_particle / self.num_particles
 
