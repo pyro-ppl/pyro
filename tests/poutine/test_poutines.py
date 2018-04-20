@@ -686,3 +686,79 @@ def test_iarange_error_on_enter():
     with pytest.raises(ZeroDivisionError):
         poutine.trace(model)()
     assert len(_DIM_ALLOCATOR._stack) == 0, 'stack was not cleaned on error'
+
+
+def test_decorator_interface_primitives():
+
+    @poutine.trace
+    def model():
+        pyro.param("p", torch.zeros(1, requires_grad=True))
+        pyro.sample("a", Bernoulli(torch.tensor([0.5])),
+                    infer={"enumerate": "parallel"})
+        pyro.sample("b", Bernoulli(torch.tensor([0.5])))
+
+    tr = model.get_trace()
+    assert isinstance(tr, poutine.Trace)
+    assert tr.graph_type == "flat"
+
+    @poutine.trace(graph_type="dense")
+    def model():
+        pyro.param("p", torch.zeros(1, requires_grad=True))
+        pyro.sample("a", Bernoulli(torch.tensor([0.5])),
+                    infer={"enumerate": "parallel"})
+        pyro.sample("b", Bernoulli(torch.tensor([0.5])))
+
+    tr = model.get_trace()
+    assert isinstance(tr, poutine.Trace)
+    assert tr.graph_type == "dense"
+
+    tr2 = poutine.trace(poutine.replay(model, trace=tr)).get_trace()
+
+    assert_equal(tr2.nodes["a"]["value"], tr.nodes["a"]["value"])
+
+
+def test_decorator_interface_queue():
+
+    sites = ["x", "y", "z", "_INPUT", "_RETURN"]
+    queue = Queue()
+    queue.put(poutine.Trace())
+
+    @poutine.queue(queue=queue)
+    def model():
+        p = torch.tensor([0.5])
+        loc = torch.zeros(1)
+        scale = torch.ones(1)
+
+        x = pyro.sample("x", Normal(loc, scale))
+        y = pyro.sample("y", Bernoulli(p))
+        z = pyro.sample("z", Normal(loc, scale))
+        return dict(x=x, y=y, z=z)
+
+    tr = poutine.trace(model).get_trace()
+    for name in sites:
+        assert name in tr
+
+
+def test_decorator_interface_do():
+
+    sites = ["x", "y", "z", "_INPUT", "_RETURN"]
+    data = {"x": torch.ones(1)}
+
+    @poutine.do(data=data)
+    def model():
+        p = torch.tensor([0.5])
+        loc = torch.zeros(1)
+        scale = torch.ones(1)
+
+        x = pyro.sample("x", Normal(loc, scale))  # Before the discrete variable.
+        y = pyro.sample("y", Bernoulli(p))
+        z = pyro.sample("z", Normal(loc, scale))  # After the discrete variable.
+        return dict(x=x, y=y, z=z)
+
+    tr = poutine.trace(model).get_trace()
+    for name in sites:
+        if name not in data:
+            assert name in tr
+        else:
+            assert name not in tr
+            assert_equal(tr.nodes["_RETURN"]["value"][name], data[name])
