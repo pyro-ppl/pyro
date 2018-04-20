@@ -162,12 +162,9 @@ def set_rng_seed(rng_seed):
     :param int rng_seed: The seed value.
     """
     torch.manual_seed(rng_seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(rng_seed)
     random.seed(rng_seed)
     try:
         import numpy as np
-
         np.random.seed(rng_seed)
     except ImportError:
         pass

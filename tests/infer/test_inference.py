@@ -264,7 +264,7 @@ class BernoulliBetaTests(TestCase):
         self.beta_n = self.beta0 - data_sum + torch.tensor(self.n_data)
         # posterior beta
         self.log_alpha_n = torch.log(self.alpha_n)
-        self.log_beta_n = torch.log(float(self.beta_n))
+        self.log_beta_n = torch.log(self.beta_n)
 
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 10000)
