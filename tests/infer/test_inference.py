@@ -167,7 +167,7 @@ class PoissonGammaTests(TestCase):
         self.n_data = len(self.data)
         data_sum = self.data.sum(0)
         self.alpha_n = self.alpha0 + data_sum  # posterior alpha
-        self.beta_n = self.beta0 + torch.tensor(self.n_data)  # posterior beta
+        self.beta_n = self.beta0 + torch.tensor(float(self.n_data))  # posterior beta
 
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 10000)
@@ -199,9 +199,9 @@ class PoissonGammaTests(TestCase):
             svi.step()
 
         assert_equal(pyro.param("alpha_q"), self.alpha_n, prec=0.2, msg='{} vs {}'.format(
-            pyro.param("alpha_q").detach().numpy(), self.alpha_n.detach().numpy()))
+            pyro.param("alpha_q").detach().cpu().numpy(), self.alpha_n.detach().cpu().numpy()))
         assert_equal(pyro.param("beta_q"), self.beta_n, prec=0.15, msg='{} vs {}'.format(
-            pyro.param("beta_q").detach().numpy(), self.beta_n.detach().numpy()))
+            pyro.param("beta_q").detach().cpu().numpy(), self.beta_n.detach().cpu().numpy()))
 
 
 @pytest.mark.stage("integration", "integration_batch_1")
@@ -220,7 +220,7 @@ def test_exponential_gamma(gamma_dist, n_steps, elbo_impl):
     beta0 = torch.tensor(1.0)
     n_data = 2
     data = torch.tensor([3.0, 2.0])  # two observations
-    alpha_n = alpha0 + torch.tensor(n_data)  # posterior alpha
+    alpha_n = alpha0 + torch.tensor(float(n_data))  # posterior alpha
     beta_n = beta0 + torch.sum(data)  # posterior beta
 
     def model():
@@ -244,9 +244,9 @@ def test_exponential_gamma(gamma_dist, n_steps, elbo_impl):
         svi.step()
 
     assert_equal(pyro.param("alpha_q"), alpha_n, prec=0.15, msg='{} vs {}'.format(
-        pyro.param("alpha_q").detach().numpy(), alpha_n.detach().numpy()))
+        pyro.param("alpha_q").detach().cpu().numpy(), alpha_n.detach().cpu().numpy()))
     assert_equal(pyro.param("beta_q"), beta_n, prec=0.15, msg='{} vs {}'.format(
-        pyro.param("beta_q").detach().numpy(), beta_n.detach().numpy()))
+        pyro.param("beta_q").detach().cpu().numpy(), beta_n.detach().cpu().numpy()))
 
 
 @pytest.mark.stage("integration", "integration_batch_2")
@@ -264,7 +264,7 @@ class BernoulliBetaTests(TestCase):
         self.beta_n = self.beta0 - data_sum + torch.tensor(self.n_data)
         # posterior beta
         self.log_alpha_n = torch.log(self.alpha_n)
-        self.log_beta_n = torch.log(self.beta_n)
+        self.log_beta_n = torch.log(float(self.beta_n))
 
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 10000)
