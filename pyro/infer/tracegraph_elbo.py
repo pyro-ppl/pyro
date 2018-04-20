@@ -194,7 +194,7 @@ class TraceGraph_ELBO(ELBO):
         for i in range(self.num_particles):
             guide_trace = poutine.trace(guide,
                                         graph_type="dense").get_trace(*args, **kwargs)
-            model_trace = poutine.trace(poutine.replay(model, guide_trace),
+            model_trace = poutine.trace(poutine.replay(model, trace=guide_trace),
                                         graph_type="dense").get_trace(*args, **kwargs)
             if is_validation_enabled():
                 check_model_guide_match(model_trace, guide_trace)

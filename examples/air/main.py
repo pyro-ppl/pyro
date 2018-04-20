@@ -221,7 +221,7 @@ def main(**kwargs):
 
         if args.viz and i % args.viz_every == 0:
             trace = poutine.trace(air.guide).get_trace(examples_to_viz, None)
-            z, recons = poutine.replay(air.prior, trace)(examples_to_viz.size(0))
+            z, recons = poutine.replay(air.prior, trace=trace)(examples_to_viz.size(0))
             z_wheres = tensor_to_objs(latents_to_tensor(z))
 
             # Show data with inferred objection positions.
