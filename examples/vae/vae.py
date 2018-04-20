@@ -25,7 +25,7 @@ class Encoder(nn.Module):
         self.fc1 = nn.Linear(784, hidden_dim)
         self.fc21 = nn.Linear(hidden_dim, z_dim)
         self.fc22 = nn.Linear(hidden_dim, z_dim)
-        # setup the non-linearity
+        # setup the non-linearities
         self.softplus = nn.Softplus()
 
     def forward(self, x):
@@ -46,10 +46,10 @@ class Encoder(nn.Module):
 class Decoder(nn.Module):
     def __init__(self, z_dim, hidden_dim):
         super(Decoder, self).__init__()
-        # setup the three linear transformations used
+        # setup the two linear transformations used
         self.fc1 = nn.Linear(z_dim, hidden_dim)
         self.fc21 = nn.Linear(hidden_dim, 784)
-        # setup the non-linearity
+        # setup the non-linearities
         self.softplus = nn.Softplus()
         self.sigmoid = nn.Sigmoid()
 
