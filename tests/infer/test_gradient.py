@@ -25,7 +25,7 @@ def test_subsample_gradient(Elbo, reparameterized, subsample):
     data = torch.tensor([-0.5, 2.0])
     subsample_size = 1 if subsample else len(data)
     num_particles = 50000
-    precision = 0.05
+    precision = 0.06
     Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
 
     def model(subsample):
@@ -67,7 +67,7 @@ def test_iarange(Elbo, reparameterized):
     pyro.clear_param_store()
     data = torch.tensor([-0.5, 2.0])
     num_particles = 20000
-    precision = 0.05
+    precision = 0.06
     Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
 
     def model():
