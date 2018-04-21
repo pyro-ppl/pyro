@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from pyro.contrib.gp.util import Parameterized
-from pyro.infer.svi import SVI
+from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import Adam, PyroOptim
 
 
@@ -58,7 +58,7 @@ class GPModel(Parameterized):
       <http://pyro.ai/examples/svi_part_i.html>`_:
 
         >>> optimizer = pyro.optim.Adam({"lr": 0.01})
-        >>> svi = SVI(gpr.model, gpr.guide, optimizer, loss="ELBO")
+        >>> svi = SVI(gpr.model, gpr.guide, optimizer, loss=Trace_ELBO())
         >>> for i in range(1000):
         ...     svi.step()
 
@@ -139,7 +139,7 @@ class GPModel(Parameterized):
             >>> Xu = torch.tensor([[1., 0, 2]])  # inducing input
             >>> likelihood = gp.likelihoods.Gaussian()
             >>> svgp = gp.models.SparseVariationalGP(X, y, kernel, Xu, likelihood)
-            >>> svi = SVI(svgp.model, svgp.guide, optimizer, "ELBO")
+            >>> svi = SVI(svgp.model, svgp.guide, optimizer, Trace_ELBO())
             >>> batched_X, batched_y = X.split(split_size=10), y.split(split_size=10)
             >>> for Xi, yi in zip(batched_X, batched_y):
             ...     svgp.set_data(Xi, yi)
@@ -175,20 +175,25 @@ class GPModel(Parameterized):
         self.X = X
         self.y = y
 
-    def optimize(self, optimizer=Adam({}), num_steps=1000):
+    def optimize(self, optimizer=None, loss=None, num_steps=1000):
         """
         A convenient method to optimize parameters for the Gaussian Process model
         using :class:`~pyro.infer.svi.SVI`.
 
         :param PyroOptim optimizer: A Pyro optimizer.
+        :param ELBO loss: A Pyro loss instance.
         :param int num_steps: Number of steps to run SVI.
         :returns: a list of losses during the training procedure
         :rtype: list
         """
+        if optimizer is None:
+            optimizer = Adam({})
         if not isinstance(optimizer, PyroOptim):
             raise ValueError("Optimizer should be an instance of "
                              "pyro.optim.PyroOptim class.")
-        svi = SVI(self.model, self.guide, optimizer, loss="ELBO")
+        if loss is None:
+            loss = Trace_ELBO()
+        svi = SVI(self.model, self.guide, optimizer, loss=loss)
         losses = []
         for i in range(num_steps):
             losses.append(svi.step())

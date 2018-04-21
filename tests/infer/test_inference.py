@@ -12,7 +12,7 @@ import pyro.distributions as dist
 import pyro.optim as optim
 from pyro.distributions.testing import fakes
 from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
-from pyro.infer import SVI, Trace_ELBO
+from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO
 from tests.common import assert_equal
 
 
@@ -205,7 +205,7 @@ class PoissonGammaTests(TestCase):
 
 
 @pytest.mark.stage("integration", "integration_batch_1")
-@pytest.mark.parametrize('elbo_impl', ["Trace", "TraceGraph", "TraceEnum"])
+@pytest.mark.parametrize('elbo_impl', [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 @pytest.mark.parametrize('gamma_dist,n_steps', [
     (dist.Gamma, 5000),
     (fakes.NonreparameterizedGamma, 10000),
@@ -235,9 +235,7 @@ def test_exponential_gamma(gamma_dist, n_steps, elbo_impl):
         pyro.sample("lambda_latent", gamma_dist(alpha_q, beta_q))
 
     adam = optim.Adam({"lr": .0003, "betas": (0.97, 0.999)})
-    svi = SVI(model, guide, adam, loss="ELBO",
-              trace_graph=(elbo_impl == "TraceGraph"),
-              enum_discrete=(elbo_impl == "TraceEnum"),
+    svi = SVI(model, guide, adam, loss=elbo_impl(),
               max_iarange_nesting=1)
 
     for k in range(n_steps):
