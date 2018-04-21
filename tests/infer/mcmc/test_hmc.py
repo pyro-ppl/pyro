@@ -195,7 +195,7 @@ def test_bernoulli_beta():
     for trace, _ in mcmc_run._traces(data):
         posterior.append(trace.nodes['p_latent']['value'])
     posterior_mean = torch.mean(torch.stack(posterior), 0)
-    assert_equal(posterior_mean, true_probs, prec=0.01)
+    assert_equal(posterior_mean, true_probs, prec=0.05)
 
 
 def test_normal_gamma():
@@ -214,7 +214,7 @@ def test_normal_gamma():
     for trace, _ in mcmc_run._traces(data):
         posterior.append(trace.nodes['p_latent']['value'])
     posterior_mean = torch.mean(torch.stack(posterior), 0)
-    assert_equal(posterior_mean, true_std, prec=0.02)
+    assert_equal(posterior_mean, true_std, prec=0.05)
 
 
 @pytest.mark.xfail(reason='log_abs_det_jacobian not implemented for StickBreakingTransform')
@@ -273,7 +273,7 @@ def test_bernoulli_beta_with_dual_averaging():
     for trace, _ in mcmc_run._traces(data):
         posterior.append(trace.nodes['p_latent']['value'])
     posterior_mean = torch.mean(torch.stack(posterior), 0)
-    assert_equal(posterior_mean, true_probs, prec=0.01)
+    assert_equal(posterior_mean, true_probs, prec=0.05)
 
 
 @pytest.mark.filterwarnings("ignore:Encountered NAN")
@@ -293,4 +293,4 @@ def test_normal_gamma_with_dual_averaging():
     for trace, _ in mcmc_run._traces(data):
         posterior.append(trace.nodes['p_latent']['value'])
     posterior_mean = torch.mean(torch.stack(posterior), 0)
-    assert_equal(posterior_mean, true_std, prec=0.02)
+    assert_equal(posterior_mean, true_std, prec=0.05)

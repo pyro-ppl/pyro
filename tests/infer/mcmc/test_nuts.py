@@ -107,7 +107,7 @@ def test_bernoulli_beta():
     for trace, _ in mcmc_run._traces(data):
         posterior.append(trace.nodes['p_latent']['value'])
     posterior_mean = torch.mean(torch.stack(posterior), 0)
-    assert_equal(posterior_mean.data, true_probs.data, prec=0.01)
+    assert_equal(posterior_mean.data, true_probs.data, prec=0.02)
 
 
 def test_normal_gamma():
@@ -126,7 +126,7 @@ def test_normal_gamma():
     for trace, _ in mcmc_run._traces(data):
         posterior.append(trace.nodes['p_latent']['value'])
     posterior_mean = torch.mean(torch.stack(posterior), 0)
-    assert_equal(posterior_mean, true_std, prec=0.02)
+    assert_equal(posterior_mean, true_std, prec=0.05)
 
 
 def test_logistic_regression_with_dual_averaging():
@@ -167,4 +167,4 @@ def test_bernoulli_beta_with_dual_averaging():
     for trace, _ in mcmc_run._traces(data):
         posterior.append(trace.nodes['p_latent']['value'])
     posterior_mean = torch.mean(torch.stack(posterior), 0)
-    assert_equal(posterior_mean.data, true_probs.data, prec=0.01)
+    assert_equal(posterior_mean.data, true_probs.data, prec=0.03)

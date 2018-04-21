@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import logging
 from collections import defaultdict, namedtuple
 
+import os
 import pytest
 import torch
 
@@ -160,6 +161,8 @@ def test_forward_with_empty_latent_shape(model_class, X, y, kernel, likelihood):
 
 @pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
 @pytest.mark.init(rng_seed=0)
+@pytest.mark.skipif("CUDA_TEST" in os.environ,
+                    reason="Incorrect results on CUDA: https://github.com/uber/pyro/issues/1051")
 def test_inference(model_class, X, y, kernel, likelihood):
     # skip variational GP models because variance/lengthscale highly
     # depend on variational parameters
