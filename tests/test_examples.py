@@ -30,7 +30,7 @@ CPU_EXAMPLES = [
 CUDA_EXAMPLES = [
     ['air/main.py', '--num-steps=1', '--cuda'],
     ['bayesian_regression.py', '--num-epochs=1', '--cuda'],
-    ['contrib/gp/sv-dkl.py', '--epochs=1', '--num_inducing=4', '--cuda'],
+    ['contrib/gp/sv-dkl.py', '--epochs=1', '--num-inducing=4', '--cuda'],
     ['dmm/dmm.py', '--num-epochs=1', '--cuda'],
     ['dmm/dmm.py', '--num-epochs=1', '--num-iafs=1', '--cuda'],
     ['vae/vae.py', '--num-epochs=1', '--cuda'],

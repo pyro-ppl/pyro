@@ -7,14 +7,15 @@ import pytest
 import torch
 
 import pyro
-import pyro.distributions as dist
-import pyro.optim as optim
-from pyro.contrib.gp.kernels import Cosine, RBF, Matern32, WhiteNoise
+from pyro.contrib.gp.kernels import Cosine, Matern32, RBF, WhiteNoise
 from pyro.contrib.gp.likelihoods import Gaussian
-from pyro.contrib.gp.models import GPRegression, SparseGPRegression, VariationalSparseGP, VariationalGP
+from pyro.contrib.gp.models import (GPRegression, SparseGPRegression,
+                                    VariationalGP, VariationalSparseGP)
+import pyro.distributions as dist
 from pyro.infer import SVI, Trace_ELBO
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.mcmc import MCMC
+import pyro.optim as optim
 from pyro.params import param_with_module_name
 from tests.common import assert_equal
 
@@ -177,12 +178,9 @@ def test_inference(model_class, X, y, kernel, likelihood):
 
     gp.optimize(optim.Adam({"lr": 0.01}), num_steps=1000)
 
-    variance = gp.kernel.get_param("variance")
-    lengthscale = gp.kernel.get_param("lengthscale")
-    target_variance = kernel.get_param("variance")
-    target_lengthscale = kernel.get_param("lengthscale")
-    assert_equal(variance, target_variance, prec=0.2)
-    assert_equal(lengthscale, target_lengthscale, prec=0.2)
+    y_cov = gp.kernel(X)
+    target_y_cov = kernel(X)
+    assert_equal(y_cov, target_y_cov, prec=0.1)
 
 
 @pytest.mark.init(rng_seed=0)
@@ -191,16 +189,16 @@ def test_inference_sgpr():
     X = dist.Uniform(torch.zeros(N), torch.ones(N)*5).sample()
     y = 0.5 * torch.sin(3*X) + dist.Normal(torch.zeros(N), torch.ones(N)*0.5).sample()
     kernel = RBF(input_dim=1)
-    Xu = torch.linspace(0, 5, 10)
+    Xu = torch.arange(0, 5.5, 0.5)
 
     sgpr = SparseGPRegression(X, y, kernel, Xu)
     sgpr.optimize(optim.Adam({"lr": 0.01}), num_steps=1000)
 
-    Xnew = torch.linspace(0, 5, 100)
+    Xnew = torch.arange(0, 5.05, 0.05)
     loc, var = sgpr(Xnew, full_cov=False)
     target = 0.5 * torch.sin(3*Xnew)
 
-    assert_equal((loc - target).abs().mean().item(), 0, prec=0.05)
+    assert_equal((loc - target).abs().mean().item(), 0, prec=0.07)
 
 
 @pytest.mark.init(rng_seed=0)
@@ -209,16 +207,16 @@ def test_inference_vsgp():
     X = dist.Uniform(torch.zeros(N), torch.ones(N)*5).sample()
     y = 0.5 * torch.sin(3*X) + dist.Normal(torch.zeros(N), torch.ones(N)*0.5).sample()
     kernel = RBF(input_dim=1)
-    Xu = torch.linspace(0, 5, 10)
+    Xu = torch.arange(0, 5.5, 0.5)
 
-    svgp = VariationalSparseGP(X, y, kernel, Xu, Gaussian())
-    svgp.optimize(optim.Adam({"lr": 0.01}), num_steps=1000)
+    vsgp = VariationalSparseGP(X, y, kernel, Xu, Gaussian())
+    vsgp.optimize(optim.Adam({"lr": 0.03}), num_steps=1000)
 
-    Xnew = torch.linspace(0, 5, 100)
-    loc, var = svgp(Xnew, full_cov=False)
+    Xnew = torch.arange(0, 5.05, 0.05)
+    loc, var = vsgp(Xnew, full_cov=False)
     target = 0.5 * torch.sin(3*Xnew)
 
-    assert_equal((loc - target).abs().mean().item(), 0, prec=0.05)
+    assert_equal((loc - target).abs().mean().item(), 0, prec=0.06)
 
 
 @pytest.mark.init(rng_seed=0)
@@ -227,16 +225,16 @@ def test_inference_whiten_vsgp():
     X = dist.Uniform(torch.zeros(N), torch.ones(N)*5).sample()
     y = 0.5 * torch.sin(3*X) + dist.Normal(torch.zeros(N), torch.ones(N)*0.5).sample()
     kernel = RBF(input_dim=1)
-    Xu = torch.linspace(0, 5, 10)
+    Xu = torch.arange(0, 5.5, 0.5)
 
-    svgp = VariationalSparseGP(X, y, kernel, Xu, Gaussian(), whiten=True)
-    svgp.optimize(optim.Adam({"lr": 0.01}), num_steps=1000)
+    vsgp = VariationalSparseGP(X, y, kernel, Xu, Gaussian(), whiten=True)
+    vsgp.optimize(optim.Adam({"lr": 0.01}), num_steps=1000)
 
-    Xnew = torch.linspace(0, 5, 100)
-    loc, var = svgp(Xnew, full_cov=False)
+    Xnew = torch.arange(0, 5.05, 0.05)
+    loc, var = vsgp(Xnew, full_cov=False)
     target = 0.5 * torch.sin(3*Xnew)
 
-    assert_equal((loc - target).abs().mean().item(), 0, prec=0.05)
+    assert_equal((loc - target).abs().mean().item(), 0, prec=0.07)
 
 
 @pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)

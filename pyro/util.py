@@ -165,7 +165,6 @@ def set_rng_seed(rng_seed):
     random.seed(rng_seed)
     try:
         import numpy as np
-
         np.random.seed(rng_seed)
     except ImportError:
         pass

@@ -61,13 +61,13 @@ TEST_CASES = [
     T(
         GaussianChain(dim=10, chain_len=3, num_obs=1),
         num_samples=800,
-        warmup_steps=50,
+        warmup_steps=200,
         hmc_params={'step_size': 0.5,
                     'num_steps': 4},
         expected_means=[0.25, 0.50, 0.75],
         expected_precs=[1.33, 1, 1.33],
         mean_tol=0.06,
-        std_tol=0.06,
+        std_tol=0.08,
     ),
     T(
         GaussianChain(dim=10, chain_len=4, num_obs=1),
@@ -176,7 +176,7 @@ def test_logistic_regression():
     for trace, _ in mcmc_run._traces(data):
         posterior.append(trace.nodes['beta']['value'])
     posterior_mean = torch.mean(torch.stack(posterior), 0)
-    assert_equal(rmse(true_coefs, posterior_mean).item(), 0.0, prec=0.05)
+    assert_equal(rmse(true_coefs, posterior_mean).item(), 0.0, prec=0.1)
 
 
 def test_bernoulli_beta():
@@ -254,7 +254,7 @@ def test_logistic_regression_with_dual_averaging():
     for trace, _ in mcmc_run._traces(data):
         posterior.append(trace.nodes['beta']['value'])
     posterior_mean = torch.mean(torch.stack(posterior), 0)
-    assert_equal(rmse(true_coefs, posterior_mean).item(), 0.0, prec=0.05)
+    assert_equal(rmse(true_coefs, posterior_mean).item(), 0.0, prec=0.1)
 
 
 def test_bernoulli_beta_with_dual_averaging():

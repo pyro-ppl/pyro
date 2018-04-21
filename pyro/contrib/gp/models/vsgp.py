@@ -43,7 +43,7 @@ class VariationalSparseGP(GPModel):
         of train inputs, :math:`M` is the number of inducing inputs. Size of
         variational parameters is :math:`\mathcal{O}(M^2)`.
 
-    References
+    References:
 
     [1] `Scalable variational Gaussian process classification`,
     James Hensman, Alexander G. de G. Matthews, Zoubin Ghahramani
@@ -98,8 +98,8 @@ class VariationalSparseGP(GPModel):
         self.u_loc = Parameter(u_loc)
 
         u_scale_tril_shape = self.latent_shape + (M, M)
-        u_scale_tril = torch.eye(M, out=self.Xu.new_empty(M, M))
-        u_scale_tril = u_scale_tril.expand(u_scale_tril_shape)
+        Id = torch.eye(M, out=self.Xu.new_empty(M, M))
+        u_scale_tril = Id.expand(u_scale_tril_shape)
         self.u_scale_tril = Parameter(u_scale_tril)
         self.set_constraint("u_scale_tril", constraints.lower_cholesky)
 
@@ -173,10 +173,10 @@ class VariationalSparseGP(GPModel):
         :rtype: tuple(torch.Tensor, torch.Tensor)
         """
         self._check_Xnew_shape(Xnew)
-        tmp_sample_latent = self._sample_latent
+        # avoid sampling the unnecessary latent u
         self._sample_latent = False
         Xu, u_loc, u_scale_tril = self.guide()
-        self._sample_latent = tmp_sample_latent
+        self._sample_latent = True
 
         loc, cov = conditional(Xnew, Xu, self.kernel, u_loc, u_scale_tril,
                                full_cov=full_cov, whiten=self.whiten,

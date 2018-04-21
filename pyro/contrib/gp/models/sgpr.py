@@ -69,7 +69,7 @@ class SparseGPRegression(GPModel):
         :math:`\mathcal{O}(NM^2)` complexity for testing. Here, :math:`N` is the number
         of train inputs, :math:`M` is the number of inducing inputs.
 
-    References
+    References:
 
     [1] `A Unifying View of Sparse Approximate Gaussian Process Regression`,
     Joaquin Qui\u00F1onero-Candela, Carl E. Rasmussen

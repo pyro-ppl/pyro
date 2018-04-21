@@ -74,8 +74,8 @@ class VariationalGP(GPModel):
         self.f_loc = Parameter(f_loc)
 
         f_scale_tril_shape = self.latent_shape + (N, N)
-        f_scale_tril = torch.eye(N, out=self.X.new_empty(N, N))
-        f_scale_tril = f_scale_tril.expand(f_scale_tril_shape)
+        Id = torch.eye(N, out=self.X.new_empty(N, N))
+        f_scale_tril = Id.expand(f_scale_tril_shape)
         self.f_scale_tril = Parameter(f_scale_tril)
         self.set_constraint("f_scale_tril", constraints.lower_cholesky)
 
@@ -149,10 +149,10 @@ class VariationalGP(GPModel):
         :rtype: tuple(torch.Tensor, torch.Tensor)
         """
         self._check_Xnew_shape(Xnew)
-        tmp_sample_latent = self._sample_latent
+        # avoid sampling the unnecessary latent f
         self._sample_latent = False
         f_loc, f_scale_tril = self.guide()
-        self._sample_latent = tmp_sample_latent
+        self._sample_latent = True
 
         loc, cov = conditional(Xnew, self.X, self.kernel, f_loc, f_scale_tril,
                                full_cov=full_cov, whiten=self.whiten,
