@@ -21,7 +21,7 @@ __all__ = [
     "enable_validation",
     "is_validation_enabled",
     "validation_enabled",
-    "Binomial"
+    "Binomial",
     "Delta",
     "Distribution",
     "Empirical",
