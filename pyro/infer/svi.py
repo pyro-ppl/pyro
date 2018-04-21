@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import torch
+
 import pyro
 from pyro.infer.elbo import ELBO
 
@@ -61,7 +63,8 @@ class SVI(object):
 
         Evaluate the loss function. Any args or kwargs are passed to the model and guide.
         """
-        return self.loss(self.model, self.guide, *args, **kwargs)
+        with torch.no_grad():
+            return self.loss(self.model, self.guide, *args, **kwargs)
 
     def step(self, *args, **kwargs):
         """
