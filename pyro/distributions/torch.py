@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import torch
 
-from pyro.distributions.binomial import Binomial  # noqa: F403
+from pyro.distributions.binomial import Binomial  # noqa: F401
 from pyro.distributions.torch_distribution import TorchDistributionMixin
 
 # Programmatically load all distributions from PyTorch.
