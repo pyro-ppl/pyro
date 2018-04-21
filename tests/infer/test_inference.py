@@ -261,7 +261,7 @@ class BernoulliBetaTests(TestCase):
         self.batch_size = 4
         data_sum = self.data.sum()
         self.alpha_n = self.alpha0 + data_sum  # posterior alpha
-        self.beta_n = self.beta0 - data_sum + torch.tensor(self.n_data)
+        self.beta_n = self.beta0 - data_sum + torch.tensor(float(self.n_data))
         # posterior beta
         self.log_alpha_n = torch.log(self.alpha_n)
         self.log_beta_n = torch.log(self.beta_n)

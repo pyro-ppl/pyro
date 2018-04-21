@@ -35,7 +35,7 @@ def test_mean_gradient(sample_shape, L21, omega1, L11, L22=0.8, L33=0.9, omega2=
     z = dist.rsample(sample_shape)
     torch.cos((omega*z).sum(-1)).mean().backward()
 
-    computed_grad = off_diag.grad.data.numpy()[1, 0]
+    computed_grad = off_diag.grad.data.cpu().numpy()[1, 0]
     analytic = analytic_grad(L11=L11, L22=L22, L21=L21, omega1=omega1, omega2=omega2)
     assert(off_diag.grad.size() == off_diag.size())
     assert(loc.grad.size() == loc.size())
