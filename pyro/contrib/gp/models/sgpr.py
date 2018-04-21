@@ -32,7 +32,7 @@ class SparseGPRegression(GPModel):
         f & \sim q(f \mid X, X_u) = \mathbb{E}_{p(u)}q(f\mid X, X_u, u),\\\\
         y & \sim f + \epsilon,
 
-    where :math:`\epsilon` is a Gaussian noise and the conditional distribution
+    where :math:`\epsilon` is Gaussian noise and the conditional distribution
     :math:`q(f\mid X, X_u, u)` is an approximation of
 
     .. math:: p(f\mid X, X_u, u) = \mathcal{N}(m, k(X, X) - Q),
@@ -85,7 +85,7 @@ class SparseGPRegression(GPModel):
         is the covariance function :math:`k`.
     :param torch.Tensor Xu: Initial values for inducing points, which are parameters
         of our model.
-    :param torch.Tensor noise: Noise parameter of this model.
+    :param torch.Tensor noise: Variance of Gaussian noise of this model.
     :param callable mean_function: An optional mean function :math:`m` of this Gaussian
         process. By default, we use zero mean.
     :param str approx: One of approximation methods: "DTC", "FITC", and "VFE"

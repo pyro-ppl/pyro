@@ -39,7 +39,7 @@ class GPRegression(GPModel):
         f &\sim \mathcal{GP}(0, k(X, X)),\\
         y & \sim f + \epsilon,
 
-    where :math:`\epsilon` is a Gaussian noise.
+    where :math:`\epsilon` is Gaussian noise.
 
     .. note:: This model has :math:`\mathcal{O}(N^3)` complexity for training,
         :math:`\mathcal{O}(N^3)` complexity for testing. Here, :math:`N` is the number
@@ -56,7 +56,7 @@ class GPRegression(GPModel):
         number of data points.
     :param ~pyro.contrib.gp.kernels.kernel.Kernel kernel: A Pyro kernel object, which
         is the covariance function :math:`k`.
-    :param torch.Tensor noise: Noise parameter of this model.
+    :param torch.Tensor noise: Variance of Gaussian noise of this model.
     :param callable mean_function: An optional mean function :math:`m` of this Gaussian
         process. By default, we use zero mean.
     :param float jitter: A small positive term which is added into the diagonal part of
