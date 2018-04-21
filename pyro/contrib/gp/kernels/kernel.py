@@ -316,10 +316,11 @@ class Warping(Transforming):
     learning architecture. For example:
 
         >>> linear = torch.nn.Linear(10, 3)
-        # register its parameters to Pyro's ParamStore
-        >>> pyro_linear = pyro.module("linear", linear)
+        # register its parameters to Pyro's ParamStore and wrap it by lambda
+        # to call the primitive pyro.module each time we use the linear function 
+        >>> pyro_linear_fn = lambda x: pyro.module("linear", linear)(x)
         >>> kernel = gp.kernels.Matern52(input_dim=3, lengthscale=torch.ones(3))
-        >>> warped_kernel = gp.kernels.Warping(kernel, pyro_linear)
+        >>> warped_kernel = gp.kernels.Warping(kernel, pyro_linear_fn)
 
     Reference:
 

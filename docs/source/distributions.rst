@@ -61,7 +61,7 @@ HalfCauchy
     :show-inheritance:
 
 LowRankMultivariateNormal
-------------------------
+-------------------------
 .. automodule:: pyro.distributions.lowrank_mvn
     :members:
     :undoc-members:

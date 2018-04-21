@@ -138,11 +138,11 @@ class GPModel(Parameterized):
 
             >>> Xu = torch.tensor([[1., 0, 2]])  # inducing input
             >>> likelihood = gp.likelihoods.Gaussian()
-            >>> svgp = gp.models.SparseVariationalGP(X, y, kernel, Xu, likelihood)
-            >>> svi = SVI(svgp.model, svgp.guide, optimizer, "ELBO")
+            >>> vsgp = gp.models.VariationalSparseGP(X, y, kernel, Xu, likelihood)
+            >>> svi = SVI(vsgp.model, vsgp.guide, optimizer, "ELBO")
             >>> batched_X, batched_y = X.split(split_size=10), y.split(split_size=10)
             >>> for Xi, yi in zip(batched_X, batched_y):
-            ...     svgp.set_data(Xi, yi)
+            ...     vsgp.set_data(Xi, yi)
             ...     svi.step()
 
         + Making a two-layer Gaussian Process stochastic function:
