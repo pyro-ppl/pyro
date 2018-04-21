@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import pyro.distributions.torch_patch  # noqa F403
 from pyro.distributions.delta import Delta
 from pyro.distributions.distribution import Distribution
 from pyro.distributions.empirical import Empirical
