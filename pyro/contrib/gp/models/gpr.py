@@ -39,7 +39,7 @@ class GPRegression(GPModel):
         f &\sim \mathcal{GP}(0, k(X, X)),\\
         y & \sim f + \epsilon,
 
-    where :math:`\epsilon` is noise.
+    where :math:`\epsilon` is a Gaussian noise.
 
     .. note:: This model has :math:`\mathcal{O}(N^3)` complexity for training,
         :math:`\mathcal{O}(N^3)` complexity for testing. Here, :math:`N` is the number

@@ -6,9 +6,9 @@ from pyro.distributions.distribution import Distribution
 from pyro.distributions.empirical import Empirical
 from pyro.distributions.half_cauchy import HalfCauchy
 from pyro.distributions.iaf import InverseAutoregressiveFlow
+from pyro.distributions.lowrank_mvn import LowRankMultivariateNormal
 from pyro.distributions.omt_mvn import OMTMultivariateNormal
 from pyro.distributions.rejector import Rejector
-from pyro.distributions.sparse_mvn import SparseMultivariateNormal
 from pyro.distributions.torch import __all__ as torch_dists
 from pyro.distributions.torch import *  # noqa F403
 from pyro.distributions.torch_distribution import TorchDistribution
@@ -24,9 +24,9 @@ __all__ = [
     "Empirical",
     "HalfCauchy",
     "InverseAutoregressiveFlow",
+    "LowRankMultivariateNormal",
     "OMTMultivariateNormal",
     "Rejector",
-    "SparseMultivariateNormal",
     "TorchDistribution",
     "VonMises",
 ]

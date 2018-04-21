@@ -12,9 +12,9 @@ from pyro.contrib.gp.util import conditional
 from pyro.params import param_with_module_name
 
 
-class SparseVariationalGP(GPModel):
+class VariationalSparseGP(GPModel):
     r"""
-    Sparse Variational Gaussian Process model.
+    Variational Sparse Gaussian Process model.
 
     In :class:`.VariationalGP` model, when the number of input data :math:`X` is large,
     the covariance matrix :math:`k(X, X)` will require a lot of computational steps to
@@ -80,7 +80,7 @@ class SparseVariationalGP(GPModel):
     def __init__(self, X, y, kernel, Xu, likelihood, mean_function=None,
                  latent_shape=None, num_data=None, whiten=False, jitter=1e-6,
                  name="SVGP"):
-        super(SparseVariationalGP, self).__init__(X, y, kernel, mean_function, jitter,
+        super(VariationalSparseGP, self).__init__(X, y, kernel, mean_function, jitter,
                                                   name)
         self.likelihood = likelihood
 

@@ -32,8 +32,8 @@ class SparseGPRegression(GPModel):
         f & \sim q(f \mid X, X_u) = \mathbb{E}_{p(u)}q(f\mid X, X_u, u),\\\\
         y & \sim f + \epsilon,
 
-    where :math:`\epsilon` is noise and the conditional distribution
-    :math:`q(f\mid X, X_u, u)` is an appxomiation of
+    where :math:`\epsilon` is a Gaussian noise and the conditional distribution
+    :math:`q(f\mid X, X_u, u)` is an approximation of
 
     .. math:: p(f\mid X, X_u, u) = \mathcal{N}(m, k(X, X) - Q),
 
@@ -152,7 +152,7 @@ class SparseGPRegression(GPModel):
         else:
             y_name = param_with_module_name(self.name, "y")
             return pyro.sample(y_name,
-                               dist.SparseMultivariateNormal(f_loc, W, D, trace_term)
+                               dist.LowRankMultivariateNormal(f_loc, W, D, trace_term)
                                    .expand_by(self.y.shape[:-1])
                                    .independent(self.y.dim() - 1),
                                obs=self.y)
