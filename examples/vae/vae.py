@@ -13,8 +13,6 @@ from utils.mnist_cached import MNISTCached as MNIST
 from utils.mnist_cached import setup_data_loaders
 from utils.vae_plots import mnist_test_tsne, plot_llk, plot_vae_samples
 
-fudge = 1e-7
-
 
 # define the PyTorch module that parameterizes the
 # diagonal gaussian distribution q(z|x)
@@ -59,8 +57,7 @@ class Decoder(nn.Module):
         hidden = self.softplus(self.fc1(z))
         # return the parameter for the output Bernoulli
         # each is of size batch_size x 784
-        # fixing numerical instabilities of sigmoid with a fudge
-        loc_img = (self.sigmoid(self.fc21(hidden))+fudge) * (1-2*fudge)
+        loc_img = self.sigmoid(self.fc21(hidden))
         return loc_img
 
 
