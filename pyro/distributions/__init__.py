@@ -1,6 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
 import pyro.distributions.torch_patch  # noqa F403
+
+from pyro.distributions.binomial import Binomial
 from pyro.distributions.delta import Delta
 from pyro.distributions.distribution import Distribution
 from pyro.distributions.empirical import Empirical
@@ -19,6 +21,7 @@ __all__ = [
     "enable_validation",
     "is_validation_enabled",
     "validation_enabled",
+    "Binomial",
     "Delta",
     "Distribution",
     "Empirical",
