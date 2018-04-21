@@ -15,6 +15,10 @@ class Binomial(torch.distributions.Distribution, TorchDistributionMixin):
     either `probs` or `logits` (but not both). `total_count` must be
     broadcastable with `probs`/`logits`.
 
+    This is adapted from :class:`torch.distributions.binomial.Binomial`,
+    with the important difference that `total_count` is not limited to
+    being a single `int`, but can be a `torch.Tensor`.
+
     Example::
 
         >>> m = Binomial(100, torch.Tensor([0 , .2, .8, 1]))
@@ -31,10 +35,9 @@ class Binomial(torch.distributions.Distribution, TorchDistributionMixin):
          7  6
         [torch.FloatTensor of size (2,2)]
 
-    Args:
-        total_count (Tensor): number of Bernoulli trials
-        probs (Tensor): Event probabilities
-        logits (Tensor): Event log-odds
+    :param (Tensor) total_count: number of Bernoulli trials
+    :param (Tensor) probs: Event probabilities
+    :param (Tensor) logits: Event log-odds
     """
     arg_constraints = {'total_count': constraints.nonnegative_integer,
                        'probs': constraints.unit_interval}

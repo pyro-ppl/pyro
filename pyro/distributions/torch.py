@@ -17,6 +17,9 @@ for _name, _Dist in torch.distributions.__dict__.items():
 
     try:
         _PyroDist = locals()[_name]
+        # Do not override existing __doc__
+        if _PyroDist.__doc__:
+            continue
     except KeyError:
 
         class _PyroDist(_Dist, TorchDistributionMixin):
