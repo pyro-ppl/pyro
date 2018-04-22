@@ -36,3 +36,11 @@ Importance
     :members:
     :undoc-members:
     :show-inheritance:
+
+Inference Utilities
+-------------------
+
+.. automodule:: pyro.infer.abstract_infer
+    :members:
+    :undoc-members:
+    :show-inheritance:

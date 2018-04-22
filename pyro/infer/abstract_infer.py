@@ -1,5 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
+from abc import abstractmethod, ABCMeta
+from six import add_metaclass
+
 import torch
 
 import pyro.poutine as poutine
@@ -31,12 +34,13 @@ class EmpiricalMarginal(Empirical):
             self.add(value, log_weight=log_weight)
 
 
+@add_metaclass(ABCMeta)
 class TracePosterior(object):
     """
     Abstract TracePosterior object from which posterior inference algorithms inherit.
-    When called, collects a bag of execution traces from the approximate posterior.
-    Not itself a distribution object, but provides convenience methods that return
-    an empirical distribution.
+    When run, collects a bag of execution traces from the approximate posterior.
+    This is designed to be used by other utility classes like `EmpiricalMarginal`,
+    that need access to the collected execution traces.
     """
     def __init__(self):
         self._init()
@@ -44,16 +48,24 @@ class TracePosterior(object):
     def _init(self):
         self.log_weights = []
         self.exec_traces = []
-        self._marginals = {}
 
+    @abstractmethod
     def _traces(self, *args, **kwargs):
         """
-        Abstract method.
-        Get unnormalized weighted list of posterior traces
+        Abstract method implemented by classes that inherit from `TracePosterior`.
+
+        :return: Generator over ``(exec_trace, weight)``.
         """
         raise NotImplementedError("inference algorithm must implement _traces")
 
-    def __call__(self, *args, **kwargs):
+    def run(self, *args, **kwargs):
+        """
+        Calls `self._traces` to populate execution traces from a stochastic
+        Pyro model.
+
+        :param args: optional args taken by `self._traces`.
+        :param kwargs: optional keywords args taken by `self._traces`.
+        """
         self._init()
         for tr, logit in poutine.block(self._traces)(*args, **kwargs):
             self.exec_traces.append(tr)

@@ -101,7 +101,7 @@ def bernoulli_beta_hmc(**kwargs):
     kernel = kwargs.pop('kernel')
     num_samples = kwargs.pop('num_samples')
     mcmc_kernel = kernel(model, **kwargs)
-    mcmc_run = MCMC(mcmc_kernel, num_samples=num_samples, warmup_steps=100)(data)
+    mcmc_run = MCMC(mcmc_kernel, num_samples=num_samples, warmup_steps=100).run(data)
     return EmpiricalMarginal(mcmc_run, sites='p_latent')
 
 

@@ -112,8 +112,8 @@ class Empirical(TorchDistribution):
     def log_prob(self, value):
         """
         Returns the log of the probability mass function evaluated at ``value``.
-        Note that this currently only supports scoring single values and not
-        a tensor of values.
+        Note that this currently only supports scoring values with empty
+        ``sample_shape``, i.e. an arbitrary batched sample is not allowed.
 
         :param torch.Tensor value: scalar or tensor value to be scored.
         """
@@ -149,7 +149,9 @@ class Empirical(TorchDistribution):
         if self._samples.dtype in (torch.int32, torch.int64):
             raise ValueError("Mean for discrete empirical distribution undefined. " +
                              "Consider converting samples to ``torch.float32`` " +
-                             "or ``torch.float64``.")
+                             "or ``torch.float64``. If these are samples from a " +
+                             "`Categorical` distribution, consider converting to a " +
+                             "`OneHotCategorical` distribution.")
         return self._weighted_mean(self._samples) / self._weighted_mean(self._samples.new_tensor([1.]))
 
     @property
@@ -158,7 +160,9 @@ class Empirical(TorchDistribution):
         if self._samples.dtype in (torch.int32, torch.int64):
             raise ValueError("Variance for discrete empirical distribution undefined. " +
                              "Consider converting samples to ``torch.float32`` " +
-                             "or ``torch.float64``.")
+                             "or ``torch.float64``. If these are samples from a " +
+                             "`Categorical` distribution, consider converting to a " +
+                             "`OneHotCategorical` distribution.")
         deviation_squared = torch.pow(self._samples - self.mean, 2)
         return self._weighted_mean(deviation_squared) / self._weighted_mean(self._samples.new_tensor([1.]))
 

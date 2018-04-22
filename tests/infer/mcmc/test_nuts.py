@@ -42,7 +42,7 @@ def test_nuts_conjugate_gaussian(fixture,
                                  std_tol):
     pyro.get_param_store().clear()
     nuts_kernel = NUTS(fixture.model, hmc_params['step_size'])
-    mcmc_run = MCMC(nuts_kernel, num_samples, warmup_steps)(fixture.data)
+    mcmc_run = MCMC(nuts_kernel, num_samples, warmup_steps).run(fixture.data)
     for i in range(1, fixture.chain_len + 1):
         param_name = 'loc_' + str(i)
         marginal = EmpiricalMarginal(mcmc_run, sites=param_name)
@@ -79,7 +79,7 @@ def test_logistic_regression():
         return y
 
     nuts_kernel = NUTS(model, step_size=0.0855)
-    mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100)(data)
+    mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites='beta')
     assert_equal(rmse(true_coefs, posterior.mean).item(), 0.0, prec=0.1)
 
@@ -95,7 +95,7 @@ def test_bernoulli_beta():
     true_probs = torch.tensor([0.9, 0.1])
     data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
     nuts_kernel = NUTS(model, step_size=0.02)
-    mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100)(data)
+    mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
     assert_equal(posterior.mean, true_probs, prec=0.02)
 
@@ -111,7 +111,7 @@ def test_normal_gamma():
     true_std = torch.tensor([0.5, 2])
     data = dist.Normal(3, true_std).sample(sample_shape=(torch.Size((2000,))))
     nuts_kernel = NUTS(model, step_size=0.01)
-    mcmc_run = MCMC(nuts_kernel, num_samples=200, warmup_steps=100)(data)
+    mcmc_run = MCMC(nuts_kernel, num_samples=200, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
     assert_equal(posterior.mean, true_std, prec=0.05)
 
@@ -129,7 +129,7 @@ def test_logistic_regression_with_dual_averaging():
         return y
 
     nuts_kernel = NUTS(model, adapt_step_size=True)
-    mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100)(data)
+    mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites='beta')
     assert_equal(rmse(true_coefs, posterior.mean).item(), 0.0, prec=0.1)
 
@@ -146,6 +146,6 @@ def test_bernoulli_beta_with_dual_averaging():
     true_probs = torch.tensor([0.9, 0.1])
     data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
     nuts_kernel = NUTS(model, adapt_step_size=True)
-    mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100)(data)
+    mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites="p_latent")
     assert_equal(posterior.mean, true_probs, prec=0.03)
