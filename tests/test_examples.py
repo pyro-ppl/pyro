@@ -68,8 +68,6 @@ def test_coverage():
 @pytest.mark.parametrize('example,args', CPU_EXAMPLES, ids=make_ids(CPU_EXAMPLES))
 def test_cpu(example, args):
     example = os.path.join(EXAMPLES_DIR, example)
-    if "schelling" in example:
-        pytest.xfail(reason="Non lazy EmpiricalMarginal not supported.")
     check_call([sys.executable, example] + args)
 
 
