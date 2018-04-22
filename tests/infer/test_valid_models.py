@@ -50,8 +50,8 @@ def assert_warning(model, guide, elbo):
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
-@pytest.mark.parametrize("is_validate", [True, False])
-def test_nonempty_model_empty_guide_ok(Elbo, is_validate):
+@pytest.mark.parametrize("strict_enumeration_warning", [True, False])
+def test_nonempty_model_empty_guide_ok(Elbo, strict_enumeration_warning):
 
     def model():
         loc = torch.tensor([0.0, 0.0])
@@ -61,16 +61,16 @@ def test_nonempty_model_empty_guide_ok(Elbo, is_validate):
     def guide():
         pass
 
-    with pyro.validation_enabled(is_validate):
-        if is_validate and Elbo is TraceEnum_ELBO:
-            assert_warning(model, guide, Elbo())
-        else:
-            assert_ok(model, guide, Elbo())
+    elbo = Elbo(strict_enumeration_warning=strict_enumeration_warning)
+    if strict_enumeration_warning and Elbo is TraceEnum_ELBO:
+        assert_warning(model, guide, elbo)
+    else:
+        assert_ok(model, guide, elbo)
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
-@pytest.mark.parametrize("is_validate", [True, False])
-def test_empty_model_empty_guide_ok(Elbo, is_validate):
+@pytest.mark.parametrize("strict_enumeration_warning", [True, False])
+def test_empty_model_empty_guide_ok(Elbo, strict_enumeration_warning):
 
     def model():
         pass
@@ -78,11 +78,11 @@ def test_empty_model_empty_guide_ok(Elbo, is_validate):
     def guide():
         pass
 
-    with pyro.validation_enabled(is_validate):
-        if is_validate and Elbo is TraceEnum_ELBO:
-            assert_warning(model, guide, Elbo())
-        else:
-            assert_ok(model, guide, Elbo())
+    elbo = Elbo(strict_enumeration_warning=strict_enumeration_warning)
+    if strict_enumeration_warning and Elbo is TraceEnum_ELBO:
+        assert_warning(model, guide, elbo)
+    else:
+        assert_ok(model, guide, elbo)
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -568,7 +568,8 @@ def test_enum_discrete_single_ok():
     assert_ok(model, config_enumerate(guide), TraceEnum_ELBO())
 
 
-def test_enum_discrete_missing_config_warning():
+@pytest.mark.parametrize("strict_enumeration_warning", [False, True])
+def test_enum_discrete_missing_config_warning(strict_enumeration_warning):
 
     def model():
         p = torch.tensor(0.5)
@@ -578,7 +579,11 @@ def test_enum_discrete_missing_config_warning():
         p = pyro.param("p", torch.tensor(0.5, requires_grad=True))
         pyro.sample("x", dist.Bernoulli(p))
 
-    assert_warning(model, guide, TraceEnum_ELBO())
+    elbo = TraceEnum_ELBO(strict_enumeration_warning=strict_enumeration_warning)
+    if strict_enumeration_warning:
+        assert_warning(model, guide, elbo)
+    else:
+        assert_ok(model, guide, elbo)
 
 
 def test_enum_discrete_single_single_ok():
@@ -626,7 +631,8 @@ def test_iarange_enum_discrete_batch_ok():
     assert_ok(model, config_enumerate(guide), TraceEnum_ELBO())
 
 
-def test_iarange_enum_discrete_no_discrete_vars_warning():
+@pytest.mark.parametrize("strict_enumeration_warning", [False, True])
+def test_iarange_enum_discrete_no_discrete_vars_warning(strict_enumeration_warning):
 
     def model():
         loc = torch.tensor(0.0)
@@ -634,13 +640,18 @@ def test_iarange_enum_discrete_no_discrete_vars_warning():
         with pyro.iarange("iarange", 10, 5) as ind:
             pyro.sample("x", dist.Normal(loc, scale).expand_by([len(ind)]))
 
+    @config_enumerate
     def guide():
         loc = pyro.param("loc", torch.tensor(1.0, requires_grad=True))
         scale = pyro.param("scale", torch.tensor(2.0, requires_grad=True))
         with pyro.iarange("iarange", 10, 5) as ind:
             pyro.sample("x", dist.Normal(loc, scale).expand_by([len(ind)]))
 
-    assert_warning(model, config_enumerate(guide), TraceEnum_ELBO())
+    elbo = TraceEnum_ELBO(strict_enumeration_warning=strict_enumeration_warning)
+    if strict_enumeration_warning:
+        assert_warning(model, guide, elbo)
+    else:
+        assert_ok(model, guide, elbo)
 
 
 def test_no_iarange_enum_discrete_batch_error():

@@ -11,10 +11,14 @@ class ELBO(object):
 
     :param num_particles: The number of particles/samples used to form the ELBO
         (gradient) estimators.
-    :param int max_iarange_nesting: optional bound on max number of nested
+    :param int max_iarange_nesting: Optional bound on max number of nested
         :func:`pyro.iarange` contexts. This is only required to enumerate over
         sample sites in parallel, e.g. if a site sets
         ``infer={"enumerate": "parallel"}``.
+    :param bool strict_enumeration_warning: Whether to warn about possible
+        misuse of enumeration, i.e. that
+        :class:`pyro.infer.traceenum_elbo.TraceEnum_ELBO` is used iff there
+        are enumerated sample sites.
 
     References
 
@@ -27,6 +31,8 @@ class ELBO(object):
 
     def __init__(self,
                  num_particles=1,
-                 max_iarange_nesting=float('inf')):
+                 max_iarange_nesting=float('inf'),
+                 strict_enumeration_warning=True):
         self.num_particles = num_particles
         self.max_iarange_nesting = max_iarange_nesting
+        self.strict_enumeration_warning = strict_enumeration_warning
