@@ -73,7 +73,7 @@ class AutoRegressiveNN(nn.Module):
 
         if permutation is None:
             # a permutation is chosen at random
-            self.permutation = torch.randperm(input_dim)
+            self.permutation = torch.randperm(input_dim, device=torch.device('cpu'))
         else:
             # the permutation is chosen by the user
             self.permutation = permutation

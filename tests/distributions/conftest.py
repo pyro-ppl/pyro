@@ -215,6 +215,17 @@ continuous_dists = [
                  'test_data': [[0.54], [0.35]]}
             ],
             scipy_arg_fn=lambda loc, scale: ((), {"loc": np.array(loc), "scale": np.array(scale)})),
+    Fixture(pyro_dist=dist.VonMises,
+            scipy_dist=sp.vonmises,
+            examples=[
+                {'loc': [0.5], 'concentration': [1.2],
+                 'test_data': [1.0]},
+                {'loc': [0.5, 3.0], 'concentration': [2.0, 0.5],
+                 'test_data': [[1.0, 2.0], [1.0, 2.0]]},
+                {'loc': [[0.5], [0.3]], 'concentration': [[2.0], [0.5]],
+                 'test_data': [[1.0], [2.0]]}
+            ],
+            scipy_arg_fn=lambda loc, concentration: ((), {"loc": np.array(loc), "kappa": np.array(concentration)})),
 ]
 
 discrete_dists = [
@@ -269,9 +280,13 @@ discrete_dists = [
                 {'probs': [0.3], 'total_count': 8,
                  'test_data': [[2.], [4.]]},
                 {'probs': [[0.2], [0.4]], 'total_count': 8,
-                 'test_data': [[4.], [3.]]}
+                 'test_data': [[4.], [3.]]},
+                {'probs': [0.2, 0.4], 'total_count': [0., 0.],
+                 'test_data': [[0., 0.], [0., 0.]]},
+                {'probs': [0.2, 0.4], 'total_count': [[8., 7.], [5., 9.]],
+                 'test_data': [[6., 3.], [2., 8.]]},
             ],
-            scipy_arg_fn=lambda probs, total_count: ((total_count, probs[0]), {}),
+            scipy_arg_fn=lambda probs, total_count: ((total_count, probs), {}),
             prec=0.05,
             min_samples=10000,
             is_discrete=True),

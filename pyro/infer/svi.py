@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import torch
+
 import pyro
 from pyro.infer.elbo import ELBO
 
@@ -10,15 +12,18 @@ class SVI(object):
     :param guide: the guide (callable containing Pyro primitives)
     :param optim: a wrapper a for a PyTorch optimizer
     :type optim: pyro.optim.PyroOptim
-    :param loss: this is either a string that specifies the loss function to be used (currently
-        the only supported built-in loss is 'ELBO') or a user-provided loss function;
-        in the case this is a built-in loss `loss_and_grads` will be filled in accordingly
-    :param loss_and_grads: if specified, this user-provided callable computes gradients for use in `step()`
-        and marks which parameters in the param store are to be optimized
+    :param loss: an instance of a subclass of :class:`~pyro.infer.elbo.ELBO`.
+        Pyro provides three built-in losses:
+        :class:`~pyro.infer.trace_elbo.Trace_ELBO`,
+        :class:`~pyro.infer.tracegraph_elbo.Trace_ELBO`, and
+        :class:`~pyro.infer.traceenum_elbo.Trace_ELBO`.
+        See the :class:`~pyro.infer.elbo.ELBO` docs to learn how to implement
+        a custom loss.
+    :type loss: pyro.infer.elbo.ELBO
 
-    A unified interface for stochastic variational inference in Pyro. Most
-    users will interact with `SVI` with the argument `loss="ELBO"`. See the
-    tutorial `SVI Part I <http://pyro.ai/examples/svi_part_i.html>`_ for a discussion.
+    A unified interface for stochastic variational inference in Pyro. The most
+    commonly used loss is ``loss=Trace_ELBO()``. See the tutorial
+    `SVI Part I <http://pyro.ai/examples/svi_part_i.html>`_ for a discussion.
     """
     def __init__(self,
                  model,
@@ -31,19 +36,12 @@ class SVI(object):
         self.guide = guide
         self.optim = optim
 
-        if isinstance(loss, str):
-            if loss == "ELBO":
-                self.ELBO = ELBO.make(**kwargs)
-                self.loss = self.ELBO.loss
-                self.loss_and_grads = self.ELBO.loss_and_grads
-            else:
-                raise NotImplementedError("The only built-in loss currently supported by SVI is ELBO")
-        elif isinstance(loss, ELBO):
+        if isinstance(loss, ELBO):
             self.ELBO = loss
             self.loss = self.ELBO.loss
             self.loss_and_grads = self.ELBO.loss_and_grads
         else:
-            raise TypeError("Unsupported loss type {}".format(type(loss)))
+            raise TypeError("Unsupported loss type. Expected an ELBO instance, got a {}".format(type(loss)))
 
     def __call__(self, *args, **kwargs):
         """
@@ -61,7 +59,8 @@ class SVI(object):
 
         Evaluate the loss function. Any args or kwargs are passed to the model and guide.
         """
-        return self.loss(self.model, self.guide, *args, **kwargs)
+        with torch.no_grad():
+            return self.loss(self.model, self.guide, *args, **kwargs)
 
     def step(self, *args, **kwargs):
         """

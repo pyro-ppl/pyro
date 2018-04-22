@@ -36,18 +36,16 @@ class OMTMultivariateNormal(MultivariateNormal):
 class _OMTMVNSample(Function):
     @staticmethod
     def forward(ctx, loc, scale_tril, shape):
-        ctx.white = loc.new_empty(shape).normal_()
-        ctx.z = torch.matmul(ctx.white, scale_tril.t())
-        ctx.save_for_backward(scale_tril)
-        return loc + ctx.z
+        white = loc.new_empty(shape).normal_()
+        z = torch.matmul(white, scale_tril.t())
+        ctx.save_for_backward(z, white, scale_tril)
+        return loc + z
 
     @staticmethod
     @once_differentiable
     def backward(ctx, grad_output):
         jitter = 1.0e-8  # do i really need this?
-        L, = ctx.saved_tensors
-        z = ctx.z
-        epsilon = ctx.white
+        z, epsilon, L = ctx.saved_tensors
 
         dim = L.shape[0]
         g = grad_output

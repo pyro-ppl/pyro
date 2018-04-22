@@ -8,28 +8,39 @@ from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.util import Dice, is_validation_enabled
-from pyro.poutine import EnumerateMessenger
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, check_site_shape, check_traceenum_requirements, torch_isnan
+
+
+def _dict_iadd(dict_, key, value):
+    if key in dict_:
+        dict_[key] = dict_[key] + value
+    else:
+        dict_[key] = value
 
 
 def _compute_dice_elbo(model_trace, guide_trace):
     # y depends on x iff ordering[x] <= ordering[y]
     # TODO refine this coarse dependency ordering.
     ordering = {name: frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
-                for name, site in model_trace.nodes.items()
+                for trace in (model_trace, guide_trace)
+                for name, site in trace.nodes.items()
                 if site["type"] == "sample"}
+
+    costs = {}
+    for name, site in model_trace.nodes.items():
+        if site["type"] == "sample":
+            _dict_iadd(costs, ordering[name], site["log_prob"])
+    for name, site in guide_trace.nodes.items():
+        if site["type"] == "sample":
+            _dict_iadd(costs, ordering[name], -site["log_prob"])
 
     dice = Dice(guide_trace, ordering)
     elbo = 0.0
-    for name, model_site in model_trace.nodes.items():
-        if model_site["type"] == "sample":
-            cost = model_site["log_prob"]
-            if not model_site["is_observed"]:
-                cost = cost - guide_trace.nodes[name]["log_prob"]
-            dice_prob = dice.in_context(cost.shape, ordering[name])
-            # TODO use score_parts.entropy_term to "stick the landing"
-            elbo = elbo + (dice_prob * cost).sum()
+    for ordinal, cost in costs.items():
+        dice_prob = dice.in_context(cost.shape, ordinal)
+        # TODO use score_parts.entropy_term to "stick the landing"
+        elbo = elbo + (dice_prob * cost).sum()
     return elbo
 
 
@@ -54,11 +65,11 @@ class TraceEnum_ELBO(ELBO):
         the result packaged as a trace generator
         """
         # enable parallel enumeration
-        guide = EnumerateMessenger(first_available_dim=self.max_iarange_nesting)(guide)
+        guide = poutine.enum(guide, first_available_dim=self.max_iarange_nesting)
 
         for i in range(self.num_particles):
             for guide_trace in iter_discrete_traces("flat", guide, *args, **kwargs):
-                model_trace = poutine.trace(poutine.replay(model, guide_trace),
+                model_trace = poutine.trace(poutine.replay(model, trace=guide_trace),
                                             graph_type="flat").get_trace(*args, **kwargs)
 
                 if is_validation_enabled():

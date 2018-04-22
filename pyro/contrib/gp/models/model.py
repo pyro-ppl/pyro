@@ -1,8 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
 from pyro.contrib.gp.util import Parameterized
-from pyro.infer.svi import SVI
+from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import Adam, PyroOptim
+
+
+def _zero_mean_function(x):
+    return 0
 
 
 class GPModel(Parameterized):
@@ -20,6 +24,12 @@ class GPModel(Parameterized):
     :math:`(x, z)`. This distribution is usually denoted by
 
     .. math:: f \sim \mathcal{GP}(0, k).
+
+    .. note:: Generally, beside a covariance matrix :math:`k`, a Gaussian Process can
+        also be specified by a mean function :math:`m` (which is a zero-value function
+        by default). In that case, its distribution will be
+
+        .. math:: p(f(X)) = \mathcal{N}(m(X), k(X, X)).
 
     Gaussian Process models are :class:`~pyro.contrib.gp.util.Parameterized`
     subclasses. So its parameters can be learned, set priors, or fixed by using
@@ -39,7 +49,7 @@ class GPModel(Parameterized):
         >>> hmc_kernel = HMC(gpr.model)
         >>> mcmc_run = MCMC(hmc_kernel, num_samples=10)
         >>> posterior_ls_trace = []  # store lengthscale trace
-        >>> ls_name = pyro.param_with_module_name(gpr.kernel.name, "lengthscale")
+        >>> ls_name = param_with_module_name(gpr.kernel.name, "lengthscale")
         >>> for trace, _ in mcmc_run._traces():
         ...     posterior_ls_trace.append(trace.nodes[ls_name]["value"])
 
@@ -48,7 +58,7 @@ class GPModel(Parameterized):
       <http://pyro.ai/examples/svi_part_i.html>`_:
 
         >>> optimizer = pyro.optim.Adam({"lr": 0.01})
-        >>> svi = SVI(gpr.model, gpr.guide, optimizer, loss="ELBO")
+        >>> svi = SVI(gpr.model, gpr.guide, optimizer, loss=Trace_ELBO())
         >>> for i in range(1000):
         ...     svi.step()
 
@@ -69,14 +79,18 @@ class GPModel(Parameterized):
         number of data points.
     :param ~pyro.contrib.gp.kernels.kernel.Kernel kernel: A Pyro kernel object, which
         is the covariance function :math:`k`.
+    :param callable mean_function: An optional mean function :math:`m` of this Gaussian
+        process. By default, we use zero mean.
     :param float jitter: A small positive term which is added into the diagonal part of
         a covariance matrix to help stablize its Cholesky decomposition.
     :param str name: Name of this model.
     """
-    def __init__(self, X, y, kernel, jitter=1e-6, name=None):
+    def __init__(self, X, y, kernel, mean_function=None, jitter=1e-6, name=None):
         super(GPModel, self).__init__(name)
         self.set_data(X, y)
         self.kernel = kernel
+        self.mean_function = (mean_function if mean_function is not None else
+                              _zero_mean_function)
         self.jitter = jitter
 
     def model(self):
@@ -125,7 +139,7 @@ class GPModel(Parameterized):
             >>> Xu = torch.tensor([[1., 0, 2]])  # inducing input
             >>> likelihood = gp.likelihoods.Gaussian()
             >>> svgp = gp.models.SparseVariationalGP(X, y, kernel, Xu, likelihood)
-            >>> svi = SVI(svgp.model, svgp.guide, optimizer, "ELBO")
+            >>> svi = SVI(svgp.model, svgp.guide, optimizer, Trace_ELBO())
             >>> batched_X, batched_y = X.split(split_size=10), y.split(split_size=10)
             >>> for Xi, yi in zip(batched_X, batched_y):
             ...     svgp.set_data(Xi, yi)
@@ -161,20 +175,25 @@ class GPModel(Parameterized):
         self.X = X
         self.y = y
 
-    def optimize(self, optimizer=Adam({}), num_steps=1000):
+    def optimize(self, optimizer=None, loss=None, num_steps=1000):
         """
         A convenient method to optimize parameters for the Gaussian Process model
         using :class:`~pyro.infer.svi.SVI`.
 
         :param PyroOptim optimizer: A Pyro optimizer.
+        :param ELBO loss: A Pyro loss instance.
         :param int num_steps: Number of steps to run SVI.
         :returns: a list of losses during the training procedure
         :rtype: list
         """
+        if optimizer is None:
+            optimizer = Adam({})
         if not isinstance(optimizer, PyroOptim):
             raise ValueError("Optimizer should be an instance of "
                              "pyro.optim.PyroOptim class.")
-        svi = SVI(self.model, self.guide, optimizer, loss="ELBO")
+        if loss is None:
+            loss = Trace_ELBO()
+        svi = SVI(self.model, self.guide, optimizer, loss=loss)
         losses = []
         for i in range(num_steps):
             losses.append(svi.step())

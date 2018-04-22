@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-import torch.nn.functional as F
+import torch
 
 import pyro
 import pyro.distributions as dist
@@ -8,29 +8,28 @@ import pyro.distributions as dist
 from .likelihood import Likelihood
 
 
-class Binary(Likelihood):
+class Poisson(Likelihood):
     """
-    Implementation of Binary likelihood, which is used for binary classification
-    problems.
+    Implementation of Poisson likelihood, which is used for count data.
 
-    Binary likelihood uses :class:`~pyro.distributions.torch.Bernoulli` distribution,
-    so the output of ``response_function`` should be in range :math:`(0,1)`. By
-    default, we use `sigmoid` function.
+    Poisson likelihood uses the :class:`~pyro.distributions.torch.Poisson`
+    distribution, so the output of ``response_function`` should be positive.
+    By default, we use :func:`torch.exp` as response function, corresponding
+    to a log-Gaussian Cox process.
 
-    :param callable response_function: A mapping to correct domain for Binary
-        likelihood.
+    :param callable response_function: A mapping to positive real numbers.
     """
-    def __init__(self, response_function=None, name="Binary"):
-        super(Binary, self).__init__(name)
-        self.response_function = (response_function if response_function is not None
-                                  else F.sigmoid)
+    def __init__(self, response_function=None, name="Poisson"):
+        super(Poisson, self).__init__(name)
+        self.response_function = (torch.exp if response_function is None
+                                  else response_function)
 
     def forward(self, f_loc, f_var, y=None):
         r"""
         Samples :math:`y` given :math:`f_{loc}`, :math:`f_{var}` according to
 
             .. math:: f & \sim \mathbb{Normal}(f_{loc}, f_{var}),\\
-                y & \sim \mathbb{Bernoulli}(f).
+                y & \sim \mathbb{Poisson}(\exp(f)).
 
         .. note:: The log likelihood is estimated using Monte Carlo with 1 sample of
             :math:`f`.
@@ -45,7 +44,7 @@ class Binary(Likelihood):
         f = dist.Normal(f_loc, f_var)()
         f_res = self.response_function(f)
 
-        y_dist = dist.Bernoulli(f_res)
+        y_dist = dist.Poisson(f_res)
         if y is not None:
             y_dist = y_dist.expand_by(y.shape[:-f_res.dim()]).independent(y.dim())
         return pyro.sample(self.y_name, y_dist, obs=y)

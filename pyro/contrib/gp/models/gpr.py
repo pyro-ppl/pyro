@@ -5,9 +5,9 @@ from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
+from pyro.contrib.gp.models.model import GPModel
 from pyro.contrib.gp.util import conditional
-
-from .model import GPModel
+from pyro.params import param_with_module_name
 
 
 class GPRegression(GPModel):
@@ -25,6 +25,12 @@ class GPRegression(GPModel):
     :math:`(x, z)`. This distribution is usually denoted by
 
     .. math:: f \sim \mathcal{GP}(0, k).
+
+    .. note:: Generally, beside a covariance matrix :math:`k`, a Gaussian Process can
+        also be specified by a mean function :math:`m` (which is a zero-value function
+        by default). In that case, its distribution will be
+
+        .. math:: p(f(X)) = \mathcal{N}(m(X), k(X, X)).
 
     Given inputs :math:`X` and their noisy observations :math:`y`, the Gaussian Process
     Regression model takes the form
@@ -51,12 +57,15 @@ class GPRegression(GPModel):
     :param ~pyro.contrib.gp.kernels.kernel.Kernel kernel: A Pyro kernel object, which
         is the covariance function :math:`k`.
     :param torch.Tensor noise: Noise parameter of this model.
+    :param callable mean_function: An optional mean function :math:`m` of this Gaussian
+        process. By default, we use zero mean.
     :param float jitter: A small positive term which is added into the diagonal part of
         a covariance matrix to help stablize its Cholesky decomposition.
     :param str name: Name of this model.
     """
-    def __init__(self, X, y, kernel, noise=None, jitter=1e-6, name="GPR"):
-        super(GPRegression, self).__init__(X, y, kernel, jitter, name)
+    def __init__(self, X, y, kernel, noise=None, mean_function=None, jitter=1e-6,
+                 name="GPR"):
+        super(GPRegression, self).__init__(X, y, kernel, mean_function, jitter, name)
 
         noise = self.X.new_ones(()) if noise is None else noise
         self.noise = Parameter(noise)
@@ -71,13 +80,14 @@ class GPRegression(GPModel):
         Lff = Kff.potrf(upper=False)
 
         zero_loc = self.X.new_zeros(self.X.shape[0])
+        f_loc = zero_loc + self.mean_function(self.X)
         if self.y is None:
             f_var = Lff.pow(2).sum(dim=-1)
-            return zero_loc, f_var
+            return f_loc, f_var
         else:
-            y_name = pyro.param_with_module_name(self.name, "y")
+            y_name = param_with_module_name(self.name, "y")
             return pyro.sample(y_name,
-                               dist.MultivariateNormal(zero_loc, scale_tril=Lff)
+                               dist.MultivariateNormal(f_loc, scale_tril=Lff)
                                    .expand_by(self.y.shape[:-1])
                                    .independent(self.y.dim() - 1),
                                obs=self.y)
@@ -85,10 +95,9 @@ class GPRegression(GPModel):
     def guide(self):
         self.set_mode("guide")
 
-        kernel = self.kernel
         noise = self.get_param("noise")
 
-        return kernel, noise
+        return noise
 
     def forward(self, Xnew, full_cov=False, noiseless=True):
         r"""
@@ -111,17 +120,18 @@ class GPRegression(GPModel):
         :rtype: tuple(torch.Tensor, torch.Tensor)
         """
         self._check_Xnew_shape(Xnew)
-        kernel, noise = self.guide()
+        noise = self.guide()
 
-        Kff = kernel(self.X) + noise.expand(self.X.shape[0]).diag()
+        Kff = self.kernel(self.X) + noise.expand(self.X.shape[0]).diag()
         Lff = Kff.potrf(upper=False)
 
-        loc, cov = conditional(Xnew, self.X, kernel, self.y, None, Lff, full_cov,
-                               jitter=self.jitter)
+        y_residual = self.y - self.mean_function(self.X)
+        loc, cov = conditional(Xnew, self.X, self.kernel, y_residual, None, Lff,
+                               full_cov, jitter=self.jitter)
 
         if full_cov and not noiseless:
             cov = cov + noise.expand(Xnew.shape[0]).diag()
         if not full_cov and not noiseless:
             cov = cov + noise.expand(Xnew.shape[0])
 
-        return loc, cov
+        return loc + self.mean_function(Xnew), cov

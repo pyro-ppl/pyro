@@ -95,4 +95,4 @@ def config_enumerate(guide=None, default="sequential"):
     if guide is None:
         return lambda guide: config_enumerate(guide, default=default)
 
-    return poutine.infer_config(guide, _config_enumerate(default))
+    return poutine.infer_config(guide, config_fn=_config_enumerate(default))
