@@ -36,11 +36,3 @@ Importance
     :members:
     :undoc-members:
     :show-inheritance:
-
-Search
-------
-
-.. automodule:: pyro.infer.search
-    :members:
-    :undoc-members:
-    :show-inheritance:

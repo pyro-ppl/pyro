@@ -17,8 +17,6 @@ CPU_EXAMPLES = [
     ['dmm/dmm.py', '--num-epochs=1'],
     ['dmm/dmm.py', '--num-epochs=1', '--num-iafs=1'],
     ['inclined_plane.py', '--num-samples=1'],
-    ['schelling.py', '--num-samples=1'],
-    ['schelling_false.py', '--num-samples=1'],
     ['vae/ss_vae_M2.py', '--num-epochs=1'],
     ['vae/ss_vae_M2.py', '--num-epochs=1', '--aux-loss'],
     ['vae/ss_vae_M2.py', '--num-epochs=1', '--enum-discrete=parallel'],
