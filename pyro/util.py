@@ -11,7 +11,7 @@ import torch
 from six.moves import zip_longest
 
 from pyro.params import _PYRO_PARAM_STORE
-from pyro.poutine.poutine import _PYRO_STACK
+from pyro.poutine.messenger import _PYRO_STACK
 from pyro.poutine.util import site_is_subsample
 
 

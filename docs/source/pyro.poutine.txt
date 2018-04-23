@@ -1,7 +1,7 @@
 Handler
 -------
 
-.. automodule:: pyro.poutine.poutine
+.. automodule:: pyro.poutine.messenger
     :members:
     :undoc-members:
     :show-inheritance:
