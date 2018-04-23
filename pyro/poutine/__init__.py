@@ -5,18 +5,18 @@ from six.moves import xrange
 
 from pyro.poutine import util
 
-from .block_poutine import BlockMessenger
-from .condition_poutine import ConditionMessenger
-from .enumerate_poutine import EnumerateMessenger  # noqa: F401
-from .escape_poutine import EscapeMessenger
-from .indep_poutine import IndepMessenger  # noqa: F401
-from .infer_config_poutine import InferConfigMessenger
-from .lift_poutine import LiftMessenger
-from .poutine import Messenger  # noqa: F401
-from .replay_poutine import ReplayMessenger
-from .scale_poutine import ScaleMessenger
+from .block_messenger import BlockMessenger
+from .condition_messenger import ConditionMessenger
+from .enumerate_messenger import EnumerateMessenger  # noqa: F401
+from .escape_messenger import EscapeMessenger
+from .indep_messenger import IndepMessenger  # noqa: F401
+from .infer_config_messenger import InferConfigMessenger
+from .lift_messenger import LiftMessenger
+from .messenger import Messenger  # noqa: F401
+from .replay_messenger import ReplayMessenger
+from .scale_messenger import ScaleMessenger
 from .trace import Trace  # noqa: F401
-from .trace_poutine import TraceMessenger
+from .trace_messenger import TraceMessenger
 
 ############################################
 # Begin primitive operations
@@ -137,7 +137,7 @@ def infer_config(fn=None, config_fn=None):
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param config_fn: a callable taking a site and returning an infer dict
 
-    Alias for :class:`~pyro.poutine.infer_config_poutine.InferConfigHandler` constructor.
+    Alias for :class:`~pyro.poutine.infer_config_messenger.InferConfigHandler` constructor.
 
     Given a callable that contains Pyro primitive calls
     and a callable taking a trace site and returning a dictionary,

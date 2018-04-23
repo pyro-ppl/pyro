@@ -249,10 +249,10 @@ class iarange(object):
         self.dim = _DIM_ALLOCATOR.allocate(self.name, self.dim)
         if self._wrapped:
             try:
-                self._scale_poutine = poutine.ScaleMessenger(self.size / self.subsample_size)
-                self._indep_poutine = poutine.IndepMessenger(self.name, size=self.subsample_size, dim=self.dim)
-                self._scale_poutine.__enter__()
-                self._indep_poutine.__enter__()
+                self._scale_messenger = poutine.ScaleMessenger(self.size / self.subsample_size)
+                self._indep_messenger = poutine.IndepMessenger(self.name, size=self.subsample_size, dim=self.dim)
+                self._scale_messenger.__enter__()
+                self._indep_messenger.__enter__()
             except BaseException:
                 _DIM_ALLOCATOR.free(self.name, self.dim)
                 raise
@@ -260,8 +260,8 @@ class iarange(object):
 
     def __exit__(self, exc_type, exc_value, traceback):
         if self._wrapped:
-            self._indep_poutine.__exit__(exc_type, exc_value, traceback)
-            self._scale_poutine.__exit__(exc_type, exc_value, traceback)
+            self._indep_messenger.__exit__(exc_type, exc_value, traceback)
+            self._scale_messenger.__exit__(exc_type, exc_value, traceback)
         _DIM_ALLOCATOR.free(self.name, self.dim)
 
 
