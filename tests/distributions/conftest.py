@@ -150,7 +150,7 @@ continuous_dists = [
                 ((), {"mean": np.array(loc), "cov": np.array([[1.0, 0.5], [0.5, 1.0]])}),
             prec=0.01,
             min_samples=500000),
-    Fixture(pyro_dist=dist.SparseMultivariateNormal,
+    Fixture(pyro_dist=dist.LowRankMultivariateNormal,
             scipy_dist=sp.multivariate_normal,
             examples=[
                 {'loc': [2.0, 1.0], 'D_term': [0.5, 0.5], 'W_term': [[1.0, 0.5]],

@@ -32,8 +32,8 @@ class SparseGPRegression(GPModel):
         f & \sim q(f \mid X, X_u) = \mathbb{E}_{p(u)}q(f\mid X, X_u, u),\\\\
         y & \sim f + \epsilon,
 
-    where :math:`\epsilon` is noise and the conditional distribution
-    :math:`q(f\mid X, X_u, u)` is an appxomiation of
+    where :math:`\epsilon` is Gaussian noise and the conditional distribution
+    :math:`q(f\mid X, X_u, u)` is an approximation of
 
     .. math:: p(f\mid X, X_u, u) = \mathcal{N}(m, k(X, X) - Q),
 
@@ -69,7 +69,7 @@ class SparseGPRegression(GPModel):
         :math:`\mathcal{O}(NM^2)` complexity for testing. Here, :math:`N` is the number
         of train inputs, :math:`M` is the number of inducing inputs.
 
-    References
+    References:
 
     [1] `A Unifying View of Sparse Approximate Gaussian Process Regression`,
     Joaquin Qui\u00F1onero-Candela, Carl E. Rasmussen
@@ -85,7 +85,7 @@ class SparseGPRegression(GPModel):
         is the covariance function :math:`k`.
     :param torch.Tensor Xu: Initial values for inducing points, which are parameters
         of our model.
-    :param torch.Tensor noise: Noise parameter of this model.
+    :param torch.Tensor noise: Variance of Gaussian noise of this model.
     :param callable mean_function: An optional mean function :math:`m` of this Gaussian
         process. By default, we use zero mean.
     :param str approx: One of approximation methods: "DTC", "FITC", and "VFE"
@@ -152,7 +152,7 @@ class SparseGPRegression(GPModel):
         else:
             y_name = param_with_module_name(self.name, "y")
             return pyro.sample(y_name,
-                               dist.SparseMultivariateNormal(f_loc, W, D, trace_term)
+                               dist.LowRankMultivariateNormal(f_loc, W, D, trace_term)
                                    .expand_by(self.y.shape[:-1])
                                    .independent(self.y.dim() - 1),
                                obs=self.y)
