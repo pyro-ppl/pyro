@@ -127,35 +127,6 @@ def am_i_wrapped():
     return len(_PYRO_STACK) > 0
 
 
-def _dict_to_tuple(d):
-    """
-    Recursively converts a dictionary to a list of key-value tuples
-    Only intended for use as a helper function inside memoize!!
-    May break when keys cant be sorted, but that is not an expected use-case
-    """
-    if isinstance(d, dict):
-        return tuple([(k, _dict_to_tuple(d[k])) for k in sorted(d.keys())])
-    else:
-        return d
-
-
-def memoize(fn):
-    """
-    https://stackoverflow.com/questions/1988804/what-is-memoization-and-how-can-i-use-it-in-python
-    unbounded memoize
-    alternate in py3: https://docs.python.org/3/library/functools.html
-    lru_cache
-    """
-    mem = {}
-
-    def _fn(*args, **kwargs):
-        kwargs_tuple = _dict_to_tuple(kwargs)
-        if (args, kwargs_tuple) not in mem:
-            mem[(args, kwargs_tuple)] = fn(*args, **kwargs)
-        return mem[(args, kwargs_tuple)]
-    return _fn
-
-
 def set_rng_seed(rng_seed):
     """
     Sets seeds of torch and torch.cuda (if available).
