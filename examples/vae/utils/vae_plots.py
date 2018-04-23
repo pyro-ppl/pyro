@@ -1,3 +1,10 @@
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import scipy as sp
+from sklearn.manifold import TSNE
+import seaborn as sns
+
 import torch
 
 
@@ -5,7 +12,6 @@ def plot_conditional_samples_ssvae(ssvae, visdom_session):
     """
     This is a method to do conditional sampling in visdom
     """
-    from pyro import poutine
     vis = visdom_session
     ys = {}
     for i in range(10):
@@ -16,19 +22,14 @@ def plot_conditional_samples_ssvae(ssvae, visdom_session):
     for i in range(10):
         images = []
         for rr in range(100):
-            sample_loc_i = poutine.trace(ssvae.model).get_trace(
-                            xs, ys[i]).nodes["x"]["fn"].base_dist.probs
+            # get the loc from the model
+            sample_loc_i = ssvae.model(xs, ys[i])
             img = sample_loc_i[0].view(1, 28, 28).cpu().data.numpy()
             images.append(img)
         vis.images(images, 10, 2)
 
 
 def plot_llk(train_elbo, test_elbo):
-    import matplotlib.pyplot as plt
-    import numpy as np
-    import scipy as sp
-    import seaborn as sns
-    import pandas as pd
     plt.figure(figsize=(30, 10))
     sns.set_style("whitegrid")
     data = np.concatenate([np.arange(len(test_elbo))[:, sp.newaxis], -test_elbo[:, sp.newaxis]], axis=1)
@@ -41,14 +42,13 @@ def plot_llk(train_elbo, test_elbo):
 
 
 def plot_vae_samples(vae, visdom_session):
-    from pyro import poutine
     vis = visdom_session
     x = torch.zeros([1, 784])
     for i in range(10):
         images = []
         for rr in range(100):
-            # sample from the model
-            sample_loc_i = poutine.trace(vae.model).get_trace(x).nodes["obs"]["fn"].base_dist.probs
+            # get loc from the model
+            sample_loc_i = vae.model(x)
             img = sample_loc_i[0].view(1, 28, 28).cpu().data.numpy()
             images.append(img)
         vis.images(images, 10, 2)
@@ -78,11 +78,6 @@ def mnist_test_tsne_ssvae(name=None, ssvae=None, test_loader=None):
 
 
 def plot_tsne(z_loc, classes, name):
-    import numpy as np
-    import matplotlib
-    matplotlib.use('Agg')
-    import matplotlib.pyplot as plt
-    from sklearn.manifold import TSNE
     model_tsne = TSNE(n_components=2, random_state=0)
     z_states = z_loc.detach().cpu().numpy()
     z_embed = model_tsne.fit_transform(z_states)

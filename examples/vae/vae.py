@@ -95,6 +95,8 @@ class VAE(nn.Module):
             loc_img = self.decoder.forward(z)
             # score against actual images
             pyro.sample("obs", dist.Bernoulli(loc_img).independent(1), obs=x.reshape(-1, 784))
+            # return the loc so we can visualize it later
+            return loc_img
 
     # define the guide (i.e. variational distribution) q(z|x)
     def guide(self, x):

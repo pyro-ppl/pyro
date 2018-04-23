@@ -128,6 +128,8 @@ class SSVAE(nn.Module):
             # where `decoder` is a neural network
             loc = self.decoder.forward([zs, ys])
             pyro.sample("x", dist.Bernoulli(loc).independent(1), obs=xs)
+            # return the loc so we can visualize it later
+            return loc
 
     def guide(self, xs, ys=None):
         """
