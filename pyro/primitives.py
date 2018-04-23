@@ -14,9 +14,9 @@ import pyro.distributions as dist
 import pyro.infer as infer
 import pyro.poutine as poutine
 from pyro.distributions.distribution import Distribution
-from pyro.params import _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, param_with_module_name
-from pyro.poutine.indep_poutine import _DIM_ALLOCATOR
-from pyro.util import am_i_wrapped, apply_stack, deep_getattr, set_rng_seed  # noqa: F401
+from pyro.params import param_with_module_name
+from pyro.poutine.runtime import _DIM_ALLOCATOR, _PYRO_PARAM_STORE, _MODULE_NAMESPACE_DIVIDER, am_i_wrapped, apply_stack
+from pyro.util import deep_getattr, set_rng_seed  # noqa: F401
 
 version_prefix = '0.2.0-a0'
 
@@ -249,10 +249,10 @@ class iarange(object):
         self.dim = _DIM_ALLOCATOR.allocate(self.name, self.dim)
         if self._wrapped:
             try:
-                self._scale_poutine = poutine.ScaleMessenger(self.size / self.subsample_size)
-                self._indep_poutine = poutine.IndepMessenger(self.name, size=self.subsample_size, dim=self.dim)
-                self._scale_poutine.__enter__()
-                self._indep_poutine.__enter__()
+                self._scale_messenger = poutine.ScaleMessenger(self.size / self.subsample_size)
+                self._indep_messenger = poutine.IndepMessenger(self.name, size=self.subsample_size, dim=self.dim)
+                self._scale_messenger.__enter__()
+                self._indep_messenger.__enter__()
             except BaseException:
                 _DIM_ALLOCATOR.free(self.name, self.dim)
                 raise
@@ -260,8 +260,8 @@ class iarange(object):
 
     def __exit__(self, exc_type, exc_value, traceback):
         if self._wrapped:
-            self._indep_poutine.__exit__(exc_type, exc_value, traceback)
-            self._scale_poutine.__exit__(exc_type, exc_value, traceback)
+            self._indep_messenger.__exit__(exc_type, exc_value, traceback)
+            self._scale_messenger.__exit__(exc_type, exc_value, traceback)
         _DIM_ALLOCATOR.free(self.name, self.dim)
 
 

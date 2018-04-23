@@ -5,18 +5,19 @@ from six.moves import xrange
 
 from pyro.poutine import util
 
-from .block_poutine import BlockMessenger
-from .condition_poutine import ConditionMessenger
-from .enumerate_poutine import EnumerateMessenger  # noqa: F401
-from .escape_poutine import EscapeMessenger
-from .indep_poutine import IndepMessenger  # noqa: F401
-from .infer_config_poutine import InferConfigMessenger
-from .lift_poutine import LiftMessenger
-from .poutine import _PYRO_STACK, Messenger  # noqa: F401
-from .replay_poutine import ReplayMessenger
-from .scale_poutine import ScaleMessenger
+from .block_messenger import BlockMessenger
+from .condition_messenger import ConditionMessenger
+from .enumerate_messenger import EnumerateMessenger  # noqa: F401
+from .escape_messenger import EscapeMessenger
+from .indep_messenger import IndepMessenger  # noqa: F401
+from .infer_config_messenger import InferConfigMessenger
+from .lift_messenger import LiftMessenger
+from .messenger import Messenger  # noqa: F401
+from .replay_messenger import ReplayMessenger
+from .runtime import NonlocalExit
+from .scale_messenger import ScaleMessenger
 from .trace import Trace  # noqa: F401
-from .trace_poutine import TraceMessenger
+from .trace_messenger import TraceMessenger
 
 ############################################
 # Begin primitive operations
@@ -48,7 +49,7 @@ def replay(fn=None, trace=None, sites=None):
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param trace: a Trace data structure to replay against
     :param sites: list or dict of names of sample sites in fn to replay against,
-    defaulting to all sites
+        defaulting to all sites
     :returns: stochastic function wrapped in a ReplayHandler
     :rtype: pyro.poutine.ReplayHandler
 
@@ -99,8 +100,8 @@ def block(fn=None, hide=None, expose=None, hide_types=None, expose_types=None):
 def escape(fn=None, escape_fn=None):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
-    :param escape_fn: function that takes a partial trace and a site
-    and returns a boolean value to decide whether to exit at that site
+    :param escape_fn: function that takes a partial trace and a site,
+        and returns a boolean value to decide whether to exit at that site
     :returns: stochastic function wrapped in EscapeHandler
 
     Alias for EscapeHandler constructor.
@@ -137,7 +138,7 @@ def infer_config(fn=None, config_fn=None):
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param config_fn: a callable taking a site and returning an infer dict
 
-    Alias for :class:`~pyro.poutine.infer_config_poutine.InferConfigHandler` constructor.
+    Alias for :class:`~pyro.poutine.infer_config_messenger.InferConfigHandler` constructor.
 
     Given a callable that contains Pyro primitive calls
     and a callable taking a trace site and returning a dictionary,
@@ -220,10 +221,10 @@ def queue(fn=None, queue=None, max_tries=None,
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param queue: a queue data structure like multiprocessing.Queue to hold partial traces
     :param max_tries: maximum number of attempts to compute a single complete trace
-    :param extend_fn: function (possibly stochastic) that takes a partial trace and a site
-    and returns a list of extended traces
-    :param escape_fn: function (possibly stochastic) that takes a partial trace and a site
-    and returns a boolean value to decide whether to exit
+    :param extend_fn: function (possibly stochastic) that takes a partial trace and a site,
+        and returns a list of extended traces
+    :param escape_fn: function (possibly stochastic) that takes a partial trace and a site,
+        and returns a boolean value to decide whether to exit
     :param num_samples: optional number of extended traces for extend_fn to return
     :returns: stochastic function wrapped in poutine logic
 
@@ -256,7 +257,7 @@ def queue(fn=None, queue=None, max_tries=None,
                                        escape_fn=functools.partial(escape_fn,
                                                                    next_trace)))
                     return ftr(*args, **kwargs)
-                except util.NonlocalExit as site_container:
+                except NonlocalExit as site_container:
                     site_container.reset_stack()
                     for tr in extend_fn(ftr.trace.copy(), site_container.site,
                                         num_samples=num_samples):

@@ -128,6 +128,8 @@ class SSVAE(nn.Module):
             # where `decoder` is a neural network
             loc = self.decoder.forward([zs, ys])
             pyro.sample("x", dist.Bernoulli(loc).independent(1), obs=xs)
+            # return the loc so we can visualize it later
+            return loc
 
     def guide(self, xs, ys=None):
         """
@@ -198,21 +200,6 @@ class SSVAE(nn.Module):
         dummy guide function to accompany model_classify in inference
         """
         pass
-
-    def model_sample(self, ys, batch_size=1):
-        """
-        sample an image from the model
-        """
-
-        # sample the handwriting style from the constant prior distribution
-        prior_loc = ys.new_zeros([batch_size, self.z_dim])
-        prior_scale = ys.new_ones([batch_size, self.z_dim])
-        zs = pyro.sample("z", dist.Normal(prior_loc, prior_scale).independent(1))
-
-        # sample an image using the decoder
-        loc = self.decoder.forward([zs, ys])
-        xs = pyro.sample("sample", dist.Bernoulli(loc).independent(1))
-        return xs, loc
 
 
 def run_inference_for_epoch(data_loaders, losses, periodic_interval_batches):
@@ -405,7 +392,7 @@ if __name__ == "__main__":
 
     parser.add_argument('--cuda', action='store_true',
                         help="use GPU(s) to speed up training")
-    parser.add_argument('-ne', '--num-epochs', default=100, type=int,
+    parser.add_argument('-n', '--num-epochs', default=100, type=int,
                         help="number of epochs to run")
     parser.add_argument('--aux-loss', action="store_true",
                         help="whether to use the auxiliary loss from NIPS 14 paper (Kingma et al)")
