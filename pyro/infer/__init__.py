@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from pyro.infer.abstract_infer import Marginal, TracePosterior
+from pyro.infer.abstract_infer import EmpiricalMarginal, TracePosterior
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import config_enumerate
 from pyro.infer.importance import Importance
@@ -16,7 +16,7 @@ __all__ = [
     "is_validation_enabled",
     "ELBO",
     "Importance",
-    "Marginal",
+    "EmpiricalMarginal",
     "SVI",
     "TracePosterior",
     "Trace_ELBO",
