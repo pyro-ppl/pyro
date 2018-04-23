@@ -87,11 +87,11 @@ def model(observed_data):
 
 def main(args):
     # create an importance sampler (the prior is used as the proposal distribution)
-    posterior = Importance(model, guide=None, num_samples=args.num_samples)
+    importance = Importance(model, guide=None, num_samples=args.num_samples)
     # get posterior samples of mu (which is the return value of model)
     # from the raw execution traces provided by the importance sampler.
     print("doing importance sampling...")
-    emp_marginal = EmpiricalMarginal(posterior(observed_data))
+    emp_marginal = EmpiricalMarginal(importance.run(observed_data))
 
     # calculate statistics over posterior samples
     posterior_mean = emp_marginal.mean
