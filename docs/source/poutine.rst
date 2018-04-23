@@ -6,11 +6,15 @@ effect handlers for creating new inference algorithms and working with probabili
 programs. Pyro's inference algorithms are all built by applying these handlers to stochastic functions.
 
 Handlers
-_________
+---------
 
 .. automodule:: pyro.poutine
     :members:
     :undoc-members:
     :show-inheritance:
+
+
+Messengers
+-----------
 
 .. include:: pyro.poutine.txt
