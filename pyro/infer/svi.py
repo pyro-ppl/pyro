@@ -67,7 +67,7 @@ class SVI(object):
         Evaluate the loss function. Any args or kwargs are passed to the model and guide.
         """
         with torch.no_grad():
-            return self.loss.loss(self.model, self.guide, *args, **kwargs)
+            return self.loss(self.model, self.guide, *args, **kwargs)
 
     def step(self, *args, **kwargs):
         """
@@ -80,7 +80,7 @@ class SVI(object):
         """
         # get loss and compute gradients
         with poutine.trace(param_only=True) as param_capture:
-            loss = self.loss.loss_and_grads(self.model, self.guide, *args, **kwargs)
+            loss = self.loss_and_grads(self.model, self.guide, *args, **kwargs)
 
         params = set(site["value"].unconstrained()
                      for site in param_capture.trace.nodes.values())
