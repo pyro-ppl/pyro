@@ -27,6 +27,21 @@ class GPLVM(Parameterized):
     its posterior by a multivariate normal distribution with two variational
     parameters: ``X_loc`` and ``X_scale_tril``.
 
+    For example, we can do dimensional reduction on Iris dataset as follows:
+
+        # With y is the 2D Iris data of shape 150x4 and to reduce it to a tensor X of
+        # of shape 150x2, we will use GPLVM to learn X.
+        # First, we define the initial values for X_loc parameter:
+        >>> X_loc = torch.zeros(150, 2)
+        # Then, we define a Gaussian Process model:
+        >>> kernel = gp.kernels.RBF(input_dim=2, lengthscale=torch.ones(2))
+        >>> Xu = torch.zeros(20, 2)  # initial inducing inputs of sparse model
+        >>> gpmodel = gp.models.SparseGPRegression(X_loc, y, kernel, Xu)
+        # Finally, wrap gpmodel by GPLVM, optimize, and get the "learned" mean of X
+        >>> gplvm = gp.models.GPLVM(gpmodel)
+        >>> gplvm.optimize()
+        >>> X = gplvm.get_param("X_loc")
+
     Reference:
 
     [1] Bayesian Gaussian Process Latent Variable Model
@@ -57,8 +72,9 @@ class GPLVM(Parameterized):
         self._call_base_model_guide = True
 
     def model(self):
-        self.set_mode("model", only_this_module=True)
+        self.set_mode("model", recursive=False)
 
+        # sample X from unit multivariate normal distribution
         zero_loc = self.X_loc.new_zeros(self.X_loc.shape)
         C = self.X_loc.shape[1]
         Id = torch.eye(C, out=self.X_loc.new_empty(C, C))
@@ -70,8 +86,9 @@ class GPLVM(Parameterized):
         self.base_model.model()
 
     def guide(self):
-        self.set_mode("guide", only_this_module=True)
+        self.set_mode("guide", recursive=False)
 
+        # sample X from variational multivariate normal distribution
         X_loc = self.get_param("X_loc")
         X_scale_tril = self.get_param("X_scale_tril")
         X_name = param_with_module_name(self.name, "X")
