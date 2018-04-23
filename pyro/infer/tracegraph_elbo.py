@@ -269,7 +269,7 @@ class TraceGraph_ELBO(ELBO):
         if trainable_params:
             surrogate_loss = -surrogate_elbo
             torch_backward(weight * (surrogate_loss + baseline_loss))
-            pyro.get_param_store().mark_params_active(trainable_params)
+            # pyro.get_param_store().mark_params_active(trainable_params)
 
         loss = -elbo
         if torch_isnan(loss):
