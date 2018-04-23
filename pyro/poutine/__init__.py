@@ -48,7 +48,7 @@ def replay(fn=None, trace=None, sites=None):
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param trace: a Trace data structure to replay against
     :param sites: list or dict of names of sample sites in fn to replay against,
-    defaulting to all sites
+        defaulting to all sites
     :returns: stochastic function wrapped in a ReplayHandler
     :rtype: pyro.poutine.ReplayHandler
 
@@ -99,8 +99,8 @@ def block(fn=None, hide=None, expose=None, hide_types=None, expose_types=None):
 def escape(fn=None, escape_fn=None):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
-    :param escape_fn: function that takes a partial trace and a site
-    and returns a boolean value to decide whether to exit at that site
+    :param escape_fn: function that takes a partial trace and a site,
+        and returns a boolean value to decide whether to exit at that site
     :returns: stochastic function wrapped in EscapeHandler
 
     Alias for EscapeHandler constructor.
@@ -220,10 +220,10 @@ def queue(fn=None, queue=None, max_tries=None,
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param queue: a queue data structure like multiprocessing.Queue to hold partial traces
     :param max_tries: maximum number of attempts to compute a single complete trace
-    :param extend_fn: function (possibly stochastic) that takes a partial trace and a site
-    and returns a list of extended traces
-    :param escape_fn: function (possibly stochastic) that takes a partial trace and a site
-    and returns a boolean value to decide whether to exit
+    :param extend_fn: function (possibly stochastic) that takes a partial trace and a site,
+        and returns a list of extended traces
+    :param escape_fn: function (possibly stochastic) that takes a partial trace and a site,
+        and returns a boolean value to decide whether to exit
     :param num_samples: optional number of extended traces for extend_fn to return
     :returns: stochastic function wrapped in poutine logic
 
