@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from collections import namedtuple
 
-from .poutine import Messenger
+from .messenger import Messenger
 
 
 class CondIndepStackFrame(namedtuple("CondIndepStackFrame", ["name", "dim", "size", "counter"])):
