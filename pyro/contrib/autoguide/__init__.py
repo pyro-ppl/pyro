@@ -1,6 +1,6 @@
 """
-The :mod:`pyro.contrib.autoguide` module provides algorithms to generate
-automatic guides for use in :class:`~pyro.infer.svi.SVI` with simple models.
+The :mod:`pyro.contrib.autoguide` module provides algorithms to automatically
+generate guides from simple models, for use in :class:`~pyro.infer.svi.SVI`.
 For example to generate a mean field Gaussian guide::
 
     def model():
