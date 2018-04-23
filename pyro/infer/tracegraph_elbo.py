@@ -198,6 +198,14 @@ class TraceGraph_ELBO(ELBO):
                                         graph_type="dense").get_trace(*args, **kwargs)
             if is_validation_enabled():
                 check_model_guide_match(model_trace, guide_trace)
+                enumerated_sites = [name for name, site in guide_trace.nodes.items()
+                                    if site["type"] == "sample" and site["infer"].get("enumerate")]
+                if enumerated_sites:
+                    warnings.warn('\n'.join([
+                        'TraceGraph_ELBO found sample sites configured for enumeration:'
+                        ', '.join(enumerated_sites),
+                        'If you want to enumerate sites, you need to use TraceEnum_ELBO instead.']))
+
             guide_trace = prune_subsample_sites(guide_trace)
             model_trace = prune_subsample_sites(model_trace)
 

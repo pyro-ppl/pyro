@@ -42,7 +42,7 @@ def test_shapes(advi_class, Elbo):
             pyro.sample("z3", dist.Normal(torch.zeros(3), torch.ones(3)))
 
     guide = advi_class(model)
-    elbo = Elbo()
+    elbo = Elbo(strict_enumeration_warning=False)
     loss = elbo.loss(model, guide)
     assert np.isfinite(loss), loss
 
@@ -66,12 +66,12 @@ def test_irange_smoke(advi_class, Elbo):
         pyro.sample("obs", dist.Bernoulli(0.1), obs=torch.tensor(0))
 
     guide = advi_class(model)
-    infer = SVI(model, guide, Adam({"lr": 1e-6}), Elbo())
+    infer = SVI(model, guide, Adam({"lr": 1e-6}), Elbo(strict_enumeration_warning=False))
     infer.step()
 
 
 @pytest.mark.parametrize("advi_class", [AutoMultivariateNormal, AutoDiagonalNormal])
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_median(advi_class, Elbo):
 
     def model():
@@ -80,7 +80,7 @@ def test_median(advi_class, Elbo):
         pyro.sample("z", dist.Beta(2.0, 2.0))
 
     guide = advi_class(model)
-    infer = SVI(model, guide, Adam({'lr': 0.01}), Elbo())
+    infer = SVI(model, guide, Adam({'lr': 0.01}), Elbo(strict_enumeration_warning=False))
     for _ in range(100):
         infer.step()
 
@@ -91,7 +91,7 @@ def test_median(advi_class, Elbo):
 
 
 @pytest.mark.parametrize("advi_class", [AutoMultivariateNormal, AutoDiagonalNormal])
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_quantiles(advi_class, Elbo):
 
     def model():
@@ -100,7 +100,7 @@ def test_quantiles(advi_class, Elbo):
         pyro.sample("z", dist.Beta(2.0, 2.0))
 
     guide = advi_class(model)
-    infer = SVI(model, guide, Adam({'lr': 0.01}), Elbo())
+    infer = SVI(model, guide, Adam({'lr': 0.01}), Elbo(strict_enumeration_warning=False))
     for _ in range(100):
         infer.step()
 

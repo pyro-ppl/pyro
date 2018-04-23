@@ -50,7 +50,8 @@ def assert_warning(model, guide, elbo):
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
-def test_nonempty_model_empty_guide_ok(Elbo):
+@pytest.mark.parametrize("strict_enumeration_warning", [True, False])
+def test_nonempty_model_empty_guide_ok(Elbo, strict_enumeration_warning):
 
     def model():
         loc = torch.tensor([0.0, 0.0])
@@ -60,11 +61,16 @@ def test_nonempty_model_empty_guide_ok(Elbo):
     def guide():
         pass
 
-    assert_ok(model, guide, Elbo())
+    elbo = Elbo(strict_enumeration_warning=strict_enumeration_warning)
+    if strict_enumeration_warning and Elbo is TraceEnum_ELBO:
+        assert_warning(model, guide, elbo)
+    else:
+        assert_ok(model, guide, elbo)
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
-def test_empty_model_empty_guide_ok(Elbo):
+@pytest.mark.parametrize("strict_enumeration_warning", [True, False])
+def test_empty_model_empty_guide_ok(Elbo, strict_enumeration_warning):
 
     def model():
         pass
@@ -72,7 +78,11 @@ def test_empty_model_empty_guide_ok(Elbo):
     def guide():
         pass
 
-    assert_ok(model, guide, Elbo())
+    elbo = Elbo(strict_enumeration_warning=strict_enumeration_warning)
+    if strict_enumeration_warning and Elbo is TraceEnum_ELBO:
+        assert_warning(model, guide, elbo)
+    else:
+        assert_ok(model, guide, elbo)
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -137,19 +147,22 @@ def test_variable_clash_in_guide_error(Elbo):
     assert_error(model, guide, Elbo())
 
 
-@pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
+@pytest.mark.parametrize("subsample_size", [None, 2], ids=["full", "subsample"])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_irange_ok(subsample_size, Elbo):
 
     def model():
         p = torch.tensor(0.5)
-        for i in pyro.irange("irange", 10, subsample_size):
+        for i in pyro.irange("irange", 4, subsample_size):
             pyro.sample("x_{}".format(i), dist.Bernoulli(p))
 
     def guide():
         p = pyro.param("p", torch.tensor(0.5, requires_grad=True))
-        for i in pyro.irange("irange", 10, subsample_size):
+        for i in pyro.irange("irange", 4, subsample_size):
             pyro.sample("x_{}".format(i), dist.Bernoulli(p))
+
+    if Elbo is TraceEnum_ELBO:
+        guide = config_enumerate(guide)
 
     assert_ok(model, guide, Elbo())
 
@@ -169,6 +182,9 @@ def test_irange_variable_clash_error(Elbo):
             # Each loop iteration should give the sample site a different name.
             pyro.sample("x", dist.Bernoulli(p))
 
+    if Elbo is TraceEnum_ELBO:
+        guide = config_enumerate(guide)
+
     assert_error(model, guide, Elbo())
 
 
@@ -186,6 +202,9 @@ def test_iarange_ok(subsample_size, Elbo):
         with pyro.iarange("iarange", 10, subsample_size) as ind:
             pyro.sample("x", dist.Bernoulli(p).expand_by([len(ind)]))
 
+    if Elbo is TraceEnum_ELBO:
+        guide = config_enumerate(guide)
+
     assert_ok(model, guide, Elbo())
 
 
@@ -202,53 +221,62 @@ def test_iarange_no_size_ok(Elbo):
         with pyro.iarange("iarange"):
             pyro.sample("x", dist.Bernoulli(p).expand_by([10]))
 
+    if Elbo is TraceEnum_ELBO:
+        guide = config_enumerate(guide)
+
     assert_ok(model, guide, Elbo())
 
 
-@pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
+@pytest.mark.parametrize("subsample_size", [None, 2], ids=["full", "subsample"])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_irange_irange_ok(subsample_size, Elbo):
 
     def model():
         p = torch.tensor(0.5)
-        outer_irange = pyro.irange("irange_0", 10, subsample_size)
-        inner_irange = pyro.irange("irange_1", 10, subsample_size)
+        outer_irange = pyro.irange("irange_0", 3, subsample_size)
+        inner_irange = pyro.irange("irange_1", 3, subsample_size)
         for i in outer_irange:
             for j in inner_irange:
                 pyro.sample("x_{}_{}".format(i, j), dist.Bernoulli(p))
 
     def guide():
         p = pyro.param("p", torch.tensor(0.5, requires_grad=True))
-        outer_irange = pyro.irange("irange_0", 10, subsample_size)
-        inner_irange = pyro.irange("irange_1", 10, subsample_size)
+        outer_irange = pyro.irange("irange_0", 3, subsample_size)
+        inner_irange = pyro.irange("irange_1", 3, subsample_size)
         for i in outer_irange:
             for j in inner_irange:
                 pyro.sample("x_{}_{}".format(i, j), dist.Bernoulli(p))
 
-    assert_ok(model, guide, Elbo())
+    if Elbo is TraceEnum_ELBO:
+        guide = config_enumerate(guide, "parallel")
+
+    assert_ok(model, guide, Elbo(max_iarange_nesting=0))
 
 
-@pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
+@pytest.mark.parametrize("subsample_size", [None, 2], ids=["full", "subsample"])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_irange_irange_swap_ok(subsample_size, Elbo):
 
     def model():
         p = torch.tensor(0.5)
-        outer_irange = pyro.irange("irange_0", 10, subsample_size)
-        inner_irange = pyro.irange("irange_1", 10, subsample_size)
+        outer_irange = pyro.irange("irange_0", 3, subsample_size)
+        inner_irange = pyro.irange("irange_1", 3, subsample_size)
         for i in outer_irange:
             for j in inner_irange:
                 pyro.sample("x_{}_{}".format(i, j), dist.Bernoulli(p))
 
     def guide():
         p = pyro.param("p", torch.tensor(0.5, requires_grad=True))
-        outer_irange = pyro.irange("irange_0", 10, subsample_size)
-        inner_irange = pyro.irange("irange_1", 10, subsample_size)
+        outer_irange = pyro.irange("irange_0", 3, subsample_size)
+        inner_irange = pyro.irange("irange_1", 3, subsample_size)
         for j in inner_irange:
             for i in outer_irange:
                 pyro.sample("x_{}_{}".format(i, j), dist.Bernoulli(p))
 
-    assert_ok(model, guide, Elbo())
+    if Elbo is TraceEnum_ELBO:
+        guide = config_enumerate(guide, "parallel")
+
+    assert_ok(model, guide, Elbo(max_iarange_nesting=0))
 
 
 @pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
@@ -264,6 +292,9 @@ def test_irange_in_model_not_guide_ok(subsample_size, Elbo):
     def guide():
         p = pyro.param("p", torch.tensor(0.5, requires_grad=True))
         pyro.sample("x", dist.Bernoulli(p))
+
+    if Elbo is TraceEnum_ELBO:
+        guide = config_enumerate(guide)
 
     assert_ok(model, guide, Elbo())
 
@@ -311,15 +342,18 @@ def test_iarange_irange_ok(Elbo):
 
     def model():
         p = torch.tensor(0.5)
-        with pyro.iarange("iarange", 10, 5) as ind:
-            for i in pyro.irange("irange", 10, 5):
+        with pyro.iarange("iarange", 3, 2) as ind:
+            for i in pyro.irange("irange", 3, 2):
                 pyro.sample("x_{}".format(i), dist.Bernoulli(p).expand_by([len(ind)]))
 
     def guide():
         p = pyro.param("p", torch.tensor(0.5, requires_grad=True))
-        with pyro.iarange("iarange", 10, 5) as ind:
-            for i in pyro.irange("irange", 10, 5):
+        with pyro.iarange("iarange", 3, 2) as ind:
+            for i in pyro.irange("irange", 3, 2):
                 pyro.sample("x_{}".format(i), dist.Bernoulli(p).expand_by([len(ind)]))
+
+    if Elbo is TraceEnum_ELBO:
+        guide = config_enumerate(guide)
 
     assert_ok(model, guide, Elbo())
 
@@ -329,17 +363,20 @@ def test_irange_iarange_ok(Elbo):
 
     def model():
         p = torch.tensor(0.5)
-        inner_iarange = pyro.iarange("iarange", 10, 5)
-        for i in pyro.irange("irange", 10, 5):
+        inner_iarange = pyro.iarange("iarange", 3, 2)
+        for i in pyro.irange("irange", 3, 2):
             with inner_iarange as ind:
                 pyro.sample("x_{}".format(i), dist.Bernoulli(p).expand_by([len(ind)]))
 
     def guide():
         p = pyro.param("p", torch.tensor(0.5, requires_grad=True))
-        inner_iarange = pyro.iarange("iarange", 10, 5)
-        for i in pyro.irange("irange", 10, 5):
+        inner_iarange = pyro.iarange("iarange", 3, 2)
+        for i in pyro.irange("irange", 3, 2):
             with inner_iarange as ind:
                 pyro.sample("x_{}".format(i), dist.Bernoulli(p).expand_by([len(ind)]))
+
+    if Elbo is TraceEnum_ELBO:
+        guide = config_enumerate(guide)
 
     assert_ok(model, guide, Elbo())
 
@@ -354,7 +391,8 @@ def test_nested_iarange_iarange_ok(Elbo):
             with pyro.iarange("iarange_inner", 11, 6) as ind_inner:
                 pyro.sample("y", dist.Bernoulli(p).expand_by([len(ind_inner), len(ind_outer)]))
 
-    assert_ok(model, model, Elbo())
+    guide = config_enumerate(model) if Elbo is TraceEnum_ELBO else model
+    assert_ok(model, guide, Elbo())
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -371,7 +409,8 @@ def test_iarange_reuse_ok(Elbo):
         with iarange_outer as ind_outer, iarange_inner as ind_inner:
             pyro.sample("z", dist.Bernoulli(p).expand_by([len(ind_inner), len(ind_outer)]))
 
-    assert_ok(model, model, Elbo())
+    guide = config_enumerate(model) if Elbo is TraceEnum_ELBO else model
+    assert_ok(model, guide, Elbo())
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -385,7 +424,8 @@ def test_nested_iarange_iarange_dim_error_1(Elbo):
                 pyro.sample("y", dist.Bernoulli(p).expand_by([len(ind_inner)]))
                 pyro.sample("z", dist.Bernoulli(p).expand_by([len(ind_outer), len(ind_inner)]))
 
-    assert_error(model, model, Elbo())
+    guide = config_enumerate(model) if Elbo is TraceEnum_ELBO else model
+    assert_error(model, guide, Elbo())
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -399,7 +439,8 @@ def test_nested_iarange_iarange_dim_error_2(Elbo):
                 pyro.sample("y", dist.Bernoulli(p).expand_by([len(ind_outer)]))  # error here
                 pyro.sample("z", dist.Bernoulli(p).expand_by([len(ind_outer), len(ind_inner)]))
 
-    assert_error(model, model, Elbo())
+    guide = config_enumerate(model) if Elbo is TraceEnum_ELBO else model
+    assert_error(model, guide, Elbo())
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -413,7 +454,8 @@ def test_nested_iarange_iarange_dim_error_3(Elbo):
                 pyro.sample("y", dist.Bernoulli(p).expand_by([len(ind_inner)]))
                 pyro.sample("z", dist.Bernoulli(p).expand_by([len(ind_inner), 1]))  # error here
 
-    assert_error(model, model, Elbo())
+    guide = config_enumerate(model) if Elbo is TraceEnum_ELBO else model
+    assert_error(model, guide, Elbo())
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -427,7 +469,8 @@ def test_nested_iarange_iarange_dim_error_4(Elbo):
                 pyro.sample("y", dist.Bernoulli(p).expand_by([len(ind_inner)]))
                 pyro.sample("z", dist.Bernoulli(p).expand_by([len(ind_outer), len(ind_outer)]))  # error here
 
-    assert_error(model, model, Elbo())
+    guide = config_enumerate(model) if Elbo is TraceEnum_ELBO else model
+    assert_error(model, guide, Elbo())
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -440,7 +483,8 @@ def test_nonnested_iarange_iarange_ok(Elbo):
         with pyro.iarange("iarange_1", 11, 6) as ind2:
             pyro.sample("x1", dist.Bernoulli(p).expand_by([len(ind2)]))
 
-    assert_ok(model, model, Elbo())
+    guide = config_enumerate(model) if Elbo is TraceEnum_ELBO else model
+    assert_ok(model, guide, Elbo())
 
 
 def test_three_indep_iarange_at_different_depths_ok():
@@ -493,6 +537,24 @@ def test_iarange_wrong_size_error():
     assert_error(model, guide, TraceGraph_ELBO())
 
 
+@pytest.mark.parametrize("enumerate_", [None, "sequential", "parallel"])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+def test_enum_discrete_misuse_warning(Elbo, enumerate_):
+
+    def model():
+        p = torch.tensor(0.5)
+        pyro.sample("x", dist.Bernoulli(p))
+
+    def guide():
+        p = pyro.param("p", torch.tensor(0.5, requires_grad=True))
+        pyro.sample("x", dist.Bernoulli(p), infer={"enumerate": enumerate_})
+
+    if (enumerate_ is None) == (Elbo is TraceEnum_ELBO):
+        assert_warning(model, guide, Elbo(max_iarange_nesting=0))
+    else:
+        assert_ok(model, guide, Elbo(max_iarange_nesting=0))
+
+
 def test_enum_discrete_single_ok():
 
     def model():
@@ -504,6 +566,24 @@ def test_enum_discrete_single_ok():
         pyro.sample("x", dist.Bernoulli(p))
 
     assert_ok(model, config_enumerate(guide), TraceEnum_ELBO())
+
+
+@pytest.mark.parametrize("strict_enumeration_warning", [False, True])
+def test_enum_discrete_missing_config_warning(strict_enumeration_warning):
+
+    def model():
+        p = torch.tensor(0.5)
+        pyro.sample("x", dist.Bernoulli(p))
+
+    def guide():
+        p = pyro.param("p", torch.tensor(0.5, requires_grad=True))
+        pyro.sample("x", dist.Bernoulli(p))
+
+    elbo = TraceEnum_ELBO(strict_enumeration_warning=strict_enumeration_warning)
+    if strict_enumeration_warning:
+        assert_warning(model, guide, elbo)
+    else:
+        assert_ok(model, guide, elbo)
 
 
 def test_enum_discrete_single_single_ok():
@@ -551,7 +631,8 @@ def test_iarange_enum_discrete_batch_ok():
     assert_ok(model, config_enumerate(guide), TraceEnum_ELBO())
 
 
-def test_iarange_enum_discrete_no_discrete_vars_ok():
+@pytest.mark.parametrize("strict_enumeration_warning", [False, True])
+def test_iarange_enum_discrete_no_discrete_vars_warning(strict_enumeration_warning):
 
     def model():
         loc = torch.tensor(0.0)
@@ -559,13 +640,18 @@ def test_iarange_enum_discrete_no_discrete_vars_ok():
         with pyro.iarange("iarange", 10, 5) as ind:
             pyro.sample("x", dist.Normal(loc, scale).expand_by([len(ind)]))
 
+    @config_enumerate
     def guide():
         loc = pyro.param("loc", torch.tensor(1.0, requires_grad=True))
         scale = pyro.param("scale", torch.tensor(2.0, requires_grad=True))
         with pyro.iarange("iarange", 10, 5) as ind:
             pyro.sample("x", dist.Normal(loc, scale).expand_by([len(ind)]))
 
-    assert_ok(model, config_enumerate(guide), TraceEnum_ELBO())
+    elbo = TraceEnum_ELBO(strict_enumeration_warning=strict_enumeration_warning)
+    if strict_enumeration_warning:
+        assert_warning(model, guide, elbo)
+    else:
+        assert_ok(model, guide, elbo)
 
 
 def test_no_iarange_enum_discrete_batch_error():
@@ -629,7 +715,7 @@ def test_enum_discrete_parallel_iarange_ok():
             with pyro.iarange("inner", 5):
                 x536 = pyro.sample("x536", dist.Categorical(p536))
 
-        if not enum_discrete:
+        if enum_discrete == "sequential":
             # All dimensions are iarange dimensions.
             assert x2.shape == torch.Size([])
             assert x34.shape == torch.Size([3])
@@ -640,10 +726,10 @@ def test_enum_discrete_parallel_iarange_ok():
             assert x34.shape == torch.Size([    4, 1, 1, 3])  # noqa: E201
             assert x536.shape == torch.Size([6, 1, 1, 5, 3])  # noqa: E201
 
-    enum_discrete = False
-    assert_ok(model, model, TraceEnum_ELBO(max_iarange_nesting=2))
+    enum_discrete = "sequential"
+    assert_ok(model, config_enumerate(model, "sequential"), TraceEnum_ELBO(max_iarange_nesting=2))
 
-    enum_discrete = True
+    enum_discrete = "parallel"
     assert_ok(model, config_enumerate(model, "parallel"), TraceEnum_ELBO(max_iarange_nesting=2))
 
 
@@ -652,6 +738,7 @@ def test_enum_discrete_parallel_iarange_ok():
 def test_enum_discrete_iarange_dependency_warning(enumerate_, is_validate):
 
     def model():
+        pyro.sample("w", dist.Bernoulli(0.5), infer={'enumerate': 'parallel'})
         with pyro.iarange("iarange", 10, 5):
             x = pyro.sample("x", dist.Bernoulli(0.5).expand_by([5]),
                             infer={'enumerate': enumerate_})
@@ -668,6 +755,7 @@ def test_enum_discrete_iarange_dependency_warning(enumerate_, is_validate):
 def test_enum_discrete_irange_iarange_dependency_ok(enumerate_):
 
     def model():
+        pyro.sample("w", dist.Bernoulli(0.5), infer={'enumerate': 'parallel'})
         inner_iarange = pyro.iarange("iarange", 10, 5)
         for i in pyro.irange("irange", 3):
             pyro.sample("y_{}".format(i), dist.Bernoulli(0.5))
@@ -683,6 +771,7 @@ def test_enum_discrete_irange_iarange_dependency_ok(enumerate_):
 def test_enum_discrete_iranges_iarange_dependency_warning(enumerate_, is_validate):
 
     def model():
+        pyro.sample("w", dist.Bernoulli(0.5), infer={'enumerate': 'parallel'})
         inner_iarange = pyro.iarange("iarange", 10, 5)
 
         for i in pyro.irange("irange1", 2):
@@ -704,6 +793,7 @@ def test_enum_discrete_iranges_iarange_dependency_warning(enumerate_, is_validat
 def test_enum_discrete_iaranges_dependency_ok(enumerate_):
 
     def model():
+        pyro.sample("w", dist.Bernoulli(0.5), infer={'enumerate': 'parallel'})
         x_iarange = pyro.iarange("x_iarange", 10, 5, dim=-1)
         y_iarange = pyro.iarange("y_iarange", 11, 6, dim=-2)
         pyro.sample("a", dist.Bernoulli(0.5))
@@ -722,6 +812,8 @@ def test_enum_discrete_iaranges_dependency_ok(enumerate_):
 def test_enum_discrete_non_enumerated_iarange_ok(enumerate_):
 
     def model():
+        pyro.sample("w", dist.Bernoulli(0.5), infer={'enumerate': 'parallel'})
+
         with pyro.iarange("non_enum", 2):
             a = pyro.sample("a", dist.Bernoulli(0.5).expand_by([2]),
                             infer={'enumerate': None})

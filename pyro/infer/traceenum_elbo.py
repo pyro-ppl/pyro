@@ -85,9 +85,17 @@ class TraceEnum_ELBO(ELBO):
                     for site in model_trace.nodes.values():
                         if site["type"] == "sample":
                             check_site_shape(site, self.max_iarange_nesting)
+                    any_enumerated = False
                     for site in guide_trace.nodes.values():
                         if site["type"] == "sample":
                             check_site_shape(site, self.max_iarange_nesting)
+                            if site["infer"].get("enumerate"):
+                                any_enumerated = True
+                    if self.strict_enumeration_warning and not any_enumerated:
+                        warnings.warn('TraceEnum_ELBO found no sample sites configured for enumeration. '
+                                      'If you want to enumerate sites, you need to @config_enumerate or set '
+                                      'infer={"enumerate": "sequential"} or infer={"enumerate": "parallel"}? '
+                                      'If you do not want to enumerate, consider using Trace_ELBO instead.')
 
                 yield model_trace, guide_trace
 
