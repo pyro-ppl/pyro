@@ -38,11 +38,17 @@ class SVI(object):
         self.optim = optim
 
         if isinstance(loss, ELBO):
-            self.ELBO = loss
-            self.loss = self.ELBO.loss
-            self.loss_and_grads = self.ELBO.loss_and_grads
+            self.loss = loss.loss
+            self.loss_and_grads = loss.loss_and_grads
         else:
-            raise TypeError("Unsupported loss type. Expected an ELBO instance, got a {}".format(type(loss)))
+            if loss_and_grads is None:
+                def _loss_and_grads(*args, **kwargs):
+                    loss_val = loss(*args, **kwargs)
+                    loss_val.backward()
+                    return loss_val
+                loss_and_grads = _loss_and_grads
+            self.loss = loss
+            self.loss_and_grads = loss_and_grads
 
     def __call__(self, *args, **kwargs):
         """
@@ -61,7 +67,7 @@ class SVI(object):
         Evaluate the loss function. Any args or kwargs are passed to the model and guide.
         """
         with torch.no_grad():
-            return self.loss(self.model, self.guide, *args, **kwargs)
+            return self.loss.loss(self.model, self.guide, *args, **kwargs)
 
     def step(self, *args, **kwargs):
         """
@@ -74,7 +80,7 @@ class SVI(object):
         """
         # get loss and compute gradients
         with poutine.trace(param_only=True) as param_capture:
-            loss = self.loss_and_grads(self.model, self.guide, *args, **kwargs)
+            loss = self.loss.loss_and_grads(self.model, self.guide, *args, **kwargs)
 
         params = set(site["value"].unconstrained()
                      for site in param_capture.trace.nodes.values())
