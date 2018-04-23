@@ -41,7 +41,7 @@ class TraceMessenger(Messenger):
     We can also use this for visualization.
     """
 
-    def __init__(self, graph_type=None, param_only=False):
+    def __init__(self, graph_type=None, param_only=None):
         """
         :param string graph_type: string that specifies the type of graph
             to construct (currently only "flat" or "dense" supported)
