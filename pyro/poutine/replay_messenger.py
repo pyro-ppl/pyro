@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from .poutine import Messenger
+from .messenger import Messenger
 
 
 class ReplayMessenger(Messenger):
