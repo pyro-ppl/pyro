@@ -127,10 +127,9 @@ class TraceEnum_ELBO(ELBO):
             elbo += elbo_particle.item() / self.num_particles
 
             # collect parameters to train from model and guide
-            trainable_params = len(set(site["value"].unconstrained()
-                                       for trace in (model_trace, guide_trace)
-                                       for site in trace.nodes.values()
-                                       if site["type"] == "param")) > 0
+            trainable_params = any(site["type"] == "param"
+                                   for trace in (model_trace, guide_trace)
+                                   for site in trace.nodes.values())
 
             if trainable_params and elbo_particle.requires_grad:
                 loss_particle = -elbo_particle

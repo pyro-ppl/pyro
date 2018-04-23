@@ -123,10 +123,9 @@ class Trace_ELBO(ELBO):
             elbo += elbo_particle / self.num_particles
 
             # collect parameters to train from model and guide
-            trainable_params = len(set(site["value"].unconstrained()
-                                       for trace in (model_trace, guide_trace)
-                                       for site in trace.nodes.values()
-                                       if site["type"] == "param")) > 0
+            trainable_params = any(site["type"] == "param"
+                                   for trace in (model_trace, guide_trace)
+                                   for site in trace.nodes.values())
 
             if trainable_params and getattr(surrogate_elbo_particle, 'requires_grad', False):
                 surrogate_loss_particle = -surrogate_elbo_particle / self.num_particles

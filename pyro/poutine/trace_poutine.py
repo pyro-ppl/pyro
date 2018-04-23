@@ -45,6 +45,7 @@ class TraceMessenger(Messenger):
         """
         :param string graph_type: string that specifies the type of graph
             to construct (currently only "flat" or "dense" supported)
+        :param param_only: boolean that specifies whether to record sample sites
         """
         super(TraceMessenger, self).__init__()
         if graph_type is None:
@@ -65,6 +66,10 @@ class TraceMessenger(Messenger):
         Adds appropriate edges based on cond_indep_stack information
         upon exiting the context.
         """
+        if self.param_only:
+            for node in list(self.trace.nodes.values()):
+                if node["type"] != "param":
+                    self.trace.remove_node(node["name"])
         if self.graph_type == "dense":
             identify_dense_edges(self.trace)
         return super(TraceMessenger, self).__exit__(*args, **kwargs)
@@ -175,7 +180,7 @@ class TraceHandler(Handler):
                                       name="_INPUT", type="args",
                                       args=args, kwargs=kwargs)
             ret = self.fn(*args, **kwargs)
-        self.msngr.trace.add_node("_RETURN", name="_RETURN", type="return", value=ret)
+            self.msngr.trace.add_node("_RETURN", name="_RETURN", type="return", value=ret)
         return ret
 
     @property
