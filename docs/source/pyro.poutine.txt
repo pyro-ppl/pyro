@@ -9,7 +9,7 @@ Handler
 BlockHandler
 ------------
 
-.. automodule:: pyro.poutine.block_poutine
+.. automodule:: pyro.poutine.block_messenger
     :members:
     :undoc-members:
     :show-inheritance:
@@ -17,7 +17,7 @@ BlockHandler
 ConditionHandler
 ----------------
 
-.. automodule:: pyro.poutine.condition_poutine
+.. automodule:: pyro.poutine.condition_messenger
     :members:
     :undoc-members:
     :show-inheritance:
@@ -25,7 +25,7 @@ ConditionHandler
 EscapeHandler
 -------------
 
-.. automodule:: pyro.poutine.escape_poutine
+.. automodule:: pyro.poutine.escape_messenger
     :members:
     :undoc-members:
     :show-inheritance:
@@ -33,7 +33,7 @@ EscapeHandler
 IndepHandler
 ------------
 
-.. automodule:: pyro.poutine.indep_poutine
+.. automodule:: pyro.poutine.indep_messenger
     :members:
     :undoc-members:
     :show-inheritance:
@@ -41,7 +41,7 @@ IndepHandler
 LiftHandler
 -----------
 
-.. automodule:: pyro.poutine.lift_poutine
+.. automodule:: pyro.poutine.lift_messenger
     :members:
     :undoc-members:
     :show-inheritance:
@@ -49,7 +49,7 @@ LiftHandler
 ReplayHandler
 -------------
 
-.. automodule:: pyro.poutine.replay_poutine
+.. automodule:: pyro.poutine.replay_messenger
     :members:
     :undoc-members:
     :show-inheritance:
@@ -57,7 +57,7 @@ ReplayHandler
 ScaleHandler
 ------------
 
-.. automodule:: pyro.poutine.scale_poutine
+.. automodule:: pyro.poutine.scale_messenger
     :members:
     :undoc-members:
     :show-inheritance:
@@ -73,7 +73,7 @@ Trace
 TraceHandler
 ------------
 
-.. automodule:: pyro.poutine.trace_poutine
+.. automodule:: pyro.poutine.trace_messenger
     :members:
     :undoc-members:
     :show-inheritance:
