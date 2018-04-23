@@ -116,14 +116,6 @@ class VAE(nn.Module):
         loc_img = self.decoder(z)
         return loc_img
 
-    def model_sample(self, batch_size=1):
-        # sample the handwriting style from the constant prior distribution
-        prior_loc = torch.zeros([batch_size, self.z_dim])
-        prior_scale = torch.ones([batch_size, self.z_dim])
-        zs = pyro.sample("z", dist.Normal(prior_loc, prior_scale))
-        loc = self.decoder.forward(zs)
-        return pyro.sample("sample", dist.Bernoulli(loc))
-
 
 def main(args):
     # setup MNIST data loaders

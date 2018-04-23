@@ -199,20 +199,6 @@ class SSVAE(nn.Module):
         """
         pass
 
-    def model_sample(self, ys, batch_size=1):
-        """
-        sample an image from the model
-        """
-
-        # sample the handwriting style from the constant prior distribution
-        prior_loc = ys.new_zeros([batch_size, self.z_dim])
-        prior_scale = ys.new_ones([batch_size, self.z_dim])
-        zs = pyro.sample("z", dist.Normal(prior_loc, prior_scale).independent(1))
-
-        # sample an image using the decoder
-        loc = self.decoder.forward([zs, ys])
-        return pyro.sample("sample", dist.Bernoulli(loc).independent(1))
-
 
 def run_inference_for_epoch(data_loaders, losses, periodic_interval_batches):
     """

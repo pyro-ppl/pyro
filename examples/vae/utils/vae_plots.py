@@ -11,12 +11,13 @@ def plot_conditional_samples_ssvae(ssvae, visdom_session):
     for i in range(10):
         ys[i] = torch.zeros(1, 10)
         ys[i][0, i] = 1
+    xs = torch.zeros(1, 784)
 
     for i in range(10):
         images = []
         for rr in range(100):
-            sample_loc_i = poutine.trace(ssvae.model_sample).get_trace(
-                            ys[i]).nodes["sample"]["fn"].base_dist.probs
+            sample_loc_i = poutine.trace(ssvae.model).get_trace(
+                            xs, ys[i]).nodes["x"]["fn"].base_dist.probs
             img = sample_loc_i[0].view(1, 28, 28).cpu().data.numpy()
             images.append(img)
         vis.images(images, 10, 2)
@@ -42,10 +43,12 @@ def plot_llk(train_elbo, test_elbo):
 def plot_vae_samples(vae, visdom_session):
     from pyro import poutine
     vis = visdom_session
+    x = torch.zeros([1, 784])
     for i in range(10):
         images = []
         for rr in range(100):
-            sample_loc_i = poutine.trace(vae.model_sample).get_trace().nodes["sample"]["fn"].probs
+            # sample from the model
+            sample_loc_i = poutine.trace(vae.model).get_trace(x).nodes["obs"]["fn"].base_dist.probs
             img = sample_loc_i[0].view(1, 28, 28).cpu().data.numpy()
             images.append(img)
         vis.images(images, 10, 2)
