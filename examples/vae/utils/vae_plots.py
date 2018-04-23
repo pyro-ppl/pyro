@@ -1,10 +1,3 @@
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-import scipy as sp
-from sklearn.manifold import TSNE
-import seaborn as sns
-
 import torch
 
 
@@ -30,6 +23,11 @@ def plot_conditional_samples_ssvae(ssvae, visdom_session):
 
 
 def plot_llk(train_elbo, test_elbo):
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import pandas as pd
+    import scipy as sp
+    import seaborn as sns
     plt.figure(figsize=(30, 10))
     sns.set_style("whitegrid")
     data = np.concatenate([np.arange(len(test_elbo))[:, sp.newaxis], -test_elbo[:, sp.newaxis]], axis=1)
@@ -78,6 +76,11 @@ def mnist_test_tsne_ssvae(name=None, ssvae=None, test_loader=None):
 
 
 def plot_tsne(z_loc, classes, name):
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    import numpy as np
+    from sklearn.manifold import TSNE
     model_tsne = TSNE(n_components=2, random_state=0)
     z_states = z_loc.detach().cpu().numpy()
     z_embed = model_tsne.fit_transform(z_states)
