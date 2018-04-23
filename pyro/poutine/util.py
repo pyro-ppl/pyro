@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from .poutine import _PYRO_STACK
+from .messenger import _PYRO_STACK
 
 
 def site_is_subsample(site):
