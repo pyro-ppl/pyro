@@ -1,5 +1,4 @@
-from pyro.params.param_store import ParamStoreDict
-from .indep_poutine import _DimAllocator
+from pyro.params.param_store import ParamStoreDict, _MODULE_NAMESPACE_DIVIDER  # noqa: F401
 
 
 # the global pyro stack
@@ -8,8 +7,51 @@ _PYRO_STACK = []
 # the global ParamStore
 _PYRO_PARAM_STORE = ParamStoreDict()
 
-# used to create fully-formed param names, e.g. mymodule$$$mysubmodule.weight
-_MODULE_NAMESPACE_DIVIDER = "$$$"
+
+class _DimAllocator(object):
+    """
+    Dimension allocator for internal use by :class:`iarange`.
+    There is a single global instance.
+
+    Note that dimensions are indexed from the right, e.g. -1, -2.
+    """
+    def __init__(self):
+        self._stack = []  # in reverse orientation of log_prob.shape
+
+    def allocate(self, name, dim):
+        """
+        Allocate a dimension to an :class:`iarange` with given name.
+        Dim should be either None for automatic allocation or a negative
+        integer for manual allocation.
+        """
+        if name in self._stack:
+            raise ValueError('duplicate iarange "{}"'.format(name))
+        if dim is None:
+            # Automatically allocate the rightmost dimension to the left of all existing dims.
+            self._stack.append(name)
+            dim = -len(self._stack)
+        elif dim >= 0:
+            raise ValueError('Expected dim < 0 to index from the right, actual {}'.format(dim))
+        else:
+            # Allocate the requested dimension.
+            while dim < -len(self._stack):
+                self._stack.append(None)
+            if self._stack[-1 - dim] is not None:
+                raise ValueError('\n'.join([
+                    'at iaranges "{}" and "{}", collide at dim={}'.format(name, self._stack[-1 - dim], dim),
+                    '\nTry moving the dim of one iarange to the left, e.g. dim={}'.format(dim - 1)]))
+            self._stack[-1 - dim] = name
+        return dim
+
+    def free(self, name, dim):
+        """
+        Free a dimension.
+        """
+        assert self._stack[-1 - dim] == name
+        self._stack[-1 - dim] = None
+        while self._stack and self._stack[-1] is None:
+            self._stack.pop()
+
 
 # Handles placement of enumeration and independence dimensions
 _DIM_ALLOCATOR = _DimAllocator()

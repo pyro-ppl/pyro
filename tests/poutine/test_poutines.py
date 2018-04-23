@@ -12,7 +12,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions import Bernoulli, Categorical, Normal
-from pyro.poutine.indep_poutine import _DIM_ALLOCATOR
+from pyro.poutine.runtime import _DIM_ALLOCATOR
 from pyro.poutine.util import NonlocalExit, all_escape, discrete_escape
 from tests.common import assert_equal
 
