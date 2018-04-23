@@ -84,6 +84,10 @@ class TraceHandlerTests(NormalNormalNormalHandlerTestCase):
         assert_equal(model_trace.nodes["latent1"]["value"],
                      model_trace.nodes["_RETURN"]["value"])
 
+    def test_trace_param_only(self):
+        model_trace = poutine.trace(self.model, param_only=True).get_trace()
+        assert all(site["type"] == "param" for site in model_trace.nodes.values())
+
 
 class ReplayHandlerTests(NormalNormalNormalHandlerTestCase):
 

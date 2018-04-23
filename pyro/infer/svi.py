@@ -3,7 +3,9 @@ from __future__ import absolute_import, division, print_function
 import torch
 
 import pyro
+import pyro.poutine as poutine
 from pyro.infer.elbo import ELBO
+from pyro.infer.util import torch_item
 
 
 class SVI(object):
@@ -37,11 +39,17 @@ class SVI(object):
         self.optim = optim
 
         if isinstance(loss, ELBO):
-            self.ELBO = loss
-            self.loss = self.ELBO.loss
-            self.loss_and_grads = self.ELBO.loss_and_grads
+            self.loss = loss.loss
+            self.loss_and_grads = loss.loss_and_grads
         else:
-            raise TypeError("Unsupported loss type. Expected an ELBO instance, got a {}".format(type(loss)))
+            if loss_and_grads is None:
+                def _loss_and_grads(*args, **kwargs):
+                    loss_val = loss(*args, **kwargs)
+                    loss_val.backward()
+                    return loss_val
+                loss_and_grads = _loss_and_grads
+            self.loss = loss
+            self.loss_and_grads = loss_and_grads
 
     def __call__(self, *args, **kwargs):
         """
@@ -60,7 +68,7 @@ class SVI(object):
         Evaluate the loss function. Any args or kwargs are passed to the model and guide.
         """
         with torch.no_grad():
-            return self.loss(self.model, self.guide, *args, **kwargs)
+            return torch_item(self.loss(self.model, self.guide, *args, **kwargs))
 
     def step(self, *args, **kwargs):
         """
@@ -72,10 +80,11 @@ class SVI(object):
         Any args or kwargs are passed to the model and guide
         """
         # get loss and compute gradients
-        loss = self.loss_and_grads(self.model, self.guide, *args, **kwargs)
+        with poutine.trace(param_only=True) as param_capture:
+            loss = self.loss_and_grads(self.model, self.guide, *args, **kwargs)
 
-        # get active params
-        params = pyro.get_param_store().get_active_params()
+        params = set(site["value"].unconstrained()
+                     for site in param_capture.trace.nodes.values())
 
         # actually perform gradient steps
         # torch.optim objects gets instantiated for any params that haven't been seen yet
@@ -84,7 +93,4 @@ class SVI(object):
         # zero gradients
         pyro.infer.util.zero_grads(params)
 
-        # mark parameters in the param store as inactive
-        pyro.get_param_store().mark_params_inactive(params)
-
-        return loss
+        return torch_item(loss)

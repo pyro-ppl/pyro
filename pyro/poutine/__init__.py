@@ -23,10 +23,11 @@ from .trace_poutine import TraceMessenger
 ############################################
 
 
-def trace(fn=None, graph_type=None):
+def trace(fn=None, graph_type=None, param_only=None):
     """
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param graph_type: string that specifies the kind of graph to construct
+    :param param_only: if true, only records params and not samples
     :returns: stochastic function wrapped in a TraceHandler
     :rtype: pyro.poutine.TraceHandler
 
@@ -38,7 +39,7 @@ def trace(fn=None, graph_type=None):
 
     Adds trace data structure site constructors to primitive stacks
     """
-    msngr = TraceMessenger(graph_type=graph_type)
+    msngr = TraceMessenger(graph_type=graph_type, param_only=param_only)
     return msngr(fn) if fn is not None else msngr
 
 

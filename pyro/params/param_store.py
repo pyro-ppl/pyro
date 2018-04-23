@@ -35,7 +35,6 @@ class ParamStoreDict(object):
         """
         self._params = {}  # dictionary from param name to param
         self._param_to_name = {}  # dictionary from unconstrained param to param name
-        self._active_params = set()  # set of all currently active params
         self._constraints = {}  # dictionary from param name to constraint object
 
     def clear(self):
@@ -44,7 +43,6 @@ class ParamStoreDict(object):
         """
         self._params = {}
         self._param_to_name = {}
-        self._active_params = set()
         self._constraints = {}
 
     def named_parameters(self):
@@ -59,33 +57,6 @@ class ParamStoreDict(object):
         Get all parameter names in the ParamStore
         """
         return self._params.keys()
-
-    def get_active_params(self):
-        """
-        :returns: all active params in the ParamStore
-        :rtype: set
-        """
-        return self._active_params
-
-    def mark_params_active(self, params):
-        """
-        :param params: iterable of params the user wishes to mark as active in the ParamStore.
-            this information is used to determine which parameters are being optimized,
-            e.g. in the context of pyro.infer.SVI
-        """
-        assert(all([p in self._param_to_name for p in params])), \
-            "some of these parameters are not in the ParamStore"
-        self._active_params.update(set(params))
-
-    def mark_params_inactive(self, params):
-        """
-        :param params: iterable of params the user wishes to mark as inactive in the ParamStore.
-            this information is used to determine which parameters are being optimized,
-            e.g. in the context of pyro.infer.SVI
-        """
-        assert(all([p in self._param_to_name for p in params])), \
-            "some of these parameters are not in the ParamStore"
-        self._active_params.difference_update(set(params))
 
     def replace_param(self, param_name, new_param, old_param):
         """
