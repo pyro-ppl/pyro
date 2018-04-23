@@ -73,18 +73,11 @@ class SVI(object):
         Any args or kwargs are passed to the model and guide
         """
         # get loss and compute gradients
-        param_captured_loss = poutine.trace(poutine.block(self.loss_and_grads,
-                                                          expose_types=["param"]))
-        loss = param_captured_loss(self.model, self.guide, *args, **kwargs)
+        with poutine.trace(param_only=True) as param_capture:
+            loss = self.loss_and_grads(self.model, self.guide, *args, **kwargs)
 
-        trainable_params = set(site["value"].unconstrained()
-                               for site in param_captured_loss.trace.nodes.values()
-                               if site["type"] == "param")
-
-        pyro.get_param_store().mark_params_active(trainable_params)
-
-        # get active params
-        params = pyro.get_param_store().get_active_params()
+        params = set(site["value"].unconstrained()
+                     for site in param_capture.trace.nodes.values())
 
         # actually perform gradient steps
         # torch.optim objects gets instantiated for any params that haven't been seen yet
@@ -92,8 +85,5 @@ class SVI(object):
 
         # zero gradients
         pyro.infer.util.zero_grads(params)
-
-        # mark parameters in the param store as inactive
-        pyro.get_param_store().mark_params_inactive(params)
 
         return loss

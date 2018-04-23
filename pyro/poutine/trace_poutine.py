@@ -41,7 +41,7 @@ class TraceMessenger(Messenger):
     We can also use this for visualization.
     """
 
-    def __init__(self, graph_type=None):
+    def __init__(self, graph_type=None, param_only=False):
         """
         :param string graph_type: string that specifies the type of graph
             to construct (currently only "flat" or "dense" supported)
@@ -49,8 +49,16 @@ class TraceMessenger(Messenger):
         super(TraceMessenger, self).__init__()
         if graph_type is None:
             graph_type = "flat"
+        if param_only is None:
+            param_only = False
         assert graph_type in ("flat", "dense")
         self.graph_type = graph_type
+        self.param_only = param_only
+        self.trace = Trace(graph_type=self.graph_type)
+
+    def __enter__(self):
+        self.trace = Trace(graph_type=self.graph_type)
+        return super(TraceMessenger, self).__enter__()
 
     def __exit__(self, *args, **kwargs):
         """
@@ -79,10 +87,11 @@ class TraceMessenger(Messenger):
 
     def _reset(self):
         tr = Trace(graph_type=self.graph_type)
-        tr.add_node("_INPUT",
-                    name="_INPUT", type="input",
-                    args=self.trace.nodes["_INPUT"]["args"],
-                    kwargs=self.trace.nodes["_INPUT"]["kwargs"])
+        if "_INPUT" in self.trace.nodes:
+            tr.add_node("_INPUT",
+                        name="_INPUT", type="input",
+                        args=self.trace.nodes["_INPUT"]["args"],
+                        kwargs=self.trace.nodes["_INPUT"]["kwargs"])
         self.trace = tr
         super(TraceMessenger, self)._reset()
 
@@ -129,6 +138,8 @@ class TraceMessenger(Messenger):
         return None
 
     def _postprocess_message(self, msg):
+        if msg["type"] == "sample" and self.param_only:
+            return None
         val = msg["value"]
         site = msg.copy()
         site.update(value=val)
@@ -159,11 +170,11 @@ class TraceHandler(Handler):
         stores the arguments and return value of the function in special sites,
         and returns self.fn's return value
         """
-        self.msngr.trace = Trace(graph_type=self.msngr.graph_type)
-        self.msngr.trace.add_node("_INPUT",
-                                  name="_INPUT", type="args",
-                                  args=args, kwargs=kwargs)
-        ret = super(TraceHandler, self).__call__(*args, **kwargs)
+        with self.msngr:
+            self.msngr.trace.add_node("_INPUT",
+                                      name="_INPUT", type="args",
+                                      args=args, kwargs=kwargs)
+            ret = self.fn(*args, **kwargs)
         self.msngr.trace.add_node("_RETURN", name="_RETURN", type="return", value=ret)
         return ret
 

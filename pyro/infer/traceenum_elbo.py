@@ -127,20 +127,16 @@ class TraceEnum_ELBO(ELBO):
 
             elbo += elbo_particle.item() / self.num_particles
 
-            if elbo_particle.requires_grad:
+            # collect parameters to train from model and guide
+            trainable_params = set(site["value"].unconstrained()
+                                   for trace in (model_trace, guide_trace)
+                                   for site in trace.nodes.values()
+                                   if site["type"] == "param")
+
+            if trainable_params and elbo_particle.requires_grad:
                 loss_particle = -elbo_particle
                 (loss_particle / self.num_particles).backward()
-
-            # # collect parameters to train from model and guide
-            # trainable_params = set(site["value"].unconstrained()
-            #                        for trace in (model_trace, guide_trace)
-            #                        for site in trace.nodes.values()
-            #                        if site["type"] == "param")
-
-            # if trainable_params and elbo_particle.requires_grad:
-            #     loss_particle = -elbo_particle
-            #     (loss_particle / self.num_particles).backward()
-            #     pyro.get_param_store().mark_params_active(trainable_params)
+                # pyro.get_param_store().mark_params_active(trainable_params)
 
         loss = -elbo
         if torch_isnan(loss):
