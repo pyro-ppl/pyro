@@ -5,7 +5,7 @@ import torch.nn as nn
 
 class ClippedSoftmax(nn.Softmax):
     """
-    a wrapper around `nn.Softmax` that scales its output
+    a wrapper around :class:`torch.nn.Softmax` that scales its output
     from `[0,1]` to `[epsilon,1-(n-1)*epsilon]`
     where n is the output dimension of Softmax
     """
@@ -21,7 +21,7 @@ class ClippedSoftmax(nn.Softmax):
 
 class ClippedSigmoid(nn.Sigmoid):
     """
-    a wrapper around `nn.Sigmoid` that scales its output
+    a wrapper around :class:`torch.nn.Sigmoid` that scales its output
     from `[0,1]` to `[epsilon,1-epsilon]`
     """
     def __init__(self, epsilon, *args, **kwargs):
