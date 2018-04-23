@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 import warnings
 
-import pyro
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
@@ -124,15 +123,14 @@ class Trace_ELBO(ELBO):
             elbo += elbo_particle / self.num_particles
 
             # collect parameters to train from model and guide
-            trainable_params = set(site["value"].unconstrained()
-                                   for trace in (model_trace, guide_trace)
-                                   for site in trace.nodes.values()
-                                   if site["type"] == "param")
+            trainable_params = len(set(site["value"].unconstrained()
+                                       for trace in (model_trace, guide_trace)
+                                       for site in trace.nodes.values()
+                                       if site["type"] == "param")) > 0
 
             if trainable_params and getattr(surrogate_elbo_particle, 'requires_grad', False):
                 surrogate_loss_particle = -surrogate_elbo_particle / self.num_particles
                 surrogate_loss_particle.backward()
-                # pyro.get_param_store().mark_params_active(trainable_params)
 
         loss = -elbo
         if torch_isnan(loss):

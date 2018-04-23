@@ -261,15 +261,14 @@ class TraceGraph_ELBO(ELBO):
             surrogate_elbo += surrogate_elbo_term
 
         # collect parameters to train from model and guide
-        trainable_params = set(site["value"].unconstrained()
-                               for trace in (model_trace, guide_trace)
-                               for site in trace.nodes.values()
-                               if site["type"] == "param")
+        trainable_params = len(set(site["value"].unconstrained()
+                                   for trace in (model_trace, guide_trace)
+                                   for site in trace.nodes.values()
+                                   if site["type"] == "param")) > 0
 
         if trainable_params:
             surrogate_loss = -surrogate_elbo
             torch_backward(weight * (surrogate_loss + baseline_loss))
-            # pyro.get_param_store().mark_params_active(trainable_params)
 
         loss = -elbo
         if torch_isnan(loss):
