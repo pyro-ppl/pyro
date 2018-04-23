@@ -235,8 +235,8 @@ def test_exponential_gamma(gamma_dist, n_steps, elbo_impl):
         pyro.sample("lambda_latent", gamma_dist(alpha_q, beta_q))
 
     adam = optim.Adam({"lr": .0003, "betas": (0.97, 0.999)})
-    svi = SVI(model, guide, adam, loss=elbo_impl(),
-              max_iarange_nesting=1)
+    elbo = elbo_impl(strict_enumeration_warning=False)
+    svi = SVI(model, guide, adam, loss=elbo, max_iarange_nesting=1)
 
     for k in range(n_steps):
         svi.step()
