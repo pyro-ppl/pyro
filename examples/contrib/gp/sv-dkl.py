@@ -16,6 +16,7 @@ Reference:
 from __future__ import absolute_import, division, print_function
 
 import argparse
+import time
 
 import torch
 import torch.nn as nn
@@ -108,7 +109,7 @@ def main(args):
     # Because we use Categorical distribution in MultiClass likelihood, we need GP model returns a list
     # of probabilities of each class. Hence it is required to use latent_shape = 10.
     # Turns on "whiten" flag will help optimization for variational models.
-    gpmodel = gp.models.SparseVariationalGP(X=Xu, y=None, kernel=kernel, Xu=Xu,
+    gpmodel = gp.models.VariationalSparseGP(X=Xu, y=None, kernel=kernel, Xu=Xu,
                                             likelihood=likelihood, latent_shape=torch.Size([10]),
                                             num_data=60000, whiten=True)
     if args.cuda:
@@ -119,9 +120,11 @@ def main(args):
     svi = infer.SVI(gpmodel.model, gpmodel.guide, optimizer, infer.Trace_ELBO())
 
     for epoch in range(1, args.epochs + 1):
+        start_time = time.time()
         train(args, train_loader, gpmodel, svi, epoch)
         with torch.no_grad():
             test(args, test_loader, gpmodel)
+        print("Amount of time spent for epoch {}: {}s\n".format(epoch, int(time.time() - start_time)))
 
 
 if __name__ == '__main__':

@@ -17,8 +17,8 @@ For differences between the Pyro and PyTorch interfaces, see
 
 .. automodule:: pyro.distributions.torch
 
-Primitive Distributions
-~~~~~~~~~~~~~~~~~~~~~~~
+Pyro Distributions
+~~~~~~~~~~~~~~~~~~
 
 Abstract Distribution
 ---------------------
@@ -38,6 +38,14 @@ TorchDistribution
     :special-members: __call__
     :show-inheritance:
     :member-order: bysource
+
+Binomial
+--------
+
+.. automodule:: pyro.distributions.binomial
+    :members:
+    :undoc-members:
+    :show-inheritance:
 
 Delta
 -----
@@ -60,16 +68,16 @@ HalfCauchy
     :undoc-members:
     :show-inheritance:
 
-OMTMultivariateNormal
----------------------
-.. automodule:: pyro.distributions.omt_mvn
+LowRankMultivariateNormal
+-------------------------
+.. automodule:: pyro.distributions.lowrank_mvn
     :members:
     :undoc-members:
     :show-inheritance:
 
-SparseMultivariateNormal
-------------------------
-.. automodule:: pyro.distributions.sparse_mvn
+OMTMultivariateNormal
+---------------------
+.. automodule:: pyro.distributions.omt_mvn
     :members:
     :undoc-members:
     :show-inheritance:

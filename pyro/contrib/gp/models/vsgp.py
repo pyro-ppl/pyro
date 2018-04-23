@@ -12,9 +12,9 @@ from pyro.contrib.gp.util import conditional
 from pyro.params import param_with_module_name
 
 
-class SparseVariationalGP(GPModel):
+class VariationalSparseGP(GPModel):
     r"""
-    Sparse Variational Gaussian Process model.
+    Variational Sparse Gaussian Process model.
 
     In :class:`.VariationalGP` model, when the number of input data :math:`X` is large,
     the covariance matrix :math:`k(X, X)` will require a lot of computational steps to
@@ -43,7 +43,7 @@ class SparseVariationalGP(GPModel):
         of train inputs, :math:`M` is the number of inducing inputs. Size of
         variational parameters is :math:`\mathcal{O}(M^2)`.
 
-    References
+    References:
 
     [1] `Scalable variational Gaussian process classification`,
     James Hensman, Alexander G. de G. Matthews, Zoubin Ghahramani
@@ -80,7 +80,7 @@ class SparseVariationalGP(GPModel):
     def __init__(self, X, y, kernel, Xu, likelihood, mean_function=None,
                  latent_shape=None, num_data=None, whiten=False, jitter=1e-6,
                  name="SVGP"):
-        super(SparseVariationalGP, self).__init__(X, y, kernel, mean_function, jitter,
+        super(VariationalSparseGP, self).__init__(X, y, kernel, mean_function, jitter,
                                                   name)
         self.likelihood = likelihood
 
@@ -98,8 +98,8 @@ class SparseVariationalGP(GPModel):
         self.u_loc = Parameter(u_loc)
 
         u_scale_tril_shape = self.latent_shape + (M, M)
-        u_scale_tril = torch.eye(M, out=self.Xu.new_empty(M, M))
-        u_scale_tril = u_scale_tril.expand(u_scale_tril_shape)
+        Id = torch.eye(M, out=self.Xu.new_empty(M, M))
+        u_scale_tril = Id.expand(u_scale_tril_shape)
         self.u_scale_tril = Parameter(u_scale_tril)
         self.set_constraint("u_scale_tril", constraints.lower_cholesky)
 
@@ -173,10 +173,10 @@ class SparseVariationalGP(GPModel):
         :rtype: tuple(torch.Tensor, torch.Tensor)
         """
         self._check_Xnew_shape(Xnew)
-        tmp_sample_latent = self._sample_latent
+        # avoid sampling the unnecessary latent u
         self._sample_latent = False
         Xu, u_loc, u_scale_tril = self.guide()
-        self._sample_latent = tmp_sample_latent
+        self._sample_latent = True
 
         loc, cov = conditional(Xnew, Xu, self.kernel, u_loc, u_scale_tril,
                                full_cov=full_cov, whiten=self.whiten,
