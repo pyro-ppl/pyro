@@ -56,9 +56,6 @@ class _DimAllocator(object):
             self._stack.pop()
 
 
-_DIM_ALLOCATOR = _DimAllocator()
-
-
 class IndepMessenger(Messenger):
     """
     This messenger keeps track of stack of independence information declared by
