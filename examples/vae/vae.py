@@ -122,8 +122,7 @@ class VAE(nn.Module):
         prior_scale = torch.ones([batch_size, self.z_dim])
         zs = pyro.sample("z", dist.Normal(prior_loc, prior_scale))
         loc = self.decoder.forward(zs)
-        xs = pyro.sample("sample", dist.Bernoulli(loc))
-        return xs, loc
+        return pyro.sample("sample", dist.Bernoulli(loc))
 
 
 def main(args):
