@@ -14,6 +14,7 @@ from .infer_config_messenger import InferConfigMessenger
 from .lift_messenger import LiftMessenger
 from .messenger import Messenger  # noqa: F401
 from .replay_messenger import ReplayMessenger
+from .runtime import NonlocalExit
 from .scale_messenger import ScaleMessenger
 from .trace import Trace  # noqa: F401
 from .trace_messenger import TraceMessenger
@@ -256,7 +257,7 @@ def queue(fn=None, queue=None, max_tries=None,
                                        escape_fn=functools.partial(escape_fn,
                                                                    next_trace)))
                     return ftr(*args, **kwargs)
-                except util.NonlocalExit as site_container:
+                except NonlocalExit as site_container:
                     site_container.reset_stack()
                     for tr in extend_fn(ftr.trace.copy(), site_container.site,
                                         num_samples=num_samples):

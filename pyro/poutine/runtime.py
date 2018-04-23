@@ -57,6 +57,30 @@ class _DimAllocator(object):
 _DIM_ALLOCATOR = _DimAllocator()
 
 
+class NonlocalExit(Exception):
+    """
+    Exception for exiting nonlocally from poutine execution.
+
+    Used by poutine.EscapeMessenger to return site information.
+    """
+    def __init__(self, site, *args, **kwargs):
+        """
+        :param site: message at a pyro site
+
+        constructor.  Just stores the input site.
+        """
+        super(NonlocalExit, self).__init__(*args, **kwargs)
+        self.site = site
+
+    def reset_stack(self):
+        """
+        Reset the state of the frames remaining in the stack.
+        Necessary for multiple re-executions in poutine.queue.
+        """
+        for frame in _PYRO_STACK:
+            frame._reset()
+
+
 def validate_message(msg):
     """
     Asserts that the message has a valid format.
