@@ -1,5 +1,5 @@
 Messenger
--------
+----------
 
 .. automodule:: pyro.poutine.messenger
     :members:
@@ -7,7 +7,7 @@ Messenger
     :show-inheritance:
 
 BlockMessenger
-------------
+---------------
 
 .. automodule:: pyro.poutine.block_messenger
     :members:
@@ -15,7 +15,7 @@ BlockMessenger
     :show-inheritance:
 
 ConditionMessenger
-----------------
+-------------------
 
 .. automodule:: pyro.poutine.condition_messenger
     :members:
@@ -23,7 +23,7 @@ ConditionMessenger
     :show-inheritance:
 
 EscapeMessenger
--------------
+----------------
 
 .. automodule:: pyro.poutine.escape_messenger
     :members:
@@ -31,7 +31,7 @@ EscapeMessenger
     :show-inheritance:
 
 IndepMessenger
-------------
+---------------
 
 .. automodule:: pyro.poutine.indep_messenger
     :members:
@@ -39,7 +39,7 @@ IndepMessenger
     :show-inheritance:
 
 LiftMessenger
------------
+--------------
 
 .. automodule:: pyro.poutine.lift_messenger
     :members:
@@ -47,7 +47,7 @@ LiftMessenger
     :show-inheritance:
 
 ReplayMessenger
--------------
+----------------
 
 .. automodule:: pyro.poutine.replay_messenger
     :members:
@@ -55,7 +55,7 @@ ReplayMessenger
     :show-inheritance:
 
 ScaleMessenger
-------------
+---------------
 
 .. automodule:: pyro.poutine.scale_messenger
     :members:
@@ -71,7 +71,7 @@ Trace
     :show-inheritance:
 
 TraceMessenger
-------------
+---------------
 
 .. automodule:: pyro.poutine.trace_messenger
     :members:
