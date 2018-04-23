@@ -5,6 +5,7 @@ import torch
 import pyro
 import pyro.poutine as poutine
 from pyro.infer.elbo import ELBO
+from pyro.infer.util import torch_item
 
 
 class SVI(object):
@@ -67,7 +68,7 @@ class SVI(object):
         Evaluate the loss function. Any args or kwargs are passed to the model and guide.
         """
         with torch.no_grad():
-            return self.loss(self.model, self.guide, *args, **kwargs)
+            return torch_item(self.loss(self.model, self.guide, *args, **kwargs))
 
     def step(self, *args, **kwargs):
         """
@@ -92,4 +93,4 @@ class SVI(object):
         # zero gradients
         pyro.infer.util.zero_grads(params)
 
-        return loss
+        return torch_item(loss)
