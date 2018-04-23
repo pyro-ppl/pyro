@@ -21,7 +21,7 @@ Pyro Documentation
    parameters
    nn
    optimization
-   advanced
+   poutine
    contrib
 
 
