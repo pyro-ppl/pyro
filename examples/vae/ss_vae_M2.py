@@ -374,8 +374,8 @@ def main(args):
             logger.close()
 
 
-EXAMPLE_RUN = "example run: python ss_vae_M2.py --seed 0 --cuda -ne 2 --aux-loss -alm 300 -enum -sup 3000 " \
-              "-zd 20 -hl 400 200 -lr 0.001 -b1 0.95 -bs 500 -eps 1e-7 -log ./tmp.log"
+EXAMPLE_RUN = "example run: python ss_vae_M2.py --seed 0 --cuda -n 2 --aux-loss -alm 46 -enum parallel " \
+              "-sup 3000 -zd 50 -hl 500 -lr 0.00042 -b1 0.95 -bs 200 -log ./tmp.log"
 
 if __name__ == "__main__":
 
