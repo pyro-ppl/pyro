@@ -36,7 +36,7 @@ def trace(fn=None, graph_type=None, param_only=None):
     :param graph_type: string that specifies the kind of graph to construct
     :param param_only: if true, only records params and not samples
     :returns: stochastic function wrapped in a TraceHandler
-    :rtype: pyro.poutine.TraceHandler
+    :rtype: TraceHandler
     """
     msngr = TraceMessenger(graph_type=graph_type, param_only=param_only)
     return msngr(fn) if fn is not None else msngr
@@ -53,7 +53,7 @@ def replay(fn=None, trace=None, sites=None):
     :param sites: list or dict of names of sample sites in fn to replay against,
         defaulting to all sites
     :returns: a replay messenger
-    :rtype: pyro.poutine.ReplayMessenger
+    :rtype: ReplayMessenger
 
     """
     msngr = ReplayMessenger(trace=trace, sites=sites)
@@ -85,7 +85,7 @@ def block(fn=None, hide=None, expose=None, hide_types=None, expose_types=None):
     :param hide_types: list of site types to be hidden
     :param expose_types: list of site types to be exposed while all others hidden
     :returns: stochastic function wrapped in a BlockHandler
-    :rtype: pyro.poutine.BlockHandler
+    :rtype: BlockHandler
     """
     msngr = BlockMessenger(hide=hide, expose=expose,
                            hide_types=hide_types, expose_types=expose_types)
@@ -118,8 +118,7 @@ def condition(fn=None, data=None):
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param data: a dict or a Trace
     :returns: stochastic function wrapped in a ConditionHandler
-    :rtype: pyro.poutine.ConditionHandler
-
+    :rtype: ConditionHandler
     """
     msngr = ConditionMessenger(data=data)
     return msngr(fn) if fn is not None else msngr
@@ -148,7 +147,7 @@ def scale(fn=None, scale=None):
     :param fn: a stochastic function (callable containing Pyro primitive calls)
     :param scale: a positive scaling factor
     :returns: stochastic function wrapped in a ScaleHandler
-    :rtype: pyro.poutine.ScaleMessenger
+    :rtype: ScaleMessenger
     """
     msngr = ScaleMessenger(scale=scale)
     # XXX temporary compatibility fix
