@@ -7,8 +7,7 @@ env:
         - PYTHONPATH=$PWD:$PYTHONPATH
 
 install:
-    # Install PyTorch wheel using the install script
-    - bash scripts/install_pytorch.sh
+    - pip install torch
     - pip install .[test]
     - pip freeze
 
