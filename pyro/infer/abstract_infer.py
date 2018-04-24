@@ -66,7 +66,10 @@ class TracePosterior(object):
 
     def __call__(self, *args, **kwargs):
         random_idx = self._categorical.sample()
-        return self.exec_traces[random_idx].copy()
+        trace = self.exec_traces[random_idx].copy()
+        for name in trace.observation_nodes:
+            trace.remove_node(name)
+        return trace
 
     def run(self, *args, **kwargs):
         """
@@ -96,27 +99,17 @@ class TracePredictive(TracePosterior):
     :param TracePosterior posterior: trace posterior instance holding
         samples from the model's approximate posterior.
     :param int num_samples: number of samples to generate.
-    :param list hide_nodes: list of nodes that should be hidden when
-        replaying the model against ``model_traces``. Corresponds to
-        observed nodes when sampling from the posterior predictive.
     """
-    def __init__(self, model, posterior, num_samples, hide_nodes=[]):
+    def __init__(self, model, posterior, num_samples):
         self.model = model
         self.posterior = posterior
-        self.hide_nodes = hide_nodes
         self.num_samples = num_samples
         super(TracePredictive, self).__init__()
-
-    def _get_random_pruned_trace(self):
-        trace = self.posterior()
-        for node in self.hide_nodes:
-            trace.remove_node(node)
-        return trace
 
     def _traces(self, *args, **kwargs):
         if not self.posterior.exec_traces:
             self.posterior.run(*args, **kwargs)
         for _ in range(self.num_samples):
-            model_trace = self._get_random_pruned_trace()
+            model_trace = self.posterior()
             replayed_trace = poutine.trace(poutine.replay(self.model, model_trace)).get_trace(*args, **kwargs)
             yield (replayed_trace, 0.)
