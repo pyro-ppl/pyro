@@ -2,9 +2,8 @@ import sys
 
 import numpy as np
 import torch
-from torch.utils.data import DataLoader
-
 import torchvision.datasets as datasets
+from torch.utils.data import DataLoader
 from torchvision import transforms
 
 

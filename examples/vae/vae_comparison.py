@@ -7,13 +7,13 @@ import torch
 import torch.nn as nn
 from six import add_metaclass
 from torch.nn import functional
+from torchvision.utils import save_image
 
 import pyro
 from pyro.contrib.examples import util
 from pyro.distributions import Bernoulli, Normal
 from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import Adam
-from torchvision.utils import save_image
 from utils.mnist_cached import DATA_DIR, RESULTS_DIR
 
 """

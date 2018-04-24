@@ -5,7 +5,6 @@ from functools import reduce
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
-
 from torchvision.datasets import MNIST
 
 # This file contains utilities for caching, transforming and splitting MNIST data
