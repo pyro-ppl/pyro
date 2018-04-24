@@ -2,7 +2,7 @@
 #
 
 # You can set these variables from the command line.
-SPHINXOPTS    =
+SPHINXOPTS    ?= -E -W
 SPHINXBUILD   = python -msphinx
 SPHINXPROJ    = PyroTutorials
 SOURCEDIR     = source

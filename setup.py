@@ -92,6 +92,7 @@ setup(
             'flake8',
             'isort',
             'nbformat',
+            'nbsphinx>=0.3.2',
             'nbstripout',
             'nbval',
             'pypandoc',
