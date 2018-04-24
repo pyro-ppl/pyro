@@ -13,7 +13,7 @@ import pyro.poutine as poutine
 from pyro.distributions import Binomial, HalfCauchy, Normal, Uniform
 from pyro.distributions.util import log_sum_exp
 from pyro.infer import EmpiricalMarginal
-from pyro.infer.abstract_infer import PosteriorPredictive
+from pyro.infer.abstract_infer import TracePredictive
 from pyro.infer.mcmc import MCMC, NUTS
 
 """
@@ -200,9 +200,9 @@ def evaluate_log_predictive_density(model, model_trace_posterior, baseball_datas
     """
     _, test, player_names = train_test_split(baseball_dataset)
     at_bats_season, hits_season = test[:, 0], test[:, 1]
-    test_eval = PosteriorPredictive(conditioned_model,
-                                    model_trace_posterior.exec_traces,
-                                    num_samples=args.num_samples)
+    test_eval = TracePredictive(conditioned_model,
+                                model_trace_posterior,
+                                num_samples=args.num_samples)
     test_eval.run(model, at_bats_season, hits_season)
     trace_log_pdf = []
     for tr in test_eval.exec_traces:
@@ -230,10 +230,10 @@ def main(args):
     logging.info("===================")
     logging.info("\nphi:")
     logging.info(summary(posterior_fully_pooled, sites=["phi"], player_names=player_names)["phi"])
-    posterior_predictive = PosteriorPredictive(fully_pooled,
-                                               posterior_fully_pooled.exec_traces,
-                                               hide_nodes=["obs"],
-                                               num_samples=args.num_samples)
+    posterior_predictive = TracePredictive(fully_pooled,
+                                           posterior_fully_pooled,
+                                           hide_nodes=["obs"],
+                                           num_samples=args.num_samples)
     sample_posterior_predictive(posterior_predictive, baseball_dataset)
     evaluate_log_predictive_density(fully_pooled, posterior_fully_pooled, baseball_dataset)
 
@@ -244,10 +244,10 @@ def main(args):
     logging.info("=================")
     logging.info("\nphi:")
     logging.info(summary(posterior_not_pooled, sites=["phi"], player_names=player_names)["phi"])
-    posterior_predictive = PosteriorPredictive(not_pooled,
-                                               posterior_not_pooled.exec_traces,
-                                               hide_nodes=["obs"],
-                                               num_samples=args.num_samples)
+    posterior_predictive = TracePredictive(not_pooled,
+                                           posterior_not_pooled,
+                                           hide_nodes=["obs"],
+                                           num_samples=args.num_samples)
     sample_posterior_predictive(posterior_predictive, baseball_dataset)
     evaluate_log_predictive_density(not_pooled, posterior_not_pooled, baseball_dataset)
 
@@ -261,10 +261,10 @@ def main(args):
                          sites=["alpha"],
                          player_names=player_names,
                          transforms={"alpha": lambda x: 1. / (1 + np.exp(-x))})["alpha"])
-    posterior_predictive = PosteriorPredictive(partially_pooled,
-                                               posterior_partially_pooled.exec_traces,
-                                               hide_nodes=["obs"],
-                                               num_samples=args.num_samples)
+    posterior_predictive = TracePredictive(partially_pooled,
+                                           posterior_partially_pooled,
+                                           hide_nodes=["obs"],
+                                           num_samples=args.num_samples)
     sample_posterior_predictive(posterior_predictive, baseball_dataset)
     evaluate_log_predictive_density(partially_pooled, posterior_partially_pooled, baseball_dataset)
 
