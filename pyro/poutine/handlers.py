@@ -46,7 +46,7 @@ def trace(fn=None, graph_type=None, param_only=None):
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param graph_type: string that specifies the kind of graph to construct
     :param param_only: if true, only records params and not samples
-    :returns: stochastic function decorated with a TraceHandler
+    :returns: stochastic function decorated with a :class:`TraceMessenger`
     """
     msngr = TraceMessenger(graph_type=graph_type, param_only=param_only)
     return msngr(fn) if fn is not None else msngr
@@ -76,8 +76,7 @@ def replay(fn=None, trace=None, sites=None):
     :param trace: a :class:`Trace` data structure to replay against
     :param sites: list or dict of names of sample sites in fn to replay against,
         defaulting to all sites
-    :returns: a replay messenger
-    :rtype: ReplayMessenger
+    :returns: a stochastic function decorated with a :class:`ReplayMessenger`
     """
     msngr = ReplayMessenger(trace=trace, sites=sites)
     return msngr(fn) if fn is not None else msngr
@@ -167,7 +166,7 @@ def escape(fn=None, escape_fn=None):
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param escape_fn: function that takes a partial trace and a site,
         and returns a boolean value to decide whether to exit at that site
-    :returns: stochastic function decorated with EscapeHandler
+    :returns: stochastic function decorated with :class:`EscapeMessenger`
     """
     msngr = EscapeMessenger(escape_fn)
     return msngr(fn) if fn is not None else msngr
@@ -196,7 +195,7 @@ def condition(fn=None, data=None):
 
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param data: a dict or a Trace
-    :returns: stochastic function decorated with a ConditionHandler
+    :returns: stochastic function decorated with a :class:`ConditionMessenger`
     """
     msngr = ConditionMessenger(data=data)
     return msngr(fn) if fn is not None else msngr
@@ -224,8 +223,7 @@ def scale(fn=None, scale=None):
 
     :param fn: a stochastic function (callable containing Pyro primitive calls)
     :param scale: a positive scaling factor
-    :returns: stochastic function decorated with a ScaleHandler
-    :rtype: ScaleMessenger
+    :returns: stochastic function decorated with a :class:`ScaleMessenger`
     """
     msngr = ScaleMessenger(scale=scale)
     # XXX temporary compatibility fix
@@ -239,7 +237,7 @@ def indep(fn=None, name=None, size=None, dim=None):
     This messenger keeps track of stack of independence information declared by
     nested ``irange`` and ``iarange`` contexts. This information is stored in
     a ``cond_indep_stack`` at each sample/observe site for consumption by
-    ``TraceMessenger``.
+    :class:`TraceMessenger`.
     """
     msngr = IndepMessenger(name=name, size=size, dim=dim)
     return msngr(fn) if fn is not None else msngr
