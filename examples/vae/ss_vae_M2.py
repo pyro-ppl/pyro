@@ -400,11 +400,11 @@ if __name__ == "__main__":
                         help="number of epochs to run")
     parser.add_argument('--aux-loss', action="store_true",
                         help="whether to use the auxiliary loss from NIPS 14 paper "
-                             "(Kingma et al) -- it is not used by default ")
+                             "(Kingma et al). It is not used by default ")
     parser.add_argument('-alm', '--aux-loss-multiplier', default=46, type=float,
                         help="the multiplier to use with the auxiliary loss")
     parser.add_argument('-enum', '--enum-discrete', default="parallel",
-                        help="parallel or sequential. if none is specified, discrete vars are sampled.")
+                        help="parallel, sequential or none. uses parallel enumeration by default")
     parser.add_argument('-sup', '--sup-num', default=3000,
                         type=float, help="supervised amount of the data i.e. "
                                          "how many of the images have supervised labels")
