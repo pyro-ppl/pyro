@@ -46,7 +46,7 @@ def trace(fn=None, graph_type=None, param_only=None):
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param graph_type: string that specifies the kind of graph to construct
     :param param_only: if true, only records params and not samples
-    :returns: stochastic function wrapped in a TraceHandler
+    :returns: stochastic function decorated with a TraceHandler
     """
     msngr = TraceMessenger(graph_type=graph_type, param_only=param_only)
     return msngr(fn) if fn is not None else msngr
@@ -73,7 +73,7 @@ def replay(fn=None, trace=None, sites=None):
         True
 
     :param fn: a stochastic function (callable containing pyro primitive calls)
-    :param trace: a Trace data structure to replay against
+    :param trace: a :class:`Trace` data structure to replay against
     :param sites: list or dict of names of sample sites in fn to replay against,
         defaulting to all sites
     :returns: a replay messenger
@@ -110,7 +110,7 @@ def lift(fn=None, prior=None):
 
     :param fn: function whose parameters will be lifted to random values
     :param prior: prior function in the form of a Distribution or a dict of stochastic fns
-    :returns: ``fn`` wrapped in a :class:`LiftMessenger`
+    :returns: ``fn`` decorated with a :class:`LiftMessenger`
     """
     msngr = LiftMessenger(prior=prior)
     return msngr(fn) if fn is not None else msngr
@@ -132,8 +132,8 @@ def block(fn=None, hide=None, expose=None, hide_types=None, expose_types=None):
     Then any effect outside of ``BlockMessenger(fn, hide=["a"])``
     will not be applied to site "a" and will only see site "b":
 
-        >>> fn_inner = TraceMessenger()(fn)
-        >>> fn_outer = TraceMessenger()(BlockMessenger(hide=["a"])(TraceMessenger()(fn)))
+        >>> fn_inner = trace(fn)
+        >>> fn_outer = trace(block(fn_inner, hide=["a"]))
         >>> trace_inner = fn_inner.get_trace()
         >>> trace_outer  = fn_outer.get_trace()
         >>> "a" in trace_inner
@@ -150,7 +150,7 @@ def block(fn=None, hide=None, expose=None, hide_types=None, expose_types=None):
     :param expose: list of site names to be exposed while all others hidden
     :param hide_types: list of site types to be hidden
     :param expose_types: list of site types to be exposed while all others hidden
-    :returns: stochastic function wrapped in a BlockMessenger
+    :returns: stochastic function decorated with a :class:`BlockMessenger`
     """
     msngr = BlockMessenger(hide=hide, expose=expose,
                            hide_types=hide_types, expose_types=expose_types)
@@ -196,7 +196,7 @@ def condition(fn=None, data=None):
 
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param data: a dict or a Trace
-    :returns: stochastic function wrapped in a ConditionHandler
+    :returns: stochastic function decorated with a ConditionHandler
     """
     msngr = ConditionMessenger(data=data)
     return msngr(fn) if fn is not None else msngr
@@ -224,7 +224,7 @@ def scale(fn=None, scale=None):
 
     :param fn: a stochastic function (callable containing Pyro primitive calls)
     :param scale: a positive scaling factor
-    :returns: stochastic function wrapped in a ScaleHandler
+    :returns: stochastic function decorated with a ScaleHandler
     :rtype: ScaleMessenger
     """
     msngr = ScaleMessenger(scale=scale)
@@ -269,7 +269,7 @@ def do(fn=None, data=None):
     set the return values of those sites equal to the values
     and hide them from the rest of the stack
     as if they were hard-coded to those values
-    by using BlockHandler
+    by using ``block``.
 
     Consider the following Pyro program:
 
@@ -282,11 +282,11 @@ def do(fn=None, data=None):
 
         >>> intervened_model = do(model, data={"z": value})
 
-    This is equivalent to replacing `z = pyro.sample("z", ...)` with `z=value`.
+    This is equivalent to replacing `z = pyro.sample("z", ...)` with `z = value`.
 
     :param fn: a stochastic function (callable containing pyro primitive calls)
-    :param data: a dict or a Trace
-    :returns: stochastic function wrapped in a BlockHandler and ConditionHandler
+    :param data: a ``dict`` or a :class`Trace`
+    :returns: stochastic function decorated with a :class:`BlockHandler and :class:`ConditionHandler`
     """
     def wrapper(wrapped):
         return block(condition(wrapped, data=data), hide=list(data.keys()))
