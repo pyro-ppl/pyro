@@ -220,12 +220,15 @@ def main(args):
     train, _, player_names = train_test_split(baseball_dataset)
     at_bats, hits = train[:, 0], train[:, 1]
     nuts_kernel = NUTS(conditioned_model, adapt_step_size=True)
+    logging.info("Original Dataset:")
+    logging.info(baseball_dataset)
 
     # (1) Full Pooling Model
     posterior_fully_pooled = MCMC(nuts_kernel, num_samples=args.num_samples, warmup_steps=args.warmup_steps) \
         .run(fully_pooled, at_bats, hits)
     logging.info("\nModel: Fully Pooled")
     logging.info("===================")
+    logging.info("\nphi:")
     logging.info(summary(posterior_fully_pooled, sites=["phi"], player_names=player_names)["phi"])
     posterior_predictive = PosteriorPredictive(fully_pooled,
                                                posterior_fully_pooled.exec_traces,
@@ -239,6 +242,7 @@ def main(args):
         .run(not_pooled, at_bats, hits)
     logging.info("\nModel: Not Pooled")
     logging.info("=================")
+    logging.info("\nphi:")
     logging.info(summary(posterior_not_pooled, sites=["phi"], player_names=player_names)["phi"])
     posterior_predictive = PosteriorPredictive(not_pooled,
                                                posterior_not_pooled.exec_traces,
@@ -252,6 +256,7 @@ def main(args):
         .run(partially_pooled, at_bats, hits)
     logging.info("\nModel: Partially Pooled")
     logging.info("=======================")
+    logging.info("\nSigmoid(alpha):")
     logging.info(summary(posterior_partially_pooled,
                          sites=["alpha"],
                          player_names=player_names,
