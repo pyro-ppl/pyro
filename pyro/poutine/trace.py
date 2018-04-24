@@ -51,7 +51,7 @@ class Trace(object):
     Consider the following Pyro program:
 
         >>> def model(x):
-        ...     s = pyro.param("s", torch.tensor([0.5]))
+        ...     s = pyro.param("s", torch.tensor(0.5))
         ...     z = pyro.sample("z", dist.Normal(x, s))
         ...     return z ** 2
 
@@ -101,7 +101,7 @@ class Trace(object):
 
     def __del__(self):
         """
-        Work around cyclic reference bugs in ``networkx.DiGraph``
+        Works around cyclic reference bugs in ``networkx.DiGraph``
         See ``https://github.com/uber/pyro/issues/798``
         """
         self._graph.__dict__.clear()
