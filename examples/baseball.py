@@ -232,7 +232,6 @@ def main(args):
     logging.info(summary(posterior_fully_pooled, sites=["phi"], player_names=player_names)["phi"])
     posterior_predictive = TracePredictive(fully_pooled,
                                            posterior_fully_pooled,
-                                           hide_nodes=["obs"],
                                            num_samples=args.num_samples)
     sample_posterior_predictive(posterior_predictive, baseball_dataset)
     evaluate_log_predictive_density(fully_pooled, posterior_fully_pooled, baseball_dataset)
@@ -246,7 +245,6 @@ def main(args):
     logging.info(summary(posterior_not_pooled, sites=["phi"], player_names=player_names)["phi"])
     posterior_predictive = TracePredictive(not_pooled,
                                            posterior_not_pooled,
-                                           hide_nodes=["obs"],
                                            num_samples=args.num_samples)
     sample_posterior_predictive(posterior_predictive, baseball_dataset)
     evaluate_log_predictive_density(not_pooled, posterior_not_pooled, baseball_dataset)
@@ -263,7 +261,6 @@ def main(args):
                          transforms={"alpha": lambda x: 1. / (1 + np.exp(-x))})["alpha"])
     posterior_predictive = TracePredictive(partially_pooled,
                                            posterior_partially_pooled,
-                                           hide_nodes=["obs"],
                                            num_samples=args.num_samples)
     sample_posterior_predictive(posterior_predictive, baseball_dataset)
     evaluate_log_predictive_density(partially_pooled, posterior_partially_pooled, baseball_dataset)
