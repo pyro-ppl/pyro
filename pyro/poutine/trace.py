@@ -22,30 +22,30 @@ def _warn_if_nan(name, value):
 
 class DiGraph(networkx.DiGraph):
     """
-    Wrapper of ``networkx.DiGraph`` that makes ``self.nodes`` a ``collections.OrderedDict``.
+    Wrapper of `networkx.DiGraph` that makes `self.nodes` a `collections.OrderedDict`.
     """
     node_dict_factory = collections.OrderedDict
 
     def fresh_copy(self):
         """
-        Returns a new ``DiGraph`` instance.
+        Returns a new `DiGraph` instance.
         """
         return DiGraph()
 
 
 class Trace(object):
     """
-    Execution trace data structure built on top of ``networkx.DiGraph``.
+    Execution trace data structure built on top of `networkx.DiGraph`.
 
     An execution trace of a Pyro program is a record of every call
     to `pyro.sample()` and `pyro.param()` in a single execution of that program.
     Traces are directed graphs whose nodes represent primitive calls or input/output,
     and whose edges represent conditional dependence relationships
-    between those primitive calls. They are created and populated by ``poutine.trace``.
+    between those primitive calls. They are created and populated by `poutine.trace`.
 
     Each node (or site) in a trace contains the name, input and output value of the site,
     as well as additional metadata added by inference algorithms or user annotation.
-    In the case of ``pyro.sample``, the trace also includes the stochastic function
+    In the case of `pyro.sample`, the trace also includes the stochastic function
     at the site, and any observed data added by users.
 
     Consider the following Pyro program:
@@ -55,20 +55,20 @@ class Trace(object):
         ...     z = pyro.sample("z", dist.Normal(x, s))
         ...     return z ** 2
 
-    We can record its execution using ``pyro.poutine.trace``
+    We can record its execution using `pyro.poutine.trace`
     and use the resulting data structure to compute the log-joint probability
     of all of the sample sites in the execution.
 
         >>> trace = pyro.poutine.trace(model).get_trace(0.0)
         >>> logp = trace.log_prob_sum()
 
-    ``trace.nodes`` contains a ``collections.OrderedDict``
-    of site names and metadata corresponding to ``x``, ``s``, ``z``, and the return value:
+    `trace.nodes` contains a `collections.OrderedDict`
+    of site names and metadata corresponding to `x`, `s`, `z`, and the return value:
 
         >>> print(list(name for name in trace.nodes.keys()))
         ["_INPUT", "s", "z", "_RETURN"]
 
-    As in ``networkx.DiGraph``, values of ``trace.nodes`` are dictionaries of node metadata:
+    As in `networkx.DiGraph`, values of `trace.nodes` are dictionaries of node metadata:
 
         >>> print(trace.nodes["z"])
         {'type': 'sample', 'name': 'z', 'is_observed': False,
@@ -76,20 +76,20 @@ class Trace(object):
          'infer': {}, 'scale': 1.0, 'cond_indep_stack': (),
          'done': True, 'stop': False, 'continuation': None}
 
-    ``'infer'`` is a dictionary of user- or algorithm-specified metadata.
-    ``'args'`` and ``'kwargs'`` are the arguments passed via ``pyro.sample``
-    to ``fn.__call__`` or ``fn.log_prob``.
-    ``'scale'`` is used to scale the log-probability of the site when computing the log-joint.
-    ``'cond_indep_stack'`` contains data structures corresponding to ``pyro.iarange`` contexts
+    `'infer'` is a dictionary of user- or algorithm-specified metadata.
+    `'args'` and `'kwargs'` are the arguments passed via `pyro.sample`
+    to `fn.__call__` or `fn.log_prob`.
+    `'scale'` is used to scale the log-probability of the site when computing the log-joint.
+    `'cond_indep_stack'` contains data structures corresponding to `pyro.iarange` contexts
     appearing in the execution.
-    ``'done'``, ``'stop'``, and ``'continuation'`` are only used by Pyro's internals.
+    `'done'`, `'stop'`, and `'continuation'` are only used by Pyro's internals.
     """
 
     def __init__(self, *args, **kwargs):
         """
         :param string graph_type: string specifying the kind of trace graph to construct
 
-        Constructor. Currently identical to networkx.``DiGraph(\*args, \**kwargs)``,
+        Constructor. Currently identical to networkx.`DiGraph(\*args, \**kwargs)`,
         except for storing the graph_type attribute
         """
         self._graph = DiGraph(*args, **kwargs)
@@ -101,82 +101,82 @@ class Trace(object):
 
     def __del__(self):
         """
-        Works around cyclic reference bugs in ``networkx.DiGraph``
-        See ``https://github.com/uber/pyro/issues/798``
+        Works around cyclic reference bugs in `networkx.DiGraph`
+        See `https://github.com/uber/pyro/issues/798`
         """
         self._graph.__dict__.clear()
 
     @property
     def nodes(self):
         """
-        Identical to ``networkx.DiGraph.nodes``
+        Identical to :attr:`networkx.DiGraph.nodes`
         """
         return self._graph.nodes
 
     @property
     def edges(self):
         """
-        Identical to ``networkx.DiGraph.edges``
+        Identical to :attr:`networkx.DiGraph.edges`
         """
         return self._graph.edges
 
     @property
     def graph(self):
         """
-        Identical to ``networkx.DiGraph.graph``
+        Identical to :attr:`networkx.DiGraph.graph`
         """
         return self._graph.graph
 
     @property
     def remove_node(self):
         """
-        Identical to ``networkx.DiGraph.remove_node``
+        Identical to :meth:`networkx.DiGraph.remove_node`
         """
         return self._graph.remove_node
 
     @property
     def add_edge(self):
         """
-        Identical to ``networkx.DiGraph.remove_edge``
+        Identical to :meth:`networkx.DiGraph.remove_edge`
         """
         return self._graph.add_edge
 
     @property
     def is_directed(self):
         """
-        Identical to ``networkx.DiGraph.is_directed``
+        Identical to :attr:`networkx.DiGraph.is_directed`
         """
         return self._graph.is_directed
 
     @property
     def in_degree(self):
         """
-        Identical to ``networkx.DiGraph.is_directed``
+        Identical to :meth:`networkx.DiGraph.in_degree`
         """
         return self._graph.in_degree
 
     @property
     def successors(self):
         """
-        Identical to ``networkx.DiGraph.successors``
+        Identical to :meth:`networkx.DiGraph.successors`
         """
         return self._graph.successors
 
     def __contains__(self, site_name):
         """
-        Identical to ``networkx.DiGraph.__contains__``
+        Identical to :meth:`networkx.DiGraph.__contains__`
         """
         return site_name in self._graph
 
     def __iter__(self):
         """
-        Identical to ``networkx.DiGraph.__iter__``
+        Identical to :meth:`networkx.DiGraph.__iter__`
         """
         return iter(self._graph)
 
     def __len__(self):
         """
-        Identical to ``networkx.DiGraph.__len__``
+        Identical to :meth:`networkx.DiGraph.__len__`
         """
         return len(self._graph)
 
@@ -186,7 +186,7 @@ class Trace(object):
 
         Adds a site to the trace.
 
-        Identical to super(Trace, self).add_node,
+        Identical to :meth:`networkx.DiGraph.add_node`,
         but raises an error when attempting to add a duplicate node
         instead of silently overwriting.
         """
@@ -201,7 +201,7 @@ class Trace(object):
     def copy(self):
         """
         Makes a shallow copy of self with nodes and edges preserved.
-        Identical to super(Trace, self).copy(), but preserves the type
+        Identical to :meth:`networkx.DiGraph.copy`, but preserves the type
         and the self.graph_type attribute
         """
         trace = Trace()
