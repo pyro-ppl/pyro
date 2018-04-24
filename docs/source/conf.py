@@ -175,6 +175,7 @@ texinfo_documents = [
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3/', None),
     'torch': ('http://pytorch.org/docs/master/', None),
+    'networkx': ('https://networkx.github.io/documentation/stable/', None),
 }
 
 # document class constructors (__init__ methods):
