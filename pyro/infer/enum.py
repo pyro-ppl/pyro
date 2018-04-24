@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 from six.moves.queue import LifoQueue
 
 from pyro import poutine
-from pyro.poutine.trace import Trace
+from pyro.poutine import Trace
 
 
 def _iter_discrete_escape(trace, msg):

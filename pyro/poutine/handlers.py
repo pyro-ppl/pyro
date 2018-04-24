@@ -8,16 +8,14 @@ from pyro.poutine import util
 
 from .block_messenger import BlockMessenger
 from .condition_messenger import ConditionMessenger
-from .enumerate_messenger import EnumerateMessenger  # noqa: F401
+from .enumerate_messenger import EnumerateMessenger
 from .escape_messenger import EscapeMessenger
-from .indep_messenger import IndepMessenger  # noqa: F401
+from .indep_messenger import IndepMessenger
 from .infer_config_messenger import InferConfigMessenger
 from .lift_messenger import LiftMessenger
-from .messenger import Messenger  # noqa: F401
 from .replay_messenger import ReplayMessenger
 from .runtime import NonlocalExit
 from .scale_messenger import ScaleMessenger
-from .trace import Trace  # noqa: F401
 from .trace_messenger import TraceMessenger
 
 ############################################
