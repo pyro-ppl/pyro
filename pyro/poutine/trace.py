@@ -61,7 +61,7 @@ class Trace(object):
 
         >>> trace = pyro.poutine.trace(model).get_trace(0.0)
         >>> logp = trace.log_prob_sum()
-        >>> params = [trace.nodes[name]["value"] for name in trace.param_nodes]
+        >>> params = [trace.nodes[name]["value"].unconstrained() for name in trace.param_nodes]
 
     We can also inspect or manipulate individual nodes in the trace.
     ``trace.nodes`` contains a ``collections.OrderedDict``
