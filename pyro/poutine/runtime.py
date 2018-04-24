@@ -142,17 +142,18 @@ def default_process_message(msg):
 
 def apply_stack(initial_msg):
     """
+    Execute the poutine stack at a single site according to the following scheme:
+
+        1. Walk down the stack from top to bottom, collecting into the message
+             all information necessary to execute the stack at that site
+        2. For each poutine in the stack from bottom to top:
+             Execute the poutine with the message;
+             If the message field "stop" is True, stop;
+             Otherwise, continue
+        3. Return the updated message
+
     :param dict initial_msg: the starting version of the trace site
     :returns: an updated message that is the final version of the trace site
-
-    Execute the poutine stack at a single site according to the following scheme:
-    1. Walk down the stack from top to bottom, collecting into the message
-        all information necessary to execute the stack at that site
-    2. For each poutine in the stack from bottom to top:
-           Execute the poutine with the message;
-           If the message field "stop" is True, stop;
-           Otherwise, continue
-    3. Return the updated message
     """
     stack = _PYRO_STACK
     # TODO check at runtime if stack is valid

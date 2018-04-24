@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from .messenger import Handler, Messenger
-from .trace import Trace
+from .trace_struct import Trace
 from .util import site_is_subsample
 
 

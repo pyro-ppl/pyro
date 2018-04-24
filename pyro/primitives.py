@@ -249,8 +249,8 @@ class iarange(object):
         self.dim = _DIM_ALLOCATOR.allocate(self.name, self.dim)
         if self._wrapped:
             try:
-                self._scale_messenger = poutine.ScaleMessenger(self.size / self.subsample_size)
-                self._indep_messenger = poutine.IndepMessenger(self.name, size=self.subsample_size, dim=self.dim)
+                self._scale_messenger = poutine.scale(scale=self.size / self.subsample_size)
+                self._indep_messenger = poutine.indep(name=self.name, size=self.subsample_size, dim=self.dim)
                 self._scale_messenger.__enter__()
                 self._indep_messenger.__enter__()
             except BaseException:
@@ -300,8 +300,8 @@ class irange(object):
             for i in self.subsample:
                 yield i if isinstance(i, numbers.Number) else i.item()
         else:
-            indep_context = poutine.IndepMessenger(self.name, size=self.subsample_size)
-            with poutine.ScaleMessenger(self.size / self.subsample_size):
+            indep_context = poutine.indep(name=self.name, size=self.subsample_size)
+            with poutine.scale(scale=self.size / self.subsample_size):
                 for i in self.subsample:
                     indep_context.next_context()
                     with indep_context:
@@ -414,7 +414,7 @@ def random_module(name, nn_module, prior, *args, **kwargs):
     """
     assert hasattr(nn_module, "parameters"), "Module is not a NN module."
     # register params in param store
-    lifted_fn = poutine.lift(module, prior)
+    lifted_fn = poutine.lift(module, prior=prior)
 
     def _fn():
         nn_copy = copy.deepcopy(nn_module)

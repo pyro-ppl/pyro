@@ -62,14 +62,6 @@ _______________
     :undoc-members:
     :show-inheritance:
 
-Trace
-_____
-
-.. automodule:: pyro.poutine.trace
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 TraceMessenger
 _______________
 
