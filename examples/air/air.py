@@ -14,7 +14,7 @@ import torch.nn.functional as F
 
 import pyro
 import pyro.distributions as dist
-from modules import Identity, Encoder, Decoder, MLP, Predict
+from modules import MLP, Decoder, Encoder, Identity, Predict
 
 
 # Default prior success probability for z_pres.

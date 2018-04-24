@@ -23,7 +23,7 @@ Pyro Distributions
 Abstract Distribution
 ---------------------
 
-.. automodule:: pyro.distributions.distribution
+.. autoclass:: pyro.distributions.Distribution
     :members:
     :undoc-members:
     :special-members: __call__
@@ -32,7 +32,7 @@ Abstract Distribution
 TorchDistribution
 -----------------
 
-.. automodule:: pyro.distributions.torch_distribution
+.. autoclass:: pyro.distributions.TorchDistribution
     :members:
     :undoc-members:
     :special-members: __call__
@@ -42,49 +42,56 @@ TorchDistribution
 Binomial
 --------
 
-.. automodule:: pyro.distributions.binomial
+.. autoclass:: pyro.distributions.Binomial
     :members:
     :undoc-members:
     :show-inheritance:
 
 Delta
 -----
-.. automodule:: pyro.distributions.delta
+.. autoclass:: pyro.distributions.Delta
     :members:
     :undoc-members:
     :show-inheritance:
 
 EmpiricalDistribution
 ----------------------
-.. automodule:: pyro.distributions.empirical
+.. autoclass:: pyro.distributions.Empirical
     :members:
     :undoc-members:
     :show-inheritance:
 
 HalfCauchy
 ----------
-.. automodule:: pyro.distributions.half_cauchy
+.. autoclass:: pyro.distributions.HalfCauchy
     :members:
     :undoc-members:
     :show-inheritance:
 
 LowRankMultivariateNormal
 -------------------------
-.. automodule:: pyro.distributions.lowrank_mvn
+.. autoclass:: pyro.distributions.LowRankMultivariateNormal
     :members:
     :undoc-members:
     :show-inheritance:
 
 OMTMultivariateNormal
 ---------------------
-.. automodule:: pyro.distributions.omt_mvn
+.. autoclass:: pyro.distributions.OMTMultivariateNormal
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+Rejector
+--------
+.. autoclass:: pyro.distributions.Rejector
     :members:
     :undoc-members:
     :show-inheritance:
 
 VonMises
 --------
-.. automodule:: pyro.distributions.von_mises
+.. autoclass:: pyro.distributions.VonMises
     :members:
     :undoc-members:
     :show-inheritance:
@@ -94,7 +101,7 @@ Transformed Distributions
 
 InverseAutoRegressiveFlow
 -------------------------
-.. autoclass:: pyro.distributions.iaf.InverseAutoregressiveFlow
+.. autoclass:: pyro.distributions.InverseAutoregressiveFlow
     :members:
     :undoc-members:
     :show-inheritance:

@@ -9,11 +9,11 @@ import torch
 import pyro
 import pyro.distributions as dist
 from pyro.infer import EmpiricalMarginal
-from pyro.infer.mcmc.nuts import NUTS
 from pyro.infer.mcmc.mcmc import MCMC
+from pyro.infer.mcmc.nuts import NUTS
 from tests.common import assert_equal
 
-from .test_hmc import rmse, T, TEST_CASES, TEST_IDS
+from .test_hmc import TEST_CASES, TEST_IDS, T, rmse
 
 logging.basicConfig(format='%(levelname)s %(message)s')
 logger = logging.getLogger('pyro')

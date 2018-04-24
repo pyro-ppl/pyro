@@ -2,8 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import torch
 
-from pyro.distributions import MultivariateNormal, LowRankMultivariateNormal
-
+from pyro.distributions import LowRankMultivariateNormal, MultivariateNormal
 from tests.common import assert_equal
 
 

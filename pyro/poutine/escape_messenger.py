@@ -1,8 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
-from .util import NonlocalExit
-
 from .messenger import Messenger
+from .runtime import NonlocalExit
 
 
 class EscapeMessenger(Messenger):

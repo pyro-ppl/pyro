@@ -1,6 +1,8 @@
-import torch.nn as nn
-import torch
 from inspect import isclass
+
+import torch
+import torch.nn as nn
+
 from pyro.distributions.util import broadcast_shape
 
 

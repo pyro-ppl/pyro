@@ -2,16 +2,16 @@ import argparse
 
 import torch
 import torch.nn as nn
+from visdom import Visdom
 
 import pyro
 import pyro.distributions as dist
 from pyro.contrib.examples.util import print_and_log, set_seed
-from pyro.infer import SVI, config_enumerate, Trace_ELBO, TraceEnum_ELBO
+from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, config_enumerate
 from pyro.optim import Adam
 from utils.custom_mlp import MLP, Exp
 from utils.mnist_cached import MNISTCached, mkdir_p, setup_data_loaders
 from utils.vae_plots import mnist_test_tsne_ssvae, plot_conditional_samples_ssvae
-from visdom import Visdom
 
 
 class SSVAE(nn.Module):
@@ -120,6 +120,8 @@ class SSVAE(nn.Module):
             # where `decoder` is a neural network
             loc = self.decoder.forward([zs, ys])
             pyro.sample("x", dist.Bernoulli(loc).independent(1), obs=xs)
+            # return the loc so we can visualize it later
+            return loc
 
     def guide(self, xs, ys=None):
         """
@@ -190,21 +192,6 @@ class SSVAE(nn.Module):
         dummy guide function to accompany model_classify in inference
         """
         pass
-
-    def model_sample(self, ys, batch_size=1):
-        """
-        sample an image from the model
-        """
-
-        # sample the handwriting style from the constant prior distribution
-        prior_loc = ys.new_zeros([batch_size, self.z_dim])
-        prior_scale = ys.new_ones([batch_size, self.z_dim])
-        zs = pyro.sample("z", dist.Normal(prior_loc, prior_scale).independent(1))
-
-        # sample an image using the decoder
-        loc = self.decoder.forward([zs, ys])
-        xs = pyro.sample("sample", dist.Bernoulli(loc).independent(1))
-        return xs, loc
 
 
 def run_inference_for_epoch(data_loaders, losses, periodic_interval_batches):

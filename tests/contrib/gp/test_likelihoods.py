@@ -7,7 +7,7 @@ import torch
 
 from pyro.contrib.gp.kernels import RBF
 from pyro.contrib.gp.likelihoods import Binary, MultiClass, Poisson
-from pyro.contrib.gp.models import VariationalSparseGP, VariationalGP
+from pyro.contrib.gp.models import VariationalGP, VariationalSparseGP
 
 T = namedtuple("TestGPLikelihood", ["model_class", "X", "y", "kernel", "likelihood"])
 

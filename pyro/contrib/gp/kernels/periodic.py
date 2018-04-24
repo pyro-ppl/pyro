@@ -6,8 +6,8 @@ import torch
 from torch.distributions import constraints
 from torch.nn import Parameter
 
-from .kernel import Kernel
 from .isotropic import Isotropy
+from .kernel import Kernel
 
 
 class Cosine(Isotropy):

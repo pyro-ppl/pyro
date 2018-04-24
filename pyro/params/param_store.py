@@ -177,9 +177,6 @@ class ParamStoreDict(object):
         self.set_state(state)
 
 
-# the global ParamStore
-_PYRO_PARAM_STORE = ParamStoreDict()
-
 # used to create fully-formed param names, e.g. mymodule$$$mysubmodule.weight
 _MODULE_NAMESPACE_DIVIDER = "$$$"
 
