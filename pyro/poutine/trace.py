@@ -70,7 +70,7 @@ class Trace(object):
         >>> print(list(name for name in trace.nodes.keys()))
         ["_INPUT", "s", "z", "_RETURN"]
 
-    As in ``networkx.DiGraph``, values of ``trace.nodes`` are dictionaries of node metadata:
+    As in :class:`networkx.DiGraph`, values of ``trace.nodes`` are dictionaries of node metadata:
 
         >>> print(trace.nodes["z"])
         {'type': 'sample', 'name': 'z', 'is_observed': False,
@@ -91,7 +91,7 @@ class Trace(object):
         """
         :param string graph_type: string specifying the kind of trace graph to construct
 
-        Constructor. Currently identical to networkx.``DiGraph(\*args, \**kwargs)``,
+        Constructor. Currently identical to :meth:`networkx.DiGraph.__init__`,
         except for storing the graph_type attribute
         """
         self._graph = DiGraph(*args, **kwargs)
@@ -103,7 +103,7 @@ class Trace(object):
 
     def __del__(self):
         """
-        Works around cyclic reference bugs in ``networkx.DiGraph``
+        Works around cyclic reference bugs in :class:`networkx.DiGraph`
         See ``https://github.com/uber/pyro/issues/798``
         """
         self._graph.__dict__.clear()
@@ -275,7 +275,7 @@ class Trace(object):
     @property
     def observation_nodes(self):
         """
-        Gets a list of names of observe sites
+        :return: a list of names of observe sites
         """
         return [name for name, node in self.nodes.items()
                 if node["type"] == "sample" and
@@ -284,7 +284,7 @@ class Trace(object):
     @property
     def param_nodes(self):
         """
-        Gets a list of names of param sites
+        :return: a list of names of param sites
         """
         return [name for name, node in self.nodes.items()
                 if node["type"] == "param"]
@@ -292,7 +292,7 @@ class Trace(object):
     @property
     def stochastic_nodes(self):
         """
-        Gets a list of names of sample sites
+        :return: a list of names of sample sites
         """
         return [name for name, node in self.nodes.items()
                 if node["type"] == "sample" and
@@ -301,8 +301,8 @@ class Trace(object):
     @property
     def reparameterized_nodes(self):
         """
-        Gets a list of names of sample sites whose stochastic functions
-        are reparameterizable primitive distributions
+        :return: a list of names of sample sites whose stochastic functions
+            are reparameterizable primitive distributions
         """
         return [name for name, node in self.nodes.items()
                 if node["type"] == "sample" and
@@ -312,14 +312,14 @@ class Trace(object):
     @property
     def nonreparam_stochastic_nodes(self):
         """
-        Gets a list of names of sample sites whose stochastic functions
-        are not reparameterizable primitive distributions
+        :return: a list of names of sample sites whose stochastic functions
+            are not reparameterizable primitive distributions
         """
         return list(set(self.stochastic_nodes) - set(self.reparameterized_nodes))
 
     def iter_stochastic_nodes(self):
         """
-        Returns an iterator over stochastic nodes in the trace.
+        :return: an iterator over stochastic nodes in the trace.
         """
         for name, node in self.nodes.items():
             if node["type"] == "sample" and not node["is_observed"]:
