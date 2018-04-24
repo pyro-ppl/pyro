@@ -186,8 +186,9 @@ def setup(app):
 
 
 # awful hack to get rtd builder to install pytorch
-os.system('pip install awscli')
-os.system('aws s3 --no-sign-request sync s3://pyro-ppl/ci tmp --exclude "*" --include "*-cp27-*";')
-os.system('pip install tmp/*')
-os.system('rm -r tmp')
-os.system('pip install -e .')
+os.system('pip install http://download.pytorch.org/whl/cpu/torch-0.3.0-cp27-cp27mu-linux_x86_64.whl')
+# os.system('pip install awscli')
+# os.system('aws s3 --no-sign-request sync s3://pyro-ppl/ci tmp --exclude "*" --include "*-cp27-*";')
+# os.system('pip install tmp/*')
+# os.system('rm -r tmp')
+# os.system('pip install -e .')
