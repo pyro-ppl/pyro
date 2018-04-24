@@ -212,7 +212,7 @@ def evaluate_log_predictive_density(model, model_trace_posterior, baseball_datas
     posterior_pred_density = log_sum_exp(torch.stack(trace_log_pdf)) - math.log(len(trace_log_pdf))
     logging.info("\nLog posterior predictive density")
     logging.info("---------------------------------")
-    logging.info("{:.4f}".format(posterior_pred_density))
+    logging.info("{:.4f}\n".format(posterior_pred_density))
 
 
 def main(args):
