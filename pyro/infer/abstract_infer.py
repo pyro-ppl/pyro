@@ -53,6 +53,7 @@ class TracePosterior(object):
     def _init(self):
         self.log_weights = []
         self.exec_traces = []
+        self._categorical = None
 
     @abstractmethod
     def _traces(self, *args, **kwargs):
@@ -62,6 +63,10 @@ class TracePosterior(object):
         :return: Generator over ``(exec_trace, weight)``.
         """
         raise NotImplementedError("inference algorithm must implement _traces")
+
+    def __call__(self, *args, **kwargs):
+        random_idx = self._categorical.sample()
+        return self.exec_traces[random_idx].copy()
 
     def run(self, *args, **kwargs):
         """
@@ -75,10 +80,11 @@ class TracePosterior(object):
         for tr, logit in poutine.block(self._traces)(*args, **kwargs):
             self.exec_traces.append(tr)
             self.log_weights.append(logit)
+        self._categorical = Categorical(logits=torch.tensor(self.log_weights))
         return self
 
 
-class PosteriorPredictive(TracePosterior):
+class TracePredictive(TracePosterior):
     """
     Generates and holds traces from the posterior predictive distribution,
     given model execution traces from the approximate posterior. This is
@@ -87,35 +93,30 @@ class PosteriorPredictive(TracePosterior):
     to generate traces with new response ("_RETURN") sites.
 
     :param model: arbitrary Python callable containing Pyro primitives.
-    :param model_traces: execution traces from the model.
+    :param TracePosterior posterior: trace posterior instance holding
+        samples from the model's approximate posterior.
     :param int num_samples: number of samples to generate.
     :param list hide_nodes: list of nodes that should be hidden when
-        replaying the model against ``model_traces``. Usually, this
-        corresponds to observed nodes.
-    :param list log_weights: optional importance weights of execution
-        traces to be used during sampling.
+        replaying the model against ``model_traces``. Corresponds to
+        observed nodes when sampling from the posterior predictive.
     """
-    def __init__(self, model, model_traces, num_samples, hide_nodes=[], log_weights=None):
+    def __init__(self, model, posterior, num_samples, hide_nodes=[]):
         self.model = model
-        self.model_traces = model_traces
+        self.posterior = posterior
         self.hide_nodes = hide_nodes
         self.num_samples = num_samples
-        if not log_weights:
-            log_weights = torch.zeros(len(model_traces,))
-        else:
-            log_weights = torch.tensor(log_weights)
-        self._categorical = Categorical(logits=log_weights)
-        super(PosteriorPredictive, self).__init__()
+        super(TracePredictive, self).__init__()
 
     def _get_random_pruned_trace(self):
-        random_idx = self._categorical.sample()
-        trace = self.model_traces[random_idx].copy()
+        trace = self.posterior()
         for node in self.hide_nodes:
             trace.remove_node(node)
         return trace
 
     def _traces(self, *args, **kwargs):
+        if not self.posterior.exec_traces:
+            self.posterior.run(*args, **kwargs)
         for _ in range(self.num_samples):
             model_trace = self._get_random_pruned_trace()
             replayed_trace = poutine.trace(poutine.replay(self.model, model_trace)).get_trace(*args, **kwargs)
-            yield (replayed_trace, 0)
+            yield (replayed_trace, 0.)

@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from pyro.infer.abstract_infer import EmpiricalMarginal, PosteriorPredictive, TracePosterior
+from pyro.infer.abstract_infer import EmpiricalMarginal, TracePredictive, TracePosterior
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import config_enumerate
 from pyro.infer.importance import Importance
@@ -17,7 +17,7 @@ __all__ = [
     "ELBO",
     "Importance",
     "EmpiricalMarginal",
-    "PosteriorPredictive",
+    "TracePredictive",
     "SVI",
     "TracePosterior",
     "Trace_ELBO",
