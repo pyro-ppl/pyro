@@ -431,7 +431,8 @@ def enable_validation(is_validate=True):
     Since some of these checks may be expensive, we recommend turning
     this off for mature models.
 
-    :param bool is_validate: enable validation checks if True.
+    :param bool is_validate: (optional; defaults to True) whether to
+        enable validation checks.
     """
     dist.enable_validation(is_validate)
     infer.enable_validation(is_validate)
@@ -443,7 +444,8 @@ def validation_enabled(is_validate=True):
     Context manager that is useful when temporarily enabling/disabling
     validation checks.
 
-    :param bool is_validate: temporary validation check override.
+    :param bool is_validate: (optional; defaults to True) temporary
+        validation check override.
     """
     infer_validation_status = infer.is_validation_enabled()
     distribution_validation_status = dist.is_validation_enabled()
