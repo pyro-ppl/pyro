@@ -396,7 +396,7 @@ if __name__ == "__main__":
 
     parser.add_argument('--cuda', action='store_true',
                         help="use GPU(s) to speed up training")
-    parser.add_argument('-ne', '--num-epochs', default=50, type=int,
+    parser.add_argument('-n', '--num-epochs', default=50, type=int,
                         help="number of epochs to run")
     parser.add_argument('--aux-loss', action="store_true",
                         help="whether to use the auxiliary loss from NIPS 14 paper "
