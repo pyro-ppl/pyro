@@ -51,15 +51,6 @@ class SVI(object):
             self.loss = loss
             self.loss_and_grads = loss_and_grads
 
-    def __call__(self, *args, **kwargs):
-        """
-        :returns: estimate of the loss
-        :rtype: float
-
-        Convenience method for doing a gradient step.
-        """
-        self.step(*args, **kwargs)
-
     def evaluate_loss(self, *args, **kwargs):
         """
         :returns: estimate of the loss
