@@ -9,12 +9,12 @@ import pandas as pd
 import torch
 
 import pyro
+import pyro.poutine as poutine
 from pyro.distributions import Binomial, HalfCauchy, Normal, Uniform
 from pyro.distributions.util import log_sum_exp
 from pyro.infer import EmpiricalMarginal
 from pyro.infer.abstract_infer import PosteriorPredictive
 from pyro.infer.mcmc import MCMC, NUTS
-import pyro.poutine as poutine
 
 """
 Example has been adapted from [1]. It demonstrates how to do Bayesian inference using
