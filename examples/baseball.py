@@ -9,7 +9,7 @@ import pandas as pd
 import torch
 
 import pyro
-from pyro.distributions import Beta, Binomial, HalfCauchy, Normal, Uniform
+from pyro.distributions import Binomial, HalfCauchy, Normal, Uniform
 from pyro.distributions.util import log_sum_exp
 from pyro.infer import EmpiricalMarginal
 from pyro.infer.abstract_infer import PosteriorPredictive
@@ -17,35 +17,35 @@ from pyro.infer.mcmc import MCMC, NUTS
 import pyro.poutine as poutine
 
 """
-Example has been adapted from [1]. It demonstrates how to do Bayesian inference using 
-NUTS (or, HMC) in Pyro, and use of some common inference utilities. 
+Example has been adapted from [1]. It demonstrates how to do Bayesian inference using
+NUTS (or, HMC) in Pyro, and use of some common inference utilities.
 
-As in the Stan tutorial, this uses the small baseball dataset of Efron and Morris [2] 
-to estimate players' batting average which is the fraction of times a player got a 
-base hit out of the number of times they went up at bat. 
+As in the Stan tutorial, this uses the small baseball dataset of Efron and Morris [2]
+to estimate players' batting average which is the fraction of times a player got a
+base hit out of the number of times they went up at bat.
 
-The dataset separates the initial 45 at-bats statistics from the remaining season. 
-We use the hits data from the initial 45 at-bats to estimate the batting average 
-for each player. We then use the remaining season's data to validate the predictions 
-from our models. 
+The dataset separates the initial 45 at-bats statistics from the remaining season.
+We use the hits data from the initial 45 at-bats to estimate the batting average
+for each player. We then use the remaining season's data to validate the predictions
+from our models.
 
-Three models are evaluated: 
- - Complete pooling model: The success probability of scoring a hit is shared 
+Three models are evaluated:
+ - Complete pooling model: The success probability of scoring a hit is shared
      amongst all players.
- - No pooling model: Each individual player's success probability is distinct and 
+ - No pooling model: Each individual player's success probability is distinct and
      there is no data sharing amongst players.
  - Partial pooling model: A hierarchical model with partial data sharing.
- 
- 
-We recommend Radford Neal's tutorial on HMC ([3]) to users who would like to get a 
-more comprehensive understanding of HMC and its variants, and to [4] for details on 
-the No U-Turn Sampler, which provides an efficient and automated way (i.e. limited 
+
+
+We recommend Radford Neal's tutorial on HMC ([3]) to users who would like to get a
+more comprehensive understanding of HMC and its variants, and to [4] for details on
+the No U-Turn Sampler, which provides an efficient and automated way (i.e. limited
 hyper-parameters) of running HMC on different problems.
 
 [1] Carpenter B. (2016), ["Hierarchical Partial Pooling for Repeated Binary Trials"]
     (http://mc-stan.org/users/documentation/case-studies/pool-binary-trials.html).
-[2] Efron B., Morris C. (1975), "Data analysis using Stein's estimator and its 
-    generalizations", J. Amer. Statist. Assoc., 70, 311-319.    
+[2] Efron B., Morris C. (1975), "Data analysis using Stein's estimator and its
+    generalizations", J. Amer. Statist. Assoc., 70, 311-319.
 [3] Neal, R. (2012), "MCMC using Hamiltonian Dynamics",
     (https://arxiv.org/pdf/1206.1901.pdf)
 [4] Hoffman, M. D. and Gelman, A. (2014), "The No-U-turn sampler: Adaptively setting
@@ -120,11 +120,15 @@ def conditioned_model(model, at_bats, hits):
 
 
 # ===================================
-#          DATA UTILITIES
+#        DATA SUMMARIZE UTILS
 # ===================================
 
 
 def get_site_stats(array, player_names):
+    """
+    Return the summarized statistics for a given array corresponding
+    to the values sampled for a latent or response site.
+    """
     if len(array.shape) == 1:
         df = pd.DataFrame(array).transpose()
     else:
@@ -133,6 +137,10 @@ def get_site_stats(array, player_names):
 
 
 def summary(traces, sites, player_names, transforms={}):
+    """
+    Return summarized statistics for each of the ``sites`` in the
+    traces corresponding to the approximate posterior.
+    """
     marginal = EmpiricalMarginal(traces, sites).get_samples_and_weights()[0].numpy()
     site_stats = {}
     for i in range(marginal.shape[1]):
@@ -145,6 +153,10 @@ def summary(traces, sites, player_names, transforms={}):
 
 
 def train_test_split(pd_dataframe):
+    """
+    Training data - 45 initial at-bats and hits for each player.
+    Validation data - Full season at-bats and hits for each player.
+    """
     train_data = torch.tensor(pd_dataframe.as_matrix(["At-Bats", "Hits"]), dtype=torch.float)
     test_data = torch.tensor(pd_dataframe.as_matrix(["SeasonAt-Bats", "SeasonHits"]), dtype=torch.float)
     first_name = pd_dataframe["FirstName"].values
@@ -153,10 +165,18 @@ def train_test_split(pd_dataframe):
     return train_data, test_data, player_names
 
 
-def evaluate_posterior_predictive(posterior_predictive, baseball_dataset):
+# ===================================
+#       MODEL EVALUATION UTILS
+# ===================================
+
+
+def sample_posterior_predictive(posterior_predictive, baseball_dataset):
+    """
+    Generate samples from posterior predictive distribution.
+    """
     train, test, player_names = train_test_split(baseball_dataset)
-    at_bats, hits = train[:, 0], train[:, 1]
-    at_bats_season, hits_season = test[:, 0], test[:, 1]
+    at_bats = train[:, 0]
+    at_bats_season = test[:, 0]
     logging.Formatter("%(message)s")
     logging.info("\nPosterior Predictive:")
     logging.info("Hit Rate - Initial 45 At Bats")
@@ -174,6 +194,10 @@ def evaluate_posterior_predictive(posterior_predictive, baseball_dataset):
 
 
 def evaluate_log_predictive_density(model, model_trace_posterior, baseball_dataset):
+    """
+    Evaluate the log probability density of observing the unseen data (season hits)
+    given a model and empirical distribution over the parameters.
+    """
     _, test, player_names = train_test_split(baseball_dataset)
     at_bats_season, hits_season = test[:, 0], test[:, 1]
     test_eval = PosteriorPredictive(conditioned_model,
@@ -183,6 +207,8 @@ def evaluate_log_predictive_density(model, model_trace_posterior, baseball_datas
     trace_log_pdf = []
     for tr in test_eval.exec_traces:
         trace_log_pdf.append(tr.log_prob_sum())
+    # Use LogSumExp trick to evaluate $log(1/num_samples \sum_i p(new_data | \theta^{i})) $,
+    # where $\theta^{i}$ are parameter samples from the model's posterior.
     posterior_pred_density = log_sum_exp(torch.stack(trace_log_pdf)) - math.log(len(trace_log_pdf))
     logging.info("\nLog posterior predictive density")
     logging.info("---------------------------------")
@@ -205,7 +231,7 @@ def main(args):
                                                posterior_fully_pooled.exec_traces,
                                                hide_nodes=["obs"],
                                                num_samples=args.num_samples)
-    evaluate_posterior_predictive(posterior_predictive, baseball_dataset)
+    sample_posterior_predictive(posterior_predictive, baseball_dataset)
     evaluate_log_predictive_density(fully_pooled, posterior_fully_pooled, baseball_dataset)
 
     # (2) No Pooling Model
@@ -218,7 +244,7 @@ def main(args):
                                                posterior_not_pooled.exec_traces,
                                                hide_nodes=["obs"],
                                                num_samples=args.num_samples)
-    evaluate_posterior_predictive(posterior_predictive, baseball_dataset)
+    sample_posterior_predictive(posterior_predictive, baseball_dataset)
     evaluate_log_predictive_density(not_pooled, posterior_not_pooled, baseball_dataset)
 
     # (3) Partially Pooled Model
@@ -234,7 +260,7 @@ def main(args):
                                                posterior_partially_pooled.exec_traces,
                                                hide_nodes=["obs"],
                                                num_samples=args.num_samples)
-    evaluate_posterior_predictive(posterior_predictive, baseball_dataset)
+    sample_posterior_predictive(posterior_predictive, baseball_dataset)
     evaluate_log_predictive_density(partially_pooled, posterior_partially_pooled, baseball_dataset)
 
 
