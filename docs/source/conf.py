@@ -185,11 +185,13 @@ def skip(app, what, name, obj, skip, options):
     if name == "__init__":
         return False
     return skip
+"""
 
 
 def setup(app):
-    app.connect("autodoc-skip-member", skip)
-"""
+    app.add_stylesheet('css/pyro.css')
+#     app.connect("autodoc-skip-member", skip)
+
 
 # @jpchen's hack to get rtd builder to install latest pytorch
 if 'READTHEDOCS' in os.environ:
