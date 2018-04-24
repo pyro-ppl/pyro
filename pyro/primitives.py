@@ -424,12 +424,25 @@ def random_module(name, nn_module, prior, *args, **kwargs):
 
 
 def enable_validation(is_validate=True):
+    """
+    Enable or disable validation checks in Pyro. Validation checks are
+    useful for debugging. Since some of these checks may be expensive,
+    we recommend turning this off for mature models.
+
+    :param bool is_validate: enable validation checks if True.
+    """
     dist.enable_validation(is_validate)
     infer.enable_validation(is_validate)
 
 
 @contextmanager
 def validation_enabled(is_validate=True):
+    """
+    Context manager that is useful when temporarily enabling/disabling
+    validation checks.
+
+    :param bool is_validate: temporary validation check override.
+    """
     infer_validation_status = infer.is_validation_enabled()
     distribution_validation_status = dist.is_validation_enabled()
     try:
