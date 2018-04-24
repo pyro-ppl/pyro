@@ -11,7 +11,7 @@ import pyro.distributions as dist
 from pyro import poutine
 from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import Adam
-from pyro.poutine.trace import Trace
+from pyro.poutine import Trace
 
 pytestmark = pytest.mark.stage('unit')
 
