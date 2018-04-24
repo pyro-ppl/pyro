@@ -8,7 +8,7 @@ programs. Pyro's inference algorithms are all built by applying these handlers t
 Handlers
 ---------
 
-.. automodule:: pyro.poutine
+.. automodule:: pyro.poutine.handlers
     :members:
     :undoc-members:
     :show-inheritance:
