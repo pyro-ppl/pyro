@@ -1,7 +1,6 @@
 import torch.nn as nn
 import torch
 from inspect import isclass
-from pyro.nn import ClippedSoftmax, ClippedSigmoid
 from pyro.distributions.util import broadcast_shape
 
 
@@ -54,24 +53,15 @@ class ListOutModule(nn.ModuleList):
         return [mm.forward(*args, **kwargs) for mm in self]
 
 
-def call_nn_op(op, epsilon):
+def call_nn_op(op):
     """
     a helper function that adds appropriate parameters when calling
     an nn module representing an operation like Softmax
 
     :param op: the nn.Module operation to instantiate
-    :param epsilon: a scaling parameter for certain custom modules
     :return: instantiation of the op module with appropriate parameters
     """
-    if op in [ClippedSoftmax]:
-        try:
-            return op(epsilon, dim=1)
-        except TypeError:
-            # Support older pytorch 0.2 release.
-            return op(epsilon)
-    elif op in [ClippedSigmoid]:
-        return op(epsilon)
-    elif op in [nn.Softmax, nn.LogSoftmax]:
+    if op in [nn.Softmax, nn.LogSoftmax]:
         return op(dim=1)
     else:
         return op()
@@ -82,7 +72,7 @@ class MLP(nn.Module):
     def __init__(self, mlp_sizes, activation=nn.ReLU, output_activation=None,
                  post_layer_fct=lambda layer_ix, total_layers, layer: None,
                  post_act_fct=lambda layer_ix, total_layers, layer: None,
-                 epsilon_scale=None, allow_broadcast=False, use_cuda=False):
+                 allow_broadcast=False, use_cuda=False):
         # init the module object
         super(MLP, self).__init__()
 
@@ -147,7 +137,7 @@ class MLP(nn.Module):
         if type(output_size) == int:
             all_modules.append(nn.Linear(last_layer_size, output_size))
             if output_activation is not None:
-                all_modules.append(call_nn_op(output_activation, epsilon_scale)
+                all_modules.append(call_nn_op(output_activation)
                                    if isclass(output_activation) else output_activation)
         else:
 
@@ -170,7 +160,7 @@ class MLP(nn.Module):
                 if(act_out_fct):
                     # we check if it's a class. if so, instantiate the object
                     # otherwise, use the object directly (e.g. pre-instaniated)
-                    split_layer.append(call_nn_op(act_out_fct, epsilon_scale)
+                    split_layer.append(call_nn_op(act_out_fct)
                                        if isclass(act_out_fct) else act_out_fct)
 
                 # our outputs is just a sequential of the two

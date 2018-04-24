@@ -7,7 +7,6 @@ import pyro
 import pyro.distributions as dist
 from pyro.contrib.examples.util import print_and_log, set_seed
 from pyro.infer import SVI, config_enumerate, Trace_ELBO, TraceEnum_ELBO
-from pyro.nn import ClippedSigmoid, ClippedSoftmax
 from pyro.optim import Adam
 from utils.custom_mlp import MLP, Exp
 from utils.mnist_cached import MNISTCached, mkdir_p, setup_data_loaders
@@ -28,13 +27,11 @@ class SSVAE(nn.Module):
                   (handwriting style for our MNIST dataset)
     :param hidden_layers: a tuple (or list) of MLP layers to be used in the neural networks
                           representing the parameters of the distributions in our model
-    :param epsilon_scale: a small float value used to scale down the output of Softmax and Sigmoid
-                          opertations in pytorch for numerical stability
     :param use_cuda: use GPUs for faster training
     :param aux_loss_multiplier: the multiplier to use with the auxiliary loss
     """
     def __init__(self, output_size=10, input_size=784, z_dim=50, hidden_layers=(500,),
-                 epsilon_scale=1e-7, config_enum=None, use_cuda=False, aux_loss_multiplier=None):
+                 config_enum=None, use_cuda=False, aux_loss_multiplier=None):
 
         super(SSVAE, self).__init__()
 
@@ -43,7 +40,6 @@ class SSVAE(nn.Module):
         self.input_size = input_size
         self.z_dim = z_dim
         self.hidden_layers = hidden_layers
-        self.epsilon_scale = epsilon_scale
         self.allow_broadcast = config_enum == 'parallel'
         self.use_cuda = use_cuda
         self.aux_loss_multiplier = aux_loss_multiplier
@@ -61,12 +57,9 @@ class SSVAE(nn.Module):
         # these networks are MLPs (multi-layered perceptrons or simple feed-forward networks)
         # where the provided activation parameter is used on every linear layer except
         # for the output layer where we use the provided output_activation parameter
-        # NOTE: we use a customized epsilon-scaled versions of Softmax and
-        # Sigmoid operations for numerical stability
         self.encoder_y = MLP([self.input_size] + hidden_sizes + [self.output_size],
                              activation=nn.Softplus,
-                             output_activation=ClippedSoftmax,
-                             epsilon_scale=self.epsilon_scale,
+                             output_activation=nn.Softmax,
                              allow_broadcast=self.allow_broadcast,
                              use_cuda=self.use_cuda)
 
@@ -84,8 +77,7 @@ class SSVAE(nn.Module):
         self.decoder = MLP([z_dim + self.output_size] +
                            hidden_sizes + [self.input_size],
                            activation=nn.Softplus,
-                           output_activation=ClippedSigmoid,
-                           epsilon_scale=self.epsilon_scale,
+                           output_activation=nn.Sigmoid,
                            allow_broadcast=self.allow_broadcast,
                            use_cuda=self.use_cuda)
 
@@ -310,7 +302,6 @@ def main(args):
     # batch_size: number of images (and labels) to be considered in a batch
     ss_vae = SSVAE(z_dim=args.z_dim,
                    hidden_layers=args.hidden_layers,
-                   epsilon_scale=args.epsilon_scale,
                    use_cuda=args.cuda,
                    config_enum=args.enum_discrete,
                    aux_loss_multiplier=args.aux_loss_multiplier)
@@ -405,13 +396,14 @@ if __name__ == "__main__":
 
     parser.add_argument('--cuda', action='store_true',
                         help="use GPU(s) to speed up training")
-    parser.add_argument('-ne', '--num-epochs', default=100, type=int,
+    parser.add_argument('-ne', '--num-epochs', default=50, type=int,
                         help="number of epochs to run")
     parser.add_argument('--aux-loss', action="store_true",
-                        help="whether to use the auxiliary loss from NIPS 14 paper (Kingma et al)")
-    parser.add_argument('-alm', '--aux-loss-multiplier', default=300, type=float,
+                        help="whether to use the auxiliary loss from NIPS 14 paper "
+                             "(Kingma et al) -- it is not used by default ")
+    parser.add_argument('-alm', '--aux-loss-multiplier', default=46, type=float,
                         help="the multiplier to use with the auxiliary loss")
-    parser.add_argument('-enum', '--enum-discrete', default=None,
+    parser.add_argument('-enum', '--enum-discrete', default="parallel",
                         help="parallel or sequential. if none is specified, discrete vars are sampled.")
     parser.add_argument('-sup', '--sup-num', default=3000,
                         type=float, help="supervised amount of the data i.e. "
@@ -422,15 +414,12 @@ if __name__ == "__main__":
     parser.add_argument('-hl', '--hidden-layers', nargs='+', default=[500], type=int,
                         help="a tuple (or list) of MLP layers to be used in the neural networks "
                              "representing the parameters of the distributions in our model")
-    parser.add_argument('-lr', '--learning-rate', default=0.0003, type=float,
+    parser.add_argument('-lr', '--learning-rate', default=0.00042, type=float,
                         help="learning rate for Adam optimizer")
     parser.add_argument('-b1', '--beta-1', default=0.9, type=float,
                         help="beta-1 parameter for Adam optimizer")
     parser.add_argument('-bs', '--batch-size', default=200, type=int,
                         help="number of images (and labels) to be considered in a batch")
-    parser.add_argument('-eps', '--epsilon-scale', default=1e-7, type=float,
-                        help="a small float value used to scale down the output of Softmax "
-                             "and Sigmoid opertations in pytorch for numerical stability")
     parser.add_argument('-log', '--logfile', default="./tmp.log", type=str,
                         help="filename for logging the outputs")
     parser.add_argument('--seed', default=None, type=int,
