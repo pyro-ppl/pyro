@@ -59,6 +59,7 @@ EXTRAS_REQUIRE = [
     'pillow',
     'torchvision',
     'visdom>=0.1.4',
+    'pandas',
 ]
 
 setup(
