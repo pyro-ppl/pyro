@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
-from collections import OrderedDict
 import numbers
+from collections import OrderedDict
 
 from pyro.contrib.gp.util import Parameterized
 

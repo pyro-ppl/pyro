@@ -1,5 +1,4 @@
-from pyro.params.param_store import ParamStoreDict, _MODULE_NAMESPACE_DIVIDER  # noqa: F401
-
+from pyro.params.param_store import _MODULE_NAMESPACE_DIVIDER, ParamStoreDict  # noqa: F401
 
 # the global pyro stack
 _PYRO_STACK = []

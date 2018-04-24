@@ -1,9 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
+import os
 import subprocess
 import sys
 
-import os
 from setuptools import find_packages, setup
 
 PROJECT_PATH = os.path.dirname(os.path.abspath(__file__))

@@ -15,7 +15,7 @@ import pyro.infer as infer
 import pyro.poutine as poutine
 from pyro.distributions.distribution import Distribution
 from pyro.params import param_with_module_name
-from pyro.poutine.runtime import _DIM_ALLOCATOR, _PYRO_PARAM_STORE, _MODULE_NAMESPACE_DIVIDER, am_i_wrapped, apply_stack
+from pyro.poutine.runtime import _DIM_ALLOCATOR, _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, am_i_wrapped, apply_stack
 from pyro.util import deep_getattr, set_rng_seed  # noqa: F401
 
 version_prefix = '0.2.0-a0'

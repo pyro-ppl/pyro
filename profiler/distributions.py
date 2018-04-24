@@ -6,8 +6,8 @@ import torch
 from torch.autograd import Variable
 
 from profiler.profiling_utils import Profile, profile_print
-from pyro.distributions import (Bernoulli, Beta, Categorical, Cauchy, Dirichlet, Exponential, Gamma,
-                                LogNormal, Normal, OneHotCategorical, Poisson, Uniform)
+from pyro.distributions import (Bernoulli, Beta, Categorical, Cauchy, Dirichlet, Exponential, Gamma, LogNormal, Normal,
+                                OneHotCategorical, Poisson, Uniform)
 
 
 def T(arr):

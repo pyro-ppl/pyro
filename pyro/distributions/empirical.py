@@ -1,13 +1,13 @@
 from __future__ import absolute_import, division, print_function
 
+import math
 import numbers
 
-import math
 import torch
 from torch.distributions import constraints
 
-from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.torch import Categorical
+from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import copy_docs_from, log_sum_exp
 
 

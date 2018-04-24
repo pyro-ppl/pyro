@@ -11,7 +11,6 @@ from pyro.util import torch_isnan
 
 from .hmc import HMC
 
-
 # sum_accept_probs and num_proposals are used to calculate
 # the statistic accept_prob for Dual Averaging scheme;
 # z_left_grads and z_right_grads are kept to avoid recalculating

@@ -5,8 +5,8 @@ from torch.distributions import constraints
 from torch.nn import Parameter
 
 import pyro
-from pyro.contrib.gp.models.model import GPModel
 import pyro.distributions as dist
+from pyro.contrib.gp.models.model import GPModel
 from pyro.distributions.util import matrix_triangular_solve_compat
 from pyro.params import param_with_module_name
 

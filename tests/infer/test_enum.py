@@ -11,10 +11,10 @@ from torch.distributions import constraints, kl_divergence
 import pyro
 import pyro.distributions as dist
 import pyro.optim
+from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
 from pyro.infer import SVI, config_enumerate
 from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.traceenum_elbo import TraceEnum_ELBO
-from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
 from tests.common import assert_equal
 
 logger = logging.getLogger(__name__)

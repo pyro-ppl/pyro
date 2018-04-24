@@ -4,7 +4,7 @@ from numbers import Number
 
 import torch
 from torch.distributions import constraints
-from torch.distributions.utils import broadcast_all, probs_to_logits, lazy_property, logits_to_probs
+from torch.distributions.utils import broadcast_all, lazy_property, logits_to_probs, probs_to_logits
 
 from pyro.distributions.torch_distribution import TorchDistributionMixin
 

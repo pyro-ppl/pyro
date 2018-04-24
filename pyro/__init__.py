@@ -4,8 +4,8 @@ import logging
 
 import pyro.poutine as poutine
 from pyro.poutine import condition, do
-from pyro.primitives import clear_param_store, enable_validation, get_param_store, iarange, irange, \
-    module, param, sample, random_module, validation_enabled
+from pyro.primitives import (clear_param_store, enable_validation, get_param_store, iarange, irange, module, param,
+                             random_module, sample, validation_enabled)
 from pyro.util import set_rng_seed
 
 version_prefix = '0.2.0-a0'
