@@ -8,10 +8,29 @@ programs. Pyro's inference algorithms are all built by applying these handlers t
 Handlers
 ---------
 
-.. automodule:: pyro.poutine.handlers
-    :members:
-    :undoc-members:
-    :show-inheritance:
+.. autofunction:: pyro.poutine.block
+
+.. autofunction:: pyro.poutine.condition
+
+.. autofunction:: pyro.poutine.do
+
+.. autofunction:: pyro.poutine.enum
+
+.. autofunction:: pyro.poutine.escape
+
+.. autofunction:: pyro.poutine.indep
+
+.. autofunction:: pyro.poutine.infer_config
+
+.. autofunction:: pyro.poutine.lift
+
+.. autofunction:: pyro.poutine.replay
+
+.. autofunction:: pyro.poutine.queue
+
+.. autofunction:: pyro.poutine.scale
+
+.. autofunction:: pyro.poutine.trace
 
 Trace
 ------
