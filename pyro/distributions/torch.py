@@ -40,7 +40,7 @@ __doc__ = '\n\n'.join([
     '''
     {0}
     ----------------------------------------------------------------
-    .. autoclass:: {0}
+    .. autoclass:: pyro.distributions.{0}
     '''.format(_name)
     for _name in sorted(__all__)
 ])
