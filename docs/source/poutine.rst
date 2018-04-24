@@ -25,3 +25,11 @@ Messengers
 -----------
 
 .. include:: pyro.poutine.txt
+
+Runtime
+--------
+
+.. automodule:: pyro.poutine.runtime
+    :members:
+    :undoc-members:
+    :show-inheritance:
