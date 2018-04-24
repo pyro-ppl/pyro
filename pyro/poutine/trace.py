@@ -111,74 +111,74 @@ class Trace(object):
     @property
     def nodes(self):
         """
-        Identical to :attr:``networkx.DiGraph.nodes``
+        Identical to :attr:`networkx.DiGraph.nodes`
         """
         return self._graph.nodes
 
     @property
     def edges(self):
         """
-        Identical to :attr:``networkx.DiGraph.edges``
+        Identical to :attr:`networkx.DiGraph.edges`
         """
         return self._graph.edges
 
     @property
     def graph(self):
         """
-        Identical to :attr:``networkx.DiGraph.graph``
+        Identical to :attr:`networkx.DiGraph.graph`
         """
         return self._graph.graph
 
     @property
     def remove_node(self):
         """
-        Identical to :meth:``networkx.DiGraph.remove_node``
+        Identical to :meth:`networkx.DiGraph.remove_node`
         """
         return self._graph.remove_node
 
     @property
     def add_edge(self):
         """
-        Identical to :meth:``networkx.DiGraph.remove_edge``
+        Identical to :meth:`networkx.DiGraph.remove_edge`
         """
         return self._graph.add_edge
 
     @property
     def is_directed(self):
         """
-        Identical to :attr:``networkx.DiGraph.is_directed``
+        Identical to :attr:`networkx.DiGraph.is_directed`
         """
         return self._graph.is_directed
 
     @property
     def in_degree(self):
         """
-        Identical to :meth:``networkx.DiGraph.in_degree``
+        Identical to :meth:`networkx.DiGraph.in_degree`
         """
         return self._graph.in_degree
 
     @property
     def successors(self):
         """
-        Identical to :meth:``networkx.DiGraph.successors``
+        Identical to :meth:`networkx.DiGraph.successors`
         """
         return self._graph.successors
 
     def __contains__(self, site_name):
         """
-        Identical to :meth:``networkx.DiGraph.__contains__``
+        Identical to :meth:`networkx.DiGraph.__contains__`
         """
         return site_name in self._graph
 
     def __iter__(self):
         """
-        Identical to :meth:``networkx.DiGraph.__iter__``
+        Identical to :meth:`networkx.DiGraph.__iter__`
         """
         return iter(self._graph)
 
     def __len__(self):
         """
-        Identical to :meth:``networkx.DiGraph.__len__``
+        Identical to :meth:`networkx.DiGraph.__len__`
         """
         return len(self._graph)
 
@@ -188,7 +188,7 @@ class Trace(object):
 
         Adds a site to the trace.
 
-        Identical to :meth:``networkx.DiGraph.add_node``,
+        Identical to :meth:`networkx.DiGraph.add_node`
         but raises an error when attempting to add a duplicate node
         instead of silently overwriting.
         """
@@ -203,7 +203,7 @@ class Trace(object):
     def copy(self):
         """
         Makes a shallow copy of self with nodes and edges preserved.
-        Identical to :meth:``networkx.DiGraph.copy``, but preserves the type
+        Identical to :meth:`networkx.DiGraph.copy`, but preserves the type
         and the self.graph_type attribute
         """
         trace = Trace()
