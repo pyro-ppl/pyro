@@ -13,6 +13,13 @@ Handlers
     :undoc-members:
     :show-inheritance:
 
+Trace
+------
+
+.. automodule:: pyro.poutine.trace
+    :members:
+    :undoc-members:
+    :show-inheritance:
 
 Messengers
 -----------
