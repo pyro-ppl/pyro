@@ -228,7 +228,7 @@ class iarange(object):
 
         # This reuses two different independence contexts.
         >>> x_axis = iarange('outer', 320, dim=-1)
-        >>> y_axis = iarange('outer', 200, dim=-2)
+        >>> y_axis = iarange('inner', 200, dim=-2)
         >>> with x_axis:
                 x_noise = sample("x_noise", Normal(loc, scale).expand_by([320]))
         >>> with y_axis:
