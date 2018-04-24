@@ -52,3 +52,11 @@ Runtime
     :members:
     :undoc-members:
     :show-inheritance:
+
+Utilities
+----------
+
+.. automodule:: pyro.poutine.util
+    :members:
+    :undoc-members:
+    :show-inheritance:
