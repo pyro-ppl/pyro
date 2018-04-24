@@ -22,7 +22,7 @@ def _warn_if_nan(name, value):
 
 class DiGraph(networkx.DiGraph):
     """
-    Wrapper of ``networkx.DiGraph`` that makes ``self.nodes`` a ``collections.OrderedDict``.
+    Wrapper of :class:`networkx.DiGraph` that makes ``self.nodes`` a ``collections.OrderedDict``.
     """
     node_dict_factory = collections.OrderedDict
 
@@ -35,7 +35,7 @@ class DiGraph(networkx.DiGraph):
 
 class Trace(object):
     """
-    Execution trace data structure built on top of ``networkx.DiGraph``.
+    Execution trace data structure built on top of :class:`networkx.DiGraph`.
 
     An execution trace of a Pyro program is a record of every call
     to ``pyro.sample()`` and ``pyro.param()`` in a single execution of that program.
