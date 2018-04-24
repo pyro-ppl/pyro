@@ -57,11 +57,13 @@ class Trace(object):
 
     We can record its execution using `pyro.poutine.trace`
     and use the resulting data structure to compute the log-joint probability
-    of all of the sample sites in the execution.
+    of all of the sample sites in the execution or extract all parameters.
 
         >>> trace = pyro.poutine.trace(model).get_trace(0.0)
         >>> logp = trace.log_prob_sum()
+        >>> params = [trace.nodes[name]["value"] for name in trace.param_nodes]
 
+    We can also inspect or manipulate individual nodes in the trace.
     `trace.nodes` contains a `collections.OrderedDict`
     of site names and metadata corresponding to `x`, `s`, `z`, and the return value:
 
@@ -278,6 +280,14 @@ class Trace(object):
         return [name for name, node in self.nodes.items()
                 if node["type"] == "sample" and
                 node["is_observed"]]
+
+    @property
+    def param_nodes(self):
+        """
+        Gets a list of names of param sites
+        """
+        return [name for name, node in self.nodes.items()
+                if node["type"] == "param"]
 
     @property
     def stochastic_nodes(self):
