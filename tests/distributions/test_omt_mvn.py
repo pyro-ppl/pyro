@@ -1,14 +1,11 @@
 from __future__ import absolute_import, division, print_function
 
-import pytest
-
 import numpy as np
-
+import pytest
 import torch
 
-from pyro.distributions.omt_mvn import OMTMultivariateNormal
 from pyro.distributions import MultivariateNormal
-
+from pyro.distributions.omt_mvn import OMTMultivariateNormal
 from tests.common import assert_equal
 
 

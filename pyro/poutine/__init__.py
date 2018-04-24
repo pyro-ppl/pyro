@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import functools
+
 from six.moves import xrange
 
 from pyro.poutine import util

@@ -13,12 +13,13 @@ however, the original source of the data seems to be the Institut fuer Algorithm
 und Kognitive Systeme at Universitaet Karlsruhe.
 """
 
+from os.path import exists, join
+
+import numpy as np
+import six.moves.cPickle as pickle
 import torch
 import torch.nn as nn
-import numpy as np
 from observations import jsb_chorales
-from os.path import join, exists
-import six.moves.cPickle as pickle
 
 
 # this function processes the raw data; in particular it unsparsifies it

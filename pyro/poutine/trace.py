@@ -7,7 +7,7 @@ import networkx
 import torch
 
 from pyro.distributions.util import scale_tensor
-from pyro.util import torch_isnan, torch_isinf
+from pyro.util import torch_isinf, torch_isnan
 
 
 def _warn_if_nan(name, value):

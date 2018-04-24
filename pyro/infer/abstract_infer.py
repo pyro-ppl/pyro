@@ -1,9 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
-from abc import abstractmethod, ABCMeta
-from six import add_metaclass
+from abc import ABCMeta, abstractmethod
 
 import torch
+from six import add_metaclass
 
 import pyro.poutine as poutine
 from pyro.distributions import Empirical

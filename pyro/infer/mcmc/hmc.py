@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
-from collections import OrderedDict
 import math
+from collections import OrderedDict
 
 import torch
 from torch.distributions import biject_to, constraints
@@ -11,8 +11,8 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer.mcmc.trace_kernel import TraceKernel
 from pyro.ops.dual_averaging import DualAveraging
-from pyro.ops.integrator import velocity_verlet, single_step_velocity_verlet
-from pyro.util import torch_isnan, torch_isinf
+from pyro.ops.integrator import single_step_velocity_verlet, velocity_verlet
+from pyro.util import torch_isinf, torch_isnan
 
 
 class HMC(TraceKernel):

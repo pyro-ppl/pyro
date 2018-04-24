@@ -7,15 +7,14 @@ import pytest
 import torch
 
 import pyro
-from pyro.contrib.gp.kernels import Cosine, Matern32, RBF, WhiteNoise
-from pyro.contrib.gp.likelihoods import Gaussian
-from pyro.contrib.gp.models import (GPRegression, SparseGPRegression,
-                                    VariationalGP, VariationalSparseGP)
 import pyro.distributions as dist
+import pyro.optim as optim
+from pyro.contrib.gp.kernels import RBF, Cosine, Matern32, WhiteNoise
+from pyro.contrib.gp.likelihoods import Gaussian
+from pyro.contrib.gp.models import GPRegression, SparseGPRegression, VariationalGP, VariationalSparseGP
 from pyro.infer import SVI, Trace_ELBO
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.mcmc import MCMC
-import pyro.optim as optim
 from pyro.params import param_with_module_name
 from tests.common import assert_equal
 
