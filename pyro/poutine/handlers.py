@@ -28,15 +28,25 @@ def trace(fn=None, graph_type=None, param_only=None):
     Return a handler that records the inputs and outputs of primitive calls
     and their dependencies.
 
-    Adds trace data structure site constructors to primitive stacks
+    Consider the following Pyro program:
 
-    Alias for :class:`TraceMessenger` constructor.
+        >>> def model(x):
+        ...     s = pyro.param("s", torch.tensor(0.5))
+        ...     z = pyro.sample("z", dist.Normal(x, s))
+        ...     return z ** 2
+
+    We can record its execution using ``trace``
+    and use the resulting data structure to compute the log-joint probability
+    of all of the sample sites in the execution or extract all parameters.
+
+        >>> trace = pyro.poutine.trace(model).get_trace(0.0)
+        >>> logp = trace.log_prob_sum()
+        >>> params = [trace.nodes[name]["value"].unconstrained() for name in trace.param_nodes]
 
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param graph_type: string that specifies the kind of graph to construct
     :param param_only: if true, only records params and not samples
     :returns: stochastic function wrapped in a TraceHandler
-    :rtype: TraceHandler
     """
     msngr = TraceMessenger(graph_type=graph_type, param_only=param_only)
     return msngr(fn) if fn is not None else msngr
@@ -47,6 +57,20 @@ def replay(fn=None, trace=None, sites=None):
     Given a callable that contains Pyro primitive calls,
     return a callable that runs the original, reusing the values at sites in trace
     at those sites in the new trace
+
+    Consider the following Pyro program:
+
+        >>> def model(x):
+        ...     s = pyro.param("s", torch.tensor(0.5))
+        ...     z = pyro.sample("z", dist.Normal(x, s))
+        ...     return z ** 2
+
+    ``replay`` makes ``sample`` statements behave as if they had sampled the values
+    at the corresponding sites in the trace:
+
+        >>> replayed_model = replay(model, trace=old_trace)
+        >>> replayed_model(0.0) == old_trace.nodes["_RETURN"]["value"]
+        True
 
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param trace: a Trace data structure to replay against
@@ -76,16 +100,39 @@ def lift(fn=None, prior=None):
 
 def block(fn=None, hide=None, expose=None, hide_types=None, expose_types=None):
     """
-    Given a callable that contains Pyro primitive calls,
-    selectively hide some of those calls from poutines higher up the stack
+    This handler selectively hides pyro primitive sites from the outside world.
+    Default behavior: block everything (hide_all == True)
+
+    A site is hidden if at least one of the following holds:
+
+        1. msg["name"] in hide
+        2. msg["type"] in hide_types
+        3. msg["name"] not in expose and msg["type"] not in expose_types
+        4. hide_all == True and hide, hide_types, and expose_types are all None
+
+    For example, suppose the stochastic function fn has two sample sites "a" and "b".
+    Then any effect outside of BlockMessenger(fn, hide=["a"])
+    will not be applied to site "a" and will only see site "b":
+
+        >>> fn_inner = TraceMessenger()(fn)
+        >>> fn_outer = TraceMessenger()(BlockMessenger(hide=["a"])(TraceMessenger()(fn)))
+        >>> trace_inner = fn_inner.get_trace()
+        >>> trace_outer  = fn_outer.get_trace()
+        >>> "a" in trace_inner
+        True
+        >>> "a" in trace_outer
+        False
+        >>> "b" in trace_inner
+        True
+        >>> "b" in trace_outer
+        True
 
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param hide: list of site names to hide
     :param expose: list of site names to be exposed while all others hidden
     :param hide_types: list of site types to be hidden
     :param expose_types: list of site types to be exposed while all others hidden
-    :returns: stochastic function wrapped in a BlockHandler
-    :rtype: BlockHandler
+    :returns: stochastic function wrapped in a BlockMessenger
     """
     msngr = BlockMessenger(hide=hide, expose=expose,
                            hide_types=hide_types, expose_types=expose_types)
@@ -96,7 +143,7 @@ def escape(fn=None, escape_fn=None):
     """
     Given a callable that contains Pyro primitive calls,
     evaluate escape_fn on each site, and if the result is True,
-    raise a NonlocalExit exception that stops execution
+    raise a :class:`NonlocalExit` exception that stops execution
     and returns the offending site.
 
     :param fn: a stochastic function (callable containing pyro primitive calls)
@@ -114,6 +161,20 @@ def condition(fn=None, data=None):
     and a dictionary of observations at names,
     change the sample statements at those names into observes
     with those values
+
+    Consider the following Pyro program:
+
+        >>> def model(x):
+        ...     s = pyro.param("s", torch.tensor(0.5))
+        ...     z = pyro.sample("z", dist.Normal(x, s))
+        ...     return z ** 2
+
+    To observe a value for site `z`, we can write
+
+        >>> conditioned_model = condition(model, data={"z": value})
+
+    This is equivalent to adding `obs=value` as a keyword argument
+    to `pyro.sample("z", ...)` in `model`.
 
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param data: a dict or a Trace
@@ -192,6 +253,19 @@ def do(fn=None, data=None):
     and hide them from the rest of the stack
     as if they were hard-coded to those values
     by using BlockHandler
+
+    Consider the following Pyro program:
+
+        >>> def model(x):
+        ...     s = pyro.param("s", torch.tensor(0.5))
+        ...     z = pyro.sample("z", dist.Normal(x, s))
+        ...     return z ** 2
+
+    To intervene with a value for site `z`, we can write
+
+        >>> intervened_model = do(model, data={"z": value})
+
+    This is equivalent to replacing `z = pyro.sample("z", ...)` with `z=value`.
 
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param data: a dict or a Trace
