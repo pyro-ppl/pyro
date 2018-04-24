@@ -89,9 +89,28 @@ def lift(fn=None, prior=None):
     create a stochastic function where all param calls are replaced by sampling from prior.
     Prior should be a callable or a dict of names to callables.
 
+    Consider the following Pyro program:
+
+        >>> def model(x):
+        ...     s = pyro.param("s", torch.tensor(0.5))
+        ...     z = pyro.sample("z", dist.Normal(x, s))
+        ...     return z ** 2
+        >>> lifted_model = lift(model, prior={"s": dist.Exponential(0.3)})
+
+    ``lift`` makes ``param`` statements behave like ``sample`` statements
+    using the distributions in ``prior``.  In this example, site `s` will now behave
+    as if it was replaced with ``s = pyro.sample("s", dist.Exponential(0.3))``:
+
+        >>> tr = trace(lifted_model).get_trace(0.0)
+        >>> tr.nodes["s"]["type"] == "sample"
+        True
+        >>> tr2 = trace(lifted_model).get_trace(0.0)
+        >>> (tr2.nodes["s"]["value"] == tr.nodes["s"]["value"]).all()
+        False
+
     :param fn: function whose parameters will be lifted to random values
     :param prior: prior function in the form of a Distribution or a dict of stochastic fns
-    :returns: stochastic function wrapped in LiftHandler
+    :returns: ``fn`` wrapped in a :class:`LiftMessenger`
     """
     msngr = LiftMessenger(prior=prior)
     return msngr(fn) if fn is not None else msngr
@@ -100,17 +119,17 @@ def lift(fn=None, prior=None):
 def block(fn=None, hide=None, expose=None, hide_types=None, expose_types=None):
     """
     This handler selectively hides pyro primitive sites from the outside world.
-    Default behavior: block everything (hide_all == True)
+    Default behavior: block everything
 
     A site is hidden if at least one of the following holds:
 
-        1. msg["name"] in hide
-        2. msg["type"] in hide_types
-        3. msg["name"] not in expose and msg["type"] not in expose_types
-        4. hide_all == True and hide, hide_types, and expose_types are all None
+        1. ``msg["name"] in hide``
+        2. ``msg["type"] in hide_types``
+        3. ``msg["name"] not in expose and msg["type"] not in expose_types``
+        4. ``hide``, ``hide_types``, and ``expose_types`` are all ``None``
 
     For example, suppose the stochastic function fn has two sample sites "a" and "b".
-    Then any effect outside of BlockMessenger(fn, hide=["a"])
+    Then any effect outside of ``BlockMessenger(fn, hide=["a"])``
     will not be applied to site "a" and will only see site "b":
 
         >>> fn_inner = TraceMessenger()(fn)
