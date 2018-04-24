@@ -87,7 +87,7 @@ language = None
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This patterns also effect to html_static_path and html_extra_path
-exclude_patterns = []
+exclude_patterns = ['.ipynb_checkpoints']
 
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = 'sphinx'
@@ -122,7 +122,7 @@ html_theme_options = {
 html_static_path = ['_static']
 html_style = 'css/pyro.css'
 
-html_favicon = '../img/favicon/favicon.ico'
+# html_favicon = '../img/favicon/favicon.ico'
 
 
 # -- Options for HTMLHelp output ------------------------------------------

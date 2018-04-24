@@ -78,7 +78,6 @@ def replay(fn=None, trace=None, sites=None):
         defaulting to all sites
     :returns: a replay messenger
     :rtype: ReplayMessenger
-
     """
     msngr = ReplayMessenger(trace=trace, sites=sites)
     return msngr(fn) if fn is not None else msngr
@@ -179,7 +178,6 @@ def condition(fn=None, data=None):
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param data: a dict or a Trace
     :returns: stochastic function wrapped in a ConditionHandler
-    :rtype: ConditionHandler
     """
     msngr = ConditionMessenger(data=data)
     return msngr(fn) if fn is not None else msngr

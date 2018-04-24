@@ -59,6 +59,7 @@ EXTRAS_REQUIRE = [
     'pillow',
     'torchvision',
     'visdom>=0.1.4',
+    'pandas',
 ]
 
 setup(
@@ -92,6 +93,7 @@ setup(
             'flake8',
             'isort',
             'nbformat',
+            'nbsphinx>=0.3.2',
             'nbstripout',
             'nbval',
             'pypandoc',
