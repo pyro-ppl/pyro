@@ -19,8 +19,9 @@ class EmpiricalMarginal(Empirical):
     :param TracePosterior trace_posterior: a TracePosterior instance representing
         a Monte Carlo posterior.
     :param list sites: optional list of sites for which we need to generate
-        the marginal distribution for. Note that for multiple sites, the shape
-        for the site values must match.
+        the marginal distribution. Note that for multiple sites, the shape
+        for the site values must match (needed by the underlying ``Empirical``
+        class).
     """
     def __init__(self, trace_posterior, sites=None, validate_args=None):
         assert isinstance(trace_posterior, TracePosterior), \
@@ -80,7 +81,10 @@ class TracePosterior(object):
 class PosteriorPredictive(TracePosterior):
     """
     Generates and holds traces from the posterior predictive distribution,
-    given model execution traces from the approximate posterior.
+    given model execution traces from the approximate posterior. This is
+    achieved by constraining latent sites to randomly sampled parameter
+    values from the model execution traces and running the model forward
+    to generate traces with new response ("_RETURN") sites.
 
     :param model: arbitrary Python callable containing Pyro primitives.
     :param model_traces: execution traces from the model.
