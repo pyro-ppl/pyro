@@ -1,8 +1,10 @@
-import torch.nn as nn
-import torch
 from inspect import isclass
-from pyro.nn import ClippedSoftmax, ClippedSigmoid
+
+import torch
+import torch.nn as nn
+
 from pyro.distributions.util import broadcast_shape
+from pyro.nn import ClippedSigmoid, ClippedSoftmax
 
 
 class Exp(nn.Module):

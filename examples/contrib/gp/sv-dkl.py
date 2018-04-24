@@ -21,13 +21,13 @@ import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision import transforms
 
 import pyro
 import pyro.contrib.gp as gp
 import pyro.infer as infer
 import pyro.optim as optim
 from pyro.contrib.examples.util import get_data_loader
+from torchvision import transforms
 
 
 class CNN(nn.Module):

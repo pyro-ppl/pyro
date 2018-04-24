@@ -22,7 +22,7 @@ scrub: FORCE
 	find tutorial -name "*.ipynb" | xargs python tutorial/source/cleannb.py
 
 format: FORCE
-	isort --recursive *.py pyro/ tests/ profiler/*.py docs/source/conf.py
+	isort --recursive *.py pyro/ examples/ tests/ profiler/*.py docs/source/conf.py
 
 perf-test: FORCE
 	bash scripts/perf_test.sh ${ref}
