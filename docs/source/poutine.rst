@@ -35,7 +35,7 @@ Handlers
 Trace
 ------
 
-.. autoclass:: pyro.poutine.trace_struct.Trace
+.. autoclass:: pyro.poutine.Trace
     :members:
     :undoc-members:
     :show-inheritance:
