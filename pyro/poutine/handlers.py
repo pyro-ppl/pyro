@@ -167,7 +167,7 @@ def escape(fn=None, escape_fn=None):
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param escape_fn: function that takes a partial trace and a site,
         and returns a boolean value to decide whether to exit at that site
-    :returns: stochastic function wrapped in EscapeHandler
+    :returns: stochastic function decorated with EscapeHandler
     """
     msngr = EscapeMessenger(escape_fn)
     return msngr(fn) if fn is not None else msngr
@@ -210,7 +210,7 @@ def infer_config(fn=None, config_fn=None):
 
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param config_fn: a callable taking a site and returning an infer dict
-    :returns: stochastic function wrapped in InferConfigHandler
+    :returns: stochastic function decorated with :class:`InferConfigMessenger`
     """
     msngr = InferConfigMessenger(config_fn)
     return msngr(fn) if fn is not None else msngr
@@ -296,6 +296,8 @@ def do(fn=None, data=None):
 def queue(fn=None, queue=None, max_tries=None,
           extend_fn=None, escape_fn=None, num_samples=None):
     """
+    Used in sequential enumeration over discrete variables.
+
     Given a stochastic function and a queue,
     return a return value from a complete trace in the queue
 
@@ -307,7 +309,7 @@ def queue(fn=None, queue=None, max_tries=None,
     :param escape_fn: function (possibly stochastic) that takes a partial trace and a site,
         and returns a boolean value to decide whether to exit
     :param num_samples: optional number of extended traces for extend_fn to return
-    :returns: stochastic function wrapped in poutine logic
+    :returns: stochastic function decorated with poutine logic
     """
 
     if max_tries is None:
