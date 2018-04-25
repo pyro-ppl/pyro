@@ -8,6 +8,8 @@ programs. Pyro's inference algorithms are all built by applying these handlers t
 Handlers
 ---------
 
+.. automodule:: pyro.poutine.handlers
+
 .. autofunction:: pyro.poutine.block
 
 .. autofunction:: pyro.poutine.condition
@@ -42,6 +44,10 @@ Trace
 
 Messengers
 -----------
+
+Messenger objects contain the implementations of the effects exposed by handlers.
+Advanced users may modify the implementations of messengers behind existing handlers or write new messengers
+that implement new effects and compose correctly with the rest of the library.
 
 .. include:: pyro.poutine.txt
 

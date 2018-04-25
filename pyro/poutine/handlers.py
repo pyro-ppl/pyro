@@ -1,3 +1,51 @@
+"""
+Poutine is a library of composable effect handlers for recording and modifying the
+behavior of Pyro programs. These lower-level ingredients simplify the implementation
+of new inference algorithms and behavior.
+
+Handlers can be used as higher-order functions, decorators, or context managers
+to modify the behavior of functions or blocks of code:
+
+For example, consider the following Pyro program:
+
+    >>> def model(x):
+    ...     s = pyro.param("s", torch.tensor(0.5))
+    ...     z = pyro.sample("z", dist.Normal(x, s))
+    ...     return z ** 2
+
+We can mark sample sites as observed using ``condition``,
+which returns a callable with the same input and output signatures as ``model``:
+
+    >>> conditioned_model = poutine.condition(model, data={"z": 1.0})
+
+We can also use handlers as decorators:
+
+    >>> @pyro.condition(data={"z": 1.0})
+    ... def model(x):
+    ...     s = pyro.param("s", torch.tensor(0.5))
+    ...     z = pyro.sample("z", dist.Normal(x, s))
+    ...     return z ** 2
+
+Or as context managers:
+
+    >>> with pyro.condition(data={"z": 1.0}):
+    ...     s = pyro.param("s", torch.tensor(0.5))
+    ...     z = pyro.sample("z", dist.Normal(x, s))
+    ...     y = z ** 2
+
+Handlers compose freely:
+
+    >>> conditioned_model = poutine.condition(model, data={"z": 1.0})
+    >>> traced_model = poutine.trace(conditioned_model)
+
+Many inference algorithms or algorithmic components can be implemented
+in just a few lines of code:
+
+    >>> guide_tr = poutine.trace(guide).get_trace(...)
+    >>> model_tr = poutine.trace(poutine.replay(conditioned_model, trace=tr)).get_trace(...)
+    >>> monte_carlo_elbo = model_tr.log_prob_sum() - guide_tr.log_prob_sum()
+"""
+
 from __future__ import absolute_import, division, print_function
 
 import functools
@@ -17,6 +65,7 @@ from .replay_messenger import ReplayMessenger
 from .runtime import NonlocalExit
 from .scale_messenger import ScaleMessenger
 from .trace_messenger import TraceMessenger
+
 
 ############################################
 # Begin primitive operations
@@ -46,7 +95,7 @@ def trace(fn=None, graph_type=None, param_only=None):
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param graph_type: string that specifies the kind of graph to construct
     :param param_only: if true, only records params and not samples
-    :returns: stochastic function decorated with a :class:`TraceMessenger`
+    :returns: stochastic function decorated with a :class:`~pyro.poutine.trace_messenger.TraceMessenger`
     """
     msngr = TraceMessenger(graph_type=graph_type, param_only=param_only)
     return msngr(fn) if fn is not None else msngr
@@ -73,10 +122,10 @@ def replay(fn=None, trace=None, sites=None):
         True
 
     :param fn: a stochastic function (callable containing pyro primitive calls)
-    :param trace: a :class:`Trace` data structure to replay against
+    :param trace: a :class:`~pyro.poutine.Trace` data structure to replay against
     :param sites: list or dict of names of sample sites in fn to replay against,
         defaulting to all sites
-    :returns: a stochastic function decorated with a :class:`ReplayMessenger`
+    :returns: a stochastic function decorated with a :class:`~pyro.poutine.replay_messenger.ReplayMessenger`
     """
     msngr = ReplayMessenger(trace=trace, sites=sites)
     return msngr(fn) if fn is not None else msngr
@@ -109,7 +158,7 @@ def lift(fn=None, prior=None):
 
     :param fn: function whose parameters will be lifted to random values
     :param prior: prior function in the form of a Distribution or a dict of stochastic fns
-    :returns: ``fn`` decorated with a :class:`LiftMessenger`
+    :returns: ``fn`` decorated with a :class:`~pyro.poutine.lift_messenger.LiftMessenger`
     """
     msngr = LiftMessenger(prior=prior)
     return msngr(fn) if fn is not None else msngr
@@ -149,7 +198,7 @@ def block(fn=None, hide=None, expose=None, hide_types=None, expose_types=None):
     :param expose: list of site names to be exposed while all others hidden
     :param hide_types: list of site types to be hidden
     :param expose_types: list of site types to be exposed while all others hidden
-    :returns: stochastic function decorated with a :class:`BlockMessenger`
+    :returns: stochastic function decorated with a :class:`~pyro.poutine.block_messenger.BlockMessenger`
     """
     msngr = BlockMessenger(hide=hide, expose=expose,
                            hide_types=hide_types, expose_types=expose_types)
@@ -160,13 +209,13 @@ def escape(fn=None, escape_fn=None):
     """
     Given a callable that contains Pyro primitive calls,
     evaluate escape_fn on each site, and if the result is True,
-    raise a :class:`NonlocalExit` exception that stops execution
+    raise a :class:`~pyro.poutine.runtime.NonlocalExit` exception that stops execution
     and returns the offending site.
 
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param escape_fn: function that takes a partial trace and a site,
         and returns a boolean value to decide whether to exit at that site
-    :returns: stochastic function decorated with :class:`EscapeMessenger`
+    :returns: stochastic function decorated with :class:`~pyro.poutine.escape_messenger.EscapeMessenger`
     """
     msngr = EscapeMessenger(escape_fn)
     return msngr(fn) if fn is not None else msngr
@@ -194,8 +243,8 @@ def condition(fn=None, data=None):
     to `pyro.sample("z", ...)` in `model`.
 
     :param fn: a stochastic function (callable containing pyro primitive calls)
-    :param data: a dict or a Trace
-    :returns: stochastic function decorated with a :class:`ConditionMessenger`
+    :param data: a dict or a :class:`~pyro.poutine.Trace`
+    :returns: stochastic function decorated with a :class:`~pyro.poutine.condition_messenger.ConditionMessenger`
     """
     msngr = ConditionMessenger(data=data)
     return msngr(fn) if fn is not None else msngr
@@ -209,7 +258,7 @@ def infer_config(fn=None, config_fn=None):
 
     :param fn: a stochastic function (callable containing pyro primitive calls)
     :param config_fn: a callable taking a site and returning an infer dict
-    :returns: stochastic function decorated with :class:`InferConfigMessenger`
+    :returns: stochastic function decorated with :class:`~pyro.poutine.infer_config_messenger.InferConfigMessenger`
     """
     msngr = InferConfigMessenger(config_fn)
     return msngr(fn) if fn is not None else msngr
@@ -221,9 +270,24 @@ def scale(fn=None, scale=None):
     scale factor, scale the score of all sample and observe sites in the
     function.
 
+    Consider the following Pyro program:
+
+        >>> def model(x):
+        ...     s = pyro.param("s", torch.tensor(0.5))
+        ...     z = pyro.sample("z", dist.Normal(x, s), obs=1.0)
+        ...     return z ** 2
+
+    ``scale`` multiplicatively scales the log-probabilities of sample sites:
+
+        >>> scaled_model = scale(model, scale=0.5)
+        >>> scaled_tr = trace(scaled_model).get_trace(0.0)
+        >>> unscaled_tr = trace(model).get_trace(0.0)
+        >>> (scaled_tr.log_prob_sum() == 0.5 * unscaled_tr.log_prob_sum()).all()
+        True
+
     :param fn: a stochastic function (callable containing Pyro primitive calls)
     :param scale: a positive scaling factor
-    :returns: stochastic function decorated with a :class:`ScaleMessenger`
+    :returns: stochastic function decorated with a :class:`~pyro.poutine.scale_messenger.ScaleMessenger`
     """
     msngr = ScaleMessenger(scale=scale)
     # XXX temporary compatibility fix
@@ -232,12 +296,12 @@ def scale(fn=None, scale=None):
 
 def indep(fn=None, name=None, size=None, dim=None):
     """
-    Note: Low-level; use `pyro.iarange` instead.
+    .. note:: Low-level; use :class:`~pyro.iarange` instead.
 
     This messenger keeps track of stack of independence information declared by
     nested ``irange`` and ``iarange`` contexts. This information is stored in
     a ``cond_indep_stack`` at each sample/observe site for consumption by
-    :class:`TraceMessenger`.
+    :class:`~pyro.poutine.trace_messenger.TraceMessenger`.
     """
     msngr = IndepMessenger(name=name, size=size, dim=dim)
     return msngr(fn) if fn is not None else msngr
@@ -283,8 +347,9 @@ def do(fn=None, data=None):
     This is equivalent to replacing `z = pyro.sample("z", ...)` with `z = value`.
 
     :param fn: a stochastic function (callable containing pyro primitive calls)
-    :param data: a ``dict`` or a :class`Trace`
-    :returns: stochastic function decorated with a :class:`BlockHandler and :class:`ConditionHandler`
+    :param data: a ``dict`` or a :class:`~pyro.poutine.Trace`
+    :returns: stochastic function decorated with a :class:`~pyro.poutine.block_messenger.BlockMessenger`
+      and :class:`pyro.poutine.condition_messenger.ConditionMessenger`
     """
     def wrapper(wrapped):
         return block(condition(wrapped, data=data), hide=list(data.keys()))
