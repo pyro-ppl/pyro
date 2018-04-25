@@ -73,7 +73,7 @@ TEST_IDS = [t[0].__name__ + "_y{}D".format(str(t[2].dim()))
 
 @pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
 def test_model(model_class, X, y, kernel, likelihood):
-    if model_class is SparseGPRegression or model_class is VariationalSparseGP:a
+    if model_class is SparseGPRegression or model_class is VariationalSparseGP:
         gp = model_class(X, None, kernel, X, likelihood)
     else:
         gp = model_class(X, None, kernel, likelihood)
