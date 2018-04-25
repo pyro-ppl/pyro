@@ -92,7 +92,7 @@ def trace(fn=None, graph_type=None, param_only=None):
         >>> logp = trace.log_prob_sum()
         >>> params = [trace.nodes[name]["value"].unconstrained() for name in trace.param_nodes]
 
-    :param fn: a stochastic function (callable containing pyro primitive calls)
+    :param fn: a stochastic function (callable containing Pyro primitive calls)
     :param graph_type: string that specifies the kind of graph to construct
     :param param_only: if true, only records params and not samples
     :returns: stochastic function decorated with a :class:`~pyro.poutine.trace_messenger.TraceMessenger`
@@ -121,7 +121,7 @@ def replay(fn=None, trace=None, sites=None):
         >>> replayed_model(0.0) == old_trace.nodes["_RETURN"]["value"]
         True
 
-    :param fn: a stochastic function (callable containing pyro primitive calls)
+    :param fn: a stochastic function (callable containing Pyro primitive calls)
     :param trace: a :class:`~pyro.poutine.Trace` data structure to replay against
     :param sites: list or dict of names of sample sites in fn to replay against,
         defaulting to all sites
@@ -166,8 +166,8 @@ def lift(fn=None, prior=None):
 
 def block(fn=None, hide=None, expose=None, hide_types=None, expose_types=None):
     """
-    This handler selectively hides pyro primitive sites from the outside world.
-    Default behavior: block everything
+    This handler selectively hides Pyro primitive sites from the outside world.
+    Default behavior: block everything.
 
     A site is hidden if at least one of the following holds:
 
@@ -193,7 +193,7 @@ def block(fn=None, hide=None, expose=None, hide_types=None, expose_types=None):
         >>> "b" in trace_outer
         True
 
-    :param fn: a stochastic function (callable containing pyro primitive calls)
+    :param fn: a stochastic function (callable containing Pyro primitive calls)
     :param hide: list of site names to hide
     :param expose: list of site names to be exposed while all others hidden
     :param hide_types: list of site types to be hidden
@@ -212,7 +212,7 @@ def escape(fn=None, escape_fn=None):
     raise a :class:`~pyro.poutine.runtime.NonlocalExit` exception that stops execution
     and returns the offending site.
 
-    :param fn: a stochastic function (callable containing pyro primitive calls)
+    :param fn: a stochastic function (callable containing Pyro primitive calls)
     :param escape_fn: function that takes a partial trace and a site,
         and returns a boolean value to decide whether to exit at that site
     :returns: stochastic function decorated with :class:`~pyro.poutine.escape_messenger.EscapeMessenger`
@@ -226,7 +226,7 @@ def condition(fn=None, data=None):
     Given a stochastic function with some sample statements
     and a dictionary of observations at names,
     change the sample statements at those names into observes
-    with those values
+    with those values.
 
     Consider the following Pyro program:
 
@@ -242,7 +242,7 @@ def condition(fn=None, data=None):
     This is equivalent to adding `obs=value` as a keyword argument
     to `pyro.sample("z", ...)` in `model`.
 
-    :param fn: a stochastic function (callable containing pyro primitive calls)
+    :param fn: a stochastic function (callable containing Pyro primitive calls)
     :param data: a dict or a :class:`~pyro.poutine.Trace`
     :returns: stochastic function decorated with a :class:`~pyro.poutine.condition_messenger.ConditionMessenger`
     """
@@ -254,9 +254,9 @@ def infer_config(fn=None, config_fn=None):
     """
     Given a callable that contains Pyro primitive calls
     and a callable taking a trace site and returning a dictionary,
-    updates the value of the infer kwarg at a sample site to config_fn(site)
+    updates the value of the infer kwarg at a sample site to config_fn(site).
 
-    :param fn: a stochastic function (callable containing pyro primitive calls)
+    :param fn: a stochastic function (callable containing Pyro primitive calls)
     :param config_fn: a callable taking a site and returning an infer dict
     :returns: stochastic function decorated with :class:`~pyro.poutine.infer_config_messenger.InferConfigMessenger`
     """
@@ -346,7 +346,7 @@ def do(fn=None, data=None):
 
     This is equivalent to replacing `z = pyro.sample("z", ...)` with `z = value`.
 
-    :param fn: a stochastic function (callable containing pyro primitive calls)
+    :param fn: a stochastic function (callable containing Pyro primitive calls)
     :param data: a ``dict`` or a :class:`~pyro.poutine.Trace`
     :returns: stochastic function decorated with a :class:`~pyro.poutine.block_messenger.BlockMessenger`
       and :class:`pyro.poutine.condition_messenger.ConditionMessenger`
@@ -362,9 +362,9 @@ def queue(fn=None, queue=None, max_tries=None,
     Used in sequential enumeration over discrete variables.
 
     Given a stochastic function and a queue,
-    return a return value from a complete trace in the queue
+    return a return value from a complete trace in the queue.
 
-    :param fn: a stochastic function (callable containing pyro primitive calls)
+    :param fn: a stochastic function (callable containing Pyro primitive calls)
     :param queue: a queue data structure like multiprocessing.Queue to hold partial traces
     :param max_tries: maximum number of attempts to compute a single complete trace
     :param extend_fn: function (possibly stochastic) that takes a partial trace and a site,

@@ -7,10 +7,10 @@ class Messenger(object):
     """
     Context manager class that modifies behavior
     and adds side effects to stochastic functions
-    i.e. callables containing pyro primitive statements.
+    i.e. callables containing Pyro primitive statements.
 
     This is the base Messenger class.
-    It implements the default behavior for all pyro primitives,
+    It implements the default behavior for all Pyro primitives,
     so that the joint distribution induced by a stochastic function fn
     is identical to the joint distribution induced by ``Messenger()(fn)``.
 
@@ -130,7 +130,7 @@ class Handler(object):
     def __init__(self, msngr, fn):
         """
         :param msngr: messenger to be used for inference
-        :param fn: a stochastic function (callable containing pyro primitive calls)
+        :param fn: a stochastic function (callable containing Pyro primitive calls)
         """
         self.msngr = msngr
         self.fn = fn

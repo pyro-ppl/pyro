@@ -139,7 +139,7 @@ class Trace(object):
     @property
     def add_edge(self):
         """
-        Identical to :meth:`networkx.DiGraph.remove_edge`
+        Identical to :meth:`networkx.DiGraph.add_edge`
         """
         return self._graph.add_edge
 

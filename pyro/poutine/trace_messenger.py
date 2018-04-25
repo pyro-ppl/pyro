@@ -33,7 +33,7 @@ class TraceMessenger(Messenger):
     """
     Execution trace messenger.
 
-    A TraceMessenger records the input and output to every pyro primitive
+    A TraceMessenger records the input and output to every Pyro primitive
     and stores them as a site in a Trace().
     This should, in theory, be sufficient information for every inference algorithm
     (along with the implicit computational graph in the Variables?)
@@ -156,7 +156,7 @@ class TraceHandler(Handler):
     """
     Execution trace poutine.
 
-    A TraceHandler records the input and output to every pyro primitive
+    A TraceHandler records the input and output to every Pyro primitive
     and stores them as a site in a Trace().
     This should, in theory, be sufficient information for every inference algorithm
     (along with the implicit computational graph in the Variables?)

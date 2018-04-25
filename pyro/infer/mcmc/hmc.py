@@ -25,7 +25,7 @@ class HMC(TraceKernel):
     [1] `MCMC Using Hamiltonian Dynamics`,
     Radford M. Neal
 
-    :param model: Python callable containing pyro primitives.
+    :param model: Python callable containing Pyro primitives.
     :param float step_size: Determines the size of a single step taken by the
         verlet integrator while computing the trajectory using Hamiltonian
         dynamics. If not specified, it will be set to 1.
