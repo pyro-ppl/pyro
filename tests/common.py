@@ -57,7 +57,7 @@ def get_gpu_type(t):
 @contextlib.contextmanager
 def tensors_default_to(host):
     """
-    Context manager to temporarily use Cpu or Cuda tensors in Pytorch.
+    Context manager to temporarily use Cpu or Cuda tensors in PyTorch.
 
     :param str host: Either "cuda" or "cpu".
     """

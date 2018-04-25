@@ -1,7 +1,7 @@
 ## Using Pyro Docker
 
 Some utilities for building docker images and running Pyro inside a Docker container are
-included in the `docker` directory. This includes a Dockerfile to build Pytorch and Pyro,
+included in the `docker` directory. This includes a Dockerfile to build PyTorch and Pyro,
 with some common recipes included in the Makefile.
  
 Dependencies for building the docker images:
