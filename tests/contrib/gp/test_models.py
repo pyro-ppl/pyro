@@ -7,15 +7,15 @@ import pytest
 import torch
 
 import pyro
+import pyro.distributions as dist
+import pyro.optim as optim
 from pyro.contrib.gp.kernels import Cosine, Matern32, RBF, WhiteNoise
 from pyro.contrib.gp.likelihoods import Gaussian
 from pyro.contrib.gp.models import (GPLVM, GPRegression, SparseGPRegression,
                                     VariationalGP, VariationalSparseGP)
-import pyro.distributions as dist
 from pyro.infer import SVI, Trace_ELBO
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.mcmc import MCMC
-import pyro.optim as optim
 from pyro.params import param_with_module_name
 from tests.common import assert_equal
 
@@ -73,7 +73,7 @@ TEST_IDS = [t[0].__name__ + "_y{}D".format(str(t[2].dim()))
 
 @pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
 def test_model(model_class, X, y, kernel, likelihood):
-    if model_class is SparseGPRegression or model_class is VariationalSparseGP:
+    if model_class is SparseGPRegression or model_class is VariationalSparseGP:a
         gp = model_class(X, None, kernel, X, likelihood)
     else:
         gp = model_class(X, None, kernel, likelihood)

@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-# the global pyro stack
-_PYRO_STACK = []
+from .runtime import _PYRO_STACK
 
 
 class Messenger(object):

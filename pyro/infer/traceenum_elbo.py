@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 import warnings
 
-import pyro
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
@@ -85,9 +84,17 @@ class TraceEnum_ELBO(ELBO):
                     for site in model_trace.nodes.values():
                         if site["type"] == "sample":
                             check_site_shape(site, self.max_iarange_nesting)
+                    any_enumerated = False
                     for site in guide_trace.nodes.values():
                         if site["type"] == "sample":
                             check_site_shape(site, self.max_iarange_nesting)
+                            if site["infer"].get("enumerate"):
+                                any_enumerated = True
+                    if self.strict_enumeration_warning and not any_enumerated:
+                        warnings.warn('TraceEnum_ELBO found no sample sites configured for enumeration. '
+                                      'If you want to enumerate sites, you need to @config_enumerate or set '
+                                      'infer={"enumerate": "sequential"} or infer={"enumerate": "parallel"}? '
+                                      'If you do not want to enumerate, consider using Trace_ELBO instead.')
 
                 yield model_trace, guide_trace
 
@@ -128,15 +135,13 @@ class TraceEnum_ELBO(ELBO):
             elbo += elbo_particle.item() / self.num_particles
 
             # collect parameters to train from model and guide
-            trainable_params = set(site["value"].unconstrained()
+            trainable_params = any(site["type"] == "param"
                                    for trace in (model_trace, guide_trace)
-                                   for site in trace.nodes.values()
-                                   if site["type"] == "param")
+                                   for site in trace.nodes.values())
 
             if trainable_params and elbo_particle.requires_grad:
                 loss_particle = -elbo_particle
                 (loss_particle / self.num_particles).backward()
-                pyro.get_param_store().mark_params_active(trainable_params)
 
         loss = -elbo
         if torch_isnan(loss):

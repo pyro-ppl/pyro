@@ -11,7 +11,6 @@ from pyro.util import torch_isnan
 
 from .hmc import HMC
 
-
 # sum_accept_probs and num_proposals are used to calculate
 # the statistic accept_prob for Dual Averaging scheme;
 # z_left_grads and z_right_grads are kept to avoid recalculating
@@ -222,7 +221,7 @@ class NUTS(HMC):
 
         # Temporarily disable distributions args checking as
         # NaNs are expected during step size adaptation.
-        dist_arg_check = False if self.adapt_step_size else pyro.distributions.is_validation_enabled()
+        dist_arg_check = False if self._adapt_phase else pyro.distributions.is_validation_enabled()
         with dist.validation_enabled(dist_arg_check):
             # doubling process, stop when turning or diverging
             for tree_depth in range(self._max_tree_depth + 1):
@@ -257,7 +256,7 @@ class NUTS(HMC):
                 else:  # update tree_size
                     tree_size += new_tree.size
 
-        if self.adapt_step_size:
+        if self._adapt_phase:
             accept_prob = new_tree.sum_accept_probs / new_tree.num_proposals
             self._adapt_step_size(accept_prob)
 

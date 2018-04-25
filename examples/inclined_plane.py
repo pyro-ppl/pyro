@@ -7,7 +7,7 @@ import torch
 
 import pyro
 from pyro.distributions import Normal, Uniform
-from pyro.infer import Importance, EmpiricalMarginal
+from pyro.infer import EmpiricalMarginal, Importance
 
 """
 Samantha really likes physics---but she likes Pyro even more. Instead of using

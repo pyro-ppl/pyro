@@ -1,9 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
+import os
 import subprocess
 import sys
 
-import os
 from setuptools import find_packages, setup
 
 PROJECT_PATH = os.path.dirname(os.path.abspath(__file__))
@@ -59,6 +59,7 @@ EXTRAS_REQUIRE = [
     'pillow',
     'torchvision',
     'visdom>=0.1.4',
+    'pandas',
 ]
 
 setup(
@@ -92,6 +93,7 @@ setup(
             'flake8',
             'isort',
             'nbformat',
+            'nbsphinx>=0.3.2',
             'nbstripout',
             'nbval',
             'pypandoc',

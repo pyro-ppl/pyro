@@ -7,7 +7,6 @@ import torch
 from torch.utils.data import DataLoader
 from torchvision.datasets import MNIST
 
-
 # This file contains utilities for caching, transforming and splitting MNIST data
 # efficiently. By default, a Pytorch DataLoader will apply the transform every epoch
 # we avoid this by caching the data early on in MNISTCached class

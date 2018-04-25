@@ -13,27 +13,27 @@ from pyro.optim import Adam
 from tests.common import assert_equal
 
 
-@pytest.mark.parametrize("advi_class", [AutoMultivariateNormal, AutoDiagonalNormal])
-def test_scores(advi_class):
+@pytest.mark.parametrize("auto_class", [AutoMultivariateNormal, AutoDiagonalNormal])
+def test_scores(auto_class):
     def model():
         pyro.sample("z", dist.Normal(0.0, 1.0))
 
-    guide = advi_class(model)
+    guide = auto_class(model)
     guide_trace = poutine.trace(guide).get_trace()
     model_trace = poutine.trace(poutine.replay(model, guide_trace)).get_trace()
 
     guide_trace.compute_log_prob()
     model_trace.compute_log_prob()
 
-    assert '_advi_latent' not in model_trace.nodes
+    assert '_auto_latent' not in model_trace.nodes
     assert model_trace.nodes['z']['log_prob_sum'].item() != 0.0
-    assert guide_trace.nodes['_advi_latent']['log_prob_sum'].item() != 0.0
+    assert guide_trace.nodes['_auto_latent']['log_prob_sum'].item() != 0.0
     assert guide_trace.nodes['z']['log_prob_sum'].item() == 0.0
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
-@pytest.mark.parametrize("advi_class", [AutoMultivariateNormal, AutoDiagonalNormal])
-def test_shapes(advi_class, Elbo):
+@pytest.mark.parametrize("auto_class", [AutoMultivariateNormal, AutoDiagonalNormal])
+def test_shapes(auto_class, Elbo):
 
     def model():
         pyro.sample("z1", dist.Normal(0.0, 1.0))
@@ -41,16 +41,16 @@ def test_shapes(advi_class, Elbo):
         with pyro.iarange("iarange", 3):
             pyro.sample("z3", dist.Normal(torch.zeros(3), torch.ones(3)))
 
-    guide = advi_class(model)
-    elbo = Elbo()
+    guide = auto_class(model)
+    elbo = Elbo(strict_enumeration_warning=False)
     loss = elbo.loss(model, guide)
     assert np.isfinite(loss), loss
 
 
 @pytest.mark.xfail(reason="irange is not yet supported")
-@pytest.mark.parametrize('advi_class', [AutoDiagonalNormal, AutoMultivariateNormal])
+@pytest.mark.parametrize('auto_class', [AutoDiagonalNormal, AutoMultivariateNormal])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO])
-def test_irange_smoke(advi_class, Elbo):
+def test_irange_smoke(auto_class, Elbo):
 
     def model():
         x = pyro.sample("x", dist.Normal(0, 1))
@@ -65,22 +65,22 @@ def test_irange_smoke(advi_class, Elbo):
 
         pyro.sample("obs", dist.Bernoulli(0.1), obs=torch.tensor(0))
 
-    guide = advi_class(model)
-    infer = SVI(model, guide, Adam({"lr": 1e-6}), Elbo())
+    guide = auto_class(model)
+    infer = SVI(model, guide, Adam({"lr": 1e-6}), Elbo(strict_enumeration_warning=False))
     infer.step()
 
 
-@pytest.mark.parametrize("advi_class", [AutoMultivariateNormal, AutoDiagonalNormal])
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO])
-def test_median(advi_class, Elbo):
+@pytest.mark.parametrize("auto_class", [AutoMultivariateNormal, AutoDiagonalNormal])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+def test_median(auto_class, Elbo):
 
     def model():
         pyro.sample("x", dist.Normal(0.0, 1.0))
         pyro.sample("y", dist.LogNormal(0.0, 1.0))
         pyro.sample("z", dist.Beta(2.0, 2.0))
 
-    guide = advi_class(model)
-    infer = SVI(model, guide, Adam({'lr': 0.01}), Elbo())
+    guide = auto_class(model)
+    infer = SVI(model, guide, Adam({'lr': 0.01}), Elbo(strict_enumeration_warning=False))
     for _ in range(100):
         infer.step()
 
@@ -90,17 +90,17 @@ def test_median(advi_class, Elbo):
     assert_equal(median["z"], torch.tensor(0.5), prec=0.1)
 
 
-@pytest.mark.parametrize("advi_class", [AutoMultivariateNormal, AutoDiagonalNormal])
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO])
-def test_quantiles(advi_class, Elbo):
+@pytest.mark.parametrize("auto_class", [AutoMultivariateNormal, AutoDiagonalNormal])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+def test_quantiles(auto_class, Elbo):
 
     def model():
         pyro.sample("x", dist.Normal(0.0, 1.0))
         pyro.sample("y", dist.LogNormal(0.0, 1.0))
         pyro.sample("z", dist.Beta(2.0, 2.0))
 
-    guide = advi_class(model)
-    infer = SVI(model, guide, Adam({'lr': 0.01}), Elbo())
+    guide = auto_class(model)
+    infer = SVI(model, guide, Adam({'lr': 0.01}), Elbo(strict_enumeration_warning=False))
     for _ in range(100):
         infer.step()
 

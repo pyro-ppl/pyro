@@ -92,6 +92,8 @@ class VAE(nn.Module):
             loc_img = self.decoder.forward(z)
             # score against actual images
             pyro.sample("obs", dist.Bernoulli(loc_img).independent(1), obs=x.reshape(-1, 784))
+            # return the loc so we can visualize it later
+            return loc_img
 
     # define the guide (i.e. variational distribution) q(z|x)
     def guide(self, x):
@@ -112,15 +114,6 @@ class VAE(nn.Module):
         # decode the image (note we don't sample in image space)
         loc_img = self.decoder(z)
         return loc_img
-
-    def model_sample(self, batch_size=1):
-        # sample the handwriting style from the constant prior distribution
-        prior_loc = torch.zeros([batch_size, self.z_dim])
-        prior_scale = torch.ones([batch_size, self.z_dim])
-        zs = pyro.sample("z", dist.Normal(prior_loc, prior_scale))
-        loc = self.decoder.forward(zs)
-        xs = pyro.sample("sample", dist.Bernoulli(loc))
-        return xs, loc
 
 
 def main(args):
@@ -208,7 +201,7 @@ if __name__ == '__main__':
     parser.add_argument('-tf', '--test-frequency', default=5, type=int, help='how often we evaluate the test set')
     parser.add_argument('-lr', '--learning-rate', default=1.0e-3, type=float, help='learning rate')
     parser.add_argument('--cuda', action='store_true', default=False, help='whether to use cuda')
-    parser.add_argument('-visdom', '--visdom_flag', default=False, help='Whether plotting in visdom is desired')
+    parser.add_argument('-visdom', '--visdom_flag', action="store_true", help='Whether plotting in visdom is desired')
     parser.add_argument('-i-tsne', '--tsne_iter', default=100, type=int, help='epoch when tsne visualization runs')
     args = parser.parse_args()
 

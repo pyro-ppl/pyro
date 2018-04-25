@@ -12,8 +12,8 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions import Bernoulli, Categorical, Normal
-from pyro.poutine.indep_poutine import _DIM_ALLOCATOR
-from pyro.poutine.util import NonlocalExit, all_escape, discrete_escape
+from pyro.poutine.runtime import _DIM_ALLOCATOR, NonlocalExit
+from pyro.poutine.util import all_escape, discrete_escape
 from tests.common import assert_equal
 
 
@@ -83,6 +83,10 @@ class TraceHandlerTests(NormalNormalNormalHandlerTestCase):
         model_trace = poutine.trace(self.model).get_trace()
         assert_equal(model_trace.nodes["latent1"]["value"],
                      model_trace.nodes["_RETURN"]["value"])
+
+    def test_trace_param_only(self):
+        model_trace = poutine.trace(self.model, param_only=True).get_trace()
+        assert all(site["type"] == "param" for site in model_trace.nodes.values())
 
 
 class ReplayHandlerTests(NormalNormalNormalHandlerTestCase):

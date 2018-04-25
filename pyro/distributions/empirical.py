@@ -1,13 +1,13 @@
 from __future__ import absolute_import, division, print_function
 
+import math
 import numbers
 
-import math
 import torch
 from torch.distributions import constraints
 
-from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.torch import Categorical
+from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import copy_docs_from, log_sum_exp
 
 
@@ -165,6 +165,10 @@ class Empirical(TorchDistribution):
                              "`OneHotCategorical` distribution.")
         deviation_squared = torch.pow(self._samples - self.mean, 2)
         return self._weighted_mean(deviation_squared) / self._weighted_mean(self._samples.new_tensor([1.]))
+
+    def get_samples_and_weights(self):
+        self._finalize()
+        return self._samples, self._log_weights
 
     def enumerate_support(self):
         self._finalize()

@@ -1,22 +1,27 @@
 from __future__ import absolute_import, division, print_function
 
-from abc import abstractmethod, ABCMeta
-from six import add_metaclass
+from abc import ABCMeta, abstractmethod
 
 import torch
+from six import add_metaclass
 
 import pyro.poutine as poutine
-from pyro.distributions import Empirical
+from pyro.distributions import Categorical, Empirical
 
 
 class EmpiricalMarginal(Empirical):
     """
-    :param trace_dist: a TracePosterior instance representing a Monte Carlo posterior.
-
     Marginal distribution, that wraps over a TracePosterior object to provide a
     a marginal over one or more latent sites or the return values of the
     TracePosterior's model. If multiple sites are specified, they must have the
     same tensor shape.
+
+    :param TracePosterior trace_posterior: a TracePosterior instance representing
+        a Monte Carlo posterior.
+    :param list sites: optional list of sites for which we need to generate
+        the marginal distribution. Note that for multiple sites, the shape
+        for the site values must match (needed by the underlying ``Empirical``
+        class).
     """
     def __init__(self, trace_posterior, sites=None, validate_args=None):
         assert isinstance(trace_posterior, TracePosterior), \
@@ -48,6 +53,7 @@ class TracePosterior(object):
     def _init(self):
         self.log_weights = []
         self.exec_traces = []
+        self._categorical = None
 
     @abstractmethod
     def _traces(self, *args, **kwargs):
@@ -57,6 +63,13 @@ class TracePosterior(object):
         :return: Generator over ``(exec_trace, weight)``.
         """
         raise NotImplementedError("inference algorithm must implement _traces")
+
+    def __call__(self, *args, **kwargs):
+        random_idx = self._categorical.sample()
+        trace = self.exec_traces[random_idx].copy()
+        for name in trace.observation_nodes:
+            trace.remove_node(name)
+        return trace
 
     def run(self, *args, **kwargs):
         """
@@ -70,4 +83,33 @@ class TracePosterior(object):
         for tr, logit in poutine.block(self._traces)(*args, **kwargs):
             self.exec_traces.append(tr)
             self.log_weights.append(logit)
+        self._categorical = Categorical(logits=torch.tensor(self.log_weights))
         return self
+
+
+class TracePredictive(TracePosterior):
+    """
+    Generates and holds traces from the posterior predictive distribution,
+    given model execution traces from the approximate posterior. This is
+    achieved by constraining latent sites to randomly sampled parameter
+    values from the model execution traces and running the model forward
+    to generate traces with new response ("_RETURN") sites.
+
+    :param model: arbitrary Python callable containing Pyro primitives.
+    :param TracePosterior posterior: trace posterior instance holding
+        samples from the model's approximate posterior.
+    :param int num_samples: number of samples to generate.
+    """
+    def __init__(self, model, posterior, num_samples):
+        self.model = model
+        self.posterior = posterior
+        self.num_samples = num_samples
+        super(TracePredictive, self).__init__()
+
+    def _traces(self, *args, **kwargs):
+        if not self.posterior.exec_traces:
+            self.posterior.run(*args, **kwargs)
+        for _ in range(self.num_samples):
+            model_trace = self.posterior()
+            replayed_trace = poutine.trace(poutine.replay(self.model, model_trace)).get_trace(*args, **kwargs)
+            yield (replayed_trace, 0.)

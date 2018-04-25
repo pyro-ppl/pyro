@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 import warnings
 
-import pyro
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
@@ -53,6 +52,13 @@ class Trace_ELBO(ELBO):
             model_trace = poutine.trace(poutine.replay(model, trace=guide_trace)).get_trace(*args, **kwargs)
             if is_validation_enabled():
                 check_model_guide_match(model_trace, guide_trace)
+                enumerated_sites = [name for name, site in guide_trace.nodes.items()
+                                    if site["type"] == "sample" and site["infer"].get("enumerate")]
+                if enumerated_sites:
+                    warnings.warn('\n'.join([
+                        'Trace_ELBO found sample sites configured for enumeration:'
+                        ', '.join(enumerated_sites),
+                        'If you want to enumerate sites, you need to use TraceEnum_ELBO instead.']))
             guide_trace = prune_subsample_sites(guide_trace)
             model_trace = prune_subsample_sites(model_trace)
 
@@ -124,15 +130,13 @@ class Trace_ELBO(ELBO):
             elbo += elbo_particle / self.num_particles
 
             # collect parameters to train from model and guide
-            trainable_params = set(site["value"].unconstrained()
+            trainable_params = any(site["type"] == "param"
                                    for trace in (model_trace, guide_trace)
-                                   for site in trace.nodes.values()
-                                   if site["type"] == "param")
+                                   for site in trace.nodes.values())
 
             if trainable_params and getattr(surrogate_elbo_particle, 'requires_grad', False):
                 surrogate_loss_particle = -surrogate_elbo_particle / self.num_particles
                 surrogate_loss_particle.backward()
-                pyro.get_param_store().mark_params_active(trainable_params)
 
         loss = -elbo
         if torch_isnan(loss):
