@@ -1,6 +1,7 @@
 import sphinx_rtd_theme
-# import re
-# import os
+import re
+import os
+from pyro import __version__
 
 # -*- coding: utf-8 -*-
 #
@@ -69,10 +70,7 @@ author = u'Uber AI Labs'
 # |version| and |release|, also used in various other places throughout the
 # built documents.
 
-# get the latest git tag with  the latest commit
-# eg pyro-0.1.2-g4c52460
-# version = re.sub('^v', '', os.popen('git describe --tags').read().strip())
-version = '0.2.0'
+version = __version__
 
 # release version
 release = version  # eg pyro 0.1.2
