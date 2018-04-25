@@ -18,14 +18,6 @@ from pyro.params import param_with_module_name
 from pyro.poutine.runtime import _DIM_ALLOCATOR, _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, am_i_wrapped, apply_stack
 from pyro.util import deep_getattr, set_rng_seed  # noqa: F401
 
-version_prefix = '0.2.0'
-
-# Get the __version__ string from the auto-generated _version.py file, if exists.
-try:
-    from pyro._version import __version__
-except ImportError:
-    __version__ = version_prefix
-
 
 # Default logger to prevent 'No handler found' warning.
 logging.getLogger(__name__).addHandler(logging.NullHandler())
