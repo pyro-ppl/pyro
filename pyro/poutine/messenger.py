@@ -5,6 +5,15 @@ from .runtime import _PYRO_STACK
 
 class Messenger(object):
     """
+    Context manager class that modifies behavior
+    and adds side effects to stochastic functions
+    i.e. callables containing pyro primitive statements.
+
+    This is the base Messenger class.
+    It implements the default behavior for all pyro primitives,
+    so that the joint distribution induced by a stochastic function fn
+    is identical to the joint distribution induced by ``Messenger()(fn)``.
+
     Class of transformers for messages passed during inference.
     Most inference operations are implemented in subclasses of this.
     """
@@ -115,17 +124,7 @@ class Messenger(object):
 
 class Handler(object):
     """
-    Context manager class that modifies behavior
-    and adds side effects to stochastic functions
-    i.e. callables containing pyro primitive statements.
-
-    See the Handler execution model writeup in the documentation
-    for a description of the entire Handler system.
-
-    This is the base Handler class.
-    It implements the default behavior for all pyro primitives,
-    so that the joint distribution induced by a stochastic function fn
-    is identical to the joint distribution induced by Handler(fn).
+    Wrapper class created by ``Messenger.__call__``
     """
 
     def __init__(self, msngr, fn):
