@@ -78,7 +78,7 @@ setup(
         'graphviz>=0.8',
         'networkx>=2.0.0',
         'six>=1.10.0',
-        'torch',
+        'torch>=0.4.0',
     ],
     extras_require={
         'extras': EXTRAS_REQUIRE,
