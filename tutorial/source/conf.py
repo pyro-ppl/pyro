@@ -1,6 +1,4 @@
 import sphinx_rtd_theme
-import re
-import os
 from pyro import __version__
 
 # -*- coding: utf-8 -*-
