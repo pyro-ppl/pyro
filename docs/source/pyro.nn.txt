@@ -5,11 +5,3 @@ AutoRegressiveNN
     :members:
     :undoc-members:
     :show-inheritance:
-
-ClippedNN
-----------------
-.. automodule:: pyro.nn.clipped_nn
-    :members:
-    :undoc-members:
-    :show-inheritance:
-

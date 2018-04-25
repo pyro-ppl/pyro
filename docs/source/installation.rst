@@ -12,9 +12,3 @@ or install from source::
    git clone https://github.com/uber/pyro.git
    cd pyro
    python setup.py install
-
-.. warning::
-
-    Pyro source requires a very recent version of PyTorch.
-    We recommend installing PyTorch from source using the `master` branch.
-    See `PyTorch install instructions <https://github.com/pytorch/pytorch#from-source>`_ for details.

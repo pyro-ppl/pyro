@@ -142,17 +142,19 @@ def default_process_message(msg):
 
 def apply_stack(initial_msg):
     """
-    :param dict initial_msg: the starting version of the trace site
-    :returns: an updated message that is the final version of the trace site
+    Execute the effect stack at a single site according to the following scheme:
 
-    Execute the poutine stack at a single site according to the following scheme:
-    1. Walk down the stack from top to bottom, collecting into the message
-        all information necessary to execute the stack at that site
-    2. For each poutine in the stack from bottom to top:
-           Execute the poutine with the message;
-           If the message field "stop" is True, stop;
-           Otherwise, continue
-    3. Return the updated message
+        1. For each ``Messenger`` in the stack from bottom to top,
+           execute ``Messenger._process_message`` with the message;
+           if the message field "stop" is True, stop;
+           otherwise, continue
+        2. Apply default behavior (``default_process_message``) to finish remaining site execution
+        3. For each ``Messenger`` in the stack from top to bottom,
+           execute ``_postprocess_message`` to update the message and internal messenger state with the site results
+        4. If the message field "continuation" is not ``None``, call it with the message
+
+    :param dict initial_msg: the starting version of the trace site
+    :returns: ``None``
     """
     stack = _PYRO_STACK
     # TODO check at runtime if stack is valid
