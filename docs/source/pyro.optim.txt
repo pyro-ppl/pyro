@@ -6,7 +6,7 @@ Pyro Optimizers
     :undoc-members:
     :show-inheritance:
 
-Pytorch Optimizers
+PyTorch Optimizers
 ------------------
 
 .. automodule:: pyro.optim.pytorch_optimizers
