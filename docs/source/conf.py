@@ -3,11 +3,6 @@ import sys
 
 import sphinx_rtd_theme
 
-if 'READTHEDOCS' in os.environ:
-    # install pyro on rtd so it can be imported
-    os.system('pip install pyro-ppl')
-
-from pyro import __version__  # noqaE402
 
 # import pkg_resources
 
@@ -70,7 +65,14 @@ author = u'Uber AI Labs'
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
 # built documents.
-version = __version__
+
+version = ''
+
+if 'READTHEDOCS' not in os.environ:
+    # if developing locally, use pyro.__version__ as version
+    from pyro import __version__  # noqaE402
+    global version
+    version = __version__
 
 # release version
 release = version
