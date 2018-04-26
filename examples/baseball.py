@@ -56,8 +56,7 @@ logging.basicConfig(format='%(message)s', level=logging.INFO)
 # Enable validation checks
 pyro.enable_validation(True)
 pyro.set_rng_seed(1)
-DATA_URL = "http://www.swarthmore.edu/NatSci/peverso1/Sports%20Data/" + \
-           "JamesSteinData/Efron-Morris%20Baseball/EfronMorrisBB.txt"
+DATA_URL = "https://d2fefpcigoriu7.cloudfront.net/datasets/EfronMorrisBB.txt"
 
 
 # ===================================
