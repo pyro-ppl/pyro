@@ -71,7 +71,6 @@ version = ''
 if 'READTHEDOCS' not in os.environ:
     # if developing locally, use pyro.__version__ as version
     from pyro import __version__  # noqaE402
-    global version
     version = __version__
 
 # release version
