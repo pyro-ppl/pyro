@@ -1,8 +1,13 @@
 import os
 import sys
-from pyro import __version__
 
 import sphinx_rtd_theme
+
+if 'READTHEDOCS' not in os.environ:
+    # install pyro on rtd so it can be imported
+    os.system('pip install pyro-ppl')
+
+from pyro import __version__  # noqaE402
 
 # import pkg_resources
 
