@@ -1,8 +1,8 @@
 import os
 import sys
-from pyro import __version__
 
 import sphinx_rtd_theme
+
 
 # import pkg_resources
 
@@ -65,7 +65,13 @@ author = u'Uber AI Labs'
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
 # built documents.
-version = __version__
+
+version = ''
+
+if 'READTHEDOCS' not in os.environ:
+    # if developing locally, use pyro.__version__ as version
+    from pyro import __version__  # noqaE402
+    version = __version__
 
 # release version
 release = version
