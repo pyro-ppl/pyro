@@ -16,6 +16,7 @@ from utils.vae_plots import mnist_test_tsne, plot_llk, plot_vae_samples
 
 # define the PyTorch module that parameterizes the
 # diagonal gaussian distribution q(z|x)
+@torch.jit.compile(nderivs=1)
 class Encoder(nn.Module):
     def __init__(self, z_dim, hidden_dim):
         super(Encoder, self).__init__()

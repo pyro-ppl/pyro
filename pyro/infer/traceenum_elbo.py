@@ -2,6 +2,9 @@ from __future__ import absolute_import, division, print_function
 
 import warnings
 
+import torch
+
+import pyro
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
@@ -142,6 +145,43 @@ class TraceEnum_ELBO(ELBO):
             if trainable_params and elbo_particle.requires_grad:
                 loss_particle = -elbo_particle
                 (loss_particle / self.num_particles).backward()
+
+        loss = -elbo
+        if torch_isnan(loss):
+            warnings.warn('Encountered NAN loss')
+        return loss
+
+    def jit_loss_and_grads(self, model, guide, *args, **kwargs):
+        if self.num_particles > 1:
+            raise NotImplementedError
+        if kwargs:
+            raise NotImplementedError
+
+        param_names = list(sorted(pyro.get_param_store().get_all_param_names()))
+        if getattr(self, '_differentiable_loss', None) is None:
+
+            @torch.jit.compile(nderivs=1)
+            def differentiable_loss(args_list, param_list):
+
+                # check sanity
+                for name, expected_param in zip(param_names, param_list):
+                    assert pyro.param(name).unconstrained() is expected_param
+
+                model_trace, guide_trace = next(self._get_traces(model, guide, *args, **kwargs))
+                elbo_particle = _compute_dice_elbo(model_trace, guide_trace)
+                loss_particle = -elbo_particle
+                return loss_particle / self.num_particles
+
+            self._differentiable_loss = differentiable_loss
+
+        # invoke _differentiable_loss
+        self.loss(model, guide, *args, **kwargs)  # populate param store
+        param_list = [pyro.param(name).unconstrained() for name in param_names]
+        args_list = list(args)
+        differentiable_loss = self._differentiable_loss(args_list, param_list)
+
+        elbo = differentiable_loss.item()
+        differentiable_loss.backward()
 
         loss = -elbo
         if torch_isnan(loss):
