@@ -286,9 +286,6 @@ class TraceGraph_ELBO(ELBO):
     # This version calls .backward() outside of the jitted function,
     # and therefore has higher memory overhead.
     def jit_loss_and_grads(self, model, guide, *args, **kwargs):
-        if kwargs:
-            raise NotImplementedError
-
         if getattr(self, '_loss_and_surrogate_loss', None) is None:
             # populate param store
             for _ in self._get_traces(model, guide, *args, **kwargs):
@@ -300,7 +297,7 @@ class TraceGraph_ELBO(ELBO):
                 self = weakself()
                 loss = 0.0
                 surrogate_loss = 0.0
-                for weight, model_trace, guide_trace in self._get_traces(model, guide, *args_list):
+                for weight, model_trace, guide_trace in self._get_traces(model, guide, *args_list, **kwargs):
                     model_trace.compute_log_prob()
                     guide_trace.compute_score_parts()
                     if is_validation_enabled():

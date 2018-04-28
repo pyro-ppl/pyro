@@ -12,7 +12,7 @@ import pyro.distributions as dist
 from pyro.distributions.testing import fakes
 from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO
 from pyro.optim import Adam
-from tests.common import assert_equal
+from tests.common import assert_equal, xfail_param
 
 logger = logging.getLogger(__name__)
 
@@ -112,8 +112,16 @@ def test_iarange(Elbo, reparameterized):
 
 @pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
 @pytest.mark.parametrize("subsample", [False, True], ids=["full", "subsample"])
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
-def test_subsample_gradient_sequential(Elbo, reparameterized, subsample):
+@pytest.mark.parametrize("Elbo,loss_and_grads_impl", [
+    (Trace_ELBO, 'loss_and_grads'),
+    (TraceGraph_ELBO, 'loss_and_grads'),
+    (TraceEnum_ELBO, 'loss_and_grads'),
+    xfail_param(TraceGraph_ELBO, 'jit_loss_and_grads',
+                reason="jit RuntimeError: Unsupported op descriptor: index-2"),
+    xfail_param(TraceEnum_ELBO, 'jit_loss_and_grads',
+                reason="jit RuntimeError: Unsupported op descriptor: index-2"),
+])
+def test_subsample_gradient_sequential(Elbo, loss_and_grads_impl, reparameterized, subsample):
     pyro.clear_param_store()
     data = torch.tensor([-0.5, 2.0])
     subsample_size = 1 if subsample else len(data)
@@ -134,11 +142,16 @@ def test_subsample_gradient_sequential(Elbo, reparameterized, subsample):
             pyro.sample("z", Normal(loc[ind], scale))
 
     optim = Adam({"lr": 0.1})
-    elbo = Elbo(num_particles=num_particles, strict_enumeration_warning=False)
-    inference = SVI(model, guide, optim, loss=elbo)
-    inference.loss_and_grads(model, guide)
+    elbo = Elbo(num_particles=10, strict_enumeration_warning=False)
+    loss_and_grads = getattr(elbo, loss_and_grads_impl)
+    inference = SVI(model, guide, optim, loss=elbo.loss, loss_and_grads=loss_and_grads)
+    iters = num_particles // 10
+    for _ in range(iters):
+        inference.loss_and_grads(model, guide)
+
     params = dict(pyro.get_param_store().named_parameters())
-    actual_grads = {name: param.grad.detach().cpu().numpy() for name, param in params.items()}
+    actual_grads = {name: param.grad.detach().cpu().numpy() / iters
+                    for name, param in params.items()}
 
     expected_grads = {'loc': np.array([0.5, -2.0]), 'scale': np.array([2.0])}
     for name in sorted(params):

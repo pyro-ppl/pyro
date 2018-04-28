@@ -156,9 +156,6 @@ class TraceEnum_ELBO(ELBO):
     # This version calls .backward() outside of the jitted function,
     # and therefore has higher memory overhead.
     def jit_loss_and_grads_v1(self, model, guide, *args, **kwargs):
-        if kwargs:
-            raise NotImplementedError
-
         if getattr(self, '_differentiable_loss', None) is None:
             # populate param store
             for _ in self._get_traces(model, guide, *args, **kwargs):
@@ -169,7 +166,7 @@ class TraceEnum_ELBO(ELBO):
             def differentiable_loss(args_list, param_list):
                 self = weakself()
                 elbo = 0.0
-                for model_trace, guide_trace in self._get_traces(model, guide, *args_list):
+                for model_trace, guide_trace in self._get_traces(model, guide, *args_list, **kwargs):
                     elbo += _compute_dice_elbo(model_trace, guide_trace)
                 return elbo * (-1.0 / self.num_particles)
 
@@ -189,9 +186,6 @@ class TraceEnum_ELBO(ELBO):
 
     # This version uses grad() but is blocked by unimplemented features.
     def jit_loss_and_grads_v2(self, model, guide, *args, **kwargs):
-        if kwargs:
-            raise NotImplementedError
-
         if getattr(self, '_jit_loss_and_grads', None) is None:
             # populate param store
             for _ in self._get_traces(model, guide, *args, **kwargs):
@@ -203,7 +197,7 @@ class TraceEnum_ELBO(ELBO):
                 self = weakself()
                 loss = 0.0
                 grads = [p.new_zeros(p.shape) for p in param_list]
-                for model_trace, guide_trace in self._get_traces(model, guide, *args_list):
+                for model_trace, guide_trace in self._get_traces(model, guide, *args_list, **kwargs):
                     elbo_particle = _compute_dice_elbo(model_trace, guide_trace)
                     loss_term = -elbo_particle / self.num_particles
                     for grad_out, term in zip(grads, grad(loss_term, param_list)):
