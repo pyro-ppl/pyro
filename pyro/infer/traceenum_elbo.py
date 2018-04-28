@@ -153,73 +153,64 @@ class TraceEnum_ELBO(ELBO):
         return loss
 
     # This version calls .backward() outside of the jitted function,
-    # but does not handle multiple particles or enumeration over model structures.
+    # and therefore has higher memory overhead.
     def jit_loss_and_grads_v1(self, model, guide, *args, **kwargs):
-        if self.num_particles > 1:
-            raise NotImplementedError
         if kwargs:
             raise NotImplementedError
 
-        param_names = list(sorted(pyro.get_param_store().get_all_param_names()))
         if getattr(self, '_differentiable_loss', None) is None:
+            # populate param store
+            for _ in self._get_traces(model, guide, *args, **kwargs):
+                pass
 
             @torch.jit.compile(nderivs=1)
             def differentiable_loss(args_list, param_list):
-
-                # check sanity
-                for name, expected_param in zip(param_names, param_list):
-                    assert pyro.param(name).unconstrained() is expected_param
-
-                model_trace, guide_trace = next(self._get_traces(model, guide, *args, **kwargs))
-                elbo_particle = _compute_dice_elbo(model_trace, guide_trace)
-                loss_particle = -elbo_particle
-                return loss_particle / self.num_particles
+                elbo = 0.0
+                for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+                    elbo += _compute_dice_elbo(model_trace, guide_trace)
+                return elbo * (-1.0 / self.num_particles)
 
             self._differentiable_loss = differentiable_loss
 
         # invoke _differentiable_loss
-        self.loss(model, guide, *args, **kwargs)  # populate param store
-        param_list = [pyro.param(name).unconstrained() for name in param_names]
         args_list = list(args)
+        param_list = [param for name, param in sorted(pyro.get_param_store().named_parameters())]
         differentiable_loss = self._differentiable_loss(args_list, param_list)
 
-        elbo = differentiable_loss.item()
+        loss = differentiable_loss.item()
         differentiable_loss.backward()
 
-        loss = -elbo
         if torch_isnan(loss):
             warnings.warn('Encountered NAN loss')
         return loss
 
     # This version uses grad() but is blocked by unimplemented features.
     def jit_loss_and_grads_v2(self, model, guide, *args, **kwargs):
-        if self.num_particles > 1:
-            raise NotImplementedError
         if kwargs:
             raise NotImplementedError
 
-        param_names = list(sorted(pyro.get_param_store().get_all_param_names()))
         if getattr(self, '_jit_loss_and_grads', None) is None:
+            # populate param store
+            for _ in self._get_traces(model, guide, *args, **kwargs):
+                pass
 
             @torch.jit.compile(nderivs=0)
             def jit_loss_and_grads(args_list, param_list):
                 loss = 0.0
                 grads = [p.new_zeros(p.shape) for p in param_list]
-
                 for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
                     elbo_particle = _compute_dice_elbo(model_trace, guide_trace)
                     loss_term = -elbo_particle / self.num_particles
                     for grad_out, term in zip(grads, grad(loss_term, param_list)):
                         grad_out += term
                     loss += loss_term.detach()
-                    return loss, grads
+                return loss, grads
 
             self._jit_loss_and_grads = jit_loss_and_grads
 
         # invoke _jit_loss_and_grads
-        self.loss(model, guide, *args, **kwargs)  # populate param store
-        param_list = [pyro.param(name).unconstrained() for name in param_names]
         args_list = list(args)
+        param_list = [param for name, param in sorted(pyro.get_param_store().named_parameters())]
         loss, grads = self._jit_loss_and_grads(args_list, param_list)
 
         loss = loss.item()

@@ -79,12 +79,13 @@ def test_grad_expand():
     f(torch.zeros(2, requires_grad=True), torch.zeros(1, requires_grad=True))
 
 
+@pytest.mark.parametrize('num_particles', [1, 10])
 @pytest.mark.parametrize('loss_and_grads_impl', [
     'loss_and_grads',
     'jit_loss_and_grads_v1',
     xfail_param('ji_loss_and_grads_v2'),
 ])
-def test_traceenum(loss_and_grads_impl):
+def test_traceenum(loss_and_grads_impl, num_particles):
     pyro.clear_param_store()
     data = torch.arange(10)
 
@@ -96,10 +97,92 @@ def test_traceenum(loss_and_grads_impl):
     def guide(data):
         pass
 
-    elbo = TraceEnum_ELBO(strict_enumeration_warning=False)
+    elbo = TraceEnum_ELBO(num_particles=num_particles,
+                          strict_enumeration_warning=False)
     loss_and_grads = getattr(elbo, loss_and_grads_impl)
     inference = SVI(model, guide, Adam({"lr": 1e-6}),
                     loss=elbo.loss,
                     loss_and_grads=loss_and_grads)
     for i in range(1000):
         inference.step(data)
+
+
+@pytest.mark.parametrize('vectorized', [False, True])
+@pytest.mark.parametrize('loss_and_grads_impl', [
+    'loss_and_grads',
+    xfail_param('jit_loss_and_grads_v1',
+                reason="jit RuntimeError: Unsupported op descriptor: stack-2-dim_i"),
+    xfail_param('ji_loss_and_grads_v2'),
+])
+def test_beta_bernoulli(loss_and_grads_impl, vectorized):
+    pyro.clear_param_store()
+    data = torch.tensor([1.0] * 6 + [0.0] * 4)
+
+    def model1(data):
+        alpha0 = torch.tensor(10.0)
+        beta0 = torch.tensor(10.0)
+        f = pyro.sample("latent_fairness", dist.Beta(alpha0, beta0))
+        for i in pyro.irange("irange", len(data)):
+            pyro.sample("obs_{}".format(i), dist.Bernoulli(f), obs=data[i])
+
+    def model2(data):
+        alpha0 = torch.tensor(10.0)
+        beta0 = torch.tensor(10.0)
+        f = pyro.sample("latent_fairness", dist.Beta(alpha0, beta0))
+        pyro.sample("obs", dist.Bernoulli(f).expand_by(data.shape).independent(1),
+                    obs=data)
+
+    model = model2 if vectorized else model1
+
+    def guide(data):
+        alpha_q = pyro.param("alpha_q", torch.tensor(15.0),
+                             constraint=constraints.positive)
+        beta_q = pyro.param("beta_q", torch.tensor(15.0),
+                            constraint=constraints.positive)
+        pyro.sample("latent_fairness", dist.Beta(alpha_q, beta_q))
+
+    elbo = TraceEnum_ELBO(num_particles=7,
+                          strict_enumeration_warning=False)
+    loss_and_grads = getattr(elbo, loss_and_grads_impl)
+    optim = Adam({"lr": 0.0005, "betas": (0.90, 0.999)})
+    svi = SVI(model, guide, optim, loss=elbo.loss, loss_and_grads=loss_and_grads)
+    for step in range(40):
+        svi.step(data)
+
+
+@pytest.mark.parametrize('vectorized', [False, True])
+@pytest.mark.parametrize('loss_and_grads_impl', [
+    'loss_and_grads',
+    xfail_param('jit_loss_and_grads_v1', reason="jit RuntimeError in Dirichlet.rsample"),
+    xfail_param('ji_loss_and_grads_v2'),
+])
+def test_dirichlet_bernoulli(loss_and_grads_impl, vectorized):
+    pyro.clear_param_store()
+    data = torch.tensor([1.0] * 6 + [0.0] * 4)
+
+    def model1(data):
+        concentration0 = torch.tensor([10.0, 10.0])
+        f = pyro.sample("latent_fairness", dist.Dirichlet(concentration0))[1]
+        for i in pyro.irange("irange", len(data)):
+            pyro.sample("obs_{}".format(i), dist.Bernoulli(f), obs=data[i])
+
+    def model2(data):
+        concentration0 = torch.tensor([10.0, 10.0])
+        f = pyro.sample("latent_fairness", dist.Dirichlet(concentration0))[1]
+        pyro.sample("obs", dist.Bernoulli(f).expand_by(data.shape).independent(1),
+                    obs=data)
+
+    model = model2 if vectorized else model1
+
+    def guide(data):
+        concentration_q = pyro.param("concentration_q", torch.tensor([15.0, 15.0]),
+                                     constraint=constraints.positive)
+        pyro.sample("latent_fairness", dist.Dirichlet(concentration_q))
+
+    elbo = TraceEnum_ELBO(num_particles=7,
+                          strict_enumeration_warning=False)
+    loss_and_grads = getattr(elbo, loss_and_grads_impl)
+    optim = Adam({"lr": 0.0005, "betas": (0.90, 0.999)})
+    svi = SVI(model, guide, optim, loss=elbo.loss, loss_and_grads=loss_and_grads)
+    for step in range(40):
+        svi.step(data)
