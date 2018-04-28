@@ -6,7 +6,7 @@ from torch.distributions import constraints
 
 import pyro
 import pyro.distributions as dist
-from pyro.infer import SVI, TraceEnum_ELBO
+from pyro.infer import SVI, TraceEnum_ELBO, TraceGraph_ELBO
 from pyro.optim import Adam
 from tests.common import assert_equal, xfail_param
 
@@ -80,12 +80,15 @@ def test_grad_expand():
 
 
 @pytest.mark.parametrize('num_particles', [1, 10])
-@pytest.mark.parametrize('loss_and_grads_impl', [
-    'loss_and_grads',
-    'jit_loss_and_grads_v1',
-    xfail_param('ji_loss_and_grads_v2'),
+@pytest.mark.parametrize('Elbo,loss_and_grads_impl', [
+    (TraceGraph_ELBO, 'loss_and_grads'),
+    (TraceGraph_ELBO, 'jit_loss_and_grads'),
+    (TraceEnum_ELBO, 'loss_and_grads'),
+    (TraceEnum_ELBO, 'jit_loss_and_grads_v1'),
+    xfail_param(TraceEnum_ELBO, 'ji_loss_and_grads_v2',
+                reason='jit RuntimeError ExpandBackward is not supported'),
 ])
-def test_traceenum(loss_and_grads_impl, num_particles):
+def test_svi(Elbo, loss_and_grads_impl, num_particles):
     pyro.clear_param_store()
     data = torch.arange(10)
 
@@ -97,8 +100,7 @@ def test_traceenum(loss_and_grads_impl, num_particles):
     def guide(data):
         pass
 
-    elbo = TraceEnum_ELBO(num_particles=num_particles,
-                          strict_enumeration_warning=False)
+    elbo = Elbo(num_particles=num_particles, strict_enumeration_warning=False)
     loss_and_grads = getattr(elbo, loss_and_grads_impl)
     inference = SVI(model, guide, Adam({"lr": 1e-6}),
                     loss=elbo.loss,
@@ -108,13 +110,13 @@ def test_traceenum(loss_and_grads_impl, num_particles):
 
 
 @pytest.mark.parametrize('vectorized', [False, True])
-@pytest.mark.parametrize('loss_and_grads_impl', [
-    'loss_and_grads',
-    xfail_param('jit_loss_and_grads_v1',
+@pytest.mark.parametrize('Elbo,loss_and_grads_impl', [
+    (TraceEnum_ELBO, 'loss_and_grads'),
+    xfail_param(TraceEnum_ELBO, 'jit_loss_and_grads_v1',
                 reason="jit RuntimeError: Unsupported op descriptor: stack-2-dim_i"),
-    xfail_param('ji_loss_and_grads_v2'),
+    xfail_param(TraceEnum_ELBO, 'ji_loss_and_grads_v2'),
 ])
-def test_beta_bernoulli(loss_and_grads_impl, vectorized):
+def test_beta_bernoulli(Elbo, loss_and_grads_impl, vectorized):
     pyro.clear_param_store()
     data = torch.tensor([1.0] * 6 + [0.0] * 4)
 
@@ -141,8 +143,7 @@ def test_beta_bernoulli(loss_and_grads_impl, vectorized):
                             constraint=constraints.positive)
         pyro.sample("latent_fairness", dist.Beta(alpha_q, beta_q))
 
-    elbo = TraceEnum_ELBO(num_particles=7,
-                          strict_enumeration_warning=False)
+    elbo = Elbo(num_particles=7, strict_enumeration_warning=False)
     loss_and_grads = getattr(elbo, loss_and_grads_impl)
     optim = Adam({"lr": 0.0005, "betas": (0.90, 0.999)})
     svi = SVI(model, guide, optim, loss=elbo.loss, loss_and_grads=loss_and_grads)
@@ -151,12 +152,13 @@ def test_beta_bernoulli(loss_and_grads_impl, vectorized):
 
 
 @pytest.mark.parametrize('vectorized', [False, True])
-@pytest.mark.parametrize('loss_and_grads_impl', [
-    'loss_and_grads',
-    xfail_param('jit_loss_and_grads_v1', reason="jit RuntimeError in Dirichlet.rsample"),
-    xfail_param('ji_loss_and_grads_v2'),
+@pytest.mark.parametrize('Elbo,loss_and_grads_impl', [
+    (TraceEnum_ELBO, 'loss_and_grads'),
+    xfail_param(TraceEnum_ELBO, 'jit_loss_and_grads_v1',
+                reason="jit RuntimeError in Dirichlet.rsample"),
+    xfail_param(TraceEnum_ELBO, 'ji_loss_and_grads_v2'),
 ])
-def test_dirichlet_bernoulli(loss_and_grads_impl, vectorized):
+def test_dirichlet_bernoulli(Elbo, loss_and_grads_impl, vectorized):
     pyro.clear_param_store()
     data = torch.tensor([1.0] * 6 + [0.0] * 4)
 
@@ -179,8 +181,7 @@ def test_dirichlet_bernoulli(loss_and_grads_impl, vectorized):
                                      constraint=constraints.positive)
         pyro.sample("latent_fairness", dist.Dirichlet(concentration_q))
 
-    elbo = TraceEnum_ELBO(num_particles=7,
-                          strict_enumeration_warning=False)
+    elbo = Elbo(num_particles=7, strict_enumeration_warning=False)
     loss_and_grads = getattr(elbo, loss_and_grads_impl)
     optim = Adam({"lr": 0.0005, "betas": (0.90, 0.999)})
     svi = SVI(model, guide, optim, loss=elbo.loss, loss_and_grads=loss_and_grads)
