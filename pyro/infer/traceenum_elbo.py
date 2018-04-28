@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import warnings
+import weakref
 
 import torch
 from torch.autograd import grad
@@ -162,9 +163,11 @@ class TraceEnum_ELBO(ELBO):
             # populate param store
             for _ in self._get_traces(model, guide, *args, **kwargs):
                 pass
+            weakself = weakref.ref(self)
 
             @torch.jit.compile(nderivs=1)
             def differentiable_loss(args_list, param_list):
+                self = weakself()
                 elbo = 0.0
                 for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
                     elbo += _compute_dice_elbo(model_trace, guide_trace)
@@ -193,9 +196,11 @@ class TraceEnum_ELBO(ELBO):
             # populate param store
             for _ in self._get_traces(model, guide, *args, **kwargs):
                 pass
+            weakself = weakref.ref(self)
 
             @torch.jit.compile(nderivs=0)
             def jit_loss_and_grads(args_list, param_list):
+                self = weakself()
                 loss = 0.0
                 grads = [p.new_zeros(p.shape) for p in param_list]
                 for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):

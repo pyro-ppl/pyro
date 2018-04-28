@@ -103,7 +103,7 @@ def test_traceenum(loss_and_grads_impl, num_particles):
     inference = SVI(model, guide, Adam({"lr": 1e-6}),
                     loss=elbo.loss,
                     loss_and_grads=loss_and_grads)
-    for i in range(1000):
+    for i in range(100):
         inference.step(data)
 
 
