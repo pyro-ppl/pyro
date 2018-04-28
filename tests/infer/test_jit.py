@@ -8,7 +8,7 @@ import pyro
 import pyro.distributions as dist
 from pyro.infer import SVI, TraceEnum_ELBO
 from pyro.optim import Adam
-from tests.common import assert_equal
+from tests.common import assert_equal, xfail_param
 
 
 def test_simple():
@@ -49,8 +49,42 @@ def test_backward():
         f(torch.ones(5, requires_grad=True))
 
 
-@pytest.mark.parametrize('use_jit', [False, True])
-def test_traceenum(use_jit):
+def test_grad():
+
+    @torch.jit.compile(nderivs=0)
+    def f(x, y):
+        print('Inside f')
+        loss = (x - y).pow(2).sum()
+        return torch.autograd.grad(loss, [x, y], allow_unused=True)
+
+    print('Invoking f')
+    f(torch.zeros(2, requires_grad=True), torch.ones(2, requires_grad=True))
+    print('Invoking f')
+    f(torch.zeros(2, requires_grad=True), torch.zeros(2, requires_grad=True))
+
+
+@pytest.mark.xfail(reason='RuntimeError: '
+                          'saved_variables() needed but not implemented in ExpandBackward')
+def test_grad_expand():
+
+    @torch.jit.compile(nderivs=0)
+    def f(x, y):
+        print('Inside f')
+        loss = (x - y).pow(2).sum()
+        return torch.autograd.grad(loss, [x, y], allow_unused=True)
+
+    print('Invoking f')
+    f(torch.zeros(2, requires_grad=True), torch.ones(1, requires_grad=True))
+    print('Invoking f')
+    f(torch.zeros(2, requires_grad=True), torch.zeros(1, requires_grad=True))
+
+
+@pytest.mark.parametrize('loss_and_grads_impl', [
+    'loss_and_grads',
+    'jit_loss_and_grads_v1',
+    xfail_param('ji_loss_and_grads_v2'),
+])
+def test_traceenum(loss_and_grads_impl):
     pyro.clear_param_store()
     data = torch.arange(10)
 
@@ -63,7 +97,7 @@ def test_traceenum(use_jit):
         pass
 
     elbo = TraceEnum_ELBO(strict_enumeration_warning=False)
-    loss_and_grads = elbo.jit_loss_and_grads if use_jit else elbo.loss_and_grads
+    loss_and_grads = getattr(elbo, loss_and_grads_impl)
     inference = SVI(model, guide, Adam({"lr": 1e-6}),
                     loss=elbo.loss,
                     loss_and_grads=loss_and_grads)

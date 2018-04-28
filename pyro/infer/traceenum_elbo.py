@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import warnings
 
 import torch
+from torch.autograd import grad
 
 import pyro
 import pyro.poutine as poutine
@@ -151,7 +152,9 @@ class TraceEnum_ELBO(ELBO):
             warnings.warn('Encountered NAN loss')
         return loss
 
-    def jit_loss_and_grads(self, model, guide, *args, **kwargs):
+    # This version calls .backward() outside of the jitted function,
+    # but does not handle multiple particles or enumeration over model structures.
+    def jit_loss_and_grads_v1(self, model, guide, *args, **kwargs):
         if self.num_particles > 1:
             raise NotImplementedError
         if kwargs:
@@ -187,3 +190,44 @@ class TraceEnum_ELBO(ELBO):
         if torch_isnan(loss):
             warnings.warn('Encountered NAN loss')
         return loss
+
+    # This version uses grad() but is blocked by unimplemented features.
+    def jit_loss_and_grads_v2(self, model, guide, *args, **kwargs):
+        if self.num_particles > 1:
+            raise NotImplementedError
+        if kwargs:
+            raise NotImplementedError
+
+        param_names = list(sorted(pyro.get_param_store().get_all_param_names()))
+        if getattr(self, '_jit_loss_and_grads', None) is None:
+
+            @torch.jit.compile(nderivs=0)
+            def jit_loss_and_grads(args_list, param_list):
+                loss = 0.0
+                grads = [p.new_zeros(p.shape) for p in param_list]
+
+                for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+                    elbo_particle = _compute_dice_elbo(model_trace, guide_trace)
+                    loss_term = -elbo_particle / self.num_particles
+                    for grad_out, term in zip(grads, grad(loss_term, param_list)):
+                        grad_out += term
+                    loss += loss_term.detach()
+                    return loss, grads
+
+            self._jit_loss_and_grads = jit_loss_and_grads
+
+        # invoke _jit_loss_and_grads
+        self.loss(model, guide, *args, **kwargs)  # populate param store
+        param_list = [pyro.param(name).unconstrained() for name in param_names]
+        args_list = list(args)
+        loss, grads = self._jit_loss_and_grads(args_list, param_list)
+
+        loss = loss.item()
+        for param, grad_update in zip(param_list, grads):
+            param.grad += grad_update
+
+        if torch_isnan(loss):
+            warnings.warn('Encountered NAN loss')
+        return loss
+
+    jit_loss_and_grads = jit_loss_and_grads_v1
