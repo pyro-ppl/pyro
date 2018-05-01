@@ -81,6 +81,12 @@ Kernels
     :show-inheritance:
     :member-order: bysource
 
+.. automodule:: pyro.contrib.gp.kernels.coregionalize
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
+
 Likelihoods
 -----------
 
