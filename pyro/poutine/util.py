@@ -22,7 +22,7 @@ def prune_subsample_sites(trace):
 def enum_extend(trace, msg, num_samples=None):
     """
     :param trace: a partial trace
-    :param msg: the message at a pyro primitive site
+    :param msg: the message at a Pyro primitive site
     :param num_samples: maximum number of extended traces to return.
     :returns: a list of traces, copies of input trace with one extra site
 
@@ -49,7 +49,7 @@ def enum_extend(trace, msg, num_samples=None):
 def mc_extend(trace, msg, num_samples=None):
     """
     :param trace: a partial trace
-    :param msg: the message at a pyro primitive site
+    :param msg: the message at a Pyro primitive site
     :param num_samples: maximum number of extended traces to return.
     :returns: a list of traces, copies of input trace with one extra site
 
@@ -74,7 +74,7 @@ def mc_extend(trace, msg, num_samples=None):
 def discrete_escape(trace, msg):
     """
     :param trace: a partial trace
-    :param msg: the message at a pyro primitive site
+    :param msg: the message at a Pyro primitive site
     :returns: boolean decision value
 
     Utility function that checks if a sample site is discrete and not already in a trace.
@@ -91,7 +91,7 @@ def discrete_escape(trace, msg):
 def all_escape(trace, msg):
     """
     :param trace: a partial trace
-    :param msg: the message at a pyro primitive site
+    :param msg: the message at a Pyro primitive site
     :returns: boolean decision value
 
     Utility function that checks if a site is not already in a trace.
