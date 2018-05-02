@@ -8,12 +8,21 @@ from .kernel import Kernel
 
 class Coregionalize(Kernel):
     r"""
-    A kernel for the linear model of coregionalization :math:`x R R^T z^T`
-    where :math:`R` is an ``input_dim``-by-``rank`` regionalization matrix
-    where typically ``rank < input_dim``.
+    A kernel for the linear model of coregionalization
+    :math:`k(x,z) = x R R^T z^T` where :math:`R` is an
+    ``input_dim``-by-``rank`` regionalization matrix and typically
+    ``rank < input_dim``.
+
+    This generalizes the
+    :class:`~pyro.contrib.gp.kernels.dot_product.Linear` kernel to multiple
+    features.
+
+    References:
+
+    [1] Mauricio A. Alvarez, Lorenzo Rosasco, Neil D. Lawrence (2012)
+        Kernels for Vector-Valued Functions: a Review
 
     :param int input_dim: Number of feature dimensions of inputs.
-    :param str name: Name of the kernel.
     :param torch.Tensor regions: An optional ``(input_dim, rank)`` shaped
         matrix that maps features to ``rank``-many regions. If unspecified,
         this will be randomly initialized.
@@ -21,6 +30,7 @@ class Coregionalize(Kernel):
         unspecified. If unspecified, ``rank`` defaults to ``input_dim``.
     :param list active_dims: List of feature dimensions of the input which the
         kernel acts on.
+    :param str name: Name of the kernel.
     """
 
     def __init__(self, input_dim, regions=None, rank=None, active_dims=None, name="coregionalize"):
