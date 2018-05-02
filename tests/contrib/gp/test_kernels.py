@@ -95,7 +95,14 @@ TEST_CASES = [
                         [0., 1., 0.]]),
         K_sum=None,  # kernel is randomly initialized
     ),
-
+    T(
+        Coregionalize(3, rank=2, diagonal=0.01 * torch.ones(3)),
+        X=torch.tensor([[1., 0., 0.],
+                        [0.5, 0., 0.5]]),
+        Z=torch.tensor([[1., 0., 0.],
+                        [0., 1., 0.]]),
+        K_sum=None,  # kernel is randomly initialized
+    ),
 ]
 
 TEST_IDS = [t[0].__class__.__name__ for t in TEST_CASES]
