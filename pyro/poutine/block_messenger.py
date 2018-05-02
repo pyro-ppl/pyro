@@ -5,8 +5,8 @@ from .messenger import Messenger
 
 class BlockMessenger(Messenger):
     """
-    This Messenger selectively hides pyro primitive sites from the outside world.
-    Default behavior: block everything
+    This Messenger selectively hides Pyro primitive sites from the outside world.
+    Default behavior: block everything.
     BlockMessenger has a flexible interface that allows users
     to specify in several different ways
     which sites should be hidden or exposed.
