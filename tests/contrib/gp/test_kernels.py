@@ -72,7 +72,7 @@ TEST_CASES = [
         X=X, Z=None, K_sum=6
     ),
     T(
-        Coregionalize(3, regions=torch.eye(3, 3)),
+        Coregionalize(3, components=torch.eye(3, 3)),
         X=torch.tensor([[1., 0., 0.],
                         [0.5, 0., 0.5]]),
         Z=torch.tensor([[1., 0., 0.],
