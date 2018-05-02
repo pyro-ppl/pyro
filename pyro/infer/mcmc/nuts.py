@@ -23,9 +23,18 @@ _TreeInfo = namedtuple("TreeInfo", ["z_left", "r_left", "z_left_grads",
 
 class NUTS(HMC):
     """
-    No-U-Turn Sampler kernel, where ``step_size`` need to be explicitly specified by the user.
+    No-U-Turn Sampler kernel, which provides an efficient and convenient way
+    to run Hamiltonian Monte Carlo. The number of steps taken by the
+    integrator is dynamically adjusted on each call to ``sample`` to ensure
+    an optimal length for the Hamiltonian trajectory [1]. As such, the samples
+    generated will typically have lower autocorrelation than those generated
+    by the :class:`~pyro.infer.mcmc.HMC` kernel. Optionally, the NUTS kernel
+    also provides the ability to adapt step size during the warmup phase.
 
-    References
+    Refer to the `baseball example <https://github.com/uber/pyro/blob/dev/examples/baseball.py>`_
+    to see how to do Bayesian inference in Pyro using NUTS.
+
+    **References**
 
     [1] `The No-U-turn sampler: adaptively setting path lengths in Hamiltonian Monte Carlo`,
     Matthew D. Hoffman, and Andrew Gelman
@@ -45,21 +54,21 @@ class NUTS(HMC):
 
     Example::
 
-        true_coefs = torch.arange(1, 4)
+        true_coefs = torch.tensor([1., 2., 3.])
         data = torch.randn(2000, 3)
+        dim = 3
         labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
 
         def model(data):
-            coefs_mean = torch.zeros(dim, requires_grad=True)
+            coefs_mean = torch.zeros(dim)
             coefs = pyro.sample('beta', dist.Normal(coefs_mean, torch.ones(3)))
             y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
             return y
 
-        nuts_kernel = NUTS(model, step_size=0.0855)
-        mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100)
-        posterior = []
-        for trace, _ in mcmc_run._traces(data):
-            posterior.append(trace.nodes['beta']['value'])
+        nuts_kernel = NUTS(model, adapt_step_size=True)
+        mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=300).run(data)
+        posterior = EmpiricalMarginal(mcmc_run, 'beta')
+        print(posterior.mean)
     """
 
     def __init__(self, model, step_size=None, adapt_step_size=False, transforms=None):
