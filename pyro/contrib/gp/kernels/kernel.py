@@ -175,7 +175,7 @@ class Combination(Kernel):
 
         active_dims = set(kern0.active_dims)
         if isinstance(kern1, Kernel):
-            active_dims  |= set(kern1.active_dims)
+            active_dims |= set(kern1.active_dims)
         active_dims = sorted(active_dims)
         input_dim = len(active_dims)
         super(Combination, self).__init__(input_dim, active_dims, name)
