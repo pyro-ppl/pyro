@@ -271,15 +271,17 @@ class ReshapedDistribution(TorchDistribution):
         return self.base_dist.rsample(sample_shape + self.sample_shape)
 
     def log_prob(self, value):
-        return sum_rightmost(self.base_dist.log_prob(value), self.reinterpreted_batch_ndims).expand(self.batch_shape)
+        shape = broadcast_shape(self.batch_shape, value.shape[:value.dim() - self.event_dim])
+        return sum_rightmost(self.base_dist.log_prob(value), self.reinterpreted_batch_ndims).expand(shape)
 
     def score_parts(self, value):
+        shape = broadcast_shape(self.batch_shape, value.shape[:value.dim() - self.event_dim])
         log_prob, score_function, entropy_term = self.base_dist.score_parts(value)
-        log_prob = sum_rightmost(log_prob, self.reinterpreted_batch_ndims).expand(self.batch_shape)
+        log_prob = sum_rightmost(log_prob, self.reinterpreted_batch_ndims).expand(shape)
         if not isinstance(score_function, numbers.Number):
-            score_function = sum_rightmost(score_function, self.reinterpreted_batch_ndims).expand(self.batch_shape)
+            score_function = sum_rightmost(score_function, self.reinterpreted_batch_ndims).expand(shape)
         if not isinstance(entropy_term, numbers.Number):
-            entropy_term = sum_rightmost(entropy_term, self.reinterpreted_batch_ndims).expand(self.batch_shape)
+            entropy_term = sum_rightmost(entropy_term, self.reinterpreted_batch_ndims).expand(shape)
         return ScoreParts(log_prob, score_function, entropy_term)
 
     def enumerate_support(self):
