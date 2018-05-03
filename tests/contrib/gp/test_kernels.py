@@ -127,11 +127,10 @@ def test_combination():
     assert k.get_subkernel(k5.name) is k5
 
 
-def test_active_dims_overlap_error():
+def test_active_dims_overlap_ok():
     k1 = Matern52(2, variance, lengthscale[0], active_dims=[0, 1])
     k2 = Matern32(2, variance, lengthscale[0], active_dims=[1, 2])
-    with pytest.raises(ValueError):
-        Sum(k1, k2)
+    Sum(k1, k2)
 
 
 def test_active_dims_disjoint_ok():
