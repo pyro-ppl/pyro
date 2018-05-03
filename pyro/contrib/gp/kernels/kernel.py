@@ -175,16 +175,7 @@ class Combination(Kernel):
 
         active_dims = set(kern0.active_dims)
         if isinstance(kern1, Kernel):
-            active_dims1 = set(kern1.active_dims)
-            if active_dims == active_dims1:  # on the same active_dims
-                pass
-            elif len(active_dims & active_dims1) == 0:  # on disjoint active_dims
-                active_dims = active_dims | active_dims1
-            else:
-                raise ValueError("Sub-kernels must act on the same active dimensions "
-                                 "or disjoint active dimensions (to create direct sum "
-                                 "or tensor product of kernels).")
-
+            active_dims  |= set(kern1.active_dims)
         active_dims = sorted(active_dims)
         input_dim = len(active_dims)
         super(Combination, self).__init__(input_dim, active_dims, name)
