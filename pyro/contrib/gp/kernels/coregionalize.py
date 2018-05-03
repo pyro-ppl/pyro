@@ -66,7 +66,7 @@ class Coregionalize(Kernel):
             self.diagonal = None
         else:
             if diagonal.shape != (input_dim,):
-                raise ValueError("Expected diagonal.shape == ({},rank), actual {}".format(diagonal.shape))
+                raise ValueError("Expected diagonal.shape == ({},), actual {}".format(input_dim, diagonal.shape))
             self.diagonal = Parameter(diagonal)
             self.set_constraint("diagonal", constraints.positive)
 
