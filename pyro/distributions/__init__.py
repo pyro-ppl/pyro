@@ -15,6 +15,7 @@ from pyro.distributions.torch import *  # noqa F403
 from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import enable_validation, is_validation_enabled, validation_enabled
 from pyro.distributions.von_mises import VonMises
+from pyro.distributions.relaxed_straight_through import RelaxedCategoricalStraightThrough
 
 __all__ = [
     "enable_validation",
@@ -31,6 +32,7 @@ __all__ = [
     "Rejector",
     "TorchDistribution",
     "VonMises",
+    "RelaxedCategoricalStraightThrough"
 ]
 
 # Import all torch distributions from `pyro.distributions.torch_distribution`
