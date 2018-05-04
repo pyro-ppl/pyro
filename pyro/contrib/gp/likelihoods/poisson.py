@@ -12,7 +12,7 @@ class Poisson(Likelihood):
     """
     Implementation of Poisson likelihood, which is used for count data.
 
-    Poisson likelihood uses the :class:`~pyro.distributions.torch.Poisson`
+    Poisson likelihood uses the :class:`~pyro.distributions.Poisson`
     distribution, so the output of ``response_function`` should be positive.
     By default, we use :func:`torch.exp` as response function, corresponding
     to a log-Gaussian Cox process.

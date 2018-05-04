@@ -17,7 +17,7 @@ class MultiClass(Likelihood):
     Implementation of MultiClass likelihood, which is used for multi-class
     classification problems.
 
-    MultiClass likelihood uses :class:`~pyro.distributions.torch.Categorical`
+    MultiClass likelihood uses :class:`~pyro.distributions.Categorical`
     distribution, so ``response_function`` should normalize its input's rightmost axis.
     By default, we use `softmax` function.
 

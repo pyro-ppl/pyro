@@ -13,7 +13,7 @@ class Binary(Likelihood):
     Implementation of Binary likelihood, which is used for binary classification
     problems.
 
-    Binary likelihood uses :class:`~pyro.distributions.torch.Bernoulli` distribution,
+    Binary likelihood uses :class:`~pyro.distributions.Bernoulli` distribution,
     so the output of ``response_function`` should be in range :math:`(0,1)`. By
     default, we use `sigmoid` function.
 
