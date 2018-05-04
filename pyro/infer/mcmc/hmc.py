@@ -189,8 +189,8 @@ class HMC(TraceKernel):
             if node["fn"].support is not constraints.real and self._automatic_transform_enabled:
                 self.transforms[name] = biject_to(node["fn"].support).inv
                 site_value = self.transforms[name](node["value"])
-            r_loc = torch.zeros_like(site_value)
-            r_scale = torch.ones_like(site_value)
+            r_loc = site_value.new_zeros(site_value.shape)
+            r_scale = site_value.new_ones(site_value.shape)
             self._r_dist[name] = dist.Normal(loc=r_loc, scale=r_scale)
         self._validate_trace(trace)
 
