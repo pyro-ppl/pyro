@@ -46,7 +46,7 @@ def detach_iterable(iterable):
 
 def zero_grads(tensors):
     """
-    Sets gradients of list of Variables to zero in place
+    Sets gradients of list of Tensors to zero in place
     """
     for p in tensors:
         if p.grad is not None:

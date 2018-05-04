@@ -4,9 +4,20 @@ from .messenger import Messenger
 
 
 class BlockMessenger(Messenger):
-    # TODO fix this docstring
     """
-    This Messenger selectively hides pyro primitive sites from the outside world.
+    This Messenger selectively hides Pyro primitive sites from the outside world.
+    Default behavior: block everything.
+    BlockMessenger has a flexible interface that allows users
+    to specify in several different ways
+    which sites should be hidden or exposed.
+
+    A site is hidden if at least one of the following holds:
+
+        1. msg["name"] in hide
+        2. msg["type"] in hide_types
+        3. msg["name"] not in expose and msg["type"] not in expose_types
+        4. hide_all == True and hide, hide_types, and expose_types are all None
+
 
     For example, suppose the stochastic function fn has two sample sites "a" and "b".
     Then any poutine outside of BlockMessenger(fn, hide=["a"])
@@ -25,33 +36,20 @@ class BlockMessenger(Messenger):
     >>> "b" in trace_outer
     True
 
-    BlockMessenger has a flexible interface that allows users
-    to specify in several different ways
-    which sites should be hidden or exposed.
     See the constructor for details.
+
+    :param bool hide_all: hide all sites
+    :param bool expose_all: expose all sites normally
+    :param list hide: list of site names to hide, rest will be exposed normally
+    :param list expose: list of site names to expose, rest will be hidden
+    :param list hide_types: list of site types to hide, rest will be exposed normally
+    :param list expose_types: list of site types to expose normally, rest will be hidden
     """
 
     def __init__(self,
                  hide_all=True, expose_all=False,
                  hide=None, expose=None,
                  hide_types=None, expose_types=None):
-        """
-        :param bool hide_all: hide all sites
-        :param bool expose_all: expose all sites normally
-        :param list hide: list of site names to hide, rest will be exposed normally
-        :param list expose: list of site names to expose, rest will be hidden
-        :param list hide_types: list of site types to hide, rest will be exposed normally
-        :param list expose_types: list of site types to expose normally, rest will be hidden
-
-        Constructor for blocking messenger
-        Default behavior: block everything (hide_all == True)
-
-        A site is hidden if at least one of the following holds:
-        1. msg["name"] in hide
-        2. msg["type"] in hide_types
-        3. msg["name"] not in expose and msg["type"] not in expose_types
-        4. hide_all == True and hide, hide_types, and expose_types are all None
-        """
         super(BlockMessenger, self).__init__()
         # first, some sanity checks:
         # hide_all and expose_all intersect?
@@ -96,14 +94,10 @@ class BlockMessenger(Messenger):
 
     def _block_up(self, msg):
         """
+        Uses rule described in main docstring to decide whether to block or expose.
+
         :param msg: current message at a trace site, after all execution finished.
         :returns: boolean decision to hide or expose site.
-
-        A site is hidden if at least one of the following holds:
-        1. msg["name"] in self.hide
-        2. msg["type"] in self.hide_types
-        3. msg["name"] not in self.expose and msg["type"] not in self.expose_types
-        4. self.hide_all == True and hide, hide_types, and expose_types are all None
         """
         # handle observes
         if msg["type"] == "sample" and msg["is_observed"]:

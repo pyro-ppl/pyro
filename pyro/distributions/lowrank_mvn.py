@@ -107,8 +107,8 @@ class LowRankMultivariateNormal(TorchDistribution):
         elif y.dim() == 2:
             W_Dinv_y = W_Dinv.matmul(y.t())
         else:
-            raise ValueError("SparseMultivariateNormal distribution does not support "
-                             "computing log_prob for a tensor with more than 2 dimensionals.")
+            raise NotImplementedError("SparseMultivariateNormal distribution does not support "
+                                      "computing log_prob for a tensor with more than 2 dimensionals.")
         Linv_W_Dinv_y = matrix_triangular_solve_compat(W_Dinv_y, L, upper=False)
         if y.dim() == 2:
             Linv_W_Dinv_y = Linv_W_Dinv_y.t()
