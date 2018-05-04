@@ -43,6 +43,13 @@ class Cauchy(torch.distributions.Cauchy, TorchDistributionMixin):
         return Cauchy(loc, scale, validate_args=validate_args)
 
 
+class Chi2(torch.distributions.Chi2, TorchDistributionMixin):
+    def expand(self, batch_shape):
+        validate_args = self.__dict__.get('validate_args')
+        df = self.df.expand(batch_shape)
+        return Chi2(df, validate_args=validate_args)
+
+
 class Dirichlet(torch.distributions.Dirichlet, TorchDistributionMixin):
     def expand(self, batch_shape):
         validate_args = self.__dict__.get('validate_args')
@@ -57,6 +64,33 @@ class Exponential(torch.distributions.Exponential, TorchDistributionMixin):
         return Exponential(rate, validate_args=validate_args)
 
 
+class Gamma(torch.distributions.Gamma, TorchDistributionMixin):
+    def expand(self, batch_shape):
+        validate_args = self.__dict__.get('validate_args')
+        concentration = self.concentration.expand(batch_shape)
+        rate = self.rate.expand(batch_shape)
+        return Gamma(concentration, rate, validate_args=validate_args)
+
+
+class Geometric(torch.distributions.Geometric, TorchDistributionMixin):
+    def expand(self, batch_shape):
+        validate_args = self.__dict__.get('validate_args')
+        if 'probs' in self.__dict__:
+            probs = self.probs.expand(batch_shape)
+            return Geometric(probs=probs, validate_args=validate_args)
+        else:
+            logits = self.logits.expand(batch_shape)
+            return Geometric(logits=logits, validate_args=validate_args)
+
+
+class Gumbel(torch.distributions.Gumbel, TorchDistributionMixin):
+    def expand(self, batch_shape):
+        validate_args = self.__dict__.get('validate_args')
+        loc = self.loc.expand(batch_shape)
+        scale = self.scale.expand(batch_shape)
+        return Gumbel(loc, scale, validate_args=validate_args)
+
+
 class Independent(torch.distributions.Independent, TorchDistributionMixin):
     def expand(self, batch_shape):
         validate_args = self.__dict__.get('validate_args')
@@ -65,12 +99,31 @@ class Independent(torch.distributions.Independent, TorchDistributionMixin):
         return Independent(base_dist, self.reinterpreted_batch_ndims, validate_args=validate_args)
 
 
+class Laplace(torch.distributions.Laplace, TorchDistributionMixin):
+    def expand(self, batch_shape):
+        validate_args = self.__dict__.get('validate_args')
+        loc = self.loc.expand(batch_shape)
+        scale = self.scale.expand(batch_shape)
+        return Laplace(loc, scale, validate_args=validate_args)
+
+
 class LogNormal(torch.distributions.LogNormal, TorchDistributionMixin):
     def expand(self, batch_shape):
         validate_args = self.__dict__.get('validate_args')
         loc = self.loc.expand(batch_shape)
         scale = self.scale.expand(batch_shape)
         return LogNormal(loc, scale, validate_args=validate_args)
+
+
+class Multinomial(torch.distributions.Multinomial, TorchDistributionMixin):
+    def expand(self, batch_shape):
+        validate_args = self.__dict__.get('validate_args')
+        if 'probs' in self.__dict__:
+            probs = self.probs.expand(batch_shape + self.event_shape)
+            return Multinomial(self.total_count, probs=probs, validate_args=validate_args)
+        else:
+            logits = self.logits.expand(batch_shape + self.event_shape)
+            return Multinomial(self.total_count, logits=logits, validate_args=validate_args)
 
 
 class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributionMixin):
@@ -113,6 +166,21 @@ class Poisson(torch.distributions.Poisson, TorchDistributionMixin):
         validate_args = self.__dict__.get('validate_args')
         rate = self.rate.expand(batch_shape)
         return Poisson(rate, validate_args=validate_args)
+
+
+class StudentT(torch.distributions.StudentT, TorchDistributionMixin):
+    def expand(self, batch_shape):
+        validate_args = self.__dict__.get('validate_args')
+        df = self.df.expand(batch_shape)
+        loc = self.loc.expand(batch_shape)
+        scale = self.scale.expand(batch_shape)
+        return StudentT(df, loc, scale, validate_args=validate_args)
+
+
+class TransformedDistribution(torch.distributions.TransformedDistribution, TorchDistributionMixin):
+    def expand(self, batch_shape):
+        base_dist = self.base_dist.expand(batch_shape)
+        return TransformedDistribution(base_dist, self.transforms)
 
 
 class Uniform(torch.distributions.Uniform, TorchDistributionMixin):
