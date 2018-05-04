@@ -34,3 +34,19 @@ __all__ = [
     "Warping",
     "WhiteNoise",
 ]
+
+# Create sphinx documentation.
+__doc__ = '\n\n'.join([
+
+    '''
+    {0}
+    ----------------------------------------------------------------
+    .. autoclass:: pyro.contrib.gp.kernels.{0}
+        :members:
+        :undoc-members:
+        :special-members: __call__
+        :show-inheritance:
+        :member-order: bysource
+    '''.format(_name)
+    for _name in sorted(__all__)
+])
