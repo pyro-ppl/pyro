@@ -77,7 +77,7 @@ TEST_CASES = [
                         [0.5, 0., 0.5]]),
         Z=torch.tensor([[1., 0., 0.],
                         [0., 1., 0.]]),
-        K_sum=1.5,
+        K_sum=2.25,
     ),
     T(
         Coregionalize(3, rank=2),

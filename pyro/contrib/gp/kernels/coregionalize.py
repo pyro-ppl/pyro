@@ -37,8 +37,7 @@ class Coregionalize(Kernel):
         matrix that maps features to ``rank``-many components. If unspecified,
         this will be randomly initialized.
     :param torch.Tensor diagonal: An optional vector of length ``input_dim``.
-        If unspecified, this will be set to constant ``1 - rank / input_dim`` if
-        ``rank < input_dim`` otherwise zero.
+        If unspecified, this will be set to constant ``0.5``.
     :param list active_dims: List of feature dimensions of the input which the
         kernel acts on.
     :param str name: Name of the kernel.
@@ -47,28 +46,24 @@ class Coregionalize(Kernel):
     def __init__(self, input_dim, rank=None, components=None, diagonal=None, active_dims=None, name="coregionalize"):
         super(Coregionalize, self).__init__(input_dim, active_dims, name)
 
-        # Add a low-rank kernel with expected value torch.eye(input_dim, input_dim) * rank / input_dim.
+        # Add a low-rank kernel with expected value torch.eye(input_dim, input_dim) / 2.
         if components is None:
             rank = input_dim if rank is None else rank
-            components = torch.randn(input_dim, rank) * (0.5 / rank ** 0.5)
+            components = torch.randn(input_dim, rank) * (0.5 / rank) ** 0.5
         else:
             rank = components.shape[-1]
         if components.shape != (input_dim, rank):
             raise ValueError("Expected components.shape == ({},rank), actual {}".format(input_dim, components.shape))
         self.components = Parameter(components)
 
-        # Add a diagonal component only if rank < input_dim.
-        # The expected value should be torch.eye(input_dim, input_dim) * (1 - rank / input_dim),
-        # such that the result has expected value the identity matrix.
-        if diagonal is None and rank < input_dim:
-            diagonal = components.new_ones(input_dim) * 0.5
+        # Add a diagonal component initialized to torch.eye(input_dim, input_dim) / 2,
+        # such that the total kernel has expected value the identity matrix.
         if diagonal is None:
-            self.diagonal = None
-        else:
-            if diagonal.shape != (input_dim,):
-                raise ValueError("Expected diagonal.shape == ({},), actual {}".format(input_dim, diagonal.shape))
-            self.diagonal = Parameter(diagonal)
-            self.set_constraint("diagonal", constraints.positive)
+            diagonal = components.new_ones(input_dim) * 0.5
+        if diagonal.shape != (input_dim,):
+            raise ValueError("Expected diagonal.shape == ({},), actual {}".format(input_dim, diagonal.shape))
+        self.diagonal = Parameter(diagonal)
+        self.set_constraint("diagonal", constraints.positive)
 
     def forward(self, X, Z=None, diag=False):
         components = self.get_param("components")
