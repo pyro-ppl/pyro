@@ -9,10 +9,10 @@ from pyro.distributions.util import copy_docs_from
 @copy_docs_from(RelaxedOneHotCategorical)
 class RelaxedCategoricalStraightThrough(RelaxedOneHotCategorical):
     """
-    Implementation of ``Dirichlet`` via ``Gamma``.
+    Implementation of RelaxedCategorical with a Straight-through Estimator
 
-    This naive implementation has stochastic reparameterized gradients, which
-    have higher variance than PyTorch's ``Dirichlet`` implementation.
+    This distribution allows using a Gumbel-Softmax thing to estimate probabilities for samples but generates discrete samples.
+    In detail, it uses discrete samples for the forward step but the relaxed sample for the backwards gradient.
     """
     def __init__(self, temperature, probs=None, logits=None, validate_args=None):
         super(RelaxedCategoricalStraightThrough, self).__init__(temperature=temperature, probs=probs, logits=logits, validate_args=validate_args)
