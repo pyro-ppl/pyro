@@ -56,21 +56,11 @@ Kernels
 ~~~~~~~
 
 .. automodule:: pyro.contrib.gp.kernels
-    :members:
-    :undoc-members:
-    :special-members: __call__
-    :show-inheritance:
-    :member-order: bysource
 
 Likelihoods
 ~~~~~~~~~~~
 
 .. automodule:: pyro.contrib.gp.likelihoods
-    :members:
-    :undoc-members:
-    :special-members: __call__
-    :show-inheritance:
-    :member-order: bysource
 
 Util
 ~~~~
