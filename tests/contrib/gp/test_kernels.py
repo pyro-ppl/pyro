@@ -77,7 +77,7 @@ TEST_CASES = [
                         [0.5, 0., 0.5]]),
         Z=torch.tensor([[1., 0., 0.],
                         [0., 1., 0.]]),
-        K_sum=1.5,
+        K_sum=2.25,
     ),
     T(
         Coregionalize(3, rank=2),
@@ -95,7 +95,14 @@ TEST_CASES = [
                         [0., 1., 0.]]),
         K_sum=None,  # kernel is randomly initialized
     ),
-
+    T(
+        Coregionalize(3, rank=2, diagonal=0.01 * torch.ones(3)),
+        X=torch.tensor([[1., 0., 0.],
+                        [0.5, 0., 0.5]]),
+        Z=torch.tensor([[1., 0., 0.],
+                        [0., 1., 0.]]),
+        K_sum=None,  # kernel is randomly initialized
+    ),
 ]
 
 TEST_IDS = [t[0].__class__.__name__ for t in TEST_CASES]
@@ -108,6 +115,10 @@ def test_kernel_forward(kernel, X, Z, K_sum):
     if K_sum is not None:
         assert_equal(K.sum().item(), K_sum)
     assert_equal(kernel(X).diag(), kernel(X, diag=True))
+    if not isinstance(kernel, WhiteNoise):  # WhiteNoise avoids computing a delta function by assuming X != Z
+        assert_equal(kernel(X), kernel(X, X))
+    if Z is not None:
+        assert_equal(kernel(X, Z), kernel(Z, X).t())
 
 
 def test_combination():
