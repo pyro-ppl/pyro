@@ -10,7 +10,7 @@ from .kernel import Kernel
 class Coregionalize(Kernel):
     r"""
     A kernel for the linear model of coregionalization
-    :math:`k(x,z) = x^T (C C^T + D) z` where :math:`C` is an
+    :math:`k(x,z) = x^T (W W^T + D) z` where :math:`W` is an
     ``input_dim``-by-``rank`` matrix and typically ``rank < input_dim``,
     and ``D`` is a diagonal matrix.
 
@@ -21,7 +21,7 @@ class Coregionalize(Kernel):
     outputs are coded as distinct data points with one-hot coded features
     denoting which output each datapoint represents.
 
-    If only ``rank`` is specified, the kernel ``(C C^T + D)`` will be
+    If only ``rank`` is specified, the kernel ``(W W^T + D)`` will be
     randomly initialized to a matrix with expected value the identity matrix.
 
     References:
@@ -50,7 +50,7 @@ class Coregionalize(Kernel):
         # Add a low-rank kernel with expected value torch.eye(input_dim, input_dim) * rank / input_dim.
         if components is None:
             rank = input_dim if rank is None else rank
-            components = torch.randn(input_dim, rank) / input_dim ** 0.5
+            components = torch.randn(input_dim, rank) * (0.5 / rank ** 0.5)
         else:
             rank = components.shape[-1]
         if components.shape != (input_dim, rank):
@@ -61,7 +61,7 @@ class Coregionalize(Kernel):
         # The expected value should be torch.eye(input_dim, input_dim) * (1 - rank / input_dim),
         # such that the result has expected value the identity matrix.
         if diagonal is None and rank < input_dim:
-            diagonal = components.new_ones(input_dim) * (1.0 - rank / input_dim)
+            diagonal = components.new_ones(input_dim) * 0.5
         if diagonal is None:
             self.diagonal = None
         else:
