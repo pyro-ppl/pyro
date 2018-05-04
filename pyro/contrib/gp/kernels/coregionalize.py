@@ -67,15 +67,12 @@ class Coregionalize(Kernel):
 
     def forward(self, X, Z=None, diag=False):
         components = self.get_param("components")
-        diagonal = None if self.diagonal is None else self.get_param("diagonal")
+        diagonal = self.get_param("diagonal")
         X = self._slice_input(X)
         Xc = X.matmul(components)
 
         if diag:
-            result = (Xc ** 2).sum(-1)
-            if diagonal is not None:
-                result = result + (X ** 2).mv(diagonal)
-            return result
+            return (Xc ** 2).sum(-1) + (X ** 2).mv(diagonal)
 
         if Z is None:
             Z = X
@@ -84,7 +81,4 @@ class Coregionalize(Kernel):
             Z = self._slice_input(Z)
             Zc = Z.matmul(components)
 
-        result = Xc.matmul(Zc.t())
-        if diagonal is not None:
-            result = result + (X * diagonal).matmul(Z.t())
-        return result
+        return Xc.matmul(Zc.t()) + (X * diagonal).matmul(Z.t())
