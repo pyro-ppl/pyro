@@ -116,7 +116,7 @@ def check_sample_shapes(small, large):
 def test_expand_by(dist, sample_shape):
     for idx in range(dist.get_num_test_data()):
         small = dist.pyro_dist(**dist.get_dist_params(idx))
-        large = small.expand(sample_shape + small.batch_shape)
+        large = small.expand_by(sample_shape)
         assert large.batch_shape == sample_shape + small.batch_shape
         check_sample_shapes(small, large)
 

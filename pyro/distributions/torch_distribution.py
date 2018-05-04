@@ -69,7 +69,16 @@ class TorchDistributionMixin(Distribution):
         Expands a distribution to a desired
         :attr:`~torch.distributions.distribution.Distribution.batch_shape`.
 
-        :param torch.Size batch_shape: The target ``batch_shape``.
+        Note that this is more general than :meth:`expand_by` because
+        ``d.expand_by(sample_shape)`` can be reduced to
+        ``d.expand(sample_shape + d.batch_shape)``.
+
+        :param torch.Size batch_shape: The target ``batch_shape``. This must
+            compatible with ``self.batch_shape`` similar to the requirements
+            of :func:`torch.Tensor.expand`: the target ``batch_shape`` must
+            be at least as long as ``self.batch_shape``, and for each
+            non-singleton dim of ``self.batch_shape``, ``batch_shape`` must
+            either agree or be set to ``-1``.
         :return: An expanded version of this distribution.
         :rtype: :class:`ReshapedDistribution`
         """
@@ -94,6 +103,9 @@ class TorchDistributionMixin(Distribution):
         """
         Expands a distribution by adding ``sample_shape`` to the left side of
         its :attr:`~torch.distributions.distribution.Distribution.batch_shape`.
+
+        To expand internal dims of ``self.batch_shape`` from 1 to something
+        larger, use :meth:`expand` instead.
 
         :param torch.Size sample_shape: The size of the iid batch to be drawn
             from the distribution.
