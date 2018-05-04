@@ -149,3 +149,19 @@ def test_bernoulli_beta_with_dual_averaging():
     mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites="p_latent")
     assert_equal(posterior.mean, true_probs, prec=0.03)
+
+
+@pytest.mark.filterwarnings("ignore:Encountered NAN")
+def test_categorical_dirichlet():
+    def model(data):
+        concentration = torch.tensor([1.0, 1.0, 1.0])
+        p_latent = pyro.sample('p_latent', dist.Dirichlet(concentration))
+        pyro.sample("obs", dist.Categorical(p_latent), obs=data)
+        return p_latent
+
+    true_probs = torch.tensor([0.1, 0.6, 0.3])
+    data = dist.Categorical(true_probs).sample(sample_shape=(torch.Size((2000,))))
+    nuts_kernel = NUTS(model, adapt_step_size=True)
+    mcmc_run = MCMC(nuts_kernel, num_samples=200, warmup_steps=100).run(data)
+    posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
+    assert_equal(posterior.mean, true_probs, prec=0.02)
