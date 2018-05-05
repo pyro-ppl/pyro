@@ -13,3 +13,20 @@ __all__ = [
     "MultiClass",
     "Poisson",
 ]
+
+
+# Create sphinx documentation.
+__doc__ = '\n\n'.join([
+
+    '''
+    {0}
+    ----------------------------------------------------------------
+    .. autoclass:: pyro.contrib.gp.likelihoods.{0}
+        :members:
+        :undoc-members:
+        :special-members: __call__
+        :show-inheritance:
+        :member-order: bysource
+    '''.format(_name)
+    for _name in sorted(__all__)
+])

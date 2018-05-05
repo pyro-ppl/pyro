@@ -205,7 +205,6 @@ def test_normal_gamma():
     assert_equal(posterior.mean, true_std, prec=0.05)
 
 
-@pytest.mark.xfail(reason='log_abs_det_jacobian not implemented for StickBreakingTransform')
 def test_categorical_dirichlet():
     def model(data):
         concentration = torch.tensor([1.0, 1.0, 1.0])
