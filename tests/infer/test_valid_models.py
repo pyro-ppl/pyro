@@ -829,7 +829,8 @@ def test_enum_discrete_non_enumerated_iarange_ok(enumerate_):
         assert_ok(model, model, TraceEnum_ELBO(max_iarange_nesting=1))
 
 
-def test_iarange_shape_broadcasting():
+@pytest.mark.parametrize("times", [1, 2], ids=["applied_once", "applied_twice"])
+def test_iarange_shape_broadcasting(times):
     data = torch.ones(1000, 2)
 
     def model():
@@ -846,7 +847,8 @@ def test_iarange_shape_broadcasting():
                 pyro.sample("p", dist.Beta(torch.tensor(1.1), torch.tensor(1.1)))
 
     pyro.clear_param_store()
-    model, guide = poutine.broadcast(model), poutine.broadcast(guide)
+    for _ in range(times):
+        model, guide = poutine.broadcast(model), poutine.broadcast(guide)
     assert_ok(model, guide, Trace_ELBO())
 
 
