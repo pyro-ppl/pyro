@@ -206,7 +206,7 @@ class JitTraceEnum_ELBO(TraceEnum_ELBO):
 
 class PyroJitTraceEnum_ELBO(TraceEnum_ELBO):
     """
-    Like :class:`TraceEnum_ELBO` but uses :func:`torch.jit.compile` to
+    Like :class:`JitTraceEnum_ELBO` but uses :func:`pyro.ops.jit.compile` to
     compile :meth:`loss_and_grads`.
 
     This works only for a limited set of models:
