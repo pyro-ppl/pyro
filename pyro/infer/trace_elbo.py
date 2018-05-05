@@ -1,7 +1,11 @@
 from __future__ import absolute_import, division, print_function
 
 import warnings
+import weakref
 
+import torch
+
+import pyro
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
@@ -139,6 +143,89 @@ class Trace_ELBO(ELBO):
                 surrogate_loss_particle.backward()
 
         loss = -elbo
+        if torch_isnan(loss):
+            warnings.warn('Encountered NAN loss')
+        return loss
+
+    def jit_loss_and_grads(self, model, guide, *args, **kwargs):
+        """
+        Like :meth:`loss_and_grads` but uses :func:`torch.jit.compile` to
+        compile the loss computation. This works only for a limited set of
+        models with static structure.
+
+        This works only for a limited set of models:
+
+        -   Models must have static structure.
+        -   Models must not depend on any global data (except the param store).
+        -   All model inputs that are tensors must be passed in via ``*args``.
+        -   All model inputs that are *not* tensors must be passed in via
+            ``*kwargs``, and these will be fixed to their values on the first
+            call to :meth:`jit_loss_and_grads`.
+
+        Example::
+
+            elbo = Trace_ELBO()
+            svi = SVI(model, guide, optim, loss=elbo.loss,
+                      loss_and_grads=elbo.jit_loss_and_grads)
+
+        .. warning:: Experimental. Interface subject to change.
+        """
+        if getattr(self, '_loss_and_surrogate_loss', None) is None:
+            # populate param store
+            with poutine.block():
+                with poutine.trace(param_only=True) as param_capture:
+                    for _ in self._get_traces(model, guide, *args, **kwargs):
+                        pass
+            self._param_names = list(param_capture.trace.nodes.keys())
+
+            # build a closure for loss_and_surrogate_loss
+            weakself = weakref.ref(self)
+
+            @torch.jit.compile(nderivs=1)
+            def loss_and_surrogate_loss(args_list, param_list):
+                self = weakself()
+                loss = 0.0
+                surrogate_loss = 0.0
+                for model_trace, guide_trace in self._get_traces(model, guide, *args_list, **kwargs):
+                    elbo_particle = 0
+                    surrogate_elbo_particle = 0
+                    log_r = None
+
+                    # compute elbo and surrogate elbo
+                    for name, site in model_trace.nodes.items():
+                        if site["type"] == "sample":
+                            elbo_particle = elbo_particle + site["log_prob_sum"]
+                            surrogate_elbo_particle = surrogate_elbo_particle + site["log_prob_sum"]
+
+                    for name, site in guide_trace.nodes.items():
+                        if site["type"] == "sample":
+                            log_prob, score_function_term, entropy_term = site["score_parts"]
+
+                            elbo_particle = elbo_particle - site["log_prob_sum"]
+
+                            if not is_identically_zero(entropy_term):
+                                surrogate_elbo_particle = surrogate_elbo_particle - entropy_term.sum()
+
+                            if not is_identically_zero(score_function_term):
+                                if log_r is None:
+                                    log_r = _compute_log_r(model_trace, guide_trace)
+                                site = log_r.sum_to(site["cond_indep_stack"])
+                                surrogate_elbo_particle = surrogate_elbo_particle + (site * score_function_term).sum()
+
+                    loss = loss - elbo_particle / self.num_particles
+                    surrogate_loss = surrogate_loss - surrogate_elbo_particle / self.num_particles
+
+                return loss, surrogate_loss
+
+            self._loss_and_surrogate_loss = loss_and_surrogate_loss
+
+        # invoke _loss_and_surrogate_loss
+        args_list = list(args)
+        param_list = [pyro.param(name).unconstrained() for name in self._param_names]
+        loss, surrogate_loss = self._loss_and_surrogate_loss(args_list, param_list)
+        surrogate_loss.backward()  # this line triggers jit compilation
+        loss = loss.item()
+
         if torch_isnan(loss):
             warnings.warn('Encountered NAN loss')
         return loss

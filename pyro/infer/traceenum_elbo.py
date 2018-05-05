@@ -4,7 +4,6 @@ import warnings
 import weakref
 
 import torch
-from torch.autograd import grad
 
 import pyro
 import pyro.poutine as poutine
@@ -153,13 +152,38 @@ class TraceEnum_ELBO(ELBO):
             warnings.warn('Encountered NAN loss')
         return loss
 
-    # This version calls .backward() outside of the jitted function,
-    # and therefore has higher memory overhead.
-    def jit_loss_and_grads_v1(self, model, guide, *args, **kwargs):
+    def jit_loss_and_grads(self, model, guide, *args, **kwargs):
+        """
+        Like :meth:`loss_and_grads` but uses :func:`torch.jit.compile` to
+        compile the loss computation. This works only for a limited set of
+        models with static structure.
+
+        This works only for a limited set of models:
+
+        -   Models must have static structure.
+        -   Models must not depend on any global data (except the param store).
+        -   All model inputs that are tensors must be passed in via ``*args``.
+        -   All model inputs that are *not* tensors must be passed in via
+            ``*kwargs``, and these will be fixed to their values on the first
+            call to :meth:`jit_loss_and_grads`.
+
+        Example::
+
+            elbo = TraceEnum_ELBO()
+            svi = SVI(model, guide, optim, loss=elbo.loss,
+                      loss_and_grads=elbo.jit_loss_and_grads)
+
+        .. warning:: Experimental. Interface subject to change.
+        """
         if getattr(self, '_differentiable_loss', None) is None:
             # populate param store
-            for _ in self._get_traces(model, guide, *args, **kwargs):
-                pass
+            with poutine.block():
+                with poutine.trace(param_only=True) as param_capture:
+                    for _ in self._get_traces(model, guide, *args, **kwargs):
+                        pass
+            self._param_names = list(param_capture.trace.nodes.keys())
+
+            # build a closure for differentiable_loss
             weakself = weakref.ref(self)
 
             @torch.jit.compile(nderivs=1)
@@ -174,50 +198,11 @@ class TraceEnum_ELBO(ELBO):
 
         # invoke _differentiable_loss
         args_list = list(args)
-        param_list = [param for name, param in sorted(pyro.get_param_store().named_parameters())]
+        param_list = [pyro.param(name).unconstrained() for name in self._param_names]
         differentiable_loss = self._differentiable_loss(args_list, param_list)
-
+        differentiable_loss.backward()  # this line triggers jit compilation
         loss = differentiable_loss.item()
-        differentiable_loss.backward()
 
         if torch_isnan(loss):
             warnings.warn('Encountered NAN loss')
         return loss
-
-    # This version uses grad() but is blocked by unimplemented features.
-    def jit_loss_and_grads_v2(self, model, guide, *args, **kwargs):
-        if getattr(self, '_jit_loss_and_grads', None) is None:
-            # populate param store
-            for _ in self._get_traces(model, guide, *args, **kwargs):
-                pass
-            weakself = weakref.ref(self)
-
-            @torch.jit.compile(nderivs=0)
-            def jit_loss_and_grads(args_list, param_list):
-                self = weakself()
-                loss = 0.0
-                grads = [p.new_zeros(p.shape) for p in param_list]
-                for model_trace, guide_trace in self._get_traces(model, guide, *args_list, **kwargs):
-                    elbo_particle = _compute_dice_elbo(model_trace, guide_trace)
-                    loss_term = -elbo_particle / self.num_particles
-                    for grad_out, term in zip(grads, grad(loss_term, param_list)):
-                        grad_out += term
-                    loss += loss_term.detach()
-                return loss, grads
-
-            self._jit_loss_and_grads = jit_loss_and_grads
-
-        # invoke _jit_loss_and_grads
-        args_list = list(args)
-        param_list = [param for name, param in sorted(pyro.get_param_store().named_parameters())]
-        loss, grads = self._jit_loss_and_grads(args_list, param_list)
-
-        loss = loss.item()
-        for param, grad_update in zip(param_list, grads):
-            param.grad += grad_update
-
-        if torch_isnan(loss):
-            warnings.warn('Encountered NAN loss')
-        return loss
-
-    jit_loss_and_grads = jit_loss_and_grads_v1

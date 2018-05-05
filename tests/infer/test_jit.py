@@ -2,11 +2,12 @@ from __future__ import absolute_import, division, print_function
 
 import pytest
 import torch
-from torch.distributions import constraints
+from torch.autograd import grad
+from torch.distributions import constraints, kl_divergence
 
 import pyro
 import pyro.distributions as dist
-from pyro.infer import SVI, TraceEnum_ELBO, TraceGraph_ELBO
+from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO
 from pyro.optim import Adam
 from tests.common import assert_equal, xfail_param
 
@@ -81,12 +82,12 @@ def test_grad_expand():
 
 @pytest.mark.parametrize('num_particles', [1, 10])
 @pytest.mark.parametrize('Elbo,loss_and_grads_impl', [
+    (Trace_ELBO, 'loss_and_grads'),
+    (Trace_ELBO, 'jit_loss_and_grads'),
     (TraceGraph_ELBO, 'loss_and_grads'),
     (TraceGraph_ELBO, 'jit_loss_and_grads'),
     (TraceEnum_ELBO, 'loss_and_grads'),
-    (TraceEnum_ELBO, 'jit_loss_and_grads_v1'),
-    xfail_param(TraceEnum_ELBO, 'ji_loss_and_grads_v2',
-                reason='jit RuntimeError ExpandBackward is not supported'),
+    (TraceEnum_ELBO, 'jit_loss_and_grads'),
 ])
 def test_svi(Elbo, loss_and_grads_impl, num_particles):
     pyro.clear_param_store()
@@ -109,12 +110,63 @@ def test_svi(Elbo, loss_and_grads_impl, num_particles):
         inference.step(data)
 
 
+@pytest.mark.parametrize("enumerate2", ["sequential", "parallel"])
+@pytest.mark.parametrize("enumerate1", ["sequential", "parallel"])
+@pytest.mark.parametrize("irange_dim", [1, 2])
+@pytest.mark.parametrize('Elbo,loss_and_grads_impl', [
+    (Trace_ELBO, 'loss_and_grads'),
+    (Trace_ELBO, 'jit_loss_and_grads'),
+    (TraceGraph_ELBO, 'loss_and_grads'),
+    (TraceGraph_ELBO, 'jit_loss_and_grads'),
+    (TraceEnum_ELBO, 'loss_and_grads'),
+    (TraceEnum_ELBO, 'jit_loss_and_grads'),
+])
+def test_svi_enum(Elbo, loss_and_grads_impl, irange_dim, enumerate1, enumerate2):
+    pyro.clear_param_store()
+    num_particles = 100
+    q = pyro.param("q", torch.tensor(0.75))
+    p = 0.2693204236205713  # for which kl(Bernoulli(q), Bernoulli(p)) = 0.5
+
+    def model():
+        pyro.sample("x", dist.Bernoulli(p))
+        for i in pyro.irange("irange", irange_dim):
+            pyro.sample("y_{}".format(i), dist.Bernoulli(p))
+
+    def guide():
+        q = pyro.param("q")
+        pyro.sample("x", dist.Bernoulli(q), infer={"enumerate": enumerate1})
+        for i in pyro.irange("irange", irange_dim):
+            pyro.sample("y_{}".format(i), dist.Bernoulli(q), infer={"enumerate": enumerate2})
+
+    kl = (1 + irange_dim) * kl_divergence(dist.Bernoulli(q), dist.Bernoulli(p))
+    expected_loss = kl.item()
+    expected_grad = grad(kl, [q])[0]
+
+    inner_particles = 10
+    outer_particles = num_particles // inner_particles
+    elbo = TraceEnum_ELBO(max_iarange_nesting=0,
+                          strict_enumeration_warning=any([enumerate1, enumerate2]),
+                          num_particles=inner_particles)
+    loss_and_grads = getattr(elbo, loss_and_grads_impl)
+    actual_loss = sum(loss_and_grads(model, guide)
+                      for i in range(outer_particles)) / outer_particles
+    actual_grad = pyro.param('q').grad / outer_particles
+
+    assert_equal(actual_loss, expected_loss, prec=0.3, msg="".join([
+        "\nexpected loss = {}".format(expected_loss),
+        "\n  actual loss = {}".format(actual_loss),
+    ]))
+    assert_equal(actual_grad, expected_grad, prec=0.5, msg="".join([
+        "\nexpected grad = {}".format(expected_grad.detach().cpu().numpy()),
+        "\n  actual grad = {}".format(actual_grad.detach().cpu().numpy()),
+    ]))
+
+
 @pytest.mark.parametrize('vectorized', [False, True])
 @pytest.mark.parametrize('Elbo,loss_and_grads_impl', [
     (TraceEnum_ELBO, 'loss_and_grads'),
-    xfail_param(TraceEnum_ELBO, 'jit_loss_and_grads_v1',
+    xfail_param(TraceEnum_ELBO, 'jit_loss_and_grads',
                 reason="jit RuntimeError: Unsupported op descriptor: stack-2-dim_i"),
-    xfail_param(TraceEnum_ELBO, 'ji_loss_and_grads_v2'),
 ])
 def test_beta_bernoulli(Elbo, loss_and_grads_impl, vectorized):
     pyro.clear_param_store()
@@ -154,9 +206,8 @@ def test_beta_bernoulli(Elbo, loss_and_grads_impl, vectorized):
 @pytest.mark.parametrize('vectorized', [False, True])
 @pytest.mark.parametrize('Elbo,loss_and_grads_impl', [
     (TraceEnum_ELBO, 'loss_and_grads'),
-    xfail_param(TraceEnum_ELBO, 'jit_loss_and_grads_v1',
+    xfail_param(TraceEnum_ELBO, 'jit_loss_and_grads',
                 reason="jit RuntimeError in Dirichlet.rsample"),
-    xfail_param(TraceEnum_ELBO, 'ji_loss_and_grads_v2'),
 ])
 def test_dirichlet_bernoulli(Elbo, loss_and_grads_impl, vectorized):
     pyro.clear_param_store()
