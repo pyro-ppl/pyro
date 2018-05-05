@@ -224,7 +224,7 @@ class PyroJitTraceEnum_ELBO(TraceEnum_ELBO):
         if getattr(self, '_differentiable_loss', None) is None:
 
             weakself = weakref.ref(self)
-            
+
             @pyro.ops.jit.compile(nderivs=1)
             def differentiable_loss(*args_list):
                 self = weakself()

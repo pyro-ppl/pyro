@@ -123,7 +123,7 @@ def replay(fn=None, trace=None, params=None):
 
     :param fn: a stochastic function (callable containing Pyro primitive calls)
     :param trace: a :class:`~pyro.poutine.Trace` data structure to replay against
-    :param params: dict of names of param sites and constrained values 
+    :param params: dict of names of param sites and constrained values
         in fn to replay against
     :returns: a stochastic function decorated with a :class:`~pyro.poutine.replay_messenger.ReplayMessenger`
     """
