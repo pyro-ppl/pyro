@@ -19,3 +19,5 @@ Primitives
 
 .. autofunction:: pyro.validation_enabled
 .. autofunction:: pyro.enable_validation
+
+.. autoclass:: pyro.ops.jit.compile

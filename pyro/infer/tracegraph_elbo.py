@@ -8,6 +8,7 @@ import networkx
 import torch
 
 import pyro
+import pyro.ops.jit
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer import ELBO
@@ -303,18 +304,11 @@ class JitTraceGraph_ELBO(TraceGraph_ELBO):
 
     def loss_and_grads(self, model, guide, *args, **kwargs):
         if getattr(self, '_loss_and_surrogate_loss', None) is None:
-            # populate param store
-            with poutine.block():
-                with poutine.trace(param_only=True) as param_capture:
-                    for _ in self._get_traces(model, guide, *args, **kwargs):
-                        pass
-            self._param_names = list(param_capture.trace.nodes.keys())
-
             # build a closure for loss_and_surrogate_loss
             weakself = weakref.ref(self)
 
-            @torch.jit.compile(nderivs=1)
-            def loss_and_surrogate_loss(args_list, param_list):
+            @pyro.ops.jit.compile(nderivs=1)
+            def loss_and_surrogate_loss(*args_list):
                 self = weakself()
                 loss = 0.0
                 surrogate_loss = 0.0
@@ -349,10 +343,7 @@ class JitTraceGraph_ELBO(TraceGraph_ELBO):
 
             self._loss_and_surrogate_loss = loss_and_surrogate_loss
 
-        # invoke _loss_and_surrogate_loss
-        args_list = list(args)
-        param_list = [pyro.param(name).unconstrained() for name in self._param_names]
-        loss, surrogate_loss = self._loss_and_surrogate_loss(args_list, param_list)
+        loss, surrogate_loss = self._loss_and_surrogate_loss(*args)
         surrogate_loss.backward()  # this line triggers jit compilation
         loss = loss.item()
 

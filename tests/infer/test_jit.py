@@ -8,7 +8,6 @@ from torch.distributions import constraints, kl_divergence
 import pyro
 import pyro.distributions as dist
 from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO,
-                        PyroJitTraceEnum_ELBO,
                         Trace_ELBO, TraceEnum_ELBO,
                         TraceGraph_ELBO)
 from pyro.optim import Adam
@@ -91,7 +90,6 @@ def test_grad_expand():
     JitTraceGraph_ELBO,
     TraceEnum_ELBO,
     JitTraceEnum_ELBO,
-    PyroJitTraceEnum_ELBO,
 ])
 def test_svi(Elbo, num_particles):
     pyro.clear_param_store()
@@ -121,7 +119,6 @@ def test_svi(Elbo, num_particles):
     JitTraceGraph_ELBO,
     TraceEnum_ELBO,
     JitTraceEnum_ELBO,
-    PyroJitTraceEnum_ELBO,
 ])
 def test_svi_enum(Elbo, irange_dim, enumerate1, enumerate2):
     pyro.clear_param_store()
