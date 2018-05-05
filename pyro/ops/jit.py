@@ -5,7 +5,7 @@ import pyro
 import pyro.poutine as poutine
 
 
-class compile(object):
+def compile(**jit_options):
     """
     Drop-in replacement for :func:`torch.jit.compile` that works with
     Pyro functions that call :func:`pyro.param`.
@@ -25,38 +25,37 @@ class compile(object):
             tr = pyro.poutine.trace(cond_model).get_trace(x)
             return tr.log_prob_sum()
     """
-    def __init__(self, **kwargs):
-        self._kwargs = kwargs
-        self.compiled = None
-        self._param_names = None
+    class wrapper(object):
+        def __init__(self, fn):
+            self.fn = fn
+            self._jit_options = jit_options
+            self.compiled = None
+            self._param_names = None
 
-    def __call__(self, fn):
+        def __call__(self, *args, **kwargs):
 
-        assert self.compiled is None, \
-            "Cannot use a compile instance on more than one function"
-
-        def wrapper(*args, **kwargs):
             # if first time
             if self.compiled is None:
                 # param capture
                 with poutine.block():
                     with poutine.trace(param_only=True) as first_param_capture:
-                        fn(*args, **kwargs)
+                        self.fn(*args, **kwargs)
 
                 self._param_names = list(set(first_param_capture.trace.nodes.keys()))
 
                 weakself = weakref.ref(self)
 
-                @torch.jit.compile(**self._kwargs)
+                @torch.jit.compile(**self._jit_options)
                 def compiled(unconstrained_params, *args):
                     self = weakself()
-                    constrained_params = {name: pyro.param(name, unconstrained_param)
-                                          for name, unconstrained_param
-                                          in zip(self._param_names,
-                                                 unconstrained_params)}
+                    constrained_params = {}
+                    for name, unconstrained_param in zip(self._param_names, unconstrained_params):
+                        constrained_param = pyro.param(name)  # assume param has been initialized
+                        assert constrained_param.unconstrained() is unconstrained_param
+                        constrained_params[name] = constrained_param
 
                     return poutine.replay(
-                        fn, params=constrained_params)(*args, **kwargs)
+                        self.fn, params=constrained_params)(*args, **kwargs)
 
                 self.compiled = compiled
 
@@ -77,4 +76,4 @@ class compile(object):
 
             return ret
 
-        return wrapper
+    return wrapper

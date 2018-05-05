@@ -308,11 +308,11 @@ class JitTraceGraph_ELBO(TraceGraph_ELBO):
             weakself = weakref.ref(self)
 
             @pyro.ops.jit.compile(nderivs=1)
-            def loss_and_surrogate_loss(*args_list):
+            def loss_and_surrogate_loss(*args):
                 self = weakself()
                 loss = 0.0
                 surrogate_loss = 0.0
-                for weight, model_trace, guide_trace in self._get_traces(model, guide, *args_list, **kwargs):
+                for weight, model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
                     model_trace.compute_log_prob()
                     guide_trace.compute_score_parts()
                     if is_validation_enabled():

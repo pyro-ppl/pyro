@@ -169,11 +169,11 @@ class JitTrace_ELBO(Trace_ELBO):
             weakself = weakref.ref(self)
 
             @pyro.ops.jit.compile(nderivs=1)
-            def loss_and_surrogate_loss(*args_list):
+            def loss_and_surrogate_loss(*args):
                 self = weakself()
                 loss = 0.0
                 surrogate_loss = 0.0
-                for model_trace, guide_trace in self._get_traces(model, guide, *args_list, **kwargs):
+                for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
                     elbo_particle = 0
                     surrogate_elbo_particle = 0
                     log_r = None

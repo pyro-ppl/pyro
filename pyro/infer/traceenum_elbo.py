@@ -174,12 +174,10 @@ class JitTraceEnum_ELBO(TraceEnum_ELBO):
             weakself = weakref.ref(self)
 
             @pyro.ops.jit.compile(nderivs=1)
-            def differentiable_loss(*args_list):
+            def differentiable_loss(*args):
                 self = weakself()
                 elbo = 0.0
-                for model_trace, guide_trace in self._get_traces(model, guide,
-                                                                 *args_list,
-                                                                 **kwargs):
+                for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
                     elbo += _compute_dice_elbo(model_trace, guide_trace)
                 return elbo * (-1.0 / self.num_particles)
 

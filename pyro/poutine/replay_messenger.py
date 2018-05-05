@@ -16,7 +16,8 @@ class ReplayMessenger(Messenger):
         Stores trace in an attribute.
         """
         super(ReplayMessenger, self).__init__()
-        assert trace is not None or params is not None, "must provide trace"
+        if trace is None and params is None:
+            raise ValueError("must provide trace or params to replay against")
         self.trace = trace
         self.params = params
 
