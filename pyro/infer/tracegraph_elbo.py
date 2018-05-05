@@ -283,13 +283,34 @@ class TraceGraph_ELBO(ELBO):
             warnings.warn('Encountered NAN loss')
         return weight * loss
 
-    # This version calls .backward() outside of the jitted function,
-    # and therefore has higher memory overhead.
-    def jit_loss_and_grads(self, model, guide, *args, **kwargs):
+
+class JitTraceGraph_ELBO(TraceGraph_ELBO):
+    """
+    Like :class:`TraceGraph_ELBO` but uses :func:`torch.jit.compile` to
+    compile :meth:`loss_and_grads`.
+
+    This works only for a limited set of models:
+
+    -   Models must have static structure.
+    -   Models must not depend on any global data (except the param store).
+    -   All model inputs that are tensors must be passed in via ``*args``.
+    -   All model inputs that are *not* tensors must be passed in via
+        ``*kwargs``, and these will be fixed to their values on the first
+        call to :meth:`loss_and_grads`.
+
+    .. warning:: Experimental. Interface subject to change.
+    """
+
+    def loss_and_grads(self, model, guide, *args, **kwargs):
         if getattr(self, '_loss_and_surrogate_loss', None) is None:
             # populate param store
-            for _ in self._get_traces(model, guide, *args, **kwargs):
-                pass
+            with poutine.block():
+                with poutine.trace(param_only=True) as param_capture:
+                    for _ in self._get_traces(model, guide, *args, **kwargs):
+                        pass
+            self._param_names = list(param_capture.trace.nodes.keys())
+
+            # build a closure for loss_and_surrogate_loss
             weakself = weakref.ref(self)
 
             @torch.jit.compile(nderivs=1)
@@ -330,11 +351,10 @@ class TraceGraph_ELBO(ELBO):
 
         # invoke _loss_and_surrogate_loss
         args_list = list(args)
-        param_list = [param for name, param in sorted(pyro.get_param_store().named_parameters())]
+        param_list = [pyro.param(name).unconstrained() for name in self._param_names]
         loss, surrogate_loss = self._loss_and_surrogate_loss(args_list, param_list)
-
+        surrogate_loss.backward()  # this line triggers jit compilation
         loss = loss.item()
-        surrogate_loss.backward()
 
         if torch_isnan(loss):
             warnings.warn('Encountered NAN loss')

@@ -10,7 +10,8 @@ import torch.optim
 import pyro
 import pyro.distributions as dist
 from pyro.distributions.testing import fakes
-from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO
+from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, Trace_ELBO, TraceEnum_ELBO,
+                        TraceGraph_ELBO)
 from pyro.optim import Adam
 from tests.common import assert_equal, xfail_param
 
@@ -112,16 +113,18 @@ def test_iarange(Elbo, reparameterized):
 
 @pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
 @pytest.mark.parametrize("subsample", [False, True], ids=["full", "subsample"])
-@pytest.mark.parametrize("Elbo,loss_and_grads_impl", [
-    (Trace_ELBO, 'loss_and_grads'),
-    (TraceGraph_ELBO, 'loss_and_grads'),
-    (TraceEnum_ELBO, 'loss_and_grads'),
-    xfail_param(TraceGraph_ELBO, 'jit_loss_and_grads',
+@pytest.mark.parametrize("Elbo", [
+    Trace_ELBO,
+    TraceGraph_ELBO,
+    TraceEnum_ELBO,
+    xfail_param(JitTrace_ELBO,
                 reason="jit RuntimeError: Unsupported op descriptor: index-2"),
-    xfail_param(TraceEnum_ELBO, 'jit_loss_and_grads',
+    xfail_param(JitTraceGraph_ELBO,
+                reason="jit RuntimeError: Unsupported op descriptor: index-2"),
+    xfail_param(JitTraceEnum_ELBO,
                 reason="jit RuntimeError: Unsupported op descriptor: index-2"),
 ])
-def test_subsample_gradient_sequential(Elbo, loss_and_grads_impl, reparameterized, subsample):
+def test_subsample_gradient_sequential(Elbo, reparameterized, subsample):
     pyro.clear_param_store()
     data = torch.tensor([-0.5, 2.0])
     subsample_size = 1 if subsample else len(data)
@@ -143,8 +146,7 @@ def test_subsample_gradient_sequential(Elbo, loss_and_grads_impl, reparameterize
 
     optim = Adam({"lr": 0.1})
     elbo = Elbo(num_particles=10, strict_enumeration_warning=False)
-    loss_and_grads = getattr(elbo, loss_and_grads_impl)
-    inference = SVI(model, guide, optim, loss=elbo.loss, loss_and_grads=loss_and_grads)
+    inference = SVI(model, guide, optim, elbo)
     iters = num_particles // 10
     for _ in range(iters):
         inference.loss_and_grads(model, guide)
