@@ -34,7 +34,7 @@ class BroadcastMessenger(Messenger):
                     target_batch_shape[f.dim] = f.size
             # Starting from the right, if expected size is None at an index,
             # set it to the actual size if it exists, else 1.
-            for i in range(-len(target_batch_shape)+1, 1):
+            for i in range(-len(target_batch_shape) + 1, 1):
                 if target_batch_shape[i] is None:
                     target_batch_shape[i] = actual_batch_shape[i] if len(actual_batch_shape) > -i else 1
             msg["fn"] = msg["fn"].expand(target_batch_shape)
