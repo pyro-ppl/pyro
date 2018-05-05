@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import warnings
+import weakref
 from operator import itemgetter
 
 import networkx
@@ -99,13 +100,13 @@ def _compute_elbo_reparam(model_trace, guide_trace, non_reparam_nodes):
     # deal with log p(z|...) terms
     for name, site in model_trace.nodes.items():
         if site["type"] == "sample":
-            elbo += torch_item(site["log_prob_sum"])
+            elbo += site["log_prob_sum"]
             surrogate_elbo += site["log_prob_sum"]
 
     # deal with log q(z|...) terms
     for name, site in guide_trace.nodes.items():
         if site["type"] == "sample":
-            elbo -= torch_item(site["log_prob_sum"])
+            elbo -= site["log_prob_sum"]
             entropy_term = site["score_parts"].entropy_term
             if not is_identically_zero(entropy_term):
                 surrogate_elbo -= entropy_term.sum()
@@ -277,7 +278,84 @@ class TraceGraph_ELBO(ELBO):
             surrogate_loss = -surrogate_elbo
             torch_backward(weight * (surrogate_loss + baseline_loss))
 
-        loss = -elbo
+        loss = -torch_item(elbo)
         if torch_isnan(loss):
             warnings.warn('Encountered NAN loss')
         return weight * loss
+
+
+class JitTraceGraph_ELBO(TraceGraph_ELBO):
+    """
+    Like :class:`TraceGraph_ELBO` but uses :func:`torch.jit.compile` to
+    compile :meth:`loss_and_grads`.
+
+    This works only for a limited set of models:
+
+    -   Models must have static structure.
+    -   Models must not depend on any global data (except the param store).
+    -   All model inputs that are tensors must be passed in via ``*args``.
+    -   All model inputs that are *not* tensors must be passed in via
+        ``*kwargs``, and these will be fixed to their values on the first
+        call to :meth:`loss_and_grads`.
+
+    .. warning:: Experimental. Interface subject to change.
+    """
+
+    def loss_and_grads(self, model, guide, *args, **kwargs):
+        if getattr(self, '_loss_and_surrogate_loss', None) is None:
+            # populate param store
+            with poutine.block():
+                with poutine.trace(param_only=True) as param_capture:
+                    for _ in self._get_traces(model, guide, *args, **kwargs):
+                        pass
+            self._param_names = list(param_capture.trace.nodes.keys())
+
+            # build a closure for loss_and_surrogate_loss
+            weakself = weakref.ref(self)
+
+            @torch.jit.compile(nderivs=1)
+            def loss_and_surrogate_loss(args_list, param_list):
+                self = weakself()
+                loss = 0.0
+                surrogate_loss = 0.0
+                for weight, model_trace, guide_trace in self._get_traces(model, guide, *args_list, **kwargs):
+                    model_trace.compute_log_prob()
+                    guide_trace.compute_score_parts()
+                    if is_validation_enabled():
+                        for site in model_trace.nodes.values():
+                            if site["type"] == "sample":
+                                check_site_shape(site, self.max_iarange_nesting)
+                        for site in guide_trace.nodes.values():
+                            if site["type"] == "sample":
+                                check_site_shape(site, self.max_iarange_nesting)
+
+                    # compute elbo for reparameterized nodes
+                    non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
+                    elbo, surrogate_elbo = _compute_elbo_reparam(model_trace, guide_trace, non_reparam_nodes)
+
+                    # the following computations are only necessary if we have non-reparameterizable nodes
+                    baseline_loss = 0.0
+                    if non_reparam_nodes:
+                        downstream_costs, _ = _compute_downstream_costs(model_trace, guide_trace, non_reparam_nodes)
+                        surrogate_elbo_term, baseline_loss = _compute_elbo_non_reparam(guide_trace,
+                                                                                       non_reparam_nodes,
+                                                                                       downstream_costs)
+                        surrogate_elbo += surrogate_elbo_term
+
+                    loss = loss - weight * elbo
+                    surrogate_loss = surrogate_loss - weight * surrogate_elbo
+
+                return loss, surrogate_loss
+
+            self._loss_and_surrogate_loss = loss_and_surrogate_loss
+
+        # invoke _loss_and_surrogate_loss
+        args_list = list(args)
+        param_list = [pyro.param(name).unconstrained() for name in self._param_names]
+        loss, surrogate_loss = self._loss_and_surrogate_loss(args_list, param_list)
+        surrogate_loss.backward()  # this line triggers jit compilation
+        loss = loss.item()
+
+        if torch_isnan(loss):
+            warnings.warn('Encountered NAN loss')
+        return loss

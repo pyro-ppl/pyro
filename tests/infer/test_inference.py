@@ -12,8 +12,9 @@ import pyro.distributions as dist
 import pyro.optim as optim
 from pyro.distributions.testing import fakes
 from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
-from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO
-from tests.common import assert_equal
+from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, Trace_ELBO, TraceEnum_ELBO,
+                        TraceGraph_ELBO)
+from tests.common import assert_equal, xfail_param
 
 
 def param_mse(name, target):
@@ -205,7 +206,14 @@ class PoissonGammaTests(TestCase):
 
 
 @pytest.mark.stage("integration", "integration_batch_1")
-@pytest.mark.parametrize('elbo_impl', [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize('elbo_impl', [
+    xfail_param(JitTrace_ELBO, reason="incorrect gradients", run=False),
+    xfail_param(JitTraceGraph_ELBO, reason="incorrect gradients", run=False),
+    xfail_param(JitTraceEnum_ELBO, reason="incorrect gradients", run=False),
+    Trace_ELBO,
+    TraceGraph_ELBO,
+    TraceEnum_ELBO,
+])
 @pytest.mark.parametrize('gamma_dist,n_steps', [
     (dist.Gamma, 5000),
     (fakes.NonreparameterizedGamma, 10000),
@@ -223,13 +231,13 @@ def test_exponential_gamma(gamma_dist, n_steps, elbo_impl):
     alpha_n = alpha0 + torch.tensor(float(n_data))  # posterior alpha
     beta_n = beta0 + torch.sum(data)  # posterior beta
 
-    def model():
+    def model(alpha0, beta0, alpha_n, beta_n):
         lambda_latent = pyro.sample("lambda_latent", gamma_dist(alpha0, beta0))
         with pyro.iarange("data", n_data):
             pyro.sample("obs", dist.Exponential(lambda_latent), obs=data)
         return lambda_latent
 
-    def guide():
+    def guide(alpha0, beta0, alpha_n, beta_n):
         alpha_q = pyro.param("alpha_q", alpha_n * math.exp(0.17), constraint=constraints.positive)
         beta_q = pyro.param("beta_q", beta_n / math.exp(0.143), constraint=constraints.positive)
         pyro.sample("lambda_latent", gamma_dist(alpha_q, beta_q))
@@ -239,7 +247,7 @@ def test_exponential_gamma(gamma_dist, n_steps, elbo_impl):
     svi = SVI(model, guide, adam, loss=elbo, max_iarange_nesting=1)
 
     for k in range(n_steps):
-        svi.step()
+        svi.step(alpha0, beta0, alpha_n, beta_n)
 
     assert_equal(pyro.param("alpha_q"), alpha_n, prec=0.15, msg='{} vs {}'.format(
         pyro.param("alpha_q").detach().cpu().numpy(), alpha_n.detach().cpu().numpy()))
