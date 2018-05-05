@@ -13,21 +13,25 @@ ELBO
     :members:
     :undoc-members:
     :show-inheritance:
+    :member-order: bysource
 
 .. automodule:: pyro.infer.trace_elbo
     :members:
     :undoc-members:
     :show-inheritance:
+    :member-order: bysource
 
 .. automodule:: pyro.infer.tracegraph_elbo
     :members:
     :undoc-members:
     :show-inheritance:
+    :member-order: bysource
 
 .. automodule:: pyro.infer.traceenum_elbo
     :members:
     :undoc-members:
     :show-inheritance:
+    :member-order: bysource
 
 Importance
 ----------

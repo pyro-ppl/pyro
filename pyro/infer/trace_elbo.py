@@ -147,29 +147,24 @@ class Trace_ELBO(ELBO):
             warnings.warn('Encountered NAN loss')
         return loss
 
-    def jit_loss_and_grads(self, model, guide, *args, **kwargs):
-        """
-        Like :meth:`loss_and_grads` but uses :func:`torch.jit.compile` to
-        compile the loss computation. This works only for a limited set of
-        models with static structure.
 
-        This works only for a limited set of models:
+class JitTrace_ELBO(Trace_ELBO):
+    """
+    Like :class:`Trace_ELBO` but uses :func:`torch.jit.compile` to compile
+    :meth:`loss_and_grads`.
 
-        -   Models must have static structure.
-        -   Models must not depend on any global data (except the param store).
-        -   All model inputs that are tensors must be passed in via ``*args``.
-        -   All model inputs that are *not* tensors must be passed in via
-            ``*kwargs``, and these will be fixed to their values on the first
-            call to :meth:`jit_loss_and_grads`.
+    This works only for a limited set of models:
 
-        Example::
+    -   Models must have static structure.
+    -   Models must not depend on any global data (except the param store).
+    -   All model inputs that are tensors must be passed in via ``*args``.
+    -   All model inputs that are *not* tensors must be passed in via
+        ``*kwargs``, and these will be fixed to their values on the first
+        call to :meth:`jit_loss_and_grads`.
 
-            elbo = Trace_ELBO()
-            svi = SVI(model, guide, optim, loss=elbo.loss,
-                      loss_and_grads=elbo.jit_loss_and_grads)
-
-        .. warning:: Experimental. Interface subject to change.
-        """
+    .. warning:: Experimental. Interface subject to change.
+    """
+    def loss_and_grads(self, model, guide, *args, **kwargs):
         if getattr(self, '_loss_and_surrogate_loss', None) is None:
             # populate param store
             with poutine.block():
