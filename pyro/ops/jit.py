@@ -76,4 +76,4 @@ def compile(**jit_options):
 
             return ret
 
-    return wrapper
+    return wrapper() if not jit_options else wrapper
