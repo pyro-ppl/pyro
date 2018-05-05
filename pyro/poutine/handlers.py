@@ -54,6 +54,7 @@ from six.moves import xrange
 
 from pyro.poutine import util
 
+from .broadcast_messenger import BroadcastMessenger
 from .block_messenger import BlockMessenger
 from .condition_messenger import ConditionMessenger
 from .enumerate_messenger import EnumerateMessenger
@@ -317,6 +318,18 @@ def enum(fn=None, first_available_dim=None):
         dimension and all dimensions left may be used internally by Pyro.
     """
     msngr = EnumerateMessenger(first_available_dim=first_available_dim)
+    return msngr(fn) if fn is not None else msngr
+
+
+def broadcast(fn=None):
+    """
+    Automatically broadcasts the batch shape of the stochastic function
+    at a sample site when inside a single or nested iarange context.
+    The existing `batch_shape` must be
+    broadcastable with the size of the :class::`pyro.iarange`
+    contexts installed in the `cond_indep_stack`.
+    """
+    msngr = BroadcastMessenger()
     return msngr(fn) if fn is not None else msngr
 
 
