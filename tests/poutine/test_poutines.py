@@ -98,19 +98,6 @@ class ReplayHandlerTests(NormalNormalNormalHandlerTestCase):
             assert_equal(model_trace.nodes[name]["value"],
                          guide_trace.nodes[name]["value"])
 
-    def test_replay_partial(self):
-        guide_trace = poutine.trace(self.guide).get_trace()
-        model_trace = poutine.trace(poutine.replay(self.model,
-                                                   trace=guide_trace,
-                                                   sites=self.partial_sample_sites)).get_trace()
-        for name in self.full_sample_sites.keys():
-            if name in self.partial_sample_sites:
-                assert_equal(model_trace.nodes[name]["value"],
-                             guide_trace.nodes[name]["value"])
-            else:
-                assert not eq(model_trace.nodes[name]["value"],
-                              guide_trace.nodes[name]["value"])
-
     def test_replay_full_repeat(self):
         model_trace = poutine.trace(self.model).get_trace()
         ftr = poutine.trace(poutine.replay(self.model, trace=model_trace))

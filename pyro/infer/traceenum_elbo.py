@@ -7,6 +7,7 @@ import torch
 
 import pyro
 import pyro.poutine as poutine
+import pyro.ops.jit
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import iter_discrete_traces
@@ -195,6 +196,48 @@ class JitTraceEnum_ELBO(TraceEnum_ELBO):
         args_list = list(args)
         param_list = [pyro.param(name).unconstrained() for name in self._param_names]
         differentiable_loss = self._differentiable_loss(args_list, param_list)
+        differentiable_loss.backward()  # this line triggers jit compilation
+        loss = differentiable_loss.item()
+
+        if torch_isnan(loss):
+            warnings.warn('Encountered NAN loss')
+        return loss
+
+
+class PyroJitTraceEnum_ELBO(TraceEnum_ELBO):
+    """
+    Like :class:`TraceEnum_ELBO` but uses :func:`torch.jit.compile` to
+    compile :meth:`loss_and_grads`.
+
+    This works only for a limited set of models:
+
+    -   Models must have static structure.
+    -   Models must not depend on any global data (except the param store).
+    -   All model inputs that are tensors must be passed in via ``*args``.
+    -   All model inputs that are *not* tensors must be passed in via
+        ``*kwargs``, and these will be fixed to their values on the first
+        call to :meth:`jit_loss_and_grads`.
+
+    .. warning:: Experimental. Interface subject to change.
+    """
+    def loss_and_grads(self, model, guide, *args, **kwargs):
+        if getattr(self, '_differentiable_loss', None) is None:
+
+            weakself = weakref.ref(self)
+            
+            @pyro.ops.jit.compile(nderivs=1)
+            def differentiable_loss(*args_list):
+                self = weakself()
+                elbo = 0.0
+                for model_trace, guide_trace in self._get_traces(model, guide,
+                                                                 *args_list,
+                                                                 **kwargs):
+                    elbo += _compute_dice_elbo(model_trace, guide_trace)
+                return elbo * (-1.0 / self.num_particles)
+
+            self._differentiable_loss = differentiable_loss
+
+        differentiable_loss = self._differentiable_loss(*args)
         differentiable_loss.backward()  # this line triggers jit compilation
         loss = differentiable_loss.item()
 
