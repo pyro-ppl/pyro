@@ -217,8 +217,8 @@ def check_site_shape(site, max_iarange_nesting):
     if max_iarange_nesting < len(actual_shape):
         actual_shape = actual_shape[len(actual_shape) - max_iarange_nesting:]
 
-    # If expected shape is None at an index, infer as either 1,
-    # or the actual shape starting from the right.
+    # Starting from the right, if expected size is None at an index,
+    # set it to the actual size if it exists, else 1.
     for i in range(-len(expected_shape) + 1, 1):
         if expected_shape[i] is None:
             expected_shape[i] = actual_shape[i] if len(expected_shape) > -i else 1

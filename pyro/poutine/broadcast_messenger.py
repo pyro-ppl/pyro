@@ -32,8 +32,8 @@ class BroadcastMessenger(Messenger):
                             .format(msg["name"], f.name, f.dim),
                             'Try setting dim arg in other iaranges.']))
                     target_batch_shape[f.dim] = f.size
-            # If expected shape is None at an index, infer as either 1,
-            # or the actual shape starting from the right.
+            # Starting from the right, if expected size is None at an index,
+            # set it to the actual size if it exists, else 1.
             for i in range(-len(target_batch_shape)+1, 1):
                 if target_batch_shape[i] is None:
                     target_batch_shape[i] = actual_batch_shape[i] if len(actual_batch_shape) > -i else 1
