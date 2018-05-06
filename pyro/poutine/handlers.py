@@ -101,7 +101,7 @@ def trace(fn=None, graph_type=None, param_only=None):
     return msngr(fn) if fn is not None else msngr
 
 
-def replay(fn=None, trace=None, sites=None):
+def replay(fn=None, trace=None, params=None):
     """
     Given a callable that contains Pyro primitive calls,
     return a callable that runs the original, reusing the values at sites in trace
@@ -123,11 +123,11 @@ def replay(fn=None, trace=None, sites=None):
 
     :param fn: a stochastic function (callable containing Pyro primitive calls)
     :param trace: a :class:`~pyro.poutine.Trace` data structure to replay against
-    :param sites: list or dict of names of sample sites in fn to replay against,
-        defaulting to all sites
+    :param params: dict of names of param sites and constrained values
+        in fn to replay against
     :returns: a stochastic function decorated with a :class:`~pyro.poutine.replay_messenger.ReplayMessenger`
     """
-    msngr = ReplayMessenger(trace=trace, sites=sites)
+    msngr = ReplayMessenger(trace=trace, params=params)
     return msngr(fn) if fn is not None else msngr
 
 

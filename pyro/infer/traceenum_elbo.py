@@ -3,10 +3,9 @@ from __future__ import absolute_import, division, print_function
 import warnings
 import weakref
 
-import torch
-
 import pyro
 import pyro.poutine as poutine
+import pyro.ops.jit
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import iter_discrete_traces
@@ -155,7 +154,7 @@ class TraceEnum_ELBO(ELBO):
 
 class JitTraceEnum_ELBO(TraceEnum_ELBO):
     """
-    Like :class:`TraceEnum_ELBO` but uses :func:`torch.jit.compile` to
+    Like :class:`TraceEnum_ELBO` but uses :func:`pyro.ops.jit.compile` to
     compile :meth:`loss_and_grads`.
 
     This works only for a limited set of models:
@@ -171,30 +170,20 @@ class JitTraceEnum_ELBO(TraceEnum_ELBO):
     """
     def loss_and_grads(self, model, guide, *args, **kwargs):
         if getattr(self, '_differentiable_loss', None) is None:
-            # populate param store
-            with poutine.block():
-                with poutine.trace(param_only=True) as param_capture:
-                    for _ in self._get_traces(model, guide, *args, **kwargs):
-                        pass
-            self._param_names = list(param_capture.trace.nodes.keys())
 
-            # build a closure for differentiable_loss
             weakself = weakref.ref(self)
 
-            @torch.jit.compile(nderivs=1)
-            def differentiable_loss(args_list, param_list):
+            @pyro.ops.jit.compile(nderivs=1)
+            def differentiable_loss(*args):
                 self = weakself()
                 elbo = 0.0
-                for model_trace, guide_trace in self._get_traces(model, guide, *args_list, **kwargs):
+                for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
                     elbo += _compute_dice_elbo(model_trace, guide_trace)
                 return elbo * (-1.0 / self.num_particles)
 
             self._differentiable_loss = differentiable_loss
 
-        # invoke _differentiable_loss
-        args_list = list(args)
-        param_list = [pyro.param(name).unconstrained() for name in self._param_names]
-        differentiable_loss = self._differentiable_loss(args_list, param_list)
+        differentiable_loss = self._differentiable_loss(*args)
         differentiable_loss.backward()  # this line triggers jit compilation
         loss = differentiable_loss.item()
 

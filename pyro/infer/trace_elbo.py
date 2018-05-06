@@ -3,9 +3,8 @@ from __future__ import absolute_import, division, print_function
 import warnings
 import weakref
 
-import torch
-
 import pyro
+import pyro.ops.jit
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
@@ -150,7 +149,7 @@ class Trace_ELBO(ELBO):
 
 class JitTrace_ELBO(Trace_ELBO):
     """
-    Like :class:`Trace_ELBO` but uses :func:`torch.jit.compile` to compile
+    Like :class:`Trace_ELBO` but uses :func:`pyro.ops.jit.compile` to compile
     :meth:`loss_and_grads`.
 
     This works only for a limited set of models:
@@ -166,22 +165,15 @@ class JitTrace_ELBO(Trace_ELBO):
     """
     def loss_and_grads(self, model, guide, *args, **kwargs):
         if getattr(self, '_loss_and_surrogate_loss', None) is None:
-            # populate param store
-            with poutine.block():
-                with poutine.trace(param_only=True) as param_capture:
-                    for _ in self._get_traces(model, guide, *args, **kwargs):
-                        pass
-            self._param_names = list(param_capture.trace.nodes.keys())
-
             # build a closure for loss_and_surrogate_loss
             weakself = weakref.ref(self)
 
-            @torch.jit.compile(nderivs=1)
-            def loss_and_surrogate_loss(args_list, param_list):
+            @pyro.ops.jit.compile(nderivs=1)
+            def loss_and_surrogate_loss(*args):
                 self = weakself()
                 loss = 0.0
                 surrogate_loss = 0.0
-                for model_trace, guide_trace in self._get_traces(model, guide, *args_list, **kwargs):
+                for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
                     elbo_particle = 0
                     surrogate_elbo_particle = 0
                     log_r = None
@@ -215,9 +207,7 @@ class JitTrace_ELBO(Trace_ELBO):
             self._loss_and_surrogate_loss = loss_and_surrogate_loss
 
         # invoke _loss_and_surrogate_loss
-        args_list = list(args)
-        param_list = [pyro.param(name).unconstrained() for name in self._param_names]
-        loss, surrogate_loss = self._loss_and_surrogate_loss(args_list, param_list)
+        loss, surrogate_loss = self._loss_and_surrogate_loss(*args)
         surrogate_loss.backward()  # this line triggers jit compilation
         loss = loss.item()
 
