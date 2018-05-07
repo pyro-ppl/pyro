@@ -7,7 +7,7 @@ import torch
 
 import pyro
 from pyro.distributions import Normal, Uniform
-from pyro.infer import Importance, Marginal
+from pyro.infer import EmpiricalMarginal, Importance
 
 """
 Samantha really likes physics---but she likes Pyro even more. Instead of using
@@ -87,16 +87,15 @@ def model(observed_data):
 
 def main(args):
     # create an importance sampler (the prior is used as the proposal distribution)
-    posterior = Importance(model, guide=None, num_samples=args.num_samples)
-    # create a marginal object that consumes the raw execution traces provided by the importance sampler
-    marginal = Marginal(posterior)
+    importance = Importance(model, guide=None, num_samples=args.num_samples)
     # get posterior samples of mu (which is the return value of model)
+    # from the raw execution traces provided by the importance sampler.
     print("doing importance sampling...")
-    posterior_samples = [marginal(observed_data) for i in range(args.num_samples)]
+    emp_marginal = EmpiricalMarginal(importance.run(observed_data))
 
     # calculate statistics over posterior samples
-    posterior_mean = torch.mean(torch.tensor(posterior_samples))
-    posterior_std_dev = torch.std(torch.tensor(posterior_samples))
+    posterior_mean = emp_marginal.mean
+    posterior_std_dev = emp_marginal.variance.sqrt()
 
     # report results
     inferred_mu = posterior_mean.item()
@@ -125,5 +124,4 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-samples', default=500, type=int)
     args = parser.parse_args()
-
     main(args)

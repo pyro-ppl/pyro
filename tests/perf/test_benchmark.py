@@ -14,7 +14,7 @@ import pyro.contrib.gp as gp
 import pyro.distributions as dist
 import pyro.optim as optim
 from pyro.distributions.testing import fakes
-from pyro.infer import SVI, Trace_ELBO, TraceGraph_ELBO
+from pyro.infer import SVI, EmpiricalMarginal, Trace_ELBO, TraceGraph_ELBO
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.mcmc import MCMC
 from pyro.infer.mcmc.nuts import NUTS
@@ -95,15 +95,14 @@ def bernoulli_beta_hmc(**kwargs):
         p_latent = pyro.sample("p_latent", dist.Beta(alpha, beta))
         pyro.sample("obs", dist.Bernoulli(p_latent), obs=data)
         return p_latent
+
+    true_probs = torch.tensor([0.9, 0.1])
+    data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
     kernel = kwargs.pop('kernel')
     num_samples = kwargs.pop('num_samples')
     mcmc_kernel = kernel(model, **kwargs)
-    mcmc_run = MCMC(mcmc_kernel, num_samples=num_samples, warmup_steps=100)
-    posterior = []
-    true_probs = torch.tensor([0.9, 0.1])
-    data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
-    for trace, _ in mcmc_run._traces(data):
-        posterior.append(trace.nodes['p_latent']['value'])
+    mcmc_run = MCMC(mcmc_kernel, num_samples=num_samples, warmup_steps=100).run(data)
+    return EmpiricalMarginal(mcmc_run, sites='p_latent')
 
 
 @register_model(num_steps=2000, whiten=False, id='SVGP::MultiClass_whiten=False')

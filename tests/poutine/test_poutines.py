@@ -12,8 +12,8 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions import Bernoulli, Categorical, Normal
-from pyro.poutine.indep_poutine import _DIM_ALLOCATOR
-from pyro.poutine.util import NonlocalExit, all_escape, discrete_escape
+from pyro.poutine.runtime import _DIM_ALLOCATOR, NonlocalExit
+from pyro.poutine.util import all_escape, discrete_escape
 from tests.common import assert_equal
 
 
@@ -84,35 +84,26 @@ class TraceHandlerTests(NormalNormalNormalHandlerTestCase):
         assert_equal(model_trace.nodes["latent1"]["value"],
                      model_trace.nodes["_RETURN"]["value"])
 
+    def test_trace_param_only(self):
+        model_trace = poutine.trace(self.model, param_only=True).get_trace()
+        assert all(site["type"] == "param" for site in model_trace.nodes.values())
+
 
 class ReplayHandlerTests(NormalNormalNormalHandlerTestCase):
 
     def test_replay_full(self):
         guide_trace = poutine.trace(self.guide).get_trace()
-        model_trace = poutine.trace(poutine.replay(self.model, guide_trace)).get_trace()
+        model_trace = poutine.trace(poutine.replay(self.model, trace=guide_trace)).get_trace()
         for name in self.full_sample_sites.keys():
             assert_equal(model_trace.nodes[name]["value"],
                          guide_trace.nodes[name]["value"])
 
-    def test_replay_partial(self):
-        guide_trace = poutine.trace(self.guide).get_trace()
-        model_trace = poutine.trace(poutine.replay(self.model,
-                                                   guide_trace,
-                                                   sites=self.partial_sample_sites)).get_trace()
-        for name in self.full_sample_sites.keys():
-            if name in self.partial_sample_sites:
-                assert_equal(model_trace.nodes[name]["value"],
-                             guide_trace.nodes[name]["value"])
-            else:
-                assert not eq(model_trace.nodes[name]["value"],
-                              guide_trace.nodes[name]["value"])
-
     def test_replay_full_repeat(self):
         model_trace = poutine.trace(self.model).get_trace()
-        ftr = poutine.trace(poutine.replay(self.model, model_trace))
+        ftr = poutine.trace(poutine.replay(self.model, trace=model_trace))
         tr11 = ftr.get_trace()
         tr12 = ftr.get_trace()
-        tr2 = poutine.trace(poutine.replay(self.model, model_trace)).get_trace()
+        tr2 = poutine.trace(poutine.replay(self.model, trace=model_trace)).get_trace()
         for name in self.full_sample_sites.keys():
             assert_equal(tr11.nodes[name]["value"], tr12.nodes[name]["value"])
             assert_equal(tr11.nodes[name]["value"], tr2.nodes[name]["value"])
@@ -554,16 +545,18 @@ class EscapeHandlerTests(TestCase):
 
     def test_discrete_escape(self):
         try:
-            poutine.escape(self.model, functools.partial(discrete_escape,
-                                                         poutine.Trace()))()
+            poutine.escape(self.model,
+                           escape_fn=functools.partial(discrete_escape,
+                                                       poutine.Trace()))()
             assert False
         except NonlocalExit as e:
             assert e.site["name"] == "y"
 
     def test_all_escape(self):
         try:
-            poutine.escape(self.model, functools.partial(all_escape,
-                                                         poutine.Trace()))()
+            poutine.escape(self.model,
+                           escape_fn=functools.partial(all_escape,
+                                                       poutine.Trace()))()
             assert False
         except NonlocalExit as e:
             assert e.site["name"] == "x"
@@ -571,14 +564,17 @@ class EscapeHandlerTests(TestCase):
     def test_trace_compose(self):
         tm = poutine.trace(self.model)
         try:
-            poutine.escape(tm, functools.partial(all_escape, poutine.Trace()))()
+            poutine.escape(tm,
+                           escape_fn=functools.partial(all_escape,
+                                                       poutine.Trace()))()
             assert False
         except NonlocalExit:
             assert "x" in tm.trace
             try:
                 tem = poutine.trace(
-                    poutine.escape(self.model, functools.partial(all_escape,
-                                                                 poutine.Trace())))
+                    poutine.escape(self.model,
+                                   escape_fn=functools.partial(all_escape,
+                                                               poutine.Trace())))
                 tem()
                 assert False
             except NonlocalExit:
@@ -604,7 +600,7 @@ class InferConfigHandlerTests(TestCase):
         self.config_fn = config_fn
 
     def test_infer_config_sample(self):
-        cfg_model = poutine.infer_config(self.model, self.config_fn)
+        cfg_model = poutine.infer_config(self.model, config_fn=self.config_fn)
 
         tr = poutine.trace(cfg_model).get_trace()
 
@@ -623,7 +619,7 @@ def test_enumerate_poutine(depth, first_available_dim):
         for i in range(depth):
             pyro.sample("a_{}".format(i), Bernoulli(0.5), infer={"enumerate": "parallel"})
 
-    model = poutine.EnumerateMessenger(first_available_dim)(model)
+    model = poutine.enum(model, first_available_dim=first_available_dim)
     model = poutine.trace(model)
 
     for i in range(num_particles):
@@ -646,7 +642,7 @@ def test_replay_enumerate_poutine(depth, first_available_dim):
     def guide():
         pyro.sample("y", y_dist, infer={"enumerate": "parallel"})
 
-    guide = poutine.EnumerateMessenger(depth + first_available_dim)(guide)
+    guide = poutine.enum(guide, first_available_dim=depth + first_available_dim)
     guide = poutine.trace(guide)
     guide_trace = guide.get_trace()
 
@@ -658,8 +654,8 @@ def test_replay_enumerate_poutine(depth, first_available_dim):
         for i in range(depth):
             pyro.sample("b_{}".format(i), Bernoulli(0.5), infer={"enumerate": "parallel"})
 
-    model = poutine.EnumerateMessenger(first_available_dim)(model)
-    model = poutine.replay(model, guide_trace)
+    model = poutine.enum(model, first_available_dim=first_available_dim)
+    model = poutine.replay(model, trace=guide_trace)
     model = poutine.trace(model)
 
     for i in range(num_particles):
@@ -681,3 +677,79 @@ def test_iarange_error_on_enter():
     with pytest.raises(ZeroDivisionError):
         poutine.trace(model)()
     assert len(_DIM_ALLOCATOR._stack) == 0, 'stack was not cleaned on error'
+
+
+def test_decorator_interface_primitives():
+
+    @poutine.trace
+    def model():
+        pyro.param("p", torch.zeros(1, requires_grad=True))
+        pyro.sample("a", Bernoulli(torch.tensor([0.5])),
+                    infer={"enumerate": "parallel"})
+        pyro.sample("b", Bernoulli(torch.tensor([0.5])))
+
+    tr = model.get_trace()
+    assert isinstance(tr, poutine.Trace)
+    assert tr.graph_type == "flat"
+
+    @poutine.trace(graph_type="dense")
+    def model():
+        pyro.param("p", torch.zeros(1, requires_grad=True))
+        pyro.sample("a", Bernoulli(torch.tensor([0.5])),
+                    infer={"enumerate": "parallel"})
+        pyro.sample("b", Bernoulli(torch.tensor([0.5])))
+
+    tr = model.get_trace()
+    assert isinstance(tr, poutine.Trace)
+    assert tr.graph_type == "dense"
+
+    tr2 = poutine.trace(poutine.replay(model, trace=tr)).get_trace()
+
+    assert_equal(tr2.nodes["a"]["value"], tr.nodes["a"]["value"])
+
+
+def test_decorator_interface_queue():
+
+    sites = ["x", "y", "z", "_INPUT", "_RETURN"]
+    queue = Queue()
+    queue.put(poutine.Trace())
+
+    @poutine.queue(queue=queue)
+    def model():
+        p = torch.tensor([0.5])
+        loc = torch.zeros(1)
+        scale = torch.ones(1)
+
+        x = pyro.sample("x", Normal(loc, scale))
+        y = pyro.sample("y", Bernoulli(p))
+        z = pyro.sample("z", Normal(loc, scale))
+        return dict(x=x, y=y, z=z)
+
+    tr = poutine.trace(model).get_trace()
+    for name in sites:
+        assert name in tr
+
+
+def test_decorator_interface_do():
+
+    sites = ["x", "y", "z", "_INPUT", "_RETURN"]
+    data = {"x": torch.ones(1)}
+
+    @poutine.do(data=data)
+    def model():
+        p = torch.tensor([0.5])
+        loc = torch.zeros(1)
+        scale = torch.ones(1)
+
+        x = pyro.sample("x", Normal(loc, scale))  # Before the discrete variable.
+        y = pyro.sample("y", Bernoulli(p))
+        z = pyro.sample("z", Normal(loc, scale))  # After the discrete variable.
+        return dict(x=x, y=y, z=z)
+
+    tr = poutine.trace(model).get_trace()
+    for name in sites:
+        if name not in data:
+            assert name in tr
+        else:
+            assert name not in tr
+            assert_equal(tr.nodes["_RETURN"]["value"][name], data[name])

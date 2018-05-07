@@ -1,7 +1,8 @@
-import sphinx_rtd_theme
-import re
 import os
 import sys
+
+import sphinx_rtd_theme
+
 
 # import pkg_resources
 
@@ -64,11 +65,13 @@ author = u'Uber AI Labs'
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
 # built documents.
-#
-# get the latest git tag with  the latest commit
-# eg pyro-0.1.2-g4c52460
-# this only matters if you host manually
-version = re.sub('^v', '', os.popen('git describe --tags').read().strip())
+
+version = ''
+
+if 'READTHEDOCS' not in os.environ:
+    # if developing locally, use pyro.__version__ as version
+    from pyro import __version__  # noqaE402
+    version = __version__
 
 # release version
 release = version
@@ -175,6 +178,7 @@ texinfo_documents = [
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3/', None),
     'torch': ('http://pytorch.org/docs/master/', None),
+    'networkx': ('https://networkx.github.io/documentation/stable/', None),
 }
 
 # document class constructors (__init__ methods):
@@ -183,11 +187,13 @@ def skip(app, what, name, obj, skip, options):
     if name == "__init__":
         return False
     return skip
+"""
 
 
 def setup(app):
-    app.connect("autodoc-skip-member", skip)
-"""
+    app.add_stylesheet('css/pyro.css')
+#     app.connect("autodoc-skip-member", skip)
+
 
 # @jpchen's hack to get rtd builder to install latest pytorch
 if 'READTHEDOCS' in os.environ:

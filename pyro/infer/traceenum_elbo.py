@@ -1,14 +1,15 @@
 from __future__ import absolute_import, division, print_function
 
 import warnings
+import weakref
 
 import pyro
 import pyro.poutine as poutine
+import pyro.ops.jit
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.util import Dice, is_validation_enabled
-from pyro.poutine import EnumerateMessenger
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, check_site_shape, check_traceenum_requirements, torch_isnan
 
@@ -66,11 +67,11 @@ class TraceEnum_ELBO(ELBO):
         the result packaged as a trace generator
         """
         # enable parallel enumeration
-        guide = EnumerateMessenger(first_available_dim=self.max_iarange_nesting)(guide)
+        guide = poutine.enum(guide, first_available_dim=self.max_iarange_nesting)
 
         for i in range(self.num_particles):
             for guide_trace in iter_discrete_traces("flat", guide, *args, **kwargs):
-                model_trace = poutine.trace(poutine.replay(model, guide_trace),
+                model_trace = poutine.trace(poutine.replay(model, trace=guide_trace),
                                             graph_type="flat").get_trace(*args, **kwargs)
 
                 if is_validation_enabled():
@@ -86,9 +87,17 @@ class TraceEnum_ELBO(ELBO):
                     for site in model_trace.nodes.values():
                         if site["type"] == "sample":
                             check_site_shape(site, self.max_iarange_nesting)
+                    any_enumerated = False
                     for site in guide_trace.nodes.values():
                         if site["type"] == "sample":
                             check_site_shape(site, self.max_iarange_nesting)
+                            if site["infer"].get("enumerate"):
+                                any_enumerated = True
+                    if self.strict_enumeration_warning and not any_enumerated:
+                        warnings.warn('TraceEnum_ELBO found no sample sites configured for enumeration. '
+                                      'If you want to enumerate sites, you need to @config_enumerate or set '
+                                      'infer={"enumerate": "sequential"} or infer={"enumerate": "parallel"}? '
+                                      'If you do not want to enumerate, consider using Trace_ELBO instead.')
 
                 yield model_trace, guide_trace
 
@@ -129,17 +138,55 @@ class TraceEnum_ELBO(ELBO):
             elbo += elbo_particle.item() / self.num_particles
 
             # collect parameters to train from model and guide
-            trainable_params = set(site["value"].unconstrained()
+            trainable_params = any(site["type"] == "param"
                                    for trace in (model_trace, guide_trace)
-                                   for site in trace.nodes.values()
-                                   if site["type"] == "param")
+                                   for site in trace.nodes.values())
 
             if trainable_params and elbo_particle.requires_grad:
                 loss_particle = -elbo_particle
                 (loss_particle / self.num_particles).backward()
-                pyro.get_param_store().mark_params_active(trainable_params)
 
         loss = -elbo
+        if torch_isnan(loss):
+            warnings.warn('Encountered NAN loss')
+        return loss
+
+
+class JitTraceEnum_ELBO(TraceEnum_ELBO):
+    """
+    Like :class:`TraceEnum_ELBO` but uses :func:`pyro.ops.jit.compile` to
+    compile :meth:`loss_and_grads`.
+
+    This works only for a limited set of models:
+
+    -   Models must have static structure.
+    -   Models must not depend on any global data (except the param store).
+    -   All model inputs that are tensors must be passed in via ``*args``.
+    -   All model inputs that are *not* tensors must be passed in via
+        ``*kwargs``, and these will be fixed to their values on the first
+        call to :meth:`jit_loss_and_grads`.
+
+    .. warning:: Experimental. Interface subject to change.
+    """
+    def loss_and_grads(self, model, guide, *args, **kwargs):
+        if getattr(self, '_differentiable_loss', None) is None:
+
+            weakself = weakref.ref(self)
+
+            @pyro.ops.jit.compile(nderivs=1)
+            def differentiable_loss(*args):
+                self = weakself()
+                elbo = 0.0
+                for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+                    elbo += _compute_dice_elbo(model_trace, guide_trace)
+                return elbo * (-1.0 / self.num_particles)
+
+            self._differentiable_loss = differentiable_loss
+
+        differentiable_loss = self._differentiable_loss(*args)
+        differentiable_loss.backward()  # this line triggers jit compilation
+        loss = differentiable_loss.item()
+
         if torch_isnan(loss):
             warnings.warn('Encountered NAN loss')
         return loss

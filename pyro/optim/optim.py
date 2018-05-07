@@ -3,9 +3,9 @@ from __future__ import absolute_import, division, print_function
 import torch
 
 import pyro
-from pyro.params import module_from_param_with_module_name, user_param_name
-from pyro.optim.clipped_adam import ClippedAdam as pt_ClippedAdam
 from pyro.optim.adagrad_rmsprop import AdagradRMSProp as pt_AdagradRMSProp
+from pyro.optim.clipped_adam import ClippedAdam as pt_ClippedAdam
+from pyro.params import module_from_param_with_module_name, user_param_name
 
 
 class PyroOptim(object):

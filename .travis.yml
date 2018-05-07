@@ -7,8 +7,11 @@ env:
         - PYTHONPATH=$PWD:$PYTHONPATH
 
 install:
-    # Install PyTorch wheel using the install script
-    - bash scripts/install_pytorch.sh
+    - if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then
+          pip install http://download.pytorch.org/whl/cpu/torch-0.4.0-cp27-cp27mu-linux_x86_64.whl;
+      else
+          pip install http://download.pytorch.org/whl/cpu/torch-0.4.0-cp35-cp35m-linux_x86_64.whl;
+      fi
     - pip install .[test]
     - pip freeze
 

@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
-from .poutine import Messenger
-from .trace import Trace
+from .messenger import Messenger
+from .trace_struct import Trace
 
 
 class ConditionMessenger(Messenger):

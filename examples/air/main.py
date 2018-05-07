@@ -7,24 +7,22 @@ Processing Systems. 2016.
 """
 from __future__ import division
 
+import argparse
 import math
 import os
 import time
-import argparse
 from functools import partial
-from observations import multi_mnist
-import numpy as np
 
+import numpy as np
 import torch
+import visdom
+from observations import multi_mnist
 
 import pyro
 import pyro.optim as optim
 import pyro.poutine as poutine
-from pyro.infer import SVI, TraceGraph_ELBO
-
-import visdom
-
 from air import AIR, latents_to_tensor
+from pyro.infer import SVI, TraceGraph_ELBO
 from viz import draw_many, tensor_to_objs
 
 
@@ -221,7 +219,7 @@ def main(**kwargs):
 
         if args.viz and i % args.viz_every == 0:
             trace = poutine.trace(air.guide).get_trace(examples_to_viz, None)
-            z, recons = poutine.replay(air.prior, trace)(examples_to_viz.size(0))
+            z, recons = poutine.replay(air.prior, trace=trace)(examples_to_viz.size(0))
             z_wheres = tensor_to_objs(latents_to_tensor(z))
 
             # Show data with inferred objection positions.

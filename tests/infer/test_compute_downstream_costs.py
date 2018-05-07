@@ -105,7 +105,7 @@ def test_compute_downstream_costs_big_model_guide_pair(include_inner_1, include_
                                 graph_type="dense").get_trace(include_obs=False, include_inner_1=include_inner_1,
                                                               include_single=include_single, flip_c23=flip_c23,
                                                               include_triple=include_triple, include_z1=include_z1)
-    model_trace = poutine.trace(poutine.replay(big_model_guide, guide_trace),
+    model_trace = poutine.trace(poutine.replay(big_model_guide, trace=guide_trace),
                                 graph_type="dense").get_trace(include_obs=True, include_inner_1=include_inner_1,
                                                               include_single=include_single, flip_c23=flip_c23,
                                                               include_triple=include_triple, include_z1=include_z1)
@@ -226,7 +226,7 @@ def diamond_guide(dim):
 def test_compute_downstream_costs_duplicates(dim):
     guide_trace = poutine.trace(diamond_guide,
                                 graph_type="dense").get_trace(dim=dim)
-    model_trace = poutine.trace(poutine.replay(diamond_model, guide_trace),
+    model_trace = poutine.trace(poutine.replay(diamond_model, trace=guide_trace),
                                 graph_type="dense").get_trace(dim=dim)
 
     guide_trace = prune_subsample_sites(guide_trace)
@@ -288,7 +288,7 @@ def nested_model_guide(include_obs=True, dim1=11, dim2=7):
 def test_compute_downstream_costs_iarange_in_irange(dim1):
     guide_trace = poutine.trace(nested_model_guide,
                                 graph_type="dense").get_trace(include_obs=False, dim1=dim1)
-    model_trace = poutine.trace(poutine.replay(nested_model_guide, guide_trace),
+    model_trace = poutine.trace(poutine.replay(nested_model_guide, trace=guide_trace),
                                 graph_type="dense").get_trace(include_obs=True, dim1=dim1)
 
     guide_trace = prune_subsample_sites(guide_trace)
@@ -349,7 +349,7 @@ def nested_model_guide2(include_obs=True, dim1=3, dim2=2):
 def test_compute_downstream_costs_irange_in_iarange(dim1, dim2):
     guide_trace = poutine.trace(nested_model_guide2,
                                 graph_type="dense").get_trace(include_obs=False, dim1=dim1, dim2=dim2)
-    model_trace = poutine.trace(poutine.replay(nested_model_guide2, guide_trace),
+    model_trace = poutine.trace(poutine.replay(nested_model_guide2, trace=guide_trace),
                                 graph_type="dense").get_trace(include_obs=True, dim1=dim1, dim2=dim2)
 
     guide_trace = prune_subsample_sites(guide_trace)
@@ -405,7 +405,7 @@ def iarange_reuse_model_guide(include_obs=True, dim1=3, dim2=2):
 def test_compute_downstream_costs_iarange_reuse(dim1, dim2):
     guide_trace = poutine.trace(iarange_reuse_model_guide,
                                 graph_type="dense").get_trace(include_obs=False, dim1=dim1, dim2=dim2)
-    model_trace = poutine.trace(poutine.replay(iarange_reuse_model_guide, guide_trace),
+    model_trace = poutine.trace(poutine.replay(iarange_reuse_model_guide, trace=guide_trace),
                                 graph_type="dense").get_trace(include_obs=True, dim1=dim1, dim2=dim2)
 
     guide_trace = prune_subsample_sites(guide_trace)

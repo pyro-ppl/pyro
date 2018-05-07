@@ -11,7 +11,7 @@ import pyro.distributions as dist
 from pyro import poutine
 from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import Adam
-from pyro.poutine.trace import Trace
+from pyro.poutine import Trace
 
 pytestmark = pytest.mark.stage('unit')
 
@@ -106,7 +106,7 @@ def test_trace_copy():
 
 def trace_replay(model, guide, *args):
     guide_trace = poutine.trace(guide).get_trace(*args)
-    poutine.trace(poutine.replay(model, guide_trace)).get_trace(*args)
+    poutine.trace(poutine.replay(model, trace=guide_trace)).get_trace(*args)
 
 
 def test_trace_replay():

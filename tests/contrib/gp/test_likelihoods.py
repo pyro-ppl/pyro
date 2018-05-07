@@ -7,7 +7,7 @@ import torch
 
 from pyro.contrib.gp.kernels import RBF
 from pyro.contrib.gp.likelihoods import Binary, MultiClass, Poisson
-from pyro.contrib.gp.models import SparseVariationalGP, VariationalGP
+from pyro.contrib.gp.models import VariationalGP, VariationalSparseGP
 
 T = namedtuple("TestGPLikelihood", ["model_class", "X", "y", "kernel", "likelihood"])
 
@@ -50,27 +50,27 @@ TEST_CASES = [
         X, y_count2D, kernel, poisson_likelihood
     ),
     T(
-        SparseVariationalGP,
+        VariationalSparseGP,
         X, y_binary1D, kernel, binary_likelihood
     ),
     T(
-        SparseVariationalGP,
+        VariationalSparseGP,
         X, y_binary2D, kernel, binary_likelihood
     ),
     T(
-        SparseVariationalGP,
+        VariationalSparseGP,
         X, y_multiclass1D, kernel, multiclass_likelihood
     ),
     T(
-        SparseVariationalGP,
+        VariationalSparseGP,
         X, y_multiclass2D, kernel, multiclass_likelihood
     ),
     T(
-        SparseVariationalGP,
+        VariationalSparseGP,
         X, y_count1D, kernel, poisson_likelihood
     ),
     T(
-        SparseVariationalGP,
+        VariationalSparseGP,
         X, y_count2D, kernel, poisson_likelihood
     ),
 ]
@@ -86,7 +86,7 @@ def test_inference(model_class, X, y, kernel, likelihood):
         latent_shape = y.shape[:-1] + (likelihood.num_classes,)
     else:
         latent_shape = y.shape[:-1]
-    if model_class is SparseVariationalGP:
+    if model_class is VariationalSparseGP:
         gp = model_class(X, y, kernel, X, likelihood, latent_shape=latent_shape)
     else:
         gp = model_class(X, y, kernel, likelihood, latent_shape=latent_shape)
@@ -100,7 +100,7 @@ def test_inference_with_empty_latent_shape(model_class, X, y, kernel, likelihood
         latent_shape = torch.Size([likelihood.num_classes])
     else:
         latent_shape = torch.Size([])
-    if model_class is SparseVariationalGP:
+    if model_class is VariationalSparseGP:
         gp = model_class(X, y, kernel, X, likelihood, latent_shape=latent_shape)
     else:
         gp = model_class(X, y, kernel, likelihood, latent_shape=latent_shape)
@@ -114,7 +114,7 @@ def test_forward(model_class, X, y, kernel, likelihood):
         latent_shape = y.shape[:-1] + (likelihood.num_classes,)
     else:
         latent_shape = y.shape[:-1]
-    if model_class is SparseVariationalGP:
+    if model_class is VariationalSparseGP:
         gp = model_class(X, y, kernel, X, likelihood, latent_shape=latent_shape)
     else:
         gp = model_class(X, y, kernel, likelihood, latent_shape=latent_shape)
@@ -133,7 +133,7 @@ def test_forward_with_empty_latent_shape(model_class, X, y, kernel, likelihood):
         latent_shape = torch.Size([likelihood.num_classes])
     else:
         latent_shape = torch.Size([])
-    if model_class is SparseVariationalGP:
+    if model_class is VariationalSparseGP:
         gp = model_class(X, y, kernel, X, likelihood, latent_shape=latent_shape)
     else:
         gp = model_class(X, y, kernel, likelihood, latent_shape=latent_shape)

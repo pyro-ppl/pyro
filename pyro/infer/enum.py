@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 from six.moves.queue import LifoQueue
 
 from pyro import poutine
-from pyro.poutine.trace import Trace
+from pyro.poutine import Trace
 
 
 def _iter_discrete_escape(trace, msg):
@@ -95,4 +95,4 @@ def config_enumerate(guide=None, default="sequential"):
     if guide is None:
         return lambda guide: config_enumerate(guide, default=default)
 
-    return poutine.infer_config(guide, _config_enumerate(default))
+    return poutine.infer_config(guide, config_fn=_config_enumerate(default))

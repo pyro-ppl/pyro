@@ -3,11 +3,12 @@ from __future__ import absolute_import, division, print_function
 import logging
 
 import pyro.poutine as poutine
-from pyro.primitives import clear_param_store, enable_validation, get_param_store, iarange, irange, \
-    module, param, sample, random_module, validation_enabled
+from pyro.poutine import condition, do
+from pyro.primitives import (clear_param_store, enable_validation, get_param_store, iarange, irange, module, param,
+                             random_module, sample, validation_enabled)
 from pyro.util import set_rng_seed
 
-version_prefix = '0.2.0-a0'
+version_prefix = '0.2.0'
 
 # Get the __version__ string from the auto-generated _version.py file, if exists.
 try:
@@ -18,9 +19,12 @@ except ImportError:
 # Default logger to prevent 'No handler found' warning.
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
+
 __all__ = [
     "__version__",
     "clear_param_store",
+    "condition",
+    "do",
     "enable_validation",
     "get_param_store",
     "iarange",

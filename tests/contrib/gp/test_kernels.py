@@ -5,9 +5,8 @@ from collections import namedtuple
 import pytest
 import torch
 
-from pyro.contrib.gp.kernels import (Brownian, Constant, Cosine, Exponent, Exponential,
-                                     Linear, Matern32, Matern52, Periodic, Polynomial,
-                                     Product, RationalQuadratic, RBF, Sum,
+from pyro.contrib.gp.kernels import (RBF, Brownian, Constant, Coregionalize, Cosine, Exponent, Exponential, Linear,
+                                     Matern32, Matern52, Periodic, Polynomial, Product, RationalQuadratic, Sum,
                                      VerticalScaling, Warping, WhiteNoise)
 from tests.common import assert_equal
 
@@ -71,7 +70,39 @@ TEST_CASES = [
     T(
         WhiteNoise(3, variance, lengthscale),
         X=X, Z=None, K_sum=6
-    )
+    ),
+    T(
+        Coregionalize(3, components=torch.eye(3, 3)),
+        X=torch.tensor([[1., 0., 0.],
+                        [0.5, 0., 0.5]]),
+        Z=torch.tensor([[1., 0., 0.],
+                        [0., 1., 0.]]),
+        K_sum=2.25,
+    ),
+    T(
+        Coregionalize(3, rank=2),
+        X=torch.tensor([[1., 0., 0.],
+                        [0.5, 0., 0.5]]),
+        Z=torch.tensor([[1., 0., 0.],
+                        [0., 1., 0.]]),
+        K_sum=None,  # kernel is randomly initialized
+    ),
+    T(
+        Coregionalize(3),
+        X=torch.tensor([[1., 0., 0.],
+                        [0.5, 0., 0.5]]),
+        Z=torch.tensor([[1., 0., 0.],
+                        [0., 1., 0.]]),
+        K_sum=None,  # kernel is randomly initialized
+    ),
+    T(
+        Coregionalize(3, rank=2, diagonal=0.01 * torch.ones(3)),
+        X=torch.tensor([[1., 0., 0.],
+                        [0.5, 0., 0.5]]),
+        Z=torch.tensor([[1., 0., 0.],
+                        [0., 1., 0.]]),
+        K_sum=None,  # kernel is randomly initialized
+    ),
 ]
 
 TEST_IDS = [t[0].__class__.__name__ for t in TEST_CASES]
@@ -80,11 +111,14 @@ TEST_IDS = [t[0].__class__.__name__ for t in TEST_CASES]
 @pytest.mark.parametrize("kernel, X, Z, K_sum", TEST_CASES, ids=TEST_IDS)
 def test_kernel_forward(kernel, X, Z, K_sum):
     K = kernel(X, Z)
-    assert K.dim() == 2
-    assert K.size(0) == 2
-    assert K.size(1) == (3 if Z is not None else 2)
-    assert_equal(K.sum().item(), K_sum)
+    assert K.shape == (X.shape[0], (X if Z is None else Z).shape[0])
+    if K_sum is not None:
+        assert_equal(K.sum().item(), K_sum)
     assert_equal(kernel(X).diag(), kernel(X, diag=True))
+    if not isinstance(kernel, WhiteNoise):  # WhiteNoise avoids computing a delta function by assuming X != Z
+        assert_equal(kernel(X), kernel(X, X))
+    if Z is not None:
+        assert_equal(kernel(X, Z), kernel(Z, X).t())
 
 
 def test_combination():
@@ -104,11 +138,10 @@ def test_combination():
     assert k.get_subkernel(k5.name) is k5
 
 
-def test_active_dims_overlap_error():
+def test_active_dims_overlap_ok():
     k1 = Matern52(2, variance, lengthscale[0], active_dims=[0, 1])
     k2 = Matern32(2, variance, lengthscale[0], active_dims=[1, 2])
-    with pytest.raises(ValueError):
-        Sum(k1, k2)
+    Sum(k1, k2)
 
 
 def test_active_dims_disjoint_ok():

@@ -42,7 +42,7 @@ ENV CMAKE_PREFIX_PATH="$(dirname $(which conda))/../"
 WORKDIR ${WORK_DIR}
 COPY install.sh ${WORK_DIR}/install.sh
 
-# Install python 2/3, Pytorch and Pyro
+# Install python 2/3, PyTorch and Pyro
 RUN cd ${WORK_DIR} && conda update -n base conda -c defaults && bash install.sh
 
 # Run Jupyter notebook

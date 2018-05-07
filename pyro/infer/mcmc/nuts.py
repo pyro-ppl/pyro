@@ -11,7 +11,6 @@ from pyro.util import torch_isnan
 
 from .hmc import HMC
 
-
 # sum_accept_probs and num_proposals are used to calculate
 # the statistic accept_prob for Dual Averaging scheme;
 # z_left_grads and z_right_grads are kept to avoid recalculating
@@ -24,14 +23,23 @@ _TreeInfo = namedtuple("TreeInfo", ["z_left", "r_left", "z_left_grads",
 
 class NUTS(HMC):
     """
-    No-U-Turn Sampler kernel, where ``step_size`` need to be explicitly specified by the user.
+    No-U-Turn Sampler kernel, which provides an efficient and convenient way
+    to run Hamiltonian Monte Carlo. The number of steps taken by the
+    integrator is dynamically adjusted on each call to ``sample`` to ensure
+    an optimal length for the Hamiltonian trajectory [1]. As such, the samples
+    generated will typically have lower autocorrelation than those generated
+    by the :class:`~pyro.infer.mcmc.HMC` kernel. Optionally, the NUTS kernel
+    also provides the ability to adapt step size during the warmup phase.
 
-    References
+    Refer to the `baseball example <https://github.com/uber/pyro/blob/dev/examples/baseball.py>`_
+    to see how to do Bayesian inference in Pyro using NUTS.
+
+    **References**
 
     [1] `The No-U-turn sampler: adaptively setting path lengths in Hamiltonian Monte Carlo`,
     Matthew D. Hoffman, and Andrew Gelman
 
-    :param model: Python callable containing pyro primitives.
+    :param model: Python callable containing Pyro primitives.
     :param float step_size: Determines the size of a single step taken by the
         verlet integrator while computing the trajectory using Hamiltonian
         dynamics. If not specified, it will be set to 1.
@@ -46,21 +54,21 @@ class NUTS(HMC):
 
     Example::
 
-        true_coefs = torch.arange(1, 4)
+        true_coefs = torch.tensor([1., 2., 3.])
         data = torch.randn(2000, 3)
+        dim = 3
         labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
 
         def model(data):
-            coefs_mean = torch.zeros(dim, requires_grad=True)
+            coefs_mean = torch.zeros(dim)
             coefs = pyro.sample('beta', dist.Normal(coefs_mean, torch.ones(3)))
             y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
             return y
 
-        nuts_kernel = NUTS(model, step_size=0.0855)
-        mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100)
-        posterior = []
-        for trace, _ in mcmc_run._traces(data):
-            posterior.append(trace.nodes['beta']['value'])
+        nuts_kernel = NUTS(model, adapt_step_size=True)
+        mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=300).run(data)
+        posterior = EmpiricalMarginal(mcmc_run, 'beta')
+        print(posterior.mean)
     """
 
     def __init__(self, model, step_size=None, adapt_step_size=False, transforms=None):
@@ -208,7 +216,7 @@ class NUTS(HMC):
         #     `A Conceptual Introduction to Hamiltonian Monte Carlo` by Michael Betancourt.
         joint_prob = torch.exp(-energy_current)
         if joint_prob == 0:
-            slice_var = torch.tensor(0.0)
+            slice_var = energy_current.new_tensor(0.0)
         else:
             slice_var = pyro.sample("slicevar_t={}".format(self._t),
                                     dist.Uniform(torch.zeros(1), joint_prob))
@@ -222,7 +230,7 @@ class NUTS(HMC):
 
         # Temporarily disable distributions args checking as
         # NaNs are expected during step size adaptation.
-        dist_arg_check = False if self.adapt_step_size else pyro.distributions.is_validation_enabled()
+        dist_arg_check = False if self._adapt_phase else pyro.distributions.is_validation_enabled()
         with dist.validation_enabled(dist_arg_check):
             # doubling process, stop when turning or diverging
             for tree_depth in range(self._max_tree_depth + 1):
@@ -257,7 +265,7 @@ class NUTS(HMC):
                 else:  # update tree_size
                     tree_size += new_tree.size
 
-        if self.adapt_step_size:
+        if self._adapt_phase:
             accept_prob = new_tree.sum_accept_probs / new_tree.num_proposals
             self._adapt_step_size(accept_prob)
 

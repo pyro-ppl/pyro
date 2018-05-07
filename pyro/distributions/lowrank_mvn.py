@@ -10,9 +10,9 @@ from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import matrix_triangular_solve_compat
 
 
-class SparseMultivariateNormal(TorchDistribution):
+class LowRankMultivariateNormal(TorchDistribution):
     """
-    Sparse Multivariate Normal distribution.
+    Low Rank Multivariate Normal distribution.
 
     Implements fast computation for log probability of Multivariate Normal distribution
     when the covariance matrix has the form::
@@ -53,7 +53,7 @@ class SparseMultivariateNormal(TorchDistribution):
         self.trace_term = trace_term if trace_term is not None else 0
 
         batch_shape, event_shape = loc.shape[:-1], loc.shape[-1:]
-        super(SparseMultivariateNormal, self).__init__(batch_shape, event_shape)
+        super(LowRankMultivariateNormal, self).__init__(batch_shape, event_shape)
 
     @property
     def mean(self):
@@ -107,8 +107,8 @@ class SparseMultivariateNormal(TorchDistribution):
         elif y.dim() == 2:
             W_Dinv_y = W_Dinv.matmul(y.t())
         else:
-            raise ValueError("SparseMultivariateNormal distribution does not support "
-                             "computing log_prob for a tensor with more than 2 dimensionals.")
+            raise NotImplementedError("SparseMultivariateNormal distribution does not support "
+                                      "computing log_prob for a tensor with more than 2 dimensionals.")
         Linv_W_Dinv_y = matrix_triangular_solve_compat(W_Dinv_y, L, upper=False)
         if y.dim() == 2:
             Linv_W_Dinv_y = Linv_W_Dinv_y.t()

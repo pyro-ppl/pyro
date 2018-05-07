@@ -14,7 +14,7 @@ class Gaussian(Likelihood):
     """
     Implementation of Gaussian likelihood, which is used for regression problems.
 
-    Gaussian likelihood uses :class:`~pyro.distributions.torch.Normal` distribution.
+    Gaussian likelihood uses :class:`~pyro.distributions.Normal` distribution.
 
     :param torch.Tensor variance: A variance parameter, which plays the role of
         ``noise`` in regression problems.

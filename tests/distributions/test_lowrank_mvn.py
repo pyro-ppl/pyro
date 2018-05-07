@@ -2,8 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import torch
 
-from pyro.distributions import MultivariateNormal, SparseMultivariateNormal
-
+from pyro.distributions import LowRankMultivariateNormal, MultivariateNormal
 from tests.common import assert_equal
 
 
@@ -14,9 +13,9 @@ def test_scale_tril():
     cov = D.diag() + W.t().matmul(W)
 
     mvn = MultivariateNormal(loc, cov)
-    sparse_mvn = SparseMultivariateNormal(loc, W, D)
+    lowrank_mvn = LowRankMultivariateNormal(loc, W, D)
 
-    assert_equal(mvn.scale_tril, sparse_mvn.scale_tril)
+    assert_equal(mvn.scale_tril, lowrank_mvn.scale_tril)
 
 
 def test_log_prob():
@@ -27,9 +26,9 @@ def test_log_prob():
     cov = D.diag() + W.t().matmul(W)
 
     mvn = MultivariateNormal(loc, cov)
-    sparse_mvn = SparseMultivariateNormal(loc, W, D)
+    lowrank_mvn = LowRankMultivariateNormal(loc, W, D)
 
-    assert_equal(mvn.log_prob(x), sparse_mvn.log_prob(x))
+    assert_equal(mvn.log_prob(x), lowrank_mvn.log_prob(x))
 
 
 def test_variance():
@@ -39,6 +38,6 @@ def test_variance():
     cov = D.diag() + W.t().matmul(W)
 
     mvn = MultivariateNormal(loc, cov)
-    sparse_mvn = SparseMultivariateNormal(loc, W, D)
+    lowrank_mvn = LowRankMultivariateNormal(loc, W, D)
 
-    assert_equal(mvn.variance, sparse_mvn.variance)
+    assert_equal(mvn.variance, lowrank_mvn.variance)

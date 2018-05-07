@@ -10,9 +10,10 @@ import torch.optim
 import pyro
 import pyro.distributions as dist
 from pyro.distributions.testing import fakes
-from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO
+from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, Trace_ELBO, TraceEnum_ELBO,
+                        TraceGraph_ELBO)
 from pyro.optim import Adam
-from tests.common import assert_equal
+from tests.common import assert_equal, xfail_param
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,7 @@ def test_subsample_gradient(Elbo, reparameterized, subsample):
     data = torch.tensor([-0.5, 2.0])
     subsample_size = 1 if subsample else len(data)
     num_particles = 50000
-    precision = 0.05
+    precision = 0.06
     Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
 
     def model(subsample):
@@ -44,7 +45,8 @@ def test_subsample_gradient(Elbo, reparameterized, subsample):
                 pyro.sample("z", Normal(loc_ind, scale))
 
     optim = Adam({"lr": 0.1})
-    inference = SVI(model, guide, optim, loss=Elbo(num_particles=1))
+    elbo = Elbo(strict_enumeration_warning=False)
+    inference = SVI(model, guide, optim, loss=elbo)
     if subsample_size == 1:
         inference.loss_and_grads(model, guide, subsample=torch.LongTensor([0]))
         inference.loss_and_grads(model, guide, subsample=torch.LongTensor([1]))
@@ -67,7 +69,7 @@ def test_iarange(Elbo, reparameterized):
     pyro.clear_param_store()
     data = torch.tensor([-0.5, 2.0])
     num_particles = 20000
-    precision = 0.05
+    precision = 0.06
     Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
 
     def model():
@@ -96,7 +98,7 @@ def test_iarange(Elbo, reparameterized):
         pyro.sample("nuisance_a", Normal(0, 1))
 
     optim = Adam({"lr": 0.1})
-    inference = SVI(model, guide, optim, loss=Elbo())
+    inference = SVI(model, guide, optim, loss=Elbo(strict_enumeration_warning=False))
     inference.loss_and_grads(model, guide)
     params = dict(pyro.get_param_store().named_parameters())
     actual_grads = {name: param.grad.detach().cpu().numpy() / num_particles
@@ -111,7 +113,17 @@ def test_iarange(Elbo, reparameterized):
 
 @pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
 @pytest.mark.parametrize("subsample", [False, True], ids=["full", "subsample"])
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("Elbo", [
+    Trace_ELBO,
+    TraceGraph_ELBO,
+    TraceEnum_ELBO,
+    xfail_param(JitTrace_ELBO,
+                reason="jit RuntimeError: Unsupported op descriptor: index-2"),
+    xfail_param(JitTraceGraph_ELBO,
+                reason="jit RuntimeError: Unsupported op descriptor: index-2"),
+    xfail_param(JitTraceEnum_ELBO,
+                reason="jit RuntimeError: Unsupported op descriptor: index-2"),
+])
 def test_subsample_gradient_sequential(Elbo, reparameterized, subsample):
     pyro.clear_param_store()
     data = torch.tensor([-0.5, 2.0])
@@ -133,10 +145,15 @@ def test_subsample_gradient_sequential(Elbo, reparameterized, subsample):
             pyro.sample("z", Normal(loc[ind], scale))
 
     optim = Adam({"lr": 0.1})
-    inference = SVI(model, guide, optim, loss=Elbo(num_particles=num_particles))
-    inference.loss_and_grads(model, guide)
+    elbo = Elbo(num_particles=10, strict_enumeration_warning=False)
+    inference = SVI(model, guide, optim, elbo)
+    iters = num_particles // 10
+    for _ in range(iters):
+        inference.loss_and_grads(model, guide)
+
     params = dict(pyro.get_param_store().named_parameters())
-    actual_grads = {name: param.grad.detach().cpu().numpy() for name, param in params.items()}
+    actual_grads = {name: param.grad.detach().cpu().numpy() / iters
+                    for name, param in params.items()}
 
     expected_grads = {'loc': np.array([0.5, -2.0]), 'scale': np.array([2.0])}
     for name in sorted(params):

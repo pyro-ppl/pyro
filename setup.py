@@ -1,9 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
+import os
 import subprocess
 import sys
 
-import os
 from setuptools import find_packages, setup
 
 PROJECT_PATH = os.path.dirname(os.path.abspath(__file__))
@@ -54,11 +54,11 @@ long_description = '\n'.join(
 EXTRAS_REQUIRE = [
     'jupyter>=1.0.0',
     'matplotlib>=1.3',
-    'numpy>=1.7',
     'observations>=0.1.4',
     'pillow',
     'torchvision',
     'visdom>=0.1.4',
+    'pandas',
 ]
 
 setup(
@@ -76,8 +76,9 @@ setup(
         'contextlib2',
         'graphviz>=0.8',
         'networkx>=2.0.0',
+        'numpy>=1.7',
         'six>=1.10.0',
-        'torch',
+        'torch>=0.4.0',
     ],
     extras_require={
         'extras': EXTRAS_REQUIRE,
@@ -92,6 +93,7 @@ setup(
             'flake8',
             'isort',
             'nbformat',
+            'nbsphinx>=0.3.2',
             'nbstripout',
             'nbval',
             'pypandoc',

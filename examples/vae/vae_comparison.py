@@ -10,11 +10,11 @@ from torch.nn import functional
 from torchvision.utils import save_image
 
 import pyro
-from utils.mnist_cached import RESULTS_DIR, DATA_DIR
 from pyro.contrib.examples import util
 from pyro.distributions import Bernoulli, Normal
 from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import Adam
+from utils.mnist_cached import DATA_DIR, RESULTS_DIR
 
 """
 Comparison of VAE implementation in PyTorch and Pyro. This example can be
@@ -137,14 +137,14 @@ class VAE(object):
         print('Test set loss: {:.4f}'.format(test_loss))
 
 
-class PytorchVAEImpl(VAE):
+class PyTorchVAEImpl(VAE):
     """
     Adapted from pytorch/examples.
     Source: https://github.com/pytorch/examples/tree/master/vae
     """
 
     def __init__(self, *args, **kwargs):
-        super(PytorchVAEImpl, self).__init__(*args, **kwargs)
+        super(PyTorchVAEImpl, self).__init__(*args, **kwargs)
         self.optimizer = self.initialize_optimizer(lr=1e-3)
 
     def compute_loss_and_gradient(self, x):
@@ -234,7 +234,7 @@ def main(args):
         vae = PyroVAEImpl(args, train_loader, test_loader)
         print('Running Pyro VAE implementation')
     elif args.impl == 'pytorch':
-        vae = PytorchVAEImpl(args, train_loader, test_loader)
+        vae = PyTorchVAEImpl(args, train_loader, test_loader)
         print('Running PyTorch VAE implementation')
     else:
         raise ValueError('Incorrect implementation specified: {}'.format(args.impl))

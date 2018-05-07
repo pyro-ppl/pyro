@@ -152,7 +152,10 @@ class GaussianChainTests(GaussianChain):
             pyro.clear_param_store()
 
         adam = optim.Adam({"lr": lr, "betas": (0.95, 0.999)})
-        svi = SVI(self.model, self.guide, adam, loss=TraceGraph_ELBO())
+        elbo = TraceGraph_ELBO()
+        loss_and_grads = elbo.loss_and_grads
+        # loss_and_grads = elbo.jit_loss_and_grads  # This fails.
+        svi = SVI(self.model, self.guide, adam, loss=elbo.loss, loss_and_grads=loss_and_grads)
 
         for step in range(n_steps):
             t0 = time.time()

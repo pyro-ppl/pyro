@@ -6,7 +6,7 @@ import pytest
 import torch
 
 import pyro
-from pyro.contrib.gp.kernels import WhiteNoise, Matern52
+from pyro.contrib.gp.kernels import Matern52, WhiteNoise
 from pyro.contrib.gp.util import conditional
 from tests.common import assert_equal
 
