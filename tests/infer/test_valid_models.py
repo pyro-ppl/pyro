@@ -855,6 +855,8 @@ def test_iarange_shape_broadcasting(times):
 @pytest.mark.parametrize('enumerate_', [None, "sequential", "parallel"])
 def test_enum_discrete_iarange_shape_broadcasting_ok(enumerate_):
 
+    @poutine.broadcast
+    @config_enumerate(default=enumerate_)
     def model():
         x_iarange = pyro.iarange("x_iarange", 10, 5, dim=-1)
         y_iarange = pyro.iarange("y_iarange", 11, 6, dim=-2)
@@ -875,6 +877,5 @@ def test_enum_discrete_iarange_shape_broadcasting_ok(enumerate_):
                 else:
                     assert d.shape == torch.Size((50, 6, 5))
 
-    model = config_enumerate(poutine.broadcast(model), default=enumerate_)
     assert_ok(model, model, TraceEnum_ELBO(max_iarange_nesting=3,
                                            strict_enumeration_warning=(enumerate_ == "parallel")))

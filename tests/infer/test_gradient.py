@@ -73,6 +73,7 @@ def test_iarange(Elbo, reparameterized):
     precision = 0.06
     Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
 
+    @poutine.broadcast
     def model():
         particles_iarange = pyro.iarange("particles", num_particles, dim=-2)
         data_iarange = pyro.iarange("data", len(data), dim=-1)
@@ -85,6 +86,7 @@ def test_iarange(Elbo, reparameterized):
             pyro.sample("x", Normal(z, 1), obs=data)
         pyro.sample("nuisance_c", Normal(4, 5))
 
+    @poutine.broadcast
     def guide():
         loc = pyro.param("loc", torch.zeros(len(data)))
         scale = pyro.param("scale", torch.tensor([1.]))
@@ -97,7 +99,6 @@ def test_iarange(Elbo, reparameterized):
         pyro.sample("nuisance_a", Normal(0, 1))
 
     optim = Adam({"lr": 0.1})
-    model, guide = poutine.broadcast(model), poutine.broadcast(guide)
     inference = SVI(model, guide, optim, loss=Elbo(strict_enumeration_warning=False))
     inference.loss_and_grads(model, guide)
     params = dict(pyro.get_param_store().named_parameters())

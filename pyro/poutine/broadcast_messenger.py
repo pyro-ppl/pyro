@@ -8,7 +8,7 @@ class BroadcastMessenger(Messenger):
     `BroadcastMessenger` automatically broadcasts the batch shape of
     the stochastic function at a sample site when inside a single
     or nested iarange context. The existing `batch_shape` must be
-    broadcastable with the size of the :class::`pyro.iarange`
+    broadcastable with the size of the :class:`~pyro.iarange`
     contexts installed in the `cond_indep_stack`.
     """
     def _pyro_sample(self, msg):
