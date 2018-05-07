@@ -206,6 +206,43 @@ def block(fn=None, hide=None, expose=None, hide_types=None, expose_types=None):
     return msngr(fn) if fn is not None else msngr
 
 
+def broadcast(fn=None):
+    """
+    Automatically broadcasts the batch shape of the stochastic function
+    at a sample site when inside a single or nested iarange context.
+    The existing `batch_shape` must be broadcastable with the size
+    of the :class:`~pyro.iarange` contexts installed in the
+    `cond_indep_stack`.
+
+    Notice how `model_automatic_broadcast` below automates expanding of
+    distribution batch shapes. This makes it easy to modularize a
+    Pyro model as the sub-components are agnostic of the wrapping
+    :class:`~pyro.iarange` contexts.
+
+    >>> import pyro
+    >>> import pyro.distributions as dist
+    >>> import pyro.poutine as poutine
+    >>>
+    >>> def model_broadcast_by_hand():
+    ...     with pyro.iarange("batch", 100, dim=-2):
+    ...         with pyro.iarange("components", 3, dim=-1)
+    ...             sample = pyro.sample("sample", dist.Bernoulli(torch.ones(3) * 0.5)
+    ...                                                .expand_by(100))
+    ...             assert sample.shape == torch.Size((100, 3))
+    ...     return sample
+    >>>
+    >>> @poutine.brodcast
+    >>> def model_automatic_broadcast():
+    ...     with pyro.iarange("batch", 100, dim=-2):
+    ...         with pyro.iarange("components", 3, dim=-1)
+    ...             sample = pyro.sample("sample", dist.Bernoulli(torch.tensor(0.5)))
+    ...             assert sample.shape == torch.Size((100, 3))
+    ...     return sample
+    """
+    msngr = BroadcastMessenger()
+    return msngr(fn) if fn is not None else msngr
+
+
 def escape(fn=None, escape_fn=None):
     """
     Given a callable that contains Pyro primitive calls,
@@ -318,18 +355,6 @@ def enum(fn=None, first_available_dim=None):
         dimension and all dimensions left may be used internally by Pyro.
     """
     msngr = EnumerateMessenger(first_available_dim=first_available_dim)
-    return msngr(fn) if fn is not None else msngr
-
-
-def broadcast(fn=None):
-    """
-    Automatically broadcasts the batch shape of the stochastic function
-    at a sample site when inside a single or nested iarange context.
-    The existing `batch_shape` must be
-    broadcastable with the size of the :class::`pyro.iarange`
-    contexts installed in the `cond_indep_stack`.
-    """
-    msngr = BroadcastMessenger()
     return msngr(fn) if fn is not None else msngr
 
 
