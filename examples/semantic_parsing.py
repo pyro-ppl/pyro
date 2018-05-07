@@ -1,15 +1,14 @@
 import torch
-from torch.autograd import Variable
 
 import queue
 import collections
 import functools
 
 import pyro
-import pyro.util as util
-import pyro.distributions.torch as dist
-from pyro.infer import Marginal, TracePosterior
+import pyro.distributions as dist
+from pyro.infer import EmpiricalMarginal, TracePosterior
 import pyro.poutine as poutine
+from pyro.poutine.runtime import NonlocalExit
 
 
 ###############################################
@@ -30,7 +29,7 @@ def pqueue(fn, queue):
 
     def _fn(*args, **kwargs):
 
-        for i in range(1e6):
+        for i in range(int(1e6)):
             assert not queue.empty(), \
                 "trying to get() from an empty queue will deadlock"
 
@@ -40,13 +39,12 @@ def pqueue(fn, queue):
                                                    functools.partial(sample_escape,
                                                                      next_trace)))
                 return ftr(*args, **kwargs)
-            except util.NonlocalExit as site_container:
-                for frame in pyro._PYRO_STACK:
-                    frame._reset()
+            except NonlocalExit as site_container:
+                site_container.reset_stack()
                 for tr in poutine.util.enum_extend(ftr.trace.copy(),
                                                    site_container.site):
                     # add a little bit of noise to the priority to break ties...
-                    queue.put((tr.log_pdf()[0] - torch.rand(1)[0] * 1e-2, tr))
+                    queue.put((tr.log_prob_sum()[0] - torch.rand(1)[0] * 1e-2, tr))
 
         raise ValueError("max tries ({}) exceeded".format(str(1e6)))
 
@@ -71,7 +69,7 @@ class BestFirstSearch(TracePosterior):
                 # num_samples was too large!
                 break
             tr = poutine.trace(q_fn).get_trace(*args, **kwargs)
-            yield tr, tr.log_pdf()
+            yield tr, tr.log_prob_sum()
 
 
 def factor(name, value):
@@ -352,20 +350,20 @@ def utterance_prior():
 
 def speaker(world):
     utterance = utterance_prior()
-    L = Marginal(BestFirstSearch(literal_listener_raw, num_samples=100))
-    pyro.observe("speaker_constraint", L, world, utterance)
+    L = EmpiricalMarginal(BestFirstSearch(literal_listener_raw, num_samples=100).run(utterance))
+    pyro.observe("speaker_constraint", L, world)
     return utterance
 
 
 def rsa_listener(utterance, qud):
     world = world_prior(2, meaning(utterance))
-    S = Marginal(BestFirstSearch(speaker, num_samples=100))
-    pyro.observe("listener_constraint", S, utterance, world)
+    S = EmpiricalMarginal(BestFirstSearch(speaker, num_samples=100).run(world))
+    pyro.observe("listener_constraint", S, utterance)
     return qud(world)
 
 
 def main():
-    mll = Marginal(BestFirstSearch(literal_listener, num_samples=100))
+    mll = lambda utterance, qud: EmpiricalMarginal(BestFirstSearch(literal_listener, num_samples=100).run(utterance, qud))
 
     def is_any_qud(world):
         return any(map(lambda obj: obj.nice, world))
@@ -384,7 +382,7 @@ def main():
                 m = m and True
         return m
 
-    rsa = Marginal(BestFirstSearch(rsa_listener, num_samples=100))
+    rsa = lambda utterance, qud: EmpiricalMarginal(BestFirstSearch(rsa_listener, num_samples=100).run(utterance, qud))
 
     print(rsa("some of the blond people are nice", is_all_qud))
 
