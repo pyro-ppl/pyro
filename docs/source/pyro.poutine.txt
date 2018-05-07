@@ -1,79 +1,71 @@
-Poutine
--------
+Messenger
+__________
 
-.. automodule:: pyro.poutine.poutine
+.. automodule:: pyro.poutine.messenger
     :members:
     :undoc-members:
     :show-inheritance:
 
-BlockPoutine
-------------
+BlockMessenger
+_______________
 
-.. automodule:: pyro.poutine.block_poutine
+.. automodule:: pyro.poutine.block_messenger
     :members:
     :undoc-members:
     :show-inheritance:
 
-ConditionPoutine
-----------------
+ConditionMessenger
+___________________
 
-.. automodule:: pyro.poutine.condition_poutine
+.. automodule:: pyro.poutine.condition_messenger
     :members:
     :undoc-members:
     :show-inheritance:
 
-EscapePoutine
--------------
+EscapeMessenger
+________________
 
-.. automodule:: pyro.poutine.escape_poutine
+.. automodule:: pyro.poutine.escape_messenger
     :members:
     :undoc-members:
     :show-inheritance:
 
-IndepPoutine
-------------
+IndepMessenger
+_______________
 
-.. automodule:: pyro.poutine.indep_poutine
+.. automodule:: pyro.poutine.indep_messenger
     :members:
     :undoc-members:
     :show-inheritance:
 
-LiftPoutine
------------
+LiftMessenger
+______________
 
-.. automodule:: pyro.poutine.lift_poutine
+.. automodule:: pyro.poutine.lift_messenger
     :members:
     :undoc-members:
     :show-inheritance:
 
-ReplayPoutine
--------------
+ReplayMessenger
+________________
 
-.. automodule:: pyro.poutine.replay_poutine
+.. automodule:: pyro.poutine.replay_messenger
     :members:
     :undoc-members:
     :show-inheritance:
 
-ScalePoutine
-------------
+ScaleMessenger
+_______________
 
-.. automodule:: pyro.poutine.scale_poutine
+.. automodule:: pyro.poutine.scale_messenger
     :members:
     :undoc-members:
     :show-inheritance:
 
-Trace
------
+TraceMessenger
+_______________
 
-.. automodule:: pyro.poutine.trace
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-TracePoutine
-------------
-
-.. automodule:: pyro.poutine.trace_poutine
+.. automodule:: pyro.poutine.trace_messenger
     :members:
     :undoc-members:
     :show-inheritance:

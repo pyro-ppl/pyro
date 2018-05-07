@@ -10,10 +10,16 @@ def pytest_configure(config):
                             "init(rng_seed): initialize the RNG using the seed provided.")
     config.addinivalue_line("markers",
                             "stage(NAME): mark test to run when testing stage matches NAME.")
+    config.addinivalue_line("markers",
+                            "disable_validation: disable all validation on this test.")
 
 
 def pytest_runtest_setup(item):
     pyro.clear_param_store()
+    if item.get_marker("disable_validation"):
+        pyro.enable_validation(False)
+    else:
+        pyro.enable_validation(True)
     test_initialize_marker = item.get_marker("init")
     if test_initialize_marker:
         rng_seed = test_initialize_marker.kwargs["rng_seed"]

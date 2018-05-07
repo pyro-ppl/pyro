@@ -4,7 +4,6 @@ import contextlib
 import numbers
 import os
 import warnings
-from copy import deepcopy
 from itertools import product
 
 import numpy as np
@@ -13,7 +12,6 @@ import torch
 import torch.cuda
 from numpy.testing import assert_allclose
 from pytest import approx
-from torch.autograd import Variable
 
 torch.set_default_tensor_type(os.environ.get('PYRO_TENSOR_TYPE', 'torch.DoubleTensor'))
 
@@ -27,6 +25,10 @@ Source: https://github.com/pytorch/pytorch/blob/master/test/common.py
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 RESOURCE_DIR = os.path.join(TESTS_DIR, 'resources')
 EXAMPLES_DIR = os.path.join(os.path.dirname(TESTS_DIR), 'examples')
+
+
+def xfail_param(*args, **kwargs):
+    return pytest.param(*args, marks=[pytest.mark.xfail(**kwargs)])
 
 
 def suppress_warnings(fn):
@@ -52,35 +54,15 @@ def get_gpu_type(t):
     return getattr(torch.cuda, t.__name__)
 
 
-def to_gpu(obj, type_map={}):
-    if torch.is_tensor(obj):
-        t = type_map.get(type(obj), get_gpu_type(type(obj)))
-        return obj.clone().type(t)
-    elif torch.is_storage(obj):
-        return obj.new().resize_(obj.size()).copy_(obj)
-    elif isinstance(obj, Variable):
-        assert obj.is_leaf
-        t = type_map.get(type(obj.data), get_gpu_type(type(obj.data)))
-        return Variable(obj.data.clone().type(
-            t), requires_grad=obj.requires_grad)
-    elif isinstance(obj, list):
-        return [to_gpu(o, type_map) for o in obj]
-    elif isinstance(obj, tuple):
-        return tuple(to_gpu(o, type_map) for o in obj)
-    else:
-        return deepcopy(obj)
-
-
 @contextlib.contextmanager
 def tensors_default_to(host):
     """
-    Context manager to temporarily use Cpu or Cuda tensors in Pytorch.
+    Context manager to temporarily use Cpu or Cuda tensors in PyTorch.
 
     :param str host: Either "cuda" or "cpu".
     """
     assert host in ('cpu', 'cuda'), host
-    old_module = torch.Tensor.__module__
-    name = torch.Tensor.__name__
+    old_module, name = torch.Tensor().type().rsplit('.', 1)
     new_module = 'torch.cuda' if host == 'cuda' else 'torch'
     torch.set_default_tensor_type('{}.{}'.format(new_module, name))
     try:
@@ -124,16 +106,6 @@ def is_iterable(obj):
         return False
 
 
-def _unwrap_variables(x, y):
-    if isinstance(x, Variable) and isinstance(y, Variable):
-        return x.data, y.data
-    elif isinstance(x, Variable) or isinstance(y, Variable):
-        raise AssertionError(
-            "cannot compare {} and {}".format(
-                type(x), type(y)))
-    return x, y
-
-
 def assert_tensors_equal(a, b, prec=1e-5, msg=''):
     assert a.size() == b.size(), msg
     if prec == 0:
@@ -148,7 +120,7 @@ def assert_tensors_equal(a, b, prec=1e-5, msg=''):
         diff[nan_mask] = 0
         if diff.is_signed():
             diff = diff.abs()
-        max_err = diff.max()
+        max_err = diff.max().item()
         assert max_err < prec, msg
 
 
@@ -180,8 +152,6 @@ def _safe_coalesce(t):
 # TODO Split this into assert_equal() and assert_close() or assert_almost_equal().
 # TODO Use atol and rtol instead of prec
 def assert_equal(x, y, prec=1e-5, msg=''):
-    x, y = _unwrap_variables(x, y)
-
     if torch.is_tensor(x) and torch.is_tensor(y):
         assert_equal(x.is_sparse, y.is_sparse, prec, msg)
         if x.is_sparse:

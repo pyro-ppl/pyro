@@ -1,4 +1,6 @@
-.. automodule:: pyro.infer.mcmc.mcmc
+MCMC
+----
+.. autoclass:: pyro.infer.mcmc.MCMC
     :members:
     :undoc-members:
     :show-inheritance:
@@ -6,7 +8,15 @@
 HMC
 ---
 
-.. automodule:: pyro.infer.mcmc.hmc
+.. autoclass:: pyro.infer.mcmc.HMC
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    
+NUTS
+----
+
+.. autoclass:: pyro.infer.mcmc.NUTS
     :members:
     :undoc-members:
     :show-inheritance:

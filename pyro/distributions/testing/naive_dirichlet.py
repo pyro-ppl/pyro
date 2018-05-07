@@ -14,9 +14,9 @@ class NaiveDirichlet(Dirichlet):
     This naive implementation has stochastic reparameterized gradients, which
     have higher variance than PyTorch's ``Dirichlet`` implementation.
     """
-    def __init__(self, alpha):
-        super(NaiveDirichlet, self).__init__(alpha)
-        self._gamma = Gamma(alpha, torch.ones_like(alpha))
+    def __init__(self, concentration):
+        super(NaiveDirichlet, self).__init__(concentration)
+        self._gamma = Gamma(concentration, torch.ones_like(concentration))
 
     def rsample(self, sample_shape=torch.Size()):
         gammas = self._gamma.rsample(sample_shape)
@@ -31,9 +31,9 @@ class NaiveBeta(Beta):
     This naive implementation has stochastic reparameterized gradients, which
     have higher variance than PyTorch's ``Beta`` implementation.
     """
-    def __init__(self, alpha, beta):
-        super(NaiveBeta, self).__init__(alpha, beta)
-        alpha_beta = torch.stack([alpha, beta], -1)
+    def __init__(self, concentration1, concentration0):
+        super(NaiveBeta, self).__init__(concentration1, concentration0)
+        alpha_beta = torch.stack([concentration1, concentration0], -1)
         self._gamma = Gamma(alpha_beta, torch.ones_like(alpha_beta))
 
     def rsample(self, sample_shape=torch.Size()):

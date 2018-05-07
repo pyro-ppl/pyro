@@ -1,8 +1,23 @@
 Primitives
 ==========
 
-.. automodule:: pyro.__init__
+.. autofunction:: pyro.sample
+.. autofunction:: pyro.param
+.. autofunction:: pyro.module
+.. autofunction:: pyro.random_module
+
+.. autoclass:: pyro.irange
     :members:
     :undoc-members:
-    :exclude-members: map_data
-    :show-inheritance:
+
+.. autoclass:: pyro.iarange
+    :members:
+    :undoc-members:
+
+.. autofunction:: pyro.get_param_store
+.. autofunction:: pyro.clear_param_store
+
+.. autofunction:: pyro.validation_enabled
+.. autofunction:: pyro.enable_validation
+
+.. autofunction:: pyro.ops.jit.compile

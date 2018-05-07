@@ -4,7 +4,6 @@ import logging
 
 import pytest
 import torch
-from torch.autograd import Variable
 
 import pyro
 import pyro.distributions as dist
@@ -14,41 +13,17 @@ from tests.common import requires_cuda
 logger = logging.getLogger(__name__)
 
 
-@pytest.mark.parametrize("batch_dim", [0, 1])
-def test_batch_dim(batch_dim):
-
-    data = Variable(torch.randn(4, 5, 7))
-
-    def local_model(ixs, _xs):
-        xs = _xs.view(-1, _xs.size(2))
-        return pyro.sample("xs", dist.Normal(xs, Variable(torch.ones(xs.size()))))
-
-    def model():
-        return pyro.map_data("md", data, local_model,
-                             batch_size=1, batch_dim=batch_dim)
-
-    tr = poutine.trace(model).get_trace()
-    assert tr.nodes["xs"]["value"].size(0) == data.size(1 - batch_dim)
-    assert tr.nodes["xs"]["value"].size(1) == data.size(2)
-
-
-def test_nested_map_data():
-    means = [Variable(torch.randn(2)) for i in range(8)]
+def test_nested_irange():
+    means = [torch.randn(2) for i in range(8)]
     mean_batch_size = 2
-    stds = [Variable(torch.abs(torch.randn(2))) for i in range(6)]
+    stds = [torch.abs(torch.randn(2)) for i in range(6)]
     std_batch_size = 3
 
     def model(means, stds):
-        return pyro.map_data("a", means,
-                             lambda i, x:
-                             pyro.map_data("a_{}".format(i), stds,
-                                           lambda j, y:
-                                           pyro.sample("x_{}{}".format(i, j),
-                                                       dist.Normal(x, y)),
-                                           batch_size=std_batch_size),
-                             batch_size=mean_batch_size)
-
-    model = model
+        a_irange = pyro.irange("a", len(means), mean_batch_size)
+        b_irange = pyro.irange("b", len(stds), std_batch_size)
+        return [[pyro.sample("x_{}{}".format(i, j), dist.Normal(means[i], stds[j]))
+                 for j in b_irange] for i in a_irange]
 
     xs = model(means, stds)
     assert len(xs) == mean_batch_size
@@ -61,69 +36,40 @@ def test_nested_map_data():
 
 
 def iarange_model(subsample_size):
-    mu = Variable(torch.zeros(20))
-    sigma = Variable(torch.ones(20))
+    loc = torch.zeros(20)
+    scale = torch.ones(20)
     with pyro.iarange('iarange', 20, subsample_size) as batch:
-        pyro.sample("x", dist.Normal(mu[batch], sigma[batch]))
+        pyro.sample("x", dist.Normal(loc[batch], scale[batch]))
         result = list(batch.data)
     return result
 
 
 def irange_model(subsample_size):
-    mu = Variable(torch.zeros(20))
-    sigma = Variable(torch.ones(20))
+    loc = torch.zeros(20)
+    scale = torch.ones(20)
     result = []
     for i in pyro.irange('irange', 20, subsample_size):
-        pyro.sample("x_{}".format(i), dist.Normal(mu[i], sigma[i]))
+        pyro.sample("x_{}".format(i), dist.Normal(loc[i], scale[i]))
         result.append(i)
     return result
 
 
 def nested_irange_model(subsample_size):
-    mu = Variable(torch.zeros(20))
-    sigma = Variable(torch.ones(20))
+    loc = torch.zeros(20)
+    scale = torch.ones(20)
     result = []
+    inner_irange = pyro.irange("inner", 20, 5)
     for i in pyro.irange("outer", 20, subsample_size):
         result.append([])
-        for j in pyro.irange("inner", 20, 5):
-            pyro.sample("x_{}_{}".format(i, j), dist.Normal(mu[i] + mu[j], sigma[i] + sigma[j]))
+        for j in inner_irange:
+            pyro.sample("x_{}_{}".format(i, j), dist.Normal(loc[i] + loc[j], scale[i] + scale[j]))
             result[-1].append(j)
     return result
 
 
-def map_data_vector_model(subsample_size):
-    mu = Variable(torch.zeros(20))
-    sigma = Variable(torch.ones(20))
-
-    def local_model(batch, unused):
-        pyro.sample("x", dist.Normal(mu[batch], sigma[batch]))
-        return batch
-
-    LongTensor = torch.cuda.LongTensor if torch.Tensor.is_cuda else torch.LongTensor
-    ind = Variable(LongTensor(range(20)))
-    batch = pyro.map_data('mapdata', ind, local_model, batch_size=subsample_size)
-    return list(batch.data)
-
-
-def map_data_iter_model(subsample_size):
-    mu = Variable(torch.zeros(20))
-    sigma = Variable(torch.ones(20))
-
-    def local_model(i, unused):
-        pyro.sample("x_{}".format(i), dist.Normal(mu[i], sigma[i]))
-        return i
-
-    return pyro.map_data('mapdata', range(20), local_model, batch_size=subsample_size)
-
-
 @pytest.mark.parametrize('subsample_size', [5, 20])
-@pytest.mark.parametrize('model', [
-    iarange_model,
-    irange_model,
-    nested_irange_model,
-    map_data_vector_model,
-    map_data_iter_model,
-], ids=['iarange', 'irange', 'nested_irange', 'map_data_vector', 'map_data_iter'])
+@pytest.mark.parametrize('model', [iarange_model, irange_model, nested_irange_model],
+                         ids=['iarange', 'irange', 'nested_irange'])
 def test_cond_indep_stack(model, subsample_size):
     tr = poutine.trace(model).get_trace(subsample_size)
     for name, node in tr.nodes.items():
@@ -132,20 +78,15 @@ def test_cond_indep_stack(model, subsample_size):
 
 
 @pytest.mark.parametrize('subsample_size', [5, 20])
-@pytest.mark.parametrize('model', [
-    iarange_model,
-    irange_model,
-    nested_irange_model,
-    map_data_vector_model,
-    map_data_iter_model,
-], ids=['iarange', 'irange', 'nested_irange', 'map_data_vector', 'map_data_iter'])
+@pytest.mark.parametrize('model', [iarange_model, irange_model, nested_irange_model],
+                         ids=['iarange', 'irange', 'nested_irange'])
 def test_replay(model, subsample_size):
     pyro.set_rng_seed(0)
 
     traced_model = poutine.trace(model)
     original = traced_model(subsample_size)
 
-    replayed = poutine.replay(model, traced_model.trace)(subsample_size)
+    replayed = poutine.replay(model, trace=traced_model.trace)(subsample_size)
     assert replayed == original
 
     if subsample_size < 20:
@@ -177,55 +118,28 @@ def test_custom_subsample(model):
 
 
 def iarange_cuda_model(subsample_size):
-    mu = Variable(torch.zeros(20).cuda())
-    sigma = Variable(torch.ones(20).cuda())
+    loc = torch.zeros(20).cuda()
+    scale = torch.ones(20).cuda()
     with pyro.iarange("data", 20, subsample_size, use_cuda=True) as batch:
-        pyro.sample("x", dist.Normal(mu[batch], sigma[batch]))
+        pyro.sample("x", dist.Normal(loc[batch], scale[batch]))
 
 
 def irange_cuda_model(subsample_size):
-    mu = Variable(torch.zeros(20).cuda())
-    sigma = Variable(torch.ones(20).cuda())
+    loc = torch.zeros(20).cuda()
+    scale = torch.ones(20).cuda()
     for i in pyro.irange("data", 20, subsample_size, use_cuda=True):
-        pyro.sample("x_{}".format(i), dist.Normal(mu[i], sigma[i]))
-
-
-def map_data_vector_cuda_model(subsample_size):
-    mu = Variable(torch.zeros(20).cuda())
-    sigma = Variable(torch.ones(20).cuda())
-    pyro.map_data("data", mu,
-                  lambda i, mu: pyro.sample("x", dist.Normal(mu, sigma[i])),
-                  batch_size=subsample_size, use_cuda=True)
-
-
-def map_data_iter_cuda_model(subsample_size):
-    mu = Variable(torch.zeros(20).cuda())
-    sigma = Variable(torch.ones(20).cuda())
-    pyro.map_data("data", list(mu),
-                  lambda i, mu: pyro.sample("x_{}".format(i), dist.Normal(mu, sigma[i])),
-                  batch_size=subsample_size, use_cuda=True)
+        pyro.sample("x_{}".format(i), dist.Normal(loc[i], scale[i]))
 
 
 @requires_cuda
 @pytest.mark.parametrize('subsample_size', [5, 20])
-@pytest.mark.parametrize('model', [
-    iarange_cuda_model,
-    irange_cuda_model,
-    map_data_vector_cuda_model,
-    map_data_iter_cuda_model,
-], ids=["iarange", "irange", "map_data_vector", "map_data_iter"])
+@pytest.mark.parametrize('model', [iarange_cuda_model, irange_cuda_model], ids=["iarange", "irange"])
 def test_cuda(model, subsample_size):
     tr = poutine.trace(model).get_trace(subsample_size)
-    assert tr.log_pdf().is_cuda
-    assert tr.batch_log_pdf().is_cuda
+    assert tr.log_prob_sum().is_cuda
 
 
-@pytest.mark.parametrize('model', [
-    iarange_model,
-    irange_model,
-    map_data_vector_model,
-    map_data_iter_model,
-], ids=['iarange', 'irange', 'map_data_vector', 'map_data_iter'])
+@pytest.mark.parametrize('model', [iarange_model, irange_model], ids=['iarange', 'irange'])
 @pytest.mark.parametrize("behavior,model_size,guide_size", [
     ("error", 20, 5),
     ("error", 5, 20),
@@ -241,8 +155,8 @@ def test_model_guide_mismatch(behavior, model_size, guide_size, model):
     model = poutine.trace(model)
     expected_ind = model(guide_size)
     if behavior == "ok":
-        actual_ind = poutine.replay(model, model.trace)(model_size)
+        actual_ind = poutine.replay(model, trace=model.trace)(model_size)
         assert actual_ind == expected_ind
     else:
         with pytest.raises(ValueError):
-            poutine.replay(model, model.trace)(model_size)
+            poutine.replay(model, trace=model.trace)(model_size)

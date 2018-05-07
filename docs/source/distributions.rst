@@ -6,51 +6,102 @@ Distributions
    :maxdepth: 2
    :caption: Contents:
 
-Primitive Distributions
-~~~~~~~~~~~~~~~~~~~~~~~~~
+PyTorch Distributions
+~~~~~~~~~~~~~~~~~~~~~
+
+Most distributions in Pyro are thin wrappers around PyTorch distributions.
+For details on the PyTorch distribution interface, see
+:class:`torch.distributions.distribution.Distribution`.
+For differences between the Pyro and PyTorch interfaces, see
+:class:`~pyro.distributions.torch_distribution.TorchDistributionMixin`.
+
+.. automodule:: pyro.distributions.torch
+
+Pyro Distributions
+~~~~~~~~~~~~~~~~~~
 
 Abstract Distribution
 ---------------------
 
-.. automodule:: pyro.distributions.distribution
+.. autoclass:: pyro.distributions.Distribution
     :members:
     :undoc-members:
+    :special-members: __call__
     :show-inheritance:
+
+TorchDistributionMixin
+----------------------
+
+.. autoclass:: pyro.distributions.torch_distribution.TorchDistributionMixin
+    :members:
+    :undoc-members:
+    :special-members: __call__
+    :show-inheritance:
+    :member-order: bysource
 
 TorchDistribution
 -----------------
 
-.. automodule:: pyro.distributions.torch_distribution
+.. autoclass:: pyro.distributions.TorchDistribution
     :members:
     :undoc-members:
+    :special-members: __call__
     :show-inheritance:
     :member-order: bysource
 
+Binomial
+--------
+
+.. autoclass:: pyro.distributions.Binomial
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Delta
 -----
-.. automodule:: pyro.distributions.delta
+.. autoclass:: pyro.distributions.Delta
     :members:
     :undoc-members:
     :show-inheritance:
 
-MultivariateNormal
-------------------
-.. automodule:: pyro.distributions.torch.multivariate_normal
+EmpiricalDistribution
+----------------------
+.. autoclass:: pyro.distributions.Empirical
     :members:
     :undoc-members:
     :show-inheritance:
 
-SparseMultivariateNormal
-------------------------
-.. automodule:: pyro.distributions.torch.sparse_multivariate_normal
+HalfCauchy
+----------
+.. autoclass:: pyro.distributions.HalfCauchy
     :members:
     :undoc-members:
     :show-inheritance:
 
-PyTorch Distributions
+LowRankMultivariateNormal
+-------------------------
+.. autoclass:: pyro.distributions.LowRankMultivariateNormal
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+OMTMultivariateNormal
 ---------------------
+.. autoclass:: pyro.distributions.OMTMultivariateNormal
+    :members:
+    :undoc-members:
+    :show-inheritance:
 
-.. automodule:: pyro.distributions.torch
+Rejector
+--------
+.. autoclass:: pyro.distributions.Rejector
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+VonMises
+--------
+.. autoclass:: pyro.distributions.VonMises
     :members:
     :undoc-members:
     :show-inheritance:
@@ -60,7 +111,7 @@ Transformed Distributions
 
 InverseAutoRegressiveFlow
 -------------------------
-.. autoclass:: pyro.distributions.torch.iaf.InverseAutoregressiveFlow
+.. autoclass:: pyro.distributions.InverseAutoregressiveFlow
     :members:
     :undoc-members:
     :show-inheritance:

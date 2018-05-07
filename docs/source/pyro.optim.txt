@@ -1,15 +1,15 @@
-PyroOptim
----------
+Pyro Optimizers
+---------------
 
 .. automodule:: pyro.optim.optim
     :members:
     :undoc-members:
     :show-inheritance:
 
-ClippedAdam
-------------
+PyTorch Optimizers
+------------------
 
-.. automodule:: pyro.optim.clipped_adam
+.. automodule:: pyro.optim.pytorch_optimizers
     :members:
     :undoc-members:
     :show-inheritance:
