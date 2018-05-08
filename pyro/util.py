@@ -206,6 +206,7 @@ def check_site_shape(site, max_iarange_nesting):
                     'at site "{}" within iarange("", dim={}), dim collision'.format(site["name"], f.name, f.dim),
                     'Try setting dim arg in other iaranges.']))
             expected_shape[f.dim] = f.size
+    expected_shape = [-1 if e is None else e for e in expected_shape]
 
     # Check for iarange stack overflow.
     if len(expected_shape) > max_iarange_nesting:
@@ -217,11 +218,6 @@ def check_site_shape(site, max_iarange_nesting):
     if max_iarange_nesting < len(actual_shape):
         actual_shape = actual_shape[len(actual_shape) - max_iarange_nesting:]
 
-    # Starting from the right, if expected size is None at an index,
-    # set it to the actual size if it exists, else 1.
-    for i in range(-len(expected_shape) + 1, 1):
-        if expected_shape[i] is None:
-            expected_shape[i] = actual_shape[i] if len(expected_shape) > -i else 1
     # Check for incorrect iarange placement on the right of max_iarange_nesting.
     for actual_size, expected_size in zip_longest(reversed(actual_shape), reversed(expected_shape), fillvalue=1):
         if expected_size != -1 and expected_size != actual_size:
