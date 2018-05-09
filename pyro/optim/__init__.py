@@ -9,5 +9,6 @@ __all__ = [
     "AdagradRMSProp",
     "ClippedAdam",
     "PyroOptim",
+    "PyroLRScheduler",
 ]
 __all__.extend(pytorch_optims)

@@ -10,12 +10,17 @@ class PyroLRScheduler(object):
     """
     A wrapper for torch.optim.lr_scheduler objects that helps with managing dynamically generated parameters.
 
-    :param optim_constructor: a torch.optim.Optimizer
+    :param optim_constructor: a torch.optim.lr_scheduler
     :param optim_args: a dictionary of learning arguments for the optimizer or a callable that returns
-        such dictionaries
+        such dictionaries. must contain the key 'optimizer' with pytorch optimizer value
     """
-    def __init__(self, optim_constructor, optim_args):
-        self.pt_optim_constructor = optim_constructor
+    def __init__(self, scheduler_constructor, optim_args):
+        # pytorch scheduler
+        self.pt_scheduler_constructor = scheduler_constructor
+        # torch optimizer
+        self.pt_optim_constructor = optim_args.pop('optimizer')
+        # kwargs for the torch optimizer
+        self.kwargs = optim_args.pop('optim_args')
 
         # must be callable or dict
         assert callable(optim_args) or isinstance(
@@ -38,14 +43,16 @@ class PyroLRScheduler(object):
         Do an optimization step for each param in params. If a given param has never been seen before,
         initialize an optimizer for it.
         """
-
         for p in params:
             # if we have not seen this param before, we instantiate and optim object to deal with it
             if p not in self.optim_objs:
                 # get our constructor arguments
                 def_optim_dict = self._get_optim_args(p)
+                # wrap torch lr_scheduler with a pyro lr scheduler
                 # create a single optim object for that param
-                self.optim_objs[p] = self.pt_optim_constructor([p], **def_optim_dict)
+                optim = self.pt_optim_constructor([p], **self.kwargs)
+                scheduler = self.pt_scheduler_constructor(optim, **def_optim_dict)
+                self.optim_objs[p] = scheduler
 
                 # set state from _state_waiting_to_be_consumed if present
                 param_name = pyro.get_param_store().param_name(p)
@@ -112,5 +119,4 @@ class PyroLRScheduler(object):
             # must be dictionary
             assert isinstance(opt_dict, dict), "per-param optim arg must return defaults dictionary"
             return opt_dict
-        else:
-            return self.pt_optim_args
+        return self.pt_optim_args
