@@ -110,8 +110,10 @@ def test_dynamic_lr(scheduler):
             scale = pyro.param('scale')
             opt = pyro_scheduler.optim_objs[loc].optimizer
             assert opt.state_dict()['param_groups'][0]['lr'] == 0.02
+            assert opt.state_dict()['param_groups'][0]['initial_lr'] == 0.01
             opt = pyro_scheduler.optim_objs[scale].optimizer
             assert opt.state_dict()['param_groups'][0]['lr'] == 0.02
+            assert opt.state_dict()['param_groups'][0]['initial_lr'] == 0.01
 
 
 @pytest.mark.parametrize('factory', [optim.Adam, optim.ClippedAdam, optim.RMSprop, optim.SGD])
