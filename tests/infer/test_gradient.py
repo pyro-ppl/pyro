@@ -13,6 +13,7 @@ from pyro.distributions.testing import fakes
 from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, Trace_ELBO, TraceEnum_ELBO,
                         TraceGraph_ELBO)
 from pyro.optim import Adam
+import pyro.poutine as poutine
 from tests.common import assert_equal, xfail_param
 
 logger = logging.getLogger(__name__)
@@ -72,28 +73,28 @@ def test_iarange(Elbo, reparameterized):
     precision = 0.06
     Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
 
+    @poutine.broadcast
     def model():
-        x = data.unsqueeze(-1).expand(-1, num_particles)
-        data_iarange = pyro.iarange("data", len(data), dim=-2)
-        particles_iarange = pyro.iarange("particles", num_particles, dim=-1)
+        particles_iarange = pyro.iarange("particles", num_particles, dim=-2)
+        data_iarange = pyro.iarange("data", len(data), dim=-1)
 
         pyro.sample("nuisance_a", Normal(0, 1))
         with particles_iarange, data_iarange:
-            z = pyro.sample("z", Normal(0, 1).expand_by(x.shape))
+            z = pyro.sample("z", Normal(0, 1))
         pyro.sample("nuisance_b", Normal(2, 3))
         with data_iarange, particles_iarange:
-            pyro.sample("x", Normal(z, 1), obs=x)
+            pyro.sample("x", Normal(z, 1), obs=data)
         pyro.sample("nuisance_c", Normal(4, 5))
 
+    @poutine.broadcast
     def guide():
-        loc = pyro.param("loc", lambda: torch.zeros(len(data), requires_grad=True))
-        scale = pyro.param("scale", lambda: torch.tensor([1.0], requires_grad=True))
-        mus = loc.unsqueeze(-1).expand(-1, num_particles)
+        loc = pyro.param("loc", torch.zeros(len(data)))
+        scale = pyro.param("scale", torch.tensor([1.]))
 
         pyro.sample("nuisance_c", Normal(4, 5))
-        with pyro.iarange("particles", num_particles):
-            with pyro.iarange("data", len(data)):
-                pyro.sample("z", Normal(mus, scale))
+        with pyro.iarange("particles", num_particles, dim=-2):
+            with pyro.iarange("data", len(data), dim=-1):
+                pyro.sample("z", Normal(loc, scale))
         pyro.sample("nuisance_b", Normal(2, 3))
         pyro.sample("nuisance_a", Normal(0, 1))
 
