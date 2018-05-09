@@ -8,7 +8,8 @@ from pyro.params import module_from_param_with_module_name, user_param_name
 
 class PyroLRScheduler(object):
     """
-    A wrapper for torch.optim.lr_scheduler objects that helps with managing dynamically generated parameters.
+    A wrapper for torch.optim.lr_scheduler objects that adjust learning rates
+    for dynamically generated parameters.
 
     :param optim_constructor: a torch.optim.lr_scheduler
     :param optim_args: a dictionary of learning arguments for the optimizer or a callable that returns
