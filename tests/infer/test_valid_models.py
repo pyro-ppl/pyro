@@ -10,6 +10,7 @@ import pyro
 import pyro.distributions as dist
 from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO, config_enumerate
 from pyro.optim import Adam
+import pyro.poutine as poutine
 
 logger = logging.getLogger(__name__)
 
@@ -826,3 +827,55 @@ def test_enum_discrete_non_enumerated_iarange_ok(enumerate_):
 
     with pyro.validation_enabled():
         assert_ok(model, model, TraceEnum_ELBO(max_iarange_nesting=1))
+
+
+@pytest.mark.parametrize("times", [1, 2], ids=["applied_once", "applied_twice"])
+def test_iarange_shape_broadcasting(times):
+    data = torch.ones(1000, 2)
+
+    def model():
+        with pyro.iarange("num_particles", 10, dim=-3):
+            with pyro.iarange("components", 2, dim=-1):
+                p = pyro.sample("p", dist.Beta(torch.tensor(1.1), torch.tensor(1.1)))
+                assert p.shape == torch.Size((10, 1, 2))
+            with pyro.iarange("data", data.shape[0], dim=-2):
+                pyro.sample("obs", dist.Bernoulli(p), obs=data)
+
+    def guide():
+        with pyro.iarange("num_particles", 10, dim=-3):
+            with pyro.iarange("components", 2, dim=-1):
+                pyro.sample("p", dist.Beta(torch.tensor(1.1), torch.tensor(1.1)))
+
+    pyro.clear_param_store()
+    for _ in range(times):
+        model, guide = poutine.broadcast(model), poutine.broadcast(guide)
+    assert_ok(model, guide, Trace_ELBO())
+
+
+@pytest.mark.parametrize('enumerate_', [None, "sequential", "parallel"])
+def test_enum_discrete_iarange_shape_broadcasting_ok(enumerate_):
+
+    @poutine.broadcast
+    @config_enumerate(default=enumerate_)
+    def model():
+        x_iarange = pyro.iarange("x_iarange", 10, 5, dim=-1)
+        y_iarange = pyro.iarange("y_iarange", 11, 6, dim=-2)
+        with pyro.iarange("num_particles", 50, dim=-3):
+            with x_iarange:
+                b = pyro.sample("b", dist.Beta(torch.tensor(1.1), torch.tensor(1.1)))
+                assert b.shape == torch.Size((50, 1, 5))
+            with y_iarange:
+                c = pyro.sample("c", dist.Bernoulli(0.5))
+                if enumerate_ == "parallel":
+                    assert c.shape == torch.Size((2, 50, 6, 1))
+                else:
+                    assert c.shape == torch.Size((50, 6, 1))
+            with x_iarange, y_iarange:
+                d = pyro.sample("d", dist.Bernoulli(b))
+                if enumerate_ == "parallel":
+                    assert d.shape == torch.Size((2, 1, 50, 6, 5))
+                else:
+                    assert d.shape == torch.Size((50, 6, 5))
+
+    assert_ok(model, model, TraceEnum_ELBO(max_iarange_nesting=3,
+                                           strict_enumeration_warning=(enumerate_ == "parallel")))

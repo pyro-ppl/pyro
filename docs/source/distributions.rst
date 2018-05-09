@@ -29,6 +29,16 @@ Abstract Distribution
     :special-members: __call__
     :show-inheritance:
 
+TorchDistributionMixin
+----------------------
+
+.. autoclass:: pyro.distributions.torch_distribution.TorchDistributionMixin
+    :members:
+    :undoc-members:
+    :special-members: __call__
+    :show-inheritance:
+    :member-order: bysource
+
 TorchDistribution
 -----------------
 

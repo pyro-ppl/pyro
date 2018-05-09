@@ -54,6 +54,7 @@ from six.moves import xrange
 
 from pyro.poutine import util
 
+from .broadcast_messenger import BroadcastMessenger
 from .block_messenger import BlockMessenger
 from .condition_messenger import ConditionMessenger
 from .enumerate_messenger import EnumerateMessenger
@@ -101,7 +102,7 @@ def trace(fn=None, graph_type=None, param_only=None):
     return msngr(fn) if fn is not None else msngr
 
 
-def replay(fn=None, trace=None, sites=None):
+def replay(fn=None, trace=None, params=None):
     """
     Given a callable that contains Pyro primitive calls,
     return a callable that runs the original, reusing the values at sites in trace
@@ -123,11 +124,11 @@ def replay(fn=None, trace=None, sites=None):
 
     :param fn: a stochastic function (callable containing Pyro primitive calls)
     :param trace: a :class:`~pyro.poutine.Trace` data structure to replay against
-    :param sites: list or dict of names of sample sites in fn to replay against,
-        defaulting to all sites
+    :param params: dict of names of param sites and constrained values
+        in fn to replay against
     :returns: a stochastic function decorated with a :class:`~pyro.poutine.replay_messenger.ReplayMessenger`
     """
-    msngr = ReplayMessenger(trace=trace, sites=sites)
+    msngr = ReplayMessenger(trace=trace, params=params)
     return msngr(fn) if fn is not None else msngr
 
 
@@ -202,6 +203,43 @@ def block(fn=None, hide=None, expose=None, hide_types=None, expose_types=None):
     """
     msngr = BlockMessenger(hide=hide, expose=expose,
                            hide_types=hide_types, expose_types=expose_types)
+    return msngr(fn) if fn is not None else msngr
+
+
+def broadcast(fn=None):
+    """
+    Automatically broadcasts the batch shape of the stochastic function
+    at a sample site when inside a single or nested iarange context.
+    The existing `batch_shape` must be broadcastable with the size
+    of the :class:`~pyro.iarange` contexts installed in the
+    `cond_indep_stack`.
+
+    Notice how `model_automatic_broadcast` below automates expanding of
+    distribution batch shapes. This makes it easy to modularize a
+    Pyro model as the sub-components are agnostic of the wrapping
+    :class:`~pyro.iarange` contexts.
+
+    >>> import pyro
+    >>> import pyro.distributions as dist
+    >>> import pyro.poutine as poutine
+    >>>
+    >>> def model_broadcast_by_hand():
+    ...     with pyro.iarange("batch", 100, dim=-2):
+    ...         with pyro.iarange("components", 3, dim=-1)
+    ...             sample = pyro.sample("sample", dist.Bernoulli(torch.ones(3) * 0.5)
+    ...                                                .expand_by(100))
+    ...             assert sample.shape == torch.Size((100, 3))
+    ...     return sample
+    >>>
+    >>> @poutine.brodcast
+    >>> def model_automatic_broadcast():
+    ...     with pyro.iarange("batch", 100, dim=-2):
+    ...         with pyro.iarange("components", 3, dim=-1)
+    ...             sample = pyro.sample("sample", dist.Bernoulli(torch.tensor(0.5)))
+    ...             assert sample.shape == torch.Size((100, 3))
+    ...     return sample
+    """
+    msngr = BroadcastMessenger()
     return msngr(fn) if fn is not None else msngr
 
 
