@@ -1,12 +1,10 @@
 from __future__ import absolute_import, division, print_function
 
-import torch
-
 import pyro
-from pyro.params import module_from_param_with_module_name, user_param_name
+from pyro.optim.optim import PyroOptim
 
 
-class PyroLRScheduler(object):
+class PyroLRScheduler(PyroOptim):
     """
     A wrapper for torch.optim.lr_scheduler objects that adjust learning rates
     for dynamically generated parameters.
@@ -68,61 +66,3 @@ class PyroLRScheduler(object):
 
             # actually perform the step for the optim object
             self.optim_objs[p].step(*args, **kwargs)
-
-    def get_state(self):
-        """
-        Get state associated with all the optimizers in the form of a dictionary with
-        key-value pairs (parameter name, optim state dicts)
-        """
-        state_dict = {}
-        for param in self.optim_objs:
-            param_name = pyro.get_param_store().param_name(param)
-            state_dict[param_name] = self.optim_objs[param].state_dict()
-        return state_dict
-
-    def set_state(self, state_dict):
-        """
-        Set the state associated with all the optimizers using the state obtained
-        from a previous call to get_state()
-        """
-        self._state_waiting_to_be_consumed = state_dict
-
-    def save(self, filename):
-        """
-        :param filename: file name to save to
-        :type name: str
-
-        Save optimizer state to disk
-        """
-        with open(filename, "wb") as output_file:
-            torch.save(self.get_state(), output_file)
-
-    def load(self, filename):
-        """
-        :param filename: file name to load from
-        :type name: str
-
-        Load optimizer state from disk
-        """
-        with open(filename, "rb") as input_file:
-            state = torch.load(input_file)
-        self.set_state(state)
-
-    # helper to fetch the optim args if callable (only used internally)
-    def _get_optim_args(self, param):
-        # if we were passed a fct, we call fct with param info
-        # arguments are (module name, param name) e.g. ('mymodule', 'bias')
-        if callable(self.pt_optim_args):
-
-            # get param name
-            param_name = pyro.get_param_store().param_name(param)
-            module_name = module_from_param_with_module_name(param_name)
-            stripped_param_name = user_param_name(param_name)
-
-            # invoke the user-provided callable
-            opt_dict = self.pt_optim_args(module_name, stripped_param_name)
-
-            # must be dictionary
-            assert isinstance(opt_dict, dict), "per-param optim arg must return defaults dictionary"
-            return opt_dict
-        return self.pt_optim_args
