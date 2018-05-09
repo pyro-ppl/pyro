@@ -13,6 +13,11 @@ class PyroLRScheduler(object):
     :param optim_constructor: a torch.optim.lr_scheduler
     :param optim_args: a dictionary of learning arguments for the optimizer or a callable that returns
         such dictionaries. must contain the key 'optimizer' with pytorch optimizer value
+
+    Example::
+
+        optimizer = torch.optim.SGD
+        pyro_scheduler = pyro.optim.ExponentialLR({'optimizer': optimizer, 'optim_args': {'lr': 0.01}, 'gamma': 0.1})
     """
     def __init__(self, scheduler_constructor, optim_args):
         # pytorch scheduler
