@@ -19,6 +19,14 @@ AutoGuideList
     :special-members: __call__
     :show-inheritance:
 
+AutoDelta
+---------
+.. autoclass:: pyro.contrib.autoguide.AutoDelta
+    :members:
+    :undoc-members:
+    :special-members: __call__
+    :show-inheritance:
+
 AutoContinuous
 --------------
 .. autoclass:: pyro.contrib.autoguide.AutoContinuous
@@ -38,6 +46,14 @@ AutoMultivariateNormal
 AutoDiagonalNormal
 ------------------
 .. autoclass:: pyro.contrib.autoguide.AutoDiagonalNormal
+    :members:
+    :undoc-members:
+    :special-members: __call__
+    :show-inheritance:
+
+AutoLowRankMultivariateNormal
+-----------------------------
+.. autoclass:: pyro.contrib.autoguide.AutoLowRankMultivariateNormal
     :members:
     :undoc-members:
     :special-members: __call__
