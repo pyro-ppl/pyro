@@ -75,23 +75,14 @@ class OptimTests(TestCase):
         assert fixed_param_unchanged and not free_param_unchanged
 
 
-@pytest.mark.parametrize('scheduler', [optim.LambdaLR,
-                                       optim.StepLR,
-                                       optim.ExponentialLR,
-                                       ])
+@pytest.mark.parametrize('scheduler', [optim.LambdaLR({'optimizer': torch.optim.SGD, 'optim_args': {'lr': 0.01},
+                                                       'lr_lambda': lambda epoch: 2. * epoch}),
+                                       optim.StepLR({'optimizer': torch.optim.SGD, 'optim_args': {'lr': 0.01},
+                                                     'gamma': 2, 'step_size': 1}),
+                                       optim.ExponentialLR({'optimizer': torch.optim.SGD, 'optim_args': {'lr': 0.01},
+                                                            'gamma': 2})])
 def test_dynamic_lr(scheduler):
     pyro.clear_param_store()
-    gamma = 2
-    step_size = 1
-    optimizer = torch.optim.SGD
-    if scheduler is optim.LambdaLR:
-        pyro_scheduler = scheduler({'optimizer': optimizer, 'optim_args': {'lr': 0.01},
-                                    'lr_lambda': lambda epoch: 2. * epoch})
-    elif scheduler is optim.StepLR:
-        pyro_scheduler = scheduler({'optimizer': optimizer, 'optim_args': {'lr': 0.01},
-                                    'gamma': gamma, 'step_size': step_size})
-    elif scheduler is optim.ExponentialLR:
-        pyro_scheduler = scheduler({'optimizer': optimizer, 'optim_args': {'lr': 0.01}, 'gamma': gamma})
 
     def model():
         sample = pyro.sample('latent', Normal(torch.tensor(0.), torch.tensor(0.3)))
@@ -102,16 +93,16 @@ def test_dynamic_lr(scheduler):
         scale = pyro.param('scale', torch.tensor(0.5))
         pyro.sample('latent', Normal(loc, scale))
 
-    svi = SVI(model, guide, pyro_scheduler, loss=TraceGraph_ELBO())
+    svi = SVI(model, guide, scheduler, loss=TraceGraph_ELBO())
     for epoch in range(2):
         svi.step()
         if epoch == 1:
             loc = pyro.param('loc')
             scale = pyro.param('scale')
-            opt = pyro_scheduler.optim_objs[loc].optimizer
+            opt = scheduler.optim_objs[loc].optimizer
             assert opt.state_dict()['param_groups'][0]['lr'] == 0.02
             assert opt.state_dict()['param_groups'][0]['initial_lr'] == 0.01
-            opt = pyro_scheduler.optim_objs[scale].optimizer
+            opt = scheduler.optim_objs[scale].optimizer
             assert opt.state_dict()['param_groups'][0]['lr'] == 0.02
             assert opt.state_dict()['param_groups'][0]['initial_lr'] == 0.01
 
