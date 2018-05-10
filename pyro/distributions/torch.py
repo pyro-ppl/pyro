@@ -26,6 +26,7 @@ class Beta(torch.distributions.Beta, TorchDistributionMixin):
 
 class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
     def expand(self, batch_shape):
+        batch_shape = torch.Size(batch_shape)
         validate_args = self.__dict__.get('validate_args')
         if 'probs' in self.__dict__:
             probs = self.probs.expand(batch_shape + self.probs.shape[-1:])
@@ -52,6 +53,7 @@ class Chi2(torch.distributions.Chi2, TorchDistributionMixin):
 
 class Dirichlet(torch.distributions.Dirichlet, TorchDistributionMixin):
     def expand(self, batch_shape):
+        batch_shape = torch.Size(batch_shape)
         validate_args = self.__dict__.get('validate_args')
         concentration = self.concentration.expand(batch_shape + self.event_shape)
         return Dirichlet(concentration, validate_args=validate_args)
@@ -93,6 +95,7 @@ class Gumbel(torch.distributions.Gumbel, TorchDistributionMixin):
 
 class Independent(torch.distributions.Independent, TorchDistributionMixin):
     def expand(self, batch_shape):
+        batch_shape = torch.Size(batch_shape)
         validate_args = self.__dict__.get('validate_args')
         extra_shape = self.base_dist.event_shape[:self.reinterpreted_batch_ndims]
         base_dist = self.base_dist.expand(batch_shape + extra_shape)
@@ -117,6 +120,7 @@ class LogNormal(torch.distributions.LogNormal, TorchDistributionMixin):
 
 class Multinomial(torch.distributions.Multinomial, TorchDistributionMixin):
     def expand(self, batch_shape):
+        batch_shape = torch.Size(batch_shape)
         validate_args = self.__dict__.get('validate_args')
         if 'probs' in self.__dict__:
             probs = self.probs.expand(batch_shape + self.event_shape)
@@ -152,6 +156,7 @@ class Normal(torch.distributions.Normal, TorchDistributionMixin):
 
 class OneHotCategorical(torch.distributions.OneHotCategorical, TorchDistributionMixin):
     def expand(self, batch_shape):
+        batch_shape = torch.Size(batch_shape)
         validate_args = self.__dict__.get('validate_args')
         if 'probs' in self.__dict__:
             probs = self.probs.expand(batch_shape + self.event_shape)
