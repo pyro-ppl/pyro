@@ -12,6 +12,7 @@ import pyro.poutine as poutine
 from pyro.infer.mcmc.trace_kernel import TraceKernel
 from pyro.ops.dual_averaging import DualAveraging
 from pyro.ops.integrator import single_step_velocity_verlet, velocity_verlet
+from pyro.ops.welford import WelfordOnlineStatistics
 from pyro.util import torch_isinf, torch_isnan
 
 
@@ -130,6 +131,7 @@ class HMC(TraceKernel):
         self._adaptation_window = None
         self._adapted_scheme = None
         self._warmup_steps = None
+        self._window_statistics = None
 
     def _find_reasonable_step_size(self, z):
         step_size = self.step_size
@@ -202,9 +204,12 @@ class HMC(TraceKernel):
             self._adaptation_schedule[start_buffer + mass_adaptation_period] = adaptation_window(
                     adapt_step_size=self.adapt_step_size, adapt_mass=False)
 
-    def _adapt_parameters(self, delta_energy):
+    def _adapt_parameters(self, delta_energy, z):
         if self._t in self._adaptation_schedule:
             self._adaptation_window = self._adaptation_schedule[self._t]
+            # Reset the window statistics at the beginning of each mass adaptation window.
+            if self._adaptation_window.adapt_mass:
+                self._window_statistics = WelfordOnlineStatistics()
         if self._adaptation_window.adapt_step_size:
             # Set accept prob to 0.0 if delta_energy is `NaN` which may be
             # the case for a diverging trajectory when using a large step size.
@@ -213,6 +218,8 @@ class HMC(TraceKernel):
             else:
                 accept_prob = (-delta_energy).exp().clamp(max=1).item()
             self._adapt_step_size(accept_prob)
+        if self._adaptation_window.adapt_mass:
+            self._window_statistics.update_statistics(z)
 
     def _adapt_step_size(self, accept_prob):
         # calculate a statistic for Dual Averaging scheme
@@ -257,6 +264,8 @@ class HMC(TraceKernel):
             _, log_step_size_avg = self._adapted_scheme.get_state()
             self.step_size = math.exp(log_step_size_avg)
             self.num_steps = max(1, int(self.trajectory_length / self.step_size))
+        if self.adapt_mass:
+            self._mass = self._window_statistics.get_variances()
 
     def cleanup(self):
         self._reset()
@@ -286,7 +295,7 @@ class HMC(TraceKernel):
             self._accept_cnt += 1
             z = z_new
         if self._adapt_phase:
-            self._adapt_parameters(delta_energy)
+            self._adapt_parameters(delta_energy, z)
         self._t += 1
         # get trace with the constrained values for `z`.
         for name, transform in self.transforms.items():
