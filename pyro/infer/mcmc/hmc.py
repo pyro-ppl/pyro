@@ -120,6 +120,7 @@ class HMC(TraceKernel):
         self._prototype_trace = None
         self._adapt_phase = False
         self._adapted_scheme = None
+        self._warmup_steps = None
 
     def _find_reasonable_step_size(self, z):
         step_size = self.step_size
@@ -175,7 +176,8 @@ class HMC(TraceKernel):
     def initial_trace(self):
         return self._prototype_trace
 
-    def setup(self, *args, **kwargs):
+    def setup(self, warmup_steps, *args, **kwargs):
+        self._warmup_steps = warmup_steps
         self._args = args
         self._kwargs = kwargs
         # set the trace prototype to inter-convert between trace object

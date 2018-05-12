@@ -29,7 +29,7 @@ class MCMC(TracePosterior):
         super(MCMC, self).__init__()
 
     def _traces(self, *args, **kwargs):
-        self.kernel.setup(*args, **kwargs)
+        self.kernel.setup(self.warmup_steps, *args, **kwargs)
         trace = self.kernel.initial_trace()
         self.logger.info("Starting MCMC using kernel - {} ...".format(self.kernel.__class__.__name__))
         logging_interval = math.ceil((self.warmup_steps + self.num_samples) / 20)
