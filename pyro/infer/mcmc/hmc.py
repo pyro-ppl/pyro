@@ -41,6 +41,9 @@ class HMC(TraceKernel):
         ``int(trajectory_length / step_size)``.
     :param bool adapt_step_size: A flag to decide if we want to adapt step_size
         during warm-up phase using Dual Averaging scheme.
+    :param bool adapt_mass: A flag to decide if we want to adapt a diagonal
+        mass matrix using the sample-variance from the second half of the
+        warm-up phase.
     :param dict transforms: Optional dictionary that specifies a transform
         for a sample site with constrained support to unconstrained space. The
         transform should be invertible, and implement `log_abs_det_jacobian`.
@@ -68,7 +71,7 @@ class HMC(TraceKernel):
     """
 
     def __init__(self, model, step_size=None, trajectory_length=None,
-                 num_steps=None, adapt_step_size=False, transforms=None):
+                 num_steps=None, adapt_step_size=False, adapt_mass=False, transforms=None):
         self.model = model
 
         self.step_size = step_size if step_size is not None else 1  # from Stan
@@ -80,6 +83,7 @@ class HMC(TraceKernel):
             self.trajectory_length = 2 * math.pi  # from Stan
         self.num_steps = max(1, int(self.trajectory_length / self.step_size))
         self.adapt_step_size = adapt_step_size
+        self.adapt_mass = adapt_mass
         self._target_accept_prob = 0.8  # from Stan
 
         self.transforms = {} if transforms is None else transforms
@@ -178,6 +182,25 @@ class HMC(TraceKernel):
             # make prox-center for Dual Averaging scheme
             loc = math.log(10 * self.step_size)
             self._adapted_scheme = DualAveraging(prox_center=loc)
+        if self.adapt_mass:
+            # Buffer and window sizes from stan
+            start_buffer = 75
+            end_buffer = 25
+            initial_window = 50
+            total = start_buffer + end_buffer + initial_window
+            if self._warmup_steps < total:
+                raise ValueError(
+                        'mass adaptation requires at least {} warmup steps (got {})'.format(total, self._warmup_steps))
+            # Divide the mass-adaptation portion of the warmup into expanding windows.
+            mass_adaptation_period = self._warmup_steps - start_buffer - end_buffer
+            mass_adaptation_windows = [start_buffer]
+            mass_adaptation_windows.extend([start_buffer + initial_window * (2 ** i)
+                                            for i in range(int((math.log2(mass_adaptation_period / initial_window))))])
+            self._adaptation_schedule.update({
+                i: adaptation_window(adapt_step_size=self.adapt_step_size, adapt_mass=True)
+                for i in mass_adaptation_windows})
+            self._adaptation_schedule[start_buffer + mass_adaptation_period] = adaptation_window(
+                    adapt_step_size=self.adapt_step_size, adapt_mass=False)
 
     def _adapt_parameters(self, delta_energy):
         if self._t in self._adaptation_schedule:
