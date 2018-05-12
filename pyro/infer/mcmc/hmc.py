@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import math
-from collections import OrderedDict
+from collections import OrderedDict, namedtuple
 
 import torch
 from torch.distributions import biject_to, constraints
@@ -13,6 +13,9 @@ from pyro.infer.mcmc.trace_kernel import TraceKernel
 from pyro.ops.dual_averaging import DualAveraging
 from pyro.ops.integrator import single_step_velocity_verlet, velocity_verlet
 from pyro.util import torch_isinf, torch_isnan
+
+
+adaptation_window = namedtuple('adaptation_window', ['adapt_step_size', 'adapt_mass'])
 
 
 class HMC(TraceKernel):
@@ -119,6 +122,8 @@ class HMC(TraceKernel):
         self._kwargs = None
         self._prototype_trace = None
         self._adapt_phase = False
+        self._adaptation_schedule = None
+        self._adaptation_window = None
         self._adapted_scheme = None
         self._warmup_steps = None
 
@@ -161,8 +166,10 @@ class HMC(TraceKernel):
         return step_size
 
     def _configure_adaptation(self, prototype_trace):
+        self._adapt_phase = True
+        # Setup up the schedule for parameter adaptation.
+        self._adaptation_schedule = {0: adaptation_window(adapt_step_size=self.adapt_step_size, adapt_mass=False)}
         if self.adapt_step_size:
-            self._adapt_phase = True
             z = {name: node["value"] for name, node in prototype_trace.iter_stochastic_nodes()}
             for name, transform in self.transforms.items():
                 z[name] = transform(z[name])
@@ -173,7 +180,9 @@ class HMC(TraceKernel):
             self._adapted_scheme = DualAveraging(prox_center=loc)
 
     def _adapt_parameters(self, delta_energy):
-        if self.adapt_step_size:
+        if self._t in self._adaptation_schedule:
+            self._adaptation_window = self._adaptation_schedule[self._t]
+        if self._adaptation_window.adapt_step_size:
             # Set accept prob to 0.0 if delta_energy is `NaN` which may be
             # the case for a diverging trajectory when using a large step size.
             if torch_isnan(delta_energy):
