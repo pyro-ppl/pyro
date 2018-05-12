@@ -160,6 +160,18 @@ class HMC(TraceKernel):
             direction_new = 1 if target_accept_logprob < -delta_energy else -1
         return step_size
 
+    def _configure_adaptation(self, prototype_trace):
+        if self.adapt_step_size:
+            self._adapt_phase = True
+            z = {name: node["value"] for name, node in prototype_trace.iter_stochastic_nodes()}
+            for name, transform in self.transforms.items():
+                z[name] = transform(z[name])
+            self.step_size = self._find_reasonable_step_size(z)
+            self.num_steps = max(1, int(self.trajectory_length / self.step_size))
+            # make prox-center for Dual Averaging scheme
+            loc = math.log(10 * self.step_size)
+            self._adapted_scheme = DualAveraging(prox_center=loc)
+
     def _adapt_step_size(self, accept_prob):
         # calculate a statistic for Dual Averaging scheme
         H = self._target_accept_prob - accept_prob
@@ -195,17 +207,7 @@ class HMC(TraceKernel):
             r_scale = site_value.new_ones(site_value.shape)
             self._r_dist[name] = dist.Normal(loc=r_loc, scale=r_scale)
         self._validate_trace(trace)
-
-        if self.adapt_step_size:
-            self._adapt_phase = True
-            z = {name: node["value"] for name, node in trace.iter_stochastic_nodes()}
-            for name, transform in self.transforms.items():
-                z[name] = transform(z[name])
-            self.step_size = self._find_reasonable_step_size(z)
-            self.num_steps = max(1, int(self.trajectory_length / self.step_size))
-            # make prox-center for Dual Averaging scheme
-            loc = math.log(10 * self.step_size)
-            self._adapted_scheme = DualAveraging(prox_center=loc)
+        self._configure_adaptation(trace)
 
     def end_warmup(self):
         if self.adapt_step_size:
