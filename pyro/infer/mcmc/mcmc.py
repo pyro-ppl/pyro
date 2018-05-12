@@ -42,8 +42,6 @@ class MCMC(TracePosterior):
                 if diagnostic_info is not None:
                     self.logger.info(diagnostic_info)
             if t <= self.warmup_steps:
-                if t == self.warmup_steps:
-                    self.kernel.end_warmup()
                 continue
             yield (trace, 1.0)
         self.kernel.cleanup()

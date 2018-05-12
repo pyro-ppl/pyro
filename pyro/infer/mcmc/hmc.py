@@ -219,7 +219,7 @@ class HMC(TraceKernel):
         self._validate_trace(trace)
         self._configure_adaptation(trace)
 
-    def end_warmup(self):
+    def _end_warmup(self):
         if self.adapt_step_size:
             self._adapt_phase = False
             _, log_step_size_avg = self._adapted_scheme.get_state()
@@ -253,14 +253,14 @@ class HMC(TraceKernel):
         if rand < (-delta_energy).exp():
             self._accept_cnt += 1
             z = z_new
-
         if self._adapt_phase:
             self._adapt_parameters(delta_energy)
-
         self._t += 1
         # get trace with the constrained values for `z`.
         for name, transform in self.transforms.items():
             z[name] = transform.inv(z[name])
+        if self._t == self._warmup_steps:
+            self._end_warmup()
         return self._get_trace(z)
 
     def diagnostics(self):
