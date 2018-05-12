@@ -172,6 +172,16 @@ class HMC(TraceKernel):
             loc = math.log(10 * self.step_size)
             self._adapted_scheme = DualAveraging(prox_center=loc)
 
+    def _adapt_parameters(self, delta_energy):
+        if self.adapt_step_size:
+            # Set accept prob to 0.0 if delta_energy is `NaN` which may be
+            # the case for a diverging trajectory when using a large step size.
+            if torch_isnan(delta_energy):
+                accept_prob = delta_energy.new_tensor(0.0)
+            else:
+                accept_prob = (-delta_energy).exp().clamp(max=1).item()
+            self._adapt_step_size(accept_prob)
+
     def _adapt_step_size(self, accept_prob):
         # calculate a statistic for Dual Averaging scheme
         H = self._target_accept_prob - accept_prob
@@ -245,13 +255,7 @@ class HMC(TraceKernel):
             z = z_new
 
         if self._adapt_phase:
-            # Set accept prob to 0.0 if delta_energy is `NaN` which may be
-            # the case for a diverging trajectory when using a large step size.
-            if torch_isnan(delta_energy):
-                accept_prob = delta_energy.new_tensor(0.0)
-            else:
-                accept_prob = (-delta_energy).exp().clamp(max=1).item()
-            self._adapt_step_size(accept_prob)
+            self._adapt_parameters(delta_energy)
 
         self._t += 1
         # get trace with the constrained values for `z`.
