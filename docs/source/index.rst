@@ -22,6 +22,7 @@ Pyro Documentation
    nn
    optimization
    poutine
+   ops
 
 .. toctree::
    :glob:
