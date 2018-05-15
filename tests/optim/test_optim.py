@@ -106,6 +106,21 @@ def test_dynamic_lr(scheduler):
             assert opt.state_dict()['param_groups'][0]['lr'] == 0.02
             assert opt.state_dict()['param_groups'][0]['initial_lr'] == 0.01
 
+    # test multi-step
+    pyro.clear_param_store()
+    for epoch in range(2):
+        svi.step()
+        svi.step()
+        if epoch == 1:
+            loc = pyro.param('loc')
+            scale = pyro.param('scale')
+            opt = scheduler.optim_objs[loc].optimizer
+            assert opt.state_dict()['param_groups'][0]['lr'] == 0.02
+            assert opt.state_dict()['param_groups'][0]['initial_lr'] == 0.01
+            opt = scheduler.optim_objs[scale].optimizer
+            assert opt.state_dict()['param_groups'][0]['lr'] == 0.02
+            assert opt.state_dict()['param_groups'][0]['initial_lr'] == 0.01
+
 
 @pytest.mark.parametrize('factory', [optim.Adam, optim.ClippedAdam, optim.RMSprop, optim.SGD])
 def test_autowrap(factory):
