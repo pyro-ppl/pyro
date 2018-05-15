@@ -113,24 +113,27 @@ def check_sample_shapes(small, large):
 
 
 @pytest.mark.parametrize('sample_shape', [(), (2,), (2, 3)])
-def test_expand_by(dist, sample_shape):
+@pytest.mark.parametrize('shape_type', [torch.Size, tuple, list])
+def test_expand_by(dist, sample_shape, shape_type):
     for idx in range(dist.get_num_test_data()):
         small = dist.pyro_dist(**dist.get_dist_params(idx))
-        large = small.expand_by(sample_shape)
+        large = small.expand_by(shape_type(sample_shape))
         assert large.batch_shape == sample_shape + small.batch_shape
         check_sample_shapes(small, large)
 
 
 @pytest.mark.parametrize('sample_shape', [(), (2,), (2, 3)])
-def test_expand_new_dim(dist, sample_shape):
+@pytest.mark.parametrize('shape_type', [torch.Size, tuple, list])
+def test_expand_new_dim(dist, sample_shape, shape_type):
     for idx in range(dist.get_num_test_data()):
         small = dist.pyro_dist(**dist.get_dist_params(idx))
-        large = small.expand(sample_shape + small.batch_shape)
+        large = small.expand(shape_type(sample_shape + small.batch_shape))
         assert large.batch_shape == sample_shape + small.batch_shape
         check_sample_shapes(small, large)
 
 
-def test_expand_existing_dim(dist):
+@pytest.mark.parametrize('shape_type', [torch.Size, tuple, list])
+def test_expand_existing_dim(dist, shape_type):
     for idx in range(dist.get_num_test_data()):
         small = dist.pyro_dist(**dist.get_dist_params(idx))
         for dim, size in enumerate(small.batch_shape):
@@ -140,7 +143,7 @@ def test_expand_existing_dim(dist):
             batch_shape[dim] = 5
             batch_shape = torch.Size(batch_shape)
             with xfail_if_not_implemented():
-                large = small.expand(batch_shape)
+                large = small.expand(shape_type(batch_shape))
             assert large.batch_shape == batch_shape
             check_sample_shapes(small, large)
 
