@@ -81,7 +81,8 @@ class OptimTests(TestCase):
                                                      'gamma': 2, 'step_size': 1}),
                                        optim.ExponentialLR({'optimizer': torch.optim.SGD, 'optim_args': {'lr': 0.01},
                                                             'gamma': 2})])
-def test_dynamic_lr(scheduler):
+@pytest.mark.parametrize('num_steps', [1, 2])
+def test_dynamic_lr(scheduler, num_steps):
     pyro.clear_param_store()
 
     def model():
@@ -95,23 +96,9 @@ def test_dynamic_lr(scheduler):
 
     svi = SVI(model, guide, scheduler, loss=TraceGraph_ELBO())
     for epoch in range(2):
-        svi.step()
-        if epoch == 1:
-            loc = pyro.param('loc')
-            scale = pyro.param('scale')
-            opt = scheduler.optim_objs[loc].optimizer
-            assert opt.state_dict()['param_groups'][0]['lr'] == 0.02
-            assert opt.state_dict()['param_groups'][0]['initial_lr'] == 0.01
-            opt = scheduler.optim_objs[scale].optimizer
-            assert opt.state_dict()['param_groups'][0]['lr'] == 0.02
-            assert opt.state_dict()['param_groups'][0]['initial_lr'] == 0.01
-
-    # test multi-step
-    pyro.clear_param_store()
-    for epoch in range(2):
         scheduler.set_epoch(epoch)
-        svi.step()
-        svi.step()
+        for _ in range(num_steps):
+            svi.step()
         if epoch == 1:
             loc = pyro.param('loc')
             scale = pyro.param('scale')
