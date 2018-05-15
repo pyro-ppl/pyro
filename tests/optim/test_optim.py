@@ -109,6 +109,7 @@ def test_dynamic_lr(scheduler):
     # test multi-step
     pyro.clear_param_store()
     for epoch in range(2):
+        scheduler.set_epoch(epoch)
         svi.step()
         svi.step()
         if epoch == 1:

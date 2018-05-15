@@ -36,6 +36,8 @@ class PyroLRScheduler(PyroOptim):
         # holds the torch optimizer objects
         self.optim_objs = {}
 
+        self.epoch = None
+
         # any optimizer state that's waiting to be consumed (because that parameter hasn't been seen before)
         self._state_waiting_to_be_consumed = {}
 
@@ -47,6 +49,7 @@ class PyroLRScheduler(PyroOptim):
         Do an optimization step for each param in params. If a given param has never been seen before,
         initialize an optimizer for it.
         """
+        kwargs['epoch'] = self.epoch
         for p in params:
             # if we have not seen this param before, we instantiate and optim object to deal with it
             if p not in self.optim_objs:
@@ -66,3 +69,6 @@ class PyroLRScheduler(PyroOptim):
 
             # actually perform the step for the optim object
             self.optim_objs[p].step(*args, **kwargs)
+
+    def set_epoch(self, epoch):
+        self.epoch = epoch
