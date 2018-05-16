@@ -41,6 +41,7 @@ class GPModel(Parameterized):
         >>> from pyro.infer.mcmc import HMC, MCMC
         >>> import pyro.distributions as dist
         >>> from pyro.params import param_with_module_name
+        >>> import torch
 
         >>> X = torch.tensor([[1., 5, 3], [4, 3, 7]])
         >>> y = torch.tensor([2., 1])
@@ -147,6 +148,7 @@ class GPModel(Parameterized):
             >>> import pyro
             >>> import pyro.contrib.gp as gp
             >>> import pyro.distributions as dist
+            >>> import torch
 
             >>> X = torch.tensor([[1., 5, 3], [4, 3, 7]])
             >>> y = torch.tensor([2., 1])
