@@ -12,6 +12,7 @@ This module provides three container data structures ``named.Object``,
 nested in each other. Together they track the address of each piece of data
 in each data structure, so that this address can be used as a Pyro site. For
 example::
+
     >>> import pyro.contrib.named as named
     >>> import pyro.distributions as dist
     >>> import torch
