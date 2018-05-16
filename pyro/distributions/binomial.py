@@ -23,6 +23,7 @@ class Binomial(torch.distributions.Distribution, TorchDistributionMixin):
 
         >>> m = Binomial(100, torch.Tensor([0 , .2, .8, 1]))
         >>> x = m.sample()
+        >>> print(x)  # doctest: +SKIP
          0
          22
          71
@@ -31,6 +32,7 @@ class Binomial(torch.distributions.Distribution, TorchDistributionMixin):
 
         >>> m = Binomial(torch.Tensor([[5.], [10.]]), torch.Tensor([0.5, 0.8]))
         >>> x = m.sample()
+        >>> print(x)  # doctest: +SKIP
          4  5
          7  6
         [torch.FloatTensor of size (2,2)]

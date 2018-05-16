@@ -18,6 +18,9 @@ raw
 logs
 *.log
 
+# Data
+*.data
+
 # Runtime data
 pids
 *.pid

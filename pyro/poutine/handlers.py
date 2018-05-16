@@ -8,6 +8,11 @@ to modify the behavior of functions or blocks of code:
 
 For example, consider the following Pyro program:
 
+    >>> import pyro
+    >>> import pyro.distributions as dist
+    >>> import pyro.poutine as poutine
+    >>> import torch
+
     >>> def model(x):
     ...     s = pyro.param("s", torch.tensor(0.5))
     ...     z = pyro.sample("z", dist.Normal(x, s))
@@ -30,7 +35,7 @@ Or as context managers:
 
     >>> with pyro.condition(data={"z": 1.0}):
     ...     s = pyro.param("s", torch.tensor(0.5))
-    ...     z = pyro.sample("z", dist.Normal(x, s))
+    ...     z = pyro.sample("z", dist.Normal(0., s))
     ...     y = z ** 2
 
 Handlers compose freely:
@@ -41,9 +46,9 @@ Handlers compose freely:
 Many inference algorithms or algorithmic components can be implemented
 in just a few lines of code:
 
-    >>> guide_tr = poutine.trace(guide).get_trace(...)
-    >>> model_tr = poutine.trace(poutine.replay(conditioned_model, trace=tr)).get_trace(...)
-    >>> monte_carlo_elbo = model_tr.log_prob_sum() - guide_tr.log_prob_sum()
+    >>> guide_tr = poutine.trace(guide).get_trace(...)  # doctest: +SKIP
+    >>> model_tr = poutine.trace(poutine.replay(conditioned_model, trace=tr)).get_trace(...)  # doctest: +SKIP
+    >>> monte_carlo_elbo = model_tr.log_prob_sum() - guide_tr.log_prob_sum()  # doctest: +SKIP
 """
 
 from __future__ import absolute_import, division, print_function
@@ -53,19 +58,18 @@ import functools
 from six.moves import xrange
 
 from pyro.poutine import util
-
-from .broadcast_messenger import BroadcastMessenger
-from .block_messenger import BlockMessenger
-from .condition_messenger import ConditionMessenger
-from .enumerate_messenger import EnumerateMessenger
-from .escape_messenger import EscapeMessenger
-from .indep_messenger import IndepMessenger
-from .infer_config_messenger import InferConfigMessenger
-from .lift_messenger import LiftMessenger
-from .replay_messenger import ReplayMessenger
-from .runtime import NonlocalExit
-from .scale_messenger import ScaleMessenger
-from .trace_messenger import TraceMessenger
+from pyro.poutine.broadcast_messenger import BroadcastMessenger
+from pyro.poutine.block_messenger import BlockMessenger
+from pyro.poutine.condition_messenger import ConditionMessenger
+from pyro.poutine.enumerate_messenger import EnumerateMessenger
+from pyro.poutine.escape_messenger import EscapeMessenger
+from pyro.poutine.indep_messenger import IndepMessenger
+from pyro.poutine.infer_config_messenger import InferConfigMessenger
+from pyro.poutine.lift_messenger import LiftMessenger
+from pyro.poutine.replay_messenger import ReplayMessenger
+from pyro.poutine.runtime import NonlocalExit
+from pyro.poutine.scale_messenger import ScaleMessenger
+from pyro.poutine.trace_messenger import TraceMessenger
 
 
 ############################################
@@ -80,6 +84,10 @@ def trace(fn=None, graph_type=None, param_only=None):
 
     Consider the following Pyro program:
 
+        >>> import pyro
+        >>> import pyro.distributions as dist
+        >>> import torch
+
         >>> def model(x):
         ...     s = pyro.param("s", torch.tensor(0.5))
         ...     z = pyro.sample("z", dist.Normal(x, s))
@@ -89,7 +97,7 @@ def trace(fn=None, graph_type=None, param_only=None):
     and use the resulting data structure to compute the log-joint probability
     of all of the sample sites in the execution or extract all parameters.
 
-        >>> trace = pyro.poutine.trace(model).get_trace(0.0)
+        >>> trace = trace(model).get_trace(0.0)
         >>> logp = trace.log_prob_sum()
         >>> params = [trace.nodes[name]["value"].unconstrained() for name in trace.param_nodes]
 
@@ -110,6 +118,10 @@ def replay(fn=None, trace=None, params=None):
 
     Consider the following Pyro program:
 
+        >>> import pyro
+        >>> import pyro.distributions as dist
+        >>> import torch
+
         >>> def model(x):
         ...     s = pyro.param("s", torch.tensor(0.5))
         ...     z = pyro.sample("z", dist.Normal(x, s))
@@ -118,8 +130,9 @@ def replay(fn=None, trace=None, params=None):
     ``replay`` makes ``sample`` statements behave as if they had sampled the values
     at the corresponding sites in the trace:
 
+        >>> old_trace = trace(model).get_trace(1.0)
         >>> replayed_model = replay(model, trace=old_trace)
-        >>> replayed_model(0.0) == old_trace.nodes["_RETURN"]["value"]
+        >>> bool(replayed_model(0.0) == old_trace.nodes["_RETURN"]["value"])
         True
 
     :param fn: a stochastic function (callable containing Pyro primitive calls)
@@ -140,6 +153,10 @@ def lift(fn=None, prior=None):
 
     Consider the following Pyro program:
 
+        >>> import pyro
+        >>> import pyro.distributions as dist
+        >>> import torch
+
         >>> def model(x):
         ...     s = pyro.param("s", torch.tensor(0.5))
         ...     z = pyro.sample("z", dist.Normal(x, s))
@@ -154,7 +171,7 @@ def lift(fn=None, prior=None):
         >>> tr.nodes["s"]["type"] == "sample"
         True
         >>> tr2 = trace(lifted_model).get_trace(0.0)
-        >>> (tr2.nodes["s"]["value"] == tr.nodes["s"]["value"]).all()
+        >>> bool((tr2.nodes["s"]["value"] == tr.nodes["s"]["value"]).all())
         False
 
     :param fn: function whose parameters will be lifted to random values
@@ -181,6 +198,12 @@ def block(fn=None, hide=None, expose=None, hide_types=None, expose_types=None):
     Then any effect outside of ``BlockMessenger(fn, hide=["a"])``
     will not be applied to site "a" and will only see site "b":
 
+        >>> import pyro
+        >>> import pyro.distributions as dist
+
+        >>> def fn():
+        ...     a = pyro.sample("a", dist.Normal(0., 1.))
+        ...     return pyro.sample("b", dist.Normal(a, 1.))
         >>> fn_inner = trace(fn)
         >>> fn_outer = trace(block(fn_inner, hide=["a"]))
         >>> trace_inner = fn_inner.get_trace()
@@ -225,16 +248,16 @@ def broadcast(fn=None):
     >>>
     >>> def model_broadcast_by_hand():
     ...     with pyro.iarange("batch", 100, dim=-2):
-    ...         with pyro.iarange("components", 3, dim=-1)
+    ...         with pyro.iarange("components", 3, dim=-1):
     ...             sample = pyro.sample("sample", dist.Bernoulli(torch.ones(3) * 0.5)
     ...                                                .expand_by(100))
     ...             assert sample.shape == torch.Size((100, 3))
     ...     return sample
-    >>>
-    >>> @poutine.brodcast
-    >>> def model_automatic_broadcast():
+
+    >>> @poutine.broadcast
+    ... def model_automatic_broadcast():
     ...     with pyro.iarange("batch", 100, dim=-2):
-    ...         with pyro.iarange("components", 3, dim=-1)
+    ...         with pyro.iarange("components", 3, dim=-1):
     ...             sample = pyro.sample("sample", dist.Bernoulli(torch.tensor(0.5)))
     ...             assert sample.shape == torch.Size((100, 3))
     ...     return sample
@@ -268,6 +291,10 @@ def condition(fn=None, data=None):
 
     Consider the following Pyro program:
 
+        >>> import pyro
+        >>> import pyro.distributions as dist
+        >>> import torch
+
         >>> def model(x):
         ...     s = pyro.param("s", torch.tensor(0.5))
         ...     z = pyro.sample("z", dist.Normal(x, s))
@@ -275,7 +302,7 @@ def condition(fn=None, data=None):
 
     To observe a value for site `z`, we can write
 
-        >>> conditioned_model = condition(model, data={"z": value})
+        >>> conditioned_model = condition(model, data={"z": torch.tensor(1.)})
 
     This is equivalent to adding `obs=value` as a keyword argument
     to `pyro.sample("z", ...)` in `model`.
@@ -310,6 +337,10 @@ def scale(fn=None, scale=None):
 
     Consider the following Pyro program:
 
+        >>> import pyro
+        >>> import pyro.distributions as dist
+        >>> import torch
+
         >>> def model(x):
         ...     s = pyro.param("s", torch.tensor(0.5))
         ...     z = pyro.sample("z", dist.Normal(x, s), obs=1.0)
@@ -320,7 +351,7 @@ def scale(fn=None, scale=None):
         >>> scaled_model = scale(model, scale=0.5)
         >>> scaled_tr = trace(scaled_model).get_trace(0.0)
         >>> unscaled_tr = trace(model).get_trace(0.0)
-        >>> (scaled_tr.log_prob_sum() == 0.5 * unscaled_tr.log_prob_sum()).all()
+        >>> bool((scaled_tr.log_prob_sum() == 0.5 * unscaled_tr.log_prob_sum()).all())
         True
 
     :param fn: a stochastic function (callable containing Pyro primitive calls)
@@ -373,6 +404,10 @@ def do(fn=None, data=None):
 
     Consider the following Pyro program:
 
+        >>> import pyro
+        >>> import pyro.distributions as dist
+        >>> import torch
+
         >>> def model(x):
         ...     s = pyro.param("s", torch.tensor(0.5))
         ...     z = pyro.sample("z", dist.Normal(x, s))
@@ -380,7 +415,7 @@ def do(fn=None, data=None):
 
     To intervene with a value for site `z`, we can write
 
-        >>> intervened_model = do(model, data={"z": value})
+        >>> intervened_model = do(model, data={"z": torch.tensor(1.)})
 
     This is equivalent to replacing `z = pyro.sample("z", ...)` with `z = value`.
 
