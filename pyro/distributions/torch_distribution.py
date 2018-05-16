@@ -127,15 +127,20 @@ class TorchDistributionMixin(Distribution):
         :attr:`~torch.distributions.distribution.Distribution.event_shape`.
 
         Example::
+            >>> from pyro.distributions import Normal
 
+            >>> d0 = Normal(torch.zeros(2, 3, 4, 5), torch.ones(2, 3, 4, 5))
+            >>> [d0.batch_shape, d0.event_shape]
+            [torch.Size([2, 3, 4, 5]), torch.Size([])]
+            >>> d1 = d0.independent(2)
             >>> [d1.batch_shape, d1.event_shape]
-            [torch.Size((2, 3)), torch.Size((4, 5))]
+            [torch.Size([2, 3]), torch.Size([4, 5])]
             >>> d2 = d1.independent(1)
             >>> [d2.batch_shape, d2.event_shape]
-            [torch.Size((2,)), torch.Size((3, 4, 5))]
+            [torch.Size([2]), torch.Size([3, 4, 5])]
             >>> d3 = d1.independent(2)
             >>> [d3.batch_shape, d3.event_shape]
-            [torch.Size(()), torch.Size((2, 3, 4, 5))]
+            [torch.Size([]), torch.Size([2, 3, 4, 5])]
 
         :param int reinterpreted_batch_ndims: The number of batch dimensions
             to reinterpret as event dimensions.

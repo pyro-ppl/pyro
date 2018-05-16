@@ -50,6 +50,10 @@ class Trace(object):
 
     Consider the following Pyro program:
 
+        >>> import pyro
+        >>> import pyro.distributions as dist
+        >>>
+        >>> pyro.set_rng_seed(0)
         >>> def model(x):
         ...     s = pyro.param("s", torch.tensor(0.5))
         ...     z = pyro.sample("z", dist.Normal(x, s))
@@ -67,12 +71,12 @@ class Trace(object):
     ``trace.nodes`` contains a ``collections.OrderedDict``
     of site names and metadata corresponding to ``x``, ``s``, ``z``, and the return value:
 
-        >>> print(list(name for name in trace.nodes.keys()))
+        >>> print(list(name for name in trace.nodes.keys()))  # doctest: +SKIP
         ["_INPUT", "s", "z", "_RETURN"]
 
     As in :class:`networkx.DiGraph`, values of ``trace.nodes`` are dictionaries of node metadata:
 
-        >>> print(trace.nodes["z"])
+        >>> print(trace.nodes["z"])  # doctest: +SKIP
         {'type': 'sample', 'name': 'z', 'is_observed': False,
          'fn': Normal(), 'value': tensor(0.6480), 'args': (), 'kwargs': {},
          'infer': {}, 'scale': 1.0, 'cond_indep_stack': (),

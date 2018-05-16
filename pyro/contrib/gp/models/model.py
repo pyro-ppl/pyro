@@ -36,9 +36,17 @@ class GPModel(Parameterized):
     corresponding methods from :class:`~pyro.contrib.gp.util.Parameterized`. A typical
     way to define a Gaussian Process model is
 
+        >>> import pyro
+        >>> import pyro.contrib.gp as gp
+        >>> from pyro.infer.mcmc import HMC, MCMC
+        >>> import pyro.distributions as dist
+        >>> from pyro.params import param_with_module_name
+
         >>> X = torch.tensor([[1., 5, 3], [4, 3, 7]])
         >>> y = torch.tensor([2., 1])
         >>> kernel = gp.kernels.RBF(input_dim=3)
+        >>> kernel.set_prior("variance", dist.Uniform(torch.tensor(0.5), torch.tensor(1.5)))
+        >>> kernel.set_prior("lengthscale", dist.Uniform(torch.tensor(1.0), torch.tensor(3.0)))
         >>> gpr = gp.models.GPRegression(X, y, kernel)
 
     There are two ways to train a Gaussian Process model:
@@ -60,7 +68,7 @@ class GPModel(Parameterized):
         >>> optimizer = pyro.optim.Adam({"lr": 0.01})
         >>> svi = SVI(gpr.model, gpr.guide, optimizer, loss=Trace_ELBO())
         >>> for i in range(1000):
-        ...     svi.step()
+        ...     svi.step()  # doctest: +SKIP
 
     To give a prediction on new dataset, simply use :meth:`forward` like any PyTorch
     :class:`torch.nn.Module`:
@@ -136,20 +144,31 @@ class GPModel(Parameterized):
 
         + Batch training on a sparse variational model:
 
+            >>> import pyro
+            >>> import pyro.contrib.gp as gp
+            >>> import pyro.distributions as dist
+
+            >>> X = torch.tensor([[1., 5, 3], [4, 3, 7]])
+            >>> y = torch.tensor([2., 1])
+            >>> kernel = gp.kernels.RBF(input_dim=3)
+            >>> kernel.set_prior("variance", dist.Uniform(torch.tensor(0.5), torch.tensor(1.5)))
+            >>> kernel.set_prior("lengthscale", dist.Uniform(torch.tensor(1.0), torch.tensor(3.0)))
+            >>> optimizer = pyro.optim.Adam({"lr": 0.01})
+
             >>> Xu = torch.tensor([[1., 0, 2]])  # inducing input
             >>> likelihood = gp.likelihoods.Gaussian()
-            >>> vsgp = gp.models.SparseVariationalGP(X, y, kernel, Xu, likelihood)
+            >>> vsgp = gp.models.VariationalSparseGP(X, y, kernel, Xu, likelihood)
             >>> svi = SVI(vsgp.model, vsgp.guide, optimizer, Trace_ELBO())
             >>> batched_X, batched_y = X.split(split_size=10), y.split(split_size=10)
             >>> for Xi, yi in zip(batched_X, batched_y):
             ...     vsgp.set_data(Xi, yi)
-            ...     svi.step()
+            ...     svi.step()  # doctest: +SKIP
 
         + Making a two-layer Gaussian Process stochastic function:
 
-            >>> gpr1 = gp.models.GPRegression(X, None, kernel1, name="GPR1")
-            >>> Z, _ = gp_layer1.model()
-            >>> gpr2 = gp.models.GPRegression(Z, y, kernel2, name="GPR2")
+            >>> gpr1 = gp.models.GPRegression(X, None, kernel1, name="GPR1")  # doctest: +SKIP
+            >>> Z, _ = gp_layer1.model()                                      # doctest: +SKIP
+            >>> gpr2 = gp.models.GPRegression(Z, y, kernel2, name="GPR2")     # doctest: +SKIP
             >>> def two_layer_model():
             ...     Z, _ = gpr1.model()
             ...     gpr2.set_data(Z, y)

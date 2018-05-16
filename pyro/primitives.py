@@ -205,28 +205,32 @@ class iarange(object):
 
     Examples::
 
-        # This version simply declares independence:
+        >>> from pyro.distributions import Normal
+        >>> loc, scale = torch.tensor(0.), torch.tensor(1.)
+        >>> data = torch.randn(100)
+
+        >>> # This version simply declares independence:
         >>> with iarange('data'):
-                sample('obs', Normal(loc, scale), obs=data)
+        ...     obs = sample('obs', Normal(loc, scale), obs=data)
 
-        # This version subsamples data in vectorized way:
+        >>> # This version subsamples data in vectorized way:
         >>> with iarange('data', 100, subsample_size=10) as ind:
-                sample('obs', Normal(loc, scale), obs=data[ind])
+        ...     obs = sample('obs', Normal(loc, scale), obs=data[ind])
 
-        # This wraps a user-defined subsampling method for use in pyro:
-        >>> ind = my_custom_subsample
+        >>> # This wraps a user-defined subsampling method for use in pyro:
+        >>> ind = torch.randint(0, 100, (10,)).long() # custom subsample
         >>> with iarange('data', 100, subsample=ind):
-                sample('obs', Normal(loc, scale), obs=data[ind])
+        ...     obs = sample('obs', Normal(loc, scale), obs=data[ind])
 
-        # This reuses two different independence contexts.
+        >>> # This reuses two different independence contexts.
         >>> x_axis = iarange('outer', 320, dim=-1)
         >>> y_axis = iarange('inner', 200, dim=-2)
         >>> with x_axis:
-                x_noise = sample("x_noise", Normal(loc, scale).expand_by([320]))
+        ...     x_noise = sample("x_noise", Normal(loc, scale).expand_by([320]))
         >>> with y_axis:
-                y_noise = sample("y_noise", Normal(loc, scale).expand_by([200, 1]))
+        ...     y_noise = sample("y_noise", Normal(loc, scale).expand_by([200, 1]))
         >>> with x_axis, y_axis:
-                xy_noise = sample("xy_noise", Normal(loc, scale).expand_by([200, 320]))
+        ...     xy_noise = sample("xy_noise", Normal(loc, scale).expand_by([200, 320]))
 
     See `SVI Part II <http://pyro.ai/examples/svi_part_ii.html>`_ for an
     extended discussion.
@@ -276,10 +280,14 @@ class irange(object):
     :return: A reusable iterator yielding a sequence of integers.
 
     Examples::
+        >>> from pyro.distributions import Bernoulli, Normal
+        >>> loc, scale = torch.tensor(0.), torch.tensor(1.)
+        >>> data = torch.randn(100)
 
+        >>> z = Bernoulli(0.5).sample((100,))
         >>> for i in irange('data', 100, subsample_size=10):
-                if z[i]:  # Prevents vectorization.
-                    observe('obs_{}'.format(i), normal, data[i], loc, scale)
+        ...     if z[i]:  # Prevents vectorization.
+        ...         obs = sample('obs_{}'.format(i), Normal(loc, scale), obs=data[i])
 
     See `SVI Part II <http://pyro.ai/examples/svi_part_ii.html>`_ for an extended discussion.
     """

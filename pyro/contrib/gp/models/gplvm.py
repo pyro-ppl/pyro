@@ -32,15 +32,21 @@ class GPLVM(Parameterized):
         # With y is the 2D Iris data of shape 150x4 and we want to reduce its dimension
         # to a tensor X of shape 150x2, we will use GPLVM.
         # First, define the initial values for X_loc parameter:
+        >>> import pyro.contrib.gp as gp
+        >>> import observations
+
         >>> X_loc = torch.zeros(150, 2)
-        # Then, define a Gaussian Process model with input X_loc and output y:
+        >>> y, _, _ = observations.iris('.')
+        >>> y = torch.from_numpy(y).float().t()
+
+        >>> # Then, define a Gaussian Process model with input X_loc and output y:
         >>> kernel = gp.kernels.RBF(input_dim=2, lengthscale=torch.ones(2))
         >>> Xu = torch.zeros(20, 2)  # initial inducing inputs of sparse model
         >>> gpmodel = gp.models.SparseGPRegression(X_loc, y, kernel, Xu)
-        # Finally, wrap gpmodel by GPLVM, optimize, and get the "learned" mean of X:
+        >>> # Finally, wrap gpmodel by GPLVM, optimize, and get the "learned" mean of X:
         >>> gplvm = gp.models.GPLVM(gpmodel)
-        >>> gplvm.optimize()
-        >>> X = gplvm.get_param("X_loc")
+        >>> gplvm.optimize()  # doctest: +SKIP
+        >>> X = gplvm.get_param("X_loc")  # doctest: +SKIP
 
     Reference:
 
