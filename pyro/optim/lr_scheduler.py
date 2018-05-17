@@ -29,5 +29,13 @@ class PyroLRScheduler(PyroOptim):
         self.epoch = None
         super(PyroLRScheduler, self).__init__(pt_optim_constructor, optim_kwargs)
 
+    def __call__(self, params, *args, **kwargs):
+        kwargs['epoch'] = self.epoch
+        super(PyroLRScheduler, self).__call__(params, *args, **kwargs)
+
+    def _get_optim(self, params):
+        optim = super(PyroLRScheduler, self)._get_optim(params)
+        return self.pt_scheduler_constructor(optim, **self.kwargs)
+
     def set_epoch(self, epoch):
         self.epoch = epoch
