@@ -73,11 +73,7 @@ class PyroMultiOptimizer(MultiOptimizer):
         self.optim = optim
 
     def step(self, loss, params):
-        names = []
-        values = []
-        for name, value in params.items():
-            names.append(name)
-            values.append(value)
+        values = params.values()
         grads = torch.autograd.grad(loss, values, create_graph=True)
         for x, g in zip(values, grads):
             x.grad = g
