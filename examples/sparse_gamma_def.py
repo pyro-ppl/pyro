@@ -1,4 +1,15 @@
+# this is an implementation of the sparse gamma deep exponential family experiment presented in
+# Ranganath, Rajesh, Tang, Linpeng, Charlin, Laurent, and Blei, David. Deep exponential families.
+#
+# the Olivetti faces dataset is originally from http://www.cl.cam.ac.uk/research/dtg/attarchive/facedatabase.html
+#
+# compare to the implementation here:
+# https://github.com/blei-lab/ars-reparameterization/tree/master/sparse%20gamma%20def
+
+
 from __future__ import absolute_import, division, print_function
+
+import argparse
 
 import numpy as np
 import torch
@@ -9,7 +20,6 @@ import pyro.optim as optim
 from pyro.distributions import Gamma, Poisson
 from pyro.infer import SVI, Trace_ELBO
 
-
 torch.set_default_tensor_type('torch.FloatTensor')
 pyro.enable_validation(True)
 pyro.util.set_rng_seed(0)
@@ -18,18 +28,22 @@ data = torch.tensor(np.loadtxt('faces_training.csv', delimiter=',')).float()
 
 class SparseGammaDEF(object):
     def __init__(self):
+        # define the sizes of the layers in the deep exponential family
         self.top_width = 100
         self.mid_width = 40
         self.bottom_width = 15
         self.image_size = 64 * 64
+        # define hyparameters that control the prior
         self.alpha_z = torch.tensor(0.1)
         self.alpha_w = torch.tensor(0.1)
         self.beta_w = torch.tensor(0.3)
+        # define parameters used to initialize variational parameters
         self.alpha_init = 0.5
         self.mean_init = 0.0
         self.sigma_init = 0.1
         self.softplus = nn.Softplus()
 
+    # define the model
     def model(self, x):
         x_size = x.size(0)
         with pyro.iarange('data'):
@@ -57,8 +71,10 @@ class SparseGammaDEF(object):
                                              self.beta_w.expand(self.bottom_width * self.image_size)).independent(1))
                 mean_obs = torch.mm(z_bottom, w_bottom.view(self.bottom_width, self.image_size))
 
+            # observe the data using a poisson likelihood
             pyro.sample('obs', Poisson(mean_obs).independent(1), obs=x)
 
+    # define the guide a.k.a. variational distribution
     def guide(self, x):
         x_size = x.size(0)
 
@@ -108,13 +124,22 @@ class SparseGammaDEF(object):
                     pyro.param(param + wz + layer).data.clamp_(min=clip)
 
 
-sparse_gamma_def = SparseGammaDEF()
-opt = optim.AdagradRMSProp({"eta": 4.5, "t": 0.1})
-svi = SVI(sparse_gamma_def.model, sparse_gamma_def.guide, opt, loss=Trace_ELBO())
+def main(args):
+    sparse_gamma_def = SparseGammaDEF()
+    opt = optim.AdagradRMSProp({"eta": 4.5, "t": 0.1})
+    svi = SVI(sparse_gamma_def.model, sparse_gamma_def.guide, opt, loss=Trace_ELBO())
 
-for k in range(1000):
-    loss = svi.step(data)
-    sparse_gamma_def.clip_params()
+    for k in range(args.num_epochs):
+        loss = svi.step(data)
+        sparse_gamma_def.clip_params()
 
-    if k % 20 == 0 and k > 0:
-        print("[epoch %05d] training elbo: %.4g" % (k, -loss))
+        if k % 20 == 0 and k > 0:
+            print("[epoch %04d] training elbo: %.4g" % (k, -loss))
+
+
+if __name__ == '__main__':
+    # parse command line arguments
+    parser = argparse.ArgumentParser(description="parse args")
+    parser.add_argument('-n', '--num-epochs', default=1000, type=int, help='number of training epochs')
+    args = parser.parse_args()
+    main(args)
