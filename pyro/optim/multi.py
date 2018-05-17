@@ -29,14 +29,37 @@ class MultiOptimizer(object):
     """
     def step(self, loss, params):
         """
-        Performs an optimization step on parameters given a differentiable
-        ``loss`` tensor.
+        Performs an in-place optimization step on parameters given a
+        differentiable ``loss`` tensor.
+
+        Note that this detaches the updated tensors.
 
         :param torch.Tensor loss: A differentiable tensor to be minimized.
             Some optimizers require this to be differentiable multiple
             times.
         :param dict params: A dictionary mapping param name to unconstrained
             value as stored in the param store.
+        """
+        updated_values = self.get_step(loss, params)
+        for name, value in params.items():
+            with torch.no_grad():
+                value[...] = updated_values[name]
+
+    def get_step(self, loss, params):
+        """
+        Computes an optimization step of parameters given a differentiable
+        ``loss`` tensor, returning the updated values.
+
+        Note that this preserves derivatives on the updated tensors.
+
+        :param torch.Tensor loss: A differentiable tensor to be minimized.
+            Some optimizers require this to be differentiable multiple
+            times.
+        :param dict params: A dictionary mapping param name to unconstrained
+            value as stored in the param store.
+        :return: A dictionary mapping param name to updated unconstrained
+            value.
+        :rtype: dict
         """
         raise NotImplementedError
 
@@ -89,6 +112,13 @@ class MixedMultiOptimizer(MultiOptimizer):
         for names_part, optim in self.parts:
             optim.step(loss, {name: params[name] for name in names_part})
 
+    def get_step(self, loss, params):
+        updated_values = {}
+        for names_part, optim in self.parts:
+            updated_values.update(
+                optim.get_step(loss, {name: params[name] for name in names_part}))
+        return updated_values
+
 
 class Newton2d(MultiOptimizer):
     """
@@ -103,12 +133,10 @@ class Newton2d(MultiOptimizer):
     def __init__(self, trust_radii={}):
         self.trust_radii = trust_radii
 
-    def step(self, loss, params):
+    def get_step(self, loss, params):
         updated_values = {}
         for name, value in params.items():
             trust_radius = self.trust_radii.get(name)
             updated_value, cov = newton_step_2d(loss, value, trust_radius)
             updated_values[name] = updated_value.detach()
-        for name, value in params.items():
-            with torch.no_grad():
-                value[...] = updated_values[name]
+        return updated_values
