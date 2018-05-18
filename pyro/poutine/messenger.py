@@ -25,6 +25,7 @@ class Messenger(object):
         def _wraps(*args, **kwargs):
             with self:
                 return fn(*args, **kwargs)
+        _wraps.msngr = self
         return _wraps
 
     def __enter__(self):
