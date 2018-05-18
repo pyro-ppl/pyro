@@ -761,8 +761,7 @@ def test_method_decorator_interface_condition():
 
         @poutine.condition(data={"b": torch.tensor(1.)})
         def model(self, p):
-            pyro.sample("a", Bernoulli(p))
-            pyro.sample("b", Bernoulli(torch.tensor([0.5])))
+            self._model(p)
 
         def _model(self, p):
             pyro.sample("a", Bernoulli(p))
