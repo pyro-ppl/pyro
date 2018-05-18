@@ -14,7 +14,6 @@ import os
 
 import numpy as np
 import torch
-from torch import nn as nn
 
 import pyro
 import pyro.optim as optim
@@ -44,7 +43,7 @@ class SparseGammaDEF(object):
         self.alpha_init = 0.5
         self.mean_init = 0.0
         self.sigma_init = 0.1
-        self.softplus = nn.Softplus()
+        self.softplus = torch.nn.Softplus()
 
     # define the model
     @poutine.broadcast
