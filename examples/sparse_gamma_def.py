@@ -77,26 +77,25 @@ class SparseGammaDEF(object):
     def guide(self, x):
         x_size = x.size(0)
 
+        # helper for initiqlizing variational parameters
+        def rand_tensor(shape, mean, sigma):
+            return mean * torch.ones(shape) + sigma * torch.randn(shape)
+
         # define a helper function to sample z's for a single layer
         def sample_zs(name, width):
             alpha_z_q = pyro.param("log_alpha_z_q_%s" % name,
-                                   torch.tensor(self.alpha_init * torch.ones(x_size, width) +
-                                                self.sigma_init * torch.randn(x_size, width)))
+                                   lambda: rand_tensor((x_size, width), self.alpha_init, self.sigma_init))
             mean_z_q = pyro.param("log_mean_z_q_%s" % name,
-                                  torch.tensor(self.mean_init * torch.ones(x_size, width) +
-                                               self.sigma_init * torch.randn(x_size, width)))
-
+                                  lambda: rand_tensor((x_size, width), self.mean_init, self.sigma_init))
             alpha_z_q, mean_z_q = self.softplus(alpha_z_q), self.softplus(mean_z_q)
             pyro.sample("z_%s" % name, Gamma(alpha_z_q, alpha_z_q / mean_z_q).independent(1))
 
         # define a helper function to sample w's for a single layer
         def sample_ws(name, width):
             alpha_w_q = pyro.param("log_alpha_w_q_%s" % name,
-                                   torch.tensor(self.alpha_init * torch.ones(width) +
-                                                self.sigma_init * torch.randn(width)))
+                                   lambda: rand_tensor((width), self.alpha_init, self.sigma_init))
             mean_w_q = pyro.param("log_mean_w_q_%s" % name,
-                                  torch.tensor(self.mean_init * torch.ones(width) +
-                                               self.sigma_init * torch.randn(width)))
+                                  lambda: rand_tensor((width), self.mean_init, self.sigma_init))
             alpha_w_q, mean_w_q = self.softplus(alpha_w_q), self.softplus(mean_w_q)
             pyro.sample("w_%s" % name, Gamma(alpha_w_q, alpha_w_q / mean_w_q))
 
