@@ -4,7 +4,9 @@ Pyro Optimizers
 .. automodule:: pyro.optim.optim
     :members:
     :undoc-members:
+    :special-members: __call__
     :show-inheritance:
+    :member-order: bysource
 
 PyTorch Optimizers
 ------------------
@@ -12,4 +14,16 @@ PyTorch Optimizers
 .. automodule:: pyro.optim.pytorch_optimizers
     :members:
     :undoc-members:
+    :special-members: __call__
     :show-inheritance:
+    :member-order: bysource
+
+Higher-Order Optimizers
+-----------------------
+
+.. automodule:: pyro.optim.multi
+    :members:
+    :undoc-members:
+    :special-members: __call__
+    :show-inheritance:
+    :member-order: bysource
