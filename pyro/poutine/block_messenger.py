@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from .messenger import Messenger
+from pyro.poutine.messenger import Messenger
 
 
 class BlockMessenger(Messenger):
@@ -22,6 +22,15 @@ class BlockMessenger(Messenger):
     For example, suppose the stochastic function fn has two sample sites "a" and "b".
     Then any poutine outside of BlockMessenger(fn, hide=["a"])
     will not be applied to site "a" and will only see site "b":
+
+    .. doctest::
+       :hide:
+
+       >>> from pyro.poutine.trace_messenger import TraceMessenger
+
+    >>> def fn():
+    ...     a = pyro.sample("a", dist.Normal(0., 1.))
+    ...     return pyro.sample("b", dist.Normal(a, 1.))
 
     >>> fn_inner = TraceMessenger()(fn)
     >>> fn_outer = TraceMessenger()(BlockMessenger(hide=["a"])(TraceMessenger()(fn)))

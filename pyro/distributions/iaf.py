@@ -16,10 +16,10 @@ class InverseAutoregressiveFlow(Transform):
 
     Example usage::
 
-    >>> base_dist = Normal(...)
-    >>> iaf = InverseAutoregressiveFlow(...)
-    >>> pyro.module("my_iaf", iaf.module)
-    >>> iaf_dist = TransformedDistribution(base_dist, [iaf])
+    >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
+    >>> iaf = InverseAutoregressiveFlow(10, 40)
+    >>> iaf_module = pyro.module("my_iaf", iaf.module)
+    >>> iaf_dist = dist.TransformedDistribution(base_dist, [iaf])
 
     Note that this implementation is only meant to be used in settings where the inverse of the Bijector
     is never explicitly computed (rather the result is cached from the forward call). In the context of
