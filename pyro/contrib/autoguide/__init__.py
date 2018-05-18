@@ -64,13 +64,13 @@ class AutoGuide(object):
     Auto guides can be used individually or combined in an
     :class:`AutoGuideList` object.
 
-    :param callable model: A pyro model.
-    :param str name: A name that will be prefixed to all param internal sites.
+    :param callable model: a pyro model
+    :param str prefix: a prefix that will be prefixed to all param internal sites
     """
-    def __init__(self, model, name="auto"):
+    def __init__(self, model, prefix="auto"):
         self.master = None
         self.model = model
-        self.name = name
+        self.prefix = prefix
         self.prototype_trace = None
         self._iaranges = {}
 
@@ -126,9 +126,10 @@ class AutoGuideList(AutoGuide):
         svi = SVI(model, guide, optim, Trace_ELBO())
 
     :param callable model: a Pyro model
+    :param str prefix: a prefix that will be prefixed to all param internal sites
     """
-    def __init__(self, model, name="auto"):
-        super(AutoGuideList, self).__init__(model, name)
+    def __init__(self, model, prefix="auto"):
+        super(AutoGuideList, self).__init__(model, prefix)
         self.parts = []
         self.iaranges = {}
 
@@ -217,7 +218,7 @@ class AutoDelta(AutoGuide):
                 for frame in site["cond_indep_stack"]:
                     if frame.vectorized:
                         stack.enter_context(iaranges[frame.name])
-                value = pyro.param("{}_{}".format(self.name, name), site["value"].detach(),
+                value = pyro.param("{}_{}".format(self.prefix, name), site["value"].detach(),
                                    constraint=site["fn"].support)
                 result[name] = pyro.sample(name, dist.Delta(value, event_dim=site["fn"].event_dim))
         return result
@@ -385,18 +386,18 @@ class AutoMultivariateNormal(AutoContinuous):
         """
         Samples the (single) multivariate normal latent used in the auto guide.
         """
-        loc = pyro.param("{}_loc".format(self.name),
+        loc = pyro.param("{}_loc".format(self.prefix),
                          lambda: torch.zeros(self.latent_dim))
-        scale_tril = pyro.param("{}_scale_tril".format(self.name),
+        scale_tril = pyro.param("{}_scale_tril".format(self.prefix),
                                 lambda: torch.eye(self.latent_dim),
                                 constraint=constraints.lower_cholesky)
-        return pyro.sample("_{}_latent".format(self.name),
+        return pyro.sample("_{}_latent".format(self.prefix),
                            dist.MultivariateNormal(loc, scale_tril=scale_tril),
                            infer={"is_auxiliary": True})
 
     def _loc_scale(self, *args, **kwargs):
-        loc = pyro.param("{}_loc".format(self.name))
-        scale = pyro.param("{}_scale_tril".format(self.name)).diag()
+        loc = pyro.param("{}_loc".format(self.prefix))
+        scale = pyro.param("{}_scale_tril".format(self.prefix)).diag()
         return loc, scale
 
 
@@ -424,18 +425,18 @@ class AutoDiagonalNormal(AutoContinuous):
         """
         Samples the (single) diagnoal normal latent used in the auto guide.
         """
-        loc = pyro.param("{}_loc".format(self.name),
+        loc = pyro.param("{}_loc".format(self.prefix),
                          lambda: torch.zeros(self.latent_dim))
-        scale = pyro.param("{}_scale".format(self.name),
+        scale = pyro.param("{}_scale".format(self.prefix),
                            lambda: torch.ones(self.latent_dim),
                            constraint=constraints.positive)
-        return pyro.sample("_{}_latent".format(self.name),
+        return pyro.sample("_{}_latent".format(self.prefix),
                            dist.Normal(loc, scale).independent(1),
                            infer={"is_auxiliary": True})
 
     def _loc_scale(self, *args, **kwargs):
-        loc = pyro.param("{}_loc".format(self.name))
-        scale = pyro.param("{}_scale".format(self.name))
+        loc = pyro.param("{}_loc".format(self.prefix))
+        scale = pyro.param("{}_scale".format(self.prefix))
         return loc, scale
 
 
@@ -464,32 +465,33 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
 
     :param callable model: a generative model
     :param int rank: the rank of the low-rank part of the covariance matrix
+    :param str prefix: a prefix that will be prefixed to all param internal sites
     """
-    def __init__(self, model, name="auto", rank=1):
+    def __init__(self, model, prefix="auto", rank=1):
         if not isinstance(rank, numbers.Number) or not rank > 0:
             raise ValueError("Expected rank >= 0 but got {}".format(rank))
         self.rank = rank
-        super(AutoLowRankMultivariateNormal, self).__init__(model, name)
+        super(AutoLowRankMultivariateNormal, self).__init__(model, prefix)
 
     def sample_latent(self, *args, **kwargs):
         """
         Samples the (single) multivariate normal latent used in the auto guide.
         """
-        loc = pyro.param("{}_loc".format(self.name),
+        loc = pyro.param("{}_loc".format(self.prefix),
                          lambda: torch.zeros(self.latent_dim))
-        W_term = pyro.param("{}_W_term".format(self.name),
+        W_term = pyro.param("{}_W_term".format(self.prefix),
                             lambda: torch.randn(self.rank, self.latent_dim) * (0.5 / self.rank) ** 0.5)
-        D_term = pyro.param("{}_D_term".format(self.name),
+        D_term = pyro.param("{}_D_term".format(self.prefix),
                             lambda: torch.ones(self.latent_dim) * 0.5,
                             constraint=constraints.positive)
-        return pyro.sample("_{}_latent".format(self.name),
+        return pyro.sample("_{}_latent".format(self.prefix),
                            dist.LowRankMultivariateNormal(loc, W_term, D_term),
                            infer={"is_auxiliary": True})
 
     def _loc_scale(self, *args, **kwargs):
-        loc = pyro.param("{}_loc".format(self.name))
-        W_term = pyro.param("{}_W_term".format(self.name))
-        D_term = pyro.param("{}_D_term".format(self.name))
+        loc = pyro.param("{}_loc".format(self.prefix))
+        W_term = pyro.param("{}_W_term".format(self.prefix))
+        D_term = pyro.param("{}_D_term".format(self.prefix))
         scale = (W_term.pow(2).sum(0) + D_term).sqrt()
         return loc, scale
 
@@ -552,7 +554,7 @@ class AutoDiscreteParallel(AutoGuide):
         for site, Dist, param_spec in self._discrete_sites:
             name = site["name"]
             dist_params = {
-                param_name: pyro.param("{}_{}_{}".format(self.name, name, param_name), param_init,
+                param_name: pyro.param("{}_{}_{}".format(self.prefix, name, param_name), param_init,
                                        constraint=param_constraint)
                 for param_name, param_init, param_constraint in param_spec
             }

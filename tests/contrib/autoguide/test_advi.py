@@ -191,6 +191,6 @@ def test_guide_list(auto_class):
         pyro.sample("y", dist.MultivariateNormal(torch.zeros(5), torch.eye(5, 5)))
 
     guide = AutoGuideList(model)
-    guide.add(auto_class(poutine.block(model, expose=["x"]), name="auto_x"))
-    guide.add(auto_class(poutine.block(model, expose=["y"]), name="auto_y"))
+    guide.add(auto_class(poutine.block(model, expose=["x"]), prefix="auto_x"))
+    guide.add(auto_class(poutine.block(model, expose=["y"]), prefix="auto_y"))
     guide()
