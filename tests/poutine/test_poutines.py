@@ -753,3 +753,22 @@ def test_decorator_interface_do():
         else:
             assert name not in tr
             assert_equal(tr.nodes["_RETURN"]["value"][name], data[name])
+
+
+def test_method_decorator_interface_condition():
+
+    class cls_model(object):
+
+        @poutine.condition(data={"b": torch.tensor(1.)})
+        def model(self, p):
+            pyro.sample("a", Bernoulli(p))
+            pyro.sample("b", Bernoulli(torch.tensor([0.5])))
+
+        def _model(self, p):
+            pyro.sample("a", Bernoulli(p))
+            pyro.sample("b", Bernoulli(torch.tensor([0.5])))
+
+    tr = poutine.trace(cls_model().model).get_trace(0.5)
+    assert isinstance(tr, poutine.Trace)
+    assert tr.graph_type == "flat"
+    assert tr.nodes["b"]["is_observed"] and tr.nodes["b"]["value"].item() == 1.
