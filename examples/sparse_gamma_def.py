@@ -18,6 +18,7 @@ from torch import nn as nn
 
 import pyro
 import pyro.optim as optim
+import pyro.poutine as poutine
 import wget
 from pyro.distributions import Gamma, Poisson
 from pyro.infer import SVI, Trace_ELBO
@@ -36,6 +37,7 @@ class SparseGammaDEF(object):
         self.image_size = 64 * 64
         # define hyparameters that control the prior
         self.alpha_z = torch.tensor(0.1)
+        self.beta_z = torch.tensor(0.1)
         self.alpha_w = torch.tensor(0.1)
         self.beta_w = torch.tensor(0.3)
         # define parameters used to initialize variational parameters
@@ -47,30 +49,24 @@ class SparseGammaDEF(object):
     # define the model
     def model(self, x):
         x_size = x.size(0)
-        with pyro.iarange('data'):
-            with pyro.iarange('locals'):
-                z_top = pyro.sample("z_top", Gamma(self.alpha_z.expand(x_size, self.top_width),
-                                                   self.alpha_z.expand(x_size, self.top_width)).independent(1))
-                w_top = pyro.sample("w_top", Gamma(self.alpha_w.expand(self.top_width * self.mid_width),
-                                                   self.beta_w.expand(self.top_width * self.mid_width)).independent(1))
-                mean_mid = torch.mm(z_top, w_top.view(self.top_width, self.mid_width))
 
-                z_mid = pyro.sample("z_mid",
-                                    Gamma(self.alpha_z.expand(x_size, self.mid_width),
-                                          self.alpha_z.expand(x_size, self.mid_width) / mean_mid).independent(1))
-                w_mid = pyro.sample("w_mid",
-                                    Gamma(self.alpha_w.expand(self.mid_width * self.bottom_width),
-                                          self.beta_w.expand(self.mid_width * self.bottom_width)).independent(1))
-                mean_bottom = torch.mm(z_mid, w_mid.view(self.mid_width, self.bottom_width))
+        # sample the global weights
+        with pyro.iarange("w_top_iarange", self.top_width * self.mid_width):
+            w_top = pyro.sample("w_top", Gamma(self.alpha_w, self.beta_w))
+        with pyro.iarange("w_mid_iarange", self.mid_width * self.bottom_width):
+            w_mid = pyro.sample("w_mid", Gamma(self.alpha_w, self.beta_w))
+        with pyro.iarange("w_bottom_iarange", self.bottom_width * self.image_size):
+            w_bottom = pyro.sample("w_bottom", Gamma(self.alpha_w, self.beta_w))
 
-                z_bottom = pyro.sample("z_bottom",
-                                       Gamma(self.alpha_z.expand(x_size, self.bottom_width),
-                                             self.alpha_z.expand(x_size, self.bottom_width) / mean_bottom)
-                                       .independent(1))
-                w_bottom = pyro.sample("w_bottom",
-                                       Gamma(self.alpha_w.expand(self.bottom_width * self.image_size),
-                                             self.beta_w.expand(self.bottom_width * self.image_size)).independent(1))
-                mean_obs = torch.mm(z_bottom, w_bottom.view(self.bottom_width, self.image_size))
+        # sample the local latent random variables
+        # (the iarange encodes the fact that the z's for different datapoints are conditionally independent)
+        with pyro.iarange("data", x_size):
+            z_top = pyro.sample("z_top", Gamma(self.alpha_z, self.beta_z).expand([self.top_width]).independent(1))
+            mean_mid = torch.mm(z_top, w_top.reshape(self.top_width, self.mid_width))
+            z_mid = pyro.sample("z_mid", Gamma(self.alpha_z, self.beta_z / mean_mid).independent(1))
+            mean_bottom = torch.mm(z_mid, w_mid.view(self.mid_width, self.bottom_width))
+            z_bottom = pyro.sample("z_bottom", Gamma(self.alpha_z, self.beta_z / mean_bottom).independent(1))
+            mean_obs = torch.mm(z_bottom, w_bottom.view(self.bottom_width, self.image_size))
 
             # observe the data using a poisson likelihood
             pyro.sample('obs', Poisson(mean_obs).independent(1), obs=x)
@@ -101,22 +97,21 @@ class SparseGammaDEF(object):
                                   torch.tensor(self.mean_init * torch.ones(width) +
                                                self.sigma_init * torch.randn(width)))
             alpha_w_q, mean_w_q = self.softplus(alpha_w_q), self.softplus(mean_w_q)
-            pyro.sample("w_%s" % name, Gamma(alpha_w_q, alpha_w_q / mean_w_q).independent(1))
+            pyro.sample("w_%s" % name, Gamma(alpha_w_q, alpha_w_q / mean_w_q))
 
-        # sample latent random variables.
-        # note that we need to enclose everything in two pyro.iarange's to encapsulate the fact that
-        # -- the latents for each datapoint are conditionally independent of the latents for other datapoints
-        # -- the different dimensions of z_top etc. for a particular datapoint are conditionally
-        #    independent of other dimensions
-        with pyro.iarange('data'):
-            with pyro.iarange('locals'):
-                sample_zs("top", self.top_width)
-                sample_zs("mid", self.mid_width)
-                sample_zs("bottom", self.bottom_width)
+        # sample the global weights
+        with pyro.iarange("w_top_iarange", self.top_width * self.mid_width):
+            sample_ws("top", self.top_width * self.mid_width)
+        with pyro.iarange("w_mid_iarange", self.mid_width * self.bottom_width):
+            sample_ws("mid", self.mid_width * self.bottom_width)
+        with pyro.iarange("w_bottom_iarange", self.bottom_width * self.image_size):
+            sample_ws("bottom", self.bottom_width * self.image_size)
 
-                sample_ws("top", self.top_width * self.mid_width)
-                sample_ws("mid", self.mid_width * self.bottom_width)
-                sample_ws("bottom", self.bottom_width * self.image_size)
+        # sample the local latent random variables
+        with pyro.iarange("data", x_size):
+            sample_zs("top", self.top_width)
+            sample_zs("mid", self.mid_width)
+            sample_zs("bottom", self.bottom_width)
 
     # define a helper function to clip parameters defining the variational family.
     # (this is to avoid regions of the gamma distributions with extremely small means)
@@ -136,7 +131,8 @@ def main(args):
 
     sparse_gamma_def = SparseGammaDEF()
     opt = optim.AdagradRMSProp({"eta": 4.5, "t": 0.1})
-    svi = SVI(sparse_gamma_def.model, sparse_gamma_def.guide, opt, loss=Trace_ELBO())
+    svi = SVI(poutine.broadcast(sparse_gamma_def.model), poutine.broadcast(sparse_gamma_def.guide),
+              opt, loss=Trace_ELBO())
 
     print('\nbeginning training...')
 
