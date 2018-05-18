@@ -187,8 +187,8 @@ def test_discrete_parallel(continuous_class):
 def test_guide_list(auto_class):
 
     def model():
-        x = pyro.sample("x", dist.Normal(0., 1.))
-        y = pyro.sample("y", dist.MultivariateNormal(torch.zeros(5), torch.eye(5, 5)))
+        pyro.sample("x", dist.Normal(0., 1.))
+        pyro.sample("y", dist.MultivariateNormal(torch.zeros(5), torch.eye(5, 5)))
 
     guide = AutoGuideList(model)
     guide.add(auto_class(poutine.block(model, expose=["x"]), name="auto_x"))
