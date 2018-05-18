@@ -263,7 +263,7 @@ class AutoContinuous(AutoGuide):
 
         self.latent_dim = sum(_product(shape) for shape in self._unconstrained_shapes.values())
         if self.latent_dim == 0:
-            raise ValueError('Latent dims was 0; Use an empty guide instead.')
+            raise RuntimeError('{} found no latent variables; Use an empty guide instead'.format(type(self).__name__))
 
     def sample_latent(self, *args, **kwargs):
         """
