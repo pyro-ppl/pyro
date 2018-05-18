@@ -289,7 +289,7 @@ class irange(object):
            >>> loc, scale = torch.tensor(0.), torch.tensor(1.)
            >>> data = torch.randn(100)
            >>> z = dist.Bernoulli(0.5).sample((100,))
-           
+
         >>> for i in irange('data', 100, subsample_size=10):
         ...     if z[i]:  # Prevents vectorization.
         ...         obs = sample('obs_{}'.format(i), dist.Normal(loc, scale), obs=data[i])
