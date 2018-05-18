@@ -136,17 +136,17 @@ class GPModel(Parameterized):
 
         Some examples to utilize this method are:
 
+        .. doctest::
+           :hide:
+
+            >>> X = torch.tensor([[1., 5, 3], [4, 3, 7]])
+            >>> y = torch.tensor([2., 1])
+            >>> kernel = gp.kernels.RBF(input_dim=3)
+            >>> kernel.set_prior("variance", dist.Uniform(torch.tensor(0.5), torch.tensor(1.5)))
+            >>> kernel.set_prior("lengthscale", dist.Uniform(torch.tensor(1.0), torch.tensor(3.0)))
+            >>> optimizer = pyro.optim.Adam({"lr": 0.01})
+
         + Batch training on a sparse variational model:
-
-            .. doctest::
-               :hide:
-
-                >>> X = torch.tensor([[1., 5, 3], [4, 3, 7]])
-                >>> y = torch.tensor([2., 1])
-                >>> kernel = gp.kernels.RBF(input_dim=3)
-                >>> kernel.set_prior("variance", dist.Uniform(torch.tensor(0.5), torch.tensor(1.5)))
-                >>> kernel.set_prior("lengthscale", dist.Uniform(torch.tensor(1.0), torch.tensor(3.0)))
-                >>> optimizer = pyro.optim.Adam({"lr": 0.01})
 
             >>> Xu = torch.tensor([[1., 0, 2]])  # inducing input
             >>> likelihood = gp.likelihoods.Gaussian()
@@ -157,7 +157,8 @@ class GPModel(Parameterized):
             ...     vsgp.set_data(Xi, yi)
             ...     svi.step()  # doctest: +SKIP
 
-        + Making a two-layer Gaussian Process stochastic function::
+        + Making a two-layer Gaussian Process stochastic function:
+
 
             >>> gpr1 = gp.models.GPRegression(X, None, kernel, name="GPR1")
             >>> Z, _ = gpr1.model()

@@ -14,7 +14,7 @@ class InverseAutoregressiveFlow(Transform):
     An implementation of an Inverse Autoregressive Flow. Together with the `TransformedDistribution` this
     provides a way to create richer variational approximations.
 
-    Example usage::
+    Example usage:
 
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
     >>> iaf = InverseAutoregressiveFlow(10, 40)

@@ -58,13 +58,13 @@ class NUTS(HMC):
         >>> data = torch.randn(2000, 3)
         >>> dim = 3
         >>> labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
-
+        >>>
         >>> def model(data):
         ...     coefs_mean = torch.zeros(dim)
         ...     coefs = pyro.sample('beta', dist.Normal(coefs_mean, torch.ones(3)))
         ...     y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
         ...     return y
-
+        >>>
         >>> nuts_kernel = NUTS(model, adapt_step_size=True)
         >>> mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=300).run(data)
         >>> posterior = EmpiricalMarginal(mcmc_run, 'beta')
