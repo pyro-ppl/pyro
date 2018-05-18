@@ -77,7 +77,7 @@ class SparseGammaDEF(object):
     def guide(self, x):
         x_size = x.size(0)
 
-        # helper for initiqlizing variational parameters
+        # helper for initializing variational parameters
         def rand_tensor(shape, mean, sigma):
             return mean * torch.ones(shape) + sigma * torch.randn(shape)
 
