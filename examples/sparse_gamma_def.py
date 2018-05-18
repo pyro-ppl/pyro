@@ -10,6 +10,7 @@
 from __future__ import absolute_import, division, print_function
 
 import argparse
+import os
 
 import numpy as np
 import torch
@@ -17,13 +18,13 @@ from torch import nn as nn
 
 import pyro
 import pyro.optim as optim
+import wget
 from pyro.distributions import Gamma, Poisson
 from pyro.infer import SVI, Trace_ELBO
 
 torch.set_default_tensor_type('torch.FloatTensor')
 pyro.enable_validation(True)
 pyro.util.set_rng_seed(0)
-data = torch.tensor(np.loadtxt('faces_training.csv', delimiter=',')).float()
 
 
 class SparseGammaDEF(object):
@@ -74,7 +75,8 @@ class SparseGammaDEF(object):
             # observe the data using a poisson likelihood
             pyro.sample('obs', Poisson(mean_obs).independent(1), obs=x)
 
-    # define the guide a.k.a. variational distribution
+    # define the guide a.k.a. variational distribution.
+    # (note the guide is mean field)
     def guide(self, x):
         x_size = x.size(0)
 
@@ -116,22 +118,32 @@ class SparseGammaDEF(object):
                 sample_ws("mid", self.mid_width * self.bottom_width)
                 sample_ws("bottom", self.bottom_width * self.image_size)
 
-    # define a helper function to clip parameters defining the variational family
+    # define a helper function to clip parameters defining the variational family.
+    # (this is to avoid regions of the gamma distributions with extremely small means)
     def clip_params(self):
-        for param, clip in zip(("log_alpha", "log_mean"), (-2.25, -4.5)):
+        for param, clip in zip(("log_alpha", "log_mean"), (-2.5, -4.5)):
             for layer in ["top", "mid", "bottom"]:
                 for wz in ["_w_q_", "_z_q_"]:
                     pyro.param(param + wz + layer).data.clamp_(min=clip)
 
 
 def main(args):
+    # load data
+    print('loading training data...')
+    if not os.path.exists('faces_training.csv'):
+        wget.download('https://d2fefpcigoriu7.cloudfront.net/datasets/faces_training.csv', 'faces_training.csv')
+    data = torch.tensor(np.loadtxt('faces_training.csv', delimiter=',')).float()
+
     sparse_gamma_def = SparseGammaDEF()
     opt = optim.AdagradRMSProp({"eta": 4.5, "t": 0.1})
     svi = SVI(sparse_gamma_def.model, sparse_gamma_def.guide, opt, loss=Trace_ELBO())
 
+    print('\nbeginning training...')
+
+    # the training loop
     for k in range(args.num_epochs):
         loss = svi.step(data)
-        sparse_gamma_def.clip_params()
+        sparse_gamma_def.clip_params()  # we clip params after each gradient step
 
         if k % 20 == 0 and k > 0:
             print("[epoch %04d] training elbo: %.4g" % (k, -loss))
@@ -140,6 +152,6 @@ def main(args):
 if __name__ == '__main__':
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', default=1000, type=int, help='number of training epochs')
+    parser.add_argument('-n', '--num-epochs', default=1001, type=int, help='number of training epochs')
     args = parser.parse_args()
     main(args)
