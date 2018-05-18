@@ -49,6 +49,7 @@ in just a few lines of code:
 from __future__ import absolute_import, division, print_function
 
 import functools
+import inspect
 
 from six.moves import xrange
 
@@ -71,6 +72,15 @@ from .trace_messenger import TraceMessenger
 ############################################
 # Begin primitive operations
 ############################################
+
+
+def _wrap_fn(fn, msngr):
+    if fn is None:
+        return msngr
+    elif inspect.ismethod(fn):
+        return lambda *args, **kwargs: msngr(fn)(*args, **kwargs)
+    else:
+        return _wrap_fn(fn, msngr)
 
 
 def trace(fn=None, graph_type=None, param_only=None):
@@ -99,7 +109,7 @@ def trace(fn=None, graph_type=None, param_only=None):
     :returns: stochastic function decorated with a :class:`~pyro.poutine.trace_messenger.TraceMessenger`
     """
     msngr = TraceMessenger(graph_type=graph_type, param_only=param_only)
-    return msngr(fn) if fn is not None else msngr
+    return _wrap_fn(fn, msngr)
 
 
 def replay(fn=None, trace=None, params=None):
@@ -129,7 +139,7 @@ def replay(fn=None, trace=None, params=None):
     :returns: a stochastic function decorated with a :class:`~pyro.poutine.replay_messenger.ReplayMessenger`
     """
     msngr = ReplayMessenger(trace=trace, params=params)
-    return msngr(fn) if fn is not None else msngr
+    return _wrap_fn(fn, msngr)
 
 
 def lift(fn=None, prior=None):
@@ -162,7 +172,7 @@ def lift(fn=None, prior=None):
     :returns: ``fn`` decorated with a :class:`~pyro.poutine.lift_messenger.LiftMessenger`
     """
     msngr = LiftMessenger(prior=prior)
-    return msngr(fn) if fn is not None else msngr
+    return _wrap_fn(fn, msngr)
 
 
 def block(fn=None, hide=None, expose=None, hide_types=None, expose_types=None):
@@ -203,7 +213,7 @@ def block(fn=None, hide=None, expose=None, hide_types=None, expose_types=None):
     """
     msngr = BlockMessenger(hide=hide, expose=expose,
                            hide_types=hide_types, expose_types=expose_types)
-    return msngr(fn) if fn is not None else msngr
+    return _wrap_fn(fn, msngr)
 
 
 def broadcast(fn=None):
@@ -240,7 +250,7 @@ def broadcast(fn=None):
     ...     return sample
     """
     msngr = BroadcastMessenger()
-    return msngr(fn) if fn is not None else msngr
+    return _wrap_fn(fn, msngr)
 
 
 def escape(fn=None, escape_fn=None):
@@ -256,7 +266,7 @@ def escape(fn=None, escape_fn=None):
     :returns: stochastic function decorated with :class:`~pyro.poutine.escape_messenger.EscapeMessenger`
     """
     msngr = EscapeMessenger(escape_fn)
-    return msngr(fn) if fn is not None else msngr
+    return _wrap_fn(fn, msngr)
 
 
 def condition(fn=None, data=None):
@@ -285,7 +295,7 @@ def condition(fn=None, data=None):
     :returns: stochastic function decorated with a :class:`~pyro.poutine.condition_messenger.ConditionMessenger`
     """
     msngr = ConditionMessenger(data=data)
-    return msngr(fn) if fn is not None else msngr
+    return _wrap_fn(fn, msngr)
 
 
 def infer_config(fn=None, config_fn=None):
@@ -299,7 +309,7 @@ def infer_config(fn=None, config_fn=None):
     :returns: stochastic function decorated with :class:`~pyro.poutine.infer_config_messenger.InferConfigMessenger`
     """
     msngr = InferConfigMessenger(config_fn)
-    return msngr(fn) if fn is not None else msngr
+    return _wrap_fn(fn, msngr)
 
 
 def scale(fn=None, scale=None):
@@ -328,8 +338,7 @@ def scale(fn=None, scale=None):
     :returns: stochastic function decorated with a :class:`~pyro.poutine.scale_messenger.ScaleMessenger`
     """
     msngr = ScaleMessenger(scale=scale)
-    # XXX temporary compatibility fix
-    return msngr(fn) if callable(fn) else msngr
+    return _wrap_fn(fn, msngr)
 
 
 def indep(fn=None, name=None, size=None, dim=None):
@@ -342,7 +351,7 @@ def indep(fn=None, name=None, size=None, dim=None):
     :class:`~pyro.poutine.trace_messenger.TraceMessenger`.
     """
     msngr = IndepMessenger(name=name, size=size, dim=dim)
-    return msngr(fn) if fn is not None else msngr
+    return _wrap_fn(fn, msngr)
 
 
 def enum(fn=None, first_available_dim=None):
@@ -355,7 +364,7 @@ def enum(fn=None, first_available_dim=None):
         dimension and all dimensions left may be used internally by Pyro.
     """
     msngr = EnumerateMessenger(first_available_dim=first_available_dim)
-    return msngr(fn) if fn is not None else msngr
+    return _wrap_fn(fn, msngr)
 
 
 #########################################
@@ -389,9 +398,9 @@ def do(fn=None, data=None):
     :returns: stochastic function decorated with a :class:`~pyro.poutine.block_messenger.BlockMessenger`
       and :class:`pyro.poutine.condition_messenger.ConditionMessenger`
     """
-    def wrapper(wrapped):
+    def msngr(wrapped):
         return block(condition(wrapped, data=data), hide=list(data.keys()))
-    return wrapper(fn) if fn is not None else wrapper
+    return _wrap_fn(fn, msngr)
 
 
 def queue(fn=None, queue=None, max_tries=None,
@@ -425,7 +434,7 @@ def queue(fn=None, queue=None, max_tries=None,
     if num_samples is None:
         num_samples = -1
 
-    def wrapper(wrapped):
+    def msngr(wrapped):
         def _fn(*args, **kwargs):
 
             for i in xrange(max_tries):
@@ -447,4 +456,4 @@ def queue(fn=None, queue=None, max_tries=None,
             raise ValueError("max tries ({}) exceeded".format(str(max_tries)))
         return _fn
 
-    return wrapper(fn) if fn is not None else wrapper
+    return _wrap_fn(fn, msngr)
