@@ -262,6 +262,8 @@ class AutoContinuous(AutoGuide):
             self._cond_indep_stacks[name] = site["cond_indep_stack"]
 
         self.latent_dim = sum(_product(shape) for shape in self._unconstrained_shapes.values())
+        if self.latent_dim == 0:
+            raise ValueError('Latent dims was 0; Use an empty guide instead.')
 
     def sample_latent(self, *args, **kwargs):
         """
