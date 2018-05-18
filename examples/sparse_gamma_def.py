@@ -47,6 +47,7 @@ class SparseGammaDEF(object):
         self.softplus = nn.Softplus()
 
     # define the model
+    @poutine.broadcast
     def model(self, x):
         x_size = x.size(0)
 
@@ -73,6 +74,7 @@ class SparseGammaDEF(object):
 
     # define the guide a.k.a. variational distribution.
     # (note the guide is mean field)
+    @poutine.broadcast
     def guide(self, x):
         x_size = x.size(0)
 
@@ -131,8 +133,7 @@ def main(args):
 
     sparse_gamma_def = SparseGammaDEF()
     opt = optim.AdagradRMSProp({"eta": 4.5, "t": 0.1})
-    svi = SVI(poutine.broadcast(sparse_gamma_def.model), poutine.broadcast(sparse_gamma_def.guide),
-              opt, loss=Trace_ELBO())
+    svi = SVI(sparse_gamma_def.model, sparse_gamma_def.guide, opt, loss=Trace_ELBO())
 
     print('\nbeginning training...')
 
