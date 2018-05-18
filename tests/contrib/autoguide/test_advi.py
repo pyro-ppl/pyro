@@ -176,3 +176,11 @@ def test_discrete_parallel(continuous_class):
     elbo = TraceEnum_ELBO(max_iarange_nesting=1)
     loss = elbo.loss_and_grads(model, guide, data)
     assert np.isfinite(loss), loss
+
+
+def test_empty_model_error():
+    def model():
+        pass
+    guide = AutoDiagonalNormal(model)
+    with pytest.raises(RuntimeError):
+        guide()
