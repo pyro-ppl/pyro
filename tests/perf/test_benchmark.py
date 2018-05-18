@@ -51,7 +51,7 @@ def poisson_gamma_model(reparameterized, Elbo):
     n_data = len(data)
     data_sum = data.sum(0)
     alpha_n = alpha0 + data_sum  # posterior alpha
-    beta_n = beta0 + torch.tensor(n_data)  # posterior beta
+    beta_n = beta0 + torch.tensor(float(n_data))  # posterior beta
     log_alpha_n = torch.log(alpha_n)
     log_beta_n = torch.log(beta_n)
 
@@ -119,14 +119,14 @@ def svgp_multiclass(num_steps, whiten):
     likelihood = gp.likelihoods.MultiClass(num_classes=3)
     Xu = X[::5].clone()
 
-    gpmodel = gp.models.SparseVariationalGP(X, y, kernel, Xu, likelihood,
+    gpmodel = gp.models.VariationalSparseGP(X, y, kernel, Xu, likelihood,
                                             latent_shape=torch.Size([3]),
                                             whiten=whiten)
 
     gpmodel.fix_param("Xu")
     gpmodel.kernel.get_subkernel("WhiteNoise").fix_param("variance")
 
-    gpmodel.optimize(optim.Adam({"lr": 0.0001}), num_steps)
+    gpmodel.optimize(optim.Adam({"lr": 0.0001}), num_steps=num_steps)
 
 
 @pytest.mark.parametrize('model, model_args, id', TEST_MODELS, ids=MODEL_IDS)
