@@ -25,7 +25,7 @@ class HMC(TraceKernel):
     [1] `MCMC Using Hamiltonian Dynamics`,
     Radford M. Neal
 
-    :param model: Python callable containing pyro primitives.
+    :param model: Python callable containing Pyro primitives.
     :param float step_size: Determines the size of a single step taken by the
         verlet integrator while computing the trajectory using Hamiltonian
         dynamics. If not specified, it will be set to 1.
@@ -185,11 +185,13 @@ class HMC(TraceKernel):
         if self._automatic_transform_enabled:
             self.transforms = {}
         for name, node in sorted(trace.iter_stochastic_nodes(), key=lambda x: x[0]):
-            r_loc = torch.zeros_like(node["value"])
-            r_scale = torch.ones_like(node["value"])
-            self._r_dist[name] = dist.Normal(loc=r_loc, scale=r_scale)
+            site_value = node["value"]
             if node["fn"].support is not constraints.real and self._automatic_transform_enabled:
                 self.transforms[name] = biject_to(node["fn"].support).inv
+                site_value = self.transforms[name](node["value"])
+            r_loc = site_value.new_zeros(site_value.shape)
+            r_scale = site_value.new_ones(site_value.shape)
+            self._r_dist[name] = dist.Normal(loc=r_loc, scale=r_scale)
         self._validate_trace(trace)
 
         if self.adapt_step_size:

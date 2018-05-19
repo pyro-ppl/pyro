@@ -39,7 +39,7 @@ class NUTS(HMC):
     [1] `The No-U-turn sampler: adaptively setting path lengths in Hamiltonian Monte Carlo`,
     Matthew D. Hoffman, and Andrew Gelman
 
-    :param model: Python callable containing pyro primitives.
+    :param model: Python callable containing Pyro primitives.
     :param float step_size: Determines the size of a single step taken by the
         verlet integrator while computing the trajectory using Hamiltonian
         dynamics. If not specified, it will be set to 1.

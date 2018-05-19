@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from .messenger import Handler, Messenger
+from .messenger import Messenger
 from .trace_struct import Trace
 from .util import site_is_subsample
 
@@ -33,7 +33,7 @@ class TraceMessenger(Messenger):
     """
     Execution trace messenger.
 
-    A TraceMessenger records the input and output to every pyro primitive
+    A TraceMessenger records the input and output to every Pyro primitive
     and stores them as a site in a Trace().
     This should, in theory, be sufficient information for every inference algorithm
     (along with the implicit computational graph in the Variables?)
@@ -152,17 +152,21 @@ class TraceMessenger(Messenger):
         return None
 
 
-class TraceHandler(Handler):
+class TraceHandler(object):
     """
     Execution trace poutine.
 
-    A TraceHandler records the input and output to every pyro primitive
+    A TraceHandler records the input and output to every Pyro primitive
     and stores them as a site in a Trace().
     This should, in theory, be sufficient information for every inference algorithm
     (along with the implicit computational graph in the Variables?)
 
     We can also use this for visualization.
     """
+    def __init__(self, msngr, fn):
+        self.fn = fn
+        self.msngr = msngr
+
     def __call__(self, *args, **kwargs):
         """
         Runs the stochastic function stored in this poutine,

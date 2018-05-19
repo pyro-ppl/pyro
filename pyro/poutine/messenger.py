@@ -7,10 +7,10 @@ class Messenger(object):
     """
     Context manager class that modifies behavior
     and adds side effects to stochastic functions
-    i.e. callables containing pyro primitive statements.
+    i.e. callables containing Pyro primitive statements.
 
     This is the base Messenger class.
-    It implements the default behavior for all pyro primitives,
+    It implements the default behavior for all Pyro primitives,
     so that the joint distribution induced by a stochastic function fn
     is identical to the joint distribution induced by ``Messenger()(fn)``.
 
@@ -22,7 +22,11 @@ class Messenger(object):
         pass
 
     def __call__(self, fn):
-        return Handler(self, fn)
+        def _wraps(*args, **kwargs):
+            with self:
+                return fn(*args, **kwargs)
+        _wraps.msngr = self
+        return _wraps
 
     def __enter__(self):
         """
@@ -120,37 +124,3 @@ class Messenger(object):
 
     def _pyro_param(self, msg):
         return None
-
-
-class Handler(object):
-    """
-    Wrapper class created by ``Messenger.__call__``
-    """
-
-    def __init__(self, msngr, fn):
-        """
-        :param msngr: messenger to be used for inference
-        :param fn: a stochastic function (callable containing pyro primitive calls)
-        """
-        self.msngr = msngr
-        self.fn = fn
-
-    def __call__(self, *args, **kwargs):
-        """
-        Installs its messenger onto the global effect stack,
-        then calls the stored stochastic function with the given varargs,
-        then uninstalls its messenger from the stack and returns the above value.
-
-        Guaranteed to have the same call signature (input/output type)
-        as the stored function.
-        """
-        with self.msngr:
-            return self.fn(*args, **kwargs)
-
-    def _reset(self):
-        """
-        Resets the computation to the beginning, un-sampling all sample sites.
-
-        By default, does nothing, but overridden in derived classes.
-        """
-        self.msngr._reset()

@@ -38,12 +38,11 @@ jobs:
               - pip install -r docs/requirements.txt
               - make docs
         - stage: perf
-          if: type = cron
           python: 2.7
           env: STAGE=perf
           script:
               - pip install -e .[profile]
-              - make perf-test
+              - pytest -vs --benchmark-disable tests/perf/test_benchmark.py
         - python: 3.5
           if: type = cron
           env: STAGE=perf

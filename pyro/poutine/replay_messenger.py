@@ -8,7 +8,7 @@ class ReplayMessenger(Messenger):
     Messenger for replaying from an existing execution trace.
     """
 
-    def __init__(self, trace=None, sites=None):
+    def __init__(self, trace=None, params=None):
         """
         :param trace: a trace whose values should be reused
 
@@ -16,34 +16,10 @@ class ReplayMessenger(Messenger):
         Stores trace in an attribute.
         """
         super(ReplayMessenger, self).__init__()
-        assert trace is not None, "must provide trace"
+        if trace is None and params is None:
+            raise ValueError("must provide trace or params to replay against")
         self.trace = trace
-        # case 1: no sites
-        if sites is None:
-            self.sites = {site: site for site in trace.nodes.keys()
-                          if trace.nodes[site]["type"] == "sample" and
-                          not trace.nodes[site]["is_observed"]}
-        # case 2: sites is a list/tuple/set
-        elif isinstance(sites, (list, tuple, set)):
-            self.sites = {site: site for site in sites}
-        # case 3: sites is a dict
-        elif isinstance(sites, dict):
-            self.sites = sites
-        # otherwise, something is wrong
-        # XXX one other possible case: sites is a trace?
-        else:
-            raise TypeError(
-                "unrecognized type {} for sites".format(str(type(sites))))
-
-    def _process_message(self, msg):
-        if msg["name"] in self.sites:
-            if msg["type"] == "sample" and not msg["is_observed"]:
-                msg["done"] = True
-                guide_msg = self.trace.nodes[self.sites[msg["name"]]]
-                msg["value"] = guide_msg["value"]
-                msg["infer"] = guide_msg["infer"]
-
-        return super(ReplayMessenger, self)._process_message(msg)
+        self.params = params
 
     def _pyro_sample(self, msg):
         """
@@ -57,19 +33,23 @@ class ReplayMessenger(Messenger):
         reverts to default Messenger._pyro_sample behavior with no additional side effects.
         """
         name = msg["name"]
-        # case 1: dict, positive: sample from guide
-        if name in self.sites:
+        if self.trace is not None and name in self.trace:
+            guide_msg = self.trace.nodes[name]
             if msg["is_observed"]:
-                raise RuntimeError("site {} is observed and should not be overwritten".format(name))
-            g_name = self.sites[name]
-            if g_name not in self.trace:
-                raise RuntimeError("{} in sites but {} not in trace".format(name, g_name))
-            if self.trace.nodes[g_name]["type"] != "sample" or \
-                    self.trace.nodes[g_name]["is_observed"]:
-                raise RuntimeError("site {} must be sample in trace".format(g_name))
+                return None
+            if guide_msg["type"] != "sample" or \
+                    guide_msg["is_observed"]:
+                raise RuntimeError("site {} must be sample in trace".format(name))
             msg["done"] = True
-            msg["value"] = self.trace.nodes[g_name]["value"]
+            msg["value"] = guide_msg["value"]
+            msg["infer"] = guide_msg["infer"]
         return None
 
     def _pyro_param(self, msg):
+        name = msg["name"]
+        if self.params is not None and name in self.params:
+            assert hasattr(self.params[name], "unconstrained"), \
+                "param {} must be constrained value".format(name)
+            msg["done"] = True
+            msg["value"] = self.params[name]
         return None

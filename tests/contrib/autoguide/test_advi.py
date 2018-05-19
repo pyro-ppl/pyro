@@ -7,13 +7,18 @@ import torch
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.contrib.autoguide import AutoDiagonalNormal, AutoDiscreteParallel, AutoGuideList, AutoMultivariateNormal
+from pyro.contrib.autoguide import (AutoDelta, AutoDiagonalNormal, AutoDiscreteParallel, AutoGuideList,
+                                    AutoLowRankMultivariateNormal, AutoMultivariateNormal)
 from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO
 from pyro.optim import Adam
 from tests.common import assert_equal
 
 
-@pytest.mark.parametrize("auto_class", [AutoMultivariateNormal, AutoDiagonalNormal])
+@pytest.mark.parametrize("auto_class", [
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoLowRankMultivariateNormal,
+])
 def test_scores(auto_class):
     def model():
         pyro.sample("z", dist.Normal(0.0, 1.0))
@@ -32,7 +37,12 @@ def test_scores(auto_class):
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
-@pytest.mark.parametrize("auto_class", [AutoMultivariateNormal, AutoDiagonalNormal])
+@pytest.mark.parametrize("auto_class", [
+    AutoDelta,
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoLowRankMultivariateNormal,
+])
 def test_shapes(auto_class, Elbo):
 
     def model():
@@ -48,7 +58,12 @@ def test_shapes(auto_class, Elbo):
 
 
 @pytest.mark.xfail(reason="irange is not yet supported")
-@pytest.mark.parametrize('auto_class', [AutoDiagonalNormal, AutoMultivariateNormal])
+@pytest.mark.parametrize('auto_class', [
+    AutoDelta,
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoLowRankMultivariateNormal,
+])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO])
 def test_irange_smoke(auto_class, Elbo):
 
@@ -70,7 +85,12 @@ def test_irange_smoke(auto_class, Elbo):
     infer.step()
 
 
-@pytest.mark.parametrize("auto_class", [AutoMultivariateNormal, AutoDiagonalNormal])
+@pytest.mark.parametrize("auto_class", [
+    AutoDelta,
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoLowRankMultivariateNormal,
+])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_median(auto_class, Elbo):
 
@@ -80,17 +100,20 @@ def test_median(auto_class, Elbo):
         pyro.sample("z", dist.Beta(2.0, 2.0))
 
     guide = auto_class(model)
-    infer = SVI(model, guide, Adam({'lr': 0.01}), Elbo(strict_enumeration_warning=False))
+    infer = SVI(model, guide, Adam({'lr': 0.05}), Elbo(strict_enumeration_warning=False))
     for _ in range(100):
         infer.step()
 
     median = guide.median()
     assert_equal(median["x"], torch.tensor(0.0), prec=0.1)
-    assert_equal(median["y"], torch.tensor(1.0), prec=0.1)
+    if auto_class is AutoDelta:
+        assert_equal(median["y"], torch.tensor(-1.0).exp(), prec=0.1)
+    else:
+        assert_equal(median["y"], torch.tensor(1.0), prec=0.1)
     assert_equal(median["z"], torch.tensor(0.5), prec=0.1)
 
 
-@pytest.mark.parametrize("auto_class", [AutoMultivariateNormal, AutoDiagonalNormal])
+@pytest.mark.parametrize("auto_class", [AutoDiagonalNormal, AutoMultivariateNormal, AutoLowRankMultivariateNormal])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_quantiles(auto_class, Elbo):
 
@@ -126,7 +149,12 @@ def test_quantiles(auto_class, Elbo):
     assert quantiles["z"][2] < 0.99
 
 
-@pytest.mark.parametrize("continuous_class", [AutoMultivariateNormal, AutoDiagonalNormal])
+@pytest.mark.parametrize("continuous_class", [
+    AutoDelta,
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoLowRankMultivariateNormal,
+])
 def test_discrete_parallel(continuous_class):
     K = 2
     data = torch.tensor([0., 1., 10., 11., 12.])
@@ -148,3 +176,21 @@ def test_discrete_parallel(continuous_class):
     elbo = TraceEnum_ELBO(max_iarange_nesting=1)
     loss = elbo.loss_and_grads(model, guide, data)
     assert np.isfinite(loss), loss
+
+
+@pytest.mark.parametrize("auto_class", [
+    AutoDelta,
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoLowRankMultivariateNormal,
+])
+def test_guide_list(auto_class):
+
+    def model():
+        pyro.sample("x", dist.Normal(0., 1.))
+        pyro.sample("y", dist.MultivariateNormal(torch.zeros(5), torch.eye(5, 5)))
+
+    guide = AutoGuideList(model)
+    guide.add(auto_class(poutine.block(model, expose=["x"]), prefix="auto_x"))
+    guide.add(auto_class(poutine.block(model, expose=["y"]), prefix="auto_y"))
+    guide()

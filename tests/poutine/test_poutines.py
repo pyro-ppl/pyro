@@ -98,19 +98,6 @@ class ReplayHandlerTests(NormalNormalNormalHandlerTestCase):
             assert_equal(model_trace.nodes[name]["value"],
                          guide_trace.nodes[name]["value"])
 
-    def test_replay_partial(self):
-        guide_trace = poutine.trace(self.guide).get_trace()
-        model_trace = poutine.trace(poutine.replay(self.model,
-                                                   trace=guide_trace,
-                                                   sites=self.partial_sample_sites)).get_trace()
-        for name in self.full_sample_sites.keys():
-            if name in self.partial_sample_sites:
-                assert_equal(model_trace.nodes[name]["value"],
-                             guide_trace.nodes[name]["value"])
-            else:
-                assert not eq(model_trace.nodes[name]["value"],
-                              guide_trace.nodes[name]["value"])
-
     def test_replay_full_repeat(self):
         model_trace = poutine.trace(self.model).get_trace()
         ftr = poutine.trace(poutine.replay(self.model, trace=model_trace))
@@ -766,3 +753,21 @@ def test_decorator_interface_do():
         else:
             assert name not in tr
             assert_equal(tr.nodes["_RETURN"]["value"][name], data[name])
+
+
+def test_method_decorator_interface_condition():
+
+    class cls_model(object):
+
+        @poutine.condition(data={"b": torch.tensor(1.)})
+        def model(self, p):
+            self._model(p)
+
+        def _model(self, p):
+            pyro.sample("a", Bernoulli(p))
+            pyro.sample("b", Bernoulli(torch.tensor([0.5])))
+
+    tr = poutine.trace(cls_model().model).get_trace(0.5)
+    assert isinstance(tr, poutine.Trace)
+    assert tr.graph_type == "flat"
+    assert tr.nodes["b"]["is_observed"] and tr.nodes["b"]["value"].item() == 1.
