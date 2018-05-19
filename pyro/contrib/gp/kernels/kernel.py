@@ -306,9 +306,6 @@ class Warping(Transforming):
     We can take advantage of :math:`f` to combine a Gaussian Process kernel with a deep
     learning architecture. For example:
 
-        >>> import torch
-        >>> import pyro.contrib.gp as gp
-
         >>> linear = torch.nn.Linear(10, 3)
         >>> # register its parameters to Pyro's ParamStore and wrap it by lambda
         >>> # to call the primitive pyro.module each time we use the linear function
