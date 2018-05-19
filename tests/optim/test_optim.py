@@ -75,6 +75,41 @@ class OptimTests(TestCase):
         assert fixed_param_unchanged and not free_param_unchanged
 
 
+@pytest.mark.parametrize('scheduler', [optim.LambdaLR({'optimizer': torch.optim.SGD, 'optim_args': {'lr': 0.01},
+                                                       'lr_lambda': lambda epoch: 2. * epoch}),
+                                       optim.StepLR({'optimizer': torch.optim.SGD, 'optim_args': {'lr': 0.01},
+                                                     'gamma': 2, 'step_size': 1}),
+                                       optim.ExponentialLR({'optimizer': torch.optim.SGD, 'optim_args': {'lr': 0.01},
+                                                            'gamma': 2})])
+@pytest.mark.parametrize('num_steps', [1, 2])
+def test_dynamic_lr(scheduler, num_steps):
+    pyro.clear_param_store()
+
+    def model():
+        sample = pyro.sample('latent', Normal(torch.tensor(0.), torch.tensor(0.3)))
+        return pyro.sample('obs', Normal(sample, torch.tensor(0.2)), obs=torch.tensor(0.1))
+
+    def guide():
+        loc = pyro.param('loc', torch.tensor(0.))
+        scale = pyro.param('scale', torch.tensor(0.5))
+        pyro.sample('latent', Normal(loc, scale))
+
+    svi = SVI(model, guide, scheduler, loss=TraceGraph_ELBO())
+    for epoch in range(2):
+        scheduler.set_epoch(epoch)
+        for _ in range(num_steps):
+            svi.step()
+        if epoch == 1:
+            loc = pyro.param('loc')
+            scale = pyro.param('scale')
+            opt = scheduler.optim_objs[loc].optimizer
+            assert opt.state_dict()['param_groups'][0]['lr'] == 0.02
+            assert opt.state_dict()['param_groups'][0]['initial_lr'] == 0.01
+            opt = scheduler.optim_objs[scale].optimizer
+            assert opt.state_dict()['param_groups'][0]['lr'] == 0.02
+            assert opt.state_dict()['param_groups'][0]['initial_lr'] == 0.01
+
+
 @pytest.mark.parametrize('factory', [optim.Adam, optim.ClippedAdam, optim.RMSprop, optim.SGD])
 def test_autowrap(factory):
     instance = factory({})

@@ -29,6 +29,9 @@ class PyroOptim(object):
         # holds the torch optimizer objects
         self.optim_objs = {}
 
+        # holds the current epoch
+        self.epoch = None
+
         # any optimizer state that's waiting to be consumed (because that parameter hasn't been seen before)
         self._state_waiting_to_be_consumed = {}
 
@@ -40,15 +43,11 @@ class PyroOptim(object):
         Do an optimization step for each param in params. If a given param has never been seen before,
         initialize an optimizer for it.
         """
-
         for p in params:
             # if we have not seen this param before, we instantiate and optim object to deal with it
             if p not in self.optim_objs:
-                # get our constructor arguments
-                def_optim_dict = self._get_optim_args(p)
                 # create a single optim object for that param
-                self.optim_objs[p] = self.pt_optim_constructor([p], **def_optim_dict)
-
+                self.optim_objs[p] = self._get_optim(p)
                 # set state from _state_waiting_to_be_consumed if present
                 param_name = pyro.get_param_store().param_name(p)
                 if param_name in self._state_waiting_to_be_consumed:
@@ -96,6 +95,9 @@ class PyroOptim(object):
         with open(filename, "rb") as input_file:
             state = torch.load(input_file)
         self.set_state(state)
+
+    def _get_optim(self, param):
+        return self.pt_optim_constructor([param], **self._get_optim_args(param))
 
     # helper to fetch the optim args if callable (only used internally)
     def _get_optim_args(self, param):

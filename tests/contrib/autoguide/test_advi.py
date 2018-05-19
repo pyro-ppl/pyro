@@ -176,3 +176,21 @@ def test_discrete_parallel(continuous_class):
     elbo = TraceEnum_ELBO(max_iarange_nesting=1)
     loss = elbo.loss_and_grads(model, guide, data)
     assert np.isfinite(loss), loss
+
+
+@pytest.mark.parametrize("auto_class", [
+    AutoDelta,
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoLowRankMultivariateNormal,
+])
+def test_guide_list(auto_class):
+
+    def model():
+        pyro.sample("x", dist.Normal(0., 1.))
+        pyro.sample("y", dist.MultivariateNormal(torch.zeros(5), torch.eye(5, 5)))
+
+    guide = AutoGuideList(model)
+    guide.add(auto_class(poutine.block(model, expose=["x"]), prefix="auto_x"))
+    guide.add(auto_class(poutine.block(model, expose=["y"]), prefix="auto_y"))
+    guide()
