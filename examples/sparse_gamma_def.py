@@ -34,7 +34,7 @@ class SparseGammaDEF(object):
         self.mid_width = 40
         self.bottom_width = 15
         self.image_size = 64 * 64
-        # define hyparameters that control the prior
+        # define hyperpaameters that control the prior
         self.alpha_z = torch.tensor(0.1)
         self.beta_z = torch.tensor(0.1)
         self.alpha_w = torch.tensor(0.1)
