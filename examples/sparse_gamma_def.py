@@ -3,7 +3,7 @@
 #
 # the Olivetti faces dataset is originally from http://www.cl.cam.ac.uk/research/dtg/attarchive/facedatabase.html
 #
-# compare to the implementation here:
+# compare to Christian Naesseth's implementation here:
 # https://github.com/blei-lab/ars-reparameterization/tree/master/sparse%20gamma%20def
 
 
