@@ -86,7 +86,7 @@ class UnsafeBernoulli(dist.Bernoulli):
         return torch.stack([(-self.probs).log1p(), self.probs.log()])[i, j]
 
 
-@pytest.mark.parametrize('sample_shape', [(), (2,), (3,4)])
+@pytest.mark.parametrize('sample_shape', [(), (2,), (3, 4)])
 def test_unsafe_bernoulli(sample_shape):
     logits = torch.randn(10)
     p = dist.Bernoulli(logits=logits)
