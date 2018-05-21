@@ -150,7 +150,7 @@ class TraceEnum_ELBO(ELBO):
 
             if trainable_params and elbo_particle.requires_grad:
                 loss_particle = -elbo_particle
-                (loss_particle / self.num_particles).backward()
+                (loss_particle / self.num_particles).backward(retain_graph=True)
 
         loss = -elbo
         if torch_isnan(loss):
