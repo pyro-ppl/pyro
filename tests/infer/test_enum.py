@@ -77,20 +77,38 @@ def test_iter_discrete_traces_vector(graph_type):
     assert len(traces) == 2 * probs.size(-1)
 
 
+# The usual dist.Bernoulli avoids NANs by clamping log prob. This unsafe version
+# allows us to test additional NAN avoidance in _compute_dice_elbo().
+class UnsafeBernoulli(dist.Bernoulli):
+    def log_prob(self, value):
+        i = value.long()
+        j = torch.arange(len(self.probs), dtype=torch.long)
+        return torch.stack([(-self.probs).log1p(), self.probs.log()])[i, j]
+
+
+@pytest.mark.parametrize('sample_shape', [(), (2,), (3, 4)])
+def test_unsafe_bernoulli(sample_shape):
+    logits = torch.randn(10)
+    p = dist.Bernoulli(logits=logits)
+    q = UnsafeBernoulli(logits=logits)
+    x = p.sample(sample_shape)
+    assert_equal(p.log_prob(x), q.log_prob(x))
+
+
 @pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
-def test_iter_discrete_traces_nan(enumerate1):
+def test_avoid_nan(enumerate1):
     pyro.clear_param_store()
 
     def model():
         p = torch.tensor([0.0, 0.5, 1.0])
         with pyro.iarange("batch", 3):
-            pyro.sample("z", dist.Bernoulli(p))
+            pyro.sample("z", UnsafeBernoulli(p))
 
     @config_enumerate(default=enumerate1)
     def guide():
         p = pyro.param("p", torch.tensor([0.0, 0.5, 1.0], requires_grad=True))
         with pyro.iarange("batch", 3):
-            pyro.sample("z", dist.Bernoulli(p))
+            pyro.sample("z", UnsafeBernoulli(p))
 
     elbo = TraceEnum_ELBO(max_iarange_nesting=1,
                           strict_enumeration_warning=any([enumerate1]))
