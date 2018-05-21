@@ -11,6 +11,7 @@ from torch.distributions import constraints, kl_divergence
 import pyro
 import pyro.distributions as dist
 import pyro.optim
+import pyro.poutine as poutine
 from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
 from pyro.infer import SVI, config_enumerate
 from pyro.infer.enum import iter_discrete_traces
@@ -184,6 +185,40 @@ def test_svi_step_smoke(model, guide, enumerate1):
                           strict_enumeration_warning=any([enumerate1]))
     inference = SVI(model, guide, optimizer, loss=elbo)
     inference.step(data)
+
+
+@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
+def test_svi_step_guide_uses_grad(enumerate1):
+    data = torch.tensor([0., 1., 3.])
+
+    @poutine.broadcast
+    def model():
+        scale = pyro.param("scale")
+        loc = pyro.sample("loc", dist.Normal(0., 10.))
+        with pyro.iarange("data", len(data)):
+            pyro.sample("obs", dist.Normal(loc, scale), obs=data)
+        pyro.sample("b", dist.Bernoulli(0.5))
+
+    @config_enumerate(default=enumerate1)
+    def guide():
+        p = pyro.param("p", torch.tensor(0.5), constraint=constraints.unit_interval)
+        scale = pyro.param("scale", torch.tensor(1.0), constraint=constraints.positive)
+        var = pyro.param("var", torch.tensor(1.0), constraint=constraints.positive)
+
+        x = torch.tensor(0., requires_grad=True)
+        prior = dist.Normal(0., 10.).log_prob(x)
+        likelihood = dist.Normal(x, scale).log_prob(data).sum()
+        loss = -(prior + likelihood)
+        g = grad(loss, [x], create_graph=True)[0]
+        H = grad(g, [x], create_graph=True)[0]
+        loc = x.detach() - g / H  # newton step
+        pyro.sample("loc", dist.Normal(loc, var))
+        pyro.sample("b", dist.Bernoulli(p))
+
+    elbo = TraceEnum_ELBO(max_iarange_nesting=1,
+                          strict_enumeration_warning=any([enumerate1]))
+    inference = SVI(model, guide, pyro.optim.Adam({}), elbo)
+    inference.step()
 
 
 @pytest.mark.parametrize("quantity", ["loss", "grad"])
