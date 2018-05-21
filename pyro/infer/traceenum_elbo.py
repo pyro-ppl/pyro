@@ -3,9 +3,11 @@ from __future__ import absolute_import, division, print_function
 import warnings
 import weakref
 
+import torch
+
 import pyro
-import pyro.poutine as poutine
 import pyro.ops.jit
+import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import iter_discrete_traces
@@ -41,6 +43,10 @@ def _compute_dice_elbo(model_trace, guide_trace):
     elbo = 0.0
     for ordinal, cost in costs.items():
         dice_prob = dice.in_context(cost.shape, ordinal)
+        mask = dice_prob > 0
+        if torch.is_tensor(mask) and not mask.all():
+            dice_prob = dice_prob[mask]
+            cost = cost[mask]
         # TODO use score_parts.entropy_term to "stick the landing"
         elbo = elbo + (dice_prob * cost).sum()
     return elbo
