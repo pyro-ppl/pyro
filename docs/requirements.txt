@@ -1,5 +1,5 @@
-sphinx
-sphinx_rtd_theme
+sphinx==1.6.5
+sphinx_rtd_theme<=0.3
 numpy>=1.7
 contextlib2
 cloudpickle>=0.3.1
