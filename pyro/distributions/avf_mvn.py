@@ -10,7 +10,8 @@ from pyro.distributions.util import sum_leftmost
 
 
 class AVFMultivariateNormal(MultivariateNormal):
-    """Multivariate normal (Gaussian) distribution with transport equation inspired control variates.
+    """Multivariate normal (Gaussian) distribution with transport equation inspired control
+    variates (adaptive velocity fields).
 
     A distribution over vectors in which all the elements have a joint Gaussian density.
 
