@@ -7,6 +7,7 @@
 [![Build Status](https://travis-ci.org/uber/pyro.svg?branch=dev)](https://travis-ci.org/uber/pyro)
 [![Latest Version](https://badge.fury.io/py/pyro-ppl.svg)](https://pypi.python.org/pypi/pyro-ppl)
 [![Documentation Status](https://readthedocs.org/projects/pyro-ppl/badge/?version=dev)](http://pyro-ppl.readthedocs.io/en/stable/?badge=dev)
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fuber%2Fpyro.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Fuber%2Fpyro?ref=badge_shield)
 
 
 [Getting Started](http://pyro.ai/examples) |
@@ -91,3 +92,7 @@ pip install .
 ## Running Pyro from a Docker Container
 
 Refer to the instructions [here](docker/README.md).
+
+
+## License
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fuber%2Fpyro.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2Fuber%2Fpyro?ref=badge_large)
