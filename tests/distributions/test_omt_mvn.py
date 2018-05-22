@@ -79,7 +79,7 @@ def test_mean_single_gradient(mvn_dist, k, L21, omega1, L11, L22=0.8, L33=0.9, o
         assert(loc.grad.size() == loc.size())
         assert(torch.triu(off_diag.grad, 1).sum() == 0.0)
 
-        computed_grad = off_diag.grad.clone().cpu().data.numpy()[1, 0]
+        computed_grad = off_diag.grad.cpu()[1, 0].item()
         computed_grads.append(computed_grad)
         off_diag.grad.zero_()
         loc.grad.zero_()
