@@ -41,7 +41,7 @@ def test_mean_gradient(mvn_dist, k, sample_shape, L21, omega1, L11, L22=0.8, L33
     z = dist.rsample(sample_shape)
     torch.cos((omega*z).sum(-1)).mean().backward()
 
-    computed_grad = off_diag.grad.clone().data.numpy()[1, 0]
+    computed_grad = off_diag.grad.cpu().data.numpy()[1, 0]
     analytic = analytic_grad(L11=L11, L22=L22, L21=L21, omega1=omega1, omega2=omega2)
     assert(off_diag.grad.size() == off_diag.size())
     assert(loc.grad.size() == loc.size())
@@ -79,7 +79,7 @@ def test_mean_single_gradient(mvn_dist, k, L21, omega1, L11, L22=0.8, L33=0.9, o
         assert(loc.grad.size() == loc.size())
         assert(torch.triu(off_diag.grad, 1).sum() == 0.0)
 
-        computed_grad = off_diag.grad.clone().data.numpy()[1, 0]
+        computed_grad = off_diag.grad.clone().cpu().data.numpy()[1, 0]
         computed_grads.append(computed_grad)
         off_diag.grad.zero_()
         loc.grad.zero_()
