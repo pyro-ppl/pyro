@@ -46,7 +46,7 @@ class AVFMultivariateNormal(MultivariateNormal):
         if scale_tril.dim() != 2:
             raise ValueError("AVFMultivariateNormal scale_tril must be 2-dimensional")
         if control_var.dim() != 3 or control_var.size(0) != 2 or control_var.size(2) != loc.size(0):
-            raise ValueError("control_var should be of size 2 x L x D, where D is the dimension of the location parameter loc")
+            raise ValueError("control_var should be of size 2 x L x D, where D is the dimension of the location parameter loc")  # noqa: E501
         self.control_var = control_var
         super(AVFMultivariateNormal, self).__init__(loc, scale_tril=scale_tril)
 
