@@ -11,7 +11,7 @@ Pyro Documentation
 .. toctree::
    :glob:
    :maxdepth: 2
-   :caption: Contents:
+   :caption: Pyro Core:
 
    installation
    getting_started
@@ -21,8 +21,17 @@ Pyro Documentation
    parameters
    nn
    optimization
-   advanced
-   contrib
+   poutine
+   ops
+
+.. toctree::
+   :glob:
+   :maxdepth: 2
+   :caption: Contributed Code:
+
+   contrib.autoguide
+   contrib.gp
+   contrib.named
 
 
 Indices and tables

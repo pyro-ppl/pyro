@@ -4,9 +4,9 @@ import math
 
 import numpy as np
 import torch
-from torch.autograd import Variable
+from torch.distributions.utils import logits_to_probs
 
-from pyro.distributions.util import get_probs_and_logits
+from pyro.distributions.util import broadcast_shape
 
 SINGLE_TEST_DATUM_IDX = [0]
 BATCH_TEST_DATA_IDX = [-1]
@@ -25,7 +25,7 @@ class Fixture(object):
                  expected_support=None,
                  test_data_indices=None,
                  batch_data_indices=None):
-        self.pyro_dist, self.pyro_dist_obj = pyro_dist
+        self.pyro_dist = pyro_dist
         self.scipy_dist = scipy_dist
         self.dist_params, self.test_data = self._extract_fixture_data(examples)
         self.scipy_arg_fn = scipy_arg_fn
@@ -58,7 +58,7 @@ class Fixture(object):
         return len(self.test_data)
 
     def get_samples(self, num_samples, **dist_params):
-        return self.pyro_dist(batch_size=num_samples, **dist_params)
+        return self.pyro_dist(**dist_params).sample(sample_shape=torch.Size((num_samples,)))
 
     def get_test_data(self, idx, wrap_tensor=True):
         if not wrap_tensor:
@@ -72,10 +72,10 @@ class Fixture(object):
 
     def _convert_logits_to_ps(self, dist_params):
         if 'logits' in dist_params:
-            logits = Variable(torch.Tensor(dist_params.pop('logits')))
+            logits = torch.tensor(dist_params.pop('logits'))
             is_multidimensional = self.get_test_distribution_name() != 'Bernoulli'
-            ps, _ = get_probs_and_logits(logits=logits, is_multidimensional=is_multidimensional)
-            dist_params['ps'] = list(ps.data.cpu().numpy())
+            probs = logits_to_probs(logits, is_binary=not is_multidimensional)
+            dist_params['probs'] = list(probs.detach().cpu().numpy())
         return dist_params
 
     def get_scipy_logpdf(self, idx):
@@ -85,10 +85,10 @@ class Fixture(object):
         dist_params = self._convert_logits_to_ps(dist_params)
         args, kwargs = self.scipy_arg_fn(**dist_params)
         if self.is_discrete:
-            log_pdf = self.scipy_dist.logpmf(self.get_test_data(idx, wrap_tensor=False), *args, **kwargs)
+            log_prob = self.scipy_dist.logpmf(self.get_test_data(idx, wrap_tensor=False), *args, **kwargs)
         else:
-            log_pdf = self.scipy_dist.logpdf(self.get_test_data(idx, wrap_tensor=False), *args, **kwargs)
-        return np.sum(log_pdf)
+            log_prob = self.scipy_dist.logpdf(self.get_test_data(idx, wrap_tensor=False), *args, **kwargs)
+        return np.sum(log_prob)
 
     def get_scipy_batch_logpdf(self, idx):
         if not self.scipy_arg_fn:
@@ -98,8 +98,8 @@ class Fixture(object):
         dist_params = self._convert_logits_to_ps(dist_params)
         test_data = self.get_test_data(idx, wrap_tensor=False)
         test_data_wrapped = self.get_test_data(idx)
-        shape = self.pyro_dist.shape(test_data_wrapped, **dist_params_wrapped)
-        batch_log_pdf = []
+        shape = broadcast_shape(self.pyro_dist(**dist_params_wrapped).shape(), test_data_wrapped.size())
+        log_prob = []
         for i in range(len(test_data)):
             batch_params = {}
             for k in dist_params:
@@ -107,21 +107,17 @@ class Fixture(object):
                 batch_params[k] = param[i]
             args, kwargs = self.scipy_arg_fn(**batch_params)
             if self.is_discrete:
-                batch_log_pdf.append(self.scipy_dist.logpmf(test_data[i],
-                                                            *args,
-                                                            **kwargs))
+                log_prob.append(self.scipy_dist.logpmf(test_data[i], *args, **kwargs))
             else:
-                batch_log_pdf.append(self.scipy_dist.logpdf(test_data[i],
-                                                            *args,
-                                                            **kwargs))
-        return batch_log_pdf
+                log_prob.append(self.scipy_dist.logpdf(test_data[i], *args, **kwargs))
+        return log_prob
 
     def get_num_samples(self, idx):
         """
         Number of samples needed to estimate the population variance within the tolerance limit
         Sample variance is normally distributed http://stats.stackexchange.com/a/105338/71884
         (see warning below).
-        Var(s^2) /approx 1/n * (\mu_4 - \sigma^4)
+        Var(s^2) /approx 1/n * (\loc_4 - \scale^4)
         Adjust n as per the tolerance needed to estimate the sample variance
         warning: does not work for some distributions like bernoulli - https://stats.stackexchange.com/a/104911
         use the min_samples for explicitly controlling the number of samples to be drawn
@@ -143,18 +139,17 @@ class Fixture(object):
         return max(min_samples, min_computed_samples)
 
     def get_test_distribution_name(self):
-        pyro_dist_class = getattr(self.pyro_dist, 'dist_class', self.pyro_dist.__class__)
-        return pyro_dist_class.__name__
+        return self.pyro_dist.__name__
 
 
 def tensor_wrap(*args, **kwargs):
     tensor_list, tensor_map = [], {}
     for arg in args:
-        wrapped_arg = Variable(torch.Tensor(arg)) if isinstance(arg, list) else arg
+        wrapped_arg = torch.tensor(arg) if isinstance(arg, list) else arg
         tensor_list.append(wrapped_arg)
     for k in kwargs:
         kwarg = kwargs[k]
-        wrapped_kwarg = Variable(torch.Tensor(kwarg)) if isinstance(kwarg, list) else kwarg
+        wrapped_kwarg = torch.tensor(kwarg) if isinstance(kwarg, list) else kwarg
         tensor_map[k] = wrapped_kwarg
     if args and not kwargs:
         return tensor_list

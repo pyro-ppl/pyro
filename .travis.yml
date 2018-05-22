@@ -7,13 +7,12 @@ env:
         - PYTHONPATH=$PWD:$PYTHONPATH
 
 install:
-    # install pytorch and its dependencies
-    - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
-          pip install http://download.pytorch.org/whl/cpu/torch-0.3.0.post4-cp27-cp27mu-linux_x86_64.whl;
+    - if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then
+          pip install http://download.pytorch.org/whl/cpu/torch-0.4.0-cp27-cp27mu-linux_x86_64.whl;
       else
-          pip install http://download.pytorch.org/whl/cpu/torch-0.3.0.post4-cp35-cp35m-linux_x86_64.whl;
+          pip install http://download.pytorch.org/whl/cpu/torch-0.4.0-cp35-cp35m-linux_x86_64.whl;
       fi
-    - pip install -e .[test]
+    - pip install .[test]
     - pip freeze
 
 branches:
@@ -32,18 +31,41 @@ jobs:
               - make lint
               #- make scrub;
               #  git diff-index --quiet HEAD
-        - stage: unit test
+        - stage: auxiliary modules
           python: 2.7
           env: STAGE=docs
-          script: 
+          script:
               - pip install -r docs/requirements.txt
               - make docs
-        - python: 2.7
+              - make doctest
+        - stage: perf
+          python: 2.7
+          env: STAGE=perf
+          script:
+              - pip install -e .[profile]
+              - pytest -vs --benchmark-disable tests/perf/test_benchmark.py
+        - python: 3.5
+          if: type = cron
+          env: STAGE=perf
+          script:
+              - pip install -e .[profile]
+              - make perf-test
+        - stage: profiler
+          python: 2.7
+          env: STAGE=profiler
+          script:
+              - pip install -e .[profile]
+              - python -m profiler.distributions
+        - stage: unit test
+          python: 2.7
           env: STAGE=unit
           script: pytest -vs --cov=pyro --stage unit --durations 20
         - python: 2.7
           env: STAGE=examples
-          script: pytest -vs --cov=pyro --stage test_examples
+          script:
+              - pytest -vs --cov=pyro --stage test_examples
+              - CI=1 grep -l smoke_test tutorial/source/*.ipynb | xargs grep -L 'smoke_test = False' \
+                  | xargs pytest -vx --nbval-lax --current-env
         - python: 3.5
           env: STAGE=unit
           script: pytest -vs --cov=pyro --stage unit --durations 20

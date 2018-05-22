@@ -1,286 +1,48 @@
 from __future__ import absolute_import, division, print_function
 
 import functools
+import numbers
+import random
 import warnings
+from collections import defaultdict
 
 import graphviz
-import numpy as np
-
 import torch
-from pyro.poutine.poutine import _PYRO_STACK
+from six.moves import zip_longest
+
 from pyro.poutine.util import site_is_subsample
-from pyro.shim import is_volatile
-from torch.autograd import Variable
-from torch.nn import Parameter
-
-
-def detach_iterable(iterable):
-    if isinstance(iterable, Variable):
-        return iterable.detach()
-    else:
-        return [var.detach() for var in iterable]
-
-
-def _dict_to_tuple(d):
-    """
-    Recursively converts a dictionary to a list of key-value tuples
-    Only intended for use as a helper function inside memoize!!
-    May break when keys cant be sorted, but that is not an expected use-case
-    """
-    if isinstance(d, dict):
-        return tuple([(k, _dict_to_tuple(d[k])) for k in sorted(d.keys())])
-    else:
-        return d
-
-
-def get_tensor_data(t):
-    if isinstance(t, Variable):
-        return t.data
-    return t
-
-
-def memoize(fn):
-    """
-    https://stackoverflow.com/questions/1988804/what-is-memoization-and-how-can-i-use-it-in-python
-    unbounded memoize
-    alternate in py3: https://docs.python.org/3/library/functools.html
-    lru_cache
-    """
-    mem = {}
-
-    def _fn(*args, **kwargs):
-        kwargs_tuple = _dict_to_tuple(kwargs)
-        if (args, kwargs_tuple) not in mem:
-            mem[(args, kwargs_tuple)] = fn(*args, **kwargs)
-        return mem[(args, kwargs_tuple)]
-    return _fn
 
 
 def set_rng_seed(rng_seed):
     """
-    Sets seeds of torch, numpy, and torch.cuda (if available).
+    Sets seeds of torch and torch.cuda (if available).
     :param int rng_seed: The seed value.
     """
     torch.manual_seed(rng_seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(rng_seed)
-    np.random.seed(rng_seed)
+    random.seed(rng_seed)
+    try:
+        import numpy as np
+        np.random.seed(rng_seed)
+    except ImportError:
+        pass
 
 
-def ones(*args, **kwargs):
+def torch_isnan(x):
     """
-    :param torch.Tensor type_as: optional argument for tensor type
-
-    A convenience function for Parameter(torch.ones(...))
+    A convenient function to check if a Tensor contains all nan; also works with numbers
     """
-    retype = kwargs.pop('type_as', None)
-    p_tensor = torch.ones(*args, **kwargs)
-    return Parameter(p_tensor if retype is None else p_tensor.type_as(retype))
+    if isinstance(x, numbers.Number):
+        return x != x
+    return torch.isnan(x).all()
 
 
-def zeros(*args, **kwargs):
+def torch_isinf(x):
     """
-    :param torch.Tensor type_as: optional argument for tensor type
-
-    A convenience function for Parameter(torch.zeros(...))
+    A convenient function to check if a Tensor contains all inf; also works with numbers
     """
-    retype = kwargs.pop('type_as', None)
-    p_tensor = torch.zeros(*args, **kwargs)
-    return Parameter(p_tensor if retype is None else p_tensor.type_as(retype))
-
-
-def ng_ones(*args, **kwargs):
-    """
-    :param torch.Tensor type_as: optional argument for tensor type
-
-    A convenience function for Variable(torch.ones(...), requires_grad=False)
-    """
-    retype = kwargs.pop('type_as', None)
-    p_tensor = torch.ones(*args, **kwargs)
-    return Variable(p_tensor if retype is None else p_tensor.type_as(retype), requires_grad=False)
-
-
-def ng_zeros(*args, **kwargs):
-    """
-    :param torch.Tensor type_as: optional argument for tensor type
-
-    A convenience function for Variable(torch.ones(...), requires_grad=False)
-    """
-    retype = kwargs.pop('type_as', None)
-    p_tensor = torch.zeros(*args, **kwargs)
-    return Variable(p_tensor if retype is None else p_tensor.type_as(retype), requires_grad=False)
-
-
-def log_sum_exp(vecs):
-    n = len(vecs.size())
-    if n == 1:
-        vecs = vecs.view(1, -1)
-    _, idx = torch.max(vecs, 1)
-    max_score = torch.index_select(vecs, 1, idx.view(-1))
-    ret = max_score + torch.log(torch.sum(torch.exp(vecs - max_score.expand_as(vecs))))
-    if n == 1:
-        return ret.view(-1)
-    return ret
-
-
-def zero_grads(tensors):
-    """
-    Sets gradients of list of Variables to zero in place
-    """
-    for p in tensors:
-        if p.grad is not None:
-            if is_volatile(p.grad):
-                p.grad.data.zero_()
-            else:
-                data = p.grad.data
-                p.grad = Variable(data.new().resize_as_(data).zero_())
-
-
-def apply_stack(initial_msg):
-    """
-    :param dict initial_msg: the starting version of the trace site
-    :returns: an updated message that is the final version of the trace site
-
-    Execute the poutine stack at a single site according to the following scheme:
-    1. Walk down the stack from top to bottom, collecting into the message
-        all information necessary to execute the stack at that site
-    2. For each poutine in the stack from bottom to top:
-           Execute the poutine with the message;
-           If the message field "stop" is True, stop;
-           Otherwise, continue
-    3. Return the updated message
-    """
-    stack = _PYRO_STACK
-    # TODO check at runtime if stack is valid
-
-    # msg is used to pass information up and down the stack
-    msg = initial_msg
-
-    # first, gather all information necessary to apply the stack to this site
-    for frame in reversed(stack):
-        msg = frame._prepare_site(msg)
-
-    # go until time to stop?
-    for frame in stack:
-        assert msg["type"] in ("sample", "param"), \
-            "{} is an invalid site type, how did that get there?".format(msg["type"])
-
-        msg["value"] = getattr(frame, "_pyro_{}".format(msg["type"]))(msg)
-
-        if msg["stop"]:
-            break
-
-    return msg
-
-
-class NonlocalExit(Exception):
-    """
-    Exception for exiting nonlocally from poutine execution.
-
-    Used by poutine.EscapePoutine to return site information.
-    """
-    def __init__(self, site, *args, **kwargs):
-        """
-        :param site: message at a pyro site
-
-        constructor.  Just stores the input site.
-        """
-        super(NonlocalExit, self).__init__(*args, **kwargs)
-        self.site = site
-
-
-def enum_extend(trace, msg, num_samples=None):
-    """
-    :param trace: a partial trace
-    :param msg: the message at a pyro primitive site
-    :param num_samples: maximum number of extended traces to return.
-    :returns: a list of traces, copies of input trace with one extra site
-
-    Utility function to copy and extend a trace with sites based on the input site
-    whose values are enumerated from the support of the input site's distribution.
-
-    Used for exact inference and integrating out discrete variables.
-    """
-    if num_samples is None:
-        num_samples = -1
-
-    # Batched .enumerate_support() assumes batched values are independent.
-    batch_shape = msg["fn"].batch_shape(msg["value"], *msg["args"], **msg["kwargs"])
-    is_batched = any(size > 1 for size in batch_shape)
-    inside_iarange = any(frame.vectorized for frame in msg["cond_indep_stack"])
-    if is_batched and not inside_iarange:
-        raise ValueError(
-                "Tried to enumerate a batched pyro.sample site '{}' outside of a pyro.iarange. "
-                "To fix, either enclose in a pyro.iarange, or avoid batching.".format(msg["name"]))
-
-    extended_traces = []
-    for i, s in enumerate(msg["fn"].enumerate_support(*msg["args"], **msg["kwargs"])):
-        if i > num_samples and num_samples >= 0:
-            break
-        msg_copy = msg.copy()
-        msg_copy.update(value=s)
-        tr_cp = trace.copy()
-        tr_cp.add_node(msg["name"], **msg_copy)
-        extended_traces.append(tr_cp)
-    return extended_traces
-
-
-def mc_extend(trace, msg, num_samples=None):
-    """
-    :param trace: a partial trace
-    :param msg: the message at a pyro primitive site
-    :param num_samples: maximum number of extended traces to return.
-    :returns: a list of traces, copies of input trace with one extra site
-
-    Utility function to copy and extend a trace with sites based on the input site
-    whose values are sampled from the input site's function.
-
-    Used for Monte Carlo marginalization of individual sample sites.
-    """
-    if num_samples is None:
-        num_samples = 1
-
-    extended_traces = []
-    for i in range(num_samples):
-        msg_copy = msg.copy()
-        msg_copy["value"] = msg_copy["fn"](*msg_copy["args"], **msg_copy["kwargs"])
-        tr_cp = trace.copy()
-        tr_cp.add_node(msg_copy["name"], **msg_copy)
-        extended_traces.append(tr_cp)
-    return extended_traces
-
-
-def discrete_escape(trace, msg):
-    """
-    :param trace: a partial trace
-    :param msg: the message at a pyro primitive site
-    :returns: boolean decision value
-
-    Utility function that checks if a sample site is discrete and not already in a trace.
-
-    Used by EscapePoutine to decide whether to do a nonlocal exit at a site.
-    Subroutine for integrating out discrete variables for variance reduction.
-    """
-    return (msg["type"] == "sample") and \
-        (not msg["is_observed"]) and \
-        (msg["name"] not in trace) and \
-        (getattr(msg["fn"], "enumerable", False))
-
-
-def all_escape(trace, msg):
-    """
-    :param trace: a partial trace
-    :param msg: the message at a pyro primitive site
-    :returns: boolean decision value
-
-    Utility function that checks if a site is not already in a trace.
-
-    Used by EscapePoutine to decide whether to do a nonlocal exit at a site.
-    Subroutine for approximately integrating out variables for variance reduction.
-    """
-    return (msg["type"] == "sample") and \
-        (not msg["is_observed"]) and \
-        (msg["name"] not in trace)
+    if isinstance(x, numbers.Number):
+        return x == float('inf')
+    return (x == float('inf')).all()
 
 
 def save_visualization(trace, graph_output):
@@ -328,16 +90,47 @@ def save_visualization(trace, graph_output):
     g.render(graph_output, view=False, cleanup=True)
 
 
-def check_model_guide_match(model_trace, guide_trace):
+def check_traces_match(trace1, trace2):
+    """
+    :param pyro.poutine.Trace trace1: Trace object of the model
+    :param pyro.poutine.Trace trace2: Trace object of the guide
+    :raises: RuntimeWarning, ValueError
+
+    Checks that (1) there is a bijection between the samples in the two traces
+    and (2) at each sample site two traces agree on sample shape.
+    """
+    # Check ordinary sample sites.
+    vars1 = set(name for name, site in trace1.nodes.items() if site["type"] == "sample")
+    vars2 = set(name for name, site in trace2.nodes.items() if site["type"] == "sample")
+    if vars1 != vars2:
+        warnings.warn("Model vars changed: {} vs {}".format(vars1, vars2))
+
+    # Check shapes agree.
+    for name in vars1:
+        site1 = trace1.nodes[name]
+        site2 = trace2.nodes[name]
+        if hasattr(site1["fn"], "shape") and hasattr(site2["fn"], "shape"):
+            shape1 = site1["fn"].shape(*site1["args"], **site1["kwargs"])
+            shape2 = site2["fn"].shape(*site2["args"], **site2["kwargs"])
+            if shape1 != shape2:
+                raise ValueError("Site dims disagree at site '{}': {} vs {}".format(name, shape1, shape2))
+
+
+def check_model_guide_match(model_trace, guide_trace, max_iarange_nesting=float('inf')):
     """
     :param pyro.poutine.Trace model_trace: Trace object of the model
     :param pyro.poutine.Trace guide_trace: Trace object of the guide
     :raises: RuntimeWarning, ValueError
 
-    Checks that (1) there is a bijection between the samples in the guide
-    and the samples in the model, (2) each `iarange` statement in the guide
-    also appears in the model, (3) at each sample site that appears in both
-    the model and guide, the model and guide agree on sample shape.
+    Checks the following assumptions:
+    1. Each sample site in the model also appears in the guide and is not
+        marked auxiliary.
+    2. Each sample site in the guide either appears in the model or is marked,
+        auxiliary via ``infer={'is_auxiliary': True}``.
+    3. Each :class:``~pyro.iarange`` statement in the guide also appears in the
+        model.
+    4. At each sample site that appears in both the model and guide, the model
+        and guide agree on sample shape.
     """
     # Check ordinary sample sites.
     model_vars = set(name for name, site in model_trace.nodes.items()
@@ -346,8 +139,15 @@ def check_model_guide_match(model_trace, guide_trace):
     guide_vars = set(name for name, site in guide_trace.nodes.items()
                      if site["type"] == "sample"
                      if type(site["fn"]).__name__ != "_Subsample")
-    if not (guide_vars <= model_vars):
-        warnings.warn("Found vars in guide but not model: {}".format(guide_vars - model_vars))
+    aux_vars = set(name for name, site in guide_trace.nodes.items()
+                   if site["type"] == "sample"
+                   if site["infer"].get("is_auxiliary"))
+    if aux_vars & model_vars:
+        warnings.warn("Found auxiliary vars in the model: {}".format(aux_vars & model_vars))
+    if not (guide_vars <= model_vars | aux_vars):
+        warnings.warn("Found non-auxiliary vars in guide but not model, "
+                      "consider marking these infer={{'is_auxiliary': True}}:\n{}".format(
+                          guide_vars - aux_vars - model_vars))
     if not (model_vars <= guide_vars):
         warnings.warn("Found vars in model but not guide: {}".format(model_vars - guide_vars))
 
@@ -355,12 +155,29 @@ def check_model_guide_match(model_trace, guide_trace):
     for name in model_vars & guide_vars:
         model_site = model_trace.nodes[name]
         guide_site = guide_trace.nodes[name]
+
+        if hasattr(model_site["fn"], "event_dim") and hasattr(guide_site["fn"], "event_dim"):
+            if model_site["fn"].event_dim != guide_site["fn"].event_dim:
+                raise ValueError("Model and guide event_dims disagree at site '{}': {} vs {}".format(
+                    name, model_site["fn"].event_dim, guide_site["fn"].event_dim))
+
         if hasattr(model_site["fn"], "shape") and hasattr(guide_site["fn"], "shape"):
-            model_shape = model_site["fn"].shape(None, *model_site["args"], **model_site["kwargs"])
-            guide_shape = guide_site["fn"].shape(None, *guide_site["args"], **guide_site["kwargs"])
-            if model_shape != guide_shape:
-                raise ValueError("Model and guide dims disagree at site '{}': {} vs {}".format(
-                    name, model_shape, guide_shape))
+            model_shape = model_site["fn"].shape(*model_site["args"], **model_site["kwargs"])
+            guide_shape = guide_site["fn"].shape(*guide_site["args"], **guide_site["kwargs"])
+            if model_shape == guide_shape:
+                continue
+
+            # Allow broadcasting outside of max_iarange_nesting.
+            if len(model_shape) > max_iarange_nesting:
+                model_shape = model_shape[len(model_shape) - max_iarange_nesting:]
+            if len(guide_shape) > max_iarange_nesting:
+                guide_shape = guide_shape[len(guide_shape) - max_iarange_nesting:]
+            if model_shape == guide_shape:
+                continue
+            for model_size, guide_size in zip_longest(reversed(model_shape), reversed(guide_shape), fillvalue=1):
+                if model_size != guide_size:
+                    raise ValueError("Model and guide shapes disagree at site '{}': {} vs {}".format(
+                        name, model_shape, guide_shape))
 
     # Check subsample sites introduced by iarange.
     model_vars = set(name for name, site in model_trace.nodes.items()
@@ -371,6 +188,98 @@ def check_model_guide_match(model_trace, guide_trace):
                      if type(site["fn"]).__name__ == "_Subsample")
     if not (guide_vars <= model_vars):
         warnings.warn("Found iarange statements in guide but not model: {}".format(guide_vars - model_vars))
+
+
+def check_site_shape(site, max_iarange_nesting):
+    actual_shape = list(site["log_prob"].shape)
+
+    # Compute expected shape.
+    expected_shape = []
+    for f in site["cond_indep_stack"]:
+        if f.dim is not None:
+            # Use the specified iarange dimension, which counts from the right.
+            assert f.dim < 0
+            if len(expected_shape) < -f.dim:
+                expected_shape = [None] * (-f.dim - len(expected_shape)) + expected_shape
+            if expected_shape[f.dim] is not None:
+                raise ValueError('\n  '.join([
+                    'at site "{}" within iarange("", dim={}), dim collision'.format(site["name"], f.name, f.dim),
+                    'Try setting dim arg in other iaranges.']))
+            expected_shape[f.dim] = f.size
+    expected_shape = [-1 if e is None else e for e in expected_shape]
+
+    # Check for iarange stack overflow.
+    if len(expected_shape) > max_iarange_nesting:
+        raise ValueError('\n  '.join([
+            'at site "{}", iarange stack overflow'.format(site["name"]),
+            'Try increasing max_iarange_nesting to at least {}'.format(len(expected_shape))]))
+
+    # Ignore dimensions left of max_iarange_nesting.
+    if max_iarange_nesting < len(actual_shape):
+        actual_shape = actual_shape[len(actual_shape) - max_iarange_nesting:]
+
+    # Check for incorrect iarange placement on the right of max_iarange_nesting.
+    for actual_size, expected_size in zip_longest(reversed(actual_shape), reversed(expected_shape), fillvalue=1):
+        if expected_size != -1 and expected_size != actual_size:
+            raise ValueError('\n  '.join([
+                'at site "{}", invalid log_prob shape'.format(site["name"]),
+                'Expected {}, actual {}'.format(expected_shape, actual_shape),
+                'Try one of the following fixes:',
+                '- enclose the batched tensor in a with iarange(...): context',
+                '- .independent(...) the distribution being sampled',
+                '- .permute() data dimensions']))
+
+    # TODO Check parallel dimensions on the left of max_iarange_nesting.
+
+
+def _are_independent(counters1, counters2):
+    for name, counter1 in counters1.items():
+        if name in counters2:
+            if counters2[name] != counter1:
+                return True
+    return False
+
+
+def check_traceenum_requirements(model_trace, guide_trace):
+    """
+    Warn if user could easily rewrite the model or guide in a way that would
+    clearly avoid invalid dependencies on enumerated variables.
+
+    :class:`~pyro.infer.traceenum_elbo.TraceEnum_ELBO` enumerates over
+    synchronized products rather than full cartesian products. Therefore models
+    must ensure that no variable outside of an iarange depends on an enumerated
+    variable inside that iarange. Since full dependency checking is impossible,
+    this function aims to warn only in cases where models can be easily
+    rewitten to be obviously correct.
+    """
+    enumerated_sites = set(name for name, site in guide_trace.nodes.items()
+                           if site["type"] == "sample" and site["infer"].get("enumerate"))
+    for role, trace in [('model', model_trace), ('guide', guide_trace)]:
+        irange_counters = {}
+        enumerated_contexts = defaultdict(set)
+        for name, site in trace.nodes.items():
+            if site["type"] != "sample":
+                continue
+            irange_counter = {f.name: f.counter for f in site["cond_indep_stack"] if not f.vectorized}
+            context = frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
+
+            # Check that sites outside each independence context precede enumerated sites inside that context.
+            for enumerated_context, names in enumerated_contexts.items():
+                if not (context < enumerated_context):
+                    continue
+                names = sorted(n for n in names if not _are_independent(irange_counter, irange_counters[n]))
+                if not names:
+                    continue
+                diff = sorted(f.name for f in enumerated_context - context)
+                warnings.warn('\n  '.join([
+                    'at {} site "{}", possibly invalid dependency.'.format(role, name),
+                    'Expected site "{}" to precede sites "{}"'.format(name, '", "'.join(sorted(names))),
+                    'to avoid breaking independence of iaranges "{}"'.format('", "'.join(diff)),
+                ]), RuntimeWarning)
+
+            irange_counters[name] = irange_counter
+            if name in enumerated_sites:
+                enumerated_contexts[context].add(name)
 
 
 def deep_getattr(obj, name):

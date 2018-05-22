@@ -1,82 +1,131 @@
 from __future__ import absolute_import, division, print_function
 
-import numbers
+from numbers import Number
 
 import torch
-from torch.autograd import Variable
+from torch.distributions import constraints
+from torch.distributions.utils import broadcast_all, lazy_property, logits_to_probs, probs_to_logits
 
-from pyro.distributions.distribution import Distribution
-from pyro.distributions.util import copy_docs_from, log_gamma, torch_multinomial
+from pyro.distributions.torch_distribution import TorchDistributionMixin
 
 
-@copy_docs_from(Distribution)
-class Binomial(Distribution):
+class Binomial(torch.distributions.Distribution, TorchDistributionMixin):
+    r"""
+    Creates a Binomial distribution parameterized by `total_count` and
+    either `probs` or `logits` (but not both). `total_count` must be
+    broadcastable with `probs`/`logits`.
+
+    This is adapted from :class:`torch.distributions.binomial.Binomial`,
+    with the important difference that `total_count` is not limited to
+    being a single `int`, but can be a `torch.Tensor`.
+
+    Example::
+
+        >>> m = Binomial(100, torch.Tensor([0 , .2, .8, 1]))
+        >>> m.sample()  # doctest: +SKIP
+         0
+         22
+         71
+         100
+        [torch.FloatTensor of size 4]]
+
+        >>> m = Binomial(torch.Tensor([[5.], [10.]]), torch.Tensor([0.5, 0.8]))
+        >>> m.sample()  # doctest: +SKIP
+         4  5
+         7  6
+        [torch.FloatTensor of size (2,2)]
+
+    :param (Tensor) total_count: number of Bernoulli trials
+    :param (Tensor) probs: Event probabilities
+    :param (Tensor) logits: Event log-odds
     """
-    Binomial distribution.
+    arg_constraints = {'total_count': constraints.nonnegative_integer,
+                       'probs': constraints.unit_interval}
+    has_enumerate_support = True
 
-    Distribution over counts for `n` independent `Bernoulli(ps)` trials.
-
-    :param torch.autograd.Variable ps: Probabilities. Should lie in the
-        interval `[0,1]`.
-    :param int n: Number of trials. Should be positive.
-    """
-
-    def __init__(self, ps, n, batch_size=None, *args, **kwargs):
-        if ps.dim() not in (1, 2):
-            raise ValueError("Parameter `ps` must be either 1 or 2 dimensional.")
-        if isinstance(n, numbers.Number):
-            n = torch.LongTensor([n]).type_as(ps.data)
-            if ps.is_cuda:
-                n = n.cuda(ps.get_device())
-            n = Variable(n)
-        self.ps = ps
-        self.n = n
-        if ps.dim() == 1 and batch_size is not None:
-            self.ps = ps.expand(batch_size, ps.size(0))
-            self.n = n.expand(batch_size, n.size(0))
-        super(Binomial, self).__init__(*args, **kwargs)
-
-    def batch_shape(self, x=None):
-        event_dim = 1
-        ps = self.ps
-        if x is not None:
-            if x.size()[-event_dim] != ps.size()[-event_dim]:
-                raise ValueError("The event size for the data and distribution parameters must match.\n"
-                                 "Expected x.size()[-1] == self.ps.size()[-1], but got {} vs {}".format(
-                                     x.size(-1), ps.size(-1)))
-            try:
-                ps = self.ps.expand_as(x)
-            except RuntimeError as e:
-                raise ValueError("Parameter `ps` with shape {} is not broadcastable to "
-                                 "the data shape {}. \nError: {}".format(ps.size(), x.size(), str(e)))
-        return ps.size()[:-event_dim]
-
-    def event_shape(self):
-        event_dim = 1
-        return self.ps.size()[-event_dim:]
-
-    def sample(self):
-        return torch.sum(self.expanded_sample(), dim=-1, keepdim=True)
-
-    def expanded_sample(self):
-        # get the int from Variable or Tensor
-        if self.n.data.dim() == 2:
-            n = int(self.n.data.cpu()[0][0])
+    def __init__(self, total_count=1, probs=None, logits=None, validate_args=None):
+        if (probs is None) == (logits is None):
+            raise ValueError("Either `probs` or `logits` must be specified, but not both.")
+        if probs is not None:
+            self.total_count, self.probs, = broadcast_all(total_count, probs)
+            is_scalar = isinstance(self.probs, Number)
         else:
-            n = int(self.n.data.cpu()[0])
-        ps = torch.cat((1 - self.ps, self.ps), dim=-1)
-        return Variable(torch_multinomial(ps.data, n, replacement=True))
+            self.total_count, self.logits, = broadcast_all(total_count, logits)
+            is_scalar = isinstance(self.logits, Number)
 
-    def batch_log_pdf(self, x):
-        batch_log_pdf_shape = self.batch_shape(x) + (1,)
-        log_factorial_n = log_gamma(self.n + 1)
-        log_factorial_xs = log_gamma(x + 1) + log_gamma(self.n - x + 1)
-        log_powers = x * torch.log(self.ps) + (self.n - x) * torch.log(1 - self.ps)
-        batch_log_pdf = log_factorial_n - log_factorial_xs + log_powers
-        return batch_log_pdf.contiguous().view(batch_log_pdf_shape)
+        self._param = self.probs if probs is not None else self.logits
+        if is_scalar:
+            batch_shape = torch.Size()
+        else:
+            batch_shape = self._param.size()
+        super(Binomial, self).__init__(batch_shape, validate_args=validate_args)
 
-    def analytic_mean(self):
-        return self.n * self.ps
+    def _new(self, *args, **kwargs):
+        return self._param.new(*args, **kwargs)
 
-    def analytic_var(self):
-        return self.n * self.ps * (1 - self.ps)
+    @constraints.dependent_property
+    def support(self):
+        return constraints.integer_interval(0, self.total_count)
+
+    @property
+    def mean(self):
+        return self.total_count * self.probs
+
+    @property
+    def variance(self):
+        return self.total_count * self.probs * (1 - self.probs)
+
+    @lazy_property
+    def logits(self):
+        return probs_to_logits(self.probs, is_binary=True)
+
+    @lazy_property
+    def probs(self):
+        return logits_to_probs(self.logits, is_binary=True)
+
+    @property
+    def param_shape(self):
+        return self._param.size()
+
+    def sample(self, sample_shape=torch.Size()):
+        with torch.no_grad():
+            max_count = max(int(self.total_count.max()), 1)
+            shape = self._extended_shape(sample_shape) + (max_count,)
+            bernoullis = torch.bernoulli(self.probs.unsqueeze(-1).expand(shape))
+            if self.total_count.min() != max_count:
+                arange = torch.arange(max_count, out=self.total_count.new_empty(max_count))
+                mask = arange >= self.total_count.unsqueeze(-1)
+                bernoullis.masked_fill_(mask, 0.)
+            return bernoullis.sum(dim=-1)
+
+    def log_prob(self, value):
+        if self._validate_args:
+            self._validate_sample(value)
+        log_factorial_n = torch.lgamma(self.total_count + 1)
+        log_factorial_k = torch.lgamma(value + 1)
+        log_factorial_nmk = torch.lgamma(self.total_count - value + 1)
+        max_val = (-self.logits).clamp(min=0.0)
+        # Note that: torch.log1p(-self.probs)) = max_val - torch.log1p((self.logits + 2 * max_val).exp()))
+        return (log_factorial_n - log_factorial_k - log_factorial_nmk +
+                value * self.logits + self.total_count * max_val -
+                self.total_count * torch.log1p((self.logits + 2 * max_val).exp()))
+
+    def enumerate_support(self):
+        total_count = int(self.total_count.max())
+        if not self.total_count.min() == total_count:
+            raise NotImplementedError("Inhomogeneous total count not supported by `enumerate_support`.")
+        values = self._new(1 + total_count,)
+        torch.arange(1 + total_count, out=values)
+        values = values.view((-1,) + (1,) * len(self._batch_shape))
+        values = values.expand((-1,) + self._batch_shape)
+        return values
+
+    def expand(self, batch_shape):
+        validate_args = self.__dict__.get('validate_args')
+        total_count = self.total_count.expand(batch_shape)
+        if 'probs' in self.__dict__:
+            probs = self.probs.expand(batch_shape)
+            return Binomial(total_count, probs=probs, validate_args=validate_args)
+        else:
+            logits = self.logits.expand(batch_shape)
+            return Binomial(total_count, logits=logits, validate_args=validate_args)

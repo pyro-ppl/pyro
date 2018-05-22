@@ -10,7 +10,8 @@ class TraceKernel(object):
 
     def setup(self, *args, **kwargs):
         """
-        Optional method to set up any state required before the run.
+        Optional method to set up any state required at the start of the
+        simulation run.
 
         :param \*args: Algorithm specific positional arguments.
         :param \*\*kwargs: Algorithm specific keyword arguments.
@@ -23,16 +24,21 @@ class TraceKernel(object):
         """
         pass
 
-    def diagnostics(self, time_step):
+    def diagnostics(self):
         """
         Relevant diagnostics (optional) to be printed at regular intervals
         of the MCMC run. Returns `None` by default.
 
-        :param time_step: Current Monte Carlo time-step.
         :return: String containing the diagnostic summary. e.g. acceptance rate
         :rtype: string
         """
         return None
+
+    def end_warmup(self):
+        """
+        Optional method to tell kernel that warm-up phase has been finished.
+        """
+        pass
 
     @abstractmethod
     def initial_trace(self):

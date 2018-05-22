@@ -6,62 +6,58 @@ import torch
 from torch.autograd import Variable
 
 from profiler.profiling_utils import Profile, profile_print
-from pyro.distributions import (bernoulli, beta, categorical, cauchy, dirichlet, exponential, gamma, halfcauchy,
-                                lognormal, normal, one_hot_categorical, poisson, uniform)
+from pyro.distributions import (Bernoulli, Beta, Categorical, Cauchy, Dirichlet, Exponential, Gamma, LogNormal, Normal,
+                                OneHotCategorical, Poisson, Uniform)
 
 
 def T(arr):
-    return Variable(torch.Tensor(arr))
+    return Variable(torch.DoubleTensor(arr))
 
 
 TOOL = 'timeit'
 TOOL_CFG = {}
 DISTRIBUTIONS = {
-    'bernoulli': (bernoulli, {
-        'ps': T([0.3, 0.3, 0.3, 0.3])
+    'Bernoulli': (Bernoulli, {
+        'probs': T([0.3, 0.3, 0.3, 0.3])
     }),
-    'beta': (beta, {
-        'alpha': T([2.4, 2.4, 2.4, 2.4]),
-        'beta': T([3.2, 3.2, 3.2, 3.2])
+    'Beta': (Beta, {
+        'concentration1': T([2.4, 2.4, 2.4, 2.4]),
+        'concentration0': T([3.2, 3.2, 3.2, 3.2])
     }),
-    'categorical': (categorical, {
-        'ps': T([0.1, 0.3, 0.4, 0.2])
+    'Categorical': (Categorical, {
+        'probs': T([0.1, 0.3, 0.4, 0.2])
     }),
-    'one_hot_categorical': (one_hot_categorical, {
-        'ps': T([0.1, 0.3, 0.4, 0.2])
+    'OneHotCategorical': (OneHotCategorical, {
+        'probs': T([0.1, 0.3, 0.4, 0.2])
     }),
-    'dirichlet': (dirichlet, {
-        'alpha': T([2.4, 3, 6, 6])
+    'Dirichlet': (Dirichlet, {
+        'concentration': T([2.4, 3, 6, 6])
     }),
-    'normal': (normal, {
-        'mu': T([0.5, 0.5, 0.5, 0.5]),
-        'sigma': T([1.2, 1.2, 1.2, 1.2])
+    'Normal': (Normal, {
+        'loc': T([0.5, 0.5, 0.5, 0.5]),
+        'scale': T([1.2, 1.2, 1.2, 1.2])
     }),
-    'lognormal': (lognormal, {
-        'mu': T([0.5, 0.5, 0.5, 0.5]),
-        'sigma': T([1.2, 1.2, 1.2, 1.2])
+    'LogNormal': (LogNormal, {
+        'loc': T([0.5, 0.5, 0.5, 0.5]),
+        'scale': T([1.2, 1.2, 1.2, 1.2])
     }),
-    'halfcauchy': (halfcauchy, {
-        'mu': T([0.5, 0.5, 0.5, 0.5]),
-        'gamma': T([1.2, 1.2, 1.2, 1.2])
+    'Cauchy': (Cauchy, {
+        'loc': T([0.5, 0.5, 0.5, 0.5]),
+        'scale': T([1.2, 1.2, 1.2, 1.2])
     }),
-    'cauchy': (cauchy, {
-        'mu': T([0.5, 0.5, 0.5, 0.5]),
-        'gamma': T([1.2, 1.2, 1.2, 1.2])
+    'Exponential': (Exponential, {
+        'rate': T([5.5, 3.2, 4.1, 5.6])
     }),
-    'exponential': (exponential, {
-        'lam': T([5.5, 3.2, 4.1, 5.6])
+    'Poisson': (Poisson, {
+        'rate': T([5.5, 3.2, 4.1, 5.6])
     }),
-    'poisson': (poisson, {
-        'lam': T([5.5, 3.2, 4.1, 5.6])
+    'Gamma': (Gamma, {
+        'concentration': T([2.4, 2.4, 2.4, 2.4]),
+        'rate': T([3.2, 3.2, 3.2, 3.2])
     }),
-    'gamma': (gamma, {
-        'alpha': T([2.4, 2.4, 2.4, 2.4]),
-        'beta': T([3.2, 3.2, 3.2, 3.2])
-    }),
-    'uniform': (uniform, {
-        'a': T([0, 0, 0, 0]),
-        'b': T([4, 4, 4, 4])
+    'Uniform': (Uniform, {
+        'low': T([0, 0, 0, 0]),
+        'high': T([4, 4, 4, 4])
     })
 }
 
@@ -78,17 +74,17 @@ def get_tool_cfg():
     tool=get_tool,
     tool_cfg=get_tool_cfg,
     fn_id=lambda dist, batch_size, *args, **kwargs: 'sample_' + dist.dist_class.__name__ + '_N=' + str(batch_size))
-def sample(dist, batch_size, *args, **kwargs):
-    return dist.sample(batch_size=batch_size, *args, **kwargs)
+def sample(dist, batch_size):
+    return dist.sample(sample_shape=(batch_size,))
 
 
 @Profile(
     tool=get_tool,
     tool_cfg=get_tool_cfg,
     fn_id=lambda dist, batch, *args, **kwargs:  #
-    'batch_log_pdf_' + dist.dist_class.__name__ + '_N=' + str(batch.size()[0]))
-def batch_log_pdf(dist, batch, *args, **kwargs):
-    return dist.batch_log_pdf(batch, *args, **kwargs)
+    'log_prob_' + dist.dist_class.__name__ + '_N=' + str(batch.size()[0]))
+def log_prob(dist, batch):
+    return dist.log_prob(batch)
 
 
 def run_with_tool(tool, dists, batch_sizes):
@@ -104,14 +100,15 @@ def run_with_tool(tool, dists, batch_sizes):
     with profile_print(column_widths, field_format, template) as out:
         column_headers = []
         for size in batch_sizes:
-            column_headers += ['SAMPLE (N=' + str(size) + ')', 'BATCH_LOG_PDF (N=' + str(size) + ')']
+            column_headers += ['SAMPLE (N=' + str(size) + ')', 'LOG_PROB (N=' + str(size) + ')']
         out.header(['DISTRIBUTION'] + column_headers)
         for dist_name in dists:
-            dist, params = DISTRIBUTIONS[dist_name]
+            Dist, params = DISTRIBUTIONS[dist_name]
             result_row = [dist_name]
+            dist = Dist(**params)
             for size in batch_sizes:
-                sample_result, sample_prof = sample(dist, batch_size=size, **params)
-                _, logpdf_prof = batch_log_pdf(dist, sample_result, **params)
+                sample_result, sample_prof = sample(dist, batch_size=size)
+                _, logpdf_prof = log_prob(dist, sample_result)
                 result_row += [sample_prof, logpdf_prof]
             out.push(result_row)
 

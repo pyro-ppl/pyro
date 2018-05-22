@@ -1,23 +1,19 @@
 from __future__ import absolute_import, division, print_function
 
-from pyro.distributions.beta import Beta
-from pyro.distributions.gamma import Gamma
-from pyro.distributions.normal import Normal
-from pyro.distributions.random_primitive import RandomPrimitive
+from pyro.distributions.torch import Beta, Dirichlet, Gamma, Normal
 
 
 class NonreparameterizedBeta(Beta):
-    reparameterized = False
+    has_rsample = False
+
+
+class NonreparameterizedDirichlet(Dirichlet):
+    has_rsample = False
 
 
 class NonreparameterizedGamma(Gamma):
-    reparameterized = False
+    has_rsample = False
 
 
 class NonreparameterizedNormal(Normal):
-    reparameterized = False
-
-
-nonreparameterized_beta = RandomPrimitive(NonreparameterizedBeta)
-nonreparameterized_gamma = RandomPrimitive(NonreparameterizedGamma)
-nonreparameterized_normal = RandomPrimitive(NonreparameterizedNormal)
+    has_rsample = False

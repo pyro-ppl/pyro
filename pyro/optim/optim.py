@@ -1,14 +1,16 @@
 from __future__ import absolute_import, division, print_function
 
-import cloudpickle
+import torch
 
 import pyro
+from pyro.optim.adagrad_rmsprop import AdagradRMSProp as pt_AdagradRMSProp
+from pyro.optim.clipped_adam import ClippedAdam as pt_ClippedAdam
 from pyro.params import module_from_param_with_module_name, user_param_name
 
 
 class PyroOptim(object):
     """
-    A wrapper for torch.optim.Optimizer objects that helps managing with dynamically generated parameters
+    A wrapper for torch.optim.Optimizer objects that helps with managing dynamically generated parameters.
 
     :param optim_constructor: a torch.optim.Optimizer
     :param optim_args: a dictionary of learning arguments for the optimizer or a callable that returns
@@ -27,6 +29,9 @@ class PyroOptim(object):
         # holds the torch optimizer objects
         self.optim_objs = {}
 
+        # holds the current epoch
+        self.epoch = None
+
         # any optimizer state that's waiting to be consumed (because that parameter hasn't been seen before)
         self._state_waiting_to_be_consumed = {}
 
@@ -38,15 +43,11 @@ class PyroOptim(object):
         Do an optimization step for each param in params. If a given param has never been seen before,
         initialize an optimizer for it.
         """
-
         for p in params:
             # if we have not seen this param before, we instantiate and optim object to deal with it
             if p not in self.optim_objs:
-                # get our constructor arguments
-                def_optim_dict = self._get_optim_args(p)
                 # create a single optim object for that param
-                self.optim_objs[p] = self.pt_optim_constructor([p], **def_optim_dict)
-
+                self.optim_objs[p] = self._get_optim(p)
                 # set state from _state_waiting_to_be_consumed if present
                 param_name = pyro.get_param_store().param_name(p)
                 if param_name in self._state_waiting_to_be_consumed:
@@ -82,7 +83,7 @@ class PyroOptim(object):
         Save optimizer state to disk
         """
         with open(filename, "wb") as output_file:
-            output_file.write(cloudpickle.dumps(self.get_state()))
+            torch.save(self.get_state(), output_file)
 
     def load(self, filename):
         """
@@ -92,13 +93,16 @@ class PyroOptim(object):
         Load optimizer state from disk
         """
         with open(filename, "rb") as input_file:
-            state = cloudpickle.loads(input_file.read())
+            state = torch.load(input_file)
         self.set_state(state)
+
+    def _get_optim(self, param):
+        return self.pt_optim_constructor([param], **self._get_optim_args(param))
 
     # helper to fetch the optim args if callable (only used internally)
     def _get_optim_args(self, param):
         # if we were passed a fct, we call fct with param info
-        # arguments are (module name, param name, tags) e.g. ('mymodule', 'bias', 'baseline')
+        # arguments are (module name, param name) e.g. ('mymodule', 'bias')
         if callable(self.pt_optim_args):
 
             # get param name
@@ -106,14 +110,27 @@ class PyroOptim(object):
             module_name = module_from_param_with_module_name(param_name)
             stripped_param_name = user_param_name(param_name)
 
-            # get tags
-            tags = pyro.get_param_store().get_param_tags(param_name)
-
             # invoke the user-provided callable
-            opt_dict = self.pt_optim_args(module_name, stripped_param_name, tags)
+            opt_dict = self.pt_optim_args(module_name, stripped_param_name)
 
             # must be dictionary
             assert isinstance(opt_dict, dict), "per-param optim arg must return defaults dictionary"
             return opt_dict
         else:
             return self.pt_optim_args
+
+
+def AdagradRMSProp(optim_args):
+    """
+    A wrapper for an optimizer that is a mash-up of
+    :class:`~torch.optim.Adagrad` and :class:`~torch.optim.RMSprop`.
+    """
+    return PyroOptim(pt_AdagradRMSProp, optim_args)
+
+
+def ClippedAdam(optim_args):
+    """
+    A wrapper for a modification of the :class:`~torch.optim.Adam`
+    optimization algorithm that supports gradient clipping.
+    """
+    return PyroOptim(pt_ClippedAdam, optim_args)

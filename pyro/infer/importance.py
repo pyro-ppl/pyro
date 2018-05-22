@@ -41,6 +41,6 @@ class Importance(TracePosterior):
         for i in range(self.num_samples):
             guide_trace = poutine.trace(self.guide).get_trace(*args, **kwargs)
             model_trace = poutine.trace(
-                poutine.replay(self.model, guide_trace)).get_trace(*args, **kwargs)
-            log_weight = model_trace.log_pdf() - guide_trace.log_pdf()
+                poutine.replay(self.model, trace=guide_trace)).get_trace(*args, **kwargs)
+            log_weight = model_trace.log_prob_sum() - guide_trace.log_prob_sum()
             yield (model_trace, log_weight)
