@@ -19,7 +19,9 @@ class AVFMultivariateNormal(MultivariateNormal):
     :param torch.Tensor scale_tril: Cholesky of Covariance matrix; D x D matrix.
     :param torch.Tensor control_var: 2 x L x D tensor that parameterizes the control variate;
     L is an arbitrary positive integer.
-    This parameter needs to be learned (i.e. adapted) to achieve lower variance gradients.
+    This parameter needs to be learned (i.e. adapted) to achieve lower variance gradients. In
+    a typical use case this parameter will be adapted concurrently with the loc and scale_tril
+    that define the distribution.
 
     Example usage::
 
@@ -39,18 +41,14 @@ class AVFMultivariateNormal(MultivariateNormal):
                        "control_var": constraints.real}
 
     def __init__(self, loc, scale_tril, control_var):
-        assert(loc.dim() == 1), "AVFMultivariateNormal loc must be 1-dimensional"
-        assert(scale_tril.dim() == 2), "AVFMultivariateNormal scale_tril must be 2-dimensional"
-        assert control_var.dim() == 3, \
-            "control_var should be of size 2 x L x D, where D is the dimension of the location parameter loc"
-        assert control_var.size(0) == 2, \
-            "control_var should be of size 2 x L x D, where D is the dimension of the location parameter loc"
-        assert control_var.size(2) == loc.size(0), \
-            "control_var should be of size 2 x L x D, where D is the dimension of the location parameter loc"
+        if loc.dim() != 1:
+            raise ValueError("AVFMultivariateNormal loc must be 1-dimensional")
+        if scale_tril.dim() != 2:
+            raise ValueError("AVFMultivariateNormal scale_tril must be 2-dimensional")
+        if control_var.dim() != 3 or control_var.size(0) != 2 or control_var.size(2) != loc.size(0):
+            raise ValueError("control_var should be of size 2 x L x D, where D is the dimension of the location parameter loc")
         self.control_var = control_var
         super(AVFMultivariateNormal, self).__init__(loc, scale_tril=scale_tril)
-        self.loc = loc
-        self.scale_tril = scale_tril
 
     def rsample(self, sample_shape=torch.Size()):
         return _AVFMVNSample.apply(self.loc, self.scale_tril, self.control_var, sample_shape + self.loc.shape)
