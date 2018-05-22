@@ -17,16 +17,17 @@ class AVFMultivariateNormal(MultivariateNormal):
 
     :param torch.Tensor loc: D-dimensional mean vector.
     :param torch.Tensor scale_tril: Cholesky of Covariance matrix; D x D matrix.
-    :param torch.Tensor CV: 2 x L x D tensor that parameterizes the control variate; L is an arbitrary positive integer.
+    :param torch.Tensor control_var: 2 x L x D tensor that parameterizes the control variate;
+    L is an arbitrary positive integer.
     This parameter needs to be learned (i.e. adapted) to achieve lower variance gradients.
 
     Example usage::
 
-    CV = torch.tensor(0.1 * torch.ones(2, 1, D), requires_grad=True)
-    opt_cv = pyro.optim.Adam([CV], lr=0.1, betas=(0.5, 0.999))
+    control_var = torch.tensor(0.1 * torch.ones(2, 1, D), requires_grad=True)
+    opt_cv = pyro.optim.Adam([control_var], lr=0.1, betas=(0.5, 0.999))
 
     for _ in range(1000):
-        d = AVFMultivariateNormal(loc, scale_tril, CV)
+        d = AVFMultivariateNormal(loc, scale_tril, control_var)
         z = d.rsample()
         cost = torch.pow(z, 2.0).sum()
         cost.backward()
@@ -34,37 +35,40 @@ class AVFMultivariateNormal(MultivariateNormal):
         opt_cv.zero_grad()
 
     """
-    arg_constraints = {"loc": constraints.real, "scale_tril": constraints.lower_triangular, "CV": constraints.real}
+    arg_constraints = {"loc": constraints.real, "scale_tril": constraints.lower_triangular,
+                       "control_var": constraints.real}
 
-    def __init__(self, loc, scale_tril, CV):
+    def __init__(self, loc, scale_tril, control_var):
         assert(loc.dim() == 1), "AVFMultivariateNormal loc must be 1-dimensional"
         assert(scale_tril.dim() == 2), "AVFMultivariateNormal scale_tril must be 2-dimensional"
-        assert CV.dim() == 3, "CV should be of size 2 x L x D, where D is the dimension of the location parameter loc"
-        assert CV.size(0) == 2, "CV should be of size 2 x L x D, where D is the dimension of the location parameter loc"
-        assert CV.size(2) == loc.size(0), \
-            "CV should be of size 2 x L x D, where D is the dimension of the location parameter loc"
-        self.CV = CV
+        assert control_var.dim() == 3, \
+            "control_var should be of size 2 x L x D, where D is the dimension of the location parameter loc"
+        assert control_var.size(0) == 2, \
+            "control_var should be of size 2 x L x D, where D is the dimension of the location parameter loc"
+        assert control_var.size(2) == loc.size(0), \
+            "control_var should be of size 2 x L x D, where D is the dimension of the location parameter loc"
+        self.control_var = control_var
         super(AVFMultivariateNormal, self).__init__(loc, scale_tril=scale_tril)
         self.loc = loc
         self.scale_tril = scale_tril
 
     def rsample(self, sample_shape=torch.Size()):
-        return _AVFMVNSample.apply(self.loc, self.scale_tril, self.CV, sample_shape + self.loc.shape)
+        return _AVFMVNSample.apply(self.loc, self.scale_tril, self.control_var, sample_shape + self.loc.shape)
 
 
 class _AVFMVNSample(Function):
     @staticmethod
-    def forward(ctx, loc, scale_tril, CV, shape):
+    def forward(ctx, loc, scale_tril, control_var, shape):
         white = loc.new(shape).normal_()
         z = torch.matmul(white, scale_tril.t())
-        ctx.save_for_backward(scale_tril, CV, white)
+        ctx.save_for_backward(scale_tril, control_var, white)
         return loc + z
 
     @staticmethod
     @once_differentiable
     def backward(ctx, grad_output):
-        L, CV, epsilon = ctx.saved_tensors
-        B, C = CV
+        L, control_var, epsilon = ctx.saved_tensors
+        B, C = control_var
         g = grad_output
         loc_grad = sum_leftmost(grad_output, -1)
 
@@ -81,7 +85,7 @@ class _AVFMVNSample(Function):
         diff_L_ab += (xi_ab.unsqueeze(0) * BC_lab).sum(0)
         L_grad = torch.tril(diff_L_ab)
 
-        # compute CV grads
+        # compute control_var grads
         diff_B = (L_grad.unsqueeze(0) * C.unsqueeze(-2) * xi_ab.unsqueeze(0)).sum(2)
         diff_C = (L_grad.t().unsqueeze(0) * B.unsqueeze(-2) * xi_ab.t().unsqueeze(0)).sum(2)
         diff_CV = torch.stack([diff_B, diff_C])
