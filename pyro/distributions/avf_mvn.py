@@ -12,12 +12,12 @@ from pyro.distributions.util import sum_leftmost
 class AVFMultivariateNormal(MultivariateNormal):
     """Multivariate normal (Gaussian) distribution with transport equation inspired control variates.
 
-    A distribution over vectors in which all the elements have a joint Gaussian
-    density.
+    A distribution over vectors in which all the elements have a joint Gaussian density.
 
     :param torch.Tensor loc: D-dimensional mean vector.
     :param torch.Tensor scale_tril: Cholesky of Covariance matrix; D x D matrix.
     :param torch.Tensor CV: 2 x L x D tensor that parameterizes the control variate; L is an arbitrary positive integer.
+    This parameter needs to be learned (i.e. adapted) to achieve lower variance gradients.
 
     Example usage::
 
@@ -26,7 +26,7 @@ class AVFMultivariateNormal(MultivariateNormal):
 
     for _ in range(1000):
         d = AVFMultivariateNormal(loc, scale_tril, CV)
-        z = d.rsample(sample_shape=torch.Size([n_samples]))
+        z = d.rsample()
         cost = torch.pow(z, 2.0).sum()
         cost.backward()
         opt_cv.step()
@@ -40,11 +40,12 @@ class AVFMultivariateNormal(MultivariateNormal):
         assert(scale_tril.dim() == 2), "AVFMultivariateNormal scale_tril must be 2-dimensional"
         assert CV.dim() == 3, "CV should be of size 2 x L x D, where D is the dimension of the location parameter loc"
         assert CV.size(0) == 2, "CV should be of size 2 x L x D, where D is the dimension of the location parameter loc"
-        assert CV.size(2) == loc.size(0), "CV should be of size 2 x L x D, where D is the dimension of the location parameter loc"
+        assert CV.size(2) == loc.size(0), \
+            "CV should be of size 2 x L x D, where D is the dimension of the location parameter loc"
+        self.CV = CV
         super(AVFMultivariateNormal, self).__init__(loc, scale_tril=scale_tril)
         self.loc = loc
         self.scale_tril = scale_tril
-        self.CV = CV
 
     def rsample(self, sample_shape=torch.Size()):
         return _AVFMVNSample.apply(self.loc, self.scale_tril, self.CV, sample_shape + self.loc.shape)

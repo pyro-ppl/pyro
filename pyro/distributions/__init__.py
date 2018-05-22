@@ -29,6 +29,7 @@ __all__ = [
     "InverseAutoregressiveFlow",
     "LowRankMultivariateNormal",
     "OMTMultivariateNormal",
+    "AVFMultivariateNormal",
     "Rejector",
     "TorchDistribution",
     "VonMises",

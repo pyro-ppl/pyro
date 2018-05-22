@@ -32,9 +32,9 @@ def test_mean_gradient(mvn_dist, k, sample_shape, L21, omega1, L11, L22=0.8, L33
     off_diag = torch.tensor([zero_vec, [L21, 0.0, 0.0], zero_vec], requires_grad=True)
     L = torch.diag(torch.tensor([L11, L22, L33])) + off_diag
 
-    if mvn_dist=='OMTMultivariateNormal':
+    if mvn_dist == 'OMTMultivariateNormal':
         dist = OMTMultivariateNormal(loc, L)
-    elif mvn_dist=='AVFMultivariateNormal':
+    elif mvn_dist == 'AVFMultivariateNormal':
         CV = torch.tensor(1.1 * torch.rand(2, k, 3), requires_grad=True)
         dist = AVFMultivariateNormal(loc, L, CV)
 
@@ -64,9 +64,9 @@ def test_mean_single_gradient(mvn_dist, k, L21, omega1, L11, L22=0.8, L33=0.9, o
     off_diag = torch.tensor([zero_vec, [L21, 0.0, 0.0], zero_vec], requires_grad=True)
     L = torch.diag(torch.tensor([L11, L22, L33])) + off_diag
 
-    if mvn_dist=='OMTMultivariateNormal':
+    if mvn_dist == 'OMTMultivariateNormal':
         dist = OMTMultivariateNormal(loc, L)
-    elif mvn_dist=='AVFMultivariateNormal':
+    elif mvn_dist == 'AVFMultivariateNormal':
         CV = torch.tensor(0.2 * torch.rand(2, k, 3), requires_grad=True)
         dist = AVFMultivariateNormal(loc, L, CV)
 
@@ -100,9 +100,9 @@ def test_log_prob(mvn_dist):
     cov = torch.mm(L, L.t())
 
     mvn = MultivariateNormal(loc, cov)
-    if mvn_dist==OMTMultivariateNormal:
+    if mvn_dist == OMTMultivariateNormal:
         mvn_prime = OMTMultivariateNormal(loc, L)
-    elif mvn_dist==AVFMultivariateNormal:
+    elif mvn_dist == AVFMultivariateNormal:
         CV = torch.tensor(0.2 * torch.rand(2, 2, 5))
         mvn_prime = AVFMultivariateNormal(loc, L, CV)
     assert_equal(mvn.log_prob(x), mvn_prime.log_prob(x))
