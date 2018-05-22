@@ -8,7 +8,7 @@ from pyro.primitives import (clear_param_store, enable_validation, get_param_sto
                              random_module, sample, validation_enabled)
 from pyro.util import set_rng_seed
 
-version_prefix = '0.2.0'
+version_prefix = '0.2.1'
 
 # Get the __version__ string from the auto-generated _version.py file, if exists.
 try:
