@@ -36,7 +36,7 @@ def test_optimizers(factory):
 
     loc = torch.tensor([-0.5, 0.5])
     cov = torch.tensor([[1.0, 0.09], [0.09, 0.1]])
-    for step in range(100):
+    for step in range(200):
         tr = poutine.trace(model).get_trace(loc, cov)
         loss = -tr.log_prob_sum()
         params = {name: pyro.param(name).unconstrained() for name in ["x", "y", "z"]}
