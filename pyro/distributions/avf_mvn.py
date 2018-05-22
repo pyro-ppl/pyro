@@ -18,23 +18,23 @@ class AVFMultivariateNormal(MultivariateNormal):
     :param torch.Tensor loc: D-dimensional mean vector.
     :param torch.Tensor scale_tril: Cholesky of Covariance matrix; D x D matrix.
     :param torch.Tensor control_var: 2 x L x D tensor that parameterizes the control variate;
-    L is an arbitrary positive integer.
-    This parameter needs to be learned (i.e. adapted) to achieve lower variance gradients. In
-    a typical use case this parameter will be adapted concurrently with the loc and scale_tril
-    that define the distribution.
+        L is an arbitrary positive integer.  This parameter needs to be learned (i.e. adapted) to
+        achieve lower variance gradients. In a typical use case this parameter will be adapted
+        concurrently with the `loc` and `scale_tril` that define the distribution.
+
 
     Example usage::
 
-    control_var = torch.tensor(0.1 * torch.ones(2, 1, D), requires_grad=True)
-    opt_cv = torch.optim.Adam([control_var], lr=0.1, betas=(0.5, 0.999))
+        control_var = torch.tensor(0.1 * torch.ones(2, 1, D), requires_grad=True)
+        opt_cv = torch.optim.Adam([control_var], lr=0.1, betas=(0.5, 0.999))
 
-    for _ in range(1000):
-        d = AVFMultivariateNormal(loc, scale_tril, control_var)
-        z = d.rsample()
-        cost = torch.pow(z, 2.0).sum()
-        cost.backward()
-        opt_cv.step()
-        opt_cv.zero_grad()
+        for _ in range(1000):
+            d = AVFMultivariateNormal(loc, scale_tril, control_var)
+            z = d.rsample()
+            cost = torch.pow(z, 2.0).sum()
+            cost.backward()
+            opt_cv.step()
+            opt_cv.zero_grad()
 
     """
     arg_constraints = {"loc": constraints.real, "scale_tril": constraints.lower_triangular,
