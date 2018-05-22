@@ -24,7 +24,7 @@ class AVFMultivariateNormal(MultivariateNormal):
     Example usage::
 
     control_var = torch.tensor(0.1 * torch.ones(2, 1, D), requires_grad=True)
-    opt_cv = pyro.optim.Adam([control_var], lr=0.1, betas=(0.5, 0.999))
+    opt_cv = torch.optim.Adam([control_var], lr=0.1, betas=(0.5, 0.999))
 
     for _ in range(1000):
         d = AVFMultivariateNormal(loc, scale_tril, control_var)
