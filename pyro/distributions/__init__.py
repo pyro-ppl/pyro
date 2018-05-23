@@ -9,6 +9,7 @@ from pyro.distributions.half_cauchy import HalfCauchy
 from pyro.distributions.iaf import InverseAutoregressiveFlow
 from pyro.distributions.lowrank_mvn import LowRankMultivariateNormal
 from pyro.distributions.omt_mvn import OMTMultivariateNormal
+from pyro.distributions.avf_mvn import AVFMultivariateNormal
 from pyro.distributions.rejector import Rejector
 from pyro.distributions.torch import __all__ as torch_dists
 from pyro.distributions.torch import *  # noqa F403
@@ -28,6 +29,7 @@ __all__ = [
     "InverseAutoregressiveFlow",
     "LowRankMultivariateNormal",
     "OMTMultivariateNormal",
+    "AVFMultivariateNormal",
     "Rejector",
     "TorchDistribution",
     "VonMises",
