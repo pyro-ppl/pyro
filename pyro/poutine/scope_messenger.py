@@ -1,25 +1,12 @@
 import functools
 
-from .poutine import Messenger
-from .runtime import _PYRO_STACK
+from .messenger import Messenger
 
 
 class ScopeMessenger(Messenger):
     def __init__(self, prefix=None):
         super(ScopeMessenger, self).__init__()
         self.prefix = prefix
-        self._ref_count = 0
-
-    def __enter__(self):
-        if self not in _PYRO_STACK:
-            super(ScopeMessenger, self).__enter__()
-        self._ref_count += 1
-        return self
-
-    def __exit__(self, *args):
-        self._ref_count -= 1
-        if self._ref_count == 0:
-            super(ScopeMessenger, self).__exit__()
 
     def __call__(self, fn):
         if self.prefix is None:
@@ -27,11 +14,10 @@ class ScopeMessenger(Messenger):
 
         @functools.wraps(fn)
         def _fn(*args, **kwargs):
-            with self:
+            with ScopeMessenger(prefix=self.prefix):
                 return fn(*args, **kwargs)
         return _fn
 
     def _pyro_sample(self, msg):
-        prefix = "/".join([self.prefix] * self._ref_count)
-        msg["name"] = "{}/{}".format(prefix, msg["name"])
+        msg["name"] = "{}/{}".format(self.prefix, msg["name"])
         return None

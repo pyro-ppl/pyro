@@ -127,7 +127,7 @@ class TraceMessenger(Messenger):
                     # Cannot sample after a previous sample statement.
                     raise RuntimeError("Multiple {} sites named '{}'".format(msg['type'], name))
         else:
-            if name in self.trace:
+            if name in self.trace and msg["type"] == "sample":
                 split_name = name.split("_")
                 if "_" in name and split_name[-1].isdigit():
                     counter = int(split_name[-1]) + 1
@@ -135,7 +135,7 @@ class TraceMessenger(Messenger):
                 else:
                     new_name = name + "_0"
                 msg["name"] = new_name
-                self._process_message(msg)
+                self._process_message(msg)  # recursively update name
         return None
 
     def _postprocess_message(self, msg):

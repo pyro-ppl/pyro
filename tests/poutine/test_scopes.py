@@ -2,21 +2,21 @@ import pyro
 import pyro.poutine as poutine
 import pyro.distributions.torch as dist
 
-from pyro.poutine import ScopeMessenger as scope
+from pyro.poutine import scope
 
 
 def test_recur_multi():
 
-    @scope()
+    @scope
     def model1(r=True):
         model2()
-        with scope("inter"):
+        with scope(prefix="inter"):
             model2()
             if r:
                 model1(r=False)
         model2()
 
-    @scope()
+    @scope
     def model2():
         return pyro.sample("y", dist.Normal(0.0, 1.0))
 
@@ -29,8 +29,8 @@ def test_recur_multi():
 def test_only_withs():
 
     def model1():
-        with scope("a"):
-            with scope("b"):
+        with scope(prefix="a"):
+            with scope(prefix="b"):
                 pyro.sample("x", dist.Bernoulli(0.5))
 
     tr1 = poutine.trace(model1).get_trace()
@@ -42,7 +42,7 @@ def test_only_withs():
 
 def test_mutual_recur():
 
-    @scope()
+    @scope
     def model1(n):
         pyro.sample("a", dist.Bernoulli(0.5))
         if n <= 0:
@@ -50,7 +50,7 @@ def test_mutual_recur():
         else:
             return model2(n-1)
 
-    @scope()
+    @scope
     def model2(n):
         pyro.sample("b", dist.Bernoulli(0.5))
         if n <= 0:
@@ -66,7 +66,7 @@ def test_mutual_recur():
 
 def test_simple_recur():
 
-    @scope()
+    @scope
     def geometric(p):
         x = pyro.sample("x", dist.Bernoulli(p))
         if x.item() == 1.0:
@@ -85,11 +85,11 @@ def test_simple_recur():
 
 def test_basic_scope():
 
-    @scope()
+    @scope
     def f1():
         return pyro.sample("x", dist.Bernoulli(0.5))
 
-    @scope()
+    @scope
     def f2():
         f1()
         return pyro.sample("y", dist.Bernoulli(0.5))
